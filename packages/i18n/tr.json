@@ -333,7 +333,9 @@
     "selectAll": "Tümünü seç",
     "selectAllShortcut": "Ctrl+A",
     "editCustomNode": "{label} öğesini düzenle",
-    "removeCustomNode": "{label} öğesini kaldır"
+    "removeCustomNode": "{label} öğesini kaldır",
+    "pasteWithoutFormatting": null,
+    "pasteWithoutFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "Belge ana hattı",

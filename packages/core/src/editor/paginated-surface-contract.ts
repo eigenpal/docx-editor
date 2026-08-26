@@ -895,6 +895,22 @@ export interface PaginatedSurface {
   bookmarks(): BookmarkIndex;
   /** The selected text, for copy and cut. */
   selectedText(): string;
+  /**
+   * Every clipboard flavour for the current selection: plain text, and the interop HTML
+   * carrying the embedded fragment when the selection is a body-story range. A cell
+   * rectangle answers grid text plus a flattened table; `html` is null where only plain
+   * text should be written.
+   */
+  copyFlavours(): { readonly text: string; readonly html: string | null };
+  /**
+   * Route one paste payload by fidelity: embedded fragment, then external HTML, then
+   * plain text — degrading on decode, read, or apply refusal. Suggesting mode, non-body
+   * stories and an armed force-plain all land on the plain lane. False when the payload
+   * landed on no lane at all (nothing to insert).
+   */
+  pasteRich(text: string, html: string | null): boolean;
+  /** The next paste routes plain, whatever its payload carries (Cmd+Shift+V). */
+  armForcePlainPaste(): void;
   /** Remove the selection, if any. Returns whether anything was deleted. */
   deleteSelection(): boolean;
   navigate(command: NavigationCommand, extend?: boolean): void;

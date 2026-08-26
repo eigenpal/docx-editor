@@ -18,6 +18,7 @@ export {
   ContextMenuInsertRowBelow,
   ContextMenuItem,
   ContextMenuPaste,
+  ContextMenuPasteWithoutFormatting,
   ContextMenuSelectAll,
   ContextMenuRefreshToc,
   ContextMenuRefreshTocPageNumbers,

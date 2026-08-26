@@ -1,0 +1,87 @@
+// Copy flavour assembly (rich-clipboard-fidelity tasks 3.3 and 3.5).
+//
+// One builder feeds both clipboard lanes — the DOM `copy`/`cut` event and the command
+// lane — so they can never drift. Degrade is tiered when the payload outgrows its budget:
+// first the media leaves the fragment, then the fragment attribute drops entirely; the
+// interop HTML and plain text always ship. A cell-rectangle selection copies as grid text
+// plus a flattened HTML table, with no fragment (design D8).
+
+import {
+  extractFragmentPackage,
+  readOoxmlPackage,
+  type FragmentCoverage,
+  type OoxmlPackage,
+} from '@docx-editor.dev/core/store';
+import { interopHtmlFromFragmentPackage } from './clipboard-html-write.ts';
+import { wrapInteropHtml } from './clipboard-fragment-codec.ts';
+
+/** Fragment zips above this stay off the clipboard attribute (base64 grows them 4/3). */
+export const MAX_COPY_FRAGMENT_BYTES = 12 * 1024 * 1024;
+
+export interface CopyFlavourInput {
+  /** The plain-text flavour, exactly as `selectedText()` reports it. */
+  readonly text: string;
+  /** True when the selection is a table cell rectangle rather than a range. */
+  readonly cellRectangle: boolean;
+  /** The coverage description for a body-story range selection, or null. */
+  readonly coverage: FragmentCoverage | null;
+  readonly pkg: OoxmlPackage | null;
+  /** Test hook: overrides {@link MAX_COPY_FRAGMENT_BYTES}. */
+  readonly maxFragmentBytes?: number;
+}
+
+export interface CopyFlavours {
+  readonly text: string;
+  /** The `text/html` flavour, or null when only plain text should be written. */
+  readonly html: string | null;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** A cell rectangle as a plain HTML table: tabs are columns, newlines are rows. */
+function gridHtmlOf(text: string): string {
+  const rows = text
+    .split('\n')
+    .map(
+      (row) =>
+        `<tr>${row
+          .split('\t')
+          .map((cell) => `<td>${escapeHtml(cell)}</td>`)
+          .join('')}</tr>`
+    )
+    .join('');
+  return `<div><table>${rows}</table></div>`;
+}
+
+/** Assemble the clipboard flavours for the current selection. */
+export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
+  if (input.text.length === 0) return { text: '', html: null };
+  if (input.cellRectangle) return { text: input.text, html: gridHtmlOf(input.text) };
+  if (!input.coverage || !input.pkg) return { text: input.text, html: null };
+
+  const full = extractFragmentPackage(input.pkg, input.coverage);
+  if (!full.ok) return { text: input.text, html: null };
+
+  const budget = input.maxFragmentBytes ?? MAX_COPY_FRAGMENT_BYTES;
+  let fragmentBytes: Uint8Array | null = full.bytes;
+  if (full.bytes.byteLength > budget) {
+    // Tier 1: media stays home. Tier 2: no fragment at all; the interop HTML still ships.
+    const lean = extractFragmentPackage(input.pkg, input.coverage, { omitMedia: true });
+    fragmentBytes = lean.ok && lean.bytes.byteLength <= budget ? lean.bytes : null;
+  }
+
+  // One read for the HTML half; the fragment travels as the bytes themselves.
+  const read = readOoxmlPackage(full.bytes);
+  const inner = read.ok ? interopHtmlFromFragmentPackage(read.package) : '';
+  const html = wrapInteropHtml(
+    inner,
+    fragmentBytes ? { bytes: fragmentBytes, lastMarkCovered: full.lastMarkCovered } : null
+  );
+  return { text: input.text, html };
+}

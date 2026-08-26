@@ -9,6 +9,7 @@ import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
 import {
   parentNodeOf,
+  type FragmentCoverage,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
@@ -240,6 +241,86 @@ function removableContentControlsIn(
 }
 
 /**
+ * The mark-to-mark coverage decision, shared by the deletion planner and the clipboard
+ * fragment extractor so "fully covered" means exactly one thing (rich-clipboard-fidelity
+ * task 1.1). Edge paragraphs qualify only when the range reaches their far edge.
+ */
+function coveredParagraphIdsIn(
+  textOf: (paragraphId: string) => string,
+  order: readonly string[],
+  firstIndex: number,
+  lastIndex: number,
+  from: SemanticPosition,
+  to: SemanticPosition
+): Set<string> {
+  const covered = new Set<string>();
+  for (let index = firstIndex; index <= lastIndex; index += 1) {
+    const id = order[index]!;
+    const wholeParagraph =
+      index === firstIndex
+        ? from.offset === 0 && (index !== lastIndex || to.offset === textOf(id).length)
+        : index === lastIndex
+          ? to.offset === textOf(id).length
+          : true;
+    if (wholeParagraph) covered.add(id);
+  }
+  return covered;
+}
+
+/** Outermost tables and block SDTs whose every paragraph the range covers mark-to-mark. */
+function fullyCoveredBlocksIn(part: OoxmlPart, covered: ReadonlySet<string>): string[] {
+  const out: string[] = [];
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'table' || isContentControl(node)) {
+      const paragraphs = paragraphIdsUnder(node);
+      if (paragraphs.length > 0 && paragraphs.every((id) => covered.has(id))) {
+        out.push(node.id);
+        return;
+      }
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(part.root);
+  return out;
+}
+
+/**
+ * The coverage description a clipboard copy hands the store-lane extractor.
+ *
+ * ONLY DATA crosses the lane boundary: paragraph ids in document order, the edge offsets,
+ * the covered set, and the fully-covered block set — the store never imports the layout
+ * this reads. Returns null for a collapsed or unresolvable range.
+ */
+export function fragmentCoverageOf(
+  layout: SemanticLayout,
+  part: OoxmlPart,
+  from: SemanticPosition,
+  to: SemanticPosition,
+  order?: readonly string[]
+): FragmentCoverage | null {
+  const textOf = (paragraphId: string): string => paragraphTextFromLayout(layout, paragraphId);
+  if (from.paragraphId === to.paragraphId && from.offset === to.offset) return null;
+  const effectiveOrder = order ?? documentOrder(layout);
+  const firstIndex = effectiveOrder.indexOf(from.paragraphId);
+  const lastIndex = effectiveOrder.indexOf(to.paragraphId);
+  if (firstIndex === -1 || lastIndex === -1 || firstIndex > lastIndex) return null;
+
+  const paragraphIds = effectiveOrder.slice(firstIndex, lastIndex + 1);
+  const covered = coveredParagraphIdsIn(textOf, effectiveOrder, firstIndex, lastIndex, from, to);
+  const lastId = effectiveOrder[lastIndex]!;
+  return {
+    partName: part.name,
+    paragraphIds,
+    startOffset: from.offset,
+    endOffset: to.offset,
+    coveredParagraphIds: [...covered],
+    fullyCoveredBlockIds: fullyCoveredBlocksIn(part, covered),
+    lastMarkCovered: to.offset === textOf(lastId).length,
+  };
+}
+
+/**
  * The plan that removes a document-ordered range, or an empty one when it is collapsed.
  *
  * A selection spanning paragraphs is trimmed at both ends and then JOINED back into one,
@@ -273,17 +354,7 @@ export function planRangeDeletion(
   // FULLY covered: the range holds the whole paragraph, mark to mark. The endpoints qualify
   // only when the range reaches their far edge — a table is removed for containing text the
   // gesture actually covered, never for being adjacent to it.
-  const covered = new Set<string>();
-  for (let index = firstIndex; index <= lastIndex; index += 1) {
-    const id = effectiveOrder[index]!;
-    const wholeParagraph =
-      index === firstIndex
-        ? from.offset === 0
-        : index === lastIndex
-          ? to.offset === textOf(id).length
-          : true;
-    if (wholeParagraph) covered.add(id);
-  }
+  const covered = coveredParagraphIdsIn(textOf, effectiveOrder, firstIndex, lastIndex, from, to);
 
   const removableTables = removableTablesIn(part, covered);
   const tableOfParagraph = new Map<string, string>();

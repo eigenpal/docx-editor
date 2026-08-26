@@ -317,6 +317,8 @@ const TREE_OP_REACH: {
   // exactly where the applier puts it.
   insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
   insertInlineContentControl: (op) => writingAt(op.paragraphId, op.offset),
+  // A fragment paste writes content at the offset, exactly like typing there.
+  insertFragment: (op) => writingAt(op.paragraphId, op.offset),
   // A split at a control's edge moves the whole control to one side of the break and changes
   // nothing it holds, so neither edge is inside. A split WITHIN it is, and the range says so.
   splitParagraph: (op) => beside(op.paragraphId, op.offset),

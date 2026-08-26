@@ -519,6 +519,12 @@ export interface TreeDocxSessionView {
     scope: StoryScope,
     input: import('../store/store/tree-package-images.ts').ApplyImagePropertiesInput
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;
+
+  /** Land a clipboard fragment (resource merge + blocks) as one package undo unit. */
+  applyFragmentPaste(
+    scope: StoryScope,
+    input: import('../store/store/tree-package-fragment.ts').FragmentPasteInput
+  ): import('../store/store/tree-package-fragment.ts').FragmentPasteResult;
 }
 
 /**
@@ -1674,6 +1680,10 @@ export function openTreeSession(
 
       applyImageProperties(scope, input) {
         return packageStore.applyImageProperties(scope, input);
+      },
+
+      applyFragmentPaste(scope, input) {
+        return packageStore.applyFragmentPaste(scope, input);
       },
     },
   };

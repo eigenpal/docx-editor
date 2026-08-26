@@ -333,7 +333,9 @@
     "selectAll": "Tout sélectionner",
     "selectAllShortcut": "Ctrl+A",
     "editCustomNode": "Modifier {label}",
-    "removeCustomNode": "Supprimer {label}"
+    "removeCustomNode": "Supprimer {label}",
+    "pasteWithoutFormatting": null,
+    "pasteWithoutFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "Plan du document",

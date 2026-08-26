@@ -197,6 +197,14 @@ export function createKeyDownHandler(
       event.preventDefault();
       return;
     }
+    if (accel && event.shiftKey && event.key.toLowerCase() === 'v') {
+      // Paste without formatting. The keydown handler cannot reach the clipboard — the
+      // payload only exists on the `paste` event, and some engines deliver plain-only
+      // payloads for this chord anyway — so the chord ARMS a force-plain flag the paste
+      // handler consumes, and deliberately does not prevent default.
+      surface.armForcePlainPaste();
+      return;
+    }
     if (accel && !event.shiftKey && event.key.toLowerCase() === 'k' && hooks.onRequestHyperlink) {
       // Word's Insert Hyperlink. On an existing link this opens EDIT mode seeded from it,
       // which is the host's job — the keymap only says the user asked.
@@ -283,42 +291,43 @@ export function createKeyDownHandler(
 /**
  * Clipboard.
  *
- * PLAIN TEXT only, deliberately: writing HTML would invite reading it back, and pasted
- * HTML is attacker-controlled markup that has no business reaching a sink here. Rich
- * paste belongs behind the same bounded parse the file path uses.
- *
- * A payload carrying ONLY `text/html` is still pasted, for its text — see
- * clipboard-plain-text.ts. That is a fallback for applications that omit the plain
- * flavour, not a rich lane: no structure, no markup, no DOM built from the payload.
+ * Copy and cut write TWO flavours: `text/plain`, and `text/html` carrying the interop
+ * markup with the fragment package embedded on its wrapper (rich-clipboard-fidelity).
+ * Paste routes by fidelity — embedded fragment, external HTML, plain text — and every
+ * rich payload goes through the SAME bounded parse the file path uses: the fragment
+ * through `readOoxmlPackage`, external HTML through the inert `DOMParser` projection.
+ * Nothing from the clipboard ever reaches an HTML sink; see clipboard-paste-router.ts.
  */
-export function createClipboardHandlers(
-  surface: PaginatedSurface,
-  insertPlainText: (text: string) => void
-): {
+export function createClipboardHandlers(surface: PaginatedSurface): {
   onCopy: (event: ClipboardEvent) => void;
   onCut: (event: ClipboardEvent) => void;
   onPaste: (event: ClipboardEvent) => void;
 } {
+  const writeFlavours = (event: ClipboardEvent): boolean => {
+    const flavours = surface.copyFlavours();
+    if (!flavours.text) return false;
+    event.clipboardData?.setData('text/plain', flavours.text);
+    if (flavours.html) event.clipboardData?.setData('text/html', flavours.html);
+    return true;
+  };
+
   const onCopy = (event: ClipboardEvent): void => {
-    const text = surface.selectedText();
-    if (!text) return;
-    event.clipboardData?.setData('text/plain', text);
+    if (!writeFlavours(event)) return;
     event.preventDefault();
   };
 
   const onCut = (event: ClipboardEvent): void => {
-    const text = surface.selectedText();
-    if (!text) return;
-    event.clipboardData?.setData('text/plain', text);
+    if (!writeFlavours(event)) return;
     surface.deleteSelection();
     event.preventDefault();
   };
 
   const onPaste = (event: ClipboardEvent): void => {
     const text = plainTextFromTransfer(event.clipboardData);
+    const html = event.clipboardData?.getData('text/html') ?? '';
     event.preventDefault();
-    if (!text) return;
-    insertPlainText(text);
+    if (!text && !html) return;
+    surface.pasteRich(text, html.length > 0 ? html : null);
   };
 
   return { onCopy, onCut, onPaste };
@@ -406,9 +415,9 @@ export function createBeforeInputHandler(
       return;
     }
     if (event.inputType === 'insertFromDrop' || event.inputType === 'insertFromPasteAsQuotation') {
-      // Plain text only, like paste: dropped content carries `text/html` from anywhere on the
-      // machine, and parsing it here would be exactly the HTML-from-a-string sink the file
-      // path is bounded to avoid.
+      // The DROP lane stays plain text by design (rich-clipboard-fidelity non-goal): only
+      // the paste router carries rich payloads, and it does so through the bounded parse
+      // lanes. A drop's `text/html` is read for its visible text and nothing else.
       const dropped = dataTransferText(event);
       if (dropped) hooks.insertPlainText(dropped);
       return;

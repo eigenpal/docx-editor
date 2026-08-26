@@ -6,7 +6,7 @@
 
 import type { ParagraphTabStop } from '../../contracts/types.ts';
 import type { ContentControlLock } from '../package/content-control-nodes.ts';
-import type { OoxmlDrawingNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import type { OoxmlDrawingNode, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import type {
   DrawingLocksInput,
   DrawingPositionInput,
@@ -899,6 +899,23 @@ export type TreeDocOp =
       };
     }
   | {
+      /**
+       * Insert clipboard-fragment blocks at a paragraph position, atomically.
+       *
+       * Blocks only — resources (styles, numbering, media, rels, note parts) merge through
+       * the package-edit path in the same transaction, and the whole commit is promoted to
+       * a package undo unit. A merged edge paragraph takes the properties of the paragraph
+       * mark that ends it: the fragment's first mark leading, the host's original mark
+       * trailing. Nodes receive fresh ids at apply.
+       */
+      readonly op: 'insertFragment';
+      readonly paragraphId: string;
+      readonly offset: number;
+      readonly blocks: readonly OoxmlNode[];
+      /** True when the fragment's last paragraph mark travelled (its paragraph stays whole). */
+      readonly lastMarkCovered?: boolean;
+    }
+  | {
       readonly op: 'insertDrawing';
       readonly paragraphId: string;
       readonly offset: number;
@@ -1063,6 +1080,7 @@ export const TREE_DOC_OP_KINDS = [
   'setNoteProperties',
   'setContentControlProperties',
   'insertContentControl',
+  'insertFragment',
   'insertDrawing',
   'replaceDrawingResource',
   'deleteDrawing',
@@ -1220,7 +1238,13 @@ export type TreeOpRejection =
   /** Suggesting-mode drawing deletion is not implemented in this change. */
   | 'trackedDrawingDeletionUnsupported'
   /** Hyperlink target creation or change needs an OPC relationship in a package transaction. */
-  | 'packageTransactionRequired';
+  | 'packageTransactionRequired'
+  /** A clipboard fragment block nests deeper than the recursion cap. */
+  | 'fragment-too-deep'
+  /** A clipboard fragment block is not a paragraph, table, or content control subtree. */
+  | 'fragment-invalid-block'
+  /** A clipboard fragment exceeds its block or node budget. */
+  | 'fragment-resource-budget';
 
 /** Whether an op applied, with the effect it produced or the reason it was refused. */
 export type TreeOpResult =

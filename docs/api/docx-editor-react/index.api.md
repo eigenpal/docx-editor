@@ -297,6 +297,15 @@ export namespace ContextMenuPaste {
 }
 
 // @public
+export function ContextMenuPasteWithoutFormatting(input: ContextMenuCommandProps): react.JSX.Element | null;
+
+// @public (undocumented)
+export namespace ContextMenuPasteWithoutFormatting {
+    var // (undocumented)
+    docxRow: "edit.pasteWithoutFormatting";
+}
+
+// @public
 export const ContextMenuRefreshToc: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
@@ -401,6 +410,8 @@ export interface DocxEditorContextMenuNamespace {
     readonly Item: typeof ContextMenuItem;
     // (undocumented)
     readonly Paste: typeof ContextMenuPaste;
+    // (undocumented)
+    readonly PasteWithoutFormatting: typeof ContextMenuPasteWithoutFormatting;
     // (undocumented)
     readonly RefreshToc: typeof ContextMenuRefreshToc;
     // (undocumented)

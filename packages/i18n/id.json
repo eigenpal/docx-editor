@@ -340,7 +340,9 @@
     "selectAll": "Pilih Semua",
     "selectAllShortcut": "Ctrl+A",
     "editCustomNode": "Edit {label}",
-    "removeCustomNode": "Hapus {label}"
+    "removeCustomNode": "Hapus {label}",
+    "pasteWithoutFormatting": null,
+    "pasteWithoutFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "Struktur dokumen",

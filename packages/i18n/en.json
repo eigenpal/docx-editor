@@ -359,6 +359,8 @@
     "copyShortcut": "Ctrl+C",
     "paste": "Paste",
     "pasteShortcut": "Ctrl+V",
+    "pasteWithoutFormatting": "Paste without formatting",
+    "pasteWithoutFormattingShortcut": "Ctrl+Shift+V",
     "delete": "Delete",
     "deleteShortcut": "Del",
     "selectAll": "Select All",

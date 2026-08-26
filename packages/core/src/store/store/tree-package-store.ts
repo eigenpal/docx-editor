@@ -69,6 +69,11 @@ import {
   type ImageIntentResult,
   type InsertImageInput,
 } from './tree-package-images.ts';
+import {
+  applyFragmentPaste as applyFragmentPasteIntent,
+  type FragmentPasteInput,
+  type FragmentPasteResult,
+} from './tree-package-fragment.ts';
 import type { ImageDecodePort, SupportedImageMime } from '../package/image-resources.ts';
 
 type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
@@ -801,6 +806,11 @@ export class TreePackageStore {
    */
   insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult> {
     return insertImageIntent(this, scope, input);
+  }
+
+  /** Land a clipboard fragment (resource merge + blocks) as one package undo unit. */
+  applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult {
+    return applyFragmentPasteIntent(this, scope, input);
   }
 
   /** Replace a picture drawing's embedded media in one package undo unit. */

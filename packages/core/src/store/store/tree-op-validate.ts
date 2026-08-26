@@ -50,6 +50,7 @@ import {
 } from './tree-op-section-address.ts';
 import { rangePartiallyOverlapsDrawingAtom } from '../package/drawing-projection.ts';
 import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
+import { validateInsertFragment } from './tree-op-fragment.ts';
 import {
   indivisibleAt,
   isParagraph,
@@ -324,6 +325,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
 
   if (op.op === 'removeContentControl') {
     return validateRemoveContentControl(part, op.controlId);
+  }
+
+  if (op.op === 'insertFragment') {
+    return validateInsertFragment(part, op);
   }
 
   if (op.op === 'insertTable') {

@@ -686,7 +686,8 @@ function applySetNoteProperties(
 // part creation
 // ---------------------------------------------------------------------------
 
-function ensureNotesPart(
+/** Provision a notes part (separator shell, content type, relationship) when absent. */
+export function ensureNotesPart(
   pkg: OoxmlPackage,
   noteKind: NoteKind
 ): NoteLifecycleResult & { createdPartName?: string } {

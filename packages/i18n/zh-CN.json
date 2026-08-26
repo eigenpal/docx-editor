@@ -333,7 +333,9 @@
     "selectAll": "全选",
     "selectAllShortcut": "Ctrl+A",
     "editCustomNode": "编辑{label}",
-    "removeCustomNode": "删除{label}"
+    "removeCustomNode": "删除{label}",
+    "pasteWithoutFormatting": null,
+    "pasteWithoutFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "文档大纲",

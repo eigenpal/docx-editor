@@ -130,6 +130,7 @@ import {
 import { contentControlAtCaret, validateTreeOp } from './tree-op-validate.ts';
 import { fnv1a32 } from '../package/para-id.ts';
 import { applyDrawingOp, isDrawingTreeDocOp } from './tree-op-drawings.ts';
+import { applyInsertFragment } from './tree-op-fragment.ts';
 
 /**
  * A `w:t`, or a `w:delText` when the text being rebuilt was already struck.
@@ -278,6 +279,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   }
   if (isDrawingTreeDocOp(op)) return applyDrawingOp(part, op, options);
 
+  if (op.op === 'insertFragment') return applyInsertFragment(part, op, options);
   if (op.op === 'insertTable') return applyInsertTable(part, op, options);
   if (op.op === 'deleteBlock') return applyDeleteBlock(part, op.blockId, options);
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
