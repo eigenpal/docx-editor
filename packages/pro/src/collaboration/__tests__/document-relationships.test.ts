@@ -13,6 +13,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { collaborationDocx } from './support.ts';
 import {
+  WML,
   applyJournal,
   destroyReplica,
   findText,
@@ -22,6 +23,7 @@ import {
   saveReopenDigest,
   seedReplica,
   spliceTextJournal,
+  syncBoth,
   syncOne,
 } from './document-support.ts';
 
@@ -228,6 +230,95 @@ describe('materialized .rels trees follow the relationship map', () => {
       expect(packageOf(replica).parts.get(relsName)).toBe(before);
     } finally {
       destroyReplica(replica);
+    }
+  });
+});
+
+describe('cached relationship and part counts', () => {
+  test('the counts track puts, deletes and remote merges', async () => {
+    const left = await seedReplica(loadPackage(collaborationDocx()));
+    const right = joinReplica(left, 2);
+    try {
+      const expectCounts = (replica: typeof left): void => {
+        expect(replica.registry.relationshipCount()).toBe(replica.registry.relationships().length);
+        expect(replica.registry.partCount()).toBe(replica.registry.partEntries().length);
+      };
+      expectCounts(left);
+      expectCounts(right);
+
+      const owner = packageOf(left).mainDocumentPart;
+      const putRelationship = (id: string, order: number) =>
+        applyJournal(left, {
+          effects: [
+            {
+              kind: 'putRelationship',
+              owner,
+              record: {
+                ownerPart: owner,
+                id,
+                type: IMAGE_REL,
+                rawTarget: `media/${id}.png`,
+                targetMode: 'Internal',
+                order,
+              },
+            },
+          ],
+        });
+      putRelationship('rIdC1', 40);
+      putRelationship('rIdC2', 41);
+      expectCounts(left);
+
+      const rootId = left.mint.take();
+      applyJournal(left, {
+        effects: [
+          {
+            kind: 'putNode',
+            descriptor: {
+              logicalId: rootId,
+              kind: 'generic',
+              qname: { namespaceUri: WML, localName: 'hdr', prefix: 'w' },
+            },
+          },
+          { kind: 'putXmlPart', name: '/word/header9.xml', rootLogicalId: rootId },
+        ],
+      });
+      expectCounts(left);
+
+      // A remote put must land in the receiving replica's count too.
+      applyJournal(right, {
+        effects: [
+          {
+            kind: 'putRelationship',
+            owner,
+            record: {
+              ownerPart: owner,
+              id: 'rIdC3',
+              type: HYPERLINK_REL,
+              rawTarget: 'https://example.com/count',
+              targetMode: 'External',
+              order: 42,
+            },
+          },
+        ],
+      });
+      syncBoth(left, right);
+      expectCounts(left);
+      expectCounts(right);
+      expect(left.registry.relationshipCount()).toBe(right.registry.relationshipCount());
+      expect(left.registry.partCount()).toBe(right.registry.partCount());
+
+      applyJournal(left, {
+        effects: [
+          { kind: 'deleteRelationship', owner, relationshipId: 'rIdC1' },
+          { kind: 'deleteXmlPart', name: '/word/header9.xml' },
+        ],
+      });
+      syncOne(left, right);
+      expectCounts(left);
+      expectCounts(right);
+    } finally {
+      destroyReplica(left);
+      destroyReplica(right);
     }
   });
 });

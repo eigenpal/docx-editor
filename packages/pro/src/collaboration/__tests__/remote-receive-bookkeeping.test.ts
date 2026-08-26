@@ -17,6 +17,7 @@ import {
   materializedPassCounts,
   materializedPlacementClaims,
 } from '../document/materialize.ts';
+import { relationshipDecodeCount } from '../document/relationship-store.ts';
 import {
   CT,
   R,
@@ -101,10 +102,12 @@ function receiveOneCharacter(
   readonly blobBytes: number;
   readonly passes: number;
   readonly fullPasses: number;
+  readonly relationshipDecodes: number;
 } {
   const claimsBefore = materializedPlacementClaims();
   const blobBefore = materializedBlobBytesRead();
   const passesBefore = materializedPassCounts();
+  const decodesBefore = relationshipDecodeCount();
   harness.apply(author, [{ op: 'insertText', paragraphId, offset, text: 'X' }]);
   const passesAfter = materializedPassCounts();
   return {
@@ -112,6 +115,7 @@ function receiveOneCharacter(
     blobBytes: materializedBlobBytesRead() - blobBefore,
     passes: passesAfter.passes - passesBefore.passes,
     fullPasses: passesAfter.full - passesBefore.full,
+    relationshipDecodes: relationshipDecodeCount() - decodesBefore,
   };
 }
 
@@ -181,6 +185,32 @@ describe('materializer bookkeeping per received character', () => {
     // The image still has to be there — a cache that forgets it is worse than one that copies.
     const bytes = bob.store.currentPackage().partBytes.get('/word/media/image1.png');
     expect(bytes?.length).toBe(MEDIA_BYTES);
+    harness.expectConverged(alice, bob);
+  });
+
+  test('a text-only keystroke decodes the relationship map zero times', async () => {
+    const { alice, bob } = await harness.pair(imageDocument());
+    const target = harness.paragraphIdAt(alice, 0);
+
+    receiveOneCharacter(alice, target, 1);
+    const steady = [receiveOneCharacter(alice, target, 2), receiveOneCharacter(alice, target, 3)];
+
+    console.log(
+      JSON.stringify({
+        relationshipDecodesPerCharacter: steady.map((sample) => sample.relationshipDecodes),
+      })
+    );
+
+    for (const sample of steady) {
+      if (sample.relationshipDecodes > 0) {
+        throw new Error(
+          `A text-only keystroke decoded the relationship map ${sample.relationshipDecodes} ` +
+            'times. Every decode walks and sorts every relationship in the document, and ' +
+            'nothing but a package write can change what it returns — the materializer holds ' +
+            'the decoded projection until a pass runs with packageChanged set.'
+        );
+      }
+    }
     harness.expectConverged(alice, bob);
   });
 });

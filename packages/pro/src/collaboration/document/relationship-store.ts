@@ -30,6 +30,18 @@ export function relationshipKey(ownerPart: string, relationshipId: string): stri
   return `${ownerPart}${FIELD_SEP}${relationshipId}`;
 }
 
+let decodes = 0;
+
+/**
+ * Test-observable count of full relationship-map decodes.
+ *
+ * Every decode walks and sorts the whole map, so the receive gates pin how often one runs:
+ * a text-only remote keystroke must not pay for the document's relationships at all.
+ */
+export function relationshipDecodeCount(): number {
+  return decodes;
+}
+
 /** The owning part of a relationship key, tolerating a key an earlier build wrote. */
 function ownerPartOfKey(key: string): string {
   const cut = key.indexOf(FIELD_SEP);
@@ -48,6 +60,7 @@ function ownerPartOfKey(key: string): string {
  * owner map holding many, which is what a peer on an earlier build wrote.
  */
 export function readRelationships(map: RelationshipMap): readonly EncodedRelationship[] {
+  decodes += 1;
   const records: EncodedRelationship[] = [];
   map.forEach((holder, mapKey) => {
     if (!isNodeMap(holder) || rejectDangerousKey(mapKey)) return;

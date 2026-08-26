@@ -19,9 +19,6 @@ import {
   NODE_REPLACED_BY_FIELD,
   NODE_SHELL_FIELD,
   NODE_TEXT_FIELD,
-  FIELD_SEP,
-  attributeMapKey,
-  bindingMapKey,
   childArrayOf,
   internNamespace,
   namespaceIdOf,
@@ -34,12 +31,10 @@ import {
   makeRelationshipEntry,
   makeTextRecord,
   namespaceUriOf,
-  packAttributeValue,
   packNodeShell,
   packageSchemaOf,
   parseAttributeMapKey,
   parseBindingMapKey,
-  unpackAttributeValue,
   unpackNodeShell,
   type DirtyPaths,
   type ElementRecord,
@@ -52,6 +47,17 @@ import {
   type TextRecord,
 } from './schema.ts';
 import { readRelationships, relationshipKey } from './relationship-store.ts';
+import { resolveContestedPlacements } from './registry-contested-placement.ts';
+import {
+  deleteSharedAttribute,
+  deleteSharedBinding,
+  removeIndexedAttribute,
+  removeIndexedBinding,
+  upsertIndexedAttribute,
+  upsertIndexedBinding,
+  writeSharedAttribute,
+  writeSharedBinding,
+} from './registry-side-maps.ts';
 import { nodeKindOf, nodeShapeOf, sameChildOrder, type NodeShape } from './registry-node-reads.ts';
 import {
   readBinaries,
@@ -75,10 +81,6 @@ function readString(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-function attrIdentity(namespaceId: string, localName: string): string {
-  return `${namespaceId}${FIELD_SEP}${localName}`;
-}
-
 /** Child-ID arrays are the only replicated membership and order authority. */
 export class DocumentRegistry {
   readonly schema: PackageSchema;
@@ -90,6 +92,8 @@ export class DocumentRegistry {
   private childrenSnapshot = new Map<LogicalId, readonly LogicalId[]>();
   private adoptees = new Map<LogicalId, LogicalId[]>();
   private tombstoneSources = new Map<LogicalId, Set<LogicalId>>();
+  /** Which survivor's source set lists each tombstone. Derived, never replicated. */
+  private tombstoneSurvivor = new Map<LogicalId, LogicalId>();
   private attributesByNode = new Map<LogicalId, Map<string, EncodedAttribute>>();
   private bindingsByNode = new Map<LogicalId, Map<string, EncodedBinding>>();
   private bulkLoad = 0;
@@ -98,6 +102,10 @@ export class DocumentRegistry {
   private nodeCountCache = -1;
   /** Nodes written since that batch. Yjs delivers a nested transaction's events late. */
   private pendingNodeAdds = 0;
+  /** Relationship-record total as of the last decode. Negative means "not counted yet". */
+  private relationshipCountCache = -1;
+  /** Part-entry total as of the last read. Negative means "not counted yet". */
+  private partCountCache = -1;
 
   constructor(
     readonly doc: Y.Doc,
@@ -116,6 +124,14 @@ export class DocumentRegistry {
     this.schema.bindings.observe((event) => {
       if (this.bulkLoad > 0) return;
       this.applyBindingMapEvent(event);
+    });
+    // Dropping a stale count is safe at any time, so these run even during a bulk load. The
+    // deep observers catch a peer on an earlier build writing inside a nested owner map.
+    this.schema.relationships.observeDeep(() => {
+      this.relationshipCountCache = -1;
+    });
+    this.schema.parts.observeDeep(() => {
+      this.partCountCache = -1;
     });
   }
 
@@ -163,6 +179,32 @@ export class DocumentRegistry {
 
   partEntries(): readonly PartDirectoryEntry[] {
     return readPartEntries(this.schema.parts);
+  }
+
+  /**
+   * How many XML parts the directory holds.
+   *
+   * {@link partEntries} decodes and sorts the whole directory. The journal's part cap read it
+   * once per `putXmlPart` effect, so admitting N parts walked the directory N times. The
+   * count is cached; any write to the part map, local or remote, drops it.
+   */
+  partCount(): number {
+    if (this.partCountCache < 0) this.partCountCache = this.partEntries().length;
+    return this.partCountCache;
+  }
+
+  /**
+   * How many relationship records shared state holds.
+   *
+   * {@link relationships} decodes and sorts every record. The journal's relationship cap read
+   * it once per `putRelationship` effect, so pasting N images decoded the map N times. The
+   * count is cached; any write to the relationship map, local or remote, drops it.
+   */
+  relationshipCount(): number {
+    if (this.relationshipCountCache < 0) {
+      this.relationshipCountCache = this.relationships().length;
+    }
+    return this.relationshipCountCache;
   }
 
   mainDocumentPart(): string {
@@ -309,10 +351,22 @@ export class DocumentRegistry {
       })
     );
     for (const attribute of record.attributes) {
-      this.writeAttribute(record.logicalId, attribute, attribute.value);
+      writeSharedAttribute(
+        this.schema,
+        this.limits.maxStringLength,
+        record.logicalId,
+        attribute,
+        attribute.value
+      );
     }
     for (const binding of record.bindings) {
-      this.writeBinding(record.logicalId, binding.prefix, binding.namespaceUri);
+      writeSharedBinding(
+        this.schema,
+        this.limits.maxStringLength,
+        record.logicalId,
+        binding.prefix,
+        binding.namespaceUri
+      );
     }
   }
 
@@ -365,18 +419,18 @@ export class DocumentRegistry {
     value: string | null
   ): void {
     if (value === null) {
-      this.deleteAttribute(logicalId, attribute.namespaceUri, attribute.localName);
+      deleteSharedAttribute(this.schema, logicalId, attribute.namespaceUri, attribute.localName);
       return;
     }
-    this.writeAttribute(logicalId, attribute, value);
+    writeSharedAttribute(this.schema, this.limits.maxStringLength, logicalId, attribute, value);
   }
 
   setNamespaceBinding(logicalId: LogicalId, prefix: string, uri: string | null): void {
     if (uri === null) {
-      this.deleteBinding(logicalId, prefix);
+      deleteSharedBinding(this.schema, logicalId, prefix);
       return;
     }
-    this.writeBinding(logicalId, prefix, uri);
+    writeSharedBinding(this.schema, this.limits.maxStringLength, logicalId, prefix, uri);
   }
 
   spliceChildren(
@@ -432,6 +486,9 @@ export class DocumentRegistry {
   }
 
   putXmlPart(entry: PartDirectoryEntry): void {
+    // Dropped here as well as in the observer: a nested transaction delivers its events late,
+    // and a queued journal can read the count inside that window.
+    this.partCountCache = -1;
     this.schema.parts.set(
       entry.name,
       makePartEntry(entry.id, entry.rootLogicalId, entry.contentType)
@@ -439,6 +496,7 @@ export class DocumentRegistry {
   }
 
   deleteXmlPart(name: string): void {
+    this.partCountCache = -1;
     this.schema.parts.delete(name);
   }
 
@@ -457,12 +515,14 @@ export class DocumentRegistry {
    */
   putRelationship(record: EncodedRelationship): void {
     if (rejectDangerousKey(record.ownerPart) || rejectDangerousKey(record.id)) return;
+    this.relationshipCountCache = -1;
     const holder = new Y.Map<Y.Map<unknown>>();
     holder.set(record.id, makeRelationshipEntry(record));
     this.schema.relationships.set(relationshipKey(record.ownerPart, record.id), holder);
   }
 
   deleteRelationship(ownerPart: string, relationshipId: string): void {
+    this.relationshipCountCache = -1;
     this.schema.relationships.delete(relationshipKey(ownerPart, relationshipId));
     this.schema.relationships.get(ownerPart)?.delete(relationshipId);
   }
@@ -570,11 +630,14 @@ export class DocumentRegistry {
     this.unobservedWrites = 0;
     this.nodeCountCache = -1;
     this.pendingNodeAdds = 0;
+    this.relationshipCountCache = -1;
+    this.partCountCache = -1;
     this.parentIndex = new Map();
     this.listings = new Map();
     this.childrenSnapshot = new Map();
     this.adoptees = new Map();
     this.tombstoneSources = new Map();
+    this.tombstoneSurvivor = new Map();
     this.attributesByNode = new Map();
     this.bindingsByNode = new Map();
     this.schema.nodes.forEach((rec, parentId) => {
@@ -594,7 +657,14 @@ export class DocumentRegistry {
       if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.localName)) {
         return;
       }
-      this.upsertIndexedAttribute(parsed.logicalId, parsed.namespaceId, parsed.localName, packed);
+      upsertIndexedAttribute(
+        this.schema,
+        this.attributesByNode,
+        parsed.logicalId,
+        parsed.namespaceId,
+        parsed.localName,
+        packed
+      );
     });
     this.schema.bindings.forEach((namespaceId, key) => {
       if (typeof namespaceId !== 'string' || rejectDangerousKey(key)) return;
@@ -602,7 +672,13 @@ export class DocumentRegistry {
       if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.prefix)) {
         return;
       }
-      this.upsertIndexedBinding(parsed.logicalId, parsed.prefix, namespaceId);
+      upsertIndexedBinding(
+        this.schema,
+        this.bindingsByNode,
+        parsed.logicalId,
+        parsed.prefix,
+        namespaceId
+      );
     });
     this.assignFirstReachable(null);
   }
@@ -661,12 +737,24 @@ export class DocumentRegistry {
         continue;
       }
       if (change.action === 'delete') {
-        this.removeIndexedAttribute(parsed.logicalId, parsed.namespaceId, parsed.localName);
+        removeIndexedAttribute(
+          this.attributesByNode,
+          parsed.logicalId,
+          parsed.namespaceId,
+          parsed.localName
+        );
         continue;
       }
       const packed = this.schema.attributes.get(String(key));
       if (typeof packed !== 'string') continue;
-      this.upsertIndexedAttribute(parsed.logicalId, parsed.namespaceId, parsed.localName, packed);
+      upsertIndexedAttribute(
+        this.schema,
+        this.attributesByNode,
+        parsed.logicalId,
+        parsed.namespaceId,
+        parsed.localName,
+        packed
+      );
     }
   }
 
@@ -678,12 +766,18 @@ export class DocumentRegistry {
         continue;
       }
       if (change.action === 'delete') {
-        this.removeIndexedBinding(parsed.logicalId, parsed.prefix);
+        removeIndexedBinding(this.bindingsByNode, parsed.logicalId, parsed.prefix);
         continue;
       }
       const namespaceId = this.schema.bindings.get(String(key));
       if (typeof namespaceId !== 'string') continue;
-      this.upsertIndexedBinding(parsed.logicalId, parsed.prefix, namespaceId);
+      upsertIndexedBinding(
+        this.schema,
+        this.bindingsByNode,
+        parsed.logicalId,
+        parsed.prefix,
+        namespaceId
+      );
     }
   }
 
@@ -745,7 +839,18 @@ export class DocumentRegistry {
       }
       multi.push(id);
     }
-    if (multi.length > 0) this.assignFirstReachable(new Set(multi));
+    if (multi.length === 0) return;
+    const resolved = resolveContestedPlacements(
+      {
+        nodes: this.schema.nodes,
+        parentIndex: this.parentIndex,
+        listings: this.listings,
+        childrenSnapshot: this.childrenSnapshot,
+        partRoots: this.partEntries().map((entry) => entry.rootLogicalId),
+      },
+      multi
+    );
+    if (!resolved) this.assignFirstReachable(new Set(multi));
   }
 
   private assignFirstReachable(only: ReadonlySet<LogicalId> | null): void {
@@ -773,24 +878,30 @@ export class DocumentRegistry {
   }
 
   private syncAdoptee(removedId: LogicalId): void {
-    for (const sources of this.tombstoneSources.values()) sources.delete(removedId);
+    // A tombstone lists at most one survivor, and every listing is written here, so the
+    // reverse index names the one source set that can hold `removedId`. Scanning every
+    // survivor instead made each tombstone event cost every tombstone in the session.
+    const previous = this.tombstoneSurvivor.get(removedId);
+    if (previous !== undefined) {
+      this.tombstoneSurvivor.delete(removedId);
+      const sources = this.tombstoneSources.get(previous);
+      if (sources) {
+        sources.delete(removedId);
+        if (sources.size === 0) this.tombstoneSources.delete(previous);
+      }
+    }
     const rec = this.schema.nodes.get(removedId);
     const survivor = rec?.get(NODE_REPLACED_BY_FIELD);
-    const targets = new Set<LogicalId>();
-    if (
-      rec?.get(NODE_DELETED_FIELD) === true &&
-      typeof survivor === 'string' &&
-      survivor.length > 0
-    ) {
+    if (typeof survivor !== 'string' || survivor.length === 0) return;
+    if (rec?.get(NODE_DELETED_FIELD) === true) {
       const sources = this.tombstoneSources.get(survivor) ?? new Set<LogicalId>();
       sources.add(removedId);
       this.tombstoneSources.set(survivor, sources);
-      targets.add(survivor);
+      this.tombstoneSurvivor.set(removedId, survivor);
     }
-    for (const [existing, sources] of this.tombstoneSources) {
-      if (sources.has(removedId) || existing === survivor) targets.add(existing);
-    }
-    for (const target of targets) this.recomputeAdoptees(target);
+    // An un-tombstoned node keeps its `replacedBy`, and its former survivor has to give the
+    // adopted children back, so the survivor recomputes in both branches.
+    this.recomputeAdoptees(survivor);
   }
 
   private isContentWitness(id: LogicalId): boolean {
@@ -836,93 +947,6 @@ export class DocumentRegistry {
     for (let index = array.length - 1; index >= 0; index -= 1) {
       if (array.get(index) === id) array.delete(index, 1);
     }
-  }
-
-  private writeAttribute(
-    logicalId: LogicalId,
-    attribute: {
-      readonly namespaceUri: string;
-      readonly localName: string;
-      readonly prefix?: string;
-    },
-    value: string
-  ): void {
-    if (rejectDangerousKey(logicalId) || rejectDangerousKey(attribute.localName)) return;
-    const namespaceId = internNamespace(
-      this.schema.namespaces,
-      attribute.namespaceUri,
-      this.limits.maxStringLength
-    );
-    const key = attributeMapKey(logicalId, namespaceId, attribute.localName);
-    if (rejectDangerousKey(key)) return;
-    this.schema.attributes.set(key, packAttributeValue(attribute.prefix ?? '', value));
-  }
-
-  private deleteAttribute(logicalId: LogicalId, namespaceUri: string, localName: string): void {
-    const namespaceId = namespaceIdOf(namespaceUri);
-    this.schema.attributes.delete(attributeMapKey(logicalId, namespaceId, localName));
-  }
-
-  private writeBinding(logicalId: LogicalId, prefix: string, uri: string): void {
-    if (rejectDangerousKey(logicalId) || rejectDangerousKey(prefix)) return;
-    const namespaceId = internNamespace(this.schema.namespaces, uri, this.limits.maxStringLength);
-    const key = bindingMapKey(logicalId, prefix);
-    if (rejectDangerousKey(key)) return;
-    this.schema.bindings.set(key, namespaceId);
-  }
-
-  private deleteBinding(logicalId: LogicalId, prefix: string): void {
-    this.schema.bindings.delete(bindingMapKey(logicalId, prefix));
-  }
-
-  private upsertIndexedAttribute(
-    logicalId: LogicalId,
-    namespaceId: string,
-    localName: string,
-    packed: string
-  ): void {
-    const { prefix, value } = unpackAttributeValue(packed);
-    let bucket = this.attributesByNode.get(logicalId);
-    if (!bucket) {
-      bucket = new Map();
-      this.attributesByNode.set(logicalId, bucket);
-    }
-    bucket.set(attrIdentity(namespaceId, localName), {
-      namespaceUri: namespaceUriOf(this.schema.namespaces, namespaceId),
-      localName,
-      prefix: prefix.length > 0 ? prefix : undefined,
-      value,
-    });
-  }
-
-  private removeIndexedAttribute(
-    logicalId: LogicalId,
-    namespaceId: string,
-    localName: string
-  ): void {
-    const bucket = this.attributesByNode.get(logicalId);
-    if (!bucket) return;
-    bucket.delete(attrIdentity(namespaceId, localName));
-    if (bucket.size === 0) this.attributesByNode.delete(logicalId);
-  }
-
-  private upsertIndexedBinding(logicalId: LogicalId, prefix: string, namespaceId: string): void {
-    let bucket = this.bindingsByNode.get(logicalId);
-    if (!bucket) {
-      bucket = new Map();
-      this.bindingsByNode.set(logicalId, bucket);
-    }
-    bucket.set(prefix, {
-      prefix,
-      namespaceUri: namespaceUriOf(this.schema.namespaces, namespaceId),
-    });
-  }
-
-  private removeIndexedBinding(logicalId: LogicalId, prefix: string): void {
-    const bucket = this.bindingsByNode.get(logicalId);
-    if (!bucket) return;
-    bucket.delete(prefix);
-    if (bucket.size === 0) this.bindingsByNode.delete(logicalId);
   }
 
   private elementRecord(logicalId: LogicalId, rec: Y.Map<unknown>): ElementRecord {

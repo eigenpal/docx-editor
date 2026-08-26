@@ -172,7 +172,7 @@ function validateEffect(
       if (partError) return { ok: false, code: partError, detail: effect.name };
       const missing = requireKnown(projection, effect.rootLogicalId);
       if (missing) return missing;
-      if (registry.partEntries().length >= registry.limits.maxParts) {
+      if (registry.partCount() >= registry.limits.maxParts) {
         return { ok: false, code: 'too-many-parts' };
       }
       return null;
@@ -187,7 +187,7 @@ function validateEffect(
         if (ownerError) return { ok: false, code: ownerError };
       }
       if (rejectDangerousKey(effect.record.id)) return { ok: false, code: 'prototype-key' };
-      if (registry.relationships().length >= registry.limits.maxRelationships) {
+      if (registry.relationshipCount() >= registry.limits.maxRelationships) {
         return { ok: false, code: 'too-many-relationships' };
       }
       return null;

@@ -4,17 +4,13 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import {
-  buildRelationshipSet,
   relsPartNameFor,
-  resolveRelationship,
   CUSTOM_XML_PROPS_TYPE,
   type ContentTypeIndex,
   type OoxmlElement,
-  type OoxmlExternalTarget,
   type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
-  type RelationshipRecord,
 } from '@docx-editor.dev/core/store';
 import type { LogicalId } from './identity.ts';
 import { rejectDangerousKey, rejectPartName } from './limits.ts';
@@ -33,7 +29,6 @@ import {
   emptyRelsPart,
   isRelsPartName,
   relationshipChildrenOf,
-  relationshipsByOwner,
   relsOwnerOf,
   relsShellMatches,
 } from './materialize-rels.ts';
@@ -44,13 +39,12 @@ import {
   customXmlRepairRelationships,
   isCustomXmlItemPartName,
   isCustomXmlPropsPartName,
-  mergeCustomXmlRelationships,
   planCustomXmlStores,
 } from './materialize-custom-xml.ts';
 import { partMemberSpecFor } from './materialize-part-members.ts';
+import { PackageProjectionCache } from './materialize-package-cache.ts';
 import {
   attributesMatch,
-  countBlobBytes,
   countPass,
   countRecordRead,
   expandAncestors,
@@ -82,6 +76,18 @@ export type MaterializeResult =
       readonly issues: readonly RepairIssue[];
     };
 
+function dedupeIssues(issues: readonly RepairIssue[]): RepairIssue[] {
+  const seen = new Set<string>();
+  const kept: RepairIssue[] = [];
+  for (const issue of issues) {
+    const key = `${issue.code}${issue.logicalId ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    kept.push(issue);
+  }
+  return kept;
+}
+
 /**
  * Incremental package materializer. Repair is pure: it does not write Yjs.
  * Child-ID arrays remain membership authority. The derived parent index is not replicated.
@@ -91,8 +97,8 @@ export class PackageMaterializer {
   /** Depth of each cached subtree, so reuse cannot smuggle a node past `maxTreeDepth`. */
   private readonly heights = new Map<LogicalId, number>();
   private readonly partCache = new Map<string, OoxmlPart>();
-  /** Media payload per storage key, with the digest it was read for. */
-  private readonly blobBytes = new Map<string, { digest: string; bytes: Uint8Array }>();
+  /** Package projections that only a package write can change. */
+  private readonly packageCache: PackageProjectionCache;
   /** Last `.rels` projection. The node tree is not the relationship authority. */
   private readonly relsProjection = new Map<string, OoxmlPart>();
   private readonly pendingDirty = new Set<LogicalId>();
@@ -102,6 +108,16 @@ export class PackageMaterializer {
   /** Adoptee signature per survivor at the end of the last pass. */
   private lastAdoption = new Map<LogicalId, string>();
   private placementContested = false;
+  /**
+   * What the last full pass decided for each contested id: the parent the registry resolved
+   * then, `null` for none. Holds only ids that pass evidenced as contested, so a hostile peer
+   * cannot grow it past the contests it actually keeps alive.
+   */
+  private lastContestResolution = new Map<LogicalId, LogicalId | null>();
+  /** Contested ids the current pass ran into. Reset per pass. */
+  private readonly contestEncountered = new Set<LogicalId>();
+  /** False when this pass placed a contested child under a parent the registry does not resolve. */
+  private contestMatchesResolution = true;
   /**
    * Whether this pass claims every node of a reused subtree, or only its root.
    *
@@ -147,6 +163,7 @@ export class PackageMaterializer {
     readonly registry: DocumentRegistry,
     readonly blobs: BlobBytesStore
   ) {
+    this.packageCache = new PackageProjectionCache(registry);
     this.stop = registry.observeDirty((paths) => {
       for (const id of paths.logicalIds) this.pendingDirty.add(id);
       if (paths.membershipChanged) this.pendingMembership = true;
@@ -213,6 +230,9 @@ export class PackageMaterializer {
     // character, so the pass rebuilds the indexes and reads everything from shared state.
     const unobserved = this.registry.hasUnobservedWrites();
     if (unobserved) this.registry.rebuildDerivedIndexes();
+    // An unobserved write can be a package write whose `packageChanged` flag has not been
+    // delivered yet, so it disqualifies the package projections exactly as the flag does.
+    if (packageChanged || unobserved) this.packageCache.invalidate();
     for (const survivor of this.adoptionChanges()) rawDirty.add(survivor);
     const dirty = expandAncestors(this.registry, rawDirty);
     // A relationship-only change dirties no nodes. Reuse the node cache, then project `.rels`.
@@ -246,7 +266,34 @@ export class PackageMaterializer {
     // Two child arrays list one id and the cache disagrees with the rebuilt parent about
     // which one owns it. A full pass decides it the one deterministic way: first preorder
     // placement wins, the rest report `duplicate-parent`.
-    return this.materializePass(dirty, packageChanged, false);
+    //
+    // Unless the decision is already made. When every contest this pass ran into is one the
+    // last full pass decided, still resolves to the same parent, and this pass placed each
+    // contested child under exactly that parent, the incremental result IS the full pass's
+    // answer — the losers' cached subtrees were built without the child. A peer keeping one
+    // contest alive then costs its winner's rebuild, not the document, per keystroke.
+    if (first.ok && this.contestMatchesResolution && this.contestUnchanged()) {
+      // A rebuilt loser re-reports a duplicate the pass also carried forward; one is enough.
+      return { ok: true, package: first.package, issues: dedupeIssues(first.issues) };
+    }
+    const second = this.materializePass(dirty, packageChanged, false);
+    this.recordContestResolution();
+    return second;
+  }
+
+  private contestUnchanged(): boolean {
+    for (const id of this.contestEncountered) {
+      const resolved = this.lastContestResolution.get(id);
+      if (resolved === undefined || resolved !== this.registry.parentOf(id)) return false;
+    }
+    return true;
+  }
+
+  private recordContestResolution(): void {
+    const next = new Map<LogicalId, LogicalId | null>();
+    for (const id of this.contestEncountered) next.set(id, this.registry.parentOf(id));
+    for (const id of this.lastDuplicateParents) next.set(id, this.registry.parentOf(id));
+    this.lastContestResolution = next;
   }
 
   private materializePass(
@@ -257,6 +304,8 @@ export class PackageMaterializer {
     this.issues.length = 0;
     this.lastDirty = dirty;
     this.placementContested = false;
+    this.contestEncountered.clear();
+    this.contestMatchesResolution = true;
     // A full pass builds the tree from shared state alone, so it is the only one that can
     // claim placement by walking, and the only one that has to.
     this.claimsWholeSubtrees = !incremental;
@@ -308,6 +357,7 @@ export class PackageMaterializer {
     for (const name of [...this.relsProjection.keys()]) {
       if (!parts.has(name)) this.relsProjection.delete(name);
     }
+    this.evictDeadSubtrees(placed);
     this.reportOrphans(candidates, placed, incremental, loose);
     this.looseCandidates = loose;
     if (!incremental) {
@@ -520,6 +570,12 @@ export class PackageMaterializer {
       // deterministically. This rides inside the loop the rebuild already runs.
       if (!this.claimsWholeSubtrees && this.registry.listingParents(childId).length > 1) {
         this.placementContested = true;
+        this.contestEncountered.add(childId);
+        // Placing the child here reproduces the full pass only when here is where the
+        // registry resolves it. A child already placed was checked at its own placement.
+        if (!placed.has(childId) && this.registry.parentOf(childId) !== logicalId) {
+          this.contestMatchesResolution = false;
+        }
       }
       const child = this.materialize(childId, placed, path, incremental);
       if (child) children.push(child);
@@ -564,6 +620,39 @@ export class PackageMaterializer {
   }
 
   /**
+   * Forget the cached subtrees of nodes this pass saw deleted for good.
+   *
+   * The cache otherwise only grows: a deleted paragraph's frozen subtree stays retained for
+   * the rest of the session. Only ids that left a parent during this pass can have died, and
+   * a dead root is one that is tombstoned (or gone from shared state) and placed nowhere.
+   * The descent stops at any placed id — a child that MOVED, or was adopted by a survivor,
+   * is in the tree and keeps its entry.
+   */
+  private evictDeadSubtrees(placed: ReadonlySet<LogicalId>): void {
+    for (const id of this.droppedChildren) {
+      if (placed.has(id)) continue;
+      if (this.registry.isTombstoned(id) || !this.registry.hasNode(id)) {
+        this.evictSubtree(id, placed);
+      }
+    }
+  }
+
+  private evictSubtree(id: LogicalId, placed: ReadonlySet<LogicalId>): void {
+    const node = this.cache.get(id);
+    this.cache.delete(id);
+    this.heights.delete(id);
+    if (!node || node.kind === 'textValue') return;
+    for (const child of node.children) {
+      if (!placed.has(child.id)) this.evictSubtree(child.id, placed);
+    }
+  }
+
+  /** @internal Test-only view of which subtrees the node cache still retains. */
+  retainedNodeIds(): readonly LogicalId[] {
+    return [...this.cache.keys()];
+  }
+
+  /**
    * Depth of one cached subtree, memoized.
    *
    * A rebuilt node forgets its height, and a node whose height moved is necessarily rebuilt
@@ -580,10 +669,6 @@ export class PackageMaterializer {
     return height;
   }
 
-  private projectedRelationships(): EncodedRelationship[] {
-    return mergeCustomXmlRelationships(this.registry.relationships(), this.customXmlRels);
-  }
-
   /**
    * Project each `.rels` part from the relationship map.
    *
@@ -591,7 +676,7 @@ export class PackageMaterializer {
    * `putRelationship` does not splice a Relationship child.
    */
   private projectRelsParts(parts: Map<string, OoxmlPart>): void {
-    const byOwner = relationshipsByOwner(this.projectedRelationships());
+    const byOwner = this.packageCache.groupedByOwner(this.customXmlRels);
     const projected = new Set<string>();
     for (const [owner, records] of byOwner) {
       const relsName = relsPartNameFor(owner);
@@ -835,61 +920,15 @@ export class PackageMaterializer {
     this.projectRelsParts(parts);
   }
 
-  /**
-   * Media bytes for every binary part, keyed the way the package wants them.
-   *
-   * The blob store returns a defensive copy on every read, and a descriptor names its bytes
-   * by content digest — so a descriptor whose digest is unchanged names bytes this
-   * materializer already holds. Re-reading them would copy every image in the document to
-   * learn they are the same images, on every pass, which is to say on every received
-   * character. The map is rebuilt each pass because a caller may own it; the payloads are
-   * not, because they are addressed by their own hash.
-   */
-  private resolvePartBytes(): Map<string, Uint8Array> | null {
-    const partBytes = new Map<string, Uint8Array>();
-    const live = new Set<string>();
-    for (const descriptor of this.registry.binaries()) {
-      live.add(descriptor.storageKey);
-      const held = this.blobBytes.get(descriptor.storageKey);
-      if (held && held.digest === descriptor.digest) {
-        partBytes.set(descriptor.storageKey, held.bytes);
-        continue;
-      }
-      const bytes = this.blobs.get(descriptor.digest);
-      if (!bytes) return null;
-      countBlobBytes(bytes.length);
-      this.blobBytes.set(descriptor.storageKey, { digest: descriptor.digest, bytes });
-      partBytes.set(descriptor.storageKey, bytes);
-    }
-    for (const key of [...this.blobBytes.keys()]) {
-      if (!live.has(key)) this.blobBytes.delete(key);
-    }
-    return partBytes;
-  }
-
   private assemblePackage(parts: Map<string, OoxmlPart>): MaterializeResult {
-    const relationships = this.projectedRelationships() as RelationshipRecord[];
-    const set = buildRelationshipSet(relationships);
-    if (!set.ok) return { ok: false, code: 'invalid-relationships', issues: [...this.issues] };
-    const externalTargets: OoxmlExternalTarget[] = [];
-    for (const record of relationships) {
-      const resolved = resolveRelationship(record);
-      if (resolved.mode === 'External') {
-        externalTargets.push({
-          ownerPart: record.ownerPart,
-          id: record.id,
-          type: record.type,
-          rawTarget: record.rawTarget,
-          sinkSafe: resolved.sinkSafe.ok,
-        });
-      }
-    }
-    const partBytes = this.resolvePartBytes();
+    const assembly = this.packageCache.relationshipAssembly(this.customXmlRels);
+    if (!assembly) return { ok: false, code: 'invalid-relationships', issues: [...this.issues] };
+    const partBytes = this.packageCache.resolvePartBytes(this.blobs);
     if (!partBytes) return { ok: false, code: 'missing-blob', issues: [...this.issues] };
-    const overrides = new Map(this.registry.contentTypeOverrides());
+    const overrides = new Map(this.packageCache.contentTypeOverrides());
     for (const [name, mediaType] of this.customXmlOverrides) overrides.set(name, mediaType);
     const contentTypes: ContentTypeIndex = {
-      defaults: this.registry.contentTypeDefaults(),
+      defaults: this.packageCache.contentTypeDefaults(),
       overrides,
     };
     const mainDocumentPart =
@@ -901,8 +940,8 @@ export class PackageMaterializer {
       package: Object.freeze({
         parts,
         partBytes,
-        relationships: set.byOwner,
-        externalTargets: Object.freeze(externalTargets),
+        relationships: assembly.byOwner,
+        externalTargets: assembly.externalTargets,
         contentTypes,
         mainDocumentPart,
       }),
