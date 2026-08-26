@@ -516,6 +516,10 @@ export class TreeDocumentStore {
       applyTo: (partName, op) => applyToPart(partName, op),
       applyPackage: (edit) => {
         if (failure) return false;
+        // The SECOND write channel, and it imports whole parts — a pasted fragment carries
+        // its own revision ids. The shared id minter is seeded from the part it first saw, so
+        // it goes here for the same reason a non-property op drops it.
+        minters.clear();
         const next = edit(working);
         if (next === working) return true;
         for (const [name, part] of next.parts) {

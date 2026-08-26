@@ -3651,9 +3651,6 @@ export interface RevisionAddress {
 export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[];
 
 // @public
-export function revisionReachedInMode(kind: OoxmlNode['kind'], displayMode: FormattingDisplayMode): boolean;
-
-// @public
 export function runAddressRanges(paragraph: Extract<OoxmlNode, {
     kind: 'paragraph';
 }>): Map<string, {

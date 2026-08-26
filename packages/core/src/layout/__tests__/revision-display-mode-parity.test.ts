@@ -16,7 +16,7 @@ import {
   DEFAULT_FORMATTING_DISPLAY_MODE,
   revisionReachedInMode,
   type FormattingDisplayMode,
-} from '@docx-editor.dev/core/store';
+} from '../../store/store/formattable-runs.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';
 
 /** Every member of each union, so a widening on either side breaks the other assignment. */

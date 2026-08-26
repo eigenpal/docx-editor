@@ -708,15 +708,26 @@ function rebuild(node: OoxmlNode, plan: RebuildPlan): OoxmlNode[] {
       // `CT_ParaRPrOriginal` admits `w:ins`, so a Word-written record legitimately carries one,
       // and keeping both emits two `w:ins` in a container whose schema allows one — a `w:pPr`
       // Word reports as unreadable. A run's own `w:rPr` holds no such children either way.
+      //
+      // THE PRESERVED CHILDREN GO THROUGH THE PLAN. They are live sites, not copies: THIS
+      // resolution may also be removing one of them, and lifting them out verbatim made
+      // Reject All report success over a paragraph-mark revision it had just been asked to
+      // reject — the reviewer saw an empty pane and a tracked change still in the file.
       if (restoring.localName === 'pPrChange') {
-        const preserved = node.children.filter(
-          (child) => isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr')
+        const preserved = rebuildChildren(
+          node.children.filter((child) => isWmlNamed(child, 'rPr') || isWmlNamed(child, 'sectPr')),
+          plan
         );
         // `w:rPr` and `w:sectPr` CLOSE `CT_PPr`, so they follow the recorded base.
         return [{ ...node, children: [...recorded, ...preserved] } as OoxmlElement];
       }
-      const liveMarks = node.children.filter((child) => isParagraphMarkRevision(child));
-      // `EG_ParaRPrTrackChanges` OPENS `CT_ParaRPr`, so the live marks lead.
+      const liveMarks = rebuildChildren(
+        node.children.filter((child) => isParagraphMarkRevision(child)),
+        plan
+      );
+      // `EG_ParaRPrTrackChanges` OPENS `CT_ParaRPr`, so the live marks lead — and the copies
+      // inside the record go, or the container ends up with two `w:ins` where its schema
+      // allows one.
       return [
         {
           ...node,

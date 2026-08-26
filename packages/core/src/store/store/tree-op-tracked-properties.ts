@@ -20,11 +20,19 @@
 // only re-attributes it. Recording the intermediate state instead would make Reject restore
 // a document nobody ever saw.
 //
-// A WRITE THAT ARRIVES BACK AT THE ORIGINAL LEAVES NO RECORD. Turning Bold on and off again
-// is not two proposals, and a card offering to revert a change that no longer exists is worse
-// than no card: accepting and rejecting it both produce the same document, so the reviewer
-// cannot tell what they decided. This is the same rule `retractsOwnParagraphMark` applies to
+// A WRITE THAT ARRIVES BACK AT THE ORIGINAL LEAVES NO RECORD. Setting a colour and then
+// setting it back is not two proposals, and a card offering to revert a change that no longer
+// exists is worse than no card: accepting and rejecting it both produce the same document, so
+// the reviewer cannot tell what they decided. Same rule `retractsOwnParagraphMark` applies to
 // a break the author took back.
+//
+// "The original" means the PROPERTY SET, compared as elements, and that is the whole of what
+// this module can know. A TOGGLE pressed twice does not reach it: toggling off writes an
+// explicit `<w:b w:val="0"/>` rather than dropping `w:b`, because the property may come from a
+// style and dropping the override would let it back (see `toggleRunProperty`). Whether that
+// explicit off is a real change is a question about the CASCADE, and the store lane has none
+// by design — reading one here would be the same mistake as merging a write against a cascaded
+// bag. So Bold on then Bold off records a change, exactly as it writes one.
 //
 // `resolveRevisions` already resolves both wrappers — accept drops the record, reject
 // restores what it holds. This module is the missing WRITE half.
@@ -153,8 +161,17 @@ export function withPropertyChangeRecord(options: {
   const existing = prior.find((child) => isWmlNamed(child, changeName));
   // The ORIGINAL: whatever a pending record already holds, else the state this write is
   // replacing. Never the intermediate state — see the module header.
-  const recorded =
-    (existing ? recordedIn(existing, container) : null) ?? recordable(prior, container);
+  //
+  // Narrowed the SAME way either source is, because the comparison below has the narrowed
+  // container on its other side. `CT_ParaRPrOriginal` admits `EG_ParaRPrTrackChanges`, so a
+  // record another producer wrote legitimately carries a `w:ins` — and taking that one raw
+  // made the two sides unequal for good: a write landing exactly on the recorded original
+  // re-attributed somebody else's proposal instead of dropping it, and copied their `w:ins`
+  // in beside the live one, two revisions sharing an `@w:id`.
+  const recorded = recordable(
+    (existing ? recordedIn(existing, container) : null) ?? prior,
+    container
+  );
   const body = next.filter((child) => !isWmlNamed(child, changeName));
   if (sameProperties(recordable(body, container), recorded)) return body;
 

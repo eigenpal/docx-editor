@@ -136,8 +136,13 @@ paragraph mark records `w:pPr/w:rPr/w:rPrChange`, and paragraph properties
 record `w:pPrChange`. Accept drops the record; reject restores what it holds.
 
 Two presses on the same run produce one card, because the record holds the
-properties the run started with. A change that lands back on those properties
-records nothing.
+properties the run started with. Setting a property back to the value the record
+holds removes the record.
+
+A toggle pressed twice is not that case. Turning bold off writes an explicit off
+value rather than removing the property, because the property might come from a
+style. The run's properties therefore differ from the ones it started with, and
+the change is recorded.
 
 Formatting text inside your own pending insertion records nothing either: the
 whole run is already your proposal, so rejecting the insertion takes the words

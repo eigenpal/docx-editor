@@ -290,6 +290,66 @@ describe('tracked format changes in suggesting mode', () => {
     });
   });
 
+  test('rejecting everything leaves no revision behind, format record or mark', () => {
+    // The restore branch lifts the container's LIVE mark revisions out and puts them back.
+    // Taking them verbatim skipped the plan, so a Reject All that was answering the mark too
+    // reported success with that decision still standing — an empty pane over a file that
+    // still held a tracked change.
+    const merged =
+      '<w:p><w:pPr><w:rPr>' +
+      '<w:del w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '</w:rPr></w:pPr>' +
+      textRun('hello') +
+      '</w:p><w:p>' +
+      textRun('second') +
+      '</w:p>';
+    withSuggesting(merged, (surface) => {
+      select(surface, 0, 5);
+      surface.toggleRunProperty('b');
+      expect(rPrChanges(surface).length).toBeGreaterThan(0);
+      const result = surface.applyAutomationOps(() => [{ op: 'rejectAllRevisions' as const }]);
+      expect(result.rejected).toBe(false);
+      expect(rPrChanges(surface)).toHaveLength(0);
+      expect(revisionItemsOf(surface.session.part())).toEqual([]);
+    });
+  });
+
+  test('a write landing on a record another producer wrote drops it', () => {
+    // `CT_ParaRPrOriginal` admits `EG_ParaRPrTrackChanges`, so a record Word wrote carries a
+    // `w:ins`. Comparing that raw against a narrowed container made the two sides unequal for
+    // good: the write re-attributed the other author's proposal and copied their `w:ins` in
+    // beside the live one, two revisions sharing an `@w:id`.
+    const foreign =
+      '<w:p><w:pPr><w:rPr>' +
+      '<w:ins w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '<w:color w:val="FF0000"/>' +
+      '<w:rPrChange w:id="5" w:author="Cy" w:date="2026-01-02T00:00:00Z"><w:rPr>' +
+      '<w:ins w:id="4" w:author="Ada" w:date="2026-01-01T00:00:00Z"/>' +
+      '<w:color w:val="00FF00"/>' +
+      '</w:rPr></w:rPrChange>' +
+      '</w:rPr></w:pPr>' +
+      textRun('hello') +
+      '</w:p>';
+    withSuggesting(foreign, (surface) => {
+      const id = surface.session.paragraphIds()[0]!;
+      surface.setSelection({
+        anchor: { paragraphId: id, offset: 0 },
+        head: { paragraphId: id, offset: 5 },
+      });
+      // Exactly Cy's recorded original, so Cy's proposal is undone rather than re-attributed.
+      surface.setRunProperty('color', { val: '00FF00' });
+      const onMark = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
+        findAll(pPr, 'rPrChange')
+      );
+      expect(onMark).toHaveLength(0);
+      // Ada's mark insertion is still there, exactly once.
+      const marks = findAll(surface.session.part().root, 'pPr').flatMap((pPr) =>
+        findAll(pPr, 'ins')
+      );
+      expect(marks).toHaveLength(1);
+    });
+  });
+
   test('a mark this author proposed adding takes no record of its own', () => {
     // Rejecting that `w:ins` runs the paragraph into the next one and takes the mark's
     // properties with it, so a record of what they used to be decides nothing.

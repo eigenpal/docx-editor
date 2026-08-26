@@ -112,7 +112,6 @@ export {
 export {
   DEFAULT_FORMATTING_DISPLAY_MODE,
   formattableRunsOfParagraph,
-  revisionReachedInMode,
   type FormattingDisplayMode,
 } from './formattable-runs.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
