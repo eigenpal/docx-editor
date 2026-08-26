@@ -782,7 +782,7 @@ export interface DocxEditorRulerProps {
     unit?: 'inch' | 'cm';
 }
 
-// @public @deprecated (undocumented)
+// @public @deprecated
 export function DocxEditorShell(input: {
     className: string | undefined;
     containerRef: React.Ref<HTMLDivElement>;
@@ -791,7 +791,7 @@ export function DocxEditorShell(input: {
     editorContainerStyle: CSSProperties;
     editorContentRef: React.Ref<HTMLDivElement>;
     editorScrollLeft: number;
-    expandedSidebarItem: string | null;
+    expandedSidebarItem?: string | null;
     fileInputs: ReactNode;
     horizontalRulerProps: HorizontalRulerProps_2;
     i18n: React.ComponentProps<typeof LocaleProvider>['i18n'];
@@ -815,7 +815,7 @@ export function DocxEditorShell(input: {
     sidebarOpen: boolean;
     toolbar: ReactNode;
     toolbarHeight: number;
-    trackedChanges: readonly TrackedChangeSummary[];
+    trackedChanges?: readonly TrackedChangeSummary[];
     verticalRulerProps: VerticalRulerProps$1;
 }): react.JSX.Element;
 

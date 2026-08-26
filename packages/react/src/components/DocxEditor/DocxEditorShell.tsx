@@ -63,11 +63,15 @@ interface OutlineProps {
  * + toggle button, plus slots for the toolbar, paged-area body,
  * overlays, dialogs, and hidden file inputs.
  *
- * The expanded-sidebar-item highlight styles are computed here from
- * `expandedSidebarItem` + `trackedChanges` because they need to live
- * inside the editor-content `<div>` for proper scoping.
+ * This shell renders NO review highlight of its own. Marking the active
+ * comment or tracked change belongs to the engine, which paints
+ * `docx-comment-band--active` and `docx-revision-band--active` for the item
+ * the caret is in, or for the one an `Editor.setActiveReviewItem` pin names
+ * instead. One source for which item is active, so a host sidebar and the
+ * painted document cannot disagree about it.
+ *
+ * @deprecated Use `<DocxEditor>` from the composition layer instead.
  */
-/** @deprecated Use `<DocxEditor>` from the composition layer instead. */
 export function DocxEditorShell({
   i18n,
   isDark,
@@ -87,8 +91,6 @@ export function DocxEditorShell({
   minLayoutWidth,
   toolbarHeight,
   editorScrollLeft,
-  expandedSidebarItem,
-  trackedChanges,
   onScrollContainerMouseDown,
   onEditorBgMouseDown,
   onEditorContextMenu,
@@ -121,8 +123,18 @@ export function DocxEditorShell({
   minLayoutWidth: number;
   toolbarHeight: number;
   editorScrollLeft: number;
-  expandedSidebarItem: string | null;
-  trackedChanges: readonly TrackedChangeSummary[];
+  /**
+   * @deprecated Ignored. Mark the active comment or tracked change with
+   * `Editor.setActiveReviewItem`, which paints the band the engine draws.
+   */
+  expandedSidebarItem?: string | null;
+  /**
+   * @deprecated Ignored. Read tracked changes with `Editor.getTrackedChanges`;
+   * activation goes through `Editor.setActiveReviewItem`. Its keys are
+   * `` `${kind}-${id}` ``, so a tracked change is `revision-<id>`, not the
+   * `tc-<id>` this shell once took.
+   */
+  trackedChanges?: readonly TrackedChangeSummary[];
   onScrollContainerMouseDown: (e: React.MouseEvent) => void;
   onEditorBgMouseDown: (e: React.MouseEvent) => void;
   onEditorContextMenu: (e: React.MouseEvent) => void;
@@ -237,24 +249,6 @@ export function DocxEditorShell({
                             <VerticalRuler {...verticalRulerProps} />
                           </div>
                         )}
-                        {/* Brightened highlight for the focused/expanded sidebar item. */}
-                        {expandedSidebarItem && expandedSidebarItem.startsWith('comment-') && (
-                          <style>{`.paged-editor__pages [data-comment-id="${expandedSidebarItem.replace('comment-', '')}"] { background-color: var(--doc-comment-active-bg) !important; border-bottom-width: 2px !important; border-bottom-style: solid !important; border-bottom-color: var(--doc-comment-active-border) !important; }`}</style>
-                        )}
-                        {expandedSidebarItem?.startsWith('tc-') &&
-                          (() => {
-                            const revId = expandedSidebarItem.split('-')[1];
-                            // The contract addresses a tracked change by its single id;
-                            // the same id styles the insertion and deletion halves.
-                            const tc = trackedChanges.find((c) => String(c.id) === revId);
-                            const activeId = tc?.id ?? revId;
-                            return (
-                              <style>{`
-                            .paged-editor__pages .docx-insertion[data-revision-id="${activeId}"] { background-color: rgba(52, 168, 83, 0.2) !important; border-bottom: 2px solid #2e7d32 !important; }
-                            .paged-editor__pages .docx-deletion[data-revision-id="${activeId}"] { background-color: rgba(211, 47, 47, 0.2) !important; text-decoration-thickness: 2px !important; }
-                          `}</style>
-                            );
-                          })()}
                         {pagedArea}
                       </div>
                     </div>
