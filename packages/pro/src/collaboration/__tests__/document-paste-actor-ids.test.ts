@@ -233,9 +233,9 @@ describe('concurrent pastes stripe every id namespace they mint', () => {
       expectOneStripe(mintedByBob[family]);
     }
 
-    // Whether two concurrent pastes both survive the merge is a question about the
-    // replication model, not about the ids, and this engine resolves the story part to one of
-    // them. So the relay is released only to leave the room in a clean state.
+    // Whether two concurrent pastes both survive the merge is a question about the replication
+    // model, not about the ids, and `document-concurrent-relocation.test.ts` owns it. So the
+    // relay is released only to leave the room in a clean state.
     resume();
   });
 

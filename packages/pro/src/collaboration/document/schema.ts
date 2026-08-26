@@ -127,11 +127,11 @@ export interface RepairIssue {
  * Repair codes that mean shared state held content the materialized package does not.
  *
  * The rest of {@link RepairIssueCode} describes structure the materializer can drop without
- * losing anything a reader could have seen: `self-child` and `duplicate-child` name a
- * placement that was never possible in a tree, and a plain `orphan` has no text, no children
- * and no attributes. Those repair silently, which is correct.
+ * losing anything a reader could have seen: `self-child`, `duplicate-child` and
+ * `duplicate-parent` name a placement that was never possible in a tree, and a plain `orphan`
+ * has no text, no children and no attributes. Those repair silently, which is correct.
  *
- * Two codes are deliberately absent, both because they are what healthy editing looks like:
+ * Three codes are deliberately absent, all because they are what healthy editing looks like:
  *
  * - `deleted-referenced` — a parent that still lists a tombstoned child is the ordinary shape
  *   of a concurrent delete, since the tombstone lands before the author's new child list
@@ -140,6 +140,19 @@ export interface RepairIssue {
  *   is unreferenced content by design. Measured, not assumed: including this code took every
  *   delete in `document-session.test.ts` to `error`, which stopped the remote apply and left
  *   the deletion unreplicated. A status that fires on every delete tells a reader nothing.
+ * - `duplicate-parent` — two child arrays list one node because two peers relocated it, which
+ *   is what `splitParagraph` and a paste do to every run after the caret. Each replica can only
+ *   unlist the parent it saw, so the merged listing names both. The materializer answers it the
+ *   one deterministic way — first preorder placement wins — and every replica walks the same
+ *   shared state, so every replica reaches the same tree. Nothing leaves the document: the
+ *   node is placed exactly once, and no tree could have held it twice. What the losing parent
+ *   loses is a PLACEMENT, not content, and it is left as an empty element.
+ *
+ *   Measured, not assumed: escalating it stopped the remote apply on BOTH peers, so each kept
+ *   its own local edit, the status stuck at `error`, and `gateOperations` refused every later
+ *   keystroke. Two people pressing Enter in one paragraph took the room read-only and
+ *   permanently split-brained — see `document-concurrent-relocation.test.ts`. The report itself
+ *   stays in {@link RepairIssue}, so a caller that wants to count contests still can.
  *
  * The consequence is that the one loss shape which presents AS an orphan — content stranded by
  * a concurrent first-create of a part — is still not reported. Separating that from a deleted
@@ -147,22 +160,9 @@ export interface RepairIssue {
  *
  * What remains cannot arise from healthy editing: each one means a parent names a child this
  * replica cannot produce, so the document is short of something shared state says is there.
- *
- * `duplicate-parent` escalates because two child arrays contesting one node drops every
- * placement but the first. That makes the code load-bearing, and a repair pass that asks for a
- * node the same pass already produced would spend it on itself: the escalation stops the remote
- * apply, so a false positive reads to a host as a diverged document. Repair paths must therefore
- * reach a node through `materializeOnce` or skip the ones already placed. Do not answer a new
- * false positive by adding a quieter twin of this code — that hands a future repair a way to
- * report a genuine contest as nothing.
  */
 export const DROPPED_CONTENT_REPAIR_CODES: ReadonlySet<RepairIssueCode> = Object.freeze(
-  new Set<RepairIssueCode>([
-    'missing-node',
-    'child-id-not-in-registry',
-    'duplicate-parent',
-    'cycle',
-  ])
+  new Set<RepairIssueCode>(['missing-node', 'child-id-not-in-registry', 'cycle'])
 );
 
 /** Longest detail string built from an issue list. Enough for every distinct code twice over. */
