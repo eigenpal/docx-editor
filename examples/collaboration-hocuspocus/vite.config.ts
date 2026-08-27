@@ -62,11 +62,19 @@ export default defineConfig({
             replacement: path.join(monorepoRoot, 'packages/react/src/index.ts'),
           },
           {
-            find: '@docx-editor.dev/core/collaboration',
+            find: '@docx-editor.dev/core/collaboration/replication',
+            replacement: path.join(monorepoRoot, 'packages/core/src/collaboration/replication.ts'),
+          },
+          {
+            // EXACT. As a bare string this matched `…/collaboration/replication` too, and
+            // resolved it to `collaboration/index.ts/replication` — a path THROUGH a file,
+            // which fails at transform time in a module the entry never mentions.
+            find: /^@docx-editor\.dev\/core\/collaboration$/,
             replacement: path.join(monorepoRoot, 'packages/core/src/collaboration/index.ts'),
           },
           {
-            find: '@docx-editor.dev/core/editor',
+            // EXACT, for the same reason as the collaboration barrel above.
+            find: /^@docx-editor\.dev\/core\/editor$/,
             replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
           },
           {
