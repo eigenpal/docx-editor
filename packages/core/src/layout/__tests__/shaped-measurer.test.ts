@@ -72,7 +72,7 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     expect(metrics.baseline).toBeLessThan(metrics.height);
   });
 
-  test('hhea lineGap is external leading and does not inflate Word line boxes', () => {
+  test('hhea lineGap is part of the Word line box, below the descent', () => {
     const withExternalGap = createShapedMeasurer({
       shaper: {
         shape(input) {
@@ -94,7 +94,35 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
       fixedPointScale: 1_000,
     });
 
-    expect(withExternalGap.lineMetrics(style())).toEqual({ height: 11, baseline: 9 });
+    // Word's single-spaced line box is ascent + descent + lineGap. Measured against Word's
+    // own PDF: an Arial 10 pt line pitch is 11.50 pt, which is (1854 + 434 + 67) / 2048 em,
+    // not the 11.17 pt that dropping the gap gives.
+    expect(withExternalGap.lineMetrics(style())).toEqual({ height: 11.5, baseline: 9 });
+  });
+
+  test('Liberation Sans measures Word\u2019s Arial line box, gap included', () => {
+    // Word\u2019s own PDF of an Arial 10 pt paragraph puts consecutive baselines 11.50 pt
+    // apart. Liberation Sans carries Arial\u2019s metrics exactly \u2014 hhea 1854 / -434 / 67
+    // over 2048 units \u2014 so the shipped substitute has to land on the same number.
+    const bytes = new Uint8Array(
+      readFileSync(new URL('../../../../fonts/assets/LiberationSans-Regular.ttf', import.meta.url))
+    );
+    const request: FontRequest = { family: 'Liberation Sans', weight: 400, style: 'normal' };
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 2_000_000,
+      resources: [
+        { request, id: 'liberation-400', bytes, hash: sha256FontBytes(bytes), faceIndex: 0 },
+      ],
+      validateFont: harfBuzzFontValidator,
+    });
+    const resolved = snapshot.resolve(request);
+    if (resolved instanceof FontResolutionError) throw resolved;
+    const metrics = measurer(() => resolved).lineMetrics(style({ fontSizePt: 10 }));
+    expect(metrics.height).toBeCloseTo(11.5, 2);
+    // Ascent alone is 9.05 pt; the difference is descent plus the external leading Word
+    // keeps in the box.
+    expect(metrics.baseline).toBeCloseTo(9.053, 2);
   });
 
   test('it is NOT the flat multiplier the fallback uses, so the font is really being read', () => {

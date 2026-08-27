@@ -1,9 +1,10 @@
 // Exact line metrics and advances, from the font itself (task 7.7).
 //
 // Every host-side measurement is a fraction out, and the fraction is not cosmetic. Word
-// derives single line spacing from the font's ascent and descent. `hhea.lineGap` is external
-// leading: Word does not add it to the line box. Including it makes every line a fraction too
-// tall, and that fraction accumulates until text paginates earlier than Word.
+// derives single line spacing from the face's ascent, descent AND `hhea.lineGap` — the same
+// total GDI reports as `tmHeight + tmExternalLeading`. Dropping the gap makes every line of a
+// face that has one a fraction too short, and that fraction accumulates until text paginates
+// later than Word.
 //
 // The font bytes carry the exact numbers, and the shaper already reads them. This adapts
 // that shaper to the semantic layout lane's `TextMeasurer` port, so the lane stays DOM-free
@@ -235,9 +236,14 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
         const shaped = shape(' ', font, style);
         const ascent = shaped.metrics.ascent / fixedPointScale;
         const descent = shaped.metrics.descent / fixedPointScale;
-        // `lineGap` is external leading. Word's line box uses the face ascent + descent;
-        // adding the gap again makes Arial/Liberation Sans about 2.9% too tall per line.
-        const height = ascent + descent;
+        // Word's single-spaced line box is ascent + descent + lineGap, and the leading sits
+        // BELOW the descent — the same total GDI reports as `tmHeight + tmExternalLeading`.
+        // Dropping the gap is what made a 10 pt Arial line 11.17 pt where Word draws 11.50
+        // (Liberation Sans and Liberation Serif both carry Arial's and Times New Roman's own
+        // gap, so both land on Word's 1.1499 em). Faces with no gap — Carlito, Caladea,
+        // Liberation Mono — are unaffected, which is why the error only showed on the two
+        // faces that have one.
+        const height = ascent + descent + shaped.metrics.lineGap / fixedPointScale;
         if (height > 0) {
           metrics = { height, baseline: ascent };
         } else {

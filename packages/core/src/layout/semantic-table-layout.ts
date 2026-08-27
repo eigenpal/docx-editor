@@ -41,7 +41,7 @@ import type {
 import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
-import { paragraphMergeGroupOf } from './story-roots.ts';
+import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
 import {
   markRevisionFields,
   paragraphMarkFormatRevisionOf,
@@ -562,6 +562,14 @@ function placeCellParagraph(
     readonly includeAfter?: boolean;
     /** When false, omit the bottom border (paragraph continues). */
     readonly includeBottomBorder?: boolean;
+    /**
+     * Place the paragraph, then charge the cell nothing for it.
+     *
+     * The empty `w:p` a cell must end with when its content ends with a `w:tbl`. Its lines
+     * are still emitted at `top`, so the paragraph stays addressable, but flow does not
+     * advance past them — which is what Word and LibreOffice both draw.
+     */
+    readonly collapseHeight?: boolean;
     /** What the table style says about this cell's paragraphs (17.7.6.6). */
     readonly tableCellStyle?: TableCellStyleFormatting;
   }
@@ -692,15 +700,18 @@ function placeCellParagraph(
   const maxBottom = options?.maxBottom ?? Number.POSITIVE_INFINITY;
   const includeAfter = options?.includeAfter ?? true;
   const includeBottomBorder = options?.includeBottomBorder ?? true;
+  const collapseHeight = options?.collapseHeight ?? false;
 
   const appliedBefore =
-    lineStart === 0 ? collapsedSpaceBefore(spacing.before, previousSpaceAfter) : 0;
+    lineStart === 0 && !collapseHeight
+      ? collapsedSpaceBefore(spacing.before, previousSpaceAfter)
+      : 0;
   const fragmentX = originX + indent.left;
   // The top rule and its gap are flow height above the first line, exactly as the bottom rule
   // is flow height below the last — so the cell's content band has to reserve it or a boxed
   // paragraph's frame paints over the cell's own top border. Reserved on the FIRST fragment
   // only: a paragraph continued onto the next page opens once, the way it closes once.
-  const topExtent = lineStart === 0 ? paragraphBorderExtentPt(borders.top) : 0;
+  const topExtent = lineStart === 0 && !collapseHeight ? paragraphBorderExtentPt(borders.top) : 0;
   const rawRecords: LineRecord[] = [];
   let y = top + appliedBefore + topExtent;
   let nextLineIndex = lineStart;
@@ -710,13 +721,18 @@ function placeCellParagraph(
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
     const borderExtra =
-      isLastLine && includeBottomBorder && bottomBorder ? paragraphBorderExtentPt(bottomBorder) : 0;
-    const afterExtra = isLastLine && includeAfter ? spacing.after : 0;
-    const skipBefore =
-      pageZones.length > 0
+      isLastLine && includeBottomBorder && bottomBorder && !collapseHeight
+        ? paragraphBorderExtentPt(bottomBorder)
+        : 0;
+    const afterExtra = isLastLine && includeAfter && !collapseHeight ? spacing.after : 0;
+    const skipBefore = collapseHeight
+      ? 0
+      : pageZones.length > 0
         ? topAndBottomSkipBeforeLine(y, pendingLine.height, pageZones)
         : (pendingLine.exclusionSkipBefore ?? 0);
-    const lineBottom = y + skipBefore + pendingLine.height + borderExtra + afterExtra;
+    const lineBottom = collapseHeight
+      ? y
+      : y + skipBefore + pendingLine.height + borderExtra + afterExtra;
     if (lineBottom > maxBottom + 0.001) {
       break;
     }
@@ -798,7 +814,7 @@ function placeCellParagraph(
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
     });
-    y += pendingLine.height;
+    if (!collapseHeight) y += pendingLine.height;
     nextLineIndex = lineIndex + 1;
     fitted = true;
   }
@@ -906,7 +922,7 @@ function placeCellParagraph(
       },
     });
   }
-  const appliedAfter = complete && includeAfter ? spacing.after : 0;
+  const appliedAfter = complete && includeAfter && !collapseHeight ? spacing.after : 0;
   const bottom = contentBottom + appliedAfter;
   // Shading fills the FRAME when there is one (a side rule is what makes it a box), and the
   // line area otherwise — the body flow's rule, stated once more for the cell lane.
@@ -1069,7 +1085,9 @@ function flowBlocksInBoxBounded(
   depth: number,
   deps: TableFlowDeps,
   cursor: CellPlaceCursor,
-  tableCellStyle?: TableCellStyleFormatting
+  tableCellStyle?: TableCellStyleFormatting,
+  /** True for a `w:tc`: its last block may be the empty terminator a nested table forces. */
+  inTableCell = false
 ): {
   readonly blocks: BlockFragmentRecord[];
   readonly bottom: number;
@@ -1120,6 +1138,15 @@ function flowBlocksInBoxBounded(
       continue;
     }
 
+    // The `w:p` a cell must end with (17.4.66) when its content ends with a `w:tbl`. Word
+    // and LibreOffice give it no height; it still flows, so the caret and select-all reach
+    // it, but it costs the row nothing.
+    const collapsed =
+      inTableCell &&
+      blockIndex === blocks.length - 1 &&
+      blockIndex > 0 &&
+      blocks[blockIndex - 1]!.kind === 'table' &&
+      isEmptyCellTerminator(block);
     const placed = placeCellParagraph(
       block,
       left,
@@ -1133,6 +1160,7 @@ function flowBlocksInBoxBounded(
         maxBottom,
         includeAfter: true,
         includeBottomBorder: true,
+        collapseHeight: collapsed,
         ...(tableCellStyle ? { tableCellStyle } : {}),
       }
     );
@@ -1392,7 +1420,8 @@ export function layoutRowFragmentBounded(
           depth,
           flowDeps,
           cursor,
-          cell.styleFormatting
+          cell.styleFormatting,
+          true
         );
         blocks = flow.blocks;
         contentBottom = flow.bottom;

@@ -168,22 +168,22 @@ test('500-page multi-section: Enter and Backspace stay incremental', () => {
   );
   const work = workByName(report);
   expect(work['enter-split-middle']).toEqual({
-    placed: 5,
+    placed: 44,
     total: 8400,
     reusedPages: 624,
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3855, 12076, 12076),
+    cache: cache(3998, 12076, 12076),
   });
   expect(work['backspace-join-middle']).toEqual({
-    placed: 3,
+    placed: 5,
     total: 8398,
     reusedPages: 624,
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3853, 12075, 12075),
+    cache: cache(3960, 12075, 12075),
   });
   expect(work['enter-split-early']).toEqual({
     placed: 16,
@@ -192,25 +192,27 @@ test('500-page multi-section: Enter and Backspace stay incremental', () => {
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3794, 12076, 12076),
+    cache: cache(3899, 12076, 12076),
   });
-  expect(work['steady-middle-text']!.placed).toBe(2);
+  expect(work['steady-middle-text']!.placed).toBe(4);
   expect(work['wrap-middle-text']!.placed).toBe(41);
-  // Adds one whole page; the pages below move but are reused, never re-placed.
+  // The break falls at the top of a page the shorter rows now open, so it adds no sheet
+  // here; the committed 200-page fixture still covers the page-ADDING path. What this row
+  // holds is the tail: 624 of 630 pages reused, never re-placed.
   expect(work['page-break-middle']).toEqual({
     placed: 43,
     total: 8399,
-    reusedPages: 312,
+    reusedPages: 624,
     fullPasses: 1,
     pagesBefore: 630,
-    pagesAfter: 631,
-    cache: cache(3893, 12075, 12075),
+    pagesAfter: 630,
+    cache: cache(3999, 12075, 12075),
   });
 }, 240_000);
 
-// The same content as ONE section with chapter-style page-break headings. An edit that
-// adds a whole page (Ctrl+Enter) reconverges at the next authored page break, and the
-// unchanged tail is reused by whole-sheet remap instead of being re-placed.
+// The same content as ONE section with chapter-style page-break headings. A Ctrl+Enter in
+// the middle reconverges at the next authored page break, and the unchanged tail is reused
+// by whole-sheet remap instead of being re-placed.
 test('500-page single-section: whole-page shifts reuse the tail', () => {
   ensureMassiveFixtures();
   const report = runBench('e2e/fixtures/generated/synthetic-massive-singlesection.docx');
@@ -219,22 +221,22 @@ test('500-page single-section: whole-page shifts reuse the tail', () => {
   );
   const work = workByName(report);
   expect(work['enter-split-middle']).toEqual({
-    placed: 5,
+    placed: 44,
     total: 8296,
-    reusedPages: 629,
+    reusedPages: 626,
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3855, 11972, 11972),
+    cache: cache(3998, 11972, 11972),
   });
-  expect(work['backspace-join-middle']!.placed).toBe(3);
+  expect(work['backspace-join-middle']!.placed).toBe(5);
   expect(work['page-break-middle']).toEqual({
     placed: 43,
     total: 8295,
     reusedPages: 626,
     fullPasses: 1,
     pagesBefore: 630,
-    pagesAfter: 631,
-    cache: cache(3893, 11971, 11971),
+    pagesAfter: 630,
+    cache: cache(3999, 11971, 11971),
   });
 }, 240_000);

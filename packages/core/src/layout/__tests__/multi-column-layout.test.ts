@@ -323,8 +323,10 @@ describe('multi-column section layout', () => {
   });
 
   test('a table in a balanced section splits at a row boundary across columns', () => {
+    // Two paragraphs per cell: one row is 25.45pt, so the pair cannot balance into a single
+    // column and the split has to fall on the row boundary between them.
     const cell = (text: string) =>
-      `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>${paragraph(text)}</w:tc>`;
+      `<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>${paragraph(text)}${paragraph(`${text} CONT`)}</w:tc>`;
     const part = packageWithBody(
       paragraph('INTRO') +
         '<w:p><w:pPr><w:sectPr>' +

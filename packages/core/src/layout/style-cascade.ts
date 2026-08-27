@@ -107,6 +107,14 @@ export interface StyleCascadeTable {
   /** `w:style[@w:default='1'][@w:type='character']` — last wins among defaults of that type. */
   readonly defaultCharacterStyleId: string | null;
   /**
+   * `w:style[@w:default='1'][@w:type='table']` — last wins among defaults of that type.
+   *
+   * A `w:tbl` with no `w:tblStyle` still resolves against this one. Word's own
+   * `TableNormal` is where the 0/108/0/108 twip cell margins live, so skipping it gives
+   * every unstyled table padding the document says it does not have.
+   */
+  readonly defaultTableStyleId: string | null;
+  /**
    * The theme part's Latin typefaces, for `w:rFonts` theme references.
    *
    * Lives on the cascade because it is document-level style material with the same
@@ -346,13 +354,22 @@ export const EMPTY_TABLE_FORMATTING: CascadedTableFormatting = Object.freeze({
   conditional: new Map<string, OoxmlElement>(),
 });
 
-/** Resolve a `w:tblStyle` id against the cascade, base-first. */
+/**
+ * Resolve a `w:tblStyle` id against the cascade, base-first.
+ *
+ * An absent or unusable id falls to the document's default table style, the same way an
+ * absent `w:pStyle` falls to the default paragraph style. Word's `TableNormal` is what
+ * states the 0/108/0/108 twip cell margins, and a table that names no style still gets
+ * them.
+ */
 export function cascadeTableFormatting(
   table: StyleCascadeTable,
   styleId: string | undefined
 ): CascadedTableFormatting {
-  if (!styleId || !isValidStyleId(styleId)) return EMPTY_TABLE_FORMATTING;
-  const chain = styleChain(table, styleId, 'table');
+  const resolvedId =
+    styleId && isValidStyleId(styleId) ? styleId : (table.defaultTableStyleId ?? undefined);
+  if (!resolvedId) return EMPTY_TABLE_FORMATTING;
+  const chain = styleChain(table, resolvedId, 'table');
   if (chain.length === 0) return EMPTY_TABLE_FORMATTING;
   const tablePropertyNodes: OoxmlElement[] = [];
   const paragraphPropertyNodes: OoxmlElement[] = [];
@@ -450,6 +467,7 @@ export function buildStyleCascadeTable(
       docDefaultsParagraphNode: undefined,
       defaultParagraphStyleId: null,
       defaultCharacterStyleId: null,
+      defaultTableStyleId: null,
       themeFonts,
       styles,
     };
@@ -458,6 +476,7 @@ export function buildStyleCascadeTable(
   const defaults = readDocDefaults(stylesRoot);
   let defaultParagraphStyleId: string | null = null;
   let defaultCharacterStyleId: string | null = null;
+  let defaultTableStyleId: string | null = null;
   let counted = 0;
   for (const child of stylesRoot.children) {
     if (!isElement(child) || child.localName !== 'style') continue;
@@ -474,6 +493,9 @@ export function buildStyleCascadeTable(
     } else if (style.type === 'character') {
       if (isDefault) defaultCharacterStyleId = style.styleId;
       else if (defaultCharacterStyleId === style.styleId) defaultCharacterStyleId = null;
+    } else if (style.type === 'table') {
+      if (isDefault) defaultTableStyleId = style.styleId;
+      else if (defaultTableStyleId === style.styleId) defaultTableStyleId = null;
     }
   }
 
@@ -483,6 +505,7 @@ export function buildStyleCascadeTable(
     dP: propertiesFingerprint(defaults.paragraph),
     defP: defaultParagraphStyleId,
     defC: defaultCharacterStyleId,
+    defT: defaultTableStyleId,
     // Retheming changes the face every theme-fonted run measures in while no style
     // material moves, so a break cached under the old theme must not be reused.
     theme: themeFonts,
@@ -502,6 +525,7 @@ export function buildStyleCascadeTable(
     docDefaultsParagraphNode: defaults.paragraphNode,
     defaultParagraphStyleId,
     defaultCharacterStyleId,
+    defaultTableStyleId,
     themeFonts,
     styles,
   };

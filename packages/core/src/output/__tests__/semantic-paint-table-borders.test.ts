@@ -382,12 +382,14 @@ describe('table cell border paint', () => {
       expect(stroke.style.height).toBe('3px');
       expect(stroke.style.backgroundColor.replace(/^#/, '').toLowerCase()).toBe('9933cc');
     }
-    // gap = max(1, 3) → extent 15; strokes at y = cellH-15, cellH-15+6, cellH-15+12
+    // gap = max(1, 3) → extent 15; strokes at y = cellH-15, cellH-15+6, cellH-15+12.
+    // Compared to six decimals rather than bit-for-bit: `cellH` is itself a sum of point
+    // values, so `cellH - 15` and the published top differ in the last double digit.
     const cellH = parsePx(cell.style.height);
     const tops = strokes.map((s) => parsePx(s.style.top)).sort((a, b) => a - b);
-    expect(tops[0]).toBe(cellH - 15);
-    expect(tops[1]).toBe(cellH - 9);
-    expect(tops[2]).toBe(cellH - 3);
+    expect(tops[0]).toBeCloseTo(cellH - 15, 6);
+    expect(tops[1]).toBeCloseTo(cellH - 9, 6);
+    expect(tops[2]).toBeCloseTo(cellH - 3, 6);
     expect(cell.querySelector('.docx-table-border-double')).toBeNull();
   });
 

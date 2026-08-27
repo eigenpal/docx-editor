@@ -42,7 +42,8 @@ const headerCell = (text: string, repeats: boolean) =>
 
 function repeatingHeaderXml(): string {
   const rows = [headerCell('HEAD', true)];
-  for (let index = 0; index < 90; index += 1) rows.push(headerCell(`row ${index}`, false));
+  // 134 body rows at 12.73pt fill three pages, so page 2 carries a repeat of the header.
+  for (let index = 0; index < 134; index += 1) rows.push(headerCell(`row ${index}`, false));
   return (
     '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="dxa"/></w:tblPr>' +
     '<w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid>' +

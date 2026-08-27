@@ -694,9 +694,9 @@ describe('table row pagination (tiny page)', () => {
   });
 
   test('header group moves whole when the remainder fits one header but not the group', () => {
-    // TINY content = 80pt; one para row ≈ 20pt. Three filler paras leave ~20pt — enough for
-    // H1 alone, not H1+H2. The group must move intact rather than split.
-    const filler = Array.from({ length: 3 }, (_, i) => p(`F${i}`)).join('');
+    // TINY content = 80pt; one para row is 12.73pt. Five filler paras leave 16.4pt — enough
+    // for H1 alone, not H1+H2. The group must move intact rather than split.
+    const filler = Array.from({ length: 5 }, (_, i) => p(`F${i}`)).join('');
     const h1 = tr(tc(p('H1')), '<w:trPr><w:tblHeader/></w:trPr>');
     const h2 = tr(tc(p('H2')), '<w:trPr><w:tblHeader/></w:trPr>');
     const body = tr(tc(p('body')));
@@ -704,6 +704,9 @@ describe('table row pagination (tiny page)', () => {
     const result = layoutTiny(part);
     assertNoContentOverflow(result);
     expect(result.pages.length).toBeGreaterThan(1);
+    // The whole group moved: page 1 keeps the filler and NO table row, even though H1
+    // alone would have fitted the remainder.
+    expect(tableFragments(result.pages[0]!)).toHaveLength(0);
 
     let sawPartialHeaderPage = false;
     for (const page of result.pages) {
@@ -758,8 +761,8 @@ describe('table row pagination (tiny page)', () => {
   });
 
   test('overheight header group fails closed', () => {
-    // Five one-line header rows ≈ 100pt > 80pt content box.
-    const headers = Array.from({ length: 5 }, (_, i) =>
+    // Seven one-line header rows = 89.1pt > 80pt content box.
+    const headers = Array.from({ length: 7 }, (_, i) =>
       tr(tc(p(`H${i}`)), '<w:trPr><w:tblHeader/></w:trPr>')
     ).join('');
     const part = loadPart(`<w:tbl>${headers}${tr(tc(p('body')))}</w:tbl>`);

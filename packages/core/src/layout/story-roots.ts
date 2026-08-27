@@ -188,6 +188,45 @@ export function mergedFlowBlocks(
   return merged.filter((block) => acceptStoryBlock(block, displayMode));
 }
 
+/**
+ * The elements Word writes beside a cell-terminating `w:p` that paint nothing.
+ *
+ * Anything else — a run, a `w:ins`, a `w:hyperlink` — is content, and a paragraph holding
+ * it keeps its line box wherever it sits.
+ */
+const CELL_TERMINATOR_MARKERS = new Set([
+  'pPr',
+  'bookmarkStart',
+  'bookmarkEnd',
+  'proofErr',
+  'permStart',
+  'permEnd',
+]);
+
+/**
+ * Does this paragraph carry nothing but properties and structural markers?
+ *
+ * A `w:tc` must end with a `w:p` (17.4.66), so a cell whose last real block is a `w:tbl`
+ * still carries one and Word writes it empty. Word and LibreOffice give that paragraph no
+ * line box; charging one for it makes the cell — and with it the row — a full line taller
+ * than either draws it. The paragraph stays in the flow so the caret and select-all can
+ * still reach it, and only its HEIGHT collapses; see `placeCellParagraph`.
+ *
+ * A paragraph with content keeps its height, and so does an empty paragraph anywhere else
+ * in the cell: the rule is about the terminator a trailing nested table forces.
+ */
+export function isEmptyCellTerminator(paragraph: OoxmlElement): boolean {
+  for (const child of paragraph.children) {
+    if (child.kind === 'textValue') {
+      if (child.value.length > 0) return false;
+      continue;
+    }
+    if (child.namespaceUri !== WML_NAMESPACE_URI) return false;
+    if (!CELL_TERMINATOR_MARKERS.has(child.localName)) return false;
+  }
+  return true;
+}
+
 /** A block, and which children array it actually lives in. */
 interface ParentedBlock {
   readonly block: OoxmlElement;

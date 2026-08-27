@@ -3024,6 +3024,7 @@ export interface StyleCascadeTable {
     readonly cacheToken: string;
     readonly defaultCharacterStyleId: string | null;
     readonly defaultParagraphStyleId: string | null;
+    readonly defaultTableStyleId: string | null;
     // (undocumented)
     readonly docDefaultsParagraph: readonly OoxmlProperty[];
     // (undocumented)

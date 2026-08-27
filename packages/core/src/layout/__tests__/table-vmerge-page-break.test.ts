@@ -73,7 +73,7 @@ function cellText(cell: TableCellFragmentRecord): string {
  * page 2 opens with the continue row alone — the fragment Word draws the merged cell into.
  */
 function splitMergeLayout(): SemanticLayout {
-  const filler = Array.from({ length: 2 }, (_, index) => p(`F${index}`)).join('');
+  const filler = Array.from({ length: 3 }, (_, index) => p(`F${index}`)).join('');
   const tall = Array.from({ length: 3 }, (_, index) => p(`T${index}`)).join('');
   const part = loadPart(
     `${filler}<w:tbl>${GRID}` +
@@ -130,7 +130,7 @@ describe('a vertical merge that crosses a page break', () => {
     // Header repeats lead the continuation fragment. The body merge below them continues a
     // restart from page 1 — it must not attach to the repeated header cell above it.
     const header = '<w:tr><w:trPr><w:tblHeader/></w:trPr>' + tc(p('H')) + tc(p('Hb')) + '</w:tr>';
-    const tall = Array.from({ length: 3 }, (_, index) => p(`T${index}`)).join('');
+    const tall = Array.from({ length: 5 }, (_, index) => p(`T${index}`)).join('');
     const part = loadPart(
       `<w:tbl>${GRID}${header}` +
         tr(tc(tall, '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('side'))) +

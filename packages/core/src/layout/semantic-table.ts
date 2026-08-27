@@ -66,10 +66,21 @@ export {
 export const MAX_TABLE_NESTING = 16;
 
 /**
- * Fallback cell padding in points (60 twips) when neither `tblCellMar` nor `tcMar` authors
- * a side. Matches the historical uniform `CELL_PAD` inset.
+ * The uniform 3 pt (60 twip) inset this lane used to apply on every side.
+ *
+ * Word's defaults are not uniform — see {@link DEFAULT_CELL_MARGINS} — so nothing resolves
+ * against this any more. Kept because it is published.
  */
 export const CELL_PAD = 3;
+
+/**
+ * Word's default left and right cell margin: 108 twips, which its UI rounds to 0.08".
+ *
+ * This is what `TableNormal` states, and `TableNormal` is what every Word-authored table
+ * ultimately derives from. The constant is the fallback for a document that ships no
+ * default table style at all.
+ */
+const DEFAULT_CELL_MARGIN_SIDE_PT = 108 / 20;
 
 /** Soft ceiling on a single margin side (~22"). */
 const MAX_CELL_MARGIN_PT = 31_680 / 20;
@@ -191,12 +202,20 @@ export interface CellMarginsPt {
   readonly left: number;
 }
 
-/** Word's own default cell padding, applied where a table declares no `w:tblCellMar`. */
+/**
+ * Word's own default cell padding, for a document whose styles part states none.
+ *
+ * 0 top, 0 bottom, 108 twips left and right — the values `TableNormal` carries. A uniform
+ * 3 pt on all four sides made every row of every table that authored no `w:tblCellMar` 6 pt
+ * taller than Word's, and that error compounds down a table until it paginates a page early.
+ * A document that DOES ship a default table style resolves against that instead; this is the
+ * floor beneath it.
+ */
 export const DEFAULT_CELL_MARGINS: CellMarginsPt = {
-  top: CELL_PAD,
-  right: CELL_PAD,
-  bottom: CELL_PAD,
-  left: CELL_PAD,
+  top: 0,
+  right: DEFAULT_CELL_MARGIN_SIDE_PT,
+  bottom: 0,
+  left: DEFAULT_CELL_MARGIN_SIDE_PT,
 };
 
 /**
@@ -222,7 +241,7 @@ export interface SemanticTableCell {
   readonly vMergeContinue: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
   readonly vAlign: CellVerticalAlign;
-  /** Resolved per-side margins (tcMar over tblCellMar over CELL_PAD). */
+  /** Resolved per-side margins (tcMar over tblCellMar over the table style over Word's default). */
   readonly margins: CellMarginsPt;
   /** Three-state authored `tcBorders` (omitted / none / edge). */
   readonly borders: CellBorderBox;
@@ -313,7 +332,7 @@ export interface SemanticTableStructure {
   readonly layoutFixed: boolean;
   /** Table-level `tblBorders` (three-state, including insideH/insideV). */
   readonly tableBorders: TableBorderBox;
-  /** Table-level `tblCellMar` defaults (per-side, CELL_PAD when a side is omitted). */
+  /** Table-level `tblCellMar` defaults (per-side, Word's own default when a side is omitted). */
   readonly defaultMargins: CellMarginsPt;
 }
 
@@ -416,7 +435,7 @@ function twipsSide(node: OoxmlElement | undefined): number | undefined {
 
 /**
  * Read `tblCellMar` / `tcMar`. Each omitted side stays undefined so callers can fall back
- * per-side (tcMar → tblCellMar → CELL_PAD).
+ * per-side (tcMar → tblCellMar → table style → Word's default).
  */
 function readMarginSides(container: OoxmlElement | undefined): Partial<CellMarginsPt> {
   if (!container) return {};
