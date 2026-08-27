@@ -857,24 +857,42 @@ export class DocumentRegistry {
     if (only) {
       for (const id of only) this.parentIndex.delete(id);
     }
-    const walk = (id: LogicalId, path: Set<LogicalId>): void => {
-      if (path.has(id)) return;
-      const rec = this.schema.nodes.get(id);
-      if (!rec || rec.get(NODE_DELETED_FIELD) === true) return;
-      const children = this.childrenSnapshot.get(id) ?? childArrayOf(rec)?.toArray() ?? [];
-      path.add(id);
-      const seen = new Set<string>();
-      for (const childId of children) {
-        if (seen.has(childId) || childId === id) continue;
-        seen.add(childId);
-        if (only === null || only.has(childId)) {
-          if (!this.parentIndex.has(childId)) this.parentIndex.set(childId, id);
+    // Explicit enter/exit frames instead of recursion: nesting depth is remote input, and a
+    // crafted deep child chain must not overflow the call stack from inside a Yjs observer.
+    // A node is assigned its parent when it is first REACHED in preorder — before its own
+    // record guards — which is the order the recursive walk had.
+    type Frame = { readonly id: LogicalId; readonly parent: LogicalId | null; readonly exit: boolean };
+    for (const part of this.partEntries()) {
+      const path = new Set<LogicalId>();
+      const stack: Frame[] = [{ id: part.rootLogicalId, parent: null, exit: false }];
+      while (stack.length > 0) {
+        const frame = stack.pop()!;
+        if (frame.exit) {
+          path.delete(frame.id);
+          continue;
         }
-        walk(childId, path);
+        const id = frame.id;
+        if (frame.parent !== null && (only === null || only.has(id))) {
+          if (!this.parentIndex.has(id)) this.parentIndex.set(id, frame.parent);
+        }
+        if (path.has(id)) continue;
+        const rec = this.schema.nodes.get(id);
+        if (!rec || rec.get(NODE_DELETED_FIELD) === true) continue;
+        const children = this.childrenSnapshot.get(id) ?? childArrayOf(rec)?.toArray() ?? [];
+        path.add(id);
+        stack.push({ id, parent: null, exit: true });
+        const seen = new Set<string>();
+        const pending: LogicalId[] = [];
+        for (const childId of children) {
+          if (seen.has(childId) || childId === id) continue;
+          seen.add(childId);
+          pending.push(childId);
+        }
+        for (let at = pending.length - 1; at >= 0; at -= 1) {
+          stack.push({ id: pending[at]!, parent: id, exit: false });
+        }
       }
-      path.delete(id);
-    };
-    for (const part of this.partEntries()) walk(part.rootLogicalId, new Set());
+    }
   }
 
   private syncAdoptee(removedId: LogicalId): void {
