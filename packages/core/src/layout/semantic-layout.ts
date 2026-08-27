@@ -93,6 +93,7 @@ import {
   layoutRowFragment,
   layoutRowFragmentBounded,
   measureRowHeight,
+  vMergePlanFor,
   MAX_TABLE_ROW_FRAGMENTS,
   paragraphDocumentOrderOf,
   rowWithSplitBorders,
@@ -100,7 +101,7 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { admitVMergeSpansAt, planVMergeRowHeights } from './table-vmerge-heights.ts';
+import { admitVMergeSpansAt, createVMergePlanBudget } from './table-vmerge-heights.ts';
 import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
@@ -1730,7 +1731,7 @@ function layoutBlocksPass(
       : {}),
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
-    vMergePlanBudget: createTableVMergeResolveBudget(),
+    vMergePlanBudget: createVMergePlanBudget(),
     displayMode,
   };
 
@@ -1983,6 +1984,16 @@ function layoutBlocksPass(
     if (structure.float && structure.float.vertAnchor === 'text' && !structure.float.ySpec) {
       cursorY = Math.max(0, Math.min(cursorY + structure.float.yPt, contentHeight()));
     }
+    /** One row's natural height where the table stands now. `tableLeft` moves; this reads it. */
+    const rowHeightOf = (probeRow: SemanticTableRow): number =>
+      measureRowHeight(
+        probeRow,
+        structure.columnWidthsPt,
+        tableLeft,
+        0,
+        tableDeps,
+        structure.cellSpacingPt
+      );
     const headerRows: SemanticTableRow[] = [];
     for (const row of structure.rows) {
       if (row.isHeader) headerRows.push(row);
@@ -2043,14 +2054,7 @@ function layoutBlocksPass(
 
       let groupHeight = 0;
       for (const headerRow of headerRows) {
-        groupHeight += measureRowHeight(
-          headerRow,
-          structure.columnWidthsPt,
-          tableLeft,
-          0,
-          tableDeps,
-          structure.cellSpacingPt
-        );
+        groupHeight += rowHeightOf(headerRow);
       }
       if (groupHeight > contentHeight() + 0.001) {
         throw new TablePaginationError(
@@ -2104,36 +2108,28 @@ function layoutBlocksPass(
     // Initial authored header group (not repeats) — atomic with body-row pagination below.
     placeHeaderGroup(false);
 
-    const rowHeightOf = (probeRow: SemanticTableRow): number =>
-      measureRowHeight(
-        probeRow,
-        structure.columnWidthsPt,
-        tableLeft,
-        0,
-        tableDeps,
-        structure.cellSpacingPt
-      );
-    // `w:vMerge` heights, planned once over the body rows: a merged cell is as tall as the
-    // rows it covers, so its own row must not swallow the whole merged height and the
-    // covered rows have to stay together. Rows the plan covers are measured there, not here.
+    // `w:vMerge` heights, planned over the BODY rows: a merged cell is as tall as the rows
+    // it covers, so its own row must not swallow the whole merged height.
     const bodyRows = structure.rows.slice(headerRows.length);
-    const vMergePlan = planVMergeRowHeights(bodyRows, rowHeightOf, tableDeps.vMergePlanBudget);
-    const admitSpans = (bodyRowIndex: number): RowVMergeLayoutOptions | undefined =>
-      admitVMergeSpansAt(vMergePlan, bodyRowIndex, cursorY, contentHeight());
+    const vMergePlan = vMergePlanFor(structure, tableLeft, 0, tableDeps, bodyRows);
+    let vMerge: RowVMergeLayoutOptions | undefined;
+    let naturalHeight = 0;
+    const admitSpans = (bodyRowIndex: number, probeRow?: SemanticTableRow): void => {
+      vMerge = admitVMergeSpansAt(vMergePlan, bodyRowIndex, cursorY, contentHeight());
+      naturalHeight = vMerge?.heightFloorPt ?? (probeRow ? rowHeightOf(probeRow) : naturalHeight);
+    };
 
     for (const [bodyRowIndex, row] of bodyRows.entries()) {
-      let vMerge = admitSpans(bodyRowIndex);
-      let naturalHeight = vMerge?.heightFloorPt ?? rowHeightOf(row);
+      admitSpans(bodyRowIndex, row);
       let cursors: CellPlaceCursor[] = initialCellCursors(row);
       let isContinuation = false;
       let fragmentsForRow = 0;
       let movedToFreshPage = false;
 
-      // A row an accepted span covers may not leave the page BEFORE it puts something on it.
-      // The merged content above it was flowed against this page, so a fragment that ends
-      // above that content leaves the content under no table at all. Breaking AFTER filling
-      // to the page bottom is safe and stays allowed: the fragment then reaches the bottom,
-      // which is the furthest the content can have gone.
+      // A row an accepted span covers does not take the whole-row MOVE: alone among the
+      // breaks below, that one is an optimization rather than a recovery, and it ends the
+      // fragment above merged content already flowed against this page. See the break-site
+      // table in `table-vmerge-heights.ts` for why the others stay open to a covered row.
       const heldByOpenSpan = vMerge !== undefined && vMerge.detachedCellIds === undefined;
 
       // Whole-row move: fits a fresh page but not the remaining band.
@@ -2146,8 +2142,7 @@ function layoutBlocksPass(
         breakForContinuation(true);
         movedToFreshPage = true;
         // A merge that did not fit the band it was offered in may fit this fresh page.
-        vMerge = admitSpans(bodyRowIndex);
-        naturalHeight = vMerge?.heightFloorPt ?? naturalHeight;
+        admitSpans(bodyRowIndex);
       }
 
       for (;;) {
@@ -2169,10 +2164,13 @@ function layoutBlocksPass(
           }
           breakForContinuation(true);
           movedToFreshPage = true;
+          admitSpans(bodyRowIndex);
           continue;
         }
 
-        // Prefer an unsplit placement when the natural height fits the remaining band.
+        // Prefer an unsplit placement when the natural height fits the remaining band. The
+        // page bottom goes in for the detached head, whose height this row does not carry
+        // and whose overflow the `placed.bottom` check below therefore cannot see.
         if (!isContinuation && naturalHeight <= remaining + 0.001) {
           const placed = layoutRowFragment(
             row,
@@ -2183,18 +2181,23 @@ function layoutBlocksPass(
             0,
             tableDeps,
             structure.cellSpacingPt,
-            vMerge
+            vMerge,
+            contentHeight()
           );
-          if (placed.bottom > contentHeight() + 0.001) {
-            throw new TablePaginationError(
-              'table-row-overheight',
-              `Table row ${row.id} overflowed the page content box after placement`
-            );
+          // A remainder is a detached head that reached the page bottom. Only the split path
+          // below carries one, so drop this trial rather than lose what it owes.
+          if (placed.remainder === null) {
+            if (placed.bottom > contentHeight() + 0.001) {
+              throw new TablePaginationError(
+                'table-row-overheight',
+                `Table row ${row.id} overflowed the page content box after placement`
+              );
+            }
+            rows.push(placed.record);
+            sourceRows.push(row);
+            cursorY = placed.bottom;
+            break;
           }
-          rows.push(placed.record);
-          sourceRows.push(row);
-          cursorY = placed.bottom;
-          break;
         }
 
         // Does not fit the remaining band.
@@ -2230,9 +2233,10 @@ function layoutBlocksPass(
         );
 
         // First attempt on a non-empty page placed nothing useful → move to next page.
-        if (!placed.fitted && !heldByOpenSpan && cursorY > 0 && !movedToFreshPage) {
+        if (!placed.fitted && cursorY > 0 && !movedToFreshPage) {
           breakForContinuation(true);
           movedToFreshPage = true;
+          admitSpans(bodyRowIndex);
           continue;
         }
 

@@ -279,6 +279,46 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expectContentInsideItsTable(layout);
   });
 
+  test('the unsplit placement bounds a detached head by the page too', () => {
+    // The unsplit branch places a row with no bound and then compares its bottom against the
+    // page — a check a detached head is invisible to, because the row does not carry its
+    // height. Left unbounded there, the head painted below the page content box outright.
+    // Nine lines do not fit an 80pt page, so the head has to split whatever branch it takes.
+    const nine = Array.from({ length: 9 }, (_, index) => p(`T${index}`)).join('');
+    const layout = layoutTiny(
+      loadPart(
+        `<w:tbl>${GRID}` +
+          `<w:tr>${tc(nine, RESTART)}${tc(p('side'))}</w:tr>` +
+          `<w:tr>${tc(p('ghost'), CONTINUE)}${tc(p('side2'))}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    for (const pageIndex of layout.pages.keys()) {
+      expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+    expectContentInsideItsTable(layout);
+  });
+
+  test('a covered row that can place nothing paginates instead of aborting the table', () => {
+    // Refusing the recovery breaks for a covered row turned any probe-versus-placement
+    // divergence into `TablePaginationError` for the whole table. `w:cantSplit` on a covered
+    // row is the shape that reaches one of those breaks without any divergence at all.
+    const layout = layoutTiny(
+      loadPart(
+        `${p('F0')}${p('F1')}${p('F2')}<w:tbl>${GRID}` +
+          `<w:tr>${tc(p('head'), RESTART)}${tc(p('side'))}</w:tr>` +
+          `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+          `${tc(p('ghost'), CONTINUE)}${tc(MERGED_CONTENT)}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    expect(layout.pages.length).toBeGreaterThan(0);
+    expectContentInsideItsTable(layout);
+    for (const pageIndex of layout.pages.keys()) {
+      expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+  });
+
   test('two merges in different columns are decided one at a time', () => {
     // Column 0 merges rows 0-1 and column 1 merges rows 1-2. Treating the two as one
     // keep-together block moved the whole table to the next page and left the first one

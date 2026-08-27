@@ -30,7 +30,10 @@
 //
 // What keeps the content inside its cell is not a bound but two facts about placement:
 //
-//   1. a detached head's content stops at the page content box;
+//   1. a detached head's content stops at the page content box. `layoutRowFragmentBounded`
+//      bounds it by `maxBottom` on the split path and by the page the caller hands
+//      `layoutRowFragment` on the unsplit one, whose row bound is deliberately infinite —
+//      a detached head is exactly the cell the caller's own `bottom` check cannot see;
 //   2. every row of an accepted span lands in the same fragment as its head — the span was
 //      admitted only because it fits the page from the head's top, and a covered row may not
 //      break a page BEFORE placing something into it.
@@ -40,6 +43,23 @@
 // bottom when a covered row filled the page — and by (1) the content stops at or above
 // whichever it is. A floor that comes out too small only lets the row grow, which grows the
 // fragment and the box with it; too large only makes a row taller than it needed to be.
+//
+// (2) holds at five break sites, for three different reasons:
+//
+//   whole-row move        an OPTIMIZATION — the row would sit here — so it is refused for a
+//                         covered row, which is the only guard this design needs;
+//   `remaining <= 0`      the page is already full, so the fragment reaches the bottom and
+//                         so does the furthest (1) let the content go. Safe, allowed;
+//   split continuation    the same, after placing to the page bottom. Safe, allowed;
+//   `w:cantSplit` unfit   a RECOVERY. Refusing it aborts the table instead;
+//   nothing fitted        a RECOVERY, likewise.
+//
+// The two recoveries can end a fragment above content the head already flowed. They are
+// still allowed, because aborting a document beats no visual defect, and `finalizeTableRows`
+// trims a head's blocks to the box its rows actually made (`blocksClippedTo`). That trim is
+// the last word on (1) and (2) together: it works on measured geometry, so it cannot be
+// wrong about where the box is, and it costs merged text that had nowhere to go rather than
+// text painted outside the table.
 //
 // Declining one merge does not decline its neighbours. Two merges in different columns that
 // only overlap by a row are separate decisions, so a table where the second one cannot be
@@ -67,7 +87,11 @@ import type {
   SemanticTableRow,
   SemanticTableStructure,
 } from './semantic-table.ts';
-import { resolveVMergeSpans, type TableVMergeResolveBudget } from './table-vmerge.ts';
+import {
+  MAX_VMERGE_RESOLVE_CELLS,
+  resolveVMergeSpans,
+  type TableVMergeResolveBudget,
+} from './table-vmerge.ts';
 
 /** Sub-point drift between a probe and the real placement is not a height difference. */
 const EPSILON_PT = 0.001;
@@ -108,29 +132,50 @@ export interface VMergeRowHeights {
   rowOptions(rowIndex: number): RowVMergeLayoutOptions | undefined;
 }
 
-/** Probes one row's natural height with no page position and no anchor side effects. */
-export type RowHeightProbe = (row: SemanticTableRow) => number;
+/**
+ * Probes one row's natural height with no page position and no anchor side effects.
+ *
+ * `detached` is passed straight through to the probe's own row layout, so the probe leaves
+ * exactly the cells out that placement will leave out. Emptying a head's blocks instead
+ * still charged the row an empty cell's line, and that phantom line became a floor.
+ */
+export type RowHeightProbe = (row: SemanticTableRow, detached?: ReadonlySet<string>) => number;
 
 interface MergeHead {
   readonly span: VMergeSpan;
   readonly cell: SemanticTableCell;
 }
 
-/** The row as it stands with the merge heads' content removed: their height is the span's. */
-function rowWithoutHeadContent(
-  row: SemanticTableRow,
-  heads: ReadonlySet<string> | undefined
-): SemanticTableRow {
-  if (!heads || heads.size === 0) return row;
-  return {
-    ...row,
-    cells: row.cells.map((cell) => (heads.has(cell.id) ? { ...cell, blocks: [] } : cell)),
-  };
-}
-
 /** Just the merged cell, at its own grid column: what the span has to be tall enough for. */
 function soloHeadRow(row: SemanticTableRow, cell: SemanticTableCell): SemanticTableRow {
   return { ...row, height: { rule: 'auto' }, cells: [cell] };
+}
+
+/**
+ * Probe layouts one plan may run. A probe re-enters nested-table layout, so a merge at every
+ * level of a 16-deep nest multiplies passes rather than adding them; this is the ceiling
+ * CLAUDE.md asks for on anything a file controls. Exhaustion fails soft: the table plans no
+ * heights and keeps the behaviour it had before this module existed.
+ */
+export const MAX_VMERGE_PROBE_LAYOUTS = 4096;
+
+/**
+ * What one layout pass lets every table plan in it spend: cell visits on resolving the merge
+ * chains, and probe layouts on measuring rows. Separate from the budget `finalizeTableRows`
+ * spends, which would otherwise run out at half the cell count and leave holes in the grid.
+ */
+export interface VMergePlanBudget extends TableVMergeResolveBudget {
+  layoutsRemaining: number;
+}
+
+export function createVMergePlanBudget(
+  cells: number = MAX_VMERGE_RESOLVE_CELLS,
+  layouts: number = MAX_VMERGE_PROBE_LAYOUTS
+): VMergePlanBudget {
+  return {
+    cellsRemaining: Math.max(0, cells | 0),
+    layoutsRemaining: Math.max(0, layouts | 0),
+  };
 }
 
 function collectHeads(
@@ -166,7 +211,7 @@ function collectHeads(
 export function planVMergeRowHeights(
   rows: readonly SemanticTableRow[],
   probeRowHeightPt: RowHeightProbe,
-  budget?: TableVMergeResolveBudget
+  budget?: VMergePlanBudget
 ): VMergeRowHeights | null {
   if (rows.length === 0) return null;
   const { heads, headIdsByRow } = collectHeads(rows, budget);
@@ -196,7 +241,9 @@ export function planVMergeRowHeights(
    * A head nobody took still sizes its own row, so its content belongs in this number: leave
    * it out and the span is judged against a row shorter than the one that gets placed, and
    * the paginator moves a row the span was admitted to keep. `pending` is the head being
-   * decided right now, which is about to join the accepted set if the span is taken.
+   * decided right now, which is about to join the accepted set if the span is taken. The
+   * detached ones are detached in the probe as well, so this is the height placement gives
+   * the row and not an approximation of it.
    */
   const baseOf = (rowIndex: number, pending?: string): number => {
     const emptied = new Set<string>();
@@ -206,7 +253,7 @@ export function planVMergeRowHeights(
     const key = `${rowIndex}\u0000${[...emptied].sort().join('\u0000')}`;
     const known = basePt.get(key);
     if (known !== undefined) return known;
-    const measured = probeRowHeightPt(rowWithoutHeadContent(rows[rowIndex]!, emptied));
+    const measured = probeRowHeightPt(rows[rowIndex]!, emptied);
     basePt.set(key, measured);
     return measured;
   };
@@ -247,7 +294,23 @@ export function planVMergeRowHeights(
     return undefined;
   };
 
+  /**
+   * Charge this span's probe layouts once, or refuse it. Each probe re-enters nested-table
+   * layout, so an unbounded plan multiplies passes through a nest a file controls.
+   */
+  const chargedSpans = new Set<VMergeSpan>();
+  const affordable = (span: VMergeSpan): boolean => {
+    if (chargedSpans.has(span)) return true;
+    const needed = span.endRow - span.headRow + 2;
+    if (budget && budget.layoutsRemaining < needed) return false;
+    if (budget) budget.layoutsRemaining -= needed;
+    chargedSpans.add(span);
+    return true;
+  };
+
   const spanHeightOf = (span: VMergeSpan): number => {
+    // Unaffordable reads as "taller than any page", so the caller never admits it.
+    if (!affordable(span)) return Number.POSITIVE_INFINITY;
     const covered = coveredPtOf(span);
     if (lastGrowableRow(span) === undefined) return covered;
     return Math.max(covered, contentOf(span));
@@ -258,7 +321,7 @@ export function planVMergeRowHeights(
     heightOf: spanHeightOf,
     accept: (span) => {
       if (acceptedSpans.has(span)) return;
-      if (headsBelowHead(span)) return;
+      if (headsBelowHead(span) || !affordable(span)) return;
       const covered = coveredPtOf(span);
       const growable = lastGrowableRow(span);
       // Nothing in the span can grow and the content does not fit what the rows are fixed
@@ -338,13 +401,17 @@ export function planTableVMergeHeights<Deps>(
     left: number,
     depth: number,
     deps: Deps,
-    cellSpacingPt?: number
+    cellSpacingPt?: number,
+    vMerge?: RowVMergeLayoutOptions
   ) => number,
-  budget?: TableVMergeResolveBudget
+  budget?: VMergePlanBudget
 ): VMergeRowHeights | null {
   return planVMergeRowHeights(
     structure.rows,
-    (row) => measure(row, structure.columnWidthsPt, left, depth, deps, structure.cellSpacingPt),
+    (row, detached) =>
+      measure(row, structure.columnWidthsPt, left, depth, deps, structure.cellSpacingPt, {
+        ...(detached ? { detachedCellIds: detached } : {}),
+      }),
     budget
   );
 }

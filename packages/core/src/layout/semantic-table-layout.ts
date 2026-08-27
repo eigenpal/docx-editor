@@ -99,9 +99,13 @@ import {
   type TableVMergeResolveWork,
 } from './table-vmerge.ts';
 import { acceptVMergeSpansAt, planTableVMergeHeights } from './table-vmerge-heights.ts';
-import { contentInsets } from './table-cell-geometry.ts';
+import { blocksClippedTo, contentInsets } from './table-cell-geometry.ts';
 export { rowWithSplitBorders } from './table-cell-geometry.ts';
-import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
+import type {
+  RowVMergeLayoutOptions,
+  VMergePlanBudget,
+  VMergeRowHeights,
+} from './table-vmerge-heights.ts';
 
 export {
   createTableBorderOwnershipBudget,
@@ -243,11 +247,12 @@ export interface TableFlowDeps {
    */
   readonly vMergeResolveBudget?: TableVMergeResolveBudget;
   /**
-   * The same again for the height plan, which resolves the AUTHORED rows before any is
-   * placed. Sharing the budget above would exhaust it at half the cell count, and finalize
-   * fails soft to `rowSpan` 1 — holes in the painted grid, worse than planning no heights.
+   * What the vMerge height plan may spend across this pass: cell visits on the AUTHORED
+   * rows, and probe layouts. Not the budget above — finalize spends that one, and sharing it
+   * exhausts it at half the cell count, where finalize fails soft to `rowSpan` 1 and leaves
+   * holes in the painted grid.
    */
-  readonly vMergePlanBudget?: TableVMergeResolveBudget;
+  readonly vMergePlanBudget?: VMergePlanBudget;
   /**
    * Which tracked revisions this pass resolves away. A cell paragraph must resolve the same
    * mode as a body paragraph, or one table would show the proposed result while the text
@@ -1203,9 +1208,15 @@ export function layoutRowFragment(
   depth: number,
   deps: TableFlowDeps,
   cellSpacingPt = 0,
-  vMerge?: RowVMergeLayoutOptions
-): { readonly record: TableRowFragmentRecord; readonly bottom: number } {
-  const placed = layoutRowFragmentBounded(
+  vMerge?: RowVMergeLayoutOptions,
+  pageBottomPt = Number.POSITIVE_INFINITY
+): LayoutRowBoundedResult {
+  // The row itself is unbounded — callers here place it and then compare `bottom` against
+  // the page, which is how an overheight row fails closed. A DETACHED head is the one cell
+  // that comparison cannot see, because it is kept out of the row's height on purpose, so
+  // the page reaches it through `pageBottomPt` instead. A caller with no page (the probe,
+  // a nested table) leaves it infinite and nothing changes.
+  return layoutRowFragmentBounded(
     row,
     cols,
     left,
@@ -1217,9 +1228,9 @@ export function layoutRowFragment(
     deps,
     initialCellCursors(row),
     cellSpacingPt,
-    vMerge
+    vMerge,
+    pageBottomPt
   );
-  return { record: placed.record, bottom: placed.bottom };
 }
 
 export interface LayoutRowBoundedResult {
@@ -1262,7 +1273,8 @@ export function layoutRowFragmentBounded(
   deps: TableFlowDeps,
   cursors: readonly CellPlaceCursor[],
   cellSpacingPt = 0,
-  vMerge?: RowVMergeLayoutOptions
+  vMerge?: RowVMergeLayoutOptions,
+  detachedBottomPt = maxBottom
 ): LayoutRowBoundedResult {
   const detached = vMerge?.detachedCellIds;
   const total = sumCols(cols, 0, cols.length);
@@ -1342,7 +1354,7 @@ export function layoutRowFragmentBounded(
     // height of the ROW (17.18.37) while the merged content goes on through the rows below,
     // and its span's own extent is not known until every row of it has been placed.
     const isDetached = detached?.has(cell.id) === true;
-    const cellMaxBottom = isDetached ? maxBottom : flowMaxBottom;
+    const cellMaxBottom = isDetached ? detachedBottomPt : flowMaxBottom;
     const contentMaxBottom = cellMaxBottom - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
@@ -1534,7 +1546,8 @@ export function measureRowHeight(
   left: number,
   depth: number,
   deps: TableFlowDeps,
-  cellSpacingPt = 0
+  cellSpacingPt = 0,
+  vMerge?: RowVMergeLayoutOptions
 ): number {
   let lineCounter = 0;
   const probeDeps: TableFlowDeps = {
@@ -1542,18 +1555,43 @@ export function measureRowHeight(
     pageExclusionZones: undefined,
     nextLineId: () => `probe-${lineCounter++}`,
   };
-  const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps, cellSpacingPt);
+  // `vMerge` reaches the probe so a detached head is detached HERE too. Emptying its blocks
+  // instead still charged the row the empty-cell line below, and that phantom line became a
+  // floor the placement never asked for.
+  const placed = layoutRowFragment(
+    row,
+    cols,
+    left,
+    0,
+    false,
+    depth,
+    probeDeps,
+    cellSpacingPt,
+    vMerge
+  );
   return placed.record.box.height;
 }
 
-/** The vMerge plan for a table whose rows are all placed in one pass, probed by row layout. */
-const vMergePlanFor = (
+/**
+ * The vMerge plan for one table, probed by row layout. `rows` narrows it to the rows the
+ * caller actually places — the paginator plans over the BODY rows, so a merge is never
+ * planned against a repeated header copy.
+ */
+export const vMergePlanFor = (
   structure: SemanticTableStructure,
   left: number,
   depth: number,
-  deps: TableFlowDeps
+  deps: TableFlowDeps,
+  rows?: readonly SemanticTableRow[]
 ): VMergeRowHeights | null =>
-  planTableVMergeHeights(structure, left, depth, deps, measureRowHeight, deps.vMergePlanBudget);
+  planTableVMergeHeights(
+    rows ? { ...structure, rows } : structure,
+    left,
+    depth,
+    deps,
+    measureRowHeight,
+    deps.vMergePlanBudget
+  );
 
 /**
  * After all rows of a table fragment are placed: expand vMerge restart boxes, re-apply
@@ -1629,6 +1667,9 @@ export function finalizeTableRows(
           }
         }
       }
+      // The span's real extent, at last. A head that flowed past it — only reachable where
+      // the placer had to cut the span short to recover — is trimmed to it here.
+      if (span > 1) blocks = blocksClippedTo(blocks, cell.box.y + height);
       const finalizedCellBox = Object.freeze({
         x: cell.box.x,
         y: cell.box.y,

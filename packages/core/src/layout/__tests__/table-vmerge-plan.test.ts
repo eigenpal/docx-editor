@@ -7,7 +7,11 @@
 
 import { describe, expect, test } from 'bun:test';
 import type { SemanticTableCell, SemanticTableRow } from '../semantic-table.ts';
-import { planVMergeRowHeights, type RowVMergeLayoutOptions } from '../table-vmerge-heights.ts';
+import {
+  createVMergePlanBudget,
+  planVMergeRowHeights,
+  type RowVMergeLayoutOptions,
+} from '../table-vmerge-heights.ts';
 
 const BORDERS = {
   top: { state: 'omitted' as const },
@@ -41,22 +45,25 @@ function row(id: string, cells: readonly SemanticTableCell[]): SemanticTableRow 
   } as unknown as SemanticTableRow;
 }
 
-/** Heights by cell id, so a probe answers with whatever the test wants each row to measure. */
+/**
+ * Heights by cell id, standing in for row layout: the tallest cell wins, and a DETACHED cell
+ * contributes nothing at all — not even an empty cell's line, which is the whole point of
+ * passing the set through instead of blanking the cell's blocks.
+ */
 function probeFrom(
   heights: Readonly<Record<string, number>>
-): (probed: SemanticTableRow) => number {
-  return (probed) => {
-    let tallest = 10;
+): (probed: SemanticTableRow, detached?: ReadonlySet<string>) => number {
+  return (probed, detached) => {
+    let tallest = 0;
     for (const probedCell of probed.cells) {
-      // An emptied head measures as an empty cell; anything else keeps its authored height.
-      const authored = probedCell.blocks.length === 0 ? 10 : (heights[probedCell.id] ?? 10);
-      tallest = Math.max(tallest, authored);
+      if (detached?.has(probedCell.id)) continue;
+      tallest = Math.max(tallest, heights[probedCell.id] ?? 10);
     }
     return tallest;
   };
 }
 
-/** A cell with content, so the probe can tell an emptied head from one that stayed. */
+/** A cell the probe gives an authored height to, as opposed to a bare continuation cell. */
 function filled(id: string, gridColumn: number): SemanticTableCell {
   return { ...cell(id, gridColumn), blocks: [{} as never] };
 }
@@ -101,6 +108,48 @@ describe('the vMerge plan hands out heights, never positions', () => {
       expect(covered?.heightFloorPt).toBeGreaterThan(0);
       expect(covered?.detachedCellIds).toBeUndefined();
     }
+  });
+
+  test('a detached head costs the row nothing, not even an empty cell line', () => {
+    // The probe used to blank a head's blocks instead of detaching it, and row layout gives
+    // an empty cell a line plus its insets. That phantom line became a hard floor on a
+    // placement where the head contributes nothing at all.
+    const rows = [
+      row('r0', [filled('head', 0), filled('side0', 1)]),
+      row('r1', [cell('cont', 0, true), filled('side1', 1)]),
+    ];
+    const seen: (readonly string[] | undefined)[] = [];
+    const plan = planVMergeRowHeights(rows, (probed, detached) => {
+      seen.push(detached ? [...detached] : undefined);
+      let tallest = 0;
+      for (const probedCell of probed.cells) {
+        if (detached?.has(probedCell.id)) continue;
+        tallest = Math.max(tallest, probedCell.id === 'head' ? 90 : 12);
+      }
+      return tallest;
+    })!;
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    // The head reached the probe as a DETACHED id, never as a cell with its blocks removed.
+    expect(seen.some((ids) => ids?.includes('head'))).toBe(true);
+    expect(rows[0]!.cells[0]!.blocks.length).toBe(1);
+    // Row 0 is 12: exactly what the cell that stayed needs, with nothing charged for the
+    // head. The span's shortfall lands on the last row that can grow, as always.
+    expect(plan.rowOptions(0)!.heightFloorPt).toBe(12);
+    expect(plan.rowOptions(1)!.heightFloorPt).toBe(90 - 12);
+  });
+
+  test('probe layouts are capped, and a plan that cannot afford them declines', () => {
+    // Each probe re-enters nested-table layout, so a merge at every level of a nest a file
+    // controls multiplies passes. The cap is a resource bound, and it fails soft.
+    const rows = [
+      row('r0', [filled('head', 0), filled('side0', 1)]),
+      row('r1', [cell('cont', 0, true), filled('side1', 1)]),
+    ];
+    const spent = createVMergePlanBudget(1024, 1);
+    const plan = planVMergeRowHeights(rows, probeFrom({ head: 90 }), spent)!;
+    for (const span of plan.spansAt(0)) plan.accept(span);
+    expect(plan.rowOptions(0)).toBeUndefined();
+    expect(spent.layoutsRemaining).toBe(1);
   });
 
   test('a span no row of which can grow is declined rather than handed a short box', () => {
