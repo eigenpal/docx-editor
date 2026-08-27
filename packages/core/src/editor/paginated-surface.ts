@@ -90,6 +90,7 @@ import {
 import {
   authorSlotsOf,
   createStableReviewAuthorSlots,
+  reviewAuthorSlotColor,
   reviewAuthorsOf,
   type ReviewAuthorInfo,
   type StableReviewAuthorSlots,
@@ -112,6 +113,7 @@ import type {
   PaginatedSurface,
   PaginatedSurfaceOptions,
   PaginatedSurfaceState,
+  RemoteCaretLabelHost,
   ReviewWriteIntent,
   SurfaceEditingMode,
 } from './paginated-surface-contract.ts';
@@ -208,6 +210,8 @@ export type {
   SurfaceParagraphFormat,
   ParagraphPropertyEdit,
   ParagraphTabStop,
+  RemoteCaretLabelAnchor,
+  RemoteCaretLabelHost,
   SectionBreakInsertType,
   ReviewWriteIntent,
   SurfaceFormatting,
@@ -1480,6 +1484,9 @@ export function mountPaginatedSurface(
   let detachCollaboration: () => void = () => {};
   let unsubscribeCollaborationStatus: () => void = () => {};
   let remoteSelectionRenderingReady = false;
+  // The host that renders its own remote-caret label content, when one registered. Part of
+  // the painter's memo key by identity, so setting or clearing it rebuilds the labels.
+  let remoteCaretLabelHost: RemoteCaretLabelHost | null = null;
   /**
    * The last payload handed to the session, so an unchanged caret publishes once.
    *
@@ -3972,6 +3979,24 @@ export function mountPaginatedSurface(
     return authorRoster;
   }
 
+  /**
+   * The presence colour for a remote participant who published none: the SAME answer the
+   * review paint gives, so presence and review markup agree with zero wiring.
+   *
+   * An author the roster already draws — tracked changes or comments — takes their resolved
+   * colour. Anyone else takes the next slot from the SAME stable allocator a comment-only
+   * author would, so when they later make a tracked change or comment they keep this colour.
+   * A presence-only reservation never joins `revisionAuthors()`: the roster still derives
+   * from the layout and the review queue alone.
+   */
+  function remotePresenceColor(name: string): string | undefined {
+    const roster = reviewAuthorState();
+    const known = roster.resolved.get(name);
+    if (known) return known.color;
+    const slot = stableAuthorSlots.resolve(roster.value, [name]).get(name);
+    return slot === undefined ? undefined : reviewAuthorSlotColor(slot);
+  }
+
   /** The class a band draws in, or null when this range should not be drawn at all. */
   function bandClassFor(
     key: string,
@@ -4107,6 +4132,11 @@ export function mountPaginatedSurface(
       scale,
       pageOffsetX: materializedExtent?.pageOffsetX,
       ...(materializedSet ? { pages: materializedSet } : {}),
+      // The review roster's answer, resolved per painted author. The painter folds what
+      // this returns into its memo key, so a roster move repaints presence on the next
+      // pass without a second invalidation channel.
+      colorForAuthor: remotePresenceColor,
+      labelHost: remoteCaretLabelHost,
     });
   }
 
@@ -5314,6 +5344,16 @@ export function mountPaginatedSurface(
       // Paint-level only: the reuse key moves with the resolved styles, so the pages
       // repaint in the new colours without a layout pass.
       render(false);
+    },
+
+    setRemoteCaretLabelHost: (host) => {
+      if (host === remoteCaretLabelHost) return;
+      remoteCaretLabelHost = host;
+      // Registration and unregistration both repaint: the first publish must fire without
+      // waiting for awareness to move, and clearing the host restores the default name
+      // labels. The painter keys its memo on the host's identity, so this is a rebuild,
+      // never a skip — and a skipped paint later never re-publishes.
+      renderRemoteSelections();
     },
 
     setReviewActivationExclusions(kinds) {

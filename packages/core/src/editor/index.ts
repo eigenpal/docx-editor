@@ -150,6 +150,8 @@ export {
   type SurfaceParagraphFormat,
   type ParagraphPropertyEdit,
   type ParagraphTabStop,
+  type RemoteCaretLabelAnchor,
+  type RemoteCaretLabelHost,
   type SectionBreakInsertType,
   type ReviewWriteIntent,
   type SurfaceFormatting,

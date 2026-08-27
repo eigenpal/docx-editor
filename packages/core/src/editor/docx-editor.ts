@@ -191,6 +191,7 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
+  type RemoteCaretLabelHost,
 } from './paginated-surface.ts';
 import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
 import { surfaceScroller } from './surface-pages.ts';
@@ -311,6 +312,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   if (openingModeDecision.rejection !== null) facadeRejection = openingModeDecision.rejection;
 
   let surface: PaginatedSurface | null = null;
+  // The facade's copy of the host's remote-caret label host: registered before attach,
+  // re-applied to every rebuilt surface (reload, font remount, re-attach).
+  let remoteCaretLabelHost: RemoteCaretLabelHost | null = null;
   let parseError: string | null = null;
   let unsubscribeSession: Unsubscribe | null = null;
   let lastSelection: SurfaceSelection | null = null;
@@ -634,6 +638,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // and still told a screen reader it was writable. Reads the CURRENT mode, not just the
     // constructed one, so a remount after `setEditingMode('viewing')` comes up right.
     surface.setEditable(editingMode !== 'viewing');
+    // Same remount rule for the host's caret-label host: registered once, and a rebuilt
+    // surface that forgot it would fall back to the default name labels mid-session.
+    if (remoteCaretLabelHost !== null) {
+      surface.setRemoteCaretLabelHost(remoteCaretLabelHost);
+    }
     // Same remount rule for the host's activation filter: the rail set it once, and a
     // rebuilt surface that forgot it would activate cards the rail does not render.
     if (reviewActivationExclusions !== null) {
@@ -2228,6 +2237,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
     getConfiguredAuthor: () => config.author?.trim() || null,
     getReviewAuthorStyle: (author) => revisionStyleState.styleFor(author),
+    setRemoteCaretLabelHost(host) {
+      remoteCaretLabelHost = host;
+      // Tolerated detached: the host waits here and applies on the next mount.
+      surface?.setRemoteCaretLabelHost(host);
+    },
     setRevisionStyles(colors) {
       revisionStyleState.set(colors);
       surface?.setRevisionStyles(colors);

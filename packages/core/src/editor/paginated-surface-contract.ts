@@ -19,7 +19,7 @@ import type {
   ReviewModuleContribution,
   CollaborationModuleContribution,
 } from '../contracts/modules.ts';
-import type { CollaborationStatus } from '../collaboration/index.ts';
+import type { CollaborationRemoteSelection, CollaborationStatus } from '../collaboration/index.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationActivation, EquationOps } from './surface-equations.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
@@ -48,6 +48,36 @@ import type {
   ContentControlSurfaceState,
 } from './surface-content-control-contract.ts';
 export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
+
+/**
+ * One live remote-caret label the engine positioned. The host owns its content.
+ *
+ * The engine still owns the label's geometry, class, and presence colour; the host renders
+ * whatever it wants inside `element`. Elements from a previous publish are dead after the
+ * next one — the engine rebuilds the labels wholesale on every repaint that moves them.
+ *
+ * @public
+ */
+export interface RemoteCaretLabelAnchor {
+  readonly element: HTMLElement;
+  readonly selection: CollaborationRemoteSelection;
+}
+
+/**
+ * A host that renders its own content inside the engine's remote-caret labels.
+ *
+ * @public
+ */
+export interface RemoteCaretLabelHost {
+  /**
+   * Called after every paint that rebuilt the labels, with the current anchors.
+   *
+   * A skipped paint (nothing moved) does not re-publish: the host keeps its last anchors
+   * until the next publish, and elements from a previous publish are dead after the next
+   * one. An empty array is a real publish — every remote caret left the screen.
+   */
+  publish(anchors: readonly RemoteCaretLabelAnchor[]): void;
+}
 
 /**
  * How a paginated surface opens. Every field is optional.
@@ -763,6 +793,17 @@ export interface PaginatedSurface {
    * remeasuring a line, and the caret, selection and undo history stay where they are.
    */
   setRevisionStyles(colors: RevisionStyles | undefined): void;
+  /**
+   * Hand remote-caret label content to the host, or take it back with `null`.
+   *
+   * With a host set, the engine still creates and positions each label (same class, same
+   * presence colour) but leaves it empty, marks it `data-docx-remote-actor`, and calls
+   * {@link RemoteCaretLabelHost.publish} after every paint that rebuilt the labels.
+   * Registration and unregistration repaint immediately, so the first publish fires
+   * without waiting for awareness to move and unregistering restores the default
+   * collaborator-name labels.
+   */
+  setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
   /**
    * Commit ops that came from automation, through the gate a keystroke goes through.
    *

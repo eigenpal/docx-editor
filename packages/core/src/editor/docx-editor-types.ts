@@ -19,7 +19,7 @@ import type {
   RevisionStyles,
 } from '../output/revision-presentation.ts';
 import type { FontConfigurationFragment, FontResolver } from './font-composition.ts';
-import type { PaginatedSurface } from './paginated-surface.ts';
+import type { PaginatedSurface, RemoteCaretLabelHost } from './paginated-surface.ts';
 import type { HyperlinkActivation } from './surface-navigation.ts';
 import type { EquationActivation } from './surface-equations.ts';
 
@@ -191,6 +191,16 @@ export interface DocxEditorInstance extends Editor {
   setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
   /** Wire the host equation popover to painted equation clicks. */
   setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
+  /**
+   * Render the host's own component as the remote-caret label, or restore the default
+   * collaborator-name label with `null`. The engine keeps owning label geometry, class,
+   * and presence colour; the host owns the content of each published element.
+   *
+   * Instance-only, like `setHyperlinkChrome`: it is what a MOUNTING host needs. Tolerated
+   * before `attach` and after `detach` — the registration waits and applies on the next
+   * mount, and it survives a document reload the way the hyperlink chrome does.
+   */
+  setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
   /**
    * Monotonic version of the observable editor state. Bumps whenever anything
    * `snapshot()` reports could have moved — a committed change, a selection move, zoom,

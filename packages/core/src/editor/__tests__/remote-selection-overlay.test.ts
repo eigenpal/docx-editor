@@ -15,7 +15,13 @@ import {
   paragraphSnapshot,
 } from '../../collaboration/paragraph-addresses.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
-import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
+import {
+  mountPaginatedSurface,
+  type PaginatedSurface,
+  type RemoteCaretLabelAnchor,
+} from '../paginated-surface.ts';
+import { paintRemoteSelections } from '../surface-remote-selection.ts';
+import { createDocxEditor } from '../docx-editor.ts';
 import { docx, paragraph, putCaret, selectCellRectangle } from './paginated-surface-fixtures.ts';
 
 const opened: { surface: PaginatedSurface; container: HTMLElement }[] = [];
@@ -348,5 +354,152 @@ describe('remote selection overlay', () => {
     const caretTop = Number.parseFloat(caret!.style.top);
     expect(caretTop).toBeLessThan(page.contentBox.y);
     expect(caretTop).toBeGreaterThanOrEqual(header!.box.y);
+  });
+});
+
+describe('remote caret label host', () => {
+  const bobAt = (nodeId: string, offset: number): CollaborationRemoteSelection => ({
+    actorId: 'bob',
+    name: 'Bob',
+    anchor: { paragraphId: 'AAAAAAAA', nodeId, offset },
+    head: { paragraphId: 'AAAAAAAA', nodeId, offset },
+  });
+
+  test('a registered host owns label content and hears every rebuilding paint', () => {
+    let remotes: CollaborationRemoteSelection[] = [];
+    const { surface, container, notify } = mountBody(THREE, () => remotes);
+    const ids = surface.session.paragraphIds();
+    remotes = [bobAt(ids[0]!, 1)];
+    notify();
+    // Default mode first: the name reaches textContent, exactly as before.
+    expect(container.querySelector('.docx-remote-caret-label')?.textContent).toBe('Bob');
+
+    const publishes: RemoteCaretLabelAnchor[][] = [];
+    // Registration repaints on its own: the first publish must not wait for awareness.
+    surface.setRemoteCaretLabelHost({ publish: (anchors) => publishes.push([...anchors]) });
+    expect(publishes).toHaveLength(1);
+    const label = container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    expect(label).toBeTruthy();
+    expect(label!.textContent).toBe('');
+    expect(label!.getAttribute('data-docx-remote-actor')).toBe('bob');
+    // The published anchors pair the created elements with their selections.
+    expect(publishes[0]).toHaveLength(1);
+    expect(publishes[0]![0]!.element).toBe(label!);
+    expect(publishes[0]![0]!.selection.actorId).toBe('bob');
+    // The layer is the furniture boundary: host content inherits contenteditable=false.
+    expect(label!.closest('[contenteditable="false"]')).toBeTruthy();
+
+    // A skipped paint (nothing moved) must NOT re-publish.
+    notify();
+    expect(publishes).toHaveLength(1);
+
+    // A moved caret rebuilds the labels and publishes fresh anchors.
+    remotes = [bobAt(ids[0]!, 2)];
+    notify();
+    expect(publishes).toHaveLength(2);
+    expect(publishes[1]![0]!.element).not.toBe(label!);
+
+    // Every caret leaving the screen is a publish too: the host renders "nobody here".
+    remotes = [];
+    notify();
+    expect(publishes).toHaveLength(3);
+    expect(publishes[2]).toHaveLength(0);
+
+    // Unregistering restores the default name labels.
+    remotes = [bobAt(ids[0]!, 1)];
+    notify();
+    expect(publishes).toHaveLength(4);
+    surface.setRemoteCaretLabelHost(null);
+    const restored = container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    expect(restored?.textContent).toBe('Bob');
+    expect(restored?.hasAttribute('data-docx-remote-actor')).toBe(false);
+    expect(publishes).toHaveLength(4);
+  });
+
+  test('the facade tolerates a label host before attach and after detach', () => {
+    const editor = createDocxEditor({ document: docx(paragraph('Hello')) });
+    const host = { publish: () => {} };
+    expect(() => editor.setRemoteCaretLabelHost(host)).not.toThrow();
+    const el = document.createElement('div');
+    document.body.append(el);
+    try {
+      editor.attach(el);
+      expect(editor.surface).toBeTruthy();
+      editor.detach();
+      expect(() => editor.setRemoteCaretLabelHost(null)).not.toThrow();
+    } finally {
+      editor.destroy();
+      el.remove();
+    }
+  });
+});
+
+describe('remote presence colour fallback', () => {
+  const INS =
+    '<w:p><w:ins w:id="1" w:author="Reviewer One" w:date="2024-01-01T00:00:00Z">' +
+    '<w:r><w:t>tracked</w:t></w:r></w:ins></w:p>';
+
+  const caretOf = (name: string, nodeId: string, color?: string): CollaborationRemoteSelection => ({
+    actorId: 'a1',
+    name,
+    ...(color ? { color } : {}),
+    anchor: { paragraphId: 'AAAAAAAA', nodeId, offset: 0 },
+    head: { paragraphId: 'AAAAAAAA', nodeId, offset: 0 },
+  });
+
+  function paintedColor(
+    body: string,
+    remote: (nodeId: string) => CollaborationRemoteSelection
+  ): { label: string; caret: string } {
+    let remotes: CollaborationRemoteSelection[] = [];
+    const { surface, container, notify } = mountBody(body, () => remotes);
+    const ids = surface.session.paragraphIds();
+    remotes = [remote(ids.at(-1)!)];
+    notify();
+    const label = container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    const caret = container.querySelector<HTMLElement>('.docx-remote-caret');
+    if (!label || !caret) throw new Error('remote caret did not paint');
+    return {
+      label: label.style.getPropertyValue('--doc-remote-color'),
+      caret: caret.style.getPropertyValue('--doc-remote-color'),
+    };
+  }
+
+  test('a colourless selection takes its author slot from the review roster', () => {
+    const painted = paintedColor(INS + paragraph('plain'), (nodeId) =>
+      caretOf('Reviewer One', nodeId)
+    );
+    expect(painted.label).toBe('var(--doc-review-author-0)');
+    expect(painted.caret).toBe('var(--doc-review-author-0)');
+  });
+
+  test('an author unknown to review takes the next stable slot', () => {
+    const painted = paintedColor(INS + paragraph('plain'), (nodeId) => caretOf('Zoe', nodeId));
+    expect(painted.label).toBe('var(--doc-review-author-1)');
+    expect(painted.caret).toBe('var(--doc-review-author-1)');
+  });
+
+  test('an explicit published colour wins over the roster', () => {
+    const painted = paintedColor(INS + paragraph('plain'), (nodeId) =>
+      caretOf('Reviewer One', nodeId, '#ff0000')
+    );
+    expect(painted.label).toBe('#ff0000');
+    expect(painted.caret).toBe('#ff0000');
+  });
+
+  test('hostile colorForAuthor output never reaches a style property', () => {
+    const { surface } = mountBody(paragraph('plain'), () => []);
+    const ids = surface.session.paragraphIds();
+    const layer = document.createElement('div');
+    paintRemoteSelections(layer, surface.layout(), [caretOf('Eve', ids[0]!)], {
+      scale: 1,
+      colorForAuthor: () => 'url(https://evil.example/beacon)',
+    });
+    const label = layer.querySelector<HTMLElement>('.docx-remote-caret-label');
+    const caret = layer.querySelector<HTMLElement>('.docx-remote-caret');
+    expect(label).toBeTruthy();
+    expect(caret).toBeTruthy();
+    expect(label!.style.getPropertyValue('--doc-remote-color')).toBe('');
+    expect(caret!.style.getPropertyValue('--doc-remote-color')).toBe('');
   });
 });

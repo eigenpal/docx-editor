@@ -20,6 +20,7 @@ import {
 import { findNode, isValidParaId, paraIdOf, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 import { safeParticipantColor } from '../collaboration/participant-color.ts';
+import type { RemoteCaretLabelAnchor, RemoteCaretLabelHost } from './paginated-surface-contract.ts';
 import type {
   CollaborationLocalSelection,
   CollaborationParagraph,
@@ -65,6 +66,20 @@ export interface RemoteSelectionPaintOptions {
    * not painted, so measuring it is cost paid on every local keystroke.
    */
   readonly pages?: ReadonlySet<number>;
+  /**
+   * The presence colour for an author who published none, or `undefined` to keep the CSS
+   * default. Its OUTPUT is sanitized through `safeParticipantColor` at every sink, exactly
+   * as a published colour is, and the resolved colour joins the paint memo key — so a
+   * roster that reassigns an author repaints their presence.
+   */
+  readonly colorForAuthor?: (name: string) => string | undefined;
+  /**
+   * A host that renders its own content inside the caret labels. With one set the labels
+   * stay empty (`data-docx-remote-actor` names the actor) and every rebuilding paint calls
+   * `publish`; a skipped paint does not. The host joins the paint memo key by identity, so
+   * registering and unregistering rebuild the labels rather than skipping.
+   */
+  readonly labelHost?: RemoteCaretLabelHost | null;
 }
 
 interface LastRemotePaint {
@@ -73,6 +88,7 @@ interface LastRemotePaint {
   readonly pagesKey: string;
   readonly scale: number;
   readonly offsetKey: string;
+  readonly labelHost: RemoteCaretLabelHost | null;
   /**
    * What the skip asserts is still on screen. Callers empty this layer on their own (a surface
    * with no replica paints nothing), and equal inputs after such a clear would otherwise skip
@@ -83,10 +99,31 @@ interface LastRemotePaint {
 
 const lastRemotePaint = new WeakMap<HTMLElement, LastRemotePaint>();
 
-function selectionFingerprint(selections: readonly CollaborationRemoteSelection[]): string {
+/**
+ * The colour each selection PAINTS, already sanitized: the published colour when it is one
+ * this engine can paint, otherwise the roster fallback, otherwise nothing (CSS default).
+ *
+ * One array per paint, indexed like `selections`, because the fingerprint hashes it too —
+ * the resolved colour is roster state, and hashing it is what repaints presence when the
+ * roster reassigns an author without any selection moving.
+ */
+function resolvedSelectionColors(
+  selections: readonly CollaborationRemoteSelection[],
+  colorForAuthor?: (name: string) => string | undefined
+): readonly (string | undefined)[] {
+  return selections.map(
+    (remote) =>
+      safeParticipantColor(remote.color) ?? safeParticipantColor(colorForAuthor?.(remote.name))
+  );
+}
+
+function selectionFingerprint(
+  selections: readonly CollaborationRemoteSelection[],
+  colors: readonly (string | undefined)[]
+): string {
   let out = '';
-  for (const remote of selections) {
-    out += `${remote.actorId}\t${remote.name}\t${remote.color ?? ''}\t${remote.kind ?? ''}\t`;
+  for (const [index, remote] of selections.entries()) {
+    out += `${remote.actorId}\t${remote.name}\t${colors[index] ?? ''}\t${remote.kind ?? ''}\t`;
     out += `${remote.anchor.nodeId}:${remote.anchor.offset}\t`;
     out += `${remote.head.nodeId}:${remote.head.offset}\n`;
   }
@@ -120,6 +157,7 @@ function sameRemotePaint(
     previous.pagesKey === next.pagesKey &&
     previous.scale === next.scale &&
     previous.offsetKey === next.offsetKey &&
+    previous.labelHost === next.labelHost &&
     previous.childCount === layer.childElementCount
   );
 }
@@ -143,9 +181,10 @@ function cellRects(layout: SemanticLayout, remote: CollaborationRemoteSelection)
 /**
  * Paint every remote selection into the overlay layer.
  *
- * The layer is furniture: the caller keeps it `contenteditable=false` and outside the pages.
- * Display names reach `textContent` only. Author colour is a CSS custom property, never
- * interpolated into a style string.
+ * The layer is furniture: the caller keeps it `contenteditable=false` and outside the pages,
+ * which covers every label and whatever a label host renders inside one. Display names reach
+ * `textContent` only, actor ids reach attribute values only. Author colour is a CSS custom
+ * property, never interpolated into a style string.
  */
 export function paintRemoteSelections(
   layer: HTMLElement,
@@ -153,15 +192,20 @@ export function paintRemoteSelections(
   selections: readonly CollaborationRemoteSelection[],
   options: RemoteSelectionPaintOptions
 ): void {
-  const { scale, pageOffsetX, pages } = options;
+  const { scale, pageOffsetX, pages, colorForAuthor } = options;
+  const labelHost = options.labelHost ?? null;
+  const colors = resolvedSelectionColors(selections, colorForAuthor);
   const paintKey = {
     layout,
-    fingerprint: selectionFingerprint(selections),
+    fingerprint: selectionFingerprint(selections, colors),
     pagesKey: pagesKey(pages),
     scale,
     offsetKey: offsetKey(pageOffsetX),
+    labelHost,
   };
   const previous = lastRemotePaint.get(layer);
+  // A skipped paint must NOT re-publish: the anchors are unchanged, and the host keeps its
+  // last ones until the next publish (see `RemoteCaretLabelHost.publish`).
   if (previous && sameRemotePaint(previous, layer, paintKey)) return;
   // Recorded after the paint below, because the child count is its result.
   lastRemotePaint.delete(layer);
@@ -169,7 +213,7 @@ export function paintRemoteSelections(
   const rects: OverlayRect[] = [];
   const rectColors: (string | undefined)[] = [];
   const labels: {
-    readonly name: string;
+    readonly selection: CollaborationRemoteSelection;
     readonly color?: string;
     readonly pageIndex: number;
     readonly x: number;
@@ -189,6 +233,7 @@ export function paintRemoteSelections(
       ? presenceRangeRects(layout, textRanges, everyStoryOrder(layout), pages)
       : null;
   for (const [index, remote] of selections.entries()) {
+    const color = colors[index];
     const labelGeometry = caretAt(layout, {
       paragraphId: remote.head.nodeId,
       offset: remote.head.offset,
@@ -196,8 +241,8 @@ export function paintRemoteSelections(
     if (labelGeometry) {
       const offset = storyContentOffset(layout, remote.head.nodeId, labelGeometry.pageIndex);
       labels.push({
-        name: remote.name,
-        ...(remote.color ? { color: remote.color } : {}),
+        selection: remote,
+        ...(color ? { color } : {}),
         pageIndex: labelGeometry.pageIndex,
         x: labelGeometry.x + offset.x,
         y: labelGeometry.y + offset.y,
@@ -208,7 +253,7 @@ export function paintRemoteSelections(
       if (painted.length > 0) {
         for (const rect of painted) {
           rects.push(rect);
-          rectColors.push(remote.color);
+          rectColors.push(color);
         }
         continue;
       }
@@ -228,14 +273,14 @@ export function paintRemoteSelections(
         height: geometry.height,
         className: 'docx-remote-caret',
       });
-      rectColors.push(remote.color);
+      rectColors.push(color);
       continue;
     }
     const painted = textRects?.get(String(index));
     if (!painted) continue;
     for (const rect of painted) {
       rects.push({ ...rect, className: 'docx-remote-selection-rect' });
-      rectColors.push(remote.color);
+      rectColors.push(color);
     }
   }
   paintSelectionOverlay(layer, layout, rects, { scale, pageOffsetX });
@@ -245,12 +290,20 @@ export function paintRemoteSelections(
     element.style.setProperty('--doc-remote-color', color);
   });
   const document = layer.ownerDocument;
+  const anchors: RemoteCaretLabelAnchor[] = [];
   for (const label of labels) {
     const page = layout.pages[label.pageIndex];
     if (!page) continue;
     const element = document.createElement('div');
     element.className = 'docx-remote-caret-label';
-    element.textContent = label.name;
+    if (labelHost) {
+      // The host owns the content: the label stays EMPTY, and the actor id — remote input —
+      // reaches the element only as an attribute VALUE through `setAttribute`, never markup.
+      element.setAttribute('data-docx-remote-actor', label.selection.actorId);
+      anchors.push({ element, selection: label.selection });
+    } else {
+      element.textContent = label.selection.name;
+    }
     element.style.left = `${
       (page.contentBox.x + label.x + (pageOffsetX?.get(label.pageIndex) ?? 0)) * scale
     }px`;
@@ -260,4 +313,7 @@ export function paintRemoteSelections(
     layer.append(element);
   }
   lastRemotePaint.set(layer, { ...paintKey, childCount: layer.childElementCount });
+  // After the memo is recorded, so a host that throws cannot leave the paint unaccounted.
+  // Publishes the empty array too: every caret leaving the screen is a state the host renders.
+  if (labelHost) labelHost.publish(anchors);
 }
