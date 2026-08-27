@@ -71,6 +71,13 @@ export interface MenuRowProps {
   /** Stable marker for hosts, tests and e2e. */
   slot?: string;
   /**
+   * What the slot currently SHOWS, for a control whose state is more than pressed-or-not —
+   * the format painter's `once` against its `locked`. Declared rather than left to a spread:
+   * this component renders only the props it names, so an undeclared attribute is dropped in
+   * silence, and the stylesheet rule keyed on it can never match.
+   */
+  'data-value'?: string;
+  /**
    * Vue TSX maps row identity through `rowSlot` because `slot` is reserved.
    * React uses {@link slot} directly.
    */
@@ -96,6 +103,7 @@ export interface MenuRowProps {
 export function MenuRow(props: MenuRowProps) {
   const { icon, shortcut, disabled, title, active, selected, slot, onSelect, className, children } =
     props;
+  const value = props['data-value'];
   const shortcutText = usePlatformShortcut();
   const reasonId = useId();
   // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
@@ -121,6 +129,7 @@ export function MenuRow(props: MenuRowProps) {
       // tab stops).
       tabIndex={-1}
       {...(slot ? { 'data-slot': slot } : {})}
+      {...(value !== undefined ? { 'data-value': value } : {})}
       {...(active ? { 'data-active': '' } : {})}
       {...(disabled ? { 'data-disabled': '', 'aria-disabled': true } : {})}
       {...(active !== undefined ? { 'aria-checked': active } : {})}

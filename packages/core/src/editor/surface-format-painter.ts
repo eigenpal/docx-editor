@@ -187,6 +187,17 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
   let mode: FormatPainterMode = 'off';
   let captured: FormatPainterCapture | null = null;
   let lastPressAt: number | null = null;
+  /**
+   * When a press last put a LOCKED painter away, so the second half of that double-click can
+   * be told from a fresh press.
+   *
+   * Only the locked mode earns this. A user who locked the painter with a double-click puts
+   * it away with one, and handing it back armed would let their next click in the document
+   * repaint silently. A single-application arming is dismissed with a SINGLE click, so a
+   * press that follows is a change of mind and must arm — swallowing that one would be a
+   * control that looks live and does nothing.
+   */
+  let dismissedLockAt: number | null = null;
 
   // Reference-stable while unchanged, like the armed typing format beside it: the editor's
   // snapshot cache compares its fields with `===`, so a fresh object per read would report
@@ -303,7 +314,15 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       }
       // The mark follows a paragraph whose pilcrow the range contains — the same rule the
       // rest of the formatting lane applies, and what a list marker takes its face from.
+      //
+      // A PARAGRAPH-level capture covers it whatever the range does, because that capture
+      // reformats the paragraph wholesale: the properties below are written for every
+      // paragraph in the set regardless of how much text is selected, so the mark has to be
+      // too. Without this, painting a bulleted item by CLICKING the target made it a list
+      // item whose bullet kept the target's old face, while painting the same capture over a
+      // SELECTION of the same paragraph did not — one capture, two results.
       const coversMark =
+        held.paragraphProperties !== null ||
         rectangular ||
         index < paragraphIds.length - 1 ||
         (start === 0 && end === text.length && text.length > 0);
@@ -359,6 +378,11 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
 
   const apply = (): FormatPainterPaintResult => {
     const result = applyNow();
+    // A single-application arming is spent by the paint, whichever gesture ran it. Left
+    // standing after a Ctrl+Alt+V, the painter kept the copy cursor on the pages and the next
+    // CLICK in the document painted again — a paragraph-level capture landing on whatever
+    // paragraph the user happened to click.
+    if (result.wrote && mode === 'once') disarm();
     if (result.wrote) return 'painted';
     if (result.armed) return 'armed';
     // BUILT AND REJECTED, not "nothing to paint": the ops existed, so the selection did hold
@@ -379,6 +403,7 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     // `Esc`, and a finished single application. The press after either of those starts a
     // fresh gesture rather than reading as the second half of the last one.
     lastPressAt = null;
+    dismissedLockAt = null;
     standDown();
   };
 
@@ -414,17 +439,21 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       // `disarm`: the window has to keep running for the branch below.
       if (previous !== 'off') {
         standDown();
+        dismissedLockAt = previous === 'locked' ? at : null;
         return true;
       }
-      // The painter is off AND the last press was moments ago, so this is the second half of
-      // the double-click whose FIRST half turned it off. Dismissing a locked painter with a
-      // double-click must not hand it straight back armed, with the user's next click in the
-      // document silently repainting.
-      if (doublePress) return true;
+      // The second half of the double-click whose FIRST half put a LOCKED painter away.
+      // Handing it back armed would leave the user's next click in the document silently
+      // repainting formatting they had just dismissed.
+      if (dismissedLockAt !== null && at - dismissedLockAt < DOUBLE_PRESS_WINDOW_MS) {
+        dismissedLockAt = null;
+        return true;
+      }
       // `captureNow`, not `capture`: the mode moves in the same gesture, so ONE report
       // covers both. Two would wake every subscriber twice for a single click.
       if (!captureNow()) return refuse();
       mode = 'once';
+      dismissedLockAt = null;
       deps.publish();
       return true;
     },

@@ -19,7 +19,11 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import type { ReactNode } from 'react';
 import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { zipSync, strToU8 } from 'fflate';
-import { CHROME_MENUS, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import {
+  CHROME_MENUS,
+  runToolbarCommand,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core/editor';
 import { createT, en, type TranslationKey, type Translations } from '@docx-editor.dev/i18n';
 import { LocaleProvider } from '../src/i18n/index.ts';
 import { DocxEditor } from '../src/components/DocxEditor.tsx';
@@ -122,6 +126,26 @@ function row(view: ReturnType<typeof render>, slot: string): HTMLButtonElement {
 
 afterEach(() => {
   cleanup();
+});
+
+describe('a row whose state is more than pressed-or-not', () => {
+  test('the format painter reports its mode as data-value, and reads as pressed', () => {
+    const { view, editor } = mountMenu(<DocxEditorMenu />);
+    act(() => {
+      editor().exec({ type: 'selectAll' });
+      runToolbarCommand(editor(), 'format.painter');
+      runToolbarCommand(editor(), 'format.painter');
+    });
+    openMenu(view, 'toolbar.format');
+    const painter = row(view, 'format.painter');
+    // `aria-checked` because the row TOGGLES, which no single command describes — the rule
+    // is the engine's (`chromeSlotIsToggle`). `data-value` because armed and locked are both
+    // pressed and only one of them ends by itself; the stylesheet keys the locked treatment
+    // on it, and `MenuRow` renders only the props it declares, so an undeclared attribute
+    // reaches the DOM in neither adapter.
+    expect(painter.getAttribute('aria-checked')).toBe('true');
+    expect(painter.getAttribute('data-value')).toBe('locked');
+  });
 });
 
 describe('the default bar', () => {

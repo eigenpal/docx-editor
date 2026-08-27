@@ -282,6 +282,29 @@ describe('painting', () => {
     );
   });
 
+  test('a caret paint carries the paragraph MARK, so a list marker follows its paragraph', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      caretAt(editor, 0, 3);
+      expect(editor.exec({ type: 'copyFormatting' })).toMatchObject({ ok: true });
+      caretAt(editor, 1, 2);
+      expect(editor.exec({ type: 'pasteFormatting' })).toMatchObject({ ok: true });
+
+      // A paragraph-level capture reformats the paragraph wholesale, and its mark is part of
+      // that: a bulleted item painted by CLICKING would otherwise become a list item whose
+      // bullet kept the target's old face, while the same capture over a SELECTION carried it.
+      const node = paragraphNodes(editor.surface!.session.part())[1]!;
+      const pPr =
+        node.kind === 'paragraph'
+          ? node.children.find((child) => child.kind === 'paragraphProperties')
+          : undefined;
+      const mark =
+        pPr && pPr.kind !== 'textValue'
+          ? pPr.children.find((child) => child.kind === 'runProperties')
+          : undefined;
+      expect(mark).toBeDefined();
+    });
+  });
+
   test('the paragraph write replaces rather than merges, so the source is what survives', () => {
     withEditor(PLAIN + STYLED, (editor) => {
       select(editor, [0, 0], [0, 5]);
@@ -458,6 +481,35 @@ describe('the control', () => {
       // Left armed, the pages would keep the paint cursor and every release would go on
       // building ops the session refuses.
       editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+      expect(editor.surface!.formatPainter.state().mode).toBe('off');
+    });
+  });
+
+  test('a press right after dismissing a single-application arming re-arms it', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      runToolbarCommand(editor, 'format.painter');
+      // Past the window, so this press DISMISSES rather than locking.
+      Bun.sleepSync(520);
+      runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('off');
+      // Inside the window of the press that dismissed it, and it must still arm: a `once`
+      // arming is dismissed with a single click, so a press that follows is a change of mind.
+      // Swallowed, it would be a control that looks live and does nothing. (A dismissed LOCK
+      // is the opposite case, asserted above.)
+      runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('once');
+    });
+  });
+
+  test('painting through the command spends a single-application arming', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      runToolbarCommand(editor, 'format.painter');
+      select(editor, [1, 0], [1, 5]);
+      // The keyboard's paint is the same paint. Left armed, the pages kept the copy cursor
+      // and the next click in the document painted again.
+      expect(editor.exec({ type: 'pasteFormatting' })).toMatchObject({ ok: true });
       expect(editor.surface!.formatPainter.state().mode).toBe('off');
     });
   });

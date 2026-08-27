@@ -1328,6 +1328,7 @@ export interface MenuReportIssueProps {
 
 // @public
 export interface MenuRowProps {
+    'data-value'?: string;
     active?: boolean;
     // (undocumented)
     children?: DocxEditorChildren;
