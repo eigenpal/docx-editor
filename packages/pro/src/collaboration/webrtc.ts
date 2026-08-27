@@ -20,6 +20,7 @@ import {
   type DocumentCollaborationHandle,
 } from './document-session.ts';
 import { installChunkedFraming, type ChunkablePeer } from './webrtc-chunking.ts';
+import { validateRoomId } from './room-id.ts';
 import type { CollaborationBootstrap } from './session.ts';
 
 /**
@@ -63,6 +64,11 @@ export interface CreateWebrtcCollaborationOptions {
   readonly roomId: string;
   readonly identity: CollaborationIdentity;
   readonly bootstrap: CollaborationBootstrap;
+  /**
+   * Admit local edits while the transport is `disconnected`. Buffered updates merge on
+   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   */
+  readonly offlineEditing?: boolean;
   readonly signaling?: readonly string[];
   readonly iceServers?: readonly RTCIceServer[];
   /**
@@ -82,21 +88,7 @@ export interface WebrtcCollaborationHandle extends DocumentCollaborationHandle {
   readonly provider: WebrtcProvider;
 }
 
-/** Create a cryptographically strong room identifier. It is not an authorization token. @public */
-export function createCollaborationRoomId(): string {
-  const bytes = new Uint8Array(24);
-  globalThis.crypto.getRandomValues(bytes);
-  return [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('');
-}
-
-/** Validate and normalize a room identifier from a host interface. @public */
-export function validateRoomId(value: string): string {
-  const roomId = value.trim();
-  if (!/^[A-Za-z0-9_-]{24,256}$/.test(roomId)) {
-    throw new TypeError('roomId must contain 24 to 256 URL-safe characters');
-  }
-  return roomId;
-}
+export { createCollaborationRoomId, validateRoomId } from './room-id.ts';
 
 const ROOM_SECRET_PATTERN = /^[A-Za-z0-9_-]{24,256}$/;
 
@@ -221,6 +213,7 @@ export async function createWebrtcCollaboration(
       documentId: roomId,
       identity: options.identity,
       bootstrap: options.bootstrap,
+      offlineEditing: options.offlineEditing,
     });
     if (!provider) provider = connectProvider();
   } catch (error) {

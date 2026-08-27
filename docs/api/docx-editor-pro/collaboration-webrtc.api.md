@@ -21,6 +21,7 @@ export interface CreateWebrtcCollaborationOptions {
     readonly iceServers?: readonly RTCIceServer[];
     // (undocumented)
     readonly identity: CollaborationIdentity;
+    readonly offlineEditing?: boolean;
     readonly password?: string;
     // (undocumented)
     readonly roomId: string;

@@ -160,6 +160,7 @@ export interface CreateDocumentCollaborationOptions {
     readonly documentId: string;
     // (undocumented)
     readonly identity: CollaborationIdentity;
+    readonly offlineEditing?: boolean;
     readonly sessionId?: string;
     // (undocumented)
     readonly ydoc: Y.Doc;

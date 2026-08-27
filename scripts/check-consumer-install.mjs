@@ -205,6 +205,7 @@ import * as Fonts from '@docx-editor.dev/fonts';
 import * as EditorApi from '@docx-editor.dev/editor-api';
 import * as Collaboration from '@docx-editor.dev/pro/collaboration';
 import * as CollaborationWebrtc from '@docx-editor.dev/pro/collaboration/webrtc';
+import * as CollaborationHocuspocus from '@docx-editor.dev/pro/collaboration/hocuspocus';
 import * as Pro from '@docx-editor.dev/pro';
 import * as ProReact from '@docx-editor.dev/pro/react';
 import '@docx-editor.dev/core/styles/editor.css';
@@ -216,6 +217,7 @@ const exportedSurfaceChecks = [
   EditorApi,
   Collaboration,
   CollaborationWebrtc,
+  CollaborationHocuspocus,
   Pro,
   ProReact,
 ];
@@ -265,6 +267,7 @@ export default defineConfig({ plugins: [react()] });
       'yjs',
       'y-protocols',
       'y-webrtc',
+      '@hocuspocus/provider',
       '@types/react',
       '@types/react-dom',
       '@vitejs/plugin-react',
@@ -378,6 +381,7 @@ createApp({ render: () => h(DocxEditor) }).mount('#app');
       'yjs',
       'y-protocols',
       'y-webrtc',
+      '@hocuspocus/provider',
       'vite',
       'typescript',
       ...tarballs,

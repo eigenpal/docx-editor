@@ -20,6 +20,11 @@
       "import": "./dist/react/webrtc.js",
       "require": "./dist/react/webrtc.cjs"
     },
+    "./react/hocuspocus": {
+      "types": "./dist/react/hocuspocus.d.ts",
+      "import": "./dist/react/hocuspocus.js",
+      "require": "./dist/react/hocuspocus.cjs"
+    },
     "./vue": {
       "types": "./dist/vue/index.d.ts",
       "import": "./dist/vue/index.js",
@@ -30,6 +35,11 @@
       "import": "./dist/vue/webrtc.js",
       "require": "./dist/vue/webrtc.cjs"
     },
+    "./vue/hocuspocus": {
+      "types": "./dist/vue/hocuspocus.d.ts",
+      "import": "./dist/vue/hocuspocus.js",
+      "require": "./dist/vue/hocuspocus.cjs"
+    },
     "./collaboration": {
       "types": "./dist/collaboration/index.d.ts",
       "import": "./dist/collaboration/index.js",
@@ -39,6 +49,11 @@
       "types": "./dist/collaboration/webrtc.d.ts",
       "import": "./dist/collaboration/webrtc.js",
       "require": "./dist/collaboration/webrtc.cjs"
+    },
+    "./collaboration/hocuspocus": {
+      "types": "./dist/collaboration/hocuspocus.d.ts",
+      "import": "./dist/collaboration/hocuspocus.js",
+      "require": "./dist/collaboration/hocuspocus.cjs"
     },
     "./package.json": "./package.json"
   },
@@ -62,7 +77,8 @@
     "react-dom": "^18.0.0 || ^19.0.0",
     "vue": "^3.3.0",
     "yjs": "^13.6.32",
-    "y-webrtc": "^10.3.0"
+    "y-webrtc": "^10.3.0",
+    "@hocuspocus/provider": "^4.6.0"
   },
   "peerDependenciesMeta": {
     "@docx-editor.dev/react": {
@@ -85,6 +101,9 @@
     },
     "y-webrtc": {
       "optional": true
+    },
+    "@hocuspocus/provider": {
+      "optional": true
     }
   },
   "dependencies": {
@@ -97,6 +116,7 @@
     "@docx-editor.dev/react": "workspace:*",
     "@docx-editor.dev/vue": "workspace:*",
     "@happy-dom/global-registrator": "^20.8.3",
+    "@hocuspocus/provider": "^4.6.0",
     "@testing-library/react": "^16.0.0",
     "@types/react": "^19.2.18",
     "fflate": "^0.8.2",

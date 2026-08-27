@@ -136,7 +136,10 @@ export function packageDivergence(left: OoxmlPackage, right: OoxmlPackage): stri
   return lines.join('; ') || 'packages differ';
 }
 
-export function createPeerHarness(documentId: string): {
+export function createPeerHarness(
+  documentId: string,
+  sessionOptions?: { readonly offlineEditing?: boolean }
+): {
   readonly pair: (
     bytes: Uint8Array
   ) => Promise<{ alice: Peer; bob: Peer; pause: () => void; resume: () => void }>;
@@ -180,6 +183,7 @@ export function createPeerHarness(documentId: string): {
       documentId,
       identity: { actorId: name, name },
       bootstrap: { kind: 'create', document: bytes },
+      ...sessionOptions,
     });
     return attachPeer(ydoc, awareness, room);
   }
@@ -239,6 +243,7 @@ export function createPeerHarness(documentId: string): {
       documentId,
       identity: { actorId: name, name },
       bootstrap: { kind: 'join', timeoutMs: 5_000 },
+      ...sessionOptions,
     });
     const peer = attachPeer(ydoc, awareness, room);
     return { peer, ...wireToOpened(peer) };

@@ -247,7 +247,8 @@ class DocumentSession implements DocumentCollaborationSession {
     private readonly materializer: PackageMaterializer,
     private readonly identityMap: LogicalIdentityMap,
     private readonly blobs: SharedBlobStore,
-    attachWatchdogMs: number
+    attachWatchdogMs: number,
+    private readonly offlineEditing: boolean
   ) {
     this.documentId = documentId;
     this.sessionId = sessionId;
@@ -383,7 +384,14 @@ class DocumentSession implements DocumentCollaborationSession {
   /** Every authorable mutation replicates, so only session readiness gates a write. */
   gateOperations(_ops: readonly TreeDocOp[], _scope: StoryScope): CollaborationFailureCode | null {
     if (this.destroyed) return 'collaboration-session-destroyed';
-    if (this.statusState.status() !== 'ready') return 'collaboration-session-not-ready';
+    const status = this.statusState.status();
+    // A journal applies to the local Y.Doc either way, so a `disconnected` replica can keep
+    // editing and its buffered updates merge on reconnect exactly as concurrent online edits
+    // do. Only the host can show an offline indicator, so it opts in. `initializing` stays
+    // refused (the bootstrap has not published a first revision) and `error` stays terminal.
+    if (status !== 'ready' && !(this.offlineEditing && status === 'disconnected')) {
+      return 'collaboration-session-not-ready';
+    }
     if (!this.port) return 'collaboration-session-not-attached';
     return null;
   }
@@ -801,6 +809,15 @@ export interface CreateDocumentCollaborationOptions {
   readonly sessionId?: string;
   readonly identity: CollaborationIdentity;
   readonly bootstrap: CollaborationBootstrap;
+  /**
+   * Admit local edits while the transport is `disconnected`.
+   *
+   * A journal applies to the local `Y.Doc` either way, so buffered offline edits merge on
+   * reconnect exactly as concurrent online edits do. Off by default: a host that shows no
+   * offline indicator would let users type into a document no peer receives yet. `error`
+   * stays terminal and `initializing` stays refused regardless of this option.
+   */
+  readonly offlineEditing?: boolean;
 }
 
 /**
@@ -905,7 +922,8 @@ export async function createDocumentCollaboration(
     materializer,
     identityMap,
     blobs,
-    attachWatchdogMs
+    attachWatchdogMs,
+    options.offlineEditing === true
   );
   return Object.freeze({
     document: writeOoxmlPackage(materialized.package),

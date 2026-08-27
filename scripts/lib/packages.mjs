@@ -168,6 +168,11 @@ export const PACKAGES = [
           'CollaborationBootstrap',
           'DocumentCollaborationHandle',
         ],
+        'collaboration-hocuspocus': [
+          'CollaborationIdentity',
+          'CollaborationBootstrap',
+          'DocumentCollaborationHandle',
+        ],
         // The WebRTC hook entries take an identity, hand back a host session, and
         // append a module. Failure codes come from core. Session is this package's
         // collaboration entry. A host already depends on core to mount an editor.
@@ -183,6 +188,29 @@ export const PACKAGES = [
           'EditorModule',
         ],
         'vue-webrtc': [
+          'CollaborationBootstrap',
+          'CollaborationFailure',
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorModule',
+        ],
+        // The Hocuspocus hook entries mirror the WebRTC ones exactly.
+        'react-hocuspocus': [
+          'CollaborationBootstrap',
+          'CollaborationFailure',
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorModule',
+        ],
+        'vue-hocuspocus': [
           'CollaborationBootstrap',
           'CollaborationFailure',
           'CollaborationFailureCode',

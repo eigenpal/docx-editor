@@ -76,18 +76,23 @@ describe('how this package asks for the engine', () => {
     expect(Object.keys(manifest.dependencies ?? {})).toEqual(['y-protocols']);
   });
 
-  test('yjs and y-webrtc are optional peers and never regular dependencies', () => {
+  test('yjs and the network providers are optional peers and never regular dependencies', () => {
     expect(manifest.peerDependencies?.yjs).toMatch(/^\^13\./);
     expect(manifest.peerDependencies?.['y-webrtc']).toMatch(/^\^10\./);
+    expect(manifest.peerDependencies?.['@hocuspocus/provider']).toMatch(/^\^4\./);
     expect(manifest.peerDependenciesMeta?.yjs).toEqual({ optional: true });
     expect(manifest.peerDependenciesMeta?.['y-webrtc']).toEqual({ optional: true });
+    expect(manifest.peerDependenciesMeta?.['@hocuspocus/provider']).toEqual({ optional: true });
     expect(manifest.dependencies?.yjs).toBeUndefined();
     expect(manifest.dependencies?.['y-webrtc']).toBeUndefined();
+    expect(manifest.dependencies?.['@hocuspocus/provider']).toBeUndefined();
   });
 
   test('the default collaboration entry does not import a network provider', async () => {
     const source = await Bun.file(join(import.meta.dir, '..', 'collaboration', 'index.ts')).text();
     expect(source).not.toContain('y-webrtc');
     expect(source).not.toContain('./webrtc');
+    expect(source).not.toContain('@hocuspocus/provider');
+    expect(source).not.toContain('./hocuspocus');
   });
 });

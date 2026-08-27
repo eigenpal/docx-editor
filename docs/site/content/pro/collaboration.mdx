@@ -15,13 +15,13 @@ Without that module, the editor does not attach a replica. Local undo stays in c
 
 ## Prerequisites
 
-Install the Pro package plus Yjs. Add `y-webrtc` when you use the WebRTC helper:
+Install the Pro package plus Yjs. Add `y-webrtc` when you use the WebRTC helper, or `@hocuspocus/provider` when you use the Hocuspocus helper:
 
 ```bash
 npm install @docx-editor.dev/pro yjs y-webrtc
 ```
 
-`yjs` and `y-webrtc` are optional peers of Pro. `y-protocols` installs with Pro.
+`yjs`, `y-webrtc`, and `@hocuspocus/provider` are optional peers of Pro. `y-protocols` installs with Pro.
 
 ## Open a room with the hook
 
@@ -140,6 +140,30 @@ When you own the Yjs resources yourself, `useDocumentCollaboration` from the sam
 
 For production, pass your own `signaling` URLs to `connect` or to the `room` option. You also need your own TURN servers. WebRTC peers cannot connect across many networks without TURN.
 
+## Hocuspocus
+
+`useHocuspocusCollaboration` owns a room on a [Hocuspocus](https://tiptap.dev/docs/hocuspocus) server. It has the same surface as `useWebrtcCollaboration`: the same `room` option, the same returns, and the same `leave` and `rejoin` contract. A server-backed room needs no signaling or TURN configuration.
+
+The hook lives on its own subpath. Import `@docx-editor.dev/pro/react/hocuspocus`, or `@docx-editor.dev/pro/vue/hocuspocus` for the Vue composable:
+
+```tsx
+import { useHocuspocusCollaboration } from '@docx-editor.dev/pro/react/hocuspocus';
+
+const { document, modules, session, pending, error, leave, rejoin } = useHocuspocusCollaboration({
+  room: {
+    url: 'wss://collab.example.test',
+    roomId,
+    token,
+    identity: { actorId: 'alex', name: 'Alex' },
+    bootstrap: { kind: 'create-or-join', document: bytes },
+  },
+});
+```
+
+`token` reaches your server's `onAuthenticate` hook. The factory version, `createHocuspocusCollaboration` on `@docx-editor.dev/pro/collaboration/hocuspocus`, takes the same options and returns the room with its `ydoc` and `provider`.
+
+The Hocuspocus v4 server runs on Node, not Bun. The provider performs the required authentication handshake, so always use `@hocuspocus/provider` rather than a hand-written WebSocket client.
+
 ## Own a Yjs document
 
 If you already own a `Y.Doc` and awareness instance, call `createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It replicates the whole canonical package, which is what the WebRTC wrapper and the module use. You destroy those resources.
@@ -182,6 +206,8 @@ provider.on('status', ({ status }: { status: string }) => {
 ```
 
 The factory rejects with a typed `CollaborationSchemaError`. The codes you handle in this flow are `initialization-timeout` (no synced room appeared), `document-id-mismatch` (the room replicates a different `documentId`), and `protocol-version-mismatch` or `schema-version-mismatch` (the room uses a different protocol or schema version).
+
+Pair the server with Yjs 13. The `y-websocket` package's own server (`bin/server.cjs`) and Hocuspocus both work unchanged. The `@y/websocket-server` package targets the Yjs 14 release candidate: it completes the initial sync and relays presence, but it does not relay live Yjs 13 updates, which looks like a silently frozen document.
 
 ### Recover from an error
 
@@ -297,6 +323,8 @@ Comments, tracked-change decisions, tables of contents, and custom nodes replica
 Two write paths stay refused while a replica is attached. Applying an edited ProseMirror document is refused because no host exercises that derivation under replication. A review write without a named intent is also refused.
 
 Tree edits are refused when the session is destroyed, not ready, or not attached to the document port. A transport drop therefore pauses editing until the connection returns.
+
+Pass `offlineEditing: true` to keep editing through a transport drop. The session then admits edits while the status is `disconnected`, and the buffered updates merge on reconnect like any concurrent edit. Show the status in your interface when you enable this, so people know when their edits have not reached the room yet. The `error` status stays terminal either way. Every room factory and hook accepts the option.
 
 A typing run undoes as one step through the session undo manager.
 

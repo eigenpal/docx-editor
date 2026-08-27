@@ -43,6 +43,16 @@ const PRO_REACT_WEBRTC_SNAPSHOT = path.join(
   'docs/api/docx-editor-pro/react-webrtc.api.md'
 );
 const PRO_VUE_WEBRTC_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/vue-webrtc.api.md');
+// The Hocuspocus hook pair ships from its own subpath for the same reason and gets the
+// same dedicated gate.
+const PRO_REACT_HOCUSPOCUS_SNAPSHOT = path.join(
+  repoRoot,
+  'docs/api/docx-editor-pro/react-hocuspocus.api.md'
+);
+const PRO_VUE_HOCUSPOCUS_SNAPSHOT = path.join(
+  repoRoot,
+  'docs/api/docx-editor-pro/vue-hocuspocus.api.md'
+);
 const CONTRACT_PATH = path.join(repoRoot, 'scripts/parity/parity.contract.json');
 const VUE_DOCX_EDITOR_SOURCE = path.join(repoRoot, 'packages/vue/src/components/DocxEditor.tsx');
 
@@ -371,7 +381,7 @@ function validateProShape(pro) {
     errors.push('Missing or invalid top-level key: pro');
     return errors;
   }
-  for (const sub of ['exports', 'reviewParts', 'webrtcExports']) {
+  for (const sub of ['exports', 'reviewParts', 'webrtcExports', 'hocuspocusExports']) {
     const section = pro[sub];
     if (!section || typeof section !== 'object') {
       errors.push(`contract.pro.${sub} is required`);
@@ -435,29 +445,23 @@ function validateProShape(pro) {
 }
 
 /**
- * Twin gate for the `pro/{react,vue}/webrtc` subpath pair. Same bucket semantics as the
- * main pro entries, exports only: the hook publishes no compound parts and no interface
- * whose members are pinned.
+ * Twin gate for a provider hook subpath pair (`pro/{react,vue}/webrtc` and
+ * `pro/{react,vue}/hocuspocus`). Same bucket semantics as the main pro entries, exports
+ * only: the hooks publish no compound parts and no interface whose members are pinned.
  */
-function checkProWebrtcParity(contract, reactSnapshot, vueSnapshot, issues) {
+function checkProProviderHookParity(label, section, reactSnapshot, vueSnapshot, issues) {
   const reactExports = extractTopLevelExportNames(reactSnapshot);
   const vueExports = extractTopLevelExportNames(vueSnapshot);
   // Freshness oracle: the hook plus its five types. A parse regression that emptied these
   // sets would otherwise let the gate pass while comparing nothing.
-  const MIN_WEBRTC_EXPORTS = 5;
-  if (reactExports.size < MIN_WEBRTC_EXPORTS || vueExports.size < MIN_WEBRTC_EXPORTS) {
+  const MIN_HOOK_EXPORTS = 5;
+  if (reactExports.size < MIN_HOOK_EXPORTS || vueExports.size < MIN_HOOK_EXPORTS) {
     console.error(
-      `Pro WebRTC parity gate misconfigured: expected at least ${MIN_WEBRTC_EXPORTS} exports per snapshot, got React ${reactExports.size} / Vue ${vueExports.size}.`
+      `Pro ${label} parity gate misconfigured: expected at least ${MIN_HOOK_EXPORTS} exports per snapshot, got React ${reactExports.size} / Vue ${vueExports.size}.`
     );
     process.exit(1);
   }
-  applyProBuckets(
-    'PRO WEBRTC EXPORT',
-    contract.pro.webrtcExports,
-    reactExports,
-    vueExports,
-    issues
-  );
+  applyProBuckets(`PRO ${label} EXPORT`, section, reactExports, vueExports, issues);
 
   // Name parity alone would pass a React-only field added to a shared interface, which is the
   // likelier drift than a whole missing export. Every interface both entries declare is
@@ -475,7 +479,7 @@ function checkProWebrtcParity(contract, reactSnapshot, vueSnapshot, issues) {
         .filter(Boolean)
         .join(' and ');
       issues.push(
-        `PRO WEBRTC INTERFACE '${name}' resolved to zero members in the ${sides} snapshot — declaration form is unparseable`
+        `PRO ${label} INTERFACE '${name}' resolved to zero members in the ${sides} snapshot — declaration form is unparseable`
       );
       continue;
     }
@@ -483,12 +487,12 @@ function checkProWebrtcParity(contract, reactSnapshot, vueSnapshot, issues) {
     for (const k of reactFields) {
       memberChecks++;
       if (!vueFields.has(k)) {
-        issues.push(`PRO WEBRTC INTERFACE '${name}': member '${k}' missing from Vue`);
+        issues.push(`PRO ${label} INTERFACE '${name}': member '${k}' missing from Vue`);
       }
     }
     for (const k of vueFields) {
       if (!reactFields.has(k)) {
-        issues.push(`PRO WEBRTC INTERFACE '${name}': member '${k}' missing from React`);
+        issues.push(`PRO ${label} INTERFACE '${name}': member '${k}' missing from React`);
       }
     }
   }
@@ -496,7 +500,7 @@ function checkProWebrtcParity(contract, reactSnapshot, vueSnapshot, issues) {
   // The test room handle is internal and is not a public webrtc export.
   if (comparedInterfaces < 3) {
     console.error(
-      `Pro WebRTC parity gate misconfigured: expected at least 3 comparable shared interfaces, compared ${comparedInterfaces}.`
+      `Pro ${label} parity gate misconfigured: expected at least 3 comparable shared interfaces, compared ${comparedInterfaces}.`
     );
     process.exit(1);
   }
@@ -909,10 +913,18 @@ function main() {
   const proReactSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_REACT_SNAPSHOT, 'utf8'));
   const proVueSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_VUE_SNAPSHOT, 'utf8'));
   const proStats = checkProParity(contract, proReactSnapshot, proVueSnapshot, issues);
-  const webrtcStats = checkProWebrtcParity(
-    contract,
+  const webrtcStats = checkProProviderHookParity(
+    'WEBRTC',
+    contract.pro.webrtcExports,
     normalizeSnapshotText(fs.readFileSync(PRO_REACT_WEBRTC_SNAPSHOT, 'utf8')),
     normalizeSnapshotText(fs.readFileSync(PRO_VUE_WEBRTC_SNAPSHOT, 'utf8')),
+    issues
+  );
+  const hocuspocusStats = checkProProviderHookParity(
+    'HOCUSPOCUS',
+    contract.pro.hocuspocusExports,
+    normalizeSnapshotText(fs.readFileSync(PRO_REACT_HOCUSPOCUS_SNAPSHOT, 'utf8')),
+    normalizeSnapshotText(fs.readFileSync(PRO_VUE_HOCUSPOCUS_SNAPSHOT, 'utf8')),
     issues
   );
 
@@ -943,6 +955,12 @@ function main() {
   );
   console.log(
     `  Pro webrtc interfaces: ${webrtcStats.comparedInterfaces} (${webrtcStats.memberChecks} member checks)`
+  );
+  console.log(
+    `  Pro hocuspocus exports:    React ${hocuspocusStats.reactExports} / Vue ${hocuspocusStats.vueExports}`
+  );
+  console.log(
+    `  Pro hocuspocus interfaces: ${hocuspocusStats.comparedInterfaces} (${hocuspocusStats.memberChecks} member checks)`
   );
   console.log(`  Pro review parts:      ${proStats.reviewParts}`);
   console.log(

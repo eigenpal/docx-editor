@@ -67,7 +67,7 @@
     "vueExclusive": {}
   },
   "pro": {
-    "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of the pinned memberCheckedInterfaces list. webrtcExports covers the separate {react,vue}-webrtc.api.md pair, which the review entries do not include.",
+    "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of the pinned memberCheckedInterfaces list. webrtcExports covers the separate {react,vue}-webrtc.api.md pair and hocuspocusExports the {react,vue}-hocuspocus.api.md pair, which the review entries do not include.",
     "webrtcExports": {
       "paired": [
         "CollaborationSession",
@@ -76,6 +76,19 @@
         "UseWebrtcCollaborationOptions",
         "UseWebrtcCollaborationReturn",
         "useWebrtcCollaboration",
+        "CollaborationIdentityUpdate"
+      ],
+      "deferredInVue": {},
+      "vueExclusive": {}
+    },
+    "hocuspocusExports": {
+      "paired": [
+        "CollaborationSession",
+        "UseHocuspocusCollaborationBootstrap",
+        "UseHocuspocusCollaborationConnectOptions",
+        "UseHocuspocusCollaborationOptions",
+        "UseHocuspocusCollaborationReturn",
+        "useHocuspocusCollaboration",
         "CollaborationIdentityUpdate"
       ],
       "deferredInVue": {},
@@ -189,10 +202,7 @@
     ],
     "interfaceMemberExceptions": {
       "ReviewMarkersProps": {
-        "vueOnly": [
-          "asChild",
-          "children"
-        ],
+        "vueOnly": ["asChild", "children"],
         "reason": "Vue declares ReviewMarkersProps as extending ReviewPartProps, so asChild and children appear in the type although the markers part does not wire them. React declares only the wired members."
       }
     }
