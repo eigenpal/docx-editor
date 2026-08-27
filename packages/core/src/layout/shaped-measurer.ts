@@ -109,6 +109,9 @@ const MAX_LINE_GAP_FACE_BOXES = 0.5;
  */
 const MAX_FACE_BOX_EM = 4;
 
+/** Maximum distinct lowercase characters tested for `smcp` support in one font. */
+const MAX_SMALL_CAPS_SUPPORT_PROBES = 256;
+
 /** Super and subscript draw at three quarters, so they measure at three quarters. */
 const sizeFactorOf = (style: ResolvedRunStyle): number =>
   style.verticalAlign === 'baseline' ? 1 : 0.75;
@@ -161,6 +164,7 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
   // Style objects live inside cached broken lines, so one resolution per style OBJECT
   // amortizes the family/weight lookup across every probe of the runs that share it.
   const fontsByStyle = new WeakMap<ResolvedRunStyle, ResolvedFont | null>();
+  const smallCapsSupportByFont = new WeakMap<ResolvedFont, Map<string, boolean>>();
 
   const resolveFontCached = (style: ResolvedRunStyle): ResolvedFont | null => {
     // A stored `null` ("no font resolves") comes back as null, not undefined, so the
@@ -202,12 +206,41 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
         script,
         language,
         direction: 'ltr',
-        features: {},
+        // `w:smallCaps` selects the font's small-cap glyphs. Paint uses the matching CSS
+        // feature, so shaping must reserve those glyph advances instead of lowercase advances.
+        features: style.smallCaps ? { smcp: 1 } : {},
         fallbackOrder: [],
         fixedPointScale,
         roundingMode: 'halfToEven',
       }),
     });
+
+  const smallCapsCoverText = (
+    text: string,
+    font: ResolvedFont,
+    style: ResolvedRunStyle
+  ): boolean => {
+    let support = smallCapsSupportByFont.get(font);
+    if (!support) {
+      support = new Map();
+      smallCapsSupportByFont.set(font, support);
+    }
+    for (const character of text) {
+      if (character === character.toUpperCase()) continue;
+      let supported = support.get(character);
+      if (supported === undefined) {
+        if (support.size >= MAX_SMALL_CAPS_SUPPORT_PROBES) return false;
+        const featured = shape(character, font, { ...style, smallCaps: true });
+        const plain = shape(character, font, { ...style, smallCaps: false });
+        supported =
+          featured.glyphs.length !== plain.glyphs.length ||
+          featured.glyphs.some((glyph, index) => glyph.id !== plain.glyphs[index]?.id);
+        support.set(character, supported);
+      }
+      if (!supported) return false;
+    }
+    return true;
+  };
 
   return {
     measure(text, style) {
@@ -216,18 +249,27 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
       if (!font) return fallback.measure(text, style);
 
       const byText = widthsFor(font, halfPointsOf(style));
-      let advance = byText.get(text);
+      // The same text and face can have different advances with `smcp`. Keep that feature in
+      // the key so a plain run cannot reuse a small-cap run's shaped width, or the reverse.
+      const shapingKey = style.smallCaps ? `smcp\0${text}` : text;
+      let advance = byText.get(shapingKey);
       if (advance === undefined) {
         let total = 0;
         try {
-          for (const glyph of shape(text, font, style).glyphs) total += glyph.advanceX;
+          // Test each lowercase character separately. A whole-run comparison can hide partial
+          // coverage when a ligature splits after only one character receives `smcp`.
+          if (style.smallCaps && !smallCapsCoverText(text, font, style)) {
+            return fallback.measure(text, style);
+          }
+          const shaped = shape(text, font, style);
+          for (const glyph of shaped.glyphs) total += glyph.advanceX;
         } catch {
           // Shaping refuses malformed or oversized input by design. Falling back keeps a
           // hostile font from taking the document down with it.
           return fallback.measure(text, style);
         }
         advance = total / fixedPointScale;
-        byText.set(text, advance);
+        byText.set(shapingKey, advance);
       }
       // Base-size advance scaled to the drawn size; the cache stays keyed on the base size,
       // so baseline and super/subscript runs of one face share entries.

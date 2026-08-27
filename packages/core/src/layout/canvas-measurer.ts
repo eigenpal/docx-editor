@@ -277,8 +277,9 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       : fallbackFamily;
     const weight = style.bold ? 'bold' : 'normal';
     const slant = style.italic ? 'italic' : 'normal';
+    const variant = style.smallCaps ? 'small-caps' : 'normal';
     const size = style.fontSizePt * (style.verticalAlign === 'baseline' ? 1 : 0.75) * scale;
-    return `${slant} ${weight} ${size}px ${family}`;
+    return `${slant} ${variant} ${weight} ${size}px ${family}`;
   };
 
   /** Painted pixels back to layout units, then the properties layout applies itself. */

@@ -245,6 +245,60 @@ describe('character rStyle cascade and default character style', () => {
     });
   });
 
+  test('character style toggles use XOR while direct formatting stays absolute', () => {
+    const styles =
+      `<w:style w:type="paragraph" w:styleId="Heading">` +
+      `<w:rPr><w:b/><w:i/><w:caps/><w:smallCaps/><w:strike/><w:dstrike/><w:vanish/>` +
+      `</w:rPr></w:style>` +
+      `<w:style w:type="character" w:styleId="Cancel">` +
+      `<w:rPr><w:b/><w:i/><w:caps/><w:smallCaps/><w:strike/><w:dstrike/><w:vanish/>` +
+      `</w:rPr></w:style>` +
+      `<w:style w:type="character" w:styleId="FalseDoesNotToggle">` +
+      `<w:rPr><w:b w:val="0"/></w:rPr></w:style>`;
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const inherited = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Heading"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    ).runProperties;
+    const cancelled = resolveRunStyle(
+      cascadeRunProperties(
+        inherited,
+        [{ localName: 'rStyle', attributes: { val: 'Cancel' } }],
+        table
+      )
+    );
+    expect(cancelled).toMatchObject({
+      bold: false,
+      italic: false,
+      caps: false,
+      smallCaps: false,
+      strike: false,
+      doubleStrike: false,
+      hidden: false,
+    });
+
+    const unchanged = resolveRunStyle(
+      cascadeRunProperties(
+        inherited,
+        [{ localName: 'rStyle', attributes: { val: 'FalseDoesNotToggle' } }],
+        table
+      )
+    );
+    expect(unchanged.bold).toBe(true);
+
+    const directOff = resolveRunStyle(
+      cascadeRunProperties(
+        inherited,
+        [
+          { localName: 'rStyle', attributes: { val: 'FalseDoesNotToggle' } },
+          { localName: 'b', attributes: { val: '0' } },
+        ],
+        table
+      )
+    );
+    expect(directOff.bold).toBe(false);
+  });
+
   test('rStyle cycles stop without hanging', () => {
     const styles =
       `<w:style w:type="character" w:styleId="A"><w:basedOn w:val="B"/>` +

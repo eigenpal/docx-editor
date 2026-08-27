@@ -99,12 +99,21 @@ describe('tryCreateCanvasMeasurer', () => {
     expect(measurer!.measure('abcd', style({ fontSizePt: 11 }))).toBeCloseTo(4 * 11 * 0.7, 5);
   });
 
-  test('bold, italic, and point size enter the canvas font shorthand like paint', () => {
+  test('bold, italic, small caps, and point size enter the canvas font shorthand like paint', () => {
     const fonts: string[] = [];
     const measurer = tryCreateCanvasMeasurer({ context: mockContext(fonts), scale: 1 })!;
-    measurer.measure('X', style({ fontFamily: 'Arial', fontSizePt: 26, bold: true, italic: true }));
+    measurer.measure(
+      'X',
+      style({
+        fontFamily: 'Arial',
+        fontSizePt: 26,
+        bold: true,
+        italic: true,
+        smallCaps: true,
+      })
+    );
     expect(fonts.at(-1)).toBe(
-      'italic bold 26px "Arial", Calibri, Carlito, Helvetica, Arial, sans-serif'
+      'italic small-caps bold 26px "Arial", Calibri, Carlito, Helvetica, Arial, sans-serif'
     );
   });
 
@@ -118,7 +127,7 @@ describe('tryCreateCanvasMeasurer', () => {
     const font = fonts.at(-1)!;
     expect(font).not.toContain('evil');
     expect(font).not.toContain('url(');
-    expect(font.startsWith('normal normal 12px Calibri')).toBe(true);
+    expect(font.startsWith('normal normal normal 12px Calibri')).toBe(true);
   });
 
   test('super/subscript shrink measurement the same way paint shrinks glyphs', () => {

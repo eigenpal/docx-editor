@@ -638,6 +638,52 @@ function styleIdFromProps(
 }
 
 /**
+ * Run toggles combine by parity inside the style hierarchy.
+ *
+ * A true toggle in a style reverses the inherited state. A false toggle leaves it unchanged.
+ * Direct run formatting is not passed here because it sets the final state absolutely.
+ */
+const STYLE_TOGGLE_PROPERTIES: ReadonlySet<string> = new Set([
+  'b',
+  'i',
+  'caps',
+  'smallCaps',
+  'strike',
+  'dstrike',
+  'outline',
+  'shadow',
+  'emboss',
+  'imprint',
+  'vanish',
+]);
+
+function styleToggleIsOn(property: OoxmlProperty): boolean {
+  const value = property.attributes?.val;
+  return value === undefined || !(value === '0' || value === 'false' || value === 'off');
+}
+
+function normalizeStyleToggleProperties(
+  properties: readonly OoxmlProperty[]
+): readonly OoxmlProperty[] {
+  const ordinary: OoxmlProperty[] = [];
+  const enabled = new Set<string>();
+  let foundToggle = false;
+  for (const property of properties) {
+    if (!STYLE_TOGGLE_PROPERTIES.has(property.localName)) {
+      ordinary.push(property);
+      continue;
+    }
+    foundToggle = true;
+    if (!styleToggleIsOn(property)) continue;
+    if (enabled.has(property.localName)) enabled.delete(property.localName);
+    else enabled.add(property.localName);
+  }
+  if (!foundToggle) return properties;
+  for (const localName of enabled) ordinary.push({ localName });
+  return ordinary;
+}
+
+/**
  * Resolve the `basedOn` chain base-first, stopping on missing ids, cycles, or depth.
  *
  * The tip must match `expectedType`; other types named by `w:pStyle` / `w:rStyle` contribute
@@ -707,12 +753,12 @@ export function cascadeParagraphFormatting(
   const markProps = propertiesOf(directMarkRun);
 
   // Content runs: defaults → table → paragraph style. Mark `w:pPr/w:rPr` is NOT content.
-  const runProperties: OoxmlProperty[] = [
+  const runProperties = normalizeStyleToggleProperties([
     ...table.docDefaultsRun,
     ...(tableCellStyle?.runProperties ?? []),
     ...chain.flatMap((style) => style.runProperties),
-  ];
-  const markRunProperties: OoxmlProperty[] =
+  ]);
+  const markRunProperties: readonly OoxmlProperty[] =
     markProps.length === 0 ? runProperties : [...runProperties, ...markProps];
 
   return {
@@ -774,10 +820,12 @@ export function cascadeRunProperties(
   if (inheritedRunProperties.length === 0 && characterProps.length === 0) {
     return directRunProperties;
   }
-  if (directRunProperties.length === 0 && characterProps.length === 0) {
-    return inheritedRunProperties;
-  }
-  return [...inheritedRunProperties, ...characterProps, ...directRunProperties];
+  const styleProperties = normalizeStyleToggleProperties([
+    ...inheritedRunProperties,
+    ...characterProps,
+  ]);
+  if (directRunProperties.length === 0) return styleProperties;
+  return [...styleProperties, ...directRunProperties];
 }
 
 /** Everything the line breaker needs about one paragraph, already cascaded and converted. */

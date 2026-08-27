@@ -284,6 +284,100 @@ describe('advances are summed glyph advances (task 7.7)', () => {
     expect(measure.measure('cached', style())).toBe(measure.measure('cached', style()));
   });
 
+  test('small caps enables smcp and has a separate shaped-width cache entry', () => {
+    let calls = 0;
+    const withSmallCaps = createShapedMeasurer({
+      shaper: {
+        shape(input) {
+          calls += 1;
+          const smallCaps = input.environment.features.smcp === 1;
+          return {
+            text: input.text,
+            direction: 'ltr',
+            bidiLevel: 0,
+            glyphs: [
+              {
+                id: smallCaps ? 2 : 1,
+                cluster: 0,
+                originX: 0,
+                originY: 0,
+                advanceX: smallCaps ? 2_000 : 1_000,
+                advanceY: 0,
+                offsetX: 0,
+                offsetY: 0,
+                outline: { path: '', unitsPerEm: 1_000 },
+              },
+            ],
+            clusters: [],
+            fontSpans: [],
+            metrics: { ascent: 9_000, descent: 2_000, lineGap: 0 },
+          };
+        },
+      },
+      resolveFont: () => font,
+      fallback,
+      shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+      unicodeDataVersion: '15.1',
+      fixedPointScale: 1_000,
+    });
+    const plain = withSmallCaps.measure('abc', style());
+    const smallCaps = withSmallCaps.measure('abc', style({ smallCaps: true }));
+    expect(plain).toBe(1);
+    expect(smallCaps).toBe(2);
+    expect(withSmallCaps.measure('abc', style({ smallCaps: true }))).toBe(2);
+    expect(calls).toBe(8);
+  });
+
+  test('small caps uses CSS measurement when the face has no smcp glyphs', () => {
+    const measure = measurer();
+    const smallCapsStyle = style({ smallCaps: true });
+    expect(measure.measure('abc', smallCapsStyle)).toBe(fallback.measure('abc', smallCapsStyle));
+  });
+
+  test('partial smcp coverage uses CSS measurement for the complete text', () => {
+    const partial = createShapedMeasurer({
+      shaper: {
+        shape(input) {
+          const enabled = input.environment.features.smcp === 1;
+          return {
+            text: input.text,
+            direction: 'ltr',
+            bidiLevel: 0,
+            glyphs: [...input.text].map((character, index) => ({
+              id: enabled && character === 'a' ? 2 : character.codePointAt(0)!,
+              cluster: index,
+              originX: index * 1_000,
+              originY: 0,
+              advanceX: 1_000,
+              advanceY: 0,
+              offsetX: 0,
+              offsetY: 0,
+              outline: { path: '', unitsPerEm: 1_000 },
+            })),
+            clusters: [...input.text].map((_, index) => ({
+              textStart: index,
+              textEnd: index + 1,
+              glyphStart: index,
+              glyphEnd: index + 1,
+              advance: 1_000,
+              caretEdges: [0, 1_000],
+              fontSpan: 0,
+            })),
+            fontSpans: [],
+            metrics: { ascent: 9_000, descent: 2_000, lineGap: 0 },
+          };
+        },
+      },
+      resolveFont: () => font,
+      fallback,
+      shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+      unicodeDataVersion: '15.1',
+      fixedPointScale: 1_000,
+    });
+    const smallCapsStyle = style({ smallCaps: true });
+    expect(partial.measure('ab', smallCapsStyle)).toBe(fallback.measure('ab', smallCapsStyle));
+  });
+
   test('super/subscript advances are EXACTLY three quarters of the baseline advance', () => {
     // Paint draws super/subscript at 0.75 of the run size, so measurement must be 0.75 of
     // the baseline advance — not the advance at the nearest whole half-point. At 11pt the
