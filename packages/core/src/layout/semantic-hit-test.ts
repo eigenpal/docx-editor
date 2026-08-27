@@ -1022,20 +1022,30 @@ export function caretBoxOnLine(
     // rules that put it below leave `leading` at zero, so the whole spaced box read as text.
     const leading = line.leading ?? 0;
     const band = Math.max(0, line.box.height - leading - (line.trailingSpacing ?? 0));
-    if (band > 0) return { x: line.contentX, y: line.box.y + leading, height: band };
-    // A line with NO box at all is the empty `w:p` a cell must end with after a nested
-    // table: it takes no flow height, so there is no band to size a caret from. Falling
-    // through to zero paints a 0px caret while the pages layer keeps the native one
-    // transparent, and the user types blind into a paragraph they cannot see. The ascent
-    // the line was measured at is what a caret in it should be, and it survives the collapse
-    // for exactly this.
+    // A line with NO BOX AT ALL — height zero, not merely a box its spacing consumes — is
+    // the empty `w:p` a cell must end with after a nested table. It takes no flow height, so
+    // there is no band to size a caret from, and falling through to zero paints a 0px caret
+    // while the pages layer keeps the native one transparent: the user types blind into a
+    // paragraph they cannot see. The ascent the line was measured at is what a caret in it
+    // should be, and it survives the collapse for exactly this.
     //
     // Drawn ENDING at the collapse point, not starting from it. The line sits on the cell's
-    // content bottom, so growing downward from `box.y` puts the whole caret outside the row
-    // and over whatever block follows the table. Growing upward keeps it in the cell that
-    // owns the paragraph.
-    const fallback = Math.max(0, line.baseline);
-    return { x: line.contentX, y: line.box.y - fallback, height: fallback };
+    // content bottom, so growing downward puts the whole caret outside the row and over
+    // whatever block follows the table. Growing upward puts it in the band the preceding
+    // table occupies — beside that table's text, never over its glyphs, because the
+    // terminator's own indent is the CELL's content left and the table's content starts
+    // inside its own margins. Neither of the alternatives is available: the paragraph's own
+    // band is empty by construction, and a table that fills the cell leaves no column to the
+    // right of it. This is the least-wrong of the three, and it is pinned as such.
+    //
+    // Restricted to a zero box on purpose. A spanless line whose `leading` and
+    // `trailingSpacing` happen to consume it is an ordinary spaced empty paragraph that
+    // still occupies its row, and it keeps the answer it has always had.
+    if (band <= 0 && line.box.height <= 0) {
+      const fallback = Math.max(0, line.baseline);
+      return { x: line.contentX, y: line.box.y - fallback, height: fallback };
+    }
+    return { x: line.contentX, y: line.box.y + leading, height: band };
   }
   let chosen = spans[0]!;
   for (let index = 0; index < spans.length; index += 1) {

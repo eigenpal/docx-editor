@@ -265,6 +265,65 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
     expect(caret!.height).toBeGreaterThan(0);
     expect(caret!.y + caret!.height).toBeCloseTo(rowBottom, 6);
     expect(caret!.y).toBeGreaterThanOrEqual(rowTop - 0.001);
+
+    // And pinned to the band it actually occupies: the last line-height of the cell, which
+    // is the nested table's row. It sits at the CELL's content left, inside that table's own
+    // margin, so it never covers the table's glyphs — the least-wrong of three placements,
+    // the other two being outside the row entirely or in a column that may not exist.
+    const nested = fragment.rows[0]!.cells[0]!.blocks.find((block) => block.kind === 'table');
+    if (nested?.kind !== 'table') throw new Error('expected a nested table fragment');
+    const glyphs = nested.rows[0]!.cells[0]!.blocks.flatMap((block) =>
+      block.kind === 'paragraph' ? block.lines.flatMap((line) => line.spans) : []
+    );
+    expect(glyphs.length).toBeGreaterThan(0);
+    for (const span of glyphs) {
+      expect(caret!.x).toBeLessThan(span.box.x);
+    }
+  });
+
+  test('a terminator whose MARK carries a tracked revision keeps its line', () => {
+    // All Markup strikes a pilcrow for the mark and draws a change bar, both sized off the
+    // line box. On a zero-height fragment the pilcrow lands outside the row and the bar
+    // vanishes, so a tracked delete of that mark is invisible or misplaced. Mode-independent:
+    // in the resolved view such a paragraph has already merged away upstream.
+    const del =
+      '<w:p><w:pPr><w:rPr>' +
+      '<w:del w:id="7" w:author="A" w:date="2024-01-01T00:00:00Z"/>' +
+      '</w:rPr></w:pPr></w:p>';
+    for (const displayMode of ['all-markup', 'resolved'] as const) {
+      const layout = layoutSemanticDocument(
+        part(
+          `<w:document xmlns:w="${W}"><w:body>${cellWithNestedTable(del)}</w:body></w:document>`,
+          '/word/document.xml'
+        ),
+        0,
+        { measurer, displayMode }
+      );
+      const fragment = layout.pages[0]!.fragments.find(
+        (record): record is TableFragmentRecord => record.kind === 'table'
+      )!;
+      const paragraphs = fragment.rows[0]!.cells[0]!.blocks.filter(
+        (block) => block.kind === 'paragraph'
+      );
+      const last = paragraphs[paragraphs.length - 1]!;
+      if (last.kind !== 'paragraph') throw new Error('expected a paragraph fragment');
+      expect(last.box.height).toBeCloseTo(14 * (10 / 11), 6);
+    }
+  });
+
+  test('a preceding table that emitted NOTHING does not license the collapse', () => {
+    // `w:tbl` with no `w:tr` is schema-valid (`EG_ContentRowContent` is minOccurs=0) and
+    // `emitNestedTable` returns null for it, as it does past the nesting ceiling. Collapsing
+    // behind it left the row with no content and no terminator — a hairline.
+    const rowless = '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr></w:tbl>';
+    const cellOf = (content: string) =>
+      '<w:tbl><w:tr><w:tc><w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>' +
+      content +
+      '</w:tc></w:tr></w:tbl>';
+    expect(outerRowHeight(layoutOf(cellOf(rowless + '<w:p/>')))).toBeCloseTo(
+      outerRowHeight(layoutOf(cellOf('<w:p/>'))),
+      6
+    );
   });
 
   test('a press still lands in it', () => {

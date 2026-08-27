@@ -82,6 +82,15 @@ export interface ShapedMeasurerOptions {
   readonly language?: string;
 }
 
+/**
+ * Ceiling on `hhea.lineGap`, as a multiple of the face's own ascent + descent.
+ *
+ * The gap is file-derived and unbounded in the format. Every face this engine ships declares
+ * either none at all or about 0.03 em, so a face box's worth of leading is already far past
+ * anything real — this only stops a hostile font from turning one run into a page.
+ */
+const MAX_LINE_GAP_FACE_BOXES = 1;
+
 /** Super and subscript draw at three quarters, so they measure at three quarters. */
 const sizeFactorOf = (style: ResolvedRunStyle): number =>
   style.verticalAlign === 'baseline' ? 1 : 0.75;
@@ -244,13 +253,21 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
         // Liberation Mono — are unaffected, which is why the error only showed on the two
         // faces that have one.
         //
-        // CLAMPED, because `hhea.lineGap` is a signed int16 read from a font a DOCX can
-        // embed. External leading is non-negative on Windows and in GDI, and a face
-        // declaring `lineGap = -(ascender - descender) + 1` would otherwise give every run
-        // in that family a one-unit line box — the `height > 0` guard below only catches a
-        // total that reaches zero, not one crushed to a fraction of a point.
-        const lineGap = Math.max(0, shaped.metrics.lineGap / fixedPointScale);
-        const height = ascent + descent + lineGap;
+        // BOUNDED AT BOTH ENDS, because `hhea.lineGap` is a signed int16 read from a font a
+        // DOCX can embed, and nothing downstream bounds a line box. Below: external leading
+        // is non-negative on Windows and in GDI, and a face declaring
+        // `lineGap = -(ascender - descender) + 1` would otherwise give every run in that
+        // family a one-unit line — the `height > 0` guard catches a total that reaches zero,
+        // not one crushed to a fraction of a point. Above: `lineGap = 32767` over 1000 units
+        // per em is a ~337 pt line for a 10 pt run, one line to a page for the whole
+        // document. Real external leading is a fraction of the face box; the ceiling is
+        // generous enough that no shipping face comes near it and still bounded.
+        const faceBox = ascent + descent;
+        const lineGap = Math.min(
+          Math.max(0, shaped.metrics.lineGap / fixedPointScale),
+          faceBox * MAX_LINE_GAP_FACE_BOXES
+        );
+        const height = faceBox + lineGap;
         if (height > 0) {
           metrics = { height, baseline: ascent };
         } else {

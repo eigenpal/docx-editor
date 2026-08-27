@@ -194,7 +194,7 @@ test('500-page multi-section: Enter and Backspace stay incremental', () => {
     pagesAfter: 630,
     cache: cache(3899, 12076, 12076),
   });
-  expect(work['steady-middle-text']!.placed).toBe(4);
+  expect(work['steady-middle-text']!.placed).toBe(2);
   expect(work['wrap-middle-text']!.placed).toBe(41);
   // Adds one whole page; the pages below move but are reused, never re-placed.
   expect(work['page-break-middle']).toEqual({

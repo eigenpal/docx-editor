@@ -701,7 +701,26 @@ function placeCellParagraph(
   const maxBottom = options?.maxBottom ?? Number.POSITIVE_INFINITY;
   const includeAfter = options?.includeAfter ?? true;
   const includeBottomBorder = options?.includeBottomBorder ?? true;
-  const collapseHeight = options?.collapseHeight ?? false;
+  // ONE question, asked once, so the next kind of furniture is caught by construction rather
+  // than arriving as the third late special case. The caller settles POSITION — last block of
+  // a cell, behind a table that actually emitted, structurally empty. What decides whether
+  // the collapse is SAFE is resolved here, and the line runs between two kinds of thing:
+  //
+  //   sized OFF the line box   borders, shading — a zero box paints a zero band, which is
+  //                            what "occupies no space" should look like. These collapse.
+  //   own intrinsic size       a list marker glyph, and the pilcrow and change bar a tracked
+  //                            `w:ins`/`w:del` on the paragraph MARK publishes. A zero box
+  //                            does not hide these, it MISPLACES them — paint centres the
+  //                            marker half a line above its row and drops the change bar
+  //                            entirely. These block the collapse.
+  //
+  // Mode-independent on purpose: a mark-revised terminator in the resolved view has already
+  // merged away upstream, so gating on `all-markup` would only add a mode to reason about.
+  const publishesPlacedGlyphs =
+    listItem !== undefined ||
+    paragraphMarkRevisionsOf(paragraph).length > 0 ||
+    paragraphMarkFormatRevisionOf(paragraph) !== null;
+  const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs;
 
   const appliedBefore =
     lineStart === 0 && !collapseHeight
@@ -1113,6 +1132,10 @@ function flowBlocksInBoxBounded(
   let paragraphFragmentIndex = cursor.paragraphFragmentIndex;
   let fitted = false;
   let nestedSplitBlocked = false;
+  // Did the block immediately before the cursor actually PUT a table on the page? Seeded
+  // from the source kind so a cell continued onto the next page, whose table was emitted on
+  // the previous one, still answers yes; the walk overwrites it from what it emits.
+  let lastEmittedTable = blockIndex > 0 && blocks[blockIndex - 1]!.kind === 'table';
 
   while (blockIndex < blocks.length) {
     const block = blocks[blockIndex]!;
@@ -1125,6 +1148,7 @@ function flowBlocksInBoxBounded(
       // Nested tables are atomic across row splits: place wholly or stop before them.
       const nested = emitNestedTable(block, left, right, y, depth + 1, deps);
       if (!nested) {
+        lastEmittedTable = false;
         blockIndex += 1;
         continue;
       }
@@ -1137,31 +1161,32 @@ function flowBlocksInBoxBounded(
       fragments.push(nested.fragment);
       y = nested.bottom;
       fitted = true;
+      lastEmittedTable = true;
       blockIndex += 1;
       lineIndex = 0;
       continue;
     }
     if (block.kind !== 'paragraph') {
+      lastEmittedTable = false;
       blockIndex += 1;
       lineIndex = 0;
       continue;
     }
 
-    // The `w:p` a cell must end with (17.4.66) after a trailing `w:tbl`: it still flows, so
-    // the caret and select-all reach it, but Word and LibreOffice give it no height.
+    // POSITION only. Whether this paragraph may actually collapse is one question about what
+    // it would publish, and `placeCellParagraph` is where every answer to it already lives —
+    // see `publishesFurniture` there. Deciding it in two places is how the list marker and
+    // the tracked paragraph mark each arrived as their own late special case.
     //
-    // A paragraph that resolves to a LIST ITEM is never that paragraph, even with no runs:
-    // its marker is painted content the author asked for, and `w:pPr` is where `w:numPr`
-    // lives, so the structural test alone calls a numbered paragraph empty. Suppressing the
-    // marker instead would hide authored content; the honest answer is that this is not a
-    // terminator. Asked of the resolved list item rather than of `w:numPr`, so numbering a
-    // `w:pStyle` brings in counts too.
-    const collapsed =
+    // `lastEmittedTable` rather than the source node's kind: `emitNestedTable` returns null
+    // for a `w:tbl` past the nesting ceiling and for one with no `w:tr` at all (schema-valid,
+    // `EG_ContentRowContent` is minOccurs=0), and the walk simply steps over it. Collapsing
+    // behind a table that produced nothing leaves the row with no content and no terminator,
+    // which paints as a hairline.
+    const collapsible =
       inTableCell &&
       blockIndex === blocks.length - 1 &&
-      blockIndex > 0 &&
-      blocks[blockIndex - 1]!.kind === 'table' &&
-      !deps.listItems?.get(block.id) &&
+      lastEmittedTable &&
       isEmptyCellTerminator(block);
     const placed = placeCellParagraph(
       block,
@@ -1176,7 +1201,7 @@ function flowBlocksInBoxBounded(
         maxBottom,
         includeAfter: true,
         includeBottomBorder: true,
-        collapseHeight: collapsed,
+        collapseHeight: collapsible,
         ...(tableCellStyle ? { tableCellStyle } : {}),
       }
     );
@@ -1188,6 +1213,7 @@ function flowBlocksInBoxBounded(
     fitted = true;
     if (placed.complete) {
       previousSpaceAfter = placed.spaceAfter;
+      lastEmittedTable = false;
       blockIndex += 1;
       lineIndex = 0;
       paragraphFragmentIndex = 0;

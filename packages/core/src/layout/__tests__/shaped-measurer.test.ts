@@ -153,6 +153,35 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     expect(hostile.lineMetrics(style())).toEqual({ height: 11, baseline: 9 });
   });
 
+  test('an enormous hhea lineGap cannot turn one run into a page', () => {
+    // The other end of the same file-derived number. `lineGap = 32767` over 1000 units per em
+    // is a ~337 pt line for a 10 pt run — one line to a page for the whole document — and
+    // nothing downstream bounds a line box. Capped at the face's own ascent + descent, which
+    // every shipping face clears by an order of magnitude.
+    const enormous = createShapedMeasurer({
+      shaper: {
+        shape(input) {
+          return {
+            text: input.text,
+            direction: 'ltr',
+            bidiLevel: 0,
+            glyphs: [],
+            clusters: [],
+            fontSpans: [],
+            metrics: { ascent: 9_000, descent: 2_000, lineGap: 32_767_000 },
+          };
+        },
+      },
+      resolveFont: () => font,
+      fallback,
+      shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+      unicodeDataVersion: '15.1',
+      fixedPointScale: 1_000,
+    });
+    // Face box 11, so the gap is admitted up to 11 and the line box stops at 22.
+    expect(enormous.lineMetrics(style())).toEqual({ height: 22, baseline: 9 });
+  });
+
   test('it is NOT the flat multiplier the fallback uses, so the font is really being read', () => {
     // If the two agreed, the test would pass whether or not the font was consulted.
     const exact = measurer().lineMetrics(style());
