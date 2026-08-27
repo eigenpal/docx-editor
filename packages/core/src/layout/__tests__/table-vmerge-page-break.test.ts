@@ -42,6 +42,15 @@ const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const tc = (content: string, tcPr = '') => `<w:tc>${tcPr}${content}</w:tc>`;
 const tr = (cells: string) => `<w:tr>${cells}</w:tr>`;
 
+/**
+ * The continue row asks for 75pt of the 80pt content box (`w:trHeight` 1500 twips), so the
+ * two rows of the merge cannot share one page whatever the merged content measures. That is
+ * what makes the break a REAL one: a merge that fits a page is kept on it, and only a merge
+ * too tall for any page runs on. Drop this and the table fits page 1, taking the whole
+ * continuation-page contract this file exists to pin with it.
+ */
+const TALL_ROW = '<w:trPr><w:trHeight w:val="1500"/></w:trPr>';
+
 /** A full grid stated on the table itself, so the test needs no styles part. */
 const GRID =
   '<w:tblPr><w:tblBorders>' +
@@ -78,10 +87,10 @@ function splitMergeLayout(): SemanticLayout {
   const part = loadPart(
     `${filler}<w:tbl>${GRID}` +
       tr(tc(tall, '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('side'))) +
-      tr(
-        tc(p('ghost'), '<w:tcPr><w:vMerge/><w:shd w:val="clear" w:fill="D9E2F3"/></w:tcPr>') +
-          tc(p('side2'))
-      ) +
+      `<w:tr>${TALL_ROW}` +
+      tc(p('ghost'), '<w:tcPr><w:vMerge/><w:shd w:val="clear" w:fill="D9E2F3"/></w:tcPr>') +
+      tc(p('side2')) +
+      '</w:tr>' +
       '</w:tbl>'
   );
   return layoutTiny(part);
@@ -134,7 +143,10 @@ describe('a vertical merge that crosses a page break', () => {
     const part = loadPart(
       `<w:tbl>${GRID}${header}` +
         tr(tc(tall, '<w:tcPr><w:vMerge w:val="restart"/></w:tcPr>') + tc(p('side'))) +
-        tr(tc(p('ghost'), '<w:tcPr><w:vMerge/></w:tcPr>') + tc(p('side2'))) +
+        `<w:tr>${TALL_ROW}` +
+        tc(p('ghost'), '<w:tcPr><w:vMerge/></w:tcPr>') +
+        tc(p('side2')) +
+        '</w:tr>' +
         '</w:tbl>'
     );
     const result = layoutTiny(part);

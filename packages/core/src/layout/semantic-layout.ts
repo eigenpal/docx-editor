@@ -100,6 +100,7 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
+import { planVMergeRowHeights } from './table-vmerge-heights.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { paragraphMergeGroupOf, storyBlocks } from './story-roots.ts';
@@ -2101,15 +2102,35 @@ function layoutBlocksPass(
     // Initial authored header group (not repeats) — atomic with body-row pagination below.
     placeHeaderGroup(false);
 
-    for (const row of structure.rows.slice(headerRows.length)) {
-      const naturalHeight = measureRowHeight(
-        row,
+    const rowHeightOf = (probeRow: SemanticTableRow): number =>
+      measureRowHeight(
+        probeRow,
         structure.columnWidthsPt,
         tableLeft,
         0,
         tableDeps,
         structure.cellSpacingPt
       );
+    // `w:vMerge` heights, planned once over the body rows: a merged cell is as tall as the
+    // rows it covers, so its own row must not swallow the whole merged height and the
+    // covered rows have to stay together. Rows the plan covers are measured there, not here.
+    const bodyRows = structure.rows.slice(headerRows.length);
+    const vMergePlan = planVMergeRowHeights(bodyRows, rowHeightOf, tableDeps.vMergeResolveBudget);
+    let vMergeGroupEnd = -1;
+
+    for (const [bodyRowIndex, row] of bodyRows.entries()) {
+      const vMergeGroup = vMergePlan?.groupAt(bodyRowIndex);
+      if (vMergeGroup && vMergeGroup.heightPt <= contentHeight() + 0.001) {
+        // The merged content paints from the head's row top across the span, so the span
+        // moves whole. A span too tall for a page keeps the row-by-row path below.
+        if (cursorY > 0 && cursorY + vMergeGroup.heightPt > contentHeight() + 0.001) {
+          breakForContinuation(true);
+        }
+        vMergeGroupEnd = vMergeGroup.endRow;
+      }
+      const vMerge =
+        bodyRowIndex <= vMergeGroupEnd ? vMergePlan?.rowOptions(bodyRowIndex) : undefined;
+      const naturalHeight = vMerge?.heightFloorPt ?? rowHeightOf(row);
       let cursors: CellPlaceCursor[] = initialCellCursors(row);
       let isContinuation = false;
       let fragmentsForRow = 0;
@@ -2157,7 +2178,8 @@ function layoutBlocksPass(
             false,
             0,
             tableDeps,
-            structure.cellSpacingPt
+            structure.cellSpacingPt,
+            vMerge
           );
           if (placed.bottom > contentHeight() + 0.001) {
             throw new TablePaginationError(
@@ -2199,7 +2221,8 @@ function layoutBlocksPass(
           0,
           tableDeps,
           cursors,
-          structure.cellSpacingPt
+          structure.cellSpacingPt,
+          vMerge
         );
 
         // First attempt on a non-empty page placed nothing useful → move to next page.
