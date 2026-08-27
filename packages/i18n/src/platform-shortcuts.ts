@@ -31,17 +31,26 @@ function isApplePlatform(): boolean {
   return APPLE_PLATFORM.test(agent.platform ?? '');
 }
 
-/** Word for the web's own Mac spelling: `Ctrl` is ⌘, `Alt` is Option. */
+/**
+ * Word for the web's own Mac spelling: `Ctrl` is ⌘, `Alt` is Option.
+ *
+ * Each pattern requires the modifier to be JOINED TO A CHORD by `+`, which is what makes
+ * this safe to run over an arbitrary label. A bare word is left alone: English
+ * `formattingBar.altText` is "Alt text" and Turkish `formattingBar.subscript` is "Alt
+ * simge", and rewriting either would put "Option" in an `aria-label`. Turkish is the case
+ * that proves a word boundary is not enough on its own — `\b` treats the dotless `ı` as a
+ * non-word character, so `/\bAlt\b/` matches inside "Altı çizili" ("underlined").
+ */
 const APPLE_MODIFIERS: readonly (readonly [RegExp, string])[] = [
-  [/\bCtrl\b/g, '⌘'],
-  [/\bAlt\b/g, 'Option'],
+  [/Ctrl(?=\s*\+)/g, '⌘'],
+  [/Alt(?=\s*\+)/g, 'Option'],
 ];
 
 /**
- * Rewrite the modifier names in a resolved shortcut string for this platform.
+ * Rewrite the modifier names in a resolved label for this platform.
  *
  * A no-op everywhere except Apple platforms, and a no-op there too for a string that names
- * no modifier — so it is safe to run over every label, including the ones that are not
+ * no chord — so it is safe to run over every label, including the ones that are not
  * shortcuts at all (a control's plain name passes through untouched).
  *
  * @public

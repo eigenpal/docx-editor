@@ -73,6 +73,8 @@ const STYLED = p(
   '<w:pPr><w:pStyle w:val="Fancy"/><w:jc w:val="center"/><w:ind w:left="720"/></w:pPr>'
 );
 const PLAIN = p(textRun('plain'));
+/** No runs at all: the layout publishes no style span for it, so nothing resolves a face. */
+const EMPTY_STYLED = p('', '<w:pPr><w:pStyle w:val="Fancy"/><w:jc w:val="center"/></w:pPr>');
 
 function withEditor(body: string, run: (editor: DocxEditorInstance) => void): void {
   const container = document.createElement('div');
@@ -185,6 +187,21 @@ describe('the capture', () => {
     });
   });
 
+  test('an EMPTY paragraph still copies its paragraph formatting', () => {
+    withEditor(EMPTY_STYLED + PLAIN, (editor) => {
+      caretAt(editor, 0, 0);
+      expect(editor.exec({ type: 'copyFormatting' })).toMatchObject({ ok: true });
+      expect(editor.surface!.formatPainter.state().level).toBe('paragraph');
+
+      select(editor, [1, 0], [1, 5]);
+      expect(editor.exec({ type: 'pasteFormatting' })).toMatchObject({ ok: true, changed: true });
+      expect(paragraphProperties(editor, 1)).toEqual(['pStyle=Fancy', 'jc=center']);
+      // No text to read a face from, so the capture states no character formatting and the
+      // target's runs keep their own rather than taking an invented one.
+      expect(runProperties(editor, 1)).toEqual([]);
+    });
+  });
+
   test('a collapsed caret copies paragraph formatting, as Word does', () => {
     withEditor(STYLED + PLAIN, (editor) => {
       caretAt(editor, 0, 3);
@@ -205,6 +222,25 @@ describe('painting', () => {
       // state the off value or the style's bold comes straight back.
       expect(runProperties(editor, 1)).toContain('b=0');
       expect(editor.snapshot().formatting?.bold).toBe(false);
+    });
+  });
+
+  test('carries the run properties a toolbar never shows, so the target cannot keep its own', () => {
+    const loud =
+      '<w:rPr><w:spacing w:val="40"/><w:position w:val="6"/>' +
+      '<w:w w:val="150"/><w:kern w:val="32"/></w:rPr>';
+    withEditor(p(textRun('plain')) + p(textRun('wide', loud)), (editor) => {
+      select(editor, [0, 0], [0, 5]);
+      editor.exec({ type: 'copyFormatting' });
+      select(editor, [1, 0], [1, 4]);
+      editor.exec({ type: 'pasteFormatting' });
+      // `runPropertyEdits` MERGES over what the target authors, so anything the capture does
+      // not name survives the paint. Expanded, raised, stretched text would have.
+      const painted = runProperties(editor, 1);
+      expect(painted).toContain('spacing=0');
+      expect(painted).toContain('position=0');
+      expect(painted).toContain('w=100');
+      expect(painted).toContain('kern=0');
     });
   });
 
@@ -284,6 +320,41 @@ describe('the control', () => {
       runToolbarCommand(editor, 'format.painter');
       runToolbarCommand(editor, 'format.painter');
       expect(editor.surface!.formatPainter.state().mode).toBe('locked');
+    });
+  });
+
+  test('a press on a LOCKED painter stands it down, as a second click does in Word', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      runToolbarCommand(editor, 'format.painter');
+      runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('locked');
+      runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('off');
+    });
+  });
+
+  test('standing down clears the double-press window, so the next press arms once', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      runToolbarCommand(editor, 'format.painter');
+      // Cancel it, then press again straight away. Without clearing the window the third
+      // press read as the second half of a double-click and locked the painter on.
+      editor.surface!.formatPainter.disarm();
+      runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('once');
+    });
+  });
+
+  test('the control greys out on a document open for viewing', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+      const state = toolbarCommandState(editor, 'format.painter');
+      // Arming a painter this document will refuse to apply is the dead button the
+      // enabled-state rule exists to prevent.
+      expect(state.enabled).toBe(false);
+      expect(state.disabledReason).toBe('the document is open for viewing');
     });
   });
 
@@ -423,6 +494,52 @@ describe('the drag gesture', () => {
       expect(pages.dataset['formatPainter']).toBeUndefined();
       const painted = paragraphNodes(surface.session.part())[1]!;
       expect(painted.kind === 'paragraph' && describeProperties(painted).length).toBeGreaterThan(0);
+    } finally {
+      surface.destroy();
+    }
+  });
+
+  test('a cancelled gesture does not paint and leaves the painter armed', () => {
+    const { surface, pages } = mount(STYLED + PLAIN);
+    try {
+      const ids = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: ids[0]!, offset: 0 },
+        head: { paragraphId: ids[0]!, offset: 6 },
+      });
+      surface.formatPainter.press();
+      const before = surface.session.packageRevision();
+
+      // `pointercancel` is the browser TAKING the gesture away — a system touch gesture, a
+      // device change — so the range under the pointer is not one the user chose.
+      pages.dispatchEvent(pointer('pointerdown', -40, 25));
+      document.dispatchEvent(pointer('pointermove', 500, 25));
+      document.dispatchEvent(pointer('pointercancel', 500, 25));
+
+      expect(surface.session.packageRevision()).toBe(before);
+      expect(surface.formatPainter.state().mode).toBe('once');
+    } finally {
+      surface.destroy();
+    }
+  });
+
+  test('apply reports the document’s refusal rather than its own op count', () => {
+    const { surface } = mount(STYLED + PLAIN);
+    try {
+      const ids = surface.session.paragraphIds();
+      surface.setSelection({
+        anchor: { paragraphId: ids[0]!, offset: 0 },
+        head: { paragraphId: ids[0]!, offset: 6 },
+      });
+      expect(surface.formatPainter.capture()).toBe(true);
+      // The write is built and then refused, which is exactly the case an op count cannot
+      // see: `commit` hands nothing back, so the model revision is what settles it.
+      surface.setEditingMode('view');
+      surface.setSelection({
+        anchor: { paragraphId: ids[1]!, offset: 0 },
+        head: { paragraphId: ids[1]!, offset: 5 },
+      });
+      expect(surface.formatPainter.apply()).toBe(false);
     } finally {
       surface.destroy();
     }

@@ -103,7 +103,7 @@
     "altText": "Alt text",
     "clearFormatting": "Clear formatting",
     "formatPainter": "Format painter",
-    "formatPainterShortcut": "Format painter (Ctrl+Alt+C, Ctrl+Alt+V). Double-click to keep it on.",
+    "formatPainterShortcut": "Format painter (Ctrl+Alt+C, Ctrl+Alt+V). Double-click to keep it on, then press Esc to release it.",
     "commentsAndChanges": "Comments & Changes",
     "more": "More",
     "unavailableInPreview": "Not available in this preview build"

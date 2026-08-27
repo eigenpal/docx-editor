@@ -81,6 +81,12 @@ export interface SurfaceFormatPainterDeps {
  * subtractive as well as additive: Word's painter un-bolds bold text when the source is not
  * bold, and a capture that listed only what was on could never do that.
  *
+ * EVERY property the op vocabulary admits is stated, not just the ones a toolbar shows.
+ * `runPropertyEdits` MERGES the capture over what the target run authors, so a property the
+ * capture leaves out is a property the target keeps: omitting `w:spacing` or `w:position`
+ * left painted text expanded or raised, looking nothing like the source it was painted
+ * from. The complete list is `ACCEPTED_RUN_PROPERTIES` minus `w:rStyle`.
+ *
  * `w:rStyle` is absent, as it is everywhere else in this engine — preserved, not authored
  * (see `ACCEPTED_RUN_PROPERTIES`) — so painting onto a run that carries a character style
  * leaves that style's face underneath. The same limit `clearFormatting` states.
@@ -91,6 +97,12 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
   const properties: SurfaceProperty[] = [
     { localName: 'b', attributes: onOff(style.bold) },
     { localName: 'i', attributes: onOff(style.italic) },
+    // The complex-script twins take the Latin answer, because the resolver keeps ONE bold
+    // and one italic: `w:bCs` is not separately resolved, so there is nothing else to copy.
+    // Left out they would survive the paint, and a run that reached the target already
+    // carrying `w:bCs` would stay bold in every complex script.
+    { localName: 'bCs', attributes: onOff(style.bold) },
+    { localName: 'iCs', attributes: onOff(style.italic) },
     {
       localName: 'u',
       attributes: style.underline
@@ -111,6 +123,16 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
     { localName: 'highlight', attributes: { val: style.highlight ?? 'none' } },
     { localName: 'sz', attributes: { val: halfPoints } },
     { localName: 'szCs', attributes: { val: halfPoints } },
+    // Back into the units the ATTRIBUTES carry. The resolver hands every measurement over in
+    // points; `w:spacing` on a run is twips, `w:position` and `w:kern` are half-points, and
+    // `w:w` is a percentage (see `resolveRunStyle`).
+    {
+      localName: 'spacing',
+      attributes: { val: String(Math.round(style.characterSpacingPt * 20)) },
+    },
+    { localName: 'position', attributes: { val: String(Math.round(style.baselineShiftPt * 2)) } },
+    { localName: 'w', attributes: { val: String(Math.round(style.horizontalScalePercent)) } },
+    { localName: 'kern', attributes: { val: String(Math.round(style.kerningMinPt * 2)) } },
   ];
   // Only when the cascade resolved to a face. A run whose whole chain authored nothing is
   // measured in the surface's own default, which is not a document fact and must not be
@@ -178,9 +200,9 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
   const capture = (): boolean => {
     const cells = deps.selectedCells?.();
     const rectangular = cells !== undefined && cells.length > 0;
-    const style = selectionRunStyle(deps.layout(), deps.selection(), cells, deps.paragraphOrder());
-    if (!style) return false;
     const { from, to } = deps.orderedRange();
+    if (!deps.paragraphOrder().includes(from.paragraphId)) return false;
+    const style = selectionRunStyle(deps.layout(), deps.selection(), cells, deps.paragraphOrder());
     // The paragraph's OWN properties, and the style it names among them. A paragraph naming
     // no style contributes no `w:pStyle`, which is exactly right: the apply below is a
     // REPLACING write, so an unnamed style drops the target's and the target falls back to
@@ -188,7 +210,18 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     const paragraphProperties = coversAParagraphMark(from, to, rectangular)
       ? directParagraphProperties(storyPart(), from.paragraphId)
       : null;
-    captured = { runProperties: runPropertiesOf(style), paragraphProperties };
+    // NO SPAN IS NOT NO CAPTURE. An EMPTY paragraph publishes no style span at all, and a
+    // caret in one is exactly where a paragraph-level copy earns its keep: copying a blank
+    // heading's style, alignment and indents onto another paragraph is what the user is
+    // reaching for. Refusing here left that press doing nothing, in silence.
+    //
+    // What it cannot carry is character formatting — there is no text to read it from — so
+    // the capture states none and the apply writes none rather than inventing a face.
+    if (!style && paragraphProperties === null) return false;
+    captured = {
+      runProperties: style ? runPropertiesOf(style) : [],
+      paragraphProperties,
+    };
     deps.publish();
     return true;
   };
@@ -212,7 +245,7 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       const text = deps.textOf(paragraphId);
       const start = rectangular || paragraphId !== from.paragraphId ? 0 : from.offset;
       const end = rectangular || paragraphId !== to.paragraphId ? text.length : to.offset;
-      if (start < end) {
+      if (start < end && held.runProperties.length > 0) {
         for (const edit of runPropertyEdits(
           part,
           paragraphId,
@@ -237,7 +270,11 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
         rectangular ||
         index < paragraphIds.length - 1 ||
         (start === 0 && end === text.length && text.length > 0);
-      if (coversMark) {
+      // Guarded on the capture carrying character formatting for the same reason the run
+      // write above is: an op that names nothing still counts as APPLIED — the store
+      // publishes a revision and pushes an undo entry for it — so an empty-source paint
+      // would cost an undo press that undoes nothing.
+      if (coversMark && held.runProperties.length > 0) {
         ops.push({
           op: 'setParagraphMarkProperties',
           paragraphId,
@@ -255,6 +292,11 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
         });
       }
     });
+    // The REVISION, not the op count: a write can be refused after it is built — a document
+    // opened for viewing, a tracked-content protection, a collaboration gate — and reporting
+    // a refused paint as success is the one thing a caller cannot recover from. `commit`
+    // hands nothing back, so the model is asked directly.
+    const before = session.packageRevision();
     if (ops.length > 0) {
       deps.commit(
         () => session.applyTreeOps(ops, deps.selectionMark(), undefined, deps.storyScope()),
@@ -262,15 +304,22 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
         { keepCellSelection: rectangular }
       );
     }
+    const wrote = session.packageRevision() !== before;
     // At a collapsed caret there is no text to paint, so the character half of the capture
     // arms for the next characters typed instead — Word's stored-marks lane, and the same
     // thing picking a font with nothing selected does. AFTER the commit, because a commit
-    // that moves the caret discards what is armed at the old one.
-    if (collapsed) deps.armPendingFormats(held.runProperties);
-    return ops.length > 0 || collapsed;
+    // that moves the caret discards what is armed at the old one. Only once the write landed:
+    // arming a format the document just refused would let the next keystroke carry it in.
+    const armed = collapsed && held.runProperties.length > 0 && (wrote || ops.length === 0);
+    if (armed) deps.armPendingFormats(held.runProperties);
+    return wrote || armed;
   };
 
   const disarm = (): void => {
+    // The window goes with it, so the press AFTER a stand-down starts a fresh gesture. Left
+    // running, "arm, cancel, arm again quickly" read the third press as the second half of a
+    // double-click and locked the painter on instead of arming it once.
+    lastPressAt = null;
     if (mode === 'off') return;
     mode = 'off';
     deps.publish();
@@ -281,25 +330,30 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     capture,
     apply,
     disarm,
-    press() {
+    press(): boolean {
       const at = deps.now();
       const doublePress = lastPressAt !== null && at - lastPressAt < DOUBLE_PRESS_WINDOW_MS;
-      lastPressAt = at;
-      // A double press locks the painter on. Re-capturing costs nothing — the selection has
-      // not moved since the press that armed it — and it keeps the two paths identical.
-      if (doublePress) {
-        if (!capture()) return;
+      // The second half of a double-click on an ARMED painter locks it on. Re-capturing costs
+      // nothing — the selection has not moved since the press that armed it — and it keeps
+      // the armed and the locked path telling one story.
+      if (mode === 'once' && doublePress) {
+        if (!capture()) return false;
         mode = 'locked';
+        lastPressAt = at;
         deps.publish();
-        return;
+        return true;
       }
+      // Any other press while it is armed stands it down, which is what a second click on a
+      // live painter means in Word — including a click on a LOCKED one.
       if (mode !== 'off') {
         disarm();
-        return;
+        return true;
       }
-      if (!capture()) return;
+      if (!capture()) return false;
       mode = 'once';
+      lastPressAt = at;
       deps.publish();
+      return true;
     },
     applyIfArmed() {
       if (mode === 'off' || captured === null) return;

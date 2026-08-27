@@ -342,9 +342,16 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
     if (painter.mode !== 'off') {
       return { id, enabled: true, disabledReason: null, active: true, value: painter.mode };
     }
-    // Copying is a READ, so it survives a document open for viewing; what it needs is
-    // something to copy FROM. The engine answers both, and this quotes it.
-    const allowed = editor.can({ type: 'copyFormatting' });
+    // Probed with the SIBLING control's command, not with `copyFormatting`.
+    //
+    // Copying formatting really does write nothing, so it is not `mutating` and the engine
+    // allows it on a document open for viewing — which is right for the command and wrong
+    // for this control. Arming a painter the document will refuse to apply is the dead
+    // button the enabled-state rule exists to prevent, so the question asked here is the one
+    // that decides whether the PAINT can land: would this document take a formatting write?
+    // `clearFormatting` is exactly that question, needs no selection to answer it, and is
+    // the control sitting next to this one.
+    const allowed = editor.can({ type: 'clearFormatting' });
     return allowed.ok
       ? { id, enabled: true, disabledReason: null, active: false, value: painter.mode }
       : {
@@ -513,6 +520,23 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 }
 
 /**
+ * Whether a slot's control renders as a TOGGLE — pressed or not — so it carries
+ * `aria-pressed`.
+ *
+ * Shared rather than derived per adapter, because it is not derivable from the command table
+ * alone: the format painter has no fixed command (a press captures, arms, locks or stands
+ * down, which no single `EditorCommand` describes), so a rule that only read `commandForSlot`
+ * left it announcing nothing at all to a screen reader while it was armed.
+ *
+ * @public
+ */
+export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean {
+  if (slotId === 'format.painter') return true;
+  const command = commandForSlot(slotId);
+  return command?.type === 'toggleMark' || command?.type === 'setAlignment';
+}
+
+/**
  * Enabled state for several controls in one pass.
  *
  * @public
@@ -584,10 +608,16 @@ export function runToolbarCommand(
     const surface = surfaceOf(editor);
     if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
     // The press captures, arms, locks or stands down — the engine decides which, from its own
-    // clock. Nothing about the DOCUMENT moves, so this reports `changed: false` however it
-    // lands; the painting itself happens on the selection the user makes next.
-    surface.formatPainter.press();
-    return { ok: true, changed: false };
+    // clock. Nothing about the DOCUMENT moves, so a press that lands reports `changed:
+    // false`; the painting itself happens on the selection the user makes next.
+    //
+    // A press that found nothing to capture is a REFUSAL, not a quiet success. Reporting it
+    // as `ok` is how a control ends up looking as though it armed while the painter stayed
+    // off, which the enabled state alone cannot prevent — the selection can move between the
+    // render and the click.
+    return surface.formatPainter.press()
+      ? { ok: true, changed: false }
+      : { ok: false, code: 'notFound', reason: 'there is nothing at the selection to copy' };
   }
   if (id === 'contentControl.showAll') {
     const surface = surfaceOf(editor);

@@ -51,6 +51,25 @@ const FORMATTING: Record<string, { localName: string; attributes?: Record<string
   u: { localName: 'u', attributes: { val: 'single' } },
 };
 
+/**
+ * Which LETTER a chord names, for the accelerators held with Alt.
+ *
+ * `event.key` is the produced character, and under Alt that is the alternate one on most
+ * layouts — macOS turns Option+C into `ç`, Option+F into `ƒ` and Option+D into `∂`, so the
+ * note chords read by `key` alone never fired there at all. `event.code` names the physical
+ * key, which is what the user is looking at on the keycap.
+ *
+ * ONE identifier, not either-or. Accepting both claims two chords on a layout where they
+ * disagree: on Dvorak the key at QWERTY's `C` position produces `j`, so matching `key` as
+ * well would swallow Ctrl+Alt+J and capture formatting from it. `key` is the fallback only
+ * where `code` says nothing — a virtual keyboard, or a synthesised event.
+ */
+function letterOf(event: KeyboardEvent): string {
+  const physical = event.code;
+  if (physical.length === 4 && physical.startsWith('Key')) return physical[3]!.toLowerCase();
+  return physical === '' ? event.key.toLowerCase() : '';
+}
+
 export function createKeyDownHandler(
   surface: PaginatedSurface,
   hooks: {
@@ -90,9 +109,9 @@ export function createKeyDownHandler(
       event.preventDefault();
       return;
     }
-    // Word: Ctrl/Cmd+Alt+F footnote, Ctrl/Cmd+Alt+D endnote.
+    // Word: Ctrl/Cmd+Alt+F footnote, Ctrl/Cmd+Alt+D endnote, and the Format Painter pair.
     if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey) {
-      const key = event.key.toLowerCase();
+      const key = letterOf(event);
       if (key === 'f') {
         event.preventDefault();
         surface.insertNote('footnote');
@@ -103,24 +122,21 @@ export function createKeyDownHandler(
         surface.insertNote('endnote');
         return;
       }
-      // The Format Painter pair, on the chords Word for the WEB uses rather than the ones
-      // Word for the desktop does.
+      // The Format Painter, on the chords Word for the WEB uses rather than the ones Word
+      // for the desktop does.
       //
       // The desktop pair is Ctrl+Shift+C / Ctrl+Shift+V, and neither is available to a page:
       // Ctrl/Cmd+Shift+C opens the browser's element inspector, which `preventDefault` does
-      // not cancel, and Ctrl/Cmd+Shift+V is already paste-without-formatting above — a
+      // not cancel, and Ctrl/Cmd+Shift+V is already paste-without-formatting below — a
       // browser-native paste chord, and the only one the engine gets a `paste` event for.
       // Word Online moved the painter to Cmd+Option+C / Cmd+Option+V for exactly these
       // reasons, and matching it keeps one gesture true across both products.
-      //
-      // `event.key` under Alt is the ALTERNATE character on several layouts (and on macOS
-      // Option+C is `ç`), so `event.code` is what actually identifies the key.
-      if (key === 'c' || event.code === 'KeyC') {
+      if (key === 'c') {
         event.preventDefault();
         surface.formatPainter.capture();
         return;
       }
-      if (key === 'v' || event.code === 'KeyV') {
+      if (key === 'v') {
         event.preventDefault();
         surface.formatPainter.apply();
         return;

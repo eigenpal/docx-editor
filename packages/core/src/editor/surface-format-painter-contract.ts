@@ -68,8 +68,11 @@ export interface FormatPainterOps {
    * The double-press window is the ENGINE's, deliberately: the alternative is each adapter
    * binding its own `dblclick` beside its own `click`, which is two hosts deciding
    * separately what a double-click means and drifting the moment one of them changes.
+   *
+   * False when there was nothing at the selection to capture, so a control can report a
+   * refusal rather than looking as though it armed.
    */
-  press(): void;
+  press(): boolean;
   /** Turn the painter off, keeping the capture. `Esc` and a finished single application. */
   disarm(): void;
 }

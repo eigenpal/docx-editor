@@ -78,6 +78,7 @@ export {
 } from './ruler-indent.ts';
 export {
   chromeProbeForSlot,
+  chromeSlotIsToggle,
   commandForSlot,
   commandForSlotValue,
   commandForTableChromeSlotValue,

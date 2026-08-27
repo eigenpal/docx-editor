@@ -3,7 +3,7 @@ import type { DocxEditorChildren } from '../../docx-editor-children';
 import {
   CHROME_GROUPS,
   chromeSlotId,
-  commandForSlot,
+  chromeSlotIsToggle,
   type ChromeControl,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
@@ -72,8 +72,9 @@ export const ToolbarButton = defineComponent({
       // catalogue can only state one spelling, and the engine's accelerator is Ctrl OR Cmd —
       // so the printed name is corrected for this keyboard rather than translated twice.
       const text = platformShortcut(label(control?.labelKey ?? props.slot));
-      const slotCommand = commandForSlot(props.slot);
-      const isToggle = slotCommand?.type === 'toggleMark' || slotCommand?.type === 'setAlignment';
+      // `aria-pressed` only where pressed-ness is meaningful. The rule is the ENGINE's,
+      // because it is not derivable from the command table alone — see `chromeSlotIsToggle`.
+      const isToggle = chromeSlotIsToggle(props.slot);
       const shared = {
         onClick: () => command.execute(),
         onMousedown: guardToolbarMousedown,

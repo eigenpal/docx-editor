@@ -13,7 +13,7 @@ import type { MouseEvent } from 'react';
 import {
   CHROME_GROUPS,
   chromeSlotId,
-  commandForSlot,
+  chromeSlotIsToggle,
   type ChromeControl,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
@@ -86,9 +86,9 @@ export function ToolbarButton(props: ToolbarButtonProps) {
   // catalogue can only state one spelling, and the engine's accelerator is Ctrl OR Cmd —
   // so the printed name is corrected for this keyboard rather than translated twice.
   const text = platformShortcut(label(control?.labelKey ?? slot));
-  // `aria-pressed` only where pressed-ness is meaningful: marks and alignment toggle.
-  const command = commandForSlot(slot);
-  const isToggle = command?.type === 'toggleMark' || command?.type === 'setAlignment';
+  // `aria-pressed` only where pressed-ness is meaningful. The rule is the ENGINE's, because
+  // it is not derivable from the command table alone — see `chromeSlotIsToggle`.
+  const isToggle = chromeSlotIsToggle(slot);
 
   const shared = {
     onClick: () => execute(),

@@ -1084,9 +1084,14 @@ export function createPointerController(
     const cells = host.cellSelection();
     if (cells) host.setCellSelection(cells);
     else host.setSelection(host.selection());
+    // Only a real RELEASE settles the selection. `pointercancel` is the browser taking the
+    // gesture away — a system touch gesture, a device change — and the range under the
+    // pointer at that moment is not one the user chose. Reporting it settled let an armed
+    // format painter paint a half-finished drag and then stand down.
+    //
     // AFTER the re-assertion above, so anything acting on the settled selection sees the
     // model's answer rather than whatever the browser left behind mid-drag.
-    host.onSelectionSettled?.();
+    if (event.type === 'pointerup') host.onSelectionSettled?.();
   };
 
   function endGesture(): void {

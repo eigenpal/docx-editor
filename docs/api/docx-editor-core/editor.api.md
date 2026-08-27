@@ -675,6 +675,9 @@ export function chromeSlotId(group: {
 }): ChromeSlotId;
 
 // @public
+export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean;
+
+// @public
 export interface CollaborationModuleContribution {
     readonly session: EditorCollaborationSession;
 }
