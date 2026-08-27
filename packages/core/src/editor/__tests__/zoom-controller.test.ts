@@ -48,6 +48,7 @@ class FakeResizeObserver {
     observerCallbacks.push(callback);
   }
   observe(): void {}
+  unobserve(): void {}
   disconnect(): void {
     observerCallbacks = observerCallbacks.filter((entry) => entry !== this.callback);
   }
@@ -65,6 +66,9 @@ interface Harness {
   settle(): Promise<void>;
 }
 
+/** Every editor this file mounts, so `afterEach` can destroy each one. */
+let mounted: DocxEditorInstance[] = [];
+
 function mount(options: Parameters<typeof createDocxEditor>[0] = {}): Harness {
   const scroller = document.createElement('div');
   scroller.className = 'docx-editor__scroll-container';
@@ -76,6 +80,7 @@ function mount(options: Parameters<typeof createDocxEditor>[0] = {}): Harness {
   Object.defineProperty(scroller, 'clientWidth', { get: () => width, configurable: true });
 
   const editor = createDocxEditor({ container, document: docx(''), ...options });
+  mounted.push(editor);
 
   return {
     editor,
@@ -96,13 +101,31 @@ function mount(options: Parameters<typeof createDocxEditor>[0] = {}): Harness {
   };
 }
 
+// `globalThis.ResizeObserver` is process-wide, and `bun test` runs every file in one
+// process. Restore the real constructor after each test, or every later file observes
+// through this stand-in.
+const RealResizeObserver = globalThis.ResizeObserver;
+
 beforeEach(() => {
   observerCallbacks = [];
+  mounted = [];
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = FakeResizeObserver;
 });
 
 afterEach(() => {
-  document.body.innerHTML = '';
+  // `destroy()` first, and before the ResizeObserver restore: the surface holds
+  // `selectionchange` and capture-phase `scroll` listeners on the shared `document`, which
+  // clearing the body does not remove, and only the stand-in's `disconnect()` drops its
+  // callback. `destroy()` is idempotent, so a test that already called it is no problem.
+  // In a `finally`, because a throw here would leave the stand-in on `globalThis` for
+  // every later file in the process — the failure this teardown exists to prevent.
+  try {
+    for (const editor of mounted) editor.destroy();
+  } finally {
+    mounted = [];
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = RealResizeObserver;
+    document.body.innerHTML = '';
+  }
 });
 
 describe('the default mode', () => {

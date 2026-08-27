@@ -50,6 +50,7 @@ class WidthObserver {
     observers.push(this);
   }
   observe(): void {}
+  unobserve(): void {}
   disconnect(): void {
     observers = observers.filter((entry) => entry !== this);
   }
@@ -118,13 +119,27 @@ function mount(props: Record<string, unknown> = {}) {
   };
 }
 
+// `globalThis.ResizeObserver` is process-wide, and `bun test` runs every file in one
+// process. Restore the real constructor after each test, or every later file observes
+// through this stand-in.
+const RealResizeObserver = globalThis.ResizeObserver;
+
 beforeEach(() => {
   viewportWidth = 1600;
   observers = [];
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = WidthObserver;
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  // The restore sits in a `finally`: `cleanup()` unmounts inside `act`, and an effect
+  // cleanup that throws would otherwise leave the stand-in on `globalThis` for every
+  // later file in the process.
+  try {
+    cleanup();
+  } finally {
+    (globalThis as { ResizeObserver?: unknown }).ResizeObserver = RealResizeObserver;
+  }
+});
 
 describe('useZoom', () => {
   test('reports the resolved scale AND where it came from', () => {
