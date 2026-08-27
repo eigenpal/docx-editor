@@ -19,6 +19,7 @@ import type {
 import type { ContainerRef } from '../contracts/types.ts';
 import type { ParagraphSummary } from '../contracts/document.ts';
 import { classifyCommand } from './docx-editor-support.ts';
+import { NO_COPIED_FORMATTING } from './surface-format-painter-contract.ts';
 import { gateImageCommand } from './docx-editor-images.ts';
 
 /** Whether a command may run, and the engine's own refusal when it may not. */
@@ -352,6 +353,15 @@ export function gateCommand(
         code: 'unsupported',
         reason: 'this document defines no paragraph styles',
       },
+    };
+  }
+  // The format painter holds its capture on the SURFACE, so "is there anything to paint
+  // with" is a question only a mounted surface answers. Gated here rather than at exec,
+  // because this answer is also what disables the chrome that would run it.
+  if (command.type === 'pasteFormatting' && surface.formatPainter.state().level === 'none') {
+    return {
+      ok: false,
+      refusal: { ok: false, code: 'notFound', reason: NO_COPIED_FORMATTING },
     };
   }
   if (command.type === 'undo' && !surface.state().canUndo) {

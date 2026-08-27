@@ -48,6 +48,7 @@ import type {
   HeaderFooterState,
   NotePropertiesState,
 } from './editor-hf-notes.ts';
+import type { EditorFormatPainterCommands } from './editor-format-painter.ts';
 import type {
   DrawingKind,
   DrawingLocks,
@@ -59,6 +60,7 @@ import type { ImageResourceState, SupportedImageMime } from '../store/package/im
 export type * from './types';
 export type * from './interaction';
 export type * from './editor-hf-notes.ts';
+export type * from './editor-format-painter.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 
 // Everything below is named by a signature IN this file, so it has to be nameable FROM this
@@ -992,7 +994,11 @@ export type {
  * closed union so an extension can widen it by declaration merging.
  */
 export interface EditorCommands
-  extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands {
+  extends
+    EditorCommandShape<DocEdits>,
+    EditorHeaderFooterCommands,
+    EditorNoteCommands,
+    EditorFormatPainterCommands {
   /** Switch how edits are written. A view command: it changes no document state. */
   setEditingMode: { mode: DocumentEditingMode };
   /**

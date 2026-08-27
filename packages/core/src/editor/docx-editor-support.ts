@@ -276,6 +276,13 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
       return { supported: true, mutating: true };
     case 'clearFormatting':
       return { supported: true, mutating: true };
+    // The painter's two halves gate differently, which is why they are two commands: copying
+    // formatting reads and writes nothing, so a document open for viewing still allows it —
+    // the same reason `selectAll` and `copy` stay live there. Applying is an edit.
+    case 'copyFormatting':
+      return { supported: true, mutating: false };
+    case 'pasteFormatting':
+      return { supported: true, mutating: true };
     case 'setLineSpacing': {
       // Bounds are `w:spacing/@w:line`'s own (ST_SignedTwipsMeasure in practice, but Word
       // rejects a non-positive line height outright). Checked here so a malformed pick is

@@ -7,11 +7,13 @@ export {
 } from './DocxEditorContextMenu';
 export {
   ContextMenuCopy,
+  ContextMenuCopyFormatting,
   ContextMenuCut,
   ContextMenuCellVerticalAlignment,
   ContextMenuDelete,
   ContextMenuItem,
   ContextMenuPaste,
+  ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
   ContextMenuSelectAll,
   ContextMenuDeleteTable,

@@ -47,7 +47,15 @@ import type {
   ContentControlOps,
   ContentControlSurfaceState,
 } from './surface-content-control-contract.ts';
+import type {
+  FormatPainterOps,
+  FormatPainterSurfaceState,
+} from './surface-format-painter-contract.ts';
+import type { PaginatedSurfacePerf } from './surface-perf-contract.ts';
 export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
+export type { FormatPainterLevel, FormatPainterMode } from './surface-format-painter-contract.ts';
+export type { FormatPainterOps, FormatPainterSurfaceState };
+export type { PaginatedSurfacePerf };
 
 /**
  * One live remote-caret label the engine positioned. The host owns its content; the engine
@@ -262,36 +270,6 @@ export interface SurfaceFormatting {
   readonly disagrees: ParagraphDisagreements;
 }
 
-/**
- * Where the last pass spent its time, and how much work it actually did.
- *
- * The durations are the surface's own three phases — layout, paint, selection sync — timed
- * separately because they fail separately: a full relayout, a full repaint and a forced
- * reflow each have a different fix. The counters come free from machinery that already
- * exists: the layout session says how much was re-placed versus reused, and the scheduler
- * says how often work was thrown away as stale. `placed` equal to `total` on every
- * keystroke is the one-glance sign that incremental layout is not engaging.
- */
-export interface PaginatedSurfacePerf {
-  /** Time the last layout pass took, in milliseconds. */
-  readonly layoutMs: number;
-  /** Time the last paint took — building and swapping the page DOM. */
-  readonly paintMs: number;
-  /** Time the last selection sync took — writing the model selection into the browser. */
-  readonly selectionMs: number;
-  /** Paragraphs the last pass re-placed, against the number in the document. */
-  readonly placed: number;
-  readonly total: number;
-  /** Pages carried over from the previous layout without being rebuilt. */
-  readonly reusedPages: number;
-  /** Passes that could not resume and laid the document out from the top. */
-  readonly fullPasses: number;
-  /** Layouts discarded because the model had already moved on. */
-  readonly staleDiscards: number;
-  /** Cooperative runs abandoned mid-flight for a newer revision. */
-  readonly cancelledRuns: number;
-}
-
 /** How a reveal places its target in the viewport. */
 export interface RevealOptions {
   /**
@@ -367,6 +345,13 @@ export interface PaginatedSurfaceState {
    * This is how a host's context menu learns it. Surface chrome, not document state.
    */
   readonly contextTocId: string | null;
+  /**
+   * Format painter arming, and the level of what it holds.
+   *
+   * Surface chrome, not document bytes — the lane `contentControls` above sits in, reported
+   * through the same `onChange` so a toolbar's pressed state has exactly one source.
+   */
+  readonly formatPainter: FormatPainterSurfaceState;
   /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
   readonly perf: PaginatedSurfacePerf;
 }
@@ -734,6 +719,8 @@ export interface PaginatedSurface {
    * Show-all and form-fill are surface chrome and never reflow layout.
    */
   readonly contentControls: ContentControlOps;
+  /** Word's Format Painter: capture, apply, and the transient armed mode. */
+  readonly formatPainter: FormatPainterOps;
   /** Whether a `rows`×`cols` table can be inserted at the caret. */
   canInsertTable(rows: number, cols: number): boolean;
   /**

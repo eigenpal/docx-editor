@@ -3185,6 +3185,34 @@ a.docx-hyperlink:focus-visible {
   cursor: default;
 }
 
+/* The format painter LOCKED on (a double-click), as against armed for one paint.
+ *
+ * Both are `data-active`, so the slab above already says "on". What this adds is that this
+ * one does not end by itself: an underline along the bottom edge, drawn inside the slab so
+ * it reads as part of the button rather than as a second control. Escape releases it — the
+ * control's own tooltip says so. */
+.docx-toolbar__button[data-slot='format.painter'][data-value='locked']::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+/* The painter armed: the pointer says the next selection takes the formatting.
+ *
+ * On the PAGES layer, not on the editor root, so chrome the user crosses on the way to the
+ * text keeps its own cursor. The descendant rule is what actually does the work — painted
+ * spans set their own cursor, and a rule on the layer alone would lose to every one of
+ * them. The attribute is written by the surface whenever the painter's mode moves. */
+.docx-pages[data-format-painter],
+.docx-pages[data-format-painter] * {
+  cursor: copy;
+}
+
 /* ── Overflow ("⋯") ────────────────────────────────────────────────────────────────
  *
  * The bar that measures itself is ONE ROW: groups that do not fit move into the menu

@@ -17,6 +17,9 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'no document is loaded': 'disabledReason.noDocument',
   'no document is open': 'disabledReason.noDocument',
   'no content control at the selection': 'disabledReason.noContentControl',
+  // Keyed on `NO_COPIED_FORMATTING` in the engine's format-painter lane; the two must stay
+  // the same sentence or the refusal reaches every locale in English.
+  'no formatting has been copied': 'disabledReason.noCopiedFormatting',
   'no drawing is selected': 'disabledReason.noDrawing',
   'the drawing is locked': 'disabledReason.drawingLocked',
   'a comment needs a selected range': 'disabledReason.commentSelection',

@@ -46,7 +46,8 @@
       "alignment": "Perataan",
       "listFormatting": "Pemformatan Daftar",
       "image": "Gambar",
-      "table": "Tabel"
+      "table": "Tabel",
+      "format": null
     },
     "undo": "Urungkan",
     "undoShortcut": "Urungkan (Ctrl+Z)",
@@ -74,7 +75,9 @@
     "unavailableInPreview": "Tidak tersedia dalam versi pratinjau ini",
     "more": "Lainnya",
     "altText": "Teks alternatif",
-    "imageWrap": "Bungkus teks"
+    "imageWrap": "Bungkus teks",
+    "formatPainter": null,
+    "formatPainterShortcut": null
   },
   "alignment": {
     "alignLeft": "Rata Kiri",
@@ -342,7 +345,11 @@
     "editCustomNode": "Edit {label}",
     "removeCustomNode": "Hapus {label}",
     "pasteWithoutFormatting": null,
-    "pasteWithoutFormattingShortcut": null
+    "pasteWithoutFormattingShortcut": null,
+    "copyFormatting": null,
+    "copyFormattingShortcut": null,
+    "pasteFormatting": null,
+    "pasteFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "Struktur dokumen",
@@ -730,7 +737,8 @@
     "suggestingSectionBreak": null,
     "tableCellSectionBreak": null,
     "lockedSectionBreak": null,
-    "lockedContentBreak": null
+    "lockedContentBreak": null,
+    "noCopiedFormatting": null
   },
   "equationPopup": {
     "apply": null,

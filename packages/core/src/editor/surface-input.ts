@@ -72,6 +72,14 @@ export function createKeyDownHandler(
     // below. Both firing made one keystroke zoom AND rewrite the selection's run properties.
     // A prevented event has an owner, so there is nothing left here to do.
     if (event.defaultPrevented) return;
+    // Escape releases the transient modes, innermost first. The format painter is the
+    // innermost of all: it is armed ON TOP of whatever scope is open, so a press that closed
+    // a header instead would leave the painter armed with no way left to release it.
+    if (event.key === 'Escape' && surface.formatPainter.state().mode !== 'off') {
+      surface.formatPainter.disarm();
+      event.preventDefault();
+      return;
+    }
     if (event.key === 'Escape' && surface.activeScope().kind === 'headerFooter') {
       surface.exitHeaderFooter();
       event.preventDefault();
@@ -93,6 +101,28 @@ export function createKeyDownHandler(
       if (key === 'd') {
         event.preventDefault();
         surface.insertNote('endnote');
+        return;
+      }
+      // The Format Painter pair, on the chords Word for the WEB uses rather than the ones
+      // Word for the desktop does.
+      //
+      // The desktop pair is Ctrl+Shift+C / Ctrl+Shift+V, and neither is available to a page:
+      // Ctrl/Cmd+Shift+C opens the browser's element inspector, which `preventDefault` does
+      // not cancel, and Ctrl/Cmd+Shift+V is already paste-without-formatting above — a
+      // browser-native paste chord, and the only one the engine gets a `paste` event for.
+      // Word Online moved the painter to Cmd+Option+C / Cmd+Option+V for exactly these
+      // reasons, and matching it keeps one gesture true across both products.
+      //
+      // `event.key` under Alt is the ALTERNATE character on several layouts (and on macOS
+      // Option+C is `ç`), so `event.code` is what actually identifies the key.
+      if (key === 'c' || event.code === 'KeyC') {
+        event.preventDefault();
+        surface.formatPainter.capture();
+        return;
+      }
+      if (key === 'v' || event.code === 'KeyV') {
+        event.preventDefault();
+        surface.formatPainter.apply();
         return;
       }
     }

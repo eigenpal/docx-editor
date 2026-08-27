@@ -47,6 +47,7 @@ import { MenuGroup, MenuItem, MenuRow, MenuSeparator, MenuSubmenu } from '../men
 import { ContextMenuContext, type ContextMenuAnchor } from './contextmenu-context';
 import {
   ContextMenuCopy,
+  ContextMenuCopyFormatting,
   ContextMenuCellVerticalAlignment,
   ContextMenuCut,
   ContextMenuDelete,
@@ -59,6 +60,7 @@ import {
   ContextMenuInsertRowBelow,
   ContextMenuItem,
   ContextMenuPaste,
+  ContextMenuPasteFormatting,
   ContextMenuPasteWithoutFormatting,
   ContextMenuSelectAll,
   ContextMenuRefreshToc,
@@ -141,6 +143,12 @@ const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
     id: 'edit.pasteWithoutFormatting',
     render: () => <ContextMenuPasteWithoutFormatting />,
   },
+  // The Format Painter's two halves, in the clipboard group where a reader looks for
+  // "copy this, put it there". The toolbar's painter button is the same capability as one
+  // armed gesture; these are the two steps taken apart, which is what a keyboard user and
+  // a right-click user each want.
+  { kind: 'row', id: 'format.copyFormatting', render: () => <ContextMenuCopyFormatting /> },
+  { kind: 'row', id: 'format.pasteFormatting', render: () => <ContextMenuPasteFormatting /> },
   { kind: 'separator', id: 'sep.clipboard' },
   { kind: 'row', id: 'edit.delete', render: () => <ContextMenuDelete /> },
   { kind: 'row', id: 'edit.selectAll', render: () => <ContextMenuSelectAll /> },

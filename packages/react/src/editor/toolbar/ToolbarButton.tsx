@@ -17,6 +17,7 @@ import {
   type ChromeControl,
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
+import { platformShortcut } from '@docx-editor.dev/i18n';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
@@ -76,12 +77,15 @@ export interface ToolbarButtonProps {
  */
 export function ToolbarButton(props: ToolbarButtonProps) {
   const { slot, icon, asChild, className, children, hidden } = props;
-  const { execute, isActive, isEnabled, disabledReason } = useEditorCommand(slot);
+  const { execute, isActive, isEnabled, disabledReason, value } = useEditorCommand(slot);
   const label = useToolbarLabel();
   if (hidden) return null;
 
   const control = chromeControlForSlot(slot);
-  const text = label(control?.labelKey ?? slot);
+  // A registry label is tooltip-shaped and often NAMES its chord ("Bold (Ctrl+B)"). The
+  // catalogue can only state one spelling, and the engine's accelerator is Ctrl OR Cmd —
+  // so the printed name is corrected for this keyboard rather than translated twice.
+  const text = platformShortcut(label(control?.labelKey ?? slot));
   // `aria-pressed` only where pressed-ness is meaningful: marks and alignment toggle.
   const command = commandForSlot(slot);
   const isToggle = command?.type === 'toggleMark' || command?.type === 'setAlignment';
@@ -98,6 +102,11 @@ export function ToolbarButton(props: ToolbarButtonProps) {
     ...(isActive ? { 'data-active': '' } : {}),
     ...(!isEnabled ? { 'data-disabled': '' } : {}),
     ...(isToggle ? { 'aria-pressed': isActive } : {}),
+    // The slot's reported value, for the controls whose state is more than pressed-or-not:
+    // the format painter renders `once` and `locked` differently, and only the engine knows
+    // which is live. Absent for every slot that reports none, so nothing else gains an
+    // attribute.
+    ...(value !== null ? { 'data-value': value } : {}),
     'aria-label': text,
     // The engine's own reason surfaces as the tooltip when disabled.
     title: disabledReason ?? text,

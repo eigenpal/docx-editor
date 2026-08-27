@@ -89,6 +89,18 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
   },
   {
+    id: 'text.format-painter',
+    name: 'Format painter',
+    category: 'text',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Copies character formatting, and paragraph formatting when the selection covers ' +
+      'the paragraph mark. Paragraph borders and character styles stay on the target.',
+  },
+  {
     id: 'text.sub-superscript',
     name: 'Subscript & superscript',
     category: 'text',

@@ -8,6 +8,7 @@ import {
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import { mergeHostClass } from '../../lib/mergeHostClass';
+import { platformShortcut } from '@docx-editor.dev/i18n';
 import { useEditorCommand } from '../useEditorCommand';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
@@ -67,7 +68,10 @@ export const ToolbarButton = defineComponent({
     return () => {
       if (props.hidden) return null;
       const control = chromeControlForSlot(props.slot);
-      const text = label(control?.labelKey ?? props.slot);
+      // A registry label is tooltip-shaped and often NAMES its chord ("Bold (Ctrl+B)"). The
+      // catalogue can only state one spelling, and the engine's accelerator is Ctrl OR Cmd —
+      // so the printed name is corrected for this keyboard rather than translated twice.
+      const text = platformShortcut(label(control?.labelKey ?? props.slot));
       const slotCommand = commandForSlot(props.slot);
       const isToggle = slotCommand?.type === 'toggleMark' || slotCommand?.type === 'setAlignment';
       const shared = {
@@ -79,6 +83,11 @@ export const ToolbarButton = defineComponent({
         ...(command.isActive.value ? { 'data-active': '' } : {}),
         ...(!command.isEnabled.value ? { 'data-disabled': '' } : {}),
         ...(isToggle ? { 'aria-pressed': command.isActive.value } : {}),
+        // The slot's reported value, for the controls whose state is more than
+        // pressed-or-not: the format painter renders `once` and `locked` differently, and
+        // only the engine knows which is live. Absent for every slot that reports none, so
+        // nothing else gains an attribute.
+        ...(command.value.value !== null ? { 'data-value': command.value.value } : {}),
         'aria-label': text,
         title: command.disabledReason.value ?? text,
       };

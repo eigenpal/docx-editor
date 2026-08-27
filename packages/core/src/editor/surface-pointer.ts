@@ -122,6 +122,15 @@ export interface PointerHost {
    * Called after mousedown is prevented so the caret is not stolen.
    */
   onContentControlWidget?(controlId: string, kind: string): void;
+  /**
+   * A pointer selection gesture has settled — the press, drag and release are over and the
+   * model selection is final.
+   *
+   * The format painter is what needs it: an armed painter paints the selection the user just
+   * MADE, and every earlier point in the gesture is a selection still being dragged. Reported
+   * rather than acted on here, because the pointer lane owns geometry and nothing else.
+   */
+  onSelectionSettled?(): void;
   /** Generated navigation paragraphs refuse caret placement and text selection. */
   isReadOnlyParagraph?(paragraphId: string): boolean;
   /**
@@ -1075,6 +1084,9 @@ export function createPointerController(
     const cells = host.cellSelection();
     if (cells) host.setCellSelection(cells);
     else host.setSelection(host.selection());
+    // AFTER the re-assertion above, so anything acting on the settled selection sees the
+    // model's answer rather than whatever the browser left behind mid-drag.
+    host.onSelectionSettled?.();
   };
 
   function endGesture(): void {

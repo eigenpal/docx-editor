@@ -325,6 +325,36 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
       value: mode,
     };
   }
+  // Word's Format Painter. Surface-owned like the content-control toggles below, and for
+  // the same reason: the capture and the armed mode are chrome state, not document bytes.
+  //
+  // `value` carries the MODE, the way the editing-mode pill's does. A control that only knew
+  // `active` could not tell "armed for one paint" from "locked on", which is the whole
+  // difference a double-press makes and the only cue that Escape is what ends it.
+  if (id === 'format.painter') {
+    const surface = surfaceOf(editor);
+    if (!surface) {
+      return { id, enabled: false, disabledReason: 'editor is not ready', active: false };
+    }
+    const painter = surface.formatPainter.state();
+    // An ARMED painter is always pressable, because the press that turns it off must not be
+    // refused by the same rule that decides whether a fresh capture is possible.
+    if (painter.mode !== 'off') {
+      return { id, enabled: true, disabledReason: null, active: true, value: painter.mode };
+    }
+    // Copying is a READ, so it survives a document open for viewing; what it needs is
+    // something to copy FROM. The engine answers both, and this quotes it.
+    const allowed = editor.can({ type: 'copyFormatting' });
+    return allowed.ok
+      ? { id, enabled: true, disabledReason: null, active: false, value: painter.mode }
+      : {
+          id,
+          enabled: false,
+          disabledReason: allowed.reason,
+          active: false,
+          value: painter.mode,
+        };
+  }
   // Surface-owned content-control chrome toggles. Enabled whenever the editor is mounted;
   // `active` reflects snapshot surface state when the facade publishes it, else false.
   // Adapters that drive the surface directly also read `surface.state().contentControls`.
@@ -550,6 +580,15 @@ export function runToolbarCommand(
   value?: unknown
 ): ExecResult {
   if (!editor) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+  if (id === 'format.painter') {
+    const surface = surfaceOf(editor);
+    if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    // The press captures, arms, locks or stands down — the engine decides which, from its own
+    // clock. Nothing about the DOCUMENT moves, so this reports `changed: false` however it
+    // lands; the painting itself happens on the selection the user makes next.
+    surface.formatPainter.press();
+    return { ok: true, changed: false };
+  }
   if (id === 'contentControl.showAll') {
     const surface = surfaceOf(editor);
     if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };

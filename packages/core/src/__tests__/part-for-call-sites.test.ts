@@ -36,6 +36,9 @@ const PINNED_CALL_SITES: Readonly<Record<string, number>> = {
   'core/src/editor/surface-range-edit.ts': 3,
   'core/src/editor/surface-equations.ts': 1,
   'core/src/editor/surface-format.ts': 1,
+  // Same lane, same story: the painter reads and writes the ACTIVE scope's part, which the
+  // formatting lane beside it has already opened for the caret sitting in it.
+  'core/src/editor/surface-format-painter.ts': 1,
   'core/src/editor/surface-hf-editing.ts': 1,
   'core/src/editor/surface-hyperlinks.ts': 1,
   'core/src/editor/surface-scope.ts': 2, // storyScopeOfNodeId — documented as a known debt in-file

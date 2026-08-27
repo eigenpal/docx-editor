@@ -18,16 +18,31 @@ export interface EditorCommandState {
   readonly isActive: ComputedRef<boolean>;
   readonly isEnabled: ComputedRef<boolean>;
   readonly disabledReason: ComputedRef<string | null>;
+  /**
+   * What the control SHOWS, for the slots whose answer is a value rather than a pressed
+   * state — the editing-mode pill, and the format painter's `off` / `once` / `locked`.
+   *
+   * `isActive` cannot express it: "armed for one paint" and "locked on until Escape" are
+   * both pressed, and only one of them ends with a keystroke. Null for every slot whose
+   * state really is just pressed-or-not, and for the raw-command form.
+   */
+  readonly value: ComputedRef<string | null>;
 }
 
 interface CommandSlice {
   readonly active: boolean;
   readonly enabled: boolean;
   readonly disabledReason: string | null;
+  readonly value: string | null;
 }
 
 function commandSliceEqual(a: CommandSlice, b: CommandSlice): boolean {
-  return a.active === b.active && a.enabled === b.enabled && a.disabledReason === b.disabledReason;
+  return (
+    a.active === b.active &&
+    a.enabled === b.enabled &&
+    a.disabledReason === b.disabledReason &&
+    a.value === b.value
+  );
 }
 
 function isSlot(target: ChromeSlotId | EditorCommand): target is ChromeSlotId {
@@ -64,14 +79,20 @@ export function useEditorCommand(
         active: state.active,
         enabled: state.enabled,
         disabledReason: localizeDisabledReason(state.disabledReason, t),
+        value: state.value ?? null,
       };
     }
-    if (!editorRef.value) return { active: false, enabled: false, disabledReason: null };
+    if (!editorRef.value) {
+      return { active: false, enabled: false, disabledReason: null, value: null };
+    }
     const allowed = editorRef.value.can(current);
     return {
       active: editorRef.value.isActive(current),
       enabled: allowed.ok,
       disabledReason: allowed.ok ? null : localizeDisabledReason(allowed.reason ?? null, t),
+      // A raw command has no registry slot to report a value FOR — `toolbarCommandState`
+      // is the only thing that derives one.
+      value: null,
     };
   };
 
@@ -91,5 +112,6 @@ export function useEditorCommand(
     isActive: computed(() => slice.value.active),
     isEnabled: computed(() => slice.value.enabled),
     disabledReason: computed(() => slice.value.disabledReason),
+    value: computed(() => slice.value.value),
   };
 }

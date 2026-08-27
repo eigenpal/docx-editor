@@ -46,7 +46,8 @@
       "alignment": "संरेखण",
       "listFormatting": "सूची प्रारूपण",
       "image": "चित्र",
-      "table": "तालिका"
+      "table": "तालिका",
+      "format": null
     },
     "undo": "पूर्ववत करें",
     "undoShortcut": "पूर्ववत करें (Ctrl+Z)",
@@ -74,7 +75,9 @@
     "unavailableInPreview": "इस पूर्वावलोकन बिल्ड में उपलब्ध नहीं है",
     "more": "अधिक",
     "altText": "वैकल्पिक पाठ",
-    "imageWrap": "पाठ रैप करें"
+    "imageWrap": "पाठ रैप करें",
+    "formatPainter": null,
+    "formatPainterShortcut": null
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -335,7 +338,11 @@
     "editCustomNode": "{label} संपादित करें",
     "removeCustomNode": "{label} निकालें",
     "pasteWithoutFormatting": null,
-    "pasteWithoutFormattingShortcut": null
+    "pasteWithoutFormattingShortcut": null,
+    "copyFormatting": null,
+    "copyFormattingShortcut": null,
+    "pasteFormatting": null,
+    "pasteFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "दस्तावेज़ की रूपरेखा",
@@ -730,7 +737,8 @@
     "suggestingSectionBreak": null,
     "tableCellSectionBreak": null,
     "lockedSectionBreak": null,
-    "lockedContentBreak": null
+    "lockedContentBreak": null,
+    "noCopiedFormatting": null
   },
   "equationPopup": {
     "apply": null,

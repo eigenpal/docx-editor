@@ -14,6 +14,7 @@ import {
 import { useDocxEditor } from '../context';
 import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
+import { platformShortcut } from '@docx-editor.dev/i18n';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel, type MenuContextValue, type MenuId } from './menu-context';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
@@ -144,7 +145,13 @@ export const MenuRow = defineComponent({
             {icon}
           </span>
           <span class="docx-menubar__item-label">{slots.default?.()}</span>
-          {shortcut ? <span class="docx-menubar__item-shortcut">{shortcut}</span> : null}
+          {/* The chord is one accelerator in the engine (`event.metaKey || event.ctrlKey`),
+              so a Mac reader presses ⌘ where a Windows reader presses Ctrl. The catalogue
+              can only state one spelling; `platformShortcut` makes the printed one match
+              the keyboard. */}
+          {shortcut ? (
+            <span class="docx-menubar__item-shortcut">{platformShortcut(shortcut)}</span>
+          ) : null}
           {describe ? (
             <span id={reasonId} class="docx-editor-sr-only">
               {title}

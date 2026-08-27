@@ -390,11 +390,27 @@ export const CHROME_GROUPS = [
     ],
   },
   {
-    // The chrome spec puts clear-formatting as a standalone control between the list
-    // group and the trailing review controls, flanked by separators.
+    // The chrome spec puts the formatting pair between the list group and the trailing
+    // review controls, flanked by separators.
     id: 'format',
-    labelKey: 'formattingBar.clearFormatting',
+    labelKey: 'formattingBar.groups.format',
     controls: [
+      {
+        // Word's Format Painter, and a toggle with THREE resting states rather than two:
+        // off, armed for one application, and locked on until Escape. The extra state is
+        // not in this descriptor — `toolbarCommandState` reports it as the control's
+        // `value`, the way the editing-mode pill reports which mode is live, because a
+        // descriptor cannot know what the engine is holding at this moment.
+        //
+        // A press means "capture and arm", and a press that lands inside the engine's
+        // double-press window means "lock". Both are one `runToolbarCommand` call: a host
+        // that bound its own `dblclick` beside its own `click` would be a second place the
+        // meaning of a double-click lives, and the two would drift.
+        id: 'painter',
+        labelKey: 'formattingBar.formatPainterShortcut',
+        paths: GENERATED_ICON_PATHS['format_paint'],
+        state: { kind: 'command' },
+      },
       {
         id: 'clear',
         labelKey: 'formattingBar.clearFormatting',
@@ -755,6 +771,7 @@ export type ChromeSlotId =
   | 'list.outdent'
   | 'list.indent'
   | 'list.lineSpacing'
+  | 'format.painter'
   | 'format.clear'
   | 'review.comments'
   | 'review.editingMode'
@@ -982,6 +999,9 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       // does not collapse.
       { kind: 'item', slot: 'paragraph.dialog' },
       { kind: 'separator' },
+      // PLAIN-LABEL key, stated rather than inherited: the registry's label is
+      // tooltip-shaped (it names both chords), and a menu row has its own shortcut column.
+      { kind: 'item', slot: 'format.painter', labelKey: 'formattingBar.formatPainter' },
       { kind: 'item', slot: 'format.clear' },
     ],
   },

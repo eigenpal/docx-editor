@@ -109,6 +109,9 @@ export const SLOT_PARITY: Readonly<Record<ChromeSlotId, ParityRule>> = Object.fr
   'list.outdent': { parity: 'same' },
   'list.indent': { parity: 'same' },
   'list.lineSpacing': { parity: 'same' },
+  // The painter copies and paints run and paragraph formatting, which is the whole subject
+  // of this contract: it means the same thing in a header as in the body.
+  'format.painter': { parity: 'same' },
   'format.clear': { parity: 'same' },
   'review.comments': { parity: 'same' },
   'review.editingMode': { parity: 'same' },

@@ -32,7 +32,7 @@ import {
   REFRESH_TOC_PATHS,
   REFRESH_TOC_PAGE_NUMBERS_PATHS,
 } from './contextmenu-icons';
-import { chromeIcon } from '../toolbar/ToolbarButton';
+import { chromeControlForSlot, chromeIcon } from '../toolbar/ToolbarButton';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The generic command row
@@ -275,6 +275,50 @@ export function ContextMenuPasteWithoutFormatting({
 }
 
 ContextMenuPasteWithoutFormatting.docxRow = 'edit.pasteWithoutFormatting' as const;
+
+/**
+ * The chrome registry's paintbrush, so the rows and the toolbar button draw one glyph.
+ *
+ * Read from the registry rather than copied into `contextmenu-icons.ts`: unlike Cut and
+ * Paste, the painter IS a chrome slot (`format.painter`), and a second copy of its path
+ * data is a silent visual drift the day the registry's changes.
+ */
+const FORMAT_PAINTER_PATHS: readonly string[] = chromeControlForSlot('format.painter')?.paths ?? [];
+
+/**
+ * Copy the formatting at the selection — the Format Painter's read half.
+ *
+ * Stays available in a read-only document, like Copy: it writes nothing.
+ *
+ * @public
+ */
+export const ContextMenuCopyFormatting = defineCommandRow(
+  'format.copyFormatting',
+  { type: 'copyFormatting' },
+  {
+    labelKey: 'contextMenu.copyFormatting',
+    shortcutKey: 'contextMenu.copyFormattingShortcut',
+    paths: FORMAT_PAINTER_PATHS,
+  }
+);
+
+/**
+ * Apply the copied formatting to the selection.
+ *
+ * Disabled with the engine's own reason until something has been copied, so the row says
+ * why rather than looking live and doing nothing.
+ *
+ * @public
+ */
+export const ContextMenuPasteFormatting = defineCommandRow(
+  'format.pasteFormatting',
+  { type: 'pasteFormatting' },
+  {
+    labelKey: 'contextMenu.pasteFormatting',
+    shortcutKey: 'contextMenu.pasteFormattingShortcut',
+    paths: FORMAT_PAINTER_PATHS,
+  }
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Table context rows — fixed commands, not chrome slots

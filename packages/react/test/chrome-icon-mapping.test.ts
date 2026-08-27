@@ -35,6 +35,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'text.color': 'format_color_text',
   'text.highlight': 'ink_highlighter',
   'text.link': 'link',
+  'format.painter': 'format_paint',
   'format.clear': 'format_clear',
   'alignment.left': 'format_align_left',
   'alignment.center': 'format_align_center',

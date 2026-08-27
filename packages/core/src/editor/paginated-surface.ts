@@ -157,6 +157,7 @@ import { createSurfaceCaret } from './surface-caret.ts';
 import { defaultTableLabel, type TableInteractionLabelKey } from './table-chrome.ts';
 import { createSurfaceTableInteraction } from './surface-table-interaction.ts';
 import { createSurfaceFormat } from './surface-format.ts';
+import { createSurfaceFormatPainter } from './surface-format-painter.ts';
 import {
   authoredRunPropertiesAt,
   mergedProperties,
@@ -938,6 +939,39 @@ export function mountPaginatedSurface(
   } | null = null;
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
+  /**
+   * Arm, replace, or clear the typing format at the caret (Word's stored marks).
+   *
+   * A named function rather than an inline dep because TWO lanes drive it: the formatting
+   * lane, when a toggle or a picker lands on a collapsed caret, and the format painter,
+   * when a paint lands on one. A second arming path would be a second place the base is
+   * captured and a second place the caret-move rule could be forgotten.
+   */
+  function setPendingFormats(next: readonly SurfaceProperty[] | null): void {
+    if (next === null || next.length === 0) {
+      if (!pendingFormats) return;
+      pendingFormats = null;
+    } else {
+      // Armed only at a collapsed caret — a range selection formats directly. The base
+      // is captured on the FIRST arm at this caret and kept across further presses:
+      // it is the face the user saw when they started pressing buttons.
+      const { anchor, head } = selection;
+      if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return;
+      const base =
+        armedAtCaret()?.base ??
+        authoredRunPropertiesAt(
+          session.partFor(storyScope()) ?? session.part(),
+          head.paragraphId,
+          head.offset,
+          revisionDisplayMode()
+        );
+      pendingFormats = { position: head, properties: next, base };
+    }
+    // Not document state, but observable state: the toolbar's Bold must light up NOW,
+    // and the snapshot cache invalidates on this report.
+    options.onChange?.(currentState());
+  }
+
   const format = createSurfaceFormat({
     session: gatedSession,
     storyScope,
@@ -953,28 +987,31 @@ export function mountPaginatedSurface(
     defaultParagraphStyleId: () => styleCascade()?.defaultParagraphStyleId ?? null,
     defaultFontFamily: () => options.defaultFontFamily ?? null,
     pendingFormats: () => pendingAtCaret(),
-    setPendingFormats: (next) => {
-      if (next === null || next.length === 0) {
-        if (!pendingFormats) return;
-        pendingFormats = null;
-      } else {
-        // Armed only at a collapsed caret — a range selection formats directly. The base
-        // is captured on the FIRST arm at this caret and kept across further presses:
-        // it is the face the user saw when they started pressing buttons.
-        const { anchor, head } = selection;
-        if (anchor.paragraphId !== head.paragraphId || anchor.offset !== head.offset) return;
-        const base =
-          armedAtCaret()?.base ??
-          authoredRunPropertiesAt(
-            session.partFor(storyScope()) ?? session.part(),
-            head.paragraphId,
-            head.offset,
-            revisionDisplayMode()
-          );
-        pendingFormats = { position: head, properties: next, base };
-      }
-      // Not document state, but observable state: the toolbar's Bold must light up NOW,
-      // and the snapshot cache invalidates on this report.
+    setPendingFormats,
+  });
+  const formatPainter = createSurfaceFormatPainter({
+    session: gatedSession,
+    storyScope,
+    layout: () => currentLayout,
+    selection: () => selection,
+    displayMode: () => revisionDisplayMode(),
+    commit: (run, nextSelection, commitOptions) => commit(run, nextSelection, commitOptions),
+    orderedRange: () => orderedRange(),
+    selectionMark: () => selectionMark(),
+    textOf: (paragraphId) => textOf(paragraphId),
+    paragraphOrder,
+    selectedCells: () => cellSelection?.cellIds,
+    // The painter's collapsed-caret lane IS the stored-marks lane — no second arming path,
+    // so a caret-painted format is discarded by a caret move like any other armed one.
+    armPendingFormats: (properties) => setPendingFormats(properties),
+    now,
+    publish: () => {
+      // The armed cursor is the ONLY thing on screen that says the next drag will paint,
+      // and it lives on the pages layer rather than on a class the host owns — a host that
+      // renders no toolbar still gets the affordance.
+      const armed = formatPainter.state().mode !== 'off';
+      if (armed) pagesLayer.dataset['formatPainter'] = '';
+      else delete pagesLayer.dataset['formatPainter'];
       options.onChange?.(currentState());
     },
   });
@@ -2622,6 +2659,7 @@ export function mountPaginatedSurface(
         activeControlId: contentControlAtCaret()?.id ?? null,
       },
       contextTocId,
+      formatPainter: formatPainter.state(),
       perf: {
         layoutMs: lastLayoutMs,
         paintMs: lastPaintMs,
@@ -5113,6 +5151,7 @@ export function mountPaginatedSurface(
     hyperlinks,
     equations,
     contentControls: contentControlsOps,
+    formatPainter,
     canInsertTable,
     insertTable,
     canInsertToc,
@@ -6024,6 +6063,9 @@ export function mountPaginatedSurface(
       // threw the reader back to page 1 before the caret it had just placed could be seen.
       // The caret is positioned from layout regardless, so nothing needs the browser's scroll.
       focus: () => pagesLayer.focus({ preventScroll: true }),
+      // An armed format painter paints the selection the gesture just produced. Word's
+      // gesture exactly: arm, then drag over the text that should take the formatting.
+      onSelectionSettled: () => formatPainter.applyIfArmed(),
       activeHeaderFooter: () => pointerHeaderFooterState(hfScope?.getActive() ?? null),
       activeNote: () => {
         const scope = noteOps?.activeNoteScope();

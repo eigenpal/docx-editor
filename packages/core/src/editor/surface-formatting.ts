@@ -16,6 +16,7 @@ import {
   type PageRecord,
   type ParagraphFragmentRecord,
   type ParagraphIndent,
+  type ResolvedRunStyle,
   type ResolvedTabStops,
   type SemanticLayout,
   type SemanticSelection,
@@ -485,6 +486,22 @@ function selectionSpans(
   // named no story, and the body's order is wrong for every caret outside it — which is the
   // exact defect the parameter above exists to prevent, left standing in its own fallback.
   return spansInSelection(layout, selection, paragraphOrder ?? everyStoryOrder(layout));
+}
+
+/**
+ * The RESOLVED run style at the selection, taken from its first span.
+ *
+ * The cascade rather than the authored properties, which is what the format painter needs:
+ * a run in a styled paragraph states almost nothing itself, so copying its `w:rPr` would
+ * copy nothing and painting it would change nothing the reader can see.
+ */
+export function selectionRunStyle(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  cells?: readonly string[],
+  paragraphOrder?: readonly string[]
+): ResolvedRunStyle | null {
+  return selectionSpans(layout, selection, cells, paragraphOrder)[0]?.style ?? null;
 }
 
 /** The run properties in force across the selection, taken from its first span. */

@@ -46,7 +46,8 @@
       "alignment": "יישור טקסט",
       "listFormatting": "עיצוב רשימה",
       "image": "תמונה",
-      "table": "טבלה"
+      "table": "טבלה",
+      "format": null
     },
     "undo": "בטל",
     "undoShortcut": "בטל (Ctrl+Z)",
@@ -74,7 +75,9 @@
     "unavailableInPreview": "לא זמין בגרסת תצוגה מקדימה זו",
     "more": "עוד",
     "altText": "טקסט חלופי",
-    "imageWrap": "גלישת טקסט"
+    "imageWrap": "גלישת טקסט",
+    "formatPainter": null,
+    "formatPainterShortcut": null
   },
   "alignment": {
     "alignLeft": "יישור לשמאל",
@@ -335,7 +338,11 @@
     "editCustomNode": "ערוך {label}",
     "removeCustomNode": "הסר {label}",
     "pasteWithoutFormatting": null,
-    "pasteWithoutFormattingShortcut": null
+    "pasteWithoutFormattingShortcut": null,
+    "copyFormatting": null,
+    "copyFormattingShortcut": null,
+    "pasteFormatting": null,
+    "pasteFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "מתווה המסמך",
@@ -730,7 +737,8 @@
     "suggestingSectionBreak": null,
     "tableCellSectionBreak": null,
     "lockedSectionBreak": null,
-    "lockedContentBreak": null
+    "lockedContentBreak": null,
+    "noCopiedFormatting": null
   },
   "equationPopup": {
     "apply": null,

@@ -94,7 +94,7 @@ describe('DocxEditorContextMenu', () => {
     }
   });
 
-  test('the default set is eight packaged rows ending with review.comments', async () => {
+  test('the default set is the packaged rows, ending with review.comments', async () => {
     const mounted = mountMenu();
     try {
       await flush();
@@ -104,6 +104,8 @@ describe('DocxEditorContextMenu', () => {
         'edit.copy',
         'edit.paste',
         'edit.pasteWithoutFormatting',
+        'format.copyFormatting',
+        'format.pasteFormatting',
         'edit.delete',
         'edit.selectAll',
         'text.link',

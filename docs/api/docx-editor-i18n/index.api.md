@@ -54,6 +54,9 @@ export type PartialLocaleStrings = DeepPartial<LocaleStrings> & {
 export const pl: PartialLocaleStrings;
 
 // @public
+export function platformShortcut(text: string): string;
+
+// @public
 export const ptBR: PartialLocaleStrings;
 
 // @public

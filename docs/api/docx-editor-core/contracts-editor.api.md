@@ -626,7 +626,7 @@ export type EditorCommand = {
 }[keyof EditorCommands];
 
 // @public
-export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands {
+export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHeaderFooterCommands, EditorNoteCommands, EditorFormatPainterCommands {
     clearFormatting: Record<never, never>;
     commitTableColumnDividerResize: {
         leftWidthTwips: number;
@@ -887,6 +887,12 @@ export class EditorFontError extends Error {
 
 // @public
 export type EditorFontErrorCode = 'initializationFailed' | 'wasmUnavailable' | 'missing' | 'forbidden' | 'overLimit' | 'malformed' | 'hashMismatch' | 'metadataMismatch' | 'fontFaceLoadFailed' | 'unsupportedFaceIndex' | 'missingFont' | 'hashInvalid' | 'fontMismatch' | 'unsupportedFace' | 'loadFailed';
+
+// @public
+export interface EditorFormatPainterCommands {
+    copyFormatting: Record<never, never>;
+    pasteFormatting: Record<never, never>;
+}
 
 // @public
 export interface EditorHeaderFooterCommands {

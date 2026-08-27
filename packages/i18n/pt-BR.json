@@ -46,7 +46,8 @@
       "alignment": "Alinhamento",
       "listFormatting": "Formatação de lista",
       "image": "Imagem",
-      "table": "Tabela"
+      "table": "Tabela",
+      "format": null
     },
     "undo": "Desfazer",
     "undoShortcut": "Desfazer (Ctrl+Z)",
@@ -74,7 +75,9 @@
     "unavailableInPreview": "Não disponível nesta versão de visualização",
     "more": "Mais",
     "altText": "Texto alternativo",
-    "imageWrap": "Quebra de texto automática"
+    "imageWrap": "Quebra de texto automática",
+    "formatPainter": null,
+    "formatPainterShortcut": null
   },
   "alignment": {
     "alignLeft": "Alinhar à esquerda",
@@ -335,7 +338,11 @@
     "editCustomNode": "Editar {label}",
     "removeCustomNode": "Remover {label}",
     "pasteWithoutFormatting": null,
-    "pasteWithoutFormattingShortcut": null
+    "pasteWithoutFormattingShortcut": null,
+    "copyFormatting": null,
+    "copyFormattingShortcut": null,
+    "pasteFormatting": null,
+    "pasteFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "Estrutura do documento",
@@ -730,7 +737,8 @@
     "suggestingSectionBreak": null,
     "tableCellSectionBreak": null,
     "lockedSectionBreak": null,
-    "lockedContentBreak": null
+    "lockedContentBreak": null,
+    "noCopiedFormatting": null
   },
   "equationPopup": {
     "apply": null,

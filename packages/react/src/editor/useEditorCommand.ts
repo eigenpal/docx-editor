@@ -45,16 +45,31 @@ export interface EditorCommandState {
   readonly isEnabled: boolean;
   /** The engine's reason when disabled — surface it as a tooltip, never invent one. */
   readonly disabledReason: string | null;
+  /**
+   * What the control SHOWS, for the slots whose answer is a value rather than a pressed
+   * state — the editing-mode pill, and the format painter's `off` / `once` / `locked`.
+   *
+   * `isActive` cannot express it: "armed for one paint" and "locked on until Escape" are
+   * both pressed, and only one of them ends with a keystroke. Null for every slot whose
+   * state really is just pressed-or-not, and for the raw-command form.
+   */
+  readonly value: string | null;
 }
 
 interface CommandSlice {
   readonly active: boolean;
   readonly enabled: boolean;
   readonly disabledReason: string | null;
+  readonly value: string | null;
 }
 
 function commandSliceEqual(a: CommandSlice, b: CommandSlice): boolean {
-  return a.active === b.active && a.enabled === b.enabled && a.disabledReason === b.disabledReason;
+  return (
+    a.active === b.active &&
+    a.enabled === b.enabled &&
+    a.disabledReason === b.disabledReason &&
+    a.value === b.value
+  );
 }
 
 /** A slot is a string; a command is an object with a `type`. */
@@ -103,14 +118,18 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
           active: state.active,
           enabled: state.enabled,
           disabledReason: localizeDisabledReason(state.disabledReason, t),
+          value: state.value ?? null,
         };
       }
-      if (!editor) return { active: false, enabled: false, disabledReason: null };
+      if (!editor) return { active: false, enabled: false, disabledReason: null, value: null };
       const allowed = editor.can(current);
       return {
         active: editor.isActive(current),
         enabled: allowed.ok,
         disabledReason: allowed.ok ? null : localizeDisabledReason(allowed.reason ?? null, t),
+        // A raw command has no registry slot to report a value FOR — `toolbarCommandState`
+        // is the only thing that derives one.
+        value: null,
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the target's identity-stable shape
@@ -134,6 +153,7 @@ export function useEditorCommand(target: ChromeSlotId | EditorCommand): EditorCo
       isActive: slice.active,
       isEnabled: slice.enabled,
       disabledReason: slice.disabledReason,
+      value: slice.value,
     }),
     [execute, slice]
   );

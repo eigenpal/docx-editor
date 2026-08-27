@@ -224,6 +224,11 @@ export const ContextMenuCopy: ((input: ContextMenuCommandProps) => react.JSX.Ele
 };
 
 // @public
+export const ContextMenuCopyFormatting: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
+
+// @public
 export const ContextMenuCut: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
     docxRow: string;
 };
@@ -295,6 +300,11 @@ export namespace ContextMenuPaste {
     var // (undocumented)
     docxRow: "edit.paste";
 }
+
+// @public
+export const ContextMenuPasteFormatting: ((input: ContextMenuCommandProps) => react.JSX.Element | null) & {
+    docxRow: string;
+};
 
 // @public
 export function ContextMenuPasteWithoutFormatting(input: ContextMenuCommandProps): react.JSX.Element | null;
@@ -979,6 +989,7 @@ export interface EditorCommandState {
     readonly execute: () => boolean;
     readonly isActive: boolean;
     readonly isEnabled: boolean;
+    readonly value: string | null;
 }
 
 export { EditorFontError }

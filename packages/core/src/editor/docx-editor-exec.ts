@@ -69,6 +69,18 @@ export function execEditorCommand(
     case 'clearFormatting':
       mounted.clearFormatting();
       break;
+    case 'copyFormatting':
+      // Reports for itself: nothing about the DOCUMENT moved, so the revision comparison the
+      // caller falls back to would answer `changed: false` for a capture that succeeded and
+      // for one that found no span alike.
+      return mounted.formatPainter.capture()
+        ? { ok: true, changed: false }
+        : { ok: false, code: 'notFound', reason: 'there is nothing at the selection to copy' };
+    case 'pasteFormatting':
+      // An empty capture is refused by `gateCommand`, which both `can` and `exec` go
+      // through — one authority, so the button's reason and the refusal are one sentence.
+      mounted.formatPainter.apply();
+      break;
     case 'setLineSpacing':
       // `w:line` is 240ths of a line under `auto` and twentieths of a point otherwise —
       // one attribute, two units, which is exactly why the command takes the rule's own.

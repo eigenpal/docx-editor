@@ -256,6 +256,13 @@ export const CHROME_GROUPS: readonly [{
     readonly labelKey: "formattingBar.groups.listFormatting";
 }, {
     readonly controls: readonly [{
+        readonly id: "painter";
+        readonly labelKey: "formattingBar.formatPainterShortcut";
+        readonly paths: readonly string[];
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
         readonly id: "clear";
         readonly labelKey: "formattingBar.clearFormatting";
         readonly paths: readonly string[];
@@ -264,7 +271,7 @@ export const CHROME_GROUPS: readonly [{
         };
     }];
     readonly id: "format";
-    readonly labelKey: "formattingBar.clearFormatting";
+    readonly labelKey: "formattingBar.groups.format";
 }, {
     readonly controls: readonly [{
         readonly id: "comments";
@@ -658,7 +665,7 @@ export interface ChromeMenuSubmenuEntry {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -1368,6 +1375,7 @@ export interface PaginatedSurface {
     flushPendingInput(): void;
     // (undocumented)
     focus(): void;
+    readonly formatPainter: FormatPainterOps;
     formatting(): SurfaceFormatting;
     headerFooterState(): {
         readonly editing: 'header' | 'footer' | null;
@@ -1548,6 +1556,7 @@ export interface PaginatedSurfaceState {
     readonly collaborationStatus: CollaborationStatus | 'inactive';
     readonly contentControls: ContentControlSurfaceState;
     readonly contextTocId: string | null;
+    readonly formatPainter: FormatPainterSurfaceState;
     // (undocumented)
     readonly lastRejection: string | null;
     // (undocumented)

@@ -46,7 +46,8 @@
       "alignment": "Hizalama",
       "listFormatting": "Liste biçimlendirme",
       "image": "Görsel",
-      "table": "Tablo"
+      "table": "Tablo",
+      "format": null
     },
     "undo": "Geri al",
     "undoShortcut": "Geri al (Ctrl+Z)",
@@ -74,7 +75,9 @@
     "unavailableInPreview": "Bu önizleme sürümünde kullanılamaz",
     "more": "Diğer",
     "altText": "Alternatif metin",
-    "imageWrap": "Metni kaydır"
+    "imageWrap": "Metni kaydır",
+    "formatPainter": null,
+    "formatPainterShortcut": null
   },
   "alignment": {
     "alignLeft": "Sola hizala",
@@ -335,7 +338,11 @@
     "editCustomNode": "{label} öğesini düzenle",
     "removeCustomNode": "{label} öğesini kaldır",
     "pasteWithoutFormatting": null,
-    "pasteWithoutFormattingShortcut": null
+    "pasteWithoutFormattingShortcut": null,
+    "copyFormatting": null,
+    "copyFormattingShortcut": null,
+    "pasteFormatting": null,
+    "pasteFormattingShortcut": null
   },
   "documentOutline": {
     "ariaLabel": "Belge ana hattı",
@@ -730,7 +737,8 @@
     "suggestingSectionBreak": null,
     "tableCellSectionBreak": null,
     "lockedSectionBreak": null,
-    "lockedContentBreak": null
+    "lockedContentBreak": null,
+    "noCopiedFormatting": null
   },
   "equationPopup": {
     "apply": null,
