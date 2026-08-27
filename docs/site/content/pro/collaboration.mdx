@@ -1,41 +1,73 @@
 ---
-title: 'Realtime collaboration'
-description: 'Replicate a DOCX across peers with the Pro collaboration module. Open a room with the framework hook, then pass the document and modules to the editor.'
+title: 'Real-time collaboration'
+description: 'Replicate a DOCX across peers with the Pro collaboration module.'
 category: 'Pro'
 order: 64
 ---
 
-Realtime collaboration replicates the canonical document across peers.
+Real-time collaboration replicates the document across peers.
 
-It covers text, structure, formatting, tables, headers, footers, notes, drawings, relationships, and embedded parts. Peers also share presence and remote selections that can span paragraphs.
+It covers text, structure, formatting, tables, headers, footers, notes,
+drawings, relationships, and embedded parts. Peers also share presence and
+remote selections across paragraphs.
 
-Collaboration requires the collaboration module from [`@docx-editor.dev/pro`](/docs/2.x/pro).
+Collaboration requires the collaboration module from
+[`@docx-editor.dev/pro`](/docs/2.x/pro).
 
-Without that module, the editor does not attach a replica. Local undo stays in charge, and `snapshot().collaborationStatus` is `'inactive'`.
+Without that module, the editor does not attach a replica. Local undo remains
+active. `snapshot().collaborationStatus` is `'inactive'`.
+
+```mermaid
+flowchart LR
+  accTitle: Collaboration between two document editors
+  accDescr: Each editor updates a local document and Yjs document. A provider synchronizes both Yjs documents.
+  subgraph A[Peer A]
+    EA[Editor] <--> DA[Local document]
+    DA <--> YA[Yjs document]
+  end
+  YA <--> T[WebRTC, Hocuspocus, or custom provider]
+  T <--> YB[Yjs document]
+  subgraph B[Peer B]
+    YB <--> DB[Local document]
+    DB <--> EB[Editor]
+  end
+```
 
 ## Prerequisites
 
-Install the Pro package plus Yjs. Add `y-webrtc` when you use the WebRTC helper, or `@hocuspocus/provider` when you use the Hocuspocus helper:
+Install the Pro package and Yjs. Add `y-webrtc` for the WebRTC helper. Add
+`@hocuspocus/provider` for the Hocuspocus helper.
 
 ```bash
 npm install @docx-editor.dev/pro yjs y-webrtc
 ```
 
-`yjs`, `y-webrtc`, and `@hocuspocus/provider` are optional peers of Pro. `y-protocols` installs with Pro.
+`yjs`, `y-webrtc`, and `@hocuspocus/provider` are optional Pro peer
+dependencies. Pro installs `y-protocols`.
 
 ## Open a room with the hook
 
-`useWebrtcCollaboration` owns the WebRTC room. It creates the replica, builds `modules`, and destroys the room when you leave.
+`useWebrtcCollaboration` owns the WebRTC room. It creates the replica and
+builds `modules`. It destroys the room when you leave.
 
-The hook lives on a WebRTC subpath so a review-only bundle does not load a network provider. Import `@docx-editor.dev/pro/react/webrtc` or `@docx-editor.dev/pro/vue/webrtc`.
+The WebRTC subpath keeps the network provider out of review-only bundles.
+Import `@docx-editor.dev/pro/react/webrtc` or
+`@docx-editor.dev/pro/vue/webrtc`.
 
-Pass `room` to connect when the component mounts. Call `leave` when the session should end. While `pending` is true, wait before you mount the editor.
+Pass `room` to connect when the component mounts. Call `leave` to end the
+session. Do not mount the editor while `pending` is true.
 
-The hook returns a host session (`CollaborationSession`). That type exposes identity, status, presence, and undo. It does not expose `attach` or `gateOperations`. `CollaborationSession`, `CollaborationStatus`, and `CollaborationFailure` are exported as types from `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
+The hook returns a `CollaborationSession`. It exposes identity, status,
+presence, and undo. It does not expose `attach` or `gateOperations`.
+`CollaborationSession`, `CollaborationStatus`, and `CollaborationFailure` are
+exported types from `@docx-editor.dev/pro/react` and
+`@docx-editor.dev/pro/vue`.
 
-`error` is a `CollaborationFailure`. Branch on `error.code` instead of matching message strings.
+`error` is a `CollaborationFailure`. Branch on `error.code` instead of matching
+message strings.
 
-The sugar `<DocxEditor>` host accepts `document` and `modules`. You do not need `DocxEditor.Root` to collaborate.
+The `<DocxEditor>` host accepts `document` and `modules`. You do not need
+`DocxEditor.Root` for collaboration.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -45,7 +77,12 @@ import { useRef } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 
-export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: Uint8Array }) {
+type CollaborativeEditorProps = {
+  roomId: string;
+  bytes: Uint8Array;
+};
+
+export function CollaborativeEditor({ roomId, bytes }: CollaborativeEditorProps) {
   const editorRef = useRef<DocxEditorRef>(null);
   const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
     room: {
@@ -56,10 +93,11 @@ export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: 
   });
 
   async function leaveRoom() {
-    // `leave` requires the current bytes. The hook cannot read them itself, and
-    // anything else would drop what the room typed.
+    // `leave` requires current bytes. The hook cannot read them.
     const saved = await editorRef.current?.save();
-    if (saved) leave(new Uint8Array(saved));
+    if (saved) {
+      leave(new Uint8Array(saved));
+    }
   }
 
   if (error) return <p>{error.detail ?? error.code}</p>;
@@ -97,9 +135,11 @@ const { document, modules, session, pending, error, leave } = useWebrtcCollabora
 });
 
 async function leaveRoom() {
-  // `leave` requires the current bytes so nothing the room typed is lost.
+  // `leave` requires current bytes.
   const saved = await editorRef.value?.save();
-  if (saved) leave(new Uint8Array(saved));
+  if (saved) {
+    leave(new Uint8Array(saved));
+  }
 }
 </script>
 
@@ -116,44 +156,71 @@ async function leaveRoom() {
 </Framework>
 </FrameworkTabs>
 
-With `create-or-join`, every peer can open the same room with the same options. The first peer finds no room and seeds it from `document`. Every later peer finds the room and joins it, so no host has to decide out-of-band which peer creates the room. The `create` and `join` kinds remain available for hosts that already know their role.
+With `create-or-join`, every peer uses the same options. The first peer seeds
+the empty room from `document`. Later peers join the existing room. Use
+`create` or `join` when each host already knows its role.
 
-Two peers that seed the same room at the same time, without seeing each other, produce a room no client can repair. Every replica then reports the failure code `concurrent-seed` and stops. Recover by creating a new room from bytes you saved.
+Two isolated peers can seed the same room at the same time. This creates a room
+that clients cannot repair. Each replica reports `concurrent-seed` and stops.
+Create a new room from saved bytes.
 
-Omit `room` when the user chooses share or join later. Call `connect` with the same options after that choice. `connect` and `leave` keep a stable identity across renders.
+Omit `room` when the user chooses to share or join later. Then call `connect`
+with the same options. `connect` and `leave` keep stable identities across
+renders.
 
-The editor reads `modules` at construction time. Set `key` to the session `sessionId`, as in the examples. Without the `key`, a connect after mount leaves the collaboration module unregistered, the editor keeps editing locally, and nothing replicates. The session logs a console warning when it is created but never attached.
+The editor reads `modules` at construction time. Set `key` to the session
+`sessionId`, as shown in the examples. Without `key`, a connection after mount
+does not register the collaboration module. The editor continues local editing,
+and no changes replicate. The session logs a warning if you create it without
+attaching it.
 
-The hook also returns `ydoc` and `provider` (both `null` while pending), so you can add persistence such as `y-indexeddb` or drive the provider directly. `rejoin(bytes)` recovers from an `error` status: it leaves with your saved bytes and reconnects to the same room as a joiner.
+The hook also returns `ydoc` and `provider`. Both values are `null` while the
+connection is pending. Use them for persistence or direct provider access.
+`rejoin(bytes)` leaves with saved bytes and rejoins the same room after an
+`error` status.
 
-The default Pro entry re-exports `collaborationModule` and does not import a network provider. Import `@docx-editor.dev/pro/collaboration` for the Yjs factories. Import `@docx-editor.dev/pro/collaboration/webrtc` for room helpers such as `createCollaborationRoomId`.
+The default Pro entry exports `collaborationModule` without a network provider.
+Import `@docx-editor.dev/pro/collaboration` for Yjs factories. Import
+`@docx-editor.dev/pro/collaboration/webrtc` for room helpers such as
+`createCollaborationRoomId`.
 
 ## Show status and participants
 
-`useCollaborationStatus(session)` returns the live status and last failure. `useCollaborationParticipants(session)` returns the people in the room for a presence list. Both live on `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
+`useCollaborationStatus(session)` returns the live status and last failure.
+`useCollaborationParticipants(session)` returns the room participants. Both
+APIs are available from `@docx-editor.dev/pro/react` and
+`@docx-editor.dev/pro/vue`.
 
-When you own the Yjs resources yourself, `useDocumentCollaboration` from the same entries gives you the identical `connect`/`leave` lifecycle over `createDocumentCollaboration`, with no WebRTC import.
+If you own the Yjs resources, use `useDocumentCollaboration` from the same
+entries. It provides the same `connect` and `leave` lifecycle without WebRTC.
 
 ## Presence UI
 
-`DocxEditorCollaboration` is the packaged presence chrome. It lives on `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`, and its parts mount anywhere inside the editor provider tree.
+`DocxEditorCollaboration` provides presence controls. Import it from
+`@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue`. Mount its parts
+anywhere in the editor provider tree.
 
-`DocxEditorCollaboration.Avatars` renders everyone in the room as an initials stack, the local person first:
+`DocxEditorCollaboration.Avatars` renders participant initials. It puts the
+local participant first.
 
 ```tsx
 <DocxEditorCollaboration.Avatars session={session} max={4} />
 ```
 
-Avatar colors resolve through the review author roster, so a collaborator's avatar automatically matches the color of their tracked changes and comments. `max` collapses the overflow into a `+N` chip, and `DocxEditorCollaboration.Avatar` renders one participant when you arrange your own stack.
+Avatar colors match each collaborator's tracked changes and comments. `max`
+collapses extra avatars into a `+N` chip. Use
+`DocxEditorCollaboration.Avatar` to render one participant.
 
-`DocxEditorCollaboration.CaretLabels` replaces the content of each remote caret label with your own component. The engine keeps positioning and coloring the label; your renderer mounts in the normal adapter tree, so every hook works inside it — `useDocxEditor`, `useEditorState`, and the review hooks all see the opened document, not only the collaborator:
+`DocxEditorCollaboration.CaretLabels` replaces each remote caret label. The
+engine positions and colors the label. Your renderer mounts in the adapter
+tree, so editor and review hooks work inside it.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
 <DocxEditorCollaboration.CaretLabels session={session}>
-  {({ selection, participant, color }) => <MyLabel name={selection.name} color={color} />}
+  {({ selection, color }) => <MyLabel name={selection.name} color={color} />}
 </DocxEditorCollaboration.CaretLabels>
 ```
 
@@ -169,27 +236,44 @@ Avatar colors resolve through the review author roster, so a collaborator's avat
 </Framework>
 </FrameworkTabs>
 
-In Vue the renderer is the default scoped slot with the same `{ selection, participant, color }` shape. Without a renderer, the label shows the collaborator's name, which is the engine default.
+In Vue, the renderer is the default scoped slot. It receives
+`{ selection, participant, color }`. Without a renderer, the label shows the
+collaborator's name.
 
-The label layer is page furniture. The engine marks the layer `aria-hidden` and turns off pointer events on it. Screen readers don't announce label content, and nothing inside a label is clickable or focusable. Keep interactive or announced presence UI in your own chrome, such as the avatar stack.
+The engine marks the label layer `aria-hidden` and disables pointer events.
+Screen readers do not announce label content. Label content cannot receive
+clicks or focus. Put interactive or announced presence controls in your own
+chrome.
 
-For CSS-only styling, the stable surface is the `docx-remote-caret-label` class on each label, the `--doc-remote-color` custom property that carries its resolved accent, and the `data-docx-remote-actor` attribute that names the actor while a label host is registered.
+For CSS styling, use the `docx-remote-caret-label` class,
+`--doc-remote-color` custom property, and `data-docx-remote-actor` attribute.
 
 ## Edit offline
 
-Pass `offlineEditing: true` in the `room` or `connect` options to keep editing through a transport drop. The session then admits edits while the status is `disconnected`, and the buffered updates merge on reconnect like any concurrent edit. Show the status in your interface when you enable this, so people know when their edits have not reached the room yet. The `error` status stays terminal either way. Every room factory and hook accepts the option.
+Set `offlineEditing: true` in the `room` or `connect` options. The session then
+accepts edits while its status is `disconnected`. It merges buffered updates
+after reconnection. Show the status so users know when edits have not reached
+the room. The `error` status remains terminal. Every room factory and hook
+accepts this option.
 
 ## Use your own signaling
 
-`DEMO_SIGNALING_ENDPOINTS` is a public demo signaling service. Production deployments must supply their own signaling and TURN servers.
+`DEMO_SIGNALING_ENDPOINTS` is a public demo signaling service. Do not use it
+for production.
 
-For production, pass your own `signaling` URLs to `connect` or to the `room` option. You also need your own TURN servers. WebRTC peers cannot connect across many networks without TURN.
+For production, pass your signaling URLs to `connect` or `room`. Also provide
+your own Traversal Using Relays around NAT (TURN) servers. Many networks block
+direct WebRTC connections without TURN.
 
 ## Hocuspocus
 
-`useHocuspocusCollaboration` owns a room on a [Hocuspocus](https://tiptap.dev/docs/hocuspocus) server. It has the same surface as `useWebrtcCollaboration`: the same `room` option, the same returns, and the same `leave` and `rejoin` contract. A server-backed room needs no signaling or TURN configuration.
+`useHocuspocusCollaboration` owns a room on a
+[Hocuspocus](https://tiptap.dev/docs/hocuspocus) server. It has the same
+options, return values, and lifecycle as `useWebrtcCollaboration`. A
+server-backed room does not need signaling or TURN configuration.
 
-The hook lives on its own subpath. Import `@docx-editor.dev/pro/react/hocuspocus`, or `@docx-editor.dev/pro/vue/hocuspocus` for the Vue composable:
+Import the hook from `@docx-editor.dev/pro/react/hocuspocus`. Import the Vue
+composable from `@docx-editor.dev/pro/vue/hocuspocus`.
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -221,20 +305,38 @@ export function ServerBackedEditor({
 }
 ```
 
-`token` reaches your server's `onAuthenticate` hook. Pass a callback instead of a string when tokens expire: the provider calls it again on every reconnect, so each attempt sends a fresh value. When the server rejects the token during a join, the hook fails fast with the failure code `initialization-aborted` and a detail that names authentication. After a successful join, a rejected token sets the session status to `error` with the detail `authentication-failed`. `syncedTimeoutMs` bounds how long a join waits for the server's initial sync. The default is 30 seconds, after which the join fails with `initialization-timeout`. The factory version, `createHocuspocusCollaboration` on `@docx-editor.dev/pro/collaboration/hocuspocus`, takes the same options and returns the room with its `ydoc` and `provider`.
+`token` reaches the server's `onAuthenticate` hook. If tokens expire, pass a
+callback instead of a string. The provider calls it for each reconnection.
 
-The Hocuspocus v4 server runs on Node, not Bun. The provider performs the required authentication handshake, so always use `@hocuspocus/provider` rather than a hand-written WebSocket client.
+A rejected token during the initial join produces `initialization-aborted`.
+After a successful join, rejection sets the status to `error` with
+`authentication-failed`. `syncedTimeoutMs` limits the initial sync wait. Its
+default is 30 seconds. A timeout produces `initialization-timeout`.
+
+The `createHocuspocusCollaboration` factory accepts the same options. Import it
+from `@docx-editor.dev/pro/collaboration/hocuspocus`. It returns the room,
+`ydoc`, and `provider`.
+
+The Hocuspocus v4 server runs on Node, not Bun. Use
+`@hocuspocus/provider` for the required authentication handshake.
 
 ## Own a Yjs document
 
-If you already own a `Y.Doc` and awareness instance, call `createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It replicates the whole canonical package, which is what the WebRTC wrapper and the module use. You destroy those resources.
+If you own a `Y.Doc` and awareness instance, call
+`createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It
+replicates the complete canonical package. You must destroy these resources.
 
 Four rules make a bring-your-own-provider integration work:
 
-1. Connect your provider before you pass `bootstrap: { kind: 'join' }`. The factory reads already-synced shared state. A joiner with no connected provider fails with `initialization-timeout` after 30 seconds.
-2. Pass an `Awareness` instance from `y-protocols/awareness`. Presence and remote selections travel through it.
-3. Wire your provider's connection events to `session.setTransportStatus`. Without that call, the status stays `ready` during an outage and users get no signal.
-4. Large documents exceed the single-message ceiling of some transports. The WebRTC wrapper installs its own message framing. A WebSocket provider does not need it.
+1. Connect the provider before you use `bootstrap: { kind: 'join' }`. The
+   factory reads synchronized shared state. Without a connection, the join
+   fails with `initialization-timeout` after 30 seconds.
+2. Pass an `Awareness` instance from `y-protocols/awareness`. It carries
+   presence and remote selections.
+3. Send provider connection events to `session.setTransportStatus`. Without
+   this call, the status remains `ready` during an outage.
+4. Some transports limit message size. The WebRTC wrapper provides message
+   framing. A WebSocket provider does not need it.
 
 This example wires `y-websocket`:
 
@@ -266,19 +368,41 @@ provider.on('status', ({ status }: { status: string }) => {
 });
 ```
 
-The factory rejects with a typed `CollaborationSchemaError`. The codes you handle in this flow are `initialization-timeout` (no synced room appeared), `document-id-mismatch` (the room replicates a different `documentId`), and `protocol-version-mismatch` or `schema-version-mismatch` (the room uses a different protocol or schema version).
+The factory rejects with a typed `CollaborationSchemaError`. Handle these
+codes:
 
-Pair the server with Yjs 13. The `y-websocket` package's own server (`bin/server.cjs`) and Hocuspocus both work unchanged. The `@y/websocket-server` package targets the Yjs 14 release candidate: it completes the initial sync and relays presence, but it does not relay live Yjs 13 updates, which looks like a silently frozen document.
+- `initialization-timeout`: No synchronized room appeared.
+- `document-id-mismatch`: The room has a different `documentId`.
+- `protocol-version-mismatch`: The room uses a different protocol version.
+- `schema-version-mismatch`: The room uses a different schema version.
+
+Use Yjs 13 on the server. The `y-websocket` server (`bin/server.cjs`) and
+Hocuspocus support it. `@y/websocket-server` targets the Yjs 14 release
+candidate. It synchronizes initial state and presence, but not live Yjs 13
+updates. This incompatibility makes the document appear frozen.
 
 ### Recover from an error
 
-A session that reports status `error` cannot repair itself. You own the Yjs resources, so you own the recovery. Save the editor bytes first with `await editor.save()`. Destroy the room with `room.destroy()`, then destroy your provider. Create a fresh `Y.Doc`, a fresh `Awareness`, and a fresh provider. Connect the provider, then call `createDocumentCollaboration` again with `bootstrap: { kind: 'join' }`. Keep the editor mounted on the saved bytes until the new room is ready. If the join fails, the saved bytes keep your local work.
+An `error` session cannot repair itself. Recover it as follows:
 
-The same entry exports `createTextCollaboration`, which replicates paragraph text alone and refuses structural edits. It is an experimental proof. Use `createDocumentCollaboration`.
+1. Save the editor bytes with `await editor.save()`.
+2. Call `room.destroy()`, then destroy the provider.
+3. Create a new `Y.Doc`, `Awareness`, and provider.
+4. Connect the provider.
+5. Call `createDocumentCollaboration` with
+   `bootstrap: { kind: 'join' }`.
+
+Keep the editor mounted with the saved bytes until the room is ready. If the
+join fails, the saved bytes preserve the local work.
+
+The same entry exports the experimental `createTextCollaboration`. It only
+replicates paragraph text and rejects structural edits. Use
+`createDocumentCollaboration`.
 
 ## Headless replica
 
-`DocxEditor.createCollaborative` on `@docx-editor.dev/editor-api` opens a DOM-free replica. It registers the session through the same module seam.
+`DocxEditor.createCollaborative` from `@docx-editor.dev/editor-api` opens a
+Document Object Model (DOM)-free replica.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -297,11 +421,12 @@ const runtime = await DocxEditor.createCollaborative(room.document, room.session
 });
 ```
 
-Call `room.destroy()` when the replica should stop.
+Call `room.destroy()` to stop the replica.
 
 ## Compose the editor
 
-Use `DocxEditor.Root`, `Viewport`, and `Content` when you need custom chrome around the same `document` and `modules` values.
+Use `DocxEditor.Root`, `Viewport`, and `Content` for custom controls. Pass the
+same `document` and `modules` values.
 
 <FrameworkTabs>
 <Framework value="react">
@@ -316,7 +441,12 @@ function Status({ session }: { session: CollaborationSession | null }) {
   return <span>{status}</span>;
 }
 
-export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: Uint8Array }) {
+type CollaborativeEditorProps = {
+  roomId: string;
+  bytes: Uint8Array;
+};
+
+export function CollaborativeEditor({ roomId, bytes }: CollaborativeEditorProps) {
   const collaboration = useWebrtcCollaboration({
     room: {
       roomId,
@@ -324,7 +454,9 @@ export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: 
       bootstrap: { kind: 'create', document: bytes },
     },
   });
-  if (collaboration.pending || !collaboration.document) return <p>Connecting…</p>;
+  if (collaboration.pending || !collaboration.document) {
+    return <p>Connecting…</p>;
+  }
   return (
     <DocxEditor.Root document={collaboration.document} modules={collaboration.modules}>
       <Status session={collaboration.session} />
@@ -371,34 +503,49 @@ const { status } = useCollaborationStatus(session);
 </Framework>
 </FrameworkTabs>
 
-Destructure the composable return so each ref is a top-level binding. Vue unwraps those bindings in the template.
+Destructure the composable return into top-level bindings. Vue unwraps these
+bindings in the template.
 
-Do not destroy the room from an effect that lists the room object as a dependency. StrictMode runs that cleanup and can hand a destroyed room to the remount. The hook owns that lifetime.
+Do not destroy the room from an effect that depends on the room object.
+StrictMode can run the cleanup before remounting. The hook owns the room
+lifecycle.
 
 ## Limits
 
-Peers connect directly over WebRTC when you use the WebRTC helper. A room lasts only as long as one peer stays open.
+The WebRTC helper connects peers directly. A room exists while at least one
+peer remains connected.
 
-Comments, tracked-change decisions, tables of contents, and custom nodes replicate while a replica is attached. Each named review write intent is admitted: add, reply, resolve, and delete comments; resolve tracked changes; and package-scoped writes such as tables of contents and custom nodes.
+Attached replicas synchronize comments, tracked-change decisions, tables of
+contents, and custom nodes. Named review actions include these operations:
 
-Two write paths stay refused while a replica is attached. Applying an edited ProseMirror document is refused because no host exercises that derivation under replication. A review write without a named intent is also refused.
+- Add, reply to, resolve, and delete comments.
+- Resolve tracked changes.
+- Write package-scoped content, such as tables of contents and custom nodes.
 
-Tree edits are refused when the session is destroyed, not ready, or not attached to the document port. A transport drop therefore pauses editing until the connection returns, unless you enable the `offlineEditing` option described in [Edit offline](#edit-offline).
+The replica rejects two write paths. It rejects an edited ProseMirror document.
+It also rejects review writes without a named intent.
 
-A typing run undoes as one step through the session undo manager.
+The replica rejects tree edits when the session is destroyed, not ready, or
+not attached. A transport interruption pauses editing until reconnection. To
+continue editing, enable [`offlineEditing`](#edit-offline).
+
+The session undo manager treats one typing run as one undo step.
 
 ### Numeric limits
 
-Each limit produces a typed failure code when a value exceeds it.
+Most exceeded limits produce a typed failure code.
 
-| Limit                                      | Value          | Failure code                                  | Remedy                                                                                                                |
-| ------------------------------------------ | -------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Seed document size                         | 20 MB          | `baseline-too-large`                          | Reduce the document before you create the room.                                                                       |
-| One embedded file                          | 32 MiB         | `blob-too-large`                              | Compress or downscale the media file.                                                                                 |
-| All embedded files in a room               | 64 MiB         | `blob-store-full`                             | Remove media from the document, then reseed a new room.                                                               |
-| `actorId`, `name`, and `documentId` length | 256 characters | `invalid-identity`, `invalid-document-id`     | Shorten the value.                                                                                                    |
-| Participants listed with presence          | 256            | none; presence reads list the first 256 peers | Keep rooms below 256 participants.                                                                                    |
-| Join wait for a synced room                | 30 seconds     | `initialization-timeout`                      | Connect the provider first, and confirm one peer created the room. On the Hocuspocus helper, raise `syncedTimeoutMs`. |
+| Limit                               | Value          | Failure code                                | Remedy                                                 |
+| ----------------------------------- | -------------- | ------------------------------------------- | ------------------------------------------------------ |
+| Seed document                       | 20 MB          | `baseline-too-large`                        | Reduce the document.                                   |
+| One embedded file                   | 32 MiB         | `blob-too-large`                            | Compress the media.                                    |
+| All embedded files                  | 64 MiB         | `blob-store-full`                           | Remove media and create a new room.                    |
+| `actorId`, `name`, and `documentId` | 256 characters | `invalid-identity` or `invalid-document-id` | Shorten the value.                                     |
+| Presence participants               | 256            | None                                        | Keep the room below 256 participants.                  |
+| Initial synchronization             | 30 seconds     | `initialization-timeout`                    | Connect the provider and confirm that the room exists. |
+
+Presence reads return only the first 256 participants. For Hocuspocus, increase
+`syncedTimeoutMs` when the initial synchronization needs more time.
 
 For module registration and licensing, see the
 [Pro package documentation](/docs/2.x/pro).

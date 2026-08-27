@@ -1,36 +1,39 @@
 ---
 title: 'Collaboration'
-description: 'Let several people edit one DOCX at the same time. The whole document replicates across peers, with presence, per-person undo, and offline editing.'
+description: 'Let people edit one DOCX together with presence, personal undo, and offline editing.'
 category: 'Getting Started'
 seoTitle: 'Real-time DOCX collaboration with presence and offline editing'
 ---
 
-Collaboration replicates the whole canonical document across peers: text,
-formatting, tables, headers, footers, notes, images, comments, and tracked
-changes. Every peer edits a local replica and the replicas converge, so typing
-stays fast on any connection.
+Collaboration replicates the document across peers. Each peer edits a local
+replica, and the replicas converge. Local typing stays responsive during
+network delays.
 
-Peers also share presence. You see who is in the room, and each person's caret
-and selection paint in their author color — the same color that marks their
-tracked changes and comments.
+Peers also share presence. You see each participant, caret, and selection in the
+participant's author color. The same color marks their tracked changes and
+comments.
 
-Collaboration ships in [`@docx-editor.dev/pro`](/docs/2.x/pro) as an editor
-module. The transport is yours to choose: peer-to-peer WebRTC, a
-[Hocuspocus](https://tiptap.dev/docs/hocuspocus) server, or any Yjs provider
-you already run.
+The [`@docx-editor.dev/pro` package](/docs/2.x/pro) provides collaboration as an
+editor module. You can use peer-to-peer WebRTC, a
+[Hocuspocus server](https://tiptap.dev/docs/hocuspocus), or an existing Yjs
+provider.
 
 ## Start in one component
 
-The framework hook owns the room. `create-or-join` means every peer opens the
-room the same way: the first peer seeds it from your document bytes, and every
-later peer joins it.
+Use the framework hook to own the room. With `create-or-join`, the first peer
+seeds the room from your document bytes. Later peers join the room.
 
 ```tsx
 import { useRef } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 
-export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: Uint8Array }) {
+interface CollaborativeEditorProps {
+  roomId: string;
+  bytes: Uint8Array;
+}
+
+export function CollaborativeEditor({ roomId, bytes }: CollaborativeEditorProps) {
   const editorRef = useRef<DocxEditorRef>(null);
   const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
     room: {
@@ -42,11 +45,17 @@ export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: 
 
   async function leaveRoom() {
     const saved = await editorRef.current?.save();
-    if (saved) leave(new Uint8Array(saved));
+    if (saved) {
+      leave(new Uint8Array(saved));
+    }
   }
 
-  if (error) return <p>{error.detail ?? error.code}</p>;
-  if (pending || !document) return <p>Connecting…</p>;
+  if (error) {
+    return <p>{error.detail ?? error.code}</p>;
+  }
+  if (pending || !document) {
+    return <p>Connecting…</p>;
+  }
 
   return (
     <>
@@ -59,63 +68,56 @@ export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: 
 }
 ```
 
-The same hook exists for Vue on `@docx-editor.dev/pro/vue/webrtc`. For the
-full walkthrough, see
-[realtime collaboration](/docs/2.x/pro/collaboration).
+Vue provides the same hook at `@docx-editor.dev/pro/vue/webrtc`. For setup
+details, see the [real-time collaboration guide](/docs/2.x/pro/collaboration).
 
 ## What replicates
 
-Everything a person can author replicates: typing, formatting, structure,
-tables, images, comments, tracked-change decisions, tables of contents, and
-custom nodes. Undo stays personal — each person undoes their own edits, never
-a collaborator's.
+Replicated content includes text, formatting, document structure, tables,
+headers, footers, notes, images, comments, tracked-change decisions, tables of
+contents, and custom nodes. Each person can undo only their own edits.
 
-Review workflows keep working in a room. One person can suggest in tracked
-changes while another accepts or rejects, and the review sidebar stays live on
-every peer. For the review features themselves, see
-[tracked changes](/docs/2.x/pro/tracked-changes) and
-[comments](/docs/2.x/pro/comments).
+Review workflows also work in a room. One person can suggest changes while
+another person accepts or rejects them. The review sidebar stays live for every
+peer. See the [tracked changes guide](/docs/2.x/pro/tracked-changes) and
+[comments guide](/docs/2.x/pro/comments).
 
-## Presence out of the box
+## Show presence
 
-Remote carets and selections paint with zero wiring once the module is
-registered. For the rest of the presence interface, the Pro package ships
-components and hooks:
+After module registration, the editor paints remote carets and selections. The
+Pro package also provides these presence components and hooks:
 
 - `DocxEditorCollaboration.Avatars` renders the participant stack, colored to
-  match each person's review markup.
-- `DocxEditorCollaboration.CaretLabels` replaces the caret name tags with your
-  own component, rendered inside the normal adapter tree so every hook works
-  in it.
-- `useCollaborationStatus` and `useCollaborationParticipants` drive a
-  connection badge and a people list.
+  match each participant's review markup.
+- `DocxEditorCollaboration.CaretLabels` replaces caret labels with your
+  component. The component renders in the adapter tree, so hooks work in it.
+- `useCollaborationStatus` and `useCollaborationParticipants` provide data for
+  connection and participant interfaces.
 
-For details, see
-[presence UI](/docs/2.x/pro/collaboration#presence-ui).
+See the [presence interface guide](/docs/2.x/pro/collaboration#presence-ui).
 
 ## Pick a transport
 
-| Transport             | When to use it                                         | How                                                                           |
-| --------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| WebRTC                | Demos and small teams, no server to run                | `useWebrtcCollaboration` with your own signaling for production               |
-| Hocuspocus            | A server you host, with authentication and persistence | `useHocuspocusCollaboration`; the server validates tokens in `onAuthenticate` |
-| Your own Yjs provider | An existing Yjs deployment                             | `createDocumentCollaboration` over your `Y.Doc` and provider                  |
+| Transport             | Use case                              | Integration                                                                   |
+| --------------------- | ------------------------------------- | ----------------------------------------------------------------------------- |
+| WebRTC                | Demos and small teams                 | Use `useWebrtcCollaboration` and configure production signaling.              |
+| Hocuspocus            | Hosted authentication and persistence | Use `useHocuspocusCollaboration`. Validate tokens in server `onAuthenticate`. |
+| Your own Yjs provider | An existing Yjs deployment            | Use `createDocumentCollaboration` with your `Y.Doc` and provider.             |
 
-Pair any server with Yjs 13. The stock `y-websocket` server and Hocuspocus
-both work unchanged.
+Use Yjs 13 with each server. The standard `y-websocket` server and Hocuspocus
+work without changes.
 
 ## Offline editing
 
-Pass `offlineEditing: true` to keep editing through a transport drop. The
-buffered edits merge on reconnect like any concurrent edit. Show the
-connection status when you enable it, so people know when their edits have
-not reached the room yet.
+Set `offlineEditing: true` to continue editing after a transport disconnection.
+Buffered edits merge with concurrent edits after reconnection. Show connection
+status so people know when their edits have not reached the room.
 
 ## Learn more
 
-- [Realtime collaboration](/docs/2.x/pro/collaboration) — rooms, providers,
-  presence UI, limits, and recovery.
-- [Tracked changes](/docs/2.x/pro/tracked-changes) — suggesting mode and the
+- [Real-time collaboration](/docs/2.x/pro/collaboration): rooms, providers,
+  presence, limits, and recovery.
+- [Tracked changes](/docs/2.x/pro/tracked-changes): suggesting mode and the
   review sidebar.
-- [Build a DOCX agent](/docs/2.x/build-a-docx-agent) — a headless replica can
-  join a room, so an agent can edit beside people in real time.
+- [Build a DOCX agent](/docs/2.x/build-a-docx-agent): connect a headless replica
+  to a room for real-time agent edits.

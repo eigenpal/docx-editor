@@ -979,7 +979,7 @@ export const wordFeatures: WordFeature[] = [
   // --- Collaboration, i18n & editing UX ---------------------------------------
   {
     id: 'collab.realtime',
-    name: 'Realtime collaboration',
+    name: 'Real-time collaboration',
     category: 'collaboration',
     editing: 'partial',
     rendering: 'partial',
@@ -987,7 +987,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'premium',
     docsLink: '/docs/2.x/pro/collaboration',
     notes:
-      'Experimental Yjs replication covers the whole canonical package: text, structure, formatting, tables, headers, footers, notes, drawings, relationships, and embedded parts, with presence, remote selections that can span paragraphs, and actor-local undo. Comments, tracked-change decisions, tables of contents, and custom nodes all replicate, and ids that two peers can mint at the same time are allocated per actor so they cannot collide. Transports include peer-to-peer WebRTC, a Hocuspocus server, or any Yjs 13 provider; opt-in offline editing buffers edits through a transport drop. One write path is refused while a replica is attached: applying an edited ProseMirror document.',
+      'Yjs replicates text, formatting, document structure, review content, tables of contents, and custom nodes. Presence includes participants, carets, and cross-paragraph selections. Each participant can undo only their edits. Use WebRTC, Hocuspocus, or another Yjs 13 provider. Optional offline editing merges buffered changes after reconnection. Applying an edited ProseMirror document is unavailable while a replica is attached.',
   },
   {
     id: 'collab.find-replace',
