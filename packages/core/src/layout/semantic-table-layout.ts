@@ -583,13 +583,23 @@ function placeCellParagraph(
   //                            marker half a line above its row and drops the change bar
   //                            entirely. These block the collapse.
   //
-  // Mode-independent on purpose: a mark-revised terminator in the resolved view has already
-  // merged away upstream, so gating on `all-markup` would only add a mode to reason about.
-  const publishesPlacedGlyphs =
+  // The mark revisions are read only in All Markup — that is the only view where the pilcrow
+  // and the change bar exist. In the resolved or original view a terminator whose mark is
+  // tracked-INSERTED publishes neither, so blocking there would keep a line Word's accept-all
+  // output does not have. (A tracked DELETE is a different case and never reaches here: the
+  // resolved view merges that paragraph away upstream.)
+  //
+  // Called behind the position gate, not before it. This runs for every paragraph of every
+  // cell on every placement pass — trial rows and continuations included — and each call is
+  // two `find` scans over `w:pPr` and `w:rPr`, which `||` would not short-circuit because
+  // `listItem` is undefined for the non-list paragraphs that are the overwhelming majority.
+  // The same pair of calls further down is gated on `showsMarkup` for exactly this reason.
+  const publishesPlacedGlyphs = (): boolean =>
     listItem !== undefined ||
-    paragraphMarkRevisionsOf(paragraph).length > 0 ||
-    paragraphMarkFormatRevisionOf(paragraph) !== null;
-  const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs;
+    (deps.displayMode === 'all-markup' &&
+      (paragraphMarkRevisionsOf(paragraph).length > 0 ||
+        paragraphMarkFormatRevisionOf(paragraph) !== null));
+  const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
 
   const appliedBefore =
     lineStart === 0 && !collapseHeight
@@ -1245,11 +1255,16 @@ export function layoutRowFragmentBounded(
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
-    const cursor = cursors[cellIndex] ?? {
+    // Typed, not inferred: without `noUncheckedIndexedAccess` the indexed read is already
+    // non-nullable, so TypeScript discards the right operand's type and a member missing
+    // from it goes unreported — `precededByEmittedTable` would arrive as `undefined` wearing
+    // a `boolean`, and the collapse would silently never fire for that cell.
+    const cursor: CellPlaceCursor = cursors[cellIndex] ?? {
       blockIndex: 0,
       lineIndex: 0,
       previousSpaceAfter: 0,
       paragraphFragmentIndex: 0,
+      precededByEmittedTable: false,
     };
     // The grid column is decided once, at read time, where `w:gridBefore` is known and the
     // row's TOTAL span is bounded (a row of maximum-span cells would otherwise walk millions

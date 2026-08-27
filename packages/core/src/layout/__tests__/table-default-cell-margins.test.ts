@@ -284,13 +284,19 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
   test('a terminator whose MARK carries a tracked revision keeps its line', () => {
     // All Markup strikes a pilcrow for the mark and draws a change bar, both sized off the
     // line box. On a zero-height fragment the pilcrow lands outside the row and the bar
-    // vanishes, so a tracked delete of that mark is invisible or misplaced. Mode-independent:
-    // in the resolved view such a paragraph has already merged away upstream.
+    // vanishes, so a tracked delete of that mark is invisible or misplaced.
+    //
+    // Only in All Markup, because that is the only view that publishes them: the resolved
+    // view shows Word's accept-all output, where the terminator is an ordinary empty
+    // paragraph after a table and takes no height at all.
     const del =
       '<w:p><w:pPr><w:rPr>' +
       '<w:del w:id="7" w:author="A" w:date="2024-01-01T00:00:00Z"/>' +
       '</w:rPr></w:pPr></w:p>';
-    for (const displayMode of ['all-markup', 'resolved'] as const) {
+    for (const [displayMode, expected] of [
+      ['all-markup', 14 * (10 / 11)],
+      ['resolved', 0],
+    ] as const) {
       const layout = layoutSemanticDocument(
         part(
           `<w:document xmlns:w="${W}"><w:body>${cellWithNestedTable(del)}</w:body></w:document>`,
@@ -307,7 +313,7 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
       );
       const last = paragraphs[paragraphs.length - 1]!;
       if (last.kind !== 'paragraph') throw new Error('expected a paragraph fragment');
-      expect(last.box.height).toBeCloseTo(14 * (10 / 11), 6);
+      expect(last.box.height).toBeCloseTo(expected, 6);
     }
   });
 
