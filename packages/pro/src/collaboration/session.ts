@@ -499,12 +499,22 @@ class Session implements TextCollaborationSession {
     return null;
   }
 
+  // Undo and redo write shared state exactly as a keystroke does, so they obey the same
+  // readiness rule as `gateOperations`: only a `ready` replica may mutate the room.
   canUndo(): boolean {
-    return !this.destroyed && this.undoManager.undoStack.length > 0;
+    return (
+      !this.destroyed &&
+      this.statusState.status() === 'ready' &&
+      this.undoManager.undoStack.length > 0
+    );
   }
 
   canRedo(): boolean {
-    return !this.destroyed && this.undoManager.redoStack.length > 0;
+    return (
+      !this.destroyed &&
+      this.statusState.status() === 'ready' &&
+      this.undoManager.redoStack.length > 0
+    );
   }
 
   undo(): boolean {

@@ -26,6 +26,9 @@ import { CollaborationSchemaError } from './schema.ts';
 /** Ceiling on the bytes one room carries beside its shared tree. */
 export const MAX_SHARED_BLOB_BYTES = 64 * 1024 * 1024;
 
+/** Top-level `Y.Map` key of the content-addressed blob bytes a room carries. */
+export const SHARED_BLOBS_KEY = 'docx-package-blobs-v1';
+
 function sharedBlobBytes(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) return new Uint8Array(value);
   if (value instanceof ArrayBuffer) return new Uint8Array(value);

@@ -47,6 +47,7 @@ import {
   type TextRecord,
 } from './schema.ts';
 import { readRelationships, relationshipKey } from './relationship-store.ts';
+import { observeRegistrySchema } from './registry-observers.ts';
 import {
   assignFirstReachableParents,
   resolveContestedPlacements,
@@ -110,32 +111,48 @@ export class DocumentRegistry {
   /** Part-entry total as of the last read. Negative means "not counted yet". */
   private partCountCache = -1;
 
+  private readonly stopObserving: () => void;
+
   constructor(
     readonly doc: Y.Doc,
     limits?: Partial<DocumentLimits>
   ) {
     this.schema = packageSchemaOf(doc);
     this.limits = mergeLimits(limits);
-    this.schema.nodes.observeDeep((events) => {
-      if (this.bulkLoad > 0) return;
-      this.applyChildArrayEvents(events);
+    this.stopObserving = observeRegistrySchema(this.schema, {
+      onNodeEvents: (events) => {
+        if (this.bulkLoad > 0) return;
+        this.applyChildArrayEvents(events);
+      },
+      onAttributeEvent: (event) => {
+        if (this.bulkLoad > 0) return;
+        this.applyAttributeMapEvent(event);
+      },
+      onBindingEvent: (event) => {
+        if (this.bulkLoad > 0) return;
+        this.applyBindingMapEvent(event);
+      },
+      // Dropping a stale count is safe at any time, so these run even during a bulk load. The
+      // deep observers catch a peer on an earlier build writing inside a nested owner map.
+      onRelationshipChange: () => {
+        this.relationshipCountCache = -1;
+      },
+      onPartChange: () => {
+        this.partCountCache = -1;
+      },
     });
-    this.schema.attributes.observe((event) => {
-      if (this.bulkLoad > 0) return;
-      this.applyAttributeMapEvent(event);
-    });
-    this.schema.bindings.observe((event) => {
-      if (this.bulkLoad > 0) return;
-      this.applyBindingMapEvent(event);
-    });
-    // Dropping a stale count is safe at any time, so these run even during a bulk load. The
-    // deep observers catch a peer on an earlier build writing inside a nested owner map.
-    this.schema.relationships.observeDeep(() => {
-      this.relationshipCountCache = -1;
-    });
-    this.schema.parts.observeDeep(() => {
-      this.partCountCache = -1;
-    });
+  }
+
+  /**
+   * Detach this registry's observers from the shared document.
+   *
+   * The registry does not own `doc`, so teardown has to give the observers back. A registry
+   * left observing outlives its consumer: every later transaction pays its handlers, and its
+   * derived indexes retain the whole tree. `readCollaborationDocument` builds one registry
+   * per call on a long-lived server document, so this detach is load-bearing.
+   */
+  destroy(): void {
+    this.stopObserving();
   }
 
   beginBulkLoad(): void {

@@ -250,8 +250,6 @@ export async function seedPackage(
   try {
     registry.doc.transact(() => {
       for (const payload of binaries.payloads) blobs.put(payload.digest, payload.bytes);
-      writeSchemaVersions(registry.schema.meta);
-      registry.schema.meta.set('mainDocumentPart', pkg.mainDocumentPart);
       const counts = { nodes: 0 };
       for (const [name, part] of pkg.parts) {
         const partError = rejectPartName(name);
@@ -322,6 +320,15 @@ export async function seedPackage(
       for (const descriptor of binaries.descriptors) {
         registry.putBinary(descriptor);
       }
+      // Initialization is the LAST write. Yjs commits everything already written when a limit
+      // refusal stops this callback, so marking the room initialized first left a FAILED seed
+      // advertising a joinable room: joiners passed the initialization wait and then hit
+      // `document-id-mismatch`, and a retried `create` refused with `already-initialized`.
+      // Order inside one transaction is invisible to a peer — the update applies atomically —
+      // so writing the flag last only changes what a failed seed leaves behind: inert records
+      // in a room that still reads uninitialized, which a retry overwrites.
+      writeSchemaVersions(registry.schema.meta);
+      registry.schema.meta.set('mainDocumentPart', pkg.mainDocumentPart);
     }, BOOTSTRAP_ORIGIN);
   } finally {
     registry.endBulkLoad();
