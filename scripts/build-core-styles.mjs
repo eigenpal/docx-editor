@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
+import cssnano from 'cssnano';
 import { coreCssProblems } from './core-css-assertions.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'core');
@@ -72,22 +73,56 @@ const prefixKeyframes = {
   },
 };
 
-const result = await postcss([
+// The shipped file is minified. Tailwind emits every utility the config generates,
+// pretty-printed, which is ~three times the bytes a host actually downloads.
+//
+// Three of cssnano's default transforms are OFF because they rewrite IDENTIFIERS,
+// and every identifier in this file is load-bearing for a stylesheet that has to
+// coexist with a host app's CSS:
+//
+//   reduceIdents   renames `@keyframes docx-editor-enter` to `a`, undoing the
+//                  prefixing above — and the global-namespace collision that
+//                  prefixing exists to prevent comes straight back.
+//   mergeIdents    same hazard from the other direction: it unifies two prefixed
+//                  names into one shared short name.
+//   discardUnused  drops `@keyframes` and `@font-face` with no reference IN THIS
+//                  FILE. For a library stylesheet the reference is in the host's
+//                  markup, which the minifier cannot see.
+const minify = cssnano({
+  preset: [
+    'default',
+    { reduceIdents: false, mergeIdents: false, discardUnused: false, zindex: false },
+  ],
+});
+
+const compiled = await postcss([
   tailwindcss({ config: join(root, 'tailwind.dist.config.cjs') }),
   scopeTailwindDefaults,
   prefixKeyframes,
   autoprefixer(),
 ]).process(input, { from, map: false });
 
-const problems = coreCssProblems(result.css);
-if (problems.length > 0) {
-  console.error('core: refusing to emit dist/editor.css:');
+// Asserted TWICE, on either side of the minifier, because the two runs blame
+// different steps. A failure before means the compile is wrong; a failure after
+// means cssnano broke the scoping contract on correct input. The shipped bytes
+// are the ones that have to satisfy it, so the second run is the load-bearing one.
+const refuse = (stage, problems) => {
+  if (problems.length === 0) return;
+  console.error(`core: refusing to emit dist/editor.css (${stage}):`);
   for (const problem of problems) console.error(`  - ${problem}`);
   process.exit(1);
-}
+};
+
+refuse('compiled', coreCssProblems(compiled.css));
+
+const result = await postcss([minify]).process(compiled.css, { from, map: false });
+
+refuse('minified', coreCssProblems(result.css));
 
 mkdirSync(dirname(to), { recursive: true });
 writeFileSync(to, result.css);
+const before = (compiled.css.length / 1024).toFixed(0);
+const after = (result.css.length / 1024).toFixed(0);
 console.log(
-  `core: compiled editor.css into dist (${(result.css.length / 1024).toFixed(0)} KiB, utilities scoped to .docx-editor)`
+  `core: compiled editor.css into dist (${after} KiB minified from ${before} KiB, utilities scoped to .docx-editor)`
 );

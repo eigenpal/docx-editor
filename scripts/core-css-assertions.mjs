@@ -42,6 +42,22 @@ const OWNED_PREFIXES = ['.docx-'];
 const KEYFRAME_STEP = /^(from|to|-?[\d.]+%)$/;
 
 /**
+ * Folds the differences a CSS minifier is free to introduce, so the positive
+ * assertions below match the same rule before and after minification.
+ *
+ * Two of them: whitespace around combinators collapses, and an attribute value
+ * that is a valid identifier loses its quotes. Nothing here changes what a
+ * selector MATCHES, so a normalized comparison stays exact.
+ */
+function normalizeSelector(selector) {
+  return selector
+    .replace(/\s+/g, ' ')
+    .replace(/\s*([>+~,])\s*/g, '$1')
+    .replace(/\[([^\]=]+)=(["'])([^"']*)\2\]/g, '[$1=$3]')
+    .trim();
+}
+
+/**
  * Whether a selector can only ever match inside the editor.
  *
  * Either it names the scope class, or SOME compound names a class the engine owns —
@@ -96,16 +112,30 @@ export function coreCssProblems(rawCss) {
 
   // The positive half: the compiled utilities and the scoped editable-surface rules
   // have to actually BE there, or a "clean" file could simply be empty.
-  if (!rawCss.includes('.docx-editor .flex')) {
+  //
+  // These read the PARSED selectors, not the raw text, because the shipped file is
+  // minified: `.docx-editor {` loses its space, and an attribute value loses its
+  // quotes (`[contenteditable='true']` → `[contenteditable=true]`). A raw
+  // `includes()` would fail on a correct file. `normalizeSelector` folds exactly
+  // the differences a minifier is allowed to introduce.
+  const selectors = new Set();
+  root.walkRules((rule) => {
+    for (const selector of rule.selectors) selectors.add(normalizeSelector(selector));
+  });
+  if (!selectors.has('.docx-editor .flex')) {
     problems.push("missing '.docx-editor .flex' — utilities absent or not scoped");
   }
-  if (!rawCss.includes(".docx-editor [contenteditable='true']")) {
+  if (!selectors.has('.docx-editor [contenteditable=true]')) {
     problems.push('missing the scoped [contenteditable] caret rule');
   }
-  if (!rawCss.includes('.docx-editor {')) {
-    problems.push("missing the '.docx-editor {' token block");
+  if (!selectors.has('.docx-editor')) {
+    problems.push("missing the '.docx-editor' token block");
   }
-  if (!rawCss.includes('--doc-')) {
+  let hasDocToken = false;
+  root.walkDecls((decl) => {
+    if (decl.prop.startsWith('--doc-')) hasDocToken = true;
+  });
+  if (!hasDocToken) {
     problems.push('missing --doc-* chrome tokens');
   }
   return problems;
