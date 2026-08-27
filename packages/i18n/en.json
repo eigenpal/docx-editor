@@ -31,7 +31,8 @@
     "tableCellSectionBreak": "Section breaks go outside a table.",
     "lockedSectionBreak": "A locked or linked content control holds the next section, so this break can't change it.",
     "lockedContentBreak": "A content control locks this text, so you can't break a section here.",
-    "nothingToCopyFormatting": "Select some text to copy its formatting"
+    "nothingToCopyFormatting": "Select some text to copy its formatting",
+    "nothingToPaint": "Select some text to paint"
   },
   "toolbar": {
     "ariaLabel": "Formatting toolbar",

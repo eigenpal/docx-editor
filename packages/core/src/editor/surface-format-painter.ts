@@ -348,14 +348,19 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     return result.wrote || result.armed;
   };
 
-  const disarm = (): void => {
-    // The window goes with it, so the press AFTER a stand-down starts a fresh gesture. Left
-    // running, "arm, cancel, arm again quickly" read the third press as the second half of a
-    // double-click and locked the painter on instead of arming it once.
-    lastPressAt = null;
+  /** Turn it off, leaving the double-press window as it was. */
+  const standDown = (): void => {
     if (mode === 'off') return;
     mode = 'off';
     deps.publish();
+  };
+
+  const disarm = (): void => {
+    // The window goes with it, because this is the lane a press does NOT come through —
+    // `Esc`, and a finished single application. The press after either of those starts a
+    // fresh gesture rather than reading as the second half of the last one.
+    lastPressAt = null;
+    standDown();
   };
 
   return {
@@ -366,27 +371,33 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     press(): boolean {
       const at = deps.now();
       const doublePress = lastPressAt !== null && at - lastPressAt < DOUBLE_PRESS_WINDOW_MS;
+      const previous = mode;
+      lastPressAt = at;
       // The second half of a double-click on an ARMED painter locks it on. Re-capturing costs
       // nothing — the selection has not moved since the press that armed it — and it keeps
       // the armed and the locked path telling one story.
-      if (mode === 'once' && doublePress) {
+      if (previous === 'once' && doublePress) {
         if (!captureNow()) return false;
         mode = 'locked';
-        lastPressAt = at;
         deps.publish();
         return true;
       }
       // Any other press while it is armed stands it down, which is what a second click on a
-      // live painter means in Word — including a click on a LOCKED one.
-      if (mode !== 'off') {
-        disarm();
+      // live painter means in Word — including a click on a LOCKED one. `standDown`, not
+      // `disarm`: the window has to keep running for the branch below.
+      if (previous !== 'off') {
+        standDown();
         return true;
       }
+      // The painter is off AND the last press was moments ago, so this is the second half of
+      // the double-click whose FIRST half turned it off. Dismissing a locked painter with a
+      // double-click must not hand it straight back armed, with the user's next click in the
+      // document silently repainting.
+      if (doublePress) return true;
       // `captureNow`, not `capture`: the mode moves in the same gesture, so ONE report
       // covers both. Two would wake every subscriber twice for a single click.
       if (!captureNow()) return false;
       mode = 'once';
-      lastPressAt = at;
       deps.publish();
       return true;
     },

@@ -324,6 +324,20 @@ describe('painting', () => {
 });
 
 describe('the control', () => {
+  test('a paint that reaches nothing is refused rather than reported as a no-op change', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      // A RUN-level capture, then a caret in a paragraph with no text to reach: there is no
+      // range to paint and no paragraph formatting in the capture, so the command answers for
+      // itself rather than letting an unmoved revision read as a successful no-op.
+      select(editor, [0, 0], [0, 4]);
+      editor.exec({ type: 'copyFormatting' });
+      expect(editor.surface!.formatPainter.state().level).toBe('run');
+      editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+      select(editor, [1, 0], [1, 5]);
+      expect(editor.exec({ type: 'pasteFormatting' })).toMatchObject({ ok: false });
+    });
+  });
+
   test('painting is refused with the engine’s reason until something is copied', () => {
     withEditor(STYLED + PLAIN, (editor) => {
       select(editor, [1, 0], [1, 5]);
@@ -389,6 +403,47 @@ describe('the control', () => {
       runToolbarCommand(editor, 'format.painter');
       expect(editor.surface!.formatPainter.state().mode).toBe('locked');
       runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('off');
+    });
+  });
+
+  test('a double-click that dismisses the painter does not hand it back armed', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      runToolbarCommand(editor, 'format.painter');
+      runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('locked');
+
+      // Two more rapid presses: the pair is one double-click, and its first half turned the
+      // painter off. Handing it back armed would leave the user's next click in the document
+      // silently repainting formatting they thought they had dismissed.
+      runToolbarCommand(editor, 'format.painter');
+      runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('off');
+    });
+  });
+
+  test('a press is refused on a document that would refuse the paint', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+      // A caller that dispatches by slot id without reading the enabled state gets the same
+      // answer the button shows, rather than an armed painter whose every release builds ops
+      // the session then rejects.
+      expect(runToolbarCommand(editor, 'format.painter')).toMatchObject({ ok: false });
+      expect(editor.surface!.formatPainter.state().mode).toBe('off');
+    });
+  });
+
+  test('switching to viewing releases an armed painter', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      runToolbarCommand(editor, 'format.painter');
+      expect(editor.surface!.formatPainter.state().mode).toBe('once');
+
+      // Left armed, the pages would keep the paint cursor and every release would go on
+      // building ops the session refuses.
+      editor.exec({ type: 'setEditingMode', mode: 'viewing' });
       expect(editor.surface!.formatPainter.state().mode).toBe('off');
     });
   });

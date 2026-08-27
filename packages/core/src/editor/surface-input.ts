@@ -87,7 +87,10 @@ function isAltAccelerator(event: KeyboardEvent): boolean {
  * where `code` says nothing — a virtual keyboard, or a synthesised event.
  */
 function letterOf(event: KeyboardEvent): string {
-  const physical = event.code;
+  // Defaulted, like `getModifierState` above: a synthesised event — this repo's own keymap
+  // tests build several — carries no `code`, and reading `.length` off it throws out of the
+  // keydown handler rather than falling through to the `key` arm below.
+  const physical = event.code ?? '';
   if (physical.length === 4 && physical.startsWith('Key')) return physical[3]!.toLowerCase();
   return physical === '' ? event.key.toLowerCase() : '';
 }

@@ -21,6 +21,7 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   // the same sentence or the refusal reaches every locale in English.
   'no formatting has been copied': 'disabledReason.noCopiedFormatting',
   'there is nothing at the selection to copy': 'disabledReason.nothingToCopyFormatting',
+  'the selection has nothing to paint': 'disabledReason.nothingToPaint',
   'no drawing is selected': 'disabledReason.noDrawing',
   'the drawing is locked': 'disabledReason.drawingLocked',
   'a comment needs a selected range': 'disabledReason.commentSelection',

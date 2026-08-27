@@ -5358,6 +5358,10 @@ export function mountPaginatedSurface(
       // body dimmed and inert under an active band and its whole options bar — a write UI
       // over a document that now refuses writes. Exiting repaints, so this runs first.
       if (moved && mode === 'view') hfScope?.exitHeaderFooter();
+      // An armed format painter is a write surface too, and a more misleading one: the pages
+      // keep the paint cursor and every release goes on building ops the session then
+      // refuses. Released rather than left standing, so the affordance and the answer agree.
+      if (moved && mode === 'view') formatPainter.disarm();
       // An open widget menu is a WRITE surface: a date picker left standing across the
       // switch still offered a value the new mode refuses. Nothing else closes it.
       removeExistingContentControlMenu();

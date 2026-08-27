@@ -608,6 +608,17 @@ export function runToolbarCommand(
   if (id === 'format.painter') {
     const surface = surfaceOf(editor);
     if (!surface) return { ok: false, code: 'unsupported', reason: 'editor is not ready' };
+    // CAN BEFORE EXEC, the same probe the enabled state above uses. A caller that dispatches
+    // by slot id without reading that state — a host's own keybinding, an automation — would
+    // otherwise arm a painter on a document that refuses the write: the cursor changes, and
+    // every following release builds ops the session then rejects.
+    //
+    // Only when it is OFF. Standing DOWN has to stay possible whatever the document allows,
+    // or a painter armed before the mode changed could never be released.
+    if (surface.formatPainter.state().mode === 'off') {
+      const allowed = editor.can({ type: 'clearFormatting' });
+      if (!allowed.ok) return { ok: false, code: allowed.code, reason: allowed.reason };
+    }
     // The press captures, arms, locks or stands down — the engine decides which, from its own
     // clock. Nothing about the DOCUMENT moves, so a press that lands reports `changed:
     // false`; the painting itself happens on the selection the user makes next.

@@ -42,7 +42,7 @@ const SLACK_EXEMPT = new Map([
  * diff where a reviewer sees it, instead of the file quietly gaining a thousand lines.
  */
 const BLANKET_DISABLES = new Map([
-  ['packages/core/src/editor/paginated-surface.ts', 6211],
+  ['packages/core/src/editor/paginated-surface.ts', 6215],
   ['packages/core/src/store/store/tree-op-apply.ts', 3493],
   ['packages/core/src/output/semantic-paint.ts', 3005],
   ['packages/core/src/layout/note-pagination.ts', 2853],

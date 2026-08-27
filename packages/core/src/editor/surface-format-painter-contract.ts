@@ -35,6 +35,9 @@ export const NO_COPIED_FORMATTING = 'no formatting has been copied';
  */
 export const NOTHING_TO_COPY_FORMATTING = 'there is nothing at the selection to copy';
 
+/** The refusal a paint gets when the selection holds nothing the capture can reach. */
+export const NOTHING_TO_PAINT = 'the selection has nothing to paint';
+
 /**
  * The resting state, as one shared frozen value.
  *

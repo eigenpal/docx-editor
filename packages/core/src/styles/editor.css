@@ -3215,7 +3215,7 @@ a.docx-hyperlink:focus-visible {
  * engine paints documents of 500 pages. */
 .docx-pages[data-format-painter],
 .docx-pages[data-format-painter] .docx-page-content,
-.docx-pages[data-format-painter] .docx-editor-page,
+.docx-pages[data-format-painter] .docx-page,
 .docx-pages[data-format-painter] .docx-paragraph-editable,
 .docx-pages[data-format-painter] .docx-drawing-textbox,
 .docx-pages[data-format-painter] .docx-hf {
