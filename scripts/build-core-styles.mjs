@@ -20,6 +20,16 @@ import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
+// Held at cssnano 7 ON PURPOSE. cssnano 8 declares `engines.node ^22.11.0`, and
+// postcss-merge-longhand@8 calls `Set.prototype.difference`, which lands in Node 22.
+// ci.yml never runs setup-node, so every job takes the runner's own Node — 20 today.
+// bun does not enforce `engines`, so cssnano 8 installs happily and then throws
+// `trustedFunctions.difference is not a function` at build time, on CI only, and
+// only for someone whose local Node is newer than the runner's. cssnano 7 supports
+// `^18.12.0 || ^20.9.0 || >=22.0`, and on this input the two differ by 59 bytes out
+// of 111 375, with the same selector rewrites — the folds in core-css-assertions.mjs
+// are pinned against cssnano's real output and pass unchanged on either.
+// Take cssnano 8 when this repo pins its own Node floor at 22 or higher.
 import cssnano from 'cssnano';
 import { coreCssProblems } from './core-css-assertions.mjs';
 
