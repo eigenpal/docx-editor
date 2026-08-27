@@ -19,6 +19,9 @@ Keep technical items exact. File paths, function names, flags, and numbers do no
 change. For example, write `packages/core/src/layout/semantic-layout.ts` and
 `w:contextualSpacing` in full.
 
+In user-facing text, always use the name `EigenPal Pro License`. Do not rename
+the legal license files or `LicenseRef-EigenPal-Pro-Evaluation-1.0` metadata.
+
 ## Packages
 
 One engine. Thin chrome on top.
