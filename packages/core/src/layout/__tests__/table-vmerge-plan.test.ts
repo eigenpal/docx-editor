@@ -81,8 +81,8 @@ describe('the vMerge plan hands out heights, never positions', () => {
     const options = plan.rowOptions(0)!;
     // The whole contract: a set of ids to detach, and a height. A `y` here would be read on
     // a page the row may already have left.
-    expect(Object.keys(options).sort()).toEqual(['detachedCellIds', 'heightFloorPt']);
-    expect([...(options.detachedCellIds ?? [])]).toEqual(['head']);
+    expect(Object.keys(options).sort()).toEqual(['detachedSpanHeightPtByCellId', 'heightFloorPt']);
+    expect([...(options.detachedSpanHeightPtByCellId ?? [])]).toEqual([['head', 90]]);
     expect(typeof options.heightFloorPt).toBe('number');
   });
 
@@ -100,13 +100,13 @@ describe('the vMerge plan hands out heights, never positions', () => {
     for (const span of plan.spansAt(0)) plan.accept(span);
 
     const head = plan.rowOptions(0)!;
-    expect([...(head.detachedCellIds ?? [])]).toEqual(['longHead']);
+    expect([...(head.detachedSpanHeightPtByCellId ?? []).keys()]).toEqual(['longHead']);
     // 80, not 10: the declined head is still in the row, so it is still in the floor.
     expect(head.heightFloorPt).toBe(80);
     for (const rowIndex of [1, 2]) {
       const covered: RowVMergeLayoutOptions | undefined = plan.rowOptions(rowIndex);
       expect(covered?.heightFloorPt).toBeGreaterThan(0);
-      expect(covered?.detachedCellIds).toBeUndefined();
+      expect(covered?.detachedSpanHeightPtByCellId).toBeUndefined();
     }
   });
 

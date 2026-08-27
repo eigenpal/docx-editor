@@ -503,15 +503,15 @@ export default [
     },
   },
 
-  // semantic-layout.ts is the story loop: section flow, paragraph fragmentation and
-  // table-row pagination advance ONE cursor, and a paragraph that spans a page boundary is
-  // decided by all three at once. Splitting them into modules would mean passing that
-  // cursor across a boundary and re-deriving the same state on the other side. The cap is
-  // a ceiling with headroom, not a blanket disable.
+  // semantic-layout.ts is the story loop: section flow and paragraph fragmentation advance
+  // ONE cursor, and a paragraph that spans a page boundary is decided by both at once.
+  // Table-row pagination used to live here too and now does not — it advances the same
+  // cursor through `TableFlowCursor`, which is the seam that let it move. The cap is a
+  // ceiling with headroom, not a blanket disable.
   {
     files: ['packages/core/src/layout/semantic-layout.ts'],
     rules: {
-      'max-lines': ['error', { max: 3250, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 3050, skipBlankLines: false, skipComments: false }],
     },
   },
 
