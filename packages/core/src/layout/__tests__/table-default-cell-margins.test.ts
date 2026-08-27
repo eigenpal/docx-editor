@@ -12,7 +12,8 @@ import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.d
 import { buildStyleCascadeTable, readTableStructure } from '../index.ts';
 import { cascadeTableFormatting } from '../style-cascade.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
-import { documentOrder } from '../semantic-interaction.ts';
+import { caretAt, documentOrder } from '../semantic-interaction.ts';
+import { hitTestPage } from '../semantic-hit-test.ts';
 import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -153,12 +154,14 @@ const cellWithNestedTable = (terminator: string) =>
   terminator +
   '</w:tc></w:tr></w:tbl>';
 
+const measurer = createFixedMeasurer();
+
 function layoutOf(bodyXml: string): SemanticLayout {
   const document = part(
     `<w:document xmlns:w="${W}"><w:body>${bodyXml}</w:body></w:document>`,
     '/word/document.xml'
   );
-  return layoutSemanticDocument(document, 0, { measurer: createFixedMeasurer() });
+  return layoutSemanticDocument(document, 0, { measurer });
 }
 
 function outerRowHeight(layout: SemanticLayout): number {
@@ -238,6 +241,29 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
     const withText = outerRowHeight(layoutOf(cellWithNestedTable(p('x'))));
     const withNone = outerRowHeight(layoutOf(cellWithNestedTable('')));
     expect(withText).toBeGreaterThan(withNone);
+  });
+
+  test('the caret in it is visible, and it is reachable by pointer', () => {
+    // Zero flow height is Word's geometry, but a zero-height CARET is not a caret: the
+    // engine suppresses the native one for as long as it paints its own, so the user would
+    // type blind. The caret falls back to the ascent the line was measured at.
+    const layout = layoutOf(cellWithNestedTable('<w:p/>'));
+    const order = documentOrder(layout);
+    const terminator = order[order.length - 1]!;
+    const caret = caretAt(layout, { paragraphId: terminator, offset: 0 }, { measurer });
+    expect(caret).not.toBeNull();
+    expect(caret!.height).toBeGreaterThan(0);
+
+    // And a press still lands in it. The nested table owns the band under its own column,
+    // so the reachable area is the rest of the cell beside it.
+    const page = layout.pages[0]!;
+    const hit = hitTestPage(
+      layout,
+      0,
+      { x: page.contentBox.x + 240, y: page.contentBox.y + 20 },
+      { measurer }
+    );
+    expect(hit?.position?.paragraphId).toBe(terminator);
   });
 
   test('it stays addressable, so the caret and select-all still reach it', () => {

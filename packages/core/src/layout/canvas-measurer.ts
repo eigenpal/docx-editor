@@ -15,20 +15,26 @@
 // layout-published line height as an explicit pixel value — never CSS `line-height:
 // normal` — so this module must not mount a DOM probe or call `getBoundingClientRect`.
 //
-// KNOWN DIVERGENCE from `shaped-measurer.ts`. Word's single-spaced line box is ascent +
-// descent + `hhea.lineGap`, and the shaped path reads all three straight out of the font.
-// `TextMetrics` exposes no leading — there is no `fontBoundingBoxLeading`, and the one
-// place a browser reports the sum is CSS `line-height: normal`, which this module may not
-// reach for. So the face-box branch below is a fraction short of the shaped rule: 1.1172 em
-// against Word's 1.1499 em for Arial, and exact for a face whose gap is zero (Calibri and
-// Carlito, which is what {@link DEFAULT_CANVAS_FONT_STACK} leads with). The gap is not
-// recoverable here, and guessing a constant would be worse than being short by a knowable
-// amount. It costs nothing on the deterministic branch, which already uses Word's 1.15.
+// The line box has to agree with `shaped-measurer.ts`, because this measurer is not only a
+// per-run fallback: `resolveDefaultSurfaceMeasurer` hands it to the surface as the WHOLE
+// document's measurer whenever a 2d context exists and no shaper was injected. A file that
+// paginated one way with HarfBuzz loaded and another without it is a fidelity bug, not a
+// degraded fallback.
 //
-// The exposure is narrow and second-order: this measurer is the shaped path's per-run
-// fallback, reached only for a family HarfBuzz could not load at all — so those runs are
-// already being measured against whatever face the browser substituted, not the declared
-// one. Closing it means giving the layout lane the gap from somewhere other than canvas.
+// Word's single-spaced line box is ascent + descent + `hhea.lineGap`, and `TextMetrics`
+// reports no leading at all — there is no `fontBoundingBoxLeading`, and the one place a
+// browser sums the three is CSS `line-height: normal`, which this module may not reach for.
+// What the face box IS, though, is a lower bound on Word's box, because the term it omits
+// is non-negative. So the height below is the larger of that bound and the deterministic
+// 1.15 em floor. Measured in Chrome against the five shipped faces, at 10/20/40/80 px:
+//
+//   Liberation Sans   face -4.3%   max  0.0%      Caladea          face 0..4.3%  max same
+//   Liberation Serif  face -4.3%   max  0.0%      Liberation Mono  face -2.9..1.5%  max 1.5%
+//   Carlito           face -1.7..6.5%  max same
+//
+// The two faces carrying a gap — Arial's and Times New Roman's — come onto Word's number,
+// and no face gets worse than the 1.5% ceiling. Chrome also rounds `fontBoundingBox*` to
+// whole pixels, which is why the face box alone wanders at small sizes.
 
 import type { TextMeasurer } from './semantic-records.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -299,11 +305,13 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       if (typeof ascent === 'number' && Number.isFinite(ascent) && ascent > 0) {
         baseline = ascent / scale;
         if (typeof descent === 'number' && Number.isFinite(descent) && descent >= 0) {
-          // Canvas reports the face box (ascent + descent) and no leading, so this is a
-          // fraction under Word's ascent + descent + `hhea.lineGap` for any face that
-          // carries a gap, and exact for one that does not. See the module header.
+          // Canvas reports the face box (ascent + descent) and no leading, so it is a LOWER
+          // BOUND on Word's ascent + descent + `hhea.lineGap`: short by the gap for a face
+          // that carries one, exact for a face that does not. Take the larger of it and the
+          // deterministic 1.15 em floor, which is Word's own ratio for the gapped faces.
+          // See the module header for the measured error per face.
           const box = (ascent + descent) / scale;
-          if (box > 0) height = box;
+          if (box > 0) height = Math.max(box, height);
         }
       }
       if (!(height > 0)) height = size * 1.15;

@@ -187,6 +187,15 @@ export function createSurfaceCaret(
       hide();
       return;
     }
+    // A caret with no height is not a caret. The engine suppresses the native one for
+    // exactly as long as it paints its own, so a zero-height geometry would leave the user
+    // with no caret at all rather than a short one. Hand the native caret back instead —
+    // the same fail-soft the surface already applies to a range selection or an unplaced
+    // position.
+    if (!(geometry.height > 0)) {
+      hide();
+      return;
+    }
     element.style.left = `${geometry.x * currentScale}px`;
     element.style.top = `${geometry.y * currentScale}px`;
     element.style.height = `${geometry.height * currentScale}px`;

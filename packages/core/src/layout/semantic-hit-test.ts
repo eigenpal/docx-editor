@@ -1021,10 +1021,17 @@ export function caretBoxOnLine(
     // Subtracting `leading` alone was right only while every rule put its extra above — the
     // rules that put it below leave `leading` at zero, so the whole spaced box read as text.
     const leading = line.leading ?? 0;
+    const band = Math.max(0, line.box.height - leading - (line.trailingSpacing ?? 0));
     return {
       x: line.contentX,
       y: line.box.y + leading,
-      height: Math.max(0, line.box.height - leading - (line.trailingSpacing ?? 0)),
+      // A line with NO box at all is the empty `w:p` a cell must end with after a nested
+      // table: it takes no flow height, so there is no band to size a caret from. Falling
+      // through to zero paints a 0px caret while the pages layer keeps the native one
+      // transparent, and the user types blind into a paragraph they cannot see. The ascent
+      // the line was measured at is what a caret in it should be, and it survives the
+      // collapse for exactly this.
+      height: band > 0 ? band : Math.max(0, line.baseline),
     };
   }
   let chosen = spans[0]!;

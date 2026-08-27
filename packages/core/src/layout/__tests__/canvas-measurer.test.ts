@@ -37,7 +37,10 @@ function load(body: string) {
  * Multiplier 0.7 is deliberately wider than the fixed measurer's 6pt*(size/11) grid at
  * typical sizes (the production bug: fixed underestimates real proportional faces ~20%).
  */
-function mockContext(fonts: string[] = []): CanvasTextContext {
+function mockContext(
+  fonts: string[] = [],
+  ratios: { ascent: number; descent: number } = { ascent: 0.8, descent: 0.2 }
+): CanvasTextContext {
   let currentFont = '';
   return {
     get font() {
@@ -52,8 +55,8 @@ function mockContext(fonts: string[] = []): CanvasTextContext {
       const sizePx = match ? Number(match[1]) : 11;
       return {
         width: text.length * sizePx * 0.7,
-        fontBoundingBoxAscent: sizePx * 0.8,
-        fontBoundingBoxDescent: sizePx * 0.2,
+        fontBoundingBoxAscent: sizePx * ratios.ascent,
+        fontBoundingBoxDescent: sizePx * ratios.descent,
       };
     },
   };
@@ -126,11 +129,17 @@ describe('tryCreateCanvasMeasurer', () => {
   });
 
   test('line metrics use fontBoundingBox ascent + descent when reported', () => {
-    const measurer = tryCreateCanvasMeasurer({ context: mockContext(), scale: 1 })!;
+    // The mock reports 1.22 em, ABOVE the 1.15 floor, so the reported box is what is used —
+    // the shape of Carlito, Calibri's metric twin and the face the default stack leads with.
+    // A face that tall must not be shortened to the floor.
+    const measurer = tryCreateCanvasMeasurer({
+      context: mockContext(undefined, { ascent: 0.95, descent: 0.27 }),
+      scale: 1,
+    })!;
     const metrics = measurer.lineMetrics(style({ fontSizePt: 20 }));
-    // Mock: ascent 0.8*20 + descent 0.2*20 = 20; baseline = ascent.
-    expect(metrics.height).toBeCloseTo(20, 5);
-    expect(metrics.baseline).toBeCloseTo(16, 5);
+    // Mock: ascent 0.95*20 + descent 0.27*20 = 24.4; baseline = ascent.
+    expect(metrics.height).toBeCloseTo(24.4, 5);
+    expect(metrics.baseline).toBeCloseTo(19, 5);
   });
 
   test('line metrics fall back to size×1.15 / 0.8 when boxes are absent', () => {
@@ -160,23 +169,31 @@ describe('tryCreateCanvasMeasurer', () => {
   });
 
   test('scale converts painted-pixel boxes back to layout points', () => {
-    const measurer = tryCreateCanvasMeasurer({ context: mockContext(), scale: 2 })!;
+    // A face box above the floor, so the conversion is what the numbers show rather than
+    // the floor standing in for it.
+    const measurer = tryCreateCanvasMeasurer({
+      context: mockContext(undefined, { ascent: 0.95, descent: 0.27 }),
+      scale: 2,
+    })!;
     const metrics = measurer.lineMetrics(style({ fontSizePt: 10 }));
-    // Painted at 20px; ascent 16 + descent 4 → 20px / scale 2 = 10 layout units.
-    expect(metrics.height).toBeCloseTo(10, 5);
-    expect(metrics.baseline).toBeCloseTo(8, 5);
+    // Painted at 20px; ascent 19 + descent 5.4 → 24.4px / scale 2 = 12.2 layout units.
+    expect(metrics.height).toBeCloseTo(12.2, 5);
+    expect(metrics.baseline).toBeCloseTo(9.5, 5);
   });
 
-  test('the face-box branch carries no line gap, and the deterministic one uses 1.15', () => {
-    // A documented divergence from `shaped-measurer.ts`, pinned so it cannot widen or be
-    // "fixed" by a guessed constant. `TextMetrics` reports no leading, so the reported box
-    // is ascent + descent and nothing else — short of Word's ascent + descent + lineGap for
-    // any face that carries a gap, exact for one that does not.
+  test('the reported face box is a floor, never shorter than Word’s 1.15 em', () => {
+    // `TextMetrics` reports no leading, so the face box is ascent + descent and nothing
+    // else — a LOWER BOUND on Word's ascent + descent + lineGap. The mock reports
+    // 0.8 + 0.2 = 1.0 em, under the 1.15 floor, so the floor stands. Measured in Chrome,
+    // taking the raw face box here left Liberation Sans and Liberation Serif 4.3% short of
+    // the shaped measurer, and this measurer is the whole document's whenever no shaper was
+    // injected.
     const reported = tryCreateCanvasMeasurer({ context: mockContext(), scale: 1 })!;
     const sized = style({ fontSizePt: 10 });
-    expect(reported.lineMetrics(sized).height).toBeCloseTo(10 * (0.8 + 0.2), 5);
-    // With no reported box the deterministic branch stands in, and it already uses Word's
-    // 1.15 em — the ratio Liberation Sans and Liberation Serif both land on with the gap.
+    expect(reported.lineMetrics(sized).height).toBeCloseTo(11.5, 5);
+    // The baseline still comes from the reported ascent, so it never exceeds the height.
+    expect(reported.lineMetrics(sized).baseline).toBeCloseTo(8, 5);
+    // With no reported box at all the same deterministic floor stands in.
     const deterministic = tryCreateCanvasMeasurer({
       context: mockContextWithoutBox(),
       scale: 1,

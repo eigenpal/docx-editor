@@ -96,22 +96,22 @@ const EXPECTED_DEFAULT: Readonly<Record<string, Work>> = {
     cache: cache(12, 3201, 3201),
   },
   'enter-split-middle': {
-    placed: 13,
+    placed: 14,
     total: 3201,
     reusedPages: 154,
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(11, 3202, 3202),
+    cache: cache(12, 3202, 3202),
   },
   'backspace-join-middle': {
-    placed: 11,
+    placed: 12,
     total: 3199,
     reusedPages: 154,
     fullPasses: 1,
     pagesBefore: 204,
     pagesAfter: 204,
-    cache: cache(10, 3201, 3201),
+    cache: cache(11, 3201, 3201),
   },
   'enter-split-early': {
     placed: 14,
@@ -168,22 +168,22 @@ test('500-page multi-section: Enter and Backspace stay incremental', () => {
   );
   const work = workByName(report);
   expect(work['enter-split-middle']).toEqual({
-    placed: 44,
+    placed: 4,
     total: 8400,
     reusedPages: 624,
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3998, 12076, 12076),
+    cache: cache(3887, 12076, 12076),
   });
   expect(work['backspace-join-middle']).toEqual({
-    placed: 5,
+    placed: 2,
     total: 8398,
     reusedPages: 624,
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3960, 12075, 12075),
+    cache: cache(3886, 12075, 12075),
   });
   expect(work['enter-split-early']).toEqual({
     placed: 16,
@@ -219,15 +219,15 @@ test('500-page single-section: whole-page shifts reuse the tail', () => {
   );
   const work = workByName(report);
   expect(work['enter-split-middle']).toEqual({
-    placed: 44,
+    placed: 4,
     total: 8296,
-    reusedPages: 626,
+    reusedPages: 629,
     fullPasses: 1,
     pagesBefore: 630,
     pagesAfter: 630,
-    cache: cache(3998, 11972, 11972),
+    cache: cache(3887, 11972, 11972),
   });
-  expect(work['backspace-join-middle']!.placed).toBe(5);
+  expect(work['backspace-join-middle']!.placed).toBe(2);
   expect(work['page-break-middle']).toEqual({
     placed: 3,
     total: 8295,

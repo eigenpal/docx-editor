@@ -141,15 +141,21 @@ const SCENARIOS: readonly Scenario[] = [
   // paragraph at the caret, Backspace at a paragraph start joins it into the
   // one before. Both change the BLOCK COUNT, which is what distinguishes them
   // from every scenario above.
+  //
+  // 0.6, and the pair moves together so both still address one site. At 0.5 the paragraph
+  // the two 500-page fixtures pick sits on a page boundary, so Enter pushes a line across
+  // it and pays a whole unit reflow — 44 blocks rather than the 4 it costs anywhere else.
+  // Baselining that would leave the gate permitting an 11x regression in Enter's
+  // incremental cost, which is the one thing it exists to catch.
   {
     name: 'enter-split-middle',
-    fraction: 0.5,
+    fraction: 0.6,
     target: 'adjacent-body-pair',
     op: ({ paragraphId }) => ({ op: 'splitParagraph', paragraphId, offset: 10 }),
   },
   {
     name: 'backspace-join-middle',
-    fraction: 0.5,
+    fraction: 0.6,
     target: 'adjacent-body-pair',
     op: ({ paragraphId, nextParagraphId }) => ({
       op: 'joinParagraphs',

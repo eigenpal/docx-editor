@@ -243,7 +243,14 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
         // gap, so both land on Word's 1.1499 em). Faces with no gap — Carlito, Caladea,
         // Liberation Mono — are unaffected, which is why the error only showed on the two
         // faces that have one.
-        const height = ascent + descent + shaped.metrics.lineGap / fixedPointScale;
+        //
+        // CLAMPED, because `hhea.lineGap` is a signed int16 read from a font a DOCX can
+        // embed. External leading is non-negative on Windows and in GDI, and a face
+        // declaring `lineGap = -(ascender - descender) + 1` would otherwise give every run
+        // in that family a one-unit line box — the `height > 0` guard below only catches a
+        // total that reaches zero, not one crushed to a fraction of a point.
+        const lineGap = Math.max(0, shaped.metrics.lineGap / fixedPointScale);
+        const height = ascent + descent + lineGap;
         if (height > 0) {
           metrics = { height, baseline: ascent };
         } else {

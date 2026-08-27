@@ -125,6 +125,34 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     expect(metrics.baseline).toBeCloseTo(9.053, 2);
   });
 
+  test('a negative hhea lineGap cannot crush the line box', () => {
+    // `hhea.lineGap` is a signed int16 read from a font, and a DOCX embeds fonts. A face
+    // declaring a gap that cancels its own ascent and descent would otherwise give every run
+    // in that family a one-unit line box, and the `height > 0` guard would not catch it.
+    // External leading is non-negative on Windows and in GDI.
+    const hostile = createShapedMeasurer({
+      shaper: {
+        shape(input) {
+          return {
+            text: input.text,
+            direction: 'ltr',
+            bidiLevel: 0,
+            glyphs: [],
+            clusters: [],
+            fontSpans: [],
+            metrics: { ascent: 9_000, descent: 2_000, lineGap: -10_999 },
+          };
+        },
+      },
+      resolveFont: () => font,
+      fallback,
+      shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+      unicodeDataVersion: '15.1',
+      fixedPointScale: 1_000,
+    });
+    expect(hostile.lineMetrics(style())).toEqual({ height: 11, baseline: 9 });
+  });
+
   test('it is NOT the flat multiplier the fallback uses, so the font is really being read', () => {
     // If the two agreed, the test would pass whether or not the font was consulted.
     const exact = measurer().lineMetrics(style());
