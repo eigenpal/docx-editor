@@ -42,6 +42,11 @@ import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
+import { contentInsets, rowWithSplitBorders } from './table-cell-box.ts';
+
+// The cell box is its own unit (`table-cell-box.ts`); re-exported because callers reach for
+// it through the table-layout surface.
+export { rowWithSplitBorders };
 import {
   markRevisionFields,
   paragraphMarkFormatRevisionOf,
@@ -66,7 +71,6 @@ import {
   MAX_TABLE_NESTING,
   readTableStructure,
   tableOriginX,
-  type CellMarginsPt,
   type SemanticTableCell,
   type SemanticTableRow,
   type SemanticTableStructure,
@@ -91,7 +95,6 @@ import {
   resolveTableCellBorderGrid,
   type BorderGridCell,
   type BorderGridGeometry,
-  type CellBorderBox,
   type TableBorderBox,
   type TableBorderOwnershipBudget,
 } from './table-borders.ts';
@@ -563,11 +566,9 @@ function placeCellParagraph(
     /** When false, omit the bottom border (paragraph continues). */
     readonly includeBottomBorder?: boolean;
     /**
-     * Place the paragraph, then charge the cell nothing for it.
-     *
-     * The empty `w:p` a cell must end with when its content ends with a `w:tbl`. Its lines
-     * are still emitted at `top`, so the paragraph stays addressable, but flow does not
-     * advance past them — which is what Word and LibreOffice both draw.
+     * The empty `w:p` a cell must end with when its content ends with a `w:tbl`: placed at
+     * `top` so it stays addressable, but charged nothing — no spacing, no rules, no line
+     * box. Word and LibreOffice both draw it that way.
      */
     readonly collapseHeight?: boolean;
     /** What the table style says about this cell's paragraphs (17.7.6.6). */
@@ -805,12 +806,16 @@ function placeCellParagraph(
         x: originX + indent.left,
         y,
         width: available,
-        height: pendingLine.height,
+        // ZERO-height, not just zero flow: selection bands, `paragraphShadingBox` and
+        // `caretBoxOnLine` all read this box, so a line that keeps its height while the cell
+        // stops at `y` paints caret and highlight below the row. It costs the terminator its
+        // caret until something is typed into it, which un-collapses it.
+        height: collapseHeight ? 0 : pendingLine.height,
       },
       contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
       baseline: pendingLine.baseline,
-      leading: pendingLine.leading,
-      trailingSpacing: pendingLine.trailingSpacing,
+      leading: collapseHeight ? 0 : pendingLine.leading,
+      trailingSpacing: collapseHeight ? 0 : pendingLine.trailingSpacing,
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
     });
@@ -865,7 +870,11 @@ function placeCellParagraph(
     });
     contentTop = ruleY;
   }
-  if (complete && includeBottomBorder && bottomBorder) {
+  // Gated on `collapseHeight` exactly as the fit test is: charging the rule here after the
+  // fit test charged nothing grows `contentBottom` past the row, and past `maxBottom` on a
+  // page's last row. `topExtent` drops the top rule for the same reason, and the two edges
+  // have to agree or a boxed terminator paints half its frame.
+  if (complete && includeBottomBorder && bottomBorder && !collapseHeight) {
     const closeStroke = paragraphBorderStrokeWidthPt(bottomBorder);
     const ruleY = linesBottom + bottomBorder.spacePt;
     const box = {
@@ -1138,9 +1147,8 @@ function flowBlocksInBoxBounded(
       continue;
     }
 
-    // The `w:p` a cell must end with (17.4.66) when its content ends with a `w:tbl`. Word
-    // and LibreOffice give it no height; it still flows, so the caret and select-all reach
-    // it, but it costs the row nothing.
+    // The `w:p` a cell must end with (17.4.66) after a trailing `w:tbl`: it still flows, so
+    // the caret and select-all reach it, but Word and LibreOffice give it no height.
     const collapsed =
       inTableCell &&
       blockIndex === blocks.length - 1 &&
@@ -1205,53 +1213,6 @@ function flowBlocksInBoxBounded(
     complete: blockIndex >= blocks.length,
     fitted,
     nestedSplitBlocked,
-  };
-}
-
-function contentInsets(
-  margins: CellMarginsPt,
-  borders: SemanticTableCell['borders']
-): {
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-  readonly left: number;
-} {
-  // Border extents shrink the content box (border-box model) so thick rules do not cover text.
-  return {
-    top: margins.top + borderExtentPt(borders.top),
-    right: margins.right + borderExtentPt(borders.right),
-    bottom: margins.bottom + borderExtentPt(borders.bottom),
-    left: margins.left + borderExtentPt(borders.left),
-  };
-}
-
-function suppressSplitBorders(
-  borders: CellBorderBox,
-  omitTop: boolean,
-  omitBottom: boolean
-): CellBorderBox {
-  return {
-    top: omitTop ? { state: 'none' } : borders.top,
-    left: borders.left,
-    bottom: omitBottom ? { state: 'none' } : borders.bottom,
-    right: borders.right,
-  };
-}
-
-/** Clone a structure row with top/bottom borders suppressed for mid-row page cuts. */
-export function rowWithSplitBorders(
-  row: SemanticTableRow,
-  omitTop: boolean,
-  omitBottom: boolean
-): SemanticTableRow {
-  if (!omitTop && !omitBottom) return row;
-  return {
-    ...row,
-    cells: row.cells.map((cell) => ({
-      ...cell,
-      borders: suppressSplitBorders(cell.borders, omitTop, omitBottom),
-    })),
   };
 }
 

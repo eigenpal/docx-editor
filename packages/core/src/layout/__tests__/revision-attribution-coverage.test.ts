@@ -138,19 +138,35 @@ function describeGap(gap: AttributionGap): string {
   );
 }
 
-describe('revision attribution coverage', () => {
-  test('every tracked character is attributed in all-markup, across the corpus', () => {
-    const fixtures = readdirSync(FIXTURES).filter((name) => name.endsWith('.docx'));
-    // A corpus that stopped loading would make this pass by finding nothing, which is the one
-    // way an oracle lies. Assert it actually read a corpus.
-    expect(fixtures.length).toBeGreaterThan(50);
+/**
+ * Bun's 5 s default is the wrong bar for a whole-corpus oracle.
+ *
+ * This test opens and lays out every `.docx` in `e2e/fixtures/` — around a hundred of them,
+ * about 3.1 s in one process on a developer machine. That is close enough to the default
+ * that a loaded runner tips it over, and a timing failure here reddens `bun run test:serial`,
+ * which is the only run that catches a test leaving state on `document`. A ceiling wide
+ * enough to be about hanging rather than about load keeps that gate readable; a real hang
+ * still fails it.
+ */
+const CORPUS_TIMEOUT_MS = 30_000;
 
-    const gaps = fixtures.flatMap(gapsIn);
-    if (gaps.length > 0) {
-      throw new Error(
-        `${gaps.length} tracked revision(s) reach the page unattributed:\n\n` +
-          `${gaps.map(describeGap).join('\n\n')}\n`
-      );
-    }
-  });
+describe('revision attribution coverage', () => {
+  test(
+    'every tracked character is attributed in all-markup, across the corpus',
+    () => {
+      const fixtures = readdirSync(FIXTURES).filter((name) => name.endsWith('.docx'));
+      // A corpus that stopped loading would make this pass by finding nothing, which is the
+      // one way an oracle lies. Assert it actually read a corpus.
+      expect(fixtures.length).toBeGreaterThan(50);
+
+      const gaps = fixtures.flatMap(gapsIn);
+      if (gaps.length > 0) {
+        throw new Error(
+          `${gaps.length} tracked revision(s) reach the page unattributed:\n\n` +
+            `${gaps.map(describeGap).join('\n\n')}\n`
+        );
+      }
+    },
+    CORPUS_TIMEOUT_MS
+  );
 });

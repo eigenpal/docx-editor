@@ -14,6 +14,21 @@
 // reports them, otherwise a bounded size×1.15 / 0.8 fallback. Paint consumes the
 // layout-published line height as an explicit pixel value — never CSS `line-height:
 // normal` — so this module must not mount a DOM probe or call `getBoundingClientRect`.
+//
+// KNOWN DIVERGENCE from `shaped-measurer.ts`. Word's single-spaced line box is ascent +
+// descent + `hhea.lineGap`, and the shaped path reads all three straight out of the font.
+// `TextMetrics` exposes no leading — there is no `fontBoundingBoxLeading`, and the one
+// place a browser reports the sum is CSS `line-height: normal`, which this module may not
+// reach for. So the face-box branch below is a fraction short of the shaped rule: 1.1172 em
+// against Word's 1.1499 em for Arial, and exact for a face whose gap is zero (Calibri and
+// Carlito, which is what {@link DEFAULT_CANVAS_FONT_STACK} leads with). The gap is not
+// recoverable here, and guessing a constant would be worse than being short by a knowable
+// amount. It costs nothing on the deterministic branch, which already uses Word's 1.15.
+//
+// The exposure is narrow and second-order: this measurer is the shaped path's per-run
+// fallback, reached only for a family HarfBuzz could not load at all — so those runs are
+// already being measured against whatever face the browser substituted, not the declared
+// one. Closing it means giving the layout lane the gap from somewhere other than canvas.
 
 import type { TextMeasurer } from './semantic-records.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -284,8 +299,9 @@ export function tryCreateCanvasMeasurer(options: CanvasMeasurerOptions = {}): Te
       if (typeof ascent === 'number' && Number.isFinite(ascent) && ascent > 0) {
         baseline = ascent / scale;
         if (typeof descent === 'number' && Number.isFinite(descent) && descent >= 0) {
-          // Canvas reports the face box (ascent + descent). That is also Word's line-box
-          // basis: `hhea.lineGap` is external leading and must not inflate every line.
+          // Canvas reports the face box (ascent + descent) and no leading, so this is a
+          // fraction under Word's ascent + descent + `hhea.lineGap` for any face that
+          // carries a gap, and exact for one that does not. See the module header.
           const box = (ascent + descent) / scale;
           if (box > 0) height = box;
         }

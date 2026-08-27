@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { buildStyleCascadeTable, readTableStructure } from '../index.ts';
+import { cascadeTableFormatting } from '../style-cascade.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { documentOrder } from '../semantic-interaction.ts';
 import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts';
@@ -91,6 +92,35 @@ describe("a table with no w:tblStyle takes the document's default table style", 
     expect(margins).toEqual({ top: 0, right: 0, bottom: 0, left: 0 });
   });
 
+  test('a w:tblStyle naming a style nobody defines falls to the default too', () => {
+    // Word resolves an unknown style reference to the default table style. Returning
+    // nothing instead costs such a table the borders, conditional formats and cell margins
+    // `TableNormal` supplies.
+    const margins = marginsOf(
+      tableOf(ONE_CELL_TABLE('<w:tblStyle w:val="NoSuchStyle"/>')),
+      part(WORD_STYLES, '/word/styles.xml')
+    );
+    expect(margins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
+  });
+
+  test('two tables naming one style share the resolved chain', () => {
+    // The chain is flattened once per (cascade, style id): every table in a document asks
+    // the same question, and allocating five containers per table showed up as GC.
+    const cascade = buildStyleCascadeTable(part(WORD_STYLES, '/word/styles.xml').root);
+    const first = readTableStructure(tableOf(ONE_CELL_TABLE()), 468, 0, cascade)!;
+    const second = readTableStructure(
+      tableOf(ONE_CELL_TABLE('<w:tblStyle w:val="Roomy"/>')),
+      468,
+      0,
+      cascade
+    )!;
+    expect(cascadeTableFormatting(cascade, undefined)).toBe(
+      cascadeTableFormatting(cascade, 'AlsoUndefined')
+    );
+    expect(first.defaultMargins).toEqual({ top: 0, right: 5.4, bottom: 0, left: 5.4 });
+    expect(second.defaultMargins).toEqual({ top: 10, right: 5.4, bottom: 10, left: 5.4 });
+  });
+
   test('a styles part with no default table style falls back to the same numbers', () => {
     const margins = marginsOf(
       tableOf(ONE_CELL_TABLE()),
@@ -166,6 +196,48 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
       14 * (10 / 11),
       6
     );
+  });
+
+  test('a w:pBdr on the terminator costs the row nothing either', () => {
+    // The fit test charges the border zero, so placement has to as well: charging it here
+    // grew the row past the height the caller already sized, and past `maxBottom` on the
+    // last row of a page.
+    const bordered =
+      '<w:p><w:pPr><w:pBdr>' +
+      '<w:top w:val="single" w:sz="24" w:space="6"/>' +
+      '<w:bottom w:val="single" w:sz="24" w:space="6"/>' +
+      '</w:pBdr></w:pPr></w:p>';
+    const withBorder = outerRowHeight(layoutOf(cellWithNestedTable(bordered)));
+    const withNone = outerRowHeight(layoutOf(cellWithNestedTable('')));
+    expect(withBorder).toBeCloseTo(withNone, 6);
+  });
+
+  test('its published line box is zero-height, so nothing paints below the row', () => {
+    // `caretBoxOnLine`, the selection bands and `paragraphShadingBox` all read this box. A
+    // line that kept its height while the cell stopped at `y` drew a full line of caret and
+    // highlight below the row.
+    const layout = layoutOf(cellWithNestedTable('<w:p/>'));
+    const fragment = layout.pages[0]!.fragments.find(
+      (record): record is TableFragmentRecord => record.kind === 'table'
+    )!;
+    const cell = fragment.rows[0]!.cells[0]!;
+    const paragraphs = cell.blocks.filter((block) => block.kind === 'paragraph');
+    const terminator = paragraphs[paragraphs.length - 1]!;
+    if (terminator.kind !== 'paragraph') throw new Error('expected a paragraph fragment');
+    expect(terminator.box.height).toBe(0);
+    for (const line of terminator.lines) expect(line.box.height).toBe(0);
+    const rowBottom = fragment.rows[0]!.box.y + fragment.rows[0]!.box.height;
+    for (const line of terminator.lines) {
+      expect(line.box.y + line.box.height).toBeLessThanOrEqual(rowBottom + 0.001);
+    }
+  });
+
+  test('typing into it makes it an ordinary paragraph again', () => {
+    // The zero box is what Word draws, and it is not a trap: the moment the paragraph holds
+    // anything it stops being a terminator and takes its full line back.
+    const withText = outerRowHeight(layoutOf(cellWithNestedTable(p('x'))));
+    const withNone = outerRowHeight(layoutOf(cellWithNestedTable('')));
+    expect(withText).toBeGreaterThan(withNone);
   });
 
   test('it stays addressable, so the caret and select-all still reach it', () => {

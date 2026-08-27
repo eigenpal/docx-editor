@@ -165,9 +165,15 @@ const SCENARIOS: readonly Scenario[] = [
   },
   // Ctrl+Enter: adds one whole sheet, so every page below moves without changing.
   // The scenario that proves whole-page tail reuse (a shifted tail must not re-place).
+  //
+  // 0.6, not 0.5. Whether a page break ADDS a sheet depends on where its paragraph sits:
+  // at 0.5 the two generated 500-page fixtures put it at the top of a page, where a break
+  // is a no-op, and both gates went from proving the remap to proving nothing. The
+  // synthetic units end on a forced page start, so slack inside a unit can also swallow the
+  // break; 0.6 lands past that on all three fixtures and each one gains exactly one sheet.
   {
     name: 'page-break-middle',
-    fraction: 0.5,
+    fraction: 0.6,
     target: 'adjacent-body-pair',
     op: ({ paragraphId }) => ({ op: 'insertPageBreak', paragraphId, offset: 0 }),
   },

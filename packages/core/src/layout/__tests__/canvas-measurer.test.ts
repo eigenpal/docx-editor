@@ -166,6 +166,23 @@ describe('tryCreateCanvasMeasurer', () => {
     expect(metrics.height).toBeCloseTo(10, 5);
     expect(metrics.baseline).toBeCloseTo(8, 5);
   });
+
+  test('the face-box branch carries no line gap, and the deterministic one uses 1.15', () => {
+    // A documented divergence from `shaped-measurer.ts`, pinned so it cannot widen or be
+    // "fixed" by a guessed constant. `TextMetrics` reports no leading, so the reported box
+    // is ascent + descent and nothing else — short of Word's ascent + descent + lineGap for
+    // any face that carries a gap, exact for one that does not.
+    const reported = tryCreateCanvasMeasurer({ context: mockContext(), scale: 1 })!;
+    const sized = style({ fontSizePt: 10 });
+    expect(reported.lineMetrics(sized).height).toBeCloseTo(10 * (0.8 + 0.2), 5);
+    // With no reported box the deterministic branch stands in, and it already uses Word's
+    // 1.15 em — the ratio Liberation Sans and Liberation Serif both land on with the gap.
+    const deterministic = tryCreateCanvasMeasurer({
+      context: mockContextWithoutBox(),
+      scale: 1,
+    })!;
+    expect(deterministic.lineMetrics(sized).height).toBeCloseTo(11.5, 5);
+  });
 });
 
 describe('canvas measurer cache bounds', () => {

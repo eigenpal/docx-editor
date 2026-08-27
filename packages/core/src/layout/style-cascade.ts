@@ -366,11 +366,53 @@ export function cascadeTableFormatting(
   table: StyleCascadeTable,
   styleId: string | undefined
 ): CascadedTableFormatting {
-  const resolvedId =
-    styleId && isValidStyleId(styleId) ? styleId : (table.defaultTableStyleId ?? undefined);
-  if (!resolvedId) return EMPTY_TABLE_FORMATTING;
-  const chain = styleChain(table, resolvedId, 'table');
-  if (chain.length === 0) return EMPTY_TABLE_FORMATTING;
+  const named = styleId && isValidStyleId(styleId) ? styleId : null;
+  const fromNamed = named ? cachedTableFormatting(table, named) : null;
+  if (fromNamed) return fromNamed;
+  // A `w:tblStyle` naming a style the part does not define is no statement at all, so it
+  // falls to the default the same way an absent one does. Checked AFTER the chain rather
+  // than before it: a well-formed id that resolves to nothing would otherwise keep the
+  // borders, conditional formats and `w:tblCellMar` that `TableNormal` supplies.
+  const fallback = table.defaultTableStyleId;
+  if (!fallback || fallback === named) return EMPTY_TABLE_FORMATTING;
+  return cachedTableFormatting(table, fallback) ?? EMPTY_TABLE_FORMATTING;
+}
+
+/**
+ * One resolved chain per (cascade, style id), for the life of the cascade.
+ *
+ * Every table in a document that names the same style — and every table that names none,
+ * which is now every one of them through the default — asks for the same answer. Flattening
+ * the chain per table allocated five containers each and showed up as GC on a corpus pass.
+ * The key space is bounded by the styles map, because an id that resolves to an empty chain
+ * is never stored.
+ */
+const tableFormattingMemos = new WeakMap<StyleCascadeTable, Map<string, CascadedTableFormatting>>();
+
+function cachedTableFormatting(
+  table: StyleCascadeTable,
+  styleId: string
+): CascadedTableFormatting | null {
+  let byId = tableFormattingMemos.get(table);
+  if (!byId) {
+    byId = new Map();
+    tableFormattingMemos.set(table, byId);
+  }
+  const cached = byId.get(styleId);
+  if (cached) return cached;
+  const built = flattenTableStyleChain(table, styleId);
+  if (!built) return null;
+  byId.set(styleId, built);
+  return built;
+}
+
+/** Flatten one style's `w:basedOn` chain, base-first. Null when the id resolves to nothing. */
+function flattenTableStyleChain(
+  table: StyleCascadeTable,
+  styleId: string
+): CascadedTableFormatting | null {
+  const chain = styleChain(table, styleId, 'table');
+  if (chain.length === 0) return null;
   const tablePropertyNodes: OoxmlElement[] = [];
   const paragraphPropertyNodes: OoxmlElement[] = [];
   const paragraphProperties: OoxmlProperty[] = [];
@@ -385,13 +427,33 @@ export function cascadeTableFormatting(
       conditional.set(conditionType, node);
     }
   }
-  return {
-    tablePropertyNodes,
-    paragraphPropertyNodes,
-    paragraphProperties,
-    runProperties,
+  // Frozen because it is now SHARED by every table that names this style: a consumer that
+  // mutated it would rewrite the answer for all of them.
+  return Object.freeze({
+    tablePropertyNodes: Object.freeze(tablePropertyNodes) as readonly OoxmlElement[],
+    paragraphPropertyNodes: Object.freeze(paragraphPropertyNodes) as readonly OoxmlElement[],
+    paragraphProperties: Object.freeze(paragraphProperties) as readonly OoxmlProperty[],
+    runProperties: Object.freeze(runProperties) as readonly OoxmlProperty[],
     conditional,
-  };
+  });
+}
+
+/**
+ * Does this style contribute anything a CELL's paragraphs read?
+ *
+ * `tableCellStyleFormatting` reads only the paragraph, run and conditional material — never
+ * `tablePropertyNodes` — so a style that carries `w:tblPr` alone (Word's `TableNormal` is
+ * exactly that) can answer for every condition set without being asked. Callers use this to
+ * keep the `EMPTY_TABLE_CELL_STYLE_FORMATTING` short circuit they used to get from an
+ * identity check against {@link EMPTY_TABLE_FORMATTING}.
+ */
+export function tableStyleAffectsCells(formatting: CascadedTableFormatting): boolean {
+  return (
+    formatting.paragraphPropertyNodes.length > 0 ||
+    formatting.paragraphProperties.length > 0 ||
+    formatting.runProperties.length > 0 ||
+    formatting.conditional.size > 0
+  );
 }
 
 /**
