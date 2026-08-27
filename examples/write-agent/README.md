@@ -5,16 +5,21 @@ It keeps `examples/agent` unchanged.
 
 ## Run the example
 
-1. Copy `.env.example` to `.env.local`.
-2. Set `OPENAI_API_KEY`.
-3. Optionally set `OPENAI_MODEL` and `ALLOWED_ORIGINS`.
-4. From the repository root, run:
+From the repository root, install dependencies and create the environment file:
 
-   ```bash
-   bun dev:write-agent
-   ```
+```bash
+bun install
+cp examples/write-agent/.env.example examples/write-agent/.env.local
+```
 
-5. Open `http://localhost:3004`.
+Set `OPENAI_API_KEY` in `examples/write-agent/.env.local`. You can also set
+`OPENAI_MODEL` and `ALLOWED_ORIGINS`. Then start the example:
+
+```bash
+bun run dev:write-agent
+```
+
+Open `http://localhost:3004`.
 
 Without `OPENAI_API_KEY`, the chat route returns HTTP 503 with a clear message.
 The editor and direct tool tests still work.

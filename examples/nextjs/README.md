@@ -1,29 +1,26 @@
 # Next.js example
 
-`@docx-editor.dev/react` in the Next.js App Router. The editor reads
-the DOM and measures layout in the browser, so it cannot run during server
-rendering. The fix is one `dynamic()` import with `ssr: false`.
+This App Router example loads the React editor in the browser.
 
-## Run it
+## Run the example
 
-This example depends on the `@docx-editor.dev/*` workspace packages, so build them
-once first. From the repo root:
+From the repository root, build the workspace packages before you start Next.js:
 
 ```bash
 bun install
 bun run build:packages
-bun run dev:nextjs     # http://localhost:3000
+bun run dev:nextjs
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:3000`.
 
-## The SSR boundary
+## Set the client boundary
 
-`app/page.tsx` keeps the route a Server Component shell and pulls the editor
-in client-only:
+`app/page.tsx` is a Client Component. It uses `dynamic()` with `ssr: false`:
 
 ```tsx
 'use client';
+
 import dynamic from 'next/dynamic';
 
 const Editor = dynamic(() => import('./components/Editor').then((m) => m.Editor), {
@@ -36,27 +33,17 @@ export default function Page() {
 }
 ```
 
-`app/components/Editor.tsx` is a `'use client'` component that renders
-`<DocxEditor />`. Without `ssr: false` the build fails on `window`/`document`
-access during prerender.
+Next.js requires the `dynamic()` call inside a Client Component.
+`app/components/Editor.tsx` also uses `'use client'` and renders `<DocxEditor />`.
 
-## Files
-
-| File                        | What it does                             |
-| --------------------------- | ---------------------------------------- |
-| `app/page.tsx`              | Server shell, client-only editor import  |
-| `app/components/Editor.tsx` | `'use client'` editor component          |
-| `app/layout.tsx`            | Page metadata, icons, share tags         |
-| `next.config.ts`            | Monorepo file tracing + build-time flags |
-
-## Use it in your own Next.js app
+## Add the editor to Next.js
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-Always import `DocxEditor` through `dynamic(..., { ssr: false })`, or wrap it
-in a `'use client'` component that only renders after mount. Toolbar icons are
-bundled as inline SVG, so there is no icon font to load.
+Import `@docx-editor.dev/core/styles/editor.css` once.
+Load your editor component with `dynamic(..., { ssr: false })`.
 
-Docs: https://www.docx-editor.dev/docs/1.x/react
+For more information, see the
+[React adapter guide](https://www.docx-editor.dev/docs/2.x/react).

@@ -8,13 +8,22 @@ The agent is read + comment only. It has no tool that edits text.
 
 ## Run it
 
+From the repository root, install dependencies and build the workspace packages:
+
 ```bash
 bun install
-bun run build:packages          # from the repo root
+bun run build:packages
 cp examples/agent/.env.example examples/agent/.env.local
-# put your OPENAI_API_KEY in .env.local
-bun run dev:agent               # http://localhost:3003
 ```
+
+Set `OPENAI_API_KEY` in `examples/agent/.env.local`. You can also set
+`OPENAI_MODEL` and `ALLOWED_ORIGINS`. Then start the example:
+
+```bash
+bun run dev:agent
+```
+
+Open `http://localhost:3003`.
 
 The demo boots with a short document of deliberately terrible prose. Click a
 suggestion, or open your own `.docx` from the title bar.
@@ -72,7 +81,7 @@ Two phases, and the first is not optional. `text` is a property of a
 Paragraphs are addressed by `uniqueLocalId`, issued by the runtime, so every
 paragraph has one whether or not the file carried an id for it.
 
-### Comments come from pro
+### Comments use EigenPal Pro License
 
 editor-api can read, reply to and resolve comments, but it cannot create one. So
 `add_comment` selects the phrase through editor-api and lands the comment
@@ -96,8 +105,8 @@ lands on the wrong occurrence, or on the whole block.
 
 ## Three things that hang the panel
 
-Each of these fails silently, with the chat sitting on "Reading the document"
-for ever and nothing in the console.
+Each of these fails silently. The chat stays on "Reading the document," and the
+console shows no error.
 
 1. **A tool that throws without answering.** `onToolCall` must reach
    `addToolResult` on every path. Catch inside it and hand the failure to the
@@ -124,4 +133,5 @@ capped, so it can search for the rest instead of assuming it saw everything.
 The route spends your API key for anyone who can reach it. Set
 `ALLOWED_ORIGINS`, and add a rate limit before it is public.
 
-Docs: https://www.docx-editor.dev/docs/editor-api
+For more information, see the
+[editor API documentation](https://www.docx-editor.dev/docs/editor-api).

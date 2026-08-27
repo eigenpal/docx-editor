@@ -1,43 +1,92 @@
 # Examples
 
-Runnable examples for every framework adapter. From the repo root:
+Install dependencies from the repository root. Build the workspace packages before you run an
+example that imports package output.
 
 ```bash
-# Vite + Vue together (the default dev target)
-bun run dev
+bun install
+bun run build:packages
+```
 
-# Pick one
-bun run dev:react   # examples/vite
-bun run dev:agent   # examples/agent (needs OPENAI_API_KEY)
-bun run dev:igloo   # examples/igloo
-bun run dev:vue     # examples/vue
-bun run dev:nextjs  # examples/nextjs
-bun run dev:nuxt    # examples/nuxt
-bun run dev:remix   # examples/remix
-bun run dev:astro   # examples/astro
+## Run an example
 
-# Server-backed collaboration: room server in one terminal, app in another
+Use one root script for each development server:
+
+```bash
+bun run dev                 # React and Vue
+bun run dev:react           # Vite and React
+bun run dev:vue             # Vite and Vue
+bun run dev:happypath       # Packaged React component
+bun run dev:igloo           # Customized React interface
+bun run dev:custom-nodes    # Custom content controls
+bun run dev:nextjs          # Next.js
+bun run dev:nuxt            # Nuxt; run build:packages:vue first
+bun run dev:remix           # Remix
+bun run dev:astro           # Astro
+bun run dev:agent           # Document review agent
+bun run dev:write-agent     # Document writing agent
+bun run dev:collaboration   # Peer-to-peer collaboration
+```
+
+Set `OPENAI_API_KEY` as described in each agent example before you run `dev:agent` or
+`dev:write-agent`.
+
+Install Node 22.18 or later for the Hocuspocus server. Run the server and app in
+separate terminals:
+
+```bash
 bun run dev:collaboration-hocuspocus:server
 bun run dev:collaboration-hocuspocus
 ```
 
-## Catalogue
+The Hocuspocus server uses `ws://127.0.0.1:1234`. The app uses
+`http://localhost:5176`.
 
-| Path                        | What it shows                                                                                                                                                                                                                                      |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vite/`                     | Vanilla Vite + React, composed (`DocxEditor.Root`/`Viewport`/`Content`). Default React dev target. Registers the PRO review module + a `defineCustomNode` citation definition; the review pane comes from `@docx-editor.dev/pro/react`.            |
-| `igloo/`                    | Deep customization (see [`docs/CUSTOMIZING.md`](../docs/CUSTOMIZING.md)): every `DocxEditor.*` part re-skinned, re-iconed and re-labelled under one theme, plus a host-composed context menu. Point people here who ask "how far can I take this?" |
-| `vue/`                      | Vue 3 adapter composable parity demo; mirrors the Vite React example.                                                                                                                                                                              |
-| `nextjs/`                   | Next.js App Router integration.                                                                                                                                                                                                                    |
-| `nuxt/`                     | Nuxt 3/4 module (`@docx-editor.dev/nuxt`).                                                                                                                                                                                                         |
-| `astro/`                    | Astro with React island.                                                                                                                                                                                                                           |
-| `remix/`                    | Remix integration.                                                                                                                                                                                                                                 |
-| `collaboration/`            | Real-time collab proof-of-concept.                                                                                                                                                                                                                 |
-| `collaboration-hocuspocus/` | Server-backed collaboration: a Hocuspocus room server plus a React host that joins it with `useHocuspocusCollaboration`. Remote carets carry the collaborator's avatar and name through `DocxEditorCollaboration.CaretLabels`.                     |
-| `parity/`                   | Single deployment serving React + Vue adapters with a switcher pill. Used by `bun run preview`.                                                                                                                                                    |
-| `automation/`               | `@docx-editor.dev/editor-api` driving a document with no browser and no framework: a template filled from a script, plus what the browser subpath adds.                                                                                            |
-| `agent/`                    | An LLM agent reading and commenting on the live document. Tool calls run in the browser through `editor-api/browser`; comments land through pro's review API. Point people here who ask "how do I plug a model into this?"                         |
-| `shared/`                   | Shared switcher widgets + the demo `sample.docx`. Not a runnable example; imported by `vite/` and `vue/`.                                                                                                                                          |
-| `dev-all.sh`                | Spins up several adapters at once for cross-adapter dogfooding. Backs `bun run dev:demo`.                                                                                                                                                          |
+Run all main framework examples together:
 
-Adding a new example: drop it under `examples/<name>/`, add a row above, and if the example has its own `package.json` with dependencies, add its path to the root `package.json` `workspaces` list (skip for static/imported-only examples like `parity/` and `shared/`).
+```bash
+bun run dev:demo
+```
+
+Build and serve the combined React and Vue preview:
+
+```bash
+bun run preview
+```
+
+Fill a DOCX template without a browser:
+
+```bash
+bun run --filter './examples/automation' fill
+```
+
+The React Vite example and the peer-to-peer collaboration example both use port `5173`.
+Stop one server before you start the other.
+
+## Catalog
+
+- `vite/` shows the composed React API with Vite. It includes review features
+  under the EigenPal Pro License and a custom citation node.
+- `vue/` shows the Vue 3 adapter and mirrors the React example.
+- `happy-path/` shows the packaged `<DocxEditor>` component with minimal host code.
+- `igloo/` shows extensive interface customization. See
+  [Customize the editor](../docs/CUSTOMIZING.md).
+- `custom-nodes/` defines and edits a custom citation content control.
+- `nextjs/` shows Next.js App Router integration.
+- `nuxt/` shows the `@docx-editor.dev/nuxt` module.
+- `remix/` shows Remix integration.
+- `astro/` shows an Astro page with a React island.
+- `agent/` uses an AI agent to read and comment on an open document.
+- `write-agent/` uses an AI agent to create a document and propose tracked changes.
+- `automation/` fills a DOCX template with `@docx-editor.dev/editor-api`.
+- `collaboration/` uses `y-webrtc` for peer-to-peer collaboration without an application
+  server.
+- `collaboration-hocuspocus/` uses a Hocuspocus server for authenticated rooms and durable
+  storage.
+- `parity/` serves the React and Vue builds through `bun run preview`.
+- `shared/` contains reusable example chrome, links, branding, and framework switchers. It is
+  not runnable.
+- `dev-all.sh` starts the main framework examples for `bun run dev:demo`.
+
+When you add an example, add its path to this catalog. Add packages with dependencies to the
+root `workspaces` list.

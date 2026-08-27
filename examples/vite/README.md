@@ -1,41 +1,35 @@
 # Vite example
 
-`@docx-editor.dev/react` in a plain Vite + React SPA. One editor, no surface
-picker: what you see here is what the package gives you.
+This Vite and React app shows the editor composition API with custom chrome.
 
-## Run it
+## Run the example
 
-From the repo root:
+From the repository root, run:
 
 ```bash
 bun install
-bun run dev:react      # http://localhost:5173
+bun run dev:react
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:5173`.
 
-## Files
+The default document is `public/sample.docx`. In development,
+`?fixture=<name>.docx` resolves a file with that name from `e2e/fixtures/`.
+Production builds include only the fixtures listed in `vite.config.ts`.
 
-| File                         | What it does                                                         |
-| ---------------------------- | -------------------------------------------------------------------- |
-| `src/main.tsx`               | React root; mounts the one editor                                    |
-| `src/ComposedEditorDemo.tsx` | The editor: composition API, custom header, library toolbar          |
-| `src/ThemeToggle.tsx`        | Light/dark switch used by the demo header                            |
-| `src/demoButtons.ts`         | Inline button styles for the demo header                             |
-| `src/styles.css`             | Demo-only chrome styles (the library ships its own)                  |
-| `src/test-harness/`          | Playwright-only tree-binding harness (`?treeFirst=1`), not a surface |
-| `index.html`                 | Page shell, icons, and share tags                                    |
-| `vite.config.ts`             | Aliases `@docx-editor.dev/*` to workspace source in dev              |
+## Add the editor to Vite
 
-The default document is served from `e2e/fixtures/` by a vite plugin, so the demo and
-the e2e suite read the same bytes. `?fixture=<name>.docx` loads any `.docx` in `public/`
-instead.
+Install the adapter and its engine peer:
 
-## Minimal integration
+```bash
+npm install @docx-editor.dev/react @docx-editor.dev/core
+```
 
-A working editor is one component. Chrome and English labels are the default:
+Import `@docx-editor.dev/core/styles/editor.css` once in your application entry.
+Then render the editor:
 
 ```tsx
+import '@docx-editor.dev/core/styles/editor.css';
 import { useRef } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
 
@@ -55,26 +49,9 @@ function Editor({ file }: { file: ArrayBuffer }) {
 `DocumentHandle`. `fonts` is optional: omit it and the engine resolves faces
 from the document's own embedded fonts.
 
-Chrome labels default to the bundled English catalogue. To show another language,
-pass `t` — any function from an i18n key to display text. The keys are the ones in
-`packages/i18n/en.json`, and `@docx-editor.dev/i18n` ships the translated
-catalogues plus a `createT` helper:
+## Build custom chrome
 
-```tsx
-import { createT, de } from '@docx-editor.dev/i18n';
-
-<DocxEditor ref={editorRef} document={file} t={createT(de, 'de')} />;
-```
-
-`chrome={false}` renders the painted document alone, for hosts supplying their own
-frame.
-
-## Building your own chrome
-
-`DocxEditor` is sugar over primitives you can use directly, which is what
-`ComposedEditorDemo` does: a custom header built from `useDocxEditor`,
-`useEditorState`, `useEditorCommand` and `useFontFamily`, with the library
-toolbar alongside it and one slot overridden in place.
+`src/ComposedEditorDemo.tsx` uses the editor primitives and hooks directly.
 
 ```tsx
 <DocxEditor.Root document={bytes}>
@@ -86,12 +63,5 @@ toolbar alongside it and one slot overridden in place.
 </DocxEditor.Root>
 ```
 
-## Use it in your own Vite app
-
-```bash
-npm install @docx-editor.dev/react
-```
-
-Toolbar icons are bundled as inline SVG, so there is no icon font to load.
-
-Docs: https://www.docx-editor.dev/docs/2.x/react
+For more information, see the
+[React adapter guide](https://www.docx-editor.dev/docs/2.x/react).

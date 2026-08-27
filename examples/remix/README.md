@@ -1,26 +1,22 @@
 # Remix example
 
-`@docx-editor.dev/react` in Remix (Vite). Remix renders on the server by
-default, and the editor is browser-only, so the route gates it behind a
-mount check and a `lazy()` import.
+This Remix and Vite example loads the React editor after the route mounts.
 
-## Run it
+## Run the example
 
-This example resolves the `@docx-editor.dev/*` packages from their built output, so
-build the workspace packages once first. From the repo root:
+From the repository root, build the workspace packages before you start Remix:
 
 ```bash
 bun install
 bun run build:packages
-bun run dev:remix      # http://localhost:3001
+bun run dev:remix
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:3001`.
 
-## The SSR boundary
+## Set the client boundary
 
-`app/routes/_index.tsx` renders a loading state on the server and the first
-client paint, then swaps in the editor after mount:
+`app/routes/_index.tsx` uses a mount check and a lazy import:
 
 ```tsx
 import { lazy, Suspense, useEffect, useState } from 'react';
@@ -40,27 +36,17 @@ export default function Index() {
 }
 ```
 
-The `mounted` guard keeps the server and first-render markup identical so
-hydration does not mismatch. `lazy()` keeps the editor bundle out of the
-server build.
+The mount check keeps the server markup and first client markup identical.
+The lazy import keeps the editor out of the server build.
 
-## Files
-
-| File                        | What it does                               |
-| --------------------------- | ------------------------------------------ |
-| `app/routes/_index.tsx`     | Mount guard + lazy editor import           |
-| `app/components/Editor.tsx` | `<DocxEditor />` and file handling         |
-| `app/root.tsx`              | Document shell, page icons                 |
-| `vite.config.ts`            | Remix Vite plugin + Tailwind/PostCSS setup |
-
-## Use it in your own Remix app
+## Add the editor to Remix
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
 ```
 
-Render the editor only after mount (the `useState`/`useEffect` pattern
-above) or it will crash server rendering on `window`. Load the Material
-Symbols font in `app/root.tsx`.
+Import `@docx-editor.dev/core/styles/editor.css` once.
+Render the editor only after the component mounts.
 
-Docs: https://www.docx-editor.dev/docs/1.x/react
+For more information, see the
+[Remix integration guide](https://www.docx-editor.dev/docs/2.x/frameworks/remix).

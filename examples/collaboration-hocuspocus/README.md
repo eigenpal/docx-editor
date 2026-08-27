@@ -1,140 +1,83 @@
-# Server-backed collaboration with avatar carets
+# Server-backed collaboration
 
-Two people editing one DOCX through a [Hocuspocus](https://tiptap.dev/docs/hocuspocus) room,
-with each remote caret labelled by the collaborator's photo and name.
+This example connects a React editor to a
+[Hocuspocus collaboration server](https://tiptap.dev/docs/hocuspocus). Remote carets show each
+person's name and avatar.
 
-The example has two halves:
+The example has two parts:
 
-- `server/server.ts` — the room server. It authenticates connections, holds the shared
-  document, and writes it to disk so a room survives a restart.
-- `src/` — a React host that joins the room with `useHocuspocusCollaboration` and replaces the
-  engine's caret labels with `DocxEditorCollaboration.CaretLabels`.
+- `server/server.ts` authenticates connections and stores rooms.
+- `src/` joins a room with `useHocuspocusCollaboration`.
 
-## Run it
+## Run the example
 
-The server needs Node 22.18 or later: it strips the types in `server/server.ts` as it runs
-them, and Hocuspocus v4 targets Node rather than Bun.
+Use Node 22.18 or later for the server. Hocuspocus v4 targets Node, and Node runs the TypeScript
+server with type stripping.
 
-Run the server and the app in two terminals, from the repository root:
+Install and build from the repository root:
 
 ```bash
 bun install
-
-# terminal 1
-bun run dev:collaboration-hocuspocus:server   # ws://127.0.0.1:1234
-
-# terminal 2
-bun run dev:collaboration-hocuspocus          # http://localhost:5176
+bun run build:packages
 ```
 
-Then:
+Start the server in the first terminal:
 
-1. Open `http://localhost:5176` and take a seat. Keys `1` to `4` pick one.
-2. Select the room id in the bar to copy the invite link.
-3. Open the link in a second browser profile or a private window, and take a different seat.
-4. Type in both windows. Each caret carries the other person's avatar and name.
-
-Rooms are stored in `server/.data/`, as a `.ydoc` the server reads back and a `.docx` it
-exports beside it. Delete that directory to start over.
-
-Two carets a few characters apart overlap, because the engine positions every label above its
-own caret and does no collision avoidance. With four seats in the demo you will see it.
-
-## One photo per person, in three places
-
-The demo's four people live in `src/people.ts`: an id, a display name, a color, and an image
-URL. That one record reaches the remote carets, the room bar, and the comment cards.
-
-The photos are illustrative portraits drawn for this demo and served from `public/avatars/`,
-so the example ships no third-party imagery and needs no network. Point `avatarUrl` at your own
-images.
-
-### The caret label
-
-Presence carries an actor id, a display name, and a color. It never carries a photo, and it
-must not: a peer publishes its own presence, so an avatar URL on the wire is a URL that any
-room member can point at any host.
-
-So the photo is resolved locally, on each replica, and arrives already resolved:
-
-```tsx
-<DocxEditorCollaboration.CaretLabels session={session}>
-  {({ selection, color, avatarUrl }) => (
-    <CollaboratorCaret selection={selection} color={color} avatarUrl={avatarUrl} />
-  )}
-</DocxEditorCollaboration.CaretLabels>
+```bash
+bun run dev:collaboration-hocuspocus:server
 ```
 
-`CollaboratorCaret` renders `avatarUrl` straight from the render prop — the engine has already
-resolved it from the `AuthorStyle` declared for that collaborator. There is no directory call
-in the component, and no lookup keyed on `actorId`.
+Start the app in the second terminal:
 
-The NAME is the one the peer published, not a local one. A peer picks its own actor id and its
-own display name, so the picture follows a value the peer controls: someone who joins calling
-themselves "Galadriel" gets Galadriel's declared photo. That is the right trade for a demo with
-no identity provider, and the wrong one for production — derive the display name from the token
-your server verified, the way `onAuthenticate` in `server/server.ts` describes.
-
-The engine keeps creating, positioning, and coloring one label element per remote caret. The
-part portals your content into each one, inside the normal React tree, so every provider above
-it still works. Removing the part restores the engine's own name labels.
-
-An `actorId` identifies one attachment, not one person: the same person in two tabs is two
-carets, so it cannot be a user id. Nothing here decodes it.
-
-The label layer is furniture — `aria-hidden`, no pointer events. Nothing inside a label is
-announced or clickable. Interactive presence chrome belongs elsewhere, which is why the room
-bar holds the avatar stack and the invite link.
-
-### Comments and tracked changes
-
-The review side keys on a different value. A comment card resolves `w:author`, the display name
-the document was saved with, because the actor id is not in the file at all. Declare the photo
-against that name:
-
-```tsx
-<DocxEditor.AuthorStyle author={person.name} color={person.color} avatarUrl={person.avatarUrl} />
+```bash
+bun run dev:collaboration-hocuspocus
 ```
 
-`AuthorStyle` renders nothing. The packaged review card reads `avatarUrl` off it, so
-`<DocxEditorReview />` shows the same face with no render prop. `avatarUrl` accepts `http`,
-`https`, non-SVG `data:`, `blob:`, and same-origin relative URLs; anything else is dropped.
+The server uses `ws://127.0.0.1:1234`. Open the app at `http://localhost:5176`.
 
-Select some text and add a comment to see it.
+1. Choose a seat in the first browser.
+2. Select the room ID to copy the invite link.
+3. Open the link in a private window or another browser profile.
+4. Choose a different seat, and edit in both windows.
 
-### What you do not have to wire
+## Configure the connection
 
-Anything else. Colour and picture both resolve from the same declaration, on every surface that
-draws that person. `src/people.ts` is a plain list with no lookups in it, and no component in
-`src/` reads it at render time — `App.tsx` declares it once and the engine does the rest.
+The default shared token is `demo-token`. Set matching server and client values when you change
+it.
 
-The one thing the declaration cannot answer for is somebody it does not name. An undeclared
-collaborator falls back to initials on a colour from the author ramp, which is what you get for
-anyone outside your directory.
+- `PORT` sets the Hocuspocus server port.
+- `COLLAB_TOKEN` sets the server token.
+- `VITE_COLLAB_URL` sets the WebSocket URL for the app.
+- `VITE_COLLAB_TOKEN` sets the token that the app sends.
 
-## Authentication
+The server checks the token before it opens a document. A production server should verify a
+signed token and derive the user identity from that token.
 
-The provider sends a token in its handshake, and the server checks it in `onAuthenticate`
-before any message reaches a document:
+## Store and export rooms
 
-```ts
-async onAuthenticate({ token, documentName }) {
-  if (token !== TOKEN) throw new Error('invalid token');
-  return { room: documentName };
-}
-```
+The server stores rooms in `server/.data/`. It reads each `.ydoc` file when a room opens.
+It also exports a `.docx` file beside each Yjs document.
 
-The demo checks one shared secret. A real deployment verifies a signed token, returns the user
-it names as the connection context, and stops trusting the client's own display name. If your
-tokens expire, pass a callback instead of a string: the provider re-evaluates it on every
-reconnect.
+Delete `server/.data/` to remove all local rooms. Replace `onLoadDocument` and
+`onStoreDocument` when you need database or object storage.
 
-Set `VITE_COLLAB_URL`, `VITE_COLLAB_TOKEN`, `PORT`, and `COLLAB_TOKEN` to point the two halves
-somewhere else.
+The server never parses Office Open XML (OOXML). Hocuspocus stores the canonical package as an
+opaque `Y.Doc`. `readCollaborationDocument` creates the DOCX export from that replica.
 
-## What the server does not do
+## Customize people and carets
 
-It never parses OOXML. What travels the socket is the Yjs replica of the canonical package, and
-Hocuspocus treats it as an opaque `Y.Doc`. Persistence is therefore one Yjs update per room in
-`server/.data/`. Swap `onLoadDocument` and `onStoreDocument` for your database and the shape of
-the call stays the same.
+`src/people.ts` defines each person's ID, name, color, and local avatar URL. The
+app uses this record for carets, the room bar, and comment cards under the
+EigenPal Pro License.
+
+Presence sends an actor ID, display name, and color. Each replica resolves the avatar locally
+through `DocxEditor.AuthorStyle`. The demo serves its avatar files from `public/avatars/`.
+
+An `actorId` identifies one editor attachment, not one person. The same person in two tabs has
+two actor IDs. The DOCX stores comment authors as `w:author`, not as actor IDs.
+
+`DocxEditorCollaboration.CaretLabels` renders custom labels inside the React tree. Removing it
+restores the standard name labels. Caret labels use `aria-hidden` and do not accept pointer
+events.
+
+Close carets can produce overlapping labels. The editor does not apply collision avoidance.

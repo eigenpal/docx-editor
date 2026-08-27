@@ -1,56 +1,44 @@
 # Vue example
 
-`@docx-editor.dev/vue` in a plain Vue 3 + Vite SPA. Same editor and same
-surface as the React adapter, with Vue components and refs. No SSR, so the
-editor mounts directly.
+This Vue 3 and Vite app uses the Vue adapter and the shared editor engine.
 
-## Run it
+## Run the example
 
-From the repo root:
+From the repository root, run:
 
 ```bash
 bun install
-bun run dev:vue        # http://localhost:5174
+bun run dev:vue
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:5174`.
 
-## Files
+`src/main.ts` starts the app and loads `src/ComposedEditorDemo.vue`.
+`src/styles.css` imports the editor stylesheet and adds demo styles.
 
-| File             | What it does                                            |
-| ---------------- | ------------------------------------------------------- |
-| `src/App.vue`    | The editor: open `.docx`, edit, agent panel             |
-| `src/main.ts`    | Vue app root; demo chrome in `styles.css`               |
-| `index.html`     | Page shell, icons, and share tags                       |
-| `vite.config.ts` | Aliases `@docx-editor.dev/*` to workspace source in dev |
+## Add the editor to Vue
 
-## Minimal integration
+Install the adapter and its engine peer:
+
+```bash
+npm install @docx-editor.dev/vue @docx-editor.dev/core
+```
+
+Import the stylesheet once. Then pass `"blank"` to create an empty document:
 
 ```vue
 <script setup lang="ts">
 import { DocxEditor } from '@docx-editor.dev/vue';
 import '@docx-editor.dev/vue/styles.css';
-import { createEmptyDocument } from '@docx-editor.dev/core';
-
-const doc = createEmptyDocument();
 </script>
 
 <template>
-  <DocxEditor :document="doc" />
+  <DocxEditor document="blank" />
 </template>
 ```
 
 To open a real file, read it as an `ArrayBuffer` or `Uint8Array` and pass it as
 `:document`.
 
-## Use it in your own Vue app
-
-```bash
-npm install @docx-editor.dev/vue @docx-editor.dev/core
-```
-
-Unlike the React adapter, the Vue adapter ships a stylesheet you must import
-once: `@docx-editor.dev/vue/styles.css`. Toolbar icons are bundled as inline
-SVG, so there is no icon font to load.
-
-Docs: https://www.docx-editor.dev/docs/2.x/vue
+For more information, see the
+[Vue adapter guide](https://www.docx-editor.dev/docs/2.x/vue).

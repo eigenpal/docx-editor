@@ -18,6 +18,11 @@ editor module. You can use peer-to-peer WebRTC, a
 [Hocuspocus server](https://tiptap.dev/docs/hocuspocus), or an existing Yjs
 provider.
 
+The adapters provide room hooks, a wired collaboration root, status fields, and
+custom presence renderers. Server code can also export synchronized room state
+as DOCX bytes. The [real-time collaboration guide](/docs/2.x/pro/collaboration)
+documents these interfaces and their recovery behavior.
+
 ## Start in one component
 
 Use the framework hook to own the room. With `create-or-join`, the first peer
@@ -93,6 +98,10 @@ Pro package also provides these presence components and hooks:
   component. The component renders in the adapter tree, so hooks work in it.
 - `useCollaborationStatus` and `useCollaborationParticipants` provide data for
   connection and participant interfaces.
+
+Presence renderers receive the resolved color and optional participant data.
+They also receive a locally declared `avatarUrl`. You can omit `session` inside
+the editor provider tree.
 
 See the [presence interface guide](/docs/2.x/pro/collaboration#presence-ui).
 

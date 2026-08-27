@@ -1,25 +1,22 @@
 # Astro example
 
-`@docx-editor.dev/react` as an Astro island. Astro ships zero JS by
-default. The editor is interactive and browser-only, so it loads with the
-`client:only` directive, which skips SSR for that component entirely.
+This example loads the React editor as an Astro island.
 
-## Run it
+## Run the example
 
-This example resolves the `@docx-editor.dev/*` packages from their built output, so
-build the workspace packages once first. From the repo root:
+From the repository root, build the workspace packages before you start Astro:
 
 ```bash
 bun install
 bun run build:packages
-bun run dev:astro      # http://localhost:4321
+bun run dev:astro
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:4321`.
 
-## The island
+## Create the island
 
-`src/pages/index.astro` renders the React editor as a client-only island:
+Use `client:only="react"` because the editor measures layout in the browser:
 
 ```astro
 ---
@@ -28,26 +25,18 @@ import { Editor } from '../components/Editor';
 <Editor client:only="react" />
 ```
 
-`client:only="react"` is the key: `client:load` would still server-render the
-component first and crash on `window`. `client:only` renders it in the
-browser only. The page shell, fonts, and styles are still static HTML.
+`client:load` still renders the component on the server.
+That behavior fails when the editor accesses `window`.
 
-## Files
-
-| File                        | What it does                            |
-| --------------------------- | --------------------------------------- |
-| `src/pages/index.astro`     | Page shell + the `client:only` island   |
-| `src/components/Editor.tsx` | React `<DocxEditor />` component        |
-| `astro.config.mjs`          | `@astrojs/react` integration + Tailwind |
-
-## Use it in your own Astro app
+## Add the editor to Astro
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/core
 npx astro add react
 ```
 
-Always mount the editor with `client:only="react"`. Toolbar icons are
-bundled as inline SVG, so there is no icon font to load.
+Import `@docx-editor.dev/core/styles/editor.css` once.
+Mount the editor with `client:only="react"`.
 
-Docs: https://www.docx-editor.dev/docs/1.x/react
+For more information, see the
+[Astro integration guide](https://www.docx-editor.dev/docs/2.x/frameworks/astro).

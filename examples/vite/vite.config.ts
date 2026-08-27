@@ -17,17 +17,11 @@ async function fetchGitHubStars(): Promise<number | null> {
 }
 
 /**
- * Serve the canonical comprehensive fixture from ONE byte source (task M6D.1).
+ * Serve named test fixtures without copying them into the demo.
  *
- * The demo's bare `/` must load `e2e/fixtures/comprehensive-word-element-test.docx`.
- * Copying it into `examples/vite/public/` would create a second DOCX that silently
- * drifts from the fixture the e2e suite asserts against — the task explicitly calls
- * for an asset mapping or an automated byte-identical copy instead. This maps the URL
- * onto the real file at request time, so there is exactly one source of bytes and it
- * cannot go stale.
- *
- * `build` copies it once into the output, so the deployed demo serves the same bytes
- * rather than depending on a dev-only route.
+ * The default document stays in `public/sample.docx`. In development, the
+ * `?fixture=<name>.docx` query loads that name from `e2e/fixtures/`. Production
+ * builds include only the named entries below.
  */
 function canonicalFixturePlugin(): Plugin {
   const fixtures = new Map([

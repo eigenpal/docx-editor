@@ -1,24 +1,23 @@
 # Nuxt example
 
-`@docx-editor.dev/nuxt`, the Nuxt 3 & 4 module wrapping the Vue adapter.
-Registering the module is the whole integration: it auto-imports an
-SSR-safe `<DocxEditor>` component and injects the editor stylesheet. No
-manual import, no `<ClientOnly>` wrapper.
+This repository example uses the private `@docx-editor.dev/nuxt` workspace
+module. The module wraps the Vue adapter for Nuxt 3 and Nuxt 4.
 
-## Run it
+## Run the example
 
-From the repo root:
+From the repository root, build the Vue and Nuxt packages before you start Nuxt:
 
 ```bash
 bun install
-bun run dev:nuxt       # http://localhost:3002
+bun run build:packages:vue
+bun run dev:nuxt
 ```
 
-Or from this directory: `bun run dev`.
+Open `http://localhost:3002`.
 
-## The integration
+## Use the workspace module
 
-`nuxt.config.ts` is the entire setup:
+Register the module in `nuxt.config.ts`:
 
 ```ts
 export default defineNuxtConfig({
@@ -26,37 +25,24 @@ export default defineNuxtConfig({
 });
 ```
 
-Then use `<DocxEditor>` anywhere. The module auto-imports it and registers it
-client-only, so it never renders during SSR:
+The module auto-imports `<DocxEditor>` as a client-only component.
+It also injects the editor stylesheet.
 
 ```vue
-<script setup lang="ts">
-import { ref } from 'vue';
-import { createEmptyDocument } from '@docx-editor.dev/core';
-
-const doc = ref(createEmptyDocument());
-</script>
-
 <template>
-  <DocxEditor :document="doc" :show-toolbar="true" />
+  <DocxEditor document="blank" author="Demo Reviewer" />
 </template>
 ```
 
-## Files
+`app.vue` shows the complete workspace example.
+It imports `DocxEditorToolbar` from `@docx-editor.dev/vue`.
+It passes document bytes, review modules, an author, and a `ready` handler.
 
-| File             | What it does                                 |
-| ---------------- | -------------------------------------------- |
-| `nuxt.config.ts` | Registers the module, sets the page icons    |
-| `app.vue`        | Opens a `.docx` and renders `<DocxEditor>`   |
+## Use Nuxt outside this repository
 
-## Use it in your own Nuxt app
+The workspace module has `"private": true`, so npm does not publish it.
+External applications must use the published Vue adapter with a client-only
+component.
 
-```bash
-npm install @docx-editor.dev/nuxt @docx-editor.dev/core
-```
-
-Add the module to `nuxt.config.ts`. The module handles the client-only
-boundary and the stylesheet. Toolbar icons are bundled as inline SVG, so
-there is no icon font to load.
-
-Docs: https://www.docx-editor.dev/docs/1.x/vue/nuxt
+Follow the
+[Nuxt integration guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).

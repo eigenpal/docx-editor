@@ -35,11 +35,18 @@ flowchart LR
 
 ## Prerequisites
 
-Install the Pro package and Yjs. Add `y-webrtc` for the WebRTC helper. Add
-`@hocuspocus/provider` for the Hocuspocus helper.
+Install the Pro package, Yjs, and the provider for your transport.
+
+For WebRTC, run:
 
 ```bash
 npm install @docx-editor.dev/pro yjs y-webrtc
+```
+
+For Hocuspocus, run:
+
+```bash
+npm install @docx-editor.dev/pro yjs @hocuspocus/provider
 ```
 
 `yjs`, `y-webrtc`, and `@hocuspocus/provider` are optional Pro peer
@@ -57,15 +64,17 @@ Import `@docx-editor.dev/pro/react/webrtc` or
 Pass `room` to connect when the component mounts. Call `leave` to end the
 session. Do not mount the editor while `pending` is true.
 
-The hook returns a `CollaborationSession`. It exposes identity, status,
-presence, and undo. It does not expose `attach` or `gateOperations`.
+The hook returns an object. Its `session` field contains a
+`CollaborationSession`. The session exposes identity, status, presence, and
+undo. It does not expose `attach` or `gateOperations`.
 `CollaborationSession`, `CollaborationStatus`, and `CollaborationFailure` are
 exported types from `@docx-editor.dev/pro/react` and
 `@docx-editor.dev/pro/vue`.
 
-`connect` and `rejoin` resolve with a `CollaborationFailure`, or `null` on
-success. They do not reject, so `onClick={() => connect(options)}` is safe.
-`error` reports the same failure for renderers:
+Room failures make `connect` and `rejoin` resolve to a
+`CollaborationFailure`. Success resolves to `null`. `rejoin` still throws if
+you call it before a connection attempt. The hook also puts room failures in
+`error` for rendering:
 
 ```tsx
 const failure = await connect(options);
@@ -74,10 +83,11 @@ if (failure?.code === 'initialization-timeout') {
 }
 ```
 
-Branch on `failure.code` or `error.code` instead of matching message strings. It reports two things: a connect that failed, and a session
-that failed after connecting. A token that expires on reconnect, a
-`concurrent-seed`, or a digest mismatch all happen after a successful join, so
-checking `error` is enough to know that collaboration is not working.
+Branch on `failure.code` or `error.code` instead of matching message strings.
+`error` reports an initial connection failure or a session failure after
+connection. An expired token, `concurrent-seed`, or digest mismatch can occur
+after a successful join. Always handle `error`, even when `document` is not
+`null`.
 
 The `<DocxEditor>` host accepts `document` and `modules`. You do not need
 `DocxEditor.Root` for collaboration.
@@ -199,57 +209,138 @@ Import `@docx-editor.dev/pro/collaboration` for Yjs factories. Import
 
 ## Mount the editor
 
-A collaborative Root takes three props from the room, and each one fails quietly if you get
-it wrong: the `key`, so a new session remounts and the collaboration module attaches; the
-`document`, which must be the room's bytes; and the `modules`, which must be the hook's array.
-`DocxEditorCollaborationRoot` writes all three:
+A collaborative root needs three values from the room. `key` remounts the
+editor for a new session. `document` contains the room bytes. `modules` contains
+the hook modules. Incorrect values can create a working editor that does not
+replicate edits.
+
+`DocxEditorCollaborationRoot` sets all three values. Import it with
+`DocxEditorCollaboration` from the framework entry. It also uses the room
+identity name as `author`. Set `author` to override this value. Other
+`DocxEditor.Root` props pass through.
+
+<FrameworkTabs>
+<Framework value="react">
 
 ```tsx
-const collaboration = useHocuspocusCollaboration({ modules: MODULES, room });
+import { DocxEditor } from '@docx-editor.dev/react';
+import { DocxEditorCollaboration, DocxEditorCollaborationRoot } from '@docx-editor.dev/pro/react';
+import {
+  useHocuspocusCollaboration,
+  type UseHocuspocusCollaborationConnectOptions,
+} from '@docx-editor.dev/pro/react/hocuspocus';
 
-<DocxEditorCollaborationRoot collaboration={collaboration} fallback={<p>Connecting…</p>}>
-  <DocxEditor.Toolbar />
-  <DocxEditor.Viewport>
-    <DocxEditor.Content />
-    <DocxEditorCollaboration.CaretLabels />
-  </DocxEditor.Viewport>
-</DocxEditorCollaborationRoot>;
+interface CollaborativeEditorProps {
+  room: UseHocuspocusCollaborationConnectOptions;
+}
+
+export function CollaborativeEditor({ room }: CollaborativeEditorProps) {
+  const collaboration = useHocuspocusCollaboration({ room });
+
+  if (collaboration.error) {
+    return <p>{collaboration.error.detail ?? collaboration.error.code}</p>;
+  }
+
+  return (
+    <DocxEditorCollaborationRoot collaboration={collaboration} fallback={<p>Connecting…</p>}>
+      <DocxEditor.Toolbar />
+      <DocxEditor.Viewport>
+        <DocxEditor.Content />
+        <DocxEditorCollaboration.CaretLabels />
+      </DocxEditor.Viewport>
+    </DocxEditorCollaborationRoot>
+  );
+}
 ```
 
-It also takes `author` from the room's identity, so comments and tracked changes are signed
-with the name the room shows. Set `author` yourself to override it. Everything else
-`DocxEditor.Root` accepts passes through.
+React renders the `fallback` prop whenever `document` is `null`. The root
+cannot distinguish a pending connection from a failure. Handle `error` before
+you render the root.
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { reactive } from 'vue';
+import { DocxEditor } from '@docx-editor.dev/vue';
+import { DocxEditorCollaboration, DocxEditorCollaborationRoot } from '@docx-editor.dev/pro/vue';
+import {
+  useHocuspocusCollaboration,
+  type UseHocuspocusCollaborationConnectOptions,
+} from '@docx-editor.dev/pro/vue/hocuspocus';
+
+const props = defineProps<{ room: UseHocuspocusCollaborationConnectOptions }>();
+const collaboration = reactive(useHocuspocusCollaboration({ room: props.room }));
+</script>
+
+<template>
+  <p v-if="collaboration.error">
+    {{ collaboration.error.detail ?? collaboration.error.code }}
+  </p>
+  <DocxEditorCollaborationRoot v-else :collaboration="collaboration">
+    <DocxEditor.Toolbar />
+    <DocxEditor.Viewport>
+      <DocxEditor.Content />
+      <DocxEditorCollaboration.CaretLabels />
+    </DocxEditor.Viewport>
+    <template #fallback><p>Connecting…</p></template>
+  </DocxEditorCollaborationRoot>
+</template>
+```
+
+Vue composables return refs. Wrap the return with `reactive` before you pass it
+to `DocxEditorCollaborationRoot`. Vue renders the named `fallback` slot whenever
+`document` is `null`. Without that slot, it renders nothing. Handle `error`
+before you render the root.
+
+</Framework>
+</FrameworkTabs>
 
 Use `DocxEditor.Root` directly when one page mounts two rooms, or when the bytes come from
 somewhere the component cannot see:
 
 ```tsx
-<DocxEditor.Root
-  key={collaboration.session?.sessionId ?? 'local'}
-  document={collaboration.document}
-  modules={collaboration.modules}
-  author={identity.name}
-/>
+if (collaboration.error) {
+  return <p>{collaboration.error.detail ?? collaboration.error.code}</p>;
+}
+if (!collaboration.document) {
+  return <p>Connecting…</p>;
+}
+
+return (
+  <DocxEditor.Root
+    key={collaboration.session?.sessionId ?? 'local'}
+    document={collaboration.document}
+    modules={collaboration.modules}
+    author={collaboration.session?.identity.name}
+  >
+    <DocxEditor.Viewport>
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+);
 ```
 
 ## Show status and participants
 
-`useCollaborationStatus()` returns the live status and last failure, plus three
-derived flags:
+`useCollaborationStatus()` returns these fields:
 
-- `live`: edits made now reach the room.
-- `diverged`: this replica no longer agrees with the room. Only `rejoin`
-  recovers it, so this is separate from "not live".
-- `attached`: an editor has attached its document port. False with a live
-  session means the host did not remount the editor when the session appeared,
-  so nothing replicates whatever `status` says.
+- `status` gives the session state, or `inactive` when no session exists.
+- `reason` gives the failure for the present state. It clears after recovery.
+- `lastFailure` keeps the latest terminal error after the status changes.
+- `live` is true when edits made now reach the room.
+- `diverged` is true when `status` is `error` or `destroyed`. Call `rejoin` to
+  recover a room that the hook connected before.
+- `attached` is true when an editor has attached its document port. A live,
+  unattached session usually means the editor did not remount for the session.
 
 `useCollaborationParticipants()` returns the room participants.
 
-Neither takes a `session` argument. Both read the one the editor above them
-holds, which `useCollaborationSession()` also returns. Pass a session
-explicitly only for a room this editor does not own. The presence parts follow
-the same rule: `session` is optional on `DocxEditorCollaboration.Avatars` and
+Both hooks accept an optional `session`. Omit it to read the session from the
+editor provider. Pass it for a room that the editor does not own. The presence
+parts use the same rule. `session` is optional on
+`DocxEditorCollaboration.Avatars` and
 `DocxEditorCollaboration.CaretLabels`.
 
 All of these are available from `@docx-editor.dev/pro/react` and
@@ -268,12 +359,30 @@ anywhere in the editor provider tree.
 local participant first.
 
 ```tsx
-<DocxEditorCollaboration.Avatars session={session} max={4} />
+<DocxEditorCollaboration.Avatars max={4} />
 ```
 
 Avatar colors match each collaborator's tracked changes and comments. `max`
 collapses extra avatars into a `+N` chip. Use
 `DocxEditorCollaboration.Avatar` to render one participant.
+
+You can replace each avatar disc with a renderer. It receives `participant`,
+`color`, `initials`, and the locally resolved optional `avatarUrl`.
+
+```tsx
+<DocxEditorCollaboration.Avatars max={4}>
+  {({ participant, avatarUrl, initials }) =>
+    avatarUrl ? (
+      <img src={avatarUrl} alt={participant.name} />
+    ) : (
+      <span aria-label={participant.name}>{initials}</span>
+    )
+  }
+</DocxEditorCollaboration.Avatars>
+```
+
+`participant` contains `actorId`, `name`, optional `color`, optional `role`, and
+`isLocal`.
 
 Avatars show the picture declared for a collaborator, so one declaration covers
 every surface that draws that person:
@@ -297,8 +406,10 @@ tree, so editor and review hooks work inside it.
 <Framework value="react">
 
 ```tsx
-<DocxEditorCollaboration.CaretLabels session={session}>
-  {({ selection, color }) => <MyLabel name={selection.name} color={color} />}
+<DocxEditorCollaboration.CaretLabels>
+  {({ selection, participant, color, avatarUrl }) => (
+    <MyLabel name={participant?.name ?? selection.name} color={color} avatarUrl={avatarUrl} />
+  )}
 </DocxEditorCollaboration.CaretLabels>
 ```
 
@@ -306,17 +417,21 @@ tree, so editor and review hooks work inside it.
 <Framework value="vue">
 
 ```vue
-<DocxEditorCollaboration.CaretLabels :session="session" v-slot="{ selection, color }">
-  <MyLabel :name="selection.name" :color="color" />
+<DocxEditorCollaboration.CaretLabels v-slot="{ selection, participant, color, avatarUrl }">
+  <MyLabel
+    :name="participant?.name ?? selection.name"
+    :color="color"
+    :avatar-url="avatarUrl"
+  />
 </DocxEditorCollaboration.CaretLabels>
 ```
 
 </Framework>
 </FrameworkTabs>
 
-In Vue, the renderer is the default scoped slot. It receives
-`{ selection, participant, color }`. Without a renderer, the label shows the
-collaborator's name.
+The renderer receives `selection`, optional `participant`, `color`, and optional
+`avatarUrl`. In Vue, it is the default scoped slot. Without a renderer, the
+label shows the collaborator's name.
 
 The engine marks the label layer `aria-hidden` and disables pointer events.
 Screen readers do not announce label content. Label content cannot receive
@@ -328,26 +443,24 @@ For CSS styling, use the `docx-remote-caret-label` class,
 
 ## Recover a diverged replica
 
-`status` `error` is terminal: the replica refused an update and kept the copy it
-had, so it is editing a document the others do not have. Waiting does not fix
-it. `rejoin` does:
+A status of `error` is terminal. The replica refused an update and kept its
+copy. It now edits a document that other peers do not have. Waiting does not fix
+the replica. Call `rejoin`:
 
 ```tsx
-const { session, rejoin } = useHocuspocusCollaboration({ room });
-const { diverged } = useCollaborationStatus();
+const { rejoin } = useHocuspocusCollaboration({ room });
 
-if (diverged) {
-  return (
-    <button onClick={() => editor.save().then((bytes) => rejoin(new Uint8Array(bytes)))}>
-      Rejoin
-    </button>
-  );
+async function rejoinRoom() {
+  const saved = await editorRef.current?.save();
+  if (saved) {
+    await rejoin(new Uint8Array(saved));
+  }
 }
 ```
 
-`rejoin` leaves with the bytes you pass, then joins the same room again with
-`{ kind: 'join' }`. If the join succeeds, the server's copy replaces those bytes
-and the edits made while diverged are gone. If it fails, nothing is lost: the
+Save the editor bytes before you call `rejoin`. It leaves with those bytes, then
+joins the same room with `{ kind: 'join' }`. A successful join uses the room
+copy, so it drops edits made after divergence. After a failed join, the saved
 bytes stay mounted locally.
 
 ## Edit offline
@@ -413,8 +526,10 @@ callback instead of a string. The provider calls it for each reconnection.
 A rejected token during the initial join produces `initialization-aborted`.
 After a successful join, rejection sets the status to `error` and `error.code`
 to `authentication-failed`. Handle that code by refreshing the credential and
-calling `rejoin`; `transport-disconnected` recovers on its own. `syncedTimeoutMs` limits the initial sync wait. Its
-default is 30 seconds. A timeout produces `initialization-timeout`.
+calling `rejoin`. A `transport-disconnected` failure recovers on its own.
+
+`syncedTimeoutMs` limits the initial sync wait. Its default is 30 seconds. A
+timeout produces `initialization-timeout`.
 
 The `createHocuspocusCollaboration` factory accepts the same options. Import it
 from `@docx-editor.dev/pro/collaboration/hocuspocus`. It returns the room,
@@ -429,13 +544,17 @@ The Hocuspocus v4 server runs on Node, not Bun. Use
 Use it for export, autosave to your own storage, search indexing, or rendering.
 
 ```ts
+import { writeFile } from 'node:fs/promises';
+import type * as Y from 'yjs';
 import { readCollaborationDocument } from '@docx-editor.dev/pro/collaboration';
 
-// Hocuspocus hands `onStoreDocument` the synchronized Y.Doc already.
-async onStoreDocument({ documentName, document }) {
+async function exportRoom(documentName: string, document: Y.Doc) {
   await writeFile(`${documentName}.docx`, readCollaborationDocument(document));
 }
 ```
+
+Call `exportRoom` from Hocuspocus `onStoreDocument`, which receives the
+synchronized `Y.Doc`.
 
 It joins nothing. There is no identity, no `Awareness`, and no session, so the
 job never appears in a room's participant list, and it creates no editing gate.
@@ -444,6 +563,14 @@ It does not write to the `Y.Doc`.
 The `Y.Doc` must already hold the room's state. Connect your provider and wait
 for its initial sync first. A document nobody seeded throws `not-initialized`
 instead of returning a truncated file.
+
+The function throws `CollaborationSchemaError` for `not-initialized`,
+`concurrent-seed`, `blob-digest-mismatch`, materialization failures, and
+resource-limit failures. Handle the error and keep the last valid export.
+
+See the
+[server-backed Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus)
+for persistence and DOCX export.
 
 ## Write a provider
 
@@ -572,92 +699,18 @@ const runtime = await DocxEditor.createCollaborative(room.document, room.session
 
 Call `room.destroy()` to stop the replica.
 
-## Compose the editor
+## Compose custom controls
 
-Use `DocxEditor.Root`, `Viewport`, and `Content` for custom controls. Pass the
-same `document` and `modules` values.
+Add custom controls as children of the collaboration root shown in
+[Mount the editor](#mount-the-editor). The root supplies `key`, `document`,
+`modules`, and the default author. Status and presence hooks inside it find the
+session without a `session` argument.
 
-<FrameworkTabs>
-<Framework value="react">
+In Vue, wrap the composable return with `reactive` before you pass it to
+`DocxEditorCollaborationRoot`.
 
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { useCollaborationStatus, type CollaborationSession } from '@docx-editor.dev/pro/react';
-import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
-
-function Status({ session }: { session: CollaborationSession | null }) {
-  const { status } = useCollaborationStatus(session);
-  return <span>{status}</span>;
-}
-
-type CollaborativeEditorProps = {
-  roomId: string;
-  bytes: Uint8Array;
-};
-
-export function CollaborativeEditor({ roomId, bytes }: CollaborativeEditorProps) {
-  const collaboration = useWebrtcCollaboration({
-    room: {
-      roomId,
-      identity: { actorId: 'alex', name: 'Alex' },
-      bootstrap: { kind: 'create', document: bytes },
-    },
-  });
-  if (collaboration.pending || !collaboration.document) {
-    return <p>Connecting…</p>;
-  }
-  return (
-    <DocxEditor.Root document={collaboration.document} modules={collaboration.modules}>
-      <Status session={collaboration.session} />
-      <DocxEditor.Viewport>
-        <DocxEditor.Content />
-      </DocxEditor.Viewport>
-    </DocxEditor.Root>
-  );
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { DocxEditor } from '@docx-editor.dev/vue';
-import { useCollaborationStatus } from '@docx-editor.dev/pro/vue';
-import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
-
-const props = defineProps<{ roomId: string; bytes: Uint8Array }>();
-
-const { document, modules, pending, session } = useWebrtcCollaboration({
-  room: {
-    roomId: props.roomId,
-    identity: { actorId: 'alex', name: 'Alex' },
-    bootstrap: { kind: 'create-or-join', document: props.bytes },
-  },
-});
-const { status } = useCollaborationStatus(session);
-</script>
-
-<template>
-  <p v-if="pending || !document">Connecting…</p>
-  <DocxEditor.Root v-else :document="document" :modules="modules">
-    <span>{{ status }}</span>
-    <DocxEditor.Viewport>
-      <DocxEditor.Content />
-    </DocxEditor.Viewport>
-  </DocxEditor.Root>
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-Destructure the composable return into top-level bindings. Vue unwraps these
-bindings in the template.
-
-Do not destroy the room from an effect that depends on the room object.
-StrictMode can run the cleanup before remounting. The hook owns the room
-lifecycle.
+Let the room hook manage cleanup. An effect cleanup can destroy the room before
+React StrictMode remounts the component.
 
 ## Limits
 

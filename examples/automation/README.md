@@ -4,11 +4,21 @@
 needs a framework, and the server half needs no browser: it opens DOCX bytes, edits them and
 writes them back.
 
+From a clean clone, install dependencies and build the workspace packages:
+
 ```bash
-bun run examples/automation/fill-template.ts examples/remix/public/sample.docx out.docx
+bun install
+bun run build:packages
+bun run --filter './examples/automation' fill
 ```
 
-## The shape of it
+The `fill` package script runs `fill-template.ts` with the sample input. It writes
+`examples/automation/filled.docx`.
+
+## Use the API
+
+The following example shows the server API directly. It is not the complete
+`fill-template.ts` script.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -72,8 +82,8 @@ Four rules carry most of the API:
 
 ## In a page, on a document already open
 
-The browser subpath takes an editor the host already created — from
-`@docx-editor.dev/react`, `@docx-editor.dev/vue`, or a plain page — and drives it in place.
+The browser subpath takes an editor that the host created with
+`@docx-editor.dev/react`, `@docx-editor.dev/vue`, or a plain page. It drives that editor in place.
 Edits land in the open document, with the reader's undo stack intact, so there is no `save()`
 here: the host saves the way it already did.
 
@@ -103,13 +113,13 @@ else's document.
 
 Deletion needs no author. `Comment.delete()` removes the root thread and anchors;
 `CommentReply.delete()` removes only that reply. Queue several calls before one `sync()` to make
-them one atomic edit and one Undo unit in a browser. Browser comment writes require the Pro review
-module and a writable, attached editor; creating a new root comment is not part of editor-api.
+them one atomic edit and one Undo unit in a browser. Browser comment writes require the
+EigenPal Pro License review module and a writable, attached editor. Editor-api cannot create a
+new root comment.
 
-Not every host can do everything, and `runtime.capabilities` says which — `save` is false for a
-browser runtime, `selection`, `scrolling` and `layout` are false for a server one. Branch on it
-rather than on which entry you imported; it is frozen for the life of the runtime, so one read
-stays true.
+`runtime.capabilities` reports the available host features. `save` is false for a browser runtime.
+`selection`, `scrolling`, and `layout` are false for a server runtime. Branch on these values
+instead of the imported entry. The values do not change during the runtime.
 
 ## What this is, and is not
 
