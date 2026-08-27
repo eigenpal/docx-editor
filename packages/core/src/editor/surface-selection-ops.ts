@@ -17,10 +17,58 @@ import {
 import {
   documentOrder,
   paragraphTextFromLayout,
+  wordBoundary,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
+
+/** What counts as part of a word for a double-click and for the format painter. */
+const WORD_CHARACTER = /[\p{L}\p{N}_'’]/u;
+
+const isWordCharacter = (character: string | undefined): boolean =>
+  character !== undefined && WORD_CHARACTER.test(character);
+
+/**
+ * The WORD one position sits in, as a range.
+ *
+ * A caret sits BETWEEN characters, so a position at a word's edge is ambiguous. Word resolves
+ * it by preferring the character to the right and falling back to the one on the left, which
+ * is what stops a double-click at the end of a word from selecting the space after it instead
+ * of the word itself.
+ *
+ * Shared rather than owned by the pointer, because two gestures ask it: a double-click, and
+ * the format painter applied at a caret — Word paints the word under a single click there.
+ * Two answers to "which word is this" is two gestures that select differently.
+ */
+export function wordRangeAt(
+  layout: SemanticLayout,
+  position: SemanticPosition,
+  /** Where a struck half meets a live one, so a word stops at the seam. See the caller. */
+  stops: ReadonlySet<number>
+): { readonly from: SemanticPosition; readonly to: SemanticPosition } {
+  const text = paragraphTextFromLayout(layout, position.paragraphId);
+  const id = position.paragraphId;
+  const offset = Math.max(0, Math.min(position.offset, text.length));
+  let anchor = -1;
+  if (isWordCharacter(text[offset])) anchor = offset;
+  else if (offset > 0 && isWordCharacter(text[offset - 1])) anchor = offset - 1;
+
+  if (anchor === -1) {
+    // Neither side is a word: take the run of whitespace the pointer is in, or the single
+    // character it is on, rather than reaching into a word that was not clicked.
+    let from = offset;
+    let to = offset;
+    while (from > 0 && /\s/.test(text[from - 1] ?? '')) from -= 1;
+    while (to < text.length && /\s/.test(text[to] ?? '')) to += 1;
+    if (from === to && to < text.length) to += 1;
+    return { from: { paragraphId: id, offset: from }, to: { paragraphId: id, offset: to } };
+  }
+  return {
+    from: { paragraphId: id, offset: wordBoundary(text, anchor + 1, -1, stops) },
+    to: { paragraphId: id, offset: wordBoundary(text, anchor, 1, stops) },
+  };
+}
 
 export function collapsedAt(position: SemanticPosition): SemanticSelection {
   return { anchor: position, head: position };

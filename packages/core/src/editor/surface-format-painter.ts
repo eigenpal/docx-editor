@@ -27,6 +27,17 @@ import {
   selectionRunStyle,
   type SurfaceProperty,
 } from './surface-formatting.ts';
+import { wordRangeAt } from './surface-selection-ops.ts';
+
+/**
+ * No struck-half seams for the painter's own word expansion.
+ *
+ * A double-click stops a word at the boundary between a tracked deletion and the text
+ * replacing it, because selecting both halves of a replacement is not what the reader
+ * pointed at. A paint has no such problem: `runPropertyEdits` clips to the runs this view
+ * RENDERS, so a hidden half is never reached whatever the range says.
+ */
+const EMPTY_STOPS: ReadonlySet<number> = new Set();
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import type {
   FormatPainterMode,
@@ -273,19 +284,28 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     const cells = deps.selectedCells?.();
     const rectangular = cells !== undefined && cells.length > 0;
     const { from, to } = deps.orderedRange();
+    const caret = !rectangular && from.paragraphId === to.paragraphId && from.offset === to.offset;
+    // A CARET takes the WORD under it, which is what a single click with the painter armed
+    // means in Word. Without it the click painted no text at all: the character half went to
+    // the stored-marks lane, the painter had nothing to spend its arming on, and it stayed
+    // live with the copy cursor on the pages until the user pressed Escape.
+    const word = caret ? wordRangeAt(deps.layout(), from, EMPTY_STOPS) : null;
+    const spanFrom = word?.from ?? from;
+    const spanTo = word?.to ?? to;
+    // Still a caret for the stored-marks lane when the word came back empty — a click in the
+    // whitespace at the end of a line — so the format is armed for what is typed next.
+    const collapsed = caret && spanFrom.offset === spanTo.offset;
     const paragraphIds = rectangular
       ? [...paragraphsInCells(deps.layout(), cells)]
-      : paragraphsInRange(deps.paragraphOrder(), { from, to });
+      : paragraphsInRange(deps.paragraphOrder(), { from: spanFrom, to: spanTo });
     if (paragraphIds.length === 0) return { wrote: false, armed: false, built: false };
-    const collapsed =
-      !rectangular && from.paragraphId === to.paragraphId && from.offset === to.offset;
     const part = storyPart();
     const displayMode = deps.displayMode();
     const ops: TreeDocOp[] = [];
-    paragraphIds.forEach((paragraphId, index) => {
+    for (const paragraphId of paragraphIds) {
       const text = deps.textOf(paragraphId);
-      const start = rectangular || paragraphId !== from.paragraphId ? 0 : from.offset;
-      const end = rectangular || paragraphId !== to.paragraphId ? text.length : to.offset;
+      const start = rectangular || paragraphId !== spanFrom.paragraphId ? 0 : spanFrom.offset;
+      const end = rectangular || paragraphId !== spanTo.paragraphId ? text.length : spanTo.offset;
       if (start < end && held.runProperties.length > 0) {
         for (const edit of runPropertyEdits(
           part,
@@ -314,10 +334,13 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       // too. Without this, painting a bulleted item by CLICKING the target made it a list
       // item whose bullet kept the target's old face, while painting the same capture over a
       // SELECTION of the same paragraph did not — one capture, two results.
+      // Read from the RANGE, not from this list's index: a range that ends at offset 0 of the
+      // next paragraph drops that paragraph from the list (`paragraphsInRange`), and the one
+      // before it is then last — while the range still reaches past its pilcrow.
       const coversMark =
         held.paragraphProperties !== null ||
         rectangular ||
-        index < paragraphIds.length - 1 ||
+        paragraphId !== spanTo.paragraphId ||
         (start === 0 && end === text.length && text.length > 0);
       // Guarded on the capture carrying character formatting for the same reason the run
       // write above is: an op that names nothing still counts as APPLIED — the store
@@ -340,7 +363,7 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
           properties: [...held.paragraphProperties],
         });
       }
-    });
+    }
     // The REVISION, not the op count: a write can be refused after it is built — a document
     // opened for viewing, a tracked-content protection, a collaboration gate — and reporting
     // a refused paint as success is the one thing a caller cannot recover from. `commit`

@@ -163,11 +163,17 @@ export function createKeyDownHandler(
       // for the desktop does.
       //
       // The desktop pair is Ctrl+Shift+C / Ctrl+Shift+V, and neither is available to a page:
-      // Ctrl/Cmd+Shift+C opens the browser's element inspector, which `preventDefault` does
-      // not cancel, and Ctrl/Cmd+Shift+V is already paste-without-formatting below — a
+      // Ctrl+Shift+C opens the browser's element inspector, which `preventDefault` does not
+      // cancel, and Ctrl/Cmd+Shift+V is already paste-without-formatting below — a
       // browser-native paste chord, and the only one the engine gets a `paste` event for.
       // Word Online moved the painter to Cmd+Option+C / Cmd+Option+V for exactly these
       // reasons, and matching it keeps one gesture true across both products.
+      //
+      // KNOWN LIMIT, and Word Online's too: on macOS the browsers bind Cmd+Option+C to the
+      // element inspector, and a browser accelerator cannot be cancelled from a page. The
+      // capture below still runs, and DevTools opens over it. Both halves stay reachable
+      // from the toolbar button and the right-click menu, which is what the guide points a
+      // Mac reader at; the paste half (Cmd+Option+V) is unclaimed and works.
       if (key === 'c') {
         event.preventDefault();
         surface.formatPainter.capture();

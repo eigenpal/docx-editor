@@ -321,6 +321,31 @@ describe('painting', () => {
     );
   });
 
+  test('a range ending at the next paragraph’s start still marks the one it covered', () => {
+    withEditor(p(textRun('plain')) + p(textRun('second')) + PLAIN, (editor) => {
+      // A RUN-level capture, so the mark rule is the range's rather than the wholesale one.
+      select(editor, [0, 0], [0, 3]);
+      editor.exec({ type: 'copyFormatting' });
+      // The range reaches PAST paragraph 1's pilcrow — that is what makes the pilcrow part
+      // of it — even though the clamp drops paragraph 2 from the write.
+      select(editor, [1, 0], [2, 0]);
+      editor.exec({ type: 'pasteFormatting' });
+
+      const node = paragraphNodes(editor.surface!.session.part())[1]!;
+      const pPr =
+        node.kind === 'paragraph'
+          ? node.children.find((child) => child.kind === 'paragraphProperties')
+          : undefined;
+      const mark =
+        pPr && pPr.kind !== 'textValue'
+          ? pPr.children.find((child) => child.kind === 'runProperties')
+          : undefined;
+      expect(mark).toBeDefined();
+      // And paragraph 2 is untouched, which is the clamp doing its job beside it.
+      expect(paragraphProperties(editor, 2)).toEqual([]);
+    });
+  });
+
   test('the paragraph write replaces rather than merges, so the source is what survives', () => {
     withEditor(PLAIN + STYLED, (editor) => {
       select(editor, [0, 0], [0, 5]);
@@ -812,8 +837,9 @@ describe('the drag gesture', () => {
     }
   });
 
-  test('a click that paints no text keeps the painter armed for the double-click', () => {
-    const { surface, pages } = mount(PLAIN + p(textRun('second line here')));
+  test('one click paints the WORD under it, then stands the painter down', () => {
+    const bold = '<w:rPr><w:b/></w:rPr>';
+    const { surface, pages } = mount(p(textRun('plain')) + p(textRun('second line here', bold)));
     try {
       const ids = surface.session.paragraphIds();
       // A RUN-level capture: a range inside one paragraph, short of its end.
@@ -823,13 +849,27 @@ describe('the drag gesture', () => {
       });
       surface.formatPainter.press();
 
-      // One click: the caret lands, nothing is selected, so there is no text to paint. Word's
-      // gesture for painting a word is the DOUBLE-click, whose second release selects it — so
-      // the painter has to survive the first.
-      pages.dispatchEvent(pointer('pointerdown', 20, 25));
-      document.dispatchEvent(pointer('pointerup', 20, 25));
+      // ONE click, in the middle of "line" on the second paragraph. A caret selects nothing,
+      // so painting the range would paint nothing at all — Word paints the word under the
+      // pointer, which is what leaves the gesture with something to spend its arming on.
+      pages.dispatchEvent(pointer('pointerdown', 40, 25));
+      document.dispatchEvent(pointer('pointerup', 40, 25));
 
-      expect(surface.formatPainter.state().mode).toBe('once');
+      expect(surface.formatPainter.state().mode).toBe('off');
+      // The bold run was split around the painted word, so a run in the paragraph now
+      // states the source's un-bold face.
+      const painted = paragraphNodes(surface.session.part())[1]!;
+      const faces =
+        painted.kind === 'paragraph'
+          ? painted.children
+              .filter((child) => child.kind === 'run')
+              .map((run) => {
+                if (run.kind === 'textValue') return [];
+                const rPr = run.children.find((child) => child.kind === 'runProperties');
+                return rPr ? describeProperties(rPr) : [];
+              })
+          : [];
+      expect(faces.some((face) => face.includes('b=0'))).toBe(true);
     } finally {
       surface.destroy();
     }
