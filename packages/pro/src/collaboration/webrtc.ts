@@ -232,12 +232,13 @@ export async function createWebrtcCollaboration(
 
   const session = handle.session;
   onAbandonedChunk = () => {
-    session.setTransportStatus('error', 'incomplete-chunk');
+    session.setTransportStatus('error', 'transport', 'incomplete chunk');
   };
   const onStatus = (event: { readonly connected: boolean }): void => {
     session.setTransportStatus(
       event.connected ? 'ready' : 'disconnected',
-      event.connected ? undefined : 'webrtc-disconnected'
+      event.connected ? undefined : 'transport-disconnected',
+      event.connected ? undefined : 'webrtc disconnected'
     );
   };
   connectedProvider.on('status', onStatus);

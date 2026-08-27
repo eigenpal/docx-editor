@@ -1040,6 +1040,7 @@ export interface DocxEditorConfig {
 // @public
 export interface DocxEditorInstance extends Editor {
     attach(el: HTMLElement): void;
+    collaborationSession(): EditorCollaborationSession | null;
     detach(): void;
     fontMeasurement(): FontMeasurementState;
     // @internal

@@ -22,13 +22,14 @@ import type {
   EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import {
+  DocxEditorAuthorStyle,
   DocxEditorContent,
   DocxEditorRoot,
   DocxEditorViewport,
   useDocxEditor,
   useEditorState,
 } from '@docx-editor.dev/react';
-import { DocxEditorCollaboration } from '../react/index.ts';
+import { DocxEditorCollaboration, DocxEditorCollaborationRoot } from '../react/index.ts';
 import type { CollaborationSession } from '../collaboration/session.ts';
 import { collaborationModule } from '../index.ts';
 
@@ -82,6 +83,7 @@ function stubSession(): EditorCollaborationSession &
     statusSnapshot: () =>
       Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
     subscribeStatus: () => () => {},
+    attached: true,
     attach: () => () => {},
     gateOperations: () => null,
     canUndo: () => false,
@@ -284,6 +286,217 @@ describe('DocxEditorCollaboration.CaretLabels', () => {
       .find((info) => info.author === 'Reviewer One');
     expect(rosterInfo?.color).toBe(painted);
   });
+
+  test('a paint that happens inside another component render is not a render-phase update', async () => {
+    // The engine repaints whenever something asks it to, and chrome asks during RENDER: the
+    // review rail reads the engine while rendering, that read repaints, and the repaint
+    // publishes new anchors. Holding the anchors in `useState` made that publish a setState
+    // inside a sibling's render — React's "Cannot update a component while rendering a
+    // different component", and in production the update it warns about is the one that
+    // draws the caret labels.
+    const session = stubSession();
+    const bytes = docx(PLAIN);
+    let instance: DocxEditorInstance | null = null;
+    // Stands in for the review rail: it touches the engine during its own render, and that
+    // touch repaints. Driving the repaint straight from render is the shortest way to say
+    // "a paint happened inside somebody else's render".
+    function RepaintsWhileRendering({
+      carets,
+    }: {
+      readonly carets: readonly CollaborationRemoteSelection[];
+    }) {
+      session.setRemotes(carets);
+      session.notify();
+      return null;
+    }
+    function Harness({ carets }: { readonly carets: readonly CollaborationRemoteSelection[] }) {
+      return (
+        <DocxEditorRoot
+          document={bytes}
+          modules={[collaborationModule({ session })]}
+          onReady={(ready) => {
+            instance = ready as DocxEditorInstance;
+          }}
+        >
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+          <DocxEditorCollaboration.CaretLabels session={session}>
+            {({ selection }) => <span data-testid="paint-label">{selection.name}</span>}
+          </DocxEditorCollaboration.CaretLabels>
+          <RepaintsWhileRendering carets={carets} />
+        </DocxEditorRoot>
+      );
+    }
+    const warnings: string[] = [];
+    const error = console.error;
+    console.error = (...args: unknown[]) => {
+      warnings.push(String(args[0] ?? ''));
+    };
+    let view: ReturnType<typeof render>;
+    try {
+      view = render(<Harness carets={[]} />);
+      await act(async () => {});
+      const ids = instance!.surface!.session.paragraphIds();
+      // The label host is registered now, so this rerender publishes anchors from inside
+      // `RepaintsWhileRendering`'s render — the sibling-update React complains about.
+      await act(async () => {
+        view.rerender(<Harness carets={[caretOf('bob', 'Bob', ids[0]!)]} />);
+      });
+    } finally {
+      console.error = error;
+    }
+    expect(
+      warnings.filter((line) => line.includes('while rendering a different component'))
+    ).toEqual([]);
+    // And the label still arrives: the fix must cost a render-phase write, not a publish.
+    expect(view!.container.querySelector('[data-testid="paint-label"]')?.textContent).toBe('Bob');
+  });
+
+  test('the render prop carries the avatar declared for the collaborator by name', async () => {
+    const session = stubSession();
+    const seen: (string | undefined)[] = [];
+    const { view, editor } = await mountEditor(
+      PLAIN,
+      session,
+      <>
+        {/* One declaration, keyed on the display name, is what a comment card resolves too. */}
+        <DocxEditorAuthorStyle author="Bob" avatarUrl="/avatars/bob.jpg" />
+        <DocxEditorCollaboration.CaretLabels session={session}>
+          {({ selection, avatarUrl }) => {
+            seen.push(avatarUrl);
+            return <span data-testid="declared-label">{selection.name}</span>;
+          }}
+        </DocxEditorCollaboration.CaretLabels>
+      </>
+    );
+    const ids = editor().surface!.session.paragraphIds();
+    await act(async () => {
+      session.setRemotes([caretOf('bob-1', 'Bob', ids[0]!)]);
+      session.notify();
+    });
+    expect(view.container.querySelector('[data-testid="declared-label"]')).toBeTruthy();
+    // Bob has written nothing, so he is in NO review roster: the declaration is what answers.
+    expect(
+      editor()
+        .getReviewAuthors()
+        .some((info) => info.author === 'Bob')
+    ).toBe(false);
+    expect(seen.at(-1)).toBe('/avatars/bob.jpg');
+  });
+
+  test('a host component owns the label outright, ignoring every value handed to it', async () => {
+    // The label is not a slot for a name and a picture: it is a portal into the host's tree.
+    // A renderer may throw away `selection.name`, `color` and `avatarUrl`, keep only the actor
+    // id, and resolve everything itself — which is what a host with its own user service and
+    // its own design system does.
+    const session = stubSession();
+    const DIRECTORY = { 'bob-1': { label: 'Bo (Design)', photo: '/team/bo.webp' } };
+    function HostCursor({ actorId }: { readonly actorId: string }) {
+      const entry = DIRECTORY[actorId as keyof typeof DIRECTORY];
+      // Hooks work here, because this renders in the ordinary React tree.
+      const pages = useEditorState((state) => state.page.total);
+      return (
+        <figure data-testid="host-cursor">
+          <img src={entry.photo} alt="" />
+          <figcaption>{`${entry.label} · p${pages}`}</figcaption>
+        </figure>
+      );
+    }
+    const { view, editor } = await mountEditor(
+      PLAIN,
+      session,
+      <DocxEditorCollaboration.CaretLabels session={session}>
+        {({ selection }) => <HostCursor actorId={selection.actorId} />}
+      </DocxEditorCollaboration.CaretLabels>
+    );
+    const ids = editor().surface!.session.paragraphIds();
+    await act(async () => {
+      session.setRemotes([caretOf('bob-1', 'Bob', ids[0]!, '#ff0000')]);
+      session.notify();
+    });
+    const label = view.container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    const cursor = label!.querySelector<HTMLElement>('[data-testid="host-cursor"]');
+    expect(cursor).toBeTruthy();
+    // Neither the published name nor the published colour appears: the host replaced both.
+    expect(cursor!.textContent).toBe('Bo (Design) · p1');
+    expect(label!.textContent).not.toContain('Bob');
+    expect(cursor!.querySelector('img')!.getAttribute('src')).toBe('/team/bo.webp');
+    // What the ENGINE still owns: the element, its position, and the colour it resolved —
+    // which the host may restyle in CSS but does not render.
+    expect(label!.style.getPropertyValue('--doc-remote-color')).toBe('#ff0000');
+    expect(label!.style.left).not.toBe('');
+  });
+
+  test('a declared colour outranks the one the peer published', async () => {
+    // A published colour is remote input: the peer chose it for itself. A declaration is the
+    // app's own record of who that person is, so the app wins — otherwise a peer could make
+    // their caret disagree with their own comment cards, and "one declaration" would be two
+    // values the host has to keep equal by hand.
+    const session = stubSession();
+    const seen: string[] = [];
+    const { view, editor } = await mountEditor(
+      PLAIN,
+      session,
+      <>
+        <DocxEditorAuthorStyle author="Bob" color="#1f7a4d" />
+        <DocxEditorCollaboration.CaretLabels session={session}>
+          {({ color }) => {
+            seen.push(color);
+            return <span data-testid="declared-color">{color}</span>;
+          }}
+        </DocxEditorCollaboration.CaretLabels>
+      </>
+    );
+    const ids = editor().surface!.session.paragraphIds();
+    await act(async () => {
+      // The peer publishes a colour of its own choosing. The declaration overrules it.
+      session.setRemotes([caretOf('bob-1', 'Bob', ids[0]!, '#ff0000')]);
+      session.notify();
+    });
+    const label = view.container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    expect(label!.style.getPropertyValue('--doc-remote-color')).toBe('#1f7a4d');
+    // And chrome reads the painted value back, so the two cannot disagree.
+    expect(seen.at(-1)).toBe('#1f7a4d');
+  });
+
+  test('the session comes from the editor when no prop names one', async () => {
+    // The editor already holds the replica `collaborationModule` contributed, so presence
+    // chrome must not have to be handed it. A host with one Root and one room passes nothing.
+    const session = stubSession();
+    const { view, editor } = await mountEditor(
+      PLAIN,
+      session,
+      <>
+        <DocxEditorCollaboration.CaretLabels />
+        <DocxEditorCollaboration.Avatars />
+      </>
+    );
+    const ids = editor().surface!.session.paragraphIds();
+    await act(async () => {
+      session.setParticipants([participantOf('bob', 'Bob')]);
+      session.setRemotes([caretOf('bob', 'Bob', ids[0]!)]);
+      session.notify();
+    });
+    expect(view.container.querySelector('.docx-remote-caret-label')?.textContent).toBe('Bob');
+    expect(view.container.querySelectorAll('[data-collaboration-avatar]').length).toBe(1);
+  });
+
+  test('a published colour still wins for an author nobody declared', async () => {
+    const session = stubSession();
+    const { view, editor } = await mountEditor(
+      PLAIN,
+      session,
+      <DocxEditorCollaboration.CaretLabels session={session} />
+    );
+    const ids = editor().surface!.session.paragraphIds();
+    await act(async () => {
+      session.setRemotes([caretOf('zoe-1', 'Zoe', ids[0]!, '#ff0000')]);
+      session.notify();
+    });
+    const label = view.container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    expect(label!.style.getPropertyValue('--doc-remote-color')).toBe('#ff0000');
+  });
 });
 
 describe('DocxEditorCollaboration.Avatars', () => {
@@ -463,5 +676,62 @@ describe('DocxEditorCollaboration.Avatars', () => {
     expect(caretColor('Uma')).not.toBe(caretColor('Vic'));
     expect(avatarColor('Uma')).toBe(caretColor('Uma'));
     expect(avatarColor('Vic')).toBe(caretColor('Vic'));
+  });
+});
+
+describe('DocxEditorCollaborationRoot', () => {
+  test('writes the key, the document and the modules, and names the author from the room', async () => {
+    // The three props that fail QUIETLY when a host writes them by hand, plus the fourth
+    // value that drifts when it is set apart: `author` is what the SAVED FILE keeps, so a
+    // comment signed with one name while the room showed another is a bug the document
+    // carries for good.
+    const session = stubSession();
+    let instance: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorCollaborationRoot
+        collaboration={{
+          document: docx(PLAIN),
+          modules: [collaborationModule({ session })],
+          session,
+        }}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+        {/* No `session` prop: the parts read it from the editor this component mounted. */}
+        <DocxEditorCollaboration.CaretLabels />
+      </DocxEditorCollaborationRoot>
+    );
+    await act(async () => {});
+
+    // The document opened, and the module attached — which is what the `key` buys.
+    expect(instance).not.toBeNull();
+    expect(instance!.getConfiguredAuthor()).toBe('Local');
+
+    const ids = instance!.surface!.session.paragraphIds();
+    await act(async () => {
+      session.setRemotes([caretOf('bob', 'Bob', ids[0]!)]);
+      session.notify();
+    });
+    expect(view.container.querySelector('.docx-remote-caret-label')?.textContent).toBe('Bob');
+  });
+
+  test('renders the fallback until the room has a document', async () => {
+    const view = render(
+      <DocxEditorCollaborationRoot
+        collaboration={{ document: null, modules: [], session: null }}
+        fallback={<p data-testid="connecting">Connecting…</p>}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorCollaborationRoot>
+    );
+    await act(async () => {});
+    expect(view.container.querySelector('[data-testid="connecting"]')).toBeTruthy();
+    expect(view.container.querySelector('.docx-paginated-surface')).toBeNull();
   });
 });

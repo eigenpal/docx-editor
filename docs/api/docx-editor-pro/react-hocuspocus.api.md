@@ -74,8 +74,7 @@ export interface UseHocuspocusCollaborationOptions {
 
 // @public
 export interface UseHocuspocusCollaborationReturn {
-    // (undocumented)
-    readonly connect: (options: UseHocuspocusCollaborationConnectOptions) => Promise<void>;
+    readonly connect: (options: UseHocuspocusCollaborationConnectOptions) => Promise<CollaborationFailure | null>;
     // (undocumented)
     readonly document: Uint8Array | null;
     // (undocumented)
@@ -86,7 +85,7 @@ export interface UseHocuspocusCollaborationReturn {
     // (undocumented)
     readonly pending: boolean;
     readonly provider: HocuspocusProvider | null;
-    readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
+    readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
     // (undocumented)
     readonly session: CollaborationSession | null;
     readonly ydoc: Y.Doc | null;

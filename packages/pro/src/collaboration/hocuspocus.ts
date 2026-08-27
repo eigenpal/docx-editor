@@ -198,7 +198,8 @@ export async function createHocuspocusCollaboration(
   const onStatus = (event: { readonly status: string }): void => {
     session.setTransportStatus(
       event.status === 'connected' ? 'ready' : 'disconnected',
-      event.status === 'connected' ? undefined : 'websocket-disconnected'
+      event.status === 'connected' ? undefined : 'transport-disconnected',
+      event.status === 'connected' ? undefined : 'websocket disconnected'
     );
   };
   connectedProvider.on('status', onStatus);

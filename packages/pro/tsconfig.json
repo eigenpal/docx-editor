@@ -38,6 +38,9 @@
       "@docx-editor.dev/core/output": ["../core/src/output/index.ts"],
       "@docx-editor.dev/core/store": ["../core/src/store/index.ts"],
       "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"],
+      "@docx-editor.dev/core/collaboration/replication": [
+        "../core/src/collaboration/replication.ts"
+      ],
       "@docx-editor.dev/core/collaboration": ["../core/src/collaboration/index.ts"],
       "@docx-editor.dev/editor-api": ["../editor-api/src/index.ts"],
       "@docx-editor.dev/react": ["../react/src/index.ts"],
@@ -49,10 +52,18 @@
     "node_modules",
     "dist",
     "src/vue",
+    // Every Vue-side test, for the same reason `src/vue` is excluded: this config compiles
+    // JSX as React, so a test that reaches `@docx-editor.dev/vue` drags the Vue package's
+    // `.tsx` into a React-JSX program and produces thousands of VNode-vs-ReactNode errors.
+    // `exclude` only filters the `include` glob, so each one has to be named here.
     "src/__tests__/collaboration-presence-ui-vue.test.ts",
     "src/__tests__/custom-node-vue-chrome.test.ts",
     "src/__tests__/review-sidebar-vue.test.ts",
     "src/__tests__/review-vue-harness.ts",
-    "src/__tests__/use-webrtc-collaboration-vue.test.ts"
+    "src/__tests__/use-collaboration-participants-vue.test.ts",
+    "src/__tests__/use-document-collaboration-vue.test.ts",
+    "src/__tests__/use-hocuspocus-collaboration-vue.test.ts",
+    "src/__tests__/use-webrtc-collaboration-vue.test.ts",
+    "src/collaboration/__tests__/use-collaboration-status-vue.test.ts"
   ]
 }

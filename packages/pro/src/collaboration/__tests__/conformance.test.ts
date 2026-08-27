@@ -112,7 +112,7 @@ describe('paragraph collaboration conformance', () => {
       const baseline = Y.encodeStateVector(leftDoc);
       insert(left, 0, 5, '[left]', 'left-session:1');
       insert(right, 0, 5, '[right]', 'right-session:1');
-      offline.session.setTransportStatus('disconnected', 'test-offline');
+      offline.session.setTransportStatus('disconnected', 'transport-disconnected', 'test-offline');
       insert(offline, 1, 3, '[offline]', 'offline-session:1');
 
       const updates = [

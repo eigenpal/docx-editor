@@ -61,7 +61,16 @@ export interface UseDocumentCollaborationReturn {
   readonly session: CollaborationSession | null;
   readonly pending: boolean;
   readonly error: CollaborationFailure | null;
-  readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<void>;
+  /**
+   * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
+   *
+   * A rejection carried nothing the resolved value does not, and it made the ordinary call
+   * site wrong by default: `onClick={() => connect(options)}` produced an unhandled rejection
+   * on every failed connect. `error` reports the same failure for renderers.
+   */
+  readonly connect: (
+    options: UseDocumentCollaborationConnectOptions
+  ) => Promise<CollaborationFailure | null>;
   /**
    * Destroy the session and carry on editing locally.
    *
@@ -120,6 +129,7 @@ export function useDocumentCollaboration(
     // The shared machinery still requires the mapping, so pin it to a join — a recovery
     // must never re-seed the room from stale local bytes.
     rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
+    identityOf: (options) => options.identity,
   });
 
   return useMemo(

@@ -15,7 +15,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type * as Y from 'yjs';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
-import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import type {
+  CollaborationFailureCode,
+  EditorCollaborationSession,
+} from '@docx-editor.dev/core/collaboration';
 import { collaborationModule } from '../collaboration/collaboration-module.ts';
 import {
   useHocuspocusCollaboration,
@@ -33,6 +36,7 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
     statusSnapshot: () =>
       Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
     subscribeStatus: () => () => {},
+    attached: true,
     attach: () => () => {},
     gateOperations: () => null,
     canUndo: () => false,
@@ -46,6 +50,33 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
     subscribeRemoteSelections: () => () => {},
     flushPendingJournals: () => {},
     destroy: () => {},
+  };
+}
+
+/** A session a test can drive into a terminal failure after the join has already succeeded. */
+function failableSession(documentId: string): EditorCollaborationSession & {
+  fail(reason: CollaborationFailureCode): void;
+} {
+  const base = stubSession(documentId);
+  let snapshot = base.statusSnapshot();
+  const listeners = new Set<() => void>();
+  return {
+    ...base,
+    status: () => snapshot.status,
+    statusSnapshot: () => snapshot,
+    subscribeStatus: (listener) => {
+      const notify = (): void => listener(snapshot.status, snapshot.reason?.code);
+      listeners.add(notify);
+      return () => listeners.delete(notify);
+    },
+    fail(reason) {
+      snapshot = Object.freeze({
+        status: 'error' as const,
+        reason: { code: reason },
+        lastFailure: { code: reason },
+      });
+      for (const notify of [...listeners]) notify();
+    },
   };
 }
 
@@ -104,6 +135,39 @@ function Probe({
 }
 
 describe('useHocuspocusCollaboration', () => {
+  test('a session that fails after the join reaches `error`', async () => {
+    // The documented guard is `if (error) …`. Before this, only a failed CONNECT set it, so
+    // an expired token or a `concurrent-seed` — both of which land after a successful join —
+    // left `error` null while replication was dead, and that guard rendered a healthy editor
+    // over a room nobody could reach.
+    const session = failableSession('room-fail');
+    const createRoom = async () => {
+      await Promise.resolve();
+      return {
+        document: new Uint8Array([1, 2, 3]),
+        session,
+        destroy() {},
+        get destroyed() {
+          return false;
+        },
+      } as StubRoom;
+    };
+    let latest: UseHocuspocusCollaborationReturn | undefined;
+    await act(async () => {
+      render(<Probe createRoom={createRoom} onState={(value) => (latest = value)} />);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // The join succeeded: a document, no error.
+    expect(latest?.document).not.toBeNull();
+    expect(latest?.error).toBeNull();
+
+    await act(async () => {
+      session.fail('authentication-failed');
+    });
+    expect(latest?.error?.code).toBe('authentication-failed');
+  });
+
   test('StrictMode remount keeps a live room', async () => {
     const created: StubRoom[] = [];
     const createRoom = async () => {
@@ -269,7 +333,7 @@ describe('useHocuspocusCollaboration', () => {
     });
   });
 
-  test('a failed rejoin keeps the saved bytes mounted and surfaces the typed error', async () => {
+  test('a failed rejoin keeps the saved bytes mounted and resolves the typed error', async () => {
     let calls = 0;
     const first = fakeRoom();
     const createRoom = async () => {
@@ -287,15 +351,13 @@ describe('useHocuspocusCollaboration', () => {
       await latest?.connect(CONNECT);
     });
     const saved = new Uint8Array([7]);
-    let thrown: unknown;
+    let resolved: unknown;
     await act(async () => {
-      try {
-        await latest?.rejoin(saved);
-      } catch (cause) {
-        thrown = cause;
-      }
+      resolved = await latest?.rejoin(saved);
     });
-    expect((thrown as { code?: string }).code).toBe('initialization-timeout');
+    // Resolves like `connect`, and the saved bytes are still what is mounted — a rejoin that
+    // could not reach the room must not also lose the work it was handed.
+    expect(resolved).toEqual({ code: 'initialization-timeout' });
     expect(latest?.error).toEqual({ code: 'initialization-timeout' });
     expect(latest?.session).toBeNull();
     expect(latest?.document).toBe(saved);
@@ -362,7 +424,7 @@ describe('useHocuspocusCollaboration', () => {
     expect(rejections).toEqual([]);
   });
 
-  test('connect rejects with the failure code from a schema error', async () => {
+  test('connect resolves with the failure code from a schema error', async () => {
     let latest: UseHocuspocusCollaborationReturn | undefined;
     await act(async () => {
       render(
@@ -379,17 +441,14 @@ describe('useHocuspocusCollaboration', () => {
         />
       );
     });
-    let thrown: unknown;
+    // RESOLVES with the failure rather than rejecting, so the ordinary call site —
+    // `onClick={() => connect(options)}` — cannot raise an unhandled rejection.
+    let resolved: unknown;
     await act(async () => {
-      try {
-        await latest?.connect(CONNECT);
-      } catch (cause) {
-        thrown = cause;
-      }
+      resolved = await latest?.connect(CONNECT);
     });
+    expect(resolved).toEqual({ code: 'initialization-timeout' });
     expect(latest?.error).toEqual({ code: 'initialization-timeout' });
-    expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as { code?: string }).code).toBe('initialization-timeout');
   });
 
   test('idle modules stay the same reference across renders', async () => {

@@ -52,13 +52,21 @@ function rampSlotOf(color: string): number | null {
 export function presenceAccentsOf(
   roster: readonly ReviewAuthorInfo[],
   participants: readonly CollaborationParticipant[],
-  colorForName?: (name: string) => string | undefined
+  colorForName?: (name: string) => string | undefined,
+  declaredColorFor?: (name: string) => string | undefined
 ): ReadonlyMap<string, PresenceAccent> {
   const byAuthor = new Map(roster.map((info) => [info.author, info] as const));
   const allocated = new Map<string, number>();
   const accents = new Map<string, PresenceAccent>();
   for (const participant of participants) {
     if (accents.has(participant.actorId)) continue;
+    // A colour the HOST declared outranks the one the peer published — the same order the
+    // painted caret resolves in, so an avatar and a caret cannot disagree about one person.
+    const declared = safeParticipantColor(declaredColorFor?.(participant.name));
+    if (declared !== undefined) {
+      accents.set(participant.actorId, { color: declared, slot: rampSlotOf(declared) });
+      continue;
+    }
     // Same sanitation as the paint sink: a colour the engine would refuse to paint must not
     // colour the avatar either, or the two disagree about who draws in what.
     const published = safeParticipantColor(participant.color);
@@ -102,9 +110,12 @@ export function presenceAccentsOf(
 export function presenceAccentOf(
   roster: readonly ReviewAuthorInfo[],
   participant: CollaborationParticipant,
-  colorForName?: (name: string) => string | undefined
+  colorForName?: (name: string) => string | undefined,
+  declaredColorFor?: (name: string) => string | undefined
 ): PresenceAccent {
-  return presenceAccentsOf(roster, [participant], colorForName).get(participant.actorId)!;
+  return presenceAccentsOf(roster, [participant], colorForName, declaredColorFor).get(
+    participant.actorId
+  )!;
 }
 
 /**
@@ -136,4 +147,31 @@ export function orderedParticipants(
     if (byName !== 0) return byName;
     return left.actorId < right.actorId ? -1 : left.actorId > right.actorId ? 1 : 0;
   });
+}
+
+/**
+ * The avatar image declared for a participant, or `undefined` for the initials disc.
+ *
+ * Presence never carries a picture and must not: a peer publishes its own presence, so an
+ * avatar URL on the wire is a zero-click fetch to any host a room member names. The picture
+ * is therefore the HOST's, declared once per author with `DocxEditor.AuthorStyle`, and looked
+ * up here by display name — the same key the review card resolves, so one declaration reaches
+ * a collaborator's caret, their avatar, and their comments.
+ *
+ * The roster answers for anyone who has written in the document. `declaredFor` — the editor's
+ * per-author style — answers for everyone else, which in a room is most people: someone who
+ * has joined and typed nothing is in no roster.
+ *
+ * Both sources are already sanitized where the style is normalized, so what comes back is a
+ * URL an `<img>` may load.
+ */
+export function presenceAvatarUrlOf(
+  roster: readonly ReviewAuthorInfo[],
+  name: string,
+  declaredFor?: (author: string) => { readonly avatarUrl?: string } | undefined
+): string | undefined {
+  for (const info of roster) {
+    if (info.author === name) return info.style?.avatarUrl;
+  }
+  return declaredFor?.(name)?.avatarUrl;
 }

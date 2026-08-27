@@ -3079,6 +3079,18 @@ a.docx-hyperlink:focus-visible {
   overflow: hidden;
 }
 
+/*
+ * A declared avatar image fills the disc. The accent stays behind it, so a URL that fails to
+ * load leaves the collaborator's colour rather than a hole.
+ */
+.docx-collaboration-avatar__image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
 /* Stacked discs overlap; the surface-coloured ring keeps each edge readable. */
 .docx-collaboration-avatars .docx-collaboration-avatar {
   box-shadow: 0 0 0 2px var(--doc-surface);

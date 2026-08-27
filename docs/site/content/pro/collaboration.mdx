@@ -63,8 +63,21 @@ presence, and undo. It does not expose `attach` or `gateOperations`.
 exported types from `@docx-editor.dev/pro/react` and
 `@docx-editor.dev/pro/vue`.
 
-`error` is a `CollaborationFailure`. Branch on `error.code` instead of matching
-message strings.
+`connect` and `rejoin` resolve with a `CollaborationFailure`, or `null` on
+success. They do not reject, so `onClick={() => connect(options)}` is safe.
+`error` reports the same failure for renderers:
+
+```tsx
+const failure = await connect(options);
+if (failure?.code === 'initialization-timeout') {
+  // No room server answered.
+}
+```
+
+Branch on `failure.code` or `error.code` instead of matching message strings. It reports two things: a connect that failed, and a session
+that failed after connecting. A token that expires on reconnect, a
+`concurrent-seed`, or a digest mismatch all happen after a successful join, so
+checking `error` is enough to know that collaboration is not working.
 
 The `<DocxEditor>` host accepts `document` and `modules`. You do not need
 `DocxEditor.Root` for collaboration.
@@ -184,11 +197,62 @@ Import `@docx-editor.dev/pro/collaboration` for Yjs factories. Import
 `@docx-editor.dev/pro/collaboration/webrtc` for room helpers such as
 `createCollaborationRoomId`.
 
+## Mount the editor
+
+A collaborative Root takes three props from the room, and each one fails quietly if you get
+it wrong: the `key`, so a new session remounts and the collaboration module attaches; the
+`document`, which must be the room's bytes; and the `modules`, which must be the hook's array.
+`DocxEditorCollaborationRoot` writes all three:
+
+```tsx
+const collaboration = useHocuspocusCollaboration({ modules: MODULES, room });
+
+<DocxEditorCollaborationRoot collaboration={collaboration} fallback={<p>Connecting…</p>}>
+  <DocxEditor.Toolbar />
+  <DocxEditor.Viewport>
+    <DocxEditor.Content />
+    <DocxEditorCollaboration.CaretLabels />
+  </DocxEditor.Viewport>
+</DocxEditorCollaborationRoot>;
+```
+
+It also takes `author` from the room's identity, so comments and tracked changes are signed
+with the name the room shows. Set `author` yourself to override it. Everything else
+`DocxEditor.Root` accepts passes through.
+
+Use `DocxEditor.Root` directly when one page mounts two rooms, or when the bytes come from
+somewhere the component cannot see:
+
+```tsx
+<DocxEditor.Root
+  key={collaboration.session?.sessionId ?? 'local'}
+  document={collaboration.document}
+  modules={collaboration.modules}
+  author={identity.name}
+/>
+```
+
 ## Show status and participants
 
-`useCollaborationStatus(session)` returns the live status and last failure.
-`useCollaborationParticipants(session)` returns the room participants. Both
-APIs are available from `@docx-editor.dev/pro/react` and
+`useCollaborationStatus()` returns the live status and last failure, plus three
+derived flags:
+
+- `live`: edits made now reach the room.
+- `diverged`: this replica no longer agrees with the room. Only `rejoin`
+  recovers it, so this is separate from "not live".
+- `attached`: an editor has attached its document port. False with a live
+  session means the host did not remount the editor when the session appeared,
+  so nothing replicates whatever `status` says.
+
+`useCollaborationParticipants()` returns the room participants.
+
+Neither takes a `session` argument. Both read the one the editor above them
+holds, which `useCollaborationSession()` also returns. Pass a session
+explicitly only for a room this editor does not own. The presence parts follow
+the same rule: `session` is optional on `DocxEditorCollaboration.Avatars` and
+`DocxEditorCollaboration.CaretLabels`.
+
+All of these are available from `@docx-editor.dev/pro/react` and
 `@docx-editor.dev/pro/vue`.
 
 If you own the Yjs resources, use `useDocumentCollaboration` from the same
@@ -210,6 +274,20 @@ local participant first.
 Avatar colors match each collaborator's tracked changes and comments. `max`
 collapses extra avatars into a `+N` chip. Use
 `DocxEditorCollaboration.Avatar` to render one participant.
+
+Avatars show the picture declared for a collaborator, so one declaration covers
+every surface that draws that person:
+
+```tsx
+<DocxEditor.AuthorStyle author="Alex Kim" color="#1f7a4d" avatarUrl="/team/alex.jpg" />
+```
+
+The review card, the caret label, and the avatar stack all resolve it by display
+name, which is the string `w:author` carries in the saved file. A declared color
+outranks the one a peer publishes in `identity.color`: the declaration is your
+own record of who someone is, and a peer must not be able to make their caret
+disagree with their comment cards. `identity.color` still applies to anyone you
+have not declared.
 
 `DocxEditorCollaboration.CaretLabels` replaces each remote caret label. The
 engine positions and colors the label. Your renderer mounts in the adapter
@@ -247,6 +325,30 @@ chrome.
 
 For CSS styling, use the `docx-remote-caret-label` class,
 `--doc-remote-color` custom property, and `data-docx-remote-actor` attribute.
+
+## Recover a diverged replica
+
+`status` `error` is terminal: the replica refused an update and kept the copy it
+had, so it is editing a document the others do not have. Waiting does not fix
+it. `rejoin` does:
+
+```tsx
+const { session, rejoin } = useHocuspocusCollaboration({ room });
+const { diverged } = useCollaborationStatus();
+
+if (diverged) {
+  return (
+    <button onClick={() => editor.save().then((bytes) => rejoin(new Uint8Array(bytes)))}>
+      Rejoin
+    </button>
+  );
+}
+```
+
+`rejoin` leaves with the bytes you pass, then joins the same room again with
+`{ kind: 'join' }`. If the join succeeds, the server's copy replaces those bytes
+and the edits made while diverged are gone. If it fails, nothing is lost: the
+bytes stay mounted locally.
 
 ## Edit offline
 
@@ -309,8 +411,9 @@ export function ServerBackedEditor({
 callback instead of a string. The provider calls it for each reconnection.
 
 A rejected token during the initial join produces `initialization-aborted`.
-After a successful join, rejection sets the status to `error` with
-`authentication-failed`. `syncedTimeoutMs` limits the initial sync wait. Its
+After a successful join, rejection sets the status to `error` and `error.code`
+to `authentication-failed`. Handle that code by refreshing the credential and
+calling `rejoin`; `transport-disconnected` recovers on its own. `syncedTimeoutMs` limits the initial sync wait. Its
 default is 30 seconds. A timeout produces `initialization-timeout`.
 
 The `createHocuspocusCollaboration` factory accepts the same options. Import it
@@ -319,6 +422,45 @@ from `@docx-editor.dev/pro/collaboration/hocuspocus`. It returns the room,
 
 The Hocuspocus v4 server runs on Node, not Bun. Use
 `@hocuspocus/provider` for the required authentication handshake.
+
+## Read a room from a server
+
+`readCollaborationDocument(ydoc)` returns the room's document as `.docx` bytes.
+Use it for export, autosave to your own storage, search indexing, or rendering.
+
+```ts
+import { readCollaborationDocument } from '@docx-editor.dev/pro/collaboration';
+
+// Hocuspocus hands `onStoreDocument` the synchronized Y.Doc already.
+async onStoreDocument({ documentName, document }) {
+  await writeFile(`${documentName}.docx`, readCollaborationDocument(document));
+}
+```
+
+It joins nothing. There is no identity, no `Awareness`, and no session, so the
+job never appears in a room's participant list, and it creates no editing gate.
+It does not write to the `Y.Doc`.
+
+The `Y.Doc` must already hold the room's state. Connect your provider and wait
+for its initial sync first. A document nobody seeded throws `not-initialized`
+instead of returning a truncated file.
+
+## Write a provider
+
+`@docx-editor.dev/core/collaboration/replication` holds the seam a replication
+implementation binds to: the document port an adapter writes through, the
+primitive journal it reads, and the descriptors that journal is made of.
+
+```ts
+import type {
+  CollaborationDocumentPort,
+  CanonicalPrimitiveJournal,
+} from '@docx-editor.dev/core/collaboration/replication';
+```
+
+A host that renders presence and reads a status needs none of it, which is why
+it is a separate subpath. Import `@docx-editor.dev/core/collaboration` for the
+consumer types: identity, participants, remote selections, status, and failures.
 
 ## Own a Yjs document
 
@@ -363,10 +505,17 @@ const room = await createDocumentCollaboration({
 provider.on('status', ({ status }: { status: string }) => {
   room.session.setTransportStatus(
     status === 'connected' ? 'ready' : 'disconnected',
-    status === 'connected' ? undefined : 'websocket-disconnected'
+    status === 'connected' ? undefined : 'transport-disconnected',
+    status === 'connected' ? undefined : 'websocket disconnected'
   );
 });
 ```
+
+The second argument is a `CollaborationFailureCode`, not free text. Use
+`transport-disconnected` for a socket that retries itself and
+`authentication-failed` for a credential the server rejected. Those need
+opposite responses from the host, so they must not share a code. Put your
+provider's own wording in the third argument.
 
 The factory rejects with a typed `CollaborationSchemaError`. Handle these
 codes:

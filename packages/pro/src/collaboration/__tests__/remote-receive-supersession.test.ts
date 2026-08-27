@@ -20,7 +20,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
-import type { CanonicalPrimitiveEffect } from '@docx-editor.dev/core/collaboration';
+import type { CanonicalPrimitiveEffect } from '@docx-editor.dev/core/collaboration/replication';
 import {
   BODY,
   createPeerHarness,

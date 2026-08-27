@@ -15,6 +15,7 @@ import { onMounted, onUnmounted, shallowRef, watch, type ShallowRef } from 'vue'
 import {
   isCollaborationFailureCode,
   type CollaborationFailure,
+  type CollaborationIdentity,
   type EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
@@ -57,10 +58,6 @@ export function collaborationFailureOf(cause: unknown): CollaborationFailure {
   return { code: 'transport' };
 }
 
-function throwCollaborationFailure(failure: CollaborationFailure): never {
-  throw Object.assign(new Error(failure.detail ?? failure.code), failure);
-}
-
 export function requireLeaveBytes(hookName: string, nextDocument: Uint8Array): void {
   if (!(nextDocument instanceof Uint8Array)) {
     throw new TypeError(
@@ -81,6 +78,14 @@ export interface CollaborationRoomConfig<TConnect, THandle extends Collaboration
   readonly autoKeyOf: () => string;
   /** Build the options a rejoin connects with from the last attempted options. */
   readonly rejoinOptionsOf: (last: TConnect) => TConnect;
+  /**
+   * The display identity the auto room asks for.
+   *
+   * Separate from `autoKeyOf` because renaming yourself must NOT reconnect: the room is the
+   * same room. The composable republishes it through `setIdentity` instead, which is what
+   * makes updating `room.identity` — the obvious call — do the obvious thing.
+   */
+  readonly identityOf: (options: TConnect) => CollaborationIdentity;
 }
 
 export interface CollaborationRoomState<TConnect, THandle extends CollaborationRoomHandle> {
@@ -90,9 +95,17 @@ export interface CollaborationRoomState<TConnect, THandle extends CollaborationR
   readonly session: ShallowRef<EditorCollaborationSession | null>;
   readonly pending: ShallowRef<boolean>;
   readonly error: ShallowRef<CollaborationFailure | null>;
-  readonly connect: (options: TConnect) => Promise<void>;
+  /**
+   * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
+   *
+   * A rejection carried nothing the resolved value does not, and it made the ordinary call
+   * site wrong by default: `@click="connect(options)"` produced an unhandled rejection on
+   * every failed connect. `error` reports the same failure for renderers.
+   */
+  readonly connect: (options: TConnect) => Promise<CollaborationFailure | null>;
   readonly leave: (nextDocument: Uint8Array) => void;
-  readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
+  /** Leave with `nextDocument`, then connect again. Resolves like {@link connect}. */
+  readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
 }
 
 export function useCollaborationRoom<TConnect, THandle extends CollaborationRoomHandle>(
@@ -131,7 +144,7 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     modules.value = modulesFor(config.hostModulesOf(), next?.session ?? null);
   };
 
-  const connect = async (next: TConnect): Promise<void> => {
+  const connect = async (next: TConnect): Promise<CollaborationFailure | null> => {
     const token = ++generation;
     // Record the attempt, not the success: rejoin after a FAILED connect must retry
     // with these options rather than refuse with "call connect first".
@@ -140,17 +153,20 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     error.value = null;
     try {
       const created = await createRoom(next);
+      // Superseded by a newer connect or a leave: neither the room nor the failure belongs to
+      // anyone any more, so it is not this caller's answer either.
       if (token !== generation) {
         created.destroy();
-        return;
+        return null;
       }
       owner.adopt(created);
       publish(created);
+      return null;
     } catch (cause) {
-      if (token !== generation) return;
       const failure = collaborationFailureOf(cause);
+      if (token !== generation) return failure;
       error.value = failure;
-      throwCollaborationFailure(failure);
+      return failure;
     } finally {
       if (token === generation) pending.value = false;
     }
@@ -168,15 +184,17 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     modules.value = modulesFor(config.hostModulesOf(), null);
   };
 
-  const rejoin = async (nextDocument: Uint8Array): Promise<void> => {
+  const rejoin = async (nextDocument: Uint8Array): Promise<CollaborationFailure | null> => {
     const last = lastConnect;
+    // Still a THROW, and deliberately: this one is a programming error, not a room that would
+    // not open. A caller has asked to rejoin something it never joined.
     if (last === null) {
       throw new Error(
         `${config.hookName}: rejoin needs a room this composable connected before. Call connect first.`
       );
     }
     leave(nextDocument);
-    await connect(config.rejoinOptionsOf(last));
+    return connect(config.rejoinOptionsOf(last));
   };
 
   watch(
@@ -191,6 +209,50 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
     () => config.hostModulesOf(),
     (hostModules) => {
       modules.value = modulesFor(hostModules, session.value);
+    }
+  );
+
+  // A session that fails AFTER the join reports through its own status, not through the
+  // connect promise — so without this the composable's `error` stayed null while the replica
+  // had stopped replicating. `destroyed` is not folded in: leave and unmount reach it on
+  // purpose.
+  watch(
+    session,
+    (next, _previous, onCleanup) => {
+      if (!next) return;
+      const apply = (): void => {
+        const snapshot = next.statusSnapshot();
+        if (snapshot.status !== 'error') return;
+        error.value = snapshot.reason ?? snapshot.lastFailure ?? { code: 'transport' };
+      };
+      apply();
+      onCleanup(next.subscribeStatus(() => apply()));
+    },
+    { immediate: true }
+  );
+
+  // Renaming yourself is not reconnecting. `autoKeyOf` deliberately leaves identity out, so
+  // this republishes it in place — and a replica that freezes identity for its lifetime omits
+  // `setIdentity`, in which case there is nothing to republish.
+  watch(
+    () => {
+      const next = config.autoRoomOf();
+      if (!next) return '';
+      const identity = config.identityOf(next);
+      return `${identity.name}\u0000${identity.color ?? ''}`;
+    },
+    () => {
+      const next = config.autoRoomOf();
+      const live = session.value;
+      if (!next || !live) return;
+      const identity = config.identityOf(next);
+      const withIdentity = live as {
+        setIdentity?: (update: { name?: string; color?: string }) => void;
+      };
+      withIdentity.setIdentity?.({
+        name: identity.name,
+        ...(identity.color !== undefined ? { color: identity.color } : {}),
+      });
     }
   );
 

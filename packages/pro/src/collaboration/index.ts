@@ -26,6 +26,7 @@ export {
 } from './session.ts';
 export {
   createDocumentCollaboration,
+  readCollaborationDocument,
   type CreateDocumentCollaborationOptions,
   type DocumentCollaborationHandle,
   type DocumentCollaborationSession,

@@ -30,6 +30,7 @@ export interface CollaborationAvatarProps {
 
 // @public
 export interface CollaborationAvatarRenderProps {
+    readonly avatarUrl?: string;
     readonly color: string;
     readonly initials: string;
     // (undocumented)
@@ -42,7 +43,7 @@ export interface CollaborationAvatarsProps {
     // (undocumented)
     readonly className?: string;
     readonly max?: number;
-    readonly session: CollaborationSession | null;
+    readonly session?: CollaborationSession | null;
 }
 
 // @public
@@ -64,6 +65,7 @@ export type CollaborationBootstrap = {
 
 // @public
 export interface CollaborationCaretLabelRenderProps {
+    readonly avatarUrl?: string;
     readonly color: string;
     readonly participant: CollaborationParticipant | null;
     readonly selection: CollaborationRemoteSelection;
@@ -72,7 +74,7 @@ export interface CollaborationCaretLabelRenderProps {
 // @public
 export interface CollaborationCaretLabelsProps {
     readonly children?: (props: CollaborationCaretLabelRenderProps) => VNode | VNode[];
-    readonly session: CollaborationSession | null;
+    readonly session?: CollaborationSession | null;
 }
 
 // @public
@@ -84,7 +86,7 @@ export interface CollaborationFailure {
 }
 
 // @public
-export type CollaborationFailureCode = 'already-initialized' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-digest-mismatch' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'concurrent-seed' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'materialize-dropped-content' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
+export type CollaborationFailureCode = 'already-initialized' | 'authentication-failed' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-digest-mismatch' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'concurrent-seed' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'materialize-dropped-content' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'transport-disconnected' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
 
 // @public
 export interface CollaborationIdentity {
@@ -145,6 +147,16 @@ export interface CollaborationRemoteSelectionAddress {
     readonly offset: number;
     // (undocumented)
     readonly paragraphId: string;
+}
+
+// @public
+export interface CollaborationRootSource {
+    // (undocumented)
+    readonly document: Uint8Array | null;
+    // (undocumented)
+    readonly modules: readonly EditorModule[];
+    // (undocumented)
+    readonly session: CollaborationSession | null;
 }
 
 // @public
@@ -275,7 +287,7 @@ export const DocxEditorCollaboration: {
             type: NumberConstructor;
         };
         session: {
-            default: null;
+            default: undefined;
             type: PropType<CollaborationSession | null>;
         };
     }>, () => VNode<vue.RendererNode, vue.RendererElement, {
@@ -290,7 +302,7 @@ export const DocxEditorCollaboration: {
             type: NumberConstructor;
         };
         session: {
-            default: null;
+            default: undefined;
             type: PropType<CollaborationSession | null>;
         };
     }>> & Readonly<{}>, {
@@ -300,14 +312,14 @@ export const DocxEditorCollaboration: {
     }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
     CaretLabels: vue.DefineComponent<vue.ExtractPropTypes<{
         session: {
-            default: null;
+            default: undefined;
             type: PropType<CollaborationSession | null>;
         };
     }>, () => VNode<vue.RendererNode, vue.RendererElement, {
         [key: string]: any;
     }>[] | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
         session: {
-            default: null;
+            default: undefined;
             type: PropType<CollaborationSession | null>;
         };
     }>> & Readonly<{}>, {
@@ -317,6 +329,29 @@ export const DocxEditorCollaboration: {
 
 // @public (undocumented)
 export type DocxEditorCollaborationNamespace = typeof DocxEditorCollaboration;
+
+// @public
+export const DocxEditorCollaborationRoot: vue.DefineComponent<vue.ExtractPropTypes<{
+    collaboration: {
+        required: true;
+        type: PropType<CollaborationRootSource>;
+    };
+}>, () => VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}> | VNode<vue.RendererNode, vue.RendererElement, {
+    [key: string]: any;
+}>[] | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+    collaboration: {
+        required: true;
+        type: PropType<CollaborationRootSource>;
+    };
+}>> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export interface DocxEditorCollaborationRootProps {
+    readonly collaboration: CollaborationRootSource;
+    readonly fallback?: VNode | VNode[];
+}
 
 // @public (undocumented)
 export const DocxEditorReview: {
@@ -1029,7 +1064,7 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 }
 
 // @public
-export function useCollaborationParticipants(session: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationParticipantsReturn;
+export function useCollaborationParticipants(session?: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationParticipantsReturn;
 
 // @public
 export interface UseCollaborationParticipantsReturn {
@@ -1038,12 +1073,23 @@ export interface UseCollaborationParticipantsReturn {
 }
 
 // @public
-export function useCollaborationStatus(session: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationStatusReturn;
+export function useCollaborationSession(): UseCollaborationSessionReturn;
+
+// @public
+export interface UseCollaborationSessionReturn {
+    readonly session: ComputedRef<CollaborationSession | null>;
+}
+
+// @public
+export function useCollaborationStatus(session?: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationStatusReturn;
 
 // @public
 export interface UseCollaborationStatusReturn {
+    readonly attached: Readonly<Ref<boolean>>;
+    readonly diverged: ComputedRef<boolean>;
     // (undocumented)
     readonly lastFailure: Readonly<Ref<CollaborationFailure | undefined>>;
+    readonly live: ComputedRef<boolean>;
     // (undocumented)
     readonly reason: Readonly<Ref<CollaborationFailure | undefined>>;
     // (undocumented)
@@ -1067,8 +1113,7 @@ export interface UseDocumentCollaborationOptions {
 
 // @public
 export interface UseDocumentCollaborationReturn {
-    // (undocumented)
-    readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<void>;
+    readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<CollaborationFailure | null>;
     // (undocumented)
     readonly document: Readonly<Ref<Uint8Array | null>>;
     // (undocumented)

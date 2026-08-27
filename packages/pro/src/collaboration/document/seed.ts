@@ -7,7 +7,7 @@ import type { OoxmlElement, OoxmlPackage, OoxmlTextNode } from '@docx-editor.dev
 import type {
   CanonicalBinaryDescriptor,
   CanonicalPrimitiveEffect,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import {
   DEFAULT_DOCUMENT_LIMITS,
   rejectDangerousKey,

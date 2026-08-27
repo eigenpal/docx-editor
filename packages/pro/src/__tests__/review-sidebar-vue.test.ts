@@ -498,7 +498,11 @@ describe('DocxEditorReview (Vue)', () => {
             .querySelector('[data-testid="review-card"]')
             ?.hasAttribute('data-resolved-miniature') === true
       );
-      expect(mounted.container.querySelector('.docx-review__slot')).toBe(initial);
+      // `find` yields `undefined` when it misses, and `toBe` takes `Element | null` — the
+      // narrowing is what makes "the slot element was reused" an assertion rather than a
+      // comparison two absent values would also pass.
+      expect(initial).toBeTruthy();
+      expect(mounted.container.querySelector('.docx-review__slot')).toBe(initial ?? null);
       expect(unobserved.includes(initial!)).toBe(false);
     } finally {
       mounted.unmount();

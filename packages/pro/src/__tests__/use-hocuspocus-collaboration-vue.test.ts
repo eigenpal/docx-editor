@@ -35,6 +35,7 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
     statusSnapshot: () =>
       Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
     subscribeStatus: () => () => {},
+    attached: true,
     attach: () => () => {},
     gateOperations: () => null,
     canUndo: () => false,
@@ -376,7 +377,7 @@ describe('useHocuspocusCollaboration (Vue)', () => {
     mounted?.unmount();
   });
 
-  test('connect rejects with the failure code from a schema error', async () => {
+  test('connect resolves with the failure code from a schema error', async () => {
     const mounted = mountHook(
       () =>
         Promise.reject(
@@ -385,15 +386,11 @@ describe('useHocuspocusCollaboration (Vue)', () => {
       false
     );
     await nextTick();
-    let thrown: unknown;
-    try {
-      await mounted.latest()?.connect(CONNECT);
-    } catch (cause) {
-      thrown = cause;
-    }
+    // RESOLVES with the failure rather than rejecting, so the ordinary call site —
+    // `@click="connect(options)"` — cannot raise an unhandled rejection.
+    const resolved = await mounted.latest()?.connect(CONNECT);
+    expect(resolved).toEqual({ code: 'initialization-timeout' });
     expect(mounted.latest()?.error.value).toEqual({ code: 'initialization-timeout' });
-    expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as { code?: string }).code).toBe('initialization-timeout');
     mounted.unmount();
   });
 

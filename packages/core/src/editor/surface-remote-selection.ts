@@ -23,10 +23,10 @@ import { safeParticipantColor } from '../collaboration/participant-color.ts';
 import type { RemoteCaretLabelAnchor, RemoteCaretLabelHost } from './paginated-surface-contract.ts';
 import type {
   CollaborationLocalSelection,
-  CollaborationParagraph,
   CollaborationRemoteSelection,
   CollaborationSelectionKind,
 } from '../collaboration/index.ts';
+import type { CollaborationParagraph } from '../collaboration/replication.ts';
 
 /** Map a surface selection to the stable paragraph ids awareness publishes. */
 export function localCollaborationSelection(
@@ -74,6 +74,16 @@ export interface RemoteSelectionPaintOptions {
    */
   readonly colorForAuthor?: (name: string) => string | undefined;
   /**
+   * The colour the HOST declared for an author, which outranks the one the peer published.
+   *
+   * A published colour is remote input: the peer chose it for itself. A declaration is the
+   * app's own record of who that person is, and an app that has said "Rosa draws in #1f7a4d"
+   * must not be overruled by a peer claiming otherwise — nor have its own comment cards and
+   * carets disagree about one person. Ranked above `colorForAuthor`, which is the ramp
+   * fallback and does NOT outrank a published colour.
+   */
+  readonly declaredColorFor?: (name: string) => string | undefined;
+  /**
    * A host that renders its own content inside the caret labels. With one set the labels
    * stay empty (`data-docx-remote-actor` names the actor) and every rebuilding paint calls
    * `publish`; a skipped paint does not. The host joins the paint memo key by identity, so
@@ -109,11 +119,14 @@ const lastRemotePaint = new WeakMap<HTMLElement, LastRemotePaint>();
  */
 function resolvedSelectionColors(
   selections: readonly CollaborationRemoteSelection[],
-  colorForAuthor?: (name: string) => string | undefined
+  colorForAuthor?: (name: string) => string | undefined,
+  declaredColorFor?: (name: string) => string | undefined
 ): readonly (string | undefined)[] {
   return selections.map(
     (remote) =>
-      safeParticipantColor(remote.color) ?? safeParticipantColor(colorForAuthor?.(remote.name))
+      safeParticipantColor(declaredColorFor?.(remote.name)) ??
+      safeParticipantColor(remote.color) ??
+      safeParticipantColor(colorForAuthor?.(remote.name))
   );
 }
 
@@ -192,9 +205,9 @@ export function paintRemoteSelections(
   selections: readonly CollaborationRemoteSelection[],
   options: RemoteSelectionPaintOptions
 ): void {
-  const { scale, pageOffsetX, pages, colorForAuthor } = options;
+  const { scale, pageOffsetX, pages, colorForAuthor, declaredColorFor } = options;
   const labelHost = options.labelHost ?? null;
-  const colors = resolvedSelectionColors(selections, colorForAuthor);
+  const colors = resolvedSelectionColors(selections, colorForAuthor, declaredColorFor);
   const paintKey = {
     layout,
     fingerprint: selectionFingerprint(selections, colors),

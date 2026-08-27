@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { readonly, shallowRef, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue';
 import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
 import type { CollaborationSession } from '../collaboration/session.ts';
+import { useCollaborationSession } from './useCollaborationSession.ts';
 
 const NO_PARTICIPANTS: readonly CollaborationParticipant[] = Object.freeze([]);
 
@@ -37,21 +38,21 @@ export interface UseCollaborationParticipantsReturn {
 }
 
 /**
- * Subscribe to the participant roster of an externally owned collaboration session.
+ * Subscribe to the participant roster of the collaboration session.
  *
- * Takes the host-facing {@link CollaborationSession}, which is what the collaboration
- * composables hand back. The ref keeps its array reference until the roster actually
- * changes, so unrelated awareness traffic does not retrigger watchers. An absent session
- * yields a stable empty array.
+ * Omit `session` and it reads the one the editor above holds. The ref keeps its array
+ * reference until the roster actually changes, so unrelated awareness traffic does not
+ * retrigger watchers. No session yields a stable empty array.
  *
  * @public
  */
 export function useCollaborationParticipants(
-  session: MaybeRefOrGetter<CollaborationSession | null>
+  session?: MaybeRefOrGetter<CollaborationSession | null>
 ): UseCollaborationParticipantsReturn {
+  const fromContext = useCollaborationSession();
   const participants = shallowRef<readonly CollaborationParticipant[]>(NO_PARTICIPANTS);
   watch(
-    () => toValue(session),
+    () => (session === undefined ? fromContext.session.value : toValue(session)),
     (next, _previous, onCleanup) => {
       const apply = (): void => {
         // `participants()` builds a fresh array per call; keep the previous reference when

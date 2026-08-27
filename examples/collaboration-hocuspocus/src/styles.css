@@ -1,0 +1,651 @@
+/* The chrome stylesheet.
+   In standalone usage: @import '@docx-editor.dev/core/styles/editor.css';
+   This app runs the packages from SOURCE, so it imports the same file from there. */
+@import '../../../packages/core/src/styles/editor.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   The demo shell.
+
+   The editor's own chrome — toolbar, review rail, popovers — is the library's and
+   is styled by the sheet above; the root carries `dark`, so it comes up dark with
+   no work here. What follows is only the frame this demo puts around it: a sign-in
+   stage and a room bar.
+
+   Two ideas run through it.
+
+   Everything is GREY, on purpose. The frame, the toolbar and the page itself are all
+   the engine's dark palette, so the only chroma anywhere is a person: a caret, an
+   avatar, a comment card, the identity stripe. Presence is the subject, so presence
+   is the only thing allowed to have a colour.
+
+   Which is the second idea: the shell WEARS THE SIGNED-IN PERSON'S COLOUR.
+   `--collab-you` is set from the identity you pick, and it is the same value the
+   engine paints that person's caret, comments and tracked changes with. The interface
+   makes the API's own claim — one declaration, every surface.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/*
+ * The demo's own tokens, on `.docx-editor` rather than `:root` — that is the element the
+ * library's `dark` class lands on, so one switch moves the editor's palette and this frame's
+ * together. Defining them on `:root` would have left the frame stuck in one theme while the
+ * editor changed underneath it.
+ */
+.docx-editor {
+  --collab-stage: #f3f4f7;
+  --collab-panel: #ffffff;
+  --collab-line: #e4e7ee;
+  --collab-line-strong: #c8cddb;
+  --collab-text: #171a21;
+  --collab-dim: #5c6474;
+  --collab-faint: #8b93a3;
+  /* State, never decoration. Green means the transport is up and nothing else uses it. */
+  --collab-live: #15803d;
+  --collab-warn: #b45309;
+  --collab-bad: #dc2626;
+  /* Overridden per person the moment somebody signs in. */
+  --collab-you: #9aa1ae;
+  /* A hairline wash for hover, so one rule serves both themes. */
+  --collab-wash: #0000000a;
+
+  --collab-display:
+    'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --collab-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* Surfaces sit a shade cooler than the engine's neutral dark, so the frame reads as a
+   separate object from the toolbar it holds rather than a seam in it. */
+.docx-editor.dark {
+  --collab-stage: #0c0e14;
+  --collab-panel: #14171f;
+  --collab-line: #2a3040;
+  --collab-line-strong: #3d4557;
+  --collab-text: #e6e9f0;
+  --collab-dim: #99a2b5;
+  --collab-faint: #6d768a;
+  --collab-live: #3ddc84;
+  --collab-warn: #f5a524;
+  --collab-bad: #f4525f;
+  --collab-you: #6b7280;
+  --collab-wash: #ffffff0f;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  background: var(--collab-stage);
+  color: var(--collab-text);
+  font-family: var(--collab-display);
+  -webkit-font-smoothing: antialiased;
+}
+
+.collab-viewport {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Readout: the shared voice of every machine-readable value on screen — a room
+   id, a socket URL, a transport state. Mono, wide-tracked, small.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.collab-readout {
+  font-family: var(--collab-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--collab-dim);
+}
+
+.collab-readout b {
+  font-weight: 600;
+  color: var(--collab-text);
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   The room bar. A status strip, not a toolbar: state on the left, who is here in
+   the middle, actions on the right, and a hairline of your colour along the top.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.collab-bar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 14px;
+  height: 46px;
+  flex: none;
+  background: var(--collab-panel);
+  border-bottom: 1px solid var(--collab-line);
+  /* The identity stripe. Quietest possible statement of "the shell is wearing you". */
+  box-shadow: inset 0 2px 0 var(--collab-you);
+}
+
+.collab-bar__spacer {
+  flex: 1;
+}
+
+.collab-bar__note {
+  font-family: var(--collab-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--collab-dim);
+}
+
+/* State reads from the glyph AND the word, so it never depends on the colour. */
+.collab-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--collab-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--collab-dim);
+  white-space: nowrap;
+}
+
+.collab-state__glyph {
+  font-size: 9px;
+  line-height: 1;
+}
+
+.collab-state.is-ready {
+  color: var(--collab-live);
+}
+
+.collab-state.is-warn {
+  color: var(--collab-warn);
+}
+
+.collab-state.is-bad {
+  color: var(--collab-bad);
+}
+
+/* The room id is the invite, so the id itself is the control — no button beside it
+   restating what the value already is. */
+.collab-room {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border: 1px solid var(--collab-line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--collab-dim);
+  font-family: var(--collab-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.collab-room:hover {
+  border-color: var(--collab-line-strong);
+  background: var(--collab-wash);
+  color: var(--collab-text);
+}
+
+.collab-room:focus-visible {
+  outline: 2px solid var(--collab-you);
+  outline-offset: 2px;
+}
+
+.collab-room__label {
+  color: var(--collab-faint);
+  letter-spacing: 0.14em;
+}
+
+.collab-room__id {
+  color: var(--collab-text);
+  font-weight: 600;
+}
+
+.collab-room.is-copied {
+  border-color: var(--collab-live);
+  color: var(--collab-live);
+}
+
+/* Who is here. Overlapped discs, tightest on the left, plus a plain count — the
+   count is what a screen reader and a squinting reader both get. */
+.collab-here {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.collab-bar__person {
+  display: inline-flex;
+  margin-left: -7px;
+  border-radius: 50%;
+  /* The cut-out ring is the panel colour, so the stack reads as depth rather than
+     four discs that happen to touch. */
+  box-shadow: 0 0 0 2px var(--collab-panel);
+}
+
+.collab-bar__person:first-child {
+  margin-left: 0;
+}
+
+.collab-count {
+  font-family: var(--collab-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--collab-dim);
+  white-space: nowrap;
+}
+
+.collab-button {
+  appearance: none;
+  border: 1px solid var(--collab-line);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--collab-dim);
+  font-family: var(--collab-display);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 8px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background 140ms ease;
+}
+
+.collab-button:hover {
+  border-color: var(--collab-line-strong);
+  background: var(--collab-wash);
+  color: var(--collab-text);
+}
+
+.collab-button:focus-visible {
+  outline: 2px solid var(--collab-you);
+  outline-offset: 2px;
+}
+
+/* Two labelled halves in one well, so the current mode is a position rather than an icon
+   whose meaning the reader has to guess. */
+.collab-theme {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--collab-line);
+  border-radius: 8px;
+}
+
+.collab-theme__option {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--collab-faint);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.collab-theme__option:hover {
+  color: var(--collab-text);
+}
+
+.collab-theme__option[aria-pressed='true'] {
+  background: var(--collab-wash);
+  color: var(--collab-text);
+}
+
+.collab-theme__option:focus-visible {
+  outline: 2px solid var(--collab-you);
+  outline-offset: 1px;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   The sign-in stage.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.collab-stage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 40px 24px;
+  overflow-y: auto;
+}
+
+.collab-stage__inner {
+  width: min(560px, 100%);
+}
+
+.collab-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 26px;
+  font-family: var(--collab-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--collab-faint);
+}
+
+.collab-eyebrow::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--collab-line);
+}
+
+.collab-stage h1 {
+  margin: 0;
+  font-size: clamp(34px, 6vw, 46px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+  color: var(--collab-text);
+}
+
+.collab-stage__lede {
+  margin: 12px 0 30px;
+  max-width: 44ch;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--collab-dim);
+}
+
+.collab-seats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--collab-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--collab-panel);
+}
+
+.collab-seats li + li {
+  border-top: 1px solid var(--collab-line);
+}
+
+.collab-seat {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--collab-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+
+/* The seat previews the identity: hovering one washes the row in that person's
+   colour, which is the same value their caret and comments will take. */
+.collab-seat::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--collab-accent) 0%, transparent 62%);
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+
+.collab-seat:hover::before,
+.collab-seat:focus-visible::before {
+  opacity: 0.14;
+}
+
+.collab-seat:focus-visible {
+  outline: 2px solid var(--collab-accent);
+  outline-offset: -2px;
+}
+
+.collab-seat:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.collab-seat:disabled::before {
+  opacity: 0;
+}
+
+/* Real keycaps: 1 through 4 select a seat, because the whole instruction for this
+   demo is "open a second browser and pick someone else" and one keystroke is the
+   shortest that gets. */
+.collab-key {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--collab-line-strong);
+  border-radius: 5px;
+  font-family: var(--collab-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--collab-dim);
+}
+
+.collab-seat__who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.collab-seat__name {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+
+.collab-seat__role {
+  font-family: var(--collab-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--collab-faint);
+}
+
+.collab-seat__go {
+  margin-left: auto;
+  font-family: var(--collab-mono);
+  font-size: 13px;
+  color: var(--collab-faint);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.collab-seat:hover .collab-seat__go,
+.collab-seat:focus-visible .collab-seat__go {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.collab-stage__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 22px 0 0;
+}
+
+/* One orchestrated entrance: the seats deal in like cards. Nothing else animates. */
+@media (prefers-reduced-motion: no-preference) {
+  .collab-seats li {
+    animation: collab-deal 380ms cubic-bezier(0.22, 0.8, 0.3, 1) backwards;
+  }
+
+  .collab-seats li:nth-child(1) {
+    animation-delay: 40ms;
+  }
+  .collab-seats li:nth-child(2) {
+    animation-delay: 100ms;
+  }
+  .collab-seats li:nth-child(3) {
+    animation-delay: 160ms;
+  }
+  .collab-seats li:nth-child(4) {
+    animation-delay: 220ms;
+  }
+
+  @keyframes collab-deal {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Full-stage messages: connecting, and the two things that can go wrong.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.collab-message {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.collab-message__inner {
+  max-width: 44ch;
+}
+
+.collab-message h2 {
+  margin: 0 0 10px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--collab-text);
+}
+
+.collab-message p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--collab-dim);
+}
+
+.collab-message code {
+  display: inline-block;
+  margin-top: 14px;
+  padding: 9px 13px;
+  border: 1px solid var(--collab-line);
+  border-radius: 8px;
+  background: var(--collab-panel);
+  font-family: var(--collab-mono);
+  font-size: 12px;
+  color: var(--collab-text);
+  user-select: all;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   The remote caret label.
+
+   The engine draws the caret, positions the label above it, and sets
+   `--doc-remote-color` on it. Its own label is a small filled chip, so this rule
+   hands the box back: no padding, no fill, no clipping. Everything visible comes
+   from `.collab-caret` inside it.
+
+   Note the specificity — it matches the engine's own selector exactly and wins on
+   source order, because the `@import` at the top of this file puts the engine's
+   sheet first. Copying this rule into an app that loads `editor.css` later would
+   silently lose it.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.docx-paginated-surface .docx-remote-caret-label {
+  max-width: none;
+  overflow: visible;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  transform: translateY(calc(-100% - 6px));
+}
+
+/* Filled with the collaborator's colour rather than the page's white: the pill sits
+   on Word-white paper, so it has to carry its own contrast, and being the same hue
+   as the caret below it is what ties the two into one object. The squared bottom-left
+   corner points at the caret — the same instinct as the engine's default chip. */
+.collab-caret {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 11px 3px 3px;
+  border-radius: 999px 999px 999px 4px;
+  background: var(--collab-accent, #4b5563);
+  color: #fff;
+  font-family: var(--collab-display);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px #0000002e;
+}
+
+.collab-caret__name {
+  /* Long enough for a full name, short enough that a label cannot cover the page. */
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   The avatar. One rule everywhere a person appears, so a collaborator looks the
+   same in the seat list, the room bar and their caret.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.collab-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--collab-accent, var(--collab-line-strong));
+  color: #fff;
+  font-family: var(--collab-mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Inside a caret pill the disc is smaller and ringed in the pill's own fill, which
+   is what makes it read as sitting on the pill rather than punched through it. */
+.collab-caret__avatar {
+  width: 22px;
+  height: 22px;
+  box-shadow: 0 0 0 2px #ffffff59;
+}

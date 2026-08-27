@@ -17,7 +17,7 @@ import {
 import {
   createCollaborationDocumentPort,
   type CanonicalPrimitiveJournal,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import {
   applyJournal,
   destroyReplica,

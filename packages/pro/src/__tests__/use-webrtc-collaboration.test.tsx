@@ -33,6 +33,7 @@ function stubSession(documentId = 'room-1'): EditorCollaborationSession {
     statusSnapshot: () =>
       Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
     subscribeStatus: () => () => {},
+    attached: true,
     attach: () => () => {},
     gateOperations: () => null,
     canUndo: () => false,
@@ -286,7 +287,7 @@ describe('useWebrtcCollaboration', () => {
     });
   });
 
-  test('a failed rejoin keeps the saved bytes mounted and surfaces the typed error', async () => {
+  test('a failed rejoin keeps the saved bytes mounted and resolves the typed error', async () => {
     let calls = 0;
     const first = fakeRoom();
     const createRoom = async () => {
@@ -304,15 +305,13 @@ describe('useWebrtcCollaboration', () => {
       await latest?.connect(CONNECT);
     });
     const saved = new Uint8Array([7]);
-    let thrown: unknown;
+    let resolved: unknown;
     await act(async () => {
-      try {
-        await latest?.rejoin(saved);
-      } catch (cause) {
-        thrown = cause;
-      }
+      resolved = await latest?.rejoin(saved);
     });
-    expect((thrown as { code?: string }).code).toBe('initialization-timeout');
+    // Resolves like `connect`, and the saved bytes are still what is mounted — a rejoin that
+    // could not reach the room must not also lose the work it was handed.
+    expect(resolved).toEqual({ code: 'initialization-timeout' });
     expect(latest?.error).toEqual({ code: 'initialization-timeout' });
     expect(latest?.session).toBeNull();
     expect(latest?.document).toBe(saved);
@@ -379,7 +378,7 @@ describe('useWebrtcCollaboration', () => {
     expect(rejections).toEqual([]);
   });
 
-  test('connect rejects with the failure code from a schema error', async () => {
+  test('connect resolves with the failure code from a schema error', async () => {
     let latest: UseWebrtcCollaborationReturn | undefined;
     await act(async () => {
       render(
@@ -396,17 +395,14 @@ describe('useWebrtcCollaboration', () => {
         />
       );
     });
-    let thrown: unknown;
+    // RESOLVES with the failure rather than rejecting, so the ordinary call site —
+    // `onClick={() => connect(options)}` — cannot raise an unhandled rejection.
+    let resolved: unknown;
     await act(async () => {
-      try {
-        await latest?.connect(CONNECT);
-      } catch (cause) {
-        thrown = cause;
-      }
+      resolved = await latest?.connect(CONNECT);
     });
+    expect(resolved).toEqual({ code: 'initialization-timeout' });
     expect(latest?.error).toEqual({ code: 'initialization-timeout' });
-    expect(thrown).toBeInstanceOf(Error);
-    expect((thrown as { code?: string }).code).toBe('initialization-timeout');
   });
 
   test('idle modules stay the same reference across renders', async () => {

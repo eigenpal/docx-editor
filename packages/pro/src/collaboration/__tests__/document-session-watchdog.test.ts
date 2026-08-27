@@ -17,7 +17,7 @@ import {
   normalizeParagraphIdentity,
   readOoxmlPackage,
 } from '@docx-editor.dev/core/store';
-import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
+import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration/replication';
 import {
   ATTACH_WATCHDOG_MS_FOR_TESTS,
   createDocumentCollaboration,

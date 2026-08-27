@@ -2213,6 +2213,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
     getConfiguredAuthor: () => config.author?.trim() || null,
     presenceColorFor: (name) => surface?.remotePresenceColor(name) ?? 'var(--doc-accent)',
+    collaborationSession: () => surface?.collaborationSession() ?? null,
     getReviewAuthorStyle: (author) => revisionStyleState.styleFor(author),
     setRemoteCaretLabelHost(host) {
       remoteCaretLabelHost = host;

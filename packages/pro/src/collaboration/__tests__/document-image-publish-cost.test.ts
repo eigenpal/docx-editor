@@ -10,7 +10,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // still linear in the document. These gates count serialize visits and package reads.
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import type { CanonicalPrimitiveEffect } from '@docx-editor.dev/core/collaboration';
+import type { CanonicalPrimitiveEffect } from '@docx-editor.dev/core/collaboration/replication';
 import type { ImageDecodePort } from '@docx-editor.dev/core/store';
 import { ooxmlPackageReadCount } from '../../../../core/src/store/package/ooxml-package.ts';
 import { canonicalSerializeNodeVisits } from '../../../../core/src/store/package/ooxml-serialize.ts';

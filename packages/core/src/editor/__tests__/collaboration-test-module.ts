@@ -3,10 +3,8 @@
 // Core tests exercise attach gating, first-registration-wins, and undo handover.
 // The real Yjs replica lives in `@docx-editor.dev/pro`.
 
-import type {
-  CollaborationDocumentPort,
-  EditorCollaborationSession,
-} from '../../collaboration/index.ts';
+import type { EditorCollaborationSession } from '../../collaboration/index.ts';
+import type { CollaborationDocumentPort } from '../../collaboration/replication.ts';
 import type { EditorModule } from '../../contracts/modules.ts';
 
 export interface StubCollaborationSession extends EditorCollaborationSession {

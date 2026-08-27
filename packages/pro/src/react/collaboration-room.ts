@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   isCollaborationFailureCode,
   type CollaborationFailure,
+  type CollaborationIdentity,
   type EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
 import type { EditorModule } from '@docx-editor.dev/core/editor';
@@ -57,10 +58,6 @@ export function collaborationFailureOf(cause: unknown): CollaborationFailure {
   return { code: 'transport' };
 }
 
-function throwCollaborationFailure(failure: CollaborationFailure): never {
-  throw Object.assign(new Error(failure.detail ?? failure.code), failure);
-}
-
 export function requireLeaveBytes(hookName: string, nextDocument: Uint8Array): void {
   if (!(nextDocument instanceof Uint8Array)) {
     throw new TypeError(
@@ -81,6 +78,14 @@ export interface CollaborationRoomConfig<TConnect, THandle extends Collaboration
   readonly autoKey: string;
   /** Build the options a rejoin connects with from the last attempted options. */
   readonly rejoinOptionsOf: (last: TConnect) => TConnect;
+  /**
+   * The display identity `autoRoom` asks for.
+   *
+   * Separate from `autoKey` because renaming yourself must NOT reconnect: the room is the
+   * same room. The hook republishes it through `setIdentity` instead, which is what makes
+   * updating `room.identity` — the obvious call — do the obvious thing.
+   */
+  readonly identityOf: (options: TConnect) => CollaborationIdentity;
 }
 
 export interface CollaborationRoomState<TConnect, THandle extends CollaborationRoomHandle> {
@@ -89,10 +94,27 @@ export interface CollaborationRoomState<TConnect, THandle extends CollaborationR
   readonly modules: readonly EditorModule[];
   readonly session: EditorCollaborationSession | null;
   readonly pending: boolean;
+  /**
+   * Why collaboration is not working: a failed connect, OR a session that failed after one.
+   *
+   * Folding both into one field is the point. A token that expires on reconnect, a
+   * `concurrent-seed`, a digest mismatch — each of those happens AFTER a successful join, and
+   * with only the connect failure here they left this null while replication was dead, so the
+   * documented `if (error)` guard rendered a healthy editor over a room nobody could reach.
+   */
   readonly error: CollaborationFailure | null;
-  readonly connect: (options: TConnect) => Promise<void>;
+  /**
+   * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
+   *
+   * A rejection here carried nothing the resolved value does not, and it made the ordinary
+   * call site wrong by default: `onClick={() => connect(options)}` produced an unhandled
+   * rejection on every failed connect, and every caller that did handle it wrote a
+   * `try`/`catch` for information it could have read from `error`.
+   */
+  readonly connect: (options: TConnect) => Promise<CollaborationFailure | null>;
   readonly leave: (nextDocument: Uint8Array) => void;
-  readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
+  /** Leave with `nextDocument`, then connect again. Resolves like {@link connect}. */
+  readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
 }
 
 export function useCollaborationRoom<TConnect, THandle extends CollaborationRoomHandle>(
@@ -120,7 +142,7 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
   }, []);
 
   const connect = useCallback(
-    async (next: TConnect) => {
+    async (next: TConnect): Promise<CollaborationFailure | null> => {
       const generation = ++generationRef.current;
       // Record the attempt, not the success: rejoin after a FAILED connect must retry
       // with these options rather than refuse with "call connect first".
@@ -129,17 +151,20 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
       setError(null);
       try {
         const created = await configRef.current.createRoom(next);
+        // Superseded by a newer connect or a leave: neither the room nor the failure belongs
+        // to anyone any more, so it is not this caller's answer either.
         if (generation !== generationRef.current) {
           created.destroy();
-          return;
+          return null;
         }
         owner.adopt(created);
         publish(created);
+        return null;
       } catch (cause) {
-        if (generation !== generationRef.current) return;
         const failure = collaborationFailureOf(cause);
+        if (generation !== generationRef.current) return failure;
         setError(failure);
-        throwCollaborationFailure(failure);
+        return failure;
       } finally {
         if (generation === generationRef.current) setPending(false);
       }
@@ -161,15 +186,17 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
   );
 
   const rejoin = useCallback(
-    async (nextDocument: Uint8Array) => {
+    async (nextDocument: Uint8Array): Promise<CollaborationFailure | null> => {
       const last = lastConnectRef.current;
+      // Still a THROW, and deliberately: this one is a programming error, not a room that
+      // would not open. A caller has asked to rejoin something it never joined.
       if (last === null) {
         throw new Error(
           `${configRef.current.hookName}: rejoin needs a room this hook connected before. Call connect first.`
         );
       }
       leave(nextDocument);
-      await connect(configRef.current.rejoinOptionsOf(last));
+      return connect(configRef.current.rejoinOptionsOf(last));
     },
     [connect, leave]
   );
@@ -183,6 +210,42 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
       owner.disposeOwner();
     };
   }, [owner, publish]);
+
+  // A session that fails AFTER the join reports through its own status, not through the
+  // connect promise — so without this the hook's `error` stayed null while the replica had
+  // stopped replicating. `destroyed` is not folded in: leave and unmount reach it on purpose.
+  const liveSession = room?.session ?? null;
+  useEffect(() => {
+    if (!liveSession) return undefined;
+    const apply = (): void => {
+      const snapshot = liveSession.statusSnapshot();
+      if (snapshot.status !== 'error') return;
+      setError(snapshot.reason ?? snapshot.lastFailure ?? { code: 'transport' });
+    };
+    apply();
+    return liveSession.subscribeStatus(() => apply());
+  }, [liveSession]);
+
+  // Renaming yourself is not reconnecting. `roomKeyOf` deliberately leaves identity out, so
+  // this republishes it in place — and a replica that freezes identity for its lifetime omits
+  // `setIdentity`, in which case there is nothing to republish.
+  const identity = configRef.current.autoRoom
+    ? configRef.current.identityOf(configRef.current.autoRoom)
+    : null;
+  const identityKey = identity ? `${identity.name}\u0000${identity.color ?? ''}` : '';
+  const identityRef = useRef(identity);
+  identityRef.current = identity;
+  useEffect(() => {
+    const next = identityRef.current;
+    if (!liveSession || !next) return;
+    const withIdentity = liveSession as {
+      setIdentity?: (update: { name?: string; color?: string }) => void;
+    };
+    withIdentity.setIdentity?.({
+      name: next.name,
+      ...(next.color !== undefined ? { color: next.color } : {}),
+    });
+  }, [identityKey, liveSession]);
 
   const autoKey = config.autoKey;
   useEffect(() => {

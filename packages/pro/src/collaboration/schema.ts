@@ -10,11 +10,9 @@ import {
   TreePackageStore,
   writeOoxmlPackage,
 } from '@docx-editor.dev/core/store';
-import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
-import type {
-  CollaborationFailureCode,
-  CollaborationParagraph,
-} from '@docx-editor.dev/core/collaboration';
+import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration/replication';
+import type { CollaborationFailureCode } from '@docx-editor.dev/core/collaboration';
+import type { CollaborationParagraph } from '@docx-editor.dev/core/collaboration/replication';
 
 /** Wire protocol version a replica writes into shared metadata and refuses to mismatch. @public */
 export const PROTOCOL_VERSION = 1;

@@ -19,7 +19,7 @@ import type {
   CanonicalNodeDescriptor,
   CanonicalPrimitiveEffect,
   CanonicalPrimitiveJournal,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 
 export class LogicalIdentityMap {
   private readonly allocator: LogicalIdAllocator;

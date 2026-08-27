@@ -28,10 +28,16 @@ export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'e
  * `concurrent-seed` reports two merged seed transactions in one room; the room cannot be
  * repaired client-side — create a new room from saved bytes.
  *
+ * Two of these name a transport condition a host has to tell apart, because the answers are
+ * opposite. `transport-disconnected` recovers on its own, so wait. `authentication-failed`
+ * never does: the credential the provider re-sent was rejected, so refresh it and rejoin.
+ * `transport` remains the catch-all for a provider that reported neither.
+ *
  * @public
  */
 export type CollaborationFailureCode =
   | 'already-initialized'
+  | 'authentication-failed'
   | 'baseline-digest-mismatch'
   | 'baseline-too-large'
   | 'blob-digest-mismatch'
@@ -85,6 +91,7 @@ export type CollaborationFailureCode =
   | 'too-many-parts'
   | 'too-many-relationships'
   | 'transport'
+  | 'transport-disconnected'
   | 'tree-too-deep'
   | 'unknown-logical-id'
   | 'unknown-paragraph-id'
@@ -93,6 +100,7 @@ export type CollaborationFailureCode =
 
 const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureCode]: true } = {
   'already-initialized': true,
+  'authentication-failed': true,
   'baseline-digest-mismatch': true,
   'baseline-too-large': true,
   'blob-digest-mismatch': true,
@@ -146,6 +154,7 @@ const COLLABORATION_FAILURE_CODE_PRESENT: { readonly [K in CollaborationFailureC
   'too-many-parts': true,
   'too-many-relationships': true,
   transport: true,
+  'transport-disconnected': true,
   'tree-too-deep': true,
   'unknown-logical-id': true,
   'unknown-paragraph-id': true,

@@ -33,10 +33,10 @@ import { TreePackageStore, type StoryScope } from '../store/store/tree-package-s
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { ORIGIN_IDS } from '../store/registry/frozen-ids.ts';
 import {
-  createCollaborationDocumentPort,
   type CollaborationModuleContribution,
   type EditorCollaborationSession,
 } from '../collaboration/index.ts';
+import { createCollaborationDocumentPort } from '../collaboration/replication.ts';
 import { normalizeCollaborationTextPackage } from '../collaboration/document-port.ts';
 import {
   addPackageComment,

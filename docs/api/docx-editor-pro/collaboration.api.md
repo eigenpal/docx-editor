@@ -143,6 +143,9 @@ export const MAX_BASELINE_BYTES: number;
 export const PROTOCOL_VERSION = 1;
 
 // @public
+export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array;
+
+// @public
 export const SCHEMA_VERSION = 1;
 
 // @beta
@@ -150,7 +153,7 @@ export type TextCollaborationHandle = CollaborationHandle<TextCollaborationSessi
 
 // @public
 export interface TextCollaborationSession extends EditorCollaborationSession {
-    setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: string): void;
+    setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: CollaborationFailureCode, detail?: string): void;
 }
 
 // (No @packageDocumentation comment for this package)

@@ -13,6 +13,7 @@ import type {
   ZoomMode,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { EditorModule } from '../contracts/modules.ts';
+import type { EditorCollaborationSession } from '../collaboration/index.ts';
 import type {
   ReviewAuthorInfo,
   RevisionAuthorStyle,
@@ -251,6 +252,14 @@ export interface DocxEditorInstance extends Editor {
    * falls back to.
    */
   presenceColorFor(name: string): string;
+  /**
+   * The live collaboration replica, or null when this editor is not in a room.
+   *
+   * Presence chrome reads it from here rather than being handed it: the editor already holds
+   * the session a `collaborationModule` contributed, so a host that threads it down to every
+   * avatar and caret consumer is passing something the tree below it can already see.
+   */
+  collaborationSession(): EditorCollaborationSession | null;
   /**
    * The configured author used when a comment or reply omits an explicit author.
    *

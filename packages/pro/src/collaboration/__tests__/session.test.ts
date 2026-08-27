@@ -382,7 +382,7 @@ describe('provider-neutral Yjs collaboration', () => {
     });
     const observed: string[] = [];
     const unsubscribe = room.session.subscribeStatus((status) => observed.push(status));
-    room.session.setTransportStatus('disconnected', 'test-disconnect');
+    room.session.setTransportStatus('disconnected', 'transport-disconnected', 'test-disconnect');
     room.session.setTransportStatus('ready');
     room.destroy();
     expect(observed).toEqual(['disconnected', 'ready', 'destroyed']);

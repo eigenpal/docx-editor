@@ -19,7 +19,7 @@ import type {
   ReviewModuleContribution,
   CollaborationModuleContribution,
 } from '../contracts/modules.ts';
-import type { CollaborationRemoteSelection, CollaborationStatus } from '../collaboration/index.ts';
+import type { CollaborationStatus } from '../collaboration/index.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationActivation, EquationOps } from './surface-equations.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
@@ -61,36 +61,8 @@ export type {
 export type { FormatPainterOps, FormatPainterSurfaceState };
 export type { PaginatedSurfacePerf };
 
-/**
- * One live remote-caret label the engine positioned. The host owns its content; the engine
- * still owns the label's geometry, class, and presence colour, and rebuilds the labels
- * wholesale on every repaint that moves them.
- *
- * @public
- */
-export interface RemoteCaretLabelAnchor {
-  readonly element: HTMLElement;
-  readonly selection: CollaborationRemoteSelection;
-}
-
-/**
- * A host that renders its own content inside the engine's remote-caret labels.
- *
- * @public
- */
-export interface RemoteCaretLabelHost {
-  /**
-   * Called after every paint that rebuilt the labels, with the current anchors.
-   *
-   * A skipped paint (nothing moved) does not re-publish: the host keeps its last anchors
-   * until the next publish, and elements from a previous publish are dead after the next
-   * one. An empty array is a real publish — every remote caret left the screen.
-   *
-   * Never mutate editor state synchronously from `publish` — a mutation repaints, and the
-   * nested rebuild's publish would arrive before this one returned; only set host state.
-   */
-  publish(anchors: readonly RemoteCaretLabelAnchor[]): void;
-}
+import type { RemoteCaretLabelAnchor, RemoteCaretLabelHost } from './surface-remote-caret-label.ts';
+export type { RemoteCaretLabelAnchor, RemoteCaretLabelHost };
 
 /**
  * How a paginated surface opens. Every field is optional.
@@ -383,6 +355,8 @@ export type SectionBreakInsertType = 'nextPage' | 'continuous';
  */
 export interface PaginatedSurface {
   readonly session: TreeDocxSessionView;
+  /** The collaboration replica a `collaborationModule` attached, or null. */
+  collaborationSession(): import('../collaboration/index.ts').EditorCollaborationSession | null;
   storyScope(): import('@docx-editor.dev/core/store').StoryScope;
   imageDecodePort(): import('../store/package/image-resources.ts').ImageDecodePort;
   applyDrawingOps(

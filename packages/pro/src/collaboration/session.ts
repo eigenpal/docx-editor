@@ -7,7 +7,6 @@ import * as Y from 'yjs';
 import type { Awareness } from 'y-protocols/awareness';
 import { ORIGIN_IDS, type StoryScope, type TreeDocOp } from '@docx-editor.dev/core/store';
 import type {
-  CollaborationDocumentPort,
   CollaborationFailureCode,
   CollaborationIdentity,
   CollaborationLocalSelection,
@@ -17,6 +16,7 @@ import type {
   CollaborationStatusSnapshot,
   EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
+import type { CollaborationDocumentPort } from '@docx-editor.dev/core/collaboration/replication';
 import {
   createCollaborationStatusTracker,
   isCollaborationFailureCode,
@@ -149,8 +149,19 @@ export interface CreateTextCollaborationOptions {
  * @public
  */
 export interface TextCollaborationSession extends EditorCollaborationSession {
-  /** Provider convenience seam. Low-level consumers normally leave the session ready. */
-  setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: string): void;
+  /**
+   * Provider convenience seam. Low-level consumers normally leave the session ready.
+   *
+   * `reason` is a typed code so a host can branch on it: pass `'transport-disconnected'` for
+   * a socket that will retry itself and `'authentication-failed'` for a credential the server
+   * rejected, because those need opposite responses. The provider's own phrasing goes in
+   * `detail`.
+   */
+  setTransportStatus(
+    status: 'ready' | 'disconnected' | 'error',
+    reason?: CollaborationFailureCode,
+    detail?: string
+  ): void;
 }
 
 /**
@@ -398,14 +409,22 @@ class Session implements TextCollaborationSession {
     return () => this.statusListeners.delete(listener);
   }
 
-  setTransportStatus(status: 'ready' | 'disconnected' | 'error', reason?: string): void {
+  setTransportStatus(
+    status: 'ready' | 'disconnected' | 'error',
+    reason?: CollaborationFailureCode,
+    detail?: string
+  ): void {
     if (this.destroyed) return;
     if (this.statusState.status() === 'error' && status !== 'error') return;
-    if (reason !== undefined && reason.length > 0) {
-      this.setStatus(status, 'transport', reason);
+    if (reason !== undefined) {
+      this.setStatus(status, reason, detail);
       return;
     }
     this.setStatus(status);
+  }
+
+  get attached(): boolean {
+    return this.port !== null;
   }
 
   attach(port: CollaborationDocumentPort): () => void {

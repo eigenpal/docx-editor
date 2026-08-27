@@ -103,7 +103,16 @@ export interface UseWebrtcCollaborationReturn {
   readonly provider: Readonly<Ref<WebrtcProvider | null>>;
   readonly pending: Readonly<Ref<boolean>>;
   readonly error: Readonly<Ref<CollaborationFailure | null>>;
-  readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
+  /**
+   * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
+   *
+   * A rejection carried nothing the resolved value does not, and it made the ordinary call
+   * site wrong by default: `onClick={() => connect(options)}` produced an unhandled rejection
+   * on every failed connect. `error` reports the same failure for renderers.
+   */
+  readonly connect: (
+    options: UseWebrtcCollaborationConnectOptions
+  ) => Promise<CollaborationFailure | null>;
   /**
    * Destroy the room and carry on editing locally.
    *
@@ -122,12 +131,13 @@ export interface UseWebrtcCollaborationReturn {
    * stays mounted locally. A connect that failed also counts as the prior attempt, so
    * rejoin retries it as a joiner.
    */
-  readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
+  readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
 }
 
 function roomKeyOf(room: UseWebrtcCollaborationConnectOptions | null | undefined): string {
   if (!room) return '';
-  return `${room.roomId}:${room.bootstrap.kind}:${room.identity.actorId}`;
+  const signaling = room.signaling ? room.signaling.join(',') : '';
+  return `${signaling}:${room.roomId}:${room.bootstrap.kind}:${room.identity.actorId}`;
 }
 
 async function defaultCreateRoom(
@@ -169,6 +179,7 @@ export function useWebrtcCollaboration(
     autoRoomOf: () => toValue(options)?.room ?? null,
     autoKeyOf: () => roomKeyOf(toValue(options)?.room),
     rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
+    identityOf: (room) => room.identity,
   });
 
   return {

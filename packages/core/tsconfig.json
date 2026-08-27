@@ -17,6 +17,7 @@
       "@docx-editor.dev/core": ["./src/index.ts"],
       "@docx-editor.dev/core/automation": ["./src/automation/index.ts"],
       "@docx-editor.dev/core/binding": ["./src/binding/index.ts"],
+      "@docx-editor.dev/core/collaboration/replication": ["./src/collaboration/replication.ts"],
       "@docx-editor.dev/core/collaboration": ["./src/collaboration/index.ts"],
       "@docx-editor.dev/core/contracts/editor": ["./src/contracts/editor.ts"],
       "@docx-editor.dev/core/contracts/document": ["./src/contracts/document.ts"],

@@ -6,6 +6,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { useRef, useSyncExternalStore } from 'react';
 import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
 import type { CollaborationSession } from '../collaboration/session.ts';
+import { useCollaborationSession } from './useCollaborationSession.ts';
 
 const NO_PARTICIPANTS: readonly CollaborationParticipant[] = Object.freeze([]);
 
@@ -48,22 +49,23 @@ function readParticipants(
 }
 
 /**
- * Reactive participant roster for an externally owned collaboration session.
+ * Reactive participant roster for the collaboration session.
  *
- * Takes the host-facing {@link CollaborationSession}, which is what the collaboration hooks
- * hand back. Returns the same array reference until the roster actually changes, so a
- * memoized consumer does not re-render on unrelated awareness traffic. An absent session
- * yields a stable empty array.
+ * Omit `session` and it reads the one the editor above holds. Returns the same array
+ * reference until the roster actually changes, so a memoized consumer does not re-render on
+ * unrelated awareness traffic. No session yields a stable empty array.
  *
  * @public
  */
 export function useCollaborationParticipants(
-  session: CollaborationSession | null
+  session?: CollaborationSession | null
 ): readonly CollaborationParticipant[] {
+  const fromContext = useCollaborationSession();
+  const active = session === undefined ? fromContext : session;
   const cache = useRef<readonly CollaborationParticipant[]>(NO_PARTICIPANTS);
   return useSyncExternalStore(
-    (notify) => session?.subscribeParticipants(() => notify()) ?? (() => {}),
-    () => readParticipants(session, cache),
-    () => readParticipants(session, cache)
+    (notify) => active?.subscribeParticipants(() => notify()) ?? (() => {}),
+    () => readParticipants(active, cache),
+    () => readParticipants(active, cache)
   );
 }

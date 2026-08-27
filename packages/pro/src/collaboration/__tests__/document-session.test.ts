@@ -29,7 +29,7 @@ import {
   createCollaborationDocumentPort,
   type CanonicalPrimitiveJournal,
   type CollaborationDocumentPort,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,
@@ -847,7 +847,7 @@ describe('full-document collaboration replicates every authorable change class',
       { op: 'splitParagraph', paragraphId: paragraphIdAt(alice, 0), offset: 1 },
     ];
     expect(alice.room.session.gateOperations(ops, BODY)).toBeNull();
-    alice.room.session.setTransportStatus('disconnected', 'offline');
+    alice.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'offline');
     expect(alice.room.session.gateOperations(ops, BODY)).toBe('collaboration-session-not-ready');
   });
 

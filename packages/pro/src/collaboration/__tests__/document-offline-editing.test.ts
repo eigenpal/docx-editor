@@ -31,7 +31,7 @@ describe('offline editing', () => {
     const { alice, bob, pause, resume } = await offlineHarness.pair(proseBytes());
 
     pause();
-    alice.room.session.setTransportStatus('disconnected', 'test-drop');
+    alice.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'test-drop');
     expect(alice.room.session.statusSnapshot().status).toBe('disconnected');
 
     // Both sides type while the wire is down: alice offline, bob still 'ready'.
@@ -49,7 +49,7 @@ describe('offline editing', () => {
   test('undo still works for edits made while disconnected', async () => {
     const { alice, bob, pause, resume } = await offlineHarness.pair(proseBytes());
     pause();
-    alice.room.session.setTransportStatus('disconnected', 'test-drop');
+    alice.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'test-drop');
     offlineHarness.apply(alice, [
       insertTextOp(offlineHarness.paragraphIdAt(alice, 0), 0, 'undo-me '),
     ]);
@@ -62,7 +62,7 @@ describe('offline editing', () => {
 
   test('error and destroyed stay refused with offline editing on', async () => {
     const { alice } = await offlineHarness.pair(proseBytes());
-    alice.room.session.setTransportStatus('error', 'test-terminal');
+    alice.room.session.setTransportStatus('error', 'transport', 'test-terminal');
     expect(
       alice.room.session.gateOperations(
         [insertTextOp(offlineHarness.paragraphIdAt(alice, 0), 0, 'x')],
@@ -73,7 +73,7 @@ describe('offline editing', () => {
 
   test('the default still refuses edits while disconnected', async () => {
     const { alice } = await defaultHarness.pair(proseBytes());
-    alice.room.session.setTransportStatus('disconnected', 'test-drop');
+    alice.room.session.setTransportStatus('disconnected', 'transport-disconnected', 'test-drop');
     expect(
       alice.room.session.gateOperations(
         [insertTextOp(defaultHarness.paragraphIdAt(alice, 0), 0, 'x')],

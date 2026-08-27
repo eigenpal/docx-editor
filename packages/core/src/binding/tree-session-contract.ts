@@ -22,7 +22,7 @@ import type {
   TreeTransactOptions,
 } from '@docx-editor.dev/core/store';
 import type { TreeBindingRejection } from './tree-binding.ts';
-import type { CollaborationDocumentPort } from '../collaboration/index.ts';
+import type { CollaborationDocumentPort } from '../collaboration/replication.ts';
 import type {
   CustomNodeSweepOutcome,
   CustomNodeWriteResult,

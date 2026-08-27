@@ -112,3 +112,6 @@ e2e/fixtures/synthetic-massive-singlesection.docx
 
 # `api:check` writes this beside the repo root while diffing snapshots.
 .snap-tmp.txt
+
+# Rooms the collaboration example's Hocuspocus server persists.
+examples/collaboration-hocuspocus/server/.data/

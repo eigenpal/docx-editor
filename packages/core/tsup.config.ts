@@ -113,6 +113,7 @@ const shared = {
     automation: 'src/automation/index.ts',
     binding: 'src/binding/index.ts',
     collaboration: 'src/collaboration/index.ts',
+    'collaboration/replication': 'src/collaboration/replication.ts',
     'contracts/editor': 'src/contracts/editor.ts',
     'contracts/document': 'src/contracts/document.ts',
     'contracts/interaction': 'src/contracts/interaction.ts',
@@ -154,6 +155,10 @@ const shared = {
       '@docx-editor.dev/core': resolve(here, 'src/index.ts'),
       '@docx-editor.dev/core/automation': resolve(here, 'src/automation/index.ts'),
       '@docx-editor.dev/core/binding': resolve(here, 'src/binding/index.ts'),
+      '@docx-editor.dev/core/collaboration/replication': resolve(
+        here,
+        'src/collaboration/replication.ts'
+      ),
       '@docx-editor.dev/core/collaboration': resolve(here, 'src/collaboration/index.ts'),
       '@docx-editor.dev/core/contracts/editor': resolve(here, 'src/contracts/editor.ts'),
       '@docx-editor.dev/core/contracts/document': resolve(here, 'src/contracts/document.ts'),

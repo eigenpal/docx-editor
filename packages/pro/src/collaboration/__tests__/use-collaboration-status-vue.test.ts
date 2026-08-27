@@ -44,6 +44,7 @@ function controllableSession(): EditorCollaborationSession & {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
+    attached: true,
     attach: () => () => {},
     gateOperations: () => null,
     canUndo: () => false,

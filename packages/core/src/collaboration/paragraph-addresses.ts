@@ -30,7 +30,7 @@ import { isValidParaId, normalizeParagraphIdentity, paraIdOf } from '../store/pa
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import { paragraphTextOf } from '../store/store/tree-op-apply.ts';
-import type { CollaborationParagraph } from './index.ts';
+import type { CollaborationParagraph } from './replication.ts';
 
 const STORY_ROOTS = new Set(['document', 'hdr', 'ftr', 'footnotes', 'endnotes']);
 

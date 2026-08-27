@@ -90,18 +90,17 @@ import {
 import {
   authorSlotsOf,
   createStableReviewAuthorSlots,
-  reviewAuthorSlotColor,
   reviewAuthorsOf,
   type ReviewAuthorInfo,
   type StableReviewAuthorSlots,
 } from '../output/revision-presentation.ts';
+import { createPresenceColors } from './surface-presence-color.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
   detachDrawingUrlRegistry,
   type DrawingPaintStrings,
 } from '../output/semantic-paint-drawings.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
-import { safeParticipantColor } from '../collaboration/participant-color.ts';
 import {
   collaborationParagraphAt,
   localCollaborationSelection,
@@ -4018,28 +4017,14 @@ export function mountPaginatedSurface(
     return authorRoster;
   }
 
-  /**
-   * The presence colour for a remote participant who published none: the SAME answer the
-   * review paint gives, so presence and review markup agree with zero wiring.
-   *
-   * An author the roster already draws — tracked changes or comments — takes their resolved
-   * colour. Anyone else takes the next slot from the SAME stable allocator a comment-only
-   * author would, so when they later make a tracked change or comment they keep this colour.
-   * A presence-only reservation never joins `revisionAuthors()`: the roster still derives
-   * from the layout and the review queue alone.
-   *
-   * Sanitized AT THE RESOLUTION: a declared style colour is host input in any CSS shape,
-   * and the paint sink refuses what `safeParticipantColor` refuses. Refusing it here —
-   * falling to the author's slot token — keeps the painted caret and any chrome reading
-   * this answer on one colour instead of splitting them at the sink.
-   */
-  function remotePresenceColor(name: string): string | undefined {
-    const roster = reviewAuthorState();
-    const known = roster.resolved.get(name);
-    if (known) return safeParticipantColor(known.color) ?? reviewAuthorSlotColor(known.slot);
-    const slot = stableAuthorSlots.resolve(roster.value, [name]).get(name);
-    return slot === undefined ? undefined : reviewAuthorSlotColor(slot);
-  }
+  // Both presence-colour answers, and why they rank differently: see the module.
+  const presenceColors = createPresenceColors({
+    roster: reviewAuthorState,
+    styles: () => revisionStyles,
+    slots: stableAuthorSlots,
+  });
+  const remotePresenceColor = presenceColors.forAuthor;
+  const declaredPresenceColor = presenceColors.declaredFor;
 
   /** The class a band draws in, or null when this range should not be drawn at all. */
   function bandClassFor(
@@ -4180,6 +4165,7 @@ export function mountPaginatedSurface(
       // this returns into its memo key, so a roster move repaints presence on the next
       // pass without a second invalidation channel.
       colorForAuthor: remotePresenceColor,
+      declaredColorFor: declaredPresenceColor,
       labelHost: remoteCaretLabelHost,
     });
   }
@@ -5381,6 +5367,7 @@ export function mountPaginatedSurface(
     },
 
     revisionAuthors: () => reviewAuthorState().value,
+    collaborationSession: () => collaborationSession ?? null,
     remotePresenceColor,
     setRevisionStyles: (colors) => {
       if (colors === revisionStyles) return;

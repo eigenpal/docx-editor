@@ -27,7 +27,7 @@ import {
 import {
   createCollaborationDocumentPort,
   type CanonicalPrimitiveJournal,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import { LogicalIdentityMap } from '../document-identity.ts';
 import { zipDocument } from './document-peer-support.ts';
 import {

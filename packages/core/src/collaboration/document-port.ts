@@ -23,7 +23,7 @@ import type {
   CollaborationMutation,
   CollaborationParagraph,
   CollaborationParagraphTextUpdate,
-} from './index.ts';
+} from './replication.ts';
 import {
   flushPendingCanonicalJournals,
   observeCanonicalPrimitiveJournal,

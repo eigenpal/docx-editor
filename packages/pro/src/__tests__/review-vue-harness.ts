@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 
-import { h, ref, type VNode } from 'vue';
+import { h } from 'vue';
 import { zipSync, strToU8 } from 'fflate';
 import { flush, mountEditorTree } from '../../../vue/test/helpers/mount.ts';
 import { DocxEditorReview } from '../vue/index.ts';

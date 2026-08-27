@@ -103,7 +103,7 @@ import {
   readDocumentProperties,
   type DocumentProperties,
 } from '../store/package/document-properties.ts';
-import { createCollaborationDocumentPort } from '../collaboration/index.ts';
+import { createCollaborationDocumentPort } from '../collaboration/replication.ts';
 import { commitSessionTreeOps } from './tree-session-apply.ts';
 
 // The session view contract (TreeApplyResult + TreeDocxSessionView) lives in

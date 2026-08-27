@@ -16,12 +16,12 @@ import {
   paraIdOf,
   readOoxmlPackage,
 } from '@docx-editor.dev/core/store';
-import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
+import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration/replication';
+import type { CollaborationLocalSelection } from '@docx-editor.dev/core/collaboration';
 import type {
   CanonicalPrimitiveJournal,
   CollaborationDocumentPort,
-  CollaborationLocalSelection,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,

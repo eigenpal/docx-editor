@@ -82,6 +82,12 @@ export {
   type UseCollaborationStatusReturn,
 } from './useCollaborationStatus.ts';
 export { useCollaborationParticipants } from './useCollaborationParticipants.ts';
+export { useCollaborationSession } from './useCollaborationSession.ts';
+export {
+  DocxEditorCollaborationRoot,
+  type CollaborationRootSource,
+  type DocxEditorCollaborationRootProps,
+} from './DocxEditorCollaborationRoot.tsx';
 export {
   useDocumentCollaboration,
   type UseDocumentCollaborationConnectOptions,

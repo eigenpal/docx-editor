@@ -10,7 +10,7 @@ import {
   TreePackageStore,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
+import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration/replication';
 
 const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

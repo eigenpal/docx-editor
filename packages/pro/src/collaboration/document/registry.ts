@@ -4,7 +4,7 @@ Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICE
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
 import * as Y from 'yjs';
-import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration';
+import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
 import { yjsItemKey, type LogicalId, type NodeIdentityMeta, wordFacingIdsOf } from './identity.ts';
 import {

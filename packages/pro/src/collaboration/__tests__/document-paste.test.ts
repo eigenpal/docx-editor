@@ -28,7 +28,7 @@ import {
 import type {
   CanonicalPrimitiveJournal,
   CollaborationDocumentPort,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import { CT, R, REL, createPeerHarness, walk } from './document-peer-support.ts';
 import { packageFingerprint, saveReopenDigest } from './document-support.ts';
 

@@ -19,7 +19,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import type {
   CanonicalNodeDescriptor,
   CanonicalPrimitiveEffect,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import type { LogicalId } from './identity.ts';
 import type { NodeShape } from './registry-node-reads.ts';
 import type { DocumentRegistry } from './registry.ts';

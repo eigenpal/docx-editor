@@ -95,7 +95,16 @@ export interface UseWebrtcCollaborationReturn {
   readonly provider: WebrtcProvider | null;
   readonly pending: boolean;
   readonly error: CollaborationFailure | null;
-  readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
+  /**
+   * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
+   *
+   * A rejection carried nothing the resolved value does not, and it made the ordinary call
+   * site wrong by default: `onClick={() => connect(options)}` produced an unhandled rejection
+   * on every failed connect. `error` reports the same failure for renderers.
+   */
+  readonly connect: (
+    options: UseWebrtcCollaborationConnectOptions
+  ) => Promise<CollaborationFailure | null>;
   /**
    * Destroy the room and carry on editing locally.
    *
@@ -114,12 +123,20 @@ export interface UseWebrtcCollaborationReturn {
    * stays mounted locally. A connect that failed also counts as the prior attempt, so
    * rejoin retries it as a joiner.
    */
-  readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
+  readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
 }
 
+/**
+ * What a reconnect keys on. NOT the display name or colour — renaming yourself is not
+ * changing rooms, and the hook republishes those through `setIdentity` instead.
+ *
+ * `signaling` IS in it, for the same reason the Hocuspocus twin keys on `url`: endpoints that
+ * resolve late, or a failover to a second set, have to move the connection.
+ */
 function roomKeyOf(room: UseWebrtcCollaborationConnectOptions | null | undefined): string {
   if (!room) return '';
-  return `${room.roomId}:${room.bootstrap.kind}:${room.identity.actorId}`;
+  const signaling = room.signaling ? room.signaling.join(',') : '';
+  return `${signaling}:${room.roomId}:${room.bootstrap.kind}:${room.identity.actorId}`;
 }
 
 async function defaultCreateRoom(
@@ -159,6 +176,7 @@ export function useWebrtcCollaboration(
     autoRoom: options.room ?? null,
     autoKey: roomKeyOf(options.room ?? null),
     rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
+    identityOf: (options) => options.identity,
   });
 
   return useMemo(

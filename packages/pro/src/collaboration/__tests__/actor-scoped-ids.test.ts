@@ -38,7 +38,7 @@ import {
 import {
   createCollaborationDocumentPort,
   type CollaborationDocumentPort,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import {
   createDocumentCollaboration,
   type DocumentCollaborationHandle,

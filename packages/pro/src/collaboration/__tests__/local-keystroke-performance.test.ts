@@ -50,7 +50,7 @@ import { PACKAGE_NODES_KEY } from '../document/index.ts';
 import { createDocumentCollaboration } from '../document-session.ts';
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness';
-import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration';
+import { createCollaborationDocumentPort } from '@docx-editor.dev/core/collaboration/replication';
 import {
   BODY,
   createPeerHarness,

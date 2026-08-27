@@ -153,9 +153,10 @@ describe('createHocuspocusCollaboration', () => {
     );
     provider?.emit('authenticationFailed', { reason: 'token expired' });
     expect(room.session.status()).toBe('error');
+    // A typed code, not a phrase in `detail`: a rejected credential and a dropped socket
+    // need opposite responses from the host, so they cannot share a code.
     expect(room.session.statusSnapshot().reason).toMatchObject({
-      code: 'transport',
-      detail: 'authentication-failed',
+      code: 'authentication-failed',
     });
     room.destroy();
     // A destroyed room no longer listens: a late auth event must not throw or resurrect it.
@@ -236,8 +237,8 @@ describe('createHocuspocusCollaboration', () => {
     provider?.emit('status', { status: 'disconnected' });
     expect(room.session.status()).toBe('disconnected');
     expect(room.session.statusSnapshot().reason).toMatchObject({
-      code: 'transport',
-      detail: 'websocket-disconnected',
+      code: 'transport-disconnected',
+      detail: 'websocket disconnected',
     });
     provider?.emit('status', { status: 'connected' });
     expect(room.session.status()).toBe('ready');

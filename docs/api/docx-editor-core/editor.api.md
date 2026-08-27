@@ -815,6 +815,7 @@ export interface DocxEditorConfig {
 // @public
 export interface DocxEditorInstance extends Editor {
     attach(el: HTMLElement): void;
+    collaborationSession(): EditorCollaborationSession | null;
     detach(): void;
     fontMeasurement(): FontMeasurementState;
     // @internal
@@ -1326,6 +1327,7 @@ export interface PaginatedSurface {
     canInsertToc(): boolean;
     canRefreshToc(tocId?: string): boolean;
     clearFormatting(): void;
+    collaborationSession(): EditorCollaborationSession | null;
     commitReviewOps(run: () => {
         readonly committed: boolean;
         readonly reason?: unknown;

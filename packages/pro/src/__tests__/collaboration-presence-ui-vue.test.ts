@@ -73,6 +73,7 @@ function stubSession(): EditorCollaborationSession &
     statusSnapshot: () =>
       Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
     subscribeStatus: () => () => {},
+    attached: true,
     attach: () => () => {},
     gateOperations: () => null,
     canUndo: () => false,

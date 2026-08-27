@@ -24,6 +24,11 @@
       "import": "./dist/collaboration.js",
       "require": "./dist/collaboration.cjs"
     },
+    "./collaboration/replication": {
+      "types": "./dist/collaboration/replication.d.ts",
+      "import": "./dist/collaboration/replication.js",
+      "require": "./dist/collaboration/replication.cjs"
+    },
     "./contracts/editor": {
       "types": "./dist/contracts/editor.d.ts",
       "import": "./dist/contracts/editor.js",

@@ -5,167 +5,6 @@
 ```ts
 
 // @public
-export interface CanonicalAttributeName {
-    // (undocumented)
-    readonly localName: string;
-    // (undocumented)
-    readonly namespaceUri: string;
-    // (undocumented)
-    readonly prefix?: string;
-}
-
-// @public
-export interface CanonicalBinaryDescriptor {
-    // (undocumented)
-    readonly digest: string;
-    // (undocumented)
-    readonly mediaType: string;
-    // (undocumented)
-    readonly size: number;
-    // (undocumented)
-    readonly storageKey: string;
-}
-
-// @public
-export interface CanonicalElementNodeDescriptor {
-    // (undocumented)
-    readonly kind: OoxmlElement['kind'];
-    // (undocumented)
-    readonly logicalId: string;
-    // (undocumented)
-    readonly qname: CanonicalAttributeName;
-}
-
-// @public
-export type CanonicalNodeDescriptor = CanonicalTextNodeDescriptor | CanonicalElementNodeDescriptor;
-
-// @public
-export type CanonicalPrimitiveEffect = {
-    readonly descriptor: CanonicalNodeDescriptor;
-    readonly kind: 'putNode';
-} | {
-    readonly deleteCount: number;
-    readonly insert: string;
-    readonly kind: 'spliceText';
-    readonly logicalId: string;
-    readonly utf16Start: number;
-} | {
-    readonly kind: 'setAttribute';
-    readonly logicalId: string;
-    readonly qname: CanonicalAttributeName;
-    readonly value: string | null;
-} | {
-    readonly kind: 'setNamespaceBinding';
-    readonly logicalId: string;
-    readonly prefix: string;
-    readonly uri: string | null;
-} | {
-    readonly childLogicalIds: readonly string[];
-    readonly deleteCount: number;
-    readonly kind: 'spliceChildren';
-    readonly parentLogicalId: string;
-    readonly start: number;
-} | {
-    readonly destinationIndex: number;
-    readonly destinationParentLogicalId: string;
-    readonly kind: 'moveNode';
-    readonly logicalId: string;
-} | {
-    readonly kind: 'putXmlPart';
-    readonly name: string;
-    readonly rootLogicalId: string;
-} | {
-    readonly kind: 'deleteXmlPart';
-    readonly name: string;
-} | {
-    readonly kind: 'putRelationship';
-    readonly owner: string;
-    readonly record: CanonicalRelationshipRecord;
-} | {
-    readonly kind: 'deleteRelationship';
-    readonly owner: string;
-    readonly relationshipId: string;
-} | {
-    readonly kind: 'putContentTypeOverride';
-    readonly mediaType: string;
-    readonly partName: string;
-} | {
-    readonly kind: 'deleteContentTypeOverride';
-    readonly partName: string;
-} | {
-    readonly descriptor: CanonicalBinaryDescriptor;
-    readonly kind: 'putBinary';
-} | {
-    readonly kind: 'deleteBinary';
-    readonly storageKey: string;
-};
-
-// @public
-export interface CanonicalPrimitiveJournal {
-    // (undocumented)
-    readonly effects: readonly CanonicalPrimitiveEffect[];
-}
-
-// @public
-export interface CanonicalRelationshipRecord {
-    // (undocumented)
-    readonly id: string;
-    // (undocumented)
-    readonly order: number;
-    // (undocumented)
-    readonly ownerPart: string;
-    // (undocumented)
-    readonly rawTarget: string;
-    // (undocumented)
-    readonly targetMode: 'Internal' | 'External';
-    // (undocumented)
-    readonly type: string;
-}
-
-// @public
-export interface CanonicalTextNodeDescriptor {
-    // (undocumented)
-    readonly kind: 'textValue';
-    // (undocumented)
-    readonly logicalId: string;
-}
-
-// @public
-export type CollaborationApplyResult = {
-    readonly changed: boolean;
-    readonly ok: true;
-} | {
-    readonly ok: false;
-    readonly reason: string;
-};
-
-// @public
-export interface CollaborationDocumentPort {
-    // (undocumented)
-    applyParagraphText(paragraphId: string, text: string, mutation: CollaborationMutation): CollaborationApplyResult;
-    // (undocumented)
-    applyParagraphTexts(updates: readonly CollaborationParagraphTextUpdate[], mutation: CollaborationMutation): CollaborationApplyResult;
-    applyRemotePackage(pkg: OoxmlPackage, mutation: CollaborationMutation): CollaborationApplyResult;
-    binaryPart(storageKey: string): Uint8Array | null;
-    // (undocumented)
-    readonly documentId: string;
-    flushPendingJournals(): void;
-    hasPendingJournals(): boolean;
-    observePrimitiveJournal(listener: (journal: CanonicalPrimitiveJournal) => void): () => void;
-    // (undocumented)
-    paragraphByNodeId(nodeId: string): CollaborationParagraph | null;
-    paragraphByStableId(paragraphId: string): CollaborationParagraph | null;
-    // (undocumented)
-    paragraphs(): readonly CollaborationParagraph[];
-    // (undocumented)
-    revision(): number;
-    // (undocumented)
-    save(): Uint8Array;
-    // (undocumented)
-    subscribe(listener: (change: TreeModelChange) => void): () => void;
-}
-
-// @public
 export interface CollaborationFailure {
     // (undocumented)
     readonly code: CollaborationFailureCode;
@@ -174,7 +13,7 @@ export interface CollaborationFailure {
 }
 
 // @public
-export type CollaborationFailureCode = 'already-initialized' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-digest-mismatch' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'concurrent-seed' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'materialize-dropped-content' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
+export type CollaborationFailureCode = 'already-initialized' | 'authentication-failed' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-digest-mismatch' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'concurrent-seed' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'materialize-dropped-content' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'transport-disconnected' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
 
 // @public
 export interface CollaborationIdentity {
@@ -201,31 +40,6 @@ export interface CollaborationLocalSelection {
 // @public
 export interface CollaborationModuleContribution {
     readonly session: EditorCollaborationSession;
-}
-
-// @public
-export interface CollaborationMutation {
-    // (undocumented)
-    readonly actorId: string;
-    // (undocumented)
-    readonly operationId: string;
-    // (undocumented)
-    readonly origin: string;
-}
-
-// @public
-export interface CollaborationParagraph {
-    readonly nodeId: string;
-    readonly paragraphId: string;
-    readonly text: string;
-}
-
-// @public
-export interface CollaborationParagraphTextUpdate {
-    // (undocumented)
-    readonly paragraphId: string;
-    // (undocumented)
-    readonly text: string;
 }
 
 // @public
@@ -284,15 +98,6 @@ export interface CollaborationStatusSnapshot {
     readonly status: CollaborationStatus;
 }
 
-// @public
-export function createCollaborationDocumentPort(store: TreePackageStore, options: CreateCollaborationDocumentPortOptions): CollaborationDocumentPort;
-
-// @public
-export interface CreateCollaborationDocumentPortOptions {
-    // (undocumented)
-    readonly documentId: string;
-}
-
 // @internal (undocumented)
 export function createCollaborationStatusTracker(initial?: CollaborationStatus): CollaborationStatusTracker;
 
@@ -300,6 +105,7 @@ export function createCollaborationStatusTracker(initial?: CollaborationStatus):
 export interface EditorCollaborationSession {
     // (undocumented)
     attach(port: CollaborationDocumentPort): () => void;
+    readonly attached: boolean;
     // (undocumented)
     canRedo(): boolean;
     // (undocumented)

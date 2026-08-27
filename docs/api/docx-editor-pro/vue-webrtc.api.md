@@ -79,8 +79,7 @@ export interface UseWebrtcCollaborationOptions {
 
 // @public
 export interface UseWebrtcCollaborationReturn {
-    // (undocumented)
-    readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<void>;
+    readonly connect: (options: UseWebrtcCollaborationConnectOptions) => Promise<CollaborationFailure | null>;
     // (undocumented)
     readonly document: Readonly<Ref<Uint8Array | null>>;
     // (undocumented)
@@ -91,7 +90,7 @@ export interface UseWebrtcCollaborationReturn {
     // (undocumented)
     readonly pending: Readonly<Ref<boolean>>;
     readonly provider: Readonly<Ref<WebrtcProvider | null>>;
-    readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
+    readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
     // (undocumented)
     readonly session: Readonly<Ref<CollaborationSession | null>>;
     readonly ydoc: Readonly<Ref<Y.Doc | null>>;

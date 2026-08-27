@@ -7,7 +7,7 @@ import type {
   CanonicalNodeDescriptor,
   CanonicalPrimitiveEffect,
   CanonicalPrimitiveJournal,
-} from '@docx-editor.dev/core/collaboration';
+} from '@docx-editor.dev/core/collaboration/replication';
 import type { LogicalId } from './identity.ts';
 import {
   rejectBlobDescriptor,

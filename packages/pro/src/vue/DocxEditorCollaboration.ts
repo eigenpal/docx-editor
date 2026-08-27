@@ -35,9 +35,11 @@ import {
   participantInitials,
   presenceAccentOf,
   presenceAccentsOf,
+  presenceAvatarUrlOf,
   type PresenceAccent,
 } from '../collaboration/presence-chrome.ts';
 import { useCollaborationParticipants } from './useCollaborationParticipants.ts';
+import { useCollaborationSession } from './useCollaborationSession.ts';
 
 /**
  * What a custom remote-caret label renders with.
@@ -58,6 +60,14 @@ export interface CollaborationCaretLabelRenderProps {
    * review roster's colour for the name — the same resolution the painted label uses.
    */
   readonly color: string;
+  /**
+   * The image declared for this collaborator with `DocxEditorAuthorStyle`, or `undefined`.
+   *
+   * Presence carries no picture, so this is the host's own declaration, resolved by display
+   * name — the same key a comment card resolves. Declare it once and it reaches the caret,
+   * the avatar stack and the review card together.
+   */
+  readonly avatarUrl?: string;
 }
 
 /**
@@ -71,8 +81,11 @@ export interface CollaborationCaretLabelRenderProps {
  * @public
  */
 export interface CollaborationCaretLabelsProps {
-  /** The live session whose participants label the carets. `null` renders nothing. */
-  readonly session: CollaborationSession | null;
+  /**
+   * The session whose collaborators label the carets. Omit it and the part uses the one the
+   * editor above holds; `null` renders nothing.
+   */
+  readonly session?: CollaborationSession | null;
   /**
    * Scoped slot: `#default="{ selection, participant, color }"`. Without it the label shows
    * the collaborator's name, matching the engine default.
@@ -87,16 +100,21 @@ export interface CollaborationAvatarRenderProps {
   readonly color: string;
   /** The first letter of up to two name words, uppercased. */
   readonly initials: string;
+  /** The image declared for this participant with `DocxEditorAuthorStyle`, or `undefined`. */
+  readonly avatarUrl?: string;
 }
 
 /** Props for {@link DocxEditorCollaboration}.Avatars. @public */
 export interface CollaborationAvatarsProps {
-  /** The live session whose participants the stack shows. `null` renders nothing. */
-  readonly session: CollaborationSession | null;
+  /**
+   * The session whose participants the stack shows. Omit it and the part uses the one the
+   * editor above holds; `null` renders nothing.
+   */
+  readonly session?: CollaborationSession | null;
   /** Avatars shown before the rest collapse into one "+N" chip. Omit to show everyone. */
   readonly max?: number;
   readonly className?: string;
-  /** Scoped slot: `#default="{ participant, color, initials }"` replaces the packaged disc. */
+  /** Scoped slot: `#default="{ participant, color, initials, avatarUrl }"` replaces the disc. */
   readonly children?: (props: CollaborationAvatarRenderProps) => VNode | VNode[];
 }
 
@@ -116,6 +134,16 @@ export interface CollaborationAvatarProps {
 const AvatarAccentKey: InjectionKey<ComputedRef<ReadonlyMap<string, PresenceAccent>>> = Symbol(
   'docx-collaboration-avatar-accents'
 );
+
+/**
+ * `avatarUrl` spread only when there is one.
+ *
+ * `exactOptionalPropertyTypes` is on across the packages, so an absent picture has to be an
+ * absent KEY rather than an explicit `undefined`.
+ */
+function avatarUrlProp(avatarUrl: string | undefined): { readonly avatarUrl?: string } {
+  return avatarUrl !== undefined ? { avatarUrl } : {};
+}
 
 function avatarVNode(
   participant: CollaborationParticipant,
@@ -140,9 +168,9 @@ function avatarVNode(
 }
 
 /**
- * One collaborator's avatar: initials in a disc filled with their resolved accent — the
- * published colour, or the review roster's colour for their name, so the disc matches
- * their tracked changes and comments with no wiring.
+ * One collaborator's avatar: their declared picture, or initials in a disc filled with their
+ * resolved accent — the published colour, or the review roster's colour for their name, so
+ * the disc matches their tracked changes and comments with no wiring.
  */
 const CollaborationAvatar = defineComponent({
   name: 'CollaborationAvatar',
@@ -164,14 +192,22 @@ const CollaborationAvatar = defineComponent({
         presenceAccentOf(
           roster.value,
           props.participant,
-          editor ? (name) => editor.presenceColorFor(name) : undefined
+          editor ? (name) => editor.presenceColorFor(name) : undefined,
+          editor ? (name) => editor.getReviewAuthorStyle(name)?.color : undefined
         );
-      return avatarVNode(
-        props.participant,
-        accent,
-        props.className,
-        slots.default?.() ?? participantInitials(props.participant.name)
+      const avatarUrl = presenceAvatarUrlOf(
+        roster.value,
+        props.participant.name,
+        editor ? (author) => editor.getReviewAuthorStyle(author) : undefined
       );
+      // A slot wins outright; otherwise the declared picture, and initials only when there is
+      // none — the accent stays behind the image, so a broken URL still reads.
+      const content =
+        slots.default?.() ??
+        (avatarUrl !== undefined
+          ? h('img', { class: 'docx-collaboration-avatar__image', src: avatarUrl, alt: '' })
+          : participantInitials(props.participant.name));
+      return avatarVNode(props.participant, accent, props.className, content);
     };
   },
 });
@@ -183,13 +219,17 @@ const CollaborationAvatar = defineComponent({
 const CollaborationAvatars = defineComponent({
   name: 'CollaborationAvatars',
   props: {
-    session: { type: Object as PropType<CollaborationSession | null>, default: null },
+    session: { type: Object as PropType<CollaborationSession | null>, default: undefined },
     max: { type: Number, default: undefined },
     className: { type: String, default: undefined },
   },
   setup(props, { slots }) {
     const editorRef = useDocxEditor();
-    const { participants } = useCollaborationParticipants(() => props.session);
+    const fromContext = useCollaborationSession();
+    const active = computed(() =>
+      props.session === undefined ? fromContext.session.value : props.session
+    );
+    const { participants } = useCollaborationParticipants(active);
     const roster = useReviewAuthors();
     const { t } = useTranslation();
     // With an editor in context the ENGINE resolves each accent (`presenceColorFor`), from
@@ -200,8 +240,22 @@ const CollaborationAvatars = defineComponent({
       return presenceAccentsOf(
         roster.value,
         participants.value,
-        editor ? (name) => editor.presenceColorFor(name) : undefined
+        editor ? (name) => editor.presenceColorFor(name) : undefined,
+        editor ? (name) => editor.getReviewAuthorStyle(name)?.color : undefined
       );
+    });
+    // One lookup per participant, beside the accents, so a stack of ten is ten resolutions
+    // rather than ten components each walking the roster.
+    const avatarUrls = computed(() => {
+      const editor = editorRef.value;
+      const styleFor = editor ? (author: string) => editor.getReviewAuthorStyle(author) : undefined;
+      const urls = new Map<string, string>();
+      for (const participant of participants.value) {
+        if (urls.has(participant.name)) continue;
+        const url = presenceAvatarUrlOf(roster.value, participant.name, styleFor);
+        if (url !== undefined) urls.set(participant.name, url);
+      }
+      return urls;
     });
     const sorted = computed(() => orderedParticipants(participants.value));
     provide(AvatarAccentKey, accents);
@@ -227,6 +281,7 @@ const CollaborationAvatars = defineComponent({
                     participant,
                     color: accents.value.get(participant.actorId)!.color,
                     initials: participantInitials(participant.name),
+                    ...avatarUrlProp(avatarUrls.value.get(participant.name)),
                   }),
                 ])
               : h(CollaborationAvatar, { key: participant.actorId, participant })
@@ -263,15 +318,21 @@ const CollaborationAvatars = defineComponent({
 const CollaborationCaretLabels = defineComponent({
   name: 'CollaborationCaretLabels',
   props: {
-    session: { type: Object as PropType<CollaborationSession | null>, default: null },
+    session: { type: Object as PropType<CollaborationSession | null>, default: undefined },
   },
   setup(props, { slots }) {
     const editorRef = useDocxEditor();
-    const { participants } = useCollaborationParticipants(() => props.session);
+    const fromContext = useCollaborationSession();
+    // Omitted means "the editor's room"; an explicit `null` means "no room", and the two
+    // must not collapse — which is why the prop defaults to `undefined`.
+    const active = computed(() =>
+      props.session === undefined ? fromContext.session.value : props.session
+    );
+    const { participants } = useCollaborationParticipants(active);
     const roster = useReviewAuthors();
     const anchors = shallowRef<readonly RemoteCaretLabelAnchor[]>([]);
     watch(
-      [editorRef, () => props.session],
+      [editorRef, active],
       ([editor, session], _previous, onCleanup) => {
         // Registered only WITH a session: a host that never renders content would leave the
         // engine's labels empty, so without one the engine keeps its default name labels.
@@ -311,7 +372,22 @@ const CollaborationCaretLabels = defineComponent({
                 isLocal: false,
               }).color);
         return h(Teleport, { to: anchor.element, key: selection.actorId }, [
-          slots.default ? slots.default({ selection, participant, color }) : selection.name,
+          slots.default
+            ? slots.default({
+                selection,
+                participant,
+                color,
+                ...avatarUrlProp(
+                  presenceAvatarUrlOf(
+                    roster.value,
+                    selection.name,
+                    editorRef.value
+                      ? (author) => editorRef.value!.getReviewAuthorStyle(author)
+                      : undefined
+                  )
+                ),
+              })
+            : selection.name,
         ]);
       });
     };

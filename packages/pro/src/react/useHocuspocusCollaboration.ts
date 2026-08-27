@@ -101,7 +101,16 @@ export interface UseHocuspocusCollaborationReturn {
   readonly provider: HocuspocusProvider | null;
   readonly pending: boolean;
   readonly error: CollaborationFailure | null;
-  readonly connect: (options: UseHocuspocusCollaborationConnectOptions) => Promise<void>;
+  /**
+   * Connect a room. RESOLVES with the failure, or null on success — it does not reject.
+   *
+   * A rejection carried nothing the resolved value does not, and it made the ordinary call
+   * site wrong by default: `onClick={() => connect(options)}` produced an unhandled rejection
+   * on every failed connect. `error` reports the same failure for renderers.
+   */
+  readonly connect: (
+    options: UseHocuspocusCollaborationConnectOptions
+  ) => Promise<CollaborationFailure | null>;
   /**
    * Destroy the room and carry on editing locally.
    *
@@ -120,12 +129,19 @@ export interface UseHocuspocusCollaborationReturn {
    * stays mounted locally. A connect that failed also counts as the prior attempt, so
    * rejoin retries it as a joiner.
    */
-  readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
+  readonly rejoin: (nextDocument: Uint8Array) => Promise<CollaborationFailure | null>;
 }
 
+/**
+ * What a reconnect keys on. NOT the display name or colour — renaming yourself is not
+ * changing rooms, and the hook republishes those through `setIdentity` instead.
+ *
+ * `url` IS in it: a config that resolves late, or a failover to a second server, has to move
+ * the socket. Without it the hook kept the old connection and nothing said so.
+ */
 function roomKeyOf(room: UseHocuspocusCollaborationConnectOptions | null | undefined): string {
   if (!room) return '';
-  return `${room.roomId}:${room.bootstrap.kind}:${room.identity.actorId}`;
+  return `${room.url}:${room.roomId}:${room.bootstrap.kind}:${room.identity.actorId}`;
 }
 
 async function defaultCreateRoom(
@@ -168,6 +184,7 @@ export function useHocuspocusCollaboration(
     autoRoom: options.room ?? null,
     autoKey: roomKeyOf(options.room ?? null),
     rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
+    identityOf: (options) => options.identity,
   });
 
   return useMemo(
