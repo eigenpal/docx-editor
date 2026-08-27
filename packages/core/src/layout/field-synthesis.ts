@@ -19,8 +19,10 @@ import type { DocumentProperties } from '@docx-editor.dev/core/store';
 import { docPropertyValue } from './field-doc-property.ts';
 import { formFieldResult } from './field-form.ts';
 import {
-  PAGE_FIELD_PLACEHOLDER,
+  numericPictureApplies,
+  pageFieldPlaceholder,
   projectPageFieldValue,
+  type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
@@ -38,7 +40,11 @@ export interface AtomicFieldSynthesis {
    * document finalize substitutes the real value for this kind. The caller carries the marker onto
    * the span. Absent for the live header/footer value and every other synthesis.
    */
-  readonly pageField?: { readonly kind: AllowlistedPageField };
+  readonly pageField?: {
+    readonly kind: AllowlistedPageField;
+    /** The field's `\#` numeric picture, carried to the substitute pass. */
+    readonly picture?: string;
+  };
 }
 
 /** Document-global inputs the synthesis reads, none of them per-run. */
@@ -51,7 +57,7 @@ export interface AtomicSynthesisContext {
    * document finalize to substitute. Absent/false in headers, footers, notes and text boxes,
    * which keep their live path or deferral — a placeholder there would never be substituted.
    */
-  readonly bodyPageFields?: boolean;
+  readonly bodyPageFields?: BodyPageFieldContext | false;
 }
 
 /**
@@ -76,7 +82,7 @@ export function synthesizeAtomicField(
 
   if (pending.kind && ctx.pageContext) {
     return {
-      text: projectPageFieldValue(pending.kind, ctx.pageContext),
+      text: projectPageFieldValue(pending.kind, ctx.pageContext, pending.picture ?? undefined),
       props: pending.props,
       style: pending.style,
     };
@@ -91,11 +97,23 @@ export function synthesizeAtomicField(
     // document finalize substitutes the page's real value. Gated on `bodyPageFields` because
     // headers/footers took the live branch above, and notes / text boxes have no substitute pass.
     if (pending.kind && ctx.bodyPageFields) {
+      // ONE decision, taken here and RECORDED. Finalize substitutes the value without
+      // re-measuring, so it must render through the picture exactly when this placeholder was
+      // measured through it — and it cannot re-derive that, because the page it lands on can
+      // carry a different `w:pgNumType/@w:fmt` from the pass that measured it (a continued
+      // section's first page keeps its HOST's). Carrying the picture only when it applies is
+      // what makes the two sides agree by construction.
+      const applied =
+        pending.picture !== null && numericPictureApplies(pending.kind, ctx.bodyPageFields.format);
+      const picture = applied ? pending.picture! : undefined;
       return {
-        text: PAGE_FIELD_PLACEHOLDER,
+        text: pageFieldPlaceholder(pending.kind, picture, ctx.bodyPageFields.format),
         props: pending.props,
         style: pending.style,
-        pageField: { kind: pending.kind },
+        pageField: {
+          kind: pending.kind,
+          ...(picture !== undefined ? { picture } : {}),
+        },
       };
     }
     if (pending.docPropertySpec) {

@@ -752,7 +752,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Section numbering start, format, chapter style, and chapter separator parse and serialize. PAGE fields in headers and footers honour the authored start and format, for example lowerRoman. NUMPAGES and SECTIONPAGES stay decimal. There is no authoring UI for pgNumType yet.',
+      'Section numbering start, format, chapter style, and chapter separator parse and serialize. PAGE fields in headers and footers honour the authored start and format, for example lowerRoman. A non-decimal format wins over a numeric picture switch, because a roman or alphabetic page number has no digits to place. NUMPAGES and SECTIONPAGES are decimal unless the field states a picture. There is no authoring UI for pgNumType yet.',
   },
 
   // --- Review ---------------------------------------------------------------
@@ -847,7 +847,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'PAGE, NUMPAGES, and SECTIONPAGES project as a complex field or w:fldSimple. They evaluate in headers and footers and in the body flow, body tables included. PAGE respects the section pgNumType start and format. Fields inside an anchored header or footer text box also project, as does a page field nested inside another field — simple or complex, such as STYLEREF — up to four levels deep, evaluated per page. React header and footer chrome can insert them, including Page X of Y. A body field paints a placeholder that document layout substitutes per page. A multi-digit body value keeps the one-digit measured width, so mid-line following text does not reflow.',
+      'PAGE, NUMPAGES, and SECTIONPAGES project as a complex field or w:fldSimple. They evaluate in headers and footers and in the body flow, body tables included. PAGE respects the section pgNumType start and format. Fields inside an anchored header or footer text box also project, as does a page field nested inside another field — simple or complex, such as STYLEREF — up to four levels deep, evaluated per page. React header and footer chrome can insert them, including Page X of Y. A numeric picture switch, for example PAGE \\# 0#, renders the computed value. Pictures support digit placeholders, a grouping comma, and literal text. In a header or footer the picture always renders the computed value, so a result cached in the file never reaches the page; in the body a non-empty cached result still wins until the field is updated. A body field with no cached result paints a placeholder that document layout substitutes per page. Without a picture, a multi-digit body value keeps the one-digit measured width, so mid-line following text does not reflow; with one, the picture sets that width, and a value wider than the picture overflows it the same way.',
   },
   {
     id: 'fields.toc',

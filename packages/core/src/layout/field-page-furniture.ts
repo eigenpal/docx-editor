@@ -13,6 +13,7 @@
 
 import type { AllowlistedPageField, StoryPageFieldNeeds } from './field-instruction.ts';
 import { NO_STORY_PAGE_FIELDS } from './field-instruction.ts';
+import { formatNumericPicture } from './field-numeric-picture.ts';
 import { formatDecimal, formatNumFmt } from './numbering-format.ts';
 import type {
   BlockFragmentRecord,
@@ -33,8 +34,62 @@ import type {
  * that is NOT last on its line paints its extra digits over the following same-line content,
  * because that content was placed at the one-digit x; Word instead re-measures and reflows.
  * Last-on-line and label usage (the common cases) are unaffected.
+ *
+ * A field with a `\#` picture measures through {@link pageFieldPlaceholder} instead: the
+ * picture states the width, so there is no reason to guess at one digit.
  */
 export const PAGE_FIELD_PLACEHOLDER = '0';
+
+/**
+ * What the BODY flow knows about page numbering while it MEASURES a page-field placeholder.
+ *
+ * Carried instead of a bare boolean because the placeholder and the value it is replaced by
+ * have to agree about whether the picture applies at all, and only the section knows that.
+ */
+export interface BodyPageFieldContext {
+  /** The section's `w:pgNumType/@w:fmt`; absent when the section authors none. */
+  readonly format?: string;
+}
+
+/**
+ * Whether a `\#` picture renders a `kind` value under `format`.
+ *
+ * ONE decision, read by the placeholder and by the value, or the two disagree about how wide
+ * the field is: a non-decimal page format has no digits for a numeric picture to place, and a
+ * placeholder measured through the picture would then reserve a width the roman numeral that
+ * replaces it never fills.
+ *
+ * `w:pgNumType/@w:fmt` binds PAGE ALONE. NUMPAGES and SECTIONPAGES are counts, not page
+ * numbers, and stay decimal whatever the section's format says — so their picture applies
+ * either way, and gating them on the format would measure `{ NUMPAGES \# "000" }` at one digit
+ * and then paint three.
+ */
+export function numericPictureApplies(
+  kind: AllowlistedPageField,
+  format: string | undefined
+): boolean {
+  return kind !== 'PAGE' || !format || format === 'decimal';
+}
+
+/**
+ * The placeholder a body page field with `picture` should be MEASURED at.
+ *
+ * A picture decides how wide the substituted value is, and finalize swaps the text in without
+ * re-measuring. `PAGE \# "Page 0 of"` paints about ten characters, so measuring it at one
+ * would overprint whatever follows it on the line. Rendering zero through the picture gives a
+ * placeholder the same shape as every value it can be replaced by — `0#` measures `00`, the
+ * width of `02` — while a pictureless field keeps the historical single digit.
+ */
+export function pageFieldPlaceholder(
+  kind: AllowlistedPageField,
+  picture: string | undefined,
+  format?: string
+): string {
+  if (picture === undefined || !numericPictureApplies(kind, format)) {
+    return PAGE_FIELD_PLACEHOLDER;
+  }
+  return formatNumericPicture(0, picture) ?? PAGE_FIELD_PLACEHOLDER;
+}
 
 /**
  * Page-field evaluation context for furniture projection.
@@ -71,16 +126,35 @@ export function formatPageNumber(value: number, format: string | undefined): str
   return text.length > 0 ? text : formatDecimal(n);
 }
 
-/** Digit / formatted string for an allowlisted page field under a page context. */
+/**
+ * Digit / formatted string for an allowlisted page field under a page context.
+ *
+ * `picture` is the field's `\#` switch. It renders the computed value and outranks nothing
+ * else: an unusable picture falls back to the plain number, never to the cached result. A
+ * NON-DECIMAL `w:pgNumType/@w:fmt` on PAGE wins instead, because a roman or alphabetic page
+ * number has no digits for a numeric picture to place. An authored `w:fmt="decimal"` — which
+ * Word writes — is decimal, so the picture still applies.
+ */
 export function projectPageFieldValue(
   kind: AllowlistedPageField,
-  context: FieldPageContext
+  context: FieldPageContext,
+  picture?: string
 ): string {
-  if (kind === 'PAGE') return formatPageNumber(context.pageNumber, context.format);
+  if (kind === 'PAGE') {
+    if (picture !== undefined && numericPictureApplies(kind, context.format)) {
+      const painted = formatNumericPicture(context.pageNumber, picture);
+      if (painted !== null) return painted;
+    }
+    return formatPageNumber(context.pageNumber, context.format);
+  }
   const value =
     kind === 'NUMPAGES' ? context.pageCount : (context.sectionPageCount ?? context.pageCount);
   // Layout-derived counts are already bounded by pagination; still refuse non-finite junk.
   if (!Number.isFinite(value) || value < 0) return '';
+  if (picture !== undefined) {
+    const painted = formatNumericPicture(value, picture);
+    if (painted !== null) return painted;
+  }
   return formatDecimal(Math.floor(value));
 }
 
@@ -233,9 +307,9 @@ function substituteBodyPageFieldLine(line: LineRecord, context: FieldPageContext
   let spans: StyleSpanRecord[] | null = null;
   for (let index = 0; index < line.spans.length; index += 1) {
     const span = line.spans[index]!;
-    const kind = span.fieldAtom?.pageField?.kind;
-    if (!kind) continue;
-    const text = projectPageFieldValue(kind, context);
+    const marker = span.fieldAtom?.pageField;
+    if (!marker) continue;
+    const text = projectPageFieldValue(marker.kind, context, marker.picture);
     if (text === span.text) continue;
     if (!spans) spans = line.spans.slice();
     spans[index] = { ...span, text };

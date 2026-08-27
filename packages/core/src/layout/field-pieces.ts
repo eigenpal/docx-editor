@@ -61,7 +61,11 @@ export interface FieldAtomMarker {
    * (`substituteBodyPageFields`) reads this marker and substitutes the real value per page.
    * Absent in headers/footers, which evaluate live through their own per-page projector.
    */
-  readonly pageField?: { readonly kind: AllowlistedPageField };
+  readonly pageField?: {
+    readonly kind: AllowlistedPageField;
+    /** The field's `\#` numeric picture, applied when finalize substitutes the value. */
+    readonly picture?: string;
+  };
 }
 
 /**
@@ -212,6 +216,13 @@ export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | 
 export interface PendingFieldProjection {
   /** Allowlisted kind when live-projecting; null paints inert cached text at the atom. */
   kind: AllowlistedPageField | null;
+  /**
+   * The `\#` numeric picture of {@link kind}, or null when the field states none.
+   *
+   * Captured beside the kind, and for the same reason the specs below are: the machine's
+   * instruction buffer is reset before the flush runs.
+   */
+  picture: string | null;
   /**
    * Parsed SYMBOL instruction, or null when the field is not one.
    *

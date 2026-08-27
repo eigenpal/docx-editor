@@ -10,6 +10,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
+import { numericPictureApplies } from './field-page-furniture.ts';
 import {
   remapPage,
   storyDrawingResourceToken,
@@ -28,8 +29,13 @@ import {
   type DocumentSection,
   type SectionColumns,
 } from './section-properties.ts';
-import type { PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
+import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PageFurniture, SemanticLayoutOptions } from './semantic-layout.ts';
+import {
+  registerOverflowPageShell,
+  type OverflowPageShell,
+  type PageContentInsets,
+} from './page-furniture-insets.ts';
 
 export interface SectionLayoutResult {
   readonly layout: SemanticLayout;
@@ -41,6 +47,8 @@ export interface SectionLayoutResult {
   readonly endSpaceAfter: number;
   /** Whether the last page is still open, or was closed by a trailing page break. */
   readonly endsOpenPage: boolean;
+  /** The shell a sheet minted at a DOCUMENT index resolves to under this section's variants. */
+  readonly overflowShellAt: (documentPageIndex: number, box: LayoutBox) => OverflowPageShell;
 }
 
 export type LayoutSectionFn = (
@@ -54,6 +62,8 @@ export type LayoutSectionFn = (
     readonly spaceBeforeCarry?: number;
     readonly pageIndexStart?: number;
     readonly balanceColumns?: boolean;
+    readonly continuedPageInsets?: PageContentInsets;
+    readonly bodyPageNumberFormat?: string;
   }
 ) => SectionLayoutResult;
 
@@ -203,11 +213,22 @@ function samePageSize(a: PageGeometry, b: PageGeometry): boolean {
   return a.width === b.width && a.height === b.height;
 }
 
+/** One sheet's content box, as the insets a section pass flows against. */
+function contentInsetsOf(page: PageRecord): PageContentInsets {
+  const top = page.contentBox.y - page.box.y;
+  return {
+    top,
+    bottom: page.box.height - top - page.contentBox.height,
+    height: page.contentBox.height,
+  };
+}
+
 /**
  * Append a continued section's first-page fragments to the sheet it continues.
  *
  * The fragments already carry content-relative offsets past the host page's used height
- * (the section was laid out with `flowStartY`), so this is a concatenation, not a shift.
+ * (the section was laid out with `flowStartY` and, since per-page insets, the host's own
+ * content box through {@link contentInsetsOf}), so this is a concatenation, not a shift.
  * The host page keeps its own furniture: the header/footer belong to the sheet, and the
  * continued section contributes content to it, not chrome.
  */
@@ -355,6 +376,11 @@ export function layoutMultiSectionDocument(
   let flowCursorY = 0;
   let flowSpaceAfter = 0;
   let flowOpenPage = true;
+  /** Each section's shell resolver, for a sheet minted after layout. */
+  const sectionShells: {
+    readonly startIndex: number;
+    readonly at: (index: number, box: LayoutBox) => OverflowPageShell;
+  }[] = [];
   let previousGeometry: PageGeometry | null = null;
   let previousFurnitureKey = '';
   /** Next displayed PAGE value if the following section does not author `w:start`. */
@@ -411,6 +437,36 @@ export function layoutMultiSectionDocument(
       section.properties.columns.count > 1 &&
       sections[sectionIndex + 1]?.properties.breakType === 'continuous';
 
+    // A continued section's local page 0 IS the host sheet, so it must flow against the box
+    // that sheet already has. Its own variants describe a page it never opens: with `w:titlePg`
+    // on both sections the host resolves `default` and this section would resolve `first`, and
+    // the taller box packs content past the host's content bottom.
+    const continuedPageInsets = continues ? contentInsetsOf(pages[pages.length - 1]!) : undefined;
+
+    // The page-number format a body page-field placeholder is MEASURED against.
+    //
+    // Normally the section's own, so the placeholder matches the value that replaces it. A
+    // CONTINUED section is the exception: its local page 0 merges onto the host sheet, which
+    // keeps whatever format that sheet was stamped with, while its own sheets keep this
+    // section's. When those two disagree about whether a `\#` picture renders at all, no single
+    // measurement is right for both — so measure against whichever format SUPPRESSES the
+    // picture. That reserves the plain number's width, and a picture-rendered value overruns it
+    // exactly as an unpictured multi-digit value already does; the reverse would reserve a
+    // width the other pages never fill.
+    //
+    // Read off the HOST PAGE, not tracked across the loop. A continuous section that fits
+    // wholly on the host contributes no sheet of its own, so the sheet the next one merges onto
+    // is still stamped with an earlier section's format — and a loop variable would by then
+    // name the section that left no page behind.
+    const sectionPageNumberFormat = section.properties.pageNumbering?.fmt;
+    const hostPageNumberFormat = continues
+      ? pages[pages.length - 1]?.pageFieldSource?.format
+      : undefined;
+    const measuredPageNumberFormat =
+      continues && !numericPictureApplies('PAGE', hostPageNumberFormat)
+        ? hostPageNumberFormat
+        : sectionPageNumberFormat;
+
     const laid = layoutSection(slice, revision, {
       ...rest,
       retainKeys,
@@ -423,8 +479,13 @@ export function layoutMultiSectionDocument(
       // is one behind the stack; every other section starts a fresh sheet at `startIndex`.
       pageIndexStart: continues ? startIndex - 1 : startIndex,
       ...(continues ? { flowStartY: flowCursorY, spaceBeforeCarry: flowSpaceAfter } : {}),
+      ...(continuedPageInsets ? { continuedPageInsets } : {}),
+      ...(measuredPageNumberFormat !== undefined
+        ? { bodyPageNumberFormat: measuredPageNumberFormat }
+        : {}),
       ...(sectionSession ? { session: sectionSession } : {}),
     });
+    sectionShells.push({ startIndex, at: laid.overflowShellAt });
     lineCounter = laid.lineCounter;
     flowCursorY = laid.endCursorY;
     flowSpaceAfter = laid.endSpaceAfter;
@@ -561,6 +622,9 @@ export function layoutMultiSectionDocument(
     });
     retainOnce();
     const finalized = finalizePageFieldProjection({ revision, pages: laid.pages });
+    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
+      laid.overflowShellAt(documentPageIndex, box)
+    );
     if (multi) {
       multi.spans = [];
       multi.previousRemapped = laid.pages;
@@ -615,6 +679,20 @@ export function layoutMultiSectionDocument(
       fullPasses: session.stats.fullPasses + (placed === total && reusedPages === 0 ? 1 : 0),
     };
   }
+
+  // Dispatch on the ANCHOR, never on where the sheet lands. A sectEnd overflow sheet is
+  // inserted at the first page of the NEXT section, so the landing index selects the section
+  // after the one the sheet belongs to — which would pair the previous section's sheet box
+  // with the next section's content box. The anchor is a page of the owning section, and the
+  // offset walks that section's own resolver past its last page.
+  registerOverflowPageShell(finalized, (sectionAnchorIndex, documentPageIndex, box) => {
+    let chosen = sectionShells[0];
+    for (const span of sectionShells) {
+      if (span.startIndex <= sectionAnchorIndex) chosen = span;
+    }
+    const owner = chosen ?? sectionShells[sectionShells.length - 1];
+    return owner?.at(documentPageIndex, box);
+  });
 
   retainOnce();
   return finalized;

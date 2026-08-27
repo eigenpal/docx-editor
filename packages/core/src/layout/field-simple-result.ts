@@ -28,7 +28,6 @@ import { parseSymbolInstruction, symbolFieldGlyph } from './field-symbol.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import { isSymbolRunChild, symbolGlyphOf } from './symbol-run.ts';
 import {
-  allowlistedPageField,
   consumeScanNode,
   createFieldParseState,
   ingestInstrTextBounded,
@@ -38,13 +37,16 @@ import {
   onFldCharBegin,
   onFldCharEnd,
   onFldCharSeparate,
+  matchAllowlistedPageField,
   type AllowlistedPageField,
   type FieldScanBudget,
 } from './field-instruction.ts';
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
-  PAGE_FIELD_PLACEHOLDER,
+  numericPictureApplies,
+  pageFieldPlaceholder,
   projectPageFieldValue,
+  type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
@@ -150,13 +152,13 @@ export function collectSimpleFieldDisplay(args: {
           if (isFldChar(grand, 'separate')) {
             const separateLevel = nested.nesting;
             const separatePhase = nested.phase;
-            const kind = onFldCharSeparate(nested);
+            const match = onFldCharSeparate(nested);
             // A level-1 machine field sits directly in this cache and always projects. A
             // DEEPER field projects only from a level-1 RESULT (never from an instruction —
             // that content is not painted) and never past the nesting cap, matching what
             // `detectStoryPageFields` notes so detection and projection stay one story.
             if (separateLevel === 1 || (separatePhase === 'result' && !nested.nestingOverflow)) {
-              tracker.onSeparate(pageContext ? kind : null, separateLevel);
+              tracker.onSeparate(pageContext ? match : null, separateLevel);
             }
             continue;
           }
@@ -212,15 +214,16 @@ export function collectSimpleFieldDisplay(args: {
         // Inside a tracked complex field's skipped cache the simple field is part of the
         // replaced result: descend so its runs are NOTED (visible cached content keeps the
         // live replacement alive), never appended on their own.
-        const nestedKind = tracker.active
+        // NOT `nested`: that name is the enclosing complex-field parse state this walk shares.
+        const simplePageField = tracker.active
           ? null
-          : allowlistedPageField(fldSimpleInstr(child) ?? '');
-        if (nestedKind && pageContext) {
+          : matchAllowlistedPageField(fldSimpleInstr(child) ?? '');
+        if (simplePageField && pageContext) {
           if (!revisionsVisible(local, displayMode)) continue;
           const beforeLen = text.length;
           collect(child, nodeDepth + 1, local);
           text = text.slice(0, beforeLen);
-          text += projectPageFieldValue(nestedKind, pageContext);
+          text += projectPageFieldValue(simplePageField.kind, pageContext, simplePageField.picture);
           continue;
         }
         collect(child, nodeDepth + 1, local);
@@ -255,7 +258,11 @@ export interface SimpleFieldProjection {
    * Present when this is a BODY page-field placeholder (no page context): {@link text} is the
    * measurement digit and document finalize substitutes the real value for this kind.
    */
-  readonly pageField?: { readonly kind: AllowlistedPageField };
+  readonly pageField?: {
+    readonly kind: AllowlistedPageField;
+    /** The field's `\#` numeric picture, carried to the substitute pass. */
+    readonly picture?: string;
+  };
 }
 
 /**
@@ -293,24 +300,28 @@ export function projectSimpleFieldResult(args: {
   /** Parsed document properties, for a TITLE / AUTHOR / … / DOCPROPERTY simple field. */
   readonly documentProperties?: DocumentProperties;
   /** True in BODY flow: an empty-cache page field paints a placeholder for finalize to fill. */
-  readonly bodyPageFields?: boolean;
+  readonly bodyPageFields?: BodyPageFieldContext | false;
 }): SimpleFieldProjection | null {
   const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
   const display = collectSimpleFieldDisplay(args);
   const instr = fldSimpleInstr(simple) ?? '';
   const props = display.resultProps ?? inheritedRunProperties;
 
-  const pageKind = allowlistedPageField(instr);
-  if (pageKind && pageContext) {
+  const pageField = matchAllowlistedPageField(instr);
+  if (pageField && pageContext) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
-    return { text: projectPageFieldValue(pageKind, pageContext), props, style };
+    return {
+      text: projectPageFieldValue(pageField.kind, pageContext, pageField.picture),
+      props,
+      style,
+    };
   }
   // A BODY page field (no page context) with no cached result: paint a placeholder and mark the
   // kind so document finalize substitutes the page's value. A cached result wins — it falls
   // through to paint normally, exactly as it would in Word until the field is next updated.
   if (
-    pageKind &&
+    pageField &&
     args.bodyPageFields &&
     !pageContext &&
     display.text.length === 0 &&
@@ -318,7 +329,19 @@ export function projectSimpleFieldResult(args: {
   ) {
     const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
     if (style.hidden) return null;
-    return { text: PAGE_FIELD_PLACEHOLDER, props, style, pageField: { kind: pageKind } };
+    // The same ONE decision the complex-field flush takes, recorded the same way: the picture
+    // travels to finalize only when this placeholder was measured through it.
+    const applied =
+      pageField.picture !== undefined &&
+      numericPictureApplies(pageField.kind, args.bodyPageFields.format);
+    const picture = applied ? pageField.picture : undefined;
+    return {
+      text: pageFieldPlaceholder(pageField.kind, picture, args.bodyPageFields.format),
+      props,
+      style,
+      pageField:
+        picture === undefined ? { kind: pageField.kind } : { kind: pageField.kind, picture },
+    };
   }
 
   const symbolSpec = parseSymbolInstruction(instr);

@@ -76,16 +76,65 @@ export function normalizeFieldInstruction(raw: string): string | null {
 }
 
 /**
- * Exact allowlist for live page-field projection.
+ * A trailing `\#` numeric picture switch: quoted, or bare up to the next switch.
  *
- * Broader keywords (DATE, TOC, INCLUDE*, DDE, …) remain unevaluated here on purpose.
+ * Anchored at the end and, unquoted, stops at a backslash, so an instruction that carries a
+ * SECOND switch (`PAGE \n 3 \# 0#`) keeps that switch in the keyword remainder and stays
+ * inert. Both alternatives are linear over a length-capped instruction.
  */
+const NUMERIC_PICTURE_SWITCH = /\s*\\#\s*(?:"([^"]*)"|([^\\"]+))$/;
+
+/** An allowlisted page field with the `\#` picture that renders its value. */
+export interface AllowlistedPageFieldMatch {
+  readonly kind: AllowlistedPageField;
+  /** The field's `\#` numeric picture, when it states one. */
+  readonly picture?: string;
+}
+
+/**
+ * Split one instruction into its keyword and its `\#` picture, in ONE read.
+ *
+ * The keyword is uppercased for matching; the PICTURE is not, because it may hold literal text
+ * whose case is the author's. Every question asked about a page-field instruction routes
+ * through here, so a `fldChar separate` on the paragraph walk pays for one whitespace collapse
+ * and one regex rather than one of each per question.
+ */
+function splitPageFieldInstruction(
+  raw: string
+): { readonly keyword: string; readonly picture: string | undefined } | null {
+  if (raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
+  const collapsed = raw.replace(/\s+/g, ' ').trim();
+  if (collapsed.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
+  const instruction = collapsed.replace(MERGEFORMAT_SUFFIX, '').trim();
+  const match = NUMERIC_PICTURE_SWITCH.exec(instruction);
+  if (!match) return { keyword: instruction.toUpperCase(), picture: undefined };
+  const picture = match[1] ?? match[2] ?? '';
+  return {
+    keyword: instruction.slice(0, match.index).trim().toUpperCase(),
+    picture: picture.length > 0 ? picture : undefined,
+  };
+}
+
+/**
+ * The allowlisted kind and its picture, from ONE read of the instruction.
+ *
+ * A trailing `\#` numeric picture rides along: the keyword still has to match exactly, and the
+ * picture only decides how the computed value is rendered — it is undefined when the field
+ * states none. Broader keywords (DATE, TOC,
+ * INCLUDE*, DDE, …) remain unevaluated here on purpose, and so does every other switch —
+ * `\n`, `\* Arabic` and friends leave the field inert.
+ */
+export function matchAllowlistedPageField(instruction: string): AllowlistedPageFieldMatch | null {
+  const split = splitPageFieldInstruction(instruction);
+  if (split === null) return null;
+  const { keyword, picture } = split;
+  if (keyword !== 'PAGE' && keyword !== 'NUMPAGES' && keyword !== 'SECTIONPAGES') return null;
+  return picture === undefined ? { kind: keyword } : { kind: keyword, picture };
+}
+
+/** Exact allowlist for live page-field projection — {@link matchAllowlistedPageField}'s kind. */
 export function allowlistedPageField(instruction: string): AllowlistedPageField | null {
-  const normalized = normalizeFieldInstruction(instruction);
-  if (normalized === 'PAGE' || normalized === 'NUMPAGES' || normalized === 'SECTIONPAGES') {
-    return normalized;
-  }
-  return null;
+  return matchAllowlistedPageField(instruction)?.kind ?? null;
 }
 
 export function isFldChar(node: OoxmlNode, type: 'begin' | 'separate' | 'end'): boolean {
@@ -414,21 +463,21 @@ export function ingestInstrTextBounded(
  * a PAGE nested inside another field's cached result is recognized instead of staying inert.
  * Deeper levels and levels whose own instruction overflowed stay null (fail closed).
  */
-export function onFldCharSeparate(state: ComplexFieldParseState): AllowlistedPageField | null {
+export function onFldCharSeparate(state: ComplexFieldParseState): AllowlistedPageFieldMatch | null {
   if (state.nesting === 1) {
     if (state.phase !== 'instruction') return null;
     state.phase = 'result';
     if (state.nestingOverflow) return null;
     const effective = effectiveFieldInstruction(state);
     if (effective.overflow) return null;
-    return allowlistedPageField(effective.instruction);
+    return matchAllowlistedPageField(effective.instruction);
   }
   const level = innerLevelOf(state);
   if (!level || level.separated) return null;
   level.separated = true;
   const effective = effectiveLevelInstruction(level);
   if (effective.overflow) return null;
-  return allowlistedPageField(effective.instruction);
+  return matchAllowlistedPageField(effective.instruction);
 }
 
 export function onFldCharEnd(state: ComplexFieldParseState): void {
@@ -505,14 +554,14 @@ export function detectStoryPageFields(root: OoxmlNode): StoryPageFieldNeeds {
     if (isFldChar(grand, 'separate')) {
       const level = field.nesting;
       const phase = field.phase;
-      const kind = onFldCharSeparate(field);
+      const match = onFldCharSeparate(field);
       if (paragraphPoisoned) return;
       // Note only what projection can actually replace. A top-level (level-1) field always
       // projects. A NESTED field projects only out of the outer field's RESULT: a page field
       // inside an outer INSTRUCTION (`IF { PAGE } = 1 "x"`) is never painted at all, and a
       // field past the nesting cap demotes to verbatim text — noting either buys a per-sheet
       // relayout that paints identical text on every page.
-      if (kind && (level <= 1 || phase === 'result')) pendingNotes.push(kind);
+      if (match && (level <= 1 || phase === 'result')) pendingNotes.push(match.kind);
       return;
     }
 

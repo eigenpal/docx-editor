@@ -163,20 +163,9 @@ Upgrading from the reviewer/bridge/MCP/chat surfaces this package used to ship? 
 | [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, and custom nodes.                                                      |
 | [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model, on a server or against an open editor. |
 
-The editor packages above are Apache 2.0. This one is not — see below.
-
 ## License
 
-This package is licensed under the
-[EigenPal Pro Evaluation License 1.0](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md).
-You may read, run and modify it internally, free of charge, to evaluate whether it fits your
-application. Browser comment creation, replies, and deletions also require `@docx-editor.dev/pro`,
-under the same evaluation-only production boundary. Production use — a live or customer-facing environment, live
-or business-operational data, or either package embedded in something you offer to others —
-requires a written commercial agreement, and so does redistribution.
-
-> [!IMPORTANT]
-> Commercial licensing: **[licensing@eigenpal.com](mailto:licensing@eigenpal.com)**.
+This package is licensed under the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/LICENSE.md), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
 ## Contributing
 

@@ -48,6 +48,7 @@ import { noteMarkKey, type NoteMarkContext } from './note-projection.ts';
 import type {
   BlockFragmentRecord,
   LineRecord,
+  LayoutBox,
   NoteAreaRecord,
   NoteStoryRecord,
   PageNoteStream,
@@ -62,6 +63,7 @@ import type { PendingLine } from './paragraph-flow.ts';
 import { cascadeRunProperties, type StyleCascadeTable } from './style-cascade.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { finalizePageFieldProjection } from './field-projection.ts';
+import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
 
 /** Bound on reflow attempts per document layout pass. */
@@ -1351,28 +1353,222 @@ function buildFootnoteArea(
   return { area, nextCarry };
 }
 
+/**
+ * The last page at or before `position` that the BODY pass produced.
+ *
+ * Only such a page carries an index in the layout's original space, which is what a section
+ * lookup needs. `lastEndnoteHostIndex` and `lastPageIndexForSection` both hand back a page that
+ * can HOST notes, and an endnote overflow sheet qualifies — `isEndnoteHostEligible` turns away
+ * only footnote drain sheets — so the run's starting page is not itself a guarantee. Position 0
+ * is always a body-pass page: minting needs a template, so nothing can be inserted before it.
+ */
+function originalPageAtOrBefore(pages: readonly PageRecord[], position: number): number {
+  let at = Math.min(Math.max(position, 0), pages.length - 1);
+  while (at > 0 && pages[at]!.noteStream !== undefined) at -= 1;
+  return at;
+}
+
+/**
+ * Mints the blank sheets a note run needs, each resolving its OWN shell.
+ *
+ * Both indices come from the caller, and each answers a different question in its own space.
+ *
+ * The SECTION ANCHOR must read in the layout's ORIGINAL index space, so it comes from a page the
+ * body pass produced — {@link originalPageAtOrBefore} finds one. A sheet this pass minted cannot
+ * serve: `insertOverflowPageAt` stamps it with an insertion POSITION, and the section spans it
+ * would be looked up against are in original space.
+ *
+ * The LANDING INDEX is the array position the sheet occupies, which is the document index it
+ * keeps once the pass reindexes — inserts only ever move forward, so nothing displaces it
+ * afterwards. It decides the variant, and through it the content box, because
+ * `w:evenAndOddHeaders` alternates on the page's number in the document: the drain sheets and
+ * earlier overflow sheets in front of this one all count towards it.
+ */
+function createOverflowSheetMinter(layout: SemanticLayout): OverflowSheetMinter {
+  return (args) => {
+    const shell = overflowPageShellAt(
+      layout,
+      args.sectionAnchorIndex,
+      args.landingIndex,
+      args.template.box
+    );
+    return cloneEmptyOverflowPage(args.template, args.landingIndex, args.noteStream, shell);
+  };
+}
+
+type OverflowSheetMinter = (args: {
+  readonly template: PageRecord;
+  /** Array position the sheet is inserted at, which is also its final document index. */
+  readonly landingIndex: number;
+  readonly noteStream?: PageNoteStream;
+  /** Original-space index of a body-pass page in the section the new sheet belongs to. */
+  readonly sectionAnchorIndex: number;
+}) => PageRecord;
+
+/**
+ * A blank sheet minted after body layout, for notes that ran off the page.
+ *
+ * `shell` is the content box AND the furniture the NEW index resolves to. Neither is the
+ * template's: a sheet cloned from a title page inherits a content box that page 0's variant
+ * resolved and its own never does — 20 pt of a header's worth on the shape this fixture class
+ * uses — and the furniture page 0 shows, which for a `w:titlePg` section with no `first`
+ * reference is no header at all. Taking one without the other is worse than taking neither: a
+ * default-variant inset over a title page's absent header paints an empty band exactly a
+ * header high. Absent shell keeps the template's, which is what a layout assembled outside the
+ * body pass can offer.
+ */
 function cloneEmptyOverflowPage(
   template: PageRecord,
   index: number,
-  noteStream?: PageNoteStream
+  noteStream?: PageNoteStream,
+  shell?: OverflowPageShell
 ): PageRecord {
+  const contentBox = shell
+    ? {
+        x: template.contentBox.x,
+        y: template.box.y + shell.insets.top,
+        width: template.contentBox.width,
+        height: shell.insets.height,
+      }
+    : template.contentBox;
+  const header = shell ? shell.header : template.header;
+  const footer = shell ? shell.footer : template.footer;
   return {
     id: `page-${index}`,
     index,
     box: template.box,
-    contentBox: template.contentBox,
+    contentBox,
     fragments: [],
     ...(noteStream ? { noteStream } : {}),
-    ...(template.header ? { header: template.header } : {}),
-    ...(template.footer ? { footer: template.footer } : {}),
+    ...(header ? { header } : {}),
+    ...(footer ? { footer } : {}),
     ...(template.pageFieldSource
       ? {
           pageFieldSource: {
             ...template.pageFieldSource,
-            pageNumber: template.pageFieldSource.pageNumber + (index - template.index),
+            // ONE PAGE after its template, stated rather than derived. `index` is an array
+            // position and `template.index` is the layout index the body pass gave it, and the
+            // notes pass reindexes only at the end — so once anything has been inserted in
+            // front of the template the two spaces differ, and their difference is a count of
+            // insertions, not a page distance. Every minted sheet sits directly after the page
+            // it was cloned from, which is what this number means.
+            pageNumber: template.pageFieldSource.pageNumber + 1,
           },
         }
       : {}),
+  };
+}
+
+/**
+ * Re-resolve the shell of every minted sheet that later insertions slid along.
+ *
+ * A sheet resolves its shell when it is minted, from where it lands at that moment. That is
+ * final for a sheet inserted inside its own section, but not for the footnote drain: the drain
+ * appends at the document's end BEFORE the section loop runs, because that is the document
+ * order Word uses, and an earlier section's `sectEnd` insertion then moves every drain sheet
+ * one position along for each sheet it adds. Under `w:evenAndOddHeaders` an odd number of them
+ * leaves each drain sheet showing the other variant's header over the other variant's box.
+ *
+ * Runs BEFORE `reindexAndFinalizeFields`, while a body-pass page still carries the index the
+ * layout gave it — that is what a section lookup reads. From here an array position IS the
+ * final page index, so the two inputs the resolver wants are both in hand.
+ *
+ * The comparison is on the FURNITURE as well as the insets. Two variants routinely resolve to
+ * the same height — a one-line `default` header against a one-line `even` header is the common
+ * shape — so equal insets say nothing about whether the sheet is showing the right story, and
+ * an inset-only test would leave exactly the sheets this exists for untouched.
+ *
+ * A `pageBottom` note area hangs from the content box's BOTTOM, so it travels with that edge
+ * when a footer variant moves it; every other area is measured from the top and travels with
+ * that. A sheet whose area cannot sit inside the new box after the shift KEEPS the shell it was
+ * minted with: its notes were fitted to the old box's HEIGHT and this pass cannot re-fit them,
+ * and a sheet that is wrong about its variant beats one whose own notes fall outside it.
+ */
+function resettleMintedSheets(pages: readonly PageRecord[], layout: SemanticLayout): PageRecord[] {
+  let sectionAnchorIndex: number | null = null;
+  let changed = false;
+  const next = pages.map((page, position) => {
+    if (page.noteStream === undefined) {
+      sectionAnchorIndex = page.index;
+      return page;
+    }
+    if (sectionAnchorIndex === null) return page;
+    const shell = overflowPageShellAt(layout, sectionAnchorIndex, position, page.box);
+    if (!shell) return page;
+    const top = page.box.y + shell.insets.top;
+    const settled =
+      top === page.contentBox.y &&
+      shell.insets.height === page.contentBox.height &&
+      shell.header?.variant === page.header?.variant &&
+      shell.footer?.variant === page.footer?.variant;
+    if (settled) return page;
+    const contentBox = { ...page.contentBox, y: top, height: shell.insets.height };
+    const bottom = top + contentBox.height;
+    const oldBottom = page.contentBox.y + page.contentBox.height;
+    const shifted = shiftNoteAreas(page, top - page.contentBox.y, bottom - oldBottom);
+    if (!shifted.fits(top, bottom)) return page;
+    changed = true;
+    const { header: _header, footer: _footer, ...rest } = page;
+    return {
+      ...rest,
+      contentBox,
+      ...(shifted.footnotes ? { footnotes: shifted.footnotes } : {}),
+      ...(shifted.endnotes ? { endnotes: shifted.endnotes } : {}),
+      ...(shell.header ? { header: shell.header } : {}),
+      ...(shell.footer ? { footer: shell.footer } : {}),
+    };
+  });
+  return changed ? next : [...pages];
+}
+
+/** Translate one note area and everything inside it by `dy`. */
+function shiftNoteArea(area: NoteAreaRecord, dy: number): NoteAreaRecord {
+  if (dy === 0) return area;
+  const shiftBox = (box: LayoutBox): LayoutBox => ({ ...box, y: box.y + dy });
+  return {
+    ...area,
+    box: shiftBox(area.box),
+    ...(area.separator
+      ? { separator: { ...area.separator, box: shiftBox(area.separator.box) } }
+      : {}),
+    notes: area.notes.map((note) => ({ ...note, box: shiftBox(note.box) })),
+  };
+}
+
+/**
+ * Move a resettled sheet's note areas onto the edge each one is measured from, and say whether
+ * they still sit inside the new box.
+ *
+ * A `pageBottom` footnote area hangs from the content bottom, so a footer variant that moves
+ * that edge must move the area with it — leaving it where it was would paint the notes over the
+ * footer band. Everything else is placed from the content top.
+ */
+function shiftNoteAreas(
+  page: PageRecord,
+  topDelta: number,
+  bottomDelta: number
+): {
+  readonly footnotes?: NoteAreaRecord;
+  readonly endnotes?: NoteAreaRecord;
+  fits(top: number, bottom: number): boolean;
+} {
+  const deltaFor = (area: NoteAreaRecord): number =>
+    area.placement === 'pageBottom' ? bottomDelta : topDelta;
+  const footnotes = page.footnotes
+    ? shiftNoteArea(page.footnotes, deltaFor(page.footnotes))
+    : undefined;
+  const endnotes = page.endnotes
+    ? shiftNoteArea(page.endnotes, deltaFor(page.endnotes))
+    : undefined;
+  return {
+    ...(footnotes ? { footnotes } : {}),
+    ...(endnotes ? { endnotes } : {}),
+    fits(top: number, bottom: number): boolean {
+      const inside = (area: NoteAreaRecord | undefined): boolean =>
+        area === undefined ||
+        (area.box.y >= top - 0.001 && area.box.y + area.box.height <= bottom + 0.001);
+      return inside(footnotes) && inside(endnotes);
+    },
   };
 }
 
@@ -1691,13 +1887,22 @@ function drainFootnoteCarryPages(
   noteMarks: NoteMarkContext,
   reasons: NotePaginationFallbackReason[],
   overflowBudget: NoteOverflowBudget,
-  separatorCache: NoteSeparatorCache
+  separatorCache: NoteSeparatorCache,
+  mint: OverflowSheetMinter
 ): { pages: PageRecord[]; carry: NoteCarryMap } {
   let nextPages = pages;
   let nextCarry = carry;
+  // This run appends after the last page and goes before any endnote insertion, so that page
+  // is a body-pass one — the walk-back is belt and braces, and states the requirement.
+  const sectionAnchorIndex = pages[originalPageAtOrBefore(pages, pages.length - 1)]!.index;
   while (nextCarry.size > 0 && overflowBudget.remaining > 0) {
     const template = nextPages[nextPages.length - 1]!;
-    const page = cloneEmptyOverflowPage(template, template.index + 1, 'footnote-drain');
+    const page = mint({
+      template,
+      landingIndex: nextPages.length,
+      noteStream: 'footnote-drain',
+      sectionAnchorIndex,
+    });
     const built = buildFootnoteArea(page, [], input, noteMarks, 'pageBottom', nextCarry, reasons, {
       separatorCache,
     });
@@ -1726,9 +1931,11 @@ function insertOverflowPageAt(
   pages: PageRecord[],
   insertAt: number,
   template: PageRecord,
+  mint: OverflowSheetMinter,
+  sectionAnchorIndex: number,
   noteStream: PageNoteStream = 'endnote-overflow'
 ): { pages: PageRecord[]; pageIndex: number } {
-  const page = cloneEmptyOverflowPage(template, insertAt, noteStream);
+  const page = mint({ template, landingIndex: insertAt, noteStream, sectionAnchorIndex });
   const next = [...pages.slice(0, insertAt), page, ...pages.slice(insertAt)];
   // Defer reindex to attachNotesToLayout — per-insert reindex is O(overflow²).
   return { pages: next, pageIndex: insertAt };
@@ -1774,7 +1981,7 @@ function placeEndnotesFromPage(
   placement: 'sectEnd' | 'docEnd',
   reasons: NotePaginationFallbackReason[],
   overflowBudget: NoteOverflowBudget,
-  options?: {
+  options: {
     /**
      * Exclusive index of the first page that belongs to a later section. Overflow sheets are
      * inserted here rather than advancing into subsequent-section body pages.
@@ -1783,9 +1990,15 @@ function placeEndnotesFromPage(
     /** First page index of the owning section (for SECTIONPAGES patching). */
     readonly sectionStartIndex?: number;
     readonly separatorCache?: NoteSeparatorCache;
+    /** Mints an overflow sheet with the shell its own index resolves to. */
+    readonly mint: OverflowSheetMinter;
   }
 ): PageRecord[] {
   if (refs.length === 0 || pages.length === 0) return pages;
+  // The section comes from the nearest BODY-PASS page at or before the run's start. The start
+  // itself may be a sheet an earlier run minted: `lastEndnoteHostIndex` accepts an endnote
+  // overflow sheet, and that sheet's `index` is an insertion position, not a layout index.
+  const sectionAnchorIndex = pages[originalPageAtOrBefore(pages, startIndex)]!.index;
   let nextPages = [...pages];
   let pending = [...refs];
   let carry: NoteCarryMap = new Map();
@@ -1808,7 +2021,14 @@ function placeEndnotesFromPage(
         nextPages[Math.min(Math.max(index, 1), nextPages.length) - 1] ??
         nextPages[nextPages.length - 1]!;
       const insertAt = Math.min(index, stopBefore, nextPages.length);
-      const inserted = insertOverflowPageAt(nextPages, insertAt, template, 'endnote-overflow');
+      const inserted = insertOverflowPageAt(
+        nextPages,
+        insertAt,
+        template,
+        options.mint,
+        sectionAnchorIndex,
+        'endnote-overflow'
+      );
       nextPages = inserted.pages;
       index = inserted.pageIndex;
       // Later-section pages shifted right by one; keep the boundary after the new sheet.
@@ -2016,6 +2236,8 @@ export function attachNotesToLayout(
   const overflowBudget: NoteOverflowBudget = { remaining: MAX_NOTE_OVERFLOW_PAGES };
   const refIndex = buildPageRefIndex(allRefs);
   const separatorCache = createNoteSeparatorCache();
+  // An overflow sheet resolves the shell its OWN index gets, not the one it was cloned from.
+  const mint = createOverflowSheetMinter(layout);
 
   // Build sites for mark derivation (page index from layout).
   const footnoteSites: NoteReferenceSite[] = [];
@@ -2139,6 +2361,14 @@ export function attachNotesToLayout(
   const pageCountBeforeOverflow = pages.length;
 
   // Drain footnote continuations that outlive the final body page.
+  //
+  // BEFORE the section loop, because that is the document order: footnote continuation belongs
+  // to the section's running content, and its `sectEnd` endnotes come after all of it. Moving
+  // this after the loop put a last section's endnote sheets in front of its own continuation.
+  //
+  // The cost is that an earlier section's insertion slides these sheets along after they were
+  // minted, so the shell each resolved no longer describes where it sits. `resettleMintedSheets`
+  // below re-resolves them once every insertion is done.
   if (carry.size > 0) {
     const drained = drainFootnoteCarryPages(
       pages,
@@ -2147,7 +2377,8 @@ export function attachNotesToLayout(
       noteMarks,
       reasons,
       overflowBudget,
-      separatorCache
+      separatorCache,
+      mint
     );
     pages = drained.pages;
     carry = drained.carry;
@@ -2182,6 +2413,7 @@ export function attachNotesToLayout(
           stopBeforeIndex: stopBefore,
           sectionStartIndex: sectionStart,
           separatorCache,
+          mint,
         }
       );
     }
@@ -2199,11 +2431,13 @@ export function attachNotesToLayout(
       'docEnd',
       reasons,
       overflowBudget,
-      { separatorCache }
+      { separatorCache, mint }
     );
   }
 
   if (pages.length !== pageCountBeforeOverflow) {
+    // Every insertion is done, so a minted sheet's array position is the page index it keeps.
+    pages = resettleMintedSheets(pages, layout);
     pages = reindexAndFinalizeFields(pages);
   }
 

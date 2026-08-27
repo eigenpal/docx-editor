@@ -19,7 +19,6 @@ import type {
 import { WML_MAIN_DOCUMENT_PART } from '../store/package/opc-names.ts';
 import {
   finalizePageFieldProjection,
-  storyNeedsPageFields,
   summarizeFlushedPage,
   withPageFieldSources,
   type FieldLinkProjector,
@@ -138,7 +137,16 @@ import {
   emptyTocSuppressedResultParagraphIds,
   tocFieldChromeParagraphIds,
 } from './toc-layout.ts';
-import { furnitureLayoutContext, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
+import { furnitureLayoutContext, remapPage } from './hf-layout.ts';
+import type { BodyPageFieldContext } from './field-page-furniture.ts';
+import { createSectionPageFurniture } from './section-page-furniture.ts';
+import type { OverflowPageShell } from './page-furniture-insets.ts';
+import {
+  createPageContentInsets,
+  registerOverflowPageShell,
+  type PageContentInsets,
+  type PageFurniture,
+} from './page-furniture-insets.ts';
 import { convergenceTailShiftAllowed } from './page-reuse-guards.ts';
 import {
   attachContentControlBoundaries,
@@ -162,7 +170,6 @@ import { passProducerOf, producerWithControlContext } from './pass-producer.ts';
 import {
   DEFAULT_PAGE_GEOMETRY,
   type BlockFragmentRecord,
-  type HeaderFooterStoryRecord,
   type LayoutBox,
   type LineRecord,
   type PageGeometry,
@@ -201,23 +208,9 @@ export {
   type LayoutSessionStats,
 } from './layout-session.ts';
 
-/** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
-export type HeaderFooterVariantName = 'default' | 'first' | 'even';
-
-/**
- * Pre-laid page furniture, supplied by the host (phase 2).
- *
- * Baseline stories are laid out once per variant (`layoutHeaderFooterStory`) for furniture
- * height. Stories that actually contain allowlisted PAGE/NUMPAGES fields attach a projector
- * so document-level finalize can re-layout under the known page count; field-free furniture
- * reuses the baseline on every sheet.
- */
-export interface PageFurniture {
-  readonly titlePage: boolean;
-  readonly evenAndOddHeaders: boolean;
-  readonly headers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
-  readonly footers: ReadonlyMap<HeaderFooterVariantName, HeaderFooterStoryLayout>;
-}
+// Both types moved to `page-furniture-insets.ts` with the per-page resolution that reads them;
+// they are re-exported here because this module is the import site every caller already has.
+export { type HeaderFooterVariantName, type PageFurniture } from './page-furniture-insets.ts';
 
 /**
  * Everything a layout pass needs beyond the document itself.
@@ -629,13 +622,15 @@ export function layoutSemanticDocument(
     const geometry =
       opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
     const furniture = furnitureForSection(opts, 0, sections.length) ?? opts.furniture;
+    const sectionNumbering = section?.properties.pageNumbering;
     const laid = layoutBlocksWithGeometry(blocks, revision, {
       ...opts,
       geometry,
       furniture,
       sectionColumns: section?.properties.columns ?? DEFAULT_SECTION_PROPERTIES.columns,
+      ...(sectionNumbering?.fmt ? { bodyPageNumberFormat: sectionNumbering.fmt } : {}),
     });
-    const numbering = section?.properties.pageNumbering;
+    const numbering = sectionNumbering;
     // Carry boundary metadata through field annotation so a no-change resume still early-exits
     // in `attachContentControlBoundaries` instead of allocating a fresh `pages` array.
     const annotated: SemanticLayout = withContentControlMetadata(
@@ -651,6 +646,10 @@ export function layoutSemanticDocument(
       laid.layout
     );
     const finalized = finalizePageFieldProjection(annotated);
+    // The notes pass mints overflow sheets from this layout; publish what index they land at.
+    registerOverflowPageShell(finalized, (_sectionAnchorIndex, documentPageIndex, box) =>
+      laid.overflowShellAt(documentPageIndex, box)
+    );
     if (opts.session) {
       opts.session.multi = null;
       opts.session.previous = finalized;
@@ -699,6 +698,15 @@ interface BlockLayoutResult {
    * sheet" from "that sheet is full and the break already ended it" without this.
    */
   readonly endsOpenPage: boolean;
+  /**
+   * The content box AND furniture a page at a DOCUMENT index resolves to under this section's
+   * variants, for a sheet placed on `box`.
+   *
+   * Published so a pass that MINTS a sheet after layout — note overflow — can resolve the new
+   * index's shell instead of copying whichever page it cloned from. Defined past the section's
+   * own last page, which is exactly where an overflow sheet lands.
+   */
+  readonly overflowShellAt: (documentPageIndex: number, box: LayoutBox) => OverflowPageShell;
 }
 
 type BlockLayoutOptions = SemanticLayoutOptions & {
@@ -708,6 +716,13 @@ type BlockLayoutOptions = SemanticLayoutOptions & {
   readonly flowStartY?: number;
   readonly spaceBeforeCarry?: number;
   readonly pageIndexStart?: number;
+  /**
+   * The host sheet's content box, when this section continues the previous one onto it.
+   *
+   * Set with `flowStartY` by the multi-section orchestrator. See `continuedPageInsets` in
+   * `page-furniture-insets.ts` for why the section's own variants cannot answer this.
+   */
+  readonly continuedPageInsets?: PageContentInsets;
   /**
    * Balance this section's columns (ECMA-376 §17.6.4): Word divides the content of a
    * multi-column section that ends in a continuous section break evenly across its
@@ -720,6 +735,14 @@ type BlockLayoutOptions = SemanticLayoutOptions & {
    * an over-tall block always makes progress exactly as it does today.
    */
   readonly columnRegionBottom?: number;
+  /**
+   * The section's `w:pgNumType/@w:fmt`, for measuring body page-field placeholders.
+   *
+   * Absent means the section authors none, which is decimal. The placeholder and the value
+   * that replaces it must agree about whether a `\#` picture applies, and only the section
+   * knows the format — see {@link numericPictureApplies}.
+   */
+  readonly bodyPageNumberFormat?: string;
 };
 
 /**
@@ -914,36 +937,21 @@ function layoutBlocksPass(
     styleCascade,
     options.noteMarks,
     defaultTabStopPt,
-    displayMode
+    displayMode,
+    options.bodyPageNumberFormat
   );
 
   // Prepass and incremental keys use the first region. Placement re-prepares a block when it
   // enters an unequal-width later column; multi-column passes conservatively skip resume.
   const contentWidth = columns.widths[0]!;
 
-  // PAGE FURNITURE. A header taller than the top-margin remainder pushes the content area
-  // down (Word's behaviour), computed as the worst case over the variants in use so the
-  // content column is one height for every page. Capped at 40% of the sheet per edge: a
-  // hostile header of five hundred paragraphs must not shrink the content area to nothing,
-  // because pagination into a zero-height column never terminates.
+  // PAGE FURNITURE. A header taller than the top-margin remainder pushes that page's content
+  // area down (Word's behaviour), and the header a page shows is the one its OWN variant
+  // resolves to — see `page-furniture-insets.ts` for why the worst case over the variants is
+  // not the same thing.
   const furniture = options.furniture;
   const headerDistance = geometry.headerDistance ?? 36;
   const footerDistance = geometry.footerDistance ?? 36;
-  const maxFlow = (stories: ReadonlyMap<string, HeaderFooterStoryLayout> | undefined): number => {
-    let max = 0;
-    for (const story of stories?.values() ?? []) max = Math.max(max, story.flowHeight);
-    return max;
-  };
-  const furnitureCap = geometry.height * 0.4;
-  const effectiveTop = Math.min(
-    furnitureCap,
-    Math.max(geometry.margin.top, furniture ? headerDistance + maxFlow(furniture.headers) : 0)
-  );
-  const effectiveBottom = Math.min(
-    furnitureCap,
-    Math.max(geometry.margin.bottom, furniture ? footerDistance + maxFlow(furniture.footers) : 0)
-  );
-  const baseContentHeight = geometry.height - effectiveTop - effectiveBottom;
   const pageBottomReserves = options.pageBottomReserves;
   const session = options.session;
   const lineCounterStart = options.lineCounterStart ?? 0;
@@ -953,6 +961,27 @@ function layoutBlocksPass(
   // Where this section's first sheet lands in the DOCUMENT. Even/odd header selection
   // alternates by page number, so it is not a section-local question.
   const pageIndexStart = options.pageIndexStart ?? 0;
+  const insetsFor = createPageContentInsets({
+    ...(furniture ? { furniture } : {}),
+    pageHeight: geometry.height,
+    marginTop: geometry.margin.top,
+    marginBottom: geometry.margin.bottom,
+    headerDistance,
+    footerDistance,
+    pageIndexStart,
+    ...(options.continuedPageInsets ? { continuedPageInsets: options.continuedPageInsets } : {}),
+  });
+  /**
+   * What the body flow measures a page-field placeholder against.
+   *
+   * The section's `w:pgNumType/@w:fmt` rides along because the placeholder and the value that
+   * replaces it have to agree about whether a `\#` picture applies — see
+   * {@link numericPictureApplies}. A section is one format, so this is fixed for the pass.
+   */
+  const bodyPageFieldContext: BodyPageFieldContext = Object.freeze(
+    options.bodyPageNumberFormat !== undefined ? { format: options.bodyPageNumberFormat } : {}
+  );
+
   // Only the reserve entries THIS pass can read belong in its context key. The pass reads
   // reserves at `pageIndexStart` plus consecutive local page slots as it opens pages, so a
   // bound of "the page count the previous pass produced, plus one" covers every slot an
@@ -971,8 +1000,14 @@ function layoutBlocksPass(
   // The producer is compared BESIDE the context (`session.producer`), not embedded in it:
   // it carries the control token, which runs to kilobytes on a control-heavy document, and
   // embedding it copied that token into every section's context string on every pass.
+  const continuedInsets = options.continuedPageInsets;
+  // The host sheet's box is an INPUT to this section's flow, so a host whose own variant moved
+  // must not let this section resume a flow measured against the box it used to have.
+  const continuedContext = continuedInsets
+    ? `|cont:${continuedInsets.top},${continuedInsets.height}`
+    : '';
   const contextFor = (notesReserveKey: string): string =>
-    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${furnitureContext}${notesReserveKey}${columnsContext}`;
+    `${geometry.width}x${geometry.height}|${geometry.margin.top},${geometry.margin.right},${geometry.margin.bottom},${geometry.margin.left}|fs:${flowStartY},${spaceBeforeCarry}${continuedContext}${furnitureContext}${notesReserveKey}${columnsContext}`;
   const context = contextFor(
     notesReserveContextKey(pageBottomReserves, pageIndexStart, reserveKeyBound)
   );
@@ -986,6 +1021,22 @@ function layoutBlocksPass(
   };
 
   const pages: PageRecord[] = [];
+  // Built HERE, above the unchanged-pass early return below, not beside the flow that uses it.
+  // `overflowShellAt` is handed to the notes pass by that return, and a closure over a `const`
+  // declared after it would sit in its temporal dead zone forever — the body's later statements
+  // never run on that path.
+  const sectionFurniture = createSectionPageFurniture({
+    ...(furniture ? { furniture } : {}),
+    geometry,
+    headerDistance,
+    footerDistance,
+    pageIndexStart,
+    contentWidth: contentWidthForReflow,
+    insetsFor,
+    pageCount: () => pages.length,
+  });
+  const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
+
   /**
    * Available body height on the page currently being filled (`pages.length`).
    *
@@ -1000,7 +1051,7 @@ function layoutBlocksPass(
     // so every flow sharing the sheet stops above the same note area.
     const base = Math.max(
       1,
-      baseContentHeight - (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0)
+      insetsFor(pages.length).height - (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0)
     );
     return columnRegionBottom !== undefined && pages.length === 0
       ? Math.max(1, Math.min(base, columnRegionBottom))
@@ -1333,6 +1384,7 @@ function layoutBlocksPass(
       endCursorY: session.endCursorY,
       endSpaceAfter: session.endSpaceAfter,
       endsOpenPage: session.endsOpenPage,
+      overflowShellAt,
     };
   }
 
@@ -1408,80 +1460,6 @@ function layoutBlocksPass(
     checkpoints.push(...session.checkpoints.slice(0, firstChanged));
   }
 
-  const pageBox = (index: number): LayoutBox => ({
-    x: 0,
-    y: index * (geometry.height + 24), // 24pt gutter between sheets, for the scroll surface
-    width: geometry.width,
-    height: geometry.height,
-  });
-
-  /**
-   * The variant page `index` shows: title page first, then even/odd when declared.
-   *
-   * `w:titlePg` (17.6.55) is a property of the SECTION, so its first page is the section's
-   * own first — the local index. `w:evenAndOddHeaders` (17.10.1) lives in settings.xml and
-   * alternates by the page's number in the DOCUMENT, so it reads through `pageIndexStart`:
-   * a section that begins on an even page must open with the even header, and `remapPage`
-   * renumbers a page without ever re-picking its variant.
-   */
-  const variantFor = (index: number): HeaderFooterVariantName =>
-    furniture?.titlePage && index === 0
-      ? 'first'
-      : furniture?.evenAndOddHeaders && (pageIndexStart + index + 1) % 2 === 0
-        ? 'even'
-        : 'default';
-
-  const furnitureFor = (
-    kind: 'header' | 'footer',
-    index: number,
-    box: LayoutBox
-  ): HeaderFooterStoryRecord | undefined => {
-    if (!furniture) return undefined;
-    const variant = variantFor(index);
-    const story = (kind === 'header' ? furniture.headers : furniture.footers).get(variant);
-    // An absent variant shows nothing — Word falls back to blank, not to `default`.
-    if (!story) return undefined;
-    const place = (laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord => {
-      const y =
-        kind === 'header'
-          ? box.y + headerDistance
-          : box.y + geometry.height - footerDistance - laid.flowHeight;
-      return {
-        kind,
-        variant,
-        partName: laid.partName,
-        ...(laid.part ? { part: laid.part } : {}),
-        ...(laid.rId ? { rId: laid.rId } : {}),
-        box: {
-          x: box.x + geometry.margin.left,
-          y,
-          width: contentWidthForReflow,
-          height: laid.flowHeight,
-        },
-        fragments: laid.fragments,
-        ...(laid.anchoredDrawings ? { anchoredDrawings: laid.anchoredDrawings } : {}),
-      };
-    };
-    const pageNumber = pageIndexStart + index + 1;
-    const pageContext: import('./field-projection.ts').FieldPageContext = {
-      pageNumber,
-      pageCount: Math.max(pageNumber, pages.length + 1),
-      sectionPageCount: index + 1,
-    };
-    const needs = story.pageFieldNeeds;
-    const needsPerPageLayout =
-      storyNeedsPageFields(needs) || (story.anchoredDrawings?.length ?? 0) > 0;
-    const laid = needsPerPageLayout ? story.withPageContext(pageContext) : story;
-    const placed = place(laid);
-    if (storyNeedsPageFields(needs)) {
-      return {
-        ...placed,
-        pageFieldProjector: (context) => place(story.withPageContext(context)),
-      };
-    }
-    return placed;
-  };
-
   const columnCount = columns.count;
   const columnOffsetX = columnLeft;
 
@@ -1496,8 +1474,9 @@ function layoutBlocksPass(
   const anchorFrameBase = (): Omit<
     DrawingAnchorFrameContext,
     'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
-  > =>
-    Object.freeze({
+  > => {
+    const insets = insetsFor(pages.length);
+    return Object.freeze({
       pageNumber: pageIndexStart + pages.length + 1,
       onPageParityRead: markPageParityRead,
       pageWidth: geometry.width,
@@ -1505,19 +1484,20 @@ function layoutBlocksPass(
       marginLeft: geometry.margin.left,
       marginRight: geometry.margin.right,
       marginBottom: geometry.margin.bottom,
-      // THE INSETS, NOT `w:pgMar`. The page content box starts at `effectiveTop`, which a
-      // header taller than the top margin pushes past it, and paint places every anchored
-      // drawing relative to that box. Handing the authored margin here made a
-      // `relativeFrom="page"` anchor land `effectiveTop − margin.top` too low — the whole
-      // header height for a `w:posOffset` of 0 (#274).
-      contentInsetTop: effectiveTop,
-      contentInsetBottom: effectiveBottom,
+      // THE INSETS, NOT `w:pgMar`. The page content box starts at this page's own top inset,
+      // which a header taller than the top margin pushes past `w:pgMar`, and paint places every
+      // anchored drawing relative to that box. Handing the authored margin here made a
+      // `relativeFrom="page"` anchor land `inset − margin.top` too low — the whole header
+      // height for a `w:posOffset` of 0 (#274).
+      contentInsetTop: insets.top,
+      contentInsetBottom: insets.bottom,
       contentWidth,
       contentHeight: contentHeight(),
-      contentBandHeight: baseContentHeight,
+      contentBandHeight: insets.height,
       ownerPartName: options.inlineDrawingLayout?.ownerPartName ?? WML_MAIN_DOCUMENT_PART,
       storyKind: 'body',
     });
+  };
 
   const pageContentClip = (): LayoutBox => pageClipRegion(anchorFrameBase());
 
@@ -1573,15 +1553,16 @@ function layoutBlocksPass(
     const header = furnitureFor('header', index, box);
     const footer = furnitureFor('footer', index, box);
     const { usedBottom, hasBodyPageFields } = summarizeFlushedPage(pageFragments, columnRegionTop);
+    const insets = insetsFor(index);
     pages.push({
       id: `page-${index}`,
       index,
       box,
       contentBox: {
         x: box.x + geometry.margin.left,
-        y: box.y + effectiveTop,
+        y: box.y + insets.top,
         width: contentWidthForReflow,
-        height: baseContentHeight,
+        height: insets.height,
       },
       fragments: pageFragments,
       hasBodyPageFields,
@@ -1695,7 +1676,7 @@ function layoutBlocksPass(
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     // Body flow: page fields in table cells paint a placeholder for document finalize to fill.
-    bodyPageFields: true,
+    bodyPageFields: bodyPageFieldContext,
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
     ...(options.drawingTokenForParagraph
@@ -1823,7 +1804,7 @@ function layoutBlocksPass(
         ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
         ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
         // Body flow: an empty-cache page field paints a placeholder finalize substitutes per page.
-        bodyPageFields: true,
+        bodyPageFields: bodyPageFieldContext,
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...(options.inlineDrawingLayout
@@ -2285,6 +2266,7 @@ function layoutBlocksPass(
           parityDependent: session.parityDependent,
           usedPageParity,
           markPageCount: mark.pageCount,
+          continuedInsets: continuedInsets !== undefined,
           hasNoteReserves: pageBottomReserves !== undefined,
           hasExclusionZones: (options.drawingExclusionZonesByPage?.size ?? 0) > 0,
         });
@@ -3082,7 +3064,15 @@ function layoutBlocksPass(
       fullPasses: session.stats.fullPasses + (startIndex === 0 ? 1 : 0),
     };
   }
-  return { layout, pages, lineCounter, endCursorY, endSpaceAfter, endsOpenPage };
+  return {
+    layout,
+    pages,
+    lineCounter,
+    endCursorY,
+    endSpaceAfter,
+    endsOpenPage,
+    overflowShellAt,
+  };
 }
 
 /** Content-relative bottom of each column's content on one page, floored at the region top. */
