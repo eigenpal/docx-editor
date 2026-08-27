@@ -130,10 +130,28 @@ export interface VMergeRowHeights {
   heightOf(span: VMergeSpan, atYPt?: number): number;
   /**
    * Take the span into the plan, unless its shape is one the module declines (see the top of
-   * this file). Idempotent: the caller offers a span again after a page move, and a span
-   * already in the plan is unaffected because nothing here depends on where it was offered.
+   * this file).
+   *
+   * A span already in the plan is left alone — including its `atYPt`. That is not a claim
+   * that offering it again somewhere else would be safe: the measurements it was admitted on
+   * belong to the y it was FIRST offered at, and a later offer keeps them. No caller does
+   * that today (a covered row cannot take the whole-row move, and a head row's span is
+   * decided before it is placed), and any caller that wants to re-offer at a new y has to
+   * `withdrawAt` the row first and let it be measured again.
    */
   accept(span: VMergeSpan, atYPt?: number): void;
+  /**
+   * Undo every acceptance headed at this row: its floors, its surplus, and its coverage.
+   *
+   * For the caller that places a row, finds the head owes a remainder, and places it again
+   * with the merge unplanned. Without this the span stays in the plan, so its surplus is
+   * still handed to the rows below while the head is once more sizing its own row — the
+   * merged height reserved twice, in a table that then paints taller than it needs.
+   *
+   * Sound because accepted spans never overlap: `headsBelowHead` and the one-merge-per-head-row
+   * rule together mean the rows this span covers are covered by nothing else.
+   */
+  withdrawAt(rowIndex: number): void;
   /** Placement options for a row covered by an accepted span, `undefined` otherwise. */
   rowOptions(rowIndex: number): RowVMergeLayoutOptions | undefined;
 }
@@ -178,6 +196,17 @@ function soloHeadRow(row: SemanticTableRow, cell: SemanticTableCell): SemanticTa
  * out. Anything reintroducing a shared counter here brings the drift back with it.
  */
 
+/**
+ * Every merge chain in these rows, and the head cells that start one.
+ *
+ * `resolveVMergeSpans` is called with NO budget here, unlike in finalize, and that is the
+ * intent rather than an omission. Finalize spends an aggregate allowance because it runs per
+ * page FRAGMENT and re-runs for nested tables inside probes, so its total is not bounded by
+ * the document alone. This runs once per table placement over that table's authored rows,
+ * which `readTableStructure` has already clamped, so the work is bounded by the same cells
+ * the pass walks to lay the table out at all. Giving it an allowance would only reintroduce
+ * a counter whose remaining balance depends on document order — see the note at the top.
+ */
 function collectHeads(rows: readonly SemanticTableRow[]): {
   readonly heads: MergeHead[];
   readonly headIdsByRow: Map<number, Set<string>>;
@@ -243,6 +272,8 @@ export function planVMergeRowHeights(
   const acceptedHeadRows = new Set<number>();
   /** Where each accepted span's head row was offered, so its height re-derives the same. */
   const admittedAtYPt = new Map<VMergeSpan, number | undefined>();
+  /** Which row each accepted span grew, so withdrawing it can take that growth back. */
+  const surplusRow = new Map<VMergeSpan, number | undefined>();
 
   /**
    * The row's height with the heads that are DETACHED from it emptied, and no others.
@@ -397,6 +428,22 @@ export function planVMergeRowHeights(
       // longer exists by the time either head is placed. `rowOptions` derives both heights
       // once every span at the row has been decided.
       admittedAtYPt.set(span, atYPt);
+      surplusRow.set(span, surplus > EPSILON_PT ? growable! : undefined);
+    },
+    withdrawAt: (rowIndex) => {
+      for (const span of spansByRow.get(rowIndex) ?? []) {
+        if (!acceptedSpans.delete(span)) continue;
+        acceptedHeadIds.delete(span.headCellId);
+        acceptedHeadRows.delete(span.headRow);
+        admittedAtYPt.delete(span);
+        const grew = surplusRow.get(span);
+        if (grew !== undefined) surplusPt.delete(grew);
+        surplusRow.delete(span);
+        for (let row = span.headRow; row <= span.endRow; row += 1) {
+          coveredRows.delete(row);
+          plannedFloorPt.delete(row);
+        }
+      }
     },
     rowOptions: (rowIndex) => {
       if (!coveredRows.has(rowIndex)) return undefined;

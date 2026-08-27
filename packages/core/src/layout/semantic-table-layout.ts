@@ -1486,10 +1486,14 @@ export function measureRowHeight(
  * again with the merge unplanned, which puts the head back to sizing its own row and holding
  * all of it — the shape this file had before any of it planned heights.
  *
- * `rollback` undoes what the discarded attempt published. That is the whole reason the
- * paginator refuses to re-place: an attempt on live deps has already emitted its anchored
- * drawings, and re-placing without taking them back leaves a float positioned by a layout
- * that never happened. A caller that cannot undo its sinks must not pass a `vMerge`.
+ * `rollback` undoes what the discarded attempt published AND withdraws the merge from the
+ * plan. The first is why the paginator refuses to re-place at all: an attempt on live deps
+ * has already emitted its anchored drawings, and re-placing without taking them back leaves
+ * a float positioned by a layout that never happened. The second matters just as much —
+ * un-planning the ROW alone leaves the span accepted, so the surplus it put below is still
+ * handed out while the head sizes its own row again, reserving the merged height twice.
+ *
+ * A caller with no sink it can undo must not pass a `vMerge` at all.
  */
 function layoutOnePassRow(
   row: SemanticTableRow,
@@ -1596,6 +1600,7 @@ function emitNestedTable(
       acceptVMergeSpansAt(vMergePlan, rowIndex, y),
       () => {
         nestedDeferred.length = deferredBefore;
+        vMergePlan?.withdrawAt(rowIndex);
       }
     );
     rawRows.push(placed.record);
@@ -1654,23 +1659,24 @@ export function layoutTableFragment(
   deps: TableFlowDeps,
   isHeaderRepeat: (row: SemanticTableRow) => boolean = () => false
 ): { readonly fragment: TableFragmentRecord; readonly bottom: number } {
-  const vMergePlan = vMergePlanFor(structure, left, depth, deps);
+  // No merge planning here, deliberately. Planning gives a head a bound it can hand a
+  // remainder back against, and the only lossless answer to that is to place the row again —
+  // which needs a sink the discarded attempt's anchored drawings can be taken back from.
+  // This function publishes straight through the `deps` it is handed and has none, so it
+  // sizes merged heads the way this file did before it planned anything. A caller that wants
+  // the planning has to bring a rollback-able sink with it, as `emitNestedTable` does.
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
-  for (const [rowIndex, row] of structure.rows.entries()) {
-    const placed = layoutOnePassRow(
+  for (const row of structure.rows) {
+    const placed = layoutRowFragment(
       row,
-      structure,
+      structure.columnWidthsPt,
       left,
       y,
+      isHeaderRepeat(row),
       depth,
       deps,
-      isHeaderRepeat(row),
-      acceptVMergeSpansAt(vMergePlan, rowIndex, y),
-      // This caller publishes through the deps it was handed and cannot take an attempt
-      // back, so a discarded one would double-publish. It has no production caller; if it
-      // gains one, give it a sink it can roll back before it keeps the `vMerge` above.
-      () => {}
+      structure.cellSpacingPt
     );
     rawRows.push(placed.record);
     y = placed.bottom;

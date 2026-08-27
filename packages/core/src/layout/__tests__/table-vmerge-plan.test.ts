@@ -75,7 +75,6 @@ describe('the vMerge plan hands out heights, never positions', () => {
       row('r1', [cell('cont', 0, true), filled('side1', 1)]),
     ];
     const plan = planVMergeRowHeights(rows, probeFrom({ head: 90, side0: 10, side1: 10 }))!;
-    expect(plan).not.toBeNull();
     for (const span of plan.spansAt(0)) plan.accept(span);
 
     const options = plan.rowOptions(0)!;
@@ -103,11 +102,15 @@ describe('the vMerge plan hands out heights, never positions', () => {
     expect([...(head.detachedSpanHeightPtByCellId ?? []).keys()]).toEqual(['longHead']);
     // 80, not 10: the declined head is still in the row, so it is still in the floor.
     expect(head.heightFloorPt).toBe(80);
-    for (const rowIndex of [1, 2]) {
-      const covered: RowVMergeLayoutOptions | undefined = plan.rowOptions(rowIndex);
-      expect(covered?.heightFloorPt).toBeGreaterThan(0);
-      expect(covered?.detachedSpanHeightPtByCellId).toBeUndefined();
-    }
+    // Row 1 holds only continuation cells and measures the probe's floor of 10; row 2 also
+    // carries the span's surplus, since it is the last row the merge can grow. Pinned as
+    // numbers, because "greater than zero" is true of anything this probe returns.
+    const covered1: RowVMergeLayoutOptions | undefined = plan.rowOptions(1);
+    const covered2: RowVMergeLayoutOptions | undefined = plan.rowOptions(2);
+    expect(covered1?.heightFloorPt).toBe(10);
+    expect(covered2?.heightFloorPt).toBe(20 - 10 - 10 + 10);
+    expect(covered1?.detachedSpanHeightPtByCellId).toBeUndefined();
+    expect(covered2?.detachedSpanHeightPtByCellId).toBeUndefined();
   });
 
   test('a detached head costs the row nothing, not even an empty cell line', () => {

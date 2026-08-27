@@ -312,7 +312,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    expect(layout.pages.length).toBeGreaterThan(0);
+    // Pinned, not just "more than none": the claim is that this lays out rather than
+    // aborting, and a page count is the difference between the two.
+    expect(layout.pages).toHaveLength(2);
     expectContentInsideItsTable(layout);
     for (const pageIndex of layout.pages.keys()) {
       expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);

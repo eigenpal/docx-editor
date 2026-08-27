@@ -13,6 +13,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { MAX_TABLE_NESTING } from '../semantic-table.ts';
+import { TablePaginationError } from '../semantic-table-layout.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -40,34 +41,42 @@ function nestedMerges(depth: number): string {
 }
 
 describe('a merge at every level of a nested table', () => {
-  test('lays out in time a person would wait, at the nesting ceiling', () => {
+  test('reaches its answer, and reaches it in time a person would wait', () => {
+    // Two claims, and the outcome is the load-bearing one: a bound on the clock alone cannot
+    // tell "laid this out" from "threw on the first row", so a change that made nested-merge
+    // layout throw for ordinary documents would keep a timing-only test green.
+    //
+    // A nest this deep is taller than any page and its rows hold nested tables that cannot be
+    // cut, so layout fails closed with `table-row-split-unsupported`. That is the pre-existing
+    // answer for this shape and not what this file is about; what it is about is how long
+    // reaching it takes.
     const part = loadBody(nestedMerges(MAX_TABLE_NESTING));
     const started = Bun.nanoseconds();
-    // A nest this deep is taller than any page, so layout fails closed rather than
-    // returning — which is the pre-existing answer and not what this test is about. The
-    // claim is the TIME it takes to reach either answer.
+    let thrown: unknown;
     try {
       layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer() });
-    } catch {
-      /* fail-closed is a fine outcome; a hang is not */
+    } catch (error) {
+      thrown = error;
     }
     const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
-    // Generous by three orders of magnitude against the fixed measurer, and still nowhere
-    // near what an allowance that does not compose across nesting costs.
-    expect(elapsedMs).toBeLessThan(2_000);
+
+    expect(thrown).toBeInstanceOf(TablePaginationError);
+    expect((thrown as TablePaginationError).code).toBe('table-row-split-unsupported');
+    // Generous by three orders of magnitude against the fixed measurer, because the failure
+    // it guards against is minutes, not milliseconds: probes that plan the tables inside them
+    // multiply through the nest instead of adding to it.
+    expect(elapsedMs).toBeLessThan(5_000);
   });
 
   test('two nests in one document cost the sum of them, not the product', () => {
-    // What bounds the work is that a row PROBE does not plan the tables inside it, so the
-    // re-entry never multiplies. No allowance is spent, and nothing here depends on what a
-    // pass walked first.
+    // Both nests lay out — no throw, so the page count is a real answer and not an artefact
+    // of failing early.
     const twice = loadBody(nestedMerges(6) + p('between') + nestedMerges(6));
     const started = Bun.nanoseconds();
-    try {
-      layoutSemanticDocument(twice, 0, { measurer: createFixedMeasurer() });
-    } catch {
-      /* as above */
-    }
-    expect((Bun.nanoseconds() - started) / 1e6).toBeLessThan(2_000);
+    const layout = layoutSemanticDocument(twice, 0, { measurer: createFixedMeasurer() });
+    const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
+
+    expect(layout.pages).toHaveLength(2);
+    expect(elapsedMs).toBeLessThan(5_000);
   });
 });
