@@ -23,7 +23,6 @@ import {
   clipInlineDrawingRecordToRegion,
   shiftInlineDrawingRecord,
   publishAnchoredDrawingsForParagraph,
-  anchoredDrawingAtomsInParagraph,
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
@@ -43,6 +42,12 @@ import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './p
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
 import { contentInsets, rowWithSplitBorders } from './table-cell-box.ts';
+import {
+  publishDeferredRowAnchors,
+  republishAnchoredParagraphsInBlocks,
+  rowDepsForAnchors,
+  type DeferredRowAnchor,
+} from './table-anchor-republish.ts';
 
 // The cell box is its own unit (`table-cell-box.ts`); re-exported because callers reach for
 // it through the table-layout surface.
@@ -299,6 +304,15 @@ export interface CellPlaceCursor {
   readonly lineIndex: number;
   readonly previousSpaceAfter: number;
   readonly paragraphFragmentIndex: number;
+  /**
+   * Did the block before `blockIndex` actually PUT a table on the page?
+   *
+   * Carried rather than re-derived, because the only thing left to re-derive it from is the
+   * source node's kind — and a `w:tbl` past the nesting ceiling, or one with no `w:tr` at
+   * all, is a table that emits nothing. Reading the kind on a continuation would let the
+   * terminator collapse behind a table that never appeared on that page.
+   */
+  readonly precededByEmittedTable: boolean;
 }
 
 export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
@@ -307,164 +321,8 @@ export function initialCellCursors(row: SemanticTableRow): CellPlaceCursor[] {
     lineIndex: 0,
     previousSpaceAfter: 0,
     paragraphFragmentIndex: 0,
+    precededByEmittedTable: false,
   }));
-}
-
-function anchorPublishSink(
-  deps: TableFlowDeps
-): ((drawings: readonly AnchoredDrawingRecord[]) => void) | undefined {
-  return deps.publishAnchoredDrawings ?? deps.collectAnchoredDrawings;
-}
-
-type DeferredRowAnchor = {
-  readonly paragraph: OoxmlNode;
-  readonly paragraphId: string;
-  readonly paragraphBox: LayoutBox;
-  readonly lines: readonly LineRecord[];
-  readonly cellOriginX: number;
-  readonly cellContentWidth: number;
-};
-
-function publishDeferredRowAnchors(
-  deferredRowAnchors: readonly DeferredRowAnchor[],
-  cells: readonly TableCellFragmentRecord[],
-  rowTop: number,
-  rowHeight: number,
-  deps: TableFlowDeps
-): void {
-  const publish = anchorPublishSink(deps);
-  if (
-    deferredRowAnchors.length === 0 ||
-    !publish ||
-    !deps.inlineDrawingLayout ||
-    !deps.anchorFrameBase ||
-    !deps.pageContentClip
-  ) {
-    return;
-  }
-  for (const pending of deferredRowAnchors) {
-    let paragraphBox: LayoutBox | null = null;
-    let cellFrameBox: LayoutBox | null = null;
-    let lines: readonly LineRecord[] = pending.lines;
-    for (const cell of cells) {
-      for (const block of cell.blocks) {
-        if (block.kind === 'paragraph' && block.paragraphId === pending.paragraphId) {
-          paragraphBox = block.box;
-          lines = block.lines;
-          cellFrameBox = cell.box;
-          break;
-        }
-      }
-      if (paragraphBox) break;
-    }
-    if (!paragraphBox) continue;
-    const cellBox =
-      cellFrameBox ??
-      Object.freeze({
-        x: pending.cellOriginX,
-        y: rowTop,
-        width: pending.cellContentWidth,
-        height: rowHeight,
-      });
-    publish(
-      publishAnchoredDrawingsForParagraph({
-        paragraph: pending.paragraph,
-        paragraphId: pending.paragraphId,
-        paragraphBox,
-        lines,
-        drawingLayout: deps.inlineDrawingLayout,
-        frameBase: deps.anchorFrameBase(),
-        columnBox: deps.columnBoxForParagraph?.(paragraphBox) ?? paragraphBox,
-        cellBox,
-        pageClip: deps.pageContentClip(),
-        measurer: deps.measurer,
-        ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
-        ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
-      })
-    );
-  }
-}
-
-function republishAnchoredParagraphsInBlocks(
-  blocks: readonly BlockFragmentRecord[],
-  authoredBlocks: readonly OoxmlElement[],
-  cellBox: LayoutBox,
-  deps: TableFlowDeps
-): void {
-  if (
-    !deps.onAnchorRepublish ||
-    !deps.inlineDrawingLayout ||
-    !deps.anchorFrameBase ||
-    !deps.pageContentClip
-  ) {
-    return;
-  }
-  for (const block of blocks) {
-    if (block.kind !== 'paragraph') continue;
-    const paragraph = authoredBlocks.find(
-      (candidate) => candidate.kind === 'paragraph' && candidate.id === block.paragraphId
-    );
-    if (!paragraph || paragraph.kind !== 'paragraph') continue;
-    const atoms = anchoredDrawingAtomsInParagraph(paragraph, deps.inlineDrawingLayout);
-    if (atoms.length === 0) continue;
-    deps.onAnchorRepublish(
-      block.paragraphId,
-      publishAnchoredDrawingsForParagraph({
-        paragraph,
-        paragraphId: block.paragraphId,
-        paragraphBox: block.box,
-        lines: block.lines,
-        drawingLayout: deps.inlineDrawingLayout,
-        frameBase: deps.anchorFrameBase(),
-        columnBox: deps.columnBoxForParagraph?.(block.box) ?? block.box,
-        cellBox,
-        pageClip: deps.pageContentClip(),
-        measurer: deps.measurer,
-        ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
-        ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
-      })
-    );
-  }
-}
-
-function rowDepsForAnchors(
-  deps: TableFlowDeps,
-  deferredRowAnchors: DeferredRowAnchor[]
-): {
-  readonly rowDeps: TableFlowDeps;
-  readonly flushDeferred: (
-    cells: readonly TableCellFragmentRecord[],
-    rowTop: number,
-    rowHeight: number
-  ) => void;
-} {
-  const publishAnchoredDrawings = anchorPublishSink(deps);
-  const parentDefer = deps.deferAnchoredDrawings;
-  if (!publishAnchoredDrawings && !parentDefer) {
-    return { rowDeps: deps, flushDeferred: () => {} };
-  }
-  const rowDeps: TableFlowDeps = {
-    ...deps,
-    publishAnchoredDrawings,
-    collectAnchoredDrawings: undefined,
-    deferAnchoredDrawings: (pending) => {
-      deferredRowAnchors.push(pending);
-    },
-  };
-  const flushDeferred = (
-    cells: readonly TableCellFragmentRecord[],
-    rowTop: number,
-    rowHeight: number
-  ): void => {
-    if (deferredRowAnchors.length === 0) return;
-    if (publishAnchoredDrawings && !deps.anchorDeferOnly) {
-      publishDeferredRowAnchors(deferredRowAnchors, cells, rowTop, rowHeight, deps);
-    } else if (parentDefer) {
-      for (const pending of deferredRowAnchors) parentDefer(pending);
-    }
-    deferredRowAnchors.length = 0;
-  };
-  return { rowDeps, flushDeferred };
 }
 
 function sumCols(cols: readonly number[], from: number, to: number): number {
@@ -571,6 +429,17 @@ function placeCellParagraph(
      * box. Word and LibreOffice both draw it that way.
      */
     readonly collapseHeight?: boolean;
+    /**
+     * How much flowed content sits above the collapse point inside this cell.
+     *
+     * The caret for a collapsed terminator is drawn upward from the collapse point, sized off
+     * the line's published `baseline`. That ascent comes from the paragraph MARK's own
+     * `w:rPr` and has nothing to do with the rows above it, so a 36 pt mark over a 6 pt
+     * nested row — or any terminator in a cell shorter than its own ascent — drew a caret
+     * that started above the page. Only the caller knows the band, so it passes it and the
+     * published baseline is clamped into it.
+     */
+    readonly collapseBandAbove?: number;
     /** What the table style says about this cell's paragraphs (17.7.6.6). */
     readonly tableCellStyle?: TableCellStyleFormatting;
   }
@@ -832,7 +701,9 @@ function placeCellParagraph(
         height: collapseHeight ? 0 : pendingLine.height,
       },
       contentX: alignedSpans[0]?.box.x ?? lineIndent + alignOffset,
-      baseline: pendingLine.baseline,
+      baseline: collapseHeight
+        ? Math.max(0, Math.min(pendingLine.baseline, options?.collapseBandAbove ?? 0))
+        : pendingLine.baseline,
       leading: collapseHeight ? 0 : pendingLine.leading,
       trailingSpacing: collapseHeight ? 0 : pendingLine.trailingSpacing,
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
@@ -1099,6 +970,7 @@ export function flowBlocksInBox(
       lineIndex: 0,
       previousSpaceAfter: 0,
       paragraphFragmentIndex: 0,
+      precededByEmittedTable: false,
     }
   );
   return { blocks: bounded.blocks, bottom: bounded.bottom };
@@ -1132,10 +1004,8 @@ function flowBlocksInBoxBounded(
   let paragraphFragmentIndex = cursor.paragraphFragmentIndex;
   let fitted = false;
   let nestedSplitBlocked = false;
-  // Did the block immediately before the cursor actually PUT a table on the page? Seeded
-  // from the source kind so a cell continued onto the next page, whose table was emitted on
-  // the previous one, still answers yes; the walk overwrites it from what it emits.
-  let lastEmittedTable = blockIndex > 0 && blocks[blockIndex - 1]!.kind === 'table';
+  // Carried across page cuts by the cursor; never re-derived from the source node's kind.
+  let lastEmittedTable = cursor.precededByEmittedTable;
 
   while (blockIndex < blocks.length) {
     const block = blocks[blockIndex]!;
@@ -1202,6 +1072,7 @@ function flowBlocksInBoxBounded(
         includeAfter: true,
         includeBottomBorder: true,
         collapseHeight: collapsible,
+        collapseBandAbove: y - top,
         ...(tableCellStyle ? { tableCellStyle } : {}),
       }
     );
@@ -1227,6 +1098,7 @@ function flowBlocksInBoxBounded(
           lineIndex: placed.nextLineIndex,
           previousSpaceAfter: 0,
           paragraphFragmentIndex: paragraphFragmentIndex + 1,
+          precededByEmittedTable: lastEmittedTable,
         },
         complete: false,
         fitted: true,
@@ -1243,6 +1115,7 @@ function flowBlocksInBoxBounded(
       lineIndex,
       previousSpaceAfter,
       paragraphFragmentIndex,
+      precededByEmittedTable: lastEmittedTable,
     },
     complete: blockIndex >= blocks.length,
     fitted,

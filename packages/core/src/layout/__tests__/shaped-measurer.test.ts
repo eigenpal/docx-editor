@@ -178,8 +178,9 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
       unicodeDataVersion: '15.1',
       fixedPointScale: 1_000,
     });
-    // Face box 11, so the gap is admitted up to 11 and the line box stops at 22.
-    expect(enormous.lineMetrics(style())).toEqual({ height: 22, baseline: 9 });
+    // Face box 11, so the gap is admitted up to 5.5 and the line box stops at 16.5 — 1.5x
+    // the face, against the largest real gap among the shipped faces of 0.038 face boxes.
+    expect(enormous.lineMetrics(style())).toEqual({ height: 16.5, baseline: 9 });
   });
 
   test('it is NOT the flat multiplier the fallback uses, so the font is really being read', () => {

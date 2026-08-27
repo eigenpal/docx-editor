@@ -326,6 +326,56 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
     );
   });
 
+  test('the caret is clamped into the cell, however tall the paragraph MARK is', () => {
+    // The caret is sized off the line's published `baseline`, and that ascent comes from the
+    // terminator's own `w:pPr/w:rPr` — nothing to do with the rows above it. A 36pt mark over
+    // a 6pt nested row, or any cell shorter than its own ascent, drew a caret that started
+    // above the page content box and painted through whatever was there.
+    const small =
+      '<w:p><w:pPr><w:rPr><w:sz w:val="12"/></w:rPr></w:pPr>' +
+      '<w:r><w:rPr><w:sz w:val="12"/></w:rPr><w:t>b</w:t></w:r></w:p>';
+    const nested = (row: string) =>
+      '<w:tbl><w:tblPr><w:tblLayout w:type="fixed"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
+      row +
+      '</w:tbl>';
+    const outer = (content: string) =>
+      '<w:tbl><w:tr><w:tc><w:tcPr><w:tcW w:w="5000" w:type="dxa"/></w:tcPr>' +
+      content +
+      '</w:tc></w:tr></w:tbl>';
+    const plainRow =
+      '<w:tr><w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>' + small + '</w:tc></w:tr>';
+    const exactRow =
+      '<w:tr><w:trPr><w:trHeight w:val="40" w:hRule="exact"/></w:trPr>' +
+      '<w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>' +
+      small +
+      '</w:tc></w:tr>';
+    const cases = [
+      // A 36pt paragraph mark over a 6pt nested row, with a body paragraph above the table.
+      p('ABOVE') +
+        outer(nested(plainRow) + '<w:p><w:pPr><w:rPr><w:sz w:val="72"/></w:rPr></w:pPr></w:p>'),
+      // An exact 2pt nested row with the table first on the page: no band at all to speak of.
+      outer(nested(exactRow) + '<w:p/>'),
+    ];
+    for (const body of cases) {
+      const layout = layoutOf(body);
+      const fragment = layout.pages[0]!.fragments.find(
+        (record): record is TableFragmentRecord => record.kind === 'table'
+      )!;
+      const rowTop = fragment.rows[0]!.box.y;
+      const rowBottom = rowTop + fragment.rows[0]!.box.height;
+      const order = documentOrder(layout);
+      const caret = caretAt(
+        layout,
+        { paragraphId: order[order.length - 1]!, offset: 0 },
+        { measurer }
+      )!;
+      expect(caret.y).toBeGreaterThanOrEqual(rowTop - 0.001);
+      expect(caret.y + caret.height).toBeLessThanOrEqual(rowBottom + 0.001);
+      expect(caret.y).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   test('a press still lands in it', () => {
     // The nested table owns the band under its own column, so the reachable area is the
     // rest of the cell beside it.

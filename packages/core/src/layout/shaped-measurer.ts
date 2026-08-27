@@ -85,11 +85,17 @@ export interface ShapedMeasurerOptions {
 /**
  * Ceiling on `hhea.lineGap`, as a multiple of the face's own ascent + descent.
  *
- * The gap is file-derived and unbounded in the format. Every face this engine ships declares
- * either none at all or about 0.03 em, so a face box's worth of leading is already far past
- * anything real — this only stops a hostile font from turning one run into a page.
+ * The gap is file-derived, signed, and unbounded in the format, so an embedded font is a
+ * lever on every line box in the document. Measured over all twenty faces this engine ships,
+ * the largest real gap is Liberation Serif's 87/2268 = 0.038 face boxes; Liberation Sans is
+ * 0.029 and Carlito, Caladea and Liberation Mono declare none at all. Even a font with
+ * unusually generous leading is a few percent, not a multiple.
+ *
+ * 0.5 therefore clears the largest face this engine ships by 13x — no real document can
+ * reach it — while capping the worst case an attacker can produce at 1.5x the face box. A
+ * full face box would have allowed 2x, which is a usable layout blow-up from a file.
  */
-const MAX_LINE_GAP_FACE_BOXES = 1;
+const MAX_LINE_GAP_FACE_BOXES = 0.5;
 
 /** Super and subscript draw at three quarters, so they measure at three quarters. */
 const sizeFactorOf = (style: ResolvedRunStyle): number =>
