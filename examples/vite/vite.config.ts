@@ -120,6 +120,17 @@ export default defineConfig(async (): Promise<UserConfig> => {
               find: '@docx-editor.dev/core/editor',
               replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
             },
+            // Nested, so the single-segment lane capture below cannot reach it. Without this
+            // the replication seam is the ONE core subpath in this graph that resolves to
+            // `dist` while everything around it resolves to source — two copies of the engine,
+            // and a node_modules dep vite re-optimizes mid-run.
+            {
+              find: '@docx-editor.dev/core/collaboration/replication',
+              replacement: path.join(
+                monorepoRoot,
+                'packages/core/src/collaboration/replication.ts'
+              ),
+            },
             // The remaining core lane subpaths, one rule. `@docx-editor.dev/react`
             // above resolves to package SOURCE, so the whole `packages/react/src` graph is
             // compiled here and its own bare specifiers resolve through these aliases too.
