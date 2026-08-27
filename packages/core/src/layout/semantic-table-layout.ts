@@ -90,11 +90,7 @@ import { contentInsets } from './table-cell-geometry.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
 export { rowWithSplitBorders } from './table-cell-geometry.ts';
-import type {
-  RowVMergeLayoutOptions,
-  VMergePlanBudget,
-  VMergeRowHeights,
-} from './table-vmerge-heights.ts';
+import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 
 export {
   createTableBorderOwnershipBudget,
@@ -233,15 +229,6 @@ export interface TableFlowDeps {
    * pass. Exhaustion fails soft (remaining restarts keep rowSpan 1).
    */
   readonly vMergeResolveBudget?: TableVMergeResolveBudget;
-  /**
-   * What the vMerge height plan may spend across this PASS: cell visits on the authored
-   * rows, and probe layouts. Nested tables inherit the same object, which is the point —
-   * probes re-enter nested layout, so an allowance that does not compose across nesting
-   * bounds no document. Not the budget above: finalize spends that one, and sharing it
-   * exhausts it at half the cell count, where finalize fails soft to `rowSpan` 1 and
-   * leaves holes in the painted grid.
-   */
-  readonly vMergePlanBudget?: VMergePlanBudget;
   /**
    * This layout is a MEASUREMENT, not a placement: nothing it produces is painted.
    *
@@ -1325,6 +1312,18 @@ export function layoutRowFragmentBounded(
       rowBottom = needed;
     }
   }
+  // A row whose ONLY cells are detached merge heads has had nothing raise it: the two passes
+  // above skip detached cells on purpose, and a head row has no continuation cell to
+  // contribute the empty-cell line the way a covered row does. Word still draws that row a
+  // line tall, so floor it there rather than collapsing it onto the row below.
+  if (rowBottom <= rowTop + 0.001 && flowed.length > 0) {
+    let lineBottom = rowTop;
+    for (const entry of flowed) {
+      const line = rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
+      if (line > lineBottom) lineBottom = line;
+    }
+    rowBottom = Math.min(flowMaxBottom, lineBottom);
+  }
   rowBottom = Math.min(flowMaxBottom, rowBottom);
 
   // Exact: force the authored height (clamped to the page budget) and clip leftover content.
@@ -1478,6 +1477,50 @@ export function measureRowHeight(
 }
 
 /**
+ * One row of a table placed in ONE PASS, where there is no next fragment to carry a
+ * remainder to — a nested table, a header/footer story.
+ *
+ * A merged head is bounded by its span, so it CAN come back owing more than it placed, and
+ * these callers have nowhere to put what it owes. Dropping it would break the one rule this
+ * module does not bend: nothing discards content to stay inside a box. So the row is placed
+ * again with the merge unplanned, which puts the head back to sizing its own row and holding
+ * all of it — the shape this file had before any of it planned heights.
+ *
+ * `rollback` undoes what the discarded attempt published. That is the whole reason the
+ * paginator refuses to re-place: an attempt on live deps has already emitted its anchored
+ * drawings, and re-placing without taking them back leaves a float positioned by a layout
+ * that never happened. A caller that cannot undo its sinks must not pass a `vMerge`.
+ */
+function layoutOnePassRow(
+  row: SemanticTableRow,
+  structure: SemanticTableStructure,
+  left: number,
+  y: number,
+  depth: number,
+  deps: TableFlowDeps,
+  isHeaderRepeat: boolean,
+  vMerge: RowVMergeLayoutOptions | undefined,
+  rollback: () => void
+): LayoutRowBoundedResult {
+  const place = (options: RowVMergeLayoutOptions | undefined): LayoutRowBoundedResult =>
+    layoutRowFragment(
+      row,
+      structure.columnWidthsPt,
+      left,
+      y,
+      isHeaderRepeat,
+      depth,
+      deps,
+      structure.cellSpacingPt,
+      options
+    );
+  const placed = place(vMerge);
+  if (placed.remainder === null || vMerge === undefined) return placed;
+  rollback();
+  return place(undefined);
+}
+
+/**
  * The vMerge plan for one table, probed by row layout. `rows` narrows it to the rows the
  * caller actually places — the paginator plans over the BODY rows, so a merge is never
  * planned against a repeated header copy.
@@ -1496,11 +1539,7 @@ export const vMergePlanFor = (
         left,
         depth,
         deps,
-        measureRowHeight,
-        // The PASS's pool, inherited by every nested table through `deps`. A fresh allowance per
-        // table lets each nesting level re-spend the whole thing, which is exponential in depth
-        // on a nest a file controls.
-        deps.vMergePlanBudget
+        measureRowHeight
       );
 
 /**
@@ -1543,22 +1582,21 @@ function emitNestedTable(
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const [rowIndex, row] of structure.rows.entries()) {
-    // No retry here, and none possible: `acceptVMergeSpansAt` sizes a merged head's span
-    // from a probe at THIS row's top with wrap bands applied, so the bound the head is
-    // placed under is the height its own content measured. Placing twice on these deps
-    // would publish the row's anchored drawings twice — once at geometry from a layout that
-    // was thrown away — and unplanning one row while the span stays accepted would leave
-    // the head sizing its row AND the surplus still sitting on the rows below it.
-    const placed = layoutRowFragment(
+    // Anchors this row defers are taken back if its placement is discarded, so a retry
+    // cannot publish a drawing twice.
+    const deferredBefore = nestedDeferred.length;
+    const placed = layoutOnePassRow(
       row,
-      structure.columnWidthsPt,
+      structure,
       tableLeft,
       y,
-      false,
       depth,
       nestedFlowDeps,
-      structure.cellSpacingPt,
-      acceptVMergeSpansAt(vMergePlan, rowIndex, y)
+      false,
+      acceptVMergeSpansAt(vMergePlan, rowIndex, y),
+      () => {
+        nestedDeferred.length = deferredBefore;
+      }
     );
     rawRows.push(placed.record);
     y = placed.bottom;
@@ -1620,16 +1658,19 @@ export function layoutTableFragment(
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const [rowIndex, row] of structure.rows.entries()) {
-    const placed = layoutRowFragment(
+    const placed = layoutOnePassRow(
       row,
-      structure.columnWidthsPt,
+      structure,
       left,
       y,
-      isHeaderRepeat(row),
       depth,
       deps,
-      structure.cellSpacingPt,
-      acceptVMergeSpansAt(vMergePlan, rowIndex, y)
+      isHeaderRepeat(row),
+      acceptVMergeSpansAt(vMergePlan, rowIndex, y),
+      // This caller publishes through the deps it was handed and cannot take an attempt
+      // back, so a discarded one would double-publish. It has no production caller; if it
+      // gains one, give it a sink it can roll back before it keeps the `vMerge` above.
+      () => {}
     );
     rawRows.push(placed.record);
     y = placed.bottom;

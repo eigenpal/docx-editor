@@ -319,6 +319,27 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     }
   });
 
+  test('a row holding nothing but a merge head is still a line tall', () => {
+    // Detaching a head takes it out of its row's height, and in a single-column table that
+    // is the only cell there is — so nothing raised the row and it collapsed to zero, with
+    // the row below it starting at the same y. Word draws that row a line tall. The two
+    // height passes skip detached cells on purpose; the floor has to come from somewhere
+    // else.
+    const layout = layoutTiny(
+      loadPart(
+        `<w:tbl>${GRID}` +
+          `<w:tr>${tc(p('head'), RESTART)}</w:tr>` +
+          `<w:tr>${tc(p('g'), CONTINUE)}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    const table = tablesOf(layout, 0)[0]!;
+    expect(table.rows[0]!.box.height).toBeGreaterThan(12);
+    expect(table.rows[1]!.box.y).toBe(table.rows[0]!.box.y + table.rows[0]!.box.height);
+    expect(table.box.height).toBe(table.rows[0]!.box.height + table.rows[1]!.box.height);
+    expectContentInsideItsTable(layout);
+  });
+
   test('two merges starting in the SAME row keep their content inside the table', () => {
     // Both cells of row 0 restart a merge over rows 0-1. Accepting the second detaches it
     // from row 0 as well, which empties row 0 of everything it had and changes what the

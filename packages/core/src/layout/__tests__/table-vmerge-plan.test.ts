@@ -8,9 +8,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { SemanticTableCell, SemanticTableRow } from '../semantic-table.ts';
 import {
-  createVMergePlanBudget,
   planVMergeRowHeights,
   type RowVMergeLayoutOptions,
+  type VMergeRowHeights,
 } from '../table-vmerge-heights.ts';
 
 const BORDERS = {
@@ -138,26 +138,33 @@ describe('the vMerge plan hands out heights, never positions', () => {
     expect(plan.rowOptions(1)!.heightFloorPt).toBe(90 - 12);
   });
 
-  test('nothing here depends on how much of a pass came before it', () => {
-    // There is no probe-layout pool any more. One existed to bound the work a nest could
-    // multiply, and a probe no longer plans at all, so the bound moved to the source. A pool
-    // would have made a table's heights depend on document ORDER — a resumed pass starts at
-    // the first changed block and spends less of it — which is one document laying out two
-    // ways depending on how you opened it.
+  test('the thousandth table of a pass plans exactly like the first', () => {
+    // The plan holds no pass-scoped state, so a table's heights cannot depend on how much
+    // of the document came before it. That mattered because a resumed pass starts at the
+    // first changed block: with any shared allowance, a table near the end could plan its
+    // merges after an edit and not plan them on reload.
+    //
+    // A thousand plans is far past what any allowance this module ever carried would have
+    // survived, so reintroducing one fails this rather than passing on a technicality —
+    // which is what the budgeted version of this test did.
     const rows = [
       row('r0', [filled('head', 0), filled('side0', 1)]),
       row('r1', [cell('cont', 0, true), filled('side1', 1)]),
     ];
-    const fresh = planVMergeRowHeights(rows, probeFrom({ head: 90 }), createVMergePlanBudget())!;
-    for (const span of fresh.spansAt(0)) fresh.accept(span);
+    const planOnce = (): VMergeRowHeights => {
+      const plan = planVMergeRowHeights(rows, probeFrom({ head: 90 }))!;
+      for (const span of plan.spansAt(0)) plan.accept(span);
+      return plan;
+    };
+    const first = planOnce();
+    let last = first;
+    for (let index = 0; index < 1000; index += 1) last = planOnce();
 
-    // The same table planned on a budget most of a long pass has already spent.
-    const spent = createVMergePlanBudget(8);
-    const late = planVMergeRowHeights(rows, probeFrom({ head: 90 }), spent)!;
-    for (const span of late.spansAt(0)) late.accept(span);
-
-    expect(late.rowOptions(0)!.heightFloorPt).toBe(fresh.rowOptions(0)!.heightFloorPt);
-    expect(late.rowOptions(1)!.heightFloorPt).toBe(fresh.rowOptions(1)!.heightFloorPt);
+    expect(last.rowOptions(0)!.heightFloorPt).toBe(first.rowOptions(0)!.heightFloorPt);
+    expect(last.rowOptions(1)!.heightFloorPt).toBe(first.rowOptions(1)!.heightFloorPt);
+    expect(last.rowOptions(0)!.detachedSpanHeightPtByCellId?.get('head')).toBe(
+      first.rowOptions(0)!.detachedSpanHeightPtByCellId?.get('head')
+    );
   });
 
   test('a span no row of which can grow is declined rather than handed a short box', () => {

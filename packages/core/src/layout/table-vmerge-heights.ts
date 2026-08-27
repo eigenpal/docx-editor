@@ -93,11 +93,7 @@ import type {
   SemanticTableRow,
   SemanticTableStructure,
 } from './semantic-table.ts';
-import {
-  MAX_VMERGE_RESOLVE_CELLS,
-  resolveVMergeSpans,
-  type TableVMergeResolveBudget,
-} from './table-vmerge.ts';
+import { resolveVMergeSpans } from './table-vmerge.ts';
 
 /** Sub-point drift between a probe and the real placement is not a height difference. */
 const EPSILON_PT = 0.001;
@@ -167,31 +163,26 @@ function soloHeadRow(row: SemanticTableRow, cell: SemanticTableCell): SemanticTa
 }
 
 /**
- * What the vMerge height plan may spend on ONE layout pass, shared by every table in it.
+ * The plan holds NO pass-scoped state, and that is the point.
  *
- * Cell visits only, and only because resolving a merge chain walks cells. There is no
- * allowance on probe LAYOUTS, and the reason is worth keeping: a probe re-entering
- * nested-table layout is what made the work multiply with nesting depth, and a probe no
- * longer plans at all (`TableFlowDeps.measuringOnly`), so the multiplication is gone at its
- * source rather than paid for out of a pool.
+ * It used to draw on a shared allowance — probe layouts first, then cell visits — and either
+ * one makes a table's heights depend on how much of the document came before it. An editor
+ * cannot afford that: a resumed pass starts at the first changed block, so it spends less of
+ * any pool than a cold open, and a table near exhaustion would plan its merges after an edit
+ * and not plan them on reload. One document, two shapes, decided by how you opened it.
  *
- * A pool would also have made the result depend on document ORDER, which an editor cannot
- * afford: a resumed pass starts at the first changed block and so spends less of the pool
- * than a cold open, and a table near exhaustion would plan its merges after an edit and not
- * plan them on reload. That is one document laying out two ways depending on how you
- * arrived at it, which is worse than the ceiling was worth.
+ * Nothing needs the allowance now. Resolving a merge chain walks the cells of ONE table, and
+ * `readTableStructure` bounds those; probes no longer plan the tables inside them
+ * (`TableFlowDeps.measuringOnly`), so the nested re-entry that multiplied the work is gone at
+ * its source. What is left is linear in the cells a pass already walks to lay the document
+ * out. Anything reintroducing a shared counter here brings the drift back with it.
  */
-export type VMergePlanBudget = TableVMergeResolveBudget;
 
-export function createVMergePlanBudget(cells: number = MAX_VMERGE_RESOLVE_CELLS): VMergePlanBudget {
-  return { cellsRemaining: Math.max(0, cells | 0) };
-}
-
-function collectHeads(
-  rows: readonly SemanticTableRow[],
-  budget: TableVMergeResolveBudget | undefined
-): { readonly heads: MergeHead[]; readonly headIdsByRow: Map<number, Set<string>> } {
-  const spans = resolveVMergeSpans(rows, undefined, budget);
+function collectHeads(rows: readonly SemanticTableRow[]): {
+  readonly heads: MergeHead[];
+  readonly headIdsByRow: Map<number, Set<string>>;
+} {
+  const spans = resolveVMergeSpans(rows);
   const heads: MergeHead[] = [];
   const headIdsByRow = new Map<number, Set<string>>();
   for (let headRow = 0; headRow < rows.length; headRow += 1) {
@@ -219,8 +210,7 @@ function collectHeads(
  */
 export function planVMergeRowHeights(
   rows: readonly SemanticTableRow[],
-  probeRowHeightPt: RowHeightProbe,
-  budget?: VMergePlanBudget
+  probeRowHeightPt: RowHeightProbe
 ): VMergeRowHeights | null {
   if (rows.length === 0) return null;
   // Most tables have no vertical merge, and this runs from inside a row PROBE as well as
@@ -228,7 +218,7 @@ export function planVMergeRowHeights(
   // cell is the only thing that can start a chain, and a scan for one beats building the
   // resolve and its budget accounting to reach the same `null`.
   if (!rows.some((row) => row.cells.some((cell) => cell.vMergeContinue))) return null;
-  const { heads, headIdsByRow } = collectHeads(rows, budget);
+  const { heads, headIdsByRow } = collectHeads(rows);
   if (heads.length === 0) return null;
 
   const headBySpan = new Map<VMergeSpan, MergeHead>(heads.map((head) => [head.span, head]));
@@ -362,9 +352,7 @@ export function planVMergeRowHeights(
 
   const spanHeightOf = (span: VMergeSpan, atYPt?: number): number => {
     // Shapes this module declines read as "taller than any page", so the caller never
-    // admits them — and they are refused BEFORE the probe budget is charged, or a table
-    // full of merges nested inside other merges would spend the allowance on spans it was
-    // never going to use and starve the ones it would.
+    // admits them and never probes for a height it will not use.
     if (headsBelowHead(span)) return Number.POSITIVE_INFINITY;
     if (acceptedHeadRows.has(span.headRow) && !acceptedSpans.has(span)) {
       return Number.POSITIVE_INFINITY;
@@ -481,31 +469,27 @@ export function planTableVMergeHeights<Deps>(
     cellSpacingPt?: number,
     vMerge?: RowVMergeLayoutOptions,
     atYPt?: number
-  ) => number,
-  budget?: VMergePlanBudget
+  ) => number
 ): VMergeRowHeights | null {
-  return planVMergeRowHeights(
-    structure.rows,
-    (row, detached, atYPt) =>
-      measure(
-        row,
-        structure.columnWidthsPt,
-        typeof left === 'function' ? left() : left,
-        depth,
-        deps,
-        structure.cellSpacingPt,
-        // A probe only needs to know WHICH cells are out: the span it measures towards has
-        // no height of its own yet, and being unbounded is the point of a probe.
-        detached
-          ? {
-              detachedSpanHeightPtByCellId: new Map(
-                [...detached].map((id) => [id, Number.POSITIVE_INFINITY])
-              ),
-            }
-          : undefined,
-        atYPt
-      ),
-    budget
+  return planVMergeRowHeights(structure.rows, (row, detached, atYPt) =>
+    measure(
+      row,
+      structure.columnWidthsPt,
+      typeof left === 'function' ? left() : left,
+      depth,
+      deps,
+      structure.cellSpacingPt,
+      // A probe only needs to know WHICH cells are out: the span it measures towards has
+      // no height of its own yet, and being unbounded is the point of a probe.
+      detached
+        ? {
+            detachedSpanHeightPtByCellId: new Map(
+              [...detached].map((id) => [id, Number.POSITIVE_INFINITY])
+            ),
+          }
+        : undefined,
+      atYPt
+    )
   );
 }
 

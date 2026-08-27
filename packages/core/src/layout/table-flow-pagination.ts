@@ -339,7 +339,11 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
       // Does not fit the remaining band.
       // Exact rows are atomic (Word clips overflow inside the fixed box; they do not
       // continue across pages). Same keep-together path as `w:cantSplit`.
-      if (row.cantSplit || row.height.rule === 'exact') {
+      // Not on a CONTINUATION: this row already split, so `w:cantSplit` is a decision that
+      // was made and lost an iteration ago. Re-taking it here reaches the throw below with
+      // `cursorY === 0` — a fresh page the row was just moved to — and aborts a layout
+      // nothing in `core` catches, on a path the module comment calls a recovery.
+      if (!isContinuation && (row.cantSplit || row.height.rule === 'exact')) {
         if (flow.cursorY > 0 && !movedToFreshPage) {
           breakForContinuation(true);
           movedToFreshPage = true;
