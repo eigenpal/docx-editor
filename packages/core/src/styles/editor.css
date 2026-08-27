@@ -3050,6 +3050,49 @@ a.docx-hyperlink:focus-visible {
   white-space: nowrap;
 }
 
+/*
+ * Collaboration presence chrome (`docx-collaboration` family): the avatar stack the pro
+ * adapters ship. Mirrors `.docx-review__avatar` — a filled disc with initials — at chrome
+ * scale. The accent arrives per avatar as `--doc-collaboration-accent`, resolved by the
+ * SAME review-roster derivation the painted presence uses, so an avatar, a review card and
+ * the collaborator's caret agree about who draws in what.
+ */
+.docx-collaboration-avatars {
+  display: inline-flex;
+  align-items: center;
+}
+
+.docx-collaboration-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--doc-collaboration-accent, var(--doc-accent));
+  color: var(--doc-on-primary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* Same rule as the review disc: custom content must not spill past it. */
+  overflow: hidden;
+}
+
+/* Stacked discs overlap; the surface-coloured ring keeps each edge readable. */
+.docx-collaboration-avatars .docx-collaboration-avatar {
+  box-shadow: 0 0 0 2px var(--doc-surface);
+}
+
+.docx-collaboration-avatars .docx-collaboration-avatar + .docx-collaboration-avatar {
+  margin-inline-start: -8px;
+}
+
+/* The "+N" chip carries a count, not an identity, so it stays out of the author ramp. */
+.docx-collaboration-avatar[data-overflow] {
+  background: var(--doc-text-muted);
+}
+
 /* ========================================================================
  * COMPOUND TOOLBAR (`docx-toolbar` family) — the composition API's default
  * chrome bar, the chrome spec's visual recipe:

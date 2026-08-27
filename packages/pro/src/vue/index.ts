@@ -70,6 +70,15 @@ export type {
   CollaborationSession,
 } from '../collaboration/session.ts';
 export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';
+export {
+  DocxEditorCollaboration,
+  type CollaborationAvatarProps,
+  type CollaborationAvatarRenderProps,
+  type CollaborationAvatarsProps,
+  type CollaborationCaretLabelRenderProps,
+  type CollaborationCaretLabelsProps,
+  type DocxEditorCollaborationNamespace,
+} from './DocxEditorCollaboration.ts';
 export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.ts';
 export {
   CustomNodeContextMenu,

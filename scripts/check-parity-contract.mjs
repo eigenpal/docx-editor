@@ -181,7 +181,7 @@ function extractVueRefMembers(snapshotText) {
 // The pro package publishes one React and one Vue entry from the same package.
 // The contract's `pro` section classifies:
 //  - `exports`: every top-level export name of each snapshot
-//  - `reviewParts`: the DocxEditorReview compound part names
+//  - `reviewParts`: the DocxEditorReview compound part names\n//  - `collaborationParts`: the DocxEditorCollaboration compound part names
 //  - `memberCheckedInterfaces`: the pinned list of interfaces whose member
 //    names compare extends-resolved across both entries. Exact-match
 //    staleness: a listed interface that stops being comparable fails as
@@ -204,7 +204,7 @@ function extractTopLevelExportNames(snapshotText) {
 }
 
 /**
- * Vue's DocxEditorReview snapshot is one `export const DocxEditorReview: { ... };`
+ * Vue's compound snapshot is one `export const <constName>: { ... };`
  * whose trailing intersection enumerates each compound part as a
  * `PartName: <component type>` member. The member match is type-agnostic
  * (DefineComponent, FunctionalComponent, anything): a part emitted under a new
@@ -222,9 +222,11 @@ function extractTopLevelExportNames(snapshotText) {
  * underscore-prefixed `__isFragment`-style internal markers. A false match
  * fails loudly as unclassified; it cannot pass vacuously.
  */
-function extractVueReviewParts(snapshotText) {
+function extractVueCompoundParts(snapshotText, constName) {
   const lines = snapshotText.split('\n');
-  const startIdx = lines.findIndex((l) => l.startsWith('export const DocxEditorReview'));
+  const startIdx = lines.findIndex(
+    (l) => l.startsWith(`export const ${constName}:`) || l.startsWith(`export const ${constName} `)
+  );
   if (startIdx === -1) return null;
   const parts = new Set();
   let depth = 0;
@@ -381,7 +383,13 @@ function validateProShape(pro) {
     errors.push('Missing or invalid top-level key: pro');
     return errors;
   }
-  for (const sub of ['exports', 'reviewParts', 'webrtcExports', 'hocuspocusExports']) {
+  for (const sub of [
+    'exports',
+    'reviewParts',
+    'collaborationParts',
+    'webrtcExports',
+    'hocuspocusExports',
+  ]) {
     const section = pro[sub];
     if (!section || typeof section !== 'object') {
       errors.push(`contract.pro.${sub} is required`);
@@ -516,7 +524,12 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
   const reactExports = extractTopLevelExportNames(reactSnapshot);
   const vueExports = extractTopLevelExportNames(vueSnapshot);
   const reactParts = extractInterfaceFields(reactSnapshot, 'DocxEditorReviewNamespace');
-  const vueParts = extractVueReviewParts(vueSnapshot);
+  const vueParts = extractVueCompoundParts(vueSnapshot, 'DocxEditorReview');
+  const reactCollaborationParts = extractInterfaceFields(
+    reactSnapshot,
+    'DocxEditorCollaborationNamespace'
+  );
+  const vueCollaborationParts = extractVueCompoundParts(vueSnapshot, 'DocxEditorCollaboration');
 
   // Freshness oracle: a parse regression must fail loudly, never pass vacuously.
   const MIN_EXPORTS = 20;
@@ -539,9 +552,31 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     );
     process.exit(1);
   }
+  // Same freshness rule for the collaboration compound: the namespace holds three parts,
+  // and a parse regression must fail loudly rather than compare nothing.
+  const MIN_COLLABORATION_PARTS = 3;
+  if (!reactCollaborationParts || reactCollaborationParts.size < MIN_COLLABORATION_PARTS) {
+    console.error(
+      `Pro parity gate misconfigured: could not parse DocxEditorCollaborationNamespace parts from ${PRO_REACT_SNAPSHOT} (got ${reactCollaborationParts?.size ?? 0}).`
+    );
+    process.exit(1);
+  }
+  if (!vueCollaborationParts || vueCollaborationParts.size < MIN_COLLABORATION_PARTS) {
+    console.error(
+      `Pro parity gate misconfigured: could not parse DocxEditorCollaboration parts from ${PRO_VUE_SNAPSHOT} (got ${vueCollaborationParts?.size ?? 0}).`
+    );
+    process.exit(1);
+  }
 
   applyProBuckets('PRO EXPORT', contract.pro.exports, reactExports, vueExports, issues);
   applyProBuckets('PRO REVIEW PART', contract.pro.reviewParts, reactParts, vueParts, issues);
+  applyProBuckets(
+    'PRO COLLABORATION PART',
+    contract.pro.collaborationParts,
+    reactCollaborationParts,
+    vueCollaborationParts,
+    issues
+  );
 
   // Member-name parity for the pinned interface list. The list is exact-match
   // stale-checked in both directions, so the compared set can never shrink
@@ -633,6 +668,7 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     reactExports: reactExports.size,
     vueExports: vueExports.size,
     reviewParts: reactParts.size,
+    collaborationParts: reactCollaborationParts.size,
     memberCheckedInterfaces: memberChecked.length,
     memberChecks,
   };
@@ -963,6 +999,7 @@ function main() {
     `  Pro hocuspocus interfaces: ${hocuspocusStats.comparedInterfaces} (${hocuspocusStats.memberChecks} member checks)`
   );
   console.log(`  Pro review parts:      ${proStats.reviewParts}`);
+  console.log(`  Pro collaboration parts: ${proStats.collaborationParts}`);
   console.log(
     `  Pro member-checked interfaces: ${proStats.memberCheckedInterfaces} (${proStats.memberChecks} member checks)`
   );

@@ -787,6 +787,11 @@
     "warning": null,
     "you": null,
     "outOfSync": null,
-    "outOfSyncShort": null
+    "outOfSyncShort": null,
+    "caretPages": null
+  },
+  "collaboration": {
+    "moreParticipants": null,
+    "participants": null
   }
 }

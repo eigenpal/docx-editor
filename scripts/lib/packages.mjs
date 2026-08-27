@@ -112,6 +112,9 @@ export const PACKAGES = [
         react: [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
+          'CollaborationAvatar',
+          'CollaborationAvatars',
+          'CollaborationCaretLabels',
           'CustomNodeDefinition',
           'Editor',
           'EditorCollaborationSession',

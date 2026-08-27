@@ -49,6 +49,15 @@ export {
   type ReviewPartProps,
   type ReviewProps,
 } from './DocxEditorReview';
+export {
+  DocxEditorCollaboration,
+  type CollaborationAvatarProps,
+  type CollaborationAvatarRenderProps,
+  type CollaborationAvatarsProps,
+  type CollaborationCaretLabelRenderProps,
+  type CollaborationCaretLabelsProps,
+  type DocxEditorCollaborationNamespace,
+} from './DocxEditorCollaboration.tsx';
 export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.tsx';
 export {
   CustomNodeContextMenu,

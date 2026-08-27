@@ -20,6 +20,32 @@ import * as Y from 'yjs';
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
 
 // @public
+export interface CollaborationAvatarProps {
+    readonly children?: VNode | VNode[];
+    // (undocumented)
+    readonly className?: string;
+    // (undocumented)
+    readonly participant: CollaborationParticipant;
+}
+
+// @public
+export interface CollaborationAvatarRenderProps {
+    readonly color: string;
+    readonly initials: string;
+    // (undocumented)
+    readonly participant: CollaborationParticipant;
+}
+
+// @public
+export interface CollaborationAvatarsProps {
+    readonly children?: (props: CollaborationAvatarRenderProps) => VNode | VNode[];
+    // (undocumented)
+    readonly className?: string;
+    readonly max?: number;
+    readonly session: CollaborationSession | null;
+}
+
+// @public
 export type CollaborationBootstrap = {
     readonly document: Uint8Array;
     readonly kind: 'create';
@@ -35,6 +61,19 @@ export type CollaborationBootstrap = {
     readonly signal?: AbortSignal;
     readonly timeoutMs?: number;
 };
+
+// @public
+export interface CollaborationCaretLabelRenderProps {
+    readonly color: string;
+    readonly participant: CollaborationParticipant | null;
+    readonly selection: CollaborationRemoteSelection;
+}
+
+// @public
+export interface CollaborationCaretLabelsProps {
+    readonly children?: (props: CollaborationCaretLabelRenderProps) => VNode | VNode[];
+    readonly session: CollaborationSession | null;
+}
 
 // @public
 export interface CollaborationFailure {
@@ -200,6 +239,84 @@ export interface CustomNodeContextMenuProps {
     readonly onRemoveRefused?: (node: ActivatedCustomNode, reason: string) => void;
     readonly remove?: boolean;
 }
+
+// @public
+export const DocxEditorCollaboration: {
+    Avatar: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        participant: {
+            required: true;
+            type: PropType<CollaborationParticipant>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        participant: {
+            required: true;
+            type: PropType<CollaborationParticipant>;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Avatars: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        max: {
+            default: undefined;
+            type: NumberConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        max: {
+            default: undefined;
+            type: NumberConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+        max: number;
+        session: CollaborationSession | null;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    CaretLabels: vue.DefineComponent<vue.ExtractPropTypes<{
+        session: {
+            default: null;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>[] | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        session: {
+            default: null;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>> & Readonly<{}>, {
+        session: CollaborationSession | null;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+};
+
+// @public (undocumented)
+export type DocxEditorCollaborationNamespace = typeof DocxEditorCollaboration;
 
 // @public (undocumented)
 export const DocxEditorReview: {

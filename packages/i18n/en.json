@@ -719,6 +719,10 @@
     "viewing": "Viewing",
     "viewingHint": "Read-only, no edits"
   },
+  "collaboration": {
+    "participants": "People in this document",
+    "moreParticipants": "{count, plural, one {# more person} other {# more people}}"
+  },
   "collaborationDemo": {
     "title": "Peer-to-peer collaboration proof",
     "subtitle": "Run this page on two machines and open the same room link.",
@@ -766,7 +770,8 @@
     "enterRoom": "Enter a room link or room ID.",
     "connectFailed": "Could not connect to the room.",
     "leaveFailed": "Could not leave the room.",
-    "guest": "Guest"
+    "guest": "Guest",
+    "caretPages": "{count, plural, one {# page} other {# pages}}"
   },
   "review": {
     "ariaLabel": "Review",

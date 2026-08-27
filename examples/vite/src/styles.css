@@ -153,22 +153,15 @@
   opacity: 0.45;
 }
 
-.demo-collaboration-avatars {
-  display: flex;
+/* The packaged avatar stack (`DocxEditorCollaboration.Avatars`), compacted to header-button
+   scale. Colours come from the library's own accent resolution; only geometry changes here. */
+.demo-collaboration-trigger .docx-collaboration-avatars {
   padding-left: 4px;
 }
 
-.demo-collaboration-avatar {
-  box-sizing: border-box;
-  display: grid;
+.demo-collaboration-trigger .docx-collaboration-avatar {
   width: 18px;
   height: 18px;
-  margin-left: -5px;
-  place-items: center;
-  border: 2px solid var(--doc-surface);
-  border-radius: 50%;
-  background: var(--demo-participant-color, var(--doc-primary));
-  color: var(--doc-on-primary);
   font-size: 9px;
 }
 

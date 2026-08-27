@@ -39,7 +39,7 @@ import { DrawingsE2eBridge } from './DrawingsE2eBridge';
 import { ReviewWritesE2eBridge } from './ReviewWritesE2eBridge';
 import { keepCaret } from './demoButtons';
 import { DemoHeaderButton } from './DemoHeaderButton';
-import { CollaborationControl } from './CollaborationDemo';
+import { CollaborationCaretLabelDemo, CollaborationControl } from './CollaborationDemo';
 import {
   citationCardAt,
   CitationCardActions,
@@ -715,6 +715,11 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
               </DocxEditor.ContextMenu>
               <DrawingsE2eBridge />
               <ReviewWritesE2eBridge />
+              {/* Custom remote-caret labels (PRO): the engine positions and colours each
+                  label, the demo renders its content — name plus a live page count read
+                  through `useEditorState`, proving the label runs inside the provider
+                  tree with the opened document in reach. */}
+              <CollaborationCaretLabelDemo session={collaboration.session} />
               {/* The link popover. Inside the viewport so it stays with the page while
                   scrolling. `<DocxEditor>` mounts it for you; a composition like this one
                   places it by name, exactly like the rulers above. */}

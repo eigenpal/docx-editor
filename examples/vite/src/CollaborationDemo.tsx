@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { useDocxEditor } from '@docx-editor.dev/react';
+import { useDocxEditor, useEditorState } from '@docx-editor.dev/react';
 import { safeParticipantColor } from '@docx-editor.dev/core/collaboration';
 import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
-import { useCollaborationParticipants, useCollaborationStatus } from '@docx-editor.dev/pro/react';
+import {
+  DocxEditorCollaboration,
+  useCollaborationParticipants,
+  useCollaborationStatus,
+} from '@docx-editor.dev/pro/react';
 import type { CollaborationSession } from '@docx-editor.dev/pro/react';
 import { createT, en } from '@docx-editor.dev/i18n';
 import {
@@ -146,20 +150,31 @@ function shareUrl(roomId: string): string {
   return url.toString();
 }
 
-function ParticipantStack({ participants }: { participants: readonly CollaborationParticipant[] }) {
+/** One remote caret's label content: the name, plus a value read live off the document. */
+function RemoteCaretLabel({ name }: { name: string }) {
+  // The proof of the context promise: this renders INSIDE the engine-positioned label,
+  // yet `useEditorState` still reads the opened document through the adapter provider.
+  const pageTotal = useEditorState((state) => state.page.total);
   return (
-    <span className="demo-collaboration-avatars" aria-hidden="true">
-      {participants.slice(0, 3).map((participant) => (
-        <span
-          className="demo-collaboration-avatar"
-          key={participant.actorId}
-          title={participant.name}
-          style={{ '--demo-participant-color': participantColor(participant) } as CSSProperties}
-        >
-          {participant.name.slice(0, 1).toUpperCase()}
-        </span>
-      ))}
+    <span className="demo-caret-label">
+      {name} · {t('collaborationDemo.caretPages', { count: pageTotal })}
     </span>
+  );
+}
+
+/**
+ * Custom remote-caret labels over the packaged compound. The engine keeps positioning and
+ * colouring each label; the child here owns its content and runs with every hook working.
+ */
+export function CollaborationCaretLabelDemo({
+  session,
+}: {
+  readonly session: CollaborationSession | null;
+}) {
+  return (
+    <DocxEditorCollaboration.CaretLabels session={session}>
+      {({ selection }) => <RemoteCaretLabel name={selection.name} />}
+    </DocxEditorCollaboration.CaretLabels>
   );
 }
 
@@ -299,7 +314,13 @@ export function CollaborationControl({
         aria-expanded={open}
         aria-busy={busy || pending}
       >
-        {session ? <ParticipantStack participants={participants} /> : <CollaborationIcon />}
+        {session ? (
+          // The packaged avatar stack: colours resolve through the review author roster,
+          // so a collaborator's disc matches their tracked changes with no wiring here.
+          <DocxEditorCollaboration.Avatars session={session} max={3} />
+        ) : (
+          <CollaborationIcon />
+        )}
         {/* A diverged replica still has peers in its participant list, so a headcount here
             reads as healthy while this copy's edits reach nobody. The trigger is the only
             collaboration state on screen once the dialog closes, so it has to carry the

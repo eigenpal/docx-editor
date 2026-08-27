@@ -1043,6 +1043,7 @@ export interface DocxEditorInstance extends Editor {
     readonly mountGeneration: number;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setRevisionStyles(styles: RevisionStyles): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;

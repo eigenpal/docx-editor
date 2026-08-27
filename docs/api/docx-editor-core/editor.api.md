@@ -815,6 +815,7 @@ export interface DocxEditorInstance extends Editor {
     readonly mountGeneration: number;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setRevisionStyles(styles: RevisionStyles): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;
@@ -1476,6 +1477,7 @@ export interface PaginatedSurface {
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
     }): void;
+    setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setRevisionStyles(colors: RevisionStyles | undefined): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
@@ -1622,6 +1624,19 @@ export const PX_PER_CM: number;
 
 // @public
 export const PX_PER_INCH = 96;
+
+// @public
+export interface RemoteCaretLabelAnchor {
+    // (undocumented)
+    readonly element: HTMLElement;
+    // (undocumented)
+    readonly selection: CollaborationRemoteSelection;
+}
+
+// @public
+export interface RemoteCaretLabelHost {
+    publish(anchors: readonly RemoteCaretLabelAnchor[]): void;
+}
 
 // @public
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;

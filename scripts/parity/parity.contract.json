@@ -54,15 +54,7 @@
   },
   "ref": {
     "comment": "Greenfield DocxEditorRef is the SAME interface on both adapters.",
-    "paired": [
-      "exec",
-      "focus",
-      "getDocumentHandle",
-      "getEditor",
-      "load",
-      "save",
-      "snapshot"
-    ],
+    "paired": ["exec", "focus", "getDocumentHandle", "getEditor", "load", "save", "snapshot"],
     "pairedViaInheritance": {},
     "vueExclusive": {}
   },
@@ -96,7 +88,12 @@
     },
     "exports": {
       "paired": [
+        "CollaborationAvatarProps",
+        "CollaborationAvatarRenderProps",
+        "CollaborationAvatarsProps",
         "CollaborationBootstrap",
+        "CollaborationCaretLabelRenderProps",
+        "CollaborationCaretLabelsProps",
         "CollaborationFailure",
         "CollaborationFailureCode",
         "CollaborationIdentity",
@@ -114,6 +111,8 @@
         "CustomNodeChromeProps",
         "CustomNodeContextMenu",
         "CustomNodeContextMenuProps",
+        "DocxEditorCollaboration",
+        "DocxEditorCollaborationNamespace",
         "DocxEditorReview",
         "DocxEditorReviewNamespace",
         "ProLicenseOptions",
@@ -173,8 +172,18 @@
       "deferredInVue": {},
       "vueExclusive": {}
     },
+    "collaborationParts": {
+      "paired": ["Avatar", "Avatars", "CaretLabels"],
+      "deferredInVue": {},
+      "vueExclusive": {}
+    },
     "memberCheckedInterfaces": [
+      "CollaborationAvatarProps",
+      "CollaborationAvatarRenderProps",
+      "CollaborationAvatarsProps",
       "CollaborationBootstrap",
+      "CollaborationCaretLabelRenderProps",
+      "CollaborationCaretLabelsProps",
       "CollaborationFailure",
       "CollaborationIdentity",
       "CollaborationIdentityUpdate",

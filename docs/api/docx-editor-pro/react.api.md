@@ -15,6 +15,32 @@ import * as Y from 'yjs';
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
 
 // @public
+export interface CollaborationAvatarProps {
+    readonly children?: ReactNode;
+    // (undocumented)
+    readonly className?: string;
+    // (undocumented)
+    readonly participant: CollaborationParticipant;
+}
+
+// @public
+export interface CollaborationAvatarRenderProps {
+    readonly color: string;
+    readonly initials: string;
+    // (undocumented)
+    readonly participant: CollaborationParticipant;
+}
+
+// @public
+export interface CollaborationAvatarsProps {
+    readonly children?: (props: CollaborationAvatarRenderProps) => ReactNode;
+    // (undocumented)
+    readonly className?: string;
+    readonly max?: number;
+    readonly session: CollaborationSession | null;
+}
+
+// @public
 export type CollaborationBootstrap = {
     readonly document: Uint8Array;
     readonly kind: 'create';
@@ -30,6 +56,19 @@ export type CollaborationBootstrap = {
     readonly signal?: AbortSignal;
     readonly timeoutMs?: number;
 };
+
+// @public
+export interface CollaborationCaretLabelRenderProps {
+    readonly color: string;
+    readonly participant: CollaborationParticipant | null;
+    readonly selection: CollaborationRemoteSelection;
+}
+
+// @public
+export interface CollaborationCaretLabelsProps {
+    readonly children?: (props: CollaborationCaretLabelRenderProps) => ReactNode;
+    readonly session: CollaborationSession | null;
+}
 
 // @public
 export interface CollaborationFailure {
@@ -192,6 +231,16 @@ export interface CustomNodeContextMenuProps {
     readonly onEditNode?: (node: ActivatedCustomNode, definition: CustomNodeDefinition) => void;
     readonly onRemoveRefused?: (node: ActivatedCustomNode, reason: string) => void;
     readonly remove?: boolean;
+}
+
+// @public
+export const DocxEditorCollaboration: DocxEditorCollaborationNamespace;
+
+// @public
+export interface DocxEditorCollaborationNamespace {
+    readonly Avatar: typeof CollaborationAvatar;
+    readonly Avatars: typeof CollaborationAvatars;
+    readonly CaretLabels: typeof CollaborationCaretLabels;
 }
 
 // @public

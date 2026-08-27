@@ -1,0 +1,391 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/pro/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
+// The React collaboration presence compound: caret labels portal host content into the
+// engine's anchors WITH adapter context working inside, and the avatar stack resolves its
+// colours through the same review roster the painted presence uses.
+
+import { GlobalRegistrator } from '@happy-dom/global-registrator';
+if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+import { afterEach, describe, expect, test } from 'bun:test';
+import { act, cleanup, render } from '@testing-library/react';
+import { zipSync, strToU8 } from 'fflate';
+import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import type {
+  CollaborationParticipant,
+  CollaborationRemoteSelection,
+  EditorCollaborationSession,
+} from '@docx-editor.dev/core/collaboration';
+import {
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorViewport,
+  useDocxEditor,
+  useEditorState,
+} from '@docx-editor.dev/react';
+import { DocxEditorCollaboration } from '../react/index.ts';
+import type { CollaborationSession } from '../collaboration/session.ts';
+import { collaborationModule } from '../index.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+
+function docx(body: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+  });
+}
+
+const INS =
+  '<w:p><w:ins w:id="1" w:author="Reviewer One" w:date="2024-01-01T00:00:00Z">' +
+  '<w:r><w:t>tracked</w:t></w:r></w:ins></w:p>';
+const PLAIN = '<w:p><w:r><w:t>plain paragraph</w:t></w:r></w:p>';
+
+/** A controllable session: the engine attaches it, the test drives presence and selections. */
+function stubSession(): EditorCollaborationSession &
+  CollaborationSession & {
+    setRemotes(next: readonly CollaborationRemoteSelection[]): void;
+    setParticipants(next: readonly CollaborationParticipant[]): void;
+    notify(): void;
+  } {
+  let remotes: readonly CollaborationRemoteSelection[] = [];
+  let roster: readonly CollaborationParticipant[] = [];
+  const selectionListeners = new Set<
+    (selections: readonly CollaborationRemoteSelection[]) => void
+  >();
+  const participantListeners = new Set<
+    (participants: readonly CollaborationParticipant[]) => void
+  >();
+  return {
+    documentId: 'presence-ui-room',
+    sessionId: 'presence-ui-session',
+    identity: { actorId: 'local', name: 'Local' },
+    status: () => 'ready',
+    statusSnapshot: () =>
+      Object.freeze({ status: 'ready' as const, reason: undefined, lastFailure: undefined }),
+    subscribeStatus: () => () => {},
+    attach: () => () => {},
+    gateOperations: () => null,
+    canUndo: () => false,
+    canRedo: () => false,
+    undo: () => false,
+    redo: () => false,
+    setLocalSelection: () => {},
+    participants: () => Object.freeze([...roster]),
+    subscribeParticipants: (listener) => {
+      participantListeners.add(listener);
+      return () => participantListeners.delete(listener);
+    },
+    remoteSelections: () => remotes,
+    subscribeRemoteSelections: (listener) => {
+      selectionListeners.add(listener);
+      return () => selectionListeners.delete(listener);
+    },
+    flushPendingJournals: () => {},
+    destroy: () => {},
+    setRemotes(next) {
+      remotes = next;
+    },
+    setParticipants(next) {
+      roster = next;
+    },
+    notify() {
+      for (const listener of [...selectionListeners]) listener(remotes);
+      for (const listener of [...participantListeners]) listener(Object.freeze([...roster]));
+    },
+  };
+}
+
+function caretOf(
+  actorId: string,
+  name: string,
+  nodeId: string,
+  color?: string
+): CollaborationRemoteSelection {
+  return {
+    actorId,
+    name,
+    ...(color ? { color } : {}),
+    anchor: { paragraphId: 'AAAAAAAA', nodeId, offset: 0 },
+    head: { paragraphId: 'AAAAAAAA', nodeId, offset: 0 },
+  };
+}
+
+function participantOf(
+  actorId: string,
+  name: string,
+  options: { color?: string; isLocal?: boolean } = {}
+): CollaborationParticipant {
+  return {
+    actorId,
+    name,
+    ...(options.color ? { color: options.color } : {}),
+    role: 'human',
+    isLocal: options.isLocal ?? false,
+  };
+}
+
+afterEach(() => {
+  cleanup();
+});
+
+async function mountEditor(body: string, session: ReturnType<typeof stubSession>, ui: unknown) {
+  let instance: DocxEditorInstance | null = null;
+  const view = render(
+    <DocxEditorRoot
+      document={docx(body)}
+      modules={[collaborationModule({ session })]}
+      onReady={(editor) => {
+        instance = editor as DocxEditorInstance;
+      }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+      {ui as React.ReactNode}
+    </DocxEditorRoot>
+  );
+  await act(async () => {});
+  return { view, editor: () => instance! };
+}
+
+describe('DocxEditorCollaboration.CaretLabels', () => {
+  test('renders the host component into the engine label with adapter context working', async () => {
+    const session = stubSession();
+    // The design-partner requirement: the label's renderer reads the OPENED DOCUMENT
+    // through the ordinary adapter hooks, not only the collaborator handed to it.
+    function LabelProbe({ name }: { name: string }) {
+      const editor = useDocxEditor();
+      const pageTotal = useEditorState((state) => state.page.total);
+      return (
+        <span data-testid="label-probe">{`${name}|pages:${pageTotal}|editor:${editor ? 'yes' : 'no'}`}</span>
+      );
+    }
+    const { view, editor } = await mountEditor(
+      PLAIN,
+      session,
+      <DocxEditorCollaboration.CaretLabels session={session}>
+        {({ selection }) => <LabelProbe name={selection.name} />}
+      </DocxEditorCollaboration.CaretLabels>
+    );
+    const ids = editor().surface!.session.paragraphIds();
+    await act(async () => {
+      session.setRemotes([caretOf('bob', 'Bob', ids[0]!)]);
+      session.notify();
+    });
+    const label = view.container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    expect(label).toBeTruthy();
+    expect(label!.getAttribute('data-docx-remote-actor')).toBe('bob');
+    const probe = label!.querySelector<HTMLElement>('[data-testid="label-probe"]');
+    expect(probe).toBeTruthy();
+    expect(probe!.textContent).toBe('Bob|pages:1|editor:yes');
+  });
+
+  test('mounted bare it renders the collaborator name, matching the engine default', async () => {
+    const session = stubSession();
+    const { view, editor } = await mountEditor(
+      PLAIN,
+      session,
+      <DocxEditorCollaboration.CaretLabels session={session} />
+    );
+    const ids = editor().surface!.session.paragraphIds();
+    await act(async () => {
+      session.setRemotes([caretOf('bob', 'Bob', ids[0]!)]);
+      session.notify();
+    });
+    const label = view.container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    expect(label!.textContent).toBe('Bob');
+  });
+
+  test('unmounting restores the engine default name labels', async () => {
+    const session = stubSession();
+    let instance: DocxEditorInstance | null = null;
+    function Harness({ withLabels }: { withLabels: boolean }) {
+      return (
+        <DocxEditorRoot
+          document={docx(PLAIN)}
+          modules={[collaborationModule({ session })]}
+          onReady={(editor) => {
+            instance = editor as DocxEditorInstance;
+          }}
+        >
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+          {withLabels ? (
+            <DocxEditorCollaboration.CaretLabels session={session}>
+              {({ selection }) => <em>{selection.name.toUpperCase()}</em>}
+            </DocxEditorCollaboration.CaretLabels>
+          ) : null}
+        </DocxEditorRoot>
+      );
+    }
+    const view = render(<Harness withLabels />);
+    await act(async () => {});
+    const ids = instance!.surface!.session.paragraphIds();
+    await act(async () => {
+      session.setRemotes([caretOf('bob', 'Bob', ids[0]!)]);
+      session.notify();
+    });
+    expect(view.container.querySelector('.docx-remote-caret-label')!.textContent).toBe('BOB');
+    await act(async () => {
+      view.rerender(<Harness withLabels={false} />);
+    });
+    const restored = view.container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    expect(restored).toBeTruthy();
+    expect(restored!.textContent).toBe('Bob');
+    expect(restored!.hasAttribute('data-docx-remote-actor')).toBe(false);
+  });
+
+  test('the render-prop colour is the painted label colour for a roster author', async () => {
+    const session = stubSession();
+    const seenColors: string[] = [];
+    const { view, editor } = await mountEditor(
+      INS + PLAIN,
+      session,
+      <DocxEditorCollaboration.CaretLabels session={session}>
+        {({ selection, color }) => {
+          seenColors.push(color);
+          return <span>{selection.name}</span>;
+        }}
+      </DocxEditorCollaboration.CaretLabels>
+    );
+    const ids = editor().surface!.session.paragraphIds();
+    await act(async () => {
+      // "Reviewer One" authored the tracked insertion, publishes no colour: presence takes
+      // the SAME review-roster slot the review chrome draws them in.
+      session.setRemotes([caretOf('a1', 'Reviewer One', ids.at(-1)!)]);
+      session.notify();
+    });
+    const label = view.container.querySelector<HTMLElement>('.docx-remote-caret-label');
+    const painted = label!.style.getPropertyValue('--doc-remote-color');
+    expect(painted).toBe('var(--doc-review-author-0)');
+    expect(seenColors.at(-1)).toBe(painted);
+    const rosterInfo = editor()
+      .getReviewAuthors()
+      .find((info) => info.author === 'Reviewer One');
+    expect(rosterInfo?.color).toBe(painted);
+  });
+});
+
+describe('DocxEditorCollaboration.Avatars', () => {
+  test('sorts local first then by name, shows initials, and marks the parts', async () => {
+    const session = stubSession();
+    session.setParticipants([
+      participantOf('c', 'Zoe Quinn'),
+      participantOf('b', 'Ada Lovelace', { color: '#aabbcc' }),
+      participantOf('a', 'Mina Murray', { isLocal: true }),
+    ]);
+    const { view } = await mountEditor(
+      PLAIN,
+      session,
+      <DocxEditorCollaboration.Avatars session={session} />
+    );
+    const stack = view.container.querySelector<HTMLElement>('[data-collaboration-avatars]');
+    expect(stack).toBeTruthy();
+    expect(stack!.getAttribute('aria-label')).toBe('People in this document');
+    const avatars = [...stack!.querySelectorAll<HTMLElement>('[data-collaboration-avatar]')];
+    expect(avatars.map((avatar) => avatar.title)).toEqual([
+      'Mina Murray',
+      'Ada Lovelace',
+      'Zoe Quinn',
+    ]);
+    expect(avatars.map((avatar) => avatar.textContent)).toEqual(['MM', 'AL', 'ZQ']);
+    expect(avatars[0]!.hasAttribute('data-local')).toBe(true);
+    expect(avatars[1]!.hasAttribute('data-local')).toBe(false);
+    // A published colour wins; it carries no ramp slot.
+    expect(avatars[1]!.style.getPropertyValue('--doc-collaboration-accent')).toBe('#aabbcc');
+    expect(avatars[1]!.hasAttribute('data-collaboration-author-slot')).toBe(false);
+    expect(avatars[0]!.hasAttribute('data-collaboration-author-slot')).toBe(true);
+    expect(avatars[0]!.getAttribute('aria-label')).toBe('Mina Murray');
+  });
+
+  test('max collapses the overflow into a "+N" chip', async () => {
+    const session = stubSession();
+    session.setParticipants([
+      participantOf('a', 'Ada', { isLocal: true }),
+      participantOf('b', 'Bob'),
+      participantOf('c', 'Cleo'),
+      participantOf('d', 'Dora'),
+    ]);
+    const { view } = await mountEditor(
+      PLAIN,
+      session,
+      <DocxEditorCollaboration.Avatars session={session} max={2} />
+    );
+    const avatars = [
+      ...view.container.querySelectorAll<HTMLElement>('[data-collaboration-avatar]'),
+    ];
+    expect(avatars).toHaveLength(3);
+    const chip = avatars.at(-1)!;
+    expect(chip.hasAttribute('data-overflow')).toBe(true);
+    expect(chip.textContent).toBe('+2');
+    expect(chip.getAttribute('title')).toBe('2 more people');
+  });
+
+  test('a colourless roster author takes the review accent; the render prop matches', async () => {
+    const session = stubSession();
+    session.setParticipants([
+      participantOf('local', 'Someone Else', { isLocal: true, color: '#112233' }),
+      participantOf('a1', 'Reviewer One'),
+    ]);
+    const seen: { name: string; color: string; initials: string }[] = [];
+    const { view, editor } = await mountEditor(
+      INS + PLAIN,
+      session,
+      <>
+        <DocxEditorCollaboration.Avatars session={session} />
+        <DocxEditorCollaboration.Avatars session={session}>
+          {({ participant, color, initials }) => {
+            seen.push({ name: participant.name, color, initials });
+            return <b data-testid="custom-avatar">{initials}</b>;
+          }}
+        </DocxEditorCollaboration.Avatars>
+      </>
+    );
+    const rosterInfo = editor()
+      .getReviewAuthors()
+      .find((info) => info.author === 'Reviewer One');
+    expect(rosterInfo).toBeTruthy();
+    const reviewer = [
+      ...view.container.querySelectorAll<HTMLElement>('[data-collaboration-avatar]'),
+    ].find((avatar) => avatar.title === 'Reviewer One');
+    expect(reviewer!.style.getPropertyValue('--doc-collaboration-accent')).toBe(rosterInfo!.color);
+    expect(reviewer!.getAttribute('data-collaboration-author-slot')).toBe(
+      String(rosterInfo!.slot % 8)
+    );
+    // The render-prop stack resolved the SAME colours as the packaged one.
+    const custom = seen.find((entry) => entry.name === 'Reviewer One');
+    expect(custom?.color).toBe(rosterInfo!.color);
+    expect(custom?.initials).toBe('RO');
+    expect(view.container.querySelectorAll('[data-testid="custom-avatar"]')).toHaveLength(2);
+  });
+
+  test('renders nothing without participants', async () => {
+    const session = stubSession();
+    const { view } = await mountEditor(
+      PLAIN,
+      session,
+      <DocxEditorCollaboration.Avatars session={session} />
+    );
+    expect(view.container.querySelector('[data-collaboration-avatars]')).toBeNull();
+  });
+});

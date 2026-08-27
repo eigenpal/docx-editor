@@ -134,6 +134,45 @@ The default Pro entry re-exports `collaborationModule` and does not import a net
 
 When you own the Yjs resources yourself, `useDocumentCollaboration` from the same entries gives you the identical `connect`/`leave` lifecycle over `createDocumentCollaboration`, with no WebRTC import.
 
+## Presence UI
+
+`DocxEditorCollaboration` is the packaged presence chrome. It lives on `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`, and its parts mount anywhere inside the editor provider tree.
+
+`DocxEditorCollaboration.Avatars` renders everyone in the room as an initials stack, the local person first:
+
+```tsx
+<DocxEditorCollaboration.Avatars session={session} max={4} />
+```
+
+Avatar colors resolve through the review author roster, so a collaborator's avatar automatically matches the color of their tracked changes and comments. `max` collapses the overflow into a `+N` chip, and `DocxEditorCollaboration.Avatar` renders one participant when you arrange your own stack.
+
+`DocxEditorCollaboration.CaretLabels` replaces the content of each remote caret label with your own component. The engine keeps positioning and coloring the label; your renderer mounts in the normal adapter tree, so every hook works inside it — `useDocxEditor`, `useEditorState`, and the review hooks all see the opened document, not only the collaborator:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditorCollaboration.CaretLabels session={session}>
+  {({ selection, participant, color }) => <MyLabel name={selection.name} color={color} />}
+</DocxEditorCollaboration.CaretLabels>
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorCollaboration.CaretLabels :session="session" v-slot="{ selection, color }">
+  <MyLabel :name="selection.name" :color="color" />
+</DocxEditorCollaboration.CaretLabels>
+```
+
+</Framework>
+</FrameworkTabs>
+
+In Vue the renderer is the default scoped slot with the same `{ selection, participant, color }` shape. Without a renderer, the label shows the collaborator's name, which is the engine default.
+
+For CSS-only styling, the stable surface is the `docx-remote-caret-label` class on each label, the `--doc-remote-color` custom property that carries its resolved accent, and the `data-docx-remote-actor` attribute that names the actor while a label host is registered.
+
 ## Edit offline
 
 Pass `offlineEditing: true` in the `room` or `connect` options to keep editing through a transport drop. The session then admits edits while the status is `disconnected`, and the buffered updates merge on reconnect like any concurrent edit. Show the status in your interface when you enable this, so people know when their edits have not reached the room yet. The `error` status stays terminal either way. Every room factory and hook accepts the option.
