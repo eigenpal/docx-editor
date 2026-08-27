@@ -51,6 +51,9 @@ const ACCELERATOR = /Ctrl(?=\s*\+)/;
  * that proves a word boundary is not enough on its own — `\b` treats the dotless `ı` as a
  * non-word character, so `/\bAlt\b/` matches inside "Altı çizili" ("underlined").
  */
+// The GLYPH for Command and the WORD for Option, separators kept, is not a slip: it is what
+// Word for the web prints in this exact tooltip ("⌘+Option+C"), and matching the product a
+// reader has the other tab open on beats an internally tidier "⌘⌥C" they then have to map.
 const APPLE_MODIFIERS: readonly (readonly [RegExp, string])[] = [
   [/Ctrl(?=\s*\+)/g, '⌘'],
   [/Alt(?=\s*\+)/g, 'Option'],

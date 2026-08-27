@@ -305,6 +305,22 @@ describe('painting', () => {
     });
   });
 
+  test('a range that ends at the START of a paragraph leaves that paragraph alone', () => {
+    withEditor(
+      STYLED + PLAIN + p(textRun('third'), '<w:pPr><w:jc w:val="right"/></w:pPr>'),
+      (editor) => {
+        select(editor, [0, 0], [0, 6]);
+        editor.exec({ type: 'copyFormatting' });
+        // Dragging from the middle of one paragraph to the very START of the next selects no
+        // character of the next. The paragraph write REPLACES, so reaching it would take its
+        // style, indents, numbering and spacing with it.
+        select(editor, [1, 2], [2, 0]);
+        editor.exec({ type: 'pasteFormatting' });
+        expect(paragraphProperties(editor, 2)).toEqual(['jc=right']);
+      }
+    );
+  });
+
   test('the paragraph write replaces rather than merges, so the source is what survives', () => {
     withEditor(PLAIN + STYLED, (editor) => {
       select(editor, [0, 0], [0, 5]);
@@ -514,6 +530,22 @@ describe('the control', () => {
     });
   });
 
+  test('a double press that finds nothing to capture leaves the control unarmed', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      runToolbarCommand(editor, 'format.painter');
+      // The capture reads the LAYOUT, so a selection it has not published answers nothing.
+      editor.surface!.setSelection({
+        anchor: { paragraphId: 'no-such-paragraph', offset: 0 },
+        head: { paragraphId: 'no-such-paragraph', offset: 0 },
+      });
+      expect(runToolbarCommand(editor, 'format.painter')).toMatchObject({ ok: false });
+      // Reporting a refusal while the button still renders pressed is the disagreement the
+      // enabled-state rule exists to prevent.
+      expect(editor.surface!.formatPainter.state().mode).toBe('off');
+    });
+  });
+
   test('standing down clears the double-press window, so the next press arms once', () => {
     withEditor(STYLED + PLAIN, (editor) => {
       select(editor, [0, 0], [0, 6]);
@@ -592,6 +624,22 @@ describe('the keyboard', () => {
       select(editor, [0, 0], [0, 6]);
       onKeyDown(chord('c', '', { ctrlKey: true, altKey: true }));
       expect(editor.surface!.formatPainter.state().level).toBe('paragraph');
+    });
+  });
+
+  test('Ctrl+Alt still reaches a chord the AltGr layout composes nothing for', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      const onKeyDown = createKeyDownHandler(editor.surface!);
+      select(editor, [0, 0], [0, 6]);
+      // `AltGraph` reports the MODIFIER, not whether this key composes with it. Polish maps
+      // AltGr over a, c, e, l, n, o, s, x and z — so `v` still produces `v`, and refusing on
+      // the modifier alone would have taken these chords down there for nothing.
+      const event = chord('v', 'KeyV', { ctrlKey: true, altKey: true }, ['AltGraph']);
+      editor.exec({ type: 'copyFormatting' });
+      select(editor, [1, 0], [1, 5]);
+      onKeyDown(event);
+      expect(event.defaultPrevented).toBe(true);
+      expect(runProperties(editor, 1)).toContain('sz=48');
     });
   });
 

@@ -22,7 +22,11 @@ import {
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
-import { selectionRunStyle, type SurfaceProperty } from './surface-formatting.ts';
+import {
+  paragraphsInRange,
+  selectionRunStyle,
+  type SurfaceProperty,
+} from './surface-formatting.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import type {
   FormatPainterMode,
@@ -161,17 +165,6 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
     });
   }
   return properties;
-}
-
-/** Every paragraph a range touches, in document order. */
-function paragraphsInRange(
-  order: readonly string[],
-  range: { from: SemanticPosition; to: SemanticPosition }
-): readonly string[] {
-  const firstIndex = order.indexOf(range.from.paragraphId);
-  const lastIndex = order.indexOf(range.to.paragraphId);
-  if (firstIndex === -1 || lastIndex === -1) return [];
-  return order.slice(firstIndex, lastIndex + 1);
 }
 
 /** The painter, plus the one hook the composition root drives from a settled gesture. */
@@ -429,7 +422,13 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       // nothing — the selection has not moved since the press that armed it — and it keeps
       // the armed and the locked path telling one story.
       if (previous === 'once' && doublePress) {
-        if (!captureNow()) return refuse();
+        // Stood down with the refusal, so the control and the answer agree: reporting a
+        // refusal while the button still renders pressed and the pages keep the paint cursor
+        // is the disagreement the enabled-state rule exists to prevent.
+        if (!captureNow()) {
+          standDown();
+          return refuse();
+        }
         mode = 'locked';
         deps.publish();
         return true;

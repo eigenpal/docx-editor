@@ -53,24 +53,31 @@ const FORMATTING: Record<string, { localName: string; attributes?: Record<string
 
 /**
  * Whether this keystroke is one of the Alt-held ACCELERATORS, rather than a character being
- * typed with AltGr.
+ * composed with AltGr.
  *
- * The two are the same bits on Windows and Linux: AltGr sets `ctrlKey` AND `altKey`, so
- * every `Ctrl+Alt+<letter>` binding also sits on top of a character somebody's layout types
- * — AltGr+C is `ć` on Polish, AltGr+D is `đ` on Croatian. `getModifierState('AltGraph')` is
- * how the browser tells them apart, and without it these bindings swallowed those characters
- * and typed nothing.
+ * The two are the same bits on Windows and Linux: AltGr sets `ctrlKey` AND `altKey`, so every
+ * `Ctrl+Alt+<letter>` binding also sits on top of a character somebody's layout types — AltGr+C
+ * is `ć` on Polish, AltGr+D is `đ` on Croatian. Swallowing those typed nothing at all.
  *
- * The macOS half never goes through AltGraph at all: the chord there is Cmd+Option, and
- * Command is not a modifier any layout composes characters with.
+ * `getModifierState('AltGraph')` is not the whole answer on its own. It reports the MODIFIER,
+ * not whether this key composes anything with it, and it is true for every Ctrl+Alt press on a
+ * layout that has an AltGr level — so refusing on it alone would have taken the long-shipped
+ * `Ctrl+Alt+F` and `Ctrl+Alt+D` note chords down on Polish and Croatian, where those two keys
+ * compose nothing. What settles it is whether a character WAS composed: the produced `key`
+ * differs from the letter on the keycap exactly when the layout used the AltGr level.
+ *
+ * The macOS half never reaches any of that: the chord there is Cmd+Option, and Command is not
+ * a modifier a layout composes with — Option alone is, which is why `event.key` there is `ç`
+ * for the very chord we want and cannot be compared.
  */
-function isAltAccelerator(event: KeyboardEvent): boolean {
+function isAltAccelerator(event: KeyboardEvent, letter: string): boolean {
   if (!event.altKey) return false;
   if (event.metaKey) return true;
   if (!event.ctrlKey) return false;
   // Optional call: a synthesised event in a test environment may not implement it, and
   // "no AltGraph" is the honest default for a keystroke that cannot say.
-  return !(event.getModifierState?.('AltGraph') ?? false);
+  if (!(event.getModifierState?.('AltGraph') ?? false)) return true;
+  return event.key.toLowerCase() === letter;
 }
 
 /**
@@ -139,8 +146,9 @@ export function createKeyDownHandler(
       return;
     }
     // Word: Ctrl/Cmd+Alt+F footnote, Ctrl/Cmd+Alt+D endnote, and the Format Painter pair.
-    if (isAltAccelerator(event) && !event.shiftKey) {
-      const key = letterOf(event);
+    const altLetter = letterOf(event);
+    if (isAltAccelerator(event, altLetter) && !event.shiftKey) {
+      const key = altLetter;
       if (key === 'f') {
         event.preventDefault();
         surface.insertNote('footnote');

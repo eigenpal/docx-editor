@@ -21,6 +21,7 @@ import {
   isRunPropertyActive,
   mergedProperties,
   paragraphMarkOps,
+  paragraphsInRange,
   pendingPropertyState,
   runPropertyEdits,
   withPendingFormatting,
@@ -550,14 +551,3 @@ const OFF_VALUES: Readonly<Record<string, string>> = {
   u: 'none',
   vertAlign: 'baseline',
 };
-
-/** Every paragraph a range touches, in document order — the span paragraph-level writes cover. */
-function paragraphsInRange(
-  order: readonly string[],
-  range: { from: SemanticPosition; to: SemanticPosition }
-): readonly string[] {
-  const firstIndex = order.indexOf(range.from.paragraphId);
-  const lastIndex = order.indexOf(range.to.paragraphId);
-  if (firstIndex === -1 || lastIndex === -1) return [];
-  return order.slice(firstIndex, lastIndex + 1);
-}
