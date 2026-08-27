@@ -42,7 +42,7 @@ function isApplePlatform(): boolean {
 const ACCELERATOR = /Ctrl(?=\s*\+)/;
 
 /**
- * Word for the web's own Mac spelling: `Ctrl` is ⌘, `Alt` is Option.
+ * The Mac spelling: `Ctrl` is ⌘, `Alt` is Option.
  *
  * Each pattern requires the modifier to be JOINED TO A CHORD by `+`, which is what makes
  * this safe to run over an arbitrary label. A bare word is left alone: English
@@ -51,9 +51,10 @@ const ACCELERATOR = /Ctrl(?=\s*\+)/;
  * that proves a word boundary is not enough on its own — `\b` treats the dotless `ı` as a
  * non-word character, so `/\bAlt\b/` matches inside "Altı çizili" ("underlined").
  */
-// The GLYPH for Command and the WORD for Option, separators kept, is not a slip: it is what
-// Word for the web prints in this exact tooltip ("⌘+Option+C"), and matching the product a
-// reader has the other tab open on beats an internally tidier "⌘⌥C" they then have to map.
+// The GLYPH for Command and the WORD for Option, separators kept, is not a slip. ⌘ is on the
+// keycap and reads instantly; ⌥ is on the same keycap as the word Option and reads as neither
+// unless you already know it. A tidier "⌘⌥C" is a string the reader has to decode, and this
+// is an `aria-label` as well as a tooltip.
 const APPLE_MODIFIERS: readonly (readonly [RegExp, string])[] = [
   [/Ctrl(?=\s*\+)/g, '⌘'],
   [/Alt(?=\s*\+)/g, 'Option'],

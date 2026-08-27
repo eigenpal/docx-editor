@@ -162,21 +162,21 @@ export function createKeyDownHandler(
         surface.insertNote('endnote');
         return;
       }
-      // The Format Painter, on the chords Word for the WEB uses rather than the ones Word
-      // for the desktop does.
+      // The Format Painter, on Alt rather than on the desktop word processor's Shift pair.
       //
-      // The desktop pair is Ctrl+Shift+C / Ctrl+Shift+V, and neither is available to a page:
-      // Ctrl+Shift+C opens the browser's element inspector, which `preventDefault` does not
-      // cancel, and Ctrl/Cmd+Shift+V is already paste-without-formatting below — a
-      // browser-native paste chord, and the only one the engine gets a `paste` event for.
-      // Word Online moved the painter to Cmd+Option+C / Cmd+Option+V for exactly these
-      // reasons, and matching it keeps one gesture true across both products.
+      // Ctrl+Shift+C / Ctrl+Shift+V is what a desktop application binds, and neither half is
+      // available to a page: Ctrl+Shift+C opens the browser's element inspector, which
+      // `preventDefault` does not cancel, and Ctrl/Cmd+Shift+V is already
+      // paste-without-formatting below — a browser-native paste chord, and the only one the
+      // engine ever gets a `paste` event for. That leaves the Alt pair, which is also where
+      // the note chords above live, so one modifier covers every accelerator this keymap
+      // adds beyond the platform's own.
       //
-      // KNOWN LIMIT, and Word Online's too: on macOS the browsers bind Cmd+Option+C to the
-      // element inspector, and a browser accelerator cannot be cancelled from a page. The
-      // capture below still runs, and DevTools opens over it. Both halves stay reachable
-      // from the toolbar button and the right-click menu, which is what the guide points a
-      // Mac reader at; the paste half (Cmd+Option+V) is unclaimed and works.
+      // KNOWN LIMIT: on macOS the browsers bind Cmd+Option+C to the element inspector, and a
+      // browser accelerator cannot be cancelled from a page. The capture below still runs,
+      // and DevTools opens over it. Both halves stay reachable from the toolbar button and
+      // the right-click menu, which is what the guide points a Mac reader at; the paste half
+      // (Cmd+Option+V) is unclaimed and works.
       if (key === 'c') {
         event.preventDefault();
         surface.formatPainter.capture();
