@@ -36,7 +36,7 @@ import {
   validateRoomId,
 } from '@docx-editor.dev/pro/collaboration/hocuspocus';
 import { CollaboratorCaret, PersonAvatar } from './CollaboratorCaret';
-import { useColorMode } from './useColorMode';
+import { useColorMode, type ColorMode } from './useColorMode';
 import { actorIdFor, PEOPLE, type Person } from './people';
 
 /**
@@ -215,8 +215,7 @@ function transportState(status: UseCollaborationStatusReturn): {
  * mode you are in and whose action is the mode you are not is the classic reading error, and
  * `aria-pressed` on each half says which one is current without depending on the icon.
  */
-function ThemeSwitch() {
-  const { mode, toggle } = useColorMode();
+function ThemeSwitch({ mode, toggle }: { readonly mode: ColorMode; readonly toggle: () => void }) {
   return (
     <span className="collab-theme" role="group" aria-label="Colour theme">
       {(['light', 'dark'] as const).map((option) => (
@@ -248,11 +247,13 @@ function RoomBar({
   session,
   person,
   roomId,
+  theme,
   onLeave,
 }: {
   readonly session: CollaborationSession | null;
   readonly person: Person;
   readonly roomId: string;
+  readonly theme: { readonly mode: ColorMode; readonly toggle: () => void };
   readonly onLeave: (bytes: Uint8Array) => void;
 }) {
   const editor = useDocxEditor();
@@ -341,7 +342,7 @@ function RoomBar({
         </span>
       ) : null}
 
-      <ThemeSwitch />
+      <ThemeSwitch mode={theme.mode} toggle={theme.toggle} />
 
       {session ? (
         <button
@@ -386,6 +387,9 @@ function failureMessage(failure: CollaborationFailure): {
 }
 
 export function App() {
+  // ABOVE every screen, so a remembered choice applies on the sign-in stage too — not only
+  // once the room bar, and with it the switch, has mounted.
+  const theme = useColorMode();
   const [joined, setJoined] = useState<Joined | null>(null);
   // Set by Leave. It keeps the editor mounted on the saved bytes and stops the hook from
   // reconnecting to the room it was just asked to leave.
@@ -504,6 +508,7 @@ export function App() {
         session={collaboration.session}
         person={joined.person}
         roomId={joined.roomId}
+        theme={theme}
         onLeave={leave}
       />
       <DocxEditor.Toolbar />

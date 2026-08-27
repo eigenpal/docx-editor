@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { applyColorMode, initialColorMode } from './useColorMode';
 import './styles.css';
 
 const host = document.querySelector<HTMLElement>('#root');
@@ -14,6 +15,9 @@ if (!host) throw new Error('missing #root');
 // page, which the engine renders as Word's own dark page rather than a white sheet on a dark
 // desk — and the demo's own frame follows the same switch.
 host.classList.add('docx-editor');
+// BEFORE the first render, and outside React: a remembered dark choice applied from inside a
+// component would land one paint late, and only on the screens that mount the switch.
+applyColorMode(initialColorMode());
 
 createRoot(host).render(
   <StrictMode>
