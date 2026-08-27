@@ -5,15 +5,14 @@
 // per-table allowance the same shape ran 63ms at depth 6, 4.3s at depth 10 and extrapolated
 // past an hour at `MAX_TABLE_NESTING` — from a document of a few kilobytes.
 //
-// The allowance is therefore one pool for the whole pass, inherited by every nested table.
-// This pins that: the pool is what makes the work additive, and the fixture below is small
-// enough to write by hand and deep enough to take minutes without it.
+// So a row probe measures the tables inside it WITHOUT planning them, and the re-entry stops
+// multiplying. This pins that: the fixture below is small enough to write by hand and deep
+// enough to take minutes if a probe ever plans again.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { MAX_TABLE_NESTING } from '../semantic-table.ts';
-import { MAX_VMERGE_PROBE_LAYOUTS } from '../table-vmerge-heights.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -58,10 +57,10 @@ describe('a merge at every level of a nested table', () => {
     expect(elapsedMs).toBeLessThan(2_000);
   });
 
-  test('the ceiling is a pass-wide pool, not a per-table one', () => {
-    // The number itself is not the contract; that it is spent ONCE across the document is.
-    // A per-table allowance would let each of the sixteen levels re-spend the whole thing.
-    expect(MAX_VMERGE_PROBE_LAYOUTS).toBeGreaterThan(0);
+  test('two nests in one document cost the sum of them, not the product', () => {
+    // What bounds the work is that a row PROBE does not plan the tables inside it, so the
+    // re-entry never multiplies. No allowance is spent, and nothing here depends on what a
+    // pass walked first.
     const twice = loadBody(nestedMerges(6) + p('between') + nestedMerges(6));
     const started = Bun.nanoseconds();
     try {

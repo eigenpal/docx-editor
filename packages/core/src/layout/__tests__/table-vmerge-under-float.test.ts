@@ -17,6 +17,7 @@ import {
   squareWrapZone,
   TINY_CONTENT,
 } from './float-over-table-harness.ts';
+import type { PageGeometry } from '../semantic-records.ts';
 import type { ExclusionZone } from '../drawing-exclusion.ts';
 import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts';
 
@@ -64,29 +65,6 @@ function overHeadColumn(top: number, height: number): ReadonlyMap<number, Exclus
           top,
           height,
           left: 0,
-          width: 60,
-        }),
-      ],
-    ],
-  ]);
-}
-
-/**
- * A band over the RIGHT column, which in this fixture is the covered rows' own cells rather
- * than the merged head. A covered row that places taller than its floor pushes the span past
- * the page it was admitted onto, and the head is measured accurately either way — so this is
- * the half of the divergence an accurate head probe does not cover.
- */
-function overCoveredColumn(top: number, height: number): ReadonlyMap<number, ExclusionZone[]> {
-  return new Map([
-    [
-      0,
-      [
-        squareWrapZone({
-          anchorParagraphId: anchorParagraphId(),
-          top,
-          height,
-          left: 120,
           width: 60,
         }),
       ],
@@ -163,21 +141,93 @@ describe('a merged head under a float the plan could not see', () => {
     });
   }
 
-  for (const [top, height] of [
-    [0, 45],
-    [20, 30],
-  ] as const) {
-    test(`a band at y=${top} for ${height}pt over a COVERED row keeps the span on its page`, () => {
-      // The rows a merge covers are measured where they will sit, bands included, for the
-      // same reason the head is: a covered row that places taller than the floor the span
-      // was admitted on takes the span past the bottom of the page it was admitted onto.
-      const layout = layoutUnderFloat(part, overCoveredColumn(top, height));
-      expect(worstOverhangPt(layout)).toBe(0);
-      for (const pageIndex of layout.pages.keys()) {
-        expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(TINY_CONTENT.height + 0.001);
+  // A band over a COVERED row lives in the roomier fixture below, not here: on this page
+  // the covered row holds one short word, so no band can make it wrap and every assertion
+  // about it would pass against a document with no float in it. Two such tests sat here and
+  // reported clean against a defect that was live — the canary is what caught them.
+
+  // The SURPLUS is what the defect lived in — merged content taller than the rows it covers
+  // — so the head has to be long enough for there to be one. Under a one-line head every
+  // arithmetic error below is multiplied by zero.
+  describe('with enough merged content to leave a surplus', () => {
+    const ROOMY: PageGeometry = {
+      width: 300,
+      height: 400,
+      margin: { top: 10, right: 10, bottom: 10, left: 10 },
+    };
+
+    function tallHeadBody(headLines: number): string {
+      const head = Array.from({ length: headLines }, (_, index) => p(`h${index}`)).join('');
+      return (
+        `${p('F0')}<w:tbl>${GRID}` +
+        `<w:tr>${tc(head, RESTART)}${tc(p('s0'))}</w:tr>` +
+        `<w:tr>${tc(p('g'), CONTINUE)}${tc(p('w0 w1 w2 w3 w4 w5 w6 w7'))}</w:tr>` +
+        '</w:tbl>'
+      );
+    }
+
+    for (const headLines of [6, 12]) {
+      for (const [top, height] of [
+        [20, 60],
+        [30, 40],
+      ] as const) {
+        test(`${headLines} lines of head, band y=${top} for ${height}pt over the covered row`, () => {
+          const tall = loadBody(tallHeadBody(headLines));
+          const first = layoutWithoutFloat(tall, ROOMY).pages[0]!.fragments[0]!;
+          if (first.kind !== 'paragraph') throw new Error('expected a leading paragraph');
+          const zones = new Map([
+            [
+              0,
+              [
+                squareWrapZone({
+                  anchorParagraphId: first.paragraphId,
+                  top,
+                  height,
+                  left: 150,
+                  width: 130,
+                  contentWidth: 280,
+                }),
+              ],
+            ],
+          ]);
+          const layout = layoutUnderFloat(tall, zones, ROOMY);
+          // The surplus is measured against rows placed under the band; handing the placer a
+          // floor measured without it let the band absorb the floor instead of adding to it,
+          // and the head then painted up to 47.9pt below the table.
+          expect(worstOverhangPt(layout)).toBeLessThanOrEqual(0);
+          for (const pageIndex of layout.pages.keys()) {
+            expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(
+              ROOMY.height - ROOMY.margin.top - ROOMY.margin.bottom + 0.001
+            );
+          }
+        });
       }
+    }
+
+    test('the band really does reach the covered row', () => {
+      const tall = loadBody(tallHeadBody(12));
+      const first = layoutWithoutFloat(tall, ROOMY).pages[0]!.fragments[0]!;
+      if (first.kind !== 'paragraph') throw new Error('expected a leading paragraph');
+      const zones = new Map([
+        [
+          0,
+          [
+            squareWrapZone({
+              anchorParagraphId: first.paragraphId,
+              top: 20,
+              height: 60,
+              left: 150,
+              width: 130,
+              contentWidth: 280,
+            }),
+          ],
+        ],
+      ]);
+      expect(paintedText(layoutUnderFloat(tall, zones, ROOMY))).not.toBe(
+        paintedText(layoutWithoutFloat(tall, ROOMY))
+      );
     });
-  }
+  });
 
   test('the float changes the layout at all: the fixture cannot go quiet', () => {
     // If a band stopped reaching the table — a geometry change, a filter change — every

@@ -88,7 +88,7 @@ describe('the vMerge plan hands out heights, never positions', () => {
 
   test('every covered row gets a floor, including one that still holds a declined head', () => {
     // Row 0 heads two merges. Column 0 covers rows 0-2, column 1 covers rows 0-1, and the
-    // second is declined because its surplus would land on a row the first already covers.
+    // second is declined for starting in a row that already has one planned.
     // The declined head goes on sizing row 0, so row 0's floor has to include it — measuring
     // row 0 without it judged the row against a height nobody would ever place.
     const rows = [
@@ -138,18 +138,26 @@ describe('the vMerge plan hands out heights, never positions', () => {
     expect(plan.rowOptions(1)!.heightFloorPt).toBe(90 - 12);
   });
 
-  test('probe layouts are capped, and a plan that cannot afford them declines', () => {
-    // Each probe re-enters nested-table layout, so a merge at every level of a nest a file
-    // controls multiplies passes. The cap is a resource bound, and it fails soft.
+  test('nothing here depends on how much of a pass came before it', () => {
+    // There is no probe-layout pool any more. One existed to bound the work a nest could
+    // multiply, and a probe no longer plans at all, so the bound moved to the source. A pool
+    // would have made a table's heights depend on document ORDER — a resumed pass starts at
+    // the first changed block and spends less of it — which is one document laying out two
+    // ways depending on how you opened it.
     const rows = [
       row('r0', [filled('head', 0), filled('side0', 1)]),
       row('r1', [cell('cont', 0, true), filled('side1', 1)]),
     ];
-    const spent = createVMergePlanBudget(1024, 1);
-    const plan = planVMergeRowHeights(rows, probeFrom({ head: 90 }), spent)!;
-    for (const span of plan.spansAt(0)) plan.accept(span);
-    expect(plan.rowOptions(0)).toBeUndefined();
-    expect(spent.layoutsRemaining).toBe(1);
+    const fresh = planVMergeRowHeights(rows, probeFrom({ head: 90 }), createVMergePlanBudget())!;
+    for (const span of fresh.spansAt(0)) fresh.accept(span);
+
+    // The same table planned on a budget most of a long pass has already spent.
+    const spent = createVMergePlanBudget(8);
+    const late = planVMergeRowHeights(rows, probeFrom({ head: 90 }), spent)!;
+    for (const span of late.spansAt(0)) late.accept(span);
+
+    expect(late.rowOptions(0)!.heightFloorPt).toBe(fresh.rowOptions(0)!.heightFloorPt);
+    expect(late.rowOptions(1)!.heightFloorPt).toBe(fresh.rowOptions(1)!.heightFloorPt);
   });
 
   test('a span no row of which can grow is declined rather than handed a short box', () => {

@@ -69,15 +69,17 @@
 //
 // - a span with ANOTHER merge head in a row below its own head row. That head sizes its own
 //   row, and a row whose height this span cannot predict is a row the paginator may move;
-// - a span whose surplus would land in a row an accepted span already covers, which would
-//   change that span's height after it was judged against the page;
-// - a span every row of which is `hRule="exact"` and too short for the merged content. It is
-//   the one span knowably unable to hold its own head, so the head keeps sizing its own row
-//   and the exact height clips it there, which is what Word draws;
 // - a SECOND merge starting in a row that already has one planned. Detaching it empties the
 //   head row of the last thing left in it, so the row collapses and the first span's rows
 //   stop adding up to the height it was sized at — its content then paints below the table.
-//   One merge per head row is planned; the rest size their own row as they did before.
+//   One merge per head row is planned; the rest size their own row as they did before;
+// - a span every row of which is `hRule="exact"` and too short for the merged content. It is
+//   the one span knowably unable to hold its own head, so the head keeps sizing its own row
+//   and the exact height clips it there, which is what Word draws.
+//
+// Those first two together mean accepted spans never overlap, which is why nothing here
+// guards against one span's surplus landing in another's rows: it cannot happen. Anything
+// that relaxes either rule has to put that guard back.
 //
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
@@ -165,40 +167,24 @@ function soloHeadRow(row: SemanticTableRow, cell: SemanticTableCell): SemanticTa
 }
 
 /**
- * Probe layouts one LAYOUT PASS may run, across every table in it at every nesting level.
+ * What the vMerge height plan may spend on ONE layout pass, shared by every table in it.
  *
- * A probe re-enters nested-table layout, and a nested table plans heights of its own, so a
- * merge at each level of a nest multiplies passes rather than adding them: measured at three
- * rows and two merges per level, a per-TABLE allowance ran depth 6 in 63ms and depth 10 in
- * 4.3s, which extrapolates past an hour at `MAX_TABLE_NESTING`. A file controls that nest,
- * so the allowance has to be one pool for the whole pass — a per-table one bounds no
- * document. Exhaustion fails soft: later tables plan no heights and keep the behaviour they
- * had before this module existed.
+ * Cell visits only, and only because resolving a merge chain walks cells. There is no
+ * allowance on probe LAYOUTS, and the reason is worth keeping: a probe re-entering
+ * nested-table layout is what made the work multiply with nesting depth, and a probe no
+ * longer plans at all (`TableFlowDeps.measuringOnly`), so the multiplication is gone at its
+ * source rather than paid for out of a pool.
  *
- * The pool makes a table's plan depend on how many tables the pass walked before it, which
- * is the same trade the `w:vMerge` resolve budget beside it already makes. Deterministic
- * per-table allowances and a bounded document cannot both be had from one counter, and an
- * unbounded document is not on the table.
+ * A pool would also have made the result depend on document ORDER, which an editor cannot
+ * afford: a resumed pass starts at the first changed block and so spends less of the pool
+ * than a cold open, and a table near exhaustion would plan its merges after an edit and not
+ * plan them on reload. That is one document laying out two ways depending on how you
+ * arrived at it, which is worse than the ceiling was worth.
  */
-export const MAX_VMERGE_PROBE_LAYOUTS = 4096;
+export type VMergePlanBudget = TableVMergeResolveBudget;
 
-/**
- * What one layout pass lets every table plan in it spend: cell visits on resolving the merge
- * chains, and probe layouts on measuring rows. Separate from the budget `finalizeTableRows`
- * spends, which would otherwise run out at half the cell count and leave holes in the grid.
- */
-export interface VMergePlanBudget extends TableVMergeResolveBudget {
-  layoutsRemaining: number;
-}
-
-export function createVMergePlanBudget(
-  cells: number = MAX_VMERGE_RESOLVE_CELLS,
-  layouts: number = MAX_VMERGE_PROBE_LAYOUTS
-): VMergePlanBudget {
-  return {
-    cellsRemaining: Math.max(0, cells | 0),
-    layoutsRemaining: Math.max(0, layouts | 0),
-  };
+export function createVMergePlanBudget(cells: number = MAX_VMERGE_RESOLVE_CELLS): VMergePlanBudget {
+  return { cellsRemaining: Math.max(0, cells | 0) };
 }
 
 function collectHeads(
@@ -258,6 +244,8 @@ export function planVMergeRowHeights(
   const basePt = new Map<string, number>();
   const contentPt = new Map<VMergeSpan | string, number>();
   const surplusPt = new Map<number, number>();
+  /** Per row, the floor the span that covers it was admitted on — positioned, not position-free. */
+  const plannedFloorPt = new Map<number, number>();
   const coveredRows = new Set<number>();
   const acceptedSpans = new Set<VMergeSpan>();
   const acceptedHeadIds = new Set<string>();
@@ -339,26 +327,37 @@ export function planVMergeRowHeights(
     return total;
   };
 
+  /**
+   * The same walk, keeping each row's own share.
+   *
+   * The surplus is `head content − what the rows cover`, and both sides of that subtraction
+   * are measured at the y the rows will sit at, bands included. The floor handed to the
+   * placer has to come from the SAME measurement: hand out a position-free base plus a
+   * positioned surplus and a band that makes a row place taller than its position-free probe
+   * absorbs the floor instead of adding to it, so the rows fall short of the head's bound and
+   * the difference paints below the table.
+   */
+  const coveredFloorsOf = (span: VMergeSpan, atYPt?: number): Map<number, number> => {
+    const floors = new Map<number, number>();
+    let total = 0;
+    for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
+      const floor = floorOf(
+        rowIndex,
+        span.headCellId,
+        atYPt === undefined ? undefined : atYPt + total
+      );
+      floors.set(rowIndex, floor);
+      total += floor;
+    }
+    return floors;
+  };
+
   /** Last row of the span Word lets grow: `hRule="exact"` fixes a row at its authored box. */
   const lastGrowableRow = (span: VMergeSpan): number | undefined => {
     for (let rowIndex = span.endRow; rowIndex >= span.headRow; rowIndex -= 1) {
       if (rows[rowIndex]!.height.rule !== 'exact') return rowIndex;
     }
     return undefined;
-  };
-
-  /**
-   * Charge this span's probe layouts once, or refuse it. Each probe re-enters nested-table
-   * layout, so an unbounded plan multiplies passes through a nest a file controls.
-   */
-  const chargedSpans = new Set<VMergeSpan>();
-  const affordable = (span: VMergeSpan): boolean => {
-    if (chargedSpans.has(span)) return true;
-    const needed = span.endRow - span.headRow + 2;
-    if (budget && budget.layoutsRemaining < needed) return false;
-    if (budget) budget.layoutsRemaining -= needed;
-    chargedSpans.add(span);
-    return true;
   };
 
   const spanHeightOf = (span: VMergeSpan, atYPt?: number): number => {
@@ -370,7 +369,6 @@ export function planVMergeRowHeights(
     if (acceptedHeadRows.has(span.headRow) && !acceptedSpans.has(span)) {
       return Number.POSITIVE_INFINITY;
     }
-    if (!affordable(span)) return Number.POSITIVE_INFINITY;
     const covered = coveredPtOf(span, atYPt);
     if (lastGrowableRow(span) === undefined) return covered;
     return Math.max(covered, contentOf(span, atYPt));
@@ -382,8 +380,9 @@ export function planVMergeRowHeights(
     accept: (span, atYPt) => {
       if (acceptedSpans.has(span)) return;
       if (headsBelowHead(span) || acceptedHeadRows.has(span.headRow)) return;
-      if (!affordable(span)) return;
-      const covered = coveredPtOf(span, atYPt);
+      const rowFloors = coveredFloorsOf(span, atYPt);
+      let covered = 0;
+      for (const floor of rowFloors.values()) covered += floor;
       const growable = lastGrowableRow(span);
       const contentHeightPt = contentOf(span, atYPt);
       // Nothing in the span can grow and the content does not fit what the rows are fixed
@@ -397,9 +396,12 @@ export function planVMergeRowHeights(
       acceptedHeadRows.add(span.headRow);
       if (surplus > EPSILON_PT) {
         surplusPt.set(growable!, (surplusPt.get(growable!) ?? 0) + surplus);
+        rowFloors.set(growable!, (rowFloors.get(growable!) ?? 0) + surplus);
       }
-      for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
+      for (const [rowIndex, floor] of rowFloors) {
         coveredRows.add(rowIndex);
+        // What the span was admitted on IS what the placer is told to leave room for.
+        plannedFloorPt.set(rowIndex, Math.max(plannedFloorPt.get(rowIndex) ?? 0, floor));
       }
       // The span's height is NOT stored here. A second head in this same row is decided
       // after this one and detaches too, which empties it out of `baseOf(headRow)` and so
@@ -421,11 +423,12 @@ export function planVMergeRowHeights(
           spanHeightOf(span, admittedAtYPt.get(span))
         );
       }
-      // Always a floor: `baseOf` measures whatever heads stayed in the row, so this is the
-      // whole row's height and never a number the caller has to second-guess.
+      // The floor recorded when the span was admitted, in the same measurement space the
+      // surplus was taken from. `floorOf` is the fallback for a covered row no accepted span
+      // recorded, which only a decline can leave behind.
       return {
         ...(detachedSpanHeightPtByCellId ? { detachedSpanHeightPtByCellId } : {}),
-        heightFloorPt: floorOf(rowIndex),
+        heightFloorPt: plannedFloorPt.get(rowIndex) ?? floorOf(rowIndex),
       };
     },
   };
