@@ -254,6 +254,7 @@ export async function createWebrtcCollaboration(
       connectedProvider.off('status', onStatus);
       handle.destroy();
       connectedProvider.destroy();
+      awareness.destroy();
       ydoc.destroy();
     },
   });

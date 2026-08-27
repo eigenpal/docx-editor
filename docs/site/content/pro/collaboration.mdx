@@ -134,6 +134,10 @@ The default Pro entry re-exports `collaborationModule` and does not import a net
 
 When you own the Yjs resources yourself, `useDocumentCollaboration` from the same entries gives you the identical `connect`/`leave` lifecycle over `createDocumentCollaboration`, with no WebRTC import.
 
+## Edit offline
+
+Pass `offlineEditing: true` in the `room` or `connect` options to keep editing through a transport drop. The session then admits edits while the status is `disconnected`, and the buffered updates merge on reconnect like any concurrent edit. Show the status in your interface when you enable this, so people know when their edits have not reached the room yet. The `error` status stays terminal either way. Every room factory and hook accepts the option.
+
 ## Use your own signaling
 
 `DEMO_SIGNALING_ENDPOINTS` is a public demo signaling service. Production deployments must supply their own signaling and TURN servers.
@@ -147,20 +151,36 @@ For production, pass your own `signaling` URLs to `connect` or to the `room` opt
 The hook lives on its own subpath. Import `@docx-editor.dev/pro/react/hocuspocus`, or `@docx-editor.dev/pro/vue/hocuspocus` for the Vue composable:
 
 ```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
 import { useHocuspocusCollaboration } from '@docx-editor.dev/pro/react/hocuspocus';
 
-const { document, modules, session, pending, error, leave, rejoin } = useHocuspocusCollaboration({
-  room: {
-    url: 'wss://collab.example.test',
-    roomId,
-    token,
-    identity: { actorId: 'alex', name: 'Alex' },
-    bootstrap: { kind: 'create-or-join', document: bytes },
-  },
-});
+export function ServerBackedEditor({
+  roomId,
+  token,
+  bytes,
+}: {
+  roomId: string;
+  token: string;
+  bytes: Uint8Array;
+}) {
+  const { document, modules, session, pending, error } = useHocuspocusCollaboration({
+    room: {
+      url: 'wss://collab.example.test',
+      roomId,
+      token,
+      identity: { actorId: 'alex', name: 'Alex' },
+      bootstrap: { kind: 'create-or-join', document: bytes },
+    },
+  });
+
+  if (error) return <p>{error.detail ?? error.code}</p>;
+  if (pending || !document) return <p>Connecting…</p>;
+
+  return <DocxEditor key={session?.sessionId} document={document} modules={modules} />;
+}
 ```
 
-`token` reaches your server's `onAuthenticate` hook. The factory version, `createHocuspocusCollaboration` on `@docx-editor.dev/pro/collaboration/hocuspocus`, takes the same options and returns the room with its `ydoc` and `provider`.
+`token` reaches your server's `onAuthenticate` hook. Pass a callback instead of a string when tokens expire: the provider calls it again on every reconnect, so each attempt sends a fresh value. When the server rejects the token during a join, the hook fails fast with the failure code `initialization-aborted` and a detail that names authentication. After a successful join, a rejected token sets the session status to `error` with the detail `authentication-failed`. `syncedTimeoutMs` bounds how long a join waits for the server's initial sync. The default is 30 seconds, after which the join fails with `initialization-timeout`. The factory version, `createHocuspocusCollaboration` on `@docx-editor.dev/pro/collaboration/hocuspocus`, takes the same options and returns the room with its `ydoc` and `provider`.
 
 The Hocuspocus v4 server runs on Node, not Bun. The provider performs the required authentication handshake, so always use `@hocuspocus/provider` rather than a hand-written WebSocket client.
 
@@ -322,9 +342,7 @@ Comments, tracked-change decisions, tables of contents, and custom nodes replica
 
 Two write paths stay refused while a replica is attached. Applying an edited ProseMirror document is refused because no host exercises that derivation under replication. A review write without a named intent is also refused.
 
-Tree edits are refused when the session is destroyed, not ready, or not attached to the document port. A transport drop therefore pauses editing until the connection returns.
-
-Pass `offlineEditing: true` to keep editing through a transport drop. The session then admits edits while the status is `disconnected`, and the buffered updates merge on reconnect like any concurrent edit. Show the status in your interface when you enable this, so people know when their edits have not reached the room yet. The `error` status stays terminal either way. Every room factory and hook accepts the option.
+Tree edits are refused when the session is destroyed, not ready, or not attached to the document port. A transport drop therefore pauses editing until the connection returns, unless you enable the `offlineEditing` option described in [Edit offline](#edit-offline).
 
 A typing run undoes as one step through the session undo manager.
 
@@ -332,14 +350,14 @@ A typing run undoes as one step through the session undo manager.
 
 Each limit produces a typed failure code when a value exceeds it.
 
-| Limit                                      | Value          | Failure code                                  | Remedy                                                             |
-| ------------------------------------------ | -------------- | --------------------------------------------- | ------------------------------------------------------------------ |
-| Seed document size                         | 20 MB          | `baseline-too-large`                          | Reduce the document before you create the room.                    |
-| One embedded file                          | 32 MiB         | `blob-too-large`                              | Compress or downscale the media file.                              |
-| All embedded files in a room               | 64 MiB         | `blob-store-full`                             | Remove media from the document, then reseed a new room.            |
-| `actorId`, `name`, and `documentId` length | 256 characters | `invalid-identity`, `invalid-document-id`     | Shorten the value.                                                 |
-| Participants listed with presence          | 256            | none; presence reads list the first 256 peers | Keep rooms below 256 participants.                                 |
-| Join wait for a synced room                | 30 seconds     | `initialization-timeout`                      | Connect the provider first, and confirm one peer created the room. |
+| Limit                                      | Value          | Failure code                                  | Remedy                                                                                                                |
+| ------------------------------------------ | -------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Seed document size                         | 20 MB          | `baseline-too-large`                          | Reduce the document before you create the room.                                                                       |
+| One embedded file                          | 32 MiB         | `blob-too-large`                              | Compress or downscale the media file.                                                                                 |
+| All embedded files in a room               | 64 MiB         | `blob-store-full`                             | Remove media from the document, then reseed a new room.                                                               |
+| `actorId`, `name`, and `documentId` length | 256 characters | `invalid-identity`, `invalid-document-id`     | Shorten the value.                                                                                                    |
+| Participants listed with presence          | 256            | none; presence reads list the first 256 peers | Keep rooms below 256 participants.                                                                                    |
+| Join wait for a synced room                | 30 seconds     | `initialization-timeout`                      | Connect the provider first, and confirm one peer created the room. On the Hocuspocus helper, raise `syncedTimeoutMs`. |
 
 For module registration and licensing, see the
 [Pro package documentation](/docs/2.x/pro).

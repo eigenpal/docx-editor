@@ -60,10 +60,11 @@ export interface UseHocuspocusCollaborationConnectOptions {
     readonly bootstrap: UseHocuspocusCollaborationBootstrap;
     // (undocumented)
     readonly identity: CollaborationIdentity;
+    readonly offlineEditing?: boolean;
     // (undocumented)
     readonly roomId: string;
     readonly syncedTimeoutMs?: number;
-    readonly token?: string;
+    readonly token?: string | (() => string | Promise<string>);
     readonly url: string;
 }
 

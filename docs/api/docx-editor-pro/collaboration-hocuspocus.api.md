@@ -23,7 +23,7 @@ export interface CreateHocuspocusCollaborationOptions {
     // (undocumented)
     readonly roomId: string;
     readonly syncedTimeoutMs?: number;
-    readonly token?: string;
+    readonly token?: string | (() => string | Promise<string>);
     readonly url: string;
 }
 

@@ -20,6 +20,11 @@ import {
   type UseHocuspocusCollaborationConnectOptions,
   type UseHocuspocusCollaborationReturn,
 } from '../vue/useHocuspocusCollaboration.ts';
+import {
+  useWebrtcCollaboration,
+  WEBRTC_CREATE_ROOM_FOR_TESTS,
+  type UseWebrtcCollaborationReturn,
+} from '../vue/useWebrtcCollaboration.ts';
 
 function stubSession(documentId = 'room-1'): EditorCollaborationSession {
   return {
@@ -231,6 +236,69 @@ describe('useHocuspocusCollaboration (Vue)', () => {
       bootstrap: { kind: 'join' },
     });
     mounted.unmount();
+  });
+
+  test('connect forwards offlineEditing to the room factory', async () => {
+    const seenOptions: UseHocuspocusCollaborationConnectOptions[] = [];
+    const mounted = mountHook(async (options) => {
+      seenOptions.push(options);
+      return fakeRoom();
+    }, false);
+    await nextTick();
+    await mounted.latest()?.connect({ ...CONNECT, offlineEditing: true });
+    expect(seenOptions[0]?.offlineEditing).toBe(true);
+    mounted.unmount();
+  });
+
+  test('one component owns a Hocuspocus room and a WebRTC room at once', async () => {
+    // The two composables must key their room owners differently: a shared owner would let
+    // each adopt destroy the other composable's room.
+    const hocuspocusRooms: StubRoom[] = [];
+    const webrtcRooms: StubRoom[] = [];
+    let hocuspocus: UseHocuspocusCollaborationReturn | null = null;
+    let webrtc: UseWebrtcCollaborationReturn | null = null;
+    const app = createApp(
+      defineComponent({
+        setup() {
+          const hocuspocusOptions = {
+            room: CONNECT,
+            [HOCUSPOCUS_CREATE_ROOM_FOR_TESTS]: async () => {
+              const room = fakeRoom('hocuspocus-room');
+              hocuspocusRooms.push(room);
+              return room;
+            },
+          };
+          hocuspocus = useHocuspocusCollaboration(hocuspocusOptions);
+          const webrtcOptions = {
+            room: {
+              roomId: CONNECT.roomId,
+              identity: CONNECT.identity,
+              bootstrap: CONNECT.bootstrap,
+            },
+            [WEBRTC_CREATE_ROOM_FOR_TESTS]: async () => {
+              const room = fakeRoom('webrtc-room');
+              webrtcRooms.push(room);
+              return room;
+            },
+          };
+          webrtc = useWebrtcCollaboration(webrtcOptions);
+          return () => h('div');
+        },
+      })
+    );
+    const el = document.createElement('div');
+    document.body.append(el);
+    app.mount(el);
+    await Promise.resolve();
+    await nextTick();
+    expect(hocuspocusRooms).toHaveLength(1);
+    expect(webrtcRooms).toHaveLength(1);
+    expect(hocuspocusRooms[0]?.destroyed).toBe(false);
+    expect(webrtcRooms[0]?.destroyed).toBe(false);
+    expect(hocuspocus!.session.value?.documentId).toBe('hocuspocus-room');
+    expect(webrtc!.session.value?.documentId).toBe('webrtc-room');
+    app.unmount();
+    el.remove();
   });
 
   test('throws when host modules already include a collaboration contribution', () => {

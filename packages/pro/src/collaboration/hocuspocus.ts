@@ -36,9 +36,10 @@ export interface CreateHocuspocusCollaborationOptions {
   /**
    * Authentication token the provider sends in its auth handshake. The server queues all
    * traffic until that message arrives, so the provider always sends one; omit this and it
-   * sends an empty token.
+   * sends an empty token. Pass a callback and the provider re-evaluates it on every
+   * reconnect, which is how expiring JWTs renew.
    */
-  readonly token?: string;
+  readonly token?: string | (() => string | Promise<string>);
   readonly identity: CollaborationIdentity;
   readonly bootstrap: CollaborationBootstrap;
   /**
@@ -73,7 +74,7 @@ interface HocuspocusProviderInit {
   readonly name: string;
   readonly document: Y.Doc;
   readonly awareness: Awareness;
-  readonly token?: string;
+  readonly token?: string | (() => string | Promise<string>);
 }
 
 type HocuspocusProviderFactory = (init: HocuspocusProviderInit) => OwnedHocuspocusProvider;
@@ -97,7 +98,9 @@ const defaultProviderFactory: HocuspocusProviderFactory = (init) =>
     name: init.name,
     document: init.document,
     awareness: init.awareness,
-    ...(init.token !== undefined ? { token: init.token } : {}),
+    // The provider accepts `string | (() => string) | (() => Promise<string>)` and awaits
+    // callback results, so a callback typed to return either shape is passed verbatim.
+    ...(init.token !== undefined ? { token: init.token as string | (() => Promise<string>) } : {}),
   });
 
 /**
@@ -105,7 +108,10 @@ const defaultProviderFactory: HocuspocusProviderFactory = (init) =>
  *
  * A joiner that never syncs would otherwise wait forever on a room the server does not
  * hold. The same bounded-wait rule the bootstrap paths already use applies here, with the
- * same failure code.
+ * same failure code. A server that rejects the auth token never syncs either, so
+ * `authenticationFailed` rejects immediately — code `initialization-aborted`, because the
+ * server ended this initialization, with a detail naming authentication — instead of
+ * burning the whole timeout.
  */
 function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -113,16 +119,30 @@ function waitForSynced(provider: OwnedHocuspocusProvider, timeoutMs: number): Pr
       resolve();
       return;
     }
-    const onSynced = (): void => {
+    const cleanup = (): void => {
       clearTimeout(timer);
       provider.off('synced', onSynced);
+      provider.off('authenticationFailed', onAuthenticationFailed);
+    };
+    const onSynced = (): void => {
+      cleanup();
       resolve();
     };
+    const onAuthenticationFailed = (event: { readonly reason: string }): void => {
+      cleanup();
+      reject(
+        new CollaborationSchemaError(
+          'initialization-aborted',
+          `authentication failed: ${event.reason}`
+        )
+      );
+    };
     const timer = setTimeout(() => {
-      provider.off('synced', onSynced);
+      cleanup();
       reject(new CollaborationSchemaError('initialization-timeout'));
     }, timeoutMs);
     provider.on('synced', onSynced);
+    provider.on('authenticationFailed', onAuthenticationFailed);
   });
 }
 
@@ -182,6 +202,12 @@ export async function createHocuspocusCollaboration(
     );
   };
   connectedProvider.on('status', onStatus);
+  // A token the server later rejects (an expired JWT on reconnect) stops replication for
+  // good: surface it as a terminal session error rather than a silent stall.
+  const onAuthenticationFailed = (): void => {
+    session.setTransportStatus('error', 'authentication-failed');
+  };
+  connectedProvider.on('authenticationFailed', onAuthenticationFailed);
 
   let destroyed = false;
   return Object.freeze({
@@ -193,6 +219,7 @@ export async function createHocuspocusCollaboration(
       if (destroyed) return;
       destroyed = true;
       connectedProvider.off('status', onStatus);
+      connectedProvider.off('authenticationFailed', onAuthenticationFailed);
       connectedHandle.destroy();
       connectedProvider.destroy();
       awareness.destroy();

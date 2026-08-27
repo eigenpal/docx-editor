@@ -103,6 +103,24 @@ function Probe({
 }
 
 describe('useWebrtcCollaboration', () => {
+  test('connect forwards offlineEditing to the room factory', async () => {
+    const seenOptions: UseWebrtcCollaborationConnectOptions[] = [];
+    const createRoom = async (options: UseWebrtcCollaborationConnectOptions) => {
+      seenOptions.push(options);
+      return fakeRoom();
+    };
+    let latest: UseWebrtcCollaborationReturn | undefined;
+    await act(async () => {
+      render(
+        <Probe autoConnect={false} createRoom={createRoom} onState={(value) => (latest = value)} />
+      );
+    });
+    await act(async () => {
+      await latest?.connect({ ...CONNECT, offlineEditing: true });
+    });
+    expect(seenOptions[0]?.offlineEditing).toBe(true);
+  });
+
   test('StrictMode remount keeps a live room', async () => {
     const created: StubRoom[] = [];
     const createRoom = async () => {

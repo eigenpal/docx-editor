@@ -26,7 +26,7 @@ interface FakeProviderInit {
   readonly name: string;
   readonly document: Y.Doc;
   readonly awareness: Awareness;
-  readonly token?: string;
+  readonly token?: string | (() => string | Promise<string>);
 }
 
 class FakeProvider {
@@ -102,6 +102,87 @@ describe('createHocuspocusCollaboration', () => {
     expect(provider?.destroyCount).toBe(1);
     expect(provider?.init.document.isDestroyed).toBe(true);
     expect(awarenessDestroyed).toBe(true);
+  });
+
+  test('a rejected token fails fast with initialization-aborted and destroys everything', async () => {
+    // The timeout is far larger than the test: the auth rejection must short-circuit it.
+    let provider: FakeProvider | undefined;
+    const promise = createHocuspocusCollaboration(
+      optionsWithFactory(
+        {
+          url: URL,
+          roomId: ROOM_ID,
+          token: 'expired-token',
+          identity: IDENTITY,
+          bootstrap: { kind: 'join' },
+          syncedTimeoutMs: 60_000,
+        },
+        (init) => {
+          provider = new FakeProvider(init);
+          setTimeout(
+            () => provider!.emit('authenticationFailed', { reason: 'permission-denied' }),
+            1
+          );
+          return provider;
+        }
+      )
+    );
+    await expect(promise).rejects.toMatchObject({
+      code: 'initialization-aborted',
+      detail: 'authentication failed: permission-denied',
+    });
+    expect(provider?.destroyCount).toBe(1);
+    expect(provider?.init.document.isDestroyed).toBe(true);
+  });
+
+  test('an authenticationFailed after the join flips the session to error', async () => {
+    let provider: FakeProvider | undefined;
+    const room = await createHocuspocusCollaboration(
+      optionsWithFactory(
+        {
+          url: URL,
+          roomId: ROOM_ID,
+          identity: IDENTITY,
+          bootstrap: { kind: 'create', document: collaborationDocx() },
+        },
+        (init) => {
+          provider = new FakeProvider(init);
+          return provider;
+        }
+      )
+    );
+    provider?.emit('authenticationFailed', { reason: 'token expired' });
+    expect(room.session.status()).toBe('error');
+    expect(room.session.statusSnapshot().reason).toMatchObject({
+      code: 'transport',
+      detail: 'authentication-failed',
+    });
+    room.destroy();
+    // A destroyed room no longer listens: a late auth event must not throw or resurrect it.
+    provider?.emit('authenticationFailed', { reason: 'token expired' });
+    expect(room.session.status()).toBe('destroyed');
+  });
+
+  test('a function token reaches the provider untouched', async () => {
+    const token = (): string => 'renewed-jwt';
+    let provider: FakeProvider | undefined;
+    const room = await createHocuspocusCollaboration(
+      optionsWithFactory(
+        {
+          url: URL,
+          roomId: ROOM_ID,
+          token,
+          identity: IDENTITY,
+          bootstrap: { kind: 'create', document: collaborationDocx() },
+        },
+        (init) => {
+          provider = new FakeProvider(init);
+          return provider;
+        }
+      )
+    );
+    expect(provider?.init.token).toBe(token);
+    room.destroy();
   });
 
   test('create seeds the shared document before the provider connects', async () => {

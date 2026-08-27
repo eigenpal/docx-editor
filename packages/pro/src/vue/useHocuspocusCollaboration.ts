@@ -35,12 +35,20 @@ export interface UseHocuspocusCollaborationConnectOptions {
   /** Hocuspocus server WebSocket URL, for example `wss://collab.example.test`. */
   readonly url: string;
   readonly roomId: string;
-  /** Authentication token the provider sends in its auth handshake. */
-  readonly token?: string;
+  /**
+   * Authentication token the provider sends in its auth handshake. Pass a callback and the
+   * provider re-evaluates it on every reconnect, which is how expiring JWTs renew.
+   */
+  readonly token?: string | (() => string | Promise<string>);
   readonly identity: CollaborationIdentity;
   readonly bootstrap: UseHocuspocusCollaborationBootstrap;
   /** Bound on the wait for the server's initial sync. Default 30000 ms. */
   readonly syncedTimeoutMs?: number;
+  /**
+   * Admit local edits while the transport is `disconnected`. Buffered updates merge on
+   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   */
+  readonly offlineEditing?: boolean;
 }
 
 interface HocuspocusRoomHandle extends CollaborationRoomHandle {
@@ -162,7 +170,10 @@ export function useHocuspocusCollaboration(
     UseHocuspocusCollaborationConnectOptions,
     HocuspocusRoomHandle
   >({
-    ownerKey: `vue:${String(instance?.uid ?? 'anonymous')}`,
+    // The composable name is part of the key: one component instance can own a Hocuspocus
+    // room and a WebRTC room at once, and a shared `vue:${uid}` key would make each adopt
+    // destroy the other's room.
+    ownerKey: `vue-hocuspocus:${String(instance?.uid ?? 'anonymous')}`,
     hookName: 'useHocuspocusCollaboration',
     createRoomOf: () => createRoomOf(toValue(options)),
     hostModulesOf: () => toValue(options)?.modules ?? EMPTY_MODULES,

@@ -60,6 +60,7 @@ export interface UseWebrtcCollaborationConnectOptions {
     readonly iceServers?: readonly RTCIceServer[];
     // (undocumented)
     readonly identity: CollaborationIdentity;
+    readonly offlineEditing?: boolean;
     // (undocumented)
     readonly password?: string;
     // (undocumented)

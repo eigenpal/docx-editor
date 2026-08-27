@@ -35,6 +35,11 @@ export interface UseWebrtcCollaborationConnectOptions {
   readonly roomId: string;
   readonly identity: CollaborationIdentity;
   readonly bootstrap: UseWebrtcCollaborationBootstrap;
+  /**
+   * Admit local edits while the transport is `disconnected`. Buffered updates merge on
+   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   */
+  readonly offlineEditing?: boolean;
   readonly signaling?: readonly string[];
   readonly iceServers?: readonly RTCIceServer[];
   readonly password?: string;
@@ -154,7 +159,10 @@ export function useWebrtcCollaboration(
 ): UseWebrtcCollaborationReturn {
   const instance = getCurrentInstance();
   const state = useCollaborationRoom<UseWebrtcCollaborationConnectOptions, WebrtcRoomHandle>({
-    ownerKey: `vue:${String(instance?.uid ?? 'anonymous')}`,
+    // The composable name is part of the key: one component instance can own a WebRTC room
+    // and a Hocuspocus room at once, and a shared `vue:${uid}` key would make each adopt
+    // destroy the other's room.
+    ownerKey: `vue-webrtc:${String(instance?.uid ?? 'anonymous')}`,
     hookName: 'useWebrtcCollaboration',
     createRoomOf: () => createRoomOf(toValue(options)),
     hostModulesOf: () => toValue(options)?.modules ?? EMPTY_MODULES,

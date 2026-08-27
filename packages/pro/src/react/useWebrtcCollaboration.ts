@@ -28,6 +28,11 @@ export interface UseWebrtcCollaborationConnectOptions {
   readonly roomId: string;
   readonly identity: CollaborationIdentity;
   readonly bootstrap: UseWebrtcCollaborationBootstrap;
+  /**
+   * Admit local edits while the transport is `disconnected`. Buffered updates merge on
+   * reconnect. See {@link CreateDocumentCollaborationOptions.offlineEditing}.
+   */
+  readonly offlineEditing?: boolean;
   readonly signaling?: readonly string[];
   readonly iceServers?: readonly RTCIceServer[];
   readonly password?: string;
@@ -145,7 +150,9 @@ export function useWebrtcCollaboration(
 ): UseWebrtcCollaborationReturn {
   const id = useId();
   const state = useCollaborationRoom<UseWebrtcCollaborationConnectOptions, WebrtcRoomHandle>({
-    ownerKey: `react:${id}`,
+    // The hook name is part of the key: `useId` is already unique per call site, but a
+    // shared prefix would let two different hooks collide if that ever changed.
+    ownerKey: `react-webrtc:${id}`,
     hookName: 'useWebrtcCollaboration',
     createRoom: createRoomOf(options),
     hostModules: options.modules ?? EMPTY_MODULES,
