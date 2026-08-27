@@ -67,6 +67,14 @@ Table structural and property edits SHALL commit only as validated `TreeDocOp`s 
 - **WHEN** a validated insert-row operation targets a canonical row in an unmerged table
 - **THEN** the store inserts one fresh row with empty cell paragraphs, preserves unrelated node identities, and publishes a single `ModelChange`
 
+#### Scenario: Row insertion extends a vertical merge
+- **WHEN** a validated insert-row operation targets a boundary inside an active vertical-merge chain
+- **THEN** the inserted row repeats `w:vMerge` for exactly the cells whose chain crosses that boundary, and leaves every other cell unmerged
+
+#### Scenario: Unreadable row shape refuses insertion
+- **WHEN** an insert-row operation names a row that holds a `w:tc` inside a cell-level wrapper such as `w:sdt`, or a wrapper hides a `w:tr` between the boundary rows a merge marker would be written from
+- **THEN** the operation is rejected with a specific reason and the tree revision is unchanged
+
 #### Scenario: Merged table refuses column edit
 - **WHEN** a column insertion, deletion, or resize operation targets a table with horizontal or vertical merges
 - **THEN** the operation is rejected with a specific reason and the tree revision is unchanged

@@ -1243,8 +1243,11 @@ export type TreeOpRejection =
   | 'unknown-row'
   /** A table property container appears more than once on a typed node. */
   | 'duplicate-property-container'
-  /** Row insertion would split an active vertical-merge chain. */
-  | 'vertical-merge-crossing'
+  /**
+   * A row holds a `w:tc` inside a cell-level wrapper such as `w:sdt`, so the row's grid
+   * mapping cannot be trusted and the inserted row would not match it.
+   */
+  | 'row-hides-cell'
   /** Column edit refused because the table carries horizontal or vertical merges. */
   | 'table-has-merge'
   /** The addressed grid column id is missing or ambiguous without `w:tblGrid`. */

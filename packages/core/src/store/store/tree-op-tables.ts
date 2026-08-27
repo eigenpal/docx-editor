@@ -1,7 +1,8 @@
 // Row insertion and deletion for canonical tables (table-editing task 3).
 //
 // Validates complete targets before mutation, copies only safe row/cell property skeletons,
-// and publishes one flow-structural effect per operation.
+// and publishes one flow-structural effect per operation. A row inserted inside a vertical
+// merge repeats `w:vMerge` for the covered cells, so the merge grows by one row.
 
 import {
   createNodeIdAllocator,
@@ -34,7 +35,6 @@ import {
 } from '../package/ooxml-tree.ts';
 import {
   DEFAULT_TABLE_TOPOLOGY_LIMITS,
-  MAX_TABLE_COLUMNS,
   MAX_TABLE_COLUMN_WIDTH_TWIPS,
   MAX_TABLE_WIDTH_TWIPS,
   MIN_TABLE_COLUMN_WIDTH_TWIPS,
@@ -53,6 +53,12 @@ import { paragraphIdsWithin } from './tree-op-blocks.ts';
 import { fromEdit, TEXT_DEPS } from './tree-op-nodes.ts';
 import { isWmlElement, wmlAttributeValue, wmlChildNamed } from './tree-op-table-shared.ts';
 import { readEditableTableTopology, type EditableTableTopology } from './tree-op-table-topology.ts';
+import {
+  rowHasVerticalMerge,
+  rowHidesCellInWrapper,
+  tableHidesRowBetween,
+  verticalMergeContinuationCells,
+} from './tree-op-table-vmerge.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   invalidRevisionAttribution,
@@ -139,16 +145,12 @@ export type TableResizeDocOp =
       readonly heightTwips: number;
     };
 
-interface GridCellSlot {
-  readonly startCol: number;
-  readonly span: number;
-  readonly vMergeKind: 'none' | 'restart' | 'continue';
-}
-
 interface RowInsertionPlan {
   readonly sourceRow: OoxmlTableRowNode;
   readonly cellCount: number;
   readonly structureBudget: number;
+  /** Source-row cell indexes whose vertical merge continues through the inserted row. */
+  readonly continuations: ReadonlySet<number>;
 }
 
 function mapTopologyRejection(
@@ -156,53 +158,6 @@ function mapTopologyRejection(
 ): TreeOpRejection {
   if (reason === 'duplicate-node-id') return 'unknown-table';
   return reason;
-}
-
-function readGridSpan(cellProperties: OoxmlElement | undefined): number {
-  const raw = cellProperties && wmlChildNamed(cellProperties, 'gridSpan');
-  const value = raw && wmlAttributeValue(raw, 'val');
-  if (!value || !/^\d{1,7}$/.test(value)) return 1;
-  const span = Number(value);
-  return Number.isInteger(span) && span > 1 ? Math.min(span, MAX_TABLE_COLUMNS) : 1;
-}
-
-function readGridSkip(rowProperties: OoxmlElement | undefined, localName: string): number {
-  const raw = rowProperties && wmlChildNamed(rowProperties, localName);
-  const value = raw && wmlAttributeValue(raw, 'val');
-  if (!value || !/^\d{1,7}$/.test(value)) return 0;
-  const count = Number(value);
-  return Number.isInteger(count) && count > 0 ? Math.min(count, MAX_TABLE_COLUMNS) : 0;
-}
-
-function readVMergeKind(cellProperties: OoxmlElement | undefined): 'none' | 'restart' | 'continue' {
-  const vMerge = cellProperties && wmlChildNamed(cellProperties, 'vMerge');
-  if (!vMerge) return 'none';
-  return wmlAttributeValue(vMerge, 'val') === 'restart' ? 'restart' : 'continue';
-}
-
-function buildRowGridSlots(row: OoxmlTableRowNode): readonly GridCellSlot[] {
-  const trPr = wmlChildNamed(row, 'trPr');
-  const gridBefore = readGridSkip(trPr, 'gridBefore');
-  let cursor = gridBefore;
-  const slots: GridCellSlot[] = [];
-  for (const child of row.children) {
-    if (child.kind !== 'tableCell') continue;
-    const tcPr = wmlChildNamed(child, 'tcPr');
-    const startCol = Math.min(cursor, MAX_TABLE_COLUMNS);
-    const span = Math.min(readGridSpan(tcPr), MAX_TABLE_COLUMNS - startCol);
-    slots.push({ startCol, span, vMergeKind: readVMergeKind(tcPr) });
-    cursor = startCol + span;
-  }
-  return slots;
-}
-
-function gridIntervalsMatchExactly(
-  aStart: number,
-  aSpan: number,
-  bStart: number,
-  bSpan: number
-): boolean {
-  return aStart === bStart && aSpan === bSpan;
 }
 
 const VAL_ATTRS = ['val'] as const;
@@ -261,26 +216,6 @@ const PRESENCE_ONLY_PROPERTY_LEAVES = new Set([
   'tcFitText',
   'hideMark',
 ]);
-
-/** True when inserting at `boundaryIndex` would split an active vertical-merge chain. */
-function insertionCrossesVerticalMerge(
-  topology: EditableTableTopology,
-  boundaryIndex: number
-): boolean {
-  if (boundaryIndex <= 0 || boundaryIndex >= topology.rows.length) return false;
-  const upperSlots = buildRowGridSlots(topology.rows[boundaryIndex - 1]!.row);
-  const lowerSlots = buildRowGridSlots(topology.rows[boundaryIndex]!.row);
-  for (const upper of upperSlots) {
-    if (upper.vMergeKind === 'none') continue;
-    for (const lower of lowerSlots) {
-      if (lower.vMergeKind !== 'continue') continue;
-      if (gridIntervalsMatchExactly(upper.startCol, upper.span, lower.startCol, lower.span)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 function projectWmlAttributes(
   source: OoxmlElement,
@@ -572,18 +507,24 @@ function countAllowlistedLeaves(container: OoxmlElement, allowedLeaves: readonly
   return count;
 }
 
-function planRowInsertion(sourceRow: OoxmlTableRowNode): RowInsertionPlan | null {
+function planRowInsertion(
+  sourceRow: OoxmlTableRowNode,
+  continuations: ReadonlySet<number>
+): RowInsertionPlan | null {
   const cells = sourceRow.children.filter((child) => child.kind === 'tableCell');
   if (cells.length === 0) return null;
   let structureBudget = 1;
-  for (const cell of cells) {
+  for (let index = 0; index < cells.length; index += 1) {
     structureBudget += 2;
-    const tcPr = wmlChildNamed(cell, 'tcPr');
+    const tcPr = wmlChildNamed(cells[index]!, 'tcPr');
     if (tcPr) structureBudget += countAllowlistedLeaves(tcPr, SAFE_TCPR_LEAVES);
+    // A continued merge adds `w:vMerge`, plus a `w:tcPr` to carry it whenever the copy has
+    // none — including a source `w:tcPr` whose every leaf is stripped. Budget the ceiling.
+    if (continuations.has(index)) structureBudget += 2;
   }
   const trPr = wmlChildNamed(sourceRow, 'trPr');
   if (trPr) structureBudget += countAllowlistedLeaves(trPr, SAFE_TRPR_LEAVES);
-  return { sourceRow, cellCount: cells.length, structureBudget };
+  return { sourceRow, cellCount: cells.length, structureBudget, continuations };
 }
 
 function emptyParagraph(
@@ -613,6 +554,24 @@ function emptyParagraph(
   } as OoxmlParagraphNode;
 }
 
+/**
+ * Repeat `w:vMerge` so the inserted row extends the covering cell instead of severing it.
+ *
+ * `patchTcPrChild` rejects only an expanded-name mismatch, and it derives the name it checks
+ * from the element handed to it — one minted here, in the WML namespace. The refusal branch
+ * is unreachable by construction, so this returns a container rather than splitting `can()`
+ * from `exec()` over a case that cannot arise.
+ */
+function withVerticalMergeContinuation(
+  copiedTcPr: OoxmlElement | null,
+  nextId: () => string,
+  wml: WmlFreshNamespaceContext
+): OoxmlElement {
+  const container = copiedTcPr ?? freshWmlElement('tcPr', nextId, wml, []);
+  const patched = patchTcPrChild(container, freshWmlElement('vMerge', nextId, wml, []));
+  return patched.ok ? patched.container : container;
+}
+
 function buildFreshCell(
   sourceCell: OoxmlTableCellNode,
   part: OoxmlPart,
@@ -620,14 +579,16 @@ function buildFreshCell(
   nextId: () => string,
   seed: string,
   used: Set<string>,
-  wml: WmlFreshNamespaceContext
+  wml: WmlFreshNamespaceContext,
+  continuesVerticalMerge: boolean
 ): OoxmlTableCellNode {
   const tcPr = wmlChildNamed(sourceCell, 'tcPr');
-  const copiedTcPr = tcPr
-    ? copySafePropertyContainer(tcPr, SAFE_TCPR_LEAVES, nextId, wml)
-    : undefined;
+  const copiedTcPr = tcPr ? copySafePropertyContainer(tcPr, SAFE_TCPR_LEAVES, nextId, wml) : null;
+  const finalTcPr = continuesVerticalMerge
+    ? withVerticalMergeContinuation(copiedTcPr, nextId, wml)
+    : copiedTcPr;
   const children: OoxmlNode[] = [];
-  if (copiedTcPr) children.push(copiedTcPr);
+  if (finalTcPr) children.push(finalTcPr);
   children.push(emptyParagraph(part, targetTable, nextId, `${seed}:p`, used, wml));
   return freshTableCell(nextId, children, wml);
 }
@@ -637,7 +598,12 @@ function buildInsertedRow(
   part: OoxmlPart,
   targetTable: OoxmlElement,
   nextId: () => string
-): { readonly row: OoxmlTableRowNode; readonly paragraphIds: readonly string[] } {
+): {
+  readonly row: OoxmlTableRowNode;
+  readonly paragraphIds: readonly string[];
+  /** First paragraph the caret can reach: merge continuations paint no content of their own. */
+  readonly caretParagraphId: string | undefined;
+} {
   const wml = wmlFreshNamespaceContextAt(part, targetTable);
   const sourceRow = plan.sourceRow;
   const trPr = wmlChildNamed(sourceRow, 'trPr');
@@ -647,10 +613,12 @@ function buildInsertedRow(
   const used = new Set(usedParaIds(part.root));
   const children: OoxmlNode[] = [];
   const paragraphIds: string[] = [];
+  let caretParagraphId: string | undefined;
   if (copiedTrPr) children.push(copiedTrPr);
   let cellIndex = 0;
   for (const child of sourceRow.children) {
     if (child.kind !== 'tableCell') continue;
+    const continues = plan.continuations.has(cellIndex);
     const fresh = buildFreshCell(
       child,
       part,
@@ -658,18 +626,55 @@ function buildInsertedRow(
       nextId,
       `${sourceRow.id}:c${cellIndex}`,
       used,
-      wml
+      wml,
+      continues
     );
     cellIndex += 1;
-    paragraphIds.push(fresh.children.find((c) => c.kind === 'paragraph')!.id);
+    const paragraphId = fresh.children.find((c) => c.kind === 'paragraph')!.id;
+    paragraphIds.push(paragraphId);
+    if (!continues && caretParagraphId === undefined) caretParagraphId = paragraphId;
     children.push(fresh);
   }
   const row = freshTableRow(nextId, children, wml);
-  return { row, paragraphIds };
+  return { row, paragraphIds, caretParagraphId };
 }
 
 function rowChildIndex(table: OoxmlElement, rowId: string): number {
   return table.children.findIndex((child) => child.id === rowId);
+}
+
+/**
+ * Refuse an insertion whose row shape the grid walk cannot read.
+ *
+ * `w:sdt` and `w:customXml` may legally hold a `w:tc`, and neither advances the grid cursor,
+ * so every later cell of that row maps one column too far left. Only a merge turns that into
+ * a wrong write, so the guard first asks whether any `w:vMerge` is in reach — a question that
+ * reads markers rather than the grid, and so survives the very shape it is judging. A
+ * merge-free table keeps the behaviour it had before this change.
+ */
+function wrappedShapeRejection(
+  topology: EditableTableTopology,
+  rowIndex: number,
+  where: 'above' | 'below'
+): TreeOpRejection | null {
+  const boundaryIndex = where === 'above' ? rowIndex : rowIndex + 1;
+  // Above the first row or below the last there is no boundary to read, so no marker can be
+  // written and the row's shape decides nothing. Matches `verticalMergeContinuationCells`.
+  if (boundaryIndex <= 0 || boundaryIndex >= topology.rows.length) return null;
+  const source = topology.rows[rowIndex]!;
+  const upper = topology.rows[boundaryIndex - 1];
+  const lower = topology.rows[boundaryIndex];
+  const mergeInReach =
+    rowHasVerticalMerge(source.row) ||
+    (upper !== undefined && rowHasVerticalMerge(upper.row)) ||
+    (lower !== undefined && rowHasVerticalMerge(lower.row));
+  if (!mergeInReach) return null;
+  if (rowHidesCellInWrapper(source.row)) return 'row-hides-cell';
+  if (!upper || !lower) return null;
+  if (rowHidesCellInWrapper(upper.row) || rowHidesCellInWrapper(lower.row)) {
+    return 'row-hides-cell';
+  }
+  return tableHidesRowBetween(topology.table, upper.row.id, lower.row.id) ? 'row-hides-cell' : null;
 }
 
 function validateRowInsertionPlan(
@@ -680,11 +685,12 @@ function validateRowInsertionPlan(
   limits: TableTopologyLimits
 ): TreeOpRejection | null {
   if (topology.rows.length >= limits.maxRows) return 'resource-limit';
-  const plan = planRowInsertion(topology.rows[rowIndex]!.row);
+  const wrapperRejection = wrappedShapeRejection(topology, rowIndex, where);
+  if (wrapperRejection) return wrapperRejection;
+  const continuations = verticalMergeContinuationCells(topology, rowIndex, where);
+  const plan = planRowInsertion(topology.rows[rowIndex]!.row, continuations);
   if (plan === null) return 'tree-invariant';
   if (plan.structureBudget > limits.maxTraversalNodes) return 'resource-limit';
-  const boundaryIndex = where === 'above' ? rowIndex : rowIndex + 1;
-  if (insertionCrossesVerticalMerge(topology, boundaryIndex)) return 'vertical-merge-crossing';
   return null;
 }
 
@@ -729,7 +735,8 @@ export function applyInsertTableRow(
   const rowIndex = topology.rows.findIndex((entry) => entry.row.id === op.rowId);
   if (rowIndex === -1) return { ok: false, reason: 'unknown-row' };
 
-  const plan = planRowInsertion(topology.rows[rowIndex]!.row);
+  const continuations = verticalMergeContinuationCells(topology, rowIndex, op.where);
+  const plan = planRowInsertion(topology.rows[rowIndex]!.row, continuations);
   if (plan === null) return { ok: false, reason: 'tree-invariant' };
 
   const nextId = createNodeIdAllocator(part);
@@ -759,7 +766,9 @@ export function applyInsertTableRow(
     deleted: [],
     dependencyKeys: TEXT_DEPS,
     impact: 'flow-structural',
-    caret: { paragraphId: paragraphIds[0]! },
+    ...(built.caretParagraphId === undefined
+      ? {}
+      : { caret: { paragraphId: built.caretParagraphId } }),
   };
 
   return fromEdit(

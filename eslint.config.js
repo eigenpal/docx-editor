@@ -344,6 +344,7 @@ export default [
       'packages/core/src/editor/paginated-surface-contract.ts',
       'packages/core/src/layout/semantic-table.ts',
       'packages/core/src/store/__tests__/table-resize-ops.test.ts',
+      'packages/core/src/store/__tests__/table-row-ops.test.ts',
       'packages/core/src/store/store/tree-op-tracked.ts',
     ],
     rules: {
@@ -367,7 +368,6 @@ export default [
       'packages/core/src/editor/__tests__/docx-editor.test.ts',
       'packages/core/src/editor/__tests__/table-command-plan.test.ts',
       'packages/core/src/editor/docx-editor-images.ts',
-      'packages/core/src/store/__tests__/table-row-ops.test.ts',
       'packages/core/src/binding/tree-session.ts',
       'packages/core/src/store/store/tree-package-store.ts',
       'packages/core/src/store/store/tree-op-types.ts',

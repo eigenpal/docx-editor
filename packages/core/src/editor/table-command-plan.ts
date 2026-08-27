@@ -135,8 +135,8 @@ function mapStoreRejection(reason: TreeOpRejection, detail?: string): TableComma
       return refusal('invalidArgs', 'the table target is no longer valid');
     case 'table-has-merge':
       return refusal('unsupported', 'this table has merged cells');
-    case 'vertical-merge-crossing':
-      return refusal('unsupported', 'the row cannot be inserted across a vertical merge');
+    case 'row-hides-cell':
+      return refusal('unsupported', 'this table has a cell the editor cannot place in the grid');
     case 'block-required':
       return refusal('unsupported', 'the table must keep at least one row or column');
     case 'resource-limit':
