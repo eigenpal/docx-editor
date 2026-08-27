@@ -88,7 +88,7 @@ export interface LoadDefaultFontsOptions {
 }
 
 // @public
-export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New';
+export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New' | 'Century Gothic';
 
 // (No @packageDocumentation comment for this package)
 

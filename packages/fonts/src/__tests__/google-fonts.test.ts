@@ -53,12 +53,10 @@ const resolveOnly = (
   });
 
 describe('catalog', () => {
-  test('every family ships all four faces, pinned to the recorded revision', () => {
+  test('every family ships all four faces, pinned to an immutable revision', () => {
     const byFamily = new Map<string, Set<string>>();
     for (const face of GOOGLE_FONT_CATALOG) {
-      expect(face.url).toStartWith(
-        `https://cdn.jsdelivr.net/gh/google/fonts@${GOOGLE_FONTS_REVISION}/`
-      );
+      expect(face.url).toMatch(/^https:\/\/cdn\.jsdelivr\.net\/gh\/google\/fonts@[0-9a-f]{40}\//);
       expect(face.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
       const faces = byFamily.get(face.family) ?? new Set<string>();
       faces.add(`${face.weight}/${face.style}`);
@@ -68,6 +66,14 @@ describe('catalog', () => {
     for (const [family, faces] of byFamily) {
       expect(`${family}:${faces.size}`).toBe(`${family}:4`);
     }
+  });
+
+  test('serves static Montserrat families without admitting variable fonts', () => {
+    expect(GOOGLE_FONT_FAMILIES).toContain('Montserrat');
+    expect(GOOGLE_FONT_FAMILIES).toContain('Montserrat Light');
+    const montserrat = GOOGLE_FONT_CATALOG.filter((face) => face.family === 'Montserrat');
+    expect(montserrat).toHaveLength(4);
+    expect(montserrat.every((face) => !face.url.includes(`@${GOOGLE_FONTS_REVISION}/`))).toBe(true);
   });
 
   test('every metric substitute target is actually catalogued', () => {
@@ -122,6 +128,28 @@ describe('googleFonts resolver', () => {
     expect(fragment.sources.every((source) => source.request.family !== 'Times New Roman')).toBe(
       true
     );
+  });
+
+  test('Century Gothic resolves through its measured-width stand-in', async () => {
+    const { fetcher } = fakeFetcher();
+    const fragment = await resolveOnly(['Century Gothic'], fetcher);
+    expect(fragment.sources).toHaveLength(4);
+    expect(fragment.sources.every((source) => source.request.family === 'Montserrat')).toBe(true);
+    expect(
+      fragment.substitutions.some(
+        (entry) => entry.from.family === 'Century Gothic' && entry.to.family === 'Montserrat'
+      )
+    ).toBe(true);
+  });
+
+  test('Montserrat family names resolve directly to their static faces', async () => {
+    const { fetcher } = fakeFetcher();
+    const fragment = await resolveOnly(['Montserrat', 'Montserrat Light'], fetcher);
+    expect(fragment.sources).toHaveLength(8);
+    expect(new Set(fragment.sources.map((source) => source.request.family))).toEqual(
+      new Set(['Montserrat', 'Montserrat Light'])
+    );
+    expect(fragment.substitutions).toHaveLength(0);
   });
 
   test('a family named directly needs no substitution entry', async () => {

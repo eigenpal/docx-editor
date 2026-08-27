@@ -7,6 +7,17 @@
 import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
+import {
+  composeFontConfiguration,
+  createLayoutShaping,
+  disposeLayoutShaping,
+} from '@docx-editor.dev/core/editor';
+import {
+  DEFAULT_RUN_STYLE,
+  FontResolutionError,
+  createFixedMeasurer,
+  createShapedMeasurer,
+} from '@docx-editor.dev/core/layout';
 import { ALL_WORD_DEFAULT_FAMILIES, FONT_ASSET_MANIFEST, loadDefaultFonts } from '../index.ts';
 
 const assetsDir = new URL('../../assets/', import.meta.url);
@@ -25,7 +36,9 @@ function countingFetcher(): { fetcher: typeof fetch; requested: string[] } {
 
 describe('packaged manifest', () => {
   test('baked hashes match the shipped bytes (the CI guarantee, asserted here too)', () => {
-    const files = readdirSync(assetsDir).filter((name) => name.endsWith('.ttf'));
+    const files = readdirSync(assetsDir).filter(
+      (name) => name.endsWith('.ttf') || name.endsWith('.otf')
+    );
     expect(files.length).toBe(FONT_ASSET_MANIFEST.length);
     for (const entry of FONT_ASSET_MANIFEST) {
       const bytes = readFileSync(new URL(entry.file, assetsDir));
@@ -35,8 +48,8 @@ describe('packaged manifest', () => {
   });
 
   test('every Word family has all four faces packaged', () => {
-    expect(ALL_WORD_DEFAULT_FAMILIES).toHaveLength(5);
-    expect(FONT_ASSET_MANIFEST).toHaveLength(20);
+    expect(ALL_WORD_DEFAULT_FAMILIES).toHaveLength(6);
+    expect(FONT_ASSET_MANIFEST).toHaveLength(24);
   });
 });
 
@@ -58,17 +71,60 @@ describe('loadDefaultFonts', () => {
     ).toBe(true);
   });
 
-  test('default load covers all five families with baked hashes attached', async () => {
+  test('default load covers all six families with baked hashes attached', async () => {
     const { fetcher, requested } = countingFetcher();
     const fragment = await loadDefaultFonts({ fetcher });
-    expect(requested).toHaveLength(20);
-    expect(fragment.sources).toHaveLength(20);
+    expect(requested).toHaveLength(24);
+    expect(fragment.sources).toHaveLength(24);
     expect(fragment.failures).toHaveLength(0);
     const manifestHashes = new Set(FONT_ASSET_MANIFEST.map((entry) => entry.hash));
     for (const source of fragment.sources) expect(manifestHashes.has(source.hash)).toBe(true);
     // Deterministic source order for stable configuration fingerprints.
     const ids = fragment.sources.map((source) => source.id);
     expect(ids).toEqual([...ids].sort((a, b) => a.localeCompare(b)));
+  });
+
+  test('Century Gothic resolves to shaped Adventor metrics', async () => {
+    const { fetcher } = countingFetcher();
+    const fragment = await loadDefaultFonts({ families: ['Century Gothic'], fetcher });
+    const shaping = await createLayoutShaping(composeFontConfiguration(fragment));
+    try {
+      const measurer = createShapedMeasurer({
+        shaper: shaping.shaper,
+        resolveFont: (style) => {
+          const resolved = shaping.fonts.resolve({
+            family: style.fontFamily ?? 'Century Gothic',
+            weight: style.bold ? 700 : 400,
+            style: style.italic ? 'italic' : 'normal',
+          });
+          return resolved instanceof FontResolutionError ? null : resolved;
+        },
+        fallback: createFixedMeasurer(),
+        shapingLibrary: shaping.environment.shapingLibrary,
+        unicodeDataVersion: shaping.environment.unicodeDataVersion,
+        fixedPointScale: shaping.environment.fixedPointScale,
+      });
+      const style = { ...DEFAULT_RUN_STYLE, fontFamily: 'Century Gothic', fontSizePt: 10 };
+      const cases = [
+        ['Document layout', 84.7],
+        ['Precise font metrics', 92.85],
+        ['Reliable page breaks', 102.85],
+      ] as const;
+      for (const [text, expectedWidth] of cases) {
+        expect(measurer.measure(text, style)).toBeCloseTo(expectedWidth, 6);
+      }
+      const resolved = shaping.fonts.resolve({
+        family: 'Century Gothic',
+        weight: 400,
+        style: 'normal',
+      });
+      expect(resolved).not.toBeInstanceOf(FontResolutionError);
+      if (!(resolved instanceof FontResolutionError)) {
+        expect(resolved.substitution?.resolved.family).toBe('TeX Gyre Adventor');
+      }
+    } finally {
+      disposeLayoutShaping(shaping);
+    }
   });
 
   test('a failed face degrades that face only', async () => {

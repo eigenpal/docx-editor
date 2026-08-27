@@ -21,7 +21,7 @@
  */
 // @docx-editor.dev/fonts/google — Google-hosted faces, fetched on demand.
 //
-// `defaultFonts()` ships five families in the bundle and loads them whichever document
+// `defaultFonts()` ships six families in the bundle and loads them whichever document
 // opens. `googleFonts()` inverts both halves: nothing is bundled, and nothing is fetched
 // until a document turns out to name a family the catalog covers. Open a file that uses
 // only Calibri and exactly one family is fetched; open one that uses none of the catalog
@@ -45,10 +45,10 @@
 // That is inherent to fetching them, which is why nothing here is a default: an app opts
 // in by passing `googleFonts()`, and `defaultFonts()` stays the zero-network answer.
 //
-// Metric compatibility is the reason the substitution map is short. Carlito/Caladea/
-// Tinos/Cousine have the same advance widths as the Word faces they stand in for, so wrap
-// and pagination land where Word puts them. Anything else would be a guess that moves line
-// breaks, so it is left to the app's own `substitute` map rather than assumed here.
+// Metric compatibility is the reason the substitution maps are short. Carlito/Caladea/
+// Tinos/Cousine have the same advance widths as the Word faces they stand in for. A second
+// internal map records substitutes that pass a measured width gate without claiming exact
+// compatibility. Anything else stays with the app's own `substitute` map.
 
 import {
   GOOGLE_FONTS_REVISION,
@@ -80,6 +80,14 @@ export const GOOGLE_METRIC_SUBSTITUTES: Readonly<Record<string, string>> = Objec
 });
 
 /**
+ * Recorded fidelity substitutes are close enough for the measured Word strings, but do
+ * not claim the identical metrics promised by {@link GOOGLE_METRIC_SUBSTITUTES}.
+ */
+const GOOGLE_WIDTH_FIDELITY_SUBSTITUTES: Readonly<Record<string, string>> = Object.freeze({
+  'Century Gothic': 'Montserrat',
+});
+
+/**
  * One catalogued face that did not arrive. Non-fatal: the resolver returns whatever else
  * succeeded, and the affected family falls back to the engine's fixed measurement.
  *
@@ -105,9 +113,8 @@ export interface GoogleFontsOptions {
    */
   readonly allow?: readonly string[];
   /**
-   * Extra document-family -> catalog-family mappings, merged OVER
-   * {@link GOOGLE_METRIC_SUBSTITUTES}. Only metric-compatible pairs keep pagination
-   * Word-accurate; anything else trades line breaks for closer-looking glyphs.
+   * Extra document-family -> catalog-family mappings, merged over the built-in metric and
+   * measured-width maps. Only metric-compatible pairs guarantee Word-accurate pagination.
    */
   readonly substitute?: Readonly<Record<string, string>>;
   /** Injectable for tests and CSP-constrained hosts; defaults to global `fetch`. */
@@ -210,9 +217,11 @@ export function googleFonts(
    * all while `Calibri` resolved to four faces.
    */
   const substitutes = new Map<string, string>(
-    Object.entries({ ...GOOGLE_METRIC_SUBSTITUTES, ...options.substitute }).map(
-      ([from, to]) => [from.toLowerCase(), to] as const
-    )
+    Object.entries({
+      ...GOOGLE_METRIC_SUBSTITUTES,
+      ...GOOGLE_WIDTH_FIDELITY_SUBSTITUTES,
+      ...options.substitute,
+    }).map(([from, to]) => [from.toLowerCase(), to] as const)
   );
   const allowed = options.allow
     ? new Set(options.allow.map((family) => family.toLowerCase()))

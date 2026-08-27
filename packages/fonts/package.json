@@ -1,7 +1,7 @@
 {
   "name": "@docx-editor.dev/fonts",
   "version": "2.12.0",
-  "description": "Metric-compatible open-licensed substitutes for Word default fonts (Carlito, Caladea, Liberation), packaged for @docx-editor.dev shaped measurement.",
+  "description": "Metric-compatible open-licensed substitutes for common Word fonts, packaged for @docx-editor.dev shaped measurement.",
   "sideEffects": false,
   "type": "module",
   "exports": {
@@ -51,7 +51,7 @@
     "email": "jedr@eigenpal.com",
     "url": "https://github.com/jedrazb"
   },
-  "license": "Apache-2.0 AND OFL-1.1",
+  "license": "Apache-2.0 AND OFL-1.1 AND LPPL-1.3c",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",

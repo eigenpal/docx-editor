@@ -1,5 +1,5 @@
 /**
- * `@docx-editor.dev/fonts` — metric-compatible substitutes for Word's default faces.
+ * `@docx-editor.dev/fonts` — metric-compatible substitutes for common Word faces.
  *
  * Word's own defaults (Calibri, Cambria, Times New Roman, Arial, Courier New) are proprietary
  * and cannot ship in an open package. What CAN ship are the faces built to MATCH THEIR METRICS:
@@ -20,7 +20,7 @@
  * @packageDocumentation
  * @public
  */
-// @docx-editor.dev/fonts — metric-compatible substitutes for Word's default faces.
+// @docx-editor.dev/fonts — metric-compatible substitutes for common Word faces.
 //
 // Word's own defaults (Calibri, Cambria, Times New Roman, Arial, Courier New) are
 // proprietary and cannot ship in an open package. What CAN ship are the faces built to
@@ -32,8 +32,9 @@
 //   Times New Roman → Liberation Serif   (SIL OFL)
 //   Arial           → Liberation Sans    (SIL OFL)
 //   Courier New     → Liberation Mono    (SIL OFL)
+//   Century Gothic  → TeX Gyre Adventor  (GUST Font License)
 //
-// `loadDefaultFonts()` fetches the packaged TTFs (lazily, only the families asked for)
+// `loadDefaultFonts()` fetches the packaged font files (lazily, only the families asked for)
 // and returns a configuration FRAGMENT — sources plus the Word-name→substitute map —
 // ready for `composeFontConfiguration`. Nothing loads until the app calls it: importing
 // this module fetches no bytes, and the editor engine itself never calls in here.
@@ -74,8 +75,14 @@ export interface DefaultFontSubstitution {
   readonly to: DefaultFontFaceRequest;
 }
 
-/** The Word default families this package can stand in for. */
-export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New';
+/** The common Word families this package can stand in for. */
+export type WordDefaultFamily =
+  | 'Calibri'
+  | 'Cambria'
+  | 'Times New Roman'
+  | 'Arial'
+  | 'Courier New'
+  | 'Century Gothic';
 
 /**
  * One face that did not load. `family` is the Word name that was asked for, `file` the
@@ -102,11 +109,11 @@ export interface DefaultFontsFragment {
 
 /**
  * Options shared by {@link loadDefaultFonts}, {@link installDefaultFontFaces} and
- * {@link defaultFonts}. Both fields are optional, so `{}` loads all five families over
+ * {@link defaultFonts}. Both fields are optional, so `{}` loads all six families over
  * the global `fetch`.
  */
 export interface LoadDefaultFontsOptions {
-  /** Narrow to specific Word families; default is all five. */
+  /** Narrow to specific Word families; default is all six. */
   readonly families?: readonly WordDefaultFamily[];
   /** Injectable for tests; defaults to global `fetch`. */
   readonly fetcher?: typeof fetch;
@@ -115,6 +122,7 @@ export interface LoadDefaultFontsOptions {
 interface FamilyPlan {
   readonly substitute: string;
   readonly filePrefix: string;
+  readonly extension?: 'otf';
 }
 
 const FAMILY_PLANS: ReadonlyMap<WordDefaultFamily, FamilyPlan> = new Map([
@@ -123,6 +131,14 @@ const FAMILY_PLANS: ReadonlyMap<WordDefaultFamily, FamilyPlan> = new Map([
   ['Times New Roman', { substitute: 'Liberation Serif', filePrefix: 'LiberationSerif' }],
   ['Arial', { substitute: 'Liberation Sans', filePrefix: 'LiberationSans' }],
   ['Courier New', { substitute: 'Liberation Mono', filePrefix: 'LiberationMono' }],
+  [
+    'Century Gothic',
+    {
+      substitute: 'TeX Gyre Adventor',
+      filePrefix: 'TeXGyreAdventor',
+      extension: 'otf',
+    },
+  ],
 ]);
 
 const FACES: readonly {
@@ -152,10 +168,11 @@ export const ALL_WORD_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Object.fr
   'Times New Roman',
   'Arial',
   'Courier New',
+  'Century Gothic',
 ]);
 
 /**
- * Load the packaged substitute faces for the given Word families (all five by default)
+ * Load the packaged substitute faces for the given Word families (all six by default)
  * and return a configuration fragment: byte-backed sources for the SUBSTITUTE families
  * plus the Word-name → substitute substitution map, so a document naming "Calibri"
  * resolves without the host mapping anything.
@@ -179,7 +196,7 @@ export async function loadDefaultFonts(
     const plan = FAMILY_PLANS.get(family);
     if (!plan) continue; // Unknown name: nothing to stand in for.
     for (const face of FACES) {
-      const file = `${plan.filePrefix}-${face.suffix}.ttf`;
+      const file = `${plan.filePrefix}-${face.suffix}.${plan.extension ?? 'ttf'}`;
       const manifest = manifestByFile.get(file);
       if (!manifest) {
         failures.push({ family, file, diagnostic: 'face missing from packaged manifest' });
@@ -275,7 +292,7 @@ export async function installDefaultFontFaces(
     const plan = FAMILY_PLANS.get(family);
     if (!plan) continue;
     for (const face of FACES) {
-      const file = `${plan.filePrefix}-${face.suffix}.ttf`;
+      const file = `${plan.filePrefix}-${face.suffix}.${plan.extension ?? 'ttf'}`;
       if (!manifestByFile.has(file)) continue;
       const faceKey = `${family}#${face.weight}#${face.style}`;
       if (started.has(faceKey)) continue;

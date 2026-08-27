@@ -1,20 +1,20 @@
 # @docx-editor.dev/fonts
 
-Metric-compatible, open-licensed substitutes for Word's default fonts, packaged for
+Metric-compatible, open-licensed substitutes for common Word fonts, packaged for
 shaped (HarfBuzz) measurement in the docx-editor engine.
 
-| Word font       | Substitute       | License |
-| --------------- | ---------------- | ------- |
-| Calibri         | Carlito          | SIL OFL |
-| Cambria         | Caladea          | SIL OFL |
-| Times New Roman | Liberation Serif | SIL OFL |
-| Arial           | Liberation Sans  | SIL OFL |
-| Courier New     | Liberation Mono  | SIL OFL |
+| Word font       | Substitute        | License           |
+| --------------- | ----------------- | ----------------- |
+| Calibri         | Carlito           | SIL OFL           |
+| Cambria         | Caladea           | SIL OFL           |
+| Times New Roman | Liberation Serif  | SIL OFL           |
+| Arial           | Liberation Sans   | SIL OFL           |
+| Courier New     | Liberation Mono   | SIL OFL           |
+| Century Gothic  | TeX Gyre Adventor | GUST Font License |
 
-Metric-compatible means identical advance widths: line wrap and pagination land where
-Word puts them, even though glyph outlines differ slightly. Documents that need exact
-rendering of the real faces should supply licensed bytes via `loadFonts` in
-`@docx-editor.dev/core`.
+The default substitutes use identical advance widths. TeX Gyre Adventor stays within
+0.5% of the recorded Century Gothic widths. Documents that need exact glyphs can supply
+licensed bytes through `loadFonts` in `@docx-editor.dev/core`.
 
 ## Usage
 
@@ -37,7 +37,7 @@ await installDefaultFontFaces();
 Nothing loads until you call `loadDefaultFonts`: importing the package fetches no
 bytes, and the editor engine never calls in here on its own.
 
-Font binaries ship as separate files (`assets/*.ttf`) fetched lazily per requested
+Font binaries ship as separate files (`assets/*.ttf` and `assets/*.otf`) fetched per requested
 family. Each face's `sha256:` hash is baked at packaging time
 (`src/manifest.generated.ts`) and CI-verified against the shipped bytes.
 
@@ -58,8 +58,8 @@ Open a file that uses only Calibri and one family is fetched (Carlito, its
 metric-compatible stand-in). Open one that names nothing cataloged and no request is
 made at all.
 
-The catalog is generated, closed and pinned to a single google/fonts commit
-(`src/google-catalog.generated.ts`, 105 families). A family a document names is only
+The catalog is generated, closed, and pinned to immutable google/fonts commits
+(`src/google-catalog.generated.ts`, 107 families). A family a document names is only
 ever a lookup key, never interpolated into a URL, and every entry carries a baked
 `sha256:` that the engine re-derives on admission. Families are included by rule:
 all four static faces present, and the shaper's table checks passed. Variable-only
@@ -77,6 +77,6 @@ the CDN.
 
 ## Licenses
 
-The packaged fonts keep their own licenses (see `licenses/`): Carlito and Caladea and
-the Liberation family under the SIL Open Font License. The package's own code is
-Apache-2.0.
+The packaged fonts keep their licenses in `licenses/`. Carlito, Caladea, and Liberation
+use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License.
+The package code uses Apache-2.0.

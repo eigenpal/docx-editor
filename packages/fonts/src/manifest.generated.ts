@@ -122,4 +122,24 @@ export const FONT_ASSET_MANIFEST: readonly FontAssetManifestEntry[] = [
     byteLength: 393576,
     hash: 'sha256:058ea80864aef09a23f45cbec2bb5400bc3dfbdea01c3f10538a21fcb497fb74',
   },
+  {
+    file: 'TeXGyreAdventor-Bold.otf',
+    byteLength: 180292,
+    hash: 'sha256:881fcd422499d3c269697e37e4d483ee91a617a28428cdb6037029924dc47129',
+  },
+  {
+    file: 'TeXGyreAdventor-BoldItalic.otf',
+    byteLength: 179620,
+    hash: 'sha256:a7aacff64987f83064eada3067887d7759675ac6286b7d1901fcc502b47f3822',
+  },
+  {
+    file: 'TeXGyreAdventor-Italic.otf',
+    byteLength: 174948,
+    hash: 'sha256:f6e17fc59536385ffb1e8ed41a3c2b9d082f4a8bebd62d829283d0de50c0d3d4',
+  },
+  {
+    file: 'TeXGyreAdventor-Regular.otf',
+    byteLength: 174340,
+    hash: 'sha256:17bfc0a97d48393453f28422f109d47099d54875600ea88a8d61c5ddd2dbffc4',
+  },
 ];
