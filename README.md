@@ -41,7 +41,7 @@ See the [React](#react) or [Vue](#vue) quick start below.
 | [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, and custom nodes.                                                                                                                                   | [Docs](https://www.docx-editor.dev/docs/2.x/pro)        |
 | [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page.                                            | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api) |
 
-Every package above is Apache 2.0 except `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro`, which are licensed under the EigenPal Pro Evaluation License 1.0 ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)): free to evaluate, production use requires a commercial agreement — **[licensing@eigenpal.com](mailto:licensing@eigenpal.com)**.
+`@docx-editor.dev/editor-api` and `@docx-editor.dev/pro` are licensed under the EigenPal Pro License ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
 > **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
 
@@ -150,7 +150,7 @@ bun run i18n:status      # check translation coverage
 
 ## License
 
-[Apache 2.0](LICENSE), except `packages/editor-api/` and `packages/pro/`, which are licensed under the EigenPal Pro Evaluation License 1.0 ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)). That licence permits internal, non-production evaluation; production use requires a written commercial agreement, available from **[licensing@eigenpal.com](mailto:licensing@eigenpal.com)**.
+This repository is licensed under [Apache 2.0](LICENSE), except `packages/editor-api/` and `packages/pro/`, which are licensed under the EigenPal Pro License ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)); you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
 ## Commercial Support
 

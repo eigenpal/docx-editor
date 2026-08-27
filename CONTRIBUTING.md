@@ -119,4 +119,4 @@ Open an issue at [github.com/eigenpal/docx-editor/issues](https://github.com/eig
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under [Apache 2.0](LICENSE), except in `packages/editor-api/` and `packages/pro/`, which carry the EigenPal Pro Evaluation License 1.0.
+By contributing, you agree that your contributions are licensed under [Apache 2.0](LICENSE), except contributions to `packages/editor-api/` and `packages/pro/`, which are licensed under the EigenPal Pro License.

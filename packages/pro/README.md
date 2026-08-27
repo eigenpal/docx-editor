@@ -125,13 +125,7 @@ Every value reaching `fromDocx` came out of a `.docx`, so treat `attrs` and `tex
 
 ## Licensing
 
-Unlike the editor packages, this one is not Apache 2.0. It is licensed under the
-[EigenPal Pro Evaluation License 1.0](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md):
-free to read, run, and modify internally to evaluate. Production use (a live or customer-facing
-environment, business-operational data, or this package inside something you offer to others)
-requires a written commercial agreement, and so does redistribution.
-
-Commercial licensing: [licensing@eigenpal.com](mailto:licensing@eigenpal.com)
+This package is licensed under the [EigenPal Pro License](https://github.com/eigenpal/docx-editor/blob/main/packages/pro/LICENSE.md), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
 Both module factories accept an optional `licenseKey`. Construction never validates it and never
 touches the network.
