@@ -34,6 +34,12 @@ import {
 } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import {
+  CJK_NO_BREAK_AFTER,
+  CJK_NO_BREAK_BEFORE,
+  cjkBreakAllowedBetween,
+  lastCodePointOf,
+} from './cjk-line-break.ts';
+import {
   EMPTY_TAB_STOPS,
   nextTabDestination,
   tabAdvanceWidth,
@@ -259,8 +265,9 @@ const BREAK_AFTER_DASH = new Set(['-', '‐', '–', '—']);
 
 /**
  * Break points inside a piece: after each run of spaces (words stay whole), after a dash
- * that sits between non-space text, and with each tab as its own atom so tab-stop
- * geometry can size `\t` independently of neighbouring text.
+ * that sits between non-space text, with each tab as its own atom so tab-stop geometry can
+ * size `\t` independently of neighbouring text — and between ideographic characters, where
+ * UAX #14 allows a line to end (kinsoku vetoes aside, see `cjk-line-break.ts`).
  *
  * A dash run breaks only after its LAST dash, mirroring how a run of spaces is one
  * boundary; a dash beside a space adds nothing the space boundary does not already give.
@@ -285,8 +292,18 @@ function wordBoundaries(text: string): number[] {
       boundaries.push(index + 1);
     }
   }
-  if (boundaries[boundaries.length - 1] !== text.length) boundaries.push(text.length);
-  return boundaries;
+  // CJK pass, by code point so a supplementary-plane ideograph is never cut inside its
+  // surrogate pair. Kept separate from the loop above so the Latin rules stay byte-identical.
+  for (let index = 0; index < text.length; ) {
+    const before = text.codePointAt(index)!;
+    const next = index + (before > 0xffff ? 2 : 1);
+    if (next >= text.length) break;
+    if (cjkBreakAllowedBetween(before, text.codePointAt(next)!)) boundaries.push(next);
+    index = next;
+  }
+  const ordered = [...new Set(boundaries)].sort((a, b) => a - b);
+  if (ordered[ordered.length - 1] !== text.length) ordered.push(text.length);
+  return ordered;
 }
 
 /**
@@ -1532,18 +1549,28 @@ export function breakParagraph(
       const measureSource = piece.measureText ?? candidate;
       let width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
       // A candidate may open a line only at a real break opportunity. Within a piece,
-      // `wordBoundaries` cuts after spaces, dashes and tabs, so every candidate but the
-      // first is one. The FIRST candidate of a piece continues whatever the previous piece
-      // ended with, so it is a break opportunity only if that ended in whitespace \u2014 or in a
-      // dash, which stays a break opportunity across run boundaries (a tracked change can
-      // split "ALPHA-" and "PRIME" into different runs without gluing them).
+      // `wordBoundaries` cuts after spaces, dashes, tabs and between ideographs, so every
+      // candidate but the first is one. The FIRST candidate of a piece continues whatever
+      // the previous piece ended with, so it is a break opportunity only if that ended in
+      // whitespace \u2014 or in a dash or an ideograph, which stay break opportunities across
+      // run boundaries (a tracked change can split "ALPHA-" and "PRIME" into different runs
+      // without gluing them, and a CJK clause split across runs must not wrap at the seam
+      // instead of the margin, #526). The kinsoku sets then veto the whole decision: no
+      // opportunity ever puts \u3002\uff0c\u3001\u300d at a line start or leaves \u300c\uff08 at a line end \u2014 a space
+      // or a run seam directly before a closing mark would otherwise create one.
+      const previousCodePoint = lastCodePointOf(lastEmitted);
+      const firstCodePoint = candidate.codePointAt(0)!;
       const opensWord =
-        consumed > 0 ||
-        lastEmitted === '' ||
-        /[\s\u00a0]$/.test(lastEmitted) ||
-        /^[\s\u00a0]/.test(candidate) ||
-        (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
-          !BREAK_AFTER_DASH.has(candidate[0]!));
+        (consumed > 0 ||
+          lastEmitted === '' ||
+          /[\s\u00a0]$/.test(lastEmitted) ||
+          /^[\s\u00a0]/.test(candidate) ||
+          (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
+            !BREAK_AFTER_DASH.has(candidate[0]!)) ||
+          (previousCodePoint !== undefined &&
+            cjkBreakAllowedBetween(previousCodePoint, firstCodePoint))) &&
+        !CJK_NO_BREAK_BEFORE.has(firstCodePoint) &&
+        !(previousCodePoint !== undefined && CJK_NO_BREAK_AFTER.has(previousCodePoint));
       if (opensWord) {
         wordStartSpan = line.spans.length;
         wordStartWidth = line.width;
