@@ -237,6 +237,11 @@ export function planVMergeRowHeights(
   budget?: VMergePlanBudget
 ): VMergeRowHeights | null {
   if (rows.length === 0) return null;
+  // Most tables have no vertical merge, and this runs from inside a row PROBE as well as
+  // from placement, so the walk that finds none has to be the cheap one: a continuation
+  // cell is the only thing that can start a chain, and a scan for one beats building the
+  // resolve and its budget accounting to reach the same `null`.
+  if (!rows.some((row) => row.cells.some((cell) => cell.vMergeContinue))) return null;
   const { heads, headIdsByRow } = collectHeads(rows, budget);
   if (heads.length === 0) return null;
 
@@ -270,16 +275,21 @@ export function planVMergeRowHeights(
    * decided right now, which is about to join the accepted set if the span is taken. The
    * detached ones are detached in the probe as well, so this is the height placement gives
    * the row and not an approximation of it.
+   *
+   * `atYPt` measures the row where it is going, bands included, for the same reason the head
+   * is measured that way: a float crossing a COVERED row makes it place taller than a
+   * position-free floor says, and the span is then admitted against a page it overruns.
    */
-  const baseOf = (rowIndex: number, pending?: string): number => {
+  const baseOf = (rowIndex: number, pending?: string, atYPt?: number): number => {
     const emptied = new Set<string>();
     for (const id of headIdsByRow.get(rowIndex) ?? []) {
       if (acceptedHeadIds.has(id) || id === pending) emptied.add(id);
     }
-    const key = `${rowIndex}\u0000${[...emptied].sort().join('\u0000')}`;
+    const at = atYPt === undefined ? '' : `@${atYPt.toFixed(2)}`;
+    const key = `${rowIndex}${at}\u0000${[...emptied].sort().join('\u0000')}`;
     const known = basePt.get(key);
     if (known !== undefined) return known;
-    const measured = probeRowHeightPt(rows[rowIndex]!, emptied);
+    const measured = probeRowHeightPt(rows[rowIndex]!, emptied, atYPt);
     basePt.set(key, measured);
     return measured;
   };
@@ -305,8 +315,8 @@ export function planVMergeRowHeights(
     return measured;
   };
 
-  const floorOf = (rowIndex: number, pending?: string): number =>
-    baseOf(rowIndex, pending) + (surplusPt.get(rowIndex) ?? 0);
+  const floorOf = (rowIndex: number, pending?: string, atYPt?: number): number =>
+    baseOf(rowIndex, pending, atYPt) + (surplusPt.get(rowIndex) ?? 0);
 
   /** Another merge starting under this one's head row: see the shapes declined above. */
   const headsBelowHead = (span: VMergeSpan): boolean => {
@@ -316,10 +326,15 @@ export function planVMergeRowHeights(
     return false;
   };
 
-  const coveredPtOf = (span: VMergeSpan): number => {
+  /**
+   * What the span's rows add up to. Each row is measured at the y the ones above it leave
+   * it at, so a wrap band is applied to the rows it really crosses — measuring them all at
+   * the head's top would put every band over every row.
+   */
+  const coveredPtOf = (span: VMergeSpan, atYPt?: number): number => {
     let total = 0;
     for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
-      total += floorOf(rowIndex, span.headCellId);
+      total += floorOf(rowIndex, span.headCellId, atYPt === undefined ? undefined : atYPt + total);
     }
     return total;
   };
@@ -356,7 +371,7 @@ export function planVMergeRowHeights(
       return Number.POSITIVE_INFINITY;
     }
     if (!affordable(span)) return Number.POSITIVE_INFINITY;
-    const covered = coveredPtOf(span);
+    const covered = coveredPtOf(span, atYPt);
     if (lastGrowableRow(span) === undefined) return covered;
     return Math.max(covered, contentOf(span, atYPt));
   };
@@ -368,7 +383,7 @@ export function planVMergeRowHeights(
       if (acceptedSpans.has(span)) return;
       if (headsBelowHead(span) || acceptedHeadRows.has(span.headRow)) return;
       if (!affordable(span)) return;
-      const covered = coveredPtOf(span);
+      const covered = coveredPtOf(span, atYPt);
       const growable = lastGrowableRow(span);
       const contentHeightPt = contentOf(span, atYPt);
       // Nothing in the span can grow and the content does not fit what the rows are fixed
@@ -377,9 +392,6 @@ export function planVMergeRowHeights(
       // where `hRule="exact"` clips it exactly as Word does.
       if (growable === undefined && contentHeightPt > covered + EPSILON_PT) return;
       const surplus = growable === undefined ? 0 : contentHeightPt - covered;
-      // Growing a row an accepted span already covers would change that span's height after
-      // it was judged against the page, which is the one thing this plan must not do.
-      if (surplus > EPSILON_PT && coveredRows.has(growable!)) return;
       acceptedSpans.add(span);
       acceptedHeadIds.add(span.headCellId);
       acceptedHeadRows.add(span.headRow);

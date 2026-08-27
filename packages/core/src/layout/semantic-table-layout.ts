@@ -243,6 +243,20 @@ export interface TableFlowDeps {
    */
   readonly vMergePlanBudget?: VMergePlanBudget;
   /**
+   * This layout is a MEASUREMENT, not a placement: nothing it produces is painted.
+   *
+   * A probe of one row lays out every nested table inside it, and planning merge heights in
+   * those tables means probing THEIR rows, which lays out the tables below them again. That
+   * multiplies rather than adds — a merge at each level of a nest a file controls ran three
+   * times slower per level and took minutes at `MAX_TABLE_NESTING`. So a probe measures
+   * nested tables unplanned, which is the height they had before this module existed.
+   *
+   * Erring tall is the safe direction: the caller reserves more room than the real
+   * placement needs, which can move a row to a fresh page early but can never overflow the
+   * page it was admitted onto.
+   */
+  readonly measuringOnly?: boolean;
+  /**
    * Which tracked revisions this pass resolves away. A cell paragraph must resolve the same
    * mode as a body paragraph, or one table would show the proposed result while the text
    * around it showed the original.
@@ -1405,6 +1419,7 @@ export function layoutRowFragmentBounded(
 function stripAnchorSinksForProbe(deps: TableFlowDeps): TableFlowDeps {
   return {
     ...deps,
+    measuringOnly: true,
     collectAnchoredDrawings: undefined,
     publishAnchoredDrawings: undefined,
     deferAnchoredDrawings: undefined,
@@ -1463,49 +1478,6 @@ export function measureRowHeight(
 }
 
 /**
- * One row of a table placed in ONE PASS, where there is no next page to carry a remainder.
- *
- * `acceptVMergeSpansAt` measures a merged head at this row's real top with wrap bands
- * applied, so the head's bound is what placement produces and the row comes back complete.
- * If it ever does not, the row is placed again with the merge unplanned: the head then sizes
- * its own row and holds all of its content, which is what this module did before it planned
- * anything. Dropping the remainder instead would lose the lines silently.
- */
-function layoutOnePassRow(
-  row: SemanticTableRow,
-  structure: SemanticTableStructure,
-  left: number,
-  y: number,
-  depth: number,
-  deps: TableFlowDeps,
-  isHeaderRepeat: boolean,
-  vMerge: RowVMergeLayoutOptions | undefined
-): LayoutRowBoundedResult {
-  const placed = layoutRowFragment(
-    row,
-    structure.columnWidthsPt,
-    left,
-    y,
-    isHeaderRepeat,
-    depth,
-    deps,
-    structure.cellSpacingPt,
-    vMerge
-  );
-  if (placed.remainder === null || vMerge === undefined) return placed;
-  return layoutRowFragment(
-    row,
-    structure.columnWidthsPt,
-    left,
-    y,
-    isHeaderRepeat,
-    depth,
-    deps,
-    structure.cellSpacingPt
-  );
-}
-
-/**
  * The vMerge plan for one table, probed by row layout. `rows` narrows it to the rows the
  * caller actually places — the paginator plans over the BODY rows, so a merge is never
  * planned against a repeated header copy.
@@ -1517,17 +1489,19 @@ export const vMergePlanFor = (
   deps: TableFlowDeps,
   rows?: readonly SemanticTableRow[]
 ): VMergeRowHeights | null =>
-  planTableVMergeHeights(
-    rows ? { ...structure, rows } : structure,
-    left,
-    depth,
-    deps,
-    measureRowHeight,
-    // The PASS's pool, inherited by every nested table through `deps`. A fresh allowance per
-    // table lets each nesting level re-spend the whole thing, which is exponential in depth
-    // on a nest a file controls.
-    deps.vMergePlanBudget
-  );
+  deps.measuringOnly === true
+    ? null
+    : planTableVMergeHeights(
+        rows ? { ...structure, rows } : structure,
+        left,
+        depth,
+        deps,
+        measureRowHeight,
+        // The PASS's pool, inherited by every nested table through `deps`. A fresh allowance per
+        // table lets each nesting level re-spend the whole thing, which is exponential in depth
+        // on a nest a file controls.
+        deps.vMergePlanBudget
+      );
 
 /**
  * A nested table inside a cell: laid out with its own geometry, no pagination, one
@@ -1569,14 +1543,21 @@ function emitNestedTable(
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const [rowIndex, row] of structure.rows.entries()) {
-    const placed = layoutOnePassRow(
+    // No retry here, and none possible: `acceptVMergeSpansAt` sizes a merged head's span
+    // from a probe at THIS row's top with wrap bands applied, so the bound the head is
+    // placed under is the height its own content measured. Placing twice on these deps
+    // would publish the row's anchored drawings twice — once at geometry from a layout that
+    // was thrown away — and unplanning one row while the span stays accepted would leave
+    // the head sizing its row AND the surplus still sitting on the rows below it.
+    const placed = layoutRowFragment(
       row,
-      structure,
+      structure.columnWidthsPt,
       tableLeft,
       y,
+      false,
       depth,
       nestedFlowDeps,
-      false,
+      structure.cellSpacingPt,
       acceptVMergeSpansAt(vMergePlan, rowIndex, y)
     );
     rawRows.push(placed.record);
@@ -1639,14 +1620,15 @@ export function layoutTableFragment(
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const [rowIndex, row] of structure.rows.entries()) {
-    const placed = layoutOnePassRow(
+    const placed = layoutRowFragment(
       row,
-      structure,
+      structure.columnWidthsPt,
       left,
       y,
+      isHeaderRepeat(row),
       depth,
       deps,
-      isHeaderRepeat(row),
+      structure.cellSpacingPt,
       acceptVMergeSpansAt(vMergePlan, rowIndex, y)
     );
     rawRows.push(placed.record);

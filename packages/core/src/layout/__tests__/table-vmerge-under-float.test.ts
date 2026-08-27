@@ -71,6 +71,29 @@ function overHeadColumn(top: number, height: number): ReadonlyMap<number, Exclus
   ]);
 }
 
+/**
+ * A band over the RIGHT column, which in this fixture is the covered rows' own cells rather
+ * than the merged head. A covered row that places taller than its floor pushes the span past
+ * the page it was admitted onto, and the head is measured accurately either way — so this is
+ * the half of the divergence an accurate head probe does not cover.
+ */
+function overCoveredColumn(top: number, height: number): ReadonlyMap<number, ExclusionZone[]> {
+  return new Map([
+    [
+      0,
+      [
+        squareWrapZone({
+          anchorParagraphId: anchorParagraphId(),
+          top,
+          height,
+          left: 120,
+          width: 60,
+        }),
+      ],
+    ],
+  ]);
+}
+
 /** How far the lowest painted block sits BELOW the table that is supposed to contain it. */
 function worstOverhangPt(layout: SemanticLayout): number {
   let worst = 0;
@@ -137,6 +160,22 @@ describe('a merged head under a float the plan could not see', () => {
       // A bound that swallows what it clips is the other way to keep content inside a box.
       const painted = paintedText(layoutUnderFloat(part, overHeadColumn(top, height)));
       for (const word of HEAD_TEXT.split(' ')) expect(painted).toContain(word);
+    });
+  }
+
+  for (const [top, height] of [
+    [0, 45],
+    [20, 30],
+  ] as const) {
+    test(`a band at y=${top} for ${height}pt over a COVERED row keeps the span on its page`, () => {
+      // The rows a merge covers are measured where they will sit, bands included, for the
+      // same reason the head is: a covered row that places taller than the floor the span
+      // was admitted on takes the span past the bottom of the page it was admitted onto.
+      const layout = layoutUnderFloat(part, overCoveredColumn(top, height));
+      expect(worstOverhangPt(layout)).toBe(0);
+      for (const pageIndex of layout.pages.keys()) {
+        expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(TINY_CONTENT.height + 0.001);
+      }
     });
   }
 
