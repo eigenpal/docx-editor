@@ -139,7 +139,7 @@ describe('comprehensive fixture table fidelity', () => {
     const nested = host.blocks.find((block) => block.kind === 'table');
     expect(nested?.kind).toBe('table');
     if (!nested || nested.kind !== 'table') throw new Error('unreachable');
-    // Inner tcMar 40 twips each side: no defaultLineHeight+2*CELL_PAD (20pt) floor.
+    // Inner tcMar 40 twips each side: no defaultLineHeight+2*pad (20pt) floor.
     expect(nested.rows[0]!.box.height).toBeLessThan(18);
     const inner = nested.rows[0]!.cells[0]!;
     const innerPara = inner.blocks[0]!;

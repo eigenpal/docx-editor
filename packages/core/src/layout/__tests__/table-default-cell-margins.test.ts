@@ -258,27 +258,27 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
     const fragment = layout.pages[0]!.fragments.find(
       (record): record is TableFragmentRecord => record.kind === 'table'
     )!;
-    const rowTop = fragment.rows[0]!.box.y;
-    const rowBottom = rowTop + fragment.rows[0]!.box.height;
+    const rowBottom = fragment.rows[0]!.box.y + fragment.rows[0]!.box.height;
+    const paragraphs = fragment.rows[0]!.cells[0]!.blocks.filter(
+      (block) => block.kind === 'paragraph'
+    );
+    const last = paragraphs[paragraphs.length - 1]!;
+    if (last.kind !== 'paragraph') throw new Error('expected a paragraph fragment');
     const caret = caretAt(layout, { paragraphId: terminator, offset: 0 }, { measurer });
     expect(caret).not.toBeNull();
     expect(caret!.height).toBeGreaterThan(0);
+    // The published ascent is the fallback, and the caret ends ON the collapse point. A
+    // `rowTop` lower bound would be no assertion here: the row starts at 0 in this fixture,
+    // so anything passes. The case where the ascent overruns the band is its own test.
+    expect(caret!.height).toBeCloseTo(last.lines[0]!.baseline, 6);
     expect(caret!.y + caret!.height).toBeCloseTo(rowBottom, 6);
-    expect(caret!.y).toBeGreaterThanOrEqual(rowTop - 0.001);
 
-    // And pinned to the band it actually occupies: the last line-height of the cell, which
-    // is the nested table's row. It sits at the CELL's content left, inside that table's own
-    // margin, so it never covers the table's glyphs — the least-wrong of three placements,
-    // the other two being outside the row entirely or in a column that may not exist.
-    const nested = fragment.rows[0]!.cells[0]!.blocks.find((block) => block.kind === 'table');
-    if (nested?.kind !== 'table') throw new Error('expected a nested table fragment');
-    const glyphs = nested.rows[0]!.cells[0]!.blocks.flatMap((block) =>
-      block.kind === 'paragraph' ? block.lines.flatMap((line) => line.spans) : []
-    );
-    expect(glyphs.length).toBeGreaterThan(0);
-    for (const span of glyphs) {
-      expect(caret!.x).toBeLessThan(span.box.x);
-    }
+    // Horizontally it follows the terminator's OWN indent and alignment, which is where the
+    // text a keystroke produces would appear — not a fixed offset. `w:ind` and `w:jc` both
+    // live in `w:pPr`, which the terminator test admits, so a centred or indented one puts
+    // the caret over the preceding table's text; that is correct, and the invariant that
+    // matters is the vertical containment.
+    expect(caret!.x).toBeCloseTo(last.lines[0]!.contentX, 6);
   });
 
   test('a terminator whose MARK carries a tracked revision keeps its line', () => {
@@ -382,20 +382,22 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
     }
   });
 
-  test('a press still lands in it', () => {
-    // The nested table owns the band under its own column, so the reachable area is the
-    // rest of the cell beside it.
+  test('a press lands in it beside the nested table, and in the table under it', () => {
+    // The CONTRAST is the claim. Asserting only that some point resolves to the terminator
+    // proves nothing: the nearest-block walk hands it back for almost any point, including
+    // ones past the page content bottom, and for the non-collapsed variant too. What is
+    // actually true is that the nested table owns the band under its own column and the
+    // terminator owns the rest of the cell — so both halves are pinned at one y.
     const layout = layoutOf(cellWithNestedTable('<w:p/>'));
     const order = documentOrder(layout);
     const terminator = order[order.length - 1]!;
+    const nestedParagraph = order[order.length - 2]!;
     const page = layout.pages[0]!;
-    const hit = hitTestPage(
-      layout,
-      0,
-      { x: page.contentBox.x + 240, y: page.contentBox.y + 20 },
-      { measurer }
-    );
-    expect(hit?.position?.paragraphId).toBe(terminator);
+    const at = (x: number, y: number) =>
+      hitTestPage(layout, 0, { x: page.contentBox.x + x, y: page.contentBox.y + y }, { measurer })
+        ?.position?.paragraphId;
+    expect(at(10, 20)).toBe(nestedParagraph);
+    expect(at(240, 20)).toBe(terminator);
   });
 
   test('a NUMBERED terminator is not one: its marker is content, so it keeps its line', () => {

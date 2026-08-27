@@ -1031,12 +1031,15 @@ export function caretBoxOnLine(
     //
     // Drawn ENDING at the collapse point, not starting from it. The line sits on the cell's
     // content bottom, so growing downward puts the whole caret outside the row and over
-    // whatever block follows the table. Growing upward puts it in the band the preceding
-    // table occupies — beside that table's text, never over its glyphs, because the
-    // terminator's own indent is the CELL's content left and the table's content starts
-    // inside its own margins. Neither of the alternatives is available: the paragraph's own
-    // band is empty by construction, and a table that fills the cell leaves no column to the
-    // right of it. This is the least-wrong of the three, and it is pinned as such.
+    // whatever block follows the table. Growing upward puts it inside the row that owns the
+    // paragraph, which is the invariant worth having and the one the tests pin.
+    //
+    // It does land in the band the preceding table occupies, and horizontally wherever the
+    // terminator's OWN `w:ind` and `w:jc` put it — so a centred or indented terminator puts
+    // the caret over that table's text. That is not a placement bug to route around: it is
+    // where the text a keystroke produces will appear. Neither alternative is available
+    // either, because the paragraph's own band is empty by construction and a table that
+    // fills the cell leaves no column beside it.
     //
     // Restricted to a zero box on purpose. A spanless line whose `leading` and
     // `trailingSpacing` happen to consume it is an ordinary spaced empty paragraph that

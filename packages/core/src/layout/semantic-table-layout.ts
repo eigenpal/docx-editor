@@ -48,10 +48,6 @@ import {
   rowDepsForAnchors,
   type DeferredRowAnchor,
 } from './table-anchor-republish.ts';
-
-// The cell box is its own unit (`table-cell-box.ts`); re-exported because callers reach for
-// it through the table-layout surface.
-export { rowWithSplitBorders };
 import {
   markRevisionFields,
   paragraphMarkFormatRevisionOf,
@@ -159,6 +155,10 @@ export {
   type TableVMergeResolveBudget,
   type TableVMergeResolveWork,
 } from './table-vmerge.ts';
+
+// The cell box is its own unit (`table-cell-box.ts`); re-exported because callers reach
+// for it through the table-layout surface.
+export { rowWithSplitBorders };
 
 /** Soft ceiling on fragments emitted for one authored row (hostile / runaway splits). */
 export const MAX_TABLE_ROW_FRAGMENTS = 4096;
@@ -1055,7 +1055,7 @@ function flowBlocksInBoxBounded(
 
     // POSITION only. Whether this paragraph may actually collapse is one question about what
     // it would publish, and `placeCellParagraph` is where every answer to it already lives —
-    // see `publishesFurniture` there. Deciding it in two places is how the list marker and
+    // see `publishesPlacedGlyphs` there. Deciding it in two places is how the list marker and
     // the tracked paragraph mark each arrived as their own late special case.
     //
     // `lastEmittedTable` rather than the source node's kind: `emitNestedTable` returns null
@@ -1249,7 +1249,7 @@ export function layoutRowFragmentBounded(
   let anyNestedBlocked = false;
   // Grow from the row top. Empty / vMerge-continue cells contribute one default line plus
   // THEIR authored insets below; fitted cells contribute measured content only. Seeding with
-  // `defaultLineHeight + 2 * CELL_PAD` used to force ~20pt rows even when tcMar was tighter
+  // `defaultLineHeight + 2 * pad` used to force ~20pt rows even when tcMar was tighter
   // and the cell's own line was shorter — nested tables picked that up as blank bottom pad.
   let rowBottom = rowTop;
 

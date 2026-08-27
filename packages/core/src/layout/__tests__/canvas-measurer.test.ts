@@ -210,8 +210,10 @@ describe('tryCreateCanvasMeasurer', () => {
       context: mockContext(undefined, { ascent: 0.8916, descent: 0.2412 }),
       scale: 1,
     })!;
+    // Liberation Mono's own face box at 10 pt, which the mock reports.
+    const monoFaceBox = 10 * (0.8916 + 0.2412);
     const metrics = mono.lineMetrics(style({ fontSizePt: 10 }));
-    expect(10 * (0.8916 + 0.2412)).toBeCloseTo(11.328, 3);
+    expect(metrics.height).toBeGreaterThan(monoFaceBox);
     expect(metrics.height).toBeCloseTo(11.5, 5);
   });
 });

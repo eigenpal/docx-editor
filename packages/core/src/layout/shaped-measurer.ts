@@ -97,6 +97,18 @@ export interface ShapedMeasurerOptions {
  */
 const MAX_LINE_GAP_FACE_BOXES = 0.5;
 
+/**
+ * Ceiling on a face's own ascent + descent, as a multiple of the size it is drawn at.
+ *
+ * Measured over the twenty faces this engine ships plus the test corpus, the largest face
+ * box is Carlito's 1.2207 em; Caladea is 1.15, Liberation Mono 1.1328, Liberation Sans
+ * 1.1172, Liberation Serif 1.1074. Faces built for scripts with tall ascenders reach about
+ * 2 em, so 4 clears every real face by a wide margin — it exists only so a font declaring a
+ * huge `hhea.ascender` over a tiny `head.unitsPerEm` cannot make one run a page. With the
+ * gap ceiling above it, the worst line box a file can ask for is 6 em.
+ */
+const MAX_FACE_BOX_EM = 4;
+
 /** Super and subscript draw at three quarters, so they measure at three quarters. */
 const sizeFactorOf = (style: ResolvedRunStyle): number =>
   style.verticalAlign === 'baseline' ? 1 : 0.75;
@@ -259,23 +271,30 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
         // Liberation Mono — are unaffected, which is why the error only showed on the two
         // faces that have one.
         //
-        // BOUNDED AT BOTH ENDS, because `hhea.lineGap` is a signed int16 read from a font a
-        // DOCX can embed, and nothing downstream bounds a line box. Below: external leading
-        // is non-negative on Windows and in GDI, and a face declaring
-        // `lineGap = -(ascender - descender) + 1` would otherwise give every run in that
-        // family a one-unit line — the `height > 0` guard catches a total that reaches zero,
-        // not one crushed to a fraction of a point. Above: `lineGap = 32767` over 1000 units
-        // per em is a ~337 pt line for a 10 pt run, one line to a page for the whole
-        // document. Real external leading is a fraction of the face box; the ceiling is
-        // generous enough that no shipping face comes near it and still bounded.
-        const faceBox = ascent + descent;
+        // BOUNDED IN THE EM, because all three numbers are `hhea` int16 read from a font a
+        // DOCX can embed and nothing downstream bounds a line box. The shaper admits any
+        // safe integer over any `upem > 0`, so `ascender = 32767` over `upem = 16` is a face
+        // box of ~2048 em on its own — bounding the gap against the face box alone would
+        // have clamped one attacker-controlled number against another.
+        //
+        // The face box is clamped first, absolutely, against the drawn size. Ascent and
+        // descent scale together so the baseline stays where it sits inside the box. Then
+        // the gap: non-negative, because external leading is non-negative on Windows and in
+        // GDI and a face declaring `lineGap = -(ascender - descender) + 1` would otherwise
+        // give every run in that family a one-unit line that the `height > 0` guard does not
+        // catch; and at most half a face box above.
+        const baseSizePt = halfPoints / 2;
+        const rawFaceBox = ascent + descent;
+        const faceBoxCeiling = baseSizePt * MAX_FACE_BOX_EM;
+        const squeeze = rawFaceBox > faceBoxCeiling ? faceBoxCeiling / rawFaceBox : 1;
+        const faceBox = rawFaceBox * squeeze;
         const lineGap = Math.min(
           Math.max(0, shaped.metrics.lineGap / fixedPointScale),
           faceBox * MAX_LINE_GAP_FACE_BOXES
         );
         const height = faceBox + lineGap;
         if (height > 0) {
-          metrics = { height, baseline: ascent };
+          metrics = { height, baseline: ascent * squeeze };
         } else {
           metrics = fallback.lineMetrics(style);
           scalable = false;

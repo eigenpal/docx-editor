@@ -156,8 +156,8 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
   test('an enormous hhea lineGap cannot turn one run into a page', () => {
     // The other end of the same file-derived number. `lineGap = 32767` over 1000 units per em
     // is a ~337 pt line for a 10 pt run — one line to a page for the whole document — and
-    // nothing downstream bounds a line box. Capped at the face's own ascent + descent, which
-    // every shipping face clears by an order of magnitude.
+    // nothing downstream bounds a line box. Capped at half the face's own ascent + descent,
+    // against a largest real gap among the shipped faces of 0.038 face boxes.
     const enormous = createShapedMeasurer({
       shaper: {
         shape(input) {
@@ -181,6 +181,38 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     // Face box 11, so the gap is admitted up to 5.5 and the line box stops at 16.5 — 1.5x
     // the face, against the largest real gap among the shipped faces of 0.038 face boxes.
     expect(enormous.lineMetrics(style())).toEqual({ height: 16.5, baseline: 9 });
+  });
+
+  test('a face box far larger than the em is clamped, baseline with it', () => {
+    // The gap ceiling is a multiple of the FACE BOX, and the face box is `hhea` int16 over
+    // `head.unitsPerEm` — both from the same embedded font, and the shaper admits any safe
+    // integer over any positive em. Bounding one attacker-controlled number against another
+    // bounds nothing, so the face box is clamped against the size it is drawn at first.
+    const huge = createShapedMeasurer({
+      shaper: {
+        shape(input) {
+          return {
+            text: input.text,
+            direction: 'ltr',
+            bidiLevel: 0,
+            glyphs: [],
+            clusters: [],
+            fontSpans: [],
+            // 900 pt of ascent and 100 pt of descent for an 11 pt run.
+            metrics: { ascent: 900_000, descent: 100_000, lineGap: 0 },
+          };
+        },
+      },
+      resolveFont: () => font,
+      fallback,
+      shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+      unicodeDataVersion: '15.1',
+      fixedPointScale: 1_000,
+    });
+    // 4 em at 11 pt is 44, and the baseline keeps its 0.9 share of the box.
+    const metrics = huge.lineMetrics(style());
+    expect(metrics.height).toBeCloseTo(44, 6);
+    expect(metrics.baseline).toBeCloseTo(39.6, 6);
   });
 
   test('it is NOT the flat multiplier the fallback uses, so the font is really being read', () => {

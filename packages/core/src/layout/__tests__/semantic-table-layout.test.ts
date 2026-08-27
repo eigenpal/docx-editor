@@ -284,7 +284,7 @@ describe('semantic table layout', () => {
     );
   });
 
-  test('authored tcMar insets content; omitted sides fall back to CELL_PAD', () => {
+  test('authored tcMar insets the content on every side it states', () => {
     const part = loadPart(
       '<w:tbl>' +
         tr(
@@ -307,10 +307,10 @@ describe('semantic table layout', () => {
     expect(para.box.y).toBe(cell.box.y + 4);
   });
 
-  test('asymmetric tcMar and final-paragraph spaceAfter size the row without CELL_PAD floor', () => {
+  test('asymmetric tcMar and final-paragraph spaceAfter size the row without a pad floor', () => {
     // Top 100 twips (5pt), bottom 20 twips (1pt). Final para after=40 twips (2pt).
     // Measured line is 14pt → natural height 5+14+2+1 = 22 when after applies; a tighter
-    // companion cell below also proves the old defaultLineHeight+2*CELL_PAD (20) seed is gone.
+    // companion cell below also proves the old defaultLineHeight+2*pad (20) seed is gone.
     const part = loadPart(
       '<w:tbl>' +
         tr(
