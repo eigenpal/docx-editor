@@ -435,11 +435,24 @@ describe('toolbar overflow integration', () => {
       )?.[0] ?? '';
     expect(zoomRule).toContain('overflow-y: visible');
 
+    const pickerHatch =
+      coreCss.match(
+        /\.docx-toolbar__more-panel:has\(\.docx-toolbar__font-family-content\),\s*\.docx-toolbar__more-panel:has\(\.docx-toolbar__style-content\)\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(pickerHatch).toContain('overflow-y: visible');
+
     const fontSizeRule =
       coreCss.match(/\.docx-toolbar__more-panel \.docx-toolbar__font-size-menu\s*\{[^}]+\}/)?.[0] ??
       '';
     expect(fontSizeRule).toContain('right: 0');
     expect(fontSizeRule).toContain('left: auto');
+
+    const pickerEdgeRule =
+      coreCss.match(
+        /\.docx-toolbar__more-panel \.docx-toolbar__font-family-content,\s*\.docx-toolbar__more-panel \.docx-toolbar__style-content\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(pickerEdgeRule).toContain('right: 0');
+    expect(pickerEdgeRule).toContain('left: auto');
 
     const lowerMenuRule =
       coreCss.match(

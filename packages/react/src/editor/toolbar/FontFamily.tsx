@@ -179,17 +179,9 @@ function FontFamilyContent({ asChild, className, children }: FontFamilyPartProps
   if (!context || !context.open) return null;
   const shared = {
     role: 'listbox' as const,
+    // Anchoring, layering and colors all come from the core stylesheet — the popup
+    // must sit in the overlay band, above ambient chrome like the navigation panel.
     className: `docx-toolbar__menu docx-toolbar__font-family-content${className ? ` ${className}` : ''}`,
-    // Anchored under the trigger; colors come from the chrome tokens, never literals.
-    style: {
-      position: 'absolute' as const,
-      top: '100%',
-      left: 0,
-      zIndex: 30,
-      minWidth: '100%',
-      maxHeight: 300,
-      overflowY: 'auto' as const,
-    },
   };
   // The default menu is the grouped picker: small gray semibold headings for
   // the classified families, a plain trailing group for the rest, ✓ on the current
@@ -284,11 +276,10 @@ export function FontFamilyRoot({ hidden, asChild, className, children }: FontFam
 
   if (hidden) return null;
   const shared = {
+    // The positioning context for the absolute Content comes from the core stylesheet.
     className: `docx-toolbar__font-family${className ? ` ${className}` : ''}`,
     // Stable slot identity, matching the other parts' `data-slot` markers.
     'data-slot': 'font.family',
-    // The positioning context for the absolute Content.
-    style: { position: 'relative' as const, display: 'inline-block' as const },
   };
   const body = children ?? (
     <>

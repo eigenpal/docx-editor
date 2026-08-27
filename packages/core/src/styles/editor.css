@@ -3162,6 +3162,20 @@ a.docx-hyperlink:focus-visible {
   overflow-y: visible;
 }
 
+/* Same hatch for the font and style pickers: their 300px lists are popovers too,
+ * and the panel's scrollport would clip them when the group collapses into More. */
+.docx-toolbar__more-panel:has(.docx-toolbar__font-family-content),
+.docx-toolbar__more-panel:has(.docx-toolbar__style-content) {
+  overflow-y: visible;
+}
+
+/* Right-edge escape, matching the font-size menu below. */
+.docx-toolbar__more-panel .docx-toolbar__font-family-content,
+.docx-toolbar__more-panel .docx-toolbar__style-content {
+  right: 0;
+  left: auto;
+}
+
 /* Right-edge controls open toward the panel instead of beyond the viewport. */
 .docx-toolbar__more-panel .docx-toolbar__font-size-menu {
   right: 0;
@@ -3309,9 +3323,12 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The font-family compound: the trigger is the transparent picker trigger
- * ("Arial ∨"); the popup is the shared dropdown card. */
+ * ("Arial ∨"); the popup is the shared dropdown card. The root is the
+ * positioning context the absolute popup anchors to. */
 .docx-toolbar__font-family,
 .docx-toolbar__style {
+  position: relative;
+  display: inline-block;
   flex: none;
 }
 
@@ -3450,9 +3467,19 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
 }
 
+/* Anchored under the trigger. The z-index is the overlay band token, like every
+ * other transient toolbar surface — a literal here once left the popup UNDER the
+ * navigation panel, which sits in the chrome band. */
 .docx-toolbar__font-family-content,
 .docx-toolbar__style-content {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
+  min-width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .docx-toolbar__font-family-item,

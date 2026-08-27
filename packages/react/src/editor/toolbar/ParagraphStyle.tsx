@@ -201,16 +201,9 @@ function ParagraphStyleContent({ asChild, className, children }: ParagraphStyleP
   if (!context || !context.open) return null;
   const shared = {
     role: 'listbox' as const,
+    // Anchoring, layering and colors all come from the core stylesheet — the popup
+    // must sit in the overlay band, above ambient chrome like the navigation panel.
     className: `docx-toolbar__menu docx-toolbar__style-content${className ? ` ${className}` : ''}`,
-    style: {
-      position: 'absolute' as const,
-      top: '100%',
-      left: 0,
-      zIndex: 30,
-      minWidth: '100%',
-      maxHeight: 300,
-      overflowY: 'auto' as const,
-    },
   };
   const items =
     children ??
@@ -287,9 +280,9 @@ export function ParagraphStyleRoot({ hidden, asChild, className, children }: Par
 
   if (hidden) return null;
   const shared = {
+    // The positioning context for the absolute Content comes from the core stylesheet.
     className: `docx-toolbar__style${className ? ` ${className}` : ''}`,
     'data-slot': 'styles.style',
-    style: { position: 'relative' as const, display: 'inline-block' as const },
   };
   const body = children ?? (
     <>

@@ -86,12 +86,15 @@ const VERTICAL_RULER_STYLE: CSSProperties = {
   pointerEvents: 'none',
 };
 
+// The band is a stacking context, so it caps every popup inside it: it must sit in
+// the overlay band, or the navigation pane (chrome band, 40) paints over every menu
+// the toolbar opens.
 const CHROME_BAND_STYLE: CSSProperties = {
   flex: 'none',
   display: 'flex',
   flexDirection: 'column',
   position: 'relative',
-  zIndex: 30,
+  zIndex: 'var(--doc-z-overlay)',
   backgroundColor: 'var(--doc-surface)',
   borderBottomWidth: '1px',
   borderBottomStyle: 'solid',
