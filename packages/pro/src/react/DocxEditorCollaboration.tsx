@@ -47,7 +47,16 @@ export interface CollaborationCaretLabelRenderProps {
   readonly color: string;
 }
 
-/** Props for {@link DocxEditorCollaboration}.CaretLabels. @public */
+/**
+ * Props for {@link DocxEditorCollaboration}.CaretLabels.
+ *
+ * The rendered content lands in the engine's label layer, which is furniture: the layer is
+ * `aria-hidden` and takes no pointer events. Assistive technology does not read a label,
+ * and nothing inside one is clickable or focusable. Keep interactive or announced presence
+ * UI in your own chrome, such as the avatar stack.
+ *
+ * @public
+ */
 export interface CollaborationCaretLabelsProps {
   /** The live session whose participants label the carets. `null` renders nothing. */
   readonly session: CollaborationSession | null;
@@ -103,9 +112,18 @@ function accentStyle(accent: PresenceAccent): CSSProperties {
  * their tracked changes and comments with no wiring.
  */
 function CollaborationAvatar({ participant, className, children }: CollaborationAvatarProps) {
+  const editor = useDocxEditor();
   const roster = useReviewAuthors();
   const stackAccents = useContext(AvatarAccentContext);
-  const accent = stackAccents?.get(participant.actorId) ?? presenceAccentOf(roster, participant);
+  // With an editor in context the ENGINE resolves the accent (`presenceColorFor`), so the
+  // disc takes the same colour as the painted caret; the arithmetic is the no-editor fallback.
+  const accent =
+    stackAccents?.get(participant.actorId) ??
+    presenceAccentOf(
+      roster,
+      participant,
+      editor ? (name) => editor.presenceColorFor(name) : undefined
+    );
   return (
     <span
       className={`docx-collaboration-avatar${className ? ` ${className}` : ''}`}
@@ -127,11 +145,22 @@ function CollaborationAvatar({ participant, className, children }: Collaboration
  * review-roster derivation the painted presence and the review cards use.
  */
 function CollaborationAvatars({ session, max, className, children }: CollaborationAvatarsProps) {
+  const editor = useDocxEditor();
   const participants = useCollaborationParticipants(session);
   const roster = useReviewAuthors();
   const { t } = useTranslation();
-  // Accents allocate in SESSION order (the engine's appearance order); only display sorts.
-  const accents = useMemo(() => presenceAccentsOf(roster, participants), [roster, participants]);
+  // With an editor in context the ENGINE resolves each accent (`presenceColorFor`), from the
+  // same allocator the painted carets use; the session-order arithmetic is the no-editor
+  // fallback. Only display sorts — resolution order stays session order.
+  const accents = useMemo(
+    () =>
+      presenceAccentsOf(
+        roster,
+        participants,
+        editor ? (name) => editor.presenceColorFor(name) : undefined
+      ),
+    [roster, participants, editor]
+  );
   const sorted = useMemo(() => orderedParticipants(participants), [participants]);
   if (sorted.length === 0) return null;
   const shown = max === undefined ? sorted : sorted.slice(0, Math.max(0, max));

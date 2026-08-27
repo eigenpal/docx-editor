@@ -432,4 +432,94 @@ describe('DocxEditorCollaboration.Avatars (Vue)', () => {
       mounted.unmount();
     }
   });
+
+  // A declared review colour is host input in any CSS shape. The paint sink refuses what
+  // it cannot paint, so the shared resolution falls to the author's slot token — the
+  // painted caret and the avatar must agree either way.
+  test('a declared non-hex colour falls to the slot var on caret and avatar alike', async () => {
+    const session = stubSession();
+    session.setParticipants([participantOf('a1', 'Reviewer One')]);
+    const mounted = mountEditorTree(
+      () => h(DocxEditorCollaboration.Avatars, { session }),
+      docx(INS + PLAIN),
+      () => [],
+      [collaborationModule({ session })]
+    );
+    try {
+      await flush();
+      const paintedAndAvatar = () => {
+        const label = mounted.container.querySelector<HTMLElement>('.docx-remote-caret-label')!;
+        const avatar = [
+          ...mounted.container.querySelectorAll<HTMLElement>('[data-collaboration-avatar]'),
+        ].find((candidate) => candidate.title === 'Reviewer One')!;
+        return {
+          caret: label.style.getPropertyValue('--doc-remote-color'),
+          avatar: avatar.style.getPropertyValue('--doc-collaboration-accent'),
+        };
+      };
+      const ids = mounted.editor().surface!.session.paragraphIds();
+      mounted.editor().setRevisionStyles({ authors: { 'Reviewer One': { color: 'crimson' } } });
+      session.setRemotes([caretOf('a1', 'Reviewer One', ids.at(-1)!)]);
+      session.notify();
+      await nextTick();
+      await flush();
+      const refused = paintedAndAvatar();
+      expect(refused.caret).toBe('var(--doc-review-author-0)');
+      expect(refused.avatar).toBe('var(--doc-review-author-0)');
+      mounted.editor().setRevisionStyles({ authors: { 'Reviewer One': { color: '#cc0000' } } });
+      session.notify();
+      await nextTick();
+      await flush();
+      const declared = paintedAndAvatar();
+      expect(declared.caret).toBe('#cc0000');
+      expect(declared.avatar).toBe('#cc0000');
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  // Colourless names outside the roster: the ENGINE's stable allocator is the one
+  // authority. Session order (Uma before Vic) differs from remote paint order (Vic
+  // first); pre-unification the avatars recomputed by session order while the carets
+  // allocated by first resolution, and the two could swap colours.
+  test('unknown colourless participants take the painted caret colours', async () => {
+    const session = stubSession();
+    session.setParticipants([participantOf('u1', 'Uma'), participantOf('u2', 'Vic')]);
+    const mounted = mountEditorTree(
+      () => h(DocxEditorCollaboration.Avatars, { session }),
+      docx(PLAIN + PLAIN),
+      () => [],
+      [collaborationModule({ session })]
+    );
+    try {
+      await flush();
+      const ids = mounted.editor().surface!.session.paragraphIds();
+      // Paint order deliberately differs from session order.
+      session.setRemotes([caretOf('u2', 'Vic', ids[1]!), caretOf('u1', 'Uma', ids[0]!)]);
+      session.notify();
+      await nextTick();
+      await flush();
+      const labels = [
+        ...mounted.container.querySelectorAll<HTMLElement>('.docx-remote-caret-label'),
+      ];
+      const caretColor = (name: string) =>
+        labels
+          .find((label) => label.textContent === name)!
+          .style.getPropertyValue('--doc-remote-color');
+      const avatars = [
+        ...mounted.container.querySelectorAll<HTMLElement>('[data-collaboration-avatar]'),
+      ];
+      const avatarColor = (name: string) =>
+        avatars
+          .find((avatar) => avatar.title === name)!
+          .style.getPropertyValue('--doc-collaboration-accent');
+      expect(caretColor('Uma')).toMatch(/^var\(--doc-review-author-\d\)$/);
+      expect(caretColor('Vic')).toMatch(/^var\(--doc-review-author-\d\)$/);
+      expect(caretColor('Uma')).not.toBe(caretColor('Vic'));
+      expect(avatarColor('Uma')).toBe(caretColor('Uma'));
+      expect(avatarColor('Vic')).toBe(caretColor('Vic'));
+    } finally {
+      mounted.unmount();
+    }
+  });
 });

@@ -60,7 +60,16 @@ export interface CollaborationCaretLabelRenderProps {
   readonly color: string;
 }
 
-/** Props for {@link DocxEditorCollaboration}.CaretLabels. @public */
+/**
+ * Props for {@link DocxEditorCollaboration}.CaretLabels.
+ *
+ * The rendered content lands in the engine's label layer, which is furniture: the layer is
+ * `aria-hidden` and takes no pointer events. Assistive technology does not read a label,
+ * and nothing inside one is clickable or focusable. Keep interactive or announced presence
+ * UI in your own chrome, such as the avatar stack.
+ *
+ * @public
+ */
 export interface CollaborationCaretLabelsProps {
   /** The live session whose participants label the carets. `null` renders nothing. */
   readonly session: CollaborationSession | null;
@@ -142,12 +151,21 @@ const CollaborationAvatar = defineComponent({
     className: { type: String, default: undefined },
   },
   setup(props, { slots }) {
+    const editorRef = useDocxEditor();
     const roster = useReviewAuthors();
     const stackAccents = inject(AvatarAccentKey, null);
     return () => {
+      // With an editor in context the ENGINE resolves the accent (`presenceColorFor`), so
+      // the disc takes the same colour as the painted caret; the arithmetic is the
+      // no-editor fallback.
+      const editor = editorRef.value;
       const accent =
         stackAccents?.value.get(props.participant.actorId) ??
-        presenceAccentOf(roster.value, props.participant);
+        presenceAccentOf(
+          roster.value,
+          props.participant,
+          editor ? (name) => editor.presenceColorFor(name) : undefined
+        );
       return avatarVNode(
         props.participant,
         accent,
@@ -170,11 +188,21 @@ const CollaborationAvatars = defineComponent({
     className: { type: String, default: undefined },
   },
   setup(props, { slots }) {
+    const editorRef = useDocxEditor();
     const { participants } = useCollaborationParticipants(() => props.session);
     const roster = useReviewAuthors();
     const { t } = useTranslation();
-    // Accents allocate in SESSION order (the engine's appearance order); only display sorts.
-    const accents = computed(() => presenceAccentsOf(roster.value, participants.value));
+    // With an editor in context the ENGINE resolves each accent (`presenceColorFor`), from
+    // the same allocator the painted carets use; the session-order arithmetic is the
+    // no-editor fallback. Only display sorts — resolution order stays session order.
+    const accents = computed(() => {
+      const editor = editorRef.value;
+      return presenceAccentsOf(
+        roster.value,
+        participants.value,
+        editor ? (name) => editor.presenceColorFor(name) : undefined
+      );
+    });
     const sorted = computed(() => orderedParticipants(participants.value));
     provide(AvatarAccentKey, accents);
     return () => {

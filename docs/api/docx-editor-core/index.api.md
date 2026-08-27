@@ -1041,6 +1041,7 @@ export interface DocxEditorInstance extends Editor {
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
+    presenceColorFor(name: string): string;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;

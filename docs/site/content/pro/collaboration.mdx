@@ -171,6 +171,8 @@ Avatar colors resolve through the review author roster, so a collaborator's avat
 
 In Vue the renderer is the default scoped slot with the same `{ selection, participant, color }` shape. Without a renderer, the label shows the collaborator's name, which is the engine default.
 
+The label layer is page furniture. The engine marks the layer `aria-hidden` and turns off pointer events on it. Screen readers don't announce label content, and nothing inside a label is clickable or focusable. Keep interactive or announced presence UI in your own chrome, such as the avatar stack.
+
 For CSS-only styling, the stable surface is the `docx-remote-caret-label` class on each label, the `--doc-remote-color` custom property that carries its resolved accent, and the `data-docx-remote-actor` attribute that names the actor while a label host is registered.
 
 ## Edit offline

@@ -813,6 +813,7 @@ export interface DocxEditorInstance extends Editor {
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
+    presenceColorFor(name: string): string;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
@@ -1420,6 +1421,7 @@ export interface PaginatedSurface {
     refreshTableInteractionLabels(): void;
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
+    remotePresenceColor(name: string): string | undefined;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
         readonly commitGuard?: () => boolean;

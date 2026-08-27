@@ -28,6 +28,12 @@ export interface PresenceAccent {
   readonly slot: number | null;
 }
 
+/** The wrapped ramp slot a `var(--doc-review-author-N)` token names, or null for any other colour. */
+function rampSlotOf(color: string): number | null {
+  const match = /^var\(--doc-review-author-(\d{1,2})\)$/.exec(color);
+  return match ? Number(match[1]) % AUTHOR_SLOTS : null;
+}
+
 /**
  * Resolve one accent per participant, keyed by `actorId`.
  *
@@ -36,10 +42,17 @@ export interface PresenceAccent {
  * is what the engine's own presence fallback allocates by. Roster authors and published
  * colours are exact; only that last fallback is an approximation of the engine's stable
  * allocator, which the painted labels resolve authoritatively anyway.
+ *
+ * With `colorForName` — the facade's `presenceColorFor`, when an editor is in context — the
+ * ENGINE answers for every colourless name: its persistent allocator hands out ramp slots in
+ * first-resolution order, which the session-order arithmetic below can only approximate, so
+ * avatars and painted carets take one colour from one allocator. The arithmetic remains only
+ * as the no-editor fallback.
  */
 export function presenceAccentsOf(
   roster: readonly ReviewAuthorInfo[],
-  participants: readonly CollaborationParticipant[]
+  participants: readonly CollaborationParticipant[],
+  colorForName?: (name: string) => string | undefined
 ): ReadonlyMap<string, PresenceAccent> {
   const byAuthor = new Map(roster.map((info) => [info.author, info] as const));
   const allocated = new Map<string, number>();
@@ -54,8 +67,22 @@ export function presenceAccentsOf(
       continue;
     }
     const known = byAuthor.get(participant.name);
+    const engine = safeParticipantColor(colorForName?.(participant.name));
+    if (engine !== undefined) {
+      accents.set(participant.actorId, {
+        color: engine,
+        slot: rampSlotOf(engine) ?? (known ? known.slot % AUTHOR_SLOTS : null),
+      });
+      continue;
+    }
     if (known !== undefined) {
-      accents.set(participant.actorId, { color: known.color, slot: known.slot % AUTHOR_SLOTS });
+      const slot = known.slot % AUTHOR_SLOTS;
+      // Sanitized as the paint sink is: a declared colour the engine refuses to paint falls
+      // to the author's slot token, exactly as the painted caret does.
+      accents.set(participant.actorId, {
+        color: safeParticipantColor(known.color) ?? `var(--doc-review-author-${slot})`,
+        slot,
+      });
       continue;
     }
     let slot = allocated.get(participant.name);
@@ -74,9 +101,10 @@ export function presenceAccentsOf(
 /** The accent for one participant rendered on its own, outside a stack. */
 export function presenceAccentOf(
   roster: readonly ReviewAuthorInfo[],
-  participant: CollaborationParticipant
+  participant: CollaborationParticipant,
+  colorForName?: (name: string) => string | undefined
 ): PresenceAccent {
-  return presenceAccentsOf(roster, [participant]).get(participant.actorId)!;
+  return presenceAccentsOf(roster, [participant], colorForName).get(participant.actorId)!;
 }
 
 /**

@@ -50,11 +50,9 @@ import type {
 export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
 
 /**
- * One live remote-caret label the engine positioned. The host owns its content.
- *
- * The engine still owns the label's geometry, class, and presence colour; the host renders
- * whatever it wants inside `element`. Elements from a previous publish are dead after the
- * next one — the engine rebuilds the labels wholesale on every repaint that moves them.
+ * One live remote-caret label the engine positioned. The host owns its content; the engine
+ * still owns the label's geometry, class, and presence colour, and rebuilds the labels
+ * wholesale on every repaint that moves them.
  *
  * @public
  */
@@ -75,6 +73,9 @@ export interface RemoteCaretLabelHost {
    * A skipped paint (nothing moved) does not re-publish: the host keeps its last anchors
    * until the next publish, and elements from a previous publish are dead after the next
    * one. An empty array is a real publish — every remote caret left the screen.
+   *
+   * Never mutate editor state synchronously from `publish` — a mutation repaints, and the
+   * nested rebuild's publish would arrive before this one returned; only set host state.
    */
   publish(anchors: readonly RemoteCaretLabelAnchor[]): void;
 }
@@ -788,6 +789,8 @@ export interface PaginatedSurface {
    * its identity.
    */
   revisionAuthors(): ReadonlyMap<string, number>;
+  /** The presence colour the caret paints for `name`, sanitized as the paint sink is. */
+  remotePresenceColor(name: string): string | undefined;
   /**
    * Replace how tracked changes are coloured, live. Paint-level: the pages repaint without
    * remeasuring a line, and the caret, selection and undo history stay where they are.

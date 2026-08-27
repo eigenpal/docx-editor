@@ -101,6 +101,7 @@ import {
   type DrawingPaintStrings,
 } from '../output/semantic-paint-drawings.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
+import { safeParticipantColor } from '../collaboration/participant-color.ts';
 import {
   collaborationParagraphAt,
   localCollaborationSelection,
@@ -3988,11 +3989,16 @@ export function mountPaginatedSurface(
    * author would, so when they later make a tracked change or comment they keep this colour.
    * A presence-only reservation never joins `revisionAuthors()`: the roster still derives
    * from the layout and the review queue alone.
+   *
+   * Sanitized AT THE RESOLUTION: a declared style colour is host input in any CSS shape,
+   * and the paint sink refuses what `safeParticipantColor` refuses. Refusing it here —
+   * falling to the author's slot token — keeps the painted caret and any chrome reading
+   * this answer on one colour instead of splitting them at the sink.
    */
   function remotePresenceColor(name: string): string | undefined {
     const roster = reviewAuthorState();
     const known = roster.resolved.get(name);
-    if (known) return known.color;
+    if (known) return safeParticipantColor(known.color) ?? reviewAuthorSlotColor(known.slot);
     const slot = stableAuthorSlots.resolve(roster.value, [name]).get(name);
     return slot === undefined ? undefined : reviewAuthorSlotColor(slot);
   }
@@ -5332,6 +5338,7 @@ export function mountPaginatedSurface(
     },
 
     revisionAuthors: () => reviewAuthorState().value,
+    remotePresenceColor,
     setRevisionStyles: (colors) => {
       if (colors === revisionStyles) return;
       revisionStyles = colors;

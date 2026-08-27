@@ -240,6 +240,18 @@ export interface DocxEditorInstance extends Editor {
    */
   getReviewAuthors(): readonly ReviewAuthorInfo[];
   /**
+   * The presence colour the engine paints for one display name — the answer the remote
+   * caret label takes, so chrome built on this cannot disagree with the painted caret.
+   *
+   * A name the review roster draws takes its resolved colour, sanitized exactly as the
+   * paint sink sanitizes it: a declared colour the paint refuses falls to the author's
+   * ramp-slot token. Any other name takes the next slot from the engine's stable
+   * allocator, in first-resolution order, and keeps it for the session. While no document
+   * is attached this returns `'var(--doc-accent)'`, the same default the overlay CSS
+   * falls back to.
+   */
+  presenceColorFor(name: string): string;
+  /**
    * The configured author used when a comment or reply omits an explicit author.
    *
    * @internal Review compose chrome uses this to draw an unfinished comment in the same

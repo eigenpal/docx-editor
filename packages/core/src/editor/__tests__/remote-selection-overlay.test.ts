@@ -416,15 +416,48 @@ describe('remote caret label host', () => {
     expect(publishes).toHaveLength(4);
   });
 
-  test('the facade tolerates a label host before attach and after detach', () => {
-    const editor = createDocxEditor({ document: docx(paragraph('Hello')) });
-    const host = { publish: () => {} };
-    expect(() => editor.setRemoteCaretLabelHost(host)).not.toThrow();
+  test('the facade re-applies the label host across detach and re-attach', () => {
+    let editorRef: ReturnType<typeof createDocxEditor> | null = null;
+    // The remotes resolve against the CURRENT surface: a re-attach mounts a fresh session
+    // whose paragraph ids differ, and a caret pinned to the old ids would never paint.
+    const { session, notify } = stubSession(() => {
+      const ids = editorRef?.surface?.session.paragraphIds() ?? [];
+      return ids.length === 0 ? [] : [bobAt(ids[0]!, 1)];
+    });
+    const editor = createDocxEditor({
+      document: docx(paragraph('Hello')),
+      modules: [{ id: 'stub-collaboration', collaboration: { session } }],
+    });
+    editorRef = editor;
+    const publishes: RemoteCaretLabelAnchor[][] = [];
+    // Registered BEFORE attach: the registration waits and applies on the next mount.
+    editor.setRemoteCaretLabelHost({ publish: (anchors) => publishes.push([...anchors]) });
     const el = document.createElement('div');
     document.body.append(el);
     try {
       editor.attach(el);
-      expect(editor.surface).toBeTruthy();
+      notify();
+      // The waiting host was applied on mount and owns the label: empty content, actor marked.
+      expect(publishes.length).toBeGreaterThan(0);
+      const label = el.querySelector<HTMLElement>('.docx-remote-caret-label');
+      expect(label).toBeTruthy();
+      expect(label!.textContent).toBe('');
+      expect(label!.getAttribute('data-docx-remote-actor')).toBe('bob');
+      expect(publishes.at(-1)!.some((anchor) => anchor.selection.actorId === 'bob')).toBe(true);
+
+      editor.detach();
+      const before = publishes.length;
+      editor.attach(el);
+      notify();
+      // The registration survives the remount: the re-applied host publishes again, and the
+      // labels stay host-owned instead of falling back to the default name labels.
+      expect(publishes.length).toBeGreaterThan(before);
+      const relabel = el.querySelector<HTMLElement>('.docx-remote-caret-label');
+      expect(relabel).toBeTruthy();
+      expect(relabel!.textContent).toBe('');
+      expect(relabel!.getAttribute('data-docx-remote-actor')).toBe('bob');
+      expect(publishes.at(-1)!.some((anchor) => anchor.selection.actorId === 'bob')).toBe(true);
+
       editor.detach();
       expect(() => editor.setRemoteCaretLabelHost(null)).not.toThrow();
     } finally {
@@ -485,6 +518,55 @@ describe('remote presence colour fallback', () => {
     );
     expect(painted.label).toBe('#ff0000');
     expect(painted.caret).toBe('#ff0000');
+  });
+
+  // A declared review colour is host input in any CSS shape. The paint sink refuses what
+  // `safeParticipantColor` refuses, so the resolution itself must fall to the author's
+  // slot token — otherwise the caret shows the default accent while chrome shows the raw
+  // declared colour, and the two surfaces disagree about who draws in what.
+  test('a declared colour the paint refuses falls to the author slot', () => {
+    let remotes: CollaborationRemoteSelection[] = [];
+    const { surface, container, notify } = mountBody(INS + paragraph('plain'), () => remotes);
+    surface.setRevisionStyles({ authors: { 'Reviewer One': { color: 'crimson' } } });
+    const ids = surface.session.paragraphIds();
+    remotes = [caretOf('Reviewer One', ids.at(-1)!)];
+    notify();
+    const label = container.querySelector<HTMLElement>('.docx-remote-caret-label')!;
+    const caret = container.querySelector<HTMLElement>('.docx-remote-caret')!;
+    expect(label.style.getPropertyValue('--doc-remote-color')).toBe('var(--doc-review-author-0)');
+    expect(caret.style.getPropertyValue('--doc-remote-color')).toBe('var(--doc-review-author-0)');
+  });
+
+  test('a declared hex colour paints as declared', () => {
+    let remotes: CollaborationRemoteSelection[] = [];
+    const { surface, container, notify } = mountBody(INS + paragraph('plain'), () => remotes);
+    surface.setRevisionStyles({ authors: { 'Reviewer One': { color: '#cc0000' } } });
+    const ids = surface.session.paragraphIds();
+    remotes = [caretOf('Reviewer One', ids.at(-1)!)];
+    notify();
+    const label = container.querySelector<HTMLElement>('.docx-remote-caret-label')!;
+    const caret = container.querySelector<HTMLElement>('.docx-remote-caret')!;
+    expect(label.style.getPropertyValue('--doc-remote-color')).toBe('#cc0000');
+    expect(caret.style.getPropertyValue('--doc-remote-color')).toBe('#cc0000');
+  });
+
+  test('presenceColorFor answers the painted colour, and the accent default while detached', () => {
+    const editor = createDocxEditor({ document: docx(paragraph('Hello')) });
+    // Detached there is no roster to resolve against: the documented fallback is the same
+    // `var(--doc-accent)` default the overlay CSS falls back to.
+    expect(editor.presenceColorFor('Anyone')).toBe('var(--doc-accent)');
+    const el = document.createElement('div');
+    document.body.append(el);
+    try {
+      editor.attach(el);
+      // Same stable allocator as the painted caret: the first colourless name takes the
+      // first slot, and asking again answers the same slot.
+      expect(editor.presenceColorFor('Zoe')).toBe('var(--doc-review-author-0)');
+      expect(editor.presenceColorFor('Zoe')).toBe('var(--doc-review-author-0)');
+    } finally {
+      editor.destroy();
+      el.remove();
+    }
   });
 
   test('hostile colorForAuthor output never reaches a style property', () => {
