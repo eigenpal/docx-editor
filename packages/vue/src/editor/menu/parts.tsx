@@ -4,6 +4,7 @@ import { flattenChildren } from '../../lib/flattenChildren';
 import { useStableDocxId } from '../../lib/stable-id';
 import { docxSlotOf, mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import {
+  chromeSlotIsToggle,
   CHROME_MENUS,
   chromeProbeForSlot,
   commandForSlot,
@@ -265,9 +266,13 @@ export const MenuItem = defineComponent({
       const slot = slotId.value;
       const control = chromeControlForSlot(slot);
       const text = label(props.labelKey ?? control?.labelKey ?? slot);
-      const command = commandForSlot(slot);
-      const isToggle = command?.type === 'toggleMark' || command?.type === 'setAlignment';
-      const isRadio = command?.type === 'setAlignment';
+      // Checked-ness only where it is meaningful — the ENGINE's rule, the same one
+      // `ToolbarButton` applies to `aria-pressed`: marks and alignment toggle, a break insert
+      // does not, and the format painter does even though no single command describes its
+      // press.
+      const isToggle = chromeSlotIsToggle(slot);
+      // The four alignments are one-of-four, not four independent toggles.
+      const isRadio = commandForSlot(slot)?.type === 'setAlignment';
       return (
         <MenuRow
           {...menuRowSlot(slot)}
@@ -277,6 +282,7 @@ export const MenuItem = defineComponent({
           {...(slotCmd.disabledReason.value ? { title: slotCmd.disabledReason.value } : {})}
           {...(isToggle ? { active: slotCmd.isActive.value } : {})}
           {...(isRadio ? { selected: true as const } : {})}
+          {...(slotCmd.value.value !== null ? { 'data-value': slotCmd.value.value } : {})}
           selectHandler={() => {
             slotCmd.execute();
             setOpenMenu(null);

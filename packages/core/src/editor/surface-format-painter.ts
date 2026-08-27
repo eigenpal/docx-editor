@@ -27,6 +27,7 @@ import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import type {
   FormatPainterMode,
   FormatPainterOps,
+  FormatPainterPaintResult,
   FormatPainterSurfaceState,
 } from './surface-format-painter-contract.ts';
 
@@ -88,6 +89,10 @@ export interface SurfaceFormatPainterDeps {
  * left painted text expanded or raised, looking nothing like the source it was painted
  * from. The complete list is `ACCEPTED_RUN_PROPERTIES` minus `w:rStyle`.
  *
+ * Two of them merge per ATTRIBUTE rather than wholesale, so the rule applies one level down:
+ * `w:u` states its theme colour as well as its colour, and `w:rFonts` deliberately does not
+ * state the East Asian and complex-script slots — see each one below.
+ *
  * `w:rStyle` is absent, as it is everywhere else in this engine — preserved, not authored
  * (see `ACCEPTED_RUN_PROPERTIES`) — so painting onto a run that carries a character style
  * leaves that style's face underneath. The same limit `clearFormatting` states.
@@ -113,6 +118,10 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
       attributes: {
         val: style.underline ? style.underline.variant : 'none',
         color: style.underline?.color ?? 'auto',
+        // `w:themeColor` OUTRANKS `w:color`, so a target underline carrying one would ignore
+        // the colour beside it. `none` is the member of `ST_ThemeColor` that means "no theme
+        // reference", which is what a resolved RRGGBB — or no colour at all — amounts to.
+        themeColor: 'none',
       },
     },
     { localName: 'strike', attributes: onOff(style.strike) },
@@ -140,6 +149,11 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
   // Only when the cascade resolved to a face. A run whose whole chain authored nothing is
   // measured in the surface's own default, which is not a document fact and must not be
   // written into a paragraph as if it were.
+  //
+  // `ascii` and `hAnsi` only. `w:rFonts` merges per SLOT (`mergedFontProperty`), so a target
+  // keeps its East Asian and complex-script faces — deliberately, and for the same reason a
+  // CJK list marker keeps its own face when the Latin text beside it changes. The resolver
+  // publishes ONE family, so there is no East Asian answer to copy even if that were wanted.
   if (style.fontFamily) {
     properties.push({
       localName: 'rFonts',
@@ -249,16 +263,16 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
    * down only for `wrote`, because a click that painted no text is the FIRST half of Word's
    * paint-a-word double-click and the painter has to still be live for the second.
    */
-  const applyNow = (): { wrote: boolean; armed: boolean } => {
+  const applyNow = (): { wrote: boolean; armed: boolean; built: boolean } => {
     const held = captured;
-    if (!held) return { wrote: false, armed: false };
+    if (!held) return { wrote: false, armed: false, built: false };
     const cells = deps.selectedCells?.();
     const rectangular = cells !== undefined && cells.length > 0;
     const { from, to } = deps.orderedRange();
     const paragraphIds = rectangular
       ? [...paragraphsInCells(deps.layout(), cells)]
       : paragraphsInRange(deps.paragraphOrder(), { from, to });
-    if (paragraphIds.length === 0) return { wrote: false, armed: false };
+    if (paragraphIds.length === 0) return { wrote: false, armed: false, built: false };
     const collapsed =
       !rectangular && from.paragraphId === to.paragraphId && from.offset === to.offset;
     const part = storyPart();
@@ -340,12 +354,17 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     // arming a format the document just refused would let the next keystroke carry it in.
     const armed = collapsed && held.runProperties.length > 0 && (wrote || ops.length === 0);
     if (armed) deps.armPendingFormats(held.runProperties);
-    return { wrote, armed };
+    return { wrote, armed, built: ops.length > 0 };
   };
 
-  const apply = (): boolean => {
+  const apply = (): FormatPainterPaintResult => {
     const result = applyNow();
-    return result.wrote || result.armed;
+    if (result.wrote) return 'painted';
+    if (result.armed) return 'armed';
+    // BUILT AND REJECTED, not "nothing to paint": the ops existed, so the selection did hold
+    // something the capture could reach and the document turned it down. Telling the reader
+    // to select some text there would be the wrong instruction for the wrong problem.
+    return result.built ? 'refused' : 'nothingToPaint';
   };
 
   /** Turn it off, leaving the double-press window as it was. */
@@ -373,11 +392,19 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       const doublePress = lastPressAt !== null && at - lastPressAt < DOUBLE_PRESS_WINDOW_MS;
       const previous = mode;
       lastPressAt = at;
+      // The window opens only on a press that LANDED. A refusal that left it open made the
+      // next press — the one with a real selection under it — read as the second half of a
+      // double-click, take the ignore branch below, and report success while the painter sat
+      // off and the button stayed unpressed.
+      const refuse = (): boolean => {
+        lastPressAt = null;
+        return false;
+      };
       // The second half of a double-click on an ARMED painter locks it on. Re-capturing costs
       // nothing — the selection has not moved since the press that armed it — and it keeps
       // the armed and the locked path telling one story.
       if (previous === 'once' && doublePress) {
-        if (!captureNow()) return false;
+        if (!captureNow()) return refuse();
         mode = 'locked';
         deps.publish();
         return true;
@@ -396,7 +423,7 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       if (doublePress) return true;
       // `captureNow`, not `capture`: the mode moves in the same gesture, so ONE report
       // covers both. Two would wake every subscriber twice for a single click.
-      if (!captureNow()) return false;
+      if (!captureNow()) return refuse();
       mode = 'once';
       deps.publish();
       return true;

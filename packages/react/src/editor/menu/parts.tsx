@@ -17,6 +17,7 @@ import type { ReactNode } from 'react';
 import { isValidElement, useCallback, useId, useLayoutEffect, useRef, useState } from 'react';
 import { mergeArrangement, unwrapFragment } from '../merge-arrangement';
 import {
+  chromeSlotIsToggle,
   CHROME_MENUS,
   chromeProbeForSlot,
   commandForSlot,
@@ -223,18 +224,18 @@ export interface MenuItemProps {
  * @public
  */
 export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: MenuItemProps) {
-  const { execute, isActive, isEnabled, disabledReason } = useEditorCommand(slot);
+  const { execute, isActive, isEnabled, disabledReason, value } = useEditorCommand(slot);
   const { setOpenMenu } = useMenuContext();
   const label = useMenuLabel();
   if (hidden) return null;
   const control = chromeControlForSlot(slot);
   const text = label(labelKey ?? control?.labelKey ?? slot);
-  // Checked-ness only where it is meaningful — the same rule `ToolbarButton` applies to
-  // `aria-pressed`: marks and alignment toggle, a break insert does not.
-  const command = commandForSlot(slot);
-  const isToggle = command?.type === 'toggleMark' || command?.type === 'setAlignment';
+  // Checked-ness only where it is meaningful — the ENGINE's rule, the same one
+  // `ToolbarButton` applies to `aria-pressed`: marks and alignment toggle, a break insert
+  // does not, and the format painter does even though no single command describes its press.
+  const isToggle = chromeSlotIsToggle(slot);
   // The four alignments are one-of-four, not four independent toggles.
-  const isRadio = command?.type === 'setAlignment';
+  const isRadio = commandForSlot(slot)?.type === 'setAlignment';
   return (
     <MenuRow
       slot={slot}
@@ -244,6 +245,7 @@ export function MenuItem({ slot, labelKey, shortcutKey, className, hidden }: Men
       {...(disabledReason ? { title: disabledReason } : {})}
       {...(isToggle ? { active: isActive } : {})}
       {...(isRadio ? { selected: true as const } : {})}
+      {...(value !== null ? { 'data-value': value } : {})}
       onSelect={() => {
         execute();
         setOpenMenu(null);

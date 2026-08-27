@@ -50,6 +50,20 @@ export const FORMAT_PAINTER_OFF: FormatPainterSurfaceState = Object.freeze({
   level: 'none',
 });
 
+/**
+ * What one paint did.
+ *
+ * Four answers rather than a boolean, because the two FAILURES are different problems with
+ * different words for the user: `'nothingToPaint'` says the selection holds nothing the
+ * capture can reach, and `'refused'` says the document would not take the write — a locked
+ * content control, a collaboration gate, a document open for viewing. Collapsed to false,
+ * a refused paint told the reader to select some text.
+ *
+ * `'armed'` is the collapsed-caret outcome: no text to paint, so the character half went to
+ * the stored-marks lane and the next characters typed will carry it.
+ */
+export type FormatPainterPaintResult = 'painted' | 'armed' | 'nothingToPaint' | 'refused';
+
 /** Word's Format Painter over the surface. */
 export interface FormatPainterOps {
   state(): FormatPainterSurfaceState;
@@ -58,12 +72,8 @@ export interface FormatPainterOps {
    * the layout has published yet — there is nothing to read.
    */
   capture(): boolean;
-  /**
-   * Paint the captured formatting over the current selection. False when nothing is
-   * captured, when the document refuses the write, or when the selection covers nothing the
-   * write can reach.
-   */
-  apply(): boolean;
+  /** Paint the captured formatting over the current selection. */
+  apply(): FormatPainterPaintResult;
   /**
    * One press of the painter control, with Word's meaning.
    *

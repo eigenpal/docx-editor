@@ -92,7 +92,11 @@ function letterOf(event: KeyboardEvent): string {
   // keydown handler rather than falling through to the `key` arm below.
   const physical = event.code ?? '';
   if (physical.length === 4 && physical.startsWith('Key')) return physical[3]!.toLowerCase();
-  return physical === '' ? event.key.toLowerCase() : '';
+  // Anything that is not a `Key*` code names no letter, and that includes the non-empty
+  // answers — `Unidentified` from several Android IMEs, remote desktops and on-screen
+  // keyboards — so the produced character is the only identifier left. Matching on the empty
+  // string alone left these chords silently dead on exactly the keyboards that have no keys.
+  return event.key.toLowerCase();
 }
 
 export function createKeyDownHandler(

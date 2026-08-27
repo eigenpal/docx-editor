@@ -324,6 +324,20 @@ describe('painting', () => {
 });
 
 describe('the control', () => {
+  test('a refused paint is told apart from a paint that reached nothing', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      editor.exec({ type: 'copyFormatting' });
+      select(editor, [1, 0], [1, 5]);
+      editor.exec({ type: 'setEditingMode', mode: 'viewing' });
+      const refusal = editor.exec({ type: 'pasteFormatting' });
+      expect(refusal.ok).toBe(false);
+      // The DOCUMENT's own words. Collapsed to one failure, this told a reader looking at a
+      // document open for viewing to select some text.
+      if (!refusal.ok) expect(refusal.reason).toBe('the document is open for viewing');
+    });
+  });
+
   test('a paint that reaches nothing is refused rather than reported as a no-op change', () => {
     withEditor(STYLED + PLAIN, (editor) => {
       // A RUN-level capture, then a caret in a paragraph with no text to reach: there is no
@@ -543,6 +557,18 @@ describe('the keyboard', () => {
     });
   });
 
+  test('an unidentified key code still reaches the chord, through the character', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      const onKeyDown = createKeyDownHandler(editor.surface!);
+      select(editor, [0, 0], [0, 6]);
+      // Android IMEs, remote desktops and on-screen keyboards report a code that names no
+      // physical key. Matched against `Key*` alone, the chord was silently dead on exactly
+      // the keyboards that have no keys.
+      onKeyDown(chord('c', 'Unidentified', { ctrlKey: true, altKey: true }));
+      expect(editor.surface!.formatPainter.state().level).toBe('paragraph');
+    });
+  });
+
   test('Escape stands the armed painter down before it releases any other mode', () => {
     withEditor(STYLED + PLAIN, (editor) => {
       const onKeyDown = createKeyDownHandler(editor.surface!);
@@ -664,7 +690,7 @@ describe('the drag gesture', () => {
     }
   });
 
-  test('apply reports the document’s refusal rather than its own op count', () => {
+  test('apply names the document’s refusal rather than reporting its own op count', () => {
     const { surface } = mount(STYLED + PLAIN);
     try {
       const ids = surface.session.paragraphIds();
@@ -680,7 +706,7 @@ describe('the drag gesture', () => {
         anchor: { paragraphId: ids[1]!, offset: 0 },
         head: { paragraphId: ids[1]!, offset: 5 },
       });
-      expect(surface.formatPainter.apply()).toBe(false);
+      expect(surface.formatPainter.apply()).toBe('refused');
     } finally {
       surface.destroy();
     }

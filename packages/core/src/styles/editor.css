@@ -3190,8 +3190,17 @@ a.docx-hyperlink:focus-visible {
  * Both are `data-active`, so the slab above already says "on". What this adds is that this
  * one does not end by itself — Escape is what releases it — as an underline along the bottom
  * edge, drawn inside the slab so it reads as part of the button rather than as a second
- * control. */
-.docx-toolbar__button[data-slot='format.painter'][data-value='locked']::after {
+ * control.
+ *
+ * The overflow row and the menu row carry the same distinction, because on a narrow window
+ * the overflow panel IS the button and the Format menu is its other route. Their icon box is
+ * the anchor there: the rows are full-width, so an underline across one would read as a rule
+ * between rows rather than as a state. */
+.docx-toolbar__button[data-slot='format.painter'][data-value='locked']::after,
+.docx-toolbar__more-command[data-slot='format.painter'][data-value='locked']
+  .docx-toolbar__more-command-icon::after,
+.docx-menubar__item[data-slot='format.painter'][data-value='locked']
+  .docx-menubar__item-icon::after {
   content: '';
   position: absolute;
   left: 5px;
@@ -3200,6 +3209,14 @@ a.docx-hyperlink:focus-visible {
   height: 2px;
   border-radius: 1px;
   background: currentColor;
+}
+
+/* The anchor for the underline above. The in-bar button is already positioned; these two are
+ * not, and an absolutely positioned child of a static box escapes to the nearest positioned
+ * ancestor — the toolbar itself. */
+.docx-toolbar__more-command[data-slot='format.painter'] .docx-toolbar__more-command-icon,
+.docx-menubar__item[data-slot='format.painter'] .docx-menubar__item-icon {
+  position: relative;
 }
 
 /* The painter armed: the pointer says the next selection takes the formatting.

@@ -53,7 +53,11 @@ import type {
 } from './surface-format-painter-contract.ts';
 import type { PaginatedSurfacePerf } from './surface-perf-contract.ts';
 export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
-export type { FormatPainterLevel, FormatPainterMode } from './surface-format-painter-contract.ts';
+export type {
+  FormatPainterLevel,
+  FormatPainterMode,
+  FormatPainterPaintResult,
+} from './surface-format-painter-contract.ts';
 export type { FormatPainterOps, FormatPainterSurfaceState };
 export type { PaginatedSurfacePerf };
 
