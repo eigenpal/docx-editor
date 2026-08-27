@@ -657,3 +657,70 @@ describe('layout applies Heading1 / Heading2 cascade', () => {
     });
   });
 });
+
+describe('the eastAsia font slot cascades from docDefaults to the painted spans', () => {
+  // The docDefaults case is the one that bit: Word's own templates author the body's CJK
+  // face as `w:eastAsiaTheme="minorEastAsia"` in `w:docDefaults/w:rPrDefault`, and no run
+  // in the document ever re-states it. Dropping it measured and painted every ideograph
+  // in the LATIN face.
+  const THEME_FONTS = {
+    major: 'Aharoni',
+    minor: 'Grandview',
+    majorEastAsia: null,
+    minorEastAsia: 'SimSun',
+  };
+  const THEMED_DEFAULTS =
+    `<w:docDefaults><w:rPrDefault><w:rPr>` +
+    `<w:rFonts w:asciiTheme="minorHAnsi" w:eastAsiaTheme="minorEastAsia"/><w:sz w:val="22"/>` +
+    `</w:rPr></w:rPrDefault><w:pPrDefault/></w:docDefaults>`;
+
+  test('docDefaults resolve both slots through the theme part', () => {
+    const table = buildStyleCascadeTable(loadStyles(THEMED_DEFAULTS), THEME_FONTS);
+    expect(resolveRunStyle(table.docDefaultsRun, table.themeFonts)).toMatchObject({
+      fontFamily: 'Grandview',
+      fontFamilyEastAsia: 'SimSun',
+    });
+  });
+
+  test('a Latin-only direct rFonts does not evict the inherited eastAsia face', () => {
+    const table = buildStyleCascadeTable(loadStyles(THEMED_DEFAULTS), THEME_FONTS);
+    const merged = cascadeRunProperties(
+      [],
+      [{ localName: 'rFonts', attributes: { ascii: 'Courier New' } }],
+      table
+    );
+    expect(resolveRunStyle([...table.docDefaultsRun, ...merged], table.themeFonts)).toMatchObject({
+      fontFamily: 'Courier New',
+      fontFamilyEastAsia: 'SimSun',
+    });
+  });
+
+  test('a mixed CJK+Latin run splits into slot-homogeneous spans, measured per face', () => {
+    const table = buildStyleCascadeTable(loadStyles(THEMED_DEFAULTS), THEME_FONTS);
+    const measured: { text: string; family: string | null }[] = [];
+    const fixed = createFixedMeasurer(6, 14);
+    const recording = {
+      measure: (text: string, style: Parameters<typeof fixed.measure>[1]) => {
+        measured.push({ text, family: style.fontFamily });
+        return fixed.measure(text, style);
+      },
+      lineMetrics: fixed.lineMetrics,
+    };
+    const part = loadDocument(`<w:p><w:r><w:t>甲方shall</w:t></w:r></w:p>`);
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: recording,
+      styleCascade: table,
+    });
+    const spans = linesOf(layout).flatMap((line) => line.spans);
+    expect(spans.map((span) => span.text)).toEqual(['甲方', 'shall']);
+    expect(spans[0]!.style.fontFamily).toBe('SimSun');
+    expect(spans[1]!.style.fontFamily).toBe('Grandview');
+    // Model offsets stay contiguous across the split, so the caret walks through it.
+    expect(spans[0]!.range.end).toBe(spans[1]!.range.start);
+    // The measurer saw the CJK text only under the eastAsia face, never the Latin one.
+    const families = new Set(
+      measured.filter((call) => call.text.includes('甲')).map((call) => call.family)
+    );
+    expect(families).toEqual(new Set(['SimSun']));
+  });
+});

@@ -68,22 +68,26 @@ function elementChild(parent: OoxmlElement, localName?: string): OoxmlElement | 
   return null;
 }
 
-/** The theme's two font slots, for resolving `w:rFonts` theme attributes. */
+/** The theme's font slots, for resolving `w:rFonts` theme attributes. */
 export interface DocumentThemeFonts {
   /** `a:majorFont` latin typeface — headings. */
   readonly major: string | null;
   /** `a:minorFont` latin typeface — body text. */
   readonly minor: string | null;
+  /** `a:majorFont` east asian typeface (`a:ea`) — headings. */
+  readonly majorEastAsia: string | null;
+  /** `a:minorFont` east asian typeface (`a:ea`) — body text. */
+  readonly minorEastAsia: string | null;
 }
 
 /** The CSS-sink shape font names must satisfy (document-catalog's `FONT_NAME`). */
 const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
 
-/** A validated `a:latin` typeface under `a:majorFont`/`a:minorFont`, or null. */
-function latinTypeface(scheme: OoxmlElement, slot: string): string | null {
+/** A validated `a:latin`/`a:ea` typeface under `a:majorFont`/`a:minorFont`, or null. */
+function schemeTypeface(scheme: OoxmlElement, slot: string, face: 'latin' | 'ea'): string | null {
   const font = elementChild(scheme, slot);
-  const latin = font ? elementChild(font, 'latin') : null;
-  const raw = latin ? attributeValue(latin, 'typeface') : undefined;
+  const element = font ? elementChild(font, face) : null;
+  const raw = element ? attributeValue(element, 'typeface') : undefined;
   return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
 }
 
@@ -93,12 +97,15 @@ function latinTypeface(scheme: OoxmlElement, slot: string): string | null {
  * all-or-nothing rule, because each resolves a different `w:rFonts` attribute.
  */
 export function collectDocumentThemeFonts(themeRoot: OoxmlElement | null): DocumentThemeFonts {
-  if (!themeRoot) return { major: null, minor: null };
+  const empty = { major: null, minor: null, majorEastAsia: null, minorEastAsia: null };
+  if (!themeRoot) return empty;
   const scheme = findElement(themeRoot, 'fontScheme');
-  if (!scheme) return { major: null, minor: null };
+  if (!scheme) return empty;
   return {
-    major: latinTypeface(scheme, 'majorFont'),
-    minor: latinTypeface(scheme, 'minorFont'),
+    major: schemeTypeface(scheme, 'majorFont', 'latin'),
+    minor: schemeTypeface(scheme, 'minorFont', 'latin'),
+    majorEastAsia: schemeTypeface(scheme, 'majorFont', 'ea'),
+    minorEastAsia: schemeTypeface(scheme, 'minorFont', 'ea'),
   };
 }
 

@@ -1,7 +1,13 @@
 // The accepted run property boundary, resolved for layout (task 7.2).
 
 import { describe, expect, test } from 'bun:test';
-import { DEFAULT_RUN_STYLE, displayText, resolveRunStyle, runStylesEqual } from '../run-style.ts';
+import {
+  DEFAULT_RUN_STYLE,
+  displayText,
+  eastAsiaSlotStyle,
+  resolveRunStyle,
+  runStylesEqual,
+} from '../run-style.ts';
 
 const resolve = (localName: string, attributes?: Record<string, string>) =>
   resolveRunStyle([attributes ? { localName, attributes } : { localName }]);
@@ -140,7 +146,7 @@ describe('a w:rFonts theme reference resolves against the theme part', () => {
   });
 
   test('an unresolvable slot falls back to the explicit name, not to nothing', () => {
-    // `minorBidi` / `minorEastAsia` name the `a:cs` / `a:ea` faces this lane does not read.
+    // `minorBidi` names the `a:cs` face this lane does not read.
     expect(themed({ ascii: 'Calibri', asciiTheme: 'minorBidi' })).toBe('Calibri');
     // A theme whose slot is empty leaves the run inheriting rather than naming null.
     expect(
@@ -149,6 +155,73 @@ describe('a w:rFonts theme reference resolves against the theme part', () => {
         minor: null,
       }).fontFamily
     ).toBeNull();
+  });
+});
+
+describe('the w:rFonts eastAsia slot resolves beside the Latin one', () => {
+  const theme = {
+    major: 'Aharoni',
+    minor: 'Grandview',
+    majorEastAsia: 'MS Gothic',
+    minorEastAsia: 'SimSun',
+  };
+  const resolved = (attributes: Record<string, string>, themeFonts = theme) =>
+    resolveRunStyle([{ localName: 'rFonts', attributes }], themeFonts);
+
+  test('an explicit w:eastAsia resolves without touching the Latin family', () => {
+    const style = resolved({ eastAsia: 'SimSun' });
+    expect(style.fontFamilyEastAsia).toBe('SimSun');
+    expect(style.fontFamily).toBeNull();
+  });
+
+  test('a Latin-only rFonts leaves the eastAsia slot inherited', () => {
+    expect(resolved({ ascii: 'Arial' }).fontFamilyEastAsia).toBeNull();
+  });
+
+  test('w:eastAsiaTheme resolves against the a:ea typefaces', () => {
+    expect(resolved({ eastAsiaTheme: 'minorEastAsia' }).fontFamilyEastAsia).toBe('SimSun');
+    expect(resolved({ eastAsiaTheme: 'majorEastAsia' }).fontFamilyEastAsia).toBe('MS Gothic');
+  });
+
+  test('the theme attribute overrides the explicit name beside it (§17.3.2.26)', () => {
+    expect(
+      resolved({ eastAsia: 'PMingLiU', eastAsiaTheme: 'minorEastAsia' }).fontFamilyEastAsia
+    ).toBe('SimSun');
+  });
+
+  test('an unresolvable theme slot falls back to the explicit name, not to nothing', () => {
+    expect(
+      resolved(
+        { eastAsia: 'PMingLiU', eastAsiaTheme: 'minorEastAsia' },
+        { major: null, minor: null }
+      ).fontFamilyEastAsia
+    ).toBe('PMingLiU');
+  });
+
+  test('styles differing only in the eastAsia face are not equal', () => {
+    expect(
+      runStylesEqual(resolved({ eastAsia: 'SimSun' }), resolved({ eastAsia: 'MS Mincho' }))
+    ).toBe(false);
+  });
+});
+
+describe('eastAsiaSlotStyle derives the face an eastAsia piece uses', () => {
+  test('swaps the eastAsia family into fontFamily and memoizes per style object', () => {
+    const style = resolveRunStyle([
+      { localName: 'rFonts', attributes: { ascii: 'Arial', eastAsia: 'SimSun' } },
+    ]);
+    const derived = eastAsiaSlotStyle(style);
+    expect(derived.fontFamily).toBe('SimSun');
+    expect(derived.fontSizePt).toBe(style.fontSizePt);
+    expect(eastAsiaSlotStyle(style)).toBe(derived);
+  });
+
+  test('answers the style itself when the slot adds nothing', () => {
+    expect(eastAsiaSlotStyle(DEFAULT_RUN_STYLE)).toBe(DEFAULT_RUN_STYLE);
+    const same = resolveRunStyle([
+      { localName: 'rFonts', attributes: { ascii: 'SimSun', eastAsia: 'SimSun' } },
+    ]);
+    expect(eastAsiaSlotStyle(same)).toBe(same);
   });
 });
 

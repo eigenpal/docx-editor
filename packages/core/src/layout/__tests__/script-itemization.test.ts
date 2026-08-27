@@ -4,6 +4,7 @@ import {
   itemizeScriptFontSlots,
   type BidiEmbeddingLevels,
 } from '../index.ts';
+import { eastAsiaSlotRanges } from '../script-itemization.ts';
 
 const ltr = (text: string): BidiEmbeddingLevels => ({
   paragraphs: [{ from: 0, to: text.length, level: 0 }],
@@ -130,5 +131,42 @@ describe('deterministic script itemization', () => {
       { text: 'עברית', script: 'Hebr', slot: 'cs' },
       { text: '。漢字', script: 'Hani', slot: 'eastAsia' },
     ]);
+  });
+});
+
+describe('eastAsiaSlotRanges — the slot-only projection for piece splitting', () => {
+  test('mixed CJK and Latin text answers the merged eastAsia ranges in order', () => {
+    expect(eastAsiaSlotRanges('甲方shall履行')).toEqual([
+      { from: 0, to: 2 },
+      { from: 7, to: 9 },
+    ]);
+  });
+
+  test('Common characters inherit the surrounding strong classification', () => {
+    // The comma and space take the preceding CJK answer, so one range covers all four.
+    expect(eastAsiaSlotRanges('甲, 方')).toEqual([{ from: 0, to: 4 }]);
+    // Leading Common text takes the FOLLOWING strong item, same as itemization.
+    expect(eastAsiaSlotRanges('"甲"')).toEqual([{ from: 0, to: 3 }]);
+  });
+
+  test('Latin-only text answers no ranges', () => {
+    expect(eastAsiaSlotRanges('shall perform')).toEqual([]);
+    expect(eastAsiaSlotRanges('')).toEqual([]);
+  });
+
+  test('an unsupported script answers [] rather than throwing through layout', () => {
+    // U+1C50 OL CHIKI is outside every supported range; the whole text stays in the
+    // base slot, which is the pre-slot behaviour.
+    expect(() => itemizeScriptFontSlots('᱐甲', 0, ltr('᱐甲'))).toThrow(UnsupportedScriptError);
+    expect(eastAsiaSlotRanges('᱐甲')).toEqual([]);
+  });
+
+  test('agrees with full itemization on the slot boundary', () => {
+    const text = 'A甲B';
+    const slots = itemizeScriptFontSlots(text, 0, ltr(text));
+    const ranges = eastAsiaSlotRanges(text);
+    expect(ranges).toEqual(
+      slots.filter((item) => item.slot === 'eastAsia').map(({ from, to }) => ({ from, to }))
+    );
   });
 });

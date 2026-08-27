@@ -2291,6 +2291,7 @@ export interface ResolvedRunStyle {
     readonly doubleStrike: boolean;
     // (undocumented)
     readonly fontFamily: string | null;
+    readonly fontFamilyEastAsia: string | null;
     readonly fontSizePt: number;
     readonly hidden: boolean;
     readonly highlight: string | null;

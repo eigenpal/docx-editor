@@ -1,5 +1,6 @@
 import type { BidiEmbeddingLevels } from './bidi.ts';
 import type { TextDirection } from './shaped-run.ts';
+import { eastAsiaSlotStyle, type ResolvedRunStyle } from './run-style.ts';
 
 /**
  * Which `w:rFonts` slot a character resolves its face through.
@@ -160,16 +161,13 @@ const classify = (codePoint: number): Classified => {
 };
 
 /**
- * Split text into shapeable runs by script, bidi level and font slot.
- *
- * Consumes the bidi levels rather than re-deriving direction, so itemization and reordering agree
- * by construction instead of by two implementations happening to match.
+ * Per-code-point classification with the inheritance passes applied: Common/inherited
+ * characters take the preceding strong item's answer, and leading Common text takes the
+ * following one. Shared by full itemization and the slot-only pass below.
  */
-export function itemizeScriptFontSlots(
-  text: string,
-  paragraphOffset: number,
-  embedding: BidiEmbeddingLevels
-): readonly ScriptItem[] {
+function classifiedCodePoints(
+  text: string
+): { from: number; to: number; classified: Classified }[] {
   const codePoints: { from: number; to: number; classified: Classified }[] = [];
   for (let from = 0; from < text.length; ) {
     const codePoint = text.codePointAt(from)!;
@@ -188,6 +186,21 @@ export function itemizeScriptFontSlots(
     if (item.classified) inherited = item.classified;
     else if (inherited) item.classified = inherited;
   }
+  return codePoints;
+}
+
+/**
+ * Split text into shapeable runs by script, bidi level and font slot.
+ *
+ * Consumes the bidi levels rather than re-deriving direction, so itemization and reordering agree
+ * by construction instead of by two implementations happening to match.
+ */
+export function itemizeScriptFontSlots(
+  text: string,
+  paragraphOffset: number,
+  embedding: BidiEmbeddingLevels
+): readonly ScriptItem[] {
+  const codePoints = classifiedCodePoints(text);
 
   const out: ScriptItem[] = [];
   const commonOnlySlot: FontSlot = codePoints.every(({ from }) => text.codePointAt(from)! <= 0x7f)
@@ -223,4 +236,78 @@ export function itemizeScriptFontSlots(
     }
   }
   return out;
+}
+
+/**
+ * The `[from, to)` UTF-16 ranges of `text` that resolve through the `eastAsia` font slot,
+ * merged and in order. `[]` means the whole text stays in the base (Latin) slots.
+ *
+ * The slot-only projection of {@link itemizeScriptFontSlots}, with the same inheritance
+ * policy for Common characters, but independent of bidi analysis: which FACE a character
+ * uses does not depend on its embedding level. A code point this engine does not itemize
+ * answers `[]` — the whole text falls back to the base slot, which is exactly what the
+ * pre-slot behaviour was — rather than throwing through layout.
+ */
+export function eastAsiaSlotRanges(text: string): readonly { from: number; to: number }[] {
+  let codePoints: { from: number; to: number; classified: Classified }[];
+  try {
+    codePoints = classifiedCodePoints(text);
+  } catch (error) {
+    if (error instanceof UnsupportedScriptError) return [];
+    throw error;
+  }
+  const out: { from: number; to: number }[] = [];
+  for (const item of codePoints) {
+    if (item.classified?.slot !== 'eastAsia') continue;
+    const previous = out.at(-1);
+    if (previous && previous.to === item.from) previous.to = item.to;
+    else out.push({ from: item.from, to: item.to });
+  }
+  return out;
+}
+
+/** One slot-homogeneous slice of a run's text, carrying the face that slot resolves to. */
+export interface FontSlotSlice {
+  readonly text: string;
+  readonly style: ResolvedRunStyle;
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Split one piece of run text into slot-homogeneous slices, or null when no split applies.
+ *
+ * The seam `piecesOfParagraph` cuts mixed CJK+Latin text on: each eastAsia range takes the
+ * style {@link eastAsiaSlotStyle} derives, the rest keep the base style, and model offsets
+ * stay contiguous. Null (the common case — no eastAsia face, or nothing to split) tells the
+ * caller to emit the piece unchanged.
+ */
+export function splitByEastAsiaSlot(
+  text: string,
+  style: ResolvedRunStyle,
+  start: number
+): readonly FontSlotSlice[] | null {
+  if (style.fontFamilyEastAsia === null || style.fontFamilyEastAsia === style.fontFamily) {
+    return null;
+  }
+  const ranges = eastAsiaSlotRanges(text);
+  if (ranges.length === 0) return null;
+  const slotStyle = eastAsiaSlotStyle(style);
+  const slices: FontSlotSlice[] = [];
+  let cursor = 0;
+  const slice = (from: number, to: number, sliceStyle: ResolvedRunStyle): void => {
+    slices.push({
+      text: text.slice(from, to),
+      style: sliceStyle,
+      start: start + from,
+      end: start + to,
+    });
+  };
+  for (const range of ranges) {
+    if (range.from > cursor) slice(cursor, range.from, style);
+    slice(range.from, range.to, slotStyle);
+    cursor = range.to;
+  }
+  if (cursor < text.length) slice(cursor, text.length, style);
+  return slices;
 }
