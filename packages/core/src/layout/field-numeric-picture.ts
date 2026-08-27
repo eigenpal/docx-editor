@@ -94,7 +94,13 @@ export function formatNumericPicture(value: number, picture: string): string | n
       // The first separator the walk meets fixes the interval every overflow group repeats.
       if (groupWidth === 0) groupWidth = sinceGroup;
       sinceGroup = 0;
-      if (remaining > 0 || requiredToLeft[index]) out.push(',');
+      if (remaining > 0 || requiredToLeft[index]) {
+        // Part of the NUMBER, not of any literal prefix. A picture whose separator sits left of
+        // every digit position — `,000` — would otherwise classify it as a prefix and paint
+        // `,12345` where Word paints `12,345`.
+        leftmostPositionAt = out.length;
+        out.push(',');
+      }
       continue;
     }
     out.push(glyph);

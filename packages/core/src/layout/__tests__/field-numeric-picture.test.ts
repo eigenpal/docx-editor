@@ -40,6 +40,11 @@ describe('numeric picture rendering', () => {
     expect(formatNumericPicture(123, 'p#s')).toBe('p123s');
     // And a literal suffix alone.
     expect(formatNumericPicture(45, '0%')).toBe('45%');
+    // A separator left of EVERY digit position groups the overflow rather than sitting in
+    // front of it: it belongs to the number, not to any literal prefix.
+    expect(formatNumericPicture(12345, ',000')).toBe('12,345');
+    expect(formatNumericPicture(345, ',000')).toBe('345');
+    expect(formatNumericPicture(12345, 'Page #,###')).toBe('Page 12,345');
     // Overflow digits repeat the interval the picture's separator established, as Word does.
     expect(formatNumericPicture(1234567, '#,###')).toBe('1,234,567');
     expect(formatNumericPicture(1234567, '#,##0')).toBe('1,234,567');

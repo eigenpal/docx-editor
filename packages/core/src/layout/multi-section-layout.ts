@@ -383,8 +383,6 @@ export function layoutMultiSectionDocument(
   }[] = [];
   let previousGeometry: PageGeometry | null = null;
   let previousFurnitureKey = '';
-  /** The page-number format the previous section stamped, which its last sheet keeps. */
-  let previousPageNumberFormat: string | undefined;
   /** Next displayed PAGE value if the following section does not author `w:start`. */
   let nextDisplayed = 1;
 
@@ -449,16 +447,24 @@ export function layoutMultiSectionDocument(
     //
     // Normally the section's own, so the placeholder matches the value that replaces it. A
     // CONTINUED section is the exception: its local page 0 merges onto the host sheet, which
-    // keeps the previous section's `pageFieldSource.format`, while its own sheets keep this
+    // keeps whatever format that sheet was stamped with, while its own sheets keep this
     // section's. When those two disagree about whether a `\#` picture renders at all, no single
     // measurement is right for both — so measure against whichever format SUPPRESSES the
     // picture. That reserves the plain number's width, and a picture-rendered value overruns it
     // exactly as an unpictured multi-digit value already does; the reverse would reserve a
     // width the other pages never fill.
+    //
+    // Read off the HOST PAGE, not tracked across the loop. A continuous section that fits
+    // wholly on the host contributes no sheet of its own, so the sheet the next one merges onto
+    // is still stamped with an earlier section's format — and a loop variable would by then
+    // name the section that left no page behind.
     const sectionPageNumberFormat = section.properties.pageNumbering?.fmt;
+    const hostPageNumberFormat = continues
+      ? pages[pages.length - 1]?.pageFieldSource?.format
+      : undefined;
     const measuredPageNumberFormat =
-      continues && !numericPictureApplies('PAGE', previousPageNumberFormat)
-        ? previousPageNumberFormat
+      continues && !numericPictureApplies('PAGE', hostPageNumberFormat)
+        ? hostPageNumberFormat
         : sectionPageNumberFormat;
 
     const laid = layoutSection(slice, revision, {
@@ -486,7 +492,6 @@ export function layoutMultiSectionDocument(
     flowOpenPage = laid.endsOpenPage;
     previousGeometry = geometry;
     previousFurnitureKey = furnitureKey;
-    previousPageNumberFormat = sectionPageNumberFormat;
 
     if (sectionSession) {
       placed += sectionSession.stats.placed;
