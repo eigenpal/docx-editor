@@ -319,6 +319,28 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     }
   });
 
+  test('two merges starting in the SAME row keep their content inside the table', () => {
+    // Both cells of row 0 restart a merge over rows 0-1. Accepting the second detaches it
+    // from row 0 as well, which empties row 0 of everything it had and changes what the
+    // FIRST span covers. A height captured for that span when it was admitted describes a
+    // row that no longer exists, and its content painted below the table's bottom border.
+    const layout = layoutTiny(
+      loadPart(
+        `<w:tbl>${GRID}` +
+          `<w:tr>${tc(MERGED_CONTENT, RESTART)}${tc(p('b0'), RESTART)}</w:tr>` +
+          `<w:tr>${tc(p('a1'), CONTINUE)}${tc(p('b1'), CONTINUE)}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    const table = tablesOf(layout, 0)[0]!;
+    expect(table.rows[0]!.cells[0]!.rowSpan).toBe(2);
+    expect(table.rows[0]!.cells[1]!.rowSpan).toBe(2);
+    expectContentInsideItsTable(layout);
+    for (const pageIndex of layout.pages.keys()) {
+      expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+  });
+
   test('two merges in different columns are decided one at a time', () => {
     // Column 0 merges rows 0-1 and column 1 merges rows 1-2. Treating the two as one
     // keep-together block moved the whole table to the next page and left the first one

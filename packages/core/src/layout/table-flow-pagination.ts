@@ -237,7 +237,10 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
   // `w:vMerge` heights, planned over the BODY rows: a merged cell is as tall as the rows
   // it covers, so its own row must not swallow the whole merged height.
   const bodyRows = structure.rows.slice(headerRows.length);
-  const vMergePlan = vMergePlanFor(structure, tableLeft, 0, tableDeps, bodyRows);
+  // `tableLeft` is read through a getter, not captured: `placeHeaderGroup` and
+  // `breakForContinuation` both re-derive it, and a positioned probe localizes wrap bands
+  // against it — a stale left measures the head against a band that does not cross it.
+  const vMergePlan = vMergePlanFor(structure, () => tableLeft, 0, tableDeps, bodyRows);
   let vMerge: RowVMergeLayoutOptions | undefined;
   let naturalHeight = 0;
   const admitSpans = (bodyRowIndex: number, probeRow?: SemanticTableRow): void => {
@@ -340,6 +343,10 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
         if (flow.cursorY > 0 && !movedToFreshPage) {
           breakForContinuation(true);
           movedToFreshPage = true;
+          // Re-offered like every other break that retries this row: a merge starting on a
+          // `w:cantSplit` row that did not fit the band it was offered in may fit the fresh
+          // page it just moved to, which is the whole point of deciding where a row lands.
+          admitSpans(bodyRowIndex);
           continue;
         }
         throw new TablePaginationError(

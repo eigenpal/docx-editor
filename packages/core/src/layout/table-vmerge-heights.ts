@@ -73,7 +73,11 @@
 //   change that span's height after it was judged against the page;
 // - a span every row of which is `hRule="exact"` and too short for the merged content. It is
 //   the one span knowably unable to hold its own head, so the head keeps sizing its own row
-//   and the exact height clips it there, which is what Word draws.
+//   and the exact height clips it there, which is what Word draws;
+// - a SECOND merge starting in a row that already has one planned. Detaching it empties the
+//   head row of the last thing left in it, so the row collapses and the first span's rows
+//   stop adding up to the height it was sized at — its content then paints below the table.
+//   One merge per head row is planned; the rest size their own row as they did before.
 //
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
@@ -161,10 +165,20 @@ function soloHeadRow(row: SemanticTableRow, cell: SemanticTableCell): SemanticTa
 }
 
 /**
- * Probe layouts one plan may run. A probe re-enters nested-table layout, so a merge at every
- * level of a 16-deep nest multiplies passes rather than adding them; this is the ceiling
- * CLAUDE.md asks for on anything a file controls. Exhaustion fails soft: the table plans no
- * heights and keeps the behaviour it had before this module existed.
+ * Probe layouts one LAYOUT PASS may run, across every table in it at every nesting level.
+ *
+ * A probe re-enters nested-table layout, and a nested table plans heights of its own, so a
+ * merge at each level of a nest multiplies passes rather than adding them: measured at three
+ * rows and two merges per level, a per-TABLE allowance ran depth 6 in 63ms and depth 10 in
+ * 4.3s, which extrapolates past an hour at `MAX_TABLE_NESTING`. A file controls that nest,
+ * so the allowance has to be one pool for the whole pass — a per-table one bounds no
+ * document. Exhaustion fails soft: later tables plan no heights and keep the behaviour they
+ * had before this module existed.
+ *
+ * The pool makes a table's plan depend on how many tables the pass walked before it, which
+ * is the same trade the `w:vMerge` resolve budget beside it already makes. Deterministic
+ * per-table allowances and a bounded document cannot both be had from one counter, and an
+ * unbounded document is not on the table.
  */
 export const MAX_VMERGE_PROBE_LAYOUTS = 4096;
 
@@ -242,7 +256,10 @@ export function planVMergeRowHeights(
   const coveredRows = new Set<number>();
   const acceptedSpans = new Set<VMergeSpan>();
   const acceptedHeadIds = new Set<string>();
-  const detachedByRow = new Map<number, Map<string, number>>();
+  /** Rows with a planned merge already. A second one there collapses the row out from it. */
+  const acceptedHeadRows = new Set<number>();
+  /** Where each accepted span's head row was offered, so its height re-derives the same. */
+  const admittedAtYPt = new Map<VMergeSpan, number | undefined>();
 
   /**
    * The row's height with the heads that are DETACHED from it emptied, and no others.
@@ -330,7 +347,14 @@ export function planVMergeRowHeights(
   };
 
   const spanHeightOf = (span: VMergeSpan, atYPt?: number): number => {
-    // Unaffordable reads as "taller than any page", so the caller never admits it.
+    // Shapes this module declines read as "taller than any page", so the caller never
+    // admits them — and they are refused BEFORE the probe budget is charged, or a table
+    // full of merges nested inside other merges would spend the allowance on spans it was
+    // never going to use and starve the ones it would.
+    if (headsBelowHead(span)) return Number.POSITIVE_INFINITY;
+    if (acceptedHeadRows.has(span.headRow) && !acceptedSpans.has(span)) {
+      return Number.POSITIVE_INFINITY;
+    }
     if (!affordable(span)) return Number.POSITIVE_INFINITY;
     const covered = coveredPtOf(span);
     if (lastGrowableRow(span) === undefined) return covered;
@@ -342,7 +366,8 @@ export function planVMergeRowHeights(
     heightOf: spanHeightOf,
     accept: (span, atYPt) => {
       if (acceptedSpans.has(span)) return;
-      if (headsBelowHead(span) || !affordable(span)) return;
+      if (headsBelowHead(span) || acceptedHeadRows.has(span.headRow)) return;
+      if (!affordable(span)) return;
       const covered = coveredPtOf(span);
       const growable = lastGrowableRow(span);
       const contentHeightPt = contentOf(span, atYPt);
@@ -357,19 +382,33 @@ export function planVMergeRowHeights(
       if (surplus > EPSILON_PT && coveredRows.has(growable!)) return;
       acceptedSpans.add(span);
       acceptedHeadIds.add(span.headCellId);
+      acceptedHeadRows.add(span.headRow);
       if (surplus > EPSILON_PT) {
         surplusPt.set(growable!, (surplusPt.get(growable!) ?? 0) + surplus);
       }
       for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
         coveredRows.add(rowIndex);
       }
-      const detached = detachedByRow.get(span.headRow) ?? new Map<string, number>();
-      detached.set(span.headCellId, spanHeightOf(span, atYPt));
-      detachedByRow.set(span.headRow, detached);
+      // The span's height is NOT stored here. A second head in this same row is decided
+      // after this one and detaches too, which empties it out of `baseOf(headRow)` and so
+      // changes what this span covers; a height captured now would describe a row that no
+      // longer exists by the time either head is placed. `rowOptions` derives both heights
+      // once every span at the row has been decided.
+      admittedAtYPt.set(span, atYPt);
     },
     rowOptions: (rowIndex) => {
       if (!coveredRows.has(rowIndex)) return undefined;
-      const detachedSpanHeightPtByCellId = detachedByRow.get(rowIndex);
+      // Derived now, not at accept: every span heading this row has been decided by the
+      // time the row is placed, so this is the first moment the heights are all settled.
+      let detachedSpanHeightPtByCellId: Map<string, number> | undefined;
+      for (const span of spansByRow.get(rowIndex) ?? []) {
+        if (!acceptedSpans.has(span)) continue;
+        detachedSpanHeightPtByCellId ??= new Map<string, number>();
+        detachedSpanHeightPtByCellId.set(
+          span.headCellId,
+          spanHeightOf(span, admittedAtYPt.get(span))
+        );
+      }
       // Always a floor: `baseOf` measures whatever heads stayed in the row, so this is the
       // whole row's height and never a number the caller has to second-guess.
       return {
@@ -414,7 +453,8 @@ export function admitVMergeSpansAt(
  */
 export function planTableVMergeHeights<Deps>(
   structure: SemanticTableStructure,
-  left: number,
+  /** A getter where the caller moves the table between rows; a number where it cannot. */
+  left: number | (() => number),
   depth: number,
   deps: Deps,
   measure: (
@@ -435,7 +475,7 @@ export function planTableVMergeHeights<Deps>(
       measure(
         row,
         structure.columnWidthsPt,
-        left,
+        typeof left === 'function' ? left() : left,
         depth,
         deps,
         structure.cellSpacingPt,
@@ -455,13 +495,19 @@ export function planTableVMergeHeights<Deps>(
 }
 
 /**
- * Accept every merge starting at `rowIndex` for a table that is placed in one pass, where
- * there is no page to fall off and so no fit to judge.
+ * Accept every merge starting at `rowIndex` for a table placed in one pass, where there is
+ * no page to fall off and so no fit to judge.
+ *
+ * `rowTopPt` is where the row is going, and it matters for the same reason it does in the
+ * paginator: the head's bound comes from this measurement, and a one-pass caller has no
+ * continuation to carry what a bound cut short. Measuring position-free here and placing
+ * under a wrap band there would drop the lines the band pushed past the span.
  */
 export function acceptVMergeSpansAt(
   plan: VMergeRowHeights | null,
-  rowIndex: number
+  rowIndex: number,
+  rowTopPt: number
 ): RowVMergeLayoutOptions | undefined {
-  for (const span of plan?.spansAt(rowIndex) ?? []) plan!.accept(span);
+  for (const span of plan?.spansAt(rowIndex) ?? []) plan!.accept(span, rowTopPt);
   return plan?.rowOptions(rowIndex);
 }

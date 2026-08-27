@@ -86,6 +86,7 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { paginateTableInFlow, type TableFlowCursor } from './table-flow-pagination.ts';
+import { createVMergePlanBudget } from './table-vmerge-heights.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { paragraphMergeGroupOf, storyBlocks } from './story-roots.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
@@ -1712,6 +1713,7 @@ function layoutBlocksPass(
       : {}),
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
+    vMergePlanBudget: createVMergePlanBudget(),
     displayMode,
   };
 

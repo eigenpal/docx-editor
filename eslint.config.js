@@ -454,15 +454,19 @@ export default [
     },
   },
 
-  // semantic-table-layout.ts holds row-split pagination, which has to stay with cell flow
-  // and finalize because a row's real height is only known after its cells have laid out.
-  // It carried a blanket `eslint-disable max-lines` once, which removes the ceiling instead
-  // of raising it; this keeps the ceiling, with headroom.
+  // semantic-table-layout.ts holds cell flow and row-split placement, which stay together
+  // because a row's real height is only known after its cells have laid out. Fragment
+  // finalize and whole-table pagination have since moved to modules of their own; what is
+  // left is the row. It carried a blanket `eslint-disable max-lines` once, which removes the
+  // ceiling instead of raising it; this keeps the ceiling, with headroom.
   {
-    files: [
-      'packages/core/src/layout/semantic-table-layout.ts',
-      'packages/core/src/store/store/tree-op-tables.ts',
-    ],
+    files: ['packages/core/src/layout/semantic-table-layout.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1800, skipBlankLines: false, skipComments: false }],
+    },
+  },
+  {
+    files: ['packages/core/src/store/store/tree-op-tables.ts'],
     rules: {
       'max-lines': ['error', { max: 1900, skipBlankLines: false, skipComments: false }],
     },
