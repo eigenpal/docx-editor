@@ -12,6 +12,7 @@ import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.d
 import { buildStyleCascadeTable, readTableStructure } from '../index.ts';
 import { cascadeTableFormatting } from '../style-cascade.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import { buildNumberingIndex } from '../numbering-index.ts';
 import { caretAt, documentOrder } from '../semantic-interaction.ts';
 import { hitTestPage } from '../semantic-hit-test.ts';
 import type { SemanticLayout, TableFragmentRecord } from '../semantic-records.ts';
@@ -243,19 +244,35 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
     expect(withText).toBeGreaterThan(withNone);
   });
 
-  test('the caret in it is visible, and it is reachable by pointer', () => {
+  test('the caret in it is visible, inside the row, and reachable by pointer', () => {
     // Zero flow height is Word's geometry, but a zero-height CARET is not a caret: the
     // engine suppresses the native one for as long as it paints its own, so the user would
     // type blind. The caret falls back to the ascent the line was measured at.
-    const layout = layoutOf(cellWithNestedTable('<w:p/>'));
+    //
+    // POSITION, not just existence. The line sits on the cell's content bottom, so a caret
+    // grown downward from it lands wholly outside the row and over the block after the
+    // table. It is drawn ending at the collapse point instead.
+    const layout = layoutOf(cellWithNestedTable('<w:p/>') + p('NEXT BLOCK'));
     const order = documentOrder(layout);
-    const terminator = order[order.length - 1]!;
+    const terminator = order.find((id) => id.endsWith('.3'))!;
+    const fragment = layout.pages[0]!.fragments.find(
+      (record): record is TableFragmentRecord => record.kind === 'table'
+    )!;
+    const rowTop = fragment.rows[0]!.box.y;
+    const rowBottom = rowTop + fragment.rows[0]!.box.height;
     const caret = caretAt(layout, { paragraphId: terminator, offset: 0 }, { measurer });
     expect(caret).not.toBeNull();
     expect(caret!.height).toBeGreaterThan(0);
+    expect(caret!.y + caret!.height).toBeCloseTo(rowBottom, 6);
+    expect(caret!.y).toBeGreaterThanOrEqual(rowTop - 0.001);
+  });
 
-    // And a press still lands in it. The nested table owns the band under its own column,
-    // so the reachable area is the rest of the cell beside it.
+  test('a press still lands in it', () => {
+    // The nested table owns the band under its own column, so the reachable area is the
+    // rest of the cell beside it.
+    const layout = layoutOf(cellWithNestedTable('<w:p/>'));
+    const order = documentOrder(layout);
+    const terminator = order[order.length - 1]!;
     const page = layout.pages[0]!;
     const hit = hitTestPage(
       layout,
@@ -264,6 +281,56 @@ describe('the empty paragraph a nested table forces at the end of a cell', () =>
       { measurer }
     );
     expect(hit?.position?.paragraphId).toBe(terminator);
+  });
+
+  test('a NUMBERED terminator is not one: its marker is content, so it keeps its line', () => {
+    // `w:pPr` is where `w:numPr` lives, so the structural emptiness test alone calls a
+    // numbered paragraph empty — and `publishListMarker` then hands paint a marker on a
+    // zero-height line, which paint centres half a line above its own row. Suppressing the
+    // marker would hide something the author asked for; the honest answer is that a
+    // paragraph carrying a list marker is not the terminator Word writes.
+    const numbering =
+      '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0">' +
+      '<w:numFmt w:val="bullet"/><w:lvlText w:val="&#8226;"/>' +
+      '<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>' +
+      '</w:lvl></w:abstractNum>' +
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>';
+    const numbered =
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr></w:p>';
+    const numberingPart = part(
+      `<w:numbering xmlns:w="${W}">${numbering}</w:numbering>`,
+      '/word/numbering.xml'
+    );
+    const index = buildNumberingIndex(numberingPart.root);
+    const layoutWith = (bodyXml: string) =>
+      layoutSemanticDocument(
+        part(
+          `<w:document xmlns:w="${W}"><w:body>${bodyXml}</w:body></w:document>`,
+          '/word/document.xml'
+        ),
+        0,
+        { measurer, numberingIndex: index }
+      );
+    const rowHeight = (bodyXml: string) =>
+      layoutWith(bodyXml).pages[0]!.fragments.find(
+        (record): record is TableFragmentRecord => record.kind === 'table'
+      )!.rows[0]!.box.height;
+
+    const withNumbered = rowHeight(cellWithNestedTable(numbered));
+    const withNone = rowHeight(cellWithNestedTable(''));
+    // It keeps a full line, exactly like a terminator carrying text.
+    expect(withNumbered - withNone).toBeCloseTo(14 * (10 / 11), 6);
+    // And the marker it publishes has a line box to sit on.
+    const fragment = layoutWith(cellWithNestedTable(numbered)).pages[0]!.fragments.find(
+      (record): record is TableFragmentRecord => record.kind === 'table'
+    )!;
+    const paragraphs = fragment.rows[0]!.cells[0]!.blocks.filter(
+      (block) => block.kind === 'paragraph'
+    );
+    const last = paragraphs[paragraphs.length - 1]!;
+    if (last.kind !== 'paragraph') throw new Error('expected a paragraph fragment');
+    expect(last.marker).toBeDefined();
+    expect(last.marker!.box.height).toBeGreaterThan(0);
   });
 
   test('it stays addressable, so the caret and select-all still reach it', () => {

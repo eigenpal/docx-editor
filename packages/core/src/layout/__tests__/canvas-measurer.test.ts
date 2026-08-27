@@ -200,6 +200,20 @@ describe('tryCreateCanvasMeasurer', () => {
     })!;
     expect(deterministic.lineMetrics(sized).height).toBeCloseTo(11.5, 5);
   });
+
+  test('the floor is a trade: a face under 1.15 em is rounded UP, not matched', () => {
+    // Pinned so the residual the module header records cannot drift unrecorded. Liberation
+    // Mono is 1.1328 em with no gap, so the shaped measurer returns 11.328 at 10pt where
+    // this one returns the 11.5 floor. Canvas cannot tell a gapless face from a gapped one,
+    // so the two measurers do not agree here and the header says so.
+    const mono = tryCreateCanvasMeasurer({
+      context: mockContext(undefined, { ascent: 0.8916, descent: 0.2412 }),
+      scale: 1,
+    })!;
+    const metrics = mono.lineMetrics(style({ fontSizePt: 10 }));
+    expect(10 * (0.8916 + 0.2412)).toBeCloseTo(11.328, 3);
+    expect(metrics.height).toBeCloseTo(11.5, 5);
+  });
 });
 
 describe('canvas measurer cache bounds', () => {

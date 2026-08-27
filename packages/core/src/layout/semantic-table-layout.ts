@@ -1149,11 +1149,19 @@ function flowBlocksInBoxBounded(
 
     // The `w:p` a cell must end with (17.4.66) after a trailing `w:tbl`: it still flows, so
     // the caret and select-all reach it, but Word and LibreOffice give it no height.
+    //
+    // A paragraph that resolves to a LIST ITEM is never that paragraph, even with no runs:
+    // its marker is painted content the author asked for, and `w:pPr` is where `w:numPr`
+    // lives, so the structural test alone calls a numbered paragraph empty. Suppressing the
+    // marker instead would hide authored content; the honest answer is that this is not a
+    // terminator. Asked of the resolved list item rather than of `w:numPr`, so numbering a
+    // `w:pStyle` brings in counts too.
     const collapsed =
       inTableCell &&
       blockIndex === blocks.length - 1 &&
       blockIndex > 0 &&
       blocks[blockIndex - 1]!.kind === 'table' &&
+      !deps.listItems?.get(block.id) &&
       isEmptyCellTerminator(block);
     const placed = placeCellParagraph(
       block,
