@@ -1730,6 +1730,7 @@ function layoutBlocksPass(
       : {}),
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
+    vMergePlanBudget: createTableVMergeResolveBudget(),
     displayMode,
   };
 
@@ -2116,7 +2117,7 @@ function layoutBlocksPass(
     // rows it covers, so its own row must not swallow the whole merged height and the
     // covered rows have to stay together. Rows the plan covers are measured there, not here.
     const bodyRows = structure.rows.slice(headerRows.length);
-    const vMergePlan = planVMergeRowHeights(bodyRows, rowHeightOf, tableDeps.vMergeResolveBudget);
+    const vMergePlan = planVMergeRowHeights(bodyRows, rowHeightOf, tableDeps.vMergePlanBudget);
     const admitSpans = (bodyRowIndex: number): RowVMergeLayoutOptions | undefined =>
       admitVMergeSpansAt(vMergePlan, bodyRowIndex, cursorY, contentHeight());
 
@@ -2128,8 +2129,13 @@ function layoutBlocksPass(
       let fragmentsForRow = 0;
       let movedToFreshPage = false;
 
+      // A row an accepted span already covers stays where the span put it. Moving it would
+      // strand the merged content placed above it on a page with no table left under it.
+      const heldByOpenSpan = vMerge !== undefined && vMerge.detachedBottomPtByCellId === undefined;
+
       // Whole-row move: fits a fresh page but not the remaining band.
       if (
+        !heldByOpenSpan &&
         naturalHeight <= contentHeight() + 0.001 &&
         cursorY + naturalHeight > contentHeight() + 0.001 &&
         cursorY > 0

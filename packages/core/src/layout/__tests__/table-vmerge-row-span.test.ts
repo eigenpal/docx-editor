@@ -61,6 +61,29 @@ function rowsOf(table: TableFragmentRecord): readonly TableRowFragmentRecord[] {
   return table.rows;
 }
 
+/**
+ * Every painted cell keeps its content inside its own box, and every box inside its table.
+ * A merged head that outlives the rows under it paints below the table's bottom border with
+ * no cell around it, which a page-level check does not see.
+ */
+function expectContentInsideItsTable(layout: SemanticLayout): void {
+  for (const table of tables(layout)) {
+    const tableBottom = table.box.y + table.box.height;
+    for (const row of table.rows) {
+      for (const cell of row.cells) {
+        if (cell.blocks.length === 0) continue;
+        const cellBottom = cell.box.y + cell.box.height;
+        let contentBottom = Number.NEGATIVE_INFINITY;
+        for (const block of cell.blocks) {
+          contentBottom = Math.max(contentBottom, block.box.y + block.box.height);
+        }
+        expect(contentBottom).toBeLessThanOrEqual(cellBottom + 0.001);
+        expect(cellBottom).toBeLessThanOrEqual(tableBottom + 0.001);
+      }
+    }
+  }
+}
+
 const shortTable = (layout: SemanticLayout): TableFragmentRecord => tables(layout)[0]!;
 const tallTable = (layout: SemanticLayout): TableFragmentRecord => tables(layout)[1]!;
 
@@ -69,6 +92,7 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     const layout = layoutFixture();
     expect(layout.pages).toHaveLength(1);
     expect(tables(layout)).toHaveLength(2);
+    expectContentInsideItsTable(layout);
   });
 
   test('the merged content really is taller than the head row: the defect stays visible', () => {
@@ -102,6 +126,7 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     expect(head.rowSpan).toBe(3);
     expect(head.box.y).toBe(rows[0]!.box.y);
     expect(head.box.height).toBe(60 + 120 + 80);
+    expectContentInsideItsTable(layoutFixture());
   });
 
   test('merged content taller than the span grows the LAST row, not the head row', () => {
@@ -121,6 +146,7 @@ describe('a cell merged over several rows takes the span, not the first row', ()
     // The span is exactly what the merged content needs, insets included.
     expect(spanPt).toBeGreaterThanOrEqual(contentPt);
     expect(spanPt - contentPt).toBeLessThan(2 * 3 + 0.001);
+    expectContentInsideItsTable(layout);
   });
 
   test('the label cells of the taller merge keep their own bands too', () => {

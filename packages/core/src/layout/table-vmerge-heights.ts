@@ -28,6 +28,16 @@
 // only overlap by a row are separate decisions, so a table where the second one cannot be
 // kept whole still gets the benefit for the first.
 //
+// Two shapes are declined outright, both because a span is only safe while nothing can move
+// its rows or change their heights after it was measured and its head's bottom was pinned:
+//
+// - a span with ANOTHER merge head in a row below its own head row. That head sizes its own
+//   row when it is declined, which is a height this span never measured, and the row can
+//   then take the paginator's whole-row move and leave this span's content behind on the
+//   page above with no table under it;
+// - a span whose surplus would land in a row an accepted span already covers, which would
+//   grow that span after its bottom was pinned and after it was judged to fit the page.
+//
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
 //
@@ -73,8 +83,9 @@ export interface VMergeRowHeights {
   /** Points the span needs below its head row's top, with accepted spans folded in. */
   heightOf(span: VMergeSpan): number;
   /**
-   * Take the span into the plan. `headTopPt` is where its head row is being placed; calling
-   * it again after the row moves to another page re-aims the head's bottom and nothing else.
+   * Take the span into the plan, unless its shape is one the module declines (see the top of
+   * this file). `headTopPt` is where its head row is being placed; calling it again after the
+   * row moves to another page re-aims the head's bottom and nothing else.
    */
   accept(span: VMergeSpan, headTopPt: number): void;
   /** Placement options for a row covered by an accepted span, `undefined` otherwise. */
@@ -185,6 +196,14 @@ export function planVMergeRowHeights(
 
   const floorOf = (rowIndex: number): number => baseOf(rowIndex) + (surplusPt.get(rowIndex) ?? 0);
 
+  /** Another merge starting under this one's head row: see the shapes declined above. */
+  const headsBelowHead = (span: VMergeSpan): boolean => {
+    for (let rowIndex = span.headRow + 1; rowIndex <= span.endRow; rowIndex += 1) {
+      if (headIdsByRow.has(rowIndex)) return true;
+    }
+    return false;
+  };
+
   const coveredPtOf = (span: VMergeSpan): number => {
     let total = 0;
     for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
@@ -212,10 +231,15 @@ export function planVMergeRowHeights(
     heightOf: spanHeightOf,
     accept: (span, headTopPt) => {
       if (!acceptedSpans.has(span)) {
+        if (headsBelowHead(span)) return;
         const covered = coveredPtOf(span);
         const growable = lastGrowableRow(span);
-        if (growable !== undefined && contentOf(span) > covered + EPSILON_PT) {
-          surplusPt.set(growable, (surplusPt.get(growable) ?? 0) + (contentOf(span) - covered));
+        const surplus = growable === undefined ? 0 : contentOf(span) - covered;
+        // Growing a row an accepted span already covers would move that span's bottom out
+        // from under content already aimed at it.
+        if (surplus > EPSILON_PT && coveredRows.has(growable!)) return;
+        if (surplus > EPSILON_PT) {
+          surplusPt.set(growable!, (surplusPt.get(growable!) ?? 0) + surplus);
         }
         for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
           coveredRows.add(rowIndex);

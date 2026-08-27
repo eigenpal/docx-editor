@@ -66,7 +66,6 @@ import {
   MAX_TABLE_NESTING,
   readTableStructure,
   tableOriginX,
-  type CellMarginsPt,
   type SemanticTableCell,
   type SemanticTableRow,
   type SemanticTableStructure,
@@ -91,7 +90,6 @@ import {
   resolveTableCellBorderGrid,
   type BorderGridCell,
   type BorderGridGeometry,
-  type CellBorderBox,
   type TableBorderBox,
   type TableBorderOwnershipBudget,
 } from './table-borders.ts';
@@ -101,6 +99,8 @@ import {
   type TableVMergeResolveWork,
 } from './table-vmerge.ts';
 import { acceptVMergeSpansAt, planTableVMergeHeights } from './table-vmerge-heights.ts';
+import { contentInsets } from './table-cell-geometry.ts';
+export { rowWithSplitBorders } from './table-cell-geometry.ts';
 import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 
 export {
@@ -242,6 +242,12 @@ export interface TableFlowDeps {
    * pass. Exhaustion fails soft (remaining restarts keep rowSpan 1).
    */
   readonly vMergeResolveBudget?: TableVMergeResolveBudget;
+  /**
+   * The same again for the height plan, which resolves the AUTHORED rows before any is
+   * placed. Sharing the budget above would exhaust it at half the cell count, and finalize
+   * fails soft to `rowSpan` 1 — holes in the painted grid, worse than planning no heights.
+   */
+  readonly vMergePlanBudget?: TableVMergeResolveBudget;
   /**
    * Which tracked revisions this pass resolves away. A cell paragraph must resolve the same
    * mode as a body paragraph, or one table would show the proposed result while the text
@@ -1182,53 +1188,6 @@ function flowBlocksInBoxBounded(
   };
 }
 
-function contentInsets(
-  margins: CellMarginsPt,
-  borders: SemanticTableCell['borders']
-): {
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-  readonly left: number;
-} {
-  // Border extents shrink the content box (border-box model) so thick rules do not cover text.
-  return {
-    top: margins.top + borderExtentPt(borders.top),
-    right: margins.right + borderExtentPt(borders.right),
-    bottom: margins.bottom + borderExtentPt(borders.bottom),
-    left: margins.left + borderExtentPt(borders.left),
-  };
-}
-
-function suppressSplitBorders(
-  borders: CellBorderBox,
-  omitTop: boolean,
-  omitBottom: boolean
-): CellBorderBox {
-  return {
-    top: omitTop ? { state: 'none' } : borders.top,
-    left: borders.left,
-    bottom: omitBottom ? { state: 'none' } : borders.bottom,
-    right: borders.right,
-  };
-}
-
-/** Clone a structure row with top/bottom borders suppressed for mid-row page cuts. */
-export function rowWithSplitBorders(
-  row: SemanticTableRow,
-  omitTop: boolean,
-  omitBottom: boolean
-): SemanticTableRow {
-  if (!omitTop && !omitBottom) return row;
-  return {
-    ...row,
-    cells: row.cells.map((cell) => ({
-      ...cell,
-      borders: suppressSplitBorders(cell.borders, omitTop, omitBottom),
-    })),
-  };
-}
-
 /**
  * Lay out one row at `rowTop`: flow every cell, size the row to its tallest cell, emit
  * every cell box at that height. `left` is the table's left edge (page-content-relative),
@@ -1379,11 +1338,12 @@ export function layoutRowFragmentBounded(
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     const contentTop = rowTop + topInset;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
-    // A detached merge head stops at its SPAN's bottom too, so it can never paint past the
-    // box it owns — the span can end in a row Word clips to an exact height.
+    // A detached head is bound by its SPAN, not this row: `hRule="exact"` fixes the ROW's
+    // height (17.18.37) while the merged content goes on through the rows below it.
     const detachedBottomPt = detachedBottoms?.get(cell.id);
-    const contentMaxBottom =
-      Math.min(flowMaxBottom, detachedBottomPt ?? Number.POSITIVE_INFINITY) - insets.bottom;
+    const cellMaxBottom =
+      detachedBottomPt === undefined ? flowMaxBottom : Math.min(maxBottom, detachedBottomPt);
+    const contentMaxBottom = cellMaxBottom - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
@@ -1422,7 +1382,7 @@ export function layoutRowFragmentBounded(
     // re-floor with defaultLineHeight — that invented bottom pad when the measured line was
     // shorter than the DEFAULT_RUN_STYLE line. Empty / continue cells still need one line.
     const cellBottom = Math.min(
-      flowMaxBottom,
+      cellMaxBottom,
       fitted ? contentBottom + insets.bottom : rowTop + topInset + defaultLineHeight + insets.bottom
     );
     if (cellBottom > rowBottom && detachedBottomPt === undefined) rowBottom = cellBottom;
@@ -1594,7 +1554,7 @@ const vMergePlanFor = (
   depth: number,
   deps: TableFlowDeps
 ): VMergeRowHeights | null =>
-  planTableVMergeHeights(structure, left, depth, deps, measureRowHeight, deps.vMergeResolveBudget);
+  planTableVMergeHeights(structure, left, depth, deps, measureRowHeight, deps.vMergePlanBudget);
 
 /**
  * After all rows of a table fragment are placed: expand vMerge restart boxes, re-apply

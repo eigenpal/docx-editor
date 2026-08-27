@@ -3,8 +3,9 @@
 // Giving the span its own height is only safe while every row of it lands on one page and
 // the span really can hold the merged content. Where either is untrue the merge has to stay
 // on the row-by-row path, because a merged cell whose content is not bounded by its span
-// paints past the page content box, and the sheet clips whatever crosses the paper edge.
-// Content outside its box is worse than the row heights this file's sibling fixes.
+// paints past the box it owns. Content outside its box is worse than the row heights this
+// file's sibling fixes, so every case here asserts the merged content is inside its CELL —
+// inside the page is not the same claim, and a cell's content is `overflow: visible`.
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
@@ -80,6 +81,30 @@ function contentBottomOf(cell: TableCellFragmentRecord): number {
   return bottom;
 }
 
+/**
+ * Every painted cell keeps its content inside its own box, and every box inside its table.
+ *
+ * The page-level check is not enough on its own: a merged head that outlives the rows under
+ * it paints below the table's bottom border with no cell around it, and still lands well
+ * inside the page.
+ */
+function expectContentInsideItsTable(layout: SemanticLayout): void {
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) {
+      if (fragment.kind !== 'table') continue;
+      const tableBottom = fragment.box.y + fragment.box.height;
+      for (const row of fragment.rows) {
+        for (const cell of row.cells) {
+          if (cell.blocks.length === 0) continue;
+          const cellBottom = cell.box.y + cell.box.height;
+          expect(contentBottomOf(cell)).toBeLessThanOrEqual(cellBottom + 0.001);
+          expect(cellBottom).toBeLessThanOrEqual(tableBottom + 0.001);
+        }
+      }
+    }
+  }
+}
+
 describe('a merge is only sized as a span where the span can hold it', () => {
   test('a repeated header row on the next page does not let the merge overrun it', () => {
     // The merge does not fit the band it is offered in. Moving the row to a fresh page
@@ -96,6 +121,7 @@ describe('a merge is only sized as a span where the span can hold it', () => {
       )
     );
     expect(layout.pages).toHaveLength(3);
+    expectContentInsideItsTable(layout);
     for (const pageIndex of layout.pages.keys()) {
       expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
     }
@@ -128,7 +154,7 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(table.rows[0]!.box.height).toBe(table.box.height - 20);
     expect(head.box.height).toBe(table.box.height);
     // Every line of the merged content is inside the merged cell, and so inside the table.
-    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + head.box.height + 0.001);
+    expectContentInsideItsTable(layout);
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
 
@@ -148,7 +174,62 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(head.box.height).toBe(40);
     // Clipped to the span, not painted past it.
     expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + 40 + 0.001);
+    expectContentInsideItsTable(layout);
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+  });
+
+  test('a merge over a row that heads another merge is left alone', () => {
+    // Column 0 merges rows 0-1 and column 1 restarts at row 1. Row 1 therefore sizes itself
+    // around the second head whenever that one is not planned, which is a height the first
+    // span never measured, and the row can then take the whole-row move and leave the first
+    // span's content on the page above with no table under it. Nothing revokes a span once
+    // its head content has been placed, so the first span is not taken at all.
+    const layout = layoutTiny(
+      loadPart(
+        `${p('F0')}${p('F1')}<w:tbl>${GRID}` +
+          `<w:tr>${tc(p('A0') + p('A1'), RESTART)}${tc(p('b0'))}</w:tr>` +
+          `<w:tr>${tc(p('a1'), CONTINUE)}${tc(MERGED_CONTENT, RESTART)}</w:tr>` +
+          `<w:tr>${tc(p('a2'))}${tc(p('b2'), CONTINUE)}</w:tr>` +
+          `<w:tr>${tc(p('a3'))}${tc(p('b3'))}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    // The two-line head sizes its own row, so its content has a cell around it.
+    const first = tablesOf(layout, 0)[0]!;
+    const head = first.rows[0]!.cells[0]!;
+    expect(head.rowSpan).toBe(1);
+    expect(contentBottomOf(head)).toBeGreaterThan(first.box.y + 18);
+    expectContentInsideItsTable(layout);
+    // The merge that starts BELOW it is still planned, on the page it moves to.
+    const carried = tablesOf(layout, 1)[0]!;
+    expect(carried.rows[0]!.cells[1]!.rowSpan).toBe(2);
+    for (const pageIndex of layout.pages.keys()) {
+      expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
+    }
+  });
+
+  test('an exact head row fixes the ROW, and the merged content flows on through the span', () => {
+    // `hRule="exact"` is a height for the row (17.18.37), not a lid on a merged cell that
+    // covers rows below it. Clipping the head to its own row while the span reserved the
+    // surplus somewhere else left a tall blank band under one visible line.
+    const layout = layoutTiny(
+      loadPart(
+        `<w:tbl>${GRID}` +
+          `<w:tr>${exactRow(400)}${tc(MERGED_CONTENT, RESTART)}${tc(p('side'))}</w:tr>` +
+          `<w:tr>${tc(p('ghost'), CONTINUE)}${tc(p('side2'))}</w:tr>` +
+          `<w:tr>${tc(p('c0'))}${tc(p('c1'))}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    const table = tablesOf(layout, 0)[0]!;
+    const head = table.rows[0]!.cells[0]!;
+    expect(table.rows[0]!.box.height).toBe(20);
+    expect(head.rowSpan).toBe(2);
+    // All five lines are painted, inside the merged box — not one line and a blank band.
+    const lineCount = head.blocks.filter((block) => block.kind === 'paragraph').length;
+    expect(lineCount).toBe(5);
+    expect(head.box.height).toBe(20 + table.rows[1]!.box.height);
+    expectContentInsideItsTable(layout);
   });
 
   test('two merges in different columns are decided one at a time', () => {
@@ -172,7 +253,7 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     const merged = carried.rows[0]!.cells[1]!;
     expect(merged.rowSpan).toBe(2);
     expect(merged.box.height).toBe(carried.rows[0]!.box.height + carried.rows[1]!.box.height);
-    expect(contentBottomOf(merged)).toBeLessThanOrEqual(merged.box.y + merged.box.height + 0.001);
+    expectContentInsideItsTable(layout);
     for (const pageIndex of layout.pages.keys()) {
       expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
     }
