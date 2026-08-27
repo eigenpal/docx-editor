@@ -63,8 +63,9 @@ const FORMATTING: Record<string, { localName: string; attributes?: Record<string
  * not whether this key composes anything with it, and it is true for every Ctrl+Alt press on a
  * layout that has an AltGr level — so refusing on it alone would have taken the long-shipped
  * `Ctrl+Alt+F` and `Ctrl+Alt+D` note chords down on Polish and Croatian, where those two keys
- * compose nothing. What settles it is whether a character WAS composed: the produced `key`
- * differs from the letter on the keycap exactly when the layout used the AltGr level.
+ * compose nothing. What settles it is whether a character WAS composed, which is exactly what
+ * `letterOf` answers: a composed character is not a Latin letter, so the letter it returns came
+ * from the KEYCAP and differs from what was typed.
  *
  * The macOS half never reaches any of that: the chord there is Cmd+Option, and Command is not
  * a modifier a layout composes with — Option alone is, which is why `event.key` there is `ç`
@@ -80,30 +81,32 @@ function isAltAccelerator(event: KeyboardEvent, letter: string): boolean {
   return event.key.toLowerCase() === letter;
 }
 
+/** A single Latin letter, which is what every chord in this keymap is named by. */
+const CHORD_LETTER = /^[a-z]$/;
+
 /**
  * Which LETTER a chord names, for the accelerators held with Alt.
  *
- * `event.key` is the produced character, and under Alt that is the alternate one on most
- * layouts — macOS turns Option+C into `ç`, Option+F into `ƒ` and Option+D into `∂`, so the
- * note chords read by `key` alone never fired there at all. `event.code` names the physical
- * key, which is what the user is looking at on the keycap.
+ * The CHARACTER first. A user reaching for Ctrl+Alt+F presses the key that types `f`,
+ * wherever their layout puts it, and Windows resolves accelerators the same way — so reading
+ * the physical position first sent Dvorak's footnote chord to the key that types `u`.
  *
- * ONE identifier, not either-or. Accepting both claims two chords on a layout where they
- * disagree: on Dvorak the key at QWERTY's `C` position produces `j`, so matching `key` as
- * well would swallow Ctrl+Alt+J and capture formatting from it. `key` is the fallback only
- * where `code` says nothing — a virtual keyboard, or a synthesised event.
+ * `event.code` is the fallback, for the case that makes `key` unreadable: a modifier that
+ * COMPOSES. macOS turns Option+F into `ƒ`, Option+C into `ç` and Option+D into `∂`, none of
+ * them a letter — so falling through to the keycap is the only way those chords work there,
+ * and it costs nothing, because a `key` that IS a letter has already answered.
+ *
+ * Never both for one event: consulting `code` as well would claim a second chord wherever
+ * the two disagree, which is every remapped layout.
  */
 function letterOf(event: KeyboardEvent): string {
+  const typed = event.key.toLowerCase();
+  if (CHORD_LETTER.test(typed)) return typed;
   // Defaulted, like `getModifierState` above: a synthesised event — this repo's own keymap
-  // tests build several — carries no `code`, and reading `.length` off it throws out of the
-  // keydown handler rather than falling through to the `key` arm below.
+  // tests build several — carries no `code`, and reading `.length` off it would throw out of
+  // the keydown handler.
   const physical = event.code ?? '';
-  if (physical.length === 4 && physical.startsWith('Key')) return physical[3]!.toLowerCase();
-  // Anything that is not a `Key*` code names no letter, and that includes the non-empty
-  // answers — `Unidentified` from several Android IMEs, remote desktops and on-screen
-  // keyboards — so the produced character is the only identifier left. Matching on the empty
-  // string alone left these chords silently dead on exactly the keyboards that have no keys.
-  return event.key.toLowerCase();
+  return physical.length === 4 && physical.startsWith('Key') ? physical[3]!.toLowerCase() : '';
 }
 
 export function createKeyDownHandler(

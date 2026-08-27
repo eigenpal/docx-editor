@@ -1000,7 +1000,9 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       { kind: 'item', slot: 'paragraph.dialog' },
       { kind: 'separator' },
       // PLAIN-LABEL key, stated rather than inherited: the registry's label is
-      // tooltip-shaped (it names both chords), and a menu row has its own shortcut column.
+      // tooltip-shaped and names both chords, which is wrong on a row whose ACTION is
+      // neither of them — a press here arms the painter, and the two chords copy and paint.
+      // That is also why the row carries no `shortcutKey`: there is no one chord to print.
       { kind: 'item', slot: 'format.painter', labelKey: 'formattingBar.formatPainter' },
       { kind: 'item', slot: 'format.clear' },
     ],

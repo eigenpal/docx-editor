@@ -3234,8 +3234,15 @@ a.docx-hyperlink:focus-visible {
 .docx-pages[data-format-painter] .docx-page-content,
 .docx-pages[data-format-painter] .docx-page,
 .docx-pages[data-format-painter] .docx-drawing-textbox,
-.docx-pages[data-format-painter] .docx-hf {
+.docx-pages[data-format-painter] .docx-hf,
+.docx-pages[data-format-painter] .docx-hyperlink {
   cursor: copy;
+}
+
+/* A content-control widget states `cursor: pointer !important`, so nothing but `!important`
+ * reaches it — and it is text like any other while the painter is armed. */
+.docx-pages[data-format-painter] .docx-content-control-widget {
+  cursor: copy !important;
 }
 
 /* ── Overflow ("⋯") ────────────────────────────────────────────────────────────────

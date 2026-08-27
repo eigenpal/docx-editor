@@ -682,6 +682,30 @@ describe('the keyboard', () => {
     });
   });
 
+  test('a remapped layout keys the chord on the character, not the keycap', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      const onKeyDown = createKeyDownHandler(editor.surface!);
+      select(editor, [0, 0], [0, 6]);
+      // Dvorak types `c` from the key at QWERTY's `I` position. A user reaching for the chord
+      // presses the key that types `c`, and Windows resolves accelerators the same way —
+      // reading the keycap first sent this to whatever `KeyI` is bound to instead.
+      onKeyDown(chord('c', 'KeyI', { ctrlKey: true, altKey: true }));
+      expect(editor.surface!.formatPainter.state().level).toBe('paragraph');
+    });
+  });
+
+  test('the keycap answers only when the character is not a letter', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      const onKeyDown = createKeyDownHandler(editor.surface!);
+      select(editor, [0, 0], [0, 6]);
+      // macOS composes Option+C into `ç`, so there is no letter to read and the keycap is
+      // the only identifier left. The same fallback is what makes an AltGr-composed
+      // character below fail the accelerator test rather than be swallowed.
+      onKeyDown(chord('ç', 'KeyC', { metaKey: true, altKey: true }));
+      expect(editor.surface!.formatPainter.state().level).toBe('paragraph');
+    });
+  });
+
   test('an unidentified key code still reaches the chord, through the character', () => {
     withEditor(STYLED + PLAIN, (editor) => {
       const onKeyDown = createKeyDownHandler(editor.surface!);

@@ -265,6 +265,22 @@ describe('superscript and subscript', () => {
   });
 });
 
+describe('the paragraphs a range touches', () => {
+  test('a range ending at the next paragraph’s start leaves that paragraph alone', () => {
+    withEditor(
+      p(textRun('first'), '<w:pPr><w:jc w:val="center"/></w:pPr>') +
+        p(textRun('second'), '<w:pPr><w:jc w:val="right"/></w:pPr>'),
+      (editor) => {
+        // Dragging from the middle of one paragraph to the very START of the next selects no
+        // character of the next, and Word treats it that way. The eraser used to clear it.
+        select(editor, [0, 2], [1, 0]);
+        expect(editor.exec({ type: 'clearFormatting' })).toMatchObject({ ok: true });
+        expect(authoredParagraphProperties(editor)).toEqual([[], ['jc=right']]);
+      }
+    );
+  });
+});
+
 describe('clear formatting', () => {
   test('the slot is live and the press strips direct run properties from the selection', () => {
     withEditor(
