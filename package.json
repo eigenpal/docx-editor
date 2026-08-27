@@ -137,7 +137,7 @@
     "husky": "^9.1.7",
     "jszip": "^3.10.1",
     "lint-staged": "^17.0.4",
-    "postcss": "^8.4.33",
+    "postcss": "^8.5.26",
     "prettier": "^3.8.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

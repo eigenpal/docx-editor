@@ -42,18 +42,32 @@ const OWNED_PREFIXES = ['.docx-'];
 const KEYFRAME_STEP = /^(from|to|-?[\d.]+%)$/;
 
 /**
- * Folds the differences a CSS minifier is free to introduce, so the positive
- * assertions below match the same rule before and after minification.
+ * Folds every rewrite `postcss-minify-selectors` performs, so a positive
+ * assertion below matches the same rule before and after minification.
  *
- * Two of them: whitespace around combinators collapses, and an attribute value
- * that is a valid identifier loses its quotes. Nothing here changes what a
- * selector MATCHES, so a normalized comparison stays exact.
+ * All four are confirmed against the shipped file, and none of them changes what
+ * a selector MATCHES, so a normalized comparison stays exact:
+ *
+ *   1. whitespace around a combinator collapses
+ *   2. an attribute value that is a valid identifier loses its quotes
+ *   3. the four legacy pseudo-elements collapse to one colon
+ *      (`.docx-content-control-widget::after` ships as `…:after`)
+ *   4. a `*` before a pseudo-element is dropped, since the descendant
+ *      combinator already implies it (`.docx-run *::selection` ships as
+ *      `.docx-run ::selection`)
+ *
+ * Write the readable form in an assertion. This function is what makes the
+ * readable form match. Adding an assertion for a shape not folded here is the
+ * one way to get a false "missing" against a correct file, so a new positive
+ * assertion is a reason to re-check this list.
  */
 function normalizeSelector(selector) {
   return selector
     .replace(/\s+/g, ' ')
     .replace(/\s*([>+~,])\s*/g, '$1')
     .replace(/\[([^\]=]+)=(["'])([^"']*)\2\]/g, '[$1=$3]')
+    .replace(/::(before|after|first-line|first-letter)\b/g, ':$1')
+    .replace(/\*(::?[a-z-]+)/g, '$1')
     .trim();
 }
 

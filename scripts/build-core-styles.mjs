@@ -76,9 +76,10 @@ const prefixKeyframes = {
 // The shipped file is minified. Tailwind emits every utility the config generates,
 // pretty-printed, which is ~three times the bytes a host actually downloads.
 //
-// Three of cssnano's default transforms are OFF because they rewrite IDENTIFIERS,
-// and every identifier in this file is load-bearing for a stylesheet that has to
-// coexist with a host app's CSS:
+// The preset is pinned to `default`, and the pin is the safety property, not a
+// default worth leaving implicit. `default` runs 29 plugins that rewrite VALUES
+// and selectors, and none that rewrite identifiers. `advanced` adds four that do,
+// and each one breaks this file:
 //
 //   reduceIdents   renames `@keyframes docx-editor-enter` to `a`, undoing the
 //                  prefixing above — and the global-namespace collision that
@@ -88,12 +89,14 @@ const prefixKeyframes = {
 //   discardUnused  drops `@keyframes` and `@font-face` with no reference IN THIS
 //                  FILE. For a library stylesheet the reference is in the host's
 //                  markup, which the minifier cannot see.
-const minify = cssnano({
-  preset: [
-    'default',
-    { reduceIdents: false, mergeIdents: false, discardUnused: false, zindex: false },
-  ],
-});
+//   zindex         renumbers a stacking order this file shares with inline styles
+//                  the engine sets at runtime, which no stylesheet pass can see.
+//
+// Naming them as `false` here does NOT hold that line: cssnano validates nothing,
+// so an option for a plugin the preset does not load is silently ignored. The
+// post-minify `coreCssProblems` run below is the real guard — it fails on a
+// keyframe name that lost its prefix, whatever produced it.
+const minify = cssnano({ preset: ['default'] });
 
 const compiled = await postcss([
   tailwindcss({ config: join(root, 'tailwind.dist.config.cjs') }),
