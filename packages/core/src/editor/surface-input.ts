@@ -52,6 +52,28 @@ const FORMATTING: Record<string, { localName: string; attributes?: Record<string
 };
 
 /**
+ * Whether this keystroke is one of the Alt-held ACCELERATORS, rather than a character being
+ * typed with AltGr.
+ *
+ * The two are the same bits on Windows and Linux: AltGr sets `ctrlKey` AND `altKey`, so
+ * every `Ctrl+Alt+<letter>` binding also sits on top of a character somebody's layout types
+ * — AltGr+C is `ć` on Polish, AltGr+D is `đ` on Croatian. `getModifierState('AltGraph')` is
+ * how the browser tells them apart, and without it these bindings swallowed those characters
+ * and typed nothing.
+ *
+ * The macOS half never goes through AltGraph at all: the chord there is Cmd+Option, and
+ * Command is not a modifier any layout composes characters with.
+ */
+function isAltAccelerator(event: KeyboardEvent): boolean {
+  if (!event.altKey) return false;
+  if (event.metaKey) return true;
+  if (!event.ctrlKey) return false;
+  // Optional call: a synthesised event in a test environment may not implement it, and
+  // "no AltGraph" is the honest default for a keystroke that cannot say.
+  return !(event.getModifierState?.('AltGraph') ?? false);
+}
+
+/**
  * Which LETTER a chord names, for the accelerators held with Alt.
  *
  * `event.key` is the produced character, and under Alt that is the alternate one on most
@@ -110,7 +132,7 @@ export function createKeyDownHandler(
       return;
     }
     // Word: Ctrl/Cmd+Alt+F footnote, Ctrl/Cmd+Alt+D endnote, and the Format Painter pair.
-    if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey) {
+    if (isAltAccelerator(event) && !event.shiftKey) {
       const key = letterOf(event);
       if (key === 'f') {
         event.preventDefault();

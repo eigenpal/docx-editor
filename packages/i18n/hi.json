@@ -738,7 +738,8 @@
     "tableCellSectionBreak": null,
     "lockedSectionBreak": null,
     "lockedContentBreak": null,
-    "noCopiedFormatting": null
+    "noCopiedFormatting": null,
+    "nothingToCopyFormatting": null
   },
   "equationPopup": {
     "apply": null,

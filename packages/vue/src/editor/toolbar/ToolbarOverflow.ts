@@ -10,7 +10,8 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { commandForSlot, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { chromeSlotIsToggle, type ChromeSlotId } from '@docx-editor.dev/core/editor';
+import { platformShortcut } from '@docx-editor.dev/i18n';
 import { useEditorCommand } from '../useEditorCommand';
 import { useStableDocxId } from '../../lib/stable-id';
 import { useToolbarLabel } from './toolbar-context';
@@ -68,9 +69,12 @@ export const ToolbarOverflowItem = defineComponent({
     const command = useEditorCommand(computed(() => props.slot) as unknown as ChromeSlotId);
     return () => {
       const control = chromeControlForSlot(props.slot);
-      const slotCommand = commandForSlot(props.slot);
-      const isToggle = slotCommand?.type === 'toggleMark' || slotCommand?.type === 'setAlignment';
-      const text = label(control?.labelKey ?? props.slot);
+      // The same three answers the in-bar button renders, because on a narrow window this IS
+      // the button: the toggle rule is the engine's (`chromeSlotIsToggle`), `data-value` is
+      // what tells a locked format painter apart from an armed one, and the label is
+      // corrected for this keyboard.
+      const isToggle = chromeSlotIsToggle(props.slot);
+      const text = platformShortcut(label(control?.labelKey ?? props.slot));
       return h(
         'button',
         {
@@ -81,6 +85,7 @@ export const ToolbarOverflowItem = defineComponent({
           ...(command.disabledReason.value ? { title: command.disabledReason.value } : {}),
           ...(isToggle ? { 'aria-pressed': command.isActive.value } : {}),
           ...(command.isActive.value ? { 'data-active': '' } : {}),
+          ...(command.value.value !== null ? { 'data-value': command.value.value } : {}),
           onMousedown: guardToolbarMousedown,
           onClick: (event: MouseEvent) => {
             command.execute();

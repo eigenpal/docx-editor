@@ -12,6 +12,8 @@
 // pinned lists below are the breaking-change tripwire.
 
 import { describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   CHROME_GROUPS,
   CHROME_MENUS,
@@ -267,6 +269,33 @@ describe('legacy chrome descriptor', () => {
         // A truncated or retyped path is a silent visual regression.
         expect(d.length, `${c.id} path length`).toBeGreaterThan(20);
         expect(d).toMatch(/^[Mm]/);
+      }
+    }
+  });
+
+  test('every control label is a NAME, not an instruction', () => {
+    // A registry label is the button's `aria-label`, its `title`, AND the overflow panel's
+    // visible row text — three places a sentence does not belong. The longest packaged label
+    // names the control and its chord ("Format painter (Ctrl+Alt+C, Ctrl+Alt+V)"); anything
+    // materially longer is prose, and prose belongs in the docs.
+    const catalogue = JSON.parse(
+      readFileSync(resolve(import.meta.dir, '../../../../i18n/en.json'), 'utf8')
+    ) as Record<string, Record<string, unknown>>;
+    const resolve_ = (key: string): string => {
+      let node: unknown = catalogue;
+      for (const part of key.split('.')) {
+        node = (node as Record<string, unknown> | undefined)?.[part];
+      }
+      return typeof node === 'string' ? node : '';
+    };
+    for (const group of CHROME_GROUPS) {
+      for (const control of group.controls) {
+        const label = resolve_(control.labelKey);
+        expect(label, `${chromeSlotId(group, control)} label`).not.toBe('');
+        expect(
+          label.length,
+          `${chromeSlotId(group, control)} label is ${label.length} characters: "${label}"`
+        ).toBeLessThanOrEqual(48);
       }
     }
   });

@@ -32,6 +32,16 @@ function isApplePlatform(): boolean {
 }
 
 /**
+ * The accelerator, in the spelling this catalogue is written in.
+ *
+ * Its presence is what licenses the whole rewrite. A locale that translates the accelerator
+ * — German writes `Strg+Alt+C` — is left alone entirely rather than half-converted into
+ * `Strg+Option+C`, which is wrong in both halves. Nothing here can tell whether an
+ * untranslated `Alt` in such a string is a modifier or a word.
+ */
+const ACCELERATOR = /Ctrl(?=\s*\+)/;
+
+/**
  * Word for the web's own Mac spelling: `Ctrl` is ⌘, `Alt` is Option.
  *
  * Each pattern requires the modifier to be JOINED TO A CHORD by `+`, which is what makes
@@ -56,7 +66,7 @@ const APPLE_MODIFIERS: readonly (readonly [RegExp, string])[] = [
  * @public
  */
 export function platformShortcut(text: string): string {
-  if (!isApplePlatform()) return text;
+  if (!ACCELERATOR.test(text) || !isApplePlatform()) return text;
   let next = text;
   for (const [pattern, replacement] of APPLE_MODIFIERS) next = next.replace(pattern, replacement);
   return next;

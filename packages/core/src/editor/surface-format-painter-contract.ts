@@ -25,6 +25,15 @@ export type FormatPainterMode = 'off' | 'once' | 'locked';
 export const NO_COPIED_FORMATTING = 'no formatting has been copied';
 
 /**
+ * The refusal a capture gets when the selection resolves to nothing to read.
+ *
+ * Stated here for the same reason its sibling above is: two lanes return it — the chrome
+ * press and the `copyFormatting` exec — and the i18n catalogue keys the localized sentence
+ * on this exact English.
+ */
+export const NOTHING_TO_COPY_FORMATTING = 'there is nothing at the selection to copy';
+
+/**
  * What a capture carries.
  *
  * `'run'` is character formatting alone — the level a range INSIDE one paragraph copies.

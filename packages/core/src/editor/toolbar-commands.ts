@@ -23,6 +23,7 @@ import type {
   ExecResult,
 } from '@docx-editor.dev/core/contracts/editor';
 import type { ChromeSlotId } from './chrome-controls.ts';
+import { NOTHING_TO_COPY_FORMATTING } from './surface-format-painter-contract.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { tableCommandState } from './docx-editor-derive.ts';
 import {
@@ -617,7 +618,7 @@ export function runToolbarCommand(
     // render and the click.
     return surface.formatPainter.press()
       ? { ok: true, changed: false }
-      : { ok: false, code: 'notFound', reason: 'there is nothing at the selection to copy' };
+      : { ok: false, code: 'notFound', reason: NOTHING_TO_COPY_FORMATTING };
   }
   if (id === 'contentControl.showAll') {
     const surface = surfaceOf(editor);

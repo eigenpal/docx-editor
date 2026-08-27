@@ -30,7 +30,8 @@
     "suggestingSectionBreak": "Turn off suggesting to insert this section break. It changes where the next section starts, which can't be suggested.",
     "tableCellSectionBreak": "Section breaks go outside a table.",
     "lockedSectionBreak": "A locked or linked content control holds the next section, so this break can't change it.",
-    "lockedContentBreak": "A content control locks this text, so you can't break a section here."
+    "lockedContentBreak": "A content control locks this text, so you can't break a section here.",
+    "nothingToCopyFormatting": "Select some text to copy its formatting"
   },
   "toolbar": {
     "ariaLabel": "Formatting toolbar",
@@ -103,7 +104,7 @@
     "altText": "Alt text",
     "clearFormatting": "Clear formatting",
     "formatPainter": "Format painter",
-    "formatPainterShortcut": "Format painter (Ctrl+Alt+C, Ctrl+Alt+V). Double-click to keep it on, then press Esc to release it.",
+    "formatPainterShortcut": "Format painter (Ctrl+Alt+C, Ctrl+Alt+V)",
     "commentsAndChanges": "Comments & Changes",
     "more": "More",
     "unavailableInPreview": "Not available in this preview build"

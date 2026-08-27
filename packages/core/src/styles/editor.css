@@ -3205,11 +3205,20 @@ a.docx-hyperlink:focus-visible {
 /* The painter armed: the pointer says the next selection takes the formatting.
  *
  * On the PAGES layer, not on the editor root, so chrome the user crosses on the way to the
- * text keeps its own cursor. The descendant rule is what actually does the work — painted
- * spans set their own cursor, and a rule on the layer alone would lose to every one of
- * them. The attribute is written by the surface whenever the painter's mode moves. */
+ * text keeps its own cursor. The attribute is written by the surface whenever the painter's
+ * mode moves.
+ *
+ * The list is the elements that set a cursor of their OWN — a rule on the layer alone loses
+ * to every one of them. Named one by one rather than swept with `*`: the descendant
+ * universal selector matches every span, line and page in the document, so arming the
+ * painter invalidated style for the whole painted subtree on a single button press, and this
+ * engine paints documents of 500 pages. */
 .docx-pages[data-format-painter],
-.docx-pages[data-format-painter] * {
+.docx-pages[data-format-painter] .docx-page-content,
+.docx-pages[data-format-painter] .docx-editor-page,
+.docx-pages[data-format-painter] .docx-paragraph-editable,
+.docx-pages[data-format-painter] .docx-drawing-textbox,
+.docx-pages[data-format-painter] .docx-hf {
   cursor: copy;
 }
 

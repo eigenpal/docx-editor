@@ -10,6 +10,7 @@ import type { EditorCommand, ExecResult } from '../contracts/editor.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import { writeClipboardRich } from './clipboard-write.ts';
 import { MARKS, isSurfaceSelection, resolveMarkAttr } from './docx-editor-support.ts';
+import { NOTHING_TO_COPY_FORMATTING } from './surface-format-painter-contract.ts';
 import { isDocAnchor, isDocAnchorRange, resolveAnchorSelection } from './anchor-resolution.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { storyScopeOfNodeId } from './surface-scope.ts';
@@ -75,7 +76,7 @@ export function execEditorCommand(
       // for one that found no span alike.
       return mounted.formatPainter.capture()
         ? { ok: true, changed: false }
-        : { ok: false, code: 'notFound', reason: 'there is nothing at the selection to copy' };
+        : { ok: false, code: 'notFound', reason: NOTHING_TO_COPY_FORMATTING };
     case 'pasteFormatting':
       // An empty capture is refused by `gateCommand`, which both `can` and `exec` go
       // through — one authority, so the button's reason and the refusal are one sentence.

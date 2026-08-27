@@ -374,8 +374,21 @@ describe('the control', () => {
 });
 
 describe('the keyboard', () => {
-  const chord = (key: string, code: string, init: KeyboardEventInit = {}): KeyboardEvent =>
-    new KeyboardEvent('keydown', { key, code, cancelable: true, ...init });
+  const chord = (
+    key: string,
+    code: string,
+    init: KeyboardEventInit = {},
+    modifiers: readonly string[] = []
+  ): KeyboardEvent => {
+    const event = new KeyboardEvent('keydown', { key, code, cancelable: true, ...init });
+    // happy-dom's `getModifierState` does not answer for AltGraph, and AltGraph is the whole
+    // subject of one of these tests, so the event carries its own answer.
+    Object.defineProperty(event, 'getModifierState', {
+      configurable: true,
+      value: (name: string) => modifiers.includes(name),
+    });
+    return event;
+  };
 
   test('Cmd+Alt+C copies and Cmd+Alt+V paints — Command on a Mac, Ctrl elsewhere', () => {
     withEditor(STYLED + PLAIN, (editor) => {
@@ -399,6 +412,20 @@ describe('the keyboard', () => {
       select(editor, [0, 0], [0, 6]);
       onKeyDown(chord('c', '', { ctrlKey: true, altKey: true }));
       expect(editor.surface!.formatPainter.state().level).toBe('paragraph');
+    });
+  });
+
+  test('AltGr types its character instead of capturing — the chord is Ctrl+Alt, not AltGr', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      const onKeyDown = createKeyDownHandler(editor.surface!);
+      select(editor, [0, 0], [0, 6]);
+      // Windows and Linux spell AltGr as Ctrl+Alt, so every Ctrl+Alt binding sits on top of
+      // a character somebody's layout composes: AltGr+C is `ć` on Polish. Swallowing it
+      // would type nothing at all.
+      const event = chord('ć', 'KeyC', { ctrlKey: true, altKey: true }, ['AltGraph']);
+      onKeyDown(event);
+      expect(event.defaultPrevented).toBe(false);
+      expect(editor.surface!.formatPainter.state().level).toBe('none');
     });
   });
 
