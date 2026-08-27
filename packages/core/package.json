@@ -19,6 +19,11 @@
       "import": "./dist/binding.js",
       "require": "./dist/binding.cjs"
     },
+    "./collaboration": {
+      "types": "./dist/collaboration.d.ts",
+      "import": "./dist/collaboration.js",
+      "require": "./dist/collaboration.cjs"
+    },
     "./contracts/editor": {
       "types": "./dist/contracts/editor.d.ts",
       "import": "./dist/contracts/editor.js",
@@ -74,7 +79,8 @@
   },
   "devDependencies": {
     "autoprefixer": "^10.4.17",
-    "postcss": "^8.4.33",
+    "cssnano": "^7.1.9",
+    "postcss": "^8.5.13",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.3.3"

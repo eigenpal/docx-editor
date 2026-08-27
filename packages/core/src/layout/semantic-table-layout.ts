@@ -21,7 +21,6 @@
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
 import {
   clipInlineDrawingRecordToRegion,
-  shiftInlineDrawingRecord,
   publishAnchoredDrawingsForParagraph,
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
@@ -41,10 +40,8 @@ import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
-import { contentInsets, rowWithSplitBorders } from './table-cell-box.ts';
 import {
   publishDeferredRowAnchors,
-  republishAnchoredParagraphsInBlocks,
   rowDepsForAnchors,
   type DeferredRowAnchor,
 } from './table-anchor-republish.ts';
@@ -91,19 +88,14 @@ import type {
 import { firstLineShift, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
-import {
-  borderExtentPt,
-  resolveTableCellBorderGrid,
-  type BorderGridCell,
-  type BorderGridGeometry,
-  type TableBorderBox,
-  type TableBorderOwnershipBudget,
-} from './table-borders.ts';
-import {
-  resolveVMergeSpans,
-  type TableVMergeResolveBudget,
-  type TableVMergeResolveWork,
-} from './table-vmerge.ts';
+import { borderExtentPt, type TableBorderOwnershipBudget } from './table-borders.ts';
+import { type TableVMergeResolveBudget } from './table-vmerge.ts';
+import { acceptVMergeSpansAt, planTableVMergeHeights } from './table-vmerge-heights.ts';
+import { contentInsets } from './table-cell-geometry.ts';
+import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
+export { finalizeTableRows } from './table-fragment-finalize.ts';
+export { rowWithSplitBorders } from './table-cell-geometry.ts';
+import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 
 export {
   createTableBorderOwnershipBudget,
@@ -151,14 +143,8 @@ export function paragraphDocumentOrderOf(
 export {
   createTableVMergeResolveBudget,
   MAX_VMERGE_RESOLVE_CELLS,
-  resolveVMergeSpans,
   type TableVMergeResolveBudget,
-  type TableVMergeResolveWork,
 } from './table-vmerge.ts';
-
-// The cell box is its own unit (`table-cell-box.ts`); re-exported because callers reach
-// for it through the table-layout surface.
-export { rowWithSplitBorders };
 
 /** Soft ceiling on fragments emitted for one authored row (hostile / runaway splits). */
 export const MAX_TABLE_ROW_FRAGMENTS = 4096;
@@ -249,6 +235,20 @@ export interface TableFlowDeps {
    */
   readonly vMergeResolveBudget?: TableVMergeResolveBudget;
   /**
+   * This layout is a MEASUREMENT, not a placement: nothing it produces is painted.
+   *
+   * A probe of one row lays out every nested table inside it, and planning merge heights in
+   * those tables means probing THEIR rows, which lays out the tables below them again. That
+   * multiplies rather than adds — a merge at each level of a nest a file controls ran three
+   * times slower per level and took minutes at `MAX_TABLE_NESTING`. So a probe measures
+   * nested tables unplanned, which is the height they had before this module existed.
+   *
+   * Erring tall is the safe direction: the caller reserves more room than the real
+   * placement needs, which can move a row to a fresh page early but can never overflow the
+   * page it was admitted onto.
+   */
+  readonly measuringOnly?: boolean;
+  /**
    * Which tracked revisions this pass resolves away. A cell paragraph must resolve the same
    * mode as a body paragraph, or one table would show the proposed result while the text
    * around it showed the original.
@@ -329,73 +329,6 @@ function sumCols(cols: readonly number[], from: number, to: number): number {
   let sum = 0;
   for (let index = from; index < to && index < cols.length; index += 1) sum += cols[index]!;
   return sum;
-}
-
-function shiftBlocks(blocks: readonly BlockFragmentRecord[], dy: number): BlockFragmentRecord[] {
-  if (dy === 0) return [...blocks];
-  return blocks.map((block) => {
-    if (block.kind === 'table') {
-      return {
-        ...block,
-        box: { ...block.box, y: block.box.y + dy },
-        rows: block.rows.map((row) => ({
-          ...row,
-          box: { ...row.box, y: row.box.y + dy },
-          cells: row.cells.map((cell) => ({
-            ...cell,
-            box: { ...cell.box, y: cell.box.y + dy },
-            blocks: shiftBlocks(cell.blocks, dy),
-          })),
-        })),
-      };
-    }
-    return {
-      ...block,
-      box: { ...block.box, y: block.box.y + dy },
-      ...(block.shadingBox
-        ? { shadingBox: { ...block.shadingBox, y: block.shadingBox.y + dy } }
-        : {}),
-      ...(block.bottomBorder
-        ? {
-            bottomBorder: {
-              ...block.bottomBorder,
-              box: { ...block.bottomBorder.box, y: block.bottomBorder.box.y + dy },
-            },
-          }
-        : {}),
-      // Every `w:pBdr` stroke, not only the bottom one. vAlign moves the whole paragraph
-      // down its cell; a frame left at the pre-shift y would sit above the text it encloses.
-      ...(block.borders
-        ? {
-            borders: block.borders.map((strokeRecord) => ({
-              ...strokeRecord,
-              box: { ...strokeRecord.box, y: strokeRecord.box.y + dy },
-            })),
-          }
-        : {}),
-      ...(block.marker
-        ? {
-            marker: {
-              ...block.marker,
-              box: { ...block.marker.box, y: block.marker.box.y + dy },
-            },
-          }
-        : {}),
-      lines: block.lines.map((line) => ({
-        ...line,
-        box: { ...line.box, y: line.box.y + dy },
-        spans: line.spans.map((span) => ({
-          ...span,
-          box: { ...span.box, y: span.box.y + dy },
-        })),
-        ...(line.drawings
-          ? {
-              drawings: line.drawings.map((drawing) => shiftInlineDrawingRecord(drawing, 0, dy)),
-            }
-          : {}),
-      })),
-    };
-  });
 }
 
 /**
@@ -1147,9 +1080,16 @@ export function layoutRowFragment(
   isHeaderRepeat: boolean,
   depth: number,
   deps: TableFlowDeps,
-  cellSpacingPt = 0
-): { readonly record: TableRowFragmentRecord; readonly bottom: number } {
-  const placed = layoutRowFragmentBounded(
+  cellSpacingPt = 0,
+  vMerge?: RowVMergeLayoutOptions,
+  pageBottomPt = Number.POSITIVE_INFINITY
+): LayoutRowBoundedResult {
+  // The row itself is unbounded — callers here place it and then compare `bottom` against
+  // the page, which is how an overheight row fails closed. A DETACHED head is the one cell
+  // that comparison cannot see, because it is kept out of the row's height on purpose, so
+  // the page reaches it through `pageBottomPt` instead. A caller with no page (the probe,
+  // a nested table) leaves it infinite and nothing changes.
+  return layoutRowFragmentBounded(
     row,
     cols,
     left,
@@ -1160,9 +1100,10 @@ export function layoutRowFragment(
     depth,
     deps,
     initialCellCursors(row),
-    cellSpacingPt
+    cellSpacingPt,
+    vMerge,
+    pageBottomPt
   );
-  return { record: placed.record, bottom: placed.bottom };
 }
 
 export interface LayoutRowBoundedResult {
@@ -1189,6 +1130,9 @@ export interface LayoutRowBoundedResult {
  * - `atLeast` — floor the finished fragment to the authored minimum when it fits the
  *   budget; mid-row page splits stay content-driven so the floor cannot overflow the page;
  * - `exact` — fixed height, content clipped (Word 17.18.37). Overflow is not continued.
+ *
+ * `vMerge` is what a vertical merge does here (17.4.85): a head covering later rows paints
+ * from this row bounded by its span, DETACHED from the row's own height.
  */
 export function layoutRowFragmentBounded(
   row: SemanticTableRow,
@@ -1201,8 +1145,11 @@ export function layoutRowFragmentBounded(
   depth: number,
   deps: TableFlowDeps,
   cursors: readonly CellPlaceCursor[],
-  cellSpacingPt = 0
+  cellSpacingPt = 0,
+  vMerge?: RowVMergeLayoutOptions,
+  detachedBottomPt = maxBottom
 ): LayoutRowBoundedResult {
+  const detachedSpans = vMerge?.detachedSpanHeightPtByCellId;
   const total = sumCols(cols, 0, cols.length);
   // `w:tblCellSpacing`: each cell gives up half of every gap it shares with a neighbour.
   // `w:tblCellSpacing` (17.4.45) separates ADJACENT cell edges, so each of the two cells
@@ -1281,7 +1228,17 @@ export function layoutRowFragmentBounded(
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     const contentTop = rowTop + topInset;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
-    const contentMaxBottom = flowMaxBottom - insets.bottom;
+    // A detached head answers to the page and to its own SPAN, and to nothing about this
+    // row: `hRule="exact"` fixes the height of the ROW (17.18.37) while the merged content
+    // goes on through the rows below it. The span arrives as a HEIGHT and becomes a bottom
+    // here, against the row top being placed, so it cannot outlive a move to another page —
+    // and a head that outruns either bound hands back a remainder rather than losing a line.
+    const spanHeightPt = detachedSpans?.get(cell.id);
+    const isDetached = spanHeightPt !== undefined;
+    const cellMaxBottom = isDetached
+      ? Math.min(detachedBottomPt, rowTop + spanHeightPt)
+      : flowMaxBottom;
+    const contentMaxBottom = cellMaxBottom - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
@@ -1321,10 +1278,10 @@ export function layoutRowFragmentBounded(
     // re-floor with defaultLineHeight — that invented bottom pad when the measured line was
     // shorter than the DEFAULT_RUN_STYLE line. Empty / continue cells still need one line.
     const cellBottom = Math.min(
-      flowMaxBottom,
+      cellMaxBottom,
       fitted ? contentBottom + insets.bottom : rowTop + topInset + defaultLineHeight + insets.bottom
     );
-    if (cellBottom > rowBottom) rowBottom = cellBottom;
+    if (cellBottom > rowBottom && !isDetached) rowBottom = cellBottom;
 
     flowed.push({
       cell,
@@ -1345,12 +1302,25 @@ export function layoutRowFragmentBounded(
   // Coordinate fragment height: tallest placed content, never past the flow budget.
   rowBottom = Math.min(flowMaxBottom, Math.max(rowBottom, rowTop));
   for (const entry of flowed) {
+    if (detachedSpans?.has(entry.cell.id) === true) continue;
     const needed = entry.fitted
       ? entry.contentBottom + entry.insets.bottom
       : rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
     if (needed > rowBottom && needed <= flowMaxBottom + 0.001) {
       rowBottom = needed;
     }
+  }
+  // A row whose ONLY cells are detached merge heads has had nothing raise it: the two passes
+  // above skip detached cells on purpose, and a head row has no continuation cell to
+  // contribute the empty-cell line the way a covered row does. Word still draws that row a
+  // line tall, so floor it there rather than collapsing it onto the row below.
+  if (rowBottom <= rowTop + 0.001 && flowed.length > 0) {
+    let lineBottom = rowTop;
+    for (const entry of flowed) {
+      const line = rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
+      if (line > lineBottom) lineBottom = line;
+    }
+    rowBottom = Math.min(flowMaxBottom, lineBottom);
   }
   rowBottom = Math.min(flowMaxBottom, rowBottom);
 
@@ -1366,12 +1336,14 @@ export function layoutRowFragmentBounded(
       // Exact taller than remaining band — keep content-sized clamp; pagination fails closed.
       rowBottom = Math.min(maxBottom, rowBottom);
     }
-  } else if (atLeastHeightPt !== undefined) {
-    const minBottom = rowTop + atLeastHeightPt;
-    const contentComplete = flowed.every((entry) => entry.complete);
-    if (contentComplete && minBottom <= maxBottom + 0.001) {
-      if (minBottom > rowBottom) rowBottom = minBottom;
-    }
+  } else {
+    // Two floors, same rule: the authored `atLeast` minimum and the height a vMerge span
+    // assigned this row. Neither applies to a continuation fragment — a mid-row split is
+    // content-driven, and flooring both halves counts the span twice — or past the budget.
+    const spanFloorPt = isContinuation ? 0 : (vMerge?.heightFloorPt ?? 0);
+    const minBottom = rowTop + Math.max(atLeastHeightPt ?? 0, spanFloorPt);
+    const floors = minBottom > rowBottom && minBottom <= maxBottom + 0.001;
+    if (floors && flowed.every((entry) => entry.complete)) rowBottom = minBottom;
   }
   rowBottom = Math.min(maxBottom, rowBottom);
   const rowHeight = Math.max(0, rowBottom - rowTop);
@@ -1444,6 +1416,7 @@ export function layoutRowFragmentBounded(
 function stripAnchorSinksForProbe(deps: TableFlowDeps): TableFlowDeps {
   return {
     ...deps,
+    measuringOnly: true,
     collectAnchoredDrawings: undefined,
     publishAnchoredDrawings: undefined,
     deferAnchoredDrawings: undefined,
@@ -1470,164 +1443,106 @@ export function measureRowHeight(
   left: number,
   depth: number,
   deps: TableFlowDeps,
-  cellSpacingPt = 0
+  cellSpacingPt = 0,
+  vMerge?: RowVMergeLayoutOptions,
+  atYPt?: number
 ): number {
   let lineCounter = 0;
+  // `atYPt` measures the row WHERE IT IS GOING, wrap bands included — the one thing the
+  // position-free probe above cannot do. A merge deciding how tall its span must be passes
+  // it; everyone else keeps the position-free probe and the bands it must not see.
+  const positioned = atYPt !== undefined;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(deps),
-    pageExclusionZones: undefined,
+    ...(positioned ? {} : { pageExclusionZones: undefined }),
     nextLineId: () => `probe-${lineCounter++}`,
   };
-  const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps, cellSpacingPt);
+  // `vMerge` reaches the probe so a detached head is detached HERE too. Emptying its blocks
+  // instead still charged the row the empty-cell line below, and that phantom line became a
+  // floor the placement never asked for.
+  const placed = layoutRowFragment(
+    row,
+    cols,
+    left,
+    atYPt ?? 0,
+    false,
+    depth,
+    probeDeps,
+    cellSpacingPt,
+    vMerge
+  );
   return placed.record.box.height;
 }
 
 /**
- * After all rows of a table fragment are placed: expand vMerge restart boxes, re-apply
- * vAlign over the full span, and publish collapsed border edges.
+ * One row of a table placed in ONE PASS, where there is no next fragment to carry a
+ * remainder to — a nested table, a header/footer story.
+ *
+ * A merged head is bounded by its span, so it CAN come back owing more than it placed, and
+ * these callers have nowhere to put what it owes. Dropping it would break the one rule this
+ * module does not bend: nothing discards content to stay inside a box. So the row is placed
+ * again with the merge unplanned, which puts the head back to sizing its own row and holding
+ * all of it — the shape this file had before any of it planned heights.
+ *
+ * `rollback` undoes what the discarded attempt published AND withdraws the merge from the
+ * plan. The first is why the paginator refuses to re-place at all: an attempt on live deps
+ * has already emitted its anchored drawings, and re-placing without taking them back leaves
+ * a float positioned by a layout that never happened. The second matters just as much —
+ * un-planning the ROW alone leaves the span accepted, so the surplus it put below is still
+ * handed out while the head sizes its own row again, reserving the merged height twice.
+ *
+ * A caller with no sink it can undo must not pass a `vMerge` at all.
  */
-export function finalizeTableRows(
-  rows: readonly TableRowFragmentRecord[],
+function layoutOnePassRow(
+  row: SemanticTableRow,
   structure: SemanticTableStructure,
-  sourceRows: readonly SemanticTableRow[],
-  ownershipBudget?: TableBorderOwnershipBudget,
-  vMergeBudget?: TableVMergeResolveBudget,
-  vMergeWork?: TableVMergeResolveWork,
-  onAnchorShift?: (paragraphId: string, dy: number) => void,
-  anchorDeps?: TableFlowDeps
-): TableRowFragmentRecord[] {
-  if (rows.length === 0) return [];
-
-  // Map laid-out cells back to authored structure cells (same order within each row).
-  const authoredById = new Map<string, SemanticTableCell>();
-  for (const row of sourceRows) {
-    for (const cell of row.cells) authoredById.set(cell.id, cell);
-  }
-
-  // One-pass column-keyed merge spans — O(cells), not O(rows × columns²). These rows are
-  // one PAGE FRAGMENT: a merge whose restart was placed on an earlier page is headed here
-  // by its continuation copy, which is why that copy comes back keyed in the span map.
-  const mergeSpanById = resolveVMergeSpans(rows, vMergeWork, vMergeBudget, {
-    pageFragment: true,
-  });
-
-  // Expand restart heights and shift content for vAlign over the full span.
-  const expanded: TableRowFragmentRecord[] = rows.map((row, rowIndex) => ({
-    ...row,
-    cells: row.cells.map((cell) => {
-      const resolvedSpan = mergeSpanById.get(cell.id);
-      if (cell.vMergeContinue && resolvedSpan === undefined) {
-        return { ...cell, paintInert: true, rowSpan: 1, borders: {}, blocks: [] };
-      }
-      // A carried-in continuation paints like the restart it continues: Word draws the
-      // merged cell's rules, fill and box on every page the merge crosses. Its content
-      // stayed with the restart on the earlier page, so `blocks` is empty either way.
-      const carried = cell.vMergeContinue;
-      const span = resolvedSpan ?? 1;
-      let height = cell.box.height;
-      if (span > 1) {
-        const last = rows[rowIndex + span - 1]!;
-        height = last.box.y + last.box.height - cell.box.y;
-      }
-      const authored = authoredById.get(cell.id);
-      let blocks = cell.blocks;
-      if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
-        const insets = contentInsets(authored.margins, authored.borders);
-        // Content was placed relative to the first row; measure current content band.
-        let contentTop = Number.POSITIVE_INFINITY;
-        let contentBottom = Number.NEGATIVE_INFINITY;
-        for (const block of blocks) {
-          contentTop = Math.min(contentTop, block.box.y);
-          contentBottom = Math.max(contentBottom, block.box.y + block.box.height);
-        }
-        if (Number.isFinite(contentTop) && Number.isFinite(contentBottom)) {
-          const available = height - insets.top - insets.bottom - (contentBottom - contentTop);
-          // Reset any per-row shift by measuring from cell top + inset.
-          const desiredTop =
-            cell.box.y +
-            insets.top +
-            (available > 0 ? (authored.vAlign === 'center' ? available / 2 : available) : 0);
-          const dy = desiredTop - contentTop;
-          if (Math.abs(dy) > 0.001) {
-            blocks = shiftBlocks(blocks, dy);
-            for (const block of blocks) {
-              if (block.kind === 'paragraph') onAnchorShift?.(block.paragraphId, dy);
-            }
-          }
-        }
-      }
-      const finalizedCellBox = Object.freeze({
-        x: cell.box.x,
-        y: cell.box.y,
-        width: cell.box.width,
-        height,
-      });
-      if (
-        authored &&
-        anchorDeps &&
-        (span > 1 || (authored.vAlign !== 'top' && blocks.length > 0))
-      ) {
-        republishAnchoredParagraphsInBlocks(blocks, authored.blocks, finalizedCellBox, anchorDeps);
-      }
-      return {
-        ...cell,
-        ...(carried ? { vMergeContinue: false, paintInert: false } : {}),
-        rowSpan: span,
-        blocks,
-        box: { ...cell.box, height },
-      };
-    }),
-  }));
-
-  // Border grid from authored structure (same row/cell order as laid-out fragment rows).
-  // Header repeats use the same authored header row; match by cell id.
-  const gridRows: BorderGridCell[][] = expanded.map((row) =>
-    row.cells.map((cell) => {
-      const authored = authoredById.get(cell.id);
-      return {
-        gridColumn: cell.gridColumn,
-        gridSpan: cell.gridSpan,
-        vMergeContinue: cell.vMergeContinue,
-        borders: authored?.borders ?? {
-          top: { state: 'omitted' as const },
-          left: { state: 'omitted' as const },
-          bottom: { state: 'omitted' as const },
-          right: { state: 'omitted' as const },
-        },
-        mergeRowSpan: cell.rowSpan ?? 1,
-      };
-    })
-  );
-
-  const columnCount = structure.columnWidthsPt.length;
-  const tableBorders: TableBorderBox = structure.tableBorders;
-  const geometry: BorderGridGeometry = {
-    columnWidthsPt: structure.columnWidthsPt,
-    rowBands: expanded.map((row) => ({ y: row.box.y, height: row.box.height })),
-    cellBoxes: expanded.map((row) =>
-      row.cells.map((cell) => ({ width: cell.box.width, height: cell.box.height }))
-    ),
-  };
-  const resolved = resolveTableCellBorderGrid(
-    gridRows,
-    tableBorders,
-    columnCount,
-    geometry,
-    undefined,
-    ownershipBudget
-  );
-
-  return expanded.map((row, rowIndex) => ({
-    ...row,
-    cells: row.cells.map((cell, cellIndex) => {
-      const borders = resolved[rowIndex]![cellIndex]!;
-      if (cell.paintInert || cell.vMergeContinue) {
-        return { ...cell, borders: {}, paintInert: true };
-      }
-      return { ...cell, borders };
-    }),
-  }));
+  left: number,
+  y: number,
+  depth: number,
+  deps: TableFlowDeps,
+  isHeaderRepeat: boolean,
+  vMerge: RowVMergeLayoutOptions | undefined,
+  rollback: () => void
+): LayoutRowBoundedResult {
+  const place = (options: RowVMergeLayoutOptions | undefined): LayoutRowBoundedResult =>
+    layoutRowFragment(
+      row,
+      structure.columnWidthsPt,
+      left,
+      y,
+      isHeaderRepeat,
+      depth,
+      deps,
+      structure.cellSpacingPt,
+      options
+    );
+  const placed = place(vMerge);
+  if (placed.remainder === null || vMerge === undefined) return placed;
+  rollback();
+  return place(undefined);
 }
+
+/**
+ * The vMerge plan for one table, probed by row layout. `rows` narrows it to the rows the
+ * caller actually places — the paginator plans over the BODY rows, so a merge is never
+ * planned against a repeated header copy.
+ */
+export const vMergePlanFor = (
+  structure: SemanticTableStructure,
+  left: number | (() => number),
+  depth: number,
+  deps: TableFlowDeps,
+  rows?: readonly SemanticTableRow[]
+): VMergeRowHeights | null =>
+  deps.measuringOnly === true
+    ? null
+    : planTableVMergeHeights(
+        rows ? { ...structure, rows } : structure,
+        left,
+        depth,
+        deps,
+        measureRowHeight
+      );
 
 /**
  * A nested table inside a cell: laid out with its own geometry, no pagination, one
@@ -1665,18 +1580,26 @@ function emitNestedTable(
   // A nested table is placed inside its CELL's content box by the same rules a top-level one
   // is placed inside the text column.
   const tableLeft = left + tableOriginX(structure, containerWidth);
+  const vMergePlan = vMergePlanFor(structure, tableLeft, depth, nestedFlowDeps);
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
-  for (const row of structure.rows) {
-    const placed = layoutRowFragment(
+  for (const [rowIndex, row] of structure.rows.entries()) {
+    // Anchors this row defers are taken back if its placement is discarded, so a retry
+    // cannot publish a drawing twice.
+    const deferredBefore = nestedDeferred.length;
+    const placed = layoutOnePassRow(
       row,
-      structure.columnWidthsPt,
+      structure,
       tableLeft,
       y,
-      false,
       depth,
       nestedFlowDeps,
-      structure.cellSpacingPt
+      false,
+      acceptVMergeSpansAt(vMergePlan, rowIndex, y),
+      () => {
+        nestedDeferred.length = deferredBefore;
+        vMergePlan?.withdrawAt(rowIndex);
+      }
     );
     rawRows.push(placed.record);
     y = placed.bottom;
@@ -1734,6 +1657,12 @@ export function layoutTableFragment(
   deps: TableFlowDeps,
   isHeaderRepeat: (row: SemanticTableRow) => boolean = () => false
 ): { readonly fragment: TableFragmentRecord; readonly bottom: number } {
+  // No merge planning here, deliberately. Planning gives a head a bound it can hand a
+  // remainder back against, and the only lossless answer to that is to place the row again —
+  // which needs a sink the discarded attempt's anchored drawings can be taken back from.
+  // This function publishes straight through the `deps` it is handed and has none, so it
+  // sizes merged heads the way this file did before it planned anything. A caller that wants
+  // the planning has to bring a rollback-able sink with it, as `emitNestedTable` does.
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const row of structure.rows) {

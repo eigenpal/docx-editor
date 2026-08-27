@@ -617,3 +617,43 @@ export function tableAnchorAt(
   }
   return null;
 }
+
+const cellAddressIndexCache = new WeakMap<SemanticLayout, ReadonlyMap<string, TableCellAddress>>();
+
+/**
+ * The innermost table cell that contains this paragraph, or null outside a table.
+ *
+ * Built once per layout so presence paint can resolve two corner paragraphs without walking
+ * every cell again on each caret move.
+ */
+export function cellAddressAt(
+  layout: SemanticLayout,
+  paragraphId: string
+): TableCellAddress | null {
+  const cached = cellAddressIndexCache.get(layout);
+  if (cached) return cached.get(paragraphId) ?? null;
+  const index = new Map<string, TableCellAddress>();
+  for (const [tableId, table] of tableIndex(layout)) {
+    for (const entry of table.placed) {
+      if (entry.isHeaderRepeat) continue;
+      const found: string[] = [];
+      for (const block of entry.cell.blocks) collectParagraphs(block, found, new Set());
+      const address: TableCellAddress = {
+        tableId,
+        rowId: entry.row.id,
+        cellId: entry.cell.id,
+        rowIndex: entry.rowIndex,
+        gridColumn: entry.cell.gridColumn,
+        gridSpan: entry.cell.gridSpan,
+      };
+      for (const id of found) {
+        const previous = index.get(id);
+        // The innermost table wins, matching `tableContextAt`.
+        if (previous && previous.tableId.length >= tableId.length) continue;
+        index.set(id, address);
+      }
+    }
+  }
+  cellAddressIndexCache.set(layout, index);
+  return index.get(paragraphId) ?? null;
+}

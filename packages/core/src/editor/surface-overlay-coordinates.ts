@@ -58,7 +58,8 @@ export function overlayFrameToSheetCssPixels(
   readonly width: number;
   readonly height: number;
 } {
-  const page = layout.pages[frame.pageIndex];
+  const page =
+    layout.pages.find((entry) => entry.index === frame.pageIndex) ?? layout.pages[frame.pageIndex];
   if (!page) return { left: 0, top: 0, width: 0, height: 0 };
   const offsetX = coordinates.pageOffsetX.get(page.index) ?? 0;
   const scale = coordinates.paintScale;

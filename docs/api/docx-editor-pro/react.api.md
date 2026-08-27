@@ -4,13 +4,206 @@
 
 ```ts
 
+import { Awareness } from 'y-protocols/awareness';
 import * as react from 'react';
 import { ReactNode } from 'react';
 import { ReviewAuthorInfo } from '@docx-editor.dev/react';
 import { ToolbarTranslate } from '@docx-editor.dev/react';
+import * as Y from 'yjs';
 
 // @public
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
+
+// @public
+export interface CollaborationAvatarProps {
+    readonly children?: ReactNode;
+    // (undocumented)
+    readonly className?: string;
+    // (undocumented)
+    readonly participant: CollaborationParticipant;
+}
+
+// @public
+export interface CollaborationAvatarRenderProps {
+    readonly color: string;
+    readonly initials: string;
+    // (undocumented)
+    readonly participant: CollaborationParticipant;
+}
+
+// @public
+export interface CollaborationAvatarsProps {
+    readonly children?: (props: CollaborationAvatarRenderProps) => ReactNode;
+    // (undocumented)
+    readonly className?: string;
+    readonly max?: number;
+    readonly session: CollaborationSession | null;
+}
+
+// @public
+export type CollaborationBootstrap = {
+    readonly document: Uint8Array;
+    readonly kind: 'create';
+} | {
+    readonly kind: 'join';
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
+} | {
+    readonly document: Uint8Array;
+    readonly electionWindowMs?: number;
+    readonly kind: 'create-or-join';
+    readonly probeTimeoutMs?: number;
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
+};
+
+// @public
+export interface CollaborationCaretLabelRenderProps {
+    readonly color: string;
+    readonly participant: CollaborationParticipant | null;
+    readonly selection: CollaborationRemoteSelection;
+}
+
+// @public
+export interface CollaborationCaretLabelsProps {
+    readonly children?: (props: CollaborationCaretLabelRenderProps) => ReactNode;
+    readonly session: CollaborationSession | null;
+}
+
+// @public
+export interface CollaborationFailure {
+    // (undocumented)
+    readonly code: CollaborationFailureCode;
+    // (undocumented)
+    readonly detail?: string;
+}
+
+// @public
+export type CollaborationFailureCode = 'already-initialized' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-digest-mismatch' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'concurrent-seed' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'materialize-dropped-content' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
+
+// @public
+export interface CollaborationIdentity {
+    // (undocumented)
+    readonly actorId: string;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly role?: 'human' | 'agent';
+}
+
+// @public
+export interface CollaborationIdentityUpdate {
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public
+export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
+
+// @public
+export interface CollaborationModuleOptions extends ProLicenseOptions {
+    // (undocumented)
+    readonly session: EditorCollaborationSession;
+}
+
+// @public
+export interface CollaborationParticipant extends CollaborationIdentity {
+    // (undocumented)
+    readonly isLocal: boolean;
+}
+
+// @public
+export interface CollaborationRemoteSelection {
+    // (undocumented)
+    readonly actorId: string;
+    // (undocumented)
+    readonly anchor: CollaborationRemoteSelectionAddress;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly head: CollaborationRemoteSelectionAddress;
+    // (undocumented)
+    readonly kind?: CollaborationSelectionKind;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface CollaborationRemoteSelectionAddress {
+    // (undocumented)
+    readonly nodeId: string;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export type CollaborationSelectionKind = 'cells';
+
+// @public
+export interface CollaborationSession {
+    // (undocumented)
+    canRedo(): boolean;
+    // (undocumented)
+    canUndo(): boolean;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    // (undocumented)
+    participants(): readonly CollaborationParticipant[];
+    // (undocumented)
+    redo(): boolean;
+    // (undocumented)
+    remoteSelections(): readonly CollaborationRemoteSelection[];
+    readonly sessionId: string;
+    setIdentity?(update: CollaborationIdentityUpdate): void;
+    // (undocumented)
+    status(): CollaborationStatus;
+    statusSnapshot(): CollaborationStatusSnapshot;
+    // (undocumented)
+    subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
+    // (undocumented)
+    subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
+    // (undocumented)
+    subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
+    // (undocumented)
+    undo(): boolean;
+}
+
+// @public
+export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
+
+// @public
+export interface CollaborationStatusSnapshot {
+    // (undocumented)
+    readonly lastFailure: CollaborationFailure | undefined;
+    // (undocumented)
+    readonly reason: CollaborationFailure | undefined;
+    // (undocumented)
+    readonly status: CollaborationStatus;
+}
+
+// @public
+export interface CreateDocumentCollaborationOptions {
+    // (undocumented)
+    readonly awareness: Awareness;
+    // (undocumented)
+    readonly bootstrap: CollaborationBootstrap;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    readonly offlineEditing?: boolean;
+    readonly sessionId?: string;
+    // (undocumented)
+    readonly ydoc: Y.Doc;
+}
 
 // @public
 export function CustomNodeChrome(props: CustomNodeChromeProps): null;
@@ -38,6 +231,16 @@ export interface CustomNodeContextMenuProps {
     readonly onEditNode?: (node: ActivatedCustomNode, definition: CustomNodeDefinition) => void;
     readonly onRemoveRefused?: (node: ActivatedCustomNode, reason: string) => void;
     readonly remove?: boolean;
+}
+
+// @public
+export const DocxEditorCollaboration: DocxEditorCollaborationNamespace;
+
+// @public
+export interface DocxEditorCollaborationNamespace {
+    readonly Avatar: typeof CollaborationAvatar;
+    readonly Avatars: typeof CollaborationAvatars;
+    readonly CaretLabels: typeof CollaborationCaretLabels;
 }
 
 // @public
@@ -160,7 +363,52 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
 }
 
 // @public
+export function useCollaborationParticipants(session: CollaborationSession | null): readonly CollaborationParticipant[];
+
+// @public
+export function useCollaborationStatus(session: CollaborationSession | null): UseCollaborationStatusReturn;
+
+// @public
+export interface UseCollaborationStatusReturn {
+    // (undocumented)
+    readonly lastFailure: CollaborationFailure | undefined;
+    // (undocumented)
+    readonly reason: CollaborationFailure | undefined;
+    // (undocumented)
+    readonly status: CollaborationStatus | 'inactive';
+}
+
+// @public
 export function useCustomNodeDefinitions(nodes: readonly AnyCustomNodeDefinition[] | undefined): readonly AnyCustomNodeDefinition[];
+
+// @public
+export function useDocumentCollaboration(options?: UseDocumentCollaborationOptions): UseDocumentCollaborationReturn;
+
+// @public
+export type UseDocumentCollaborationConnectOptions = CreateDocumentCollaborationOptions;
+
+// @public
+export interface UseDocumentCollaborationOptions {
+    readonly modules?: readonly EditorModule[];
+    readonly room?: UseDocumentCollaborationConnectOptions | null;
+}
+
+// @public
+export interface UseDocumentCollaborationReturn {
+    // (undocumented)
+    readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<void>;
+    // (undocumented)
+    readonly document: Uint8Array | null;
+    // (undocumented)
+    readonly error: CollaborationFailure | null;
+    readonly leave: (nextDocument: Uint8Array) => void;
+    // (undocumented)
+    readonly modules: readonly EditorModule[];
+    // (undocumented)
+    readonly pending: boolean;
+    // (undocumented)
+    readonly session: CollaborationSession | null;
+}
 
 // @public
 export function useReview(query?: ReviewItemQuery): UseReviewReturn;

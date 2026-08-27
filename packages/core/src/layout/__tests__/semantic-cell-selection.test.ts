@@ -7,6 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
+  cellAddressAt,
   cellSelectionBetween,
   cellSelectionRects,
   cellSelectionText,
@@ -71,6 +72,17 @@ describe('the rectangle two cells define', () => {
     expect(selection.cellIds).toEqual([cellId(0, 0), cellId(0, 1), cellId(1, 0), cellId(1, 1)]);
     expect(selection.rows).toEqual({ from: 0, to: 1 });
     expect(selection.columns).toEqual({ from: 0, to: 1 });
+  });
+
+  test('a paragraph inside a cell reconstructs that cell address', () => {
+    const paragraph = table.rows[0]!.cells[1]!.blocks[0]!;
+    if (paragraph.kind !== 'paragraph') throw new Error('fixture cell is not a paragraph');
+    expect(cellAddressAt(layout, paragraph.paragraphId)).toMatchObject({
+      tableId: table.tableId,
+      cellId: cellId(0, 1),
+      rowIndex: 0,
+      gridColumn: 1,
+    });
   });
 
   test('the rectangle is the same whichever corner the drag started from', () => {

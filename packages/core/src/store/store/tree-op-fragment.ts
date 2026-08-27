@@ -38,6 +38,7 @@ import {
 import { rejectContentEdit } from './tree-op-validate-controls.ts';
 import { applyTreeOp } from './tree-op-apply.ts';
 import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
+import { recordSetNamespaceBinding } from '../package/canonical-primitive-capture.ts';
 
 export type InsertFragmentOp = Extract<TreeDocOp, { readonly op: 'insertFragment' }>;
 
@@ -196,6 +197,9 @@ export function withRequiredNamespaceBindings(
       ...[...additions].map(([prefix, namespaceUri]) => ({ prefix, namespaceUri })),
     ],
   } as typeof part.root;
+  for (const [prefix, namespaceUri] of additions) {
+    recordSetNamespaceBinding(part.root.id, prefix, namespaceUri);
+  }
   return Object.freeze({ ...part, root }) as OoxmlPart;
 }
 

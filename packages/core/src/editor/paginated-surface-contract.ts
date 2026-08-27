@@ -15,13 +15,16 @@ import type { SelectionPin, ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
-import type { ReviewModuleContribution } from '../contracts/modules.ts';
+import type {
+  ReviewModuleContribution,
+  CollaborationModuleContribution,
+} from '../contracts/modules.ts';
+import type { CollaborationRemoteSelection, CollaborationStatus } from '../collaboration/index.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationActivation, EquationOps } from './surface-equations.ts';
 import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
 import type {
   CellSelection,
-  ContentControlBoundaryRecord,
   NavigationCommand,
   SectionProperties,
   SemanticLayout,
@@ -39,45 +42,42 @@ import type {
  */
 export type SurfaceEditingMode = 'edit' | 'suggest' | 'view';
 
+import type { ReviewWriteIntent } from './review-write-intent.ts';
+import type {
+  ContentControlOps,
+  ContentControlSurfaceState,
+} from './surface-content-control-contract.ts';
+export type { ReviewWriteIntent, ContentControlOps, ContentControlSurfaceState };
+
 /**
- * Content-control interaction lane on the paginated surface.
+ * One live remote-caret label the engine positioned. The host owns its content; the engine
+ * still owns the label's geometry, class, and presence colour, and rebuilds the labels
+ * wholesale on every repaint that moves them.
  *
- * Chrome toggles are surface state; value / remove commit through tree ops.
+ * @public
  */
-export interface ContentControlOps {
-  /** Toggle show-all boundary chrome. No layout reflow. */
-  setShowAll(show: boolean): void;
-  /** Toggle form-fill Tab navigation mode. */
-  setFormFill(active: boolean): void;
-  /** Whether show-all chrome is on. */
-  showAll(): boolean;
-  /** Whether form-fill navigation is on. */
-  formFill(): boolean;
-  /** Innermost control at the caret from layout boundary records. */
-  atCaret(): ContentControlBoundaryRecord | null;
+export interface RemoteCaretLabelAnchor {
+  readonly element: HTMLElement;
+  readonly selection: CollaborationRemoteSelection;
+}
+
+/**
+ * A host that renders its own content inside the engine's remote-caret labels.
+ *
+ * @public
+ */
+export interface RemoteCaretLabelHost {
   /**
-   * Move to the next or previous editable control (tabIndex, then document order).
+   * Called after every paint that rebuilt the labels, with the current anchors.
    *
-   * Skips content-locked and bound controls. Selects the control's content for replacement.
-   * Returns whether navigation landed somewhere.
-   */
-  navigate(direction: 'next' | 'previous'): boolean;
-  /**
-   * Set a control's value through `setContentControlValue`. Honours lock / bound refusals.
-   * Returns whether the op committed.
-   */
-  setValue(controlId: string, value: string): boolean;
-  /**
-   * Unwrap a control keeping its content (`removeContentControl`). Defaults to the control
-   * at the caret. Returns whether the op committed.
-   */
-  remove(controlId?: string): boolean;
-  /**
-   * Engine reason a widget or remove action is disabled, or null when allowed.
+   * A skipped paint (nothing moved) does not re-publish: the host keeps its last anchors
+   * until the next publish, and elements from a previous publish are dead after the next
+   * one. An empty array is a real publish — every remote caret left the screen.
    *
-   * `edit` covers content / value changes; `remove` covers unwrap.
+   * Never mutate editor state synchronously from `publish` — a mutation repaints, and the
+   * nested rebuild's publish would arrive before this one returned; only set host state.
    */
-  disabledReason(controlId: string, action: 'edit' | 'remove'): string | null;
+  publish(anchors: readonly RemoteCaretLabelAnchor[]): void;
 }
 
 /**
@@ -87,6 +87,12 @@ export interface ContentControlOps {
  * on a server, or leave it off in a browser to get the canvas measurer.
  */
 export interface PaginatedSurfaceOptions {
+  /**
+   * The collaboration module's replica for this surface's session. Absent,
+   * the surface does not attach, and local store history remains the undo
+   * authority.
+   */
+  readonly collaborationModel?: CollaborationModuleContribution;
   readonly measurer?: TextMeasurer;
   /** Ambient author for tracked edits. Required before suggesting can write anything. */
   readonly author?: string;
@@ -331,6 +337,11 @@ export interface PaginatedSurfaceState {
   readonly cellSelection: CellSelection | null;
   readonly canUndo: boolean;
   readonly canRedo: boolean;
+  /**
+   * Lifecycle of the attached replica, or `'inactive'` when no collaboration
+   * module is registered on this surface.
+   */
+  readonly collaborationStatus: CollaborationStatus | 'inactive';
   readonly lastRejection: string | null;
   /**
    * The typing format armed at the caret (Word's stored marks), or null.
@@ -358,21 +369,6 @@ export interface PaginatedSurfaceState {
   readonly contextTocId: string | null;
   /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
   readonly perf: PaginatedSurfacePerf;
-}
-
-/**
- * Observable content-control interaction state on the paginated surface.
- *
- * Boundary furniture visibility and form-fill navigation are surface chrome, not model
- * bytes — toggling them never reflows layout records.
- */
-export interface ContentControlSurfaceState {
-  /** Show boundary chrome for every control. */
-  readonly showAll: boolean;
-  /** Tab / Shift+Tab navigate between editable controls. */
-  readonly formFill: boolean;
-  /** Innermost control containing the caret, or null. */
-  readonly activeControlId: string | null;
 }
 
 /**
@@ -410,7 +406,7 @@ export interface PaginatedSurface {
     drawingNodeId: string
   ): import('../store/store/tree-package-images.ts').ImageIntentResult;
   insertImage(
-    input: Omit<import('../store/store/tree-package-images.ts').InsertImageInput, 'decodePort'>
+    input: import('./surface-image-ops.ts').SurfaceInsertImageInput
   ): Promise<import('../store/store/tree-package-images.ts').ImageIntentResult>;
   replaceImage(
     drawingNodeId: string,
@@ -435,14 +431,11 @@ export interface PaginatedSurface {
   /**
    * Queue plain typed text for a batched commit at the caret.
    *
-   * The DOM input lane's entry: keystrokes arriving in a burst append here and land
-   * through ONE `type()` call — one transaction, one undo step, one layout flush —
-   * when the input queue drains. Every surface-level mutation, selection or scope
-   * move, geometry read, composition start and teardown flushes the buffer first.
-   * Code reading `session` directly (its text or its bytes) sits BELOW the buffer
-   * and must call {@link flushPendingInput} first, as the facade's save/detach
-   * paths do. `type()` itself stays synchronous; automation and commands should
-   * keep calling it directly.
+   * The DOM input lane's entry: a burst of keystrokes appends here and lands through ONE
+   * `type()` call — one transaction, one undo step, one layout flush — when the queue drains.
+   * Every surface mutation, selection or scope move, geometry read, composition start and
+   * teardown flushes first. Code reading `session` directly sits BELOW the buffer and must
+   * call {@link flushPendingInput}, as save/detach do. `type()` stays synchronous.
    */
   enqueueType(text: string): void;
   /**
@@ -796,11 +789,24 @@ export interface PaginatedSurface {
    * its identity.
    */
   revisionAuthors(): ReadonlyMap<string, number>;
+  /** The presence colour the caret paints for `name`, sanitized as the paint sink is. */
+  remotePresenceColor(name: string): string | undefined;
   /**
    * Replace how tracked changes are coloured, live. Paint-level: the pages repaint without
    * remeasuring a line, and the caret, selection and undo history stay where they are.
    */
   setRevisionStyles(colors: RevisionStyles | undefined): void;
+  /**
+   * Hand remote-caret label content to the host, or take it back with `null`.
+   *
+   * With a host set, the engine still creates and positions each label (same class, same
+   * presence colour) but leaves it empty, marks it `data-docx-remote-actor`, and calls
+   * {@link RemoteCaretLabelHost.publish} after every paint that rebuilt the labels.
+   * Registration and unregistration repaint immediately, so the first publish fires
+   * without waiting for awareness to move and unregistering restores the default
+   * collaborator-name labels.
+   */
+  setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
   /**
    * Commit ops that came from automation, through the gate a keystroke goes through.
    *
@@ -837,12 +843,19 @@ export interface PaginatedSurface {
    * Commit review ops — accept, reject, a new comment — through the SAME path a keystroke
    * takes: layout, paint, and a caret clamped to what the document now holds.
    *
+   * `intent` names WHICH review write this is, so a lane that judges them can tell them apart.
+   * The callback is opaque, and a replica admits only the writes proven to replicate — see
+   * {@link ReviewWriteIntent}.
+   *
    * Applying them straight to the session skipped all three. Rejecting an insertion left the
    * pages painting text the tree no longer had, every card anchored where it used to be, and
    * the caret past the end of the paragraph — after which every keystroke was refused with
    * `offset-out-of-range` until the user happened to click somewhere else.
    */
-  commitReviewOps(run: () => { readonly committed: boolean; readonly reason?: unknown }): void;
+  commitReviewOps(
+    run: () => { readonly committed: boolean; readonly reason?: unknown },
+    intent?: ReviewWriteIntent
+  ): void;
   /**
    * The layout as last PUBLISHED, without forcing pending work.
    *
@@ -856,14 +869,12 @@ export interface PaginatedSurface {
   /**
    * How the current selection came to address a drawing, if it does at all.
    *
-   * Word's rule: a caret NEXT TO a floating object is a text caret, never an object
-   * selection — only clicking the object (or an explicit host selection write) selects it.
-   * The engine's selection is a caret at the drawing's anchor offset either way, so the
-   * offsets alone cannot tell the two apart; this is the discriminator. `none` for a fresh
-   * mount (a document must not open with an image selected — the initial caret routinely
-   * coincides with a drawing anchored at offset zero) and after typing, caret keys, or a
-   * pointer press on anything that is not a drawing. `pointer` names the drawing the press
-   * landed on, so a stale press can never claim a different drawing the caret later visits.
+   * Word's rule: a caret NEXT TO a floating object is a text caret, never an object selection —
+   * only clicking the object (or a host selection write) selects it. The engine's selection is a
+   * caret at the anchor offset either way, so offsets cannot tell them apart; this is the
+   * discriminator. `none` for a fresh mount (the initial caret routinely coincides with a drawing
+   * anchored at offset zero) and after typing, caret keys, or a press on a non-drawing. `pointer`
+   * names the drawing the press landed on, so a stale press cannot claim a later one.
    */
   drawingSelectionIntent(): DrawingSelectionIntent;
   /**

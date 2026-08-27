@@ -3,6 +3,11 @@
 // Adds binary media parts, owner-relative image relationships, package-wide wp:docPr/@id
 // allocation, and orphan media cleanup. No store transaction wiring or drawing-tree insertion.
 
+import {
+  nextDenseDecimalId,
+  nextStripedDecimalId,
+  resolveAllocationActor,
+} from './actor-scoped-ids.ts';
 import { resolveContentType } from './content-types.ts';
 import { removeNode } from './ooxml-edit.ts';
 import { normalizePartName, partNameKey, resolveInternalTarget } from './opc-names.ts';
@@ -30,9 +35,18 @@ import {
 } from './package-edit.ts';
 import { IMAGE_RELATIONSHIP_TYPE, resolveImageRelationship } from './relationships.ts';
 import { withoutContentTypeOverride } from './hf-lifecycle-shell.ts';
+import { sha256FontBytes as sha256Bytes } from './sha256.ts';
+import {
+  isCanonicalPrimitiveCaptureActive,
+  recordDeleteBinary,
+  recordDeleteRelationship,
+  recordPutBinary,
+  runWithoutJournalCapture,
+} from './canonical-primitive-capture.ts';
 
 const WP_NAMESPACE_URI = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
-const MAX_UNSIGNED_INT = 4_294_967_295;
+/** `wp:docPr/@id` is `xsd:unsignedInt`, so this is the highest id any minter may take. */
+export const MAX_UNSIGNED_INT = 4_294_967_295;
 
 const MIME_TO_CONTENT_TYPE: Readonly<Record<SupportedImageMime, string>> = Object.freeze({
   'image/png': 'image/png',
@@ -117,16 +131,33 @@ function walkNodes(node: OoxmlNode, visit: (node: OoxmlNode) => void): void {
   for (const child of node.children) walkNodes(child, visit);
 }
 
-function highestValidDocPrId(pkg: OoxmlPackage): number {
-  let max = 0;
+/**
+ * Every valid `wp:docPr/@id` the package holds, and the highest of them.
+ *
+ * `0` is seeded as used. It is a legal `xsd:unsignedInt` but names no drawing here —
+ * {@link parseValidDocPrId} refuses it, so an id nothing can read back must never be minted.
+ * The solo walk is `highest + 1` and cannot reach it; a striped residue of 0 would.
+ *
+ * Exported because the clipboard merge mints a RUN of these ids for one paste and needs the
+ * same occupancy — reserved `0` included — that {@link allocateDrawingPropertyId} allocates
+ * against for a single one.
+ */
+export function drawingPropertyIdOccupancy(pkg: OoxmlPackage): {
+  readonly highest: number;
+  readonly used: Set<string>;
+} {
+  let highest = 0;
+  const used = new Set<string>(['0']);
   for (const part of pkg.parts.values()) {
     walkNodes(part.root, (node) => {
       if (!isDocPrNode(node)) return;
       const parsed = parseValidDocPrId(docPrIdAttributeValue(node));
-      if (parsed !== null) max = Math.max(max, parsed);
+      if (parsed === null) return;
+      used.add(String(parsed));
+      if (parsed > highest) highest = parsed;
     });
   }
-  return max;
+  return { highest, used };
 }
 
 /**
@@ -134,9 +165,28 @@ function highestValidDocPrId(pkg: OoxmlPackage): number {
  *
  * Package-wide rather than per-part: Word treats these ids as document-global, and a collision
  * makes it renumber on open.
+ *
+ * Solo: `highest + 1`, the dense sequence Word writes. With a collaboration actor bound —
+ * explicit argument, or the open store transaction — the id is the next unused value in that
+ * actor's stripe. Two peers inserting a picture from one snapshot otherwise both mint `id="1"`,
+ * and the merged document carries two drawings under one document-global id.
  */
-export function allocateDrawingPropertyId(pkg: OoxmlPackage): DrawingPropertyIdResult {
-  const next = highestValidDocPrId(pkg) + 1;
+export function allocateDrawingPropertyId(
+  pkg: OoxmlPackage,
+  actorId?: string
+): DrawingPropertyIdResult {
+  const { highest, used } = drawingPropertyIdOccupancy(pkg);
+  const actor = resolveAllocationActor(actorId);
+  let next: number;
+  try {
+    next = Number(
+      actor
+        ? nextStripedDecimalId(used, actor, MAX_UNSIGNED_INT)
+        : nextDenseDecimalId(highest, undefined, MAX_UNSIGNED_INT)
+    );
+  } catch {
+    return { ok: false, reason: 'invalidArgs' };
+  }
   if (next <= 0 || next > MAX_UNSIGNED_INT) {
     return { ok: false, reason: 'invalidArgs' };
   }
@@ -330,19 +380,30 @@ export function withBinaryPart(
   if (existingBytes !== null && bytesEqual(existingBytes, copied)) {
     return withContentTypeOverride(pkg, normalized.partName, contentType, { forceOverride: true });
   }
-  const partBytes = new Map(pkg.partBytes);
-  partBytes.set(storedName, copied);
-  const parts = new Map(pkg.parts);
-  const storedKey = canonicalPartKey(storedName);
-  for (const name of [...parts.keys()]) {
-    if (storedKey !== null && canonicalPartKey(name) === storedKey) parts.delete(name);
+  const next = runWithoutJournalCapture(() => {
+    const partBytes = new Map(pkg.partBytes);
+    partBytes.set(storedName, copied);
+    const parts = new Map(pkg.parts);
+    const storedKey = canonicalPartKey(storedName);
+    for (const name of [...parts.keys()]) {
+      if (storedKey !== null && canonicalPartKey(name) === storedKey) parts.delete(name);
+    }
+    return withContentTypeOverride(
+      Object.freeze({ ...pkg, partBytes, parts }),
+      normalized.partName,
+      contentType,
+      { forceOverride: true }
+    );
+  });
+  if (isCanonicalPrimitiveCaptureActive()) {
+    recordPutBinary({
+      storageKey: storedName,
+      digest: sha256Bytes(copied),
+      size: copied.byteLength,
+      mediaType: contentType,
+    });
   }
-  return withContentTypeOverride(
-    Object.freeze({ ...pkg, partBytes, parts }),
-    normalized.partName,
-    contentType,
-    { forceOverride: true }
-  );
+  return next;
 }
 
 /**
@@ -427,24 +488,46 @@ export function withBinaryParts(
   }>
 ): OoxmlPackage {
   if (additions.length === 0) return pkg;
-  const partBytes = new Map(pkg.partBytes);
-  const parts = new Map(pkg.parts);
+  const capture = isCanonicalPrimitiveCaptureActive();
+  const recorded: Array<{
+    readonly storageKey: string;
+    readonly digest: string;
+    readonly size: number;
+    readonly mediaType: string;
+  }> = [];
   const overrides: Array<readonly [string, string]> = [];
-  for (const addition of additions) {
-    const normalized = normalizePartName(addition.partName);
-    if (!normalized.ok) continue;
-    const storedName = storagePartName(normalized.partName, pkg);
-    partBytes.set(storedName, snapshotPartBytes(addition.bytes));
-    const storedKey = canonicalPartKey(storedName);
-    if (storedKey !== null) {
-      for (const name of [...parts.keys()]) {
-        if (canonicalPartKey(name) === storedKey) parts.delete(name);
+  const withBytes = runWithoutJournalCapture(() => {
+    const partBytes = new Map(pkg.partBytes);
+    const parts = new Map(pkg.parts);
+    for (const addition of additions) {
+      const normalized = normalizePartName(addition.partName);
+      if (!normalized.ok) continue;
+      const storedName = storagePartName(normalized.partName, pkg);
+      const copied = snapshotPartBytes(addition.bytes);
+      partBytes.set(storedName, copied);
+      const storedKey = canonicalPartKey(storedName);
+      if (storedKey !== null) {
+        for (const name of [...parts.keys()]) {
+          if (canonicalPartKey(name) === storedKey) parts.delete(name);
+        }
+      }
+      overrides.push([normalized.partName, addition.contentType]);
+      if (capture) {
+        recorded.push({
+          storageKey: storedName,
+          digest: sha256Bytes(copied),
+          size: copied.byteLength,
+          mediaType: addition.contentType,
+        });
       }
     }
-    overrides.push([normalized.partName, addition.contentType]);
+    return Object.freeze({ ...pkg, partBytes, parts });
+  });
+  const next = withContentTypeOverrides(withBytes, overrides);
+  if (capture) {
+    for (const descriptor of recorded) recordPutBinary(descriptor);
   }
-  const withBytes = Object.freeze({ ...pkg, partBytes, parts });
-  return withContentTypeOverrides(withBytes, overrides);
+  return next;
 }
 
 /** English typographic points → EMUs (914400 EMU per inch, 72 pt per inch). */
@@ -546,6 +629,18 @@ export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string
   if (isPartReferencedByAnyInternalRelationship(pkg, normalized.partName)) return pkg;
 
   const storedName = storagePartName(normalized.partName, pkg);
+  const next = runWithoutJournalCapture(() =>
+    removeUnreferencedImagePart(pkg, normalized.partName, storedName)
+  );
+  if (next !== pkg) recordDeleteBinary(storedName);
+  return next;
+}
+
+function removeUnreferencedImagePart(
+  pkg: OoxmlPackage,
+  partName: string,
+  storedName: string
+): OoxmlPackage {
   const partBytes = new Map(pkg.partBytes);
   const storedKey = canonicalPartKey(storedName);
   let removed = false;
@@ -557,7 +652,7 @@ export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string
       }
     }
   }
-  if (!removed && !partPresent(pkg, normalized.partName)) return pkg;
+  if (!removed && !partPresent(pkg, partName)) return pkg;
 
   const parts = new Map(pkg.parts);
   if (storedKey !== null) {
@@ -567,7 +662,7 @@ export function withoutUnreferencedImagePart(pkg: OoxmlPackage, partName: string
   }
 
   const withoutBytes = Object.freeze({ ...pkg, partBytes, parts });
-  return withoutContentTypeOverride(withoutBytes, normalized.partName) ?? withoutBytes;
+  return withoutContentTypeOverride(withoutBytes, partName) ?? withoutBytes;
 }
 
 function relsAttribute(node: OoxmlNode, localName: string): string | undefined {
@@ -579,6 +674,21 @@ function relsAttribute(node: OoxmlNode, localName: string): string | undefined {
 
 /** Drop one internal relationship from an owner part and its `.rels` tree. */
 export function removeOwnerRelationship(
+  pkg: OoxmlPackage,
+  ownerPart: string,
+  relationshipId: string
+): OoxmlPackage | null {
+  const owned = pkg.relationships.get(ownerPart) ?? [];
+  const record = owned.find((entry) => entry.id === relationshipId);
+  if (!record) return pkg;
+  const next = runWithoutJournalCapture(() =>
+    dropOwnerRelationship(pkg, ownerPart, relationshipId)
+  );
+  if (next && next !== pkg) recordDeleteRelationship(ownerPart, relationshipId);
+  return next;
+}
+
+function dropOwnerRelationship(
   pkg: OoxmlPackage,
   ownerPart: string,
   relationshipId: string

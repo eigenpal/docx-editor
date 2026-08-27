@@ -19,8 +19,10 @@ import type {
   StoryTargetRejection,
   TreeDocOp,
   TreeModelChange,
+  TreeTransactOptions,
 } from '@docx-editor.dev/core/store';
 import type { TreeBindingRejection } from './tree-binding.ts';
+import type { CollaborationDocumentPort } from '../collaboration/index.ts';
 import type {
   CustomNodeSweepOutcome,
   CustomNodeWriteResult,
@@ -48,6 +50,12 @@ export interface TreeApplyResult {
   /** Present when the edit was refused, so a host can report WHY rather than a silent no-op. */
   readonly reason?: TreeBindingRejection | StoryTargetRejection | string;
 }
+
+/** Optional collaboration attribution for a direct tree-op transaction. */
+export type TreeApplyOptions = Pick<
+  TreeTransactOptions,
+  'origin' | 'actorId' | 'operationId' | 'recordsHistory'
+>;
 
 /**
  * One open document: the canonical tree, and the only write path into it.
@@ -93,7 +101,8 @@ export interface TreeDocxSessionView {
     ops: readonly TreeDocOp[],
     selectionBefore?: SelectionMark | null,
     selectionAfter?: SelectionMark | null,
-    scope?: StoryScope
+    scope?: StoryScope,
+    options?: TreeApplyOptions
   ): TreeApplyResult;
   /**
    * Every part that holds a story, body first, then headers, footers and note parts.
@@ -129,6 +138,8 @@ export interface TreeDocxSessionView {
   beginComposition(scope?: StoryScope): void;
   endComposition(): void;
   subscribe(onChange: (change: TreeModelChange) => void): () => void;
+  /** Narrow provider-neutral attachment over this session's canonical package store. */
+  collaborationPort(documentId: string): CollaborationDocumentPort;
   /** Serialize the whole package back to DOCX bytes. */
   save(): Uint8Array;
   /**
@@ -261,7 +272,9 @@ export interface TreeDocxSessionView {
     author: string,
     /** ISO-8601. Omitted writes no `@w:date`, because inventing one is a content change. */
     date?: string,
-    scope?: StoryScope
+    scope?: StoryScope,
+    /** Binds id allocation to one actor, so two peers cannot mint the same comment id. */
+    actorId?: string
   ): string | null;
   /**
    * Resolve a comment thread, or reopen it. False when the document holds no such comment.

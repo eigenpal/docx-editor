@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    // Map the workspace packages to their SOURCES. Resolving them through package exports would
+    // need a built `dist`, which CI does not have when it runs typecheck.
+    "paths": {
+      "@docx-editor.dev/core": ["../../packages/core/src/index.ts"],
+      "@docx-editor.dev/core/*": ["../../packages/core/src/*"],
+      "@docx-editor.dev/editor-api": ["../../packages/editor-api/src/index.ts"],
+      "@docx-editor.dev/editor-api/*": ["../../packages/editor-api/src/*"],
+      "@docx-editor.dev/i18n": ["../../packages/i18n/src/index.ts"],
+      "@docx-editor.dev/pro": ["../../packages/pro/src/index.ts"],
+      "@docx-editor.dev/pro/*": ["../../packages/pro/src/*"]
+    },
+    "types": ["bun"]
+  },
+  "include": ["src", "headless-agent.ts"]
+}

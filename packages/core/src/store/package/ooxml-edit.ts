@@ -24,6 +24,13 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
+import { isCanonicalPrimitiveCaptureActive } from './canonical-primitive-capture.ts';
+import {
+  captureInsertChildren,
+  captureRemoveNode,
+  captureReplaceChildren,
+  captureReplaceNode,
+} from './canonical-primitive-lower.ts';
 
 /** An edited part, or the invariant violations that rejected the edit. */
 export type OoxmlEditResult =
@@ -373,6 +380,31 @@ function finish(part: OoxmlPart | null, options?: EditOptions): OoxmlEditResult 
   return { ok: true, part };
 }
 
+/**
+ * Pre-edit membership for journal lowering, restricted to the subtrees the edit introduces.
+ *
+ * Lowering only ever asks `knownIds.has(...)` for ids inside the incoming subtrees, so
+ * probing the cached pre-edit index for exactly those ids costs the size of the edit.
+ * Copying every id in the part was O(part) per primitive — the "cost the document" shape
+ * the journal work removed elsewhere — and the live index map cannot stand in for the
+ * copy because `rebuild` steals and patches it to post-edit membership before capture runs.
+ */
+function knownIdsIfCapturing(
+  part: OoxmlPart,
+  introduced: readonly OoxmlNode[]
+): Set<string> | undefined {
+  if (!isCanonicalPrimitiveCaptureActive()) return undefined;
+  const preEdit = nodeIndexFor(part.root).nodes;
+  const known = new Set<string>();
+  const walk = (node: OoxmlNode): void => {
+    if (preEdit.has(node.id)) known.add(node.id);
+    if (node.kind === 'textValue') return;
+    for (const child of node.children) walk(child);
+  };
+  for (const node of introduced) walk(node);
+  return known;
+}
+
 /** Replace one node's children wholesale. */
 export function replaceChildren(
   part: OoxmlPart,
@@ -384,7 +416,10 @@ export function replaceChildren(
   if (!target || target.kind === 'textValue') {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  return finish(rebuild(part, nodeId, withChildren(target, children)), options);
+  const knownIds = knownIdsIfCapturing(part, children);
+  const result = finish(rebuild(part, nodeId, withChildren(target, children)), options);
+  if (result.ok) captureReplaceChildren(target, children, knownIds);
+  return result;
 }
 
 /** Insert children into a node at `index` (clamped to the child list). */
@@ -401,7 +436,10 @@ export function insertChildren(
   }
   const at = Math.max(0, Math.min(index, target.children.length));
   const next = [...target.children.slice(0, at), ...children, ...target.children.slice(at)];
-  return finish(rebuild(part, nodeId, withChildren(target, next)), options);
+  const knownIds = knownIdsIfCapturing(part, children);
+  const result = finish(rebuild(part, nodeId, withChildren(target, next)), options);
+  if (result.ok) captureInsertChildren(target, at, children, knownIds);
+  return result;
 }
 
 /** Replace one node with another, keeping its position among its siblings. */
@@ -411,10 +449,15 @@ export function replaceNode(
   replacement: OoxmlNode,
   options?: EditOptions
 ): OoxmlEditResult {
-  if (!hasNode(part, nodeId)) {
+  const previous = findNode(part, nodeId);
+  if (!previous) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  return finish(rebuild(part, nodeId, replacement), options);
+  const knownIds = knownIdsIfCapturing(part, [replacement]);
+  const parent = isCanonicalPrimitiveCaptureActive() ? parentNodeOf(part, nodeId) : null;
+  const result = finish(rebuild(part, nodeId, replacement), options);
+  if (result.ok) captureReplaceNode(previous, parent, replacement, knownIds);
+  return result;
 }
 
 /** Remove a node and its subtree. */
@@ -426,7 +469,10 @@ export function removeNode(
   if (!hasNode(part, nodeId)) {
     return { ok: false, issues: [{ code: 'known-node-invariant', path: nodeId, nodeId }] };
   }
-  return finish(rebuild(part, nodeId, null), options);
+  const parent = isCanonicalPrimitiveCaptureActive() ? parentNodeOf(part, nodeId) : null;
+  const result = finish(rebuild(part, nodeId, null), options);
+  if (result.ok && parent) captureRemoveNode(parent, nodeId);
+  return result;
 }
 
 /**

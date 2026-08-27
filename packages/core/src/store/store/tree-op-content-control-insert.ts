@@ -9,8 +9,7 @@
 // side by side rather than to fit under a line cap.
 
 import {
-  contentControlPropertiesOf,
-  contentControlsIn,
+  allocateContentControlId,
   lockForbidsEdit,
   orderedContentControlProperties,
 } from '../package/content-control-nodes.ts';
@@ -57,22 +56,13 @@ const TYPE_ELEMENT_FOR: Readonly<Record<InsertableContentControlKind, string>> =
   date: 'date',
 };
 
-/** The next `w:id`, seeded from the part's own maximum. Null once the 32-bit bound is reached. */
-function nextContentControlId(part: OoxmlPart): number | null {
-  let max = 0;
-  for (const entry of contentControlsIn(part.root)) {
-    const id = contentControlPropertiesOf(entry.node).id;
-    if (id !== undefined && id > max) max = id;
-  }
-  if (max >= 0x7fffffff) return null;
-  return max + 1;
-}
-
 type InsertOp = Extract<TreeDocOp, { op: 'insertContentControl' }>;
 
 /** `w:sdtPr` + the type element, in schema order, with the op's metadata on it. */
 function propertiesFor(part: OoxmlPart, op: InsertOp, nextId: () => string): OoxmlElement {
-  const allocated = nextContentControlId(part);
+  // Inside the store transaction, so the collaboration actor is already bound. A second
+  // local max+1 here would ignore that bind and collide the moment two peers insert.
+  const allocated = allocateContentControlId(part.root);
   const properties = editedProperties(
     undefined,
     {

@@ -2,11 +2,21 @@
 // Internal to hf-lifecycle — not re-exported from package/index.ts.
 
 import { strFromU8, strToU8 } from 'fflate';
+import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
+import {
+  recordDeleteContentTypeOverride,
+  recordDeleteRelationship,
+  recordDeleteXmlPart,
+  recordPutContentTypeOverride,
+  recordPutRelationship,
+  runWithoutJournalCapture,
+} from './canonical-primitive-capture.ts';
 import { createNodeIdAllocator, insertChildren, removeNode } from './ooxml-edit.ts';
 import { readOoxmlPart, type OoxmlNode } from './ooxml-tree.ts';
 import type { OoxmlExternalTarget, OoxmlPackage } from './ooxml-package.ts';
 import { partNameKey, resolveInternalTarget, validateExternalTarget } from './opc-names.ts';
-import { contentTypesPartBytes } from './package-edit.ts';
+import { freePackageRelationshipId } from './actor-scoped-ids.ts';
+import { contentTypesPartBytes, withRelationshipsPartFor } from './package-edit.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
 
@@ -17,25 +27,58 @@ const CONTENT_TYPES_NS = 'http://schemas.openxmlformats.org/package/2006/content
 const MAX_OWNED_RELATIONSHIPS = 4_096;
 
 export function freeRelationshipId(pkg: OoxmlPackage): string {
-  let max = 0;
-  for (const records of pkg.relationships.values()) {
-    for (const record of records) {
-      const match = /^rId(\d{1,9})$/.exec(record.id);
-      if (match) max = Math.max(max, Number(match[1]));
-    }
-  }
   // External hyperlink targets live outside `relationships`; ignoring them reused ids and
   // collided with later furniture allocation after shell resources persisted across undo.
-  for (const external of pkg.externalTargets) {
-    const match = /^rId(\d{1,9})$/.exec(external.id);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return `rId${max + 1}`;
+  // The shared scan still walks both maps. An attached collaboration actor stripes the
+  // number so two peers cannot mint the same `rId` from one snapshot.
+  return freePackageRelationshipId(pkg);
 }
 
 export function relsPartNameFor(partName: string): string {
   const slash = partName.lastIndexOf('/');
   return `${partName.slice(0, slash)}/_rels/${partName.slice(slash + 1)}.rels`;
+}
+
+/**
+ * Append one relationship with a caller-chosen id.
+ *
+ * Tree splices stay suppressed. The journal records `putRelationship` so replay does not
+ * duplicate the Relationship child. Empty `.rels` parts are created through
+ * `withRelationshipsPartFor`, which journals `putXmlPart` of the empty root.
+ */
+export function appendFixedRelationship(
+  pkg: OoxmlPackage,
+  owner: string,
+  record: RelationshipRecord
+): OoxmlPackage | null {
+  const relsName = relsPartNameFor(owner);
+  const prepared = withRelationshipsPartFor(pkg, owner);
+  const relsPart = prepared.parts.get(relsName);
+  if (!relsPart) return null;
+  const owned = prepared.relationships.get(owner) ?? [];
+  if (owned.some((entry) => entry.id === record.id)) return null;
+
+  const authored = readOoxmlPart(
+    `<Relationships xmlns="${REL}">` +
+      `<Relationship Id="${record.id}" Type="${record.type}" Target="${record.rawTarget}"/>` +
+      '</Relationships>',
+    { name: relsName, contentType: RELS_CONTENT_TYPE }
+  );
+  if (!authored.ok) return null;
+  const node = authored.part.root.children[0];
+  if (!node) return null;
+  const inserted = runWithoutJournalCapture(() =>
+    insertChildren(relsPart, relsPart.root.id, relsPart.root.children.length, [
+      withFreshIds(node, createNodeIdAllocator(relsPart)),
+    ])
+  );
+  if (!inserted.ok) return null;
+  recordPutRelationship(owner, record);
+  return Object.freeze({
+    ...prepared,
+    parts: new Map([...prepared.parts, [relsName, inserted.part]]),
+    relationships: new Map([...prepared.relationships, [owner, [...owned, record]]]),
+  });
 }
 
 export function withStoryRelationship(
@@ -49,16 +92,6 @@ export function withStoryRelationship(
     return null;
   }
   const owner = pkg.mainDocumentPart;
-  const relsName = relsPartNameFor(owner);
-  const existing = pkg.parts.get(relsName);
-  const authored = readOoxmlPart(
-    `<Relationships xmlns="${REL}">` +
-      `<Relationship Id="${id}" Type="${typeUri}" Target="${target}"/>` +
-      '</Relationships>',
-    { name: relsName, contentType: RELS_CONTENT_TYPE }
-  );
-  if (!authored.ok) return null;
-
   const owned = pkg.relationships.get(owner) ?? [];
   if (owned.some((entry) => entry.id === id)) return null;
   const record: RelationshipRecord = {
@@ -69,27 +102,7 @@ export function withStoryRelationship(
     targetMode: 'Internal',
     order: owned.reduce((max, entry) => Math.max(max, entry.order), -1) + 1,
   };
-  const relationships = new Map([...pkg.relationships, [owner, [...owned, record]]]);
-
-  if (!existing) {
-    return Object.freeze({
-      ...pkg,
-      parts: new Map([...pkg.parts, [relsName, authored.part]]),
-      relationships,
-    });
-  }
-  const nextId = createNodeIdAllocator(existing);
-  const node = authored.part.root.children[0];
-  if (!node) return null;
-  const inserted = insertChildren(existing, existing.root.id, existing.root.children.length, [
-    withFreshIds(node, nextId),
-  ]);
-  if (!inserted.ok) return null;
-  return Object.freeze({
-    ...pkg,
-    parts: new Map([...pkg.parts, [relsName, inserted.part]]),
-    relationships,
-  });
+  return appendFixedRelationship(pkg, owner, record);
 }
 
 export function withFreshIds(node: OoxmlNode, nextId: () => string): OoxmlNode {
@@ -129,8 +142,9 @@ export function removeRelationship(pkg: OoxmlPackage, rId: string): OoxmlPackage
   if (!node) {
     return Object.freeze({ ...pkg, relationships });
   }
-  const removed = removeNode(relsPart, node.id);
+  const removed = runWithoutJournalCapture(() => removeNode(relsPart, node.id));
   if (!removed.ok) return null;
+  recordDeleteRelationship(owner, rId);
   return Object.freeze({
     ...pkg,
     parts: new Map([...pkg.parts, [relsName, removed.part]]),
@@ -226,6 +240,7 @@ export function cloneOwnedRelationships(
       ...next,
       parts: new Map([...next.parts, [destRelsName, cloned]]),
     });
+    captureXmlPartRoot(cloned);
   } else if (clonedRecords.length > 0) {
     const authored = authorRelsPart(destRelsName, clonedRecords);
     if (!authored) return null;
@@ -233,6 +248,7 @@ export function cloneOwnedRelationships(
       ...next,
       parts: new Map([...next.parts, [destRelsName, authored]]),
     });
+    captureXmlPartRoot(authored);
   } else if (sourceRelsBytes) {
     // Bytes-only shell with no modeled records — copy verbatim under the new name.
     next = Object.freeze({
@@ -259,6 +275,9 @@ export function cloneOwnedRelationships(
 /** Drop an orphaned furniture part's owned relationship indexes and `.rels` entry. */
 export function withoutOwnedRelationships(pkg: OoxmlPackage, ownerPart: string): OoxmlPackage {
   const relsName = relsPartNameFor(ownerPart);
+  const hadRels =
+    pkg.parts.has(relsName) ||
+    [...pkg.partBytes.keys()].some((name) => partNameKey(name) === partNameKey(relsName));
   const parts = new Map(pkg.parts);
   parts.delete(relsName);
   const partBytes = new Map(pkg.partBytes);
@@ -268,6 +287,7 @@ export function withoutOwnedRelationships(pkg: OoxmlPackage, ownerPart: string):
   const externalTargets = Object.freeze(
     pkg.externalTargets.filter((entry) => entry.ownerPart !== ownerPart)
   );
+  if (hadRels) recordDeleteXmlPart(relsName);
   return Object.freeze({ ...pkg, parts, partBytes, relationships, externalTargets });
 }
 
@@ -340,7 +360,7 @@ export function withContentTypeOverride(
   if (after.children.length !== expected.length) return null;
   if (after.children.some((child, index) => child !== expected[index])) return null;
 
-  return Object.freeze({
+  const next = Object.freeze({
     ...pkg,
     partBytes: new Map([...pkg.partBytes, [contentTypesEntry.storageKey, strToU8(patched)]]),
     contentTypes: Object.freeze({
@@ -348,6 +368,8 @@ export function withContentTypeOverride(
       overrides: new Map([...pkg.contentTypes.overrides, [key, contentType]]),
     }),
   });
+  recordPutContentTypeOverride(partName, contentType);
+  return next;
 }
 
 export function withoutContentTypeOverride(
@@ -402,7 +424,7 @@ export function withoutContentTypeOverride(
 
   const overrides = new Map(pkg.contentTypes.overrides);
   overrides.delete(key);
-  return Object.freeze({
+  const next = Object.freeze({
     ...pkg,
     partBytes: new Map([...pkg.partBytes, [contentTypesEntry.storageKey, strToU8(rebuilt)]]),
     contentTypes: Object.freeze({
@@ -410,6 +432,8 @@ export function withoutContentTypeOverride(
       overrides,
     }),
   });
+  recordDeleteContentTypeOverride(partName);
+  return next;
 }
 
 function serializeContentTypes(

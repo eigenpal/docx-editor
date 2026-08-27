@@ -79,7 +79,7 @@ export interface DocxEditorRootProps {
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
    * Capability modules to register (`@docx-editor.dev/pro`'s review module,
-   * custom nodes). Sampled at mount only, like `mode`: module registration is
+   * custom nodes, collaboration). Sampled at mount only, like `mode`: module registration is
    * construction-time in the engine.
    */
   modules?: readonly EditorModule[];

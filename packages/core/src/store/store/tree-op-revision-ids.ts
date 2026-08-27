@@ -3,6 +3,11 @@
 // Split from `tree-op-tracked.ts`, which owns the wrappers and placement rules; this module
 // owns only the question "which id is free in this part".
 
+import {
+  MAX_DECIMAL_ID,
+  nextStripedDecimalId,
+  resolveAllocationActor,
+} from '../package/actor-scoped-ids.ts';
 import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/ooxml-tree.ts';
 
 /**
@@ -11,8 +16,13 @@ import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlPart } from '../package/oo
  * `ST_DecimalNumber`, and only ever compared for equality — Word writes them densely from
  * zero and nothing reads them as an order. Taking one past the highest in use keeps a new
  * revision from joining an existing one by accident, which is what an id collision means.
+ *
+ * When a collaboration actor is bound on the store transaction, the next id is the next
+ * unused value in that actor's stripe. Two peers minting from the same snapshot then
+ * cannot share an `@w:id`, which is what made Accept on your edit accept theirs too.
+ * No actor keeps the dense sequence byte-identical to a solo Word document.
  */
-export function nextRevisionId(part: OoxmlPart): () => string {
+export function nextRevisionId(part: OoxmlPart, actorId?: string): () => string {
   let highest = -1;
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
@@ -33,6 +43,15 @@ export function nextRevisionId(part: OoxmlPart): () => string {
     for (const child of node.children) visit(child);
   };
   visit(part.root);
+  const actor = resolveAllocationActor(actorId);
+  if (actor) {
+    const used = usedRevisionIds(part);
+    return () => {
+      const id = nextStripedDecimalId(used, actor, MAX_REVISION_ID);
+      used.add(id);
+      return id;
+    };
+  }
   let next = highest + 1;
   return () => {
     // Past the ceiling there is no "one higher" left, and clamping to it would hand back an
@@ -77,6 +96,10 @@ function usedRevisionIds(part: OoxmlPart): Set<string> {
  * Keying on kind missed them, so a document whose only revisions were a tracked row
  * insertion minted an id already in use — and the new edit then shared an address with a
  * structural revision the engine refuses, which marked the user's own insertion read-only.
+ *
+ * Exported so the clipboard merge occupies the same set when it mints ids for a pasted
+ * revision. A second list there would let a striped paste land on the id of a `w:cellIns` it
+ * never looked at, and the pasted insertion would join that row revision.
  */
 export const REVISION_ID_BEARING: ReadonlySet<string> = new Set([
   'ins',
@@ -115,4 +138,4 @@ export function carriesRevisionId(node: OoxmlNode): boolean {
 }
 
 /** `ST_DecimalNumber` is unbounded; Word's reader is not. */
-const MAX_REVISION_ID = 2147483647;
+const MAX_REVISION_ID = MAX_DECIMAL_ID;

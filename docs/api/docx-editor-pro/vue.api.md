@@ -4,6 +4,7 @@
 
 ```ts
 
+import { Awareness } from 'y-protocols/awareness';
 import { ComputedRef } from 'vue';
 import { MaybeRefOrGetter } from 'vue';
 import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from '@docx-editor.dev/vue';
@@ -13,9 +14,201 @@ import { ReviewAuthorInfo } from '@docx-editor.dev/vue';
 import { VNode } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
+import * as Y from 'yjs';
 
 // @public
 export function activatedCustomNodeOf(resolved: ResolvedCustomNodeActivation, editor: Editor | null | undefined): ActivatedCustomNode | null;
+
+// @public
+export interface CollaborationAvatarProps {
+    readonly children?: VNode | VNode[];
+    // (undocumented)
+    readonly className?: string;
+    // (undocumented)
+    readonly participant: CollaborationParticipant;
+}
+
+// @public
+export interface CollaborationAvatarRenderProps {
+    readonly color: string;
+    readonly initials: string;
+    // (undocumented)
+    readonly participant: CollaborationParticipant;
+}
+
+// @public
+export interface CollaborationAvatarsProps {
+    readonly children?: (props: CollaborationAvatarRenderProps) => VNode | VNode[];
+    // (undocumented)
+    readonly className?: string;
+    readonly max?: number;
+    readonly session: CollaborationSession | null;
+}
+
+// @public
+export type CollaborationBootstrap = {
+    readonly document: Uint8Array;
+    readonly kind: 'create';
+} | {
+    readonly kind: 'join';
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
+} | {
+    readonly document: Uint8Array;
+    readonly electionWindowMs?: number;
+    readonly kind: 'create-or-join';
+    readonly probeTimeoutMs?: number;
+    readonly signal?: AbortSignal;
+    readonly timeoutMs?: number;
+};
+
+// @public
+export interface CollaborationCaretLabelRenderProps {
+    readonly color: string;
+    readonly participant: CollaborationParticipant | null;
+    readonly selection: CollaborationRemoteSelection;
+}
+
+// @public
+export interface CollaborationCaretLabelsProps {
+    readonly children?: (props: CollaborationCaretLabelRenderProps) => VNode | VNode[];
+    readonly session: CollaborationSession | null;
+}
+
+// @public
+export interface CollaborationFailure {
+    // (undocumented)
+    readonly code: CollaborationFailureCode;
+    // (undocumented)
+    readonly detail?: string;
+}
+
+// @public
+export type CollaborationFailureCode = 'already-initialized' | 'baseline-digest-mismatch' | 'baseline-too-large' | 'blob-digest-mismatch' | 'blob-read' | 'blob-store-full' | 'blob-too-large' | 'collaboration-session-destroyed' | 'collaboration-session-not-attached' | 'collaboration-session-not-ready' | 'collaboration-text-limit' | 'concurrent-seed' | 'document-id-mismatch' | 'duplicate-paragraph-id' | 'experimental-collaboration-body-text-only' | 'experimental-collaboration-existing-paragraphs-only' | 'experimental-collaboration-text-only' | 'experimental-collaboration-untracked-text-only' | 'immutable-baseline-changed' | 'immutable-metadata-changed' | 'initialization-aborted' | 'initialization-timeout' | 'invalid-baseline' | 'invalid-blob-descriptor' | 'invalid-bound' | 'invalid-document-id' | 'invalid-identity' | 'invalid-identity-color' | 'invalid-logical-id' | 'invalid-relationships' | 'invalid-session-id' | 'invalid-shared-metadata' | 'invalid-string' | 'local-mirror-failed' | 'materialize-dropped-content' | 'missing-blob' | 'missing-local-blob' | 'missing-root' | 'no-main-document-part' | 'not-initialized' | 'paragraph-set-mismatch' | 'port-already-attached' | 'protocol-version-mismatch' | 'prototype-key' | 'remote-apply-failed' | 'schema-version-mismatch' | 'shared-schema-invalid' | 'text-too-long' | 'too-many-attributes' | 'too-many-children' | 'too-many-nodes' | 'too-many-parts' | 'too-many-relationships' | 'transport' | 'tree-too-deep' | 'unknown-logical-id' | 'unknown-paragraph-id' | 'unsafe-part-name' | 'unsupported-root-key';
+
+// @public
+export interface CollaborationIdentity {
+    // (undocumented)
+    readonly actorId: string;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly role?: 'human' | 'agent';
+}
+
+// @public
+export interface CollaborationIdentityUpdate {
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public
+export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
+
+// @public
+export interface CollaborationModuleOptions extends ProLicenseOptions {
+    // (undocumented)
+    readonly session: EditorCollaborationSession;
+}
+
+// @public
+export interface CollaborationParticipant extends CollaborationIdentity {
+    // (undocumented)
+    readonly isLocal: boolean;
+}
+
+// @public
+export interface CollaborationRemoteSelection {
+    // (undocumented)
+    readonly actorId: string;
+    // (undocumented)
+    readonly anchor: CollaborationRemoteSelectionAddress;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly head: CollaborationRemoteSelectionAddress;
+    // (undocumented)
+    readonly kind?: CollaborationSelectionKind;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface CollaborationRemoteSelectionAddress {
+    // (undocumented)
+    readonly nodeId: string;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export type CollaborationSelectionKind = 'cells';
+
+// @public
+export interface CollaborationSession {
+    // (undocumented)
+    canRedo(): boolean;
+    // (undocumented)
+    canUndo(): boolean;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    // (undocumented)
+    participants(): readonly CollaborationParticipant[];
+    // (undocumented)
+    redo(): boolean;
+    // (undocumented)
+    remoteSelections(): readonly CollaborationRemoteSelection[];
+    readonly sessionId: string;
+    setIdentity?(update: CollaborationIdentityUpdate): void;
+    // (undocumented)
+    status(): CollaborationStatus;
+    statusSnapshot(): CollaborationStatusSnapshot;
+    // (undocumented)
+    subscribeParticipants(listener: (participants: readonly CollaborationParticipant[]) => void): () => void;
+    // (undocumented)
+    subscribeRemoteSelections(listener: (selections: readonly CollaborationRemoteSelection[]) => void): () => void;
+    // (undocumented)
+    subscribeStatus(listener: (status: CollaborationStatus, reason?: CollaborationFailureCode, detail?: string) => void): () => void;
+    // (undocumented)
+    undo(): boolean;
+}
+
+// @public
+export type CollaborationStatus = 'initializing' | 'ready' | 'disconnected' | 'error' | 'destroyed';
+
+// @public
+export interface CollaborationStatusSnapshot {
+    // (undocumented)
+    readonly lastFailure: CollaborationFailure | undefined;
+    // (undocumented)
+    readonly reason: CollaborationFailure | undefined;
+    // (undocumented)
+    readonly status: CollaborationStatus;
+}
+
+// @public
+export interface CreateDocumentCollaborationOptions {
+    // (undocumented)
+    readonly awareness: Awareness;
+    // (undocumented)
+    readonly bootstrap: CollaborationBootstrap;
+    // (undocumented)
+    readonly documentId: string;
+    // (undocumented)
+    readonly identity: CollaborationIdentity;
+    readonly offlineEditing?: boolean;
+    readonly sessionId?: string;
+    // (undocumented)
+    readonly ydoc: Y.Doc;
+}
 
 // @public
 export const CustomNodeChrome: {
@@ -46,6 +239,84 @@ export interface CustomNodeContextMenuProps {
     readonly onRemoveRefused?: (node: ActivatedCustomNode, reason: string) => void;
     readonly remove?: boolean;
 }
+
+// @public
+export const DocxEditorCollaboration: {
+    Avatar: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        participant: {
+            required: true;
+            type: PropType<CollaborationParticipant>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        participant: {
+            required: true;
+            type: PropType<CollaborationParticipant>;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    Avatars: vue.DefineComponent<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        max: {
+            default: undefined;
+            type: NumberConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        className: {
+            default: undefined;
+            type: StringConstructor;
+        };
+        max: {
+            default: undefined;
+            type: NumberConstructor;
+        };
+        session: {
+            default: null;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>> & Readonly<{}>, {
+        className: string;
+        max: number;
+        session: CollaborationSession | null;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+    CaretLabels: vue.DefineComponent<vue.ExtractPropTypes<{
+        session: {
+            default: null;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>, () => VNode<vue.RendererNode, vue.RendererElement, {
+        [key: string]: any;
+    }>[] | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
+        session: {
+            default: null;
+            type: PropType<CollaborationSession | null>;
+        };
+    }>> & Readonly<{}>, {
+        session: CollaborationSession | null;
+    }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+};
+
+// @public (undocumented)
+export type DocxEditorCollaborationNamespace = typeof DocxEditorCollaboration;
 
 // @public (undocumented)
 export const DocxEditorReview: {
@@ -758,7 +1029,58 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children' | 'hidden'
 }
 
 // @public
+export function useCollaborationParticipants(session: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationParticipantsReturn;
+
+// @public
+export interface UseCollaborationParticipantsReturn {
+    // (undocumented)
+    readonly participants: Readonly<Ref<readonly CollaborationParticipant[]>>;
+}
+
+// @public
+export function useCollaborationStatus(session: MaybeRefOrGetter<CollaborationSession | null>): UseCollaborationStatusReturn;
+
+// @public
+export interface UseCollaborationStatusReturn {
+    // (undocumented)
+    readonly lastFailure: Readonly<Ref<CollaborationFailure | undefined>>;
+    // (undocumented)
+    readonly reason: Readonly<Ref<CollaborationFailure | undefined>>;
+    // (undocumented)
+    readonly status: Readonly<Ref<CollaborationStatus | 'inactive'>>;
+}
+
+// @public
 export function useCustomNodeDefinitions(nodes?: MaybeRefOrGetter<readonly AnyCustomNodeDefinition[] | undefined>): ComputedRef<readonly AnyCustomNodeDefinition[]>;
+
+// @public
+export function useDocumentCollaboration(options?: MaybeRefOrGetter<UseDocumentCollaborationOptions | null>): UseDocumentCollaborationReturn;
+
+// @public
+export type UseDocumentCollaborationConnectOptions = CreateDocumentCollaborationOptions;
+
+// @public
+export interface UseDocumentCollaborationOptions {
+    readonly modules?: readonly EditorModule[];
+    readonly room?: UseDocumentCollaborationConnectOptions | null;
+}
+
+// @public
+export interface UseDocumentCollaborationReturn {
+    // (undocumented)
+    readonly connect: (options: UseDocumentCollaborationConnectOptions) => Promise<void>;
+    // (undocumented)
+    readonly document: Readonly<Ref<Uint8Array | null>>;
+    // (undocumented)
+    readonly error: Readonly<Ref<CollaborationFailure | null>>;
+    readonly leave: (nextDocument: Uint8Array) => void;
+    // (undocumented)
+    readonly modules: Readonly<Ref<readonly EditorModule[]>>;
+    // (undocumented)
+    readonly pending: Readonly<Ref<boolean>>;
+    // (undocumented)
+    readonly session: Readonly<Ref<CollaborationSession | null>>;
+}
 
 // @public (undocumented)
 export function useReview(query?: MaybeRefOrGetter_2<ReviewItemQuery | undefined>): UseReviewReturn;

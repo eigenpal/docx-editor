@@ -141,7 +141,10 @@ import {
   tableContextOf,
   selectedTableOf,
 } from './docx-editor-derive.ts';
-import { setReviewCommentResolved } from './docx-editor-comment-resolution.ts';
+import {
+  commentTargetRangeOf,
+  setReviewCommentResolved,
+} from './docx-editor-comment-resolution.ts';
 import { reviewReplyRefusal } from './review-reply.ts';
 import {
   canContentControlCommand,
@@ -188,6 +191,7 @@ import {
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
   type PaginatedSurfaceState,
+  type RemoteCaretLabelHost,
 } from './paginated-surface.ts';
 import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
 import { surfaceScroller } from './surface-pages.ts';
@@ -308,6 +312,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   if (openingModeDecision.rejection !== null) facadeRejection = openingModeDecision.rejection;
 
   let surface: PaginatedSurface | null = null;
+  // The facade's copy of the host's remote-caret label host: registered before attach,
+  // re-applied to every rebuilt surface (reload, font remount, re-attach).
+  let remoteCaretLabelHost: RemoteCaretLabelHost | null = null;
   let parseError: string | null = null;
   let unsubscribeSession: Unsubscribe | null = null;
   let lastSelection: SurfaceSelection | null = null;
@@ -566,6 +573,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? { tableInteractionLabel: config.tableInteractionLabel }
         : {}),
       ...(config.imageDecodePort ? { imageDecodePort: config.imageDecodePort } : {}),
+      ...(modules.collaboration ? { collaborationModel: modules.collaboration } : {}),
       // Read through the holder rather than captured: the popover mounts AFTER the editor
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
@@ -630,6 +638,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // and still told a screen reader it was writable. Reads the CURRENT mode, not just the
     // constructed one, so a remount after `setEditingMode('viewing')` comes up right.
     surface.setEditable(editingMode !== 'viewing');
+    // Same remount rule for the host's caret-label host: registered once, and a rebuilt
+    // surface that forgot it would fall back to the default name labels mid-session.
+    if (remoteCaretLabelHost !== null) {
+      surface.setRemoteCaretLabelHost(remoteCaretLabelHost);
+    }
     // Same remount rule for the host's activation filter: the rail set it once, and a
     // rebuilt surface that forgot it would activate cards the rail does not render.
     if (reviewActivationExclusions !== null) {
@@ -1082,6 +1095,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       pageSetup: pageSetupOf(surface),
       reviewPaneOpen,
       hasReviewContent: surface?.session.hasReviewContent() ?? false,
+      collaborationStatus: state?.collaborationStatus ?? 'inactive',
       editingMode,
       // The facade's own refusal wins while it stands: the surface never saw the request.
       // A document that ASKS for tracked changes and cannot get them — no author configured
@@ -1377,41 +1391,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return index;
   }
 
-  /**
-   * The range a new comment would cover: the RETAINED pin when a panel took focus, else the
-   * live selection. Null when nothing is selected, or the selection is a caret.
-   */
   function commentTargetRange(): { from: SemanticPosition; to: SemanticPosition } | null {
-    // The captured offsets outlive this read (they anchor the comment), so any
-    // queued typing must land before they are taken.
-    surface?.flushPendingInput();
-    const selection = surface?.retainedSelection() ?? surface?.state().selection ?? null;
-    if (!selection) return null;
-    const { anchor, head } = selection;
-    if (anchor.paragraphId === head.paragraphId && anchor.offset === head.offset) return null;
-    const layout = surface?.publishedLayout();
-    if (!layout) return null;
-    // Document order, not the order the user swept in: a backwards drag has its head first.
-    // Through the memoized INDEX, not `indexOf` over the id list — this runs on every
-    // snapshot read, and a linear scan of a 2432-paragraph document twice per read is the
-    // kind of cost that only shows up on the documents that can least afford it.
-    const order = paragraphOrderOf(layout);
-    let anchorIndex = order.get(anchor.paragraphId) ?? -1;
-    let headIndex = order.get(head.paragraphId) ?? -1;
-    if (anchorIndex === -1 || headIndex === -1) {
-      // The body layout order only knows body paragraphs, so a range selected inside a
-      // header, footer or note resolved to nothing: `selectionAnchorY` came back null, the
-      // "comment on this" affordance never appeared, and `addComment` reported that a
-      // comment needs a selected range while one was plainly on screen. The open story
-      // publishes its own order, and that is the ruler for a selection inside it.
-      const scoped = openStoryParagraphOrder();
-      anchorIndex = scoped.get(anchor.paragraphId) ?? -1;
-      headIndex = scoped.get(head.paragraphId) ?? -1;
-    }
-    if (anchorIndex === -1 || headIndex === -1) return null;
-    const forwards =
-      anchorIndex < headIndex || (anchorIndex === headIndex && anchor.offset <= head.offset);
-    return forwards ? { from: anchor, to: head } : { from: head, to: anchor };
+    return commentTargetRangeOf({
+      surface,
+      bodyOrder: () => {
+        const layout = surface?.publishedLayout();
+        return layout ? paragraphOrderOf(layout) : new Map();
+      },
+      openStoryOrder: openStoryParagraphOrder,
+    });
   }
 
   /** The story the reader has open, in the vocabulary the store's writes take. */
@@ -1746,7 +1734,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         storyScopeOfReviewItem(item)
       );
       return applied;
-    });
+    }, 'revision-resolve');
     if (!applied?.committed) {
       const reason =
         typeof applied?.reason === 'string' ? applied.reason : 'the revision was refused';
@@ -2195,6 +2183,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!reviewEnabled) {
         return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
       }
+      // The captured offsets outlive this write (they anchor the comment), so any
+      // queued typing must land before they are taken. The range read itself is
+      // flush-free: it is also the review store's snapshot.
+      surface?.flushPendingInput();
       const range = commentTargetRange();
       if (!range || !surface) {
         return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
@@ -2229,7 +2221,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           storyScopeOfParagraph(range.from.paragraphId)
         );
         return { committed: created !== null };
-      });
+      }, 'comment-add');
       if (created === null) {
         return { ok: false, code: 'unsupported', reason: 'the comment could not be committed' };
       }
@@ -2244,7 +2236,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getReviewAuthors: () =>
       revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
     getConfiguredAuthor: () => config.author?.trim() || null,
+    presenceColorFor: (name) => surface?.remotePresenceColor(name) ?? 'var(--doc-accent)',
     getReviewAuthorStyle: (author) => revisionStyleState.styleFor(author),
+    setRemoteCaretLabelHost(host) {
+      remoteCaretLabelHost = host;
+      // Tolerated detached: the host waits here and applies on the next mount.
+      surface?.setRemoteCaretLabelHost(host);
+    },
     setRevisionStyles(colors) {
       revisionStyleState.set(colors);
       surface?.setRevisionStyles(colors);
@@ -2447,7 +2445,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           parsed?.noteId
         );
         return { committed: deleted };
-      });
+      }, 'comment-delete');
       if (!deleted) {
         return { ok: false, code: 'unsupported', reason: 'the comment could not be deleted' };
       }
@@ -2500,7 +2498,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           storyScopeOfReviewItem(item)
         );
         return { committed: created !== null };
-      });
+      }, 'comment-reply');
       if (created === null) {
         return { ok: false, code: 'unsupported', reason: 'the reply could not be committed' };
       }

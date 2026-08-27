@@ -15,6 +15,15 @@ import type {
 import type { DrawingTreeDocOp } from '../store/store/tree-op-types.ts';
 import type { SurfaceEditingMode } from './paginated-surface-contract.ts';
 
+/**
+ * What a host may set on a surface image insert.
+ *
+ * The decode port and the collaboration actor are the SURFACE's to supply. An actor a host
+ * could pass would be a second identity for the same mint, which is the thing actor-scoped
+ * allocation exists to prevent.
+ */
+export type SurfaceInsertImageInput = Omit<InsertImageInput, 'decodePort' | 'actorId'>;
+
 const VIEWING_REFUSAL = 'the document is open for viewing';
 const SUGGESTING_IMAGE_REFUSAL = 'image changes are not supported in suggesting mode';
 const TRACKED_AUTHOR_REFUSAL = 'tracked changes need a non-empty author';
@@ -36,11 +45,19 @@ export function createImageOps(deps: {
   author: () => string | undefined;
   trackedDate: () => string;
   decodePort: () => ImageDecodePort;
+  /**
+   * The collaboration actor, or undefined when none is attached.
+   *
+   * Handed DOWN as a value rather than bound around the call: both image entries await a
+   * decode before they mint, and `runWithTransactionActor` is ambient and synchronous, so a
+   * wrap here would be unbound by the time `wp:docPr/@id` is taken.
+   */
+  actorId: () => string | undefined;
 }): {
   applyDrawingOps: (ops: readonly DrawingTreeDocOp[]) => TreeApplyResult;
   applyImageProperties: (input: ApplyImagePropertiesInput) => ImageIntentResult;
   deleteImage: (drawingNodeId: string) => ImageIntentResult;
-  insertImage: (input: Omit<InsertImageInput, 'decodePort'>) => Promise<ImageIntentResult>;
+  insertImage: (input: SurfaceInsertImageInput) => Promise<ImageIntentResult>;
   replaceImage: (
     drawingNodeId: string,
     bytes: Uint8Array,
@@ -153,10 +170,12 @@ export function createImageOps(deps: {
           detail: TRACKED_AUTHOR_REFUSAL,
         });
       }
+      const actorId = deps.actorId();
       return deps.session.insertImage(deps.storyScope(), {
         ...input,
         decodePort: deps.decodePort(),
         ...(tracked ? { revision: { author: author!, date: deps.trackedDate() } } : {}),
+        ...(actorId ? { actorId } : {}),
       });
     },
 
@@ -171,13 +190,14 @@ export function createImageOps(deps: {
           detail: SUGGESTING_IMAGE_REFUSAL,
         });
       }
+      const actorId = deps.actorId();
       return deps.session.replaceImage(
         deps.storyScope(),
         drawingNodeId,
         bytes,
         mime,
         deps.decodePort(),
-        options
+        { ...options, ...(actorId ? { actorId } : {}) }
       );
     },
   };

@@ -19,8 +19,33 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // learn about the reader's limits.
 
 import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
+import type {
+  CollaborationModuleContribution,
+  EditorCollaborationSession,
+} from '@docx-editor.dev/core/collaboration';
 import { fail } from './errors.ts';
 import { createRuntime, type DocxEditorServerRuntime, type RevisionTextView } from './runtime.ts';
+
+/**
+ * Capability module accepted by {@link createServer}. Collaboration attaches
+ * through a collaboration contribution. Other contributions are ignored here.
+ *
+ * @public
+ */
+export interface EditorModule {
+  readonly id: string;
+  readonly collaboration?: CollaborationModuleContribution;
+}
+
+function collaborationModelOf(
+  modules: readonly EditorModule[] | undefined
+): CollaborationModuleContribution | undefined {
+  if (!modules) return undefined;
+  for (const module of modules) {
+    if (module.collaboration) return module.collaboration;
+  }
+  return undefined;
+}
 
 /** Resource limits for the DOCX archive. */
 export interface DocumentZipLimits {
@@ -68,6 +93,11 @@ export interface DocumentLimits {
  */
 export interface CreateServerOptions {
   /**
+   * Capability modules to register. Collaboration attaches only through a
+   * collaboration contribution on this list.
+   */
+  readonly modules?: readonly EditorModule[];
+  /**
    * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.
    *
    * Exposed because a server opening documents it did not author is exactly where a caller may
@@ -94,8 +124,10 @@ export async function createServer(
   bytes: Uint8Array,
   options: CreateServerOptions = {}
 ): Promise<DocxEditorServerRuntime> {
+  const collaborationModel = collaborationModelOf(options.modules);
   const opened = createServerAutomationHost(bytes, {
     ...(options.limits === undefined ? {} : { limits: options.limits }),
+    ...(collaborationModel === undefined ? {} : { collaborationModel }),
   });
   if (!opened.ok) fail({ code: 'InvalidArgument', target: 'createServer' });
   return createRuntime({
@@ -105,5 +137,27 @@ export async function createServer(
     ...(options.revisionTextView === undefined
       ? {}
       : { revisionTextView: options.revisionTextView }),
+  });
+}
+
+/** Options for {@link createCollaborative}. @public */
+export type CreateCollaborativeOptions = CreateServerOptions;
+
+/**
+ * Open one DOM-free canonical replica and attach it through the module seam.
+ *
+ * @public
+ */
+export function createCollaborative(
+  bytes: Uint8Array,
+  collaboration: EditorCollaborationSession,
+  options: CreateCollaborativeOptions = {}
+): Promise<DocxEditorServerRuntime> {
+  return createServer(bytes, {
+    ...options,
+    modules: [
+      ...(options.modules ?? []),
+      { id: 'collaboration', collaboration: { session: collaboration } },
+    ],
   });
 }

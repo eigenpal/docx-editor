@@ -10,7 +10,9 @@ import { AutomationHost } from '@docx-editor.dev/core/automation';
 import { AutomationOperation } from '@docx-editor.dev/core/automation';
 import { AutomationSpan } from '@docx-editor.dev/core/automation';
 import { AutomationValue } from '@docx-editor.dev/core/automation';
+import { CollaborationModuleContribution } from '@docx-editor.dev/core/collaboration';
 import { DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
 
 // @public
 export type BesideLocation = Extract<InsertLocation, 'Before' | 'After'>;
@@ -252,9 +254,13 @@ export interface CreateBrowserOptions {
 }
 
 // @public
+export type CreateCollaborativeOptions = CreateServerOptions;
+
+// @public
 export interface CreateServerOptions {
     readonly author?: string;
     readonly limits?: DocumentLimits;
+    readonly modules?: readonly EditorModule[];
     readonly revisionTextView?: RevisionTextView;
 }
 
@@ -379,6 +385,7 @@ export interface DocxEditorErrorInit {
 // @public
 export interface DocxEditorNamespace {
     createBrowser(editor: DocxEditorInstance, options?: CreateBrowserOptions): DocxEditorRuntime;
+    createCollaborative(bytes: Uint8Array, collaboration: EditorCollaborationSession, options?: CreateCollaborativeOptions): Promise<DocxEditorServerRuntime>;
     createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
 }
 
@@ -393,6 +400,14 @@ export interface DocxEditorRuntime {
 // @public
 export interface DocxEditorServerRuntime extends DocxEditorRuntime {
     save(): Promise<Uint8Array>;
+}
+
+// @public
+export interface EditorModule {
+    // (undocumented)
+    readonly collaboration?: CollaborationModuleContribution;
+    // (undocumented)
+    readonly id: string;
 }
 
 // @public

@@ -26,6 +26,9 @@ import {
   isHyperlinkNode,
 } from './hyperlink.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, RELATIONSHIPS_NAMESPACE_URI } from './ooxml-tree.ts';
+import { freePackageRelationshipId } from './actor-scoped-ids.ts';
+import { withRelationshipsPartFor } from './package-edit.ts';
+import { recordPutRelationship, runWithoutJournalCapture } from './canonical-primitive-capture.ts';
 
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const RELS_CONTENT_TYPE = 'application/vnd.openxmlformats-package.relationships+xml';
@@ -72,21 +75,10 @@ function relsPartNameFor(partName: string): string {
 
 /** An `rIdN` no owner in the package already uses. */
 function freeRelationshipId(pkg: OoxmlPackage): string {
-  let max = 0;
-  for (const records of pkg.relationships.values()) {
-    for (const record of records) {
-      const match = /^rId(\d{1,9})$/.exec(record.id);
-      if (match) max = Math.max(max, Number(match[1]));
-    }
-  }
   // External targets live OUTSIDE `relationships` (that map holds the internal ones), so an
   // id already spent on a hyperlink would be handed out a second time without this — two
   // links pointing at one URL, and editing either would silently move the other.
-  for (const external of pkg.externalTargets) {
-    const match = /^rId(\d{1,9})$/.exec(external.id);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return `rId${max + 1}`;
+  return freePackageRelationshipId(pkg);
 }
 
 /** Re-key a grafted subtree so it cannot collide with the part it is joining. */
@@ -145,8 +137,14 @@ export function ensureHyperlinkRelationship(
   if (reusable) return { pkg, relationshipId: reusable.id };
 
   const relsName = relsPartNameFor(owner);
-  const existing = pkg.parts.get(relsName);
-  const id = freeRelationshipId(pkg);
+  const prepared = withRelationshipsPartFor(pkg, owner);
+  const existing = prepared.parts.get(relsName);
+  if (!existing) return null;
+  const id = freeRelationshipId(prepared);
+  const order =
+    [...prepared.relationships.values()]
+      .flat()
+      .reduce((max, entry) => Math.max(max, entry.order), -1) + 1;
   const authored = readOoxmlPart(
     `<Relationships xmlns="${REL}">` +
       `<Relationship Id="${escapeXmlChecked(id, 'relationship id')}"` +
@@ -163,7 +161,7 @@ export function ensureHyperlinkRelationship(
   // this session had just created: it painted inert until the document was saved and
   // reopened.
   const externalTargets = [
-    ...pkg.externalTargets,
+    ...prepared.externalTargets,
     {
       ownerPart: owner,
       id,
@@ -172,29 +170,30 @@ export function ensureHyperlinkRelationship(
       sinkSafe: true,
     },
   ];
-
-  if (!existing) {
-    return {
-      pkg: Object.freeze({
-        ...pkg,
-        parts: new Map([...pkg.parts, [relsName, authored.part]]),
-        externalTargets,
-      }),
-      relationshipId: id,
-    };
-  }
-  const nextId = createNodeIdAllocator(existing);
   const node = authored.part.root.children[0];
   if (!node) return null;
-  const inserted = insertChildren(existing, existing.root.id, existing.root.children.length, [
-    withFreshIds(node, nextId),
-  ]);
+  const inserted = runWithoutJournalCapture(() =>
+    insertChildren(existing, existing.root.id, existing.root.children.length, [
+      withFreshIds(node, createNodeIdAllocator(existing)),
+    ])
+  );
   if (!inserted.ok) return null;
+  const owned = prepared.relationships.get(owner) ?? [];
+  const record = {
+    ownerPart: owner,
+    id,
+    type: HYPERLINK_RELATIONSHIP_TYPE,
+    rawTarget: target,
+    targetMode: 'External' as const,
+    order,
+  };
+  recordPutRelationship(owner, record);
   return {
     pkg: Object.freeze({
-      ...pkg,
-      parts: new Map([...pkg.parts, [relsName, inserted.part]]),
+      ...prepared,
+      parts: new Map([...prepared.parts, [relsName, inserted.part]]),
       externalTargets,
+      relationships: new Map([...prepared.relationships, [owner, [...owned, record]]]),
     }),
     relationshipId: id,
   };

@@ -2,7 +2,16 @@
 // promoted to a package undo unit (rich-clipboard-fidelity task 2.2, pattern from
 // tree-package-images.ts). Undo reverts the tree and the imported styles, numbering,
 // media, rels and note parts together — a story-only undo would strand the resources.
+//
+// The story store commits the write. Capture must be armed on the package store, the
+// same way `addPackageComment` does: `storyStore.transact` alone never entered
+// `runObservedStoreTransaction`, so a paste produced no primitive journal and a peer
+// never saw the blocks or the imported parts.
 
+import {
+  packageTransactionPublished,
+  runObservedStoreTransaction,
+} from '../package/canonical-primitive-capture.ts';
 import { readOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { mergeFragmentIntoPackage, type FragmentMergeResult } from './clipboard-fragment-merge.ts';
 import {
@@ -25,6 +34,15 @@ export interface FragmentPasteInput {
   readonly lastMarkCovered: boolean;
   /** Ops that clear the current selection first (the surface's deleteSelectionPlan). */
   readonly priorOps?: readonly TreeDocOp[];
+  /**
+   * Collaboration actor for the ids this paste mints.
+   *
+   * A paste freshens three package-wide namespaces — bookmark `@w:id`, revision `@w:id` and
+   * `wp:docPr/@id` — and the merge reads the actor off the open transaction. Without one, two
+   * replicas pasting the same fragment from one snapshot mint the same numbers, and only the
+   * merged document shows it. Omitted (solo) keeps Word's dense sequences.
+   */
+  readonly actorId?: string;
 }
 
 export type FragmentPasteResult =
@@ -115,57 +133,69 @@ export function applyFragmentPaste(
   let blockCount = 0;
   let refusalDetail = '';
 
-  const result = storyStore.transact(
-    (ctx) => {
-      for (const op of input.priorOps ?? []) {
-        if (!ctx.apply(op)) return;
+  return runObservedStoreTransaction(
+    store,
+    () => {
+      const result = storyStore.transact(
+        (ctx) => {
+          for (const op of input.priorOps ?? []) {
+            if (!ctx.apply(op)) return;
+          }
+          // The merge MUST run against the transaction's WORKING package — the one the
+          // selection-clearing ops above just edited. Merging from `store.currentPackage()`
+          // (the pre-transaction snapshot) and replacing the working package wholesale threw
+          // those deletions away, so a rich paste over a selection kept the old content.
+          let merged: FragmentMergeResult | null = null;
+          const packageApplied = ctx.applyPackage((current) => {
+            merged = mergeFragmentIntoPackage(current, fragment, story.partName);
+            return merged.ok ? merged.pkg : current;
+          });
+          const landed = merged as FragmentMergeResult | null;
+          if (!landed || !landed.ok) {
+            refusalDetail = `fragment-merge:${landed ? landed.reason : 'no-merge'}`;
+            // Poison the transaction so nothing commits.
+            ctx.apply({ op: 'insertText', paragraphId: '\0fragment-abort', offset: 0, text: 'x' });
+            return;
+          }
+          if (!packageApplied) return;
+          blockCount = landed.blocks.length;
+          ctx.apply({
+            op: 'insertFragment',
+            paragraphId: input.paragraphId,
+            offset: input.offset,
+            blocks: landed.blocks,
+            lastMarkCovered: input.lastMarkCovered,
+          });
+        },
+        {
+          story,
+          // THE BINDING THAT REACHES THE MINT. `transact` wraps the whole synchronous build in
+          // `runWithTransactionActor`, and the build is where the merge takes its bookmark,
+          // revision and `docPr` ids.
+          ...(input.actorId ? { actorId: input.actorId } : {}),
+        }
+      );
+
+      if (refusalDetail.length > 0) {
+        return { ok: false as const, reason: 'invalidArgs' as const, detail: refusalDetail };
       }
-      // The merge MUST run against the transaction's WORKING package — the one the
-      // selection-clearing ops above just edited. Merging from `store.currentPackage()`
-      // (the pre-transaction snapshot) and replacing the working package wholesale threw
-      // those deletions away, so a rich paste over a selection kept the old content.
-      let merged: FragmentMergeResult | null = null;
-      const packageApplied = ctx.applyPackage((current) => {
-        merged = mergeFragmentIntoPackage(current, fragment, story.partName);
-        return merged.ok ? merged.pkg : current;
-      });
-      const landed = merged as FragmentMergeResult | null;
-      if (!landed || !landed.ok) {
-        refusalDetail = `fragment-merge:${landed ? landed.reason : 'no-merge'}`;
-        // Poison the transaction so nothing commits.
-        ctx.apply({ op: 'insertText', paragraphId: '\0fragment-abort', offset: 0, text: 'x' });
-        return;
+      if (!result.ok) {
+        return {
+          ok: false as const,
+          reason: result.reason,
+          ...(result.detail ? { detail: result.detail } : {}),
+        };
       }
-      if (!packageApplied) return;
-      blockCount = landed.blocks.length;
-      ctx.apply({
-        op: 'insertFragment',
-        paragraphId: input.paragraphId,
-        offset: input.offset,
-        blocks: landed.blocks,
-        lastMarkCovered: input.lastMarkCovered,
-      });
+      if (!result.change) return { ok: true as const, change: null, blockCount };
+
+      const change = store.promoteStoryTransactionToPackageUnit(
+        beforePackage,
+        storyStore,
+        checkpoint,
+        beforeDepth
+      );
+      return { ok: true as const, change, blockCount };
     },
-    { story }
+    (outcome) => packageTransactionPublished(outcome)
   );
-
-  if (refusalDetail.length > 0) {
-    return { ok: false, reason: 'invalidArgs', detail: refusalDetail };
-  }
-  if (!result.ok) {
-    return {
-      ok: false,
-      reason: result.reason,
-      ...(result.detail ? { detail: result.detail } : {}),
-    };
-  }
-  if (!result.change) return { ok: true, change: null, blockCount };
-
-  const change = store.promoteStoryTransactionToPackageUnit(
-    beforePackage,
-    storyStore,
-    checkpoint,
-    beforeDepth
-  );
-  return { ok: true, change, blockCount };
 }

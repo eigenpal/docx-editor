@@ -21,6 +21,7 @@ import {
   extractFragmentPackage,
   type FragmentCoverage,
 } from '../store/clipboard-fragment-extract.ts';
+import { carriesRevisionId } from '../store/tree-op-revision-ids.ts';
 import { TreePackageStore } from '../store/tree-package-store.ts';
 import { normalizedBodySignatures, referencedNoteSignatures } from './clipboard-fragment-oracle.ts';
 import { paragraphLength } from '../store/tree-op-segments.ts';

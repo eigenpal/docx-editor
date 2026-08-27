@@ -15,13 +15,11 @@ import type { OoxmlPackage } from './ooxml-package.ts';
 import { withPart } from './ooxml-package.ts';
 import { resolveRelationship } from './relationships.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { withoutPart } from './package-edit.ts';
 import {
   cloneOwnedRelationships,
   freeRelationshipId,
-  removeRelationship,
   withContentTypeOverride,
-  withoutContentTypeOverride,
-  withoutOwnedRelationships,
   withFreshIds,
   withStoryRelationship,
 } from './hf-lifecycle-shell.ts';
@@ -792,19 +790,14 @@ function garbageCollectStory(
   rId: string,
   partName: string
 ): OoxmlPackage | null {
-  let next = removeRelationship(pkg, rId);
-  if (!next) return null;
-
-  const parts = new Map(next.parts);
-  parts.delete(partName);
-  const partBytes = new Map(next.partBytes);
-  partBytes.delete(partName);
-  next = Object.freeze({ ...next, parts, partBytes });
-  // Drop the orphan's owned relationship map / externalTargets / `.rels` entry so
-  // indexes cannot keep dangling owner keys after the part is gone.
-  next = withoutOwnedRelationships(next, partName);
-
-  return withoutContentTypeOverride(next, partName);
+  // `withoutPart` finds every relationship whose target resolves to the part, across every
+  // owner, so it covers this `rId` and any duplicate reference the old id-only removal left
+  // behind. It is also the one deletion primitive the journal records, so a story removed
+  // here replicates instead of surviving on the peer.
+  void rId;
+  const removed = withoutPart(pkg, partName);
+  if (!removed.ok) return null;
+  return removed.pkg;
 }
 
 // ---------------------------------------------------------------------------

@@ -29,6 +29,8 @@ const OVERLAY_SELECTORS = [
   '.docx-toolbar__mode-menu',
   '.docx-toolbar__image-wrap-menu',
   '.docx-toolbar__alt-text-panel',
+  '.docx-toolbar__font-family-content',
+  '.docx-toolbar__style-content',
 ];
 const CHROME_SELECTORS = ['.docx-nav', '.docx-table-chrome__panel', '.docx-editor__outline-toggle'];
 const CONTEXT_SELECTORS = ['.docx-contextmenu'];

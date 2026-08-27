@@ -1054,6 +1054,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly canRedo?: boolean;
     readonly canUndo?: boolean;
+    readonly collaborationStatus: CollaborationStatus | 'inactive';
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
     readonly fontSubstitutions?: readonly string[];

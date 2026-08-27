@@ -115,16 +115,9 @@ const ParagraphStyleContent = defineComponent({
       if (!context || !context.open.value) return null;
       const shared = {
         role: 'listbox' as const,
+        // Anchoring, layering and colors all come from the core stylesheet — the popup
+        // must sit in the overlay band, above ambient chrome like the navigation panel.
         class: `docx-toolbar__menu docx-toolbar__style-content${props.className ? ` ${props.className}` : ''}`,
-        style: {
-          position: 'absolute' as const,
-          top: '100%',
-          left: 0,
-          zIndex: 30,
-          minWidth: '100%',
-          maxHeight: '300px',
-          overflowY: 'auto' as const,
-        },
       };
       const items =
         slots.default?.() ??
@@ -225,9 +218,9 @@ const ParagraphStyleRoot = defineComponent({
     return () => {
       if (props.hidden) return null;
       const shared = {
+        // The positioning context for the absolute Content comes from the core stylesheet.
         class: `docx-toolbar__style${props.className ? ` ${props.className}` : ''}`,
         'data-slot': 'styles.style',
-        style: { position: 'relative' as const, display: 'inline-block' as const },
       };
       const body = slots.default?.() ?? [<ParagraphStyleTrigger />, <ParagraphStyleContent />];
       if (props.asChild) {

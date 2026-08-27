@@ -104,7 +104,7 @@ export const PACKAGES = [
       allowlist: {
         // Owned by `core` and imported from there — a consumer CAN name these, just not
         // through this package, which is the boundary `contracts/modules.ts` documents.
-        index: ['Editor', 'EditorModule', 'ExecResult', 'OoxmlPart'],
+        index: ['Editor', 'EditorModule', 'ExecResult', 'OoxmlPart', 'EditorCollaborationSession'],
         // The react entry is a compound-parts barrel: every `Review*` here is a namespace
         // member reachable as `DocxEditorReview.Card`, and the three custom-node types are
         // re-exports of names the package's own index publishes. This is the noise case the
@@ -112,8 +112,12 @@ export const PACKAGES = [
         react: [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
+          'CollaborationAvatar',
+          'CollaborationAvatars',
+          'CollaborationCaretLabels',
           'CustomNodeDefinition',
           'Editor',
+          'EditorCollaborationSession',
           'EditorModule',
           'ReviewAccept',
           'ReviewAddComment',
@@ -144,9 +148,81 @@ export const PACKAGES = [
           'AnyCustomNodeDefinition',
           'CustomNodeDefinition',
           'Editor',
+          'EditorCollaborationSession',
           'EditorModule',
           'ReviewItemPlacement',
           'ReviewItemQuery',
+        ],
+        // Owned by core or by this package's other entries. The collaboration barrel
+        // names them in signatures but does not re-export them.
+        collaboration: [
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorCollaborationSession',
+          'EditorModule',
+          'ProLicenseOptions',
+        ],
+        'collaboration-webrtc': [
+          'CollaborationIdentity',
+          'CollaborationBootstrap',
+          'DocumentCollaborationHandle',
+        ],
+        'collaboration-hocuspocus': [
+          'CollaborationIdentity',
+          'CollaborationBootstrap',
+          'DocumentCollaborationHandle',
+        ],
+        // The WebRTC hook entries take an identity, hand back a host session, and
+        // append a module. Failure codes come from core. Session is this package's
+        // collaboration entry. A host already depends on core to mount an editor.
+        'react-webrtc': [
+          'CollaborationBootstrap',
+          'CollaborationFailure',
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorModule',
+        ],
+        'vue-webrtc': [
+          'CollaborationBootstrap',
+          'CollaborationFailure',
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorModule',
+        ],
+        // The Hocuspocus hook entries mirror the WebRTC ones exactly.
+        'react-hocuspocus': [
+          'CollaborationBootstrap',
+          'CollaborationFailure',
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorModule',
+        ],
+        'vue-hocuspocus': [
+          'CollaborationBootstrap',
+          'CollaborationFailure',
+          'CollaborationFailureCode',
+          'CollaborationIdentity',
+          'CollaborationParticipant',
+          'CollaborationRemoteSelection',
+          'CollaborationStatus',
+          'CollaborationStatusSnapshot',
+          'EditorModule',
         ],
       },
     },
@@ -158,7 +234,6 @@ export const PACKAGES = [
     tsconfigPath: 'packages/fonts/tsconfig.api.json',
   },
 ];
-
 
 // Derived: build invocation hint shown in `api:check` drift error
 // output. Every package builds via the same `bun run --filter` shape,

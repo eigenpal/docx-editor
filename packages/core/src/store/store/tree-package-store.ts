@@ -21,7 +21,6 @@ import { settingsPartOf } from '../package/note-properties.ts';
 import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { resolveRelationship } from '../package/relationships.ts';
-import { FOOTER_REL_TYPE, HEADER_REL_TYPE, locateHeaderFooterPart } from './story-part-locate.ts';
 import {
   applyHeaderFooterLifecycleOp,
   isHeaderFooterLifecycleOp,
@@ -48,6 +47,9 @@ import {
   deleteBlockMayStrandNote,
   deleteMayEmptyCommentRange,
   deleteMayStrandNote,
+  FOOTER_REL_TYPE,
+  HEADER_REL_TYPE,
+  locateHeaderFooterPart,
 } from './tree-package-gates.ts';
 import { cascadeEmptiedComments } from '../package/comment-lifecycle.ts';
 import {
@@ -63,7 +65,7 @@ import {
   applyImagePropertiesIntent,
   deleteImage as deleteImageIntent,
   deleteImageTracked as deleteImageTrackedIntent,
-  embedExternalImage as embedExternalImageIntent,
+  embedExternalImage as embedExternalIntent,
   insertImage as insertImageIntent,
   replaceImage as replaceImageIntent,
   setDrawingMetadataWithHyperlink as setDrawingMetadataWithHyperlinkIntent,
@@ -78,6 +80,19 @@ import {
   type FragmentPasteResult,
 } from './tree-package-fragment.ts';
 import type { ImageDecodePort, SupportedImageMime } from '../package/image-resources.ts';
+import {
+  packageTransactionPublished,
+  runObservedStoreTransaction,
+} from '../package/canonical-primitive-capture.ts';
+import {
+  publishRemoteCanonicalPackage,
+  type RemotePackageAttribution,
+} from './tree-package-remote.ts';
+import {
+  retainedHyperlinkOwnerParts,
+  retainedStoryPartNames,
+  type HistoryPointer,
+} from './story-retention.ts';
 
 type NoteCascadeFn = (before: OoxmlPackage, after: OoxmlPackage) => OoxmlPackage | null;
 
@@ -164,20 +179,6 @@ export interface TreePackageStoreOptions {
   readonly cascadeDeletedNoteReferences?: NoteCascadeFn;
 }
 
-interface StoryHistoryPointer {
-  readonly kind: 'story';
-  readonly partName: string;
-  readonly story: TreeStoryRef;
-}
-
-interface PackageHistoryPointer {
-  readonly kind: 'package';
-  readonly before: OoxmlPackage;
-  readonly after: OoxmlPackage;
-}
-
-type HistoryPointer = StoryHistoryPointer | PackageHistoryPointer;
-
 /**
  * Package-level mutation authority: routes `TreeDocOp`s to the store for a story part,
  * publishes one ModelChange / undo unit per transaction, and keeps `currentPackage()`
@@ -217,13 +218,11 @@ export class TreePackageStore {
   } | null = null;
   private commitCounter = 0;
   /**
-   * Memo for {@link currentPackage}, keyed on the COMPLETE read set of that method by
-   * object identity: the package shell, the body part, and each open story's part in
-   * map order. Identity is the only sound key — `packageRevision` deliberately is not
-   * part of it, because shell writes (`replacePackageShell`, story-store grafts, lazy
-   * store opens) move `this.pkg` or a `store.part` without bumping the revision.
-   * Packages and parts are frozen-immutable, so a matching tuple proves the merged
-   * snapshot cannot differ; no explicit invalidation exists anywhere.
+   * Memo for {@link currentPackage}, keyed on that method's COMPLETE read set by object identity:
+   * the shell, the body part, and each open story's part in map order. Identity is the only sound
+   * key — `packageRevision` is excluded, because shell writes (`replacePackageShell`, story-store
+   * grafts, lazy opens) move `this.pkg` or a `store.part` without bumping it. Parts are frozen, so
+   * a matching tuple proves the snapshot cannot differ; nothing invalidates explicitly.
    */
   private currentPackageMemo: {
     readonly pkg: OoxmlPackage;
@@ -238,18 +237,16 @@ export class TreePackageStore {
     this.maxEditableStoryParts = options.maxEditableStoryParts ?? DEFAULT_MAX_EDITABLE_STORY_PARTS;
     this.cascadeNoteReferences =
       options.cascadeDeletedNoteReferences ?? cascadeDeletedNoteReferences;
-    // The WHOLE package, not the part alone. A transaction that writes several parts in one
-    // unit — a comment's markers in the story plus its body in `comments.xml` plus the
-    // relationship and content-type override — needs the package as its working set, and a
-    // store handed one part rebuilds a stub package the invariant check then refuses.
+    // The WHOLE package, not the part alone. A transaction writing several parts as one unit —
+    // a comment's story markers plus its body in `comments.xml` plus the relationship and
+    // content-type override — needs the package as its working set; a store handed one part
+    // rebuilds a stub package the invariant check refuses.
     this.body = new TreeDocumentStore(this.pkg, main.name, {
       historyLimit: this.historyLimit,
-      // The SAME live getter the story stores get. A store keeps its own working copy of the
-      // package, so a `settings.xml` replaced through the coordinator rather than through this
-      // store's own transaction left the body reading stale protection — and once the story
-      // stores read it live, the body was the one story a protected document still let you
-      // edit. Protection that holds in a header and not in the body is worse than protection
-      // that holds nowhere: it looks enforced.
+      // The SAME live getter the story stores get. A store keeps its own working copy, so a
+      // `settings.xml` replaced through the coordinator left the body reading stale protection —
+      // making the body the one story a protected document still let you edit. Protection that
+      // holds in a header but not the body is worse than none: it looks enforced.
       settingsPart: () => settingsPartOf(this.pkg),
     });
     this.body.setStoryRef({ kind: 'body', partName: main.name });
@@ -372,6 +369,18 @@ export class TreePackageStore {
     build: (ctx: TransactionContext) => void,
     options: Omit<TransactOptions, 'story' | 'minimumImpact'> = {}
   ): PackageTransactResult {
+    return runObservedStoreTransaction(
+      this,
+      () => this.commitStoryTransaction(scope, build, options),
+      packageTransactionPublished
+    );
+  }
+
+  private commitStoryTransaction(
+    scope: StoryScope,
+    build: (ctx: TransactionContext) => void,
+    options: Omit<TransactOptions, 'story' | 'minimumImpact'> = {}
+  ): PackageTransactResult {
     const resolved = this.resolveStory(scope);
     if (!resolved.ok) {
       return {
@@ -423,12 +432,10 @@ export class TreePackageStore {
               ) {
                 mayDeleteNoteAtoms = true;
               } else if (RESOLUTION_OPS.has(op.op)) {
-                // Accepting a deletion, or rejecting an insertion, removes the content the
-                // revision covers — and a note reference measures one model unit, so a
-                // selection struck through one carries the reference away with it. The gate
-                // cannot be narrowed to a paragraph range the way `deleteText` is, because a
-                // revision's sites are wherever the file put them; the cascade itself is a
-                // before/after diff and does nothing when no reference actually went.
+                // Resolving a revision removes the content it covers, and a note reference is one
+                // model unit, so a struck-through selection carries it away. Not narrowable to a
+                // paragraph range: a revision's sites are wherever the file put them. The cascade
+                // is a diff, so it is free.
                 mayDeleteNoteAtoms = true;
               }
             }
@@ -441,12 +448,10 @@ export class TreePackageStore {
                   commentTargets
                 );
               } else if (RESOLUTION_OPS.has(op.op) || CONTENT_REMOVING_OPS.has(op.op)) {
-                // Rejecting an insertion removes the words it inserted, and a comment can be
-                // anchored over exactly those — the same reason resolution opens the note gate.
-                // A row or column deletion removes whole cell PARAGRAPHS, markers and all,
-                // and it names a table rather than a paragraph, so there is no cheap subtree
-                // to probe the way `deleteText` has one. It opens the gate outright; the reap
-                // is a diff and costs nothing when the table held no comment.
+                // Rejecting an insertion removes the words it inserted, which a comment can be
+                // anchored over. A row or column deletion removes whole cell PARAGRAPHS, markers
+                // and all, and names a table rather than a paragraph, so there is no cheap
+                // subtree to probe. Opens the gate outright; the reap is a diff, so it is free.
                 mayEmptyComments = true;
               }
             }
@@ -654,6 +659,16 @@ export class TreePackageStore {
   applyLifecycleOp(
     op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp
   ): PackageTransactResult {
+    return runObservedStoreTransaction(
+      this,
+      () => this.commitLifecycleOp(op),
+      packageTransactionPublished
+    );
+  }
+
+  private commitLifecycleOp(
+    op: HeaderFooterLifecycleOp | NoteLifecycleOp | TreeDocOp
+  ): PackageTransactResult {
     const before = this.currentPackage();
 
     if (isNoteLifecycleOp(op)) {
@@ -799,9 +814,7 @@ export class TreePackageStore {
     return openStoryTokenOf(this.stories, this.pkg);
   }
 
-  /**
-   * Insert a validated raster image as one package undo unit (task 12).
-   */
+  /** Insert a validated raster image as one package undo unit (task 12). */
   insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult> {
     return insertImageIntent(this, scope, input);
   }
@@ -844,9 +857,10 @@ export class TreePackageStore {
     url: string,
     port: ExternalImageFetchPort,
     signal: AbortSignal,
-    decodePort: ImageDecodePort
+    decodePort: ImageDecodePort,
+    actorId?: string
   ): Promise<ImageIntentResult> {
-    return embedExternalImageIntent(this, scope, drawingNodeId, url, port, signal, decodePort);
+    return embedExternalIntent(this, scope, drawingNodeId, url, port, signal, decodePort, actorId);
   }
 
   /** Metadata plus hyperlink target creation in one package transaction. */
@@ -932,13 +946,12 @@ export class TreePackageStore {
   /**
    * Record a write that spanned SEVERAL parts as one package undo unit.
    *
-   * A comment is not in one part — the body in `comments.xml`, the thread record in
-   * `commentsExtended.xml`, the markers in the story — and those writes reach the store
-   * through the story store directly rather than through `transact`. The story store's own
-   * history entry cannot undo them: `undo()` on a story pointer syncs the STORY PART back and
-   * nothing else, so undoing a comment restored the markers and left the body behind, or the
-   * other way round. The caller discards the story entry and hands the package it started
-   * from to this instead, which is the same promotion the note cascade does.
+   * A comment spans parts — the body in `comments.xml`, the thread record in
+   * `commentsExtended.xml`, the markers in the story — and those writes reach the store through
+   * the story store rather than `transact`. The story store's history cannot undo them: `undo()`
+   * on a story pointer syncs the STORY PART alone, so undoing a comment restored the markers and
+   * left the body, or the reverse. The caller discards the story entry and hands the package it
+   * started from to this instead, the same promotion the note cascade does.
    */
   adoptPackageUnit(before: OoxmlPackage): void {
     const after = this.currentPackage();
@@ -949,6 +962,22 @@ export class TreePackageStore {
   /** Install a full package snapshot (public seam for post-fetch cleanup). */
   installPackageSnapshot(snapshot: OoxmlPackage): void {
     this.installPackageSnapshotInternal(snapshot);
+  }
+
+  /**
+   * Install a package this replica did not author, verbatim. No shell merge — see
+   * `publishRemoteCanonicalPackage` for why merging one here diverges two replicas.
+   */
+  installAuthoritativePackageSnapshot(snapshot: OoxmlPackage): void {
+    this.installPackageSnapshotInternal(snapshot, false);
+  }
+
+  /** Publish one remotely materialized canonical package as one revision. */
+  publishRemotePackage(
+    pkg: OoxmlPackage,
+    attribution: RemotePackageAttribution
+  ): PackageTransactResult {
+    return publishRemoteCanonicalPackage(this, pkg, attribution);
   }
 
   /**
@@ -981,9 +1010,11 @@ export class TreePackageStore {
    * park when the part is temporarily absent and are pruned once history can no longer restore
    * the owner. Lifecycle-cloned owned relationships are not shell-minted and GC with the part.
    */
-  private installPackageSnapshotInternal(snapshot: OoxmlPackage): void {
+  private installPackageSnapshotInternal(snapshot: OoxmlPackage, mergeLocalShell = true): void {
     // Capture live shell before replacing — snapshot may predate numbering/hyperlink writes.
-    const merged = mergePersistentPackageShell(snapshot, this.pkg, this.shellHyperlinks);
+    const merged = mergeLocalShell
+      ? mergePersistentPackageShell(snapshot, this.pkg, this.shellHyperlinks)
+      : snapshot;
     const main = merged.parts.get(merged.mainDocumentPart);
     if (!main) return;
     this.body.replacePart(main);
@@ -1154,7 +1185,12 @@ export class TreePackageStore {
    * live and not history-reachable (see `pruneUnreachableHyperlinkShell`).
    */
   private evictUnreachableStories(): void {
-    const retained = this.retainedStoryPartNames();
+    const retained = retainedStoryPartNames(
+      this.pkg,
+      this.stories.keys(),
+      this.undoOrder,
+      this.redoOrder
+    );
     for (const [name] of [...this.stories]) {
       if (retained.has(name)) continue;
       this.stories.delete(name);
@@ -1162,7 +1198,13 @@ export class TreePackageStore {
         if (partName === name) this.rIdToPartName.delete(rId);
       }
     }
-    const hyperlinkOwners = this.retainedHyperlinkOwnerParts(retained);
+    const hyperlinkOwners = retainedHyperlinkOwnerParts(
+      retained,
+      this.pkg.mainDocumentPart,
+      this.body.part.name,
+      this.undoOrder,
+      this.redoOrder
+    );
     const pruned = pruneUnreachableHyperlinkShell(this.pkg, hyperlinkOwners);
     if (pruned !== this.pkg) this.pkg = pruned;
     this.shellHyperlinks = retainShellHyperlinks(
@@ -1170,60 +1212,6 @@ export class TreePackageStore {
       hyperlinkOwners,
       this.pkg.mainDocumentPart
     );
-  }
-
-  private retainedStoryPartNames(): Set<string> {
-    const retained = new Set<string>();
-    const live = this.pkg;
-    for (const name of this.stories.keys()) {
-      if (live.parts.has(name)) retained.add(name);
-    }
-    for (const pointer of this.undoOrder) {
-      this.retainPointerStoryParts(pointer, retained);
-    }
-    for (const pointer of this.redoOrder) {
-      this.retainPointerStoryParts(pointer, retained);
-    }
-    return retained;
-  }
-
-  /**
-   * Owners whose scoped hyperlink shell must survive while furniture/notes parts are
-   * temporarily absent: opened/parked story retention plus every part name that package
-   * history can still restore (even when the story store was never opened).
-   */
-  private retainedHyperlinkOwnerParts(storyRetained: ReadonlySet<string>): Set<string> {
-    const retained = new Set<string>(storyRetained);
-    retained.add(this.pkg.mainDocumentPart);
-    retained.add(this.body.part.name);
-    for (const pointer of this.undoOrder) {
-      this.retainPointerHyperlinkOwners(pointer, retained);
-    }
-    for (const pointer of this.redoOrder) {
-      this.retainPointerHyperlinkOwners(pointer, retained);
-    }
-    return retained;
-  }
-
-  private retainPointerStoryParts(pointer: HistoryPointer, retained: Set<string>): void {
-    if (pointer.kind === 'story') {
-      retained.add(pointer.partName);
-      return;
-    }
-    for (const name of this.stories.keys()) {
-      if (pointer.before.parts.has(name) || pointer.after.parts.has(name)) {
-        retained.add(name);
-      }
-    }
-  }
-
-  private retainPointerHyperlinkOwners(pointer: HistoryPointer, retained: Set<string>): void {
-    if (pointer.kind === 'story') {
-      retained.add(pointer.partName);
-      return;
-    }
-    for (const name of pointer.before.parts.keys()) retained.add(name);
-    for (const name of pointer.after.parts.keys()) retained.add(name);
   }
 
   private publish(change: TreeModelChange): void {

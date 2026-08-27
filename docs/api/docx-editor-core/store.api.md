@@ -15,6 +15,7 @@ export function addComment(store: TreeDocumentStore, request: AddCommentRequest)
 
 // @public
 export interface AddCommentRequest {
+    readonly actorId?: string;
     // (undocumented)
     readonly anchor: CommentAnchorRequest;
     readonly author: string;
@@ -37,16 +38,19 @@ export type AddCommentResult = {
 };
 
 // @public
+export function addPackageComment(packageStore: TreePackageStore, request: AddCommentRequest, scope?: StoryScope): AddCommentResult;
+
+// @public
 export const ALL_FROZEN_IDS: readonly string[];
 
 // @public
-export function allocateContentControlId(root: OoxmlNode): number | null;
+export function allocateContentControlId(root: OoxmlNode, actorId?: string): number | null;
 
 // @public
-export function allocateDrawingPropertyId(pkg: OoxmlPackage): DrawingPropertyIdResult;
+export function allocateDrawingPropertyId(pkg: OoxmlPackage, actorId?: string): DrawingPropertyIdResult;
 
 // @public
-export function allocateNoteId(notesRoot: OoxmlNode): number | null;
+export function allocateNoteId(notesRoot: OoxmlNode, actorId?: string): number | null;
 
 // @public
 export interface AnchorSnapshot {
@@ -1013,6 +1017,9 @@ export interface DefaultRecord {
 export function deleteCommentThread(pkg: OoxmlPackage, commentId: string, owner?: CommentDeletionOwner): OoxmlPackage | null;
 
 // @public
+export function deletePackageComments(packageStore: TreePackageStore, comments: readonly PackageCommentDelete[], scope?: StoryScope, noteId?: number): boolean;
+
+// @public
 export function deobfuscateFont(bytes: Uint8Array, fontKey: string): Uint8Array | null;
 
 // @public
@@ -1466,6 +1473,7 @@ export type FragmentMergeResult = {
 
 // @public (undocumented)
 export interface FragmentPasteInput {
+    readonly actorId?: string;
     readonly fragmentBytes: Uint8Array;
     // (undocumented)
     readonly lastMarkCovered: boolean;
@@ -1838,6 +1846,9 @@ export function insertCustomNodeWrite(store: TreeDocumentStore, write: InsertCus
 dataOwnerPartName?: string): CustomNodeWriteResult;
 
 // @public
+export function insertPackageCustomNode(packageStore: TreePackageStore, write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+
+// @public
 export function instrTextValue(node: OoxmlNode): string;
 
 // @public
@@ -2152,6 +2163,9 @@ export type NameResult = {
     readonly ok: false;
     readonly reason: NameRejection;
 };
+
+// @public
+export function nextCommentId(part: OoxmlPart | undefined, actorId?: string): string;
 
 // @public
 export const NO_TRACKING_SETTINGS: DocumentTrackingSettings;
@@ -3041,6 +3055,14 @@ export interface OverrideRecord {
 }
 
 // @public
+export interface PackageCommentDelete {
+    // (undocumented)
+    readonly commentId: string;
+    // (undocumented)
+    readonly parentCommentId?: string;
+}
+
+// @public
 export type PackageInvariantCode = 'dangling-relationship' | 'missing-content-type'
 /** A part occupies a name OPC reserves for package infrastructure. */
 | 'reserved-part-name'
@@ -3155,7 +3177,7 @@ export interface PersistencePort {
 }
 
 // @public
-export function planTocEntries(part: OoxmlPart, outline: readonly TocOutlineHeading[], instruction: TocInstruction, pageNumberByParagraphId: ReadonlyMap<string, string>, excludeParagraphIds: ReadonlySet<string>): {
+export function planTocEntries(part: OoxmlPart, outline: readonly TocOutlineHeading[], instruction: TocInstruction, pageNumberByParagraphId: ReadonlyMap<string, string>, excludeParagraphIds: ReadonlySet<string>, actorId?: string): {
     readonly bookmarksToCreate: readonly {
         name: string;
         paragraphId: string;
@@ -3240,7 +3262,7 @@ export interface ReadEmbeddedFontsOptions {
 // @public
 export function readOnOffChild(parent: OoxmlNode, localName: string, namespaceUri?: string): boolean;
 
-// @public
+// @public (undocumented)
 export function readOoxmlPackage(bytes: Uint8Array, limits?: OoxmlPackageLimits): OoxmlPackageResult;
 
 // @public
@@ -3323,10 +3345,23 @@ export type RelationshipTargetResolver = (relationshipId: string) => {
 export function relsPartNameFor(partName: string): string;
 
 // @public
+export interface RemotePackageAttribution {
+    // (undocumented)
+    readonly actorId?: string;
+    // (undocumented)
+    readonly operationId?: string;
+    // (undocumented)
+    readonly origin: string;
+}
+
+// @public
 export function removeCustomNodeWrite(store: TreeDocumentStore, controlNodeId: string): CustomNodeWriteResult;
 
 // @public
 export function removeNode(part: OoxmlPart, nodeId: string, options?: EditOptions): OoxmlEditResult;
+
+// @public
+export function removePackageCustomNode(packageStore: TreePackageStore, controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
 
 // @public
 export function replaceChildren(part: OoxmlPart, nodeId: string, children: readonly OoxmlNode[], options?: EditOptions): OoxmlEditResult;
@@ -3787,6 +3822,9 @@ export type SetCommentResolvedResult = {
     readonly ok: false;
     readonly reason: TreeOpRejection | 'unknown-comment';
 };
+
+// @public
+export function setPackageCommentResolved(packageStore: TreePackageStore, commentId: string, resolved: boolean): SetCommentResolvedResult;
 
 // @public
 export function settingsPartOf(pkg: OoxmlPackage): OoxmlPart | null;
@@ -4478,6 +4516,7 @@ export interface TreeDocumentStoreOptions {
 
 // @public
 export interface TreeModelChange {
+    readonly actorId?: string;
     readonly caret?: SelectionMark;
     // (undocumented)
     readonly change: 'model-change';
@@ -4494,6 +4533,7 @@ export interface TreeModelChange {
     // (undocumented)
     readonly fromRevision: number;
     readonly impact: ImpactClass;
+    readonly operationId?: string;
     // (undocumented)
     readonly origin: string;
     // (undocumented)
@@ -4656,10 +4696,11 @@ export class TreePackageStore {
     currentPackage(): OoxmlPackage;
     deleteImage(scope: StoryScope, drawingNodeId: string): ImageIntentResult;
     deleteImageTracked(scope: StoryScope, drawingNodeId: string, revision: RevisionAttributionInput): ImageIntentResult;
-    embedExternalImage(scope: StoryScope, drawingNodeId: string, url: string, port: ExternalImageFetchPort, signal: AbortSignal, decodePort: ImageDecodePort): Promise<ImageIntentResult>;
+    embedExternalImage(scope: StoryScope, drawingNodeId: string, url: string, port: ExternalImageFetchPort, signal: AbortSignal, decodePort: ImageDecodePort, actorId?: string): Promise<ImageIntentResult>;
     // (undocumented)
     endComposition(): void;
     insertImage(scope: StoryScope, input: InsertImageInput): Promise<ImageIntentResult>;
+    installAuthoritativePackageSnapshot(snapshot: OoxmlPackage): void;
     installPackageSnapshot(snapshot: OoxmlPackage): void;
     // (undocumented)
     get lastModelChange(): TreeModelChange | null;
@@ -4670,6 +4711,7 @@ export class TreePackageStore {
     get packageRevision(): number;
     partFor(scope: StoryScope): OoxmlPart | null;
     promoteStoryTransactionToPackageUnit(beforePackage: OoxmlPackage, store: TreeDocumentStore, checkpoint: TreeDocumentCheckpoint, beforeDepth: number): TreeModelChange;
+    publishRemotePackage(pkg: OoxmlPackage, attribution: RemotePackageAttribution): PackageTransactResult;
     publishStoryWrite(change: TreeModelChange | null): TreeModelChange | null;
     // (undocumented)
     redo(): TreeModelChange | null;
@@ -4722,9 +4764,12 @@ export interface TreeTransactionContext {
 
 // @public
 export interface TreeTransactOptions {
+    readonly actorId?: string;
     readonly minimumImpact?: ImpactClass;
+    readonly operationId?: string;
     // (undocumented)
     readonly origin?: string;
+    readonly recordsHistory?: boolean;
     readonly scope?: 'transaction' | 'command';
     readonly story?: TreeStoryRef;
 }

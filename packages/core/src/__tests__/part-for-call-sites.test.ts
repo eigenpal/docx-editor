@@ -25,19 +25,24 @@ const SCANNED_ROOTS = ['core/src', 'pro/src', 'editor-api/src', 'react/src', 'vu
 
 /** file (relative to packages/) → number of `partFor(` occurrences, definitions included. */
 const PINNED_CALL_SITES: Readonly<Record<string, number>> = {
-  'core/src/automation/server-host.ts': 1,
-  'core/src/binding/tree-session.ts': 6, // includes the TreeEditingSession facade definition
+  'core/src/automation/server-host.ts': 2,
+  'core/src/binding/tree-session.ts': 5, // the facade definition moved to tree-session-contract.ts
   'core/src/binding/tree-session-contract.ts': 1, // the session view's partFor declaration
+  'core/src/binding/tree-session-apply.ts': 1,
   'core/src/editor/doc-target-resolution.ts': 2,
   'core/src/editor/docx-editor-derive.ts': 1,
   'core/src/editor/docx-editor-images.ts': 1,
-  'core/src/editor/paginated-surface.ts': 10,
+  'core/src/editor/paginated-surface.ts': 7,
+  'core/src/editor/surface-range-edit.ts': 3,
   'core/src/editor/surface-equations.ts': 1,
   'core/src/editor/surface-format.ts': 1,
   'core/src/editor/surface-hf-editing.ts': 1,
   'core/src/editor/surface-hyperlinks.ts': 1,
   'core/src/editor/surface-scope.ts': 2, // storyScopeOfNodeId — documented as a known debt in-file
   'core/src/editor/surface-structure.ts': 1,
+  // A comment delete needs the story part to scope its owner, and the reader has already opened
+  // that story to see the comment it is deleting, so the slot is spent either way.
+  'core/src/store/store/comment-package-write.ts': 1,
   'core/src/store/store/tree-package-store.ts': 1, // the definition itself
   // Custom-node payload writes genuinely need the open store (they mutate the part).
   'pro/src/custom-nodes/insert-custom-node.ts': 1,

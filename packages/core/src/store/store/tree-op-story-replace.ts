@@ -5,11 +5,18 @@
 // those blocks, while a body must retain its final `w:sectPr` page setup.
 
 import { createNodeIdAllocator, findNode, replaceChildren } from '../package/ooxml-edit.ts';
-import { normalizeParagraphIdentity } from '../package/para-id.ts';
+import {
+  mintParaId,
+  mintedParagraphIdentityAttributes,
+  normalizeParagraphIdentity,
+  usedParaIds,
+  w14RootPrefix,
+} from '../package/para-id.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { storyRootsOf } from '../package/story-blocks.ts';
 import {
   WML_NAMESPACE_URI,
+  type OoxmlAttribute,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
@@ -46,7 +53,13 @@ function collectIds(node: OoxmlNode, ids: string[]): void {
   for (const child of node.children) collectIds(child, ids);
 }
 
-function paragraph(nextId: () => string, text: string): OoxmlNode {
+function paragraph(
+  nextId: () => string,
+  text: string,
+  w14Prefix: string | null,
+  seed: string,
+  usedParagraphIds: Set<string>
+): OoxmlNode {
   const children: OoxmlNode[] = [];
   if (text.length > 0) {
     const value: OoxmlNode = { id: nextId(), kind: 'textValue', value: text };
@@ -71,6 +84,12 @@ function paragraph(nextId: () => string, text: string): OoxmlNode {
       children: [textNode],
     } as OoxmlNode);
   }
+  const identity: OoxmlAttribute[] = [];
+  if (w14Prefix !== null) {
+    const paraId = mintParaId(seed, usedParagraphIds);
+    usedParagraphIds.add(paraId);
+    identity.push(...mintedParagraphIdentityAttributes(w14Prefix, paraId));
+  }
   return {
     id: nextId(),
     kind: 'paragraph',
@@ -78,7 +97,7 @@ function paragraph(nextId: () => string, text: string): OoxmlNode {
     localName: 'p',
     prefix: 'w',
     namespaceBindings: [],
-    attributes: [],
+    attributes: identity,
     children,
   } as OoxmlNode;
 }
@@ -109,7 +128,11 @@ export function applyReplaceStoryBlocks(
         )
       : undefined;
   const nextId = createNodeIdAllocator(part);
-  const created = paragraphs.map((text) => paragraph(nextId, text));
+  const usedParagraphIds = new Set(usedParaIds(part.root));
+  const w14Prefix = w14RootPrefix(part.root);
+  const created = paragraphs.map((text, index) =>
+    paragraph(nextId, text, w14Prefix, `${storyRootId}:${index}`, usedParagraphIds)
+  );
   const deleted: string[] = [];
   for (const child of oldChildren) {
     if (child !== finalSection) collectIds(child, deleted);

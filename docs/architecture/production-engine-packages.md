@@ -29,15 +29,16 @@ as a file move.
 
 ## Lanes
 
-| Lane         | Directory        | Subpath        | May import                                            | Environment |
-| ------------ | ---------------- | -------------- | ----------------------------------------------------- | ----------- |
-| `contracts`  | `src/contracts`  | `./contracts`  | —                                                     | neutral     |
-| `store`      | `src/store`      | `./store`      | —                                                     | neutral     |
-| `binding`    | `src/binding`    | `./binding`    | contracts, store                                      | browser     |
-| `layout`     | `src/layout`     | `./layout`     | store                                                 | neutral     |
-| `output`     | `src/output`     | `./output`     | store, layout                                         | browser     |
-| `automation` | `src/automation` | `./automation` | store                                                 | neutral     |
-| `editor`     | `src/editor`     | `./editor`     | contracts, store, binding, layout, output, automation | browser     |
+| Lane            | Directory           | Subpath           | May import                                                           | Environment |
+| --------------- | ------------------- | ----------------- | -------------------------------------------------------------------- | ----------- |
+| `contracts`     | `src/contracts`     | `./contracts`     | —                                                                    | neutral     |
+| `store`         | `src/store`         | `./store`         | —                                                                    | neutral     |
+| `collaboration` | `src/collaboration` | `./collaboration` | store                                                                | neutral     |
+| `binding`       | `src/binding`       | `./binding`       | contracts, store, collaboration                                      | browser     |
+| `layout`        | `src/layout`        | `./layout`        | store                                                                | neutral     |
+| `output`        | `src/output`        | `./output`        | store, layout                                                        | browser     |
+| `automation`    | `src/automation`    | `./automation`    | store, collaboration                                                 | neutral     |
+| `editor`        | `src/editor`        | `./editor`        | contracts, store, collaboration, binding, layout, output, automation | browser     |
 
 Responsibilities:
 
@@ -45,6 +46,9 @@ Responsibilities:
   commands, queries, document types.
 - **`store`** — the bounded OPC/OOXML trust boundary, the canonical ordered OOXML
   tree, `TreeDocumentStore`, and the `TreeDocOp` vocabulary. The source of truth.
+- **`collaboration`** — provider-neutral contracts for the document port,
+  session, failure codes, and status. This lane is DOM-free. Replication
+  implementations live outside core.
 - **`binding`** — the ONLY ProseMirror-aware lane: projects a tree revision into
   a PM doc, and maps an edited doc back into tree ops or refuses.
 - **`layout`** — resolved caches, shaping, convergent pagination, positioned
@@ -63,19 +67,17 @@ Edges point downward only. A lane that acquires a new dependency declares it in
 
 ## Guarantees
 
-**ProseMirror is contained to `binding`.** `contracts`, `store`, `layout` and
-`output` may not name a PM type or reach a PM view — enforced by identifier scan,
-since a structurally-typed leak (a parameter shaped like an `EditorView`, a
-re-exported PM alias) needs no import to exist. Nothing on a headless or
-server path transitively pulls in ProseMirror.
+**ProseMirror is contained to `binding`.** `contracts`, `store`,
+`collaboration`, `layout` and `output` may not name a PM type or reach a PM
+view. An identifier scan enforces this rule. A structural type can leak without
+an import. Nothing on a headless or server path pulls in ProseMirror.
 
-**Runtime-neutral lanes are DOM-free.** `store`, `layout` and `automation` each
-carry their own `tsconfig.json` with a DOM-free `lib`, so a `document` or
-`window` reference fails to typecheck. The shared core config includes DOM for
-the browser lanes, which is exactly why the per-lane projects have to exist —
-without them, a DOM reference in the store lane would compile. `contracts` is
-excluded on purpose: it is declaration-only and names `HTMLElement` for host
-element accessors, a type reference rather than a runtime need.
+**Runtime-neutral lanes are DOM-free.** `store`, `collaboration`, `layout`, and
+`automation` each have a `tsconfig.json` with a DOM-free `lib`. A `document` or
+`window` reference fails type checking. The shared core configuration includes
+DOM types for browser lanes. The per-lane projects stop DOM references in
+runtime-neutral lanes. `contracts` includes runtime-neutral code and public
+types. Its public host accessors use the `HTMLElement` type.
 
 **A browser bundle stays a browser bundle.** `yjs`, `y-protocols`, `pdfkit`,
 `node:fs`, `node:net` and `node:http` must not reach a default browser import.

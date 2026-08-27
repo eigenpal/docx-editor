@@ -6,8 +6,9 @@
 
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
-import { paragraphFragmentsOf } from './semantic-records.ts';
-import type { SemanticLayout } from './semantic-records.ts';
+import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
+import type { BlockFragmentRecord, SemanticLayout } from './semantic-records.ts';
+import { documentOrderIndex } from './document-order.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
 
@@ -217,6 +218,180 @@ export function keyedRangeRects(
             });
             found.set(range.key, rects);
           }
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Content-box offset for a story-relative position.
+ *
+ * Body fragments are already in page-content space. Header, footer and note fragments are
+ * relative to their own box, so a caret or range painted against `page.contentBox` has to
+ * add this or it lands in the body.
+ */
+export function storyContentOffset(
+  layout: SemanticLayout,
+  paragraphId: string,
+  pageIndex: number
+): { readonly x: number; readonly y: number } {
+  if (documentOrderIndex(layout).has(paragraphId)) return { x: 0, y: 0 };
+  const page = layout.pages[pageIndex];
+  if (!page) return { x: 0, y: 0 };
+  const inBlocks = (blocks: readonly BlockFragmentRecord[]): boolean =>
+    paragraphFragmentsOfBlocks(blocks).some((fragment) => fragment.paragraphId === paragraphId);
+  if (page.header && inBlocks(page.header.fragments)) {
+    return {
+      x: page.header.box.x - page.contentBox.x,
+      y: page.header.box.y - page.contentBox.y,
+    };
+  }
+  if (page.footer && inBlocks(page.footer.fragments)) {
+    return {
+      x: page.footer.box.x - page.contentBox.x,
+      y: page.footer.box.y - page.contentBox.y,
+    };
+  }
+  for (const area of [page.footnotes, page.endnotes]) {
+    if (!area) continue;
+    for (const note of area.notes) {
+      if (!inBlocks(note.fragments)) continue;
+      return {
+        x: note.box.x - page.contentBox.x,
+        y: note.box.y - page.contentBox.y,
+      };
+    }
+  }
+  return { x: 0, y: 0 };
+}
+
+let presenceWalkPages = 0;
+let presenceWalkLines = 0;
+
+/**
+ * @internal Warm-path recorder for remote-presence geometry walks.
+ *
+ * Presence highlights must not scan every line of the document per paint. Tests assert
+ * the walk stays bounded to the pages the caller names.
+ */
+export function presenceWalkRecorder(): {
+  readonly pages: number;
+  readonly lines: number;
+  reset(): void;
+} {
+  return {
+    get pages() {
+      return presenceWalkPages;
+    },
+    get lines() {
+      return presenceWalkLines;
+    },
+    reset() {
+      presenceWalkPages = 0;
+      presenceWalkLines = 0;
+    },
+  };
+}
+
+/**
+ * Selection rectangles in page-content coordinates, every story included.
+ *
+ * {@link selectionRects} stays body-only: feeding header coordinates into that walk without
+ * an origin painted a band on every page at the top of the body. This walk carries the story
+ * box, so a remote caret in a header lands in the header.
+ *
+ * Pass `pages` to measure only those sheets. A band that is not on screen is not painted, so
+ * measuring it is pure cost — and it is cost paid per keystroke, because an edit republishes
+ * the layout. Bounding this to the materialized pages is what keeps typing beside a large
+ * remote selection as fast as typing beside a caret.
+ */
+export function presenceSelectionRects(
+  layout: SemanticLayout,
+  selection: SemanticSelection,
+  order: readonly string[],
+  pages?: ReadonlySet<number>
+): SelectionRect[] {
+  return (
+    presenceRangeRects(
+      layout,
+      [{ key: 'selection', from: selection.anchor, to: selection.head }],
+      order,
+      pages
+    ).get('selection') ?? []
+  );
+}
+
+/**
+ * Rectangles for MANY presence ranges in ONE pass over the named pages.
+ *
+ * Not {@link presenceSelectionRects} in a loop. That walks every page, fragment and line per
+ * range, and a room with several remote selections would re-walk the document once each.
+ */
+export function presenceRangeRects(
+  layout: SemanticLayout,
+  ranges: readonly KeyedRange[],
+  order: readonly string[],
+  pages?: ReadonlySet<number>
+): Map<string, SelectionRect[]> {
+  const found = new Map<string, SelectionRect[]>();
+  const ordered: { key: string; from: SemanticPosition; to: SemanticPosition }[] = [];
+  for (const range of ranges) {
+    const pair = orderPositions({ anchor: range.from, head: range.to }, order);
+    if (pair) ordered.push({ key: range.key, from: pair.from, to: pair.to });
+  }
+  if (ordered.length === 0) return found;
+  const take = (
+    blocks: readonly BlockFragmentRecord[],
+    pageIndex: number,
+    offsetX: number,
+    offsetY: number
+  ): void => {
+    for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
+      for (const line of fragment.lines) {
+        presenceWalkLines += 1;
+        for (const segment of lineSegments(line)) {
+          for (const range of ordered) {
+            const overlap = segmentOverlap(layout, segment, range.from, range.to);
+            if (!overlap) continue;
+            const startX = xWithinLine(line, overlap.start, undefined, segment);
+            const endX = xWithinLine(line, overlap.end, undefined, segment);
+            const rects = found.get(range.key) ?? [];
+            rects.push({
+              pageIndex,
+              x: Math.min(startX, endX) + offsetX,
+              y: line.box.y + offsetY,
+              width: Math.abs(endX - startX),
+              height: line.box.height,
+            });
+            found.set(range.key, rects);
+          }
+        }
+      }
+    }
+  };
+  for (const page of layout.pages) {
+    if (pages && !pages.has(page.index)) continue;
+    presenceWalkPages += 1;
+    take(page.fragments, page.index, 0, 0);
+    for (const story of [page.header, page.footer]) {
+      if (!story) continue;
+      take(
+        story.fragments,
+        page.index,
+        story.box.x - page.contentBox.x,
+        story.box.y - page.contentBox.y
+      );
+    }
+    for (const area of [page.footnotes, page.endnotes]) {
+      if (!area) continue;
+      for (const note of area.notes) {
+        take(
+          note.fragments,
+          page.index,
+          note.box.x - page.contentBox.x,
+          note.box.y - page.contentBox.y
+        );
       }
     }
   }

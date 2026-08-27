@@ -150,7 +150,10 @@ export {
   type SurfaceParagraphFormat,
   type ParagraphPropertyEdit,
   type ParagraphTabStop,
+  type RemoteCaretLabelAnchor,
+  type RemoteCaretLabelHost,
   type SectionBreakInsertType,
+  type ReviewWriteIntent,
   type SurfaceFormatting,
 } from './paginated-surface.ts';
 export {
@@ -176,6 +179,7 @@ export {
   type EditorModuleRegistry,
   type ReviewModelInput,
   type ReviewModuleContribution,
+  type CollaborationModuleContribution,
 } from '../contracts/modules.ts';
 export {
   applyThemeShade,
@@ -278,6 +282,7 @@ export {
   type ImageResourceLimits,
 } from '../store/runtime/limits.ts';
 export type { HyperlinkOps, SurfaceHyperlink } from './surface-hyperlinks.ts';
+export type { SurfaceInsertImageInput } from './surface-image-ops.ts';
 export {
   equationAtPosition,
   type EquationActivation,

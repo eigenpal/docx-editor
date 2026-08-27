@@ -77,29 +77,14 @@ import {
   type StyleCascadeTable,
 } from './style-cascade.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
-import {
-  readTableStructure,
-  tableFloatOriginX,
-  tableOriginX,
-  type SemanticTableRow,
-  type TableAnchorFrames,
-} from './semantic-table.ts';
+import { type TableAnchorFrames } from './semantic-table.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
-  finalizeTableRows,
-  initialCellCursors,
-  layoutRowFragment,
-  layoutRowFragmentBounded,
-  measureRowHeight,
-  MAX_TABLE_ROW_FRAGMENTS,
   paragraphDocumentOrderOf,
-  rowWithSplitBorders,
-  TablePaginationError,
-  type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
+import { paginateTableInFlow, type TableFlowCursor } from './table-flow-pagination.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { paragraphMergeGroupOf, storyBlocks } from './story-roots.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
@@ -177,7 +162,6 @@ import {
   type ParagraphBorderStrokeRecord,
   type ParagraphBottomBorderRecord,
   type SemanticLayout,
-  type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
 import type { NumberingIndex } from './numbering-index.ts';
@@ -1931,296 +1915,32 @@ function layoutBlocksPass(
     return live > 0.001 ? live : breakSkip;
   };
 
-  /**
-   * Lay out one top-level table with OOXML-aligned row pagination.
-   *
-   * Preflights the real unsplit row height (not a one-line estimate). A row that fits on a
-   * fresh page but not the current remainder moves whole. A row taller than a fresh page
-   * fragments at paragraph/line boundaries when splittable; `w:cantSplit` and unsafe nested
-   * cuts fail closed via {@link TablePaginationError} instead of overflowing contentHeight().
-   * Contiguous leading `w:tblHeader` rows form one atomic repeated group: preflighted and
-   * placed together, moved whole when the remainder is too short, re-emitted complete atop
-   * each continuation page, and rejected when the group itself exceeds a fresh content page.
-   */
   const layoutTableInFlow = (table: OoxmlElement): void => {
-    const regionWidth = columnWidth();
-    const structure = readTableStructure(table, regionWidth, 0, styleCascade, displayMode);
-    if (!structure || structure.rows.length === 0) return;
-    // `w:tblInd` / `w:jc` place the table inside the text column, `w:tblpPr` against a wider
-    // anchor box; every row and the fragment box share the one origin so cell geometry and
-    // the reported box cannot drift apart.
-    const tableWidthPt = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
-    const originX = (): number =>
-      structure.float
-        ? tableFloatOriginX(structure.float, tableWidthPt, anchorFrames())
-        : columnLeft() + tableOriginX(structure, columnWidth());
-    let tableLeft = originX();
-    // `w:tblpY` against the text anchor is an offset from where the table would otherwise
-    // sit, so it moves the table within the flow. The page and margin anchors state an
-    // absolute position on the sheet, which this layout does not model — those stay in flow.
-    if (structure.float && structure.float.vertAnchor === 'text' && !structure.float.ySpec) {
-      cursorY = Math.max(0, Math.min(cursorY + structure.float.yPt, contentHeight()));
-    }
-    const headerRows: SemanticTableRow[] = [];
-    for (const row of structure.rows) {
-      if (row.isHeader) headerRows.push(row);
-      else break;
-    }
-    let fragmentIndex = 0;
-    let fragmentTop = cursorY;
-    let rows: TableRowFragmentRecord[] = [];
-    const rowOrdinals = new Map<string, number>();
-    // Authored rows backing the open fragment (includes header repeats) for finalize.
-    let sourceRows: (typeof structure.rows)[number][] = [];
-    const closeTableFragment = (): void => {
-      if (rows.length === 0) return;
-      const finalized = finalizeTableRows(
-        rows,
-        structure,
-        sourceRows,
-        tableDeps.borderOwnershipBudget,
-        tableDeps.vMergeResolveBudget,
-        undefined,
-        (paragraphId, dy) => {
-          shiftAnchoredDrawingRecords(pendingAnchoredDrawings, paragraphId, dy);
-        },
-        tableDeps
-      );
-      const last = finalized[finalized.length - 1]!;
-      pageFragments.push(
-        annotateTableFragmentGeometry(
-          {
-            kind: 'table',
-            id: `${table.id}#f${fragmentIndex}`,
-            tableId: table.id,
-            fragmentIndex,
-            rows: finalized,
-            box: {
-              x: tableLeft,
-              y: fragmentTop,
-              width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
-              height: last.box.y + last.box.height - fragmentTop,
-            },
-          },
-          structure.columnWidthsPt,
-          0,
-          rowOrdinals
-        )
-      );
-      fragmentIndex += 1;
-      rows = [];
-      sourceRows = [];
-    };
-
-    /**
-     * Place the contiguous leading header rows as one group. Never splits the group across
-     * pages; fails closed when the group itself is taller than a fresh content page.
-     */
-    const placeHeaderGroup = (asRepeat: boolean): void => {
-      if (headerRows.length === 0) return;
-
-      let groupHeight = 0;
-      for (const headerRow of headerRows) {
-        groupHeight += measureRowHeight(
-          headerRow,
-          structure.columnWidthsPt,
-          tableLeft,
-          0,
-          tableDeps,
-          structure.cellSpacingPt
-        );
-      }
-      if (groupHeight > contentHeight() + 0.001) {
-        throw new TablePaginationError(
-          'table-row-overheight',
-          `Table header group (${headerRows.length} row(s)) is taller than the page content box`
-        );
-      }
-      if (cursorY + groupHeight > contentHeight() + 0.001 && cursorY > 0) {
-        closeTableFragment();
+    // The paginator owns the cursor while it runs. `advanceColumn` is the one call that
+    // hands it back — it belongs to the story flow and moves the cursor itself — so the
+    // adapter syncs across it in both directions rather than letting the two drift.
+    const flow: TableFlowCursor = {
+      cursorY,
+      columnWidth,
+      columnLeft,
+      contentHeight,
+      advanceColumn: () => {
+        cursorY = flow.cursorY;
         advanceColumn();
-        tableLeft = originX();
-        // The cursor, not 0: a same-sheet column advance opens at the column REGION top
-        // (a continuous section shares its sheet), and a fragment box anchored at 0 would
-        // stretch over whatever the earlier section already painted above the region.
-        fragmentTop = cursorY;
-      }
-
-      for (const headerRow of headerRows) {
-        const placed = layoutRowFragment(
-          headerRow,
-          structure.columnWidthsPt,
-          tableLeft,
-          cursorY,
-          asRepeat,
-          0,
-          tableDeps,
-          structure.cellSpacingPt
-        );
-        if (placed.bottom > contentHeight() + 0.001) {
-          throw new TablePaginationError(
-            'table-row-overheight',
-            `Table header row ${headerRow.id} overflowed the page content box`
-          );
-        }
-        rows.push(placed.record);
-        sourceRows.push(headerRow);
-        cursorY = placed.bottom;
-      }
+        flow.cursorY = cursorY;
+      },
+      anchorFrames,
+      styleCascade,
+      displayMode,
+      deps: tableDeps,
+      shiftAnchor: (paragraphId, dy) =>
+        shiftAnchoredDrawingRecords(pendingAnchoredDrawings, paragraphId, dy),
+      // A sink, not the array: completing a page replaces `pageFragments`, and a reference
+      // taken when the table started would collect its later fragments into a dead array.
+      publishFragment: (fragment) => pageFragments.push(fragment),
     };
-
-    const breakForContinuation = (emitHeaders: boolean): void => {
-      closeTableFragment();
-      advanceColumn();
-      tableLeft = originX();
-      // See placeHeaderGroup: the new fragment opens at the advanced cursor, which is the
-      // column region top on a shared sheet and 0 only when a fresh page was opened.
-      fragmentTop = cursorY;
-      if (emitHeaders) placeHeaderGroup(true);
-    };
-
-    // Initial authored header group (not repeats) — atomic with body-row pagination below.
-    placeHeaderGroup(false);
-
-    for (const row of structure.rows.slice(headerRows.length)) {
-      const naturalHeight = measureRowHeight(
-        row,
-        structure.columnWidthsPt,
-        tableLeft,
-        0,
-        tableDeps,
-        structure.cellSpacingPt
-      );
-      let cursors: CellPlaceCursor[] = initialCellCursors(row);
-      let isContinuation = false;
-      let fragmentsForRow = 0;
-      let movedToFreshPage = false;
-
-      // Whole-row move: fits a fresh page but not the remaining band.
-      if (
-        naturalHeight <= contentHeight() + 0.001 &&
-        cursorY + naturalHeight > contentHeight() + 0.001 &&
-        cursorY > 0
-      ) {
-        breakForContinuation(true);
-        movedToFreshPage = true;
-      }
-
-      for (;;) {
-        fragmentsForRow += 1;
-        if (fragmentsForRow > MAX_TABLE_ROW_FRAGMENTS) {
-          throw new TablePaginationError(
-            'table-row-fragment-limit',
-            `Table row ${row.id} exceeded ${MAX_TABLE_ROW_FRAGMENTS} page fragments`
-          );
-        }
-
-        const remaining = contentHeight() - cursorY;
-        if (remaining <= 0.001 && cursorY > 0) {
-          if (movedToFreshPage) {
-            throw new TablePaginationError(
-              'table-row-overheight',
-              `Table row ${row.id} cannot fit after repeated header rows`
-            );
-          }
-          breakForContinuation(true);
-          movedToFreshPage = true;
-          continue;
-        }
-
-        // Prefer an unsplit placement when the natural height fits the remaining band.
-        if (!isContinuation && naturalHeight <= remaining + 0.001) {
-          const placed = layoutRowFragment(
-            row,
-            structure.columnWidthsPt,
-            tableLeft,
-            cursorY,
-            false,
-            0,
-            tableDeps,
-            structure.cellSpacingPt
-          );
-          if (placed.bottom > contentHeight() + 0.001) {
-            throw new TablePaginationError(
-              'table-row-overheight',
-              `Table row ${row.id} overflowed the page content box after placement`
-            );
-          }
-          rows.push(placed.record);
-          sourceRows.push(row);
-          cursorY = placed.bottom;
-          break;
-        }
-
-        // Does not fit the remaining band.
-        // Exact rows are atomic (Word clips overflow inside the fixed box; they do not
-        // continue across pages). Same keep-together path as `w:cantSplit`.
-        if (row.cantSplit || row.height.rule === 'exact') {
-          if (cursorY > 0 && !movedToFreshPage) {
-            breakForContinuation(true);
-            movedToFreshPage = true;
-            continue;
-          }
-          throw new TablePaginationError(
-            'table-row-overheight',
-            row.height.rule === 'exact'
-              ? `Table row ${row.id} has w:trHeight hRule=exact taller than the available page content`
-              : `Table row ${row.id} has w:cantSplit and is taller than the available page content`
-          );
-        }
-
-        const placed = layoutRowFragmentBounded(
-          row,
-          structure.columnWidthsPt,
-          tableLeft,
-          cursorY,
-          contentHeight(),
-          false,
-          isContinuation,
-          0,
-          tableDeps,
-          cursors,
-          structure.cellSpacingPt
-        );
-
-        // First attempt on a non-empty page placed nothing useful → move to next page.
-        if (!placed.fitted && cursorY > 0 && !movedToFreshPage) {
-          breakForContinuation(true);
-          movedToFreshPage = true;
-          continue;
-        }
-
-        if (!placed.fitted) {
-          throw new TablePaginationError(
-            placed.nestedSplitBlocked ? 'table-row-split-unsupported' : 'table-row-overheight',
-            placed.nestedSplitBlocked
-              ? `Table row ${row.id} contains a nested table taller than the page content box`
-              : `Table row ${row.id} has content that cannot fit a page content box`
-          );
-        }
-
-        if (placed.bottom > contentHeight() + 0.001) {
-          throw new TablePaginationError(
-            'table-row-overheight',
-            `Table row ${row.id} overflowed the page content box`
-          );
-        }
-
-        const hasMore = placed.remainder !== null;
-        const source = rowWithSplitBorders(row, isContinuation, hasMore);
-        rows.push(placed.record);
-        sourceRows.push(source);
-        cursorY = placed.bottom;
-
-        if (!hasMore) break;
-
-        cursors = placed.remainder!;
-        isContinuation = true;
-        movedToFreshPage = false;
-        breakForContinuation(true);
-      }
-    }
-    closeTableFragment();
+    paginateTableInFlow(table, flow);
+    cursorY = flow.cursorY;
   };
 
   let converged = false;

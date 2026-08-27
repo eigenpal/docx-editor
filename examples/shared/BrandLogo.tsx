@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import { useId } from 'react';
 
 // "DOCX Editor by EigenPal" lockup — the exact same mark used in the
 // docx-editor.dev site header (DocxIcon + wordmark + EigenpalLogo). Kept in

@@ -35,6 +35,24 @@ const REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-react/index.api
 const VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-vue/index.api.md');
 const PRO_REACT_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/react.api.md');
 const PRO_VUE_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/vue.api.md');
+// The WebRTC hook ships from its own subpath so a review-only bundle skips the network
+// provider. That puts it outside the `{react,vue}.api.md` pair above, so without its own
+// gate a React-only hook member would drift past every parity check in the repo.
+const PRO_REACT_WEBRTC_SNAPSHOT = path.join(
+  repoRoot,
+  'docs/api/docx-editor-pro/react-webrtc.api.md'
+);
+const PRO_VUE_WEBRTC_SNAPSHOT = path.join(repoRoot, 'docs/api/docx-editor-pro/vue-webrtc.api.md');
+// The Hocuspocus hook pair ships from its own subpath for the same reason and gets the
+// same dedicated gate.
+const PRO_REACT_HOCUSPOCUS_SNAPSHOT = path.join(
+  repoRoot,
+  'docs/api/docx-editor-pro/react-hocuspocus.api.md'
+);
+const PRO_VUE_HOCUSPOCUS_SNAPSHOT = path.join(
+  repoRoot,
+  'docs/api/docx-editor-pro/vue-hocuspocus.api.md'
+);
 const CONTRACT_PATH = path.join(repoRoot, 'scripts/parity/parity.contract.json');
 const VUE_DOCX_EDITOR_SOURCE = path.join(repoRoot, 'packages/vue/src/components/DocxEditor.tsx');
 
@@ -55,7 +73,10 @@ function extractVueDocxEditorForms(source) {
  * The name stays in the string — paired members share it by definition.
  */
 function normalizeMemberLine(line) {
-  return line.trim().replace(/^readonly\s+/, '').replace(/\s+/g, ' ');
+  return line
+    .trim()
+    .replace(/^readonly\s+/, '')
+    .replace(/\s+/g, ' ');
 }
 
 /**
@@ -160,7 +181,7 @@ function extractVueRefMembers(snapshotText) {
 // The pro package publishes one React and one Vue entry from the same package.
 // The contract's `pro` section classifies:
 //  - `exports`: every top-level export name of each snapshot
-//  - `reviewParts`: the DocxEditorReview compound part names
+//  - `reviewParts`: the DocxEditorReview compound part names\n//  - `collaborationParts`: the DocxEditorCollaboration compound part names
 //  - `memberCheckedInterfaces`: the pinned list of interfaces whose member
 //    names compare extends-resolved across both entries. Exact-match
 //    staleness: a listed interface that stops being comparable fails as
@@ -183,7 +204,7 @@ function extractTopLevelExportNames(snapshotText) {
 }
 
 /**
- * Vue's DocxEditorReview snapshot is one `export const DocxEditorReview: { ... };`
+ * Vue's compound snapshot is one `export const <constName>: { ... };`
  * whose trailing intersection enumerates each compound part as a
  * `PartName: <component type>` member. The member match is type-agnostic
  * (DefineComponent, FunctionalComponent, anything): a part emitted under a new
@@ -201,9 +222,11 @@ function extractTopLevelExportNames(snapshotText) {
  * underscore-prefixed `__isFragment`-style internal markers. A false match
  * fails loudly as unclassified; it cannot pass vacuously.
  */
-function extractVueReviewParts(snapshotText) {
+function extractVueCompoundParts(snapshotText, constName) {
   const lines = snapshotText.split('\n');
-  const startIdx = lines.findIndex((l) => l.startsWith('export const DocxEditorReview'));
+  const startIdx = lines.findIndex(
+    (l) => l.startsWith(`export const ${constName}:`) || l.startsWith(`export const ${constName} `)
+  );
   if (startIdx === -1) return null;
   const parts = new Set();
   let depth = 0;
@@ -329,12 +352,16 @@ function applyProBuckets(kind, section, reactSet, vueSet, issues) {
     if (!vueSet.has(k)) issues.push(`${kind} paired '${k}' missing from Vue`);
   }
   for (const k of deferred) {
-    if (!reactSet.has(k)) issues.push(`${kind} deferred '${k}' missing from React (contract stale)`);
-    if (vueSet.has(k)) issues.push(`${kind} '${k}' has shipped in Vue — move from deferredInVue to paired`);
+    if (!reactSet.has(k))
+      issues.push(`${kind} deferred '${k}' missing from React (contract stale)`);
+    if (vueSet.has(k))
+      issues.push(`${kind} '${k}' has shipped in Vue — move from deferredInVue to paired`);
   }
   for (const k of vueOnly) {
-    if (!vueSet.has(k)) issues.push(`${kind} vueExclusive '${k}' missing from Vue (contract stale)`);
-    if (reactSet.has(k)) issues.push(`${kind} '${k}' has shipped in React — move from vueExclusive to paired`);
+    if (!vueSet.has(k))
+      issues.push(`${kind} vueExclusive '${k}' missing from Vue (contract stale)`);
+    if (reactSet.has(k))
+      issues.push(`${kind} '${k}' has shipped in React — move from vueExclusive to paired`);
   }
   for (const k of reactSet) {
     if (!paired.includes(k) && !deferred.includes(k) && !vueOnly.includes(k)) {
@@ -356,7 +383,13 @@ function validateProShape(pro) {
     errors.push('Missing or invalid top-level key: pro');
     return errors;
   }
-  for (const sub of ['exports', 'reviewParts']) {
+  for (const sub of [
+    'exports',
+    'reviewParts',
+    'collaborationParts',
+    'webrtcExports',
+    'hocuspocusExports',
+  ]) {
     const section = pro[sub];
     if (!section || typeof section !== 'object') {
       errors.push(`contract.pro.${sub} is required`);
@@ -369,13 +402,21 @@ function validateProShape(pro) {
         errors.push(`contract.pro.${sub}.${bucket} is required`);
         continue;
       }
-      const ok = type === 'array' ? Array.isArray(value) : typeof value === 'object' && !Array.isArray(value);
+      const ok =
+        type === 'array'
+          ? Array.isArray(value)
+          : typeof value === 'object' && !Array.isArray(value);
       if (!ok) {
-        errors.push(`contract.pro.${sub}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`);
+        errors.push(
+          `contract.pro.${sub}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`
+        );
         continue;
       }
       for (const k of Array.isArray(value) ? value : Object.keys(value)) {
-        if (seen.has(k)) errors.push(`contract.pro.${sub}: '${k}' appears in multiple buckets — must be in exactly one`);
+        if (seen.has(k))
+          errors.push(
+            `contract.pro.${sub}: '${k}' appears in multiple buckets — must be in exactly one`
+          );
         seen.add(k);
       }
     }
@@ -411,11 +452,84 @@ function validateProShape(pro) {
   return errors;
 }
 
+/**
+ * Twin gate for a provider hook subpath pair (`pro/{react,vue}/webrtc` and
+ * `pro/{react,vue}/hocuspocus`). Same bucket semantics as the main pro entries, exports
+ * only: the hooks publish no compound parts and no interface whose members are pinned.
+ */
+function checkProProviderHookParity(label, section, reactSnapshot, vueSnapshot, issues) {
+  const reactExports = extractTopLevelExportNames(reactSnapshot);
+  const vueExports = extractTopLevelExportNames(vueSnapshot);
+  // Freshness oracle: the hook plus its five types. A parse regression that emptied these
+  // sets would otherwise let the gate pass while comparing nothing.
+  const MIN_HOOK_EXPORTS = 5;
+  if (reactExports.size < MIN_HOOK_EXPORTS || vueExports.size < MIN_HOOK_EXPORTS) {
+    console.error(
+      `Pro ${label} parity gate misconfigured: expected at least ${MIN_HOOK_EXPORTS} exports per snapshot, got React ${reactExports.size} / Vue ${vueExports.size}.`
+    );
+    process.exit(1);
+  }
+  applyProBuckets(`PRO ${label} EXPORT`, section, reactExports, vueExports, issues);
+
+  // Name parity alone would pass a React-only field added to a shared interface, which is the
+  // likelier drift than a whole missing export. Every interface both entries declare is
+  // compared by member name, derived rather than listed so this cannot go stale.
+  const reactDecls = extractInterfaceDecls(reactSnapshot);
+  const vueDecls = extractInterfaceDecls(vueSnapshot);
+  let memberChecks = 0;
+  let comparedInterfaces = 0;
+  for (const name of [...reactDecls.keys()].sort()) {
+    if (!vueDecls.has(name)) continue;
+    const reactFields = effectiveInterfaceFields(reactSnapshot, reactDecls, name);
+    const vueFields = effectiveInterfaceFields(vueSnapshot, vueDecls, name);
+    if (reactFields.size === 0 || vueFields.size === 0) {
+      const sides = [reactFields.size === 0 && 'React', vueFields.size === 0 && 'Vue']
+        .filter(Boolean)
+        .join(' and ');
+      issues.push(
+        `PRO ${label} INTERFACE '${name}' resolved to zero members in the ${sides} snapshot — declaration form is unparseable`
+      );
+      continue;
+    }
+    comparedInterfaces++;
+    for (const k of reactFields) {
+      memberChecks++;
+      if (!vueFields.has(k)) {
+        issues.push(`PRO ${label} INTERFACE '${name}': member '${k}' missing from Vue`);
+      }
+    }
+    for (const k of vueFields) {
+      if (!reactFields.has(k)) {
+        issues.push(`PRO ${label} INTERFACE '${name}': member '${k}' missing from React`);
+      }
+    }
+  }
+  // Vacuity guard: ConnectOptions, Options, and Return must stay comparable.
+  // The test room handle is internal and is not a public webrtc export.
+  if (comparedInterfaces < 3) {
+    console.error(
+      `Pro ${label} parity gate misconfigured: expected at least 3 comparable shared interfaces, compared ${comparedInterfaces}.`
+    );
+    process.exit(1);
+  }
+  return {
+    reactExports: reactExports.size,
+    vueExports: vueExports.size,
+    comparedInterfaces,
+    memberChecks,
+  };
+}
+
 function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
   const reactExports = extractTopLevelExportNames(reactSnapshot);
   const vueExports = extractTopLevelExportNames(vueSnapshot);
   const reactParts = extractInterfaceFields(reactSnapshot, 'DocxEditorReviewNamespace');
-  const vueParts = extractVueReviewParts(vueSnapshot);
+  const vueParts = extractVueCompoundParts(vueSnapshot, 'DocxEditorReview');
+  const reactCollaborationParts = extractInterfaceFields(
+    reactSnapshot,
+    'DocxEditorCollaborationNamespace'
+  );
+  const vueCollaborationParts = extractVueCompoundParts(vueSnapshot, 'DocxEditorCollaboration');
 
   // Freshness oracle: a parse regression must fail loudly, never pass vacuously.
   const MIN_EXPORTS = 20;
@@ -438,9 +552,31 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     );
     process.exit(1);
   }
+  // Same freshness rule for the collaboration compound: the namespace holds three parts,
+  // and a parse regression must fail loudly rather than compare nothing.
+  const MIN_COLLABORATION_PARTS = 3;
+  if (!reactCollaborationParts || reactCollaborationParts.size < MIN_COLLABORATION_PARTS) {
+    console.error(
+      `Pro parity gate misconfigured: could not parse DocxEditorCollaborationNamespace parts from ${PRO_REACT_SNAPSHOT} (got ${reactCollaborationParts?.size ?? 0}).`
+    );
+    process.exit(1);
+  }
+  if (!vueCollaborationParts || vueCollaborationParts.size < MIN_COLLABORATION_PARTS) {
+    console.error(
+      `Pro parity gate misconfigured: could not parse DocxEditorCollaboration parts from ${PRO_VUE_SNAPSHOT} (got ${vueCollaborationParts?.size ?? 0}).`
+    );
+    process.exit(1);
+  }
 
   applyProBuckets('PRO EXPORT', contract.pro.exports, reactExports, vueExports, issues);
   applyProBuckets('PRO REVIEW PART', contract.pro.reviewParts, reactParts, vueParts, issues);
+  applyProBuckets(
+    'PRO COLLABORATION PART',
+    contract.pro.collaborationParts,
+    reactCollaborationParts,
+    vueCollaborationParts,
+    issues
+  );
 
   // Member-name parity for the pinned interface list. The list is exact-match
   // stale-checked in both directions, so the compared set can never shrink
@@ -496,12 +632,16 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     const vueAllowed = new Set(exception?.vueOnly ?? []);
     for (const k of reactAllowed) {
       if (!reactFields.has(k) || vueFields.has(k)) {
-        issues.push(`PRO INTERFACE '${name}': stale reactOnly exception '${k}' — remove it from the contract`);
+        issues.push(
+          `PRO INTERFACE '${name}': stale reactOnly exception '${k}' — remove it from the contract`
+        );
       }
     }
     for (const k of vueAllowed) {
       if (!vueFields.has(k) || reactFields.has(k)) {
-        issues.push(`PRO INTERFACE '${name}': stale vueOnly exception '${k}' — remove it from the contract`);
+        issues.push(
+          `PRO INTERFACE '${name}': stale vueOnly exception '${k}' — remove it from the contract`
+        );
       }
     }
     for (const k of reactFields) {
@@ -528,6 +668,7 @@ function checkProParity(contract, reactSnapshot, vueSnapshot, issues) {
     reactExports: reactExports.size,
     vueExports: vueExports.size,
     reviewParts: reactParts.size,
+    collaborationParts: reactCollaborationParts.size,
     memberCheckedInterfaces: memberChecked.length,
     memberChecks,
   };
@@ -587,8 +728,14 @@ function validateContractShape(contract) {
         if (!optional) errors.push(`contract.${top}.${bucket} is required`);
         continue;
       }
-      const ok = type === 'array' ? Array.isArray(value) : typeof value === 'object' && !Array.isArray(value);
-      if (!ok) errors.push(`contract.${top}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`);
+      const ok =
+        type === 'array'
+          ? Array.isArray(value)
+          : typeof value === 'object' && !Array.isArray(value);
+      if (!ok)
+        errors.push(
+          `contract.${top}.${bucket} must be ${type === 'array' ? 'an array' : 'an object'}`
+        );
     }
     // Within each section, every member must appear in exactly one bucket.
     const seen = new Set();
@@ -691,8 +838,7 @@ function main() {
   }
   for (const k of callbackEmits) {
     if (!reactProps.has(k)) issues.push(`PROP reactCallbacksAsVueEmits '${k}' missing from React`);
-    if (vueProps.has(k))
-      issues.push(`PROP '${k}' must be a Vue emit, not a DocxEditorProps field`);
+    if (vueProps.has(k)) issues.push(`PROP '${k}' must be a Vue emit, not a DocxEditorProps field`);
     const emitName = contract.props.reactCallbacksAsVueEmits[k];
     if (vueForms && !vueForms.emits.has(emitName)) {
       issues.push(`PROP '${k}' maps to missing Vue emit '${emitName}'`);
@@ -707,9 +853,9 @@ function main() {
     }
   }
   for (const k of renderSlots) {
-    if (!reactProps.has(k)) issues.push(`PROP reactRenderPropsAsVueSlots '${k}' missing from React`);
-    if (vueProps.has(k))
-      issues.push(`PROP '${k}' must be a Vue slot, not a DocxEditorProps field`);
+    if (!reactProps.has(k))
+      issues.push(`PROP reactRenderPropsAsVueSlots '${k}' missing from React`);
+    if (vueProps.has(k)) issues.push(`PROP '${k}' must be a Vue slot, not a DocxEditorProps field`);
     const slotName = contract.props.reactRenderPropsAsVueSlots[k];
     if (vueForms && !vueForms.slots.has(slotName)) {
       issues.push(`PROP '${k}' maps to missing Vue slot '${slotName}'`);
@@ -726,7 +872,9 @@ function main() {
   for (const k of classFallthrough) {
     if (!reactProps.has(k)) issues.push(`PROP reactClassNameAsVueClass '${k}' missing from React`);
     if (vueProps.has(k))
-      issues.push(`PROP '${k}' must fall through as Vue \`class\`, not appear under the React name`);
+      issues.push(
+        `PROP '${k}' must fall through as Vue \`class\`, not appear under the React name`
+      );
   }
   for (const k of vueOnly) {
     if (!vueProps.has(k)) issues.push(`PROP vueExclusive '${k}' missing from Vue (contract stale)`);
@@ -801,6 +949,20 @@ function main() {
   const proReactSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_REACT_SNAPSHOT, 'utf8'));
   const proVueSnapshot = normalizeSnapshotText(fs.readFileSync(PRO_VUE_SNAPSHOT, 'utf8'));
   const proStats = checkProParity(contract, proReactSnapshot, proVueSnapshot, issues);
+  const webrtcStats = checkProProviderHookParity(
+    'WEBRTC',
+    contract.pro.webrtcExports,
+    normalizeSnapshotText(fs.readFileSync(PRO_REACT_WEBRTC_SNAPSHOT, 'utf8')),
+    normalizeSnapshotText(fs.readFileSync(PRO_VUE_WEBRTC_SNAPSHOT, 'utf8')),
+    issues
+  );
+  const hocuspocusStats = checkProProviderHookParity(
+    'HOCUSPOCUS',
+    contract.pro.hocuspocusExports,
+    normalizeSnapshotText(fs.readFileSync(PRO_REACT_HOCUSPOCUS_SNAPSHOT, 'utf8')),
+    normalizeSnapshotText(fs.readFileSync(PRO_VUE_HOCUSPOCUS_SNAPSHOT, 'utf8')),
+    issues
+  );
 
   // ── Report ───────────────────────────────────────────────────────────────
   const reactPropsCount = reactProps.size;
@@ -821,8 +983,23 @@ function main() {
   console.log(`  Paired ref members:    ${refPaired.length}`);
   console.log(`  Inherited via EditorRefLike: ${refInherited.length}`);
   console.log(`  Vue-exclusive refs:    ${refVueOnly.length}`);
-  console.log(`  Pro exports:           React ${proStats.reactExports} / Vue ${proStats.vueExports}`);
+  console.log(
+    `  Pro exports:           React ${proStats.reactExports} / Vue ${proStats.vueExports}`
+  );
+  console.log(
+    `  Pro webrtc exports:    React ${webrtcStats.reactExports} / Vue ${webrtcStats.vueExports}`
+  );
+  console.log(
+    `  Pro webrtc interfaces: ${webrtcStats.comparedInterfaces} (${webrtcStats.memberChecks} member checks)`
+  );
+  console.log(
+    `  Pro hocuspocus exports:    React ${hocuspocusStats.reactExports} / Vue ${hocuspocusStats.vueExports}`
+  );
+  console.log(
+    `  Pro hocuspocus interfaces: ${hocuspocusStats.comparedInterfaces} (${hocuspocusStats.memberChecks} member checks)`
+  );
   console.log(`  Pro review parts:      ${proStats.reviewParts}`);
+  console.log(`  Pro collaboration parts: ${proStats.collaborationParts}`);
   console.log(
     `  Pro member-checked interfaces: ${proStats.memberCheckedInterfaces} (${proStats.memberChecks} member checks)`
   );

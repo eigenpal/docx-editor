@@ -203,11 +203,24 @@ import * as Engine from '@docx-editor.dev/core';
 import * as EngineEditor from '@docx-editor.dev/core/editor';
 import * as Fonts from '@docx-editor.dev/fonts';
 import * as EditorApi from '@docx-editor.dev/editor-api';
+import * as Collaboration from '@docx-editor.dev/pro/collaboration';
+import * as CollaborationWebrtc from '@docx-editor.dev/pro/collaboration/webrtc';
+import * as CollaborationHocuspocus from '@docx-editor.dev/pro/collaboration/hocuspocus';
 import * as Pro from '@docx-editor.dev/pro';
 import * as ProReact from '@docx-editor.dev/pro/react';
 import '@docx-editor.dev/core/styles/editor.css';
 
-const exportedSurfaceChecks = [Engine, EngineEditor, Fonts, EditorApi, Pro, ProReact];
+const exportedSurfaceChecks = [
+  Engine,
+  EngineEditor,
+  Fonts,
+  EditorApi,
+  Collaboration,
+  CollaborationWebrtc,
+  CollaborationHocuspocus,
+  Pro,
+  ProReact,
+];
 console.assert(exportedSurfaceChecks.every((entry) => typeof entry === 'object' && entry !== null));
 void exportedSurfaceChecks;
 
@@ -251,6 +264,10 @@ export default defineConfig({ plugins: [react()] });
       '--ignore-scripts',
       'react',
       'react-dom',
+      'yjs',
+      'y-protocols',
+      'y-webrtc',
+      '@hocuspocus/provider',
       '@types/react',
       '@types/react-dom',
       '@vitejs/plugin-react',
@@ -355,9 +372,22 @@ createApp({ render: () => h(DocxEditor) }).mount('#app');
       2
     )
   );
-  run('npm', ['install', '--ignore-scripts', 'vue', 'vite', 'typescript', ...tarballs], {
-    cwd: vueAppDir,
-  });
+  run(
+    'npm',
+    [
+      'install',
+      '--ignore-scripts',
+      'vue',
+      'yjs',
+      'y-protocols',
+      'y-webrtc',
+      '@hocuspocus/provider',
+      'vite',
+      'typescript',
+      ...tarballs,
+    ],
+    { cwd: vueAppDir }
+  );
   run('npm', ['run', 'build'], { cwd: vueAppDir });
   console.log('Fresh Vue consumer install/build passed.');
 } finally {

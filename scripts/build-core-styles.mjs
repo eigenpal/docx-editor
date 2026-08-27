@@ -20,6 +20,17 @@ import { fileURLToPath } from 'node:url';
 import postcss from 'postcss';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
+// Held at cssnano 7 ON PURPOSE. cssnano 8 declares `engines.node ^22.11.0`, and
+// postcss-merge-longhand@8 calls `Set.prototype.difference`, which lands in Node 22.
+// ci.yml never runs setup-node, so every job takes the runner's own Node — 20 today.
+// bun does not enforce `engines`, so cssnano 8 installs happily and then throws
+// `trustedFunctions.difference is not a function` at build time, on CI only, and
+// only for someone whose local Node is newer than the runner's. cssnano 7 supports
+// `^18.12.0 || ^20.9.0 || >=22.0`, and on this input the two differ by 59 bytes out
+// of 111 375, with the same selector rewrites — the folds in core-css-assertions.mjs
+// are pinned against cssnano's real output and pass unchanged on either.
+// Take cssnano 8 when this repo pins its own Node floor at 22 or higher.
+import cssnano from 'cssnano';
 import { coreCssProblems } from './core-css-assertions.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'packages', 'core');
@@ -72,22 +83,59 @@ const prefixKeyframes = {
   },
 };
 
-const result = await postcss([
+// The shipped file is minified. Tailwind emits every utility the config generates,
+// pretty-printed, which is ~three times the bytes a host actually downloads.
+//
+// The preset is pinned to `default`, and the pin is the safety property, not a
+// default worth leaving implicit. `default` runs 29 plugins that rewrite VALUES
+// and selectors, and none that rewrite identifiers. `advanced` adds four that do,
+// and each one breaks this file:
+//
+//   reduceIdents   renames `@keyframes docx-editor-enter` to `a`, undoing the
+//                  prefixing above — and the global-namespace collision that
+//                  prefixing exists to prevent comes straight back.
+//   mergeIdents    same hazard from the other direction: it unifies two prefixed
+//                  names into one shared short name.
+//   discardUnused  drops `@keyframes` and `@font-face` with no reference IN THIS
+//                  FILE. For a library stylesheet the reference is in the host's
+//                  markup, which the minifier cannot see.
+//   zindex         renumbers a stacking order this file shares with inline styles
+//                  the engine sets at runtime, which no stylesheet pass can see.
+//
+// Naming them as `false` here does NOT hold that line: cssnano validates nothing,
+// so an option for a plugin the preset does not load is silently ignored. The
+// post-minify `coreCssProblems` run below is the real guard — it fails on a
+// keyframe name that lost its prefix, whatever produced it.
+const minify = cssnano({ preset: ['default'] });
+
+const compiled = await postcss([
   tailwindcss({ config: join(root, 'tailwind.dist.config.cjs') }),
   scopeTailwindDefaults,
   prefixKeyframes,
   autoprefixer(),
 ]).process(input, { from, map: false });
 
-const problems = coreCssProblems(result.css);
-if (problems.length > 0) {
-  console.error('core: refusing to emit dist/editor.css:');
+// Asserted TWICE, on either side of the minifier, because the two runs blame
+// different steps. A failure before means the compile is wrong; a failure after
+// means cssnano broke the scoping contract on correct input. The shipped bytes
+// are the ones that have to satisfy it, so the second run is the load-bearing one.
+const refuse = (stage, problems) => {
+  if (problems.length === 0) return;
+  console.error(`core: refusing to emit dist/editor.css (${stage}):`);
   for (const problem of problems) console.error(`  - ${problem}`);
   process.exit(1);
-}
+};
+
+refuse('compiled', coreCssProblems(compiled.css));
+
+const result = await postcss([minify]).process(compiled.css, { from, map: false });
+
+refuse('minified', coreCssProblems(result.css));
 
 mkdirSync(dirname(to), { recursive: true });
 writeFileSync(to, result.css);
+const before = (compiled.css.length / 1024).toFixed(0);
+const after = (result.css.length / 1024).toFixed(0);
 console.log(
-  `core: compiled editor.css into dist (${(result.css.length / 1024).toFixed(0)} KiB, utilities scoped to .docx-editor)`
+  `core: compiled editor.css into dist (${after} KiB minified from ${before} KiB, utilities scoped to .docx-editor)`
 );

@@ -141,14 +141,16 @@ const VERTICAL_RULER_STYLE: CSSProperties = {
  * the band in two and leaves the toolbar with no ground of its own.
  *
  * `z-index` lifts the seam's shadow over the workspace, and the menus that open from
- * this row stack inside its context, above everything below.
+ * this row stack inside its context, above everything below. The band is a stacking
+ * context, so it caps every popup inside it: it must sit in the overlay band, or the
+ * navigation pane (chrome band, 40) paints over every menu the toolbar opens.
  */
 const CHROME_BAND_STYLE: CSSProperties = {
   flex: 'none',
   display: 'flex',
   flexDirection: 'column',
   position: 'relative',
-  zIndex: 30,
+  zIndex: 'var(--doc-z-overlay)',
   backgroundColor: 'var(--doc-surface)',
   // Longhand on purpose: the `border-bottom` shorthand does not survive a var()
   // in every DOM implementation the suite runs against.

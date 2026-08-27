@@ -12,6 +12,11 @@
 //
 // EditorScope note ids encode kind + signed id: `footnote:<id>` / `endnote:<id>`.
 
+import {
+  nextDenseDecimalId,
+  nextStripedDecimalId,
+  resolveAllocationActor,
+} from './actor-scoped-ids.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import { walkParagraphInline } from './content-control-walk.ts';
 import type {
@@ -292,24 +297,45 @@ export const MAX_NOTES_PER_PART = 10_000;
 
 /**
  * Allocate the next positive signed 32-bit note id for a notes-part root.
- * Seeds from `max(existing)+1`; never returns ≤0; `null` on exhaustion.
+ *
+ * Solo: `max(existing)+1`, the dense sequence Word writes. `null` on exhaustion, so the
+ * caller refuses rather than wrapping onto an id a note already holds.
+ *
+ * With a collaboration actor bound — explicit argument, or the open store transaction — the
+ * id is the next unused value in that actor's stripe. Two peers each adding their first
+ * footnote from one snapshot otherwise both mint `w:id="1"`: the merge keeps both bodies
+ * under one id, both `w:footnoteReference` marks resolve to the first, and one author's note
+ * becomes unreachable.
+ *
+ * The reserved ids stay reserved either way. `0` (continuation separator) is seeded as used,
+ * so a residue of 0 advances one class instead of taking Word's furniture, and a stripe walk
+ * only ever climbs from a non-negative residue, so `-1` (separator) is unreachable.
  */
-export function allocateNoteId(notesRoot: OoxmlNode): number | null {
+export function allocateNoteId(notesRoot: OoxmlNode, actorId?: string): number | null {
   if (notesRoot.kind === 'textValue') return null;
   let max = 0;
   let scanned = 0;
+  const used = new Set<string>([String(NOTE_CONTINUATION_SEPARATOR_ID)]);
   for (const child of notesRoot.children) {
     if (scanned >= MAX_NOTES_PER_PART) break;
     scanned += 1;
     if (noteKindOf(child) === null) continue;
     const id = noteIdOf(child);
     if (id === null) continue;
+    used.add(String(id));
     if (id > max) max = id;
   }
-  if (max >= NOTE_ID_MAX) return null;
-  const next = Math.max(max + 1, NOTE_ID_MIN);
-  if (next > NOTE_ID_MAX) return null;
-  return next;
+  const actor = resolveAllocationActor(actorId);
+  try {
+    const next = Number(
+      actor
+        ? nextStripedDecimalId(used, actor, NOTE_ID_MAX)
+        : nextDenseDecimalId(max, undefined, NOTE_ID_MAX)
+    );
+    return next >= NOTE_ID_MIN ? next : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Collect note bodies from a footnotes/endnotes root, bounded. */

@@ -371,4 +371,17 @@ describe('packaged chrome band', () => {
     expect(view.container.querySelector('.docx-toolbar')).toBeNull();
     view.unmount();
   });
+
+  // The band is a stacking context, so it caps every popup inside it. A literal
+  // below the chrome band (40) put the font picker and the File menu UNDER the
+  // open navigation pane (#522); the overlay token keeps them above it.
+  test('the band stacks in the overlay band, above ambient chrome', async () => {
+    const view = await mountSugarAsync({});
+    await view.flush();
+    const toolbar = view.container.querySelector('.docx-toolbar');
+    const band = (toolbar?.parentElement?.parentElement ?? null) as HTMLElement | null;
+    expect(band).not.toBeNull();
+    expect(band!.style.zIndex).toBe('var(--doc-z-overlay)');
+    view.unmount();
+  });
 });

@@ -668,6 +668,11 @@ export function chromeSlotId(group: {
 }): ChromeSlotId;
 
 // @public
+export interface CollaborationModuleContribution {
+    readonly session: EditorCollaborationSession;
+}
+
+// @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
 // @public
@@ -808,8 +813,10 @@ export interface DocxEditorInstance extends Editor {
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
     readonly mountGeneration: number;
+    presenceColorFor(name: string): string;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setRevisionStyles(styles: RevisionStyles): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;
@@ -852,6 +859,7 @@ export function editorCommandKey(command: EditorCommand): string;
 
 // @public
 export interface EditorModule {
+    readonly collaboration?: CollaborationModuleContribution;
     readonly customNodePayloadNamespaces?: readonly string[];
     readonly customNodes?: readonly unknown[];
     readonly id: string;
@@ -861,6 +869,8 @@ export interface EditorModule {
 
 // @public
 export interface EditorModuleRegistry {
+    // (undocumented)
+    readonly collaboration: CollaborationModuleContribution | null;
     readonly customNodeDiagnostics: readonly ((diagnostic: unknown) => void)[];
     readonly customNodePayloadNamespaces: readonly string[];
     // (undocumented)
@@ -1309,7 +1319,7 @@ export interface PaginatedSurface {
     commitReviewOps(run: () => {
         readonly committed: boolean;
         readonly reason?: unknown;
-    }): void;
+    }, intent?: ReviewWriteIntent): void;
     readonly contentControls: ContentControlOps;
     // (undocumented)
     convertAllNotes(fromKind: 'footnote' | 'endnote'): boolean;
@@ -1375,7 +1385,7 @@ export interface PaginatedSurface {
     // (undocumented)
     imageDecodePort(): ImageDecodePort;
     // (undocumented)
-    insertImage(input: Omit<InsertImageInput, 'decodePort'>): Promise<ImageIntentResult>;
+    insertImage(input: SurfaceInsertImageInput): Promise<ImageIntentResult>;
     insertLineBreak(): void;
     insertNote(noteKind: 'footnote' | 'endnote'): boolean;
     insertPageBreak(): void;
@@ -1411,6 +1421,7 @@ export interface PaginatedSurface {
     refreshTableInteractionLabels(): void;
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
+    remotePresenceColor(name: string): string | undefined;
     // (undocumented)
     replaceImage(drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, options: {
         readonly commitGuard?: () => boolean;
@@ -1468,6 +1479,7 @@ export interface PaginatedSurface {
     setParagraphProperty(localName: string, attributes?: Record<string, string | null>, options?: {
         readonly mergeAttributes?: boolean;
     }): void;
+    setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setRevisionStyles(colors: RevisionStyles | undefined): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
@@ -1499,6 +1511,7 @@ export interface PaginatedSurface {
 // @public
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
+    readonly collaborationModel?: CollaborationModuleContribution;
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
@@ -1532,6 +1545,7 @@ export interface PaginatedSurfaceState {
     // (undocumented)
     readonly canUndo: boolean;
     readonly cellSelection: CellSelection | null;
+    readonly collaborationStatus: CollaborationStatus | 'inactive';
     readonly contentControls: ContentControlSurfaceState;
     readonly contextTocId: string | null;
     // (undocumented)
@@ -1614,6 +1628,19 @@ export const PX_PER_CM: number;
 export const PX_PER_INCH = 96;
 
 // @public
+export interface RemoteCaretLabelAnchor {
+    // (undocumented)
+    readonly element: HTMLElement;
+    // (undocumented)
+    readonly selection: CollaborationRemoteSelection;
+}
+
+// @public
+export interface RemoteCaretLabelHost {
+    publish(anchors: readonly RemoteCaretLabelAnchor[]): void;
+}
+
+// @public
 export type RenderableImageMime = SupportedImageMime | VectorImageMime;
 
 // @public
@@ -1674,6 +1701,9 @@ export interface ReviewModuleContribution {
     readonly displayModes: readonly RevisionDisplayMode[];
     readonly revisionItemsOfParagraph: (part: OoxmlPart, paragraphId: string) => readonly ReviewRevisionItem[];
 }
+
+// @public
+export type ReviewWriteIntent = 'revision-resolve' | 'comment-add' | 'comment-reply' | 'comment-resolve' | 'comment-delete' | 'package-scoped';
 
 // @public
 export interface RevisionAuthorAssignments {
@@ -2024,6 +2054,9 @@ export interface SurfaceHyperlink {
 }
 
 // @public
+export type SurfaceInsertImageInput = Omit<InsertImageInput, 'decodePort' | 'actorId'>;
+
+// @public
 export interface SurfaceNavigation {
     // (undocumented)
     destroy(): void;
@@ -2095,7 +2128,7 @@ export interface TableBorderStyleOption {
     readonly labelKey: string;
     readonly previewClass: string;
     // (undocumented)
-    readonly value: TableBorderStyle;
+    readonly value: TableBorderStyle_2;
 }
 
 // @public
@@ -2108,7 +2141,7 @@ export interface TableBorderTargetOption {
 }
 
 // @public
-export type TableBorderTargetValue = TableBorderEdgeTarget | 'none';
+export type TableBorderTargetValue = TableBorderEdgeTarget_2 | 'none';
 
 // @public
 export interface TableBorderWidthOption {
@@ -2121,7 +2154,7 @@ export interface TableBorderWidthOption {
 // @public
 export interface TableChromeDraft {
     // (undocumented)
-    readonly activeTarget: TableBorderEdgeTarget;
+    readonly activeTarget: TableBorderEdgeTarget_2;
     // (undocumented)
     readonly spec: TableBorderSpec;
 }
@@ -2130,7 +2163,7 @@ export interface TableChromeDraft {
 export function tableChromeIconPaths(name: keyof typeof GENERATED_ICON_PATHS): readonly string[];
 
 // @public
-export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget): string;
+export function tableChromeLabelKeyForTarget(target: TableBorderEdgeTarget_2): string;
 
 // @public
 export interface TableChromePick {
@@ -2205,7 +2238,7 @@ export interface TreeApplyResult {
 export interface TreeDocxSessionView {
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
-    applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope): TreeApplyResult;
+    applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
     // (undocumented)
     beginComposition(scope?: StoryScope): void;
     bodyText(): string;
@@ -2214,6 +2247,7 @@ export interface TreeDocxSessionView {
     canRedo(): boolean;
     // (undocumented)
     canUndo(): boolean;
+    collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
     deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
     deleteComments(comments: readonly {
@@ -2268,7 +2302,8 @@ export interface TreeDocxSessionView {
         paragraphId: string;
         start: number;
     }, text: string, author: string,
-    date?: string, scope?: StoryScope): string | null;
+    date?: string, scope?: StoryScope,
+    actorId?: string): string | null;
     reviewItems(): readonly ReviewItem[];
     revision(): number;
     revisionFor(scope: StoryScope): number | null;

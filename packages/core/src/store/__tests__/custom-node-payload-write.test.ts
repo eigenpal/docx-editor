@@ -180,10 +180,11 @@ describe('one transaction authors the store, the node and the control', () => {
     ).toBe(true);
     const dataPart = findCustomXmlDataPart(store.package, STORY, NS);
     if (!dataPart) throw new Error('no store');
-    expect(customXmlNodes(store.package, dataPart.partName).map((node) => node.id)).toEqual([
-      'cx1',
-      'cx2',
-    ]);
+    expect(
+      customXmlNodes(store.package, dataPart.partName)
+        .map((node) => node.id)
+        .sort()
+    ).toEqual(['cx1', 'cx2']);
     // One store, not two: a second call must not author a sibling part.
     const names = [...store.package.parts.keys()].filter((name) =>
       /customXml\/item\d+\.xml$/.test(name)

@@ -59,13 +59,60 @@
     "vueExclusive": {}
   },
   "pro": {
-    "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of the pinned memberCheckedInterfaces list.",
+    "comment": "Pro review surface across docs/api/docx-editor-pro/{react,vue}.api.md: top-level exports, DocxEditorReview compound part names, and extends-resolved member names of the pinned memberCheckedInterfaces list. webrtcExports covers the separate {react,vue}-webrtc.api.md pair and hocuspocusExports the {react,vue}-hocuspocus.api.md pair, which the review entries do not include.",
+    "webrtcExports": {
+      "paired": [
+        "CollaborationSession",
+        "UseWebrtcCollaborationBootstrap",
+        "UseWebrtcCollaborationConnectOptions",
+        "UseWebrtcCollaborationOptions",
+        "UseWebrtcCollaborationReturn",
+        "useWebrtcCollaboration",
+        "CollaborationIdentityUpdate"
+      ],
+      "deferredInVue": {},
+      "vueExclusive": {}
+    },
+    "hocuspocusExports": {
+      "paired": [
+        "CollaborationSession",
+        "UseHocuspocusCollaborationBootstrap",
+        "UseHocuspocusCollaborationConnectOptions",
+        "UseHocuspocusCollaborationOptions",
+        "UseHocuspocusCollaborationReturn",
+        "useHocuspocusCollaboration",
+        "CollaborationIdentityUpdate"
+      ],
+      "deferredInVue": {},
+      "vueExclusive": {}
+    },
     "exports": {
       "paired": [
+        "CollaborationAvatarProps",
+        "CollaborationAvatarRenderProps",
+        "CollaborationAvatarsProps",
+        "CollaborationBootstrap",
+        "CollaborationCaretLabelRenderProps",
+        "CollaborationCaretLabelsProps",
+        "CollaborationFailure",
+        "CollaborationFailureCode",
+        "CollaborationIdentity",
+        "CollaborationIdentityUpdate",
+        "CollaborationModuleOptions",
+        "CollaborationParticipant",
+        "CollaborationRemoteSelection",
+        "CollaborationRemoteSelectionAddress",
+        "CollaborationSelectionKind",
+        "CollaborationSession",
+        "CollaborationStatus",
+        "CollaborationStatusSnapshot",
+        "CreateDocumentCollaborationOptions",
         "CustomNodeChrome",
         "CustomNodeChromeProps",
         "CustomNodeContextMenu",
         "CustomNodeContextMenuProps",
+        "DocxEditorCollaboration",
+        "DocxEditorCollaborationNamespace",
         "DocxEditorReview",
         "DocxEditorReviewNamespace",
         "ProLicenseOptions",
@@ -77,11 +124,19 @@
         "ReviewModuleOptions",
         "ReviewPartProps",
         "ReviewProps",
+        "UseCollaborationStatusReturn",
+        "UseDocumentCollaborationConnectOptions",
+        "UseDocumentCollaborationOptions",
+        "UseDocumentCollaborationReturn",
         "UseReviewReturn",
         "activatedCustomNodeOf",
+        "collaborationModule",
         "resolveCustomNodeActivation",
         "reviewModule",
+        "useCollaborationParticipants",
+        "useCollaborationStatus",
         "useCustomNodeDefinitions",
+        "useDocumentCollaboration",
         "useReview",
         "useReviewAuthor",
         "useReviewItem",
@@ -89,7 +144,9 @@
         "useStackedReviewPositions"
       ],
       "deferredInVue": {},
-      "vueExclusive": {}
+      "vueExclusive": {
+        "UseCollaborationParticipantsReturn": "Vue composables declare a named Use<Name>Return interface wrapping the ref; the React hook returns the participants array directly, so only Vue exports this type."
+      }
     },
     "reviewParts": {
       "paired": [
@@ -115,7 +172,28 @@
       "deferredInVue": {},
       "vueExclusive": {}
     },
+    "collaborationParts": {
+      "paired": ["Avatar", "Avatars", "CaretLabels"],
+      "deferredInVue": {},
+      "vueExclusive": {}
+    },
     "memberCheckedInterfaces": [
+      "CollaborationAvatarProps",
+      "CollaborationAvatarRenderProps",
+      "CollaborationAvatarsProps",
+      "CollaborationBootstrap",
+      "CollaborationCaretLabelRenderProps",
+      "CollaborationCaretLabelsProps",
+      "CollaborationFailure",
+      "CollaborationIdentity",
+      "CollaborationIdentityUpdate",
+      "CollaborationModuleOptions",
+      "CollaborationParticipant",
+      "CollaborationRemoteSelection",
+      "CollaborationRemoteSelectionAddress",
+      "CollaborationSession",
+      "CollaborationStatusSnapshot",
+      "CreateDocumentCollaborationOptions",
       "CustomNodeChromeProps",
       "CustomNodeContextMenuProps",
       "ProLicenseOptions",
@@ -126,6 +204,9 @@
       "ReviewModuleOptions",
       "ReviewPartProps",
       "ReviewProps",
+      "UseCollaborationStatusReturn",
+      "UseDocumentCollaborationOptions",
+      "UseDocumentCollaborationReturn",
       "UseReviewReturn"
     ],
     "interfaceMemberExceptions": {

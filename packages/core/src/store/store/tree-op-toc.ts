@@ -26,6 +26,7 @@ import {
   parentOf,
 } from './tree-op-nodes.ts';
 import { isValidXmlText } from '../package/sinks.ts';
+import { nextBookmarkId } from './tree-op-bookmark-ids.ts';
 import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 
 export type ReplaceTocResultOp = Extract<TreeDocOp, { op: 'replaceTocResult' }>;
@@ -160,26 +161,14 @@ function insertBookmarks(
 ): TreeOpResult {
   let current = part;
   const mint = createNodeIdAllocator(current);
+  const mintBookmarkId = nextBookmarkId(current);
   const dirty: string[] = [];
-  const usedBookmarkIds = new Set<string>();
-  const collectBookmarkIds = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') return;
-    if (node.localName === 'bookmarkStart' || node.localName === 'bookmarkEnd') {
-      const id = node.attributes.find((attribute) => attribute.localName === 'id')?.value;
-      if (id) usedBookmarkIds.add(id);
-    }
-    for (const child of node.children) collectBookmarkIds(child);
-  };
-  collectBookmarkIds(current.root);
-  let nextBookmarkId = 1;
   for (const bookmark of bookmarks) {
     const paragraph = findNode(current, bookmark.paragraphId);
     if (!paragraph || paragraph.kind === 'textValue') {
       return { ok: false, reason: 'unknown-paragraph' };
     }
-    while (usedBookmarkIds.has(String(nextBookmarkId))) nextBookmarkId += 1;
-    const bookmarkId = String(nextBookmarkId++);
-    usedBookmarkIds.add(bookmarkId);
+    const bookmarkId = mintBookmarkId();
     const pair = bookmarkPairNodes(mint, bookmark.name, bookmarkId);
     // Place start at front (after pPr if any), end at end.
     const children = [...paragraph.children];

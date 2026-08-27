@@ -63,8 +63,13 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * @public
  */
 
-import { createServer } from './runtime/server.ts';
-import type { CreateServerOptions, DocxEditorServerRuntime } from './runtime/public.ts';
+import type { EditorCollaborationSession } from '@docx-editor.dev/core/collaboration';
+import { createCollaborative, createServer } from './runtime/server.ts';
+import type {
+  CreateCollaborativeOptions,
+  CreateServerOptions,
+  DocxEditorServerRuntime,
+} from './runtime/public.ts';
 
 export * from './runtime/public.ts';
 
@@ -82,6 +87,12 @@ export * from './runtime/public.ts';
 export interface DocxEditorNamespace {
   /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer(bytes: Uint8Array, options?: CreateServerOptions): Promise<DocxEditorServerRuntime>;
+  /** A DOM-free runtime over one experimental collaboration replica. */
+  createCollaborative(
+    bytes: Uint8Array,
+    collaboration: EditorCollaborationSession,
+    options?: CreateCollaborativeOptions
+  ): Promise<DocxEditorServerRuntime>;
 }
 
 /**
@@ -108,4 +119,6 @@ export interface DocxEditorNamespace {
 export const DocxEditor: DocxEditorNamespace = Object.freeze({
   /** A runtime over DOCX bytes. Additionally offers `save()`. */
   createServer,
+  /** A DOM-free runtime over one experimental collaboration replica. */
+  createCollaborative,
 });

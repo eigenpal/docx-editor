@@ -368,6 +368,7 @@ export default [
       'packages/core/src/editor/__tests__/table-command-plan.test.ts',
       'packages/core/src/editor/docx-editor-images.ts',
       'packages/core/src/store/__tests__/table-row-ops.test.ts',
+      'packages/core/src/binding/tree-session.ts',
       'packages/core/src/store/store/tree-package-store.ts',
       'packages/core/src/store/store/tree-op-types.ts',
     ],
@@ -379,7 +380,6 @@ export default [
   {
     files: [
       'packages/core/src/layout/drawing-layout.ts',
-      'packages/core/src/binding/tree-session.ts',
       'packages/core/src/store/__tests__/image-resources.test.ts',
     ],
     rules: {
@@ -454,15 +454,19 @@ export default [
     },
   },
 
-  // semantic-table-layout.ts holds row-split pagination, which has to stay with cell flow
-  // and finalize because a row's real height is only known after its cells have laid out.
-  // It carried a blanket `eslint-disable max-lines` once, which removes the ceiling instead
-  // of raising it; this keeps the ceiling, with headroom.
+  // semantic-table-layout.ts holds cell flow and row-split placement, which stay together
+  // because a row's real height is only known after its cells have laid out. Fragment
+  // finalize and whole-table pagination have since moved to modules of their own; what is
+  // left is the row. It carried a blanket `eslint-disable max-lines` once, which removes the
+  // ceiling instead of raising it; this keeps the ceiling, with headroom.
   {
-    files: [
-      'packages/core/src/layout/semantic-table-layout.ts',
-      'packages/core/src/store/store/tree-op-tables.ts',
-    ],
+    files: ['packages/core/src/layout/semantic-table-layout.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1800, skipBlankLines: false, skipComments: false }],
+    },
+  },
+  {
+    files: ['packages/core/src/store/store/tree-op-tables.ts'],
     rules: {
       'max-lines': ['error', { max: 1900, skipBlankLines: false, skipComments: false }],
     },
@@ -503,15 +507,15 @@ export default [
     },
   },
 
-  // semantic-layout.ts is the story loop: section flow, paragraph fragmentation and
-  // table-row pagination advance ONE cursor, and a paragraph that spans a page boundary is
-  // decided by all three at once. Splitting them into modules would mean passing that
-  // cursor across a boundary and re-deriving the same state on the other side. The cap is
-  // a ceiling with headroom, not a blanket disable.
+  // semantic-layout.ts is the story loop: section flow and paragraph fragmentation advance
+  // ONE cursor, and a paragraph that spans a page boundary is decided by both at once.
+  // Table-row pagination used to live here too and now does not — it advances the same
+  // cursor through `TableFlowCursor`, which is the seam that let it move. The cap is a
+  // ceiling with headroom, not a blanket disable.
   {
     files: ['packages/core/src/layout/semantic-layout.ts'],
     rules: {
-      'max-lines': ['error', { max: 3250, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 3050, skipBlankLines: false, skipComments: false }],
     },
   },
 

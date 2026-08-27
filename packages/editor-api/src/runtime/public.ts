@@ -77,9 +77,11 @@ export type {
   RunCallback,
 } from './runtime.ts';
 export type {
+  CreateCollaborativeOptions,
   CreateServerOptions,
   DocumentLimits,
   DocumentXmlLimits,
   DocumentZipLimits,
+  EditorModule,
 } from './server.ts';
 export { TrackedObjects } from './tracked-objects.ts';

@@ -19,6 +19,7 @@
  */
 
 import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import type { CollaborationModuleContribution } from '../collaboration/index.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type {
   ReviewItem,
@@ -89,6 +90,13 @@ export interface ReviewModuleContribution {
 }
 
 /**
+ * The replica the surface attaches. The host passes a ready session.
+ *
+ * @public
+ */
+export type { CollaborationModuleContribution };
+
+/**
  * One registered capability module. Registration is construction-time
  * (`createDocxEditor({ modules })`) and immutable for the instance's lifetime.
  *
@@ -99,6 +107,11 @@ export interface EditorModule {
   readonly id: string;
   /** Review capability: queue derivation, commands gate, display modes. */
   readonly review?: ReviewModuleContribution;
+  /**
+   * Collaboration replica. Absent, the editor stays single-user: local undo
+   * stays the authority, and `snapshot().collaborationStatus` is `'inactive'`.
+   */
+  readonly collaboration?: CollaborationModuleContribution;
   /**
    * Custom inline node definitions. Reserved: the definition shape lands with
    * the custom-nodes lane; the registry carries them opaquely until then.
@@ -131,11 +144,12 @@ export interface EditorModule {
 
 /**
  * The resolved registry the editor instance holds: at most one review
- * contribution (first registration wins), all custom node definitions in
- * registration order.
+ * contribution and at most one collaboration contribution (first registration
+ * wins for each), all custom node definitions in registration order.
  */
 export interface EditorModuleRegistry {
   readonly review: ReviewModuleContribution | null;
+  readonly collaboration: CollaborationModuleContribution | null;
   readonly customNodes: readonly unknown[];
   /** Every claimed payload namespace, deduplicated, in registration order. */
   readonly customNodePayloadNamespaces: readonly string[];
@@ -145,6 +159,7 @@ export interface EditorModuleRegistry {
 
 const EMPTY_REGISTRY: EditorModuleRegistry = Object.freeze({
   review: null,
+  collaboration: null,
   customNodes: Object.freeze([]) as readonly unknown[],
   customNodePayloadNamespaces: Object.freeze([]) as readonly string[],
   customNodeDiagnostics: Object.freeze([]) as readonly ((diagnostic: unknown) => void)[],
@@ -156,6 +171,7 @@ export function resolveEditorModules(
 ): EditorModuleRegistry {
   if (!modules || modules.length === 0) return EMPTY_REGISTRY;
   let review: ReviewModuleContribution | null = null;
+  let collaboration: CollaborationModuleContribution | null = null;
   const customNodes: unknown[] = [];
   const namespaces = new Set<string>();
   const diagnostics: ((diagnostic: unknown) => void)[] = [];
@@ -165,12 +181,21 @@ export function resolveEditorModules(
     // derivation runs. The second is ignored rather than throwing — a module
     // list assembled from independent sources must not take the editor down.
     if (module.review && review === null) review = module.review;
+    // Same rule as review: two collaboration modules is a configuration
+    // mistake, and silently merging two sessions would leave neither author
+    // able to say which replica attaches. The second is ignored rather than
+    // throwing — a module list assembled from independent sources must not
+    // take the editor down.
+    if (module.collaboration && collaboration === null) {
+      collaboration = module.collaboration;
+    }
     if (module.customNodes) customNodes.push(...module.customNodes);
     for (const namespace of module.customNodePayloadNamespaces ?? []) namespaces.add(namespace);
     if (module.onCustomNodeDiagnostic) diagnostics.push(module.onCustomNodeDiagnostic);
   }
   return {
     review,
+    collaboration,
     customNodes,
     customNodePayloadNamespaces: [...namespaces],
     customNodeDiagnostics: diagnostics,

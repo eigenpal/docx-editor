@@ -23,11 +23,13 @@
 import type { AutomationCapabilities, AutomationHost } from '../automation/index.ts';
 import { DEFAULT_FORMATTING_DISPLAY_MODE } from '../store/store/formattable-runs.ts';
 import type {
+  AutomationCommentWrite,
   AutomationCommentWriteResult,
   AutomationDocumentPort,
   AutomationPortApplyResult,
   AutomationStagedOps,
 } from '../automation/document-port.ts';
+import type { ReviewWriteIntent } from './paginated-surface-contract.ts';
 import { createAutomationHost } from '../automation/host.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
@@ -51,6 +53,26 @@ export const BROWSER_AUTOMATION_CAPABILITIES: AutomationCapabilities = Object.fr
   scrolling: true,
   layout: true,
 });
+
+/**
+ * Which review write a comment batch amounts to, decided BEFORE the commit.
+ *
+ * The callback below branches on the batch, so the gate cannot read the kind off it. `undefined`
+ * for a batch this lane refuses anyway (empty, or mixed kinds) — a caller that cannot be named is
+ * one a replica must not admit, and the branch inside reports the specific reason.
+ */
+function automationCommentIntent(
+  writes: readonly AutomationCommentWrite[]
+): ReviewWriteIntent | undefined {
+  if (writes.length === 0) return undefined;
+  if (writes.every((write) => write.kind === 'delete')) return 'comment-delete';
+  if (writes.length !== 1) return undefined;
+  const write = writes[0]!;
+  if (write.kind === 'resolve') return 'comment-resolve';
+  if (write.kind === 'create') return 'comment-add';
+  if (write.kind === 'reply') return 'comment-reply';
+  return undefined;
+}
 
 /**
  * An automation host over a live editor.
@@ -199,7 +221,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
             ? { ok: false, reason: 'refused' }
             : { ok: true, changed: true, commentId: created };
         return { committed: created !== null };
-      });
+      }, automationCommentIntent(writes));
       return outcome;
     },
     applyCustomNodeWrite(write, scope): AutomationPortApplyResult {
@@ -223,7 +245,7 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
               reason: result.detail ? `${result.reason}: ${result.detail}` : result.reason,
             };
         return { committed: result.ok };
-      });
+      }, 'package-scoped');
       return outcome;
     },
     save: () => sync()?.save() ?? null,

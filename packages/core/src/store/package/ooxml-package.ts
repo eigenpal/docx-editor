@@ -51,6 +51,7 @@ import {
   type OoxmlPart,
   type OoxmlReadRejection,
 } from './ooxml-tree.ts';
+import { captureXmlPartRoot } from './canonical-primitive-lower.ts';
 
 const CONTENT_TYPES_PART = '/[Content_Types].xml';
 const CONTENT_TYPES_NAMESPACE = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -345,10 +346,24 @@ function contentTypeFor(partName: string, index: ContentTypeIndex): string {
  * normalization, content-type indexing, relationship validation, entity-free XML — into one
  * loader, and returns a typed rejection rather than throwing from inside a decoder.
  */
+/**
+ * Times {@link readOoxmlPackage} has run in this process.
+ *
+ * Publishing one image used to save and re-parse the whole package. Tests count this so a
+ * large document cannot hide the extra parse behind wall-clock noise.
+ */
+let packageReadCount = 0;
+
+/** Test-observable count of {@link readOoxmlPackage} calls. */
+export function ooxmlPackageReadCount(): number {
+  return packageReadCount;
+}
+
 export function readOoxmlPackage(
   bytes: Uint8Array,
   limits: OoxmlPackageLimits = {}
 ): OoxmlPackageResult {
+  packageReadCount += 1;
   const zip = readZip(bytes, limits.zip ?? DEFAULT_ZIP_LIMITS);
   if (!zip.ok) return { ok: false, reason: zip.reason, detail: zip.detail };
 
@@ -508,9 +523,12 @@ export function writeOoxmlPackage(pkg: OoxmlPackage): Uint8Array {
 export function withPart(pkg: OoxmlPackage, part: OoxmlPart): OoxmlPackage {
   // Copy the map directly instead of spreading through an intermediate entry array; this
   // runs on every staged op of every transaction.
+  const previous = pkg.parts.get(part.name);
   const parts = new Map(pkg.parts);
   parts.set(part.name, part);
-  return Object.freeze({ ...pkg, parts });
+  const next = Object.freeze({ ...pkg, parts });
+  if (!previous || previous.root.id !== part.root.id) captureXmlPartRoot(part);
+  return next;
 }
 
 export {

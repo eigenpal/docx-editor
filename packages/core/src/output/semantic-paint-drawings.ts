@@ -124,7 +124,18 @@ export function drawingUrlRegistryFor(
     urlForReady(handle: ValidatedImageBytesHandle, mime: RenderableImageMime): string | null {
       const existing = urlsByKey.get(handle.resourceKey);
       if (existing) return existing;
-      const url = port.create(handle, mime);
+      let url: string;
+      try {
+        url = port.create(handle, mime);
+      } catch (error) {
+        // Layout marked the resource ready, but the validated bytes are gone — a
+        // package reset between layout and paint, or a stale handle. Paint must
+        // still finish; the placeholder stands until a later pass mints.
+        if (error instanceof Error && error.message.startsWith('PaintImageUrlSource:')) {
+          return null;
+        }
+        throw error;
+      }
       urlsByKey.set(handle.resourceKey, url);
       return url;
     },

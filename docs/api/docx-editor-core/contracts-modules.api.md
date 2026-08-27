@@ -5,6 +5,11 @@
 ```ts
 
 // @public
+export interface CollaborationModuleContribution {
+    readonly session: EditorCollaborationSession;
+}
+
+// @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
 
 // @public
@@ -24,6 +29,7 @@ export interface CommentRecord {
 
 // @public
 export interface EditorModule {
+    readonly collaboration?: CollaborationModuleContribution;
     readonly customNodePayloadNamespaces?: readonly string[];
     readonly customNodes?: readonly unknown[];
     readonly id: string;
@@ -33,6 +39,8 @@ export interface EditorModule {
 
 // @public
 export interface EditorModuleRegistry {
+    // (undocumented)
+    readonly collaboration: CollaborationModuleContribution | null;
     readonly customNodeDiagnostics: readonly ((diagnostic: unknown) => void)[];
     readonly customNodePayloadNamespaces: readonly string[];
     // (undocumented)

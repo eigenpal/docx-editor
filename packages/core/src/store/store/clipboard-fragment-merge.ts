@@ -26,11 +26,7 @@ import {
   withRelationships,
   withRelationshipsPartFor,
 } from '../package/package-edit.ts';
-import {
-  withBinaryParts,
-  allocateDrawingPropertyId,
-  validateEmbeddedImageBytes,
-} from '../package/drawing-package-edit.ts';
+import { withBinaryParts, validateEmbeddedImageBytes } from '../package/drawing-package-edit.ts';
 import { sniffImageMime, type SupportedImageMime } from '../package/image-resources.ts';
 import { ensureHyperlinkRelationship } from '../package/hyperlink-part.ts';
 import { ensureNotesPart } from '../package/note-lifecycle.ts';
@@ -58,6 +54,7 @@ import {
   rewriteIdentifiers,
   withRewrittenAttribute,
 } from './clipboard-fragment-identifiers.ts';
+import { mintFragmentUniqueIds } from './clipboard-fragment-unique-ids.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const HYPERLINK_REL = `${R_NS}/hyperlink`;
@@ -714,7 +711,8 @@ export function mergeFragmentIntoPackage(
   // ------------------------------------------------------------------
   // Unique-id namespaces — bookmarks, `wp:docPr`, SDT ids, revision ids — freshened over
   // the blocks AND the note bodies (the insert spec's "every namespace the fragment
-  // carries"). One shared counter per namespace keeps everything collision-free.
+  // carries"). One sequence per namespace keeps everything collision-free inside this paste;
+  // `clipboard-fragment-unique-ids.ts` is what keeps it collision-free against a PEER's.
   // ------------------------------------------------------------------
   const ownerPart = pkg.parts.get(ownerPartName)!;
   const allTravelling: OoxmlNode[] = [...blocks, ...transplants.flatMap((entry) => entry.bodies)];
@@ -761,30 +759,24 @@ export function mergeFragmentIntoPackage(
     }
   });
 
-  const bookmarkIdMap = new Map<string, string>();
-  if (fragmentBookmarkIds.length > 0) {
-    let nextBookmarkId =
-      maxNumericAttribute(ownerPart.root, (node) =>
-        node.kind !== 'textValue' && node.kind === 'bookmarkStart'
-          ? attributeValueOf(node, 'id')
-          : undefined
-      ) + 1;
-    for (const transplant of transplants) {
-      const notesPart = resolveNotesPart(pkg, transplant.kind);
-      if (!notesPart) continue;
-      nextBookmarkId = Math.max(
-        nextBookmarkId,
-        maxNumericAttribute(notesPart.root, (node) =>
-          node.kind !== 'textValue' && node.kind === 'bookmarkStart'
-            ? attributeValueOf(node, 'id')
-            : undefined
-        ) + 1
-      );
-    }
-    for (const id of fragmentBookmarkIds) {
-      if (!bookmarkIdMap.has(id)) bookmarkIdMap.set(id, String(nextBookmarkId++));
-    }
-  }
+  // All three counters at once, striped per actor when a collaboration transaction bound one
+  // and dense when none did. A refusal here is a namespace with no free id left; landing the
+  // paste anyway would reuse an id the document already holds.
+  const uniqueIds = mintFragmentUniqueIds({
+    pkg,
+    ownerPart,
+    notesParts: transplants
+      .map((transplant) => resolveNotesPart(pkg, transplant.kind))
+      .filter((part): part is OoxmlPart => part !== null),
+    travelling: allTravelling,
+    fragmentBookmarkIds,
+    hasRevision: fragmentHasRevision,
+    hasDocPr: fragmentHasDocPr,
+  });
+  if (!uniqueIds) return { ok: false, reason: 'merge-refused' };
+  const bookmarkIdMap = uniqueIds.bookmarkIds;
+  const revisionIdMap = uniqueIds.revisionIds;
+  const docPrIdMap = uniqueIds.docPrIds;
 
   // Pasted bookmark wins a name collision: the target's same-name markers go.
   if (pastedBookmarkNames.size > 0) {
@@ -823,36 +815,6 @@ export function mergeFragmentIntoPackage(
         pkg = withPart(pkg, { ...ownerPart, root: nextRoot });
       }
     }
-  }
-
-  const revisionIdMap = new Map<string, string>();
-  if (fragmentHasRevision) {
-    let nextRevisionId =
-      maxNumericAttribute(ownerPart.root, (node) =>
-        carriesPastedRevisionId(node) ? attributeValueOf(node, 'id') : undefined
-      ) + 1;
-    walkAll(allTravelling, (node) => {
-      if (!carriesPastedRevisionId(node)) return;
-      const id = attributeValueOf(node, 'id');
-      if (id !== undefined && !revisionIdMap.has(id)) {
-        revisionIdMap.set(id, String(nextRevisionId++));
-      }
-    });
-  }
-
-  const docPrIdMap = new Map<string, string>();
-  if (fragmentHasDocPr) {
-    const allocated = allocateDrawingPropertyId(pkg);
-    let nextDocPrId = allocated.ok ? allocated.id : 100_000;
-    walkAll(allTravelling, (node) => {
-      if (node.kind === 'textValue' || node.kind !== 'drawingDocPr') return;
-      const value = node.attributes.find(
-        (attribute) => attribute.localName === 'id' && attribute.namespaceUri === ''
-      )?.value;
-      if (value !== undefined && !docPrIdMap.has(value)) {
-        docPrIdMap.set(value, String(nextDocPrId++));
-      }
-    });
   }
 
   // ------------------------------------------------------------------

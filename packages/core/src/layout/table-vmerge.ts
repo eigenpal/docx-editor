@@ -6,8 +6,24 @@
 // restarts, omitted columns) match the historical scan semantics: a merge ends
 // at the first non-continue or missing cell at that column.
 
-import type { TableRowFragmentRecord } from './semantic-records.ts';
 import { MAX_TABLE_COLUMNS } from './semantic-table.ts';
+
+/**
+ * All a cell has to expose to take part in a merge chain. Both a laid-out
+ * `TableCellFragmentRecord` and an authored `SemanticTableCell` satisfy it, so the same
+ * pass resolves a page fragment and the authored rows a table is about to be paginated from.
+ */
+export interface VMergeResolveCell {
+  readonly id: string;
+  readonly gridColumn: number;
+  readonly vMergeContinue: boolean;
+}
+
+/** A row of {@link VMergeResolveCell}s, plus whether it is a repeated `w:tblHeader` copy. */
+export interface VMergeResolveRow {
+  readonly cells: readonly VMergeResolveCell[];
+  readonly isHeaderRepeat?: boolean;
+}
 
 /**
  * Aggregate ceiling on cells visited during vMerge span resolve across one layout
@@ -63,7 +79,7 @@ export interface VMergeResolveOptions {
  * carried-in continuation is itself a head and appears in the map.
  */
 export function resolveVMergeSpans(
-  rows: readonly TableRowFragmentRecord[],
+  rows: readonly VMergeResolveRow[],
   work?: TableVMergeResolveWork,
   budget?: TableVMergeResolveBudget,
   options?: VMergeResolveOptions

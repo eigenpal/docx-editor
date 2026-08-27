@@ -45,7 +45,9 @@
    shadow) closes the `--doc-surface` band DIRECTLY under the toolbar pill. The
    ruler row lives outside, on the gray `--doc-bg` workspace below the seam.
    `z-index` lifts the seam shadow over the workspace; the demo menus open
-   inside this stacking context, above everything below. */
+   inside this stacking context, above everything below — so the band must sit
+   in the overlay band, or the navigation pane (chrome band, 40) paints over
+   every menu the toolbar opens. */
 .demo-chrome {
   flex: none;
   display: flex;
@@ -54,7 +56,7 @@
   border-bottom: 1px solid var(--doc-border);
   box-shadow: 0 1px 3px var(--doc-shadow-subtle);
   position: relative;
-  z-index: 30;
+  z-index: var(--doc-z-overlay, 50);
 }
 
 /* Header bar: brand + menus | editable title | live status + switchers.

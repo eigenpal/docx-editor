@@ -34,6 +34,10 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  */
 
 export { reviewModule, type ReviewModuleOptions } from '../review/review-module.ts';
+export {
+  collaborationModule,
+  type CollaborationModuleOptions,
+} from '../collaboration/collaboration-module.ts';
 export { type ProLicenseOptions } from '../license.ts';
 export {
   DocxEditorReview,
@@ -45,6 +49,15 @@ export {
   type ReviewPartProps,
   type ReviewProps,
 } from './DocxEditorReview';
+export {
+  DocxEditorCollaboration,
+  type CollaborationAvatarProps,
+  type CollaborationAvatarRenderProps,
+  type CollaborationAvatarsProps,
+  type CollaborationCaretLabelRenderProps,
+  type CollaborationCaretLabelsProps,
+  type DocxEditorCollaborationNamespace,
+} from './DocxEditorCollaboration.tsx';
 export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.tsx';
 export {
   CustomNodeContextMenu,
@@ -64,3 +77,31 @@ export {
   type ReviewItemView,
   type UseReviewReturn,
 } from './useReview';
+export {
+  useCollaborationStatus,
+  type UseCollaborationStatusReturn,
+} from './useCollaborationStatus.ts';
+export { useCollaborationParticipants } from './useCollaborationParticipants.ts';
+export {
+  useDocumentCollaboration,
+  type UseDocumentCollaborationConnectOptions,
+  type UseDocumentCollaborationOptions,
+  type UseDocumentCollaborationReturn,
+} from './useDocumentCollaboration.ts';
+export type {
+  CollaborationFailure,
+  CollaborationFailureCode,
+  CollaborationIdentity,
+  CollaborationParticipant,
+  CollaborationRemoteSelection,
+  CollaborationRemoteSelectionAddress,
+  CollaborationSelectionKind,
+  CollaborationStatus,
+  CollaborationStatusSnapshot,
+} from '@docx-editor.dev/core/collaboration';
+export type {
+  CollaborationBootstrap,
+  CollaborationIdentityUpdate,
+  CollaborationSession,
+} from '../collaboration/session.ts';
+export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';

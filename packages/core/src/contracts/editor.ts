@@ -26,6 +26,7 @@ import type { InteractionOutcome } from './interaction';
 // below for the same reason the review types are: an adapter is not allowed to import the
 // layout lane, so a form it must construct has to be nameable from this contract.
 import type { SemanticPosition, SemanticSelection } from '../layout/semantic-interaction.ts';
+import type { CollaborationStatus } from '../collaboration/index.ts';
 import type {
   ColorValue,
   ContentControlFilter,
@@ -1584,6 +1585,15 @@ export interface EditorSnapshot {
    * vocabulary and memoized per revision.
    */
   readonly hasReviewContent?: boolean;
+  /**
+   * Lifecycle of the attached collaboration replica, or `'inactive'` when no
+   * collaboration module is registered.
+   *
+   * The free tier's honest upsell signal: a host can render from this value
+   * without importing `@docx-editor.dev/pro`. When a module is registered the
+   * field follows the session's `status()`.
+   */
+  readonly collaborationStatus: CollaborationStatus | 'inactive';
   /**
    * How edits are written right now.
    *

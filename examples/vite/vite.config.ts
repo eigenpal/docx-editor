@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin, type UserConfig } from 'vite';
 import { readFile } from 'node:fs/promises';
 import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
@@ -82,7 +82,10 @@ function canonicalFixturePlugin(): Plugin {
   };
 }
 
-export default defineConfig(async () => {
+// Annotated rather than inferred: inferring this object against Vite's `UserConfigExport`
+// union blows the comparison depth limit, and the resulting error names the whole config
+// instead of whatever is actually wrong in it.
+export default defineConfig(async (): Promise<UserConfig> => {
   const stars = await fetchGitHubStars();
   // `@docx-editor.dev/core` lives in a separate repo and is consumed from npm,
   // so it always resolves via node_modules — only workspace-local packages get
@@ -123,12 +126,24 @@ export default defineConfig(async () => {
             // `editor` and the `contracts/*` single-file entries are matched above / by the
             // capture.
             {
-              find: /^@docx-editor\.dev\/core\/(binding|layout|output|store|sync|clients|server)$/,
+              find: /^@docx-editor\.dev\/core\/(binding|collaboration|layout|output|store|sync|clients|server)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/$1/index.ts'),
             },
             {
               find: /^@docx-editor\.dev\/core\/contracts\/(.+)$/,
               replacement: path.join(monorepoRoot, 'packages/core/src/contracts/$1.ts'),
+            },
+            {
+              find: '@docx-editor.dev/pro/collaboration/webrtc',
+              replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/webrtc.ts'),
+            },
+            {
+              find: '@docx-editor.dev/pro/collaboration',
+              replacement: path.join(monorepoRoot, 'packages/pro/src/collaboration/index.ts'),
+            },
+            {
+              find: '@docx-editor.dev/pro/react/webrtc',
+              replacement: path.join(monorepoRoot, 'packages/pro/src/react/webrtc.ts'),
             },
             {
               find: '@docx-editor.dev/pro/react',
@@ -159,10 +174,14 @@ export default defineConfig(async () => {
     },
     css: {
       postcss: {
+        // Two copies of postcss are installed, so `tailwindcss` and `autoprefixer` are typed
+        // against a different one than vite's `AcceptedPlugin`. Identical shapes, unrelated
+        // types. Deduplicating the dependency is the real fix; casting keeps that a dependency
+        // problem rather than a reason to leave this whole project unchecked.
         plugins: [
           tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
           autoprefixer(),
-        ],
+        ] as UserConfig['css'] extends { postcss?: { plugins?: infer P } } ? P : never,
       },
     },
     define: {
@@ -174,6 +193,9 @@ export default defineConfig(async () => {
     server: {
       port: 5173,
       open: false,
+      // Collaboration Playwright starts its own Vite. Disable HMR there so a
+      // concurrent edit of engine source cannot remount the editor mid-suite.
+      ...(process.env.COLLAB_E2E === '1' ? { hmr: false, watch: null } : {}),
     },
     build: {
       outDir: 'dist',

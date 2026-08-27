@@ -14,10 +14,21 @@ import { strFromU8, strToU8 } from 'fflate';
 import { createNodeIdAllocator, insertChildren } from './ooxml-edit.ts';
 import { readOoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
-import type { OoxmlPackage } from './ooxml-package.ts';
+import { withPart, type OoxmlPackage } from './ooxml-package.ts';
 import { partNameKey } from './opc-names.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { readXml, type XmlNode } from './xml-reader.ts';
+import {
+  MAX_RELATIONSHIP_NUMBER,
+  freePackageRelationshipId,
+  nextStripedDecimalId,
+  resolveAllocationActor,
+} from './actor-scoped-ids.ts';
+import {
+  recordPutContentTypeOverride,
+  recordPutRelationship,
+  runWithoutJournalCapture,
+} from './canonical-primitive-capture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
@@ -213,15 +224,27 @@ function sequenceInsertIndex(
   return at;
 }
 
-/** The largest existing id in a set, so a new one cannot collide. */
+/**
+ * Next unused `w:numId` / `w:abstractNumId`.
+ *
+ * No actor: one past the highest, the sequence this file minted before striping. `w:numId`
+ * 0 is Word's "no numbering" sentinel, so even a stripe that lands on 0 advances one class.
+ * An attached actor takes the next unused id in its residue, so two peers creating lists
+ * from the same snapshot cannot weld `numbering.xml` onto one shared `numId`.
+ */
 function nextFreeId(nodes: readonly OoxmlElement[], attributeName: string): number {
+  const used = new Set<string>(['0']);
   let max = 0;
   for (const node of nodes) {
     const raw = attribute(node, attributeName);
     if (!raw || !/^\d{1,9}$/.test(raw)) continue;
-    max = Math.max(max, Number(raw));
+    const value = Number(raw);
+    used.add(String(value));
+    max = Math.max(max, value);
   }
-  return max + 1;
+  const actor = resolveAllocationActor();
+  if (!actor) return max + 1;
+  return Number(nextStripedDecimalId(used, actor, MAX_RELATIONSHIP_NUMBER));
 }
 
 export interface EnsuredListDefinition {
@@ -293,29 +316,34 @@ export function ensureListDefinition(
 
   // A new `w:abstractNum` must precede every `w:num` (17.9.1). Each element lands at its
   // CT_NUMBERING_SEQUENCE slot, while a reused template leaves existing children untouched.
-  let partWithAbstract = numbering;
-  if (newAbstract) {
-    const inserted = insertChildren(
-      numbering,
+  const build = (): OoxmlPart | null => {
+    let partWithAbstract = numbering;
+    if (newAbstract) {
+      const inserted = insertChildren(
+        numbering,
+        root.id,
+        sequenceInsertIndex(root.children, CT_NUMBERING_SEQUENCE, 'abstractNum'),
+        [newAbstract]
+      );
+      if (!inserted.ok) return null;
+      partWithAbstract = inserted.part;
+    }
+    const withNum = insertChildren(
+      partWithAbstract,
       root.id,
-      sequenceInsertIndex(root.children, CT_NUMBERING_SEQUENCE, 'abstractNum'),
-      [newAbstract]
+      sequenceInsertIndex(partWithAbstract.root.children, CT_NUMBERING_SEQUENCE, 'num'),
+      [newNum]
     );
-    if (!inserted.ok) return null;
-    partWithAbstract = inserted.part;
-  }
-  const withNum = insertChildren(
-    partWithAbstract,
-    root.id,
-    sequenceInsertIndex(partWithAbstract.root.children, CT_NUMBERING_SEQUENCE, 'num'),
-    [newNum]
-  );
-  if (!withNum.ok) return null;
+    return withNum.ok ? withNum.part : null;
+  };
 
-  let next: OoxmlPackage = Object.freeze({
-    ...pkg,
-    parts: new Map([...pkg.parts, [NUMBERING_PART, withNum.part]]),
-  });
+  // A FIRST list creates the part, and a splice into a root no peer has yet cannot replay:
+  // the journal has to carry the part itself. So the build is suppressed in that case and
+  // `withPart` records the finished root; an existing part keeps the narrow splices.
+  const built = existingPart ? build() : runWithoutJournalCapture(build);
+  if (!built) return null;
+
+  let next: OoxmlPackage = withPart(pkg, built);
   if (!existingPart) {
     // FAIL CLOSED, both of them: a package that gained `/word/numbering.xml` without the
     // matching relationship or content-type override is not a package worth returning.
@@ -430,10 +458,7 @@ export function ensureNumberingLevel(
   );
   if (!inserted.ok) return null;
 
-  return Object.freeze({
-    ...pkg,
-    parts: new Map([...pkg.parts, [NUMBERING_PART, inserted.part]]),
-  });
+  return withPart(pkg, inserted.part);
 }
 
 /** Re-key a grafted subtree so it cannot collide with the part it is joining. */
@@ -483,25 +508,31 @@ function withNumberingRelationship(pkg: OoxmlPackage): OoxmlPackage | null {
   };
   const relationships = new Map([...pkg.relationships, [owner, [...owned, record]]]);
 
+  // The relationship travels as ONE first-class effect, the way `withRelationship` does it: a
+  // peer rebuilds the `.rels` entry from the record, so the tree splice under it is suppressed
+  // rather than journaled twice. Recording nothing at all is what left a replicated first list
+  // pointing at a numbering part the peer had no relationship for.
   if (!existing) {
-    return Object.freeze({
-      ...pkg,
-      parts: new Map([...pkg.parts, [relsName, authored.part]]),
-      relationships,
-    });
+    const next = Object.freeze({ ...withPart(pkg, authored.part), relationships });
+    recordPutRelationship(owner, record);
+    return next;
   }
   const nextId = createNodeIdAllocator(existing);
   const node = authored.part.root.children[0];
   if (!node) return null;
-  const inserted = insertChildren(existing, existing.root.id, existing.root.children.length, [
-    withFreshIds(node, nextId),
-  ]);
+  const inserted = runWithoutJournalCapture(() =>
+    insertChildren(existing, existing.root.id, existing.root.children.length, [
+      withFreshIds(node, nextId),
+    ])
+  );
   if (!inserted.ok) return null;
-  return Object.freeze({
+  const next = Object.freeze({
     ...pkg,
     parts: new Map([...pkg.parts, [relsName, inserted.part]]),
     relationships,
   });
+  recordPutRelationship(owner, record);
+  return next;
 }
 
 /** `/word/document.xml` -> `/word/_rels/document.xml.rels`. */
@@ -512,18 +543,7 @@ function relsPartNameFor(partName: string): string {
 
 /** An `rIdN` no owner in the package already uses. */
 function freeRelationshipId(pkg: OoxmlPackage): string {
-  let max = 0;
-  for (const records of pkg.relationships.values()) {
-    for (const record of records) {
-      const match = /^rId(\d{1,9})$/.exec(record.id);
-      if (match) max = Math.max(max, Number(match[1]));
-    }
-  }
-  for (const external of pkg.externalTargets) {
-    const match = /^rId(\d{1,9})$/.exec(external.id);
-    if (match) max = Math.max(max, Number(match[1]));
-  }
-  return `rId${max + 1}`;
+  return freePackageRelationshipId(pkg);
 }
 
 const NUMBERING_OVERRIDE = `<Override PartName="${NUMBERING_PART}" ContentType="${NUMBERING_CONTENT_TYPE}"/>`;
@@ -579,7 +599,7 @@ function withNumberingContentType(pkg: OoxmlPackage): OoxmlPackage | null {
   if (after.children.length !== expected.length) return null;
   if (after.children.some((child, index) => child !== expected[index])) return null;
 
-  return Object.freeze({
+  const next = Object.freeze({
     ...pkg,
     partBytes: new Map([...pkg.partBytes, [CONTENT_TYPES_PART, strToU8(patched)]]),
     contentTypes: Object.freeze({
@@ -590,6 +610,8 @@ function withNumberingContentType(pkg: OoxmlPackage): OoxmlPackage | null {
       ]),
     }),
   });
+  recordPutContentTypeOverride(NUMBERING_PART, NUMBERING_CONTENT_TYPE);
+  return next;
 }
 
 interface ContentTypesShape {

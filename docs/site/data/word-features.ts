@@ -29,7 +29,14 @@ export type FeatureStatus =
   | 'planned'
   | 'none';
 
-export type FeatureTier = 'community' | 'premium';
+/**
+ * The tiers, as values rather than a bare union, so the test beside this file can check every
+ * row at runtime. An invalid tier shipped once because nothing typechecked this file; one source
+ * of truth means the suite catches it even where a type gate does not reach.
+ */
+export const FEATURE_TIERS = ['community', 'premium'] as const;
+
+export type FeatureTier = (typeof FEATURE_TIERS)[number];
 
 export type FeatureCategory =
   | 'text'
@@ -972,13 +979,15 @@ export const wordFeatures: WordFeature[] = [
   // --- Collaboration, i18n & editing UX ---------------------------------------
   {
     id: 'collab.realtime',
-    name: 'Realtime collaboration (Yjs)',
+    name: 'Real-time collaboration',
     category: 'collaboration',
-    editing: 'full',
-    rendering: 'full',
-    roundTrip: 'full',
-    tier: 'community',
-    notes: 'Live cursors, presence, comment sync, per-author tracked-change attribution.',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'preserved',
+    tier: 'premium',
+    docsLink: '/docs/2.x/pro/collaboration',
+    notes:
+      'Yjs replicates text, formatting, document structure, review content, tables of contents, and custom nodes. Presence includes participants, carets, and cross-paragraph selections. Each participant can undo only their edits. Use WebRTC, Hocuspocus, or another Yjs 13 provider. Optional offline editing merges buffered changes after reconnection. Applying an edited ProseMirror document is unavailable while a replica is attached.',
   },
   {
     id: 'collab.find-replace',

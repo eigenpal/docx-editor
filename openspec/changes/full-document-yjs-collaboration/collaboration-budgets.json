@@ -1,0 +1,249 @@
+{
+  "schema": 1,
+  "task": "full-document-yjs-collaboration/0.6",
+  "definedAt": "2026-08-26",
+  "source": {
+    "baselineTask": "full-document-yjs-collaboration/1.7",
+    "baselinePath": "openspec/changes/full-document-yjs-collaboration/local-edit-baseline.json",
+    "capturedAt": "2026-08-26T09:47:07.167Z",
+    "editBenchGates": "scripts/bench/edit-bench-gates.test.ts",
+    "editBenchScenario": "steady-middle-text",
+    "collaborationBench": "scripts/bench/collaboration-local-edit-bench.ts"
+  },
+  "fixture": {
+    "path": "e2e/fixtures/synthetic-long-edit.docx",
+    "bytes": 27897,
+    "sha256": "ca8ee28a8d40ae7914a820303b96ddbbe8f06d37325b0fc2ae6f1140aea96321"
+  },
+  "target": {
+    "paragraphIndex": 1599,
+    "paragraphId": "/word/document.xml#0.0.1599",
+    "collaborationParagraphId": "4A7E6EC2",
+    "edit": "insertText('X') at offset 0",
+    "measurer": "fixed(6px,14px)"
+  },
+  "samples": {
+    "pullRequestWork": { "warmup": 1, "runs": 1 },
+    "maintainedHardware": { "warmup": 2, "runs": 9 },
+    "browserTyping": { "isolatedSamples": 100, "unpacedCharacters": 180 }
+  },
+  "hardwareProfile": {
+    "id": "bun-1.3.14-arm64-darwin",
+    "runtime": "Bun 1.3.14",
+    "arch": "arm64",
+    "platform": "darwin",
+    "compareKeys": ["runtime", "arch", "platform"]
+  },
+  "lanes": {
+    "workCounters": {
+      "pullRequest": true,
+      "maintainedHardware": true,
+      "reason": "Work counters are deterministic for this fixture, edit, and measurer."
+    },
+    "timings": {
+      "pullRequest": false,
+      "maintainedHardware": true,
+      "reason": "Wall-clock values change with CPU, load, and thermal state."
+    },
+    "rss": {
+      "pullRequest": false,
+      "maintainedHardware": true,
+      "reason": "RSS is process-level and hardware-sensitive."
+    },
+    "external": {
+      "pullRequest": false,
+      "maintainedHardware": false,
+      "reason": "External memory remains informational because its local denominator is zero."
+    },
+    "heapUsed": {
+      "pullRequest": false,
+      "maintainedHardware": false,
+      "reason": "Bun 1.3.14 reported a 0 heapUsed delta across edit, layout, and paint."
+    },
+    "browserPresentation": {
+      "pullRequest": false,
+      "maintainedHardware": true,
+      "reason": "The 16.7 ms / 33.4 ms sub-frame gate is a Chromium typing budget, not a happy-dom paint budget."
+    }
+  },
+  "ratios": {
+    "allocationPassExclusive": 3,
+    "allocationOptimizeMinInclusive": 3,
+    "allocationKillInclusive": 10,
+    "layoutPaintWorkMaxInclusive": 2,
+    "timingMaxInclusive": 2,
+    "rssMaxInclusive": 2
+  },
+  "localExact": {
+    "canonical": {
+      "totalBefore": 34555,
+      "totalAfter": 34557,
+      "allocated": 6,
+      "reused": 34551,
+      "allocatedOnParagraphPath": 6,
+      "allocatedOffParagraphPath": 0
+    },
+    "dirty": {
+      "impact": "text-local",
+      "dirty": ["/word/document.xml#0.0.1599"],
+      "created": [],
+      "deleted": [],
+      "dependencyKeyCount": 1
+    },
+    "layout": {
+      "placed": 13,
+      "total": 3200,
+      "reusedPages": 154,
+      "fullPasses": 1,
+      "pagesBefore": 204,
+      "pagesAfter": 204,
+      "cache": { "hits": 12, "misses": 3201, "evictions": 0, "size": 3201 }
+    },
+    "paint": {
+      "pagesBefore": 204,
+      "pagesAfter": 204,
+      "reusedPageRecords": 203,
+      "newPageRecords": 1,
+      "materializedPages": 4,
+      "reusedPaintElements": 204,
+      "rebuiltPaintElements": 0
+    },
+    "yjsProofSchema": {
+      "incrementalUpdateBytes": 14,
+      "snapshotBytes": 742057,
+      "paragraphCount": 3200
+    },
+    "memory": {
+      "heapUsedDeltaMedian": {
+        "edit": 0,
+        "layout": 0,
+        "paint": 0,
+        "editThroughPaint": 0
+      },
+      "rssDeltaMedian": { "editThroughPaint": 19628032 },
+      "externalDeltaMedian": { "editThroughPaint": 0 }
+    },
+    "timings": {
+      "transaction": { "medianMs": 6.770292000000154, "p95Ms": 8.56491700000015 },
+      "layout": { "medianMs": 1.8675419999999576, "p95Ms": 2.3654159999998683 },
+      "paint": { "medianMs": 12.715791000000081, "p95Ms": 14.397958000000017 },
+      "total": { "medianMs": 21.434749999999894, "p95Ms": 24.36049899999989 }
+    }
+  },
+  "pullRequest": {
+    "localOneCharacter": {
+      "canonical": "exact",
+      "dirty": "exact",
+      "layout": "exact",
+      "paint": "exact",
+      "yjsProofSchema": "exact"
+    },
+    "remoteOneCharacter": {
+      "canonicalAllocated": {
+        "passMaxExclusive": 18,
+        "optimizeMinInclusive": 18,
+        "optimizeMaxExclusive": 60,
+        "killMinInclusive": 60,
+        "offPathMustBe": 0
+      },
+      "dirty": {
+        "impact": "text-local",
+        "dirty": ["/word/document.xml#0.0.1599"],
+        "created": [],
+        "deleted": [],
+        "dependencyKeyCount": 1
+      },
+      "layout": {
+        "placedMaxInclusive": 26,
+        "total": 3200,
+        "reusedPagesMinInclusive": 154,
+        "fullPasses": 1,
+        "pagesBefore": 204,
+        "pagesAfter": 204,
+        "cacheEvictions": 0,
+        "cacheHitsMinInclusive": 12
+      },
+      "pageIdentity": {
+        "pagesBefore": 204,
+        "pagesAfter": 204,
+        "reusedPageRecordsMinInclusive": 203,
+        "newPageRecordsMaxInclusive": 1
+      },
+      "paint": {
+        "materializedPages": 4,
+        "reusedPaintElements": 204,
+        "rebuiltPaintElements": 0
+      },
+      "bytes": {
+        "incrementalUpdatePassMaxExclusive": 42,
+        "incrementalUpdateKillMinInclusive": 140,
+        "incrementalUpdateAbsoluteMaxExclusive": 4096,
+        "snapshotGrowthPassMaxExclusive": 42,
+        "snapshotGrowthKillMinInclusive": 140,
+        "proofSchemaSnapshotBytes": 742057
+      }
+    },
+    "reconnect": {
+      "empty": {
+        "allocated": 0,
+        "allocatedOffParagraphPath": 0,
+        "dirty": [],
+        "created": [],
+        "deleted": [],
+        "extraFullPasses": 0,
+        "pagesBeforeEqualsPagesAfter": true,
+        "rebuiltPaintElements": 0,
+        "snapshotDeltaMaxBytes": 7420
+      },
+      "oneBufferedCharacter": "remoteOneCharacter"
+    }
+  },
+  "maintainedHardware": {
+    "remoteTimingMaxInclusive": {
+      "transaction": { "medianMs": 13.540584000000308, "p95Ms": 17.1298340000003 },
+      "layout": { "medianMs": 3.7350839999999152, "p95Ms": 4.730831999999737 },
+      "paint": { "medianMs": 25.431582000000162, "p95Ms": 28.795916000000034 },
+      "total": { "medianMs": 42.86949999999979, "p95Ms": 48.72099799999978 }
+    },
+    "rssDeltaMaxInclusive": { "editThroughPaint": 39256064 },
+    "externalDeltaPolicy": "record-only-zero-local-denominator",
+    "browserTyping": {
+      "eligibleMedianMs": 16.7,
+      "eligibleP95Ms": 33.4,
+      "surface": "Chromium beforeinput presentation, not happy-dom paint"
+    },
+    "reconnect": {
+      "oneBufferedCharacterTotal": {
+        "medianMs": 42.86949999999979,
+        "p95Ms": 48.72099799999978
+      },
+      "empty": "informational until task 7.4; must not add layout or paint work"
+    }
+  },
+  "failurePolicy": {
+    "fixtureHashMismatch": "fail-immediately",
+    "pullRequestWorkMiss": "fail-pr",
+    "pullRequestTimingOrRss": "do-not-fail-pr",
+    "hardwareTimingOrRssMiss": "fail-maintained-job-on-recorded-profile",
+    "hardwareProfileMismatch": "skip-timing-still-run-work",
+    "timingFlake": "rerun-once-same-hardware",
+    "allocationOptimizeBand": "one-bounded-optimization-then-remeasure",
+    "allocationKill": "reject-representation",
+    "identityOrMoveKill": "reject-representation",
+    "mutationClassRatioMiss": "keep-experimental",
+    "bothRepresentationsFail": "stop-no-editor-integration"
+  },
+  "keystrokePath": {
+    "replicationInsideTransact": true,
+    "pendingJournalsAfterLocalTransactMustBe": 0,
+    "flushSeam": "CollaborationDocumentPort.flushPendingJournals",
+    "why": "A journal carries absolute spliceText and spliceChildren positions against the tree it was diffed against. Holding one past the commit lets a remote update move that tree first, and an interior stale position stays in bounds, so validation admits it and every replica agrees on content nobody authored. Replication is therefore part of the commit. The transaction timings above are measured with the Yjs write included.",
+    "measuredCostMs": {
+      "fixture": "e2e/fixtures/synthetic-long-edit.docx",
+      "deferredTransactMedian": 2.249,
+      "deferredFlushMedian": 2.201,
+      "synchronousTransactMedian": 4.901,
+      "synchronousFlushMedian": 0.0003
+    }
+  }
+}

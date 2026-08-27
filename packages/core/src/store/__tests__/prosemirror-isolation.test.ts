@@ -33,6 +33,7 @@ const TEST_DIRECTORIES = new Set(['__tests__', 'test', 'tests']);
 const PM_FREE_ROOTS: readonly { readonly label: string; readonly dir: string }[] = [
   { label: 'public host contracts', dir: 'core/src' },
   { label: 'store + save + semantic history', dir: 'core/src/store' },
+  { label: 'collaboration', dir: 'core/src/collaboration' },
   { label: 'layout', dir: 'core/src/layout' },
   { label: 'output', dir: 'core/src/output' },
   // The browser editor facade is the composition root the adapters bind to, so it is a

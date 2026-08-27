@@ -21,6 +21,7 @@
 
 import { withPart, type OoxmlPackage } from './ooxml-package.ts';
 import { insertChildren, removeNode, replaceChildren } from './ooxml-edit.ts';
+import { runWithoutJournalCapture } from './canonical-primitive-capture.ts';
 import { XML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
@@ -188,10 +189,34 @@ export function withCustomXmlNode(
     ]);
     return replaced.ok ? withPart(pkg, replaced.part) : pkg;
   }
-  const appended = insertChildren(part, part.root.id, part.root.children.length, [authored], {
+  // Append would record `spliceChildren` at `children.length`. After concurrent first-create,
+  // orphan adoption is a materialize projection and does not write the peer's `node` into
+  // Yjs, so that index is past the shared child array and the journal refuses. Insert at 0
+  // stays in bounds. Bindings address a node by `@id`, not by sibling order.
+  const appended = insertChildren(part, part.root.id, 0, [authored], {
     deferValidation: true,
   });
-  return appended.ok ? withPart(pkg, appended.part) : pkg;
+  if (!appended.ok) return pkg;
+  return withPart(pkg, withNodesSortedByPayloadId(appended.part));
+}
+
+function payloadIdOfNode(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return node.id;
+  return node.attributes.find((attribute) => attribute.localName === 'id')?.value ?? node.id;
+}
+
+function withNodesSortedByPayloadId(part: OoxmlPart): OoxmlPart {
+  const sorted = [...part.root.children].sort((left, right) =>
+    payloadIdOfNode(left).localeCompare(payloadIdOfNode(right))
+  );
+  if (sorted.every((child, index) => child === part.root.children[index])) return part;
+  // The peer sorts adopted `node` children by payload `@id`. Journaling this reorder would
+  // splice by the store's child count, which is past the Yjs array after a concurrent
+  // first-create, so the peer would refuse a write that only changed order.
+  const replaced = runWithoutJournalCapture(() =>
+    replaceChildren(part, part.root.id, sorted, { deferValidation: true })
+  );
+  return replaced.ok ? replaced.part : part;
 }
 
 /** Drop one node by id. A store that never held it comes back unchanged. */

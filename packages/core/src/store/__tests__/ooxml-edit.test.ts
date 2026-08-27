@@ -142,6 +142,18 @@ describe('atomic tree-edit primitives (task 4.5)', () => {
     expect(new Set(minted).size).toBe(3);
     for (const id of minted) expect(findNode(part, id)).toBeNull();
   });
+
+  test('two documents opened from the same bytes mint the SAME ids', () => {
+    // Deliberate, and load-bearing for collaboration: a minted id is a part-scoped counter,
+    // so two replicas that started from one baseline both mint `#new:0` for the different
+    // paragraphs each of them inserted. Shared identity for NEW nodes therefore cannot be a
+    // canonical node id; the replication layer maps them to replica-scoped logical ids.
+    const mint = (): string =>
+      createNodeIdAllocator(
+        load(`<w:document xmlns:w="${W}"><w:body><w:p/></w:body></w:document>`)
+      )();
+    expect(mint()).toBe(mint());
+  });
 });
 
 describe('generic unknown nodes survive supported edits (task 4.6)', () => {

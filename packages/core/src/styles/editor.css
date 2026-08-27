@@ -192,16 +192,18 @@
      something did. */
   /* Per-AUTHOR review colours. OOXML carries no colour on a revision — Word assigns one per
      author in the application — so this ramp is presentation policy, and overriding a slot
-     under `.docx-editor` restyles both the painted document and the review cards. Chosen to stay
-     distinguishable from each other and from the black body text. */
+     under `.docx-editor` restyles both the painted document and the review cards.
+     One hue family per slot, so two authors never read as the same colour: red, blue, purple,
+     teal, amber, magenta, slate, green. Each stays dark enough to carry white text on a filled
+     avatar and to separate from black body text. */
   --doc-review-author-0: #c0392b;
   --doc-review-author-1: #1f6fb2;
   --doc-review-author-2: #7d3c98;
   --doc-review-author-3: #117a65;
-  --doc-review-author-4: #b9770e;
-  --doc-review-author-5: #a93226;
+  --doc-review-author-4: #9a6206;
+  --doc-review-author-5: #c2185b;
   --doc-review-author-6: #2e4053;
-  --doc-review-author-7: #6c3483;
+  --doc-review-author-7: #2e7d32;
   /* Retained as an override hook for a host that wants one neutral margin rule instead of the
      kind-coloured pair. Nothing reads it by default. */
   --doc-review-change-bar: #767676;
@@ -2768,6 +2770,13 @@ a.docx-hyperlink:focus-visible {
 
 /* The engine-owned paginated surface: painted pages plus a semantic caret and selection.
  * Geometry comes entirely from the layout records; these rules only supply appearance. */
+/* Overlay chrome portals here. It must be the containing block, or the
+ * selection frame resolves against the scroll viewport and lands at the top of
+ * the window instead of on the drawing — especially on a page past the first. */
+.docx-content-mount {
+  position: relative;
+}
+
 .docx-paginated-surface {
   position: relative;
   outline: none;
@@ -3014,6 +3023,76 @@ a.docx-hyperlink:focus-visible {
   background-color: var(--doc-selection);
 }
 
+.docx-paginated-surface .docx-remote-selection-rect {
+  background-color: color-mix(in srgb, var(--doc-remote-color, var(--doc-accent)) 28%, transparent);
+  border-radius: 2px;
+}
+
+.docx-paginated-surface .docx-remote-caret {
+  background-color: var(--doc-remote-color, var(--doc-accent));
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px var(--doc-surface);
+}
+
+.docx-paginated-surface .docx-remote-caret-label {
+  position: absolute;
+  max-width: 180px;
+  overflow: hidden;
+  padding: 2px 6px;
+  transform: translateY(calc(-100% - 2px));
+  border-radius: 5px 5px 5px 1px;
+  background: var(--doc-remote-color, var(--doc-accent));
+  color: var(--doc-on-primary);
+  font:
+    600 11px/1.4 system-ui,
+    sans-serif;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Collaboration presence chrome (`docx-collaboration` family): the avatar stack the pro
+ * adapters ship. Mirrors `.docx-review__avatar` — a filled disc with initials — at chrome
+ * scale. The accent arrives per avatar as `--doc-collaboration-accent`, resolved by the
+ * SAME review-roster derivation the painted presence uses, so an avatar, a review card and
+ * the collaborator's caret agree about who draws in what.
+ */
+.docx-collaboration-avatars {
+  display: inline-flex;
+  align-items: center;
+}
+
+.docx-collaboration-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--doc-collaboration-accent, var(--doc-accent));
+  color: var(--doc-on-primary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* Same rule as the review disc: custom content must not spill past it. */
+  overflow: hidden;
+}
+
+/* Stacked discs overlap; the surface-coloured ring keeps each edge readable. */
+.docx-collaboration-avatars .docx-collaboration-avatar {
+  box-shadow: 0 0 0 2px var(--doc-surface);
+}
+
+.docx-collaboration-avatars .docx-collaboration-avatar + .docx-collaboration-avatar {
+  margin-inline-start: -8px;
+}
+
+/* The "+N" chip carries a count, not an identity, so it stays out of the author ramp. */
+.docx-collaboration-avatar[data-overflow] {
+  background: var(--doc-text-muted);
+}
+
 /* ========================================================================
  * COMPOUND TOOLBAR (`docx-toolbar` family) — the composition API's default
  * chrome bar, the chrome spec's visual recipe:
@@ -3160,6 +3239,20 @@ a.docx-hyperlink:focus-visible {
  * browser we support, and scopes the escape hatch to the short interval the picker exists. */
 .docx-toolbar__more-panel:has(.docx-toolbar__zoom-menu) {
   overflow-y: visible;
+}
+
+/* Same hatch for the font and style pickers: their 300px lists are popovers too,
+ * and the panel's scrollport would clip them when the group collapses into More. */
+.docx-toolbar__more-panel:has(.docx-toolbar__font-family-content),
+.docx-toolbar__more-panel:has(.docx-toolbar__style-content) {
+  overflow-y: visible;
+}
+
+/* Right-edge escape, matching the font-size menu below. */
+.docx-toolbar__more-panel .docx-toolbar__font-family-content,
+.docx-toolbar__more-panel .docx-toolbar__style-content {
+  right: 0;
+  left: auto;
 }
 
 /* Right-edge controls open toward the panel instead of beyond the viewport. */
@@ -3309,9 +3402,12 @@ a.docx-hyperlink:focus-visible {
 }
 
 /* The font-family compound: the trigger is the transparent picker trigger
- * ("Arial ∨"); the popup is the shared dropdown card. */
+ * ("Arial ∨"); the popup is the shared dropdown card. The root is the
+ * positioning context the absolute popup anchors to. */
 .docx-toolbar__font-family,
 .docx-toolbar__style {
+  position: relative;
+  display: inline-block;
   flex: none;
 }
 
@@ -3450,9 +3546,19 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-text);
 }
 
+/* Anchored under the trigger. The z-index is the overlay band token, like every
+ * other transient toolbar surface — a literal here once left the popup UNDER the
+ * navigation panel, which sits in the chrome band. */
 .docx-toolbar__font-family-content,
 .docx-toolbar__style-content {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: var(--doc-z-overlay);
   margin-top: 4px;
+  min-width: 100%;
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .docx-toolbar__font-family-item,

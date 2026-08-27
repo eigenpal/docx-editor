@@ -15,6 +15,7 @@
 // structurally shared: an entry retains the previous part by reference rather than cloning
 // it, so undo is a pointer swap and history costs nothing per entry.
 
+import { runWithTransactionActor } from '../package/actor-scoped-ids.ts';
 import { validateOoxmlPartDelta, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
 import { validatePackageInvariants } from '../package/package-edit.ts';
@@ -68,6 +69,10 @@ export interface TreeModelChange {
   readonly toRevision: number;
   readonly commitId: string;
   readonly origin: string;
+  /** Stable collaboration actor attribution, when the caller supplied it. */
+  readonly actorId?: string;
+  /** Stable collaboration operation identity, when the caller supplied it. */
+  readonly operationId?: string;
   readonly dirty: readonly string[];
   readonly created: readonly string[];
   readonly deleted: readonly string[];
@@ -124,6 +129,17 @@ export interface TransactionContext {
 /** How one transaction behaves: its story scope, its attribution, and its selection marks. */
 export interface TransactOptions {
   readonly origin?: string;
+  /** Stable actor attribution for collaboration and audit correlation. */
+  readonly actorId?: string;
+  /** Stable constituent identity for collaboration duplicate correlation. */
+  readonly operationId?: string;
+  /**
+   * Whether this transaction enters the legacy snapshot undo stack.
+   *
+   * Collaboration commits set this to false because their actor-local undo authority is the
+   * CRDT undo manager. Omitted preserves the ordinary non-collaborative history behavior.
+   */
+  readonly recordsHistory?: boolean;
   /**
    * A COMMAND is one user intent that may need several ops (a toolbar click applying a
    * property across a multi-run selection). It is still exactly one history entry, which is
@@ -393,6 +409,13 @@ export class TreeDocumentStore {
     build: (ctx: TransactionContext) => void,
     options: TransactOptions = {}
   ): TransactResult {
+    return runWithTransactionActor(options.actorId, () => this.commitTransaction(build, options));
+  }
+
+  private commitTransaction(
+    build: (ctx: TransactionContext) => void,
+    options: TransactOptions
+  ): TransactResult {
     const origin = options.origin ?? ORIGIN_IDS.mutationHuman;
     const before = this.current;
     const beforeRevision = this.rev;
@@ -605,7 +628,9 @@ export class TreeDocumentStore {
     // A PROJECTION-origin commit reconciles the view with state the store already holds.
     // It publishes a revision so consumers can re-derive, but it is not a user intent, so
     // it must not become an undo step (task 5.6).
-    const recordsHistory = origin !== ORIGIN_IDS.projection;
+    const recordsHistory =
+      options.recordsHistory ??
+      (origin !== ORIGIN_IDS.projection && origin !== ORIGIN_IDS.awareness);
 
     if (recordsHistory) {
       if (this.composition) {
@@ -647,7 +672,9 @@ export class TreeDocumentStore {
           impact,
           caret: committedCaret,
         },
-        options.story ?? this.storyRef ?? undefined
+        options.story ?? this.storyRef ?? undefined,
+        options.actorId,
+        options.operationId
       ),
     };
   }
@@ -745,7 +772,9 @@ export class TreeDocumentStore {
       impact: ImpactClass;
       caret?: SelectionMark;
     } | null,
-    story?: TreeStoryRef
+    story?: TreeStoryRef,
+    actorId?: string,
+    operationId?: string
   ): TreeModelChange {
     this.commitCounter += 1;
     const change: TreeModelChange = {
@@ -754,6 +783,8 @@ export class TreeDocumentStore {
       toRevision: this.rev,
       commitId: `commit-${this.commitCounter}`,
       origin,
+      ...(actorId ? { actorId } : {}),
+      ...(operationId ? { operationId } : {}),
       dirty: effects ? [...effects.dirty] : [],
       created: effects ? [...effects.created] : [],
       deleted: effects ? [...effects.deleted] : [],

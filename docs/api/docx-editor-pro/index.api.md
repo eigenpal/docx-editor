@@ -22,6 +22,15 @@ export interface ActivatedCustomNode {
 export type AnyCustomNodeDefinition = CustomNodeDefinition;
 
 // @public
+export function collaborationModule(options: CollaborationModuleOptions): EditorModule;
+
+// @public
+export interface CollaborationModuleOptions extends ProLicenseOptions {
+    // (undocumented)
+    readonly session: EditorCollaborationSession;
+}
+
+// @public
 export const CUSTOM_NODE_STORE_ROOT = "docxEditor";
 
 // @public

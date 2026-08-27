@@ -4,7 +4,15 @@ import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 // Nuxt remains private and has no publishable dist artifact.
-const packageDirs = ['core', 'react', 'vue', 'editor-api', 'i18n', 'pro', 'fonts'];
+const packageDirs = [
+  'core',
+  'react',
+  'vue',
+  'editor-api',
+  'i18n',
+  'pro',
+  'fonts',
+];
 const errors = [];
 
 // What a published artifact may name when it reaches for the engine: exactly the
