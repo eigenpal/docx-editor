@@ -155,11 +155,12 @@ export interface OverflowPageShell {
  * earlier overflow sheets in front of it all count. It is the sheet's array position, which the
  * notes pass turns into the page index when it reindexes at the end.
  *
- * That only holds because nothing the pass does afterwards inserts IN FRONT of a sheet already
- * minted, and that is an ordering the pass has to maintain rather than something it gets for
- * free: a `sectEnd` run inserts inside its own section, so it lands ahead of anything appended
- * at the document's end. `attachNotesToLayout` runs the section loop before the footnote drain
- * for exactly this reason — see the comment there.
+ * A sheet inserted INSIDE its own section is final at that moment, because every later run
+ * works at or beyond it. A footnote DRAIN sheet is not: it appends at the document's end before
+ * the section loop runs — which is the document order, continuation ahead of the section's
+ * endnotes — and each sheet an earlier section then inserts moves it one position along. Those
+ * sheets are re-resolved once every insertion is done, by `resettleMintedSheets` in
+ * `note-pagination.ts`, which is where the argument for this index actually lives.
  *
  * `box` is the sheet the new page occupies, which furniture is positioned against.
  */

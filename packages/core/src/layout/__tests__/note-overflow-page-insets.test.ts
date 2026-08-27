@@ -613,7 +613,22 @@ describe('drain sheets behind a later insertion', () => {
    * sheets in front of them. An odd number of those moves every drain sheet one page along,
    * and its variant — resolved when it was minted — no longer matches where it sits.
    */
-  function drainShiftDoc(sectEndLines: number, footnoteLines: number): Uint8Array {
+  function drainShiftDoc(
+    sectEndLines: number,
+    footnoteLines: number,
+    shape: { readonly evenHeaderLines?: number; readonly footers?: boolean } = {}
+  ): Uint8Array {
+    const story = (tag: string, label: string, count: number) =>
+      `<w:${tag} xmlns:w="${W}">` +
+      Array.from(
+        { length: count },
+        (_u, i) => `<w:p><w:r><w:t>${label} ${i}</w:t></w:r></w:p>`
+      ).join('') +
+      `</w:${tag}>`;
+    const footerRefs = shape.footers
+      ? '<w:footerReference w:type="default" r:id="rIdF1"/>' +
+        '<w:footerReference w:type="even" r:id="rIdF2"/>'
+      : '';
     const notes = (label: string, count: number) =>
       Array.from(
         { length: count },
@@ -623,6 +638,7 @@ describe('drain sheets behind a later insertion', () => {
       '<w:sectPr>' +
       '<w:headerReference w:type="default" r:id="rIdH1"/>' +
       '<w:headerReference w:type="even" r:id="rIdH2"/>' +
+      footerRefs +
       '<w:pgSz w:w="12240" w:h="4320"/>' +
       '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"' +
       ' w:header="360" w:footer="360"/>' +
@@ -637,6 +653,10 @@ describe('drain sheets behind a later insertion', () => {
           '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>' +
           '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
           '<Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+          (shape.footers
+            ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' +
+              '<Override PartName="/word/footer2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>'
+            : '') +
           '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
           '<Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/>' +
           '</Types>'
@@ -649,6 +669,10 @@ describe('drain sheets behind a later insertion', () => {
           `<Relationship Id="rIdS" Type="${R}/settings" Target="settings.xml"/>` +
           `<Relationship Id="rIdH1" Type="${R}/header" Target="header1.xml"/>` +
           `<Relationship Id="rIdH2" Type="${R}/header" Target="header2.xml"/>` +
+          (shape.footers
+            ? `<Relationship Id="rIdF1" Type="${R}/footer" Target="footer1.xml"/>` +
+              `<Relationship Id="rIdF2" Type="${R}/footer" Target="footer2.xml"/>`
+            : '') +
           `<Relationship Id="rIdFn" Type="${R}/footnotes" Target="footnotes.xml"/>` +
           `<Relationship Id="rIdEn" Type="${R}/endnotes" Target="endnotes.xml"/>` +
           '</Relationships>'
@@ -659,14 +683,14 @@ describe('drain sheets behind a later insertion', () => {
       'word/header1.xml': strToU8(
         `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>Odd</w:t></w:r></w:p></w:hdr>`
       ),
-      'word/header2.xml': strToU8(
-        `<w:hdr xmlns:w="${W}">` +
-          '<w:p><w:r><w:t>Even a</w:t></w:r></w:p>' +
-          '<w:p><w:r><w:t>Even b</w:t></w:r></w:p>' +
-          '<w:p><w:r><w:t>Even c</w:t></w:r></w:p>' +
-          '<w:p><w:r><w:t>Even d</w:t></w:r></w:p>' +
-          '</w:hdr>'
-      ),
+      'word/header2.xml': strToU8(story('hdr', 'Even', shape.evenHeaderLines ?? 4)),
+      ...(shape.footers
+        ? {
+            'word/footer1.xml': strToU8(story('ftr', 'Odd foot', 1)),
+            // Three lines against one, so the even variant moves the content box's BOTTOM.
+            'word/footer2.xml': strToU8(story('ftr', 'Even foot', 3)),
+          }
+        : {}),
       'word/document.xml': strToU8(
         `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
           '<w:p><w:r><w:t>One</w:t></w:r></w:p>' +
@@ -694,10 +718,9 @@ describe('drain sheets behind a later insertion', () => {
     });
   }
 
-  test('a drain sheet keeps its own page number behind an earlier section insertion', () => {
-    // Tuned so section 1 overflows by exactly ONE sheet: an odd number in front of the drain
-    // run is what flips parity. An even one slides it by two pages and hides the defect.
-    const loaded = readOoxmlPackage(drainShiftDoc(8, 10));
+  /** Lay the fixture out with per-section furniture, and hand back what the tests assert on. */
+  function layoutDrainShift(bytes: Uint8Array) {
+    const loaded = readOoxmlPackage(bytes);
     if (!loaded.ok) throw new Error(loaded.reason);
     const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
     const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
@@ -719,15 +742,18 @@ describe('drain sheets behind a later insertion', () => {
       const parts = bySection[index]!;
       const geometry = geometryOfSection(section.properties);
       const width = geometry.width - geometry.margin.left - geometry.margin.right;
-      const headers = new Map();
-      for (const [variant, hfPart] of parts.headers) {
-        headers.set(variant, layoutHeaderFooterStory(hfPart, width, measurer, 'drainshift'));
-      }
+      const stories = (source: typeof parts.headers) => {
+        const laid = new Map();
+        for (const [variant, hfPart] of source) {
+          laid.set(variant, layoutHeaderFooterStory(hfPart, width, measurer, 'drainshift'));
+        }
+        return laid;
+      };
       return {
         titlePage: parts.titlePage,
         evenAndOddHeaders: parts.evenAndOddHeaders,
-        headers,
-        footers: new Map(),
+        headers: stories(parts.headers),
+        footers: stories(parts.footers),
       };
     });
     const layout = layoutSemanticDocument(part, 1, {
@@ -736,10 +762,20 @@ describe('drain sheets behind a later insertion', () => {
       producer: 'drainshift',
       sectionFurniture: furniture,
     });
-    const geometry = geometryOfSection(sections[0]!.properties);
-    const headers = furniture[0]!.headers;
-    const drain = layout.pages.filter((page) => page.noteStream === 'footnote-drain');
-    const inserted = layout.pages.filter((page) => page.noteStream === 'endnote-overflow');
+    return {
+      layout,
+      geometry: geometryOfSection(sections[0]!.properties),
+      headers: furniture[0]!.headers,
+      footers: furniture[0]!.footers,
+      drain: layout.pages.filter((page) => page.noteStream === 'footnote-drain'),
+      inserted: layout.pages.filter((page) => page.noteStream === 'endnote-overflow'),
+    };
+  }
+
+  test('a drain sheet keeps its own page number behind an earlier section insertion', () => {
+    // Tuned so section 1 overflows by exactly ONE sheet: an odd number in front of the drain
+    // run is what flips parity. An even one slides it by two pages and hides the defect.
+    const { layout, geometry, headers, drain, inserted } = layoutDrainShift(drainShiftDoc(8, 10));
     expect(drain.length).toBeGreaterThan(0);
     // An ODD number of sheets inserted in front of the drain run: the arrangement that moves
     // every drain sheet onto the opposite parity.
@@ -763,6 +799,62 @@ describe('drain sheets behind a later insertion', () => {
       const top = Math.max(geometry.margin.top, (geometry.headerDistance ?? 36) + flow);
       expect(page.contentBox.y - page.box.y).toBeCloseTo(top, 6);
       expect(page.contentBox.height).toBeCloseTo(geometry.height - top - geometry.margin.bottom, 6);
+    }
+  });
+
+  test('a shifted sheet re-picks its variant even when both are the same height', () => {
+    // Two ONE-LINE header variants. The insets a shifted sheet resolves are then identical to
+    // the ones it carries, so anything that compares only the box sees nothing to do and leaves
+    // the sheet showing the other variant's story — the common shape, not an exotic one.
+    const { geometry, headers, drain, inserted } = layoutDrainShift(
+      drainShiftDoc(14, 10, { evenHeaderLines: 1 })
+    );
+    expect(headers.get('default')!.flowHeight).toBe(headers.get('even')!.flowHeight);
+    expect(drain.length).toBeGreaterThan(0);
+    expect(inserted.length % 2).toBe(1);
+
+    for (const page of [...drain, ...inserted]) {
+      const expected = (page.index + 1) % 2 === 0 ? 'even' : 'default';
+      expect(page.header?.variant).toBe(expected);
+      // Same height either way, so the box alone can never tell these two apart.
+      const top = Math.max(
+        geometry.margin.top,
+        (geometry.headerDistance ?? 36) + headers.get(expected)!.flowHeight
+      );
+      expect(page.contentBox.y - page.box.y).toBeCloseTo(top, 6);
+    }
+  });
+
+  test('a shifted sheet keeps its notes inside the box its footer variant resolves', () => {
+    // Equal-height HEADERS so the content top never moves, and a taller `even` FOOTER so the
+    // bottom does. A `pageBottom` note area hangs from that bottom: left where it was when the
+    // box shrinks under it, the notes paint over the footer band. Checking only the new top
+    // waves that through, because the top is exactly what did not change.
+    const { geometry, footers, drain, inserted } = layoutDrainShift(
+      drainShiftDoc(14, 24, { evenHeaderLines: 1, footers: true })
+    );
+    expect(footers.get('even')!.flowHeight).toBeGreaterThan(footers.get('default')!.flowHeight);
+    expect(drain.length).toBeGreaterThan(0);
+    expect(inserted.length % 2).toBe(1);
+
+    for (const page of [...drain, ...inserted]) {
+      const expected = (page.index + 1) % 2 === 0 ? 'even' : 'default';
+      expect(page.footer?.variant).toBe(expected);
+      const bottom = page.contentBox.y + page.contentBox.height;
+      for (const area of [page.footnotes, page.endnotes]) {
+        if (!area) continue;
+        expect(area.box.y).toBeGreaterThanOrEqual(page.contentBox.y - 0.001);
+        expect(area.box.y + area.box.height).toBeLessThanOrEqual(bottom + 0.001);
+        // And clear of the footer the sheet actually shows.
+        expect(bottom).toBeLessThanOrEqual(page.footer!.box.y + 0.001);
+      }
+      // The box itself still agrees with the variant it shows.
+      const footerDistance = geometry.footerDistance ?? 36;
+      const resolved = Math.max(
+        geometry.margin.bottom,
+        footerDistance + footers.get(expected)!.flowHeight
+      );
+      expect(geometry.height - (bottom - page.box.y)).toBeCloseTo(resolved, 6);
     }
   });
 });

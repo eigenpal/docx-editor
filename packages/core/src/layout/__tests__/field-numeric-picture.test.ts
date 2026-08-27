@@ -29,6 +29,17 @@ describe('numeric picture rendering', () => {
   test('keeps every digit of a value wider than the picture, grouping included', () => {
     expect(formatNumericPicture(1234, '0#')).toBe('1234');
     expect(formatNumericPicture(100, '0')).toBe('100');
+    // Overflow lands at the LEFTMOST DIGIT POSITION, not in front of the whole picture: a
+    // literal prefix stays a prefix. `Page 0 of` is the shape the placeholder is measured at,
+    // so getting this wrong mangles a footer from page 10 on.
+    expect(formatNumericPicture(12, 'Page 0 of')).toBe('Page 12 of');
+    expect(formatNumericPicture(12, 'Page 0')).toBe('Page 12');
+    expect(formatNumericPicture(12345, '$###')).toBe('$12345');
+    // A literal on BOTH sides, in the optional-digit form as well as the required one.
+    expect(formatNumericPicture(123, 'p0s')).toBe('p123s');
+    expect(formatNumericPicture(123, 'p#s')).toBe('p123s');
+    // And a literal suffix alone.
+    expect(formatNumericPicture(45, '0%')).toBe('45%');
     // Overflow digits repeat the interval the picture's separator established, as Word does.
     expect(formatNumericPicture(1234567, '#,###')).toBe('1,234,567');
     expect(formatNumericPicture(1234567, '#,##0')).toBe('1,234,567');

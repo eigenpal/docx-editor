@@ -67,12 +67,21 @@ export function formatNumericPicture(value: number, picture: string): string | n
   /** Digit positions since the picture's last `,`, which sets the group width for overflow. */
   let sinceGroup = 0;
   let groupWidth = 0;
+  /**
+   * Characters of the result in REVERSE order, because the walk fills from the right.
+   *
+   * `leftmostPositionAt` is where the picture's leftmost digit position landed in it. Overflow
+   * digits belong immediately left of THAT, not left of the whole picture: `Page 0 of` renders
+   * 12 as `Page 12 of`, and appending them to this buffer would put them in front of `Page`.
+   */
   const out: string[] = [];
+  let leftmostPositionAt = -1;
   for (let index = picture.length - 1; index >= 0; index -= 1) {
     const glyph = picture[index]!;
     if (glyph === '0' || glyph === '#') {
       sawPosition = true;
       sinceGroup += 1;
+      leftmostPositionAt = out.length;
       if (remaining > 0) {
         remaining -= 1;
         out.push(digits[remaining]!);
@@ -91,16 +100,27 @@ export function formatNumericPicture(value: number, picture: string): string | n
     out.push(glyph);
   }
   if (!sawPosition) return null;
-  // Digits the picture had no position for. They keep its grouping, so a value wider than the
-  // picture reads the way the picture said narrower ones would.
+  // Digits the picture had no position for, in the same reverse order. They keep its grouping,
+  // so a value wider than the picture reads the way the picture said narrower ones would.
+  const overflow: string[] = [];
   while (remaining > 0) {
     if (groupWidth > 0 && sinceGroup >= groupWidth) {
-      out.push(',');
+      overflow.push(',');
       sinceGroup = 0;
     }
     remaining -= 1;
     sinceGroup += 1;
-    out.push(digits[remaining]!);
+    overflow.push(digits[remaining]!);
   }
-  return out.reverse().join('');
+  // Split at the leftmost digit position: everything the walk pushed after it is the picture's
+  // literal PREFIX and stays in front, and the overflow slots in between.
+  const prefix = out
+    .slice(leftmostPositionAt + 1)
+    .reverse()
+    .join('');
+  const rest = out
+    .slice(0, leftmostPositionAt + 1)
+    .reverse()
+    .join('');
+  return prefix + overflow.reverse().join('') + rest;
 }
