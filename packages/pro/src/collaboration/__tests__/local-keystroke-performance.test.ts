@@ -31,8 +31,11 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 //      about 1.5x inserting at the end, which alone moves the ratio.
 //   3. `gateOperations` sits outside the timed span. A detached store cannot call it at
 //      all, so timing it charges the attached arm for work the solo arm can never do.
-//   4. The gate compares each arm's FASTEST round, not its median, because the arms are
-//      sampled one after the other and load drifts between them — see `measureInsertRatio`.
+//   4. The arms are sampled in alternating contiguous blocks, and the gate compares the
+//      fastest round of temporally PAIRED blocks — see `measureInterleaved`. A per-arm
+//      minimum over back-to-back arms is not enough: each arm's whole sampling window is
+//      only ~10-30 ms, so one load spike covering one arm inflates every round of that
+//      arm, minimum included. CI run #1167 read 2.71x that way on a 1.28x path.
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -62,6 +65,10 @@ import {
 
 const WARMUP = 2;
 const RUNS = 40;
+// The gated ratio interleaves the arms in blocks: BLOCKS blocks of BLOCK_ROUNDS rounds per
+// arm, solo then attached within each block, BLOCKS * BLOCK_ROUNDS = RUNS rounds per arm.
+const BLOCKS = 5;
+const BLOCK_ROUNDS = 8;
 const LEAK_EDITS = 400;
 const LONG_TEXT = 'abcdefghijklmnopqrstuvwxyz '.repeat(12);
 const BUDGET_RATIO = 2;
@@ -82,27 +89,28 @@ function summarize(values: readonly number[]): {
   };
 }
 
-function ratioPass(
-  solo: { readonly minMs: number },
-  attached: { readonly minMs: number }
-): boolean {
-  // A pure ratio, with no flat slack, over the fastest round of each arm.
+function ratioPass(blockRatios: readonly number[]): boolean {
+  // A pure ratio, with no flat slack, over the best temporally paired block.
   //
   // The ratio has to carry the gate by itself, because this file shares a runner with the rest
   // of its shard: a flat slack added to a sub-millisecond baseline is an ABSOLUTE wall-clock
   // budget wearing a ratio's clothes, and an absolute budget is a different test on every
   // machine. The old +1 ms median slack admitted about 11x a solo transact, far above the
   // regression it was written to catch — the O(document) capture cost, which moved the figure
-  // ~5x. Removing the slack makes this gate stricter, not looser.
+  // ~5x.
   //
-  // The minimum is the estimator because contention noise is one-sided: a preempted or
-  // GC-interrupted round can only read HIGH, never low, so the fastest of RUNS rounds is the
-  // closest each arm gets to its own cost. Neither tail statistic is gated. The p95 of 40
-  // sub-millisecond samples measures GC and scheduler pauses — under 16-way contention the p95
-  // ratio reached 21.5 while the min ratio stayed near 1.2 — and it catches nothing the gate
-  // misses, since an O(document) regression moves every statistic together. Both stay in the
-  // logged rows for diagnosis.
-  return attached.minMs <= solo.minMs * BUDGET_RATIO;
+  // Within a block, the minimum is the estimator because contention noise is one-sided: a
+  // preempted or GC-interrupted round can only read HIGH, never low, so the fastest round is
+  // the closest each arm gets to its own cost. Across blocks, the gate takes the LOWEST block
+  // ratio: a spike that lands on one block's attached rounds inflates that block's ratio, and
+  // some other block, milliseconds away, pairs two quiet windows. A block ratio can only read
+  // spuriously LOW when a spike lands on its solo rounds alone, which loosens the gate near
+  // the 2x line but cannot hide the ~5x regression it exists to catch — a real O(document)
+  // cost inflates the attached rounds of EVERY block. Tail statistics stay ungated for the
+  // same reason as before: the p95 of sub-millisecond samples measures GC and scheduler
+  // pauses (21.5x observed at 16-way contention on a 1.2x path). All rounds stay in the
+  // logged summaries for diagnosis.
+  return Math.min(...blockRatios) <= BUDGET_RATIO;
 }
 
 const harness = createPeerHarness('keystroke-perf');
@@ -260,22 +268,57 @@ function insertAtEnd(peer: Peer): readonly TreeDocOp[] {
 }
 
 /**
- * Sample the solo arm, then the attached arm, and compare their FASTEST rounds.
+ * Sample the two arms in alternating contiguous blocks and pair each block's fastest rounds.
  *
- * Rule 4: the arms are sampled one after the other, so they see different machine load — this
- * file shares a worker pool with the rest of its shard — and a median comparison reports that
- * drift as attach cost. Over 128 runs at 16-way contention, drift alone produced a 2.25x median
- * reading on a path that costs 1.29x.
+ * Rule 4: sampling one whole arm after the other looks clean and is the flake. Each arm's 40
+ * rounds span only ~10-30 ms, so machine load drifts BETWEEN the arms — this file shares a
+ * worker pool with the rest of its shard — and a spike that covers one arm's whole window
+ * inflates every round of that arm, minimum included. Over 128 runs at 16-way contention,
+ * drift alone produced a 2.25x median reading on a path that costs 1.29x; after the gate
+ * moved to per-arm minimums, CI run #1167 still read 2.71x min-vs-min the same way.
  *
- * Alternating the arms round by round looks like the fix and is not: at this scale each arm
- * evicts the other's working set, which cost the attached arm a flat ~0.09 ms and pushed the
- * ratio from 1.19x to 1.91x. Contention noise is one-sided — it only ever adds time — so the
- * minimum of RUNS rounds is the drift-resistant estimator, and it keeps each arm's rounds
- * contiguous and cache-warm.
+ * Alternating the arms round by round is not the fix either: at this scale each arm evicts
+ * the other's working set, which cost the attached arm a flat ~0.09 ms and pushed the ratio
+ * from 1.19x to 1.91x. Blocks give both properties at once. Within a block the rounds are
+ * contiguous, so the cold first round after a switch reads high and the block minimum ignores
+ * it — noise is one-sided. Across blocks both arms sample every time window, so `ratioPass`
+ * can compare minimums that saw the same load.
  */
+function measureInterleaved(
+  soloRound: () => number,
+  attachedRound: () => number
+): {
+  readonly solo: ReturnType<typeof summarize>;
+  readonly attached: ReturnType<typeof summarize>;
+  readonly blockRatios: readonly number[];
+} {
+  for (let round = 0; round < WARMUP; round += 1) {
+    soloRound();
+    attachedRound();
+  }
+  const soloTimes: number[] = [];
+  const attachedTimes: number[] = [];
+  const blockRatios: number[] = [];
+  for (let block = 0; block < BLOCKS; block += 1) {
+    const soloBlock: number[] = [];
+    const attachedBlock: number[] = [];
+    for (let round = 0; round < BLOCK_ROUNDS; round += 1) soloBlock.push(soloRound());
+    for (let round = 0; round < BLOCK_ROUNDS; round += 1) attachedBlock.push(attachedRound());
+    soloTimes.push(...soloBlock);
+    attachedTimes.push(...attachedBlock);
+    blockRatios.push(Math.min(...attachedBlock) / Math.min(...soloBlock));
+  }
+  return {
+    solo: summarize(soloTimes),
+    attached: summarize(attachedTimes),
+    blockRatios,
+  };
+}
+
 async function measureInsertRatio(bytes: Uint8Array): Promise<{
   readonly solo: ReturnType<typeof summarize>;
   readonly attached: ReturnType<typeof summarize>;
+  readonly blockRatios: readonly number[];
 }> {
   harness.cleanup();
   // Order matters: the harness relays each JOINING peer to every peer already open, so the
@@ -285,23 +328,19 @@ async function measureInsertRatio(bytes: Uint8Array): Promise<{
   const attachedPair = await harness.pair(bytes);
   harness.leave(attachedPair.bob);
   const attachedPeer = attachedPair.alice;
-  const soloTimes: number[] = [];
-  for (let round = 0; round < WARMUP + RUNS; round += 1) {
-    const soloOps = insertAtEnd(soloPeer);
-    const started = performance.now();
-    const result = soloPeer.store.transact(BODY, (context) => {
-      for (const op of soloOps) context.apply(op);
-    });
-    const ms = performance.now() - started;
-    if (!result.ok) throw new Error(result.detail ?? result.reason);
-    if (round >= WARMUP) soloTimes.push(ms);
-  }
-  const attachedTimes: number[] = [];
-  for (let round = 0; round < WARMUP + RUNS; round += 1) {
-    const sample = runOps(attachedPeer, insertAtEnd(attachedPeer));
-    if (round >= WARMUP) attachedTimes.push(sample.transactMs);
-  }
-  return { solo: summarize(soloTimes), attached: summarize(attachedTimes) };
+  return measureInterleaved(
+    () => {
+      const soloOps = insertAtEnd(soloPeer);
+      const started = performance.now();
+      const result = soloPeer.store.transact(BODY, (context) => {
+        for (const op of soloOps) context.apply(op);
+      });
+      const ms = performance.now() - started;
+      if (!result.ok) throw new Error(result.detail ?? result.reason);
+      return ms;
+    },
+    () => runOps(attachedPeer, insertAtEnd(attachedPeer)).transactMs
+  );
 }
 
 describe('local keystroke path with a replica attached', () => {
@@ -310,7 +349,7 @@ describe('local keystroke path with a replica attached', () => {
     // The gated comparison: one solo arm against one lone attached replica, same gesture.
     // The gesture sweep below re-measures `insert-text` for its row, but only this pair
     // decides the ratio.
-    const { solo, attached: insertAttached } = await measureInsertRatio(bytes);
+    const { solo, attached: insertAttached, blockRatios } = await measureInsertRatio(bytes);
 
     const gestures: readonly {
       readonly name: string;
@@ -403,14 +442,15 @@ describe('local keystroke path with a replica attached', () => {
       JSON.stringify({
         soloInsert: solo,
         attachedInsert: insertAttached,
-        ratioPass: ratioPass(solo, insertAttached),
+        blockRatios,
+        ratioPass: ratioPass(blockRatios),
         rows,
       })
     );
     // No gesture may leave a journal waiting, and every gesture must reach Yjs on its commit.
     expect(stranded).toEqual([]);
     expect(silent).toEqual([]);
-    expect(ratioPass(solo, insertAttached)).toBe(true);
+    expect(ratioPass(blockRatios)).toBe(true);
     expect(rows.length).toBe(gestures.length);
   });
 
@@ -480,22 +520,6 @@ describe('local keystroke path with a replica attached', () => {
       if (!soloId) throw new Error('no middle paragraph');
       // Rule 2 above: end-of-paragraph inserts, the same gesture the attached arm runs.
       const soloLength = paragraphTextOf(soloStore.bodyStore().part, soloId)?.length ?? 0;
-      const soloTimes: number[] = [];
-      for (let round = 0; round < WARMUP + RUNS; round += 1) {
-        const started = performance.now();
-        const result = soloStore.transact(BODY, (context) => {
-          context.apply({
-            op: 'insertText',
-            paragraphId: soloId,
-            offset: soloLength + round,
-            text: 'X',
-          });
-        });
-        const ms = performance.now() - started;
-        if (!result.ok) throw new Error(result.detail ?? result.reason);
-        if (round >= WARMUP) soloTimes.push(ms);
-      }
-      const solo = summarize(soloTimes);
 
       const ydoc = new Y.Doc();
       const awareness = new Awareness(ydoc);
@@ -528,20 +552,33 @@ describe('local keystroke path with a replica attached', () => {
       } as Peer;
       const ids = paragraphIds(replicaPeer);
       const live = paragraphAt(replicaPeer, Math.floor((ids.length - 1) * 0.5));
-      const transact: number[] = [];
       const flush: number[] = [];
       let yUpdatesDuringTransact = 0;
-      for (let round = 0; round < WARMUP + RUNS; round += 1) {
-        const sample = runOps(replicaPeer, [
-          { op: 'insertText', paragraphId: live.id, offset: live.length + round, text: 'X' },
-        ]);
-        yUpdatesDuringTransact += sample.yUpdatesDuringTransact;
-        if (round >= WARMUP) {
-          transact.push(sample.transactMs);
+      let soloRoundIndex = 0;
+      let attachedRoundIndex = 0;
+      const { solo, attached, blockRatios } = measureInterleaved(
+        () => {
+          const offset = soloLength + soloRoundIndex;
+          soloRoundIndex += 1;
+          const started = performance.now();
+          const result = soloStore.transact(BODY, (context) => {
+            context.apply({ op: 'insertText', paragraphId: soloId, offset, text: 'X' });
+          });
+          const ms = performance.now() - started;
+          if (!result.ok) throw new Error(result.detail ?? result.reason);
+          return ms;
+        },
+        () => {
+          const offset = live.length + attachedRoundIndex;
+          attachedRoundIndex += 1;
+          const sample = runOps(replicaPeer, [
+            { op: 'insertText', paragraphId: live.id, offset, text: 'X' },
+          ]);
+          yUpdatesDuringTransact += sample.yUpdatesDuringTransact;
           flush.push(sample.flushMs);
+          return sample.transactMs;
         }
-      }
-      const attached = summarize(transact);
+      );
       const attachedFlush = summarize(flush);
       // The ratio is the gate, and the absolute number is only a backstop.
       //
@@ -562,12 +599,13 @@ describe('local keystroke path with a replica attached', () => {
           attached,
           attachedFlush,
           yUpdatesDuringTransact,
-          ratioPass: ratioPass(solo, attached),
+          blockRatios,
+          ratioPass: ratioPass(blockRatios),
           minBackstopMs: TRANSACTION_MIN_MAX_MS,
         })
       );
       expect(yUpdatesDuringTransact).toBeGreaterThan(0);
-      expect(ratioPass(solo, attached)).toBe(true);
+      expect(ratioPass(blockRatios)).toBe(true);
       expect(attached.minMs).toBeLessThanOrEqual(TRANSACTION_MIN_MAX_MS);
       detach();
       room.destroy();
