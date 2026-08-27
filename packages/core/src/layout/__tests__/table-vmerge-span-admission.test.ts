@@ -75,6 +75,19 @@ function paintedBottomPt(layout: SemanticLayout, pageIndex: number): number {
   return bottom;
 }
 
+/**
+ * Did a `w:tblHeader` row get re-emitted at the top of this page?
+ *
+ * The page COUNT alone cannot say so, and it moves whenever row heights change. This is the
+ * precondition the overrun case actually needs: the merge landed on a page whose header
+ * repeat had already taken room off it.
+ */
+function headerRepeatsOn(layout: SemanticLayout, pageIndex: number): boolean {
+  return tablesOf(layout, pageIndex)
+    .flatMap((table) => table.rows)
+    .some((row) => row.isHeaderRepeat === true);
+}
+
 function contentBottomOf(cell: TableCellFragmentRecord): number {
   let bottom = Number.NEGATIVE_INFINITY;
   for (const block of cell.blocks) bottom = Math.max(bottom, block.box.y + block.box.height);
@@ -120,7 +133,12 @@ describe('a merge is only sized as a span where the span can hold it', () => {
           '</w:tbl>'
       )
     );
-    expect(layout.pages).toHaveLength(3);
+    // Two pages rather than three, because Word's cell margins make every row 12.73pt where
+    // it used to be 18.73pt. The shape this test needs is unchanged, and verified: the merge
+    // still does not fit the band it is offered, it still moves to a fresh page, and that
+    // page still re-emits the `w:tblHeader` row above it.
+    expect(layout.pages).toHaveLength(2);
+    expect(headerRepeatsOn(layout, 1)).toBe(true);
     expectContentInsideItsTable(layout);
     for (const pageIndex of layout.pages.keys()) {
       expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);

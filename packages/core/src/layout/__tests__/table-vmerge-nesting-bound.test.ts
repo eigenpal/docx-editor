@@ -13,7 +13,6 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { MAX_TABLE_NESTING } from '../semantic-table.ts';
-import { TablePaginationError } from '../semantic-table-layout.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -46,22 +45,24 @@ describe('a merge at every level of a nested table', () => {
     // tell "laid this out" from "threw on the first row", so a change that made nested-merge
     // layout throw for ordinary documents would keep a timing-only test green.
     //
-    // A nest this deep is taller than any page and its rows hold nested tables that cannot be
-    // cut, so layout fails closed with `table-row-split-unsupported`. That is the pre-existing
-    // answer for this shape and not what this file is about; what it is about is how long
-    // reaching it takes.
+    // This nest used to be taller than a page and failed closed with
+    // `table-row-split-unsupported`. Word's cell margins took 6pt off every row of every
+    // level, so it now fits and lays out. Either answer is fine here — what this file is
+    // about is how long reaching one takes — but the outcome is asserted so that "laid it
+    // out" stays distinguishable from "threw on the first row".
     const part = loadBody(nestedMerges(MAX_TABLE_NESTING));
     const started = Bun.nanoseconds();
     let thrown: unknown;
+    let pageCount = 0;
     try {
-      layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer() });
+      pageCount = layoutSemanticDocument(part, 0, { measurer: createFixedMeasurer() }).pages.length;
     } catch (error) {
       thrown = error;
     }
     const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
 
-    expect(thrown).toBeInstanceOf(TablePaginationError);
-    expect((thrown as TablePaginationError).code).toBe('table-row-split-unsupported');
+    expect(thrown).toBeUndefined();
+    expect(pageCount).toBeGreaterThan(0);
     // Generous by three orders of magnitude against the fixed measurer, because the failure
     // it guards against is minutes, not milliseconds: probes that plan the tables inside them
     // multiply through the nest instead of adding to it.
@@ -76,7 +77,9 @@ describe('a merge at every level of a nested table', () => {
     const layout = layoutSemanticDocument(twice, 0, { measurer: createFixedMeasurer() });
     const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
 
-    expect(layout.pages).toHaveLength(2);
+    // One page, not two: the same 6pt a row no longer spends on cell margins compounds
+    // through six levels of nesting, so both nests now fit on one sheet.
+    expect(layout.pages).toHaveLength(1);
     expect(elapsedMs).toBeLessThan(5_000);
   });
 });

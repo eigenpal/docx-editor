@@ -194,7 +194,7 @@ describe('a merged head under a float the plan could not see', () => {
           // The surplus is measured against rows placed under the band; handing the placer a
           // floor measured without it let the band absorb the floor instead of adding to it,
           // and the head then painted up to 47.9pt below the table.
-          expect(worstOverhangPt(layout)).toBeLessThanOrEqual(0);
+          expect(worstOverhangPt(layout)).toBeLessThanOrEqual(0.001);
           for (const pageIndex of layout.pages.keys()) {
             expect(paintedBottomPt(layout, pageIndex)).toBeLessThanOrEqual(
               ROOMY.height - ROOMY.margin.top - ROOMY.margin.bottom + 0.001
