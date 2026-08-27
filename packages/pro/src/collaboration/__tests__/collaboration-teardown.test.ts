@@ -25,7 +25,11 @@ const SCHEMA_MAP_KEYS = [
   'docx-package-binaries-v1',
   'docx-package-attributes-v1',
   'docx-package-bindings-v1',
+  'docx-package-meta-v1',
+  'docx-package-blobs-v1',
 ] as const;
+
+const SEED_RECORDS_KEY = 'docx-collaboration-seeds-v1';
 
 /** Handler lists Yjs keeps per type: `_eH` observes the type, `_dEH` observes it deeply. */
 interface ObservableInternals {
@@ -33,14 +37,22 @@ interface ObservableInternals {
   readonly _dEH: { readonly l: readonly unknown[] };
 }
 
-function observerCount(ydoc: Y.Doc, key: string): number {
-  const type = ydoc.getMap(key) as unknown as ObservableInternals;
-  return type._eH.l.length + type._dEH.l.length;
+function typeObserverCount(type: unknown): number {
+  const internals = type as ObservableInternals;
+  return internals._eH.l.length + internals._dEH.l.length;
 }
 
+/**
+ * Every handler the collaboration lane can register on the document: the schema maps, the
+ * blob map, the seed-record array, and the doc-level `afterTransaction` listeners the
+ * session, the undo manager, and the initialization waits attach.
+ */
 function totalObservers(ydoc: Y.Doc): number {
   let total = 0;
-  for (const key of SCHEMA_MAP_KEYS) total += observerCount(ydoc, key);
+  for (const key of SCHEMA_MAP_KEYS) total += typeObserverCount(ydoc.getMap(key));
+  total += typeObserverCount(ydoc.getArray(SEED_RECORDS_KEY));
+  const observers = (ydoc as unknown as { _observers: Map<string, Set<unknown>> })._observers;
+  total += observers.get('afterTransaction')?.size ?? 0;
   return total;
 }
 
@@ -92,6 +104,37 @@ describe('collaboration teardown', () => {
     const host = await seededRoom();
     host.destroy();
     expect(totalObservers(host.ydoc)).toBe(0);
+    host.ydoc.destroy();
+  });
+
+  test('a bootstrap that fails while materializing leaves no observers behind', async () => {
+    const host = await seededRoom();
+    host.destroy();
+    // Corrupt one element record the way a hostile peer could: drop its child array, which
+    // makes materializing THROW (`no children at …`) rather than refuse with a typed code.
+    const nodes = host.ydoc.getMap<Y.Map<unknown>>('docx-package-nodes-v1');
+    let corrupted = false;
+    nodes.forEach((record) => {
+      if (corrupted || !(record instanceof Y.Map) || !record.has('children')) return;
+      record.delete('children');
+      corrupted = true;
+    });
+    expect(corrupted).toBe(true);
+    const before = totalObservers(host.ydoc);
+    const awareness = new Awareness(host.ydoc);
+    await expect(
+      createDocumentCollaboration({
+        ydoc: host.ydoc,
+        awareness,
+        documentId: 'teardown-room',
+        identity: { actorId: 'late', name: 'Late' },
+        bootstrap: { kind: 'join', timeoutMs: 1_000 },
+      })
+    ).rejects.toThrow();
+    // The materializer registered its dirty observers before the throw; the factory must
+    // hand them back, or every retry on this document leaks another set.
+    expect(totalObservers(host.ydoc)).toBe(before);
+    awareness.destroy();
     host.ydoc.destroy();
   });
 

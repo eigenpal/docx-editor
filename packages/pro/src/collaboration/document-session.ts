@@ -61,6 +61,18 @@ import {
   waitForSharedInitialization,
 } from './document-bootstrap.ts';
 import { LogicalIdentityMap } from './document-identity.ts';
+import {
+  AWARENESS_FIELD,
+  MAX_AWARENESS_STATES,
+  MAX_IDENTITY_LENGTH,
+  awarenessPayload,
+  sessionIdentity,
+  validateDocumentId,
+  validateIdentity,
+  type AwarenessPayload,
+  type EncodedSelection,
+  type EncodedSelectionAddress,
+} from './document-awareness.ts';
 import { CollaborationSchemaError } from './schema.ts';
 import type {
   CollaborationBootstrap,
@@ -69,9 +81,6 @@ import type {
   TextCollaborationSession,
 } from './session.ts';
 
-const AWARENESS_FIELD = 'docxEditor';
-const MAX_IDENTITY_LENGTH = 256;
-const MAX_AWARENESS_STATES = 256;
 /** One refused journal recovers; a run of them means the next edit refuses too. */
 const MAX_REFUSALS_IN_A_ROW = 3;
 /** Local journals inside this window share one actor undo item. */
@@ -88,127 +97,6 @@ const ATTACH_WATCHDOG_MS = 2_000;
 export const ATTACH_WATCHDOG_MS_FOR_TESTS: unique symbol = Symbol(
   'createDocumentCollaboration.attachWatchdogMs'
 );
-
-interface EncodedSelectionAddress {
-  readonly paragraphId: string;
-  readonly offset: number;
-}
-
-interface EncodedSelection {
-  readonly anchor: EncodedSelectionAddress;
-  readonly head: EncodedSelectionAddress;
-  readonly kind?: 'cells';
-}
-
-interface AwarenessPayload {
-  readonly actorId: string;
-  readonly name: string;
-  readonly color?: string;
-  readonly role: 'human' | 'agent';
-  readonly selection?: EncodedSelection;
-}
-
-function validateIdentity(identity: CollaborationIdentity): CollaborationIdentity {
-  const actorId = identity.actorId.trim();
-  const name = identity.name.trim();
-  if (
-    actorId.length === 0 ||
-    actorId.length > MAX_IDENTITY_LENGTH ||
-    name.length === 0 ||
-    name.length > MAX_IDENTITY_LENGTH
-  ) {
-    throw new CollaborationSchemaError('invalid-identity');
-  }
-  if (identity.color !== undefined && identity.color.length > 64) {
-    throw new CollaborationSchemaError('invalid-identity-color');
-  }
-  return Object.freeze({
-    actorId,
-    name,
-    ...(identity.color ? { color: identity.color } : {}),
-    role: identity.role ?? 'human',
-  });
-}
-
-function validateDocumentId(value: string): string {
-  const documentId = value.trim();
-  if (documentId.length === 0 || documentId.length > MAX_IDENTITY_LENGTH) {
-    throw new CollaborationSchemaError('invalid-document-id');
-  }
-  return documentId;
-}
-
-function sessionIdentity(value: string | undefined): string {
-  const sessionId = value?.trim() || globalThis.crypto.randomUUID();
-  if (sessionId.length > MAX_IDENTITY_LENGTH) {
-    throw new CollaborationSchemaError('invalid-session-id');
-  }
-  return sessionId;
-}
-
-function encodedSelectionAddress(value: unknown): EncodedSelectionAddress | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  if (
-    typeof record.paragraphId !== 'string' ||
-    record.paragraphId.length !== 8 ||
-    !Number.isSafeInteger(record.offset) ||
-    (record.offset as number) < 0
-  ) {
-    return null;
-  }
-  return { paragraphId: record.paragraphId.toUpperCase(), offset: record.offset as number };
-}
-
-function encodedSelection(value: unknown): EncodedSelection | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
-  const selected = value as Record<string, unknown>;
-  const anchor = encodedSelectionAddress(selected.anchor);
-  const head = encodedSelectionAddress(selected.head);
-  if (anchor && head) {
-    return selected.kind === 'cells' ? { anchor, head, kind: 'cells' } : { anchor, head };
-  }
-  if (
-    typeof selected.paragraphId === 'string' &&
-    selected.paragraphId.length === 8 &&
-    Number.isSafeInteger(selected.start) &&
-    Number.isSafeInteger(selected.end) &&
-    (selected.start as number) >= 0 &&
-    (selected.end as number) >= 0
-  ) {
-    const paragraphId = selected.paragraphId.toUpperCase();
-    return {
-      anchor: { paragraphId, offset: selected.start as number },
-      head: { paragraphId, offset: selected.end as number },
-    };
-  }
-  return undefined;
-}
-
-function awarenessPayload(value: unknown): AwarenessPayload | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  if (
-    typeof record.actorId !== 'string' ||
-    record.actorId.length === 0 ||
-    record.actorId.length > MAX_IDENTITY_LENGTH ||
-    typeof record.name !== 'string' ||
-    record.name.length === 0 ||
-    record.name.length > MAX_IDENTITY_LENGTH
-  ) {
-    return null;
-  }
-  // Trust boundary for a peer's presence record. The color flows into `participants()` and
-  // `remoteSelections()`, and hosts paint it into CSS (`background:` via a custom property),
-  // where `url(//host/t)` is a zero-click GET. Only the shapes this engine itself produces
-  // pass; anything else drops so every consumer falls back to the accent color.
-  const color = safeParticipantColor(typeof record.color === 'string' ? record.color : undefined);
-  const role: 'human' | 'agent' = record.role === 'agent' ? 'agent' : 'human';
-  const base = { actorId: record.actorId, name: record.name, ...(color ? { color } : {}), role };
-  const selection = encodedSelection(record.selection);
-  return selection ? { ...base, selection } : base;
-}
 
 class DocumentSession implements DocumentCollaborationSession {
   readonly documentId: string;
@@ -430,6 +318,9 @@ class DocumentSession implements DocumentCollaborationSession {
   undo(): boolean {
     if (!this.canWriteSharedState()) return false;
     this.flushPendingJournals();
+    // The flush can refuse the queued journal and take this session to terminal `error`,
+    // so the gate re-checks: undo must not write a room the session just diverged from.
+    if (!this.canWriteSharedState()) return false;
     if (this.undoManager.undoStack.length === 0) return false;
     this.undoManager.undo();
     return true;
@@ -438,6 +329,7 @@ class DocumentSession implements DocumentCollaborationSession {
   redo(): boolean {
     if (!this.canWriteSharedState()) return false;
     this.flushPendingJournals();
+    if (!this.canWriteSharedState()) return false;
     if (this.undoManager.redoStack.length === 0) return false;
     this.undoManager.redo();
     return true;
@@ -961,34 +853,44 @@ async function bootstrapDocumentReplica(
   if (exceeded) throw new CollaborationSchemaError(exceeded.code, exceeded.detail);
 
   const materializer = new PackageMaterializer(registry, blobs);
-  const materialized = materializer.current();
-  const poisoned = blobs.poisonedDigest();
-  if (poisoned) {
+  // Any throw between here and the return leaks the materializer's observers on the
+  // caller's document — `current()` can throw on hostile shared state, and the refusals
+  // below throw by design — so the whole tail hands the materializer back on the way out.
+  // On success, ownership passes to the session, which detaches it on destroy.
+  try {
+    const materialized = materializer.current();
+    const poisoned = blobs.poisonedDigest();
+    if (poisoned) {
+      // A blob that does not hash to its key reads downstream as a blob that is not there.
+      // Say which it was, so a poisoned room is not reported as a truncated one.
+      throw new CollaborationSchemaError('blob-digest-mismatch', poisoned);
+    }
+    if (!materialized.ok) {
+      throw new CollaborationSchemaError(materialized.code);
+    }
+    // Serialize before the session exists: a throw here must not orphan a live session
+    // whose registry and materializer the catch below is about to tear down.
+    const document = writeOoxmlPackage(materialized.package);
+    const session = new DocumentSession(
+      options.ydoc,
+      options.awareness,
+      documentId,
+      sessionId,
+      identity,
+      registry,
+      materializer,
+      identityMap,
+      blobs,
+      attachWatchdogMs,
+      options.offlineEditing === true
+    );
+    return Object.freeze({
+      document,
+      session,
+      destroy: () => session.destroy(),
+    });
+  } catch (error) {
     materializer.destroy();
-    // A blob that does not hash to its key reads downstream as a blob that is not there. Say
-    // which it was, so a poisoned room is not reported as a truncated one.
-    throw new CollaborationSchemaError('blob-digest-mismatch', poisoned);
+    throw error;
   }
-  if (!materialized.ok) {
-    materializer.destroy();
-    throw new CollaborationSchemaError(materialized.code);
-  }
-  const session = new DocumentSession(
-    options.ydoc,
-    options.awareness,
-    documentId,
-    sessionId,
-    identity,
-    registry,
-    materializer,
-    identityMap,
-    blobs,
-    attachWatchdogMs,
-    options.offlineEditing === true
-  );
-  return Object.freeze({
-    document: writeOoxmlPackage(materialized.package),
-    session,
-    destroy: () => session.destroy(),
-  });
 }
