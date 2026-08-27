@@ -18,25 +18,42 @@
 // A span is decided ONE AT A TIME, by the caller, against the page it will really land on:
 //
 // - `heightOf` says what the span needs, with every span accepted before it folded in;
-// - `accept` takes it into the plan — its head is DETACHED from its own row (the row is then
-//   sized by the cells that really belong to it), its rows take height floors, and the
-//   head's content gets a hard bottom so it can never paint past the span;
+// - `accept` takes it into the plan — its head is DETACHED from its own row, so the row is
+//   sized by the cells that really belong to it, and its rows take height floors;
 // - a merge NOT accepted stays exactly where it was before this module existed: its head
 //   sizes its own row, and the ordinary row-split machinery paginates it.
+//
+// The plan binds NOTHING a later row can contradict. It sets a floor under a row's height
+// and takes a head's content out of its row's height; it does not bound where that content
+// may reach. A detached head flows against the PAGE, the same budget every other cell has,
+// so it paginates like any cell and no coordinate here can go stale when a row moves.
+//
+// What keeps the content inside its cell is not a bound but two facts about placement:
+//
+//   1. a detached head's content stops at the page content box;
+//   2. every row of an accepted span lands in the same fragment as its head — the span was
+//      admitted only because it fits the page from the head's top, and a covered row may not
+//      break a page BEFORE placing something into it.
+//
+// The head's box is the extent of the span's rows, measured after the fact in
+// `finalizeTableRows`. By (2) that extent runs to the last covered row, or to the page
+// bottom when a covered row filled the page — and by (1) the content stops at or above
+// whichever it is. A floor that comes out too small only lets the row grow, which grows the
+// fragment and the box with it; too large only makes a row taller than it needed to be.
 //
 // Declining one merge does not decline its neighbours. Two merges in different columns that
 // only overlap by a row are separate decisions, so a table where the second one cannot be
 // kept whole still gets the benefit for the first.
 //
-// Two shapes are declined outright, both because a span is only safe while nothing can move
-// its rows or change their heights after it was measured and its head's bottom was pinned:
+// Three shapes are declined outright, each from data that cannot change during placement:
 //
 // - a span with ANOTHER merge head in a row below its own head row. That head sizes its own
-//   row when it is declined, which is a height this span never measured, and the row can
-//   then take the paginator's whole-row move and leave this span's content behind on the
-//   page above with no table under it;
+//   row, and a row whose height this span cannot predict is a row the paginator may move;
 // - a span whose surplus would land in a row an accepted span already covers, which would
-//   grow that span after its bottom was pinned and after it was judged to fit the page.
+//   change that span's height after it was judged against the page;
+// - a span every row of which is `hRule="exact"` and too short for the merged content. It is
+//   the one span knowably unable to hold its own head, so the head keeps sizing its own row
+//   and the exact height clips it there, which is what Word draws.
 //
 // Measurement is not repeated work: a row inside an accepted span is probed here instead of
 // by the paginator, so only the merge head itself costs one extra probe.
@@ -58,12 +75,11 @@ const EPSILON_PT = 0.001;
 /** How the vertical merges accepted so far change ONE row's placement. */
 export interface RowVMergeLayoutOptions {
   /**
-   * Merge heads in this row that cover later rows, each mapped to the y its content must
-   * stop at. Their content paints from this row but must not size it — the span carries
-   * that height — and must not paint past the span, whose last row may be clipped or on
-   * another page.
+   * Merge heads in this row that cover later rows. Their content paints from this row but
+   * must not size it — the span as a whole carries that height. It is still bounded by the
+   * page, like every other cell's, so a head taller than a page paginates as one always did.
    */
-  readonly detachedBottomPtByCellId?: ReadonlyMap<string, number>;
+  readonly detachedCellIds?: ReadonlySet<string>;
   /** Minimum finished height: the row's own height plus any surplus the span put on it. */
   readonly heightFloorPt?: number;
 }
@@ -84,10 +100,10 @@ export interface VMergeRowHeights {
   heightOf(span: VMergeSpan): number;
   /**
    * Take the span into the plan, unless its shape is one the module declines (see the top of
-   * this file). `headTopPt` is where its head row is being placed; calling it again after the
-   * row moves to another page re-aims the head's bottom and nothing else.
+   * this file). Idempotent: the caller offers a span again after a page move, and a span
+   * already in the plan is unaffected because nothing here depends on where it was offered.
    */
-  accept(span: VMergeSpan, headTopPt: number): void;
+  accept(span: VMergeSpan): void;
   /** Placement options for a row covered by an accepted span, `undefined` otherwise. */
   rowOptions(rowIndex: number): RowVMergeLayoutOptions | undefined;
 }
@@ -166,22 +182,32 @@ export function planVMergeRowHeights(
   // Longest first: the outer merge takes its decision before one that only overlaps it.
   for (const at of spansByRow.values()) at.sort((a, b) => b.endRow - a.endRow);
 
-  const basePt = new Map<number, number>();
+  const basePt = new Map<string, number>();
   const contentPt = new Map<VMergeSpan, number>();
   const surplusPt = new Map<number, number>();
   const coveredRows = new Set<number>();
   const acceptedSpans = new Set<VMergeSpan>();
   const acceptedHeadIds = new Set<string>();
-  const detachedByRow = new Map<number, Map<string, number>>();
+  const detachedByRow = new Map<number, Set<string>>();
 
-  /** The row's own height, with every merge head in it emptied. Probed once. */
-  const baseOf = (rowIndex: number): number => {
-    const known = basePt.get(rowIndex);
+  /**
+   * The row's height with the heads that are DETACHED from it emptied, and no others.
+   *
+   * A head nobody took still sizes its own row, so its content belongs in this number: leave
+   * it out and the span is judged against a row shorter than the one that gets placed, and
+   * the paginator moves a row the span was admitted to keep. `pending` is the head being
+   * decided right now, which is about to join the accepted set if the span is taken.
+   */
+  const baseOf = (rowIndex: number, pending?: string): number => {
+    const emptied = new Set<string>();
+    for (const id of headIdsByRow.get(rowIndex) ?? []) {
+      if (acceptedHeadIds.has(id) || id === pending) emptied.add(id);
+    }
+    const key = `${rowIndex}\u0000${[...emptied].sort().join('\u0000')}`;
+    const known = basePt.get(key);
     if (known !== undefined) return known;
-    const measured = probeRowHeightPt(
-      rowWithoutHeadContent(rows[rowIndex]!, headIdsByRow.get(rowIndex))
-    );
-    basePt.set(rowIndex, measured);
+    const measured = probeRowHeightPt(rowWithoutHeadContent(rows[rowIndex]!, emptied));
+    basePt.set(key, measured);
     return measured;
   };
 
@@ -194,7 +220,8 @@ export function planVMergeRowHeights(
     return measured;
   };
 
-  const floorOf = (rowIndex: number): number => baseOf(rowIndex) + (surplusPt.get(rowIndex) ?? 0);
+  const floorOf = (rowIndex: number, pending?: string): number =>
+    baseOf(rowIndex, pending) + (surplusPt.get(rowIndex) ?? 0);
 
   /** Another merge starting under this one's head row: see the shapes declined above. */
   const headsBelowHead = (span: VMergeSpan): boolean => {
@@ -207,7 +234,7 @@ export function planVMergeRowHeights(
   const coveredPtOf = (span: VMergeSpan): number => {
     let total = 0;
     for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
-      total += floorOf(rowIndex);
+      total += floorOf(rowIndex, span.headCellId);
     }
     return total;
   };
@@ -229,38 +256,40 @@ export function planVMergeRowHeights(
   return {
     spansAt: (rowIndex) => spansByRow.get(rowIndex) ?? [],
     heightOf: spanHeightOf,
-    accept: (span, headTopPt) => {
-      if (!acceptedSpans.has(span)) {
-        if (headsBelowHead(span)) return;
-        const covered = coveredPtOf(span);
-        const growable = lastGrowableRow(span);
-        const surplus = growable === undefined ? 0 : contentOf(span) - covered;
-        // Growing a row an accepted span already covers would move that span's bottom out
-        // from under content already aimed at it.
-        if (surplus > EPSILON_PT && coveredRows.has(growable!)) return;
-        if (surplus > EPSILON_PT) {
-          surplusPt.set(growable!, (surplusPt.get(growable!) ?? 0) + surplus);
-        }
-        for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
-          coveredRows.add(rowIndex);
-        }
-        acceptedSpans.add(span);
-        acceptedHeadIds.add(span.headCellId);
+    accept: (span) => {
+      if (acceptedSpans.has(span)) return;
+      if (headsBelowHead(span)) return;
+      const covered = coveredPtOf(span);
+      const growable = lastGrowableRow(span);
+      // Nothing in the span can grow and the content does not fit what the rows are fixed
+      // at: the one case where the span is knowably too short for its own head, and the
+      // only way to keep the content inside a box is to leave the head sizing its own row,
+      // where `hRule="exact"` clips it exactly as Word does.
+      if (growable === undefined && contentOf(span) > covered + EPSILON_PT) return;
+      const surplus = growable === undefined ? 0 : contentOf(span) - covered;
+      // Growing a row an accepted span already covers would change that span's height after
+      // it was judged against the page, which is the one thing this plan must not do.
+      if (surplus > EPSILON_PT && coveredRows.has(growable!)) return;
+      acceptedSpans.add(span);
+      acceptedHeadIds.add(span.headCellId);
+      if (surplus > EPSILON_PT) {
+        surplusPt.set(growable!, (surplusPt.get(growable!) ?? 0) + surplus);
       }
-      const bottoms = detachedByRow.get(span.headRow) ?? new Map<string, number>();
-      bottoms.set(span.headCellId, headTopPt + spanHeightOf(span));
-      detachedByRow.set(span.headRow, bottoms);
+      for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
+        coveredRows.add(rowIndex);
+      }
+      const detached = detachedByRow.get(span.headRow) ?? new Set<string>();
+      detached.add(span.headCellId);
+      detachedByRow.set(span.headRow, detached);
     },
     rowOptions: (rowIndex) => {
       if (!coveredRows.has(rowIndex)) return undefined;
-      const detachedBottomPtByCellId = detachedByRow.get(rowIndex);
-      // A head nobody took still sizes its own row, so the planned floor is not that row's
-      // height and the caller has to measure it.
-      const heads = headIdsByRow.get(rowIndex);
-      const planned = !heads || [...heads].every((id) => acceptedHeadIds.has(id));
+      const detachedCellIds = detachedByRow.get(rowIndex);
+      // Always a floor: `baseOf` measures whatever heads stayed in the row, so this is the
+      // whole row's height and never a number the caller has to second-guess.
       return {
-        ...(detachedBottomPtByCellId ? { detachedBottomPtByCellId } : {}),
-        ...(planned ? { heightFloorPt: floorOf(rowIndex) } : {}),
+        ...(detachedCellIds ? { detachedCellIds } : {}),
+        heightFloorPt: floorOf(rowIndex),
       };
     },
   };
@@ -286,7 +315,7 @@ export function admitVMergeSpansAt(
 ): RowVMergeLayoutOptions | undefined {
   for (const span of plan?.spansAt(rowIndex) ?? []) {
     if (rowTopPt + plan!.heightOf(span) > contentBottomPt + EPSILON_PT) continue;
-    plan!.accept(span, rowTopPt);
+    plan!.accept(span);
   }
   return plan?.rowOptions(rowIndex);
 }
@@ -326,9 +355,8 @@ export function planTableVMergeHeights<Deps>(
  */
 export function acceptVMergeSpansAt(
   plan: VMergeRowHeights | null,
-  rowIndex: number,
-  rowTopPt: number
+  rowIndex: number
 ): RowVMergeLayoutOptions | undefined {
-  for (const span of plan?.spansAt(rowIndex) ?? []) plan!.accept(span, rowTopPt);
+  for (const span of plan?.spansAt(rowIndex) ?? []) plan!.accept(span);
   return plan?.rowOptions(rowIndex);
 }

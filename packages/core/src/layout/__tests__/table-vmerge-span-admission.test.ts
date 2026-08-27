@@ -172,8 +172,9 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     expect(table.rows.map((row) => row.box.height)).toEqual([20, 20]);
     const head = table.rows[0]!.cells[0]!;
     expect(head.box.height).toBe(40);
-    // Clipped to the span, not painted past it.
-    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + 40 + 0.001);
+    // The span cannot hold the head, so the head keeps sizing its own row and the exact
+    // height clips it there: one line, inside the 20pt row, the way Word draws it.
+    expect(contentBottomOf(head)).toBeLessThanOrEqual(head.box.y + 20 + 0.001);
     expectContentInsideItsTable(layout);
     expect(paintedBottomPt(layout, 0)).toBeLessThanOrEqual(CONTENT_BOTTOM_PT + 0.001);
   });
@@ -229,6 +230,52 @@ describe('a merge is only sized as a span where the span can hold it', () => {
     const lineCount = head.blocks.filter((block) => block.kind === 'paragraph').length;
     expect(lineCount).toBe(5);
     expect(head.box.height).toBe(20 + table.rows[1]!.box.height);
+    expectContentInsideItsTable(layout);
+  });
+
+  test('a head taller than a page paginates instead of losing its tail', () => {
+    // A detached head answers to the page, so it splits and continues like any other cell.
+    // Bounding it by its span instead swallowed everything past the span's bottom: the
+    // fragment reported itself complete, no remainder was carried, and the tail was gone.
+    const nine = Array.from({ length: 9 }, (_, index) => p(`T${index}`)).join('');
+    const layout = layoutTiny(
+      loadPart(
+        `<w:tbl>${GRID}` +
+          `<w:tr>${tc(nine, RESTART)}${tc(p('side'))}</w:tr>` +
+          `<w:tr>${tc(p('ghost'), CONTINUE)}${tc(p('side2'))}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    const painted = layout.pages
+      .flatMap((page) => page.fragments)
+      .filter((fragment): fragment is TableFragmentRecord => fragment.kind === 'table')
+      .flatMap((table) => table.rows)
+      .flatMap((row) => row.cells)
+      .flatMap((cell) => cell.blocks)
+      .flatMap((block) => (block.kind === 'paragraph' ? block.lines : []))
+      .flatMap((line) => line.spans)
+      .map((span) => span.text)
+      .join(' ');
+    for (let index = 0; index < 9; index += 1) expect(painted).toContain(`T${index}`);
+    expectContentInsideItsTable(layout);
+  });
+
+  test('a row that starts two merges is measured with the head that stayed in it', () => {
+    // Row 0 heads both columns. Whichever merge is not planned goes on sizing row 0, so the
+    // row's planned height has to include it. Measuring the row without the content the plan
+    // detached judged it against a height nobody would place and broke the page under it.
+    const layout = layoutTiny(
+      loadPart(
+        `${p('F0')}<w:tbl>${GRID}` +
+          `<w:tr>${tc(p('A0') + p('A1') + p('A2'), RESTART)}${tc(p('B0') + p('B1') + p('B2'), RESTART)}</w:tr>` +
+          `<w:tr>${tc(p('a1'), CONTINUE)}${tc(p('b1'), CONTINUE)}</w:tr>` +
+          `<w:tr>${tc(p('a2'), CONTINUE)}${tc(p('b2'))}</w:tr>` +
+          `<w:tr>${tc(p('a3'), CONTINUE)}${tc(p('b3'))}</w:tr>` +
+          '</w:tbl>'
+      )
+    );
+    // The row after the heads shares their page: no break opened under a mostly empty page.
+    expect(tablesOf(layout, 0)[0]!.rows.length).toBeGreaterThanOrEqual(2);
     expectContentInsideItsTable(layout);
   });
 

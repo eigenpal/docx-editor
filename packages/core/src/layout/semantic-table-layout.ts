@@ -1264,7 +1264,7 @@ export function layoutRowFragmentBounded(
   cellSpacingPt = 0,
   vMerge?: RowVMergeLayoutOptions
 ): LayoutRowBoundedResult {
-  const detachedBottoms = vMerge?.detachedBottomPtByCellId;
+  const detached = vMerge?.detachedCellIds;
   const total = sumCols(cols, 0, cols.length);
   // `w:tblCellSpacing`: each cell gives up half of every gap it shares with a neighbour.
   // `w:tblCellSpacing` (17.4.45) separates ADJACENT cell edges, so each of the two cells
@@ -1338,11 +1338,11 @@ export function layoutRowFragmentBounded(
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     const contentTop = rowTop + topInset;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
-    // A detached head is bound by its SPAN, not this row: `hRule="exact"` fixes the ROW's
-    // height (17.18.37) while the merged content goes on through the rows below it.
-    const detachedBottomPt = detachedBottoms?.get(cell.id);
-    const cellMaxBottom =
-      detachedBottomPt === undefined ? flowMaxBottom : Math.min(maxBottom, detachedBottomPt);
+    // A detached head answers to the PAGE and to nothing else: `hRule="exact"` fixes the
+    // height of the ROW (17.18.37) while the merged content goes on through the rows below,
+    // and its span's own extent is not known until every row of it has been placed.
+    const isDetached = detached?.has(cell.id) === true;
+    const cellMaxBottom = isDetached ? maxBottom : flowMaxBottom;
     const contentMaxBottom = cellMaxBottom - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
@@ -1385,7 +1385,7 @@ export function layoutRowFragmentBounded(
       cellMaxBottom,
       fitted ? contentBottom + insets.bottom : rowTop + topInset + defaultLineHeight + insets.bottom
     );
-    if (cellBottom > rowBottom && detachedBottomPt === undefined) rowBottom = cellBottom;
+    if (cellBottom > rowBottom && !isDetached) rowBottom = cellBottom;
 
     flowed.push({
       cell,
@@ -1397,8 +1397,7 @@ export function layoutRowFragmentBounded(
       contentBottom,
       insets: { ...insets, top: topInset },
       nextCursor,
-      // A detached head's content is the span's, clipped tail included: never the row's.
-      complete: cell.vMergeContinue || detachedBottomPt !== undefined ? true : complete,
+      complete: cell.vMergeContinue ? true : complete,
       fitted,
       nestedSplitBlocked,
     });
@@ -1407,7 +1406,7 @@ export function layoutRowFragmentBounded(
   // Coordinate fragment height: tallest placed content, never past the flow budget.
   rowBottom = Math.min(flowMaxBottom, Math.max(rowBottom, rowTop));
   for (const entry of flowed) {
-    if (detachedBottoms?.has(entry.cell.id) === true) continue;
+    if (detached?.has(entry.cell.id) === true) continue;
     const needed = entry.fitted
       ? entry.contentBottom + entry.insets.bottom
       : rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
@@ -1752,7 +1751,7 @@ function emitNestedTable(
       depth,
       nestedFlowDeps,
       structure.cellSpacingPt,
-      acceptVMergeSpansAt(vMergePlan, rowIndex, y)
+      acceptVMergeSpansAt(vMergePlan, rowIndex)
     );
     rawRows.push(placed.record);
     y = placed.bottom;
@@ -1823,7 +1822,7 @@ export function layoutTableFragment(
       depth,
       deps,
       structure.cellSpacingPt,
-      acceptVMergeSpansAt(vMergePlan, rowIndex, y)
+      acceptVMergeSpansAt(vMergePlan, rowIndex)
     );
     rawRows.push(placed.record);
     y = placed.bottom;

@@ -2129,9 +2129,12 @@ function layoutBlocksPass(
       let fragmentsForRow = 0;
       let movedToFreshPage = false;
 
-      // A row an accepted span already covers stays where the span put it. Moving it would
-      // strand the merged content placed above it on a page with no table left under it.
-      const heldByOpenSpan = vMerge !== undefined && vMerge.detachedBottomPtByCellId === undefined;
+      // A row an accepted span covers may not leave the page BEFORE it puts something on it.
+      // The merged content above it was flowed against this page, so a fragment that ends
+      // above that content leaves the content under no table at all. Breaking AFTER filling
+      // to the page bottom is safe and stays allowed: the fragment then reaches the bottom,
+      // which is the furthest the content can have gone.
+      const heldByOpenSpan = vMerge !== undefined && vMerge.detachedCellIds === undefined;
 
       // Whole-row move: fits a fresh page but not the remaining band.
       if (
@@ -2227,7 +2230,7 @@ function layoutBlocksPass(
         );
 
         // First attempt on a non-empty page placed nothing useful → move to next page.
-        if (!placed.fitted && cursorY > 0 && !movedToFreshPage) {
+        if (!placed.fitted && !heldByOpenSpan && cursorY > 0 && !movedToFreshPage) {
           breakForContinuation(true);
           movedToFreshPage = true;
           continue;
