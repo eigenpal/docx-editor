@@ -224,6 +224,50 @@ describe('useWebrtcCollaboration', () => {
     });
   });
 
+  test('rejoin after a failed initial connect retries as a joiner', async () => {
+    // The failed attempt is still "the last connect": rejoin must retry it instead of
+    // refusing with "call connect first".
+    let calls = 0;
+    const seenOptions: UseWebrtcCollaborationConnectOptions[] = [];
+    const room = fakeRoom('recovered');
+    const createRoom = async (options: UseWebrtcCollaborationConnectOptions) => {
+      seenOptions.push(options);
+      calls += 1;
+      if (calls === 1) {
+        throw Object.assign(new Error('initialization-timeout'), {
+          code: 'initialization-timeout',
+        });
+      }
+      return room;
+    };
+    let latest: UseWebrtcCollaborationReturn | undefined;
+    await act(async () => {
+      render(<Probe autoConnect={false} createRoom={createRoom} onState={(v) => (latest = v)} />);
+    });
+    await act(async () => {
+      try {
+        await latest?.connect({
+          ...CONNECT,
+          bootstrap: { kind: 'create', document: new Uint8Array([1]) },
+        });
+      } catch {
+        // The failure is under test; the hook already exposes it through `error`.
+      }
+    });
+    expect(latest?.error).toEqual({ code: 'initialization-timeout' });
+    const saved = new Uint8Array([42]);
+    await act(async () => {
+      await latest?.rejoin(saved);
+    });
+    expect(latest?.session).toBe(room.session);
+    expect(latest?.error).toBeNull();
+    expect(seenOptions[1]).toMatchObject({
+      roomId: CONNECT.roomId,
+      identity: CONNECT.identity,
+      bootstrap: { kind: 'join' },
+    });
+  });
+
   test('a failed rejoin keeps the saved bytes mounted and surfaces the typed error', async () => {
     let calls = 0;
     const first = fakeRoom();

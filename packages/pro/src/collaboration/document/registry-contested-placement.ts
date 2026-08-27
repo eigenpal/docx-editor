@@ -151,3 +151,58 @@ export function resolveContestedPlacements(
   }
   return true;
 }
+
+/**
+ * Full first-preorder parent assignment over every part.
+ *
+ * The fallback for shapes the local resolution refuses, and the whole-index rebuild after a
+ * bulk load. Explicit enter/exit frames instead of recursion: nesting depth is remote input,
+ * and a crafted deep child chain must not overflow the call stack from inside a Yjs
+ * observer. A node is assigned its parent when it is first REACHED in preorder — before its
+ * own record guards — which is the order the recursive walk had.
+ */
+export function assignFirstReachableParents(
+  context: ContestContext,
+  only: ReadonlySet<LogicalId> | null
+): void {
+  const { nodes, parentIndex, childrenSnapshot, partRoots } = context;
+  if (only) {
+    for (const id of only) parentIndex.delete(id);
+  }
+  type Frame = {
+    readonly id: LogicalId;
+    readonly parent: LogicalId | null;
+    readonly exit: boolean;
+  };
+  for (const root of partRoots) {
+    const path = new Set<LogicalId>();
+    const stack: Frame[] = [{ id: root, parent: null, exit: false }];
+    while (stack.length > 0) {
+      const frame = stack.pop()!;
+      if (frame.exit) {
+        path.delete(frame.id);
+        continue;
+      }
+      const id = frame.id;
+      if (frame.parent !== null && (only === null || only.has(id))) {
+        if (!parentIndex.has(id)) parentIndex.set(id, frame.parent);
+      }
+      if (path.has(id)) continue;
+      const rec = nodes.get(id);
+      if (!rec || rec.get(NODE_DELETED_FIELD) === true) continue;
+      const children = childrenSnapshot.get(id) ?? childArrayOf(rec)?.toArray() ?? [];
+      path.add(id);
+      stack.push({ id, parent: null, exit: true });
+      const seen = new Set<string>();
+      const pending: LogicalId[] = [];
+      for (const childId of children) {
+        if (seen.has(childId) || childId === id) continue;
+        seen.add(childId);
+        pending.push(childId);
+      }
+      for (let at = pending.length - 1; at >= 0; at -= 1) {
+        stack.push({ id: pending[at]!, parent: id, exit: false });
+      }
+    }
+  }
+}

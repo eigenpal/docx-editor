@@ -31,7 +31,7 @@ The hook lives on a WebRTC subpath so a review-only bundle does not load a netwo
 
 Pass `room` to connect when the component mounts. Call `leave` when the session should end. While `pending` is true, wait before you mount the editor.
 
-The hook returns a host session (`CollaborationSession`). That type exposes identity, status, presence, and undo. It does not expose `attach` or `gateOperations`.
+The hook returns a host session (`CollaborationSession`). That type exposes identity, status, presence, and undo. It does not expose `attach` or `gateOperations`. `CollaborationSession`, `CollaborationStatus`, and `CollaborationFailure` are exported as types from `@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
 
 `error` is a `CollaborationFailure`. Branch on `error.code` instead of matching message strings.
 
@@ -183,6 +183,10 @@ provider.on('status', ({ status }: { status: string }) => {
 
 The factory rejects with a typed `CollaborationSchemaError`. The codes you handle in this flow are `initialization-timeout` (no synced room appeared), `document-id-mismatch` (the room replicates a different `documentId`), and `protocol-version-mismatch` or `schema-version-mismatch` (the room uses a different protocol or schema version).
 
+### Recover from an error
+
+A session that reports status `error` cannot repair itself. You own the Yjs resources, so you own the recovery. Save the editor bytes first with `await editor.save()`. Destroy the room with `room.destroy()`, then destroy your provider. Create a fresh `Y.Doc`, a fresh `Awareness`, and a fresh provider. Connect the provider, then call `createDocumentCollaboration` again with `bootstrap: { kind: 'join' }`. Keep the editor mounted on the saved bytes until the new room is ready. If the join fails, the saved bytes keep your local work.
+
 The same entry exports `createTextCollaboration`, which replicates paragraph text alone and refuses structural edits. It is an experimental proof. Use `createDocumentCollaboration`.
 
 ## Headless replica
@@ -217,15 +221,15 @@ Use `DocxEditor.Root`, `Viewport`, and `Content` when you need custom chrome aro
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import { useCollaborationStatus } from '@docx-editor.dev/pro/react';
+import { useCollaborationStatus, type CollaborationSession } from '@docx-editor.dev/pro/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 
-function Status({ session }: { session: ReturnType<typeof useWebrtcCollaboration>['session'] }) {
+function Status({ session }: { session: CollaborationSession | null }) {
   const { status } = useCollaborationStatus(session);
   return <span>{status}</span>;
 }
 
-export function CollaborativeEditor() {
+export function CollaborativeEditor({ roomId, bytes }: { roomId: string; bytes: Uint8Array }) {
   const collaboration = useWebrtcCollaboration({
     room: {
       roomId,
@@ -254,11 +258,13 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 import { useCollaborationStatus } from '@docx-editor.dev/pro/vue';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
 
+const props = defineProps<{ roomId: string; bytes: Uint8Array }>();
+
 const { document, modules, pending, session } = useWebrtcCollaboration({
   room: {
-    roomId,
+    roomId: props.roomId,
     identity: { actorId: 'alex', name: 'Alex' },
-    bootstrap: { kind: 'join' },
+    bootstrap: { kind: 'create-or-join', document: props.bytes },
   },
 });
 const { status } = useCollaborationStatus(session);

@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { describe, expect, test } from 'bun:test';
 import { collaborationDocx } from './support.ts';
+import { isElementRecord } from '../document/schema.ts';
 import {
   destroyReplica,
   expectConverged,
@@ -27,15 +28,23 @@ describe('cross-nesting cycles', () => {
     const bob = joinReplica(alice, 31);
     try {
       const alphaText = findText(packageOf(alice), 'Alpha paragraph');
-      const alpha = parentOf(alice.registry, parentOf(alice.registry, alphaText.id, 'run'), 'paragraph');
+      const alpha = parentOf(
+        alice.registry,
+        parentOf(alice.registry, alphaText.id, 'run'),
+        'paragraph'
+      );
       const bravoText = findText(packageOf(alice), 'Bravo paragraph');
-      const bravo = parentOf(alice.registry, parentOf(alice.registry, bravoText.id, 'run'), 'paragraph');
+      const bravo = parentOf(
+        alice.registry,
+        parentOf(alice.registry, bravoText.id, 'run'),
+        'paragraph'
+      );
       const body = alice.registry.parentOf(alpha);
       expect(body).not.toBeNull();
 
       const unlist = (replica: typeof alice, parent: string, child: string): void => {
         const record = replica.registry.record(parent);
-        if (!record || record.kind === 'textValue') throw new Error('parent record missing');
+        if (!record || !isElementRecord(record)) throw new Error('parent record missing');
         const at = record.childIds.indexOf(child);
         expect(at).toBeGreaterThanOrEqual(0);
         replica.registry.spliceChildren(parent, at, 1, []);

@@ -54,10 +54,21 @@ export {
   type UseDocumentCollaborationReturn,
 } from './useDocumentCollaboration.ts';
 export type {
+  CollaborationFailure,
+  CollaborationFailureCode,
   CollaborationIdentity,
   CollaborationParticipant,
+  CollaborationRemoteSelection,
+  CollaborationRemoteSelectionAddress,
+  CollaborationSelectionKind,
+  CollaborationStatus,
+  CollaborationStatusSnapshot,
 } from '@docx-editor.dev/core/collaboration';
-export type { CollaborationBootstrap } from '../collaboration/session.ts';
+export type {
+  CollaborationBootstrap,
+  CollaborationIdentityUpdate,
+  CollaborationSession,
+} from '../collaboration/session.ts';
 export type { CreateDocumentCollaborationOptions } from '../collaboration/document-session.ts';
 export { CustomNodeChrome, type CustomNodeChromeProps } from './CustomNodeChrome.ts';
 export {

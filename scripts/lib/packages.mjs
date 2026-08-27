@@ -112,9 +112,6 @@ export const PACKAGES = [
         react: [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
-          'CollaborationFailure',
-          'CollaborationSession',
-          'CollaborationStatus',
           'CustomNodeDefinition',
           'Editor',
           'EditorCollaborationSession',
@@ -146,9 +143,6 @@ export const PACKAGES = [
         vue: [
           'ActivatedCustomNode',
           'AnyCustomNodeDefinition',
-          'CollaborationFailure',
-          'CollaborationSession',
-          'CollaborationStatus',
           'CustomNodeDefinition',
           'Editor',
           'EditorCollaborationSession',

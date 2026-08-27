@@ -115,7 +115,11 @@ export function useDocumentCollaboration(
     hostModules: options.modules ?? EMPTY_MODULES,
     autoRoom: options.room ?? null,
     autoKey: roomKeyOf(options.room ?? null),
-    rejoinOptionsOf: (last) => last,
+    // This hook does not expose rejoin: the consumer owns `ydoc`, `awareness`, and the
+    // provider, and a replica that errored needs fresh resources the hook cannot create.
+    // The shared machinery still requires the mapping, so pin it to a join — a recovery
+    // must never re-seed the room from stale local bytes.
+    rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
   });
 
   return useMemo(

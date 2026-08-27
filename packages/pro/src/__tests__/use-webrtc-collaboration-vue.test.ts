@@ -194,6 +194,44 @@ describe('useWebrtcCollaboration (Vue)', () => {
     mounted.unmount();
   });
 
+  test('rejoin after a failed initial connect retries as a joiner', async () => {
+    // The failed attempt is still "the last connect": rejoin must retry it instead of
+    // refusing with "call connect first".
+    let calls = 0;
+    const seenOptions: UseWebrtcCollaborationConnectOptions[] = [];
+    const room = fakeRoom('recovered');
+    const mounted = mountHook(async (options) => {
+      seenOptions.push(options);
+      calls += 1;
+      if (calls === 1) {
+        throw Object.assign(new Error('initialization-timeout'), {
+          code: 'initialization-timeout',
+        });
+      }
+      return room;
+    }, false);
+    await nextTick();
+    try {
+      await mounted.latest()?.connect({
+        ...CONNECT,
+        bootstrap: { kind: 'create', document: new Uint8Array([1]) },
+      });
+    } catch {
+      // The failure is under test; the composable already exposes it through `error`.
+    }
+    expect(mounted.latest()?.error.value).toEqual({ code: 'initialization-timeout' });
+    await mounted.latest()?.rejoin(new Uint8Array([42]));
+    // `readonly()` wraps the session in a proxy, so compare by identity field.
+    expect(mounted.latest()?.session.value?.documentId).toBe('recovered');
+    expect(mounted.latest()?.error.value).toBeNull();
+    expect(seenOptions[1]).toMatchObject({
+      roomId: CONNECT.roomId,
+      identity: CONNECT.identity,
+      bootstrap: { kind: 'join' },
+    });
+    mounted.unmount();
+  });
+
   test('throws when host modules already include a collaboration contribution', () => {
     const modules = [collaborationModule({ session: stubSession('host') })];
     expect(() => {

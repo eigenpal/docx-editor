@@ -79,7 +79,7 @@ export interface CollaborationRoomConfig<TConnect, THandle extends Collaboration
   readonly autoRoomOf: () => TConnect | null;
   /** Identity key of the auto room; a change retriggers the auto connect. */
   readonly autoKeyOf: () => string;
-  /** Build the options a rejoin connects with from the last connected options. */
+  /** Build the options a rejoin connects with from the last attempted options. */
   readonly rejoinOptionsOf: (last: TConnect) => TConnect;
 }
 
@@ -133,6 +133,9 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
 
   const connect = async (next: TConnect): Promise<void> => {
     const token = ++generation;
+    // Record the attempt, not the success: rejoin after a FAILED connect must retry
+    // with these options rather than refuse with "call connect first".
+    lastConnect = next;
     pending.value = true;
     error.value = null;
     try {
@@ -141,7 +144,6 @@ export function useCollaborationRoom<TConnect, THandle extends CollaborationRoom
         created.destroy();
         return;
       }
-      lastConnect = next;
       owner.adopt(created);
       publish(created);
     } catch (cause) {

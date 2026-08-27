@@ -114,7 +114,8 @@ export interface UseWebrtcCollaborationReturn {
    * The reconnect always uses bootstrap `{ kind: 'join' }`, because an active room still
    * exists on the other peers. When no peer holds the room any more, the join rejects with
    * `initialization-timeout` — nothing is lost, because `nextDocument` (your saved bytes)
-   * stays mounted locally.
+   * stays mounted locally. A connect that failed also counts as the prior attempt, so
+   * rejoin retries it as a joiner.
    */
   readonly rejoin: (nextDocument: Uint8Array) => Promise<void>;
 }

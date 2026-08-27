@@ -4,15 +4,13 @@ import { useDocxEditor } from '@docx-editor.dev/react';
 import { safeParticipantColor } from '@docx-editor.dev/core/collaboration';
 import type { CollaborationParticipant } from '@docx-editor.dev/core/collaboration';
 import { useCollaborationParticipants, useCollaborationStatus } from '@docx-editor.dev/pro/react';
+import type { CollaborationSession } from '@docx-editor.dev/pro/react';
 import { createT, en } from '@docx-editor.dev/i18n';
 import {
   createCollaborationRoomId,
   validateRoomId,
 } from '@docx-editor.dev/pro/collaboration/webrtc';
-import type {
-  CollaborationSession,
-  UseWebrtcCollaborationConnectOptions,
-} from '@docx-editor.dev/pro/react/webrtc';
+import type { UseWebrtcCollaborationConnectOptions } from '@docx-editor.dev/pro/react/webrtc';
 import { DemoHeaderButton } from './DemoHeaderButton';
 
 const NAME_KEY = 'docx-editor-collaboration-name';

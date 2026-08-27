@@ -118,7 +118,11 @@ export function useDocumentCollaboration(
     hostModulesOf: () => toValue(options)?.modules ?? EMPTY_MODULES,
     autoRoomOf: () => toValue(options)?.room ?? null,
     autoKeyOf: () => roomKeyOf(toValue(options)?.room),
-    rejoinOptionsOf: (last) => last,
+    // This composable does not expose rejoin: the consumer owns `ydoc`, `awareness`, and
+    // the provider, and a replica that errored needs fresh resources the composable cannot
+    // create. The shared machinery still requires the mapping, so pin it to a join — a
+    // recovery must never re-seed the room from stale local bytes.
+    rejoinOptionsOf: (last) => ({ ...last, bootstrap: { kind: 'join' } }),
   });
 
   return {
