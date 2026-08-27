@@ -29,8 +29,8 @@ import { useDocxEditor } from '../context';
 import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
-import { platformShortcut } from '@docx-editor.dev/i18n';
 import { useMenuContext, useMenuLabel, type MenuId } from './menu-context';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
 
@@ -95,6 +95,7 @@ export interface MenuRowProps {
 export function MenuRow(props: MenuRowProps) {
   const { icon, shortcut, disabled, title, active, selected, slot, onSelect, className, children } =
     props;
+  const shortcutText = usePlatformShortcut();
   const reasonId = useId();
   // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
   // order and stops firing pointer events, so its `title` never renders and a screen
@@ -135,7 +136,7 @@ export function MenuRow(props: MenuRowProps) {
           Mac reader presses ⌘ where a Windows reader presses Ctrl. The catalogue can only
           state one spelling; `platformShortcut` makes the printed one match the keyboard. */}
       {shortcut ? (
-        <span className="docx-menubar__item-shortcut">{platformShortcut(shortcut)}</span>
+        <span className="docx-menubar__item-shortcut">{shortcutText(shortcut)}</span>
       ) : null}
       {describe ? (
         <span id={reasonId} className="docx-editor-sr-only">

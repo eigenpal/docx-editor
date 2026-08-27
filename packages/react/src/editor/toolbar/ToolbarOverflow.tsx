@@ -22,8 +22,8 @@ import {
 } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { chromeSlotIsToggle, type ChromeSlotId } from '@docx-editor.dev/core/editor';
-import { platformShortcut } from '@docx-editor.dev/i18n';
 import { useEditorCommand } from '../useEditorCommand';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
 import { MORE_ATTRIBUTE } from './useToolbarOverflow';
@@ -88,6 +88,7 @@ export function ToolbarOverflowControl({
  */
 export function ToolbarOverflowItem({ slot }: { readonly slot: ChromeSlotId }) {
   const label = useToolbarLabel();
+  const shortcut = usePlatformShortcut();
   const { close } = useContext(OverflowPanelContext);
   const { execute, isActive, isEnabled, disabledReason, value } = useEditorCommand(slot);
   const control = chromeControlForSlot(slot);
@@ -96,7 +97,7 @@ export function ToolbarOverflowItem({ slot }: { readonly slot: ChromeSlotId }) {
   // tells a locked format painter apart from an armed one, and the label is corrected for
   // this keyboard.
   const isToggle = chromeSlotIsToggle(slot);
-  const text = platformShortcut(label(control?.labelKey ?? slot));
+  const text = shortcut(label(control?.labelKey ?? slot));
 
   return (
     <button

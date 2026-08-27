@@ -121,6 +121,25 @@ function runProperties(editor: DocxEditorInstance, paragraph: number, run = 0): 
   return rPr ? describeProperties(rPr) : [];
 }
 
+/** The attributes one run property carries, for the settings `describeProperties` folds away. */
+function runPropertyAttributes(
+  editor: DocxEditorInstance,
+  paragraph: number,
+  localName: string
+): Record<string, string> {
+  const node = paragraphNodes(editor.surface!.session.part())[paragraph]!;
+  if (node.kind === 'textValue') return {};
+  const run = node.children.filter((child) => child.kind === 'run')[0];
+  if (!run || run.kind === 'textValue') return {};
+  const rPr = run.children.find((child) => child.kind === 'runProperties');
+  if (!rPr || rPr.kind === 'textValue') return {};
+  const property = rPr.children.find(
+    (child) => child.kind !== 'textValue' && child.localName === localName
+  );
+  if (!property || property.kind === 'textValue') return {};
+  return Object.fromEntries(property.attributes.map((a) => [a.localName, a.value]));
+}
+
 /** One paragraph's own `w:pPr`, minus the mark's run properties. */
 function paragraphProperties(editor: DocxEditorInstance, paragraph: number): string[] {
   const node = paragraphNodes(editor.surface!.session.part())[paragraph]!;
@@ -244,6 +263,25 @@ describe('painting', () => {
     });
   });
 
+  test('carries the underline COLOUR, not just its variant', () => {
+    const red = '<w:rPr><w:u w:val="single" w:color="FF0000"/></w:rPr>';
+    withEditor(
+      p(textRun('plain', '<w:rPr><w:u w:val="double"/></w:rPr>')) + p(textRun('loud', red)),
+      (editor) => {
+        select(editor, [0, 0], [0, 5]);
+        editor.exec({ type: 'copyFormatting' });
+        select(editor, [1, 0], [1, 4]);
+        editor.exec({ type: 'pasteFormatting' });
+        // `w:u` merges ATTRIBUTE by attribute, so an omitted colour is the target's colour
+        // kept — a red double underline where the source had a text-coloured one.
+        expect(runPropertyAttributes(editor, 1, 'u')).toMatchObject({
+          val: 'double',
+          color: 'auto',
+        });
+      }
+    );
+  });
+
   test('the paragraph write replaces rather than merges, so the source is what survives', () => {
     withEditor(PLAIN + STYLED, (editor) => {
       select(editor, [0, 0], [0, 5]);
@@ -311,6 +349,27 @@ describe('the control', () => {
         active: true,
         value: 'once',
       });
+    });
+  });
+
+  test('arming REACHES a host, so a toolbar can light up', () => {
+    withEditor(STYLED + PLAIN, (editor) => {
+      select(editor, [0, 0], [0, 6]);
+      let ticks = 0;
+      const off = editor.on('selectionChange', () => {
+        ticks += 1;
+      });
+      const first = editor.snapshot();
+
+      runToolbarCommand(editor, 'format.painter');
+
+      // Asserted on the EVENT, not on a later read: `useEditorState` is a subscription, so a
+      // press that quietly invalidated the snapshot cache and emitted nothing would leave the
+      // button un-pressed until something unrelated woke it. Arming moves no revision and no
+      // caret, which is exactly why it needs its own answer in the publish signal.
+      expect(ticks).toBe(1);
+      expect(editor.snapshot()).not.toBe(first);
+      off();
     });
   });
 
@@ -567,6 +626,29 @@ describe('the drag gesture', () => {
         head: { paragraphId: ids[1]!, offset: 5 },
       });
       expect(surface.formatPainter.apply()).toBe(false);
+    } finally {
+      surface.destroy();
+    }
+  });
+
+  test('a click that paints no text keeps the painter armed for the double-click', () => {
+    const { surface, pages } = mount(PLAIN + p(textRun('second line here')));
+    try {
+      const ids = surface.session.paragraphIds();
+      // A RUN-level capture: a range inside one paragraph, short of its end.
+      surface.setSelection({
+        anchor: { paragraphId: ids[0]!, offset: 0 },
+        head: { paragraphId: ids[0]!, offset: 3 },
+      });
+      surface.formatPainter.press();
+
+      // One click: the caret lands, nothing is selected, so there is no text to paint. Word's
+      // gesture for painting a word is the DOUBLE-click, whose second release selects it — so
+      // the painter has to survive the first.
+      pages.dispatchEvent(pointer('pointerdown', 20, 25));
+      document.dispatchEvent(pointer('pointerup', 20, 25));
+
+      expect(surface.formatPainter.state().mode).toBe('once');
     } finally {
       surface.destroy();
     }

@@ -193,8 +193,8 @@ the paragraph mark also copies the paragraph style, alignment, spacing, and inde
 
 The painter reads the formatting the reader sees, not only what the text states directly.
 Copying from a paragraph that takes its face from a style carries that face to the target.
-Two things stay on the target: paragraph borders (`w:pBdr`) and a run's character style
-(`w:rStyle`).
+Three things stay on the target: paragraph borders (`w:pBdr`), a run's character style
+(`w:rStyle`), and character shading (`w:shd` on a run).
 
 To drive the painter from your own chrome, use the `copyFormatting` and `pasteFormatting`
 commands. `pasteFormatting` reports a disabled reason until something is copied.

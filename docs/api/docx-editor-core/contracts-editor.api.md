@@ -1064,6 +1064,7 @@ export interface EditorSnapshot {
     readonly editable: boolean;
     readonly editingMode?: DocumentEditingMode;
     readonly fontSubstitutions?: readonly string[];
+    readonly formatPainter?: FormatPainterSurfaceState;
     // (undocumented)
     readonly formatting: RunFormatting | null;
     readonly hasReviewContent?: boolean;
@@ -1177,6 +1178,20 @@ export interface FontSourceSubstitution {
     readonly from: FontFaceRequest;
     // (undocumented)
     readonly to: FontFaceRequest;
+}
+
+// @public
+export type FormatPainterLevel = 'none' | 'run' | 'paragraph';
+
+// @public
+export type FormatPainterMode = 'off' | 'once' | 'locked';
+
+// @public
+export interface FormatPainterSurfaceState {
+    // (undocumented)
+    readonly level: FormatPainterLevel;
+    // (undocumented)
+    readonly mode: FormatPainterMode;
 }
 
 // @public

@@ -11,8 +11,8 @@ import {
   type VNode,
 } from 'vue';
 import { chromeSlotIsToggle, type ChromeSlotId } from '@docx-editor.dev/core/editor';
-import { platformShortcut } from '@docx-editor.dev/i18n';
 import { useEditorCommand } from '../useEditorCommand';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useStableDocxId } from '../../lib/stable-id';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from './ToolbarButton';
@@ -65,6 +65,7 @@ export const ToolbarOverflowItem = defineComponent({
   },
   setup(props) {
     const label = useToolbarLabel();
+    const shortcut = usePlatformShortcut();
     const panel = inject(OverflowPanelContext, { close: () => {} });
     const command = useEditorCommand(computed(() => props.slot) as unknown as ChromeSlotId);
     return () => {
@@ -74,7 +75,7 @@ export const ToolbarOverflowItem = defineComponent({
       // what tells a locked format painter apart from an armed one, and the label is
       // corrected for this keyboard.
       const isToggle = chromeSlotIsToggle(props.slot);
-      const text = platformShortcut(label(control?.labelKey ?? props.slot));
+      const text = shortcut(label(control?.labelKey ?? props.slot));
       return h(
         'button',
         {

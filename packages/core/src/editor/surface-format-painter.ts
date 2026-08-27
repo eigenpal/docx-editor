@@ -23,6 +23,7 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { selectionRunStyle, type SurfaceProperty } from './surface-formatting.ts';
+import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import type {
   FormatPainterMode,
   FormatPainterOps,
@@ -104,13 +105,15 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
     { localName: 'bCs', attributes: onOff(style.bold) },
     { localName: 'iCs', attributes: onOff(style.italic) },
     {
+      // `w:u` carries two settings, and `mergedMultiSettingProperty` merges it ATTRIBUTE by
+      // attribute — so an omitted `w:color` is the target's colour kept, one level below the
+      // rule this file's header states. `auto` is the spelling for "follows the text",
+      // which is what a resolved colour of null means.
       localName: 'u',
-      attributes: style.underline
-        ? {
-            val: style.underline.variant,
-            ...(style.underline.color ? { color: style.underline.color } : {}),
-          }
-        : { val: 'none' },
+      attributes: {
+        val: style.underline ? style.underline.variant : 'none',
+        color: style.underline?.color ?? 'auto',
+      },
     },
     { localName: 'strike', attributes: onOff(style.strike) },
     { localName: 'dstrike', attributes: onOff(style.doubleStrike) },
@@ -171,10 +174,15 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
   let captured: FormatPainterCapture | null = null;
   let lastPressAt: number | null = null;
 
-  const state = (): FormatPainterSurfaceState => ({
-    mode,
-    level: captured === null ? 'none' : captured.paragraphProperties ? 'paragraph' : 'run',
-  });
+  // Reference-stable while unchanged, like the armed typing format beside it: the editor's
+  // snapshot cache compares its fields with `===`, so a fresh object per read would report
+  // every tick as a change and cost every consumer a re-render.
+  let published: FormatPainterSurfaceState = FORMAT_PAINTER_OFF;
+  const state = (): FormatPainterSurfaceState => {
+    const level = captured === null ? 'none' : captured.paragraphProperties ? 'paragraph' : 'run';
+    if (published.mode !== mode || published.level !== level) published = { mode, level };
+    return published;
+  };
 
   /**
    * Whether the selection covers a paragraph MARK, which is what decides the level.
@@ -197,7 +205,8 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     return from.offset === 0 && to.offset === text.length && text.length > 0;
   };
 
-  const capture = (): boolean => {
+  /** The capture itself. Silent, so a caller that also moves the MODE reports once. */
+  const captureNow = (): boolean => {
     const cells = deps.selectedCells?.();
     const rectangular = cells !== undefined && cells.length > 0;
     const { from, to } = deps.orderedRange();
@@ -222,20 +231,34 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       runProperties: style ? runPropertiesOf(style) : [],
       paragraphProperties,
     };
+    return true;
+  };
+
+  const capture = (): boolean => {
+    if (!captureNow()) return false;
     deps.publish();
     return true;
   };
 
-  const apply = (): boolean => {
+  /**
+   * The paint, and the two different things a caller wants to know about it.
+   *
+   * `wrote` is whether the DOCUMENT moved — the only honest answer to "did it work". `armed`
+   * is the collapsed-caret consolation: no text to paint, so the character half went to the
+   * stored-marks lane instead. The public `apply` reports either; the armed painter stands
+   * down only for `wrote`, because a click that painted no text is the FIRST half of Word's
+   * paint-a-word double-click and the painter has to still be live for the second.
+   */
+  const applyNow = (): { wrote: boolean; armed: boolean } => {
     const held = captured;
-    if (!held) return false;
+    if (!held) return { wrote: false, armed: false };
     const cells = deps.selectedCells?.();
     const rectangular = cells !== undefined && cells.length > 0;
     const { from, to } = deps.orderedRange();
     const paragraphIds = rectangular
       ? [...paragraphsInCells(deps.layout(), cells)]
       : paragraphsInRange(deps.paragraphOrder(), { from, to });
-    if (paragraphIds.length === 0) return false;
+    if (paragraphIds.length === 0) return { wrote: false, armed: false };
     const collapsed =
       !rectangular && from.paragraphId === to.paragraphId && from.offset === to.offset;
     const part = storyPart();
@@ -296,6 +319,11 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     // opened for viewing, a tracked-content protection, a collaboration gate — and reporting
     // a refused paint as success is the one thing a caller cannot recover from. `commit`
     // hands nothing back, so the model is asked directly.
+    //
+    // Sampled AFTER `orderedRange()` above, which is the point: that call flushes buffered
+    // typing (`flushPendingInputAndLayout`), so the keystrokes a user typed just before
+    // pressing the chord have already landed and moved the revision. Sampled earlier, this
+    // would read their transaction as the paint's own and call a refused paint a success.
     const before = session.packageRevision();
     if (ops.length > 0) {
       deps.commit(
@@ -312,7 +340,12 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     // arming a format the document just refused would let the next keystroke carry it in.
     const armed = collapsed && held.runProperties.length > 0 && (wrote || ops.length === 0);
     if (armed) deps.armPendingFormats(held.runProperties);
-    return wrote || armed;
+    return { wrote, armed };
+  };
+
+  const apply = (): boolean => {
+    const result = applyNow();
+    return result.wrote || result.armed;
   };
 
   const disarm = (): void => {
@@ -337,7 +370,7 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       // nothing — the selection has not moved since the press that armed it — and it keeps
       // the armed and the locked path telling one story.
       if (mode === 'once' && doublePress) {
-        if (!capture()) return false;
+        if (!captureNow()) return false;
         mode = 'locked';
         lastPressAt = at;
         deps.publish();
@@ -349,7 +382,9 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
         disarm();
         return true;
       }
-      if (!capture()) return false;
+      // `captureNow`, not `capture`: the mode moves in the same gesture, so ONE report
+      // covers both. Two would wake every subscriber twice for a single click.
+      if (!captureNow()) return false;
       mode = 'once';
       lastPressAt = at;
       deps.publish();
@@ -357,8 +392,11 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
     },
     applyIfArmed() {
       if (mode === 'off' || captured === null) return;
-      apply();
-      if (mode === 'once') disarm();
+      // Only a paint that reached the DOCUMENT consumes a single-application arming. A click
+      // with a character-level capture selects nothing to paint, and Word's gesture there is
+      // the double-click whose SECOND release selects the word — so the painter has to still
+      // be armed when that release arrives. A refused write does not consume it either.
+      if (applyNow().wrote && mode === 'once') disarm();
     },
   };
 }

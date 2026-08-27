@@ -36,9 +36,40 @@ export interface EditorFormatPainterCommands {
    * Refused with `no formatting has been copied` until `copyFormatting` has run. Paragraph
    * formatting is applied only when the capture carries it; the text itself never moves.
    *
-   * Paragraph borders (`w:pBdr`) and the run's character style (`w:rStyle`) are outside the
-   * property vocabulary an op may name, so they are preserved on the target rather than
-   * painted over — the same limit `clearFormatting` states.
+   * Three things stay on the TARGET rather than being painted over, because they are outside
+   * the property vocabulary an op may name — the same limit `clearFormatting` states:
+   * paragraph borders (`w:pBdr`), the run's character style (`w:rStyle`), and character
+   * shading (`w:rPr/w:shd`), which is resolved and painted but cannot be authored.
    */
   pasteFormatting: Record<never, never>;
+}
+
+/**
+ * How long the painter stays armed.
+ *
+ * Word's two gestures, named: a single press arms it for ONE application, a double press
+ * locks it on until the user presses `Esc`. `'off'` is the resting state.
+ */
+export type FormatPainterMode = 'off' | 'once' | 'locked';
+
+/**
+ * What a capture carries.
+ *
+ * `'run'` is character formatting alone — the level a range INSIDE one paragraph copies.
+ * `'paragraph'` adds the paragraph style and its direct paragraph properties, which is what
+ * a selection covering a paragraph mark copies. `'none'` means nothing has been captured.
+ */
+export type FormatPainterLevel = 'none' | 'run' | 'paragraph';
+
+/**
+ * Painter state, as the editor publishes it.
+ *
+ * Chrome state rather than document state, so it moves through the same report every other
+ * observable surface state uses — a toolbar's pressed state has one source. It lives in the
+ * CONTRACTS lane rather than beside the surface implementation because `EditorSnapshot`
+ * names it, and the contracts lane may not reach into the editor lane.
+ */
+export interface FormatPainterSurfaceState {
+  readonly mode: FormatPainterMode;
+  readonly level: FormatPainterLevel;
 }

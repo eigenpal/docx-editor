@@ -34,6 +34,10 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
   { file: 'contracts/editor.ts', to: 'layout' },
   { file: 'contracts/editor.ts', to: 'store' },
   { file: 'contracts/editor.ts', to: 'collaboration' },
+  // Split out of `contracts/editor.ts` above, and it inherits that file's coupling with it:
+  // the selected-image read model names drawing, crop and image-resource types the store
+  // lane owns. Compile-time only, and one fewer line in a file at its cap.
+  { file: 'contracts/editor-image-state.ts', to: 'store' },
   { file: 'contracts/modules.ts', to: 'layout' },
   { file: 'contracts/modules.ts', to: 'store' },
   { file: 'contracts/modules.ts', to: 'collaboration' },

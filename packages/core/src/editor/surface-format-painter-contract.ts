@@ -6,13 +6,15 @@
 // publishing the OOXML property bags would make an internal vocabulary part of the surface
 // contract that hosts then program against.
 
-/**
- * How long the painter stays armed.
- *
- * Word's two gestures, named: a single press arms it for ONE application, a double press
- * locks it on until the user presses `Esc`. `'off'` is the resting state.
- */
-export type FormatPainterMode = 'off' | 'once' | 'locked';
+import type {
+  FormatPainterLevel,
+  FormatPainterMode,
+  FormatPainterSurfaceState,
+} from '../contracts/editor-format-painter.ts';
+
+// Declared in the CONTRACTS lane, because `EditorSnapshot` names them and that lane may not
+// reach into this one. Re-exported here so the surface contract stays one import path.
+export type { FormatPainterLevel, FormatPainterMode, FormatPainterSurfaceState };
 
 /**
  * The refusal an apply gets before anything has been copied.
@@ -34,24 +36,16 @@ export const NO_COPIED_FORMATTING = 'no formatting has been copied';
 export const NOTHING_TO_COPY_FORMATTING = 'there is nothing at the selection to copy';
 
 /**
- * What a capture carries.
+ * The resting state, as one shared frozen value.
  *
- * `'run'` is character formatting alone — the level a range INSIDE one paragraph copies.
- * `'paragraph'` adds the paragraph style and its direct paragraph properties, which is what
- * a selection covering a paragraph mark copies. `'none'` means nothing has been captured.
+ * `EditorSnapshot` is value-cached by REFERENCE comparison, so a fresh `{ mode: 'off' }`
+ * object per derivation would report every tick as a change and defeat the cache for every
+ * consumer, not just this one.
  */
-export type FormatPainterLevel = 'none' | 'run' | 'paragraph';
-
-/**
- * Painter state, as the surface publishes it.
- *
- * Surface chrome rather than document bytes, so it moves through the same `onChange` report
- * every other observable surface state uses — a toolbar's pressed state has one source.
- */
-export interface FormatPainterSurfaceState {
-  readonly mode: FormatPainterMode;
-  readonly level: FormatPainterLevel;
-}
+export const FORMAT_PAINTER_OFF: FormatPainterSurfaceState = Object.freeze({
+  mode: 'off',
+  level: 'none',
+});
 
 /** Word's Format Painter over the surface. */
 export interface FormatPainterOps {

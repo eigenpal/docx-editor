@@ -3188,9 +3188,9 @@ a.docx-hyperlink:focus-visible {
 /* The format painter LOCKED on (a double-click), as against armed for one paint.
  *
  * Both are `data-active`, so the slab above already says "on". What this adds is that this
- * one does not end by itself: an underline along the bottom edge, drawn inside the slab so
- * it reads as part of the button rather than as a second control. Escape releases it — the
- * control's own tooltip says so. */
+ * one does not end by itself — Escape is what releases it — as an underline along the bottom
+ * edge, drawn inside the slab so it reads as part of the button rather than as a second
+ * control. */
 .docx-toolbar__button[data-slot='format.painter'][data-value='locked']::after {
   content: '';
   position: absolute;

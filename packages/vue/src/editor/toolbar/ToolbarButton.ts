@@ -8,8 +8,8 @@ import {
   type ChromeSlotId,
 } from '@docx-editor.dev/core/editor';
 import { mergeHostClass } from '../../lib/mergeHostClass';
-import { platformShortcut } from '@docx-editor.dev/i18n';
 import { useEditorCommand } from '../useEditorCommand';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { useToolbarLabel } from './toolbar-context';
 import { Slot } from './Slot';
 
@@ -64,6 +64,7 @@ export const ToolbarButton = defineComponent({
   },
   setup(props, { slots }) {
     const label = useToolbarLabel();
+    const shortcut = usePlatformShortcut();
     const command = useEditorCommand(computed(() => props.slot) as unknown as ChromeSlotId);
     return () => {
       if (props.hidden) return null;
@@ -71,7 +72,7 @@ export const ToolbarButton = defineComponent({
       // A registry label is tooltip-shaped and often NAMES its chord ("Bold (Ctrl+B)"). The
       // catalogue can only state one spelling, and the engine's accelerator is Ctrl OR Cmd —
       // so the printed name is corrected for this keyboard rather than translated twice.
-      const text = platformShortcut(label(control?.labelKey ?? props.slot));
+      const text = shortcut(label(control?.labelKey ?? props.slot));
       // `aria-pressed` only where pressed-ness is meaningful. The rule is the ENGINE's,
       // because it is not derivable from the command table alone — see `chromeSlotIsToggle`.
       const isToggle = chromeSlotIsToggle(props.slot);

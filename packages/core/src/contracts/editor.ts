@@ -48,19 +48,19 @@ import type {
   HeaderFooterState,
   NotePropertiesState,
 } from './editor-hf-notes.ts';
-import type { EditorFormatPainterCommands } from './editor-format-painter.ts';
 import type {
-  DrawingKind,
-  DrawingLocks,
-  DrawingPositionInput,
-  ImageWrapTarget,
-} from '../store/package/drawing-projection.ts';
+  EditorFormatPainterCommands,
+  FormatPainterSurfaceState,
+} from './editor-format-painter.ts';
+import type { ImageWrapTarget } from '../store/package/drawing-projection.ts';
+import type { SupportedImageMime } from '../store/package/image-resources.ts';
 import type { ImageCropPercent } from '../store/package/image-crop-units.ts';
-import type { ImageResourceState, SupportedImageMime } from '../store/package/image-resources.ts';
+import type { ImageContext, SelectedImageState } from './editor-image-state.ts';
 export type * from './types';
 export type * from './interaction';
 export type * from './editor-hf-notes.ts';
 export type * from './editor-format-painter.ts';
+export type * from './editor-image-state.ts';
 export type { ImageCropPercent } from '../store/package/image-crop-units.ts';
 
 // Everything below is named by a signature IN this file, so it has to be nameable FROM this
@@ -1624,52 +1624,13 @@ export interface EditorSnapshot {
    * derived it; empty means every family resolved (or no document is loaded).
    */
   readonly fontSubstitutions?: readonly string[];
+  /**
+   * Format painter arming, and the level of what it holds. Here for the same reason
+   * `lastRejection` is: it moves no revision and no caret, so a mode the snapshot does not
+   * carry is a mode no toolbar can reflect. Optional and additive.
+   */
+  readonly formatPainter?: FormatPainterSurfaceState;
 }
-
-/**
- * Canonical selected-image read model shared by {@link EditorSnapshot.image} and
- * {@link Editor.getSelectedImage}.
- *
- * @public
- */
-export interface SelectedImageState {
-  readonly id: string;
-  readonly kind: DrawingKind;
-  readonly widthEmu: number;
-  readonly heightEmu: number;
-  /** Crop inset per edge in UI percent (0–100); OOXML stores permille (×1000). */
-  readonly crop: ImageCropPercent;
-  readonly rotationDegrees: number;
-  readonly wrap: ImageWrapTarget;
-  readonly position: DrawingPositionInput | null;
-  readonly name: string;
-  readonly title: string;
-  readonly description: string;
-  readonly hyperlink: string | null;
-  readonly locks: DrawingLocks;
-  readonly hidden: boolean;
-  readonly resourceStatus: ImageResourceState['kind'];
-  readonly intrinsic: Readonly<{
-    readonly pixelWidth: number;
-    readonly pixelHeight: number;
-    readonly dpiX: number;
-    readonly dpiY: number;
-  }> | null;
-  readonly canResize: boolean;
-  readonly canMove: boolean;
-  readonly canChangeWrap: boolean;
-  readonly canCrop: boolean;
-}
-
-/**
- * The selected image and what may be done to it — the `imageContext` query's answer.
- *
- * An alias of `SelectedImageState`, kept as its own name because it is the query's result type
- * and chrome is written against it.
- *
- * @public
- */
-export type ImageContext = SelectedImageState;
 
 /**
  * An error the engine raised, carrying a machine-readable `code` alongside the message.

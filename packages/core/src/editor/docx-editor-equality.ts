@@ -232,6 +232,7 @@ const SNAPSHOT_FIELDS = {
   editingMode: 'compared',
   lastRejection: 'compared',
   fontSubstitutions: 'compared',
+  formatPainter: 'compared',
 } as const satisfies Record<keyof EditorSnapshot, 'compared'>;
 
 const SNAPSHOT_KEYS = Object.keys(SNAPSHOT_FIELDS) as readonly (keyof EditorSnapshot)[];

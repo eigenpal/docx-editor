@@ -94,7 +94,6 @@ import {
   fontRequestKey,
   createShapedMeasurer,
   resolveDefaultSurfaceMeasurer,
-  type SemanticSelection as SurfaceSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 import { createAnchorIndex } from './docx-editor-anchors.ts';
@@ -122,6 +121,8 @@ import {
   type LocaleStrings,
 } from '@docx-editor.dev/i18n';
 import { execEditorCommand } from './docx-editor-exec.ts';
+import { createPublishSignal } from './surface-publish-signal.ts';
+import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
 import { resolveDocTargetSelection } from './doc-target-resolution.ts';
 import { createOpenScheduler } from './docx-editor-open-scheduler.ts';
 import {
@@ -155,7 +156,6 @@ import {
   isContentControlEditorCommand,
 } from './content-controls.ts';
 import {
-  drawingSelectionIntentKey,
   imageContextEqual,
   selectedImageStateOf,
   canExecuteImageCommand as canExecuteImageCommandOf,
@@ -190,7 +190,6 @@ import {
   type DrawingSelectionIntent,
   type PaginatedSurface,
   type PaginatedSurfaceOptions,
-  type PaginatedSurfaceState,
   type RemoteCaretLabelHost,
 } from './paginated-surface.ts';
 import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
@@ -317,21 +316,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let remoteCaretLabelHost: RemoteCaretLabelHost | null = null;
   let parseError: string | null = null;
   let unsubscribeSession: Unsubscribe | null = null;
-  let lastSelection: SurfaceSelection | null = null;
-  // A press on a drawing can re-set the SAME selection value; the intent key reports it.
-  let lastDrawingIntentKey = 'none';
+  // What the last emitted tick reported, so a publish that moved nothing observable stays
+  // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
+  const publishSignal = createPublishSignal();
   let remountDrawingIntent: DrawingSelectionIntent = { kind: 'none' };
-  /**
-   * The armed typing format the last tick reported (Word's stored marks).
-   *
-   * Arming moves NO document revision and NO caret, so neither of this facade's two change
-   * signals fires for it — and a host that only ever hears events would leave its Bold
-   * button unpressed while the engine had it armed. Reference-compared: the surface hands
-   * back the same array while the armed set is unchanged.
-   */
-  let lastPendingFormat: PaginatedSurfaceState['pendingFormat'] = null;
-  /** Furniture scope key — chrome must wake even when caret text offsets did not move. */
-  let lastHeaderFooterKey: string | null = null;
   const hyperlinkChrome = createChromeHandlerStack<HyperlinkChromeHandlers>({});
   const equationChrome = createChromeHandlerStack<EquationChromeHandlers>({});
   let destroyed = false;
@@ -487,10 +475,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     unsubscribeSession = null;
     surface?.destroy();
     surface = null;
-    lastSelection = null;
-    lastDrawingIntentKey = 'none';
-    lastPendingFormat = null;
-    lastHeaderFooterKey = null;
+    publishSignal.reset();
     mountGeneration += 1;
   }
 
@@ -599,21 +584,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // re-derivation returns the previous snapshot reference, so a no-op publish costs
         // one comparison, never a spurious re-render.
         bump();
-        // The armed typing format is observable state with no other channel: it moves no
-        // revision (so no `change`) and no caret (so the guard below would return). A host
-        // learns about a Bold press at a collapsed caret here or not at all.
-        const pendingMoved = state.pendingFormat !== lastPendingFormat;
-        lastPendingFormat = state.pendingFormat;
-        const hf = surface.headerFooterState?.();
-        const hfKey = hf?.editing && hf.rId ? `${hf.editing}:${hf.rId}` : null;
-        const hfMoved = hfKey !== lastHeaderFooterKey;
-        lastHeaderFooterKey = hfKey;
-        const intentKey = drawingSelectionIntentKey(surface.drawingSelectionIntent());
-        const intentMoved = intentKey !== lastDrawingIntentKey;
-        lastDrawingIntentKey = intentKey;
-        const quiet = selectionsMatch(state.selection, lastSelection) && !pendingMoved;
-        if (quiet && !hfMoved && !intentMoved) return;
-        lastSelection = state.selection;
+        // The caret is not the only observable thing that moves: an armed typing format, an
+        // open furniture story, how a drawing came to be selected and the format painter's
+        // arming all move without it, and each has no other channel to a host.
+        if (!publishSignal.moved(state, surface)) return;
         emitSelectionChange();
       },
     } as PaginatedSurfaceOptions & { readonly onTrackedChange?: () => void });
@@ -648,8 +622,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (reviewActivationExclusions !== null) {
       surface.setReviewActivationExclusions(reviewActivationExclusions);
     }
-    lastSelection = surface.state().selection;
-    lastDrawingIntentKey = drawingSelectionIntentKey(surface.drawingSelectionIntent());
+    publishSignal.adopt(surface);
     // `result.surface`, not the reassignable `surface`: this subscription is THIS session's.
     unsubscribeSession = result.surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
@@ -1103,6 +1076,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // surface state to report it. Cleared the moment the surface refuses anything itself.
       lastRejection: state?.lastRejection ?? facadeRejection,
       fontSubstitutions: deriveFontSubstitutions(),
+      // Reference-stable from the surface, and a shared frozen constant when there is no
+      // surface — the snapshot cache below compares this field with `===`.
+      formatPainter: state?.formatPainter ?? FORMAT_PAINTER_OFF,
     };
   }
 

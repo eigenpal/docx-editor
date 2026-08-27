@@ -14,9 +14,9 @@ import {
 import { useDocxEditor } from '../context';
 import { openReportIssue } from '../../lib/reportIssue';
 import { useEditorCommand } from '../useEditorCommand';
-import { platformShortcut } from '@docx-editor.dev/i18n';
 import { chromeControlForSlot, chromeIcon, guardToolbarMousedown } from '../toolbar/ToolbarButton';
 import { useMenuContext, useMenuLabel, type MenuContextValue, type MenuId } from './menu-context';
+import { usePlatformShortcut } from '../usePlatformShortcut';
 import { focusBy, focusEdge, panelItems } from './menu-keyboard';
 import { useImageInsertOptional } from '../images/ImageInsert';
 //
@@ -105,6 +105,7 @@ export const MenuRow = defineComponent({
   },
   setup(props, { slots }) {
     const reasonId = useStableDocxId('menu-reason');
+    const shortcutText = usePlatformShortcut();
     // `aria-disabled`, NOT the native attribute. A natively-disabled button leaves the tab
     // order and stops firing pointer events, so its `title` never renders and a screen
     // reader walking the menu skips the row entirely — which is the whole "present and
@@ -150,7 +151,7 @@ export const MenuRow = defineComponent({
               can only state one spelling; `platformShortcut` makes the printed one match
               the keyboard. */}
           {shortcut ? (
-            <span class="docx-menubar__item-shortcut">{platformShortcut(shortcut)}</span>
+            <span class="docx-menubar__item-shortcut">{shortcutText(shortcut)}</span>
           ) : null}
           {describe ? (
             <span id={reasonId} class="docx-editor-sr-only">
