@@ -1,5 +1,85 @@
 # @docx-editor.dev/pro
 
+## 2.11.0
+
+### Minor Changes
+
+- e4872fb: Add `useDocumentCollaboration` and `useCollaborationParticipants` for React and Vue, expose `ydoc` and `provider` plus a `rejoin` recovery on the WebRTC hooks, and add `session.setIdentity` for live name and color changes. `leave` now requires the saved document bytes so nothing typed in the room is lost.
+- e4872fb: Collaboration hooks now return a host-facing `CollaborationSession` and typed `CollaborationFailure` errors, and the shared room bootstrap type is `CollaborationBootstrap`.
+- e4872fb: Add the `DocxEditorCollaboration` compound to the React and Vue entries: `CaretLabels` renders your own component inside each remote-caret label with full adapter context, and `Avatars`/`Avatar` ship a participant stack whose colors match the review author colors automatically.
+- e4872fb: Add the `create-or-join` collaboration bootstrap: every peer opens a room with the same options, the first peer seeds it and later peers join it, so hosts no longer decide out-of-band which peer creates the room. A room that two partitioned peers seeded concurrently reports the new terminal failure code `concurrent-seed` on every replica; recover by creating a new room from saved bytes.
+- e4872fb: Add an experimental API that replicates full-document canonical edits across Yjs peers. A typing run undoes as one step.
+- e4872fb: Add `useHocuspocusCollaboration` (React and Vue) and `createHocuspocusCollaboration` on new `hocuspocus` subpaths, so a Hocuspocus server room works the same way a WebRTC room does. The `token` option accepts a renewal callback, and a rejected token fails fast instead of waiting out the sync timeout.
+- e4872fb: Add an `offlineEditing` option to the collaboration factories and hooks: a disconnected replica keeps accepting local edits, and the buffered updates merge on reconnect.
+- e4872fb: Realtime collaboration is available from `@docx-editor.dev/pro`. Register `collaborationModule({ session })` on the editor module list.
+- e4872fb: Add `useWebrtcCollaboration` for React and Vue so a host can open a WebRTC room without owning its StrictMode lifecycle.
+
+### Patch Changes
+
+- e4872fb: A collaboration session that cannot accept the document no longer throws out of the editor's mount path, so the editor stays mounted and reports that it is out of sync instead of going blank.
+- e4872fb: Verify shared media bytes against their content digest before use, so a peer cannot substitute the bytes behind an image that every replica already trusts.
+- e4872fb: Report a collaboration status of `error` when shared state can only be materialized by leaving content out, instead of repairing the document silently while the session still reads `ready`.
+- e4872fb: Hold remote collaboration updates to the same node, part, relationship, and blob limits as local writes, so one peer can no longer drive unbounded allocation on every replica in the room.
+- e4872fb: Collaboration status now keeps a typed last-failure reason after the session recovers, so a host can learn why a replica failed. The session factory that always received `"document"` is removed; pass a ready session instead.
+- e4872fb: Resolving, reopening, and deleting a comment now replicate to collaboration peers without dropping the anchored text.
+- e4872fb: Keep both authors' work when two collaborators add the first footnote or endnote at the same
+  time, instead of dropping one of them.
+- e4872fb: Keep a collaborative room editable and converged when two people press Enter or paste in the
+  same paragraph at the same time, instead of leaving each author on their own copy.
+- e4872fb: A cross-paragraph type-over now replicates to peers. Joining no longer adopts the removed paragraph's properties onto the survivor.
+- e4872fb: A character-format command no longer duplicates selected text. New text nodes fill by replacing their current value, so a replay cannot insert the same characters again.
+- e4872fb: Inserting an image in a collaborative document now copies only that image's bytes into the room, instead of serializing the whole document.
+- e4872fb: An incomplete WebRTC chunked message now times out and moves the replica to error instead of stalling later updates behind a silent gap.
+- e4872fb: Fix silent data loss where a local edit that a remote update raced could overwrite text or delete a paragraph nobody touched, by replicating each edit on the commit that makes it.
+- e4872fb: Keep a keystroke in a collaborative document proportional to the edit rather than to the document, so typing in a long file costs what typing in a short one does.
+- e4872fb: Maintaining a node's child listing is now linear in its child count, which removes a slowdown when typing in a long document or a wide table.
+- e4872fb: Keep both relationships when two people add the first one to the same part at the same time, so a concurrently inserted image or hyperlink no longer ends up permanently broken.
+- e4872fb: A collaborative edit that replaces a run no longer sends the text it replaced to the other replicas, so formatting, tracked deletion, and hyperlink edits over previously edited text converge.
+- e4872fb: Undo no longer destroys text a collaborator typed into the same node while the undone edit was being made.
+- e4872fb: WebRTC room encryption no longer uses the public room id as the password; pass a `#collab=` URL fragment secret or signaling stays unencrypted.
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [2015f33]
+- Updated dependencies [1542e73]
+- Updated dependencies [40578c6]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [c4b4dab]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [af77c9b]
+- Updated dependencies [d11816f]
+- Updated dependencies [0d770d9]
+- Updated dependencies [dfaafc0]
+  - @docx-editor.dev/core@2.11.0
+  - @docx-editor.dev/react@2.11.0
+  - @docx-editor.dev/vue@2.11.0
+
 ## 2.10.0
 
 ### Patch Changes

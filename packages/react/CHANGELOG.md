@@ -1,5 +1,51 @@
 # @eigenpal/docx-js-editor
 
+## 2.11.0
+
+### Patch Changes
+
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [2015f33]
+- Updated dependencies [1542e73]
+- Updated dependencies [40578c6]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [c4b4dab]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [af77c9b]
+- Updated dependencies [d11816f]
+- Updated dependencies [0d770d9]
+- Updated dependencies [dfaafc0]
+  - @docx-editor.dev/core@2.11.0
+  - @docx-editor.dev/i18n@2.11.0
+
 ## 2.10.0
 
 ### Patch Changes

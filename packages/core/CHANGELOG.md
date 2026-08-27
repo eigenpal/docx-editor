@@ -1,5 +1,54 @@
 # @docx-editor.dev/core
 
+## 2.11.0
+
+### Minor Changes
+
+- e4872fb: Replicate a cross-paragraph collaboration selection as an anchor and a head address.
+- 1542e73: Fix toolbar and menu bar popups rendering behind the open navigation pane. Fixes #522
+- 40578c6: Add a format painter: the `format.painter` toolbar slot, `copyFormatting` and `pasteFormatting` commands, `Ctrl+Alt+C` / `Ctrl+Alt+V` (`Command` on macOS), and Copy formatting / Paste formatting rows on the right-click menu. Clear formatting now leaves a paragraph alone when the selection only ends at its start. Fixes #519
+- e4872fb: Add a provider-neutral collaboration port and session contracts so the editor can attach a replication implementation without importing a CRDT or transport.
+- e4872fb: Share table-cell and header selection presence as two endpoints plus an optional cell kind.
+- af77c9b: Tables match Word's default cell metrics: a table that names no style resolves the document's default table style, cell margins fall back to Word's own values, the paragraph Word writes to close a cell after a nested table takes no height, and a single-spaced line box includes the font's line gap. `StyleCascadeTable` gains `defaultTableStyleId`, and `DEFAULT_CELL_MARGINS` is no longer a uniform 3pt.
+- dfaafc0: Live collaboration now reports every failure a room can reach, including a session that fails after connecting, and presence chrome finds its session through the editor rather than a prop. Adds `DocxEditorCollaborationRoot` for mounting a room and `readCollaborationDocument` for reading one on a server.
+
+### Patch Changes
+
+- e4872fb: Allocate bookmark ids per collaboration actor so concurrent table-of-contents edits cannot mint the same id.
+- e4872fb: Give each picture its own `wp:docPr` id when two people insert an image into the same document at the same time, so Word no longer renumbers the drawings when it opens the merged file.
+- e4872fb: Allocate revision, comment, relationship, bookmark, and numbering ids per collaboration actor so concurrent peers no longer mint the same id from a shared snapshot.
+- e4872fb: Keep both footnotes when two people add the first one to the same document at the same time, so neither author's note becomes unreachable after the edits merge.
+- e4872fb: Give each paste its own bookmark, revision, and `wp:docPr` ids when two people paste into the same document at the same time, so the merged file keeps every marker, tracked change, and drawing addressable on its own.
+- e4872fb: Allocate table-of-contents bookmark names and content-control ids per collaboration actor so concurrent peers cannot mint the same value.
+- e4872fb: Headless automation writes now publish to a collaboration replica before the call returns, so a script that edits and then reads a peer no longer sees the document as it stood before the edit.
+- e4872fb: Insert Picture and Replace Picture now mint their `wp:docPr` and relationship ids under the collaboration actor, so two people adding an image to the same document at the same time no longer produce colliding ids. A single author still gets Word's dense numbering.
+- e4872fb: A rich clipboard paste now replicates story content and imported package resources to collaboration peers.
+- e4872fb: Attach a collaboration session after the editing surface finishes mounting, so a session no longer fails to start and report an error status.
+- e4872fb: Comments, tracked-change decisions, tables of contents, and custom nodes now replicate while a collaboration replica is attached, so those writes are no longer refused.
+- e4872fb: Comment writes now replicate the comments part, relationship, and content type to collaboration peers.
+- e4872fb: Add the `create-or-join` collaboration bootstrap: every peer opens a room with the same options, the first peer seeds it and later peers join it, so hosts no longer decide out-of-band which peer creates the room. A room that two partitioned peers seeded concurrently reports the new terminal failure code `concurrent-seed` on every replica; recover by creating a new room from saved bytes.
+- e4872fb: Concurrent first-create of a customXml store keeps both custom nodes on collaboration peers.
+- e4872fb: Give each review author slot its own hue, so two authors no longer read as the same colour.
+- 2015f33: Grow a vertically merged cell by one row when you insert a row inside its span, instead of breaking the merge and shifting the grid. In a merged table, a row that holds a cell inside a content control refuses the insert rather than marking the wrong column. Fixes #57.
+- e4872fb: Minted external hyperlink relationships are indexed in both `relationships` and `externalTargets`, matching the shape after save and reopen.
+- e4872fb: Image insert, list numbering, and hyperlink minting now replicate to collaboration peers instead of staying local.
+- e4872fb: A collaborative replica now rebuilds only the nodes a received edit names, keeps the rest of the document by identity, and revalidates only the parts that changed.
+- e4872fb: Joining a collaboration room keeps inline images, and the image selection frame sits on the selected drawing.
+- e4872fb: Typing in a large document with a collaboration replica attached no longer costs a scan of
+  every node id in the part on each edit, so an attached editor now runs at close to solo speed.
+- e4872fb: Add an `offlineEditing` option to the collaboration factories and hooks: a disconnected replica keeps accepting local edits, and the buffered updates merge on reconnect.
+- c4b4dab: Minify the shipped `dist/editor.css`, which halves it from 212 KiB to 109 KiB.
+- e4872fb: Keep a queued collaboration edit when a remote update arrives during it, and flush each document's queue independently so two documents in one process no longer strand each other.
+- e4872fb: Resolve collaboration presence addresses without scanning the document, so remote carets no longer slow down typing on long documents.
+- e4872fb: Remote carets now follow a collaborator's typing instead of stopping at the last place they clicked.
+- e4872fb: Remote presence highlights now measure only visible pages, so a large remote selection no longer walks the whole document on every keystroke.
+- e4872fb: Rejected tracked deletions restore ordinary run text on collaboration peers, and custom-node create-part writes now carry their content-type overrides.
+- e4872fb: Receiving a collaborative edit now costs the size of the edit instead of the size of the document, and a received keystroke reaches layout as the same paragraph-scoped change a local one does.
+- e4872fb: Review chrome no longer commits queued typing while it reads, and a missing image at paint time shows a placeholder instead of throwing.
+- d11816f: A cell merged over several rows now takes the height of the rows it covers instead of loading all of it onto the row it starts on, so the rows beside it keep their own heights and shading. A `w:cantSplit` row holding such a merge can now split across a page rather than failing the table's layout. Fixes #504
+- 0d770d9: Header and footer variants resolve per page, so a title page with no first-page header starts its body at the top margin, and a sheet added for note overflow takes the variant its own page number resolves. `PAGE` and `NUMPAGES` fields evaluate the `\#` numeric picture switch instead of painting the result cached in the file.
+- @docx-editor.dev/i18n@2.11.0
+
 ## 2.10.0
 
 ### Minor Changes

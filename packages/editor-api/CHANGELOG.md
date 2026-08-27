@@ -1,5 +1,64 @@
 # @docx-editor.dev/editor-api
 
+## 2.11.0
+
+### Minor Changes
+
+- e4872fb: Allow browser runtimes to receive an explicit author identity so scripts can reply to comments when the live editor permits review writes.
+- e4872fb: Add atomic `Comment.delete()` and `CommentReply.delete()` operations, including browser Undo support and root-versus-reply lifecycle semantics.
+- e4872fb: Add `Body.bookmarks` to enumerate bookmarks in a body story without first searching for text.
+- e4872fb: Add `ContentControl.isBound` for safely preflighting custom-XML-bound controls before writes.
+- e4872fb: Add read-only `NoteItem.text` so footnote and endnote text can be loaded directly in one post-listing sync while preserving `NoteItem.body` for structured access.
+
+### Patch Changes
+
+- e4872fb: Fix browser runtimes reporting save support even though they do not expose a `save()` method.
+- e4872fb: Correct font getter types to include `null` when a range has mixed or inherited formatting. Strict TypeScript consumers must now handle the existing nullable runtime result.
+- e4872fb: Correct comment, reply, and revision date getter types to include `null` for missing or invalid OOXML dates. Strict TypeScript consumers must now guard these review dates before using `Date` methods.
+- e4872fb: Reject non-empty `LoadQueryOptions.expand` requests instead of silently ignoring navigation-property expansion.
+- e4872fb: Fix browser `Range.select()` calls so offscreen ranges are revealed as well as logically selected.
+- e4872fb: Fix browser `Bookmark.select()` calls so they resolve and reveal the bookmark without requiring a prior `bookmark.range` sync.
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [2015f33]
+- Updated dependencies [1542e73]
+- Updated dependencies [40578c6]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [c4b4dab]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [e4872fb]
+- Updated dependencies [af77c9b]
+- Updated dependencies [d11816f]
+- Updated dependencies [0d770d9]
+- Updated dependencies [dfaafc0]
+  - @docx-editor.dev/core@2.11.0
+
 ## 2.10.0
 
 ### Patch Changes
