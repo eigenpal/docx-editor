@@ -100,7 +100,8 @@ import {
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
-import { planVMergeRowHeights } from './table-vmerge-heights.ts';
+import { admitVMergeSpansAt, planVMergeRowHeights } from './table-vmerge-heights.ts';
+import type { RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { paragraphMergeGroupOf, storyBlocks } from './story-roots.ts';
@@ -2116,21 +2117,12 @@ function layoutBlocksPass(
     // covered rows have to stay together. Rows the plan covers are measured there, not here.
     const bodyRows = structure.rows.slice(headerRows.length);
     const vMergePlan = planVMergeRowHeights(bodyRows, rowHeightOf, tableDeps.vMergeResolveBudget);
-    let vMergeGroupEnd = -1;
+    const admitSpans = (bodyRowIndex: number): RowVMergeLayoutOptions | undefined =>
+      admitVMergeSpansAt(vMergePlan, bodyRowIndex, cursorY, contentHeight());
 
     for (const [bodyRowIndex, row] of bodyRows.entries()) {
-      const vMergeGroup = vMergePlan?.groupAt(bodyRowIndex);
-      if (vMergeGroup && vMergeGroup.heightPt <= contentHeight() + 0.001) {
-        // The merged content paints from the head's row top across the span, so the span
-        // moves whole. A span too tall for a page keeps the row-by-row path below.
-        if (cursorY > 0 && cursorY + vMergeGroup.heightPt > contentHeight() + 0.001) {
-          breakForContinuation(true);
-        }
-        vMergeGroupEnd = vMergeGroup.endRow;
-      }
-      const vMerge =
-        bodyRowIndex <= vMergeGroupEnd ? vMergePlan?.rowOptions(bodyRowIndex) : undefined;
-      const naturalHeight = vMerge?.heightFloorPt ?? rowHeightOf(row);
+      let vMerge = admitSpans(bodyRowIndex);
+      let naturalHeight = vMerge?.heightFloorPt ?? rowHeightOf(row);
       let cursors: CellPlaceCursor[] = initialCellCursors(row);
       let isContinuation = false;
       let fragmentsForRow = 0;
@@ -2144,6 +2136,9 @@ function layoutBlocksPass(
       ) {
         breakForContinuation(true);
         movedToFreshPage = true;
+        // A merge that did not fit the band it was offered in may fit this fresh page.
+        vMerge = admitSpans(bodyRowIndex);
+        naturalHeight = vMerge?.heightFloorPt ?? naturalHeight;
       }
 
       for (;;) {

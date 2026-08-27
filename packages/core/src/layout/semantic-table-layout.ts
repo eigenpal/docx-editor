@@ -100,7 +100,8 @@ import {
   type TableVMergeResolveBudget,
   type TableVMergeResolveWork,
 } from './table-vmerge.ts';
-import { planTableVMergeHeights, type RowVMergeLayoutOptions } from './table-vmerge-heights.ts';
+import { acceptVMergeSpansAt, planTableVMergeHeights } from './table-vmerge-heights.ts';
+import type { RowVMergeLayoutOptions, VMergeRowHeights } from './table-vmerge-heights.ts';
 
 export {
   createTableBorderOwnershipBudget,
@@ -1287,9 +1288,8 @@ export interface LayoutRowBoundedResult {
  *   budget; mid-row page splits stay content-driven so the floor cannot overflow the page;
  * - `exact` — fixed height, content clipped (Word 17.18.37). Overflow is not continued.
  *
- * `vMerge` is what a vertical merge does here (17.4.85): a merge head covering later rows
- * paints from this row but is DETACHED from its height, which the span's floor sets
- * instead. See `table-vmerge-heights.ts`.
+ * `vMerge` is what a vertical merge does here (17.4.85): a head covering later rows paints
+ * from this row bounded by its span, DETACHED from the row's own height.
  */
 export function layoutRowFragmentBounded(
   row: SemanticTableRow,
@@ -1305,7 +1305,7 @@ export function layoutRowFragmentBounded(
   cellSpacingPt = 0,
   vMerge?: RowVMergeLayoutOptions
 ): LayoutRowBoundedResult {
-  const detached = vMerge?.detachedCellIds;
+  const detachedBottoms = vMerge?.detachedBottomPtByCellId;
   const total = sumCols(cols, 0, cols.length);
   // `w:tblCellSpacing`: each cell gives up half of every gap it shares with a neighbour.
   // `w:tblCellSpacing` (17.4.45) separates ADJACENT cell edges, so each of the two cells
@@ -1379,7 +1379,11 @@ export function layoutRowFragmentBounded(
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     const contentTop = rowTop + topInset;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
-    const contentMaxBottom = flowMaxBottom - insets.bottom;
+    // A detached merge head stops at its SPAN's bottom too, so it can never paint past the
+    // box it owns — the span can end in a row Word clips to an exact height.
+    const detachedBottomPt = detachedBottoms?.get(cell.id);
+    const contentMaxBottom =
+      Math.min(flowMaxBottom, detachedBottomPt ?? Number.POSITIVE_INFINITY) - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
@@ -1421,7 +1425,7 @@ export function layoutRowFragmentBounded(
       flowMaxBottom,
       fitted ? contentBottom + insets.bottom : rowTop + topInset + defaultLineHeight + insets.bottom
     );
-    if (cellBottom > rowBottom && detached?.has(cell.id) !== true) rowBottom = cellBottom;
+    if (cellBottom > rowBottom && detachedBottomPt === undefined) rowBottom = cellBottom;
 
     flowed.push({
       cell,
@@ -1433,7 +1437,8 @@ export function layoutRowFragmentBounded(
       contentBottom,
       insets: { ...insets, top: topInset },
       nextCursor,
-      complete: cell.vMergeContinue ? true : complete,
+      // A detached head's content is the span's, clipped tail included: never the row's.
+      complete: cell.vMergeContinue || detachedBottomPt !== undefined ? true : complete,
       fitted,
       nestedSplitBlocked,
     });
@@ -1442,7 +1447,7 @@ export function layoutRowFragmentBounded(
   // Coordinate fragment height: tallest placed content, never past the flow budget.
   rowBottom = Math.min(flowMaxBottom, Math.max(rowBottom, rowTop));
   for (const entry of flowed) {
-    if (detached?.has(entry.cell.id) === true) continue;
+    if (detachedBottoms?.has(entry.cell.id) === true) continue;
     const needed = entry.fitted
       ? entry.contentBottom + entry.insets.bottom
       : rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
@@ -1464,18 +1469,14 @@ export function layoutRowFragmentBounded(
       // Exact taller than remaining band — keep content-sized clamp; pagination fails closed.
       rowBottom = Math.min(maxBottom, rowBottom);
     }
-  } else if (atLeastHeightPt !== undefined) {
-    const minBottom = rowTop + atLeastHeightPt;
-    const contentComplete = flowed.every((entry) => entry.complete);
-    if (contentComplete && minBottom <= maxBottom + 0.001) {
-      if (minBottom > rowBottom) rowBottom = minBottom;
-    }
-  }
-  // The height the span assigned this row. An exact row keeps its authored box — the merge
-  // grows rows that can grow, never one Word clips to a fixed height.
-  const vMergeFloorPt = clipExact ? undefined : vMerge?.heightFloorPt;
-  if (vMergeFloorPt !== undefined && rowTop + vMergeFloorPt > rowBottom) {
-    rowBottom = rowTop + vMergeFloorPt;
+  } else {
+    // Two floors, same rule: the authored `atLeast` minimum and the height a vMerge span
+    // assigned this row. Neither applies to a continuation fragment — a mid-row split is
+    // content-driven, and flooring both halves counts the span twice — or past the budget.
+    const spanFloorPt = isContinuation ? 0 : (vMerge?.heightFloorPt ?? 0);
+    const minBottom = rowTop + Math.max(atLeastHeightPt ?? 0, spanFloorPt);
+    const floors = minBottom > rowBottom && minBottom <= maxBottom + 0.001;
+    if (floors && flowed.every((entry) => entry.complete)) rowBottom = minBottom;
   }
   rowBottom = Math.min(maxBottom, rowBottom);
   const rowHeight = Math.max(0, rowBottom - rowTop);
@@ -1585,6 +1586,15 @@ export function measureRowHeight(
   const placed = layoutRowFragment(row, cols, left, 0, false, depth, probeDeps, cellSpacingPt);
   return placed.record.box.height;
 }
+
+/** The vMerge plan for a table whose rows are all placed in one pass, probed by row layout. */
+const vMergePlanFor = (
+  structure: SemanticTableStructure,
+  left: number,
+  depth: number,
+  deps: TableFlowDeps
+): VMergeRowHeights | null =>
+  planTableVMergeHeights(structure, left, depth, deps, measureRowHeight, deps.vMergeResolveBudget);
 
 /**
  * After all rows of a table fragment are placed: expand vMerge restart boxes, re-apply
@@ -1769,14 +1779,7 @@ function emitNestedTable(
   // A nested table is placed inside its CELL's content box by the same rules a top-level one
   // is placed inside the text column.
   const tableLeft = left + tableOriginX(structure, containerWidth);
-  const vMergePlan = planTableVMergeHeights(
-    structure,
-    tableLeft,
-    depth,
-    nestedFlowDeps,
-    measureRowHeight,
-    deps.vMergeResolveBudget
-  );
+  const vMergePlan = vMergePlanFor(structure, tableLeft, depth, nestedFlowDeps);
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const [rowIndex, row] of structure.rows.entries()) {
@@ -1789,7 +1792,7 @@ function emitNestedTable(
       depth,
       nestedFlowDeps,
       structure.cellSpacingPt,
-      vMergePlan?.rowOptions(rowIndex)
+      acceptVMergeSpansAt(vMergePlan, rowIndex, y)
     );
     rawRows.push(placed.record);
     y = placed.bottom;
@@ -1847,14 +1850,7 @@ export function layoutTableFragment(
   deps: TableFlowDeps,
   isHeaderRepeat: (row: SemanticTableRow) => boolean = () => false
 ): { readonly fragment: TableFragmentRecord; readonly bottom: number } {
-  const vMergePlan = planTableVMergeHeights(
-    structure,
-    left,
-    depth,
-    deps,
-    measureRowHeight,
-    deps.vMergeResolveBudget
-  );
+  const vMergePlan = vMergePlanFor(structure, left, depth, deps);
   const rawRows: TableRowFragmentRecord[] = [];
   let y = top;
   for (const [rowIndex, row] of structure.rows.entries()) {
@@ -1867,7 +1863,7 @@ export function layoutTableFragment(
       depth,
       deps,
       structure.cellSpacingPt,
-      vMergePlan?.rowOptions(rowIndex)
+      acceptVMergeSpansAt(vMergePlan, rowIndex, y)
     );
     rawRows.push(placed.record);
     y = placed.bottom;

@@ -7,22 +7,33 @@
 // the merge paints as one band of the first row's fill.
 //
 // The surplus — merged content taller than the rows it covers — goes to the LAST row of the
-// span, not evenly across it. Word's own rendering of a four-row merge settles that: every
-// row but the last painted at exactly its `w:trHeight` minimum and the last one painted
-// 6pt over its minimum, which is the whole surplus. An even split would have moved the
-// second and third band edges as well, and Word left them where the minimums put them.
+// span that is allowed to grow, not evenly across the span. Word's own rendering of a
+// four-row merge settles that: every row but the last painted at exactly its `w:trHeight`
+// minimum and the last one painted 6pt over its minimum, which is the whole surplus. An
+// even split would have moved the second and third band edges as well, and Word left them
+// where the minimums put them. A row with `w:trHeight hRule="exact"` cannot grow (17.18.37),
+// so the surplus skips it; when NO row of the span can grow, the span keeps its authored
+// height and the merged content is clipped to it, the same as Word clips an exact row.
 //
-// The plan is built once per table, before any row is placed:
+// A span is decided ONE AT A TIME, by the caller, against the page it will really land on:
 //
-// - a merge head that covers more than one row is DETACHED from its own row, so the row is
-//   sized by the cells that really belong to it;
-// - each spanned row keeps a height FLOOR (its own height, and on the last row of a span
-//   the surplus too), which is what the paginator treats as the row's natural height;
-// - the spanned rows form a GROUP the paginator keeps on one page, because the merged
-//   content is painted from the head's row top across the whole span.
+// - `heightOf` says what the span needs, with every span accepted before it folded in;
+// - `accept` takes it into the plan — its head is DETACHED from its own row (the row is then
+//   sized by the cells that really belong to it), its rows take height floors, and the
+//   head's content gets a hard bottom so it can never paint past the span;
+// - a merge NOT accepted stays exactly where it was before this module existed: its head
+//   sizes its own row, and the ordinary row-split machinery paginates it.
 //
-// Measurement is not repeated work: rows inside a group are probed here instead of by the
-// paginator, so only the merge head itself costs one extra probe.
+// Declining one merge does not decline its neighbours. Two merges in different columns that
+// only overlap by a row are separate decisions, so a table where the second one cannot be
+// kept whole still gets the benefit for the first.
+//
+// Measurement is not repeated work: a row inside an accepted span is probed here instead of
+// by the paginator, so only the merge head itself costs one extra probe.
+//
+// NOT handled: a `w:vMerge w:val="restart"` inside a leading `w:tblHeader` row. The header
+// group is placed by its own path and repeats on every continuation page, so the merge would
+// have to be re-headed per page. Filed as issue #518; those merges keep the old behavior.
 
 import type {
   SemanticTableCell,
@@ -34,32 +45,39 @@ import { resolveVMergeSpans, type TableVMergeResolveBudget } from './table-vmerg
 /** Sub-point drift between a probe and the real placement is not a height difference. */
 const EPSILON_PT = 0.001;
 
-/** How a vertically merged span changes ONE row's placement. */
+/** How the vertical merges accepted so far change ONE row's placement. */
 export interface RowVMergeLayoutOptions {
   /**
-   * Merge heads in this row that cover later rows. Their content is painted from this row
-   * but must not size it — the span as a whole carries that height.
+   * Merge heads in this row that cover later rows, each mapped to the y its content must
+   * stop at. Their content paints from this row but must not size it — the span carries
+   * that height — and must not paint past the span, whose last row may be clipped or on
+   * another page.
    */
-  readonly detachedCellIds?: ReadonlySet<string>;
-  /** Minimum finished height: the row's own height plus its share of the span's surplus. */
+  readonly detachedBottomPtByCellId?: ReadonlyMap<string, number>;
+  /** Minimum finished height: the row's own height plus any surplus the span put on it. */
   readonly heightFloorPt?: number;
 }
 
-/** Consecutive rows tied together by at least one vertical merge. */
-export interface VMergeRowGroup {
-  /** First row index of the group, in the row list the plan was built from. */
-  readonly startRow: number;
-  /** Last row index of the group (inclusive). */
+/** One `w:vMerge` chain: the head cell and the rows it covers. */
+export interface VMergeSpan {
+  readonly headRow: number;
+  /** Last row covered, inclusive. Always greater than `headRow`. */
   readonly endRow: number;
-  /** Total height of the group once every floor is applied. */
-  readonly heightPt: number;
+  readonly headCellId: string;
 }
 
 /** Per-row placement advice for one table; `null` when no merge covers more than one row. */
-export interface VMergeRowHeightPlan {
-  /** The group that STARTS at this row index, or `undefined` when none does. */
-  groupAt(rowIndex: number): VMergeRowGroup | undefined;
-  /** Placement options for a row inside a group, or `undefined` for an ordinary row. */
+export interface VMergeRowHeights {
+  /** Merges that START at this row, longest first. Decide each before placing the row. */
+  spansAt(rowIndex: number): readonly VMergeSpan[];
+  /** Points the span needs below its head row's top, with accepted spans folded in. */
+  heightOf(span: VMergeSpan): number;
+  /**
+   * Take the span into the plan. `headTopPt` is where its head row is being placed; calling
+   * it again after the row moves to another page re-aims the head's bottom and nothing else.
+   */
+  accept(span: VMergeSpan, headTopPt: number): void;
+  /** Placement options for a row covered by an accepted span, `undefined` otherwise. */
   rowOptions(rowIndex: number): RowVMergeLayoutOptions | undefined;
 }
 
@@ -67,21 +85,19 @@ export interface VMergeRowHeightPlan {
 export type RowHeightProbe = (row: SemanticTableRow) => number;
 
 interface MergeHead {
-  readonly rowIndex: number;
+  readonly span: VMergeSpan;
   readonly cell: SemanticTableCell;
-  /** Rows covered, clamped to the row list (a truncated chain keeps the rows it has). */
-  readonly span: number;
 }
 
-/** The row as it stands with the spanning cells' content removed: their height is the span's. */
-function rowWithoutDetachedContent(
+/** The row as it stands with the merge heads' content removed: their height is the span's. */
+function rowWithoutHeadContent(
   row: SemanticTableRow,
-  detached: ReadonlySet<string> | undefined
+  heads: ReadonlySet<string> | undefined
 ): SemanticTableRow {
-  if (!detached || detached.size === 0) return row;
+  if (!heads || heads.size === 0) return row;
   return {
     ...row,
-    cells: row.cells.map((cell) => (detached.has(cell.id) ? { ...cell, blocks: [] } : cell)),
+    cells: row.cells.map((cell) => (heads.has(cell.id) ? { ...cell, blocks: [] } : cell)),
   };
 }
 
@@ -93,100 +109,162 @@ function soloHeadRow(row: SemanticTableRow, cell: SemanticTableCell): SemanticTa
 function collectHeads(
   rows: readonly SemanticTableRow[],
   budget: TableVMergeResolveBudget | undefined
-): { readonly heads: MergeHead[]; readonly detachedByRow: Map<number, Set<string>> } {
+): { readonly heads: MergeHead[]; readonly headIdsByRow: Map<number, Set<string>> } {
   const spans = resolveVMergeSpans(rows, undefined, budget);
   const heads: MergeHead[] = [];
-  const detachedByRow = new Map<number, Set<string>>();
-  for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    for (const cell of rows[rowIndex]!.cells) {
-      const span = spans.get(cell.id);
-      if (span === undefined || span < 2) continue;
-      const endRow = Math.min(rowIndex + span - 1, rows.length - 1);
-      if (endRow <= rowIndex) continue;
-      heads.push({ rowIndex, cell, span: endRow - rowIndex + 1 });
-      const detached = detachedByRow.get(rowIndex);
-      if (detached) detached.add(cell.id);
-      else detachedByRow.set(rowIndex, new Set([cell.id]));
+  const headIdsByRow = new Map<number, Set<string>>();
+  for (let headRow = 0; headRow < rows.length; headRow += 1) {
+    for (const cell of rows[headRow]!.cells) {
+      const covered = spans.get(cell.id);
+      if (covered === undefined || covered < 2) continue;
+      const endRow = Math.min(headRow + covered - 1, rows.length - 1);
+      if (endRow <= headRow) continue;
+      heads.push({ span: { headRow, endRow, headCellId: cell.id }, cell });
+      const ids = headIdsByRow.get(headRow);
+      if (ids) ids.add(cell.id);
+      else headIdsByRow.set(headRow, new Set([cell.id]));
     }
   }
-  return { heads, detachedByRow };
-}
-
-/** Maximal runs of rows joined by overlapping or adjacent spans, in row order. */
-function groupRanges(heads: readonly MergeHead[]): { start: number; end: number }[] {
-  const ranges: { start: number; end: number }[] = [];
-  for (const head of heads) {
-    const end = head.rowIndex + head.span - 1;
-    const open = ranges[ranges.length - 1];
-    if (open && head.rowIndex <= open.end) open.end = Math.max(open.end, end);
-    else ranges.push({ start: head.rowIndex, end });
-  }
-  return ranges;
+  return { heads, headIdsByRow };
 }
 
 /**
  * Plan the row heights of one table around its vertical merges.
  *
- * `rows` are the rows the caller paginates, in order — for a paginated table that is the
- * BODY rows, so a merge is never planned against a repeated header copy of a row.
- * Returns `null` when no merge covers more than one row, which leaves those tables on
- * exactly the path they were on before.
+ * `rows` are the rows the caller places, in order — for a paginated table that is the BODY
+ * rows, so a merge is never planned against a repeated header copy of a row. Returns `null`
+ * when no merge covers more than one row, which leaves those tables on exactly the path
+ * they were on before.
  */
 export function planVMergeRowHeights(
   rows: readonly SemanticTableRow[],
   probeRowHeightPt: RowHeightProbe,
   budget?: TableVMergeResolveBudget
-): VMergeRowHeightPlan | null {
+): VMergeRowHeights | null {
   if (rows.length === 0) return null;
-  const { heads, detachedByRow } = collectHeads(rows, budget);
+  const { heads, headIdsByRow } = collectHeads(rows, budget);
   if (heads.length === 0) return null;
 
-  const ranges = groupRanges(heads);
-  const floors = new Map<number, number>();
-  for (const range of ranges) {
-    for (let rowIndex = range.start; rowIndex <= range.end; rowIndex += 1) {
-      floors.set(
-        rowIndex,
-        probeRowHeightPt(rowWithoutDetachedContent(rows[rowIndex]!, detachedByRow.get(rowIndex)))
-      );
-    }
-  }
-
-  // Heads are visited in row order, so a second merge inside the same group already sees
-  // what the first one grew.
+  const headBySpan = new Map<VMergeSpan, MergeHead>(heads.map((head) => [head.span, head]));
+  const spansByRow = new Map<number, VMergeSpan[]>();
   for (const head of heads) {
-    const contentPt = probeRowHeightPt(soloHeadRow(rows[head.rowIndex]!, head.cell));
-    const lastRow = head.rowIndex + head.span - 1;
-    let coveredPt = 0;
-    for (let rowIndex = head.rowIndex; rowIndex <= lastRow; rowIndex += 1) {
-      coveredPt += floors.get(rowIndex) ?? 0;
-    }
-    if (contentPt <= coveredPt + EPSILON_PT) continue;
-    floors.set(lastRow, (floors.get(lastRow) ?? 0) + (contentPt - coveredPt));
+    const at = spansByRow.get(head.span.headRow);
+    if (at) at.push(head.span);
+    else spansByRow.set(head.span.headRow, [head.span]);
   }
+  // Longest first: the outer merge takes its decision before one that only overlaps it.
+  for (const at of spansByRow.values()) at.sort((a, b) => b.endRow - a.endRow);
 
-  const groupByStart = new Map<number, VMergeRowGroup>();
-  const groupRowSet = new Set<number>();
-  for (const range of ranges) {
-    let heightPt = 0;
-    for (let rowIndex = range.start; rowIndex <= range.end; rowIndex += 1) {
-      heightPt += floors.get(rowIndex) ?? 0;
-      groupRowSet.add(rowIndex);
+  const basePt = new Map<number, number>();
+  const contentPt = new Map<VMergeSpan, number>();
+  const surplusPt = new Map<number, number>();
+  const coveredRows = new Set<number>();
+  const acceptedSpans = new Set<VMergeSpan>();
+  const acceptedHeadIds = new Set<string>();
+  const detachedByRow = new Map<number, Map<string, number>>();
+
+  /** The row's own height, with every merge head in it emptied. Probed once. */
+  const baseOf = (rowIndex: number): number => {
+    const known = basePt.get(rowIndex);
+    if (known !== undefined) return known;
+    const measured = probeRowHeightPt(
+      rowWithoutHeadContent(rows[rowIndex]!, headIdsByRow.get(rowIndex))
+    );
+    basePt.set(rowIndex, measured);
+    return measured;
+  };
+
+  const contentOf = (span: VMergeSpan): number => {
+    const known = contentPt.get(span);
+    if (known !== undefined) return known;
+    const head = headBySpan.get(span)!;
+    const measured = probeRowHeightPt(soloHeadRow(rows[span.headRow]!, head.cell));
+    contentPt.set(span, measured);
+    return measured;
+  };
+
+  const floorOf = (rowIndex: number): number => baseOf(rowIndex) + (surplusPt.get(rowIndex) ?? 0);
+
+  const coveredPtOf = (span: VMergeSpan): number => {
+    let total = 0;
+    for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
+      total += floorOf(rowIndex);
     }
-    groupByStart.set(range.start, { startRow: range.start, endRow: range.end, heightPt });
-  }
+    return total;
+  };
+
+  /** Last row of the span Word lets grow: `hRule="exact"` fixes a row at its authored box. */
+  const lastGrowableRow = (span: VMergeSpan): number | undefined => {
+    for (let rowIndex = span.endRow; rowIndex >= span.headRow; rowIndex -= 1) {
+      if (rows[rowIndex]!.height.rule !== 'exact') return rowIndex;
+    }
+    return undefined;
+  };
+
+  const spanHeightOf = (span: VMergeSpan): number => {
+    const covered = coveredPtOf(span);
+    if (lastGrowableRow(span) === undefined) return covered;
+    return Math.max(covered, contentOf(span));
+  };
 
   return {
-    groupAt: (rowIndex) => groupByStart.get(rowIndex),
+    spansAt: (rowIndex) => spansByRow.get(rowIndex) ?? [],
+    heightOf: spanHeightOf,
+    accept: (span, headTopPt) => {
+      if (!acceptedSpans.has(span)) {
+        const covered = coveredPtOf(span);
+        const growable = lastGrowableRow(span);
+        if (growable !== undefined && contentOf(span) > covered + EPSILON_PT) {
+          surplusPt.set(growable, (surplusPt.get(growable) ?? 0) + (contentOf(span) - covered));
+        }
+        for (let rowIndex = span.headRow; rowIndex <= span.endRow; rowIndex += 1) {
+          coveredRows.add(rowIndex);
+        }
+        acceptedSpans.add(span);
+        acceptedHeadIds.add(span.headCellId);
+      }
+      const bottoms = detachedByRow.get(span.headRow) ?? new Map<string, number>();
+      bottoms.set(span.headCellId, headTopPt + spanHeightOf(span));
+      detachedByRow.set(span.headRow, bottoms);
+    },
     rowOptions: (rowIndex) => {
-      if (!groupRowSet.has(rowIndex)) return undefined;
-      const detachedCellIds = detachedByRow.get(rowIndex);
+      if (!coveredRows.has(rowIndex)) return undefined;
+      const detachedBottomPtByCellId = detachedByRow.get(rowIndex);
+      // A head nobody took still sizes its own row, so the planned floor is not that row's
+      // height and the caller has to measure it.
+      const heads = headIdsByRow.get(rowIndex);
+      const planned = !heads || [...heads].every((id) => acceptedHeadIds.has(id));
       return {
-        ...(detachedCellIds ? { detachedCellIds } : {}),
-        heightFloorPt: floors.get(rowIndex) ?? 0,
+        ...(detachedBottomPtByCellId ? { detachedBottomPtByCellId } : {}),
+        ...(planned ? { heightFloorPt: floorOf(rowIndex) } : {}),
       };
     },
   };
+}
+
+/**
+ * Take every merge that starts at `rowIndex` and fits between `rowTopPt` and
+ * `contentBottomPt`, and return this row's placement options.
+ *
+ * The fit is judged where the row is ACTUALLY about to be placed, which is why this is
+ * called from the placing loop rather than planned up front: a page break re-emits repeated
+ * header rows and can open a page with a shorter content box. It never breaks a page of its
+ * own — the caller's whole-row move does that, and calls again on the fresh page, where a
+ * merge that did not fit before may fit now. A merge that still does not fit is simply not
+ * taken, which leaves it on the row-by-row path where the row-split machinery paginates it
+ * exactly as it did before.
+ */
+export function admitVMergeSpansAt(
+  plan: VMergeRowHeights | null,
+  rowIndex: number,
+  rowTopPt: number,
+  contentBottomPt: number
+): RowVMergeLayoutOptions | undefined {
+  for (const span of plan?.spansAt(rowIndex) ?? []) {
+    if (rowTopPt + plan!.heightOf(span) > contentBottomPt + EPSILON_PT) continue;
+    plan!.accept(span, rowTopPt);
+  }
+  return plan?.rowOptions(rowIndex);
 }
 
 /**
@@ -210,10 +288,23 @@ export function planTableVMergeHeights<Deps>(
     cellSpacingPt?: number
   ) => number,
   budget?: TableVMergeResolveBudget
-): VMergeRowHeightPlan | null {
+): VMergeRowHeights | null {
   return planVMergeRowHeights(
     structure.rows,
     (row) => measure(row, structure.columnWidthsPt, left, depth, deps, structure.cellSpacingPt),
     budget
   );
+}
+
+/**
+ * Accept every merge starting at `rowIndex` for a table that is placed in one pass, where
+ * there is no page to fall off and so no fit to judge.
+ */
+export function acceptVMergeSpansAt(
+  plan: VMergeRowHeights | null,
+  rowIndex: number,
+  rowTopPt: number
+): RowVMergeLayoutOptions | undefined {
+  for (const span of plan?.spansAt(rowIndex) ?? []) plan!.accept(span, rowTopPt);
+  return plan?.rowOptions(rowIndex);
 }
