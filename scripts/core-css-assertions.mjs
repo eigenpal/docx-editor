@@ -52,22 +52,31 @@ const KEYFRAME_STEP = /^(from|to|-?[\d.]+%)$/;
  *   2. an attribute value that is a valid identifier loses its quotes
  *   3. the four legacy pseudo-elements collapse to one colon
  *      (`.docx-content-control-widget::after` ships as `…:after`)
- *   4. a `*` before a pseudo-element is dropped, since the descendant
- *      combinator already implies it (`.docx-run *::selection` ships as
- *      `.docx-run ::selection`)
+ *   4. a `*` qualified by anything is dropped, since what follows already
+ *      implies it: `*.b`, `*[data-x]`, `*#id`, `*:hover` and `*::selection`
+ *      all lose it (`.docx-run *::selection` ships as `.docx-run ::selection`).
+ *      A bare `*` is kept, by cssnano and here, because nothing implies it.
  *
  * Write the readable form in an assertion. This function is what makes the
  * readable form match. Adding an assertion for a shape not folded here is the
  * one way to get a false "missing" against a correct file, so a new positive
- * assertion is a reason to re-check this list.
+ * assertion is a reason to re-check this list, and scripts/__tests__ pins each
+ * fold against what cssnano actually emits.
+ *
+ * Two known warts, both harmless because they are SYMMETRIC — cssnano leaves
+ * these selectors alone, so the raw and minified sides fold identically and
+ * still compare equal. The quote strip is unconditional, so it also strips
+ * quotes cssnano keeps (`[data-foo="a b"]`), and a value that begins with `*:`
+ * loses that prefix. Folding them exactly needs a real selector parser, which
+ * this assertion does not warrant.
  */
-function normalizeSelector(selector) {
+export function normalizeSelector(selector) {
   return selector
     .replace(/\s+/g, ' ')
     .replace(/\s*([>+~,])\s*/g, '$1')
     .replace(/\[([^\]=]+)=(["'])([^"']*)\2\]/g, '[$1=$3]')
     .replace(/::(before|after|first-line|first-letter)\b/g, ':$1')
-    .replace(/\*(::?[a-z-]+)/g, '$1')
+    .replace(/\*(?=[.#:[])/g, '')
     .trim();
 }
 
@@ -130,8 +139,9 @@ export function coreCssProblems(rawCss) {
   // These read the PARSED selectors, not the raw text, because the shipped file is
   // minified: `.docx-editor {` loses its space, and an attribute value loses its
   // quotes (`[contenteditable='true']` → `[contenteditable=true]`). A raw
-  // `includes()` would fail on a correct file. `normalizeSelector` folds exactly
-  // the differences a minifier is allowed to introduce.
+  // `includes()` would fail on a correct file. Each one is written in the readable
+  // form and matched through `normalizeSelector`; see its docblock before adding
+  // another, because a shape it does not fold reports a false "missing".
   const selectors = new Set();
   root.walkRules((rule) => {
     for (const selector of rule.selectors) selectors.add(normalizeSelector(selector));
