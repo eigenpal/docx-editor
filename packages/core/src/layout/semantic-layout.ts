@@ -50,7 +50,6 @@ import {
   paragraphBorderExtentPt,
   paragraphBorderStrokeWidthPt,
   collapsedSpaceBefore,
-  paragraphBordersFingerprint,
   paragraphBreaksBefore,
   type ParagraphBorders,
   type ParagraphLineSpacing,
@@ -76,6 +75,7 @@ import {
   cascadeRunProperties,
   type StyleCascadeTable,
 } from './style-cascade.ts';
+import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
 import {
@@ -1130,7 +1130,6 @@ function layoutBlocksPass(
         block.children.find((child) => child.kind === 'paragraphProperties'),
         styleCascade
       );
-      const bordersToken = paragraphBordersFingerprint(borders);
       // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
       const tabStops = withDefaultTabInterval(preparedParagraph.tabStops, defaultTabStopPt);
       const tabStopsCacheToken =
@@ -1157,7 +1156,7 @@ function layoutBlocksPass(
         // collapsed outside column 0 and every paragraph there drew its own box. Which
         // column a paragraph lands in is a layout outcome; the group is an authored
         // relationship between neighbours, and only the authored insets may decide it.
-        borderGroupKey: bordersToken === '' ? '' : `${bordersToken}@${indent.left},${indent.right}`,
+        borderGroupKey: paragraphBorderGroupKey({ borders, indent }),
         shading,
         inheritedRunProperties,
         markRunProperties,

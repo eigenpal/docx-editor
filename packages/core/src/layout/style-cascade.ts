@@ -719,8 +719,21 @@ export function cascadeParagraphFormatting(
     { properties: tableCellStyle?.runProperties ?? [], role: 'xor', emit: true },
     { properties: chain.flatMap((style) => style.runProperties), role: 'xor', emit: true },
   ]);
+  // The paragraph MARK is the same cascade with the mark's own `w:pPr/w:rPr` on top, and that
+  // `w:rPr` is DIRECT formatting for the mark — absolute, either way it is stated.
+  //
+  // Combined rather than concatenated so the result carries its resolved toggle state like
+  // any other cascade output. `list-resolve.ts` resolves a numbering marker from this list,
+  // and a plain concatenation is a fresh array with nothing attached: the marker would fall
+  // back to reading the properties and could answer differently from the text of the very
+  // paragraph it belongs to.
   const markRunProperties: readonly OoxmlProperty[] =
-    markProps.length === 0 ? runProperties : [...runProperties, ...markProps];
+    markProps.length === 0
+      ? runProperties
+      : combineStyleToggles([
+          { properties: runProperties, role: 'carried', emit: true },
+          { properties: markProps, role: 'direct', emit: true },
+        ]);
 
   return {
     paragraphProperties,
@@ -761,6 +774,16 @@ export function cascadedBottomBorder(
  * When a cascade table is supplied, also resolves `w:rStyle` character styles (basedOn chain,
  * cycle/depth capped). Runs without an explicit `rStyle` pick up the default character style
  * (`w:default="1"`). Precedence: inherited → character style chain → direct formatting.
+ *
+ * PASS `inheritedRunProperties` BY IDENTITY. It must be an array
+ * {@link cascadeParagraphFormatting} returned — `runProperties` or `markRunProperties` — and
+ * not a copy of one. A toggle property (ECMA-376 §17.7.3) resolves per level of the style
+ * hierarchy, and the levels below the character style resolve to more than a true or a false:
+ * whether the document defaults' short circuit is still standing decides what the character
+ * style's own toggle does next, and no single `w:b` element can spell that. The paragraph
+ * cascade attaches that state to the array it returns, so spreading, filtering, sorting or
+ * freezing the list drops it. A list without it is read as one ordinary level, which is the
+ * most a bare property list can say and is what a caller assembling its own list gets.
  */
 export function cascadeRunProperties(
   inheritedRunProperties: readonly OoxmlProperty[],
@@ -799,13 +822,23 @@ export function cascadeRunProperties(
         // this module did not build: it has no carried state, so it reads as one level, and
         // the defaults are the only way §17.7.3's short circuit reaches it at all.
         //
-        // `emit: false` says their ORDINARY properties do not join the result, because the
-        // inherited level already carries them. A caller that passes an empty inherited list
-        // — `note-pagination.ts` resolves a note mark from its character style alone — gets
-        // no document defaults at all, which is that caller's long-standing behaviour and
-        // not something this level changes.
+        // EMPTY inherited list means the paragraph cascade never ran, and then there is no
+        // short circuit to apply: the defaults level is left out entirely. `note-pagination`
+        // resolves a note mark from its character style alone and passes `[]` for exactly
+        // that reason. Injecting the defaults there would apply HALF of them — the toggles,
+        // because they combine here, and not `w:sz` or `w:rFonts`, because they do not — so a
+        // footnote reference mark in a document whose `docDefaults` declare `<w:b/>` would
+        // come back bold at the wrong size. Either all of the defaults or none of them, and
+        // none is what that caller has always had.
+        //
+        // `emit: false` says their ORDINARY properties do not join the result, because a
+        // non-empty inherited level already carries them.
         combineStyleToggles([
-          { properties: table?.docDefaultsRun ?? [], role: 'defaults', emit: false },
+          ...(inheritedRunProperties.length > 0
+            ? ([
+                { properties: table?.docDefaultsRun ?? [], role: 'defaults', emit: false },
+              ] as const)
+            : []),
           { properties: inheritedRunProperties, role: 'carried', emit: true },
           { properties: characterProps, role: 'xor', emit: true },
         ]);

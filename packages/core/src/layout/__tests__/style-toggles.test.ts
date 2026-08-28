@@ -5,7 +5,7 @@
 // levels combine, and what an explicit `w:val="0"` does at each of them.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlElement } from '@docx-editor.dev/core/store';
+import { readOoxmlPart, type OoxmlElement, type OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
   buildStyleCascadeTable,
   cascadeParagraphFormatting,
@@ -13,7 +13,7 @@ import {
   cascadeTableFormatting,
   tableCellStyleFormatting,
 } from '../style-cascade.ts';
-import { resolveRunStyle } from '../run-style.ts';
+import { DEFAULT_RUN_STYLE, resolveRunStyle } from '../run-style.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -276,6 +276,13 @@ describe('toggle properties combine across the levels of the style hierarchy', (
       { name: 'table on, character off', table: '', character: ' w:val="0"', bold: false },
       { name: 'docDefaults on, character off', defaults: '', character: ' w:val="0"', bold: false },
       // The short circuit itself: a true document default outlasts any number of `on` levels.
+      //
+      // THESE TWO ROWS ARE SPEC-DERIVED AND UNVERIFIED against either implementation. They
+      // follow §17.7.3 literally ("If the value specified by the document defaults is true,
+      // the effective value is true"). LibreOffice renders both REGULAR — it does not
+      // implement the short circuit — and Word has not been measured on them. Every other row
+      // here matches LibreOffice. Do not "fix" these to match one renderer without saying
+      // which renderer and why.
       { name: 'docDefaults on, paragraph on', defaults: '', paragraph: '', bold: true },
       { name: 'docDefaults on, paragraph on, character on', defaults: '', paragraph: '', character: '', bold: true }, // prettier-ignore
       // An off clears the short circuit, and a stronger `on` then reverses the off.
@@ -327,6 +334,81 @@ describe('toggle properties combine across the levels of the style hierarchy', (
         expect(resolved.bold).toBe(testCase.bold);
       });
     }
+
+    test('a paragraph MARK answers the same as the text of the same paragraph', () => {
+      // `markRunProperties` is `runProperties` plus the mark's own `w:pPr/w:rPr`, and
+      // `list-resolve.ts` resolves a numbering marker from it. Concatenating the two lists
+      // produced a fresh array with no resolved state attached, so the marker read the
+      // properties instead and the short circuit came back to life: in this configuration the
+      // MARKER rendered bold while the TEXT of the same paragraph rendered regular.
+      const styles =
+        `<w:docDefaults><w:rPrDefault><w:rPr><w:b/></w:rPr></w:rPrDefault></w:docDefaults>` +
+        `<w:style w:type="table" w:styleId="Tbl"><w:rPr><w:b w:val="0"/></w:rPr></w:style>` +
+        `<w:style w:type="paragraph" w:styleId="Para"><w:rPr><w:b/></w:rPr></w:style>` +
+        `<w:style w:type="character" w:styleId="Chr"><w:rPr><w:b/></w:rPr></w:style>`;
+      const table = buildStyleCascadeTable(loadStyles(styles));
+      const cascaded = cascadeParagraphFormatting(
+        table,
+        paragraphPPr(
+          `<w:p><w:pPr><w:pStyle w:val="Para"/><w:rPr><w:i/></w:rPr></w:pPr>` +
+            `<w:r><w:t>x</w:t></w:r></w:p>`
+        ),
+        tableCellStyleFormatting(cascadeTableFormatting(table, 'Tbl'), [])
+      );
+      // The mark cascade really is a separate array, or this test proves nothing.
+      expect(cascaded.markRunProperties).not.toBe(cascaded.runProperties);
+      const rStyle = [{ localName: 'rStyle', attributes: { val: 'Chr' } }];
+      const boldOf = (props: readonly OoxmlProperty[]) =>
+        resolveRunStyle(cascadeRunProperties(props, rStyle, table)).bold;
+      expect(boldOf(cascaded.runProperties)).toBe(false);
+      expect(boldOf(cascaded.markRunProperties)).toBe(false);
+      // The mark's own `w:i` still reaches it, so the two lists are not simply the same one.
+      expect(resolveRunStyle(cascaded.markRunProperties).italic).toBe(true);
+      expect(resolveRunStyle(cascaded.runProperties).italic).toBe(false);
+    });
+
+    test('a mark w:rPr toggle is direct formatting: absolute, either way it is stated', () => {
+      const styles = `<w:style w:type="paragraph" w:styleId="Bold"><w:rPr><w:b/></w:rPr></w:style>`;
+      const table = buildStyleCascadeTable(loadStyles(styles));
+      const markBoldOf = (markRPr: string) =>
+        resolveRunStyle(
+          cascadeParagraphFormatting(
+            table,
+            paragraphPPr(
+              `<w:p><w:pPr><w:pStyle w:val="Bold"/><w:rPr>${markRPr}</w:rPr></w:pPr>` +
+                `<w:r><w:t>x</w:t></w:r></w:p>`
+            )
+          ).markRunProperties
+        ).bold;
+      // A `w:val="0"` on the mark turns it off; a bare `<w:b/>` does NOT toggle it off.
+      expect(markBoldOf('<w:b w:val="0"/>')).toBe(false);
+      expect(markBoldOf('<w:b/>')).toBe(true);
+      expect(markBoldOf('<w:sz w:val="24"/>')).toBe(true);
+    });
+
+    test('a note mark resolved from a character style alone gets NO document defaults', () => {
+      // `note-pagination.ts` passes an empty inherited list on purpose: a footnote reference
+      // mark is resolved from its character style and nothing else. Listing the document
+      // defaults there applied HALF of them — the toggles, which combine here, and not `w:sz`
+      // or `w:rFonts`, which do not — so the mark came back bold at the unchanged size.
+      const styles =
+        `<w:docDefaults><w:rPrDefault><w:rPr><w:b/><w:sz w:val="40"/></w:rPr>` +
+        `</w:rPrDefault></w:docDefaults>` +
+        `<w:style w:type="character" w:styleId="FootnoteReference">` +
+        `<w:rPr><w:vertAlign w:val="superscript"/></w:rPr></w:style>`;
+      const table = buildStyleCascadeTable(loadStyles(styles));
+      const props = cascadeRunProperties(
+        [],
+        [{ localName: 'rStyle', attributes: { val: 'FootnoteReference' } }],
+        table
+      );
+      expect(props.filter((property) => property.localName === 'b')).toEqual([]);
+      const resolved = resolveRunStyle(props);
+      expect(resolved.bold).toBe(false);
+      // All of the defaults or none of them: the size is untouched too.
+      expect(resolved.fontSizePt).toBe(DEFAULT_RUN_STYLE.fontSizePt);
+      expect(resolved.verticalAlign).toBe('superscript');
+    });
 
     test('a list built by hand carries the off in the property list itself', () => {
       // `list-resolve.ts` resolves a numbering marker from `markRunProperties`, which is

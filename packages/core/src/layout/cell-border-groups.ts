@@ -14,10 +14,9 @@
 // and only a paragraph that actually carries `w:pBdr` ever makes a neighbour resolve.
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
-import { paragraphBordersFingerprint } from './paragraph-style.ts';
+import { paragraphBordersFingerprint, type ParagraphBorders } from './paragraph-style.ts';
 import {
   resolveParagraphLayoutInputs,
-  type ParagraphLayoutInputs,
   type StyleCascadeTable,
   type TableCellStyleFormatting,
 } from './style-cascade.ts';
@@ -42,11 +41,26 @@ const memos = new WeakMap<OoxmlElement, CellBorderGroupMemo>();
 /**
  * The group identity of one paragraph: its border set plus its own box INSETS.
  *
- * The insets and not `available`, for the reason body flow states: `available` folds in the
- * content width, and the same authored paragraph in two columns of different width would then
- * never group with itself. Empty string means "no borders", which groups with nothing.
+ * ONE definition for both flows. Body flow and cell flow have to spell this key identically
+ * or the same authored callout groups in a `w:tc` and not in the body, which is the drift
+ * this module exists to prevent; a second hand-inlined copy of the string would be exactly
+ * that drift waiting to happen.
+ *
+ * The insets and not `available`: `available` folds in the content width, and the same
+ * authored paragraph in two columns of different width would then never group with itself.
+ *
+ * EVERY FIELD IN THIS KEY MUST BE WIDTH-INDEPENDENT. `cellBorderGroupKey` resolves a
+ * NEIGHBOUR at a content width of 1 while `placeCellParagraph` seeds the memo at the real
+ * cell width, so a width-dependent field would make grouping asymmetric — A would group with
+ * B while B did not group with A, and which of the two ran first would decide what was
+ * painted. `borders` and `w:ind` are both width-independent today.
+ *
+ * Empty string means "no borders", which groups with nothing.
  */
-export function paragraphBorderGroupKey(inputs: ParagraphLayoutInputs): string {
+export function paragraphBorderGroupKey(inputs: {
+  readonly borders: ParagraphBorders;
+  readonly indent: { readonly left: number; readonly right: number };
+}): string {
   const token = paragraphBordersFingerprint(inputs.borders);
   return token === '' ? '' : `${token}@${inputs.indent.left},${inputs.indent.right}`;
 }
