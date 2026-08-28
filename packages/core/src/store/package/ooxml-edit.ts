@@ -167,7 +167,10 @@ export function collectNodeIds(part: OoxmlPart): Set<string> {
  * Checks the part's node index directly rather than copying every id into a fresh set: the
  * copy was O(document) per op, and an allocator is created for every op.
  */
-export function createNodeIdAllocator(part: OoxmlPart, family = 'new'): () => string {
+export function createNodeIdAllocator(
+  part: OoxmlPart,
+  family: 'new' | 'paste' = 'new'
+): () => string {
   const index = nodeIndexFor(part.root);
   const minted = new Set<string>();
   let counter = index.mintFrontier;
@@ -255,6 +258,19 @@ function stealPatchedIndex(oldRoot: OoxmlElement, newRoot: OoxmlElement): void {
   partIndexes.delete(oldRoot);
   diffPatch(index, oldRoot, newRoot, null);
   partIndexes.set(newRoot, index);
+}
+
+/**
+ * Carry the index across a root rebuilt OUTSIDE the op executors.
+ *
+ * Every op executor moves the index with `stealPatchedIndex`, so the mint frontier and the
+ * diffed entries survive its root replacement. A helper that rebuilds the root directly —
+ * the fragment lane binding namespace prefixes — must do the same, or the new root starts
+ * an orphaned index: the next lookup re-walks the whole part, and the mint frontier
+ * restarts at 0 underneath ids already handed out.
+ */
+export function carryIndexToRebuiltRoot(oldRoot: OoxmlElement, newRoot: OoxmlElement): void {
+  stealPatchedIndex(oldRoot, newRoot);
 }
 
 function removeIndexedSubtree(index: PartIndex, node: OoxmlNode): void {

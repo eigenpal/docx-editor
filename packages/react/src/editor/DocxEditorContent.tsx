@@ -8,7 +8,7 @@
 // Paste and drop of supported raster formats route through the shared image-insert path.
 
 import { useCallback, useLayoutEffect, useRef } from 'react';
-import { clipboardHtmlLandsContent } from '@docx-editor.dev/core/editor';
+import { clipboardDropLandsText, clipboardPasteLandsContent } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay.tsx';
@@ -62,15 +62,15 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       const items = event.clipboardData;
       if (!items) return;
       if (!hasImageFile(items)) return;
-      // STAND DOWN whenever the ENGINE will land content from the HTML flavour — an
-      // embedded fragment, a `data:` image, or plain visible text. Word on macOS pastes a
-      // rendered PNG of copied TEXT beside the HTML; taking this file lane for it inserted
-      // that rendering on top of the text. A browser "copy image" payload (external
-      // `<img src>`, no text) and a bare screenshot (no HTML) still need this lane.
-      // (`defaultPrevented` says nothing — the engine prevents every paste, even ones it
-      // ignores.)
-      const html = typeof items.getData === 'function' ? (items.getData('text/html') ?? '') : '';
-      if (clipboardHtmlLandsContent(html)) return;
+      // STAND DOWN whenever the ENGINE will land content from the payload — see the
+      // predicate's contract in core. Word on macOS pastes a rendered PNG of copied TEXT
+      // beside the HTML; taking this file lane for it inserted that rendering on top of
+      // the text. (`defaultPrevented` says nothing — the engine prevents every paste,
+      // even ones it ignores.)
+      const canRead = typeof items.getData === 'function';
+      const html = canRead ? (items.getData('text/html') ?? '') : '';
+      const text = canRead ? (items.getData('text/plain') ?? '') : '';
+      if (clipboardPasteLandsContent(html, text)) return;
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(items);
     },
@@ -89,6 +89,14 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
     (event: React.DragEvent) => {
       if (!imageInsert?.isEnabled) return;
       if (!hasImageFile(event.dataTransfer)) return;
+      // Same stand-down as paste, for the drop lane's plain-text-only reality: when the
+      // payload carries visible text, NOT preventing the default lets the browser fire
+      // `insertFromDrop`, which is the engine's only drop path. Word on macOS drags carry
+      // a rendered PNG beside the text; taking the file lane swallowed that event and
+      // turned dropped text into a picture of it.
+      const html = event.dataTransfer.getData('text/html') ?? '';
+      const text = event.dataTransfer.getData('text/plain') ?? '';
+      if (clipboardDropLandsText(html, text)) return;
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(event.dataTransfer);
     },

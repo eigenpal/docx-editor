@@ -113,7 +113,10 @@ function appendToPart(
   index?: number
 ): OoxmlPackage | null {
   if (nodes.length === 0) return pkg;
-  const nextId = createNodeIdAllocator(part);
+  // Detached-clone shape, same as `applyInsertFragment`: the clones exist before the
+  // insert below, so they mint in the `paste` family where no in-transaction `new` mint
+  // can ever re-issue their ids.
+  const nextId = createNodeIdAllocator(part, 'paste');
   const cloned = nodes.map((node) => cloneWithNewIds(node, nextId));
   const bound = withRequiredNamespaceBindings(part, cloned);
   const at = index ?? bound.root.children.length;

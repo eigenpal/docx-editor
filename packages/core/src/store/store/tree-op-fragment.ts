@@ -15,6 +15,7 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import {
+  carryIndexToRebuiltRoot,
   createNodeIdAllocator,
   findNode,
   insertChildren,
@@ -170,10 +171,9 @@ export function withRequiredNamespaceBindings(
     }
     const need = (prefix: string | undefined, namespaceUri: string): void => {
       if (prefix === undefined || prefix.length === 0 || namespaceUri.length === 0) return;
-      // `xml` and `xmlns` are bound by the XML spec itself, never by a declaration. Every
-      // real document copy carries `xml:space="preserve"`, so treating `xml` as unbound
-      // rebuilt the root for virtually every paste — and a rebuilt root resets the id-mint
-      // frontier, which is what made rich pastes into non-empty documents fail wholesale.
+      // `xml` and `xmlns` are bound by the XML spec itself, never by a declaration.
+      // Treating `xml` as unbound declared it redundantly and rebuilt the root for
+      // virtually every paste — `xml:space="preserve"` is in every real document copy.
       if (prefix === 'xml' || prefix === 'xmlns') return;
       if (local.get(prefix) === namespaceUri) return;
       if (rootBindings.get(prefix) === namespaceUri) return;
@@ -202,6 +202,10 @@ export function withRequiredNamespaceBindings(
       ...[...additions].map(([prefix, namespaceUri]) => ({ prefix, namespaceUri })),
     ],
   } as typeof part.root;
+  // Same id, same children — only the bindings changed. Carry the index like every op
+  // executor does, or the rebuilt root re-walks the whole part on its next lookup and
+  // restarts the mint frontier underneath ids already handed out.
+  carryIndexToRebuiltRoot(part.root, root);
   for (const [prefix, namespaceUri] of additions) {
     recordSetNamespaceBinding(part.root.id, prefix, namespaceUri);
   }
@@ -232,11 +236,12 @@ export function applyInsertFragment(
   // ids belong to another document, and a second paste of the same payload must not
   // collide with the first.
   //
-  // The clones stay DETACHED until the split/merge sequence below lands them, and every op
-  // in that sequence replaces the root — which resets the shared mint frontier, so a later
-  // `new`-family mint can re-issue an id a clone already holds. A dedicated family keeps
-  // the two disjoint by construction; in-tree occupancy (a prior paste) is still skipped by
-  // the allocator's index check.
+  // The clones stay DETACHED until the split/merge sequence below lands them, so their ids
+  // are invisible to every later allocator's in-tree check — the frontier alone kept them
+  // apart, and losing it (an orphaned index after a root rebuild) re-issued a clone's id to
+  // the split's tail and refused the whole paste as duplicate ids. A dedicated family makes
+  // the disjointness structural instead of frontier-dependent; in-tree occupancy (a prior
+  // paste) is still skipped by the allocator's index check.
   const nextId = createNodeIdAllocator(hostPart, 'paste');
   const paraIds = new Set(usedParaIds(hostPart.root as OoxmlElement));
   const counter = { value: 0 };

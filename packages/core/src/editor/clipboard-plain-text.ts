@@ -170,33 +170,22 @@ function rawTextEnd(html: string, name: string, from: number): number {
 }
 
 /**
- * The visible text of an HTML fragment.
+ * The text pieces of an HTML fragment, in document order.
  *
- * A single forward walk, not a sequence of `replace` passes. The walk never re-reads what it
- * has already written, so no later stage can turn emitted text back into a tag, and every
- * branch moves the cursor forward over a range the next branch will not revisit — a hostile
- * payload costs one pass over its own length.
- *
- * It does NOT promise the output holds no angle brackets. A payload may write a literal `<`
- * that a browser also shows as text, and removing the element after it can leave that `<`
- * beside a word. That is fine here and only here: the result is inserted as run text through
- * the same path typed characters take, and is escaped again on save. Nothing re-parses it.
- *
- * Block boundaries become newlines and table cells become tabs, matching how this engine
- * already flattens a copied cell range — so an HTML table pasted here lands in the same
- * shape a table copied out of the document does.
+ * One forward walk shared by the full transform below and the early-exit predicate — every
+ * branch moves the cursor forward over a range the next branch will not revisit, so a
+ * hostile payload costs at most one pass over its own length. Yields raw text slices plus
+ * the `\n`/`\t` a block or cell boundary reads as; entity references are NOT decoded here.
  */
-export function plainTextFromHtml(html: string): string {
-  const bounded = html.length > MAX_HTML_INPUT ? html.slice(0, MAX_HTML_INPUT) : html;
-  let text = '';
+function* htmlTextPieces(bounded: string): Generator<string> {
   let at = 0;
   while (at < bounded.length) {
     const open = bounded.indexOf('<', at);
     if (open === -1) {
-      text += bounded.slice(at);
+      yield bounded.slice(at);
       break;
     }
-    text += bounded.slice(at, open);
+    if (open > at) yield bounded.slice(at, open);
     // Comments first: they can contain anything, including tag-shaped text.
     if (bounded.startsWith('<!--', open)) {
       // `<!-->` and `<!--->` close AT ONCE. Demanding a full `-->` after them found no
@@ -223,7 +212,7 @@ export function plainTextFromHtml(html: string): string {
     const tag = scanTag(bounded, open);
     if (tag === null) {
       // A `<` that starts no tag is text, exactly as a browser reads it.
-      text += '<';
+      yield '<';
       at = open + 1;
       continue;
     }
@@ -231,13 +220,35 @@ export function plainTextFromHtml(html: string): string {
     if (!tag.closing && RAW_TEXT_TAGS.has(tag.name)) {
       at = rawTextEnd(bounded, tag.name, tag.end);
     } else if (!tag.closing && tag.name === 'br') {
-      text += '\n';
+      yield '\n';
     } else if (tag.closing && CELL_TAGS.has(tag.name)) {
-      text += '\t';
+      yield '\t';
     } else if (tag.closing && BLOCK_TAGS.has(tag.name)) {
-      text += '\n';
+      yield '\n';
     }
   }
+}
+
+/**
+ * The visible text of an HTML fragment.
+ *
+ * A single forward walk (see {@link htmlTextPieces}), not a sequence of `replace` passes.
+ * The walk never re-reads what it has already written, so no later stage can turn emitted
+ * text back into a tag.
+ *
+ * It does NOT promise the output holds no angle brackets. A payload may write a literal `<`
+ * that a browser also shows as text, and removing the element after it can leave that `<`
+ * beside a word. That is fine here and only here: the result is inserted as run text through
+ * the same path typed characters take, and is escaped again on save. Nothing re-parses it.
+ *
+ * Block boundaries become newlines and table cells become tabs, matching how this engine
+ * already flattens a copied cell range — so an HTML table pasted here lands in the same
+ * shape a table copied out of the document does.
+ */
+export function plainTextFromHtml(html: string): string {
+  const bounded = html.length > MAX_HTML_INPUT ? html.slice(0, MAX_HTML_INPUT) : html;
+  let text = '';
+  for (const piece of htmlTextPieces(bounded)) text += piece;
   return (
     decodeEntities(text)
       // Collapse the runs of blank lines that block-level markup leaves behind, and drop
@@ -304,22 +315,74 @@ export function insertableText(text: string): string {
 }
 
 /**
- * True when the engine's paste router will land content from this `text/html` flavour —
- * an embedded fragment, a `data:` image, or visible text.
+ * A character the reader can actually see: not whitespace, and not one of the zero-width
+ * or invisible-format characters (`U+200B`–`U+200D`, `U+2060`, `U+FEFF`, soft hyphen) some
+ * applications wrap around inline content. Those survive `trim()` and would make an
+ * effectively empty payload read as "carries text".
+ */
+const VISIBLE_CHAR = /[^\s\u200B-\u200D\u2060\uFEFF\u00AD]/;
+
+/**
+ * A `data:` image the paste projection actually accepts — the same mime/base64 shape as
+ * `DATA_IMAGE_RE` in clipboard-html-read.ts. A bare `data:image` substring also matched
+ * webp/svg payloads the projection refuses, standing the file lane down for an image the
+ * engine then dropped.
+ */
+const LANDABLE_DATA_IMAGE = /\bdata:image\/(?:png|jpe?g|jpg|gif);base64,/;
+
+/** Early-exit visible-text scan: stops at the first visible character instead of
+ * materializing the whole payload's text the way {@link plainTextFromHtml} does. */
+function htmlHasVisibleText(html: string): boolean {
+  const bounded = html.length > MAX_HTML_INPUT ? html.slice(0, MAX_HTML_INPUT) : html;
+  for (const piece of htmlTextPieces(bounded)) {
+    if (VISIBLE_CHAR.test(decodeEntities(piece))) return true;
+  }
+  return false;
+}
+
+/**
+ * True when the engine's PASTE router will land content from these clipboard flavours —
+ * an embedded fragment, a `data:` image the projection accepts, visible HTML text, or
+ * (with no HTML at all) visible plain text.
  *
  * This is the adapters' stand-down predicate for the image-FILE paste lane. Word on macOS
  * puts a rendered PNG of the copied TEXT on the pasteboard next to the HTML; a host that
  * inserts the file whenever one is present pastes that rendering ON TOP of the text the
- * engine lands. The file lane is only for payloads the engine ignores: a bare screenshot
- * (no HTML at all), or a browser "copy image" whose HTML is a single external `<img>` the
- * projection drops by design — both of which carry no visible text.
+ * engine lands. The file lane is only for payloads the engine ignores: a bare screenshot,
+ * or a browser "copy image" whose HTML is a single external `<img>` the projection drops
+ * by design.
+ *
+ * Known limits, on purpose: it cannot see the engine's own gating (suggesting mode, cell
+ * selections, the force-plain window), and a payload mixing text with non-`data:` images
+ * lands its text while the engine drops those images — text wins over a rendering that
+ * would duplicate it.
  *
  * @public
  */
-export function clipboardHtmlLandsContent(html: string): boolean {
-  if (html.length === 0) return false;
-  if (html.includes('data-docx-fragment') || html.includes('data:image')) return true;
-  return plainTextFromHtml(html).length > 0;
+export function clipboardPasteLandsContent(html: string, text: string): boolean {
+  if (html.length > 0) {
+    if (html.includes('data-docx-fragment="')) return true;
+    if (LANDABLE_DATA_IMAGE.test(html)) return true;
+    return htmlHasVisibleText(html);
+  }
+  // No HTML flavour at all: the plain lane inserts `text/plain` whenever it carries
+  // visible text, so an image file beside it is Word's duplicate rendering, not content.
+  return VISIBLE_CHAR.test(text);
+}
+
+/**
+ * True when the engine's DROP lane will land text from these flavours.
+ *
+ * The drop lane is PLAIN TEXT only (see `createBeforeInputHandler`): fragments and `data:`
+ * images never land from a drop, so only visible text — in either flavour, matching
+ * {@link plainTextFromTransfer} — stands a host's image-file drop lane down. A host that
+ * takes the file lane anyway swallows the browser's `insertFromDrop`, turning a dropped
+ * text selection into a picture of that text.
+ *
+ * @public
+ */
+export function clipboardDropLandsText(html: string, text: string): boolean {
+  return VISIBLE_CHAR.test(text) || htmlHasVisibleText(html);
 }
 
 /**

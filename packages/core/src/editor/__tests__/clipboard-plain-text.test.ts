@@ -9,7 +9,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import {
-  clipboardHtmlLandsContent,
+  clipboardDropLandsText,
+  clipboardPasteLandsContent,
   insertableText,
   plainTextFromHtml,
   plainTextFromTransfer,
@@ -263,23 +264,58 @@ describe('the visible text of an HTML fragment', () => {
   });
 });
 
-describe('clipboardHtmlLandsContent — the image-file stand-down predicate for adapters', () => {
+describe('clipboardPasteLandsContent — the image-file stand-down predicate for adapters', () => {
   test('a Word-for-Mac text copy (HTML with text, PNG file beside it) stands the file lane down', () => {
     const wordHtml =
       '<html xmlns:o="urn:schemas-microsoft-com:office:office"><head>' +
       '<meta name=ProgId content=Word.Document><style>p.MsoNormal{margin:0}</style></head>' +
       '<body><!--StartFragment--><p class=MsoNormal align=center><b>' +
       '<span style="font-size:26.0pt">DOCX TITLE</span></b></p><!--EndFragment--></body></html>';
-    expect(clipboardHtmlLandsContent(wordHtml)).toBe(true);
+    expect(clipboardPasteLandsContent(wordHtml, 'DOCX TITLE')).toBe(true);
   });
 
-  test('an embedded fragment or a data: image lands through the engine', () => {
-    expect(clipboardHtmlLandsContent('<div data-docx-fragment="AAAA"></div>')).toBe(true);
-    expect(clipboardHtmlLandsContent('<img src="data:image/png;base64,AAAA">')).toBe(true);
+  test('an embedded fragment or a landable data: image lands through the engine', () => {
+    expect(clipboardPasteLandsContent('<div data-docx-fragment="AAAA"></div>', '')).toBe(true);
+    expect(clipboardPasteLandsContent('<img src="data:image/png;base64,AAAA">', '')).toBe(true);
+  });
+
+  test('a data: image the projection refuses keeps the file lane', () => {
+    // `data:image/webp` is not in the projection's accepted set; standing down for it
+    // dropped the real PNG file AND landed nothing — a dead paste gesture.
+    expect(clipboardPasteLandsContent('<img src="data:image/webp;base64,AAAA">', '')).toBe(false);
   });
 
   test('a browser copy-image payload and a bare screenshot keep the file lane', () => {
-    expect(clipboardHtmlLandsContent('<img src="https://example.com/x.png">')).toBe(false);
-    expect(clipboardHtmlLandsContent('')).toBe(false);
+    expect(clipboardPasteLandsContent('<img src="https://example.com/x.png">', '')).toBe(false);
+    expect(clipboardPasteLandsContent('', '')).toBe(false);
+  });
+
+  test('invisible-only text does not count as content', () => {
+    // Zero-width wrappers around an external image (Slack/Notion-style markup) must not
+    // read as "the engine lands text" — it would land one invisible character.
+    expect(clipboardPasteLandsContent('<span>\u200b<img src="https://x/y.png"></span>', '')).toBe(
+      false
+    );
+    expect(clipboardPasteLandsContent('<p>&nbsp;</p>', '')).toBe(false);
+  });
+
+  test('a payload with no HTML stands down on visible plain text', () => {
+    // text/plain + image file and no text/html: the engine's plain lane inserts the text,
+    // so the file is Word's duplicate rendering.
+    expect(clipboardPasteLandsContent('', 'plain words')).toBe(true);
+    expect(clipboardPasteLandsContent('', '\u200b \n')).toBe(false);
+  });
+});
+
+describe('clipboardDropLandsText — the image-file drop-lane stand-down', () => {
+  test('a dropped text selection stands the file lane down, either flavour', () => {
+    expect(clipboardDropLandsText('', 'dropped words')).toBe(true);
+    expect(clipboardDropLandsText('<p>dropped words</p>', '')).toBe(true);
+  });
+
+  test('fragments and data: images do NOT land from a drop, so they keep the file lane', () => {
+    // The drop lane is plain text only; only visible text stands the file lane down.
+    expect(clipboardDropLandsText('<div data-docx-fragment="AAAA"></div>', '')).toBe(false);
+    expect(clipboardDropLandsText('<img src="data:image/png;base64,AAAA">', '')).toBe(false);
   });
 });

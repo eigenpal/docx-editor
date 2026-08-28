@@ -7,7 +7,7 @@ import {
   shallowRef,
   watch,
 } from 'vue';
-import { clipboardHtmlLandsContent } from '@docx-editor.dev/core/editor';
+import { clipboardDropLandsText, clipboardPasteLandsContent } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
@@ -57,12 +57,13 @@ export const DocxEditorContent = defineComponent({
       const items = event.clipboardData;
       if (!items) return;
       if (!hasImageFile(items)) return;
-      // STAND DOWN whenever the ENGINE will land content from the HTML flavour (fragment,
-      // `data:` image, or visible text — Word on macOS ships a rendered PNG beside copied
-      // text). External `<img src>` payloads and bare screenshots still need this file
-      // lane. Mirrors the React adapter exactly.
-      const html = typeof items.getData === 'function' ? (items.getData('text/html') ?? '') : '';
-      if (clipboardHtmlLandsContent(html)) return;
+      // STAND DOWN whenever the ENGINE will land content from the payload — see the
+      // predicate's contract in core. Word on macOS ships a rendered PNG beside copied
+      // text. Mirrors the React adapter exactly.
+      const canRead = typeof items.getData === 'function';
+      const html = canRead ? (items.getData('text/html') ?? '') : '';
+      const text = canRead ? (items.getData('text/plain') ?? '') : '';
+      if (clipboardPasteLandsContent(html, text)) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(items);
     };
@@ -80,6 +81,12 @@ export const DocxEditorContent = defineComponent({
       const transfer = event.dataTransfer;
       if (!transfer) return;
       if (!hasImageFile(transfer)) return;
+      // Same stand-down as paste, for the drop lane's plain-text-only reality: when the
+      // payload carries visible text, NOT preventing the default lets the browser fire
+      // `insertFromDrop`, which is the engine's only drop path. Mirrors the React adapter.
+      const html = transfer.getData('text/html') ?? '';
+      const text = transfer.getData('text/plain') ?? '';
+      if (clipboardDropLandsText(html, text)) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(transfer);
     };
