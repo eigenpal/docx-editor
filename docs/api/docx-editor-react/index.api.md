@@ -62,6 +62,7 @@ import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
 import { LocaleStrings } from '@docx-editor.dev/i18n';
+import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { NavigationCommand } from '@docx-editor.dev/core/editor';
 import { PageSetup } from '@docx-editor.dev/core/contracts/editor';
@@ -974,7 +975,7 @@ export interface DocxEditorViewportProps {
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
 
 // @public
-export type DocxFontsSource = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>) | readonly FontOrigin[];
+export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
 
 // @public
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
@@ -2226,7 +2227,7 @@ export interface UseFontFamilyResult {
 }
 
 // @public
-export function useFonts(...origins: readonly FontsInput[]): FontResolver;
+export function useFonts(...origins: readonly FontsInput[]): MarkedFontResolver;
 
 // @public
 export function useHeaderFooterState(): HeaderFooterState | null;

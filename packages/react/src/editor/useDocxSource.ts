@@ -30,6 +30,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   composeFontConfiguration,
   composeFontOrigins,
+  defineFontResolver,
   isFontResolver,
 } from '@docx-editor.dev/core/editor';
 import type {
@@ -37,6 +38,7 @@ import type {
   FontOrigin,
   FontResolutionRequest,
   FontResolver,
+  MarkedFontResolver,
 } from '@docx-editor.dev/core/editor';
 import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 
@@ -56,10 +58,19 @@ export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
  *
  * @public
  */
-export type DocxFontsSource =
-  | FontOrigin
-  | (() => DocxFontsInput | Promise<DocxFontsInput>)
-  | readonly FontOrigin[];
+export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
+
+/**
+ * One entry of a `fonts` list: any {@link FontOrigin}, or the older zero-argument loader.
+ *
+ * The resolver arm of `FontOrigin` is a MARKED resolver, so handing this a function that
+ * takes a request but never went through `defineFontResolver` is a compile error rather
+ * than a silent total loss of fonts — it matches neither arm, because a one-argument
+ * function is not assignable to the zero-argument loader.
+ *
+ * @public
+ */
+export type DocxFontOrigin = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>);
 
 /**
  * What the document itself can be: a URL to fetch, or bytes already in hand.
@@ -107,8 +118,19 @@ function bytesOf(source: DocxSource): Uint8Array | null {
 }
 
 /** One origin or several — the rest of the hook only ever deals with a list. */
-function fontOrigins(source: DocxFontsSource): readonly FontOrigin[] {
-  return Array.isArray(source) ? source : [source as FontOrigin];
+function fontOrigins(source: DocxFontsSource): readonly DocxFontOrigin[] {
+  return Array.isArray(source) ? source : [source as DocxFontOrigin];
+}
+
+/**
+ * A loader sitting in an ON-DEMAND list is still a loader: wrapped so it is called with no
+ * argument, once per load, and so a throw lands in `composeFontOrigins`' per-origin catch
+ * rather than escaping the surrounding `.map`.
+ */
+function asFontOrigin(origin: DocxFontOrigin): FontOrigin {
+  if (typeof origin !== 'function' || isFontResolver(origin)) return origin as FontOrigin;
+  const loader = origin as () => DocxFontsInput | Promise<DocxFontsInput>;
+  return defineFontResolver(async () => loader());
 }
 
 /**
@@ -120,10 +142,13 @@ function isOnDemand(source: DocxFontsSource | undefined): boolean {
 }
 
 /** Eager path only: a zero-argument loader is called, everything else is taken as it is. */
-async function resolveEagerOrigin(origin: FontOrigin): Promise<DocxFontsInput | undefined> {
-  return typeof origin === 'function'
-    ? ((await (origin as () => DocxFontsInput | Promise<DocxFontsInput>)()) as DocxFontsInput)
-    : await origin;
+async function resolveEagerOrigin(origin: DocxFontOrigin): Promise<DocxFontsInput | undefined> {
+  if (typeof origin !== 'function') return await origin;
+  // `isOnDemand` already answered false for this list, so no function here is a marked
+  // resolver and the loader form is the only one left.
+  return (await (origin as unknown as () => DocxFontsInput | Promise<DocxFontsInput>)()) as
+    | DocxFontsInput
+    | undefined;
 }
 
 /**
@@ -169,14 +194,18 @@ export function useDocxSource(
   const [fonts, setFonts] = useState<FontConfiguration | undefined>(undefined);
   const [error, setError] = useState<Error | null>(null);
   const [documentLoading, setDocumentLoading] = useState(source != null);
-  // Which path this hook is on, decided ONCE from the first render's options — the same
-  // render that fixes `fontsSettled`, so the two can never disagree about whether there is
-  // anything to wait for. `useRef`'s initializer is kept, later renders' values discarded.
-  const onDemand = useRef(isOnDemand(options.fonts)).current;
+  // Which path this hook is on, re-read every render rather than latched at mount. Latched,
+  // `{ fonts: ready ? packagedFonts() : undefined }` — a host waiting on something before
+  // it can build its origins — decided "eager" on the first render and never resolved
+  // fonts at all. The Vue twin re-decides, and `check:parity` is signature-only and cannot
+  // see the difference.
+  const onDemand = isOnDemand(options.fonts);
   // Whether the font question is answered — resolved, failed, never asked, or not
   // answerable ahead of the parse. The document is held back until it is; see the note on
-  // reflow above.
-  const [fontsSettled, setFontsSettled] = useState(options.fonts === undefined || onDemand);
+  // reflow above. The effect below is the ONE place that decides for a `fonts` option that
+  // is present, on-demand included: a second decision here would be a second thing to keep
+  // in step with `onDemand`, and it bought no render — the settle batches with the bytes.
+  const [fontsSettled, setFontsSettled] = useState(options.fonts === undefined);
 
   // Options are rebuilt every render by any caller writing them inline, which is the normal
   // case. Read from a ref so a fresh object literal cannot restart a fetch.
@@ -187,17 +216,30 @@ export function useDocxSource(
   // unconditionally because hooks are, and returned only on the on-demand path. Inline
   // `{ fonts: packagedFonts() }` is a fresh function every render; without this the `fonts`
   // prop would change identity every render and rebuild the editor forever.
-  const resolver = useMemo<FontResolver>(
-    () => (request: FontResolutionRequest) =>
-      composeFontOrigins(fontOrigins(latest.current.fonts ?? []), request),
+  const resolver = useMemo<MarkedFontResolver>(
+    () =>
+      defineFontResolver((request: FontResolutionRequest) =>
+        composeFontOrigins(fontOrigins(latest.current.fonts ?? []).map(asFontOrigin), request)
+      ),
     []
   );
 
-  // Fonts load ONCE, not per document: the faces are a property of the app, not of the file
-  // open in it, and re-fetching them on every navigation would be pure waste.
+  // Fonts load ONCE per PATH, not per document: the faces are a property of the app, not of
+  // the file open in it, and re-fetching them on every navigation would be pure waste. The
+  // dependency is `onDemand` rather than `[]` so a host that switches paths — undefined or
+  // eager first, a resolver once it is ready — actually gets the fonts it asked for.
   useEffect(() => {
     const fontsSource = latest.current.fonts;
-    if (fontsSource === undefined || onDemand) return undefined;
+    if (fontsSource === undefined) {
+      setFontsSettled(true);
+      return undefined;
+    }
+    if (onDemand) {
+      // Nothing to await ahead of the parse; release the bytes.
+      setFontsSettled(true);
+      return undefined;
+    }
+    setFontsSettled(false);
     let live = true;
     void (async () => {
       try {
@@ -214,9 +256,13 @@ export function useDocxSource(
             )
           );
         }
-      } catch {
-        // Deliberately swallowed. The loader reports its own failures, and the engine
-        // measures on its fixed fallback — a worse-looking document, not a missing one.
+      } catch (cause) {
+        // Never fatal — the engine measures on its fixed fallback, which is a
+        // worse-looking document rather than a missing one — but never silent either. A
+        // loader reports its own per-face failures; a THROW from here is something else,
+        // and the one that used to reach this catch unannounced was an unmarked resolver
+        // being called as a loader, which loses every font with no diagnostic at all.
+        console.warn('[fonts] font loading failed; the fixed measurer stays in effect', cause);
       } finally {
         // `finally`, so a font failure releases the document instead of holding it forever.
         if (live) setFontsSettled(true);

@@ -27,11 +27,17 @@ it from these same packaged bytes only when a document names it.
 
 ```ts
 import { packagedFonts } from '@docx-editor.dev/fonts';
+import { useFonts } from '@docx-editor.dev/react';
 
 // A resolver: the editor calls it once per load with the families the file
 // declares, so a document using only Times New Roman loads Liberation Serif and
 // nothing else, and one naming none of the five loads nothing at all.
-<DocxEditor.Root document={bytes} fonts={packagedFonts()} />;
+//
+// `useFonts` is not optional here. The `fonts` prop rebuilds the editor when its
+// identity changes, and `packagedFonts()` written inline is a new function on
+// every render; `useFonts` keeps one for the component's life.
+const fonts = useFonts(packagedFonts());
+<DocxEditor.Root document={bytes} fonts={fonts} />;
 ```
 
 Same call shape as `googleFonts()` below, so composing the two is adding an argument:

@@ -10,6 +10,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   FONT_RESOLVER_BRAND,
+  FONT_RESOLVER_MARK_KEY,
   composeFontOrigins,
   defineFontResolver,
   isFontResolver,
@@ -51,8 +52,40 @@ describe('the resolver mark', () => {
   test('the mark is invisible to enumeration and to the spread a host might write', () => {
     const marked = defineFontResolver(async () => ({ sources: [] }));
 
-    expect(Object.keys(marked)).toEqual([]);
+    // Both halves, both non-enumerable. `Object.keys` alone would pass on a symbol-only
+    // mark whatever its descriptor said, so the spread check is what carries the symbol
+    // half and `Object.keys` carries the string half.
     expect(Object.getOwnPropertySymbols({ ...marked })).not.toContain(FONT_RESOLVER_BRAND);
+    expect(Object.keys(marked)).toEqual([]);
+    expect(Object.keys({ ...marked })).toEqual([]);
+  });
+
+  test('both halves of the mark are really set, so the TYPE is not lying', () => {
+    const marked = defineFontResolver(async () => ({ sources: [] }));
+
+    expect((marked as unknown as Record<symbol, unknown>)[FONT_RESOLVER_BRAND]).toBe(true);
+    // The string half is what `MarkedFontResolver` claims in the type and what lets
+    // `@docx-editor.dev/fonts` declare the same mark without importing from the engine.
+    expect(marked[FONT_RESOLVER_MARK_KEY]).toBe(true);
+    expect(FONT_RESOLVER_MARK_KEY).toBe('docx-editor.dev/font-resolver');
+  });
+
+  test('refuses a frozen function rather than returning it unmarked', () => {
+    const frozen = Object.freeze(async () => ({ sources: [] }));
+
+    // The return TYPE says marked. Handing back an unmarked function would compile and
+    // then lose every font at the first `useDocxSource` call.
+    expect(() => defineFontResolver(frozen)).toThrow(TypeError);
+    expect(isFontResolver(frozen)).toBe(false);
+  });
+
+  test('the mark does not survive .bind() or a wrapper, which the docs say', () => {
+    const marked = defineFontResolver(async () => ({ sources: [] }));
+
+    expect(isFontResolver(marked.bind(null))).toBe(false);
+    expect(isFontResolver((request: FontResolutionRequest) => marked(request))).toBe(false);
+    // Re-marking the new object is the documented fix.
+    expect(isFontResolver(defineFontResolver(marked.bind(null)))).toBe(true);
   });
 
   test('the mark is the registered symbol, so a second module copy still reads it', () => {
@@ -84,10 +117,16 @@ describe('composeFontOrigins', () => {
     ).toEqual(['second']);
   });
 
-  test('tells a later origin which families an earlier one already answered for', async () => {
+  const faceNames = (request: FontResolutionRequest | undefined) =>
+    [...(request?.resolvedFaces ?? [])]
+      .map((face) => `${face.family}/${face.weight}/${face.style}`)
+      .sort();
+
+  test('reports the faces an earlier origin can paint, by BOTH names', async () => {
     const seen: FontResolutionRequest[] = [];
     const first = defineFontResolver(async () => ({
-      // Both halves: the face that was loaded, and the document name it stands in for.
+      // What a substitute package answers: bytes under the face it loaded, plus the map
+      // from the name the document wrote.
       sources: [source('Carlito', 'packaged')],
       substitutions: [
         {
@@ -104,10 +143,83 @@ describe('composeFontOrigins', () => {
     await composeFontOrigins([first, second], REQUEST);
 
     expect(seen).toHaveLength(1);
-    expect([...(seen[0]!.resolvedFamilies ?? [])].sort()).toEqual(['Calibri', 'Carlito']);
+    expect(faceNames(seen[0])).toEqual(['Calibri/400/normal', 'Carlito/400/normal']);
     // Everything else about the request is untouched.
     expect(seen[0]!.families).toBe(REQUEST.families);
     expect(seen[0]!.defaultFamily).toBe(REQUEST.defaultFamily);
+  });
+
+  test('reports FACES, not families: two faces of one family are two entries', async () => {
+    const seen: FontResolutionRequest[] = [];
+    // The brand fragment the `useFonts(brandFragment, packagedFonts())` shape produces:
+    // some Arial, not all of it. Keyed on family, the two collapsed into one entry saying
+    // "Arial", and a packaged origin reading that supplied no italics at all.
+    const brand = {
+      sources: [
+        { ...source('Arial', 'brand-regular') },
+        {
+          ...source('Arial', 'brand-bold'),
+          request: { family: 'Arial', weight: 700, style: 'normal' as const },
+        },
+      ],
+    };
+    const second = defineFontResolver(async (request: FontResolutionRequest) => {
+      seen.push(request);
+      return { sources: [] };
+    });
+
+    await composeFontOrigins([brand, second], REQUEST);
+
+    expect(faceNames(seen[0])).toEqual(['Arial/400/normal', 'Arial/700/normal']);
+    // The faces the brand does NOT hold stay unreported, which is what lets the origin
+    // behind it supply them.
+    expect(faceNames(seen[0])).not.toContain('Arial/400/italic');
+  });
+
+  test('reports only faces with BYTES, so a failed origin cannot suppress its failover', async () => {
+    const seen: FontResolutionRequest[] = [];
+    // Exactly what `packagedFonts()` answers when every asset fetch fails: the whole
+    // substitution map, and no sources at all. Both shipped resolvers build the map before
+    // fetching, so trusting substitutions alone lost the failover the list exists for.
+    const failed = defineFontResolver(async () => ({
+      sources: [],
+      substitutions: [400, 700].map((weight) => ({
+        from: { family: 'Calibri', weight, style: 'normal' as const },
+        to: { family: 'Carlito', weight, style: 'normal' as const },
+      })),
+    }));
+    const failover = defineFontResolver(async (request: FontResolutionRequest) => {
+      seen.push(request);
+      return { sources: [source('Carlito', 'failover')] };
+    });
+
+    const merged = await composeFontOrigins([failed, failover], REQUEST);
+
+    expect(faceNames(seen[0])).toEqual([]);
+    expect(merged?.sources?.map((entry) => entry.id)).toEqual(['failover']);
+  });
+
+  test('a substitution becomes reportable once a LATER origin supplies its target', async () => {
+    const seen: FontResolutionRequest[] = [];
+    const mapOnly = defineFontResolver(async () => ({
+      substitutions: [
+        {
+          from: { family: 'Calibri', weight: 400, style: 'normal' as const },
+          to: { family: 'Carlito', weight: 400, style: 'normal' as const },
+        },
+      ],
+    }));
+    const bytes = defineFontResolver(async () => ({ sources: [source('Carlito', 'bytes')] }));
+    const third = defineFontResolver(async (request: FontResolutionRequest) => {
+      seen.push(request);
+      return undefined;
+    });
+
+    await composeFontOrigins([mapOnly, bytes, third], REQUEST);
+
+    // Calibri was unpaintable when origin 2 was asked and paintable by the time origin 3
+    // was, which is why coverage is recomputed per origin rather than accumulated.
+    expect(faceNames(seen[0])).toEqual(['Calibri/400/normal', 'Carlito/400/normal']);
   });
 
   test('the FIRST origin is asked the request as it came, with nothing marked resolved', async () => {
@@ -120,7 +232,7 @@ describe('composeFontOrigins', () => {
     await composeFontOrigins([record], REQUEST);
 
     expect(seen).toEqual([REQUEST]);
-    expect(seen[0]!.resolvedFamilies).toBeUndefined();
+    expect(seen[0]!.resolvedFaces).toBeUndefined();
   });
 
   test('an origin that answered nothing does not narrow the next one', async () => {
@@ -133,7 +245,33 @@ describe('composeFontOrigins', () => {
 
     await composeFontOrigins([empty, record], REQUEST);
 
-    expect(seen[0]!.resolvedFamilies).toBeUndefined();
+    expect(seen[0]!.resolvedFaces).toBeUndefined();
+  });
+
+  test('one throwing origin is reported and skipped; the others still compose', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    try {
+      const boom = defineFontResolver(() => {
+        throw new Error('resolver called as a loader');
+      });
+      const merged = await composeFontOrigins(
+        [
+          { sources: [source('Calibri', 'before')] },
+          boom,
+          { sources: [source('Cambria', 'after')] },
+        ],
+        REQUEST
+      );
+
+      expect(merged?.sources?.map((entry) => entry.id)).toEqual(['before', 'after']);
+    } finally {
+      console.warn = warn;
+    }
+    // Reported, not swallowed: this is the failure mode an empty catch made undebuggable.
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0]?.[0])).toContain('font origin failed');
   });
 
   test('carries NO epoch, so the engine stamps the load sequence', async () => {

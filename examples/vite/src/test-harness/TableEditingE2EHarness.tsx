@@ -6,7 +6,12 @@
 import { useEffect, useRef } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { DocxEditor, useDocxEditor, useDocxSource } from '@docx-editor.dev/react';
-import { packagedFonts } from '@docx-editor.dev/fonts';
+// FONTS ARE EAGER HERE, deliberately, unlike the demos. `packagedFonts()` resolves after
+// the parse and the editor re-paginates when the faces land, which inside a benchmark is a
+// surface remount in the middle of the measurement and an "open to ready" that reports
+// ready before the document is measured with its real fonts. `defaultFonts` settles before
+// the first layout, so every run measures the same thing.
+import { defaultFonts } from '@docx-editor.dev/fonts';
 import { createDocxEditorE2EHook } from './table-editing-e2e-hook.ts';
 
 function E2EBridge() {
@@ -30,7 +35,7 @@ export function TableEditingE2EHarness({ fixtureUrl }: { fixtureUrl: string }) {
     fonts,
     error: loadError,
   } = useDocxSource(fixtureUrl, {
-    fonts: packagedFonts(),
+    fonts: defaultFonts,
   });
 
   return (

@@ -36,11 +36,11 @@ export interface GoogleFontLoadFailure {
 }
 
 // @public
-export function googleFonts(options?: GoogleFontsOptions): (request: {
+export function googleFonts(options?: GoogleFontsOptions): ((request: {
     readonly defaultFamily: string;
     readonly families: readonly string[];
-    readonly resolvedFamilies?: readonly string[];
-}) => Promise<GoogleFontsFragment>;
+    readonly resolvedFaces?: readonly ResolvedFontFace[];
+}) => Promise<GoogleFontsFragment>) & FontResolverMark;
 
 // @public
 export interface GoogleFontsFragment {

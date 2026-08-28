@@ -301,16 +301,34 @@ zero-argument function is assignable to a one-argument function type.
 ```ts
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 
-const brandFonts = defineFontResolver(async ({ families, resolvedFamilies }) => {
-  const already = new Set(resolvedFamilies ?? []);
-  const wanted = families.filter((family) => BRAND.has(family) && !already.has(family));
+const faceKey = (family: string, weight: number, style: string) =>
+  // Case-folded: Word matches font names that way, and so do both shipped resolvers.
+  `${family.trim().toLowerCase()} ${weight} ${style}`;
+
+const brandFonts = defineFontResolver(async ({ families, resolvedFaces }) => {
+  const already = new Set(
+    (resolvedFaces ?? []).map((face) => faceKey(face.family, face.weight, face.style))
+  );
+  const wanted = families.filter(
+    (family) =>
+      BRAND.has(family) &&
+      // Load a family unless EVERY face of it is already covered. Skipping a partly
+      // covered family leaves its other faces with no bytes at all.
+      !BRAND_FACES.every((face) => already.has(faceKey(family, face.weight, face.style)))
+  );
   return { sources: await loadBrandFaces(wanted) };
 });
 ```
 
-`resolvedFamilies` lists what earlier origins in the same composition already
-supplied. Skipping those is an optimization, not a requirement: composition drops
-a duplicate face either way, so ignoring the list only costs bytes.
+`resolvedFaces` lists the faces earlier origins in the same composition can already
+paint. It reports faces rather than families, and only faces backed by bytes, so
+skipping one cannot lose one. That is what makes honoring the list an optimization
+rather than a requirement: composition drops a duplicate face either way, so
+ignoring it only costs bytes.
+
+Origins resolve one after another, not in parallel, so each can be told what the
+ones before it covered. That costs one extra origin's latency. Order origins
+cheapest-first.
 
 ## Source precedence
 

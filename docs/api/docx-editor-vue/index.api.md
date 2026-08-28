@@ -64,6 +64,7 @@ import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
 import { LOADING_SNAPSHOT } from '@docx-editor.dev/core/editor';
 import { LocaleStrings } from '@docx-editor.dev/i18n';
+import { MarkedFontResolver } from '@docx-editor.dev/core/editor';
 import { MAX_RESOLVER_FAMILIES } from '@docx-editor.dev/core/editor';
 import { MaybeRef } from 'vue';
 import { MaybeRefOrGetter as MaybeRefOrGetter_2 } from 'vue';
@@ -3279,7 +3280,7 @@ export interface DocxEditorViewportProps {
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
 
 // @public (undocumented)
-export type DocxFontsSource = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>) | readonly FontOrigin[];
+export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
 
 // @public (undocumented)
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
@@ -5466,7 +5467,7 @@ export interface UseFontFamilyResult {
 }
 
 // @public (undocumented)
-export function useFonts(...origins: readonly MaybeRefOrGetter<FontsInput>[]): FontResolver;
+export function useFonts(...origins: readonly MaybeRefOrGetter<FontsInput>[]): MarkedFontResolver;
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;

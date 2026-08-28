@@ -371,6 +371,49 @@ export async function defaultFonts(
  */
 const FONT_RESOLVER_BRAND: unique symbol = Symbol.for('docx-editor.dev/font-resolver') as never;
 
+/** The string half of the same mark; see {@link FontResolverMark}. */
+const FONT_RESOLVER_MARK_KEY = 'docx-editor.dev/font-resolver';
+
+/**
+ * The TYPE-level half of the resolver mark, structurally identical to the editor
+ * contract's `FontResolverMark`.
+ *
+ * A string key rather than a symbol precisely so the two unify without this package
+ * importing anything from the engine: two `unique symbol` declarations in two packages are
+ * two different types. Because they unify, `useFonts(packagedFonts())` typechecks against
+ * a `FontOrigin` list that REQUIRES the mark, and a hand-written resolver that forgot
+ * `defineFontResolver` does not.
+ */
+export interface FontResolverMark {
+  /** Always `true`. Set non-enumerably on the resolvers this package builds. */
+  readonly 'docx-editor.dev/font-resolver': true;
+}
+
+/** Set both halves of the mark on a resolver, non-enumerably. */
+function markResolver<T extends object>(resolve: T): T & FontResolverMark {
+  const descriptor = { value: true, enumerable: false, configurable: true } as const;
+  Object.defineProperty(resolve, FONT_RESOLVER_BRAND, descriptor);
+  Object.defineProperty(resolve, FONT_RESOLVER_MARK_KEY, descriptor);
+  return resolve as T & FontResolverMark;
+}
+
+/**
+ * One face an earlier origin can already paint, structurally identical to the editor
+ * contract's `FontFaceRequest`.
+ */
+export interface ResolvedFontFace {
+  /** The family name, matched case-insensitively as Word matches font names. */
+  readonly family: string;
+  /** CSS numeric weight; the packaged faces are 400 and 700. */
+  readonly weight: number;
+  /** Whether this is the upright or the italic face. */
+  readonly style: 'normal' | 'italic';
+}
+
+/** Case-folded face identity, matching how the engine keys `resolvedFaces`. */
+const faceKey = (family: string, weight: number, style: string): string =>
+  `${family.trim().toLowerCase()} ${weight} ${style}`;
+
 /**
  * How {@link packagedFonts} behaves once a document hands it a family list. Every field is
  * optional; `packagedFonts()` with no options serves any of the five families a document
@@ -387,9 +430,15 @@ export interface PackagedFontsOptions {
   /** Per-face failures. Defaults to a console warning; pass a handler to route them. */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
   /**
-   * Skip the paint-side `FontFace` registration {@link installDefaultFontFaces} performs.
-   * Measurement is unaffected; painted glyphs fall back to whatever the platform
-   * substitutes for the Word family name.
+   * Set `false` to skip the paint-side `FontFace` registration
+   * {@link installDefaultFontFaces} performs. Measurement is unaffected; painted glyphs
+   * fall back to whatever the platform substitutes for the Word family name.
+   *
+   * The registration goes through the BROWSER's own loader (`new FontFace(family,
+   * 'url(…)')`), which cannot be given {@link PackagedFontsOptions.fetcher} — so an
+   * injected fetcher measures the byte cost of the measurement half only, and a real
+   * browser makes a second request per face. Same-origin and immutable, so it is normally
+   * served from cache; the registration is idempotent per document either way.
    */
   readonly install?: boolean;
 }
@@ -435,11 +484,12 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map
  */
 export function packagedFonts(
   options: PackagedFontsOptions = {}
-): (request: {
+): ((request: {
   readonly families: readonly string[];
   readonly defaultFamily: string;
-  readonly resolvedFamilies?: readonly string[];
-}) => Promise<PackagedFontsFragment> {
+  readonly resolvedFaces?: readonly ResolvedFontFace[];
+}) => Promise<PackagedFontsFragment>) &
+  FontResolverMark {
   const allowed = options.allow
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
@@ -447,23 +497,35 @@ export function packagedFonts(
   async function resolvePackagedFonts(request: {
     readonly families: readonly string[];
     readonly defaultFamily: string;
-    readonly resolvedFamilies?: readonly string[];
+    readonly resolvedFaces?: readonly ResolvedFontFace[];
   }): Promise<PackagedFontsFragment> {
-    // Faces an earlier origin in the composition already supplied. Loading them again
+    // Faces an earlier origin in the composition can already PAINT. Loading them again
     // would spend the bytes on a fragment first-wins composition is bound to drop.
-    const already = new Set((request.resolvedFamilies ?? []).map((family) => family.toLowerCase()));
+    const already = new Set(
+      (request.resolvedFaces ?? []).map((face) => faceKey(face.family, face.weight, face.style))
+    );
+    // ALL FOUR faces, or none. This loads a family at a time, so skipping one whose
+    // regular is covered but whose bold is not would leave the bold with neither bytes nor
+    // a substitution — which is exactly what the family-grained version of this check did.
+    const fullyCovered = (family: WordDefaultFamily): boolean => {
+      const substitute = FAMILY_PLANS.get(family)!.substitute;
+      return FACES.every(
+        // Under the Word name the document wrote, or under the face this would load: an
+        // earlier origin may have reported either.
+        (face) =>
+          already.has(faceKey(family, face.weight, face.style)) ||
+          already.has(faceKey(substitute, face.weight, face.style))
+      );
+    };
     // The default family counts as declared: a document whose runs name no font still
     // renders in one, and leaving it out would load nothing for a file that is entirely
     // default-styled.
     const wanted = new Set<WordDefaultFamily>();
     for (const declared of [request.defaultFamily, ...request.families]) {
-      if (already.has(declared.toLowerCase())) continue;
       const family = wordFamiliesByFoldedName.get(declared.toLowerCase());
       if (!family) continue;
       if (allowed && !allowed.has(family.toLowerCase())) continue;
-      // The SUBSTITUTE too: an earlier origin that supplied Carlito directly has covered
-      // what this would load, whatever name the document used to ask for it.
-      if (already.has(FAMILY_PLANS.get(family)!.substitute.toLowerCase())) continue;
+      if (fullyCovered(family)) continue;
       wanted.add(family);
     }
     // Stable order regardless of how the document happened to declare them, so the same
@@ -486,12 +548,7 @@ export function packagedFonts(
     return { ...fragment, families };
   }
 
-  Object.defineProperty(resolvePackagedFonts, FONT_RESOLVER_BRAND, {
-    value: true,
-    enumerable: false,
-    configurable: true,
-  });
-  return resolvePackagedFonts;
+  return markResolver(resolvePackagedFonts);
 }
 
 export { FONT_ASSET_MANIFEST, type FontAssetManifestEntry } from './manifest.generated.ts';

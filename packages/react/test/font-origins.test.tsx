@@ -15,7 +15,7 @@ import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { act, cleanup, render } from '@testing-library/react';
-import { defineFontResolver } from '@docx-editor.dev/core/editor';
+import { defineFontResolver, isFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import type { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxSource } from '../src/editor/useDocxSource.ts';
@@ -114,19 +114,35 @@ describe('useDocxSource: the eager path still holds the document', () => {
 });
 
 describe('useDocxSource: the on-demand path cannot wait, and does not pretend to', () => {
-  test('document is released at once and `fonts` is a resolver', async () => {
-    const resolver = defineFontResolver(async () => ({ sources: [source('Calibri', 'lazy')] }));
-    let result!: ReturnType<typeof useDocxSource>;
+  test('an on-demand origin costs the document no renders at all', async () => {
+    // The control: no `fonts` option, so nothing is waited for. Whatever render the
+    // document appears on here is the floor.
+    const renderOf = async (options: Parameters<typeof useDocxSource>[1]) => {
+      const seen: boolean[] = [];
+      let result!: ReturnType<typeof useDocxSource>;
+      function Probe() {
+        result = useDocxSource(BYTES, options);
+        // Recorded DURING render, so an extra state round trip is visible as an extra
+        // render before the document appears.
+        seen.push(result.document !== undefined);
+        return null;
+      }
+      render(<Probe />);
+      await flush();
+      return { firstReleased: seen.indexOf(true), fonts: result.fonts };
+    };
 
-    function Probe() {
-      result = useDocxSource(BYTES, { fonts: resolver });
-      return null;
-    }
-    render(<Probe />);
+    const control = await renderOf({});
+    cleanup();
+    const onDemand = await renderOf({
+      fonts: defineFontResolver(async () => ({ sources: [source('Calibri', 'lazy')] })),
+    });
 
-    expect(result.document).toBe(BYTES);
-    expect(result.isLoading).toBe(false);
-    expect(typeof result.fonts).toBe('function');
+    expect(control.firstReleased).toBeGreaterThanOrEqual(0);
+    // Not "eventually the same" — the SAME render. Holding the bytes for a resolver that
+    // cannot answer until after the parse costs a frame of loading screen for nothing.
+    expect(onDemand.firstReleased).toBe(control.firstReleased);
+    expect(typeof onDemand.fonts).toBe('function');
   });
 
   test('the resolver keeps ONE identity even when the origins are written inline', async () => {
@@ -227,6 +243,70 @@ describe('useFonts takes every origin in the same shape', () => {
       sources: FontSource[];
     };
     expect(merged.sources.map((entry) => entry.id)).toEqual(['packaged', 'google']);
+  });
+
+  test('the result is MARKED, so it can be an origin of another list', async () => {
+    let composed!: unknown;
+    let nested!: unknown;
+
+    function Probe() {
+      composed = useFonts(defineFontResolver(async () => ({ sources: [source('Calibri', 'a')] })));
+      // Unmarked, `useDocxSource` would call this with no argument and lose every font.
+      nested = useDocxSource(BYTES, { fonts: composed as never }).fonts;
+      return null;
+    }
+    render(<Probe />);
+
+    expect(isFontResolver(composed)).toBe(true);
+    // Taken as a resolver, not as a loader: the on-demand path returns a function.
+    expect(typeof nested).toBe('function');
+    const merged = (await (nested as (r: FontResolutionRequest) => Promise<unknown>)(REQUEST)) as {
+      sources: FontSource[];
+    };
+    expect(merged.sources.map((entry) => entry.id)).toEqual(['a']);
+  });
+
+  test('switching from no fonts to a resolver actually resolves them', async () => {
+    let result!: ReturnType<typeof useDocxSource>;
+
+    function Probe({ ready }: { ready: boolean }) {
+      // The shape a host writes when its origins depend on something else being loaded.
+      result = useDocxSource(BYTES, {
+        ...(ready
+          ? { fonts: defineFontResolver(async () => ({ sources: [source('Calibri', 'late')] })) }
+          : {}),
+      });
+      return null;
+    }
+    const view = render(<Probe ready={false} />);
+    await flush();
+    expect(result.fonts).toBeUndefined();
+
+    view.rerender(<Probe ready />);
+    await flush();
+
+    // Latched at mount, this stayed undefined forever and the document never got fonts.
+    expect(typeof result.fonts).toBe('function');
+    expect(result.document).toBe(BYTES);
+  });
+
+  test('a throwing eager loader is reported, not swallowed', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    try {
+      function Probe() {
+        useDocxSource(BYTES, { fonts: () => Promise.reject(new Error('boom')) });
+        return null;
+      }
+      render(<Probe />);
+      await flush();
+    } finally {
+      console.warn = warn;
+    }
+
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0]?.[0])).toContain('font loading failed');
   });
 
   test('the returned resolver never changes identity', () => {

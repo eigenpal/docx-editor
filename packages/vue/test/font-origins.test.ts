@@ -11,7 +11,7 @@ import './dom-setup.ts';
 
 import { describe, expect, test } from 'bun:test';
 import { createApp, ref } from 'vue';
-import { defineFontResolver } from '@docx-editor.dev/core/editor';
+import { defineFontResolver, isFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import type { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxSource } from '../src/editor/useDocxSource';
@@ -196,6 +196,43 @@ describe('useFonts takes every origin in the same shape', () => {
         expect(merged.sources.map((entry) => entry.id)).toEqual(['packaged', 'google']);
       }
     );
+  });
+
+  test('the result is MARKED, so it can be an origin of another list', async () => {
+    await mounted(
+      () => useFonts(defineFontResolver(async () => ({ sources: [source('Calibri', 'a')] }))),
+      async (composed) => {
+        expect(isFontResolver(composed)).toBe(true);
+        // Unmarked, `useFonts` would read it as a getter and `toValue` would call it with
+        // no argument — the exact failure this round fixed.
+        await mounted(
+          () => useFonts(composed),
+          async (outer) => {
+            const merged = (await outer(REQUEST)) as { sources: FontSource[] };
+            expect(merged.sources.map((entry) => entry.id)).toEqual(['a']);
+          }
+        );
+      }
+    );
+  });
+
+  test('a throwing eager loader is reported, not swallowed', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    try {
+      await mounted(
+        () => useDocxSource(BYTES, { fonts: () => Promise.reject(new Error('boom')) }),
+        async () => {
+          await flush();
+        }
+      );
+    } finally {
+      console.warn = warn;
+    }
+
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0]?.[0])).toContain('font loading failed');
   });
 
   test('a ref origin is still read reactively', async () => {

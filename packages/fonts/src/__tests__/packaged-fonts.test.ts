@@ -106,9 +106,11 @@ describe('packagedFonts', () => {
     });
 
     expect(forwards.families).toEqual(backwards.families);
-    expect(forwards.families).toEqual(['Calibri', 'Cambria', 'Arial']);
-    expect(forwards.families.every((family) => ALL_WORD_DEFAULT_FAMILIES.includes(family))).toBe(
-      true
+    // The canonical order, which is ALL_WORD_DEFAULT_FAMILIES' — not either document's.
+    expect(forwards.families).toEqual(
+      ALL_WORD_DEFAULT_FAMILIES.filter(
+        (family) => family !== 'Times New Roman' && family !== 'Courier New'
+      )
     );
   });
 
@@ -142,28 +144,80 @@ describe('packagedFonts', () => {
     );
   });
 
-  test('skips a family an earlier origin in the composition already answered for', async () => {
+  const FOUR_FACES = [
+    { weight: 400, style: 'normal' as const },
+    { weight: 700, style: 'normal' as const },
+    { weight: 400, style: 'italic' as const },
+    { weight: 700, style: 'italic' as const },
+  ];
+  const allFacesOf = (family: string) => FOUR_FACES.map((face) => ({ family, ...face }));
+
+  test('skips a family an earlier origin can already paint in EVERY face', async () => {
     const { fetcher, requested } = countingFetcher();
     const fragment = await packagedFonts({ fetcher, install: false })({
       families: ['Times New Roman'],
       defaultFamily: 'Calibri',
-      // Both spellings a composition can report: the Word name and the loaded face.
-      resolvedFamilies: ['calibri', 'Liberation Serif'],
+      // Both spellings a composition can report: the Word name the document wrote
+      // (case-folded, as Word matches) and the face that was actually loaded.
+      resolvedFaces: [...allFacesOf('calibri'), ...allFacesOf('Liberation Serif')],
     });
 
     expect(fragment.families).toHaveLength(0);
     expect(requested).toHaveLength(0);
   });
 
-  test('carries the resolver mark, so a hook never calls it as a loader', () => {
+  test('a PARTLY covered family is loaded whole, so no face is left without bytes', async () => {
+    const { fetcher, requested } = countingFetcher();
+    // The composition an earlier origin of hand-supplied brand bytes produces: regular
+    // Arial and nothing else. Reading that as "Arial is covered" left bold, italic and
+    // bold-italic Arial with neither bytes nor a substitution.
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['Arial'],
+      defaultFamily: 'Arial',
+      resolvedFaces: [{ family: 'Arial', weight: 400, style: 'normal' }],
+    });
+
+    expect(fragment.families).toEqual(['Arial']);
+    expect(requested).toHaveLength(4);
+    // A substitution for every face, including the one the earlier origin covers —
+    // first-wins composition drops that one, and keeps the three that matter.
+    expect(fragment.substitutions).toHaveLength(4);
+    expect(
+      fragment.substitutions.map((entry) => `${entry.from.weight}/${entry.from.style}`).sort()
+    ).toEqual(['400/italic', '400/normal', '700/italic', '700/normal']);
+  });
+
+  test('a face covered under only ONE of its two names still counts', async () => {
+    const { fetcher, requested } = countingFetcher();
+    // Regular and bold reported under the Word name, italics under the substitute: a
+    // composition can report either spelling, and neither alone should have to be complete.
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: [],
+      defaultFamily: 'Calibri',
+      resolvedFaces: [
+        { family: 'Calibri', weight: 400, style: 'normal' },
+        { family: 'Calibri', weight: 700, style: 'normal' },
+        { family: 'Carlito', weight: 400, style: 'italic' },
+        { family: 'Carlito', weight: 700, style: 'italic' },
+      ],
+    });
+
+    expect(fragment.families).toHaveLength(0);
+    expect(requested).toHaveLength(0);
+  });
+
+  test('carries both halves of the resolver mark, so a hook never calls it as a loader', () => {
     const resolve = packagedFonts();
     const brand = Symbol.for('docx-editor.dev/font-resolver');
 
     expect((resolve as unknown as Record<symbol, unknown>)[brand]).toBe(true);
-    // Not enumerable: the mark must not turn up in a host's own `{ ...resolver }`.
-    expect(Object.getOwnPropertyNames(resolve)).not.toContain(
-      'Symbol(docx-editor.dev/font-resolver)'
+    // The string half, which is what the TYPE claims and so must really be there.
+    expect((resolve as unknown as Record<string, unknown>)['docx-editor.dev/font-resolver']).toBe(
+      true
     );
+    // Neither half enumerable: the mark must not turn up in a host's own `{ ...resolver }`.
+    expect(Object.getOwnPropertySymbols({ ...resolve })).not.toContain(brand);
+    expect(Object.keys(resolve)).toEqual([]);
   });
 
   test('routes failures to `onFailure` instead of the console', async () => {

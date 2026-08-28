@@ -152,6 +152,12 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 const fonts = useFonts(packagedFonts(), googleFonts());
 ```
 
+`packagedFonts()` resolves after the document is parsed, so the first layout uses
+fixed measurement and the editor re-paginates when the faces arrive. Edits made in
+between survive that; the undo history behind them does not. For a document that
+must paginate correctly on the first pass, use `defaultFonts()` instead. For more
+information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
+
 See [Fonts and measurement](/docs/2.x/guides/fonts) for font sources and
 on-demand loading.
 

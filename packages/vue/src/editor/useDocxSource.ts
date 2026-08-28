@@ -7,6 +7,7 @@ import { scopeDispose } from './scope-dispose';
 import {
   composeFontConfiguration,
   composeFontOrigins,
+  defineFontResolver,
   isFontResolver,
 } from '@docx-editor.dev/core/editor';
 import type {
@@ -22,10 +23,10 @@ import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
 
 /** @public */
-export type DocxFontsSource =
-  | FontOrigin
-  | (() => DocxFontsInput | Promise<DocxFontsInput>)
-  | readonly FontOrigin[];
+export type DocxFontsSource = DocxFontOrigin | readonly DocxFontOrigin[];
+
+/** @public */
+export type DocxFontOrigin = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>);
 
 /** @public */
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
@@ -51,8 +52,15 @@ function bytesOf(source: DocxSource): Uint8Array | null {
 }
 
 /** One origin or several — the rest of the composable only ever deals with a list. */
-function fontOrigins(source: DocxFontsSource): readonly FontOrigin[] {
-  return Array.isArray(source) ? source : [source as FontOrigin];
+function fontOrigins(source: DocxFontsSource): readonly DocxFontOrigin[] {
+  return Array.isArray(source) ? source : [source as DocxFontOrigin];
+}
+
+/** A loader in an ON-DEMAND list is still a loader: wrapped so it is called with no argument. */
+function asFontOrigin(origin: DocxFontOrigin): FontOrigin {
+  if (typeof origin !== 'function' || isFontResolver(origin)) return origin as FontOrigin;
+  const loader = origin as () => DocxFontsInput | Promise<DocxFontsInput>;
+  return defineFontResolver(async () => loader());
 }
 
 /** Whether ANY origin resolves per document, in which case nothing can be waited for. */
@@ -61,10 +69,11 @@ function isOnDemand(source: DocxFontsSource | undefined): boolean {
 }
 
 /** Eager path only: a zero-argument loader is called, everything else is taken as it is. */
-async function resolveEagerOrigin(origin: FontOrigin): Promise<DocxFontsInput | undefined> {
-  return typeof origin === 'function'
-    ? ((await (origin as () => DocxFontsInput | Promise<DocxFontsInput>)()) as DocxFontsInput)
-    : await origin;
+async function resolveEagerOrigin(origin: DocxFontOrigin): Promise<DocxFontsInput | undefined> {
+  if (typeof origin !== 'function') return await origin;
+  return (await (origin as unknown as () => DocxFontsInput | Promise<DocxFontsInput>)()) as
+    | DocxFontsInput
+    | undefined;
 }
 
 /** @public */
@@ -84,8 +93,9 @@ export function useDocxSource(
   // ONE resolver for the composable's life, delegating to whatever the options hold now.
   // `:fonts` rebuilds the editor when its identity changes, and `packagedFonts()` written
   // inline is a fresh function on every render; this is what keeps that from remounting.
-  const resolver: FontResolver = (request: FontResolutionRequest) =>
-    composeFontOrigins(fontOrigins(toValue(reactiveOptions).fonts ?? []), request);
+  const resolver: FontResolver = defineFontResolver((request: FontResolutionRequest) =>
+    composeFontOrigins(fontOrigins(toValue(reactiveOptions).fonts ?? []).map(asFontOrigin), request)
+  );
 
   scopeDispose(
     watch(
@@ -117,8 +127,9 @@ export function useDocxSource(
                 ...(resolved.slice(1) as readonly FontConfigurationFragment[])
               );
             }
-          } catch {
-            // Font failures never fail the document.
+          } catch (cause) {
+            // Never fatal, never silent: the same reasoning as the React twin.
+            console.warn('[fonts] font loading failed; the fixed measurer stays in effect', cause);
           } finally {
             if (live) fontsSettled.value = true;
           }

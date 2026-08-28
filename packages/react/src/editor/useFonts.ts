@@ -14,9 +14,10 @@
 import { useMemo, useRef } from 'react';
 import {
   composeFontOrigins,
+  defineFontResolver,
   type FontOrigin,
   type FontResolutionRequest,
-  type FontResolver,
+  type MarkedFontResolver,
 } from '@docx-editor.dev/core/editor';
 
 /**
@@ -47,23 +48,34 @@ export type FontsInput = FontOrigin;
  * EVERY argument takes the same union, so adding an origin is adding an argument and
  * never a change of shape. Origins compose first-wins in argument order, exactly like
  * `composeFontConfiguration`: the first argument beats later ones, and any of them beats
- * a substitution for a family some origin supplies directly. They resolve concurrently,
- * so two fetching origins overlap rather than queue.
+ * a substitution for a family some origin supplies directly.
+ *
+ * They resolve ONE AFTER ANOTHER, not concurrently, so that each can be told which faces
+ * the ones before it already cover and skip fetching them. That costs one extra origin's
+ * latency on the critical path and saves a duplicate download — and, for a network origin,
+ * a request that would have told a font host which families the document uses for nothing.
+ * Order origins cheapest-first.
  *
  * The returned resolver never changes identity, so the editor is never rebuilt on account
  * of this prop — which also means the arguments are re-read per LOAD rather than per
  * render. Changing them mid-document does not re-resolve fonts; load a document, or
  * remount, for new fonts to take effect.
  *
+ * It is marked (`defineFontResolver`), so it can itself be an origin of another list or
+ * `useDocxSource`'s `fonts` option without being mistaken for a zero-argument loader.
+ *
  * @public
  */
-export function useFonts(...origins: readonly FontsInput[]): FontResolver {
+export function useFonts(...origins: readonly FontsInput[]): MarkedFontResolver {
   // Read at resolve time, not captured: the resolver below outlives every render.
   const latest = useRef<readonly FontsInput[]>(origins);
   latest.current = origins;
 
-  return useMemo<FontResolver>(
-    () => (request: FontResolutionRequest) => composeFontOrigins(latest.current, request),
+  return useMemo<MarkedFontResolver>(
+    () =>
+      defineFontResolver((request: FontResolutionRequest) =>
+        composeFontOrigins(latest.current, request)
+      ),
     []
   );
 }

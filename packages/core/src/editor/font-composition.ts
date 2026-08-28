@@ -16,6 +16,7 @@
 
 import type {
   FontConfiguration,
+  FontFaceRequest,
   FontSource,
   FontSourceSubstitution,
 } from '@docx-editor.dev/core/contracts/editor';
@@ -66,17 +67,25 @@ export interface FontResolutionRequest {
   /** The face a run naming no font resolves to, so a resolver can cover it too. */
   readonly defaultFamily: string;
   /**
-   * Families an EARLIER origin in the same composition already answered for — both the
-   * names the document wrote and the faces that were loaded for them.
+   * Faces an EARLIER origin in the same composition can already PAINT — either because it
+   * supplied the bytes, or because it mapped that face onto one it did supply.
    *
-   * Absent when the engine calls a resolver directly, and empty for the first origin of a
-   * composition. Honouring it is an OPTIMIZATION, never a correctness requirement:
-   * composition is first-wins, so a resolver that ignores this only spends bytes on a face
-   * that goes on to lose. Ignoring it is what made `[packagedFonts(), googleFonts()]`
-   * fetch Carlito from a CDN after the packaged copy had already been read from disk —
-   * twice the bytes, and a third party told which families the document uses for nothing.
+   * Absent, not empty, when there is nothing to report: the engine calling a resolver
+   * directly, and the first origin of a composition.
+   *
+   * FACES, not families, and only faces backed by bytes. Both narrowings are load-bearing.
+   * A family-grained list would let an origin holding only regular Arial suppress the bold
+   * and italic a later origin would have supplied, and a list built from substitutions
+   * alone would let an origin whose fetches all failed suppress the failover behind it,
+   * because both shipped resolvers emit their substitution map before fetching. Together
+   * they are what makes honouring this an OPTIMIZATION rather than a correctness
+   * requirement: skipping a reported face cannot lose one, so a resolver that ignores this
+   * list only spends bytes on a face first-wins composition would drop anyway.
+   *
+   * Match it case-insensitively. Word matches font names that way and both shipped
+   * resolvers do.
    */
-  readonly resolvedFamilies?: readonly string[];
+  readonly resolvedFaces?: readonly FontFaceRequest[];
 }
 
 /**

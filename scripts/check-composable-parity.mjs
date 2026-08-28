@@ -392,25 +392,30 @@ export interface FontResolver {}
     process.exit(1);
   }
 
-  // …and a compound inner type still needs its parentheses, or `A | B[]` would compare
-  // equal to `(A | B)[]`.
-  const restUnion = `
-export function useSample(...origins: readonly (A | B)[]): FontResolver;
-export interface A {}
-export interface B {}
+  // …and anything that is not a plain type reference still needs its parentheses, or
+  // `A | B[]` would compare equal to `(A | B)[]`. A union, a conditional and a `keyof`
+  // all bind looser than `[]`; a generic reference does not.
+  for (const [inner, parenthesized] of [
+    ['A | B', '(A | B)'],
+    ['A & B', '(A & B)'],
+    ['keyof A', '(keyof A)'],
+    ['A extends B ? C : D', '(A extends B ? C : D)'],
+    ['Map<A, B>', 'Map<A, B>'],
+  ]) {
+    const reactSnap = `
+export function useSample(...origins: readonly ${parenthesized}[]): FontResolver;
 export interface FontResolver {}
 `;
-  const restUnionDrift = `
-export function useSample(...origins: readonly MaybeRefOrGetter<A | B>[]): FontResolver;
-export interface A {}
-export interface B {}
+    const vueSnap = `
+export function useSample(...origins: readonly MaybeRefOrGetter<${inner}>[]): FontResolver;
 export interface FontResolver {}
 `;
-  ({ issues } = runComposableParityCheck({ reactSnap: restUnion, vueSnap: restUnionDrift }));
-  if (issues.length !== 0) {
-    console.error('Self-test FAIL: compound wrapped rest parameter should keep its parens');
-    for (const i of issues) console.error(`  - ${i}`);
-    process.exit(1);
+    ({ issues } = runComposableParityCheck({ reactSnap, vueSnap }));
+    if (issues.length !== 0) {
+      console.error(`Self-test FAIL: wrapped rest parameter '${inner}' should normalize`);
+      for (const i of issues) console.error(`  - ${i}`);
+      process.exit(1);
+    }
   }
 
   const functionReturn = `

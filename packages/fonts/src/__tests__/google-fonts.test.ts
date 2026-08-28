@@ -438,6 +438,14 @@ describe('googleFonts resolver', () => {
     expect(first.sources.map((source) => source.id)).toEqual(second.sources.map((s) => s.id));
   });
 
+  const FOUR_FACES = [
+    { weight: 400, style: 'normal' as const },
+    { weight: 700, style: 'normal' as const },
+    { weight: 400, style: 'italic' as const },
+    { weight: 700, style: 'italic' as const },
+  ];
+  const allFacesOf = (family: string) => FOUR_FACES.map((face) => ({ family, ...face }));
+
   test('never asks the CDN for a WORD name an earlier origin already substituted for', async () => {
     const { fetcher, requested } = fakeFetcher();
     // Only the document's own name is reported, which is what `packagedFonts()` covering
@@ -445,7 +453,7 @@ describe('googleFonts resolver', () => {
     const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
       families: ['Cousine'],
       defaultFamily: 'Calibri',
-      resolvedFamilies: ['calibri'],
+      resolvedFaces: allFacesOf('calibri'),
     });
 
     expect(requested.some((url) => url.includes('Carlito'))).toBe(false);
@@ -463,7 +471,7 @@ describe('googleFonts resolver', () => {
     const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
       families: ['Cousine'],
       defaultFamily: 'Calibri',
-      resolvedFamilies: ['Carlito'],
+      resolvedFaces: allFacesOf('Carlito'),
     });
 
     expect(requested.every((url) => url.includes('Cousine'))).toBe(true);
@@ -471,5 +479,20 @@ describe('googleFonts resolver', () => {
     expect(new Set(fragment.sources.map((source) => source.request.family))).toEqual(
       new Set(['Cousine'])
     );
+  });
+
+  test('a PARTLY covered family is fetched whole, so no face is left without bytes', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    // Regular Carlito only. Reading that as "Calibri is covered" left bold and the italics
+    // with neither bytes nor a substitution.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: [],
+      defaultFamily: 'Calibri',
+      resolvedFaces: [{ family: 'Carlito', weight: 400, style: 'normal' }],
+    });
+
+    expect(requested.every((url) => url.includes('Carlito'))).toBe(true);
+    expect(requested).toHaveLength(4);
+    expect(fragment.substitutions).toHaveLength(4);
   });
 });

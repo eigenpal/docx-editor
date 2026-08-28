@@ -701,7 +701,7 @@ export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
 };
 
 // @public
-export function defineFontResolver<T extends FontResolver>(resolve: T): T;
+export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
 
 // @public
 export interface DocAnchor {
@@ -1777,6 +1777,12 @@ export interface Extent {
 }
 
 // @public
+export const FONT_RESOLVER_BRAND: unique symbol;
+
+// @public
+export const FONT_RESOLVER_MARK_KEY = "docx-editor.dev/font-resolver";
+
+// @public
 export interface FontConfiguration {
     // (undocumented)
     readonly defaultFont: {
@@ -1861,17 +1867,22 @@ export interface FontMeasurementState {
 }
 
 // @public
-export type FontOrigin = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+export type FontOrigin = FontConfiguration | FontConfigurationFragment | MarkedFontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
 
 // @public
 export interface FontResolutionRequest {
     readonly defaultFamily: string;
     readonly families: readonly string[];
-    readonly resolvedFamilies?: readonly string[];
+    readonly resolvedFaces?: readonly FontFaceRequest[];
 }
 
 // @public
 export type FontResolver = (request: FontResolutionRequest) => FontConfiguration | FontConfigurationFragment | undefined | Promise<FontConfiguration | FontConfigurationFragment | undefined>;
+
+// @public
+export interface FontResolverMark {
+    readonly 'docx-editor.dev/font-resolver': true;
+}
 
 // @public
 export interface FontSource {
@@ -2078,7 +2089,7 @@ export type InteractionOutcome<T> = {
 export type InteractionOutcomeCode = 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
 
 // @public
-export function isFontResolver(value: unknown): value is FontResolver;
+export function isFontResolver(value: unknown): value is MarkedFontResolver;
 
 // @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;
@@ -2099,6 +2110,9 @@ export interface LoadFontsResult extends FontConfigurationFragment {
     // (undocumented)
     readonly sources: readonly FontSource[];
 }
+
+// @public
+export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & FontResolverMark;
 
 // @public
 export type NoteKind = 'footnote' | 'endnote';
