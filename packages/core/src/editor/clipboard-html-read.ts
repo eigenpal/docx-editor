@@ -18,7 +18,6 @@ import { sanitizeHref, escapeXml, escapeXmlAttribute } from '../store/package/si
 import { sniffImageMime, validateRasterHeader } from '../store/package/image-resources.ts';
 import {
   htmlListKindAndStart,
-  numberingPartXml,
   semanticHtmlListKind,
   semanticHtmlListStart,
   type HtmlListAllocation as ListAllocation,
@@ -27,13 +26,12 @@ import {
 import { clipboardBookmarkName } from './clipboard-html-links.ts';
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import {
-  writeHtmlFragmentPackage,
+  writeProjectedHtmlPackage,
   type HtmlFragmentRel as RelEntry,
 } from './clipboard-html-package.ts';
 import {
   clipboardNoteDefinitions,
   clipboardNoteReference,
-  clipboardNotesPartXml,
   isClipboardNoteList,
   type ClipboardNoteKind,
 } from './clipboard-html-notes.ts';
@@ -93,13 +91,8 @@ const DEFAULT_MAX_NODES = 100_000;
 const DEFAULT_MAX_DEPTH = 64;
 const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
-const WML_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
-const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
-
 /** Whole elements that never contribute anything to the projection. */
 const IGNORED_TAGS = new Set(
   (
@@ -132,6 +125,7 @@ interface FlowContext {
   readonly pre: boolean;
   readonly list: ListState | null;
   readonly noteBody?: boolean;
+  readonly rels?: RelEntry[];
 }
 
 interface Projection {
@@ -150,6 +144,7 @@ interface Projection {
   nextBookmarkId: number;
   readonly classAlignments: ReadonlyMap<string, HtmlParagraphAlign>;
   readonly notes: Record<ClipboardNoteKind, Map<number, readonly string[]>>;
+  readonly noteRels: Record<ClipboardNoteKind, RelEntry[]>;
 }
 
 function clamp(value: number, low: number, high: number): number {
@@ -316,7 +311,7 @@ function decodeBase64(data: string, maxBytes: number): Uint8Array | null {
 const DATA_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|gif|emf);base64,([A-Za-z0-9+/=]+)$/i;
 
 /** Project a `data:` image into a media part + rel + inline `w:drawing` run. */
-function projectImage(element: Element, runs: string[], p: Projection): void {
+function projectImage(element: Element, runs: string[], p: Projection, rels: RelEntry[]): void {
   const src = element.getAttribute('src');
   if (src === null || src.length > p.maxImageBytes * 2) return;
   const match = DATA_IMAGE_RE.exec(src);
@@ -347,7 +342,13 @@ function projectImage(element: Element, runs: string[], p: Projection): void {
   p.imageCount += 1;
   p.media.set(`word/media/image${p.imageCount}.${extension}`, bytes);
   if (!p.mediaExtensions.has(extension)) p.mediaExtensions.set(extension, sniffed);
-  const relId = allocateRel(p, `${R_NS}/image`, `media/image${p.imageCount}.${extension}`, false);
+  const relId = allocateRel(
+    p,
+    `${R_NS}/image`,
+    `media/image${p.imageCount}.${extension}`,
+    false,
+    rels
+  );
   p.docPrId += 1;
   runs.push(
     '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
@@ -364,9 +365,15 @@ function projectImage(element: Element, runs: string[], p: Projection): void {
 
 // --- Allocation
 
-function allocateRel(p: Projection, type: string, target: string, external: boolean): string {
-  const id = `rId${p.rels.length + 1}`;
-  p.rels.push({ id, type, target, external });
+function allocateRel(
+  p: Projection,
+  type: string,
+  target: string,
+  external: boolean,
+  rels = p.rels
+): string {
+  const id = `rId${rels.length + 1}`;
+  rels.push({ id, type, target, external });
   return id;
 }
 
@@ -493,7 +500,7 @@ function collectInline(
     return;
   }
   if (tag === 'img') {
-    projectImage(node, runs, p);
+    projectImage(node, runs, p, ctx.rels ?? p.rels);
     return;
   }
   const nextCtx: FlowContext = {
@@ -506,7 +513,10 @@ function collectInline(
   if (node.getAttribute('dir')?.trim().toLowerCase() === 'rtl') nextCtx.run.rtl = true;
   const noteReference = tag === 'a' ? clipboardNoteReference(style) : null;
   if (noteReference !== null) {
-    if (!ctx.noteBody) {
+    if (ctx.noteBody) {
+      const localName = noteReference.kind === 'footnote' ? 'footnoteRef' : 'endnoteRef';
+      runs.push(`<w:r>${rPrXml(nextCtx.run)}<w:${localName}/></w:r>`);
+    } else {
       const localName =
         noteReference.kind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
       runs.push(`<w:r>${rPrXml(nextCtx.run)}<w:${localName} w:id="${noteReference.id}"/></w:r>`);
@@ -531,7 +541,7 @@ function collectInline(
     } else {
       const sanitized = href === null ? null : sanitizeHref(href);
       if (sanitized !== null && sanitized.ok && sanitized.href.length > 0) {
-        const relId = allocateRel(p, `${R_NS}/hyperlink`, sanitized.href, true);
+        const relId = allocateRel(p, `${R_NS}/hyperlink`, sanitized.href, true, ctx.rels ?? p.rels);
         content = `<w:hyperlink r:id="${relId}">${content}</w:hyperlink>`;
       }
     }
@@ -626,6 +636,8 @@ function projectParagraph(
     paragraphMarkCovered: styleId !== undefined,
     pre,
     list: ctx.list,
+    ...(ctx.noteBody ? { noteBody: true } : {}),
+    ...(ctx.rels ? { rels: ctx.rels } : {}),
   };
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true);
 }
@@ -851,6 +863,8 @@ function projectCell(
     paragraphMarkCovered: false,
     pre: false,
     list: null,
+    ...(ctx.noteBody ? { noteBody: true } : {}),
+    ...(ctx.rels ? { rels: ctx.rels } : {}),
   };
   const blocks: string[] = [];
   projectFlow(Array.from(cell.childNodes), depth + 2, cellCtx, p, blocks, true);
@@ -862,24 +876,12 @@ function projectCell(
 }
 
 function assembleFragment(p: Projection, blocks: readonly string[]): Uint8Array {
-  const hasNumbering = p.lists.size > 0;
-  if (hasNumbering) allocateRel(p, `${R_NS}/numbering`, 'numbering.xml', false);
-  for (const kind of ['footnote', 'endnote'] as const) {
-    if (p.notes[kind].size > 0) allocateRel(p, `${R_NS}/${kind}s`, `${kind}s.xml`, false);
-  }
-  const documentXml =
-    `${XML_DECL}<w:document xmlns:w="${WML_NS}" xmlns:r="${R_NS}" xmlns:wp="${WP_NS}" ` +
-    `xmlns:a="${A_NS}" xmlns:pic="${PIC_NS}"><w:body>${blocks.join('')}</w:body></w:document>`;
-  return writeHtmlFragmentPackage({
-    documentXml,
+  return writeProjectedHtmlPackage({
+    blocks,
     rels: p.rels,
-    ...(hasNumbering ? { numberingXml: numberingPartXml([...p.lists.values()]) } : {}),
-    ...(p.notes.footnote.size > 0
-      ? { footnotesXml: clipboardNotesPartXml('footnote', p.notes.footnote) }
-      : {}),
-    ...(p.notes.endnote.size > 0
-      ? { endnotesXml: clipboardNotesPartXml('endnote', p.notes.endnote) }
-      : {}),
+    lists: [...p.lists.values()],
+    notes: p.notes,
+    noteRels: p.noteRels,
     media: p.media,
     mediaExtensions: p.mediaExtensions,
   });
@@ -929,6 +931,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     nextBookmarkId: 1,
     classAlignments: wordClassAlignmentsFromDocument(parsed),
     notes: { footnote: new Map(), endnote: new Map() },
+    noteRels: { footnote: [], endnote: [] },
   };
   const blocks: string[] = [];
   const rootCtx: FlowContext = {
@@ -945,7 +948,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     projectFlow(
       Array.from(note.element.childNodes),
       0,
-      { ...rootCtx, noteBody: true },
+      { ...rootCtx, noteBody: true, rels: projection.noteRels[note.kind] },
       projection,
       noteBlocks,
       true

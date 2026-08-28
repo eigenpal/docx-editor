@@ -615,7 +615,8 @@ describe('notes', () => {
         '<a style="mso-endnote-id:edn2" href="#_edn2">[i]</a>.</p>' +
         '<div style="mso-element:footnote-list">' +
         '<div style="mso-element:footnote" id="ftn1"><p>' +
-        '<a style="mso-footnote-id:ftn1" href="#_ftnref1">[1]</a>Source note.</p></div></div>' +
+        '<a style="mso-footnote-id:ftn1" href="#_ftnref1">[1]</a>' +
+        '<a href="https://notes.example/source">Source note.</a></p></div></div>' +
         '<div style="mso-element:endnote-list">' +
         '<div style="mso-element:endnote" id="edn2"><p>' +
         '<a style="mso-endnote-id:edn2" href="#_ednref2">[i]</a>End note.</p></div></div>'
@@ -629,11 +630,18 @@ describe('notes', () => {
     const footnotes = strFromU8(pkg.partBytes.get('/word/footnotes.xml')!);
     const endnotes = strFromU8(pkg.partBytes.get('/word/endnotes.xml')!);
     expect(footnotes).toContain('<w:footnote w:id="1">');
+    expect(footnotes).toContain('<w:footnoteRef/>');
+    expect(footnotes).not.toContain('<w:footnoteReference ');
     expect(footnotes).toContain('Source note.');
     expect(footnotes).not.toContain('[1]');
     expect(endnotes).toContain('<w:endnote w:id="2">');
+    expect(endnotes).toContain('<w:endnoteRef/>');
+    expect(endnotes).not.toContain('<w:endnoteReference ');
     expect(endnotes).toContain('End note.');
     expect(endnotes).not.toContain('[i]');
+    expect(relsXml).not.toContain('notes.example');
+    const footnoteRels = strFromU8(pkg.partBytes.get('/word/_rels/footnotes.xml.rels')!);
+    expect(footnoteRels).toContain('https://notes.example/source');
   });
 });
 

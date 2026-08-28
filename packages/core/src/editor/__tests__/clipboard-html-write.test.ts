@@ -216,7 +216,9 @@ describe('interopHtmlFromFragment', () => {
       fragment({
         body:
           '<w:tbl>' +
-          '<w:tblPr><w:tblW w:w="4320" w:type="dxa"/><w:jc w:val="center"/></w:tblPr>' +
+          '<w:tblPr><w:tblW w:w="4320" w:type="dxa"/><w:jc w:val="center"/>' +
+          '<w:tblBorders><w:bottom w:val="single" w:color="112233"/>' +
+          '<w:insideH w:val="dotted" w:color="445566"/></w:tblBorders></w:tblPr>' +
           `<w:tr><w:trPr><w:trHeight w:val="360" w:hRule="exact"/></w:trPr>${cell('<w:gridSpan w:val="999"/>', 'head')}</w:tr>` +
           `<w:tr>${cell('<w:vMerge w:val="restart"/><w:shd w:val="clear" w:fill="DDEEFF"/>', 'merged')}${cell('<w:vAlign w:val="center"/>', 'b1')}</w:tr>` +
           `<w:tr>${cell('<w:vMerge/>', '')}${cell('<w:tcW w:w="2400" w:type="dxa"/><w:tcMar><w:left w:w="120" w:type="dxa"/></w:tcMar>', 'b2')}</w:tr>` +
@@ -224,11 +226,12 @@ describe('interopHtmlFromFragment', () => {
       })
     );
     expect(html).toContain(
-      '<table style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto">'
+      '<table style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto;'
     );
     expect(html).toContain('<tr style="height:18pt;mso-height-rule:exactly">');
     expect(html).toContain('colspan="63"');
     expect(html).toContain('rowspan="2"');
+    expect(html).toMatch(/rowspan="2" style="[^"]*border-bottom:1pt solid #112233/);
     expect(html).toContain('background-color:#ddeeff');
     expect(html).toContain('vertical-align:middle');
     expect(html).toContain('width:120pt');

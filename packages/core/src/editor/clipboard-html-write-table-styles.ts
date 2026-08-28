@@ -39,6 +39,7 @@ export function wordTableCellCss(
   tblBorders: OoxmlElement | null,
   rowIndex: number,
   rowCount: number,
+  rowSpan: number,
   cellIndex: number,
   cellCount: number
 ): string {
@@ -46,7 +47,7 @@ export function wordTableCellCss(
   const tcBorders = wmlChild(tcPr, 'tcBorders');
   const tableEdges = {
     top: rowIndex === 0 ? 'top' : 'insideH',
-    bottom: rowIndex === rowCount - 1 ? 'bottom' : 'insideH',
+    bottom: rowIndex + rowSpan >= rowCount ? 'bottom' : 'insideH',
     left: cellIndex === 0 ? 'left' : 'insideV',
     right: cellIndex === cellCount - 1 ? 'right' : 'insideV',
   } as const;

@@ -836,6 +836,7 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
         tblBorders,
         rowIndex,
         placements.length,
+        rowSpan,
         cellIndex,
         rowCells.length
       );
