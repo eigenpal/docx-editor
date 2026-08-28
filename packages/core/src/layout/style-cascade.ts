@@ -781,8 +781,8 @@ export function cascadedBottomBorder(
  * hierarchy, and the levels below the character style resolve to more than a true or a false:
  * whether the document defaults' short circuit is still standing decides what the character
  * style's own toggle does next, and no single `w:b` element can spell that. The paragraph
- * cascade attaches that state to the array it returns, so spreading, filtering, sorting or
- * freezing the list drops it. A list without it is read as one ordinary level, which is the
+ * cascade attaches that state to the array it returns, so spreading, filtering or sorting the
+ * list drops it. (`Object.freeze` returns the same object, so that one is safe.) A list without it is read as one ordinary level, which is the
  * most a bare property list can say and is what a caller assembling its own list gets.
  */
 export function cascadeRunProperties(
@@ -804,10 +804,14 @@ export function cascadeRunProperties(
   if (inheritedRunProperties.length === 0 && characterProps.length === 0) {
     return directRunProperties;
   }
-  // Nothing to combine and nothing to append: hand back the SAME array. Layout keys and
-  // span merging compare inherited property lists by identity, and rebuilding one for the
-  // overwhelming majority of runs — no character style, no direct `w:rPr` — cost a fresh
-  // allocation and a lost cache hit per run.
+  // Nothing to combine and nothing to append: hand back the SAME array. This is the path the
+  // overwhelming majority of runs take — no character style, no direct `w:rPr` — and copying
+  // there is a fresh array per run for no change in content.
+  //
+  // The identity of the INPUT is separately load-bearing: it is what carries the resolved
+  // toggle state (see the note on this function), so handing back a copy would also drop
+  // that. Paragraph layout keys are content-based (`propertiesToken` joins the properties),
+  // so a copy would not miss a cache entry — only allocate one.
   if (characterProps.length === 0 && directRunProperties.length === 0) {
     return inheritedRunProperties;
   }

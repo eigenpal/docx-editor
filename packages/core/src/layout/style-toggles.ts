@@ -34,9 +34,10 @@
 //   and the behaviour has not been checked against Word. Those two cases follow the spec and
 //   nothing else.
 //
-//   `off` has NO spec support. §17.7.3's algorithm ends "(if no value is encountered, the
-//   property takes on its default value)", which is false, and `false XOR x` is `x`, so read
-//   literally an explicit `w:val="0"` at a level is a no-op. It is not treated as one here,
+//   `off` has NO spec support. §17.7.3 introduces the per-level algorithm with the aside
+//   "(if no value is encountered, the property takes on its default value)" — false, per
+//   §17.3.2.1 — and `false XOR x` is `x`, so read literally an explicit `w:val="0"` at a
+//   level is a no-op. It is not treated as one here,
 //   because every implementation says otherwise: LibreOffice renders `docDefaults <w:b/>` +
 //   character `<w:b w:val="0"/>` as regular, this engine did the same before the cascade
 //   existed, and Word's own authoring corroborates the split — a "Not Bold" character style
@@ -119,9 +120,14 @@ export interface StyleToggleLevel {
   /**
    * Whether this level's NON-toggle properties join the result.
    *
-   * The document defaults contribute their ordinary properties once, in the paragraph
-   * cascade. The run cascade re-reads them for their toggle values alone, because its
-   * inherited level already carries the ordinary ones.
+   * SIZE, not correctness. The one `emit: false` producer is the run cascade's document
+   * defaults level, and every ordinary property it holds is already in the carried level that
+   * follows it — so emitting them anyway would resolve to the same values under last-wins.
+   * What it would not do is stay the same LENGTH: `w:rFonts`, `w:sz`, `w:color` and `w:lang`
+   * are in nearly every `docDefaults`, and this runs once per run of the document, so the
+   * duplicates are a per-run allocation and a longer list for every consumer downstream to
+   * walk. A result with no duplicate ordinary properties in it is the contract, and
+   * `style-toggles.test.ts` asserts exactly that.
    */
   readonly emit: boolean;
 }

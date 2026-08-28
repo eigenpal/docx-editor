@@ -386,6 +386,78 @@ describe('toggle properties combine across the levels of the style hierarchy', (
       expect(markBoldOf('<w:sz w:val="24"/>')).toBe(true);
     });
 
+    test('direct formatting also takes the document defaults short circuit down with it', () => {
+      // The other half of "absolute": a mark `w:rPr` does not just SET the value, it ends the
+      // defaults' claim on it. Leaving the short circuit standing would make the numbering
+      // level below resolve the marker bold — the `on` would be forced true instead of
+      // reversing the mark's own value.
+      const styles =
+        `<w:docDefaults><w:rPrDefault><w:rPr><w:b/></w:rPr></w:rPrDefault></w:docDefaults>` +
+        `<w:style w:type="paragraph" w:styleId="Para"><w:rPr><w:sz w:val="24"/></w:rPr>` +
+        `</w:style>` +
+        `<w:style w:type="character" w:styleId="Chr"><w:rPr><w:b/></w:rPr></w:style>`;
+      const table = buildStyleCascadeTable(loadStyles(styles));
+      const cascaded = cascadeParagraphFormatting(
+        table,
+        paragraphPPr(
+          `<w:p><w:pPr><w:pStyle w:val="Para"/><w:rPr><w:b/></w:rPr></w:pPr>` +
+            `<w:r><w:t>x</w:t></w:r></w:p>`
+        )
+      );
+      const rStyle = [{ localName: 'rStyle', attributes: { val: 'Chr' } }];
+      // The mark stated `on` directly, so the character level's `on` REVERSES it to regular.
+      expect(
+        resolveRunStyle(cascadeRunProperties(cascaded.markRunProperties, rStyle, table)).bold
+      ).toBe(false);
+      // The paragraph text never met direct formatting, so the defaults still force it true
+      // and the same character level cannot reverse it. Two different answers from one
+      // document is the point: they prove the mark's `forced` was cleared and the text's was
+      // not.
+      expect(
+        resolveRunStyle(cascadeRunProperties(cascaded.runProperties, rStyle, table)).bold
+      ).toBe(true);
+    });
+
+    test('the run cascade does not re-emit the document defaults it already inherited', () => {
+      // The defaults level is listed in the run cascade for its TOGGLE values only; the
+      // carried level already holds every ordinary property it has. Emitting them again
+      // resolves to the same values under last-wins, so nothing renders differently — the
+      // list just grows, once per run of the document, for every consumer to walk.
+      const styles =
+        `<w:docDefaults><w:rPrDefault><w:rPr><w:b/>` +
+        `<w:rFonts w:ascii="Calibri"/><w:sz w:val="22"/><w:color w:val="222222"/>` +
+        `</w:rPr></w:rPrDefault></w:docDefaults>` +
+        `<w:style w:type="paragraph" w:styleId="Para"><w:rPr><w:i/></w:rPr></w:style>` +
+        `<w:style w:type="character" w:styleId="Chr"><w:rPr><w:u w:val="single"/></w:rPr>` +
+        `</w:style>`;
+      const table = buildStyleCascadeTable(loadStyles(styles));
+      const inherited = cascadeParagraphFormatting(
+        table,
+        paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Para"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+      ).runProperties;
+      const combined = cascadeRunProperties(
+        inherited,
+        [{ localName: 'rStyle', attributes: { val: 'Chr' } }],
+        table
+      );
+      const counts = new Map<string, number>();
+      for (const property of combined) {
+        counts.set(property.localName, (counts.get(property.localName) ?? 0) + 1);
+      }
+      // The defaults' ordinary properties appear ONCE each, from the carried level.
+      for (const localName of ['rFonts', 'sz', 'color']) {
+        expect([localName, counts.get(localName)]).toEqual([localName, 1]);
+      }
+      // Not because they were dropped: they are still there and still resolve.
+      const resolved = resolveRunStyle(combined);
+      expect(resolved.fontFamily).toBe('Calibri');
+      expect(resolved.fontSizePt).toBe(11);
+      expect(resolved.color).toBe('222222');
+      // And the defaults' TOGGLE still reached the combination, which is why the level is
+      // listed at all — the character style's `w:u` is not a toggle and cannot stand in.
+      expect(resolved.bold).toBe(true);
+    });
+
     test('a note mark resolved from a character style alone gets NO document defaults', () => {
       // `note-pagination.ts` passes an empty inherited list on purpose: a footnote reference
       // mark is resolved from its character style and nothing else. Listing the document
