@@ -60,10 +60,7 @@ export const DocxEditorContent = defineComponent({
       // STAND DOWN whenever the ENGINE will land content from the payload — see the
       // predicate's contract in core. Word on macOS ships a rendered PNG beside copied
       // text. Mirrors the React adapter exactly.
-      const canRead = typeof items.getData === 'function';
-      const html = canRead ? (items.getData('text/html') ?? '') : '';
-      const text = canRead ? (items.getData('text/plain') ?? '') : '';
-      if (clipboardPasteLandsContent(html, text)) return;
+      if (clipboardPasteLandsContent(items)) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(items);
     };
@@ -82,11 +79,10 @@ export const DocxEditorContent = defineComponent({
       if (!transfer) return;
       if (!hasImageFile(transfer)) return;
       // Same stand-down as paste, for the drop lane's plain-text-only reality: when the
-      // payload carries visible text, NOT preventing the default lets the browser fire
-      // `insertFromDrop`, which is the engine's only drop path. Mirrors the React adapter.
-      const html = transfer.getData('text/html') ?? '';
-      const text = transfer.getData('text/plain') ?? '';
-      if (clipboardDropLandsText(html, text)) return;
+      // payload carries visible HTML text, NOT preventing the default lets the browser
+      // fire `insertFromDrop`, which is the engine's only drop path. Mirrors the React
+      // adapter.
+      if (clipboardDropLandsText(transfer)) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(transfer);
     };

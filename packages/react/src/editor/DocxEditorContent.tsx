@@ -67,10 +67,7 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       // beside the HTML; taking this file lane for it inserted that rendering on top of
       // the text. (`defaultPrevented` says nothing — the engine prevents every paste,
       // even ones it ignores.)
-      const canRead = typeof items.getData === 'function';
-      const html = canRead ? (items.getData('text/html') ?? '') : '';
-      const text = canRead ? (items.getData('text/plain') ?? '') : '';
-      if (clipboardPasteLandsContent(html, text)) return;
+      if (clipboardPasteLandsContent(items)) return;
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(items);
     },
@@ -90,13 +87,11 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       if (!imageInsert?.isEnabled) return;
       if (!hasImageFile(event.dataTransfer)) return;
       // Same stand-down as paste, for the drop lane's plain-text-only reality: when the
-      // payload carries visible text, NOT preventing the default lets the browser fire
-      // `insertFromDrop`, which is the engine's only drop path. Word on macOS drags carry
-      // a rendered PNG beside the text; taking the file lane swallowed that event and
-      // turned dropped text into a picture of it.
-      const html = event.dataTransfer.getData('text/html') ?? '';
-      const text = event.dataTransfer.getData('text/plain') ?? '';
-      if (clipboardDropLandsText(html, text)) return;
+      // payload carries visible HTML text, NOT preventing the default lets the browser
+      // fire `insertFromDrop`, which is the engine's only drop path. Word on macOS drags
+      // carry a rendered PNG beside the text; taking the file lane swallowed that event
+      // and turned dropped text into a picture of it.
+      if (clipboardDropLandsText(event.dataTransfer)) return;
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(event.dataTransfer);
     },

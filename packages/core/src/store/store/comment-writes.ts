@@ -18,7 +18,12 @@ import {
   withRelationshipsPartFor,
 } from '../package/package-edit.ts';
 import { withPart, type OoxmlPackage } from '../package/ooxml-package.ts';
-import { insertChildren, findNode, replaceNode } from '../package/ooxml-edit.ts';
+import {
+  carryIndexToRebuiltRoot,
+  insertChildren,
+  findNode,
+  replaceNode,
+} from '../package/ooxml-edit.ts';
 import { relativeTarget } from '../package/custom-xml-part.ts';
 import { resolveInternalTarget } from '../package/opc-names.ts';
 import {
@@ -342,7 +347,11 @@ function withW14Binding(part: OoxmlPart): { part: OoxmlPart; prefix: string } {
   // Spreading a new root left the peer's comments part without `w14`, so `w14:paraId`
   // failed `invalid-qname` and the remote package was refused — markers never landed.
   const replaced = replaceNode(part, part.root.id, bound, { deferValidation: true });
-  return { part: replaced.ok ? replaced.part : { ...part, root: bound }, prefix: 'w14' };
+  if (replaced.ok) return { part: replaced.part, prefix: 'w14' };
+  // The direct-spread fallback rebuilds the root outside the edit primitives, so it must
+  // carry the index itself — see the invariant on `carryIndexToRebuiltRoot`.
+  carryIndexToRebuiltRoot(part.root, bound);
+  return { part: { ...part, root: bound }, prefix: 'w14' };
 }
 
 /**

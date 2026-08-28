@@ -21,6 +21,10 @@ import {
   type SupportedImageMime,
 } from '../store/package/image-resources.ts';
 import { writeZip, strToU8 } from '../store/package/zip.ts';
+import {
+  numberingPartXml,
+  type HtmlListAllocation as ListAllocation,
+} from './clipboard-html-numbering.ts';
 
 export interface HtmlProjectionLimits {
   /** UTF-8 size cap applied BEFORE parse. Default 4 MiB. */
@@ -40,6 +44,8 @@ export type HtmlProjectionResult =
       readonly fragmentBytes: Uint8Array;
       /** Always false: the last projected paragraph merges into the host paragraph. */
       readonly lastMarkCovered: boolean;
+      /** How many `data:` images the projection accepted into the fragment. */
+      readonly imageCount: number;
     }
   | { readonly ok: false; readonly reason: 'too-large' | 'no-content' | 'parse-unavailable' };
 
@@ -117,7 +123,7 @@ interface ParaProps {
 }
 
 type ListState = { readonly numId: string; readonly level: number };
-type ListAllocation = { readonly numId: string; readonly kind: 'ordered' | 'bullet' };
+
 type RelEntry = {
   readonly id: string;
   readonly type: string;
@@ -845,56 +851,6 @@ function projectCell(
   return `<w:tc><w:tcPr>${tcPr}</w:tcPr>${blocks.join('')}</w:tc>`;
 }
 
-// --- Numbering part
-
-// Symbol-font codepoints Word writes (private-use range), as escapes so they are not
-// invisible literals in the source; see store/package/numbering-part.ts.
-const BULLET_LEVELS = [
-  { text: '\uF0B7', font: 'Symbol' },
-  { text: 'o', font: 'Courier New' },
-  { text: '\uF0A7', font: 'Wingdings' },
-] as const;
-
-/** One `w:lvl` in strict CT_Lvl order: start, numFmt, lvlText, lvlJc, pPr, rPr. */
-function levelXml(kind: 'ordered' | 'bullet', ilvl: number): string {
-  const left = 720 * (ilvl + 1);
-  const indent = `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>`;
-  if (kind === 'bullet') {
-    const bullet = BULLET_LEVELS[ilvl % BULLET_LEVELS.length]!;
-    return (
-      `<w:lvl w:ilvl="${ilvl}"><w:start w:val="1"/><w:numFmt w:val="bullet"/>` +
-      `<w:lvlText w:val="${escapeXmlAttribute(bullet.text)}"/><w:lvlJc w:val="left"/>${indent}` +
-      `<w:rPr><w:rFonts w:ascii="${bullet.font}" w:hAnsi="${bullet.font}" w:hint="default"/></w:rPr>` +
-      '</w:lvl>'
-    );
-  }
-  return (
-    `<w:lvl w:ilvl="${ilvl}"><w:start w:val="1"/><w:numFmt w:val="decimal"/>` +
-    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="left"/>${indent}</w:lvl>`
-  );
-}
-
-function numberingPartXml(allocations: readonly ListAllocation[]): string {
-  const abstracts = allocations
-    .map((allocation, index) => {
-      const levels = Array.from({ length: 9 }, (_, ilvl) => levelXml(allocation.kind, ilvl)).join(
-        ''
-      );
-      return (
-        `<w:abstractNum w:abstractNumId="${index}">` +
-        `<w:multiLevelType w:val="hybridMultilevel"/>${levels}</w:abstractNum>`
-      );
-    })
-    .join('');
-  const nums = allocations
-    .map(
-      (allocation, index) =>
-        `<w:num w:numId="${allocation.numId}"><w:abstractNumId w:val="${index}"/></w:num>`
-    )
-    .join('');
-  return `${XML_DECL}<w:numbering xmlns:w="${WML_NS}">${abstracts}${nums}</w:numbering>`;
-}
-
 // --- Zip assembly (entry names mirror the internal fragment extractor)
 
 function relationshipXml(rels: readonly RelEntry[]): string {
@@ -995,5 +951,10 @@ export function projectExternalHtml(
   const rootCtx: FlowContext = { run: {}, para: {}, pre: false, list: null };
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
   if (blocks.length === 0) return { ok: false, reason: 'no-content' };
-  return { ok: true, fragmentBytes: assembleFragment(projection, blocks), lastMarkCovered: false };
+  return {
+    ok: true,
+    fragmentBytes: assembleFragment(projection, blocks),
+    lastMarkCovered: false,
+    imageCount: projection.imageCount,
+  };
 }

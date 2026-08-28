@@ -9,12 +9,11 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import {
-  clipboardDropLandsText,
-  clipboardPasteLandsContent,
   insertableText,
   plainTextFromHtml,
   plainTextFromTransfer,
 } from '../clipboard-plain-text.ts';
+import { clipboardDropLandsText, clipboardPasteLandsContent } from '../clipboard-file-lane.ts';
 import { isValidXmlText } from '../../store/package/sinks.ts';
 import { createClipboardHandlers } from '../surface-input.ts';
 import type { PaginatedSurface } from '../paginated-surface-contract.ts';
@@ -265,57 +264,126 @@ describe('the visible text of an HTML fragment', () => {
 });
 
 describe('clipboardPasteLandsContent — the image-file stand-down predicate for adapters', () => {
+  // A real 1x1 PNG: the projection sniffs magic bytes, so only a genuine image reads as
+  // one the engine lands.
+  const REAL_PNG =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
   test('a Word-for-Mac text copy (HTML with text, PNG file beside it) stands the file lane down', () => {
     const wordHtml =
       '<html xmlns:o="urn:schemas-microsoft-com:office:office"><head>' +
       '<meta name=ProgId content=Word.Document><style>p.MsoNormal{margin:0}</style></head>' +
       '<body><!--StartFragment--><p class=MsoNormal align=center><b>' +
       '<span style="font-size:26.0pt">DOCX TITLE</span></b></p><!--EndFragment--></body></html>';
-    expect(clipboardPasteLandsContent(wordHtml, 'DOCX TITLE')).toBe(true);
+    const payload = transfer({ 'text/html': wordHtml, 'text/plain': 'DOCX TITLE' });
+    expect(clipboardPasteLandsContent(payload)).toBe(true);
   });
 
-  test('an embedded fragment or a landable data: image lands through the engine', () => {
-    expect(clipboardPasteLandsContent('<div data-docx-fragment="AAAA"></div>', '')).toBe(true);
-    expect(clipboardPasteLandsContent('<img src="data:image/png;base64,AAAA">', '')).toBe(true);
+  test('an embedded fragment or a projectable data: image lands through the engine', () => {
+    expect(
+      clipboardPasteLandsContent(transfer({ 'text/html': '<div data-docx-fragment="AAAA"></div>' }))
+    ).toBe(true);
+    expect(
+      clipboardPasteLandsContent(
+        transfer({ 'text/html': `<img src="data:image/png;base64,${REAL_PNG}">` })
+      )
+    ).toBe(true);
   });
 
   test('a data: image the projection refuses keeps the file lane', () => {
-    // `data:image/webp` is not in the projection's accepted set; standing down for it
-    // dropped the real PNG file AND landed nothing — a dead paste gesture.
-    expect(clipboardPasteLandsContent('<img src="data:image/webp;base64,AAAA">', '')).toBe(false);
+    // Standing down for a payload the engine then refuses dropped the real PNG file AND
+    // landed nothing — a dead paste gesture. The predicate asks the projection itself.
+    expect(
+      clipboardPasteLandsContent(
+        transfer({ 'text/html': '<img src="data:image/webp;base64,AAAA">' })
+      )
+    ).toBe(false);
+    // Claims png, but the bytes are not a PNG: the magic-byte sniff refuses it.
+    expect(
+      clipboardPasteLandsContent(
+        transfer({ 'text/html': '<img src="data:image/png;base64,AAAA">' })
+      )
+    ).toBe(false);
+  });
+
+  test('a malformed fragment attribute keeps the file lane', () => {
+    expect(
+      clipboardPasteLandsContent(transfer({ 'text/html': '<span data-docx-fragment=""></span>' }))
+    ).toBe(false);
   });
 
   test('a browser copy-image payload and a bare screenshot keep the file lane', () => {
-    expect(clipboardPasteLandsContent('<img src="https://example.com/x.png">', '')).toBe(false);
-    expect(clipboardPasteLandsContent('', '')).toBe(false);
+    expect(
+      clipboardPasteLandsContent(transfer({ 'text/html': '<img src="https://example.com/x.png">' }))
+    ).toBe(false);
+    expect(clipboardPasteLandsContent(transfer({}))).toBe(false);
+    expect(clipboardPasteLandsContent(null)).toBe(false);
   });
 
-  test('invisible-only text does not count as content', () => {
-    // Zero-width wrappers around an external image (Slack/Notion-style markup) must not
-    // read as "the engine lands text" — it would land one invisible character.
-    expect(clipboardPasteLandsContent('<span>\u200b<img src="https://x/y.png"></span>', '')).toBe(
-      false
-    );
-    expect(clipboardPasteLandsContent('<p>&nbsp;</p>', '')).toBe(false);
+  test('a page title around a copied image does not count as content', () => {
+    // A full-document copy-image flavour carries a <title> no reader ever saw. Counting
+    // it stood the file lane down and pasted the word instead of the image.
+    const html =
+      '<html><head><title>Photos</title></head><body><img src="https://cdn/x.png"></body></html>';
+    expect(clipboardPasteLandsContent(transfer({ 'text/html': html }))).toBe(false);
+  });
+
+  test('invisible-only text does not stand the file lane down', () => {
+    // Zero-width wrappers around an external image (Slack/Notion-style markup), or a bare
+    // newline in text/plain. The engine may still land those invisible characters beside
+    // the file — the predicate deliberately values the image over suppressing them.
+    expect(
+      clipboardPasteLandsContent(
+        transfer({ 'text/html': '<span>\u200b<img src="https://x/y.png"></span>' })
+      )
+    ).toBe(false);
+    expect(clipboardPasteLandsContent(transfer({ 'text/html': '<p>&nbsp;</p>' }))).toBe(false);
+    expect(clipboardPasteLandsContent(transfer({ 'text/plain': '\u200b \n' }))).toBe(false);
   });
 
   test('a payload with no HTML stands down on visible plain text', () => {
     // text/plain + image file and no text/html: the engine's plain lane inserts the text,
     // so the file is Word's duplicate rendering.
-    expect(clipboardPasteLandsContent('', 'plain words')).toBe(true);
-    expect(clipboardPasteLandsContent('', '\u200b \n')).toBe(false);
+    expect(clipboardPasteLandsContent(transfer({ 'text/plain': 'plain words' }))).toBe(true);
+  });
+
+  test('visible text/plain wins even when the HTML flavour carries none', () => {
+    // A caption or URL beside a text-free HTML flavour: the plain lane lands it whatever
+    // the rich lanes do, so the file would be a second insertion.
+    const payload = transfer({
+      'text/html': '<img src="data:image/webp;base64,AAAA">',
+      'text/plain': 'a caption',
+    });
+    expect(clipboardPasteLandsContent(payload)).toBe(true);
   });
 });
 
 describe('clipboardDropLandsText — the image-file drop-lane stand-down', () => {
-  test('a dropped text selection stands the file lane down, either flavour', () => {
-    expect(clipboardDropLandsText('', 'dropped words')).toBe(true);
-    expect(clipboardDropLandsText('<p>dropped words</p>', '')).toBe(true);
+  test('a dropped text selection stands the file lane down', () => {
+    expect(
+      clipboardDropLandsText(
+        transfer({ 'text/html': '<p>dropped words</p>', 'text/plain': 'dropped words' })
+      )
+    ).toBe(true);
+  });
+
+  test('an image-file drag that mirrors its path into text/plain keeps the file lane', () => {
+    // Safari image drags and file managers put the path or URL in text/plain; the payload
+    // is still an IMAGE drag, so text/plain must not stand the file lane down.
+    expect(clipboardDropLandsText(transfer({ 'text/plain': 'file:///Users/a/photo.png' }))).toBe(
+      false
+    );
+    expect(
+      clipboardDropLandsText(
+        transfer({ 'text/plain': 'https://x/y.png', 'text/html': '<img src="https://x/y.png">' })
+      )
+    ).toBe(false);
   });
 
   test('fragments and data: images do NOT land from a drop, so they keep the file lane', () => {
-    // The drop lane is plain text only; only visible text stands the file lane down.
-    expect(clipboardDropLandsText('<div data-docx-fragment="AAAA"></div>', '')).toBe(false);
-    expect(clipboardDropLandsText('<img src="data:image/png;base64,AAAA">', '')).toBe(false);
+    // The drop lane is plain text only; only visible HTML text stands the file lane down.
+    expect(
+      clipboardDropLandsText(transfer({ 'text/html': '<div data-docx-fragment="AAAA"></div>' }))
+    ).toBe(false);
   });
 });

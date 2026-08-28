@@ -58,8 +58,13 @@ function decodeEntities(text: string): string {
   });
 }
 
-/** Tags whose CONTENT is source, not visible text: the whole element is dropped. */
-const RAW_TEXT_TAGS = new Set(['script', 'style']);
+/**
+ * Tags whose CONTENT is never visible text: the whole element is dropped. `title` and
+ * `template` join `script`/`style` because a full-document clipboard flavour (a browser's
+ * "copy image", say) carries a page title no reader ever saw — pasting it inserted the
+ * word instead of nothing, and made the payload read as text-bearing to the paste lanes.
+ */
+const RAW_TEXT_TAGS = new Set(['script', 'style', 'title', 'template']);
 /** Close tags that end a block, so what follows starts a new line. */
 const BLOCK_TAGS = new Set([
   'p',
@@ -322,67 +327,23 @@ export function insertableText(text: string): string {
  */
 const VISIBLE_CHAR = /[^\s\u200B-\u200D\u2060\uFEFF\u00AD]/;
 
-/**
- * A `data:` image the paste projection actually accepts — the same mime/base64 shape as
- * `DATA_IMAGE_RE` in clipboard-html-read.ts. A bare `data:image` substring also matched
- * webp/svg payloads the projection refuses, standing the file lane down for an image the
- * engine then dropped.
- */
-const LANDABLE_DATA_IMAGE = /\bdata:image\/(?:png|jpe?g|jpg|gif);base64,/;
+/** Whether the text holds at least one character the reader can see. */
+export function hasVisibleChar(text: string): boolean {
+  return VISIBLE_CHAR.test(text);
+}
 
-/** Early-exit visible-text scan: stops at the first visible character instead of
- * materializing the whole payload's text the way {@link plainTextFromHtml} does. */
-function htmlHasVisibleText(html: string): boolean {
+/**
+ * Early-exit visible-text scan: stops at the first visible character instead of
+ * materializing the whole payload's text the way {@link plainTextFromHtml} does. The two
+ * share {@link htmlTextPieces} and the same input cap, so they agree on WHERE text is —
+ * this one only answers sooner.
+ */
+export function htmlHasVisibleText(html: string): boolean {
   const bounded = html.length > MAX_HTML_INPUT ? html.slice(0, MAX_HTML_INPUT) : html;
   for (const piece of htmlTextPieces(bounded)) {
     if (VISIBLE_CHAR.test(decodeEntities(piece))) return true;
   }
   return false;
-}
-
-/**
- * True when the engine's PASTE router will land content from these clipboard flavours —
- * an embedded fragment, a `data:` image the projection accepts, visible HTML text, or
- * (with no HTML at all) visible plain text.
- *
- * This is the adapters' stand-down predicate for the image-FILE paste lane. Word on macOS
- * puts a rendered PNG of the copied TEXT on the pasteboard next to the HTML; a host that
- * inserts the file whenever one is present pastes that rendering ON TOP of the text the
- * engine lands. The file lane is only for payloads the engine ignores: a bare screenshot,
- * or a browser "copy image" whose HTML is a single external `<img>` the projection drops
- * by design.
- *
- * Known limits, on purpose: it cannot see the engine's own gating (suggesting mode, cell
- * selections, the force-plain window), and a payload mixing text with non-`data:` images
- * lands its text while the engine drops those images — text wins over a rendering that
- * would duplicate it.
- *
- * @public
- */
-export function clipboardPasteLandsContent(html: string, text: string): boolean {
-  if (html.length > 0) {
-    if (html.includes('data-docx-fragment="')) return true;
-    if (LANDABLE_DATA_IMAGE.test(html)) return true;
-    return htmlHasVisibleText(html);
-  }
-  // No HTML flavour at all: the plain lane inserts `text/plain` whenever it carries
-  // visible text, so an image file beside it is Word's duplicate rendering, not content.
-  return VISIBLE_CHAR.test(text);
-}
-
-/**
- * True when the engine's DROP lane will land text from these flavours.
- *
- * The drop lane is PLAIN TEXT only (see `createBeforeInputHandler`): fragments and `data:`
- * images never land from a drop, so only visible text — in either flavour, matching
- * {@link plainTextFromTransfer} — stands a host's image-file drop lane down. A host that
- * takes the file lane anyway swallows the browser's `insertFromDrop`, turning a dropped
- * text selection into a picture of that text.
- *
- * @public
- */
-export function clipboardDropLandsText(html: string, text: string): boolean {
-  return VISIBLE_CHAR.test(text) || htmlHasVisibleText(html);
 }
 
 /**

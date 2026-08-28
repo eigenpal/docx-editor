@@ -678,10 +678,10 @@ export function chromeSlotId(group: {
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean;
 
 // @public
-export function clipboardDropLandsText(html: string, text: string): boolean;
+export function clipboardDropLandsText(transfer: DataTransfer | null | undefined): boolean;
 
 // @public
-export function clipboardPasteLandsContent(html: string, text: string): boolean;
+export function clipboardPasteLandsContent(transfer: DataTransfer | null | undefined): boolean;
 
 // @public
 export interface CollaborationModuleContribution {
