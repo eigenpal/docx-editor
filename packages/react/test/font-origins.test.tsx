@@ -19,7 +19,8 @@ import { defineFontResolver, isFontResolver } from '@docx-editor.dev/core/editor
 import type { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import type { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { useDocxSource } from '../src/editor/useDocxSource.ts';
-import { useFonts } from '../src/editor/useFonts.ts';
+import { useFonts, type FontsInput } from '../src/editor/useFonts.ts';
+import type { FontResolver } from '@docx-editor.dev/core/editor';
 
 afterEach(cleanup);
 
@@ -203,6 +204,37 @@ describe('useDocxSource: the on-demand path cannot wait, and does not pretend to
   });
 });
 
+describe('useFonts keeps every call shape that compiled before the mark existed', () => {
+  // Compile-time half. `FontsInput` and the first argument both still take a BARE
+  // resolver: adding the mark narrowed them, and a host with a hand-written resolver that
+  // worked would have had to change source for a type that never protected it — the first
+  // position has never accepted a loader, so there was nothing to disambiguate there.
+  const _aliasStillTakesBareResolver: FontsInput = (() => undefined) as unknown as FontResolver;
+  void _aliasStillTakesBareResolver;
+
+  test('an UNMARKED resolver in the first position is called with the full request', async () => {
+    const seen: FontResolutionRequest[] = [];
+    // No `defineFontResolver`, exactly as a host would have written it before.
+    const unmarked = (request: FontResolutionRequest) => {
+      seen.push(request);
+      return { sources: [source(request.defaultFamily, 'unmarked')] };
+    };
+    let compose!: unknown;
+
+    function Probe() {
+      compose = useFonts(unmarked, { sources: [source('Cambria', 'fragment')] });
+      return null;
+    }
+    render(<Probe />);
+
+    const merged = (await (compose as (r: FontResolutionRequest) => Promise<unknown>)(
+      REQUEST
+    )) as { sources: FontSource[] };
+    expect(seen).toEqual([REQUEST]);
+    expect(merged.sources.map((entry) => entry.id)).toEqual(['unmarked', 'fragment']);
+  });
+});
+
 describe('useFonts takes every origin in the same shape', () => {
   test('a resolver composes with a fragment in either position', async () => {
     let first!: unknown;
@@ -288,6 +320,87 @@ describe('useFonts takes every origin in the same shape', () => {
     // Latched at mount, this stayed undefined forever and the document never got fonts.
     expect(typeof result.fonts).toBe('function');
     expect(result.document).toBe(BYTES);
+  });
+
+  test('a LOADER in an on-demand list is still called with no argument', async () => {
+    let sawArguments: unknown;
+    let result!: ReturnType<typeof useDocxSource>;
+
+    function Probe() {
+      result = useDocxSource(BYTES, {
+        fonts: [
+          // Unmarked and zero-argument: the older loader form, sharing a list with a
+          // resolver. Handed the request instead, `defaultFonts` would silently change
+          // from "every packaged face" to "the ones this document names".
+          (...args: unknown[]) => {
+            sawArguments = args;
+            return { sources: [source('Cambria', 'loader')] };
+          },
+          defineFontResolver(async () => ({ sources: [source('Calibri', 'resolver')] })),
+        ] as never,
+      });
+      return null;
+    }
+    render(<Probe />);
+
+    const merged = (await (result.fonts as (r: FontResolutionRequest) => Promise<unknown>)(
+      REQUEST
+    )) as { sources: FontSource[] };
+    expect(sawArguments).toEqual([]);
+    expect(merged.sources.map((entry) => entry.id)).toEqual(['loader', 'resolver']);
+  });
+
+  test('one rejecting eager origin does not discard the others', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    let result!: ReturnType<typeof useDocxSource>;
+    try {
+      function Probe() {
+        result = useDocxSource(BYTES, {
+          fonts: [
+            { sources: [source('Calibri', 'before')] },
+            () => Promise.reject(new Error('boom')),
+            { sources: [source('Cambria', 'after')] },
+          ],
+        });
+        return null;
+      }
+      render(<Probe />);
+      await flush();
+    } finally {
+      console.warn = warn;
+    }
+
+    // `Promise.all` rejected wholesale here and left the document with no fonts at all.
+    expect((result.fonts as { sources: FontSource[] }).sources.map((e) => e.id)).toEqual([
+      'before',
+      'after',
+    ]);
+    expect(warnings).toHaveLength(1);
+  });
+
+  test('switching from no fonts to an eager LOADER resolves them too', async () => {
+    let result!: ReturnType<typeof useDocxSource>;
+
+    function Probe({ ready }: { ready: boolean }) {
+      // The same host shape as the resolver case, with the older loader form. Keyed on
+      // "is it on demand" alone, this stayed false on both renders and never re-ran.
+      result = useDocxSource(BYTES, {
+        ...(ready ? { fonts: () => ({ sources: [source('Calibri', 'late-eager')] }) } : {}),
+      });
+      return null;
+    }
+    const view = render(<Probe ready={false} />);
+    await flush();
+    expect(result.fonts).toBeUndefined();
+
+    view.rerender(<Probe ready />);
+    await flush();
+
+    expect((result.fonts as { sources: FontSource[] }).sources.map((e) => e.id)).toEqual([
+      'late-eager',
+    ]);
   });
 
   test('a throwing eager loader is reported, not swallowed', async () => {

@@ -216,6 +216,95 @@ describe('useFonts takes every origin in the same shape', () => {
     );
   });
 
+  test('a LOADER in an on-demand list is still called with no argument', async () => {
+    let sawArguments: unknown;
+
+    await mounted(
+      () =>
+        useDocxSource(BYTES, {
+          fonts: [
+            (...args: unknown[]) => {
+              sawArguments = args;
+              return { sources: [source('Cambria', 'loader')] };
+            },
+            defineFontResolver(async () => ({ sources: [source('Calibri', 'resolver')] })),
+          ] as never,
+        }),
+      async (result) => {
+        const merged = (await (
+          result.fonts.value as (r: FontResolutionRequest) => Promise<unknown>
+        )(REQUEST)) as { sources: FontSource[] };
+        expect(sawArguments).toEqual([]);
+        expect(merged.sources.map((entry) => entry.id)).toEqual(['loader', 'resolver']);
+      }
+    );
+  });
+
+  test('one rejecting eager origin does not discard the others', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    try {
+      await mounted(
+        () =>
+          useDocxSource(BYTES, {
+            fonts: [
+              { sources: [source('Calibri', 'before')] },
+              () => Promise.reject(new Error('boom')),
+              { sources: [source('Cambria', 'after')] },
+            ],
+          }),
+        async (result) => {
+          await flush();
+          const merged = result.fonts.value as unknown as { sources: FontSource[] };
+          expect(merged.sources.map((entry) => entry.id)).toEqual(['before', 'after']);
+        }
+      );
+    } finally {
+      console.warn = warn;
+    }
+
+    expect(warnings).toHaveLength(1);
+  });
+
+  test('an unmarked resolver is read as a value, by arity, not called as a getter', async () => {
+    // No `defineFontResolver`. A one-argument function cannot be a `MaybeRefOrGetter`
+    // getter, so `toValue` must not call it — this is what threw on `main`.
+    const unmarked = (request: FontResolutionRequest) => ({
+      sources: [source(request.defaultFamily, 'unmarked')],
+    });
+
+    await mounted(
+      () => useFonts(unmarked),
+      async (compose) => {
+        const merged = (await compose(REQUEST)) as { sources: FontSource[] };
+        expect(merged.sources.map((entry) => entry.id)).toEqual(['unmarked']);
+      }
+    );
+  });
+
+  test('a zero-argument getter is re-read on every resolve, not captured once', async () => {
+    let calls = 0;
+    const getter = () => {
+      calls += 1;
+      return { sources: [source('Calibri', `call-${calls}`)] };
+    };
+
+    await mounted(
+      () => useFonts(getter),
+      async (compose) => {
+        const first = (await compose(REQUEST)) as { sources: FontSource[] };
+        const second = (await compose(REQUEST)) as { sources: FontSource[] };
+
+        // The getter form exists so a host can compute origins from reactive state; a
+        // resolver that captured the first read would serve the first document's fonts to
+        // every document after it.
+        expect(first.sources.map((entry) => entry.id)).toEqual(['call-1']);
+        expect(second.sources.map((entry) => entry.id)).toEqual(['call-2']);
+      }
+    );
+  });
+
   test('a throwing eager loader is reported, not swallowed', async () => {
     const warnings: unknown[][] = [];
     const warn = console.warn;

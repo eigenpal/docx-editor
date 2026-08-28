@@ -204,12 +204,17 @@ const faceKey = (face: FontFaceRequest): string =>
  * `resolvedFaces` be documented as an optimization a resolver may ignore.
  */
 function paintableFaces(
+  inherited: readonly FontFaceRequest[],
   sourceFaces: ReadonlyMap<string, FontFaceRequest>,
   substitutions: readonly FontSourceSubstitution[]
 ): FontFaceRequest[] {
-  const faces = new Map(sourceFaces);
+  // Seeded with whatever the CALLER was already told, so a composition used as an origin
+  // of another composition — which is exactly what a `useFonts` result handed to another
+  // list is — passes its coverage through instead of dropping it.
+  const faces = new Map(inherited.map((face) => [faceKey(face), face] as const));
+  for (const [key, face] of sourceFaces) faces.set(key, face);
   for (const substitution of substitutions) {
-    if (sourceFaces.has(faceKey(substitution.to))) {
+    if (sourceFaces.has(faceKey(substitution.to)) || faces.has(faceKey(substitution.to))) {
       faces.set(faceKey(substitution.from), substitution.from);
     }
   }
@@ -230,9 +235,11 @@ function paintableFaces(
  *
  * A resolver that ignores `resolvedFaces` still composes correctly; it just spends more.
  *
- * ONE ORIGIN CANNOT SINK THE REST. A resolver that throws is reported and skipped, and the
- * origins around it still compose — an app that listed a flaky network origin behind a
- * bundled one keeps the bundled faces.
+ * ONE ORIGIN CANNOT SINK THE REST. An origin that throws, answers `null`, or answers
+ * something malformed is reported and skipped whole, and the origins around it still
+ * compose — an app that listed a flaky network origin behind a bundled one keeps the
+ * bundled faces. Skipped WHOLE: an answer is read completely before any of it is
+ * committed, so a half-ingested origin can never reach composition.
  *
  * The result carries NO `epoch`: it is a fragment for the engine to stamp with the load
  * sequence. A fixed epoch from here would label every document's byte set as the same one.
@@ -248,17 +255,32 @@ export async function composeFontOrigins(
   const present: (FontConfiguration | FontConfigurationFragment)[] = [];
   const sourceFaces = new Map<string, FontFaceRequest>();
   const substitutions: FontSourceSubstitution[] = [];
+  const inherited = request.resolvedFaces ?? [];
 
   for (const origin of origins) {
     // Faces recomputed per origin rather than accumulated, because a substitution an
     // earlier origin emitted can become paintable when a LATER origin supplies its target.
-    const covered = paintableFaces(sourceFaces, substitutions);
-    let answer: FontConfiguration | FontConfigurationFragment | undefined;
+    const covered = paintableFaces(inherited, sourceFaces, substitutions);
     try {
-      answer =
+      const answer =
         typeof origin === 'function'
           ? await origin(covered.length === 0 ? request : { ...request, resolvedFaces: covered })
           : await origin;
+      // `== null`, not `=== undefined`: "returning nothing is a valid answer" reads as
+      // `null` to plenty of hosts, and reading `.sources` off it took every OTHER origin
+      // down with it.
+      if (answer == null) continue;
+      // Read the whole answer BEFORE committing any of it. A malformed source — no
+      // `request`, an unusable family — throws in `faceKey`, and an origin half-ingested
+      // is worse than one skipped: it would sit in `present` with its faces unrecorded and
+      // break composition later, outside anyone's catch.
+      const faces = (answer.sources ?? []).map(
+        (source) => [faceKey(source.request), source.request] as const
+      );
+      const answerSubstitutions = [...(answer.substitutions ?? [])];
+      present.push(answer);
+      for (const [key, face] of faces) sourceFaces.set(key, face);
+      for (const substitution of answerSubstitutions) substitutions.push(substitution);
     } catch (cause) {
       // Reported, never swallowed: a font origin that throws is a host bug (an unmarked
       // resolver called as a loader is the common one) and it degrades the document
@@ -266,12 +288,6 @@ export async function composeFontOrigins(
       console.warn('[fonts] a font origin failed and was skipped', cause);
       continue;
     }
-    if (answer === undefined) continue;
-    present.push(answer);
-    for (const source of answer.sources ?? []) {
-      sourceFaces.set(faceKey(source.request), source.request);
-    }
-    for (const substitution of answer.substitutions ?? []) substitutions.push(substitution);
   }
 
   if (present.length === 0) return undefined;

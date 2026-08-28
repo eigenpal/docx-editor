@@ -154,12 +154,19 @@ describe('composeFontOrigins', () => {
     // The brand fragment the `useFonts(brandFragment, packagedFonts())` shape produces:
     // some Arial, not all of it. Keyed on family, the two collapsed into one entry saying
     // "Arial", and a packaged origin reading that supplied no italics at all.
+    // Three of Arial's four faces, chosen so that dropping ANY limb of the key collapses
+    // them: family alone gives one entry, family+weight gives two (400 and 700),
+    // family+style gives two (normal and italic). Only all three give three.
     const brand = {
       sources: [
         { ...source('Arial', 'brand-regular') },
         {
           ...source('Arial', 'brand-bold'),
           request: { family: 'Arial', weight: 700, style: 'normal' as const },
+        },
+        {
+          ...source('Arial', 'brand-italic'),
+          request: { family: 'Arial', weight: 400, style: 'italic' as const },
         },
       ],
     };
@@ -170,10 +177,13 @@ describe('composeFontOrigins', () => {
 
     await composeFontOrigins([brand, second], REQUEST);
 
-    expect(faceNames(seen[0])).toEqual(['Arial/400/normal', 'Arial/700/normal']);
-    // The faces the brand does NOT hold stay unreported, which is what lets the origin
-    // behind it supply them.
-    expect(faceNames(seen[0])).not.toContain('Arial/400/italic');
+    // Bold-italic is the face the brand does NOT hold, and its absence is what lets the
+    // origin behind it supply one.
+    expect(faceNames(seen[0])).toEqual([
+      'Arial/400/italic',
+      'Arial/400/normal',
+      'Arial/700/normal',
+    ]);
   });
 
   test('reports only faces with BYTES, so a failed origin cannot suppress its failover', async () => {
@@ -195,6 +205,10 @@ describe('composeFontOrigins', () => {
 
     const merged = await composeFontOrigins([failed, failover], REQUEST);
 
+    // ASKED, and asked about everything. `faceNames(undefined)` is also `[]`, so asserting
+    // the list alone would have passed just as well had the failover never been called —
+    // which is the outcome this test exists to rule out.
+    expect(seen).toHaveLength(1);
     expect(faceNames(seen[0])).toEqual([]);
     expect(merged?.sources?.map((entry) => entry.id)).toEqual(['failover']);
   });
@@ -246,6 +260,76 @@ describe('composeFontOrigins', () => {
     await composeFontOrigins([empty, record], REQUEST);
 
     expect(seen[0]!.resolvedFaces).toBeUndefined();
+  });
+
+  test('passes through the coverage IT was told about', async () => {
+    const seen: FontResolutionRequest[] = [];
+    const record = defineFontResolver(async (request: FontResolutionRequest) => {
+      seen.push(request);
+      return { sources: [source('Cambria', 'inner')] };
+    });
+
+    // The shape a `useFonts` result used as an origin of another list produces: an inner
+    // composition handed a request that already carries coverage. Replacing rather than
+    // merging made every inner origin from the second on under-report, and refetch.
+    await composeFontOrigins([{ sources: [source('Calibri', 'first')] }, record], {
+      ...REQUEST,
+      resolvedFaces: [{ family: 'Georgia', weight: 400, style: 'normal' }],
+    });
+
+    expect(faceNames(seen[0])).toEqual(['Calibri/400/normal', 'Georgia/400/normal']);
+  });
+
+  test('an origin answering null is skipped, not fatal to the ones around it', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    let merged: Awaited<ReturnType<typeof composeFontOrigins>>;
+    try {
+      // `null`, not `undefined`. "Returning nothing is a valid answer" reads as `null` to
+      // plenty of hosts, and `null.sources` took every other origin down with it.
+      const nullish = defineFontResolver(async () => null as never);
+      merged = await composeFontOrigins(
+        [
+          { sources: [source('Calibri', 'before')] },
+          nullish,
+          { sources: [source('Cambria', 'after')] },
+        ],
+        REQUEST
+      );
+    } finally {
+      console.warn = warn;
+    }
+
+    expect(merged?.sources?.map((entry) => entry.id)).toEqual(['before', 'after']);
+    // A valid "I cover none of this", not a failure: nothing to report.
+    expect(warnings).toHaveLength(0);
+  });
+
+  test('an origin answering something malformed is skipped WHOLE', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    let merged: Awaited<ReturnType<typeof composeFontOrigins>>;
+    try {
+      // A source with no `request`: keying it throws. Committing the answer before reading
+      // it would leave this fragment in the composition with its faces unrecorded, and
+      // break `composeFontConfiguration` later, outside anyone's catch.
+      const malformed = defineFontResolver(async () => ({ sources: [{} as never] }));
+      merged = await composeFontOrigins(
+        [
+          { sources: [source('Calibri', 'before')] },
+          malformed,
+          { sources: [source('Cambria', 'after')] },
+        ],
+        REQUEST
+      );
+    } finally {
+      console.warn = warn;
+    }
+
+    expect(merged?.sources?.map((entry) => entry.id)).toEqual(['before', 'after']);
+    expect(warnings).toHaveLength(1);
   });
 
   test('one throwing origin is reported and skipped; the others still compose', async () => {

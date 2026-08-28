@@ -111,8 +111,10 @@ A fetching resolver makes opening a document perform network requests, and the C
 which families a document uses. The engine never supplies one, so opting in stays your call.
 `packagedFonts()` remains the zero-network answer, and
 `googleFonts({ allow: ['Tinos', 'Lato'] })` narrows what may ever be fetched. Listed
-after `packagedFonts()`, this resolver is told which families are already covered and
-skips them, so the packaged five never cost a CDN request.
+after `packagedFonts()`, this resolver is told which FACES are already covered — family,
+weight and style, and only faces actually backed by bytes — and skips a family only when
+every one of its faces is covered. So the packaged five never cost a CDN request, and a
+partly covered family is still fetched whole rather than left with missing faces.
 
 Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes).
 

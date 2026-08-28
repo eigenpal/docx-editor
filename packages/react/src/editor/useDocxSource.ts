@@ -200,6 +200,18 @@ export function useDocxSource(
   // fonts at all. The Vue twin re-decides, and `check:parity` is signature-only and cannot
   // see the difference.
   const onDemand = isOnDemand(options.fonts);
+  // What SHAPE the `fonts` option has this render: absent, answerable up front, or only
+  // after the parse. The font effect keys on this rather than on `onDemand` alone, because
+  // `{ fonts: ready ? defaultFonts : undefined }` — the same host shape, with an eager
+  // loader instead of a resolver — leaves `onDemand` false on both renders and the effect
+  // never re-ran, so the fonts never loaded.
+  //
+  // A SHAPE, deliberately, not `options.fonts` itself. Options are rebuilt every render by
+  // any caller writing them inline, so keying on identity would re-run the eager load on
+  // every render. Vue keys on the value because Vue's `setup` runs once and a plain options
+  // object is not reactive; that difference is in the frameworks, not in this contract, and
+  // `check:parity` compares signatures and cannot see either.
+  const fontsShape = options.fonts === undefined ? 'absent' : onDemand ? 'on-demand' : 'eager';
   // Whether the font question is answered — resolved, failed, never asked, or not
   // answerable ahead of the parse. The document is held back until it is; see the note on
   // reflow above. The effect below is the ONE place that decides for a `fonts` option that
@@ -226,15 +238,17 @@ export function useDocxSource(
 
   // Fonts load ONCE per PATH, not per document: the faces are a property of the app, not of
   // the file open in it, and re-fetching them on every navigation would be pure waste. The
-  // dependency is `onDemand` rather than `[]` so a host that switches paths — undefined or
-  // eager first, a resolver once it is ready — actually gets the fonts it asked for.
+  // dependency is `fontsShape` rather than `[]` so a host that switches shapes — nothing
+  // first, then a loader or a resolver once it is ready — actually gets the fonts it asked
+  // for. Swapping one eager loader for another eager loader does NOT re-run it; the
+  // documented contract is that fonts load once.
   useEffect(() => {
     const fontsSource = latest.current.fonts;
     if (fontsSource === undefined) {
       setFontsSettled(true);
       return undefined;
     }
-    if (onDemand) {
+    if (isOnDemand(fontsSource)) {
       // Nothing to await ahead of the parse; release the bytes.
       setFontsSettled(true);
       return undefined;
@@ -243,10 +257,23 @@ export function useDocxSource(
     let live = true;
     void (async () => {
       try {
-        const resolved = (await Promise.all(fontOrigins(fontsSource).map(resolveEagerOrigin)))
+        // `allSettled`, not `all`: one origin that rejects must not take the answers
+        // around it down with it. `all` rejected wholesale, so a single flaky loader in a
+        // list left the document with no fonts at all rather than with the others'.
+        const settled = await Promise.allSettled(fontOrigins(fontsSource).map(resolveEagerOrigin));
+        const resolved: DocxFontsInput[] = [];
+        for (const outcome of settled) {
+          if (outcome.status === 'rejected') {
+            console.warn(
+              '[fonts] font loading failed for one origin; the others still compose',
+              outcome.reason
+            );
+            continue;
+          }
           // An origin that answered `undefined` contributed nothing; composing it would
           // only make the first-wins order harder to read.
-          .filter((origin): origin is DocxFontsInput => origin !== undefined);
+          if (outcome.value !== undefined) resolved.push(outcome.value);
+        }
         // A fragment composes with the defaults; a complete configuration passes through.
         if (live && resolved.length > 0) {
           setFonts(
@@ -271,7 +298,7 @@ export function useDocxSource(
     return () => {
       live = false;
     };
-  }, [onDemand]);
+  }, [fontsShape]);
 
   useEffect(() => {
     if (source == null) {
@@ -323,7 +350,8 @@ export function useDocxSource(
 
   return {
     // Held back until fonts settle, so the first layout is the only layout. On the
-    // on-demand path `fontsSettled` starts true: there is nothing to hold FOR.
+    // on-demand path the font effect settles it immediately — there is nothing to hold
+    // FOR — and that settle batches with the bytes, so it costs no render.
     document: fontsSettled ? bytes : undefined,
     fonts: onDemand ? resolver : fonts,
     error,

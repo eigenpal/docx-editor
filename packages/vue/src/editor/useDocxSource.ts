@@ -118,9 +118,22 @@ export function useDocxSource(
         fontsSettled.value = false;
         void (async () => {
           try {
-            const resolved = (await Promise.all(fontOrigins(fontsSource).map(resolveEagerOrigin)))
-              // An origin that answered `undefined` contributed nothing.
-              .filter((origin): origin is DocxFontsInput => origin !== undefined);
+            // `allSettled`, not `all`: one rejecting origin must not take the answers
+            // around it down with it. The React twin carries the reasoning.
+            const settled = await Promise.allSettled(
+              fontOrigins(fontsSource).map(resolveEagerOrigin)
+            );
+            const resolved: DocxFontsInput[] = [];
+            for (const outcome of settled) {
+              if (outcome.status === 'rejected') {
+                console.warn(
+                  '[fonts] font loading failed for one origin; the others still compose',
+                  outcome.reason
+                );
+                continue;
+              }
+              if (outcome.value !== undefined) resolved.push(outcome.value);
+            }
             if (live && resolved.length > 0) {
               fonts.value = composeFontConfiguration(
                 resolved[0] as FontConfigurationFragment,

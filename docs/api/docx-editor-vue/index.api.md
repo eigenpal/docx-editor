@@ -3395,7 +3395,7 @@ export { FontResolutionRequest }
 export { FontResolver }
 
 // @public (undocumented)
-export type FontsInput = FontOrigin;
+export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
 
 export { FontSource }
 
@@ -5467,7 +5467,10 @@ export interface UseFontFamilyResult {
 }
 
 // @public (undocumented)
-export function useFonts(...origins: readonly MaybeRefOrGetter<FontsInput>[]): MarkedFontResolver;
+export function useFonts(source: MaybeRefOrGetter<FontsInput>, ...fragments: readonly MaybeRefOrGetter<FontConfigurationFragment | undefined>[]): MarkedFontResolver;
+
+// @public (undocumented)
+export function useFonts(...origins: readonly MaybeRefOrGetter<FontOrigin>[]): MarkedFontResolver;
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;

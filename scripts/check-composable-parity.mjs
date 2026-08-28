@@ -400,7 +400,11 @@ export interface FontResolver {}
     ['A & B', '(A & B)'],
     ['keyof A', '(keyof A)'],
     ['A extends B ? C : D', '(A extends B ? C : D)'],
-    ['Map<A, B>', 'Map<A, B>'],
+    // A dotted qualified name: still a plain type reference, so still no parentheses.
+    // NOT a nested generic — `MaybeRefOrGetter<Set<A>>` is beyond the unwrapper's
+    // `[^>]+` capture, which stops at the first `>`, so such a case would pass here for
+    // a reason that has nothing to do with the branch under test.
+    ['A.B', 'A.B'],
   ]) {
     const reactSnap = `
 export function useSample(...origins: readonly ${parenthesized}[]): FontResolver;

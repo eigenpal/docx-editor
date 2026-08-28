@@ -15,19 +15,33 @@ import { useMemo, useRef } from 'react';
 import {
   composeFontOrigins,
   defineFontResolver,
+  type FontConfigurationFragment,
   type FontOrigin,
   type FontResolutionRequest,
+  type FontResolver,
   type MarkedFontResolver,
 } from '@docx-editor.dev/core/editor';
+import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 
 /**
  * Anything that can describe fonts: a resolved configuration, a bare fragment, a promise
  * for either (what a loader like `defaultFonts()` returns), or an on-demand
  * {@link FontResolver} (what `packagedFonts()` and `googleFonts()` return).
  *
+ * The resolver arm is BARE `FontResolver`, unmarked. `FontOrigin` — what a list position
+ * takes — requires the `defineFontResolver` mark, because a list may also hold a
+ * zero-argument loader and only the mark separates the two. There is no such ambiguity in
+ * the first argument of {@link useFonts}, which has never accepted a loader, so it keeps
+ * taking any resolver.
+ *
  * @public
  */
-export type FontsInput = FontOrigin;
+export type FontsInput =
+  | FontConfiguration
+  | FontConfigurationFragment
+  | FontResolver
+  | Promise<FontConfiguration | FontConfigurationFragment | undefined>
+  | undefined;
 
 /**
  * Merge font origins into one stable value for `DocxEditor.Root`'s `fonts` prop.
@@ -66,15 +80,33 @@ export type FontsInput = FontOrigin;
  *
  * @public
  */
-export function useFonts(...origins: readonly FontsInput[]): MarkedFontResolver {
+export function useFonts(
+  source: FontsInput,
+  ...fragments: readonly (FontConfigurationFragment | undefined)[]
+): MarkedFontResolver;
+/**
+ * The uniform form: every position takes the same {@link FontOrigin}, so composing two
+ * resolvers is one extra argument.
+ *
+ * A resolver in any position but the first must carry the `defineFontResolver` mark. The
+ * first position keeps the older, looser type so that every call that compiled before this
+ * overload existed still compiles.
+ *
+ * @public
+ */
+export function useFonts(...origins: readonly FontOrigin[]): MarkedFontResolver;
+export function useFonts(...origins: readonly (FontsInput | FontOrigin)[]): MarkedFontResolver {
   // Read at resolve time, not captured: the resolver below outlives every render.
-  const latest = useRef<readonly FontsInput[]>(origins);
+  const latest = useRef<readonly (FontsInput | FontOrigin)[]>(origins);
   latest.current = origins;
 
   return useMemo<MarkedFontResolver>(
     () =>
       defineFontResolver((request: FontResolutionRequest) =>
-        composeFontOrigins(latest.current, request)
+        // `composeFontOrigins` calls EVERY function origin with the request and never
+        // reads the mark, so an unmarked resolver in the first position behaves exactly as
+        // it did before the mark existed.
+        composeFontOrigins(latest.current as readonly FontOrigin[], request)
       ),
     []
   );

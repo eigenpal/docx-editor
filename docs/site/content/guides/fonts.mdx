@@ -298,6 +298,10 @@ resolver, which it calls with a request, from a loader such as `defaultFonts`,
 which it calls with no arguments. TypeScript cannot separate the two, because a
 zero-argument function is assignable to a one-argument function type.
 
+`useFonts` needs the mark only from the second argument on. Its first argument has
+never accepted a loader, so there is nothing to disambiguate and a bare resolver
+still works there.
+
 ```ts
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 
