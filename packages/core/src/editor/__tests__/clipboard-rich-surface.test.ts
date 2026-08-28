@@ -175,4 +175,57 @@ describe('rich paste', () => {
     expect(markup).toContain('w:jc');
     expect(markup).toContain('<w:b/>');
   });
+
+  test('external block paste at a paragraph end keeps the final paragraph alignment', () => {
+    const target = mount(paragraph(''));
+    putCaret(target.surface, 0);
+    target.surface.pasteRich(
+      'image\ncaption',
+      '<p style="text-align:center">image</p>' +
+        '<p class="MsoCaption" style="text-align:center">caption</p>'
+    );
+    const markup = serializeOoxmlPart(target.surface.session.part());
+    expect(markup.match(/w:jc w:val="center"/g)).toHaveLength(2);
+  });
+
+  test('external block paste within text keeps the host final paragraph mark', () => {
+    const target = mount(paragraph('host'));
+    putCaret(target.surface, 2);
+    target.surface.pasteRich(
+      'image\ncaption',
+      '<p style="text-align:center">image</p>' +
+        '<p class="MsoCaption" style="text-align:center">caption</p>'
+    );
+    const markup = serializeOoxmlPart(target.surface.session.part());
+    const captionParagraph = markup.split('</w:p>').find((entry) => entry.includes('caption'));
+    expect(captionParagraph).toBeDefined();
+    expect(captionParagraph).not.toContain('w:jc w:val="center"');
+    expect(target.surface.session.bodyText()).toContain('st');
+  });
+
+  test('a Word heading pasted within text keeps its heading paragraph', () => {
+    const bytes = new Uint8Array(
+      readFileSync(`${import.meta.dir}/../../../../../examples/vite/public/sample.docx`)
+    );
+    const container = document.createElement('div');
+    const mounted = mountPaginatedSurface(container, bytes, { scale: 1 });
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const target = mounted.surface;
+    putCaret(target, 2);
+    target.pasteRich(
+      'Word heading',
+      '<html xmlns:w="urn:schemas-microsoft-com:office:word"><body>' +
+        '<h2>Word heading</h2></body></html>'
+    );
+    const markup = serializeOoxmlPart(target.session.part());
+    const headingParagraph = markup.split('</w:p>').find((entry) => entry.includes('Word heading'));
+    expect(headingParagraph).toContain('<w:pStyle w:val="Heading2"/>');
+    const headingRun = headingParagraph!
+      .split('</w:r>')
+      .find((entry) => entry.includes('Word heading'));
+    expect(headingRun).not.toContain('w:sz w:val="52"');
+    expect(headingRun).not.toContain('<w:b/>');
+    target.destroy();
+    container.remove();
+  });
 });

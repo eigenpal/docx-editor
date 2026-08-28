@@ -13,14 +13,18 @@ import { routePaste, type PasteRouteTarget } from '../clipboard-paste-router.ts'
 import { wrapInteropHtml, fragmentFromHtml } from '../clipboard-fragment-codec.ts';
 
 function target(overrides: Partial<PasteRouteTarget> & { fragmentAnswers?: boolean[] } = {}) {
-  const pasted: Array<{ bytes: Uint8Array; lastMarkCovered: boolean }> = [];
+  const pasted: Array<{
+    bytes: Uint8Array;
+    lastMarkCovered: boolean;
+    lane: 'fragment' | 'external-html';
+  }> = [];
   const plain: string[] = [];
   const answers = overrides.fragmentAnswers ?? [true];
   let call = 0;
   const routeTarget: PasteRouteTarget = {
     richLaneOpen: overrides.richLaneOpen ?? true,
-    pasteFragment: (bytes, lastMarkCovered) => {
-      pasted.push({ bytes, lastMarkCovered });
+    pasteFragment: (bytes, lastMarkCovered, lane) => {
+      pasted.push({ bytes, lastMarkCovered, lane });
       const answer = answers[Math.min(call, answers.length - 1)]!;
       call += 1;
       return answer;
@@ -44,6 +48,7 @@ describe('paste routing', () => {
     expect(pasted.length).toBe(1);
     expect([...pasted[0]!.bytes]).toEqual([...FRAGMENT_BYTES]);
     expect(pasted[0]!.lastMarkCovered).toBe(true);
+    expect(pasted[0]!.lane).toBe('fragment');
     expect(plain).toEqual([]);
   });
 
@@ -71,6 +76,7 @@ describe('paste routing', () => {
     // The projection landed as a synthesized fragment.
     expect(lane).toBe('external-html');
     expect(pasted.length).toBe(1);
+    expect(pasted[0]!.lane).toBe('external-html');
   });
 
   test('force-plain skips every rich lane, whatever the payload carries', () => {

@@ -223,11 +223,26 @@ export function applyInsertFragment(
   const host = findNode(hostPart, op.paragraphId);
   if (!host || host.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
 
+  const sourceFirst = op.blocks[0]!;
+  const inlineOnly =
+    op.blocks.length === 1 && sourceFirst.kind === 'paragraph' && op.lastMarkCovered !== true;
+
+  // Split before fragment id allocation. Both operations allocate from the target part, so
+  // allocating the fragment first let the split reuse ids that were not in the part yet.
+  const split = applyTreeOp(
+    hostPart,
+    { op: 'splitParagraph', paragraphId: host.id, offset: op.offset },
+    options
+  );
+  if (!split.ok) return split;
+  const tailId = split.effect.split?.tail;
+  if (!tailId) return { ok: false, reason: 'tree-invariant' };
+
   // Clone every block with fresh node ids and fresh paragraph identities: the fragment's
   // ids belong to another document, and a second paste of the same payload must not
   // collide with the first.
-  const nextId = createNodeIdAllocator(hostPart);
-  const paraIds = new Set(usedParaIds(hostPart.root as OoxmlElement));
+  const nextId = createNodeIdAllocator(split.part);
+  const paraIds = new Set(usedParaIds(split.part.root as OoxmlElement));
   const counter = { value: 0 };
   const blocks = op.blocks.map((block, index) =>
     withFreshParaIds(
@@ -239,28 +254,18 @@ export function applyInsertFragment(
   );
 
   // Prefixes the fragment uses must be bound at the target root before commit validation.
-  const part = withRequiredNamespaceBindings(hostPart, blocks);
+  const part = withRequiredNamespaceBindings(split.part, blocks);
 
   const first = blocks[0]!;
   const last = blocks[blocks.length - 1]!;
-  const inlineOnly =
-    blocks.length === 1 && first.kind === 'paragraph' && op.lastMarkCovered !== true;
 
   if (inlineOnly) {
     // Pure inline splice: split, append the fragment's inline content to the head, join.
     // Reusing split+join keeps every offset/atom/wrapper rule identical to typing lanes.
-    const split = applyTreeOp(
-      part,
-      { op: 'splitParagraph', paragraphId: host.id, offset: op.offset },
-      options
-    );
-    if (!split.ok) return split;
-    const tailId = split.effect.split?.tail;
-    if (!tailId) return { ok: false, reason: 'tree-invariant' };
-    const head = findNode(split.part, host.id);
+    const head = findNode(part, host.id);
     if (!head || head.kind !== 'paragraph') return { ok: false, reason: 'tree-invariant' };
     const appended = replaceChildren(
-      split.part,
+      part,
       head.id,
       [...head.children, ...inlineChildrenOf(first as OoxmlElement)],
       { ...options, deferValidation: true }
@@ -283,15 +288,7 @@ export function applyInsertFragment(
   }
 
   // Structural landing: split the host, merge paragraph edges, insert the rest between.
-  const split = applyTreeOp(
-    part,
-    { op: 'splitParagraph', paragraphId: host.id, offset: op.offset },
-    options
-  );
-  if (!split.ok) return split;
-  const tailId = split.effect.split?.tail;
-  if (!tailId) return { ok: false, reason: 'tree-invariant' };
-  let current = split.part;
+  let current = part;
 
   const middle: OoxmlNode[] = [...blocks];
   const created: string[] = [tailId];

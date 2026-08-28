@@ -8,7 +8,7 @@ import { renderToString } from 'vue/server-renderer';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
-import { DocxEditorContent } from '../src/editor/DocxEditorContent';
+import { DocxEditorContent, engineOwnsImagePaste } from '../src/editor/DocxEditorContent';
 import { DocxEditorNotesChrome } from '../src/editor/DocxEditorNotes';
 import { editorScopeFor } from '../src/editor/editor-scope';
 import { DocxEditorNavigation } from '../src/editor/navigation/DocxEditorNavigation';
@@ -333,6 +333,32 @@ describe('hydration-safe stable ids', () => {
 });
 
 describe('image paste wiring', () => {
+  const transfer = (plain: string, html: string): DataTransfer =>
+    ({
+      items: [{ kind: 'file', type: 'image/png' }],
+      getData: (type: string) => (type === 'text/plain' ? plain : type === 'text/html' ? html : ''),
+    }) as unknown as DataTransfer;
+
+  test('leaves Word for Mac text plus its PNG preview to the engine', () => {
+    expect(
+      engineOwnsImagePaste(
+        transfer(
+          'Quarterly report',
+          '<html><body><p class="MsoTitle">Quarterly report</p></body></html>'
+        )
+      )
+    ).toBe(true);
+  });
+
+  test('keeps browser Copy Image and bare screenshots in the image lane', () => {
+    expect(
+      engineOwnsImagePaste(
+        transfer('https://example.test/title.png', '<a><img src="title.png"></a>')
+      )
+    ).toBe(false);
+    expect(engineOwnsImagePaste(transfer('', ''))).toBe(false);
+  });
+
   test('Content prevents default paste when clipboard carries an image', async () => {
     const view = mountEditorTree(() => []);
     await flush();

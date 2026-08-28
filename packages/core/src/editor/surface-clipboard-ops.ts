@@ -20,6 +20,7 @@ import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core
 import type { StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import {
   cellSelectionText,
+  paragraphTextFromLayout,
   type CellSelection,
   type SemanticLayout,
   type SemanticPosition,
@@ -227,13 +228,21 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
    * the resource merge plus `insertFragment`, promoted to a package undo unit in the
    * session. False on any refusal — the paste router degrades to the next flavour.
    */
-  function pasteFragmentBytes(bytes: Uint8Array, lastMarkCovered: boolean): boolean {
+  function pasteFragmentBytes(
+    bytes: Uint8Array,
+    lastMarkCovered: boolean,
+    lane: 'fragment' | 'external-html'
+  ): boolean {
     if (deps.editingMode() !== 'edit') return false;
     if (deps.storyScope().kind !== 'body') return false;
     if (deps.cellSelection()) return false;
     deps.flushPendingInputAndLayout();
     const plan = deps.deleteSelectionPlan();
     const target = plan.replaceAt ?? plan.collapseTo;
+    const externalBlockEndsAtHostMark =
+      lane === 'external-html' &&
+      plan.ops.length === 0 &&
+      target.offset === paragraphTextFromLayout(deps.layout(), target.paragraphId).length;
     let landed = false;
     deps.commit(
       () => {
@@ -257,7 +266,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
             paragraphId: target.paragraphId,
             offset: target.offset,
             fragmentBytes: bytes,
-            lastMarkCovered,
+            lastMarkCovered: lastMarkCovered || externalBlockEndsAtHostMark,
             priorOps: plan.ops as unknown as TreeDocOp[],
             ...(actorId !== undefined ? { actorId } : {}),
           }
@@ -287,8 +296,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
           deps.editingMode() === 'edit' &&
           deps.storyScope().kind === 'body' &&
           deps.cellSelection() === null,
-        pasteFragment: (fragmentBytes, lastMarkCovered) =>
-          pasteFragmentBytes(fragmentBytes, lastMarkCovered),
+        pasteFragment: (fragmentBytes, lastMarkCovered, lane) =>
+          pasteFragmentBytes(fragmentBytes, lastMarkCovered, lane),
         insertPlainText,
       },
       { html, text, forcePlain }

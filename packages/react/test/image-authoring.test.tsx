@@ -16,9 +16,10 @@ import {
 import type { ImageDecodePort } from '@docx-editor.dev/core/editor';
 import { validateRasterHeader } from '@docx-editor.dev/core/editor';
 import { resolveImageResourceLimits } from '@docx-editor.dev/core/editor';
+import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
-import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { DocxEditorContent, engineOwnsImagePaste } from '../src/editor/DocxEditorContent.tsx';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 import { useEditorValueCommand } from '../src/editor/useEditorValueCommand.ts';
 import { normalizeImageBytes } from '../src/editor/images/normalizeImageFile.ts';
@@ -40,6 +41,28 @@ const PNG_1X1 = Uint8Array.from(
   ),
   (c) => c.charCodeAt(0)
 );
+
+function pngWithPhysicalSize(width: number, height: number, pixelsPerMeter: number): Uint8Array {
+  const source = PNG_1X1.slice();
+  const writeUint32 = (bytes: Uint8Array, offset: number, value: number): void => {
+    bytes[offset] = (value >>> 24) & 0xff;
+    bytes[offset + 1] = (value >>> 16) & 0xff;
+    bytes[offset + 2] = (value >>> 8) & 0xff;
+    bytes[offset + 3] = value & 0xff;
+  };
+  writeUint32(source, 16, width);
+  writeUint32(source, 20, height);
+  const phys = Uint8Array.from([
+    0, 0, 0, 9, 0x70, 0x48, 0x59, 0x73, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+  ]);
+  writeUint32(phys, 8, pixelsPerMeter);
+  writeUint32(phys, 12, pixelsPerMeter);
+  const out = new Uint8Array(source.length + phys.length);
+  out.set(source.subarray(0, 33));
+  out.set(phys, 33);
+  out.set(source.subarray(33), 33 + phys.length);
+  return out;
+}
 
 const JPEG_1X1 = Uint8Array.from([
   0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
@@ -173,6 +196,13 @@ function placeTextCaret(editor: DocxEditorInstance, offset = 5): void {
   });
 }
 
+function treeContainsKind(value: unknown, kind: string): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const node = value as { kind?: unknown; children?: readonly unknown[] };
+  if (node.kind === kind) return true;
+  return node.children?.some((child) => treeContainsKind(child, kind)) ?? false;
+}
+
 async function waitForSurface(editor: () => DocxEditorInstance): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt++) {
     await act(async () => {
@@ -230,6 +260,69 @@ function mount(
 }
 
 afterEach(() => cleanup);
+
+describe('routes clipboard preview images', () => {
+  const transfer = (plain: string, html: string): DataTransfer =>
+    ({
+      items: [{ kind: 'file', type: 'image/png' }],
+      getData: (type: string) => (type === 'text/plain' ? plain : type === 'text/html' ? html : ''),
+    }) as unknown as DataTransfer;
+
+  test('leaves Word for Mac text plus its PNG preview to the engine', () => {
+    expect(
+      engineOwnsImagePaste(
+        transfer(
+          'Quarterly report',
+          '<html><body><p class="MsoTitle">Quarterly report</p></body></html>'
+        )
+      )
+    ).toBe(true);
+  });
+
+  test('a Word for Mac payload commits its text once and never inserts the preview', async () => {
+    const { view, editor, ready } = mount(null);
+    await ready();
+    placeTextCaret(editor(), 5);
+    const file = new File([PNG_1X1], 'word-preview.png', { type: 'image/png' });
+    const item = { kind: 'file', type: 'image/png', getAsFile: () => file };
+    const event = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(event, 'clipboardData', {
+      value: {
+        files: [file],
+        items: [item],
+        getData: (type: string) =>
+          type === 'text/plain'
+            ? 'Quarterly report'
+            : type === 'text/html'
+              ? '<p class="MsoTitle">Quarterly report</p>'
+              : '',
+      },
+    });
+    const beforeRevision = editor().surface!.session.packageRevision();
+
+    await act(async () => {
+      view.container.querySelector('.docx-pages')!.dispatchEvent(event);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const surface = editor().surface!;
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    expect(paragraphTextOf(surface.session.part(), paragraphId)).toBe(
+      'helloQuarterly report world'
+    );
+    expect(treeContainsKind(surface.session.part().root, 'drawing')).toBe(false);
+    expect(surface.session.packageRevision()).toBe(beforeRevision + 1);
+  });
+
+  test('keeps browser Copy Image and bare screenshots in the image lane', () => {
+    expect(
+      engineOwnsImagePaste(
+        transfer('https://example.test/title.png', '<a><img src="title.png"></a>')
+      )
+    ).toBe(false);
+    expect(engineOwnsImagePaste(transfer('', ''))).toBe(false);
+  });
+});
 
 describe('binds image value commands', () => {
   function WrapProbe({
@@ -334,6 +427,15 @@ describe('inserts validated image files', () => {
     if (!refused.ok) {
       expect(refused.reasonKey).toBe('imageInsert.errors.unsupportedFormat');
     }
+  });
+
+  test('uses PNG physical resolution for the inserted size', () => {
+    const retinaPng = pngWithPhysicalSize(144, 72, 5669);
+    const normalized = normalizeImageBytes(retinaPng);
+    expect(normalized.ok).toBe(true);
+    if (!normalized.ok) return;
+    expect(normalized.widthPoints).toBe(72);
+    expect(normalized.heightPoints).toBe(36);
   });
 
   test('insert button preserves caret on mousedown', async () => {

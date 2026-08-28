@@ -21,6 +21,13 @@ import {
   type SupportedImageMime,
 } from '../store/package/image-resources.ts';
 import { writeZip, strToU8 } from '../store/package/zip.ts';
+import { xmlSafeText } from './clipboard-html-xml.ts';
+import {
+  isElement,
+  isWordClipboardHtml,
+  tagOf,
+  wordParagraphStyleId,
+} from './clipboard-word-styles.ts';
 
 export interface HtmlProjectionLimits {
   /** UTF-8 size cap applied BEFORE parse. Default 4 MiB. */
@@ -71,7 +78,7 @@ const IGNORED_TAGS = new Set(
   ).split(' ')
 );
 
-/** Heading direct formatting: bold plus these sizes in half-points (h1=32pt … h6=14pt). */
+/** Generic HTML heading fallback: bold plus these sizes in half-points (h1=32pt … h6=14pt). */
 const HEADING_SZ: Record<string, number> = { h1: 64, h2: 52, h3: 44, h4: 36, h5: 32, h6: 28 };
 
 const PARAGRAPH_TAGS = new Set('p div h1 h2 h3 h4 h5 h6 li blockquote pre'.split(' '));
@@ -107,6 +114,7 @@ interface RunProps {
 }
 
 interface ParaProps {
+  styleId?: string;
   jc?: 'left' | 'center' | 'right' | 'both';
   indLeftTwips?: number;
   /** Positive → `w:firstLine`, negative → `w:hanging`. */
@@ -134,6 +142,7 @@ interface FlowContext {
 
 interface Projection {
   nodesLeft: number;
+  readonly wordHtml: boolean;
   readonly maxDepth: number;
   readonly maxImageBytes: number;
   readonly rels: RelEntry[];
@@ -261,26 +270,6 @@ function applyParaCss(para: ParaProps, style: ReadonlyMap<string, string>): void
 
 // --- XML emission
 
-/** Drop code units XML 1.0 forbids in run text; mirrors the store's `isValidXmlText`. */
-function xmlSafeText(text: string): string {
-  let out = '';
-  for (let i = 0; i < text.length; i += 1) {
-    const unit = text.charCodeAt(i);
-    if (unit !== 0x09 && (unit < 0x20 || unit === 0xfffe || unit === 0xffff)) continue;
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = text.charCodeAt(i + 1);
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        out += text[i]! + text[i + 1]!;
-        i += 1;
-      }
-      continue;
-    }
-    if (unit >= 0xdc00 && unit <= 0xdfff) continue;
-    out += text[i]!;
-  }
-  return out;
-}
-
 /** `w:rPr`, children in CT_RPr sequence order. */
 function rPrXml(props: RunProps): string {
   let inner = '';
@@ -308,6 +297,9 @@ function textRunXml(text: string, props: RunProps): string {
 /** `w:pPr`, children in CT_PPr sequence order: numPr, spacing, ind, jc. */
 function pPrXml(para: ParaProps): string {
   let inner = '';
+  if (para.styleId !== undefined) {
+    inner += `<w:pStyle w:val="${escapeXmlAttribute(para.styleId)}"/>`;
+  }
   if (para.numPr) {
     inner +=
       `<w:numPr><w:ilvl w:val="${para.numPr.ilvl}"/>` +
@@ -380,12 +372,15 @@ const DATA_IMAGE_RE = /^data:image\/(png|jpeg|jpg|gif);base64,([A-Za-z0-9+/=]+)$
 function cssOrAttributePx(
   element: Element,
   style: ReadonlyMap<string, string>,
-  axis: 'width' | 'height'
+  axis: 'width' | 'height',
+  wordHtml: boolean
 ): number | null {
   const pt = parseCssLengthPt(style.get(axis) ?? '');
   if (pt !== null && pt > 0) return pt / 0.75;
   const attr = element.getAttribute(axis) ?? '';
-  return /^[1-9]\d{0,4}$/.test(attr.trim()) ? Number.parseInt(attr, 10) : null;
+  if (!/^[1-9]\d{0,4}$/.test(attr.trim())) return null;
+  const value = Number.parseInt(attr, 10);
+  return wordHtml ? value / 0.75 : value;
 }
 
 /** Project a `data:` image into a media part + rel + inline `w:drawing` run. */
@@ -402,8 +397,8 @@ function projectImage(element: Element, runs: string[], p: Projection): void {
   const header = validateRasterHeader(bytes, declared);
 
   const style = parseInlineStyle(element);
-  let widthPx = cssOrAttributePx(element, style, 'width');
-  let heightPx = cssOrAttributePx(element, style, 'height');
+  let widthPx = cssOrAttributePx(element, style, 'width', p.wordHtml);
+  let heightPx = cssOrAttributePx(element, style, 'height', p.wordHtml);
   if (widthPx === null && heightPx === null && header) {
     widthPx = header.pixelWidth;
     heightPx = header.pixelHeight;
@@ -452,14 +447,6 @@ function allocateList(p: Projection, key: string, kind: 'ordered' | 'bullet'): s
 }
 
 // --- Walk
-
-function isElement(node: Node): node is Element {
-  return node.nodeType === 1; // ELEMENT_NODE
-}
-
-function tagOf(element: Element): string {
-  return element.tagName.toLowerCase();
-}
 
 /** True for the literal marker span Word emits beside `mso-list` paragraphs. */
 function isMsoListIgnoreMarker(style: ReadonlyMap<string, string>): boolean {
@@ -587,10 +574,12 @@ function projectParagraph(
   const tag = tagOf(element);
   const style = parseInlineStyle(element);
   const para: ParaProps = {};
+  const styleId = wordParagraphStyleId(element, p.wordHtml);
+  if (styleId !== undefined) para.styleId = styleId;
   if (ctx.para.numPr) para.numPr = ctx.para.numPr;
   if (ctx.para.jc) para.jc = ctx.para.jc;
   let run = { ...ctx.run };
-  const heading = HEADING_SZ[tag];
+  const heading = para.styleId === undefined ? HEADING_SZ[tag] : undefined;
   if (heading !== undefined) {
     run.bold = true;
     run.szHalfPoints = heading;
@@ -981,6 +970,7 @@ export function projectExternalHtml(
 
   const projection: Projection = {
     nodesLeft: limits.maxNodes ?? DEFAULT_MAX_NODES,
+    wordHtml: isWordClipboardHtml(html),
     maxDepth: limits.maxDepth ?? DEFAULT_MAX_DEPTH,
     maxImageBytes: limits.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     rels: [],
@@ -995,5 +985,7 @@ export function projectExternalHtml(
   const rootCtx: FlowContext = { run: {}, para: {}, pre: false, list: null };
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
   if (blocks.length === 0) return { ok: false, reason: 'no-content' };
-  return { ok: true, fragmentBytes: assembleFragment(projection, blocks), lastMarkCovered: false };
+  const finalBlock = blocks[blocks.length - 1]!;
+  const lastMarkCovered = projection.wordHtml && finalBlock.includes('<w:pStyle w:val="Heading');
+  return { ok: true, fragmentBytes: assembleFragment(projection, blocks), lastMarkCovered };
 }

@@ -17,6 +17,27 @@ function hasImageFile(transfer: DataTransfer): boolean {
   return [...transfer.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
 }
 
+/** Whether an image clipboard is really text plus a preview image from a word processor. */
+export function engineOwnsImagePaste(transfer: DataTransfer): boolean {
+  if (typeof transfer.getData !== 'function') return false;
+  const html = transfer.getData('text/html') ?? '';
+  if (html.includes('data-docx-fragment') || html.includes('data:image')) return true;
+
+  const plain = transfer.getData('text/plain') ?? '';
+  if (plain.length === 0) return false;
+  if (html.length === 0) return true;
+  // Word for Mac puts a PNG preview beside normal textual clipboard flavours. The HTML
+  // contains visible text; a browser's Copy Image payload is normally only an <img>
+  // (possibly wrapped in a link), so its textContent stays empty and keeps the file lane.
+  if (html.length > 4 * 1024 * 1024 || typeof DOMParser === 'undefined') return true;
+  try {
+    return new DOMParser().parseFromString(html, 'text/html').body?.textContent?.trim().length > 0;
+  } catch {
+    // Plain text is still an honest fallback; prefer one text paste over text plus a preview.
+    return true;
+  }
+}
+
 /** @public */
 export interface DocxEditorContentProps {
   class?: string;
@@ -56,11 +77,10 @@ export const DocxEditorContent = defineComponent({
       const items = event.clipboardData;
       if (!items) return;
       if (!hasImageFile(items)) return;
-      // STAND DOWN only for payloads the ENGINE will land (fragment or `data:` image in
-      // the HTML). External `<img src>` payloads and bare screenshots still need this
-      // file lane. Mirrors the React adapter exactly.
-      const html = typeof items.getData === 'function' ? (items.getData('text/html') ?? '') : '';
-      if (html.includes('data-docx-fragment') || html.includes('data:image')) return;
+      // Word processors can add a rendered preview image beside the real text flavours.
+      // The engine owns those payloads; the file lane remains for screenshots and Copy Image.
+      // Mirrors the React adapter exactly.
+      if (engineOwnsImagePaste(items)) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(items);
     };

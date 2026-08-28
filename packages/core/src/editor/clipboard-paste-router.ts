@@ -13,7 +13,11 @@ export interface PasteRouteTarget {
   /** True when a fragment landing is even possible: body story, edit mode. */
   readonly richLaneOpen: boolean;
   /** Land a fragment package; false means refused (any reason) and the router degrades. */
-  pasteFragment(bytes: Uint8Array, lastMarkCovered: boolean): boolean;
+  pasteFragment(
+    bytes: Uint8Array,
+    lastMarkCovered: boolean,
+    lane: 'fragment' | 'external-html'
+  ): boolean;
   insertPlainText(text: string): void;
 }
 
@@ -39,12 +43,15 @@ export function routePaste(target: PasteRouteTarget, input: PasteRouteInput): Pa
   if (html === null || html.length === 0) return plain();
 
   const embedded = fragmentFromHtml(html);
-  if (embedded && target.pasteFragment(embedded.bytes, embedded.lastMarkCovered)) {
+  if (embedded && target.pasteFragment(embedded.bytes, embedded.lastMarkCovered, 'fragment')) {
     return 'fragment';
   }
 
   const projected = projectExternalHtml(html);
-  if (projected.ok && target.pasteFragment(projected.fragmentBytes, projected.lastMarkCovered)) {
+  if (
+    projected.ok &&
+    target.pasteFragment(projected.fragmentBytes, projected.lastMarkCovered, 'external-html')
+  ) {
     return 'external-html';
   }
 

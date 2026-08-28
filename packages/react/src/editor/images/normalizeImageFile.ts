@@ -12,6 +12,45 @@ import {
 
 const EMU_PER_POINT = 12_700;
 const DEFAULT_DPI = 96;
+const MAX_PNG_METADATA_SCAN_BYTES = 65_536;
+
+type RasterDpi = Readonly<{ dpiX: number; dpiY: number }>;
+
+function readUint32Be(bytes: Uint8Array, offset: number): number {
+  return (
+    ((bytes[offset]! << 24) |
+      (bytes[offset + 1]! << 16) |
+      (bytes[offset + 2]! << 8) |
+      bytes[offset + 3]!) >>>
+    0
+  );
+}
+
+/** Read a bounded PNG `pHYs` chunk. Invalid or implausible densities use the CSS default. */
+function pngDpi(bytes: Uint8Array): RasterDpi | null {
+  const scanEnd = Math.min(bytes.length, MAX_PNG_METADATA_SCAN_BYTES);
+  let offset = 8;
+  while (offset + 12 <= scanEnd) {
+    const length = readUint32Be(bytes, offset);
+    const chunkEnd = offset + 12 + length;
+    if (chunkEnd > scanEnd || chunkEnd < offset) return null;
+    const isPhys =
+      bytes[offset + 4] === 0x70 &&
+      bytes[offset + 5] === 0x48 &&
+      bytes[offset + 6] === 0x59 &&
+      bytes[offset + 7] === 0x73;
+    if (isPhys && length === 9 && bytes[offset + 16] === 1) {
+      const dpiX = readUint32Be(bytes, offset + 8) * 0.0254;
+      const dpiY = readUint32Be(bytes, offset + 12) * 0.0254;
+      if (dpiX >= 10 && dpiX <= 2400 && dpiY >= 10 && dpiY <= 2400) {
+        return { dpiX, dpiY };
+      }
+      return null;
+    }
+    offset = chunkEnd;
+  }
+  return null;
+}
 
 export type NormalizedImagePayload =
   | {
@@ -76,11 +115,12 @@ export function normalizeImageBytes(bytes: Uint8Array): NormalizedImagePayload {
   ) {
     return { ok: false, reasonKey: 'imageInsert.errors.oversize' };
   }
+  const dpi = sniffed === 'image/png' ? pngDpi(bytes) : null;
   const { widthPoints, heightPoints } = naturalPoints(
     header.pixelWidth,
     header.pixelHeight,
-    DEFAULT_DPI,
-    DEFAULT_DPI
+    dpi?.dpiX ?? DEFAULT_DPI,
+    dpi?.dpiY ?? DEFAULT_DPI
   );
   return Object.freeze({
     ok: true,
