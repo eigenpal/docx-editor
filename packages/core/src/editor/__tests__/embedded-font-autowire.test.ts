@@ -155,6 +155,16 @@ const EMBED_BOTH: readonly EmbedEntry[] = [
   { family: 'DejaVu Sans', slot: 'embedBold', bytes: boldBytes },
 ];
 
+/**
+ * The composed substitution list, read off the shaping fingerprint.
+ *
+ * Composition's keep-or-drop decision has no other observable: the compatibility notice
+ * reports what is UNAVAILABLE, and a family is available whether it resolves to its own
+ * embedded bytes or to a configured stand-in.
+ */
+const substitutionFingerprint = (editor: { fontMeasurement(): { producer?: string } }): string =>
+  editor.fontMeasurement().producer?.split(';substitutions:')[1]?.split('+fallback:')[0] ?? '';
+
 describe('embedded fonts auto-wire into shaped measurement', () => {
   test('zero config + embedded fonts engages the shaped measurer', async () => {
     const container = document.createElement('div');
@@ -469,7 +479,7 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     editor.destroy();
   });
 
-  test('an admitted embedded face suppresses its configured substitution report', async () => {
+  test('an admitted embedded face wins over its configured substitution', async () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: docxWithEmbeds(p('original', 'Original Face'), [
@@ -494,11 +504,16 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       },
     });
     await fontsSettled(editor);
+    // The file's OWN face is what the document should be measured in, so composition drops
+    // the redirect. Asserted on the shaping fingerprint, which carries the composed
+    // substitution list; the notice cannot see this, because the family is covered either
+    // way and is right to stay quiet either way.
+    expect(substitutionFingerprint(editor)).toBe('[]');
     expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Original Face');
     editor.destroy();
   });
 
-  test('a refused embedded face restores its configured substitution report', async () => {
+  test('a refused embedded face restores its configured substitution', async () => {
     const corrupt = new Uint8Array(4096).fill(0x42);
     const editor = createDocxEditor({
       container: document.createElement('div'),
@@ -524,7 +539,47 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       },
     });
     await fontsSettled(editor);
-    expect(editor.snapshot().fontSubstitutions ?? []).toContain('Original Face');
+    // A refused embedded face is worse than no embedded face: without the recompose the
+    // dropped redirect never comes back and the run measures on the fixed grid. The
+    // fingerprint is where that is visible.
+    expect(substitutionFingerprint(editor)).toContain('Original Face');
+    expect(substitutionFingerprint(editor)).toContain('DejaVu Sans');
+    // Covered THROUGH the redirect, so the fidelity notice stays quiet: the run paginates
+    // on the metrics the app chose for it.
+    expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Original Face');
+    editor.destroy();
+  });
+
+  test('an over-budget drop is reported even when nothing else survives validation', async () => {
+    // Both diagnostics or neither. The refusal path returns early once no source is left,
+    // and reporting the drops only AFTER that loop lost the `overLimit` report for exactly
+    // the file that needed it most: one oversized face and one damaged one.
+    // Incompressible on purpose: a 2 MB run of zeros trips the package reader's
+    // decompression-ratio cap and the document never opens at all.
+    const oversized = new Uint8Array(2 * 1024 * 1024);
+    for (let index = 0; index < oversized.length; index += 1) {
+      oversized[index] = (index * 2654435761) >>> 24;
+    }
+    const corrupt = new Uint8Array(4096).fill(0x42);
+    const errors: EditorFontError[] = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docxWithEmbeds(p('diagnosable'), [
+        { family: 'Oversized Face', slot: 'embedRegular', bytes: oversized },
+        { family: 'Broken Face', slot: 'embedRegular', bytes: corrupt },
+      ]),
+      fonts: { maxFontBytes: 1024 * 1024, sources: [] },
+      onFontError: (error) => errors.push(error),
+    });
+    await fontsSettled(editor);
+    expect(editor.fontMeasurement().measurer).toBe('fixed');
+    expect(
+      errors
+        .map((error) => error.request?.family)
+        .filter(Boolean)
+        .sort()
+    ).toEqual(['Broken Face', 'Oversized Face']);
+    expect(errors.some((error) => error.code === 'overLimit')).toBe(true);
     editor.destroy();
   });
 

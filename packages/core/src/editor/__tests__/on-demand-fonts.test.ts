@@ -196,7 +196,7 @@ describe('on-demand font resolution', () => {
     editor.destroy();
   });
 
-  test('a configured redirect remains visible in the substitution report', async () => {
+  test('a configured redirect counts as available, not as a substitution to warn about', async () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: docx(runIn('Brand Sans', 'substituted')),
@@ -211,7 +211,10 @@ describe('on-demand font resolution', () => {
       }),
     });
     await fontsSettled(editor);
-    expect(editor.snapshot().fontSubstitutions ?? []).toContain('Brand Sans');
+    // The notice reports what is UNAVAILABLE. A resolver that deliberately answers this
+    // family has made it available: the run measures and paints on the face the app chose,
+    // so telling the user the font "isn't available" would be the opposite of the truth.
+    expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Brand Sans');
     editor.destroy();
   });
 

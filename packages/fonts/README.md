@@ -12,9 +12,15 @@ shaped (HarfBuzz) measurement in the docx-editor engine.
 | Courier New     | Liberation Mono   | SIL OFL           |
 | Century Gothic  | TeX Gyre Adventor | GUST Font License |
 
-The default substitutes use identical advance widths. TeX Gyre Adventor stays within
-0.5% of the recorded Century Gothic widths. Documents that need exact glyphs can supply
+The first five substitutes use identical advance widths. TeX Gyre Adventor is close but
+not identical: across the recorded Century Gothic samples it stays within 1%, the widest
+being -0.85% ("of work" at 40 pt bold). Documents that need exact glyphs can supply
 licensed bytes through `loadFonts` in `@docx-editor.dev/core`.
+
+`loadDefaultFonts()` and `defaultFonts()` load the five families Word applies to a
+document by default. Century Gothic is not one of them and adds about 709 KB, so it is
+opt-in: pass `families: ALL_WORD_DEFAULT_FAMILIES`, or use `googleFonts()`, which serves
+it from these same packaged bytes only when a document names it.
 
 ## Usage
 
@@ -66,9 +72,16 @@ all four static faces present, and the shaper's table checks passed. Variable-on
 families (Roboto, Arimo, Open Sans, …) are excluded, because the shaper refuses
 variation axes and a variable file would render bold at regular weight.
 
-If the catalog has no exact family, the resolver can rank a short candidate list.
-It uses validated PANOSE fields and normalized average advances from the candidate fonts.
-It refuses distant classifications instead of assigning an arbitrary text face.
+A family the catalog cannot match may still be answered from this package's own assets.
+Century Gothic is the one, served with no network request at all.
+
+Failing that, the resolver ranks the document's validated PANOSE classification against a
+short list of measured candidates, and refuses far more often than it matches. The family
+kind and the SERIF STYLE are gates, not weighted terms, so an old-style serif or a slab
+serif is never answered with a sans; a candidate that leaves its own classification mostly
+unstated is not ranked at all; and a match beyond the distance bound is refused. A refused
+family keeps whatever measurement the host already had, which is the safer answer, because
+a substitute chosen on classification alone moves line breaks.
 
 A fetching resolver makes opening a document perform network requests, and the CDN learns
 which families a document uses. The engine never supplies one, so opting in stays your call.

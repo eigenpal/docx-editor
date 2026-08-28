@@ -72,7 +72,12 @@ export interface FontResolutionRequest {
   readonly families: readonly string[];
   /** The face a run naming no font resolves to, so a resolver can cover it too. */
   readonly defaultFamily: string;
-  /** Bounded font-table metadata that a resolver may use to rank closed substitutes. */
+  /**
+   * Bounded `word/fontTable.xml` metadata a resolver may use to rank a CLOSED substitute
+   * set. Shape-validated at the parse boundary and capped, but attacker-controlled in
+   * value: rank with it, and never let it become a URL, an object key, an allocation
+   * size, or a loop bound.
+   */
   readonly metadata?: readonly FontFamilyMetadata[];
 }
 

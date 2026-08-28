@@ -5,6 +5,7 @@
 // every URL is pinned to the recorded revision, and a substituted name resolves to its
 // metric-compatible target.
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 import {
   GOOGLE_FONTS_REVISION,
@@ -13,13 +14,21 @@ import {
   GOOGLE_METRIC_SUBSTITUTES,
   googleFonts,
 } from '../google-fonts.ts';
+import { METRIC_CANDIDATES, isRankableCandidate } from '../metric-candidates.ts';
 
-/** A fetcher that serves catalogued byte lengths without touching the network. */
+/**
+ * A fetcher that serves catalogued byte lengths without touching the network, and reads
+ * the package's OWN assets from disk — `googleFonts()` answers a family the catalog
+ * cannot match from the bundle, over this same fetcher.
+ */
 function fakeFetcher(): { fetcher: typeof fetch; requested: string[] } {
   const requested: string[] = [];
   const fetcher = ((input: RequestInfo | URL) => {
     const url = String(input);
     requested.push(url);
+    if (url.startsWith('file:')) {
+      return Promise.resolve(new Response(new Uint8Array(readFileSync(new URL(url)))));
+    }
     const face = GOOGLE_FONT_CATALOG.find((entry) => entry.url === url);
     if (!face) return Promise.resolve(new Response(null, { status: 404 }));
     return Promise.resolve(new Response(new Uint8Array(face.byteLength)));
@@ -83,6 +92,27 @@ describe('catalog', () => {
   });
 });
 
+describe('metric candidates', () => {
+  test('a candidate that leaves most of its PANOSE unstated cannot rank', () => {
+    // Nobile's own PANOSE. It states four digits as "any", serif style among them, so the
+    // distance function skips those terms and it scored as a near-perfect match for every
+    // latin text family — old-style serifs and slab serifs included. It shipped as a
+    // candidate once; the rule, not a removal, is what keeps the next one out.
+    expect(isRankableCandidate('02000503050000020004')).toBe(false);
+    // Serif style stated, but only six of ten digits classified — still too little of
+    // itself to be compared honestly, because every unstated digit is a term the
+    // comparison skips and the candidate scores well by saying nothing.
+    expect(isRankableCandidate('020b0503050000020000')).toBe(false);
+    expect(isRankableCandidate('020b0503050000020004')).toBe(true);
+    for (const candidate of METRIC_CANDIDATES) {
+      expect(`${candidate.family}:${isRankableCandidate(candidate.panose)}`).toBe(
+        `${candidate.family}:true`
+      );
+    }
+    expect(METRIC_CANDIDATES.some((candidate) => candidate.family === 'Nobile')).toBe(false);
+  });
+});
+
 describe('googleFonts resolver', () => {
   test('fetches ONLY the families the document declared', async () => {
     const { fetcher, requested } = fakeFetcher();
@@ -131,31 +161,74 @@ describe('googleFonts resolver', () => {
   });
 
   test('an uncatalogued family selects a closed candidate by PANOSE and average width', async () => {
+    // A humanist sans: latin text (2), normal sans serifs (11), even-width proportion (4).
+    // B612 wins it by 1.5 distance over Fira Sans, and ONLY through the average-advance
+    // term — drop `AVERAGE_ADVANCE_BY_PROPORTION` and Fira Sans wins on PANOSE alone.
     const { fetcher } = fakeFetcher();
     const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
       families: ['Uncatalogued Sans'],
       defaultFamily: 'No Such Family',
-      metadata: [{ family: 'Uncatalogued Sans', panose: '02000502050000020004' }],
+      metadata: [{ family: 'Uncatalogued Sans', panose: '020b0604020202020204' }],
     });
     expect(fragment.sources).toHaveLength(4);
-    expect(fragment.sources.every((source) => source.request.family === 'Nobile')).toBe(true);
+    expect(fragment.sources.every((source) => source.request.family === 'B612')).toBe(true);
     expect(
       fragment.substitutions.some(
-        (entry) => entry.from.family === 'Uncatalogued Sans' && entry.to.family === 'Nobile'
+        (entry) => entry.from.family === 'Uncatalogued Sans' && entry.to.family === 'B612'
       )
     ).toBe(true);
   });
 
-  test('a distant PANOSE family does not receive an arbitrary text substitute', async () => {
+  test('a text family far from every candidate receives no substitute at all', async () => {
+    // Latin TEXT (2), like every candidate — so this does not short-circuit on the family
+    // kind. It is an old-style serif with high contrast and long extenders, and its nearest
+    // candidate sits at distance 92, well past MAX_METRIC_DISTANCE. Raise that constant and
+    // this family silently starts rendering in a geometric sans, ~19% too wide.
     const { fetcher, requested } = fakeFetcher();
     const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
-      families: ['Decorative Face'],
+      families: ['Uncatalogued Old Style'],
       defaultFamily: 'No Such Family',
-      metadata: [{ family: 'Decorative Face', panose: '05000502050000020004' }],
+      metadata: [{ family: 'Uncatalogued Old Style', panose: '02020404030301010803' }],
     });
     expect(requested).toHaveLength(0);
     expect(fragment.sources).toHaveLength(0);
     expect(fragment.substitutions).toHaveLength(0);
+  });
+
+  test('a family that leaves its serif style unstated is not ranked', async () => {
+    // The serif digit is what separates a serif from a sans. A document that does not
+    // state it cannot be told apart, so the ranking refuses rather than guessing.
+    const { fetcher, requested } = fakeFetcher();
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Unstated Serif Style'],
+      defaultFamily: 'No Such Family',
+      metadata: [{ family: 'Unstated Serif Style', panose: '02000604020202020204' }],
+    });
+    expect(requested).toHaveLength(0);
+    expect(fragment.sources).toHaveLength(0);
+    expect(fragment.substitutions).toHaveLength(0);
+  });
+
+  test('a family the catalog cannot match resolves from the packaged assets', async () => {
+    // No google/fonts family is metric-compatible with Century Gothic, and the closest
+    // catalog candidate lands ~6% narrow. The package's own TeX Gyre Adventor answers it,
+    // over the SAME fetcher, so `googleFonts()` is the on-demand path for it.
+    const { fetcher, requested } = fakeFetcher();
+    const fragment = await resolveOnly(['century gothic'], fetcher);
+    expect(fragment.sources).toHaveLength(4);
+    expect(fragment.sources.every((source) => source.request.family === 'TeX Gyre Adventor')).toBe(
+      true
+    );
+    expect(requested.every((url) => url.includes('TeXGyreAdventor'))).toBe(true);
+    // Keyed on the document's own spelling, and carrying Word's line box for the family.
+    expect(
+      fragment.substitutions.every(
+        (entry) =>
+          entry.from.family === 'century gothic' &&
+          entry.to.family === 'TeX Gyre Adventor' &&
+          entry.lineMetrics?.heightEm === 1.19140625
+      )
+    ).toBe(true);
   });
 
   test('Montserrat family names resolve directly to their static faces', async () => {

@@ -38,7 +38,10 @@ export interface EmbeddedFont {
   readonly partName: string;
 }
 
-/** Safe font-table metadata that an on-demand resolver may use for substitute ranking. */
+/**
+ * Shape-validated font-table metadata an on-demand resolver may use for substitute
+ * ranking. Validated, not trusted: both fields still carry values the file chose.
+ */
 export interface DeclaredFontMetadata {
   readonly family: string;
   readonly panose?: string;
@@ -123,8 +126,13 @@ const wmlAttribute = (node: OoxmlNode, localName: string): string | undefined =>
 /**
  * Read bounded, validated family metadata from `word/fontTable.xml`.
  *
- * PANOSE is advisory document data. The resolver uses it only to rank a closed candidate
- * set, so it never becomes a URL, object key, allocation size, or loop bound.
+ * PANOSE and the family name are ATTACKER-CONTROLLED, and they reach whatever
+ * `FontResolver` the host installed — a third-party one, through public API, not only the
+ * resolvers this repository ships. So the shape is pinned here, at the trust boundary: a
+ * family name matching `FONT_NAME`, a PANOSE matching `PANOSE`, at most `maxFonts`
+ * entries. What a resolver must then do with them is a REQUIREMENT on the resolver, not a
+ * property of the values: treat both as lookup keys against a closed set, and never let
+ * either become a URL, an object key, an allocation size, or a loop bound.
  */
 export function readDeclaredFontMetadata(
   fontTable: OoxmlPart | undefined,

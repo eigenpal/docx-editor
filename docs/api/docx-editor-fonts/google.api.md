@@ -32,7 +32,6 @@ export interface GoogleFontLoadFailure {
     // (undocumented)
     readonly diagnostic: string;
     readonly family: string;
-    // (undocumented)
     readonly url: string;
 }
 

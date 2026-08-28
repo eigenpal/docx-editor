@@ -1,7 +1,18 @@
 // Word font-metric regression gate over privacy-safe synthetic strings.
 //
-// Expected advances and vertical metrics come from Word PDF font subsets. The source
-// documents and their text stay outside the repository. Each string was authored for this gate.
+// Expected advances come from Word PDF font subsets (`/Widths`, scaled by the run size).
+// The source documents and their text stay outside the repository, and each string here
+// was authored for this gate.
+//
+// The two halves of the vertical check have different provenance, so read them differently:
+//
+//   - Century Gothic's line box is a WORD reading, and the gate takes it from the shipped
+//     `FAMILY_PLANS` rather than restating the numbers. Restating them made the assertion
+//     a tautology: the gate fed its own literal into the snapshot and then checked the
+//     snapshot returned it, so a wrong `lineMetrics` in `src/index.ts` still passed.
+//   - Montserrat's 12.2/9.7 are the FONT's own `hhea` values (ascender 968, descender
+//     -213, gap 38 over 1000 upem), which is what the engine falls back to when no
+//     override exists. They pin that fallback; they are not an independent Word oracle.
 
 import { readFileSync } from 'node:fs';
 import {
@@ -18,9 +29,13 @@ import {
   type ResolvedRunStyle,
 } from '../../core/src/layout/index.ts';
 import { GOOGLE_FONT_CATALOG } from '../src/google-catalog.generated.ts';
+import { FAMILY_PLANS, planFaceFile } from '../src/family-plans.ts';
+
+/** The Word families this gate covers that resolve through a PACKAGED plan. */
+type PackagedFamily = 'Century Gothic';
 
 interface WidthCase {
-  readonly family: 'Century Gothic' | 'Montserrat' | 'Montserrat Light';
+  readonly family: PackagedFamily | 'Montserrat' | 'Montserrat Light';
   readonly weight: 400 | 700;
   readonly style: 'normal' | 'italic';
   readonly text: string;
@@ -79,10 +94,40 @@ const WIDTH_CASES: readonly WidthCase[] = [
   },
 ];
 
+/**
+ * Substituted families this gate does NOT cover yet, and why. Listed rather than left
+ * unsaid: #507 asks for the families that cannot meet the tolerance to be recorded, and a
+ * gate with five green cases reads like five is all there is.
+ */
+const KNOWN_GAPS: readonly { readonly family: string; readonly gap: string }[] = [
+  {
+    family: 'Garamond',
+    gap: 'no packaged or catalogued face is metric-compatible; the resolvers deliberately return nothing, and Word line pitch at 8pt is 1.125em against the engine fallback 1.2727em (issue #563)',
+  },
+  {
+    family: 'Rockwell',
+    gap: 'slab serif with no metric-compatible answer; the PANOSE ranking refuses it rather than assigning a sans',
+  },
+  {
+    family: 'Sagona',
+    gap: 'commercial face that declares no PANOSE at all, so nothing can be ranked for it',
+  },
+];
+
 const assetsDir = new URL('../assets/', import.meta.url);
 
+/** The shipped plan for a packaged family; the gate reads it, never restates it. */
+function planFor(family: PackagedFamily): NonNullable<ReturnType<typeof FAMILY_PLANS.get>> {
+  const plan = FAMILY_PLANS.get(family);
+  if (!plan) throw new Error(`${family} has no packaged plan`);
+  return plan;
+}
+
+const isPackaged = (testCase: WidthCase): testCase is WidthCase & { family: PackagedFamily } =>
+  testCase.family === 'Century Gothic';
+
 async function bytesFor(testCase: WidthCase): Promise<Uint8Array> {
-  if (testCase.family === 'Century Gothic') {
+  if (isPackaged(testCase)) {
     const suffix =
       testCase.style === 'italic'
         ? testCase.weight === 700
@@ -91,7 +136,9 @@ async function bytesFor(testCase: WidthCase): Promise<Uint8Array> {
         : testCase.weight === 700
           ? 'Bold'
           : 'Regular';
-    return new Uint8Array(readFileSync(new URL(`TeXGyreAdventor-${suffix}.otf`, assetsDir)));
+    return new Uint8Array(
+      readFileSync(new URL(planFaceFile(planFor(testCase.family), suffix), assetsDir))
+    );
   }
   const face = GOOGLE_FONT_CATALOG.find(
     (candidate) =>
@@ -114,8 +161,8 @@ const shaper = createHarfBuzzTextShaper();
 try {
   for (const testCase of WIDTH_CASES) {
     const bytes = await bytesFor(testCase);
-    const resolvedFamily =
-      testCase.family === 'Century Gothic' ? 'TeX Gyre Adventor' : testCase.family;
+    const plan = isPackaged(testCase) ? planFor(testCase.family) : null;
+    const resolvedFamily = plan ? plan.substitute : testCase.family;
     const resolvedRequest = {
       family: resolvedFamily,
       weight: testCase.weight,
@@ -138,13 +185,16 @@ try {
           faceIndex: 0,
         },
       ],
-      ...(testCase.family === 'Century Gothic'
+      // The redirect, and its line box, come from the SHIPPED plan. The expected values
+      // below come from Word. Feeding the gate's own literal in here and reading it back
+      // out asserted nothing about what the package actually ships.
+      ...(plan
         ? {
             substitutions: [
               {
                 from: requestedFace,
                 to: resolvedRequest,
-                lineMetrics: { heightEm: 1.19140625, baselineEm: 0.97119140625 },
+                ...(plan.lineMetrics ? { lineMetrics: plan.lineMetrics } : {}),
               },
             ],
           }
@@ -199,3 +249,4 @@ console.log(
   `font metric fidelity OK (${WIDTH_CASES.length} cases, width ±${WIDTH_TOLERANCE_PT.toFixed(2)}pt, ` +
     `vertical ±${VERTICAL_TOLERANCE_PT.toFixed(2)}pt)`
 );
+for (const { family, gap } of KNOWN_GAPS) console.log(`  known gap: ${family} — ${gap}`);

@@ -225,6 +225,10 @@ jobs:
         run: bun run check:fonts-manifest
 
       - name: Word font width fidelity
+        # The only step here that reaches the network: three Montserrat faces from
+        # jsDelivr, hash-verified. Bounded so a CDN that hangs fails this step instead of
+        # holding a runner for the workflow's whole timeout.
+        timeout-minutes: 5
         run: bun run check:font-width-fidelity
 
       - name: Docs JSON generation (smoke test)

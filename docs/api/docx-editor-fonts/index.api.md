@@ -93,6 +93,9 @@ export interface LoadDefaultFontsOptions {
 }
 
 // @public
+export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly WordDefaultFamily[];
+
+// @public
 export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New' | 'Century Gothic';
 
 // (No @packageDocumentation comment for this package)

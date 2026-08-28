@@ -57,6 +57,7 @@ import {
   paragraphTextOf,
   collectRevisionSites,
   type BookmarkIndex,
+  type DeclaredFontMetadata,
   type EmbeddedFont,
   type HeaderFooterParts,
   type HeaderFooterSectionResolution,
@@ -431,7 +432,14 @@ export function openTreeSession(
     embeddedFontsCache = Object.freeze(readEmbeddedFonts(currentPackage(), resolveFontTablePart()));
     return embeddedFontsCache;
   };
-  const declaredFontMetadata = Object.freeze(readDeclaredFontMetadata(resolveFontTablePart()));
+  // Lazy like everything else on this path: only the FUNCTION form of `resolveFonts` ever
+  // asks, and reading it at open time made every session walk `word/fontTable.xml` for an
+  // answer almost none of them wants.
+  let declaredFontMetadataCache: readonly DeclaredFontMetadata[] | null = null;
+  const resolveDeclaredFontMetadata = (): readonly DeclaredFontMetadata[] => {
+    declaredFontMetadataCache ??= Object.freeze(readDeclaredFontMetadata(resolveFontTablePart()));
+    return declaredFontMetadataCache;
+  };
 
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
   let rendersTextCache: { readonly revision: number; readonly rendersText: boolean } | null = null;
@@ -756,7 +764,7 @@ export function openTreeSession(
         };
         return fontsCache.fonts;
       },
-      declaredFontMetadata: () => declaredFontMetadata,
+      declaredFontMetadata: resolveDeclaredFontMetadata,
 
       rendersText() {
         // Same revision key as `documentFonts`, and for the same reason: typing the first

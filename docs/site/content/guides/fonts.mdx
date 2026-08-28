@@ -29,16 +29,30 @@ application.
 
 The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes.
 
-| Word font       | Substitute       | License |
-| --------------- | ---------------- | ------- |
-| Calibri         | Carlito          | SIL OFL |
-| Cambria         | Caladea          | SIL OFL |
-| Times New Roman | Liberation Serif | SIL OFL |
-| Arial           | Liberation Sans  | SIL OFL |
-| Courier New     | Liberation Mono  | SIL OFL |
+| Word font       | Substitute        | License           | Loaded by default |
+| --------------- | ----------------- | ----------------- | ----------------- |
+| Calibri         | Carlito           | SIL OFL           | Yes               |
+| Cambria         | Caladea           | SIL OFL           | Yes               |
+| Times New Roman | Liberation Serif  | SIL OFL           | Yes               |
+| Arial           | Liberation Sans   | SIL OFL           | Yes               |
+| Courier New     | Liberation Mono   | SIL OFL           | Yes               |
+| Century Gothic  | TeX Gyre Adventor | GUST Font License | No                |
 
 These fonts match advance widths. Rare kerning differences can still change an
 edge case. Supply licensed font bytes when pixels must match the original face.
+
+`defaultFonts()` loads the five families Word applies to a document by default.
+Century Gothic is not one of them, and its four assets add about 709 KB to every
+load, so you opt in:
+
+```ts
+import { ALL_WORD_DEFAULT_FAMILIES, defaultFonts } from '@docx-editor.dev/fonts';
+
+const fonts = await defaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES });
+```
+
+`googleFonts()` covers it on demand instead. It serves Century Gothic from the
+same packaged bytes, and only when a document names the family.
 
 Load fonts before the first editor mount. This avoids a visible remount and
 keeps the initial caret and undo history.
@@ -164,8 +178,11 @@ const fonts = useFonts(googleFonts());
 </Framework>
 </FrameworkTabs>
 
-`googleFonts()` uses a generated catalog. Each face is pinned to one
-`google/fonts` commit and includes a checked `sha256:` value.
+`googleFonts()` uses a generated catalog. Each face is pinned to an immutable
+`google/fonts` commit and includes a checked `sha256:` value. Most faces share
+one commit. A family whose current upstream version ships variable-only files is
+pinned to the last commit that carried static instances, so the catalog records
+more than one revision.
 
 ```ts
 googleFonts({
@@ -188,8 +205,22 @@ metric-compatible substitute when layout must remain stable.
 An inline resolver creates a new function on each render. That identity change
 can rebuild the editor. `useFonts` keeps one resolver for the component life.
 
-The editor caps the family list passed to a resolver. `googleFonts()` matches
-only its closed catalog.
+The editor caps the family list passed to a resolver.
+
+`googleFonts()` resolves a family in three steps, all against closed sets:
+
+1. A direct catalog match, or a built-in metric-compatible redirect such as
+   Calibri to Carlito.
+2. A packaged face for a family the catalog cannot match. Century Gothic is the
+   one, served from the package's own bytes with no network request.
+3. A ranking of the document's declared PANOSE classification against a short
+   list of measured catalog candidates.
+
+Step 3 refuses more often than it matches. It compares the family kind and the
+serif style before anything else, and it returns nothing when the closest
+candidate is still far away. A family it refuses keeps whatever measurement your
+host already had, which is the safer answer: a substitute chosen on
+classification alone moves line breaks.
 
 ## Source precedence
 

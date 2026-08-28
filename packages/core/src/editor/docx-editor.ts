@@ -183,7 +183,11 @@ import {
   embeddedFontSourcesAfterExplicit,
   explicitFontBudgetError,
 } from './embedded-font-sources.ts';
-import { createLocalFontProbe, detectFontSubstitutions } from './font-availability.ts';
+import {
+  coveredFontFamiliesOf,
+  createLocalFontProbe,
+  detectFontSubstitutions,
+} from './font-availability.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   registerEmbeddedFontFaces,
@@ -358,7 +362,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * catalog for the whole of a document's life.
    */
   let resolvedFontConfiguration: FontConfigurationBase | undefined;
-  let effectiveFontConfiguration: FontConfigurationBase | undefined;
   const fontConfiguration = (): FontConfigurationBase | undefined =>
     typeof config.fonts === 'function' ? resolvedFontConfiguration : config.fonts;
   /**
@@ -385,36 +388,33 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     }
     return localFontProbe(family);
   };
-  /** Families whose byte sources passed admission for the active document. */
-  let admittedFontFamilies: ReadonlySet<string> = new Set();
+  /**
+   * Families the active document can be laid out in, from {@link coveredFontFamiliesOf}.
+   * Rebuilt per load, because an on-demand resolver's coverage is not known until a
+   * document has asked.
+   */
+  let coveredFontFamilies: ReadonlySet<string> = new Set();
   const fontFamilyCovered = (family: string): boolean =>
-    admittedFontFamilies.has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
+    coveredFontFamilies.has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
   /**
    * While font work is still in flight the answer would flicker: embedded faces register
    * at resolution, so a file whose own fonts are arriving must not flash a notice first.
    *
-   * A document that renders no character has no visible substitution to report.
+   * A document that renders no character has nothing a substitute face could get wrong.
    * That is not a special case for the blank template but the notice's own definition:
-   * `documentFonts()` reports declared families, and Word's `w:docDefaults` declares
-   * Calibri over a document with no runs. The gate lifts on the first typed character.
-   * Configured redirects remain in the result, even when their metrics match.
+   * `documentFonts()` reports DECLARED families, and Word's `w:docDefaults` declares
+   * Calibri over a document with no runs at all — so the first thing a user saw on a page
+   * they had just created was a warning about text that does not exist. The gate lifts on
+   * the first typed character, when the claim becomes true.
    */
   const deriveFontSubstitutions = (): readonly string[] => {
     if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
     if (!surface.session.rendersText()) return EMPTY_FONT_SUBSTITUTIONS;
-    const families = surface.session.documentFonts();
-    const detected = new Set(
-      detectFontSubstitutions(families, fontFamilyCovered, probeLocalFont).map((family) =>
-        family.toLowerCase()
-      )
+    return detectFontSubstitutions(
+      surface.session.documentFonts(),
+      fontFamilyCovered,
+      probeLocalFont
     );
-    const configured = effectiveFontConfiguration?.substitutions ?? [];
-    for (const substitution of configured) {
-      if (substitution.from.family !== substitution.to.family) {
-        detected.add(substitution.from.family.toLowerCase());
-      }
-    }
-    return families.filter((family) => detected.has(family.toLowerCase()));
   };
 
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
@@ -665,8 +665,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // An on-demand answer describes the document that asked for it. Carrying it into the
     // next one would offer the previous file's families in this file's font picker.
     resolvedFontConfiguration = undefined;
-    effectiveFontConfiguration = undefined;
-    admittedFontFamilies = new Set();
+    coveredFontFamilies = new Set();
     disposeEmbeddedFaces();
     // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
     // guard will refuse to touch state, so the flag must reset here or a load that
@@ -850,6 +849,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           { sources: embeddedSurvivors }
         );
         if (fonts.sources.length === 0) {
+          reportDocumentDrops();
           disposeLayoutShaping(superseded);
           fontsResolving = false;
           bump();
@@ -883,6 +883,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             { sources: admittedEmbedded }
           );
           if (fonts.sources.length === 0) {
+            reportDocumentDrops();
             disposeLayoutShaping(rejected);
             fontsResolving = false;
             bump();
@@ -935,8 +936,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       }
       disposeEmbeddedFaces();
       embeddedFaces = registration;
-      effectiveFontConfiguration = fonts;
-      admittedFontFamilies = new Set(admitted.map((source) => source.request.family.toLowerCase()));
+      coveredFontFamilies = coveredFontFamiliesOf(admitted, fonts.substitutions ?? []);
       // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
       // still name a locally installed browser face (Helvetica is the common macOS case):
       // paint resolves that face through CSS, so falling back to the deterministic monospace

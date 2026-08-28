@@ -97,3 +97,29 @@ export function detectFontSubstitutions(
   }
   return substituted;
 }
+
+/**
+ * The families a font configuration makes available, case-folded: every family a byte
+ * source was ADMITTED for, plus every family a redirect points at one of those.
+ *
+ * The redirect half is what keeps the notice honest. `defaultFonts()` deliberately
+ * answers "Times New Roman" with metric-compatible Liberation Serif, so the family IS
+ * available — a document naming it wraps and paginates exactly as Word does, and
+ * reporting it as unavailable told the user the opposite of the truth. A redirect whose
+ * TARGET never made it through admission is not coverage, so the target is checked.
+ */
+export function coveredFontFamiliesOf(
+  admitted: readonly { readonly request: { readonly family: string } }[],
+  substitutions: readonly {
+    readonly from: { readonly family: string };
+    readonly to: { readonly family: string };
+  }[]
+): ReadonlySet<string> {
+  const covered = new Set(admitted.map((source) => source.request.family.toLowerCase()));
+  for (const substitution of substitutions) {
+    if (covered.has(substitution.to.family.toLowerCase())) {
+      covered.add(substitution.from.family.toLowerCase());
+    }
+  }
+  return covered;
+}

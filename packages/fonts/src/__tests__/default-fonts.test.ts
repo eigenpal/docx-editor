@@ -18,7 +18,12 @@ import {
   createFixedMeasurer,
   createShapedMeasurer,
 } from '@docx-editor.dev/core/layout';
-import { ALL_WORD_DEFAULT_FAMILIES, FONT_ASSET_MANIFEST, loadDefaultFonts } from '../index.ts';
+import {
+  ALL_WORD_DEFAULT_FAMILIES,
+  FONT_ASSET_MANIFEST,
+  WORD_DOCUMENT_DEFAULT_FAMILIES,
+  loadDefaultFonts,
+} from '../index.ts';
 
 const assetsDir = new URL('../../assets/', import.meta.url);
 
@@ -51,6 +56,21 @@ describe('packaged manifest', () => {
     expect(ALL_WORD_DEFAULT_FAMILIES).toHaveLength(6);
     expect(FONT_ASSET_MANIFEST).toHaveLength(24);
   });
+
+  test('the omitted-families default carries only Word DOCUMENT defaults', () => {
+    // Every family here costs four faces on EVERY load, whether or not the file names it.
+    // Century Gothic is not a Word document default and most documents never name it, so
+    // it is opt-in (`families`) or on-demand (`googleFonts()`), not a 709 KB tax on both.
+    expect([...WORD_DOCUMENT_DEFAULT_FAMILIES]).toEqual([
+      'Calibri',
+      'Cambria',
+      'Times New Roman',
+      'Arial',
+      'Courier New',
+    ]);
+    expect(WORD_DOCUMENT_DEFAULT_FAMILIES).not.toContain('Century Gothic');
+    expect(ALL_WORD_DEFAULT_FAMILIES).toContain('Century Gothic');
+  });
 });
 
 describe('loadDefaultFonts', () => {
@@ -71,17 +91,27 @@ describe('loadDefaultFonts', () => {
     ).toBe(true);
   });
 
-  test('default load covers all six families with baked hashes attached', async () => {
+  test('default load covers the document defaults with baked hashes attached', async () => {
     const { fetcher, requested } = countingFetcher();
     const fragment = await loadDefaultFonts({ fetcher });
-    expect(requested).toHaveLength(24);
-    expect(fragment.sources).toHaveLength(24);
+    expect(requested).toHaveLength(20);
+    expect(requested.some((url) => url.includes('TeXGyreAdventor'))).toBe(false);
+    expect(fragment.sources).toHaveLength(20);
     expect(fragment.failures).toHaveLength(0);
     const manifestHashes = new Set(FONT_ASSET_MANIFEST.map((entry) => entry.hash));
     for (const source of fragment.sources) expect(manifestHashes.has(source.hash)).toBe(true);
     // Deterministic source order for stable configuration fingerprints.
     const ids = fragment.sources.map((source) => source.id);
     expect(ids).toEqual([...ids].sort((a, b) => a.localeCompare(b)));
+  });
+
+  test('the full family list is opt-in and adds the packaged extras', async () => {
+    const { fetcher, requested } = countingFetcher();
+    const fragment = await loadDefaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES, fetcher });
+    expect(requested).toHaveLength(24);
+    expect(requested.filter((url) => url.includes('TeXGyreAdventor'))).toHaveLength(4);
+    expect(fragment.sources).toHaveLength(24);
+    expect(fragment.failures).toHaveLength(0);
   });
 
   test('Century Gothic resolves to shaped Adventor metrics', async () => {

@@ -1,8 +1,8 @@
 /**
  * `@docx-editor.dev/fonts/google` — Google-hosted faces, fetched on demand.
  *
- * Nothing is bundled and nothing is fetched until a document turns out to name a family the
- * pinned catalog covers. Open a file using only Calibri and exactly one family is fetched.
+ * Nothing is fetched until a document turns out to name a family this module can answer.
+ * Open a file using only Calibri and exactly one family is fetched.
  *
  * Be deliberate about this: it makes OPENING A DOCUMENT perform network requests, which the
  * engine never does on its own. What keeps it safe is that a document-declared family is only
@@ -21,11 +21,15 @@
  */
 // @docx-editor.dev/fonts/google — Google-hosted faces, fetched on demand.
 //
-// `defaultFonts()` ships six families in the bundle and loads them whichever document
-// opens. `googleFonts()` inverts both halves: nothing is bundled, and nothing is fetched
-// until a document turns out to name a family the catalog covers. Open a file that uses
-// only Calibri and exactly one family is fetched; open one that uses none of the catalog
-// and no request is made at all.
+// `defaultFonts()` loads Word's five document-default families whichever document opens.
+// `googleFonts()` inverts that: nothing loads until a document turns out to name a family
+// this module can answer. Open a file that uses only Calibri and exactly one family is
+// fetched; open one that names nothing it covers and no request is made at all.
+//
+// Two things can answer a name. Most come from the pinned Google catalog, over the
+// network. A short list comes from the package's OWN bundled assets
+// (`PACKAGED_ONLY_FAMILIES`) because no catalog family is metric-compatible with them —
+// Century Gothic is the one, answered by TeX Gyre Adventor with no network at all.
 //
 // It is a `FontResolver`, so the editor calls it once per load with the families the file
 // declares. That is the part to be deliberate about: it makes OPENING A DOCUMENT perform
@@ -34,7 +38,9 @@
 //
 //   - The catalog is generated, closed and pinned (`google-catalog.generated.ts`). A name
 //     is either in it or it is not; nothing is interpolated into a URL, so a crafted
-//     `w:rFonts` cannot point this at a host of its choosing.
+//     `w:rFonts` cannot point this at a host of its choosing. The PANOSE ranking below
+//     picks from that same closed set, so it widens which names resolve, never where
+//     bytes come from.
 //   - Every URL is pinned to one immutable google/fonts commit and carries a baked
 //     `sha256:`. Bytes are trusted by CONTENT, and the engine's admission path re-derives
 //     the hash, so a swapped CDN asset fails there with a typed `hashMismatch`.
@@ -45,15 +51,40 @@
 // That is inherent to fetching them, which is why nothing here is a default: an app opts
 // in by passing `googleFonts()`, and `defaultFonts()` stays the zero-network answer.
 //
-// Metric compatibility is the reason the explicit substitution map is short. For another
-// family, validated PANOSE metadata can rank a closed set of measured candidates.
+// Metric compatibility is the reason the explicit substitution map is short: Carlito,
+// Caladea, Tinos and Cousine have the same advance widths as the Word faces they stand in
+// for, so wrap and pagination land where Word puts them.
+//
+// For a family with no metric-compatible answer, validated PANOSE metadata ranks a closed
+// set of MEASURED candidates — and refuses when none is close. Refusing is the important
+// half: a substitute picked on classification alone moves line breaks, so anything the
+// ranking cannot vouch for is left to the app's own `substitute` map. The ranking gates on
+// the serif-style digit and will not consider a candidate that leaves its own
+// classification mostly unstated; see `metricDistance`.
 
+import { FAMILY_PLANS, PACKAGED_ONLY_FAMILIES, type WordDefaultFamily } from './family-plans.ts';
 import {
   GOOGLE_FONTS_REVISION,
   GOOGLE_FONT_CATALOG,
   type GoogleFontFace,
 } from './google-catalog.generated.ts';
+import { loadDefaultFonts } from './index.ts';
+import { MAX_METRIC_DISTANCE, METRIC_CANDIDATES, metricDistance } from './metric-candidates.ts';
 import type { DefaultFontSource, DefaultFontSubstitution } from './index.ts';
+
+/**
+ * Word families the package ships bytes for that the catalog cannot serve, keyed by the
+ * case-folded name a document would write.
+ *
+ * Century Gothic is the concrete one: no google/fonts family is metric-compatible with
+ * it, and ranking the closest catalog candidate lands ~6% narrow, while the packaged TeX
+ * Gyre Adventor lands on Word's own widths. Serving it from the bundle here is what makes
+ * `googleFonts()` the ON-DEMAND path for it, so `defaultFonts()` does not have to load
+ * ~709 KB of it for every document that never asks.
+ */
+const PACKAGED_ONLY_BY_NAME: ReadonlyMap<string, WordDefaultFamily> = new Map(
+  PACKAGED_ONLY_FAMILIES.map((family) => [family.toLowerCase(), family] as const)
+);
 
 export { GOOGLE_FONTS_REVISION, GOOGLE_FONT_CATALOG, type GoogleFontFace };
 
@@ -77,63 +108,9 @@ export const GOOGLE_METRIC_SUBSTITUTES: Readonly<Record<string, string>> = Objec
   'Courier New': 'Cousine',
 });
 
-interface MetricCandidate {
-  readonly family: string;
-  readonly panose: string;
-  readonly averageAdvanceEm: number;
-}
-
-/** Static catalog faces measured during substitute selection. */
-const METRIC_CANDIDATES: readonly MetricCandidate[] = Object.freeze([
-  { family: 'B612', panose: '020b0606050000020004', averageAdvanceEm: 0.6435 },
-  { family: 'Fira Sans', panose: '020b0503050000020004', averageAdvanceEm: 0.558 },
-  { family: 'Lato', panose: '020f0502020204030203', averageAdvanceEm: 0.554 },
-  { family: 'Nobile', panose: '02000503050000020004', averageAdvanceEm: 0.4794921875 },
-]);
-
-const PANOSE_FIELD_WEIGHTS = [12, 8, 3, 6, 2, 1, 1, 1, 1, 1] as const;
-const MAX_METRIC_DISTANCE = 40;
-const AVERAGE_ADVANCE_BY_PROPORTION = new Map<number, number>([
-  [2, 0.49],
-  [3, 0.54],
-  [4, 0.6],
-  [5, 0.66],
-  [6, 0.45],
-  [7, 0.72],
-  [8, 0.4],
-  [9, 0.6],
-]);
-
-function panoseBytes(value: string): readonly number[] | null {
-  if (!/^[0-9a-f]{20}$/.test(value)) return null;
-  return Array.from({ length: 10 }, (_, index) =>
-    Number.parseInt(value.slice(index * 2, index * 2 + 2), 16)
-  );
-}
-
-function metricDistance(sourcePanose: string, candidate: MetricCandidate): number {
-  const source = panoseBytes(sourcePanose);
-  const target = panoseBytes(candidate.panose);
-  if (!source || !target || source[0]! <= 1 || source[0] !== target[0]) {
-    return Number.POSITIVE_INFINITY;
-  }
-  let score = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    const left = source[index]!;
-    const right = target[index]!;
-    if (left <= 1 || right <= 1) continue;
-    score += Math.abs(left - right) * PANOSE_FIELD_WEIGHTS[index]!;
-  }
-  const expectedAdvance = AVERAGE_ADVANCE_BY_PROPORTION.get(source[3]!);
-  if (expectedAdvance !== undefined) {
-    score += Math.abs(candidate.averageAdvanceEm - expectedAdvance) * 100;
-  }
-  return score;
-}
-
 /**
- * One catalogued face that did not arrive. Non-fatal: the resolver returns whatever else
- * succeeded, and the affected family falls back to the engine's fixed measurement.
+ * One face that did not arrive. Non-fatal: the resolver returns whatever else succeeded,
+ * and the affected family falls back to the engine's fixed measurement.
  *
  * A `hashMismatch` does NOT appear here — bytes are trusted by content at the engine's
  * admission path, which rejects them after this resolver has handed them over.
@@ -141,6 +118,7 @@ function metricDistance(sourcePanose: string, candidate: MetricCandidate): numbe
 export interface GoogleFontLoadFailure {
   /** The family as the DOCUMENT named it, which may be the substituted-from name. */
   readonly family: string;
+  /** The pinned catalog URL, or the asset filename for a face served from the bundle. */
   readonly url: string;
   readonly diagnostic: string;
 }
@@ -152,12 +130,15 @@ export interface GoogleFontLoadFailure {
  */
 export interface GoogleFontsOptions {
   /**
-   * Narrow what may ever be fetched, by catalog family name. Omitted, any catalogued
-   * family a document names is fair game; set it to run against a closed short list.
+   * Narrow what may ever load, by the name of the face that would SERVE the request
+   * ("Carlito", "TeX Gyre Adventor"). Omitted, any family this module can answer is fair
+   * game; set it to run against a closed short list.
    */
   readonly allow?: readonly string[];
   /**
-   * Extra document-family -> catalog-family mappings, merged over the built-in metric map.
+   * Extra document-family -> catalog-family mappings, merged OVER
+   * {@link GOOGLE_METRIC_SUBSTITUTES}. Only metric-compatible pairs keep pagination
+   * Word-accurate; anything else trades line breaks for closer-looking glyphs.
    */
   readonly substitute?: Readonly<Record<string, string>>;
   /** Injectable for tests and CSP-constrained hosts; defaults to global `fetch`. */
@@ -248,7 +229,8 @@ async function fetchFace(face: GoogleFontFace, fetcher: typeof fetch): Promise<U
 
 /**
  * A {@link FontResolver} that serves the document's declared families from the pinned
- * Google catalog, fetching only what that document turned out to need.
+ * Google catalog — plus the package's own bundled faces for families the catalog has no
+ * metric-compatible answer for — loading only what that document turned out to need.
  *
  * ```ts
  * <DocxEditor.Root fonts={googleFonts()} />
@@ -299,7 +281,18 @@ export function googleFonts(
         .map((entry) => [entry.family.toLowerCase(), entry] as const)
     );
 
+    /** Declared spelling -> the packaged Word family whose bundled bytes answer it. */
+    const packaged = new Map<string, WordDefaultFamily>();
+
     for (const declared of [request.defaultFamily, ...request.families]) {
+      const bundled = PACKAGED_ONLY_BY_NAME.get(declared.toLowerCase());
+      if (bundled) {
+        const plan = FAMILY_PLANS.get(bundled);
+        if (plan && (!allowed || allowed.has(plan.substitute.toLowerCase()))) {
+          packaged.set(declared, bundled);
+        }
+        continue;
+      }
       const target = substitutes.get(declared.toLowerCase()) ?? declared;
       let faces = catalogByFamily.get(target.toLowerCase());
       if (faces && allowed && !allowed.has(faces[0]!.family.toLowerCase())) continue;
@@ -326,8 +319,35 @@ export function googleFonts(
     }
 
     const sources: DefaultFontSource[] = [];
-    await Promise.all(
-      [...wanted.values()].flat().map(async (face) => {
+    const packagedJob = async (): Promise<void> => {
+      if (packaged.size === 0) return;
+      const fragment = await loadDefaultFonts({
+        families: [...new Set(packaged.values())],
+        fetcher,
+      });
+      sources.push(...fragment.sources);
+      // Re-keyed onto the DOCUMENT's spelling for the same reason the catalog path does
+      // it: the painter finds a face's alias under the name the run actually wrote.
+      for (const [declared, family] of packaged) {
+        for (const entry of fragment.substitutions) {
+          if (entry.from.family !== family) continue;
+          substitutions.push({ ...entry, from: { ...entry.from, family: declared } });
+        }
+      }
+      for (const failure of fragment.failures) {
+        const record = {
+          family: failure.family,
+          url: failure.file,
+          diagnostic: failure.diagnostic,
+        };
+        failures.push(record);
+        if (options.onFailure) options.onFailure(record);
+        else console.warn(`[fonts] ${record.family} (${record.url}): ${record.diagnostic}`);
+      }
+    };
+    await Promise.all([
+      packagedJob(),
+      ...[...wanted.values()].flat().map(async (face) => {
         try {
           const bytes = await fetchFace(face, fetcher);
           sources.push({
@@ -347,8 +367,8 @@ export function googleFonts(
           if (options.onFailure) options.onFailure(failure);
           else console.warn(`[fonts] ${face.family} (${face.url}): ${failure.diagnostic}`);
         }
-      })
-    );
+      }),
+    ]);
 
     // Deterministic regardless of which response landed first, so the same document
     // composes to the same configuration fingerprint on every load.
