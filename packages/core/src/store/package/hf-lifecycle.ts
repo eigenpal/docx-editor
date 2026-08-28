@@ -9,7 +9,12 @@
 // validated integers only; content-types bytes are parse-and-prove patched; relationship
 // targets are relative safe paths; maps are prototype-safe; scans are bounded.
 
-import { createNodeIdAllocator, insertChildren, replaceChildren } from './ooxml-edit.ts';
+import {
+  carryIndexToRebuiltRoot,
+  createNodeIdAllocator,
+  insertChildren,
+  replaceChildren,
+} from './ooxml-edit.ts';
 import { readOoxmlPart, type OoxmlElement, type OoxmlNode, type OoxmlPart } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { withPart } from './ooxml-package.ts';
@@ -521,6 +526,9 @@ function withRelationshipRootBinding(main: OoxmlPart): OoxmlPart | null {
       Object.freeze({ prefix: 'r', namespaceUri: R_NS }),
     ]),
   } as typeof main.root;
+  // A rebuilt root outside the edit primitives carries its index — see the invariant on
+  // `carryIndexToRebuiltRoot`.
+  carryIndexToRebuiltRoot(main.root, root);
   return { ...main, root };
 }
 

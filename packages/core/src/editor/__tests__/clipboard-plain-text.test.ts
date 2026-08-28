@@ -279,15 +279,20 @@ describe('clipboardPasteLandsContent — the image-file stand-down predicate for
     expect(clipboardPasteLandsContent(payload)).toBe(true);
   });
 
-  test('an embedded fragment or a projectable data: image lands through the engine', () => {
-    expect(
-      clipboardPasteLandsContent(transfer({ 'text/html': '<div data-docx-fragment="AAAA"></div>' }))
-    ).toBe(true);
+  test('a projectable data: image lands through the engine', () => {
     expect(
       clipboardPasteLandsContent(
         transfer({ 'text/html': `<img src="data:image/png;base64,${REAL_PNG}">` })
       )
     ).toBe(true);
+  });
+
+  test('a fragment that does not read as a package keeps the file lane', () => {
+    // The router refuses bytes `readOoxmlPackage` cannot open and would land nothing, so
+    // a decodable-but-garbage attribute must not stand the file lane down.
+    expect(
+      clipboardPasteLandsContent(transfer({ 'text/html': '<div data-docx-fragment="AAAA"></div>' }))
+    ).toBe(false);
   });
 
   test('a data: image the projection refuses keeps the file lane', () => {
@@ -345,6 +350,21 @@ describe('clipboardPasteLandsContent — the image-file stand-down predicate for
     // text/plain + image file and no text/html: the engine's plain lane inserts the text,
     // so the file is Word's duplicate rendering.
     expect(clipboardPasteLandsContent(transfer({ 'text/plain': 'plain words' }))).toBe(true);
+  });
+
+  test('text/plain that is just the image file name, path, or URL keeps the file lane', () => {
+    // File managers mirror the copied file into text/plain; it describes the image, so
+    // the picture wins over pasting a literal path.
+    expect(clipboardPasteLandsContent(transfer({ 'text/plain': 'photo.png' }))).toBe(false);
+    expect(
+      clipboardPasteLandsContent(transfer({ 'text/plain': 'file:///Users/a/photo.png' }))
+    ).toBe(false);
+    expect(
+      clipboardPasteLandsContent(transfer({ 'text/plain': 'https://cdn.example.com/x.jpeg' }))
+    ).toBe(false);
+    expect(clipboardPasteLandsContent(transfer({ 'text/plain': 'see photo.png attached' }))).toBe(
+      true
+    );
   });
 
   test('visible text/plain wins even when the HTML flavour carries none', () => {

@@ -91,7 +91,16 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       // fire `insertFromDrop`, which is the engine's only drop path. Word on macOS drags
       // carry a rendered PNG beside the text; taking the file lane swallowed that event
       // and turned dropped text into a picture of it.
-      if (clipboardDropLandsText(event.dataTransfer)) return;
+      if (clipboardDropLandsText(event.dataTransfer)) {
+        // Only an EDITABLE target fires `insertFromDrop`. Anywhere else (page furniture,
+        // an inactive header band), the browser's default action for a file-carrying
+        // transfer is to NAVIGATE to the file — which destroys the session — so the drop
+        // is swallowed instead of released.
+        const target = event.target as HTMLElement | null;
+        if (target?.isContentEditable) return;
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(event.dataTransfer);
     },

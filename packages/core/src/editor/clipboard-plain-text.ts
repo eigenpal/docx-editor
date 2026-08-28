@@ -341,7 +341,11 @@ export function hasVisibleChar(text: string): boolean {
 export function htmlHasVisibleText(html: string): boolean {
   const bounded = html.length > MAX_HTML_INPUT ? html.slice(0, MAX_HTML_INPUT) : html;
   for (const piece of htmlTextPieces(bounded)) {
-    if (VISIBLE_CHAR.test(decodeEntities(piece))) return true;
+    // Entities decode per piece only when one can be present; a reference split across
+    // pieces by markup may still read as visible here — the full transform concatenates
+    // before decoding, so on such (hand-crafted) payloads this over-reports visibility.
+    const text = piece.includes('&') ? decodeEntities(piece) : piece;
+    if (VISIBLE_CHAR.test(text)) return true;
   }
   return false;
 }

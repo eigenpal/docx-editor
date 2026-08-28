@@ -906,17 +906,12 @@ function assembleFragment(p: Projection, blocks: readonly string[]): Uint8Array 
 
 // --- Entry point
 
-/**
- * Project external `text/html` into a WordprocessingML fragment package.
- *
- * Pure over its input: parses into an inert document, walks under caps, and returns
- * fragment bytes the paste router reads through `readOoxmlPackage`. Never attaches
- * parsed nodes anywhere, never fetches, never executes.
- */
-export function projectExternalHtml(
-  html: string,
-  limits: HtmlProjectionLimits = {}
-): HtmlProjectionResult {
+type ProjectedBlocks =
+  | { readonly ok: true; readonly projection: Projection; readonly blocks: string[] }
+  | { readonly ok: false; readonly reason: 'too-large' | 'no-content' | 'parse-unavailable' };
+
+/** The shared parse-and-walk half: everything up to (but not including) zip assembly. */
+function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlocks {
   const maxHtmlBytes = limits.maxHtmlBytes ?? DEFAULT_MAX_HTML_BYTES;
   // UTF-16 length is a lower bound on UTF-8 bytes, so the cheap check refuses first;
   // borderline payloads get an exact byte count.
@@ -951,10 +946,42 @@ export function projectExternalHtml(
   const rootCtx: FlowContext = { run: {}, para: {}, pre: false, list: null };
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
   if (blocks.length === 0) return { ok: false, reason: 'no-content' };
+  return { ok: true, projection, blocks };
+}
+
+/**
+ * Project external `text/html` into a WordprocessingML fragment package.
+ *
+ * Pure over its input: parses into an inert document, walks under caps, and returns
+ * fragment bytes the paste router reads through `readOoxmlPackage`. Never attaches
+ * parsed nodes anywhere, never fetches, never executes.
+ */
+export function projectExternalHtml(
+  html: string,
+  limits: HtmlProjectionLimits = {}
+): HtmlProjectionResult {
+  const projected = projectBlocks(html, limits);
+  if (!projected.ok) return projected;
   return {
     ok: true,
-    fragmentBytes: assembleFragment(projection, blocks),
+    fragmentBytes: assembleFragment(projected.projection, projected.blocks),
     lastMarkCovered: false,
-    imageCount: projection.imageCount,
+    imageCount: projected.projection.imageCount,
   };
+}
+
+/**
+ * What the projection WOULD land, without paying for zip assembly.
+ *
+ * The file-lane stand-down predicate asks this per paste gesture; running the full
+ * projection just to read a boolean doubled the parse-and-deflate cost of every
+ * image-bearing paste (the router runs the real projection right after).
+ */
+export function probeExternalHtml(
+  html: string,
+  limits: HtmlProjectionLimits = {}
+): { readonly lands: boolean; readonly imageCount: number } {
+  const projected = projectBlocks(html, limits);
+  if (!projected.ok) return { lands: false, imageCount: 0 };
+  return { lands: true, imageCount: projected.projection.imageCount };
 }

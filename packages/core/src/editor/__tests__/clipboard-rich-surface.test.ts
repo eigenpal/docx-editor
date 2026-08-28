@@ -12,7 +12,8 @@ import { describe, expect, test, afterEach } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
-import { fragmentFromHtml } from '../clipboard-fragment-codec.ts';
+import { fragmentFromHtml, wrapInteropHtml } from '../clipboard-fragment-codec.ts';
+import { clipboardPasteLandsContent } from '../clipboard-file-lane.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
 import { docx, mount, paragraph, putCaret } from './paginated-surface-fixtures.ts';
 
@@ -217,6 +218,16 @@ describe('fragment landings that rebuild the host root', () => {
 
     source.destroy();
     container.remove();
+  });
+});
+
+describe('the file-lane stand-down against real fragments', () => {
+  test('a fragment that reads as a package stands the file lane down without visible text', () => {
+    // An engine copy of image-only content: the interop half may carry no visible text,
+    // so the predicate must recognize the READABLE fragment itself.
+    const html = wrapInteropHtml('', { bytes: docx('<w:p/>'), lastMarkCovered: false });
+    const payload = { getData: (type: string) => (type === 'text/html' ? html : '') };
+    expect(clipboardPasteLandsContent(payload as unknown as DataTransfer)).toBe(true);
   });
 });
 

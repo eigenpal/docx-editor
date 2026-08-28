@@ -82,7 +82,15 @@ export const DocxEditorContent = defineComponent({
       // payload carries visible HTML text, NOT preventing the default lets the browser
       // fire `insertFromDrop`, which is the engine's only drop path. Mirrors the React
       // adapter.
-      if (clipboardDropLandsText(transfer)) return;
+      if (clipboardDropLandsText(transfer)) {
+        // Only an EDITABLE target fires `insertFromDrop`. Anywhere else the browser's
+        // default action for a file-carrying transfer is to NAVIGATE to the file — which
+        // destroys the session — so the drop is swallowed instead of released.
+        const target = event.target as HTMLElement | null;
+        if (target?.isContentEditable) return;
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
       void insert.insertFromDataTransfer(transfer);
     };
