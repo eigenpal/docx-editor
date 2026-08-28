@@ -1,7 +1,7 @@
 # @docx-editor.dev/fonts
 
-Metric-compatible, open-licensed substitutes for common Word fonts, packaged for
-shaped (HarfBuzz) measurement in the docx-editor engine.
+Open-licensed substitutes for common Word fonts, packaged for shaped (HarfBuzz)
+measurement in the docx-editor engine.
 
 | Word font       | Substitute        | License           |
 | --------------- | ----------------- | ----------------- |

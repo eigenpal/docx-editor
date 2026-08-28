@@ -35,7 +35,7 @@ import {
   initializeHarfBuzz,
   sha256FontBytes,
   type ResolvedRunStyle,
-} from '../../core/src/layout/index.ts';
+} from '@docx-editor.dev/core/layout';
 import { GOOGLE_FONT_CATALOG } from '../src/google-catalog.generated.ts';
 import { GOOGLE_METRIC_SUBSTITUTES } from '../src/google-fonts.ts';
 import { FAMILY_PLANS, planFaceFile, planLineBox } from '../src/family-plans.ts';

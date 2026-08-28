@@ -241,6 +241,28 @@ describe('googleFonts resolver', () => {
     expect(fragment.substitutions).toHaveLength(0);
   });
 
+  test('allow names the SERVING face for a packaged family, not the Word name', async () => {
+    // `allow` is a list of faces that may load, so a packaged family is named by its
+    // substitute. Naming the Word family instead resolves to nothing — correct per the
+    // documented semantics, and a foot-gun worth pinning in both directions.
+    const served = fakeFetcher();
+    const byServingName = await resolveOnly(['Century Gothic'], served.fetcher, {
+      allow: ['TeX Gyre Adventor'],
+    });
+    expect(byServingName.sources).toHaveLength(4);
+    expect(
+      byServingName.sources.every((source) => source.request.family === 'TeX Gyre Adventor')
+    ).toBe(true);
+
+    const wordName = fakeFetcher();
+    const byWordName = await resolveOnly(['Century Gothic'], wordName.fetcher, {
+      allow: ['Century Gothic'],
+    });
+    expect(byWordName.sources).toHaveLength(0);
+    expect(byWordName.substitutions).toHaveLength(0);
+    expect(wordName.requested).toHaveLength(0);
+  });
+
   test('an explicit substitute overrides the packaged answer for that family', async () => {
     // The bundled face is a DEFAULT, not a floor. Checking it before the substitution map
     // made Century Gothic the one family `substitute` could not redirect, and under
@@ -337,7 +359,10 @@ describe('googleFonts resolver', () => {
     // Carlito, so this is the entry being OVERRIDDEN rather than merely added.
     const { fetcher } = fakeFetcher();
     const fragment = await resolveOnly(['Calibri'], fetcher, { substitute: { Calibri: 'Tinos' } });
+    // Counted before the `every`, which is vacuously true on an empty list.
+    expect(fragment.sources).toHaveLength(4);
     expect(fragment.sources.every((source) => source.request.family === 'Tinos')).toBe(true);
+    expect(fragment.substitutions).toHaveLength(4);
     expect(
       fragment.substitutions.every(
         (entry) => entry.from.family === 'Calibri' && entry.to.family === 'Tinos'
@@ -352,8 +377,11 @@ describe('googleFonts resolver', () => {
     const { fetcher, requested } = fakeFetcher();
     expect(GOOGLE_FONT_FAMILIES).toContain('Lato');
     const fragment = await resolveOnly(['Lato'], fetcher, { substitute: { Lato: 'Tinos' } });
+    expect(fragment.sources).toHaveLength(4);
     expect(fragment.sources.every((source) => source.request.family === 'Tinos')).toBe(true);
+    expect(requested).toHaveLength(4);
     expect(requested.every((url) => url.includes('/tinos/'))).toBe(true);
+    expect(fragment.substitutions).toHaveLength(4);
     expect(
       fragment.substitutions.every(
         (entry) => entry.from.family === 'Lato' && entry.to.family === 'Tinos'
