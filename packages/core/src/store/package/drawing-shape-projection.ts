@@ -39,12 +39,41 @@ export function parseEmu(value: string | undefined, clamp = true): number | null
 /**
  * An `xsd:boolean` attribute read fail-closed.
  *
- * The schema allows exactly `0`, `1`, `false` and `true`. Only `0`, `false` and an absent
- * attribute mean "not set"; every other spelling — `TRUE`, `yes`, `2` — is schema-invalid,
- * and the sender chose it, so it refuses the shape rather than painting as if unset.
+ * Ignoring whitespace, the schema allows exactly `0`, `1`, `false` and `true`. Only `0`,
+ * `false` and an absent attribute mean "not set"; every other spelling — `TRUE`, `yes`, `2`
+ * — is schema-invalid, and the sender chose it, so it refuses the shape rather than painting
+ * as if the flag were unset.
+ *
+ * The collapse is load-bearing. `xsd:boolean` carries a fixed `whiteSpace="collapse"` facet,
+ * so ` 0 ` and `0\n` are valid false, but the XML reader keeps attribute values verbatim
+ * (`trimValues: false`). Comparing the raw string would refuse a shape Word paints, which is
+ * the one way a fail-closed read like this can be worse than the permissive one it replaced.
  */
 function schemaFlagIsUnset(value: string | undefined): boolean {
-  return value === undefined || value === '0' || value === 'false';
+  if (value === undefined) return true;
+  const collapsed = collapseSchemaFlag(value);
+  return collapsed === '0' || collapsed === 'false';
+}
+
+/**
+ * The complement of {@link schemaFlagIsUnset}: an `xsd:boolean` that legally reads true.
+ *
+ * A value is neither set nor unset when it is schema-invalid, and the two callers want
+ * opposite things there. A flag the engine cannot HONOUR (a flipped vector shape) refuses
+ * through `schemaFlagIsUnset`, because painting it unflipped would be a wrong render. A flag
+ * the engine can honour (a flipped picture) reads through here and treats anything invalid
+ * as unset, because refusing would drop the picture entirely — a worse outcome than a
+ * mirror the sender spelled illegally.
+ */
+export function schemaFlagIsSet(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  const collapsed = collapseSchemaFlag(value);
+  return collapsed === '1' || collapsed === 'true';
+}
+
+function collapseSchemaFlag(value: string): string {
+  // XML whitespace is exactly space, tab, LF and CR — not `\s`, which is wider.
+  return value.replace(/[ \t\n\r]+/g, ' ').trim();
 }
 
 export function findDirectChild(
@@ -175,13 +204,21 @@ function channelsHex(channels: readonly number[]): string {
  *   oracle here. Treat this as one renderer's behaviour reproduced exactly (47 of 47
  *   base/ratio pairs), not as Word's behaviour confirmed. Note also that 2.3 is LibreOffice's
  *   own colour-space gamma, so agreement with it is partly circular.
- * - The one independent, spec-side check: ECMA-376 20.1.2.3.31's worked `a:shade` example,
- *   `00FF00` at `val="50000"`, gives `00BC00`. This model reproduces that exactly; a blend on
- *   the stored channel gives `007F00`.
+ * - The one check that does not come from a renderer: ECMA-376 Part 1 20.1.2.3.31's worked
+ *   `a:shade` example, `00FF00` at `val="50%"`, gives `00BC00`. This model reproduces it
+ *   exactly. Read what that does and does not settle — a blend on the stored channel gives
+ *   `008000`, so the example rules that reading out decisively, but the sRGB curve gives
+ *   `00BB00`, one level away, so it barely speaks to the choice of curve.
  *
- * Both constants are load-bearing. With `Math.round` the result moves one level on most
- * inputs; with the sRGB piecewise curve it moves up to four (`336699` + `shade 40000` is
- * `224466` here and `1E4164` through sRGB).
+ * On the spelling in that citation: Part 1 (Strict) writes percentages as `50%`, and its
+ * `ST_PositiveFixedPercentage` does not admit `50000` at all. The 1000ths-of-a-percent
+ * integer Word writes is Part 4 (Transitional). `transformRatio` takes both.
+ *
+ * Both constants are load-bearing, though neither is dramatic on any single colour. Against
+ * `Math.round` the result moves a level on about half of a uniform base/ratio grid. Against
+ * the sRGB piecewise curve, holding this floor fixed, it moves on about half as well, by
+ * four levels on `336699` + `shade 40000` (`224466` here, `1E4163` through sRGB) and by as
+ * much as eleven at the dark end.
  *
  * `lumMod`/`lumOff` are NOT linear-light: they stay in HSL over the stored channels and keep
  * `channelsHex`'s rounding. That path is confirmed against Word itself, so do not fold it in.
@@ -237,11 +274,33 @@ function hslToRgb([hue, saturation, lightness]: readonly number[]): [number, num
   return [channel(1 / 3) * 255, channel(0) * 255, channel(-1 / 3) * 255];
 }
 
+/**
+ * `val` on a colour transform, as a 0..1 ratio, or null to refuse the colour.
+ *
+ * Two spellings are legal and both appear in the wild:
+ *
+ * - The 1000ths-of-a-percent integer (`50000`). This is `ST_Percentage`'s Transitional
+ *   spelling (ECMA-376 Part 4), and it is what Word writes, so it is the common case.
+ * - The percentage literal (`50%`, `12.5%`). This is the Strict spelling (Part 1
+ *   20.1.10.40/20.1.10.41) and the one the spec's own worked examples use. Refusing it
+ *   dropped the shape to a placeholder card.
+ *
+ * Both regexes are anchored, bounded and have no nested quantifier, so a hostile `val`
+ * cannot make either backtrack. Anything else — a sign, an exponent, whitespace, 7 digits —
+ * refuses, and the caller fails the whole colour closed rather than guessing.
+ */
 function transformRatio(node: OoxmlElement): number | null {
   const value = schemaAttributeValue(node.attributes, 'val');
-  if (value === undefined || !/^\d{1,6}$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 100_000 ? parsed / 100_000 : null;
+  if (value === undefined) return null;
+  if (/^\d{1,6}$/.test(value)) {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 && parsed <= 100_000 ? parsed / 100_000 : null;
+  }
+  if (/^(?:100|\d{1,2})(?:\.\d{1,2})?%$/.test(value)) {
+    // The regex already bounds this to 0..100, so the divide cannot leave the ratio range.
+    return Number(value.slice(0, -1)) / 100;
+  }
+  return null;
 }
 
 function resolveColorNode(

@@ -145,22 +145,31 @@ export const MAX_SVG_ROOT_SCAN_BYTES = 8192;
 const DEFAULT_SVG_INTRINSIC_WIDTH = 300;
 const DEFAULT_SVG_INTRINSIC_HEIGHT = 150;
 
-const CONTENT_TYPE_TO_MIME: Readonly<Record<string, RenderableImageMime | PreservedImageMime>> =
-  Object.freeze({
-    'image/png': 'image/png',
-    'image/jpeg': 'image/jpeg',
-    'image/jpg': 'image/jpeg',
-    'image/gif': 'image/gif',
+// A Map, not an object literal: the key is a `[Content_Types].xml` value the sender controls,
+// and this is the upstream of the `mime` that reaches paint's format label.
+//
+// No exploit reaches it today, and the reason is worth recording so nobody relaxes the wrong
+// guard later: `readContentTypes` refuses anything that is not `type/subtype`
+// (`MIME_ESSENCE_RE` in content-types.ts) and fails the whole package with
+// `bad-content-types`, and no member of `Object.prototype` contains a slash. The Map removes
+// the hazard at the source instead of depending on that coincidence holding.
+const CONTENT_TYPE_TO_MIME: ReadonlyMap<string, RenderableImageMime | PreservedImageMime> = new Map(
+  [
+    ['image/png', 'image/png'],
+    ['image/jpeg', 'image/jpeg'],
+    ['image/jpg', 'image/jpeg'],
+    ['image/gif', 'image/gif'],
     // `image/bmp` is the registered type; Word and older producers also write these two.
-    'image/bmp': 'image/bmp',
-    'image/x-ms-bmp': 'image/bmp',
-    'image/x-bmp': 'image/bmp',
-    'image/webp': 'image/webp',
-    'image/svg+xml': 'image/svg+xml',
-    'image/tiff': 'image/tiff',
-    'image/x-emf': 'image/x-emf',
-    'image/x-wmf': 'image/x-wmf',
-  });
+    ['image/bmp', 'image/bmp'],
+    ['image/x-ms-bmp', 'image/bmp'],
+    ['image/x-bmp', 'image/bmp'],
+    ['image/webp', 'image/webp'],
+    ['image/svg+xml', 'image/svg+xml'],
+    ['image/tiff', 'image/tiff'],
+    ['image/x-emf', 'image/x-emf'],
+    ['image/x-wmf', 'image/x-wmf'],
+  ]
+);
 
 /** A raster header that passed structural validation: its real MIME type and pixel extent. */
 export interface ValidatedRasterHeader {
@@ -720,7 +729,7 @@ function claimedMimeForPart(
 ): RenderableImageMime | PreservedImageMime | 'unknown' {
   const resolved = resolveContentType(pkg.contentTypes, partName);
   if (!resolved.ok) return 'unknown';
-  return CONTENT_TYPE_TO_MIME[resolved.contentType.toLowerCase()] ?? 'unknown';
+  return CONTENT_TYPE_TO_MIME.get(resolved.contentType.toLowerCase()) ?? 'unknown';
 }
 
 function snapshotBytes(bytes: Uint8Array): Uint8Array {

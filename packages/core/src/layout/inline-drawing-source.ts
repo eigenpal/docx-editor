@@ -186,6 +186,13 @@ const COORDINATE_BITS = new Uint32Array(COORDINATE_SCRATCH.buffer);
  * stream into two 32-bit FNV-1a accumulators and joins the scalars verbatim. The shape of
  * the component list (its length, and each subpath's length) is joined literally rather than
  * hashed, so a structural change can never hide inside the digest.
+ *
+ * This is a cache key, NOT a security primitive. FNV-1a is trivially invertible — its round
+ * is `h = (h ^ d) * p` with an odd, hence modularly invertible, `p` — so a chosen last
+ * coordinate can drive both accumulators to any target in closed form. That buys nothing
+ * here, because forging a collision needs two shapes under the same `drawingNodeId` in two
+ * revisions of one document, and the payoff is a stale repaint. Do not reuse this digest
+ * anywhere an attacker profits from a collision.
  */
 export function vectorShapeLayoutToken(
   vector: NonNullable<DrawingProjection['vectorShape']>

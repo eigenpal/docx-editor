@@ -49,6 +49,7 @@ import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
 import {
   findDirectChild,
   parseEmu,
+  schemaFlagIsSet,
   projectTextboxStory,
   projectVectorShape,
   type ShapeSchemeColorResolver,
@@ -1202,8 +1203,15 @@ function projectPicture(
   const rotEmu = rotRaw !== undefined ? parseEmu(rotRaw, false) : null;
   const transform: DrawingTransform = Object.freeze({
     rotationDegrees: rotEmu === null ? 0 : rotEmu / 60_000,
-    flipHorizontal: xfrm ? schemaAttributeValue(xfrm.attributes, 'flipH') === '1' : false,
-    flipVertical: xfrm ? schemaAttributeValue(xfrm.attributes, 'flipV') === '1' : false,
+    // `xsd:boolean`, so `true` is as legal as `1`; reading only `1` painted a mirrored
+    // picture the right way round. A picture flip IS paintable, so a schema-invalid value
+    // reads as unset here rather than refusing the whole picture.
+    flipHorizontal: schemaFlagIsSet(
+      xfrm ? schemaAttributeValue(xfrm.attributes, 'flipH') : undefined
+    ),
+    flipVertical: schemaFlagIsSet(
+      xfrm ? schemaAttributeValue(xfrm.attributes, 'flipV') : undefined
+    ),
     offsetEmu: Object.freeze({
       x: offNode ? (parseEmu(schemaAttributeValue(offNode.attributes, 'x'), false) ?? 0) : 0,
       y: offNode ? (parseEmu(schemaAttributeValue(offNode.attributes, 'y'), false) ?? 0) : 0,

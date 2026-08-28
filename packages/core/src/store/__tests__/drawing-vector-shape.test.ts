@@ -81,6 +81,33 @@ function mcWrapped(drawing: string): string {
   );
 }
 
+/** Attribute-escape a raw value so a hostile spelling reaches the parser intact. */
+function escapeAttribute(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+
+/** A `wpg:wgp` group of two independently filled children, with a group `a:xfrm`. */
+function groupShapeDrawing(): string {
+  return (
+    '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+    '<wp:extent cx="200000" cy="100000"/><wp:docPr id="13" name="Group 13"/>' +
+    `<a:graphic><a:graphicData uri="${WPG}"><wpg:wgp><wpg:grpSpPr>` +
+    '<a:xfrm><a:chOff x="0" y="0"/><a:chExt cx="200000" cy="100000"/></a:xfrm>' +
+    '</wpg:grpSpPr>' +
+    '<wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100000" cy="100000"/></a:xfrm>' +
+    '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>' +
+    '<a:solidFill><a:schemeClr val="accent1"/></a:solidFill></wps:spPr></wps:wsp>' +
+    '<wps:wsp><wps:spPr><a:xfrm><a:off x="100000" y="0"/><a:ext cx="100000" cy="100000"/></a:xfrm>' +
+    '<a:custGeom><a:pathLst><a:path w="100000" h="100000">' +
+    '<a:moveTo><a:pt x="0" y="0"/></a:moveTo>' +
+    '<a:cubicBezTo><a:pt x="25000" y="0"/><a:pt x="75000" y="100000"/>' +
+    '<a:pt x="100000" y="100000"/></a:cubicBezTo><a:close/>' +
+    '</a:path></a:pathLst></a:custGeom>' +
+    '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></wps:spPr></wps:wsp>' +
+    '</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing>'
+  );
+}
+
 describe('wps vector shape projection', () => {
   test('package theme colours honor the settings colour mapping', () => {
     const theme = readOoxmlPart(
@@ -233,8 +260,13 @@ describe('wps vector shape projection', () => {
 
   // `a:tint` and `a:shade` are a blend in LINEAR light, and `val` is the fraction of the
   // INPUT colour (ECMA-376 20.1.2.3.34/20.1.2.3.31) — not of white, and not a blend on the
-  // stored channel. Each base/value pair below is picked so all three readings disagree, and
-  // every expectation is the pixel LibreOffice paints for that exact fill:
+  // stored channel. Every expectation below is the pixel LibreOffice paints for that exact
+  // fill; the two right-hand columns are what the readings this engine rejects would give.
+  //
+  // `a:shade` has only two readings, since the white-fraction question does not arise. Of the
+  // tint rows, `0000FF` and `336699` separate all three; `808080` at 50% is the one point
+  // where the two rejected readings agree with each other, and it is here only to pin the
+  // case the old fixture leaned on:
   //
   //   base    transform        this engine   `val` as white-fraction   blend in gamma space
   //   0000FF  tint  20000      E7E7FF        3333FF                    CCCCFF
@@ -273,6 +305,42 @@ describe('wps vector shape projection', () => {
     }
   });
 
+  // ECMA-376 gives `val` two legal spellings: the 1000ths-of-a-percent integer Word writes
+  // (`50000`, Part 4 Transitional) and the percentage literal (`50%`, Part 1 Strict), which
+  // is what the spec's own worked examples use. Both must resolve, and to the same colour.
+  test('a colour transform accepts both the integer and the percentage spelling', () => {
+    const fillFor = (val: string): string | null => {
+      const drawing = doubleRuleShapeDrawing().replace(
+        '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
+        `<a:solidFill><a:srgbClr val="00FF00"><a:shade val="${val}"/></a:srgbClr></a:solidFill>`
+      );
+      const part = parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`);
+      return (
+        [...indexInlineDrawingProjectionsInPart(part).values()][0]?.vectorShape?.fillHex ?? null
+      );
+    };
+    // ECMA-376 Part 1 20.1.2.3.31's worked `a:shade` example: `00FF00` at 50% is `00BC00`.
+    // It is the one check on this colour model that does not come from a renderer, so it is
+    // pinned in both spellings. A blend on the stored channel would give `008000`; note the
+    // sRGB curve would give `00BB00`, so this example separates the two BLENDS decisively and
+    // the two CURVES only just.
+    expect(fillFor('50%')).toBe('00BC00');
+    expect(fillFor('50000')).toBe('00BC00');
+    for (const [percent, integer] of [
+      ['0%', '0'],
+      ['100%', '100000'],
+      ['12.5%', '12500'],
+      ['99.99%', '99990'],
+    ] as const) {
+      expect(`${percent}: ${fillFor(percent)}`).toBe(`${percent}: ${fillFor(integer)}`);
+      expect(fillFor(percent)).not.toBeNull();
+    }
+    // Everything else refuses, and a refused transform fails the whole colour closed.
+    for (const rejected of ['101%', '-5%', ' 50% ', '50.123%', '1e2%', '%', '50 %', '1000000']) {
+      expect(`${rejected}: ${fillFor(rejected)}`).toBe(`${rejected}: null`);
+    }
+  });
+
   // A ratio of 100000 is the identity, so the round trip through linear light and back must
   // return the authored byte. The floor in `channelFromLinear` is one ulp away from turning
   // every channel into the one below it, which no other case here would catch.
@@ -297,34 +365,73 @@ describe('wps vector shape projection', () => {
   // `flipH`/`flipV` are `xsd:boolean`. The engine cannot paint a flip, so a set flag refuses
   // the shape — and a spelling the schema does not allow must refuse too, not fall through
   // to "unset" and paint the shape the wrong way round.
-  test('an unset flip paints and any other spelling refuses', () => {
-    const cases = [
+  //
+  // Four call sites read a flip: `flipH` and `flipV` on a shape's own `a:xfrm`, and the same
+  // pair on a group's `wpg:grpSpPr/a:xfrm`. The group pair is the lane this file exists for,
+  // so every spelling runs against all four.
+  test('an unset flip paints and any other spelling refuses, at all four sites', () => {
+    const spellings = [
+      // Legal `xsd:boolean` false, including the forms the fixed `whiteSpace="collapse"`
+      // facet makes valid. The XML reader does not trim, so the helper has to.
       [undefined, true],
       ['0', true],
       ['false', true],
+      [' 0 ', true],
+      ['\nfalse\n', true],
+      // Legal true — the engine cannot paint a flip, so it refuses.
       ['1', false],
       ['true', false],
+      [' 1 ', false],
+      // Schema-invalid: refuse rather than read as unset.
       ['TRUE', false],
       ['True', false],
       ['yes', false],
       ['2', false],
       ['', false],
+      ['0 1', false],
     ] as const;
-    for (const [value, paints] of cases) {
-      const xfrm =
-        value === undefined
-          ? '<a:xfrm><a:off x="0" y="0"/><a:ext cx="6696075" cy="47625"/></a:xfrm>'
-          : `<a:xfrm flipH="${value}"><a:off x="0" y="0"/>` +
-            '<a:ext cx="6696075" cy="47625"/></a:xfrm>';
-      const drawing = doubleRuleShapeDrawing().replace(
-        '<a:xfrm><a:off x="0" y="0"/><a:ext cx="6696075" cy="47625"/></a:xfrm>',
-        xfrm
-      );
-      const part = parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`);
-      const shape = [...indexInlineDrawingProjectionsInPart(part).values()][0]?.vectorShape;
-      expect(`flipH=${value}: ${shape !== null && shape !== undefined}`).toBe(
-        `flipH=${value}: ${paints}`
-      );
+
+    const SHAPE_XFRM = '<a:xfrm><a:off x="0" y="0"/><a:ext cx="6696075" cy="47625"/></a:xfrm>';
+    const GROUP_XFRM = '<a:xfrm><a:chOff x="0" y="0"/><a:chExt cx="200000" cy="100000"/></a:xfrm>';
+    const sites = [
+      {
+        name: 'shape flipH',
+        drawing: (attrs: string) =>
+          doubleRuleShapeDrawing().replace(SHAPE_XFRM, `<a:xfrm${attrs}>${SHAPE_XFRM.slice(9)}`),
+        attr: 'flipH',
+      },
+      {
+        name: 'shape flipV',
+        drawing: (attrs: string) =>
+          doubleRuleShapeDrawing().replace(SHAPE_XFRM, `<a:xfrm${attrs}>${SHAPE_XFRM.slice(9)}`),
+        attr: 'flipV',
+      },
+      {
+        name: 'group flipH',
+        drawing: (attrs: string) =>
+          groupShapeDrawing().replace(GROUP_XFRM, `<a:xfrm${attrs}>${GROUP_XFRM.slice(9)}`),
+        attr: 'flipH',
+      },
+      {
+        name: 'group flipV',
+        drawing: (attrs: string) =>
+          groupShapeDrawing().replace(GROUP_XFRM, `<a:xfrm${attrs}>${GROUP_XFRM.slice(9)}`),
+        attr: 'flipV',
+      },
+    ];
+
+    for (const site of sites) {
+      for (const [value, paints] of spellings) {
+        const attrs = value === undefined ? '' : ` ${site.attr}="${escapeAttribute(value)}"`;
+        const part = parsePart(`<w:p><w:r>${site.drawing(attrs)}</w:r></w:p>`);
+        const shape = [
+          ...indexInlineDrawingProjectionsInPart(part, {
+            resolveSchemeColor: () => '4472C4',
+          }).values(),
+        ][0]?.vectorShape;
+        const label = `${site.name}=${JSON.stringify(value)}`;
+        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(`${label}: ${paints}`);
+      }
     }
   });
 
@@ -455,23 +562,7 @@ describe('wps vector shape projection', () => {
   });
 
   test('an MC wpg group projects each child with its own geometry and colour', () => {
-    const drawing =
-      '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
-      '<wp:extent cx="200000" cy="100000"/><wp:docPr id="13" name="Group 13"/>' +
-      `<a:graphic><a:graphicData uri="${WPG}"><wpg:wgp><wpg:grpSpPr>` +
-      '<a:xfrm><a:chOff x="0" y="0"/><a:chExt cx="200000" cy="100000"/></a:xfrm>' +
-      '</wpg:grpSpPr>' +
-      '<wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="100000" cy="100000"/></a:xfrm>' +
-      '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>' +
-      '<a:solidFill><a:schemeClr val="accent1"/></a:solidFill></wps:spPr></wps:wsp>' +
-      '<wps:wsp><wps:spPr><a:xfrm><a:off x="100000" y="0"/><a:ext cx="100000" cy="100000"/></a:xfrm>' +
-      '<a:custGeom><a:pathLst><a:path w="100000" h="100000">' +
-      '<a:moveTo><a:pt x="0" y="0"/></a:moveTo>' +
-      '<a:cubicBezTo><a:pt x="25000" y="0"/><a:pt x="75000" y="100000"/>' +
-      '<a:pt x="100000" y="100000"/></a:cubicBezTo><a:close/>' +
-      '</a:path></a:pathLst></a:custGeom>' +
-      '<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></wps:spPr></wps:wsp>' +
-      '</wpg:wgp></a:graphicData></a:graphic></wp:inline></w:drawing>';
+    const drawing = groupShapeDrawing();
     const wrapped =
       '<mc:AlternateContent><mc:Choice Requires="wpg">' +
       drawing +

@@ -1,6 +1,10 @@
-// `graphicData@uri` is sender-controlled and keys the placeholder label a refused graphic
-// paints. Looked up on an object literal, a uri of `constructor` or `__proto__` hands back a
-// prototype member, and the card announces a stringified function instead of naming a kind.
+// Two file-derived drawing reads that must not be taken at face value.
+//
+// `graphicData@uri` keys the placeholder label a refused graphic paints. Looked up on an
+// object literal, a uri of `constructor` or `__proto__` hands back a prototype member, and
+// the card announces a stringified function instead of naming a kind.
+//
+// A picture's `a:xfrm` flip is `xsd:boolean`, so reading only `1` silently dropped `true`.
 
 import { describe, expect, test } from 'bun:test';
 import {
@@ -11,6 +15,7 @@ import {
 } from '../../store/package/ooxml-tree.ts';
 import {
   DEFAULT_DRAWING_PROJECTION_LIMITS,
+  indexInlineDrawingProjectionsInPart,
   projectDrawing,
 } from '../../store/package/drawing-projection.ts';
 import type { ImageResourceState } from '../../store/package/image-resources.ts';
@@ -92,5 +97,54 @@ describe('placeholder graphic kind', () => {
     for (const hostile of ['constructor', '__proto__', 'toString', 'valueOf']) {
       expect(`${hostile}: ${placeholderKindFor(hostile)}`).toBe(`${hostile}: graphic`);
     }
+  });
+});
+
+// A picture's `a:xfrm` flip is `xsd:boolean` too, but unlike a vector shape's the engine CAN
+// paint it, so the policy differs: a legal true mirrors, and a spelling the schema forbids
+// reads as unset rather than refusing and losing the picture.
+describe('picture transform flip', () => {
+  const flipsFor = (attrs: string): { h: boolean; v: boolean } => {
+    const xml =
+      `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+      `xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p><w:r><w:drawing>` +
+      '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
+      '<wp:extent cx="914400" cy="457200"/><wp:docPr id="1" name="pic"/>' +
+      `<a:graphic><a:graphicData uri="${PIC}"><pic:pic>` +
+      '<pic:nvPicPr><pic:cNvPr id="1" name="pic"/><pic:cNvPicPr/></pic:nvPicPr>' +
+      '<pic:blipFill><a:blip r:embed="rId9"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+      `<pic:spPr><a:xfrm${attrs}><a:ext cx="914400" cy="457200"/></a:xfrm>` +
+      '<a:prstGeom prst="rect"/></pic:spPr>' +
+      '</pic:pic></a:graphicData></a:graphic>' +
+      '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>';
+    const result = readOoxmlPart(xml, {
+      name: OWNER,
+      contentType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+    });
+    if (!result.ok) throw new Error(result.reason);
+    const projection = [...indexInlineDrawingProjectionsInPart(result.part).values()][0]!;
+    const transform = projection.picture!.transform;
+    return { h: transform.flipHorizontal, v: transform.flipVertical };
+  };
+
+  test('every legal true mirrors and everything else does not', () => {
+    expect(flipsFor('')).toEqual({ h: false, v: false });
+    for (const set of ['1', 'true', ' 1 ', '\ntrue\n']) {
+      expect(`flipH=${JSON.stringify(set)}: ${flipsFor(` flipH="${set}"`).h}`).toBe(
+        `flipH=${JSON.stringify(set)}: true`
+      );
+      expect(`flipV=${JSON.stringify(set)}: ${flipsFor(` flipV="${set}"`).v}`).toBe(
+        `flipV=${JSON.stringify(set)}: true`
+      );
+    }
+    for (const unset of ['0', 'false', ' 0 ', 'TRUE', 'True', 'yes', '2', '']) {
+      expect(`flipH=${JSON.stringify(unset)}: ${flipsFor(` flipH="${unset}"`).h}`).toBe(
+        `flipH=${JSON.stringify(unset)}: false`
+      );
+    }
+    // A schema-invalid flip must not cost the picture itself.
+    expect(flipsFor(' flipH="TRUE"')).toEqual({ h: false, v: false });
+    expect(flipsFor(' flipH="1" flipV="1"')).toEqual({ h: true, v: true });
   });
 });
