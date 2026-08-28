@@ -66,6 +66,18 @@ function hasElement(peer: Peer, localName: string): boolean {
   return present;
 }
 
+/** Every value of one attribute across all elements of a localName, so a dropped or
+ * duplicated instance is visible — `hasElement` alone matches any single survivor. */
+function attributeValues(peer: Peer, localName: string, attribute: string): string[] {
+  const values: string[] = [];
+  walk(peer.store.bodyStore().part.root, (node) => {
+    if (node.kind === 'textValue' || node.localName !== localName) return;
+    const found = node.attributes.find((a) => a.localName === attribute);
+    if (found) values.push(found.value);
+  });
+  return values.sort();
+}
+
 /**
  * Apply two concurrent edits with the wire paused, reconnect, and assert convergence.
  *
@@ -111,7 +123,9 @@ describe('concurrent variant edits converge', () => {
         },
       ],
       (peer) => {
-        expect(hasElement(peer, 'ind')).toBe(true);
+        // BOTH indents must survive — a count/value check, not `hasElement`, which any
+        // single survivor would satisfy.
+        expect(attributeValues(peer, 'ind', 'start')).toEqual(['1440', '720']);
         expect(bodyText(peer)).toBe('Alpha bravo canvas delta editorSecond paragraph');
       }
     );
