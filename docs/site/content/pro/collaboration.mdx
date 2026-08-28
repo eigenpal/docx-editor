@@ -1,15 +1,21 @@
 ---
-title: 'Real-time collaboration'
-description: 'Replicate a DOCX across peers with the Pro collaboration module.'
+title: 'DOCX collaboration reference'
+description: 'Reference for Pro providers, room lifecycles, presence, offline editing, recovery, and limits.'
 category: 'Pro'
 order: 64
+seoTitle: 'DOCX collaboration API reference'
 ---
 
-Real-time collaboration replicates the document across peers.
+This reference documents the complete configuration and API behavior for
+real-time DOCX collaboration with the Pro package. It covers providers, room
+lifecycles, presence, recovery, and resource limits.
 
-It covers text, structure, formatting, tables, headers, footers, notes,
-drawings, relationships, and embedded parts. Peers also share presence and
-remote selections across paragraphs.
+For a basic WebRTC setup, use the
+[real-time collaboration quickstart](/docs/2.x/collaboration).
+
+The Pro module replicates text, structure, formatting, tables, headers, footers,
+notes, drawings, relationships, and embedded parts. Peers also share presence
+and remote selections across paragraphs.
 
 Collaboration requires the collaboration module from
 [`@docx-editor.dev/pro`](/docs/2.x/pro).
@@ -52,7 +58,7 @@ npm install @docx-editor.dev/pro yjs @hocuspocus/provider
 `yjs`, `y-webrtc`, and `@hocuspocus/provider` are optional Pro peer
 dependencies. Pro installs `y-protocols`.
 
-## Open a room with the hook
+## Connect with `useWebrtcCollaboration`
 
 `useWebrtcCollaboration` owns the WebRTC room. It creates the replica and
 builds `modules`. It destroys the room when you leave.
@@ -103,14 +109,16 @@ import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 type CollaborativeEditorProps = {
   roomId: string;
   bytes: Uint8Array;
+  actorId: string;
+  name: string;
 };
 
-export function CollaborativeEditor({ roomId, bytes }: CollaborativeEditorProps) {
+export function CollaborativeEditor({ roomId, bytes, actorId, name }: CollaborativeEditorProps) {
   const editorRef = useRef<DocxEditorRef>(null);
   const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
     room: {
       roomId,
-      identity: { actorId: 'alex', name: 'Alex' },
+      identity: { actorId, name },
       bootstrap: { kind: 'create-or-join', document: bytes },
     },
   });
@@ -146,13 +154,18 @@ import { ref } from 'vue';
 import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/vue';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/vue/webrtc';
 
-const props = defineProps<{ roomId: string; bytes: Uint8Array }>();
+const props = defineProps<{
+  roomId: string;
+  bytes: Uint8Array;
+  actorId: string;
+  name: string;
+}>();
 
 const editorRef = ref<DocxEditorRef | null>(null);
 const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
   room: {
     roomId: props.roomId,
-    identity: { actorId: 'alex', name: 'Alex' },
+    identity: { actorId: props.actorId, name: props.name },
     bootstrap: { kind: 'create-or-join', document: props.bytes },
   },
 });
@@ -179,9 +192,10 @@ async function leaveRoom() {
 </Framework>
 </FrameworkTabs>
 
-With `create-or-join`, every peer uses the same options. The first peer seeds
-the empty room from `document`. Later peers join the existing room. Use
-`create` or `join` when each host already knows its role.
+With `create-or-join`, every peer uses the same room and bootstrap settings.
+Each peer must use a unique `actorId`. The first peer seeds the empty room from
+`document`. Later peers join the existing room. Use `create` or `join` when each
+host already knows its role.
 
 Two isolated peers can seed the same room at the same time. This creates a room
 that clients cannot repair. Each replica reports `concurrent-seed` and stops.
@@ -349,7 +363,7 @@ All of these are available from `@docx-editor.dev/pro/react` and
 If you own the Yjs resources, use `useDocumentCollaboration` from the same
 entries. It provides the same `connect` and `leave` lifecycle without WebRTC.
 
-## Presence UI
+## Show avatars and caret labels
 
 `DocxEditorCollaboration` provides presence controls. Import it from
 `@docx-editor.dev/pro/react` or `@docx-editor.dev/pro/vue`. Mount its parts
@@ -444,8 +458,8 @@ For CSS styling, use the `docx-remote-caret-label` class,
 ## Recover a diverged replica
 
 A status of `error` is terminal. The replica refused an update and kept its
-copy. It now edits a document that other peers do not have. Waiting does not fix
-the replica. Call `rejoin`:
+copy. The session now refuses edits, and other peers might not have its latest
+changes. Waiting does not fix the replica. Call `rejoin`:
 
 ```tsx
 const { rejoin } = useHocuspocusCollaboration({ room });
@@ -460,8 +474,8 @@ async function rejoinRoom() {
 
 Save the editor bytes before you call `rejoin`. It leaves with those bytes, then
 joins the same room with `{ kind: 'join' }`. A successful join uses the room
-copy, so it drops edits made after divergence. After a failed join, the saved
-bytes stay mounted locally.
+copy. It can drop unreplicated changes that existed when the session failed.
+After a failed join, the saved bytes stay mounted locally.
 
 ## Edit offline
 
@@ -480,7 +494,7 @@ For production, pass your signaling URLs to `connect` or `room`. Also provide
 your own Traversal Using Relays around NAT (TURN) servers. Many networks block
 direct WebRTC connections without TURN.
 
-## Hocuspocus
+## Connect to a Hocuspocus server
 
 `useHocuspocusCollaboration` owns a room on a
 [Hocuspocus](https://tiptap.dev/docs/hocuspocus) server. It has the same
@@ -498,17 +512,21 @@ export function ServerBackedEditor({
   roomId,
   token,
   bytes,
+  actorId,
+  name,
 }: {
   roomId: string;
   token: string;
   bytes: Uint8Array;
+  actorId: string;
+  name: string;
 }) {
   const { document, modules, session, pending, error } = useHocuspocusCollaboration({
     room: {
       url: 'wss://collab.example.test',
       roomId,
       token,
-      identity: { actorId: 'alex', name: 'Alex' },
+      identity: { actorId, name },
       bootstrap: { kind: 'create-or-join', document: bytes },
     },
   });
@@ -572,7 +590,7 @@ See the
 [server-backed Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus)
 for persistence and DOCX export.
 
-## Write a provider
+## Use the replication contracts
 
 `@docx-editor.dev/core/collaboration/replication` holds the seam a replication
 implementation binds to: the document port an adapter writes through, the
@@ -589,7 +607,7 @@ A host that renders presence and reads a status needs none of it, which is why
 it is a separate subpath. Import `@docx-editor.dev/core/collaboration` for the
 consumer types: identity, participants, remote selections, status, and failures.
 
-## Own a Yjs document
+## Integrate a custom Yjs provider
 
 If you own a `Y.Doc` and awareness instance, call
 `createDocumentCollaboration` from `@docx-editor.dev/pro/collaboration`. It
@@ -618,6 +636,8 @@ import { createDocumentCollaboration } from '@docx-editor.dev/pro/collaboration'
 const ydoc = new Y.Doc();
 const awareness = new Awareness(ydoc);
 const provider = new WebsocketProvider('wss://example.test', 'room-1', ydoc, { awareness });
+declare const currentUser: { id: string; name: string };
+const identity = { actorId: currentUser.id, name: currentUser.name };
 
 await new Promise((resolve) => provider.once('sync', resolve));
 
@@ -625,7 +645,7 @@ const room = await createDocumentCollaboration({
   ydoc,
   awareness,
   documentId: 'room-1',
-  identity: { actorId: 'alex', name: 'Alex' },
+  identity,
   bootstrap: { kind: 'join' },
 });
 
@@ -675,7 +695,7 @@ The same entry exports the experimental `createTextCollaboration`. It only
 replicates paragraph text and rejects structural edits. Use
 `createDocumentCollaboration`.
 
-## Headless replica
+## Create a headless replica
 
 `DocxEditor.createCollaborative` from `@docx-editor.dev/editor-api` opens a
 Document Object Model (DOM)-free replica.
@@ -712,7 +732,7 @@ In Vue, wrap the composable return with `reactive` before you pass it to
 Let the room hook manage cleanup. An effect cleanup can destroy the room before
 React StrictMode remounts the component.
 
-## Limits
+## Collaboration behavior and limits
 
 The WebRTC helper connects peers directly. A room exists while at least one
 peer remains connected.

@@ -1,59 +1,66 @@
 ---
-title: 'Collaboration'
-description: 'Let people edit one DOCX together with presence, personal undo, and offline editing.'
+title: 'Get started with DOCX collaboration'
+description: 'Connect two React or Vue DOCX editors through one WebRTC room.'
 category: 'Getting Started'
-seoTitle: 'Real-time DOCX collaboration with presence and offline editing'
+seoTitle: 'Real-time DOCX collaboration quickstart for React and Vue'
 ---
 
-Collaboration replicates the document across peers. Each peer edits a local
-replica, and the replicas converge. Local typing stays responsive during
-network delays.
+This quickstart uses `useWebrtcCollaboration` to add real-time DOCX
+collaboration to a React or Vue editor. It connects two editors through WebRTC
+and shows each participant's changes.
 
-Peers also share presence. You see each participant, caret, and selection in the
-participant's author color. The same color marks their tracked changes and
-comments.
+Start with a working editor from the [Quickstart](/docs/2.x/quickstart). For
+provider options and failure states, see the
+[collaboration reference](/docs/2.x/pro/collaboration).
 
-The [`@docx-editor.dev/pro` package](/docs/2.x/pro) provides collaboration as an
-editor module. You can use peer-to-peer WebRTC, a
-[Hocuspocus server](https://tiptap.dev/docs/hocuspocus), or an existing Yjs
-provider.
+## Install the packages
 
-The adapters provide room hooks, a wired collaboration root, status fields, and
-custom presence renderers. Server code can also export synchronized room state
-as DOCX bytes. The [real-time collaboration guide](/docs/2.x/pro/collaboration)
-documents these interfaces and their recovery behavior.
+Install the Pro package, Yjs, and the WebRTC provider:
 
-## Start in one component
+```bash
+npm install @docx-editor.dev/pro yjs y-webrtc
+```
 
-Use the framework hook to own the room. With `create-or-join`, the first peer
-seeds the room from your document bytes. Later peers join the room.
+You also need `@docx-editor.dev/react` or `@docx-editor.dev/vue` in your
+application.
+
+## Create a room ID
+
+Create one room ID and send it to each participant:
+
+```ts
+import { createCollaborationRoomId } from '@docx-editor.dev/pro/collaboration/webrtc';
+
+const roomId = createCollaborationRoomId();
+```
+
+Store the room ID in your application state or URL. Do not create a new ID
+during each render.
+
+## Add a collaborative editor
+
+Call `useWebrtcCollaboration` with a room ID, an identity, and the initial DOCX
+bytes. The first editor creates the room. Later editors join its document.
 
 ```tsx
-import { useRef } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { DocxEditor } from '@docx-editor.dev/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 
 interface CollaborativeEditorProps {
   roomId: string;
   bytes: Uint8Array;
+  actorId: string;
+  name: string;
 }
 
-export function CollaborativeEditor({ roomId, bytes }: CollaborativeEditorProps) {
-  const editorRef = useRef<DocxEditorRef>(null);
-  const { document, modules, session, pending, error, leave } = useWebrtcCollaboration({
+export function CollaborativeEditor({ roomId, bytes, actorId, name }: CollaborativeEditorProps) {
+  const { document, modules, session, pending, error } = useWebrtcCollaboration({
     room: {
       roomId,
-      identity: { actorId: 'alex', name: 'Alex' },
+      identity: { actorId, name },
       bootstrap: { kind: 'create-or-join', document: bytes },
     },
   });
-
-  async function leaveRoom() {
-    const saved = await editorRef.current?.save();
-    if (saved) {
-      leave(new Uint8Array(saved));
-    }
-  }
 
   if (error) {
     return <p>{error.detail ?? error.code}</p>;
@@ -62,70 +69,34 @@ export function CollaborativeEditor({ roomId, bytes }: CollaborativeEditorProps)
     return <p>Connecting…</p>;
   }
 
-  return (
-    <>
-      <button type="button" onClick={leaveRoom}>
-        Leave
-      </button>
-      <DocxEditor ref={editorRef} key={session?.sessionId} document={document} modules={modules} />
-    </>
-  );
+  return <DocxEditor key={session?.sessionId} document={document} modules={modules} />;
 }
 ```
 
-Vue provides the same hook at `@docx-editor.dev/pro/vue/webrtc`. For setup
-details, see the [real-time collaboration guide](/docs/2.x/pro/collaboration).
+Vue provides the composable at `@docx-editor.dev/pro/vue/webrtc`. Select Vue in
+the [collaboration API reference](/docs/2.x/pro/collaboration#connect-with-usewebrtccollaboration)
+for a complete component.
 
-## What replicates
+## Test the room
 
-Replicated content includes text, formatting, document structure, tables,
-headers, footers, notes, images, comments, tracked-change decisions, tables of
-contents, and custom nodes. Each person can undo only their own edits.
+1. Open the application in one browser tab.
+2. Open a second tab with the same `roomId` and a different `actorId`.
+3. Type in either editor.
 
-Review workflows also work in a room. One person can suggest changes while
-another person accepts or rejects them. The review sidebar stays live for every
-peer. See the [tracked changes guide](/docs/2.x/pro/tracked-changes) and
-[comments guide](/docs/2.x/pro/comments).
+Open the first tab before the second tab. This sequence prevents both peers from
+seeding an empty room at the same time.
 
-## Show presence
+The example uses the public demo signaling service when you omit `signaling`.
+Configure your own signaling URLs and TURN servers for production.
 
-After module registration, the editor paints remote carets and selections. The
-Pro package also provides these presence components and hooks:
+## Continue the setup
 
-- `DocxEditorCollaboration.Avatars` renders the participant stack, colored to
-  match each participant's review markup.
-- `DocxEditorCollaboration.CaretLabels` replaces caret labels with your
-  component. The component renders in the adapter tree, so hooks work in it.
-- `useCollaborationStatus` and `useCollaborationParticipants` provide data for
-  connection and participant interfaces.
-
-Presence renderers receive the resolved color and optional participant data.
-They also receive a locally declared `avatarUrl`. You can omit `session` inside
-the editor provider tree.
-
-See the [presence interface guide](/docs/2.x/pro/collaboration#presence-ui).
-
-## Pick a transport
-
-| Transport             | Use case                              | Integration                                                                   |
-| --------------------- | ------------------------------------- | ----------------------------------------------------------------------------- |
-| WebRTC                | Demos and small teams                 | Use `useWebrtcCollaboration` and configure production signaling.              |
-| Hocuspocus            | Hosted authentication and persistence | Use `useHocuspocusCollaboration`. Validate tokens in server `onAuthenticate`. |
-| Your own Yjs provider | An existing Yjs deployment            | Use `createDocumentCollaboration` with your `Y.Doc` and provider.             |
-
-Use Yjs 13 with each server. The standard `y-websocket` server and Hocuspocus
-work without changes.
-
-## Offline editing
-
-Set `offlineEditing: true` to continue editing after a transport disconnection.
-Buffered edits merge with concurrent edits after reconnection. Show connection
-status so people know when their edits have not reached the room.
-
-## Learn more
-
-- [Real-time collaboration](/docs/2.x/pro/collaboration): rooms, providers,
-  presence, limits, and recovery.
+- [Production WebRTC setup](/docs/2.x/pro/collaboration#use-your-own-signaling):
+  configure signaling and TURN servers.
+- [Hocuspocus setup](/docs/2.x/pro/collaboration#connect-to-a-hocuspocus-server):
+  connect authentication and persistence.
+- [Custom Yjs providers](/docs/2.x/pro/collaboration#integrate-a-custom-yjs-provider):
+  connect an existing Yjs deployment.
 - [Tracked changes](/docs/2.x/pro/tracked-changes): suggesting mode and the
   review sidebar.
 - [Build a DOCX agent](/docs/2.x/build-a-docx-agent): connect a headless replica
