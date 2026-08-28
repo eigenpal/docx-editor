@@ -499,10 +499,35 @@ function tombstoneRemoved(
 function recordSplitProvenance(registry: DocumentRegistry, planned: JournalPlan): void {
   for (const [removedId, insertedIds] of planned.replacementsByRemoved) {
     if (registry.kindOf(removedId) !== 'run') continue;
+    const root = resolveSplitRoot(registry, removedId, planned.reinserted);
     for (const runId of insertedIds) {
-      if (registry.kindOf(runId) === 'run') registry.recordSplitFrom(removedId, runId);
+      if (registry.kindOf(runId) === 'run') registry.recordSplitFrom(root, runId);
     }
   }
+}
+
+/**
+ * The run a split op started from, climbing through the intermediate runs THIS journal created.
+ *
+ * One op splits at both edges: it makes an intermediate run, then splits that. The intermediate
+ * is in `reinserted`, so climb its `splitFrom` to group every product of the op under the one
+ * run it superseded. Stop at a run from an EARLIER round — a later split of a survivor is its own
+ * origin, so two peers concurrently splitting that survivor meet at it and dedup, instead of one
+ * peer climbing past it to a stale ancestor while the other stops there.
+ */
+function resolveSplitRoot(
+  registry: DocumentRegistry,
+  removedId: LogicalId,
+  reinserted: ReadonlySet<LogicalId>
+): LogicalId {
+  let root = removedId;
+  for (let depth = 0; depth < registry.limits.maxTreeDepth; depth += 1) {
+    if (!reinserted.has(root)) break;
+    const parent = registry.splitOriginOf(root);
+    if (parent === null || parent === root) break;
+    root = parent;
+  }
+  return root;
 }
 
 function captureChildLists(

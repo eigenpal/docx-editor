@@ -28,13 +28,10 @@ import {
  * What the dedup reads about the tree it is projecting, injected so the index stays free of the
  * record walk. `isPresent` is true only for a run that still hangs off its parent — a
  * multi-boundary split leaves an intermediate run detached but neither tombstoned nor deleted,
- * and counting it would double the group's text. `groupText` concatenates the runs' text in
- * document order — the dedup drops a run only when another run already carries the exact same
- * text, so it never loses distinct content.
+ * and materializing it would double the paragraph's text.
  */
 export interface SplitDedupContext {
   readonly isPresent: (id: LogicalId) => boolean;
-  readonly groupText: (runIds: readonly LogicalId[]) => string;
 }
 
 export class SplitDedupIndex {
@@ -51,10 +48,7 @@ export class SplitDedupIndex {
    */
   private liveRootedOrigins = new Set<LogicalId>();
 
-  constructor(
-    private readonly nodes: Y.Map<Y.Map<unknown>>,
-    private readonly maxDepth: number
-  ) {}
+  constructor(private readonly nodes: Y.Map<Y.Map<unknown>>) {}
 
   reset(): void {
     this.runsBySplitOrigin = new Map();
@@ -64,16 +58,16 @@ export class SplitDedupIndex {
   }
 
   /**
-   * Stamp `runId` as split off from `originalId`, resolved to its ROOT origin.
+   * Stamp `runId` as split off from `root`, the run the whole op superseded.
    *
-   * One op splits at both edges, so a later split can target a run the earlier split made.
-   * Resolving to the root — the run the whole op superseded — groups every product of a
-   * multi-boundary split under one id, so the concurrent dedup sees them all.
+   * The caller resolves the root, because only the journal knows which intermediate runs this
+   * same op created and removed (a multi-boundary split) versus a run split in an earlier round.
+   * Both concurrent splits of one run must reach the SAME root, or their products land in
+   * separate groups and both survive.
    */
-  record(originalId: LogicalId, runId: LogicalId): void {
+  record(root: LogicalId, runId: LogicalId): void {
     const rec = this.nodes.get(runId);
     if (!isNodeMap(rec)) return;
-    const root = this.rootOf(originalId, replicaOfLogicalId(runId));
     // A run is not split from itself. Wrapping a run (a TOC bookmark, a hyperlink) removes and
     // reinserts the SAME node, which looks like a replacement but partitions nothing; stamping it
     // would let the dedup drop the run as a copy of itself.
@@ -107,66 +101,63 @@ export class SplitDedupIndex {
   }
 
   /**
-   * The root a `runReplica` split reached, following `splitFrom` only through ancestors that
-   * SAME replica minted.
-   *
-   * A multi-boundary split by one peer chains its own runs, so those steps resolve to the
-   * original run — its whole set groups together. But a LATER peer splitting a run this peer
-   * made is a sequential refinement, not a competing split of the original: stopping at the
-   * replica boundary keeps the two out of one group, so the later split is not mistaken for a
-   * concurrent duplicate and dropped.
-   */
-  private rootOf(id: LogicalId, runReplica: string | null): LogicalId {
-    let current = id;
-    for (let depth = 0; depth < this.maxDepth; depth += 1) {
-      if (replicaOfLogicalId(current) !== runReplica) return current;
-      const parent = nodeRecordSplitFrom(this.nodes.get(current));
-      if (parent === null || parent === current) return current;
-      current = parent;
-    }
-    return current;
-  }
-
-  /**
    * Runs a concurrent split superseded and a replica must not materialize.
    *
-   * An origin with live split children from MORE THAN ONE minting replica was split by two
-   * peers at once. The winner is the replica whose identity sorts first — every replica reads
-   * the same shared state and picks the same winner — and a losing replica's runs are dropped
-   * ONLY when they carry the exact text the winner already carries, so the concurrent case
-   * keeps the text once while a run a peer grew with new typed text is never lost.
+   * An origin split by MORE THAN ONE replica was split by two peers at once. The winner is the
+   * replica whose identity sorts first — every replica reads the same shared state and picks the
+   * same winner — so every other replica's products are dropped and the origin's text is kept
+   * once. If the origin run is live again — an undo restored it — it represents the text on its
+   * own, so every product is dropped instead.
    *
-   * If the origin run itself is live again — an undo restored it — it represents the text on its
-   * own, so every product that merely repeats it is dropped. Without this, undoing the winner's
-   * split would leave the restored origin AND the loser's runs, doubling the text again.
+   * The dedup only claims ONE round of concurrent splitting on a run. A second round — a peer
+   * splitting a run the first round produced — tangles the winning replica's runs at the merge
+   * layer, below what a projection can repair (see the split-replication follow-up). So when a
+   * product of an origin was itself split again, this leaves the whole origin alone: every run
+   * materializes, exactly as it would without this feature. The result stays consistent across
+   * peers — a duplicated but CONVERGENT tree, never one replica disagreeing with another.
    */
+  /**
+   * True if a contested origin was split again in a later round — the tangle the dedup declines.
+   *
+   * The materialized tree then differs from what the local author authored, so the session must
+   * reconcile the author's store to it or the author would keep a clean view while every other
+   * replica sees the duplicated one. Cheap and read straight off shared state, so all replicas
+   * agree.
+   */
+  hasDeclinedTangle(): boolean {
+    for (const root of this.contestedOrigins) if (this.isReSplit(root)) return true;
+    for (const root of this.liveRootedOrigins) if (this.isReSplit(root)) return true;
+    return false;
+  }
+
+  private isReSplit(root: LogicalId): boolean {
+    const runs = this.runsBySplitOrigin.get(root);
+    if (!runs) return false;
+    for (const id of runs) if ((this.runsBySplitOrigin.get(id)?.size ?? 0) > 0) return true;
+    return false;
+  }
+
   loserRuns(ctx: SplitDedupContext): ReadonlySet<LogicalId> {
     const losers = new Set<LogicalId>();
     const examine = new Set<LogicalId>([...this.contestedOrigins, ...this.liveRootedOrigins]);
     for (const root of examine) {
       const runs = this.runsBySplitOrigin.get(root);
       if (!runs) continue;
-      const byReplica = new Map<string, LogicalId[]>();
+      // No-regression guard: a single round collapses every product's origin to `root`, so no
+      // product is itself a split origin. If one is, a later round re-split it — hand the whole
+      // origin back to the plain projection rather than risk a divergent partial drop.
+      if (this.isReSplit(root)) continue;
+      const present = new Set<string>();
       for (const runId of runs) {
-        if (!ctx.isPresent(runId)) continue;
-        const replica = replicaOfLogicalId(runId) ?? '';
-        const group = byReplica.get(replica) ?? [];
-        group.push(runId);
-        byReplica.set(replica, group);
+        if (ctx.isPresent(runId)) present.add(replicaOfLogicalId(runId) ?? '');
       }
-      if (ctx.isPresent(root)) {
-        const rootText = ctx.groupText([root]);
-        for (const runIds of byReplica.values()) {
-          if (ctx.groupText(runIds) === rootText) for (const id of runIds) losers.add(id);
-        }
-        continue;
-      }
-      if (byReplica.size <= 1) continue;
-      const winner = [...byReplica.keys()].sort()[0]!;
-      const winnerText = ctx.groupText(byReplica.get(winner)!);
-      for (const [replica, runIds] of byReplica) {
-        if (replica === winner) continue;
-        if (ctx.groupText(runIds) === winnerText) for (const id of runIds) losers.add(id);
+      const originLive = ctx.isPresent(root);
+      if (!originLive && present.size <= 1) continue;
+      // A live origin beats every product; otherwise the first-sorting present replica wins.
+      const winner = originLive ? null : [...present].sort()[0]!;
+      for (const runId of runs) {
+        if (!originLive && (replicaOfLogicalId(runId) ?? '') === winner) continue;
+        if (ctx.isPresent(runId)) losers.add(runId);
       }
     }
     return losers;

@@ -8,7 +8,7 @@ import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaborat
 import { partNameKey } from '@docx-editor.dev/core/store';
 import { yjsItemKey, type LogicalId, type NodeIdentityMeta, wordFacingIdsOf } from './identity.ts';
 import { SplitDedupIndex } from './split-dedup.ts';
-import { runGroupText, runIsPresent } from './run-text-reads.ts';
+import { runIsPresent } from './run-text-reads.ts';
 import {
   DEFAULT_DOCUMENT_LIMITS,
   mergeLimits,
@@ -34,6 +34,7 @@ import {
   makeTextRecord,
   namespaceUriOf,
   nodeRecordReplacedBy,
+  nodeRecordSplitFrom,
   nodeRecordTombstoned,
   packNodeShell,
   packageSchemaOf,
@@ -125,7 +126,7 @@ export class DocumentRegistry {
   ) {
     this.schema = packageSchemaOf(doc);
     this.limits = mergeLimits(limits);
-    this.splitDedup = new SplitDedupIndex(this.schema.nodes, this.limits.maxTreeDepth);
+    this.splitDedup = new SplitDedupIndex(this.schema.nodes);
     this.stopObserving = observeRegistrySchema(this.schema, {
       onNodeEvents: (events) => {
         if (this.bulkLoad > 0) return;
@@ -484,17 +485,29 @@ export class DocumentRegistry {
     if (replacedBy) rec.set(NODE_REPLACED_BY_FIELD, replacedBy);
   }
 
-  /** Stamp each run a format split minted with the origin it superseded (#581). */
-  recordSplitFrom(originalId: LogicalId, runId: LogicalId): void {
-    this.splitDedup.record(originalId, runId);
+  /** Stamp a run with the root origin a concurrent split superseded (#581). */
+  recordSplitFrom(root: LogicalId, runId: LogicalId): void {
+    this.splitDedup.record(root, runId);
+  }
+
+  /** The run a given run split off from, or null — the caller resolves the chain (#581). */
+  splitOriginOf(logicalId: LogicalId): LogicalId | null {
+    return nodeRecordSplitFrom(this.schema.nodes.get(logicalId));
   }
 
   /** Runs a concurrent format split superseded and this replica must not materialize (#581). */
   replacementLoserRuns(): ReadonlySet<LogicalId> {
-    return this.splitDedup.loserRuns({
-      isPresent: (id) => runIsPresent(this, id),
-      groupText: (runIds) => runGroupText(this, runIds, this.limits.maxTreeDepth),
-    });
+    return this.splitDedup.loserRuns({ isPresent: (id) => runIsPresent(this, id) });
+  }
+
+  /**
+   * True when a run a concurrent split produced was split again — a tangle the dedup declines,
+   * so the materialized tree differs from what the local author authored (#581). The session
+   * reconciles the author's store to the materialization when this holds, keeping every replica
+   * on the same tree.
+   */
+  hasDeclinedSplitTangle(): boolean {
+    return this.splitDedup.hasDeclinedTangle();
   }
 
   /**
