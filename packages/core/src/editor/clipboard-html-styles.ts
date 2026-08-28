@@ -273,7 +273,11 @@ export interface HtmlRunProps {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
+  underlineVal?: 'single' | 'double' | 'thick' | 'dotted' | 'dash' | 'wave';
+  underlineColor?: string;
   strike?: boolean;
+  caps?: boolean;
+  smallCaps?: boolean;
   vertAlign?: 'subscript' | 'superscript';
   /** RRGGBB uppercase. */
   color?: string;
@@ -311,8 +315,9 @@ export interface HtmlParaProps {
   firstLineTwips?: number;
   spacingBeforeTwips?: number;
   spacingAfterTwips?: number;
-  /** `w:spacing w:line` in 240ths, `w:lineRule="auto"`. */
+  /** `w:spacing w:line`; 240ths for auto, twips for exact and at-least. */
   lineTwentieths?: number;
+  lineRule?: 'auto' | 'exact' | 'atLeast';
   keepNext?: boolean;
   keepLines?: boolean;
   pageBreakBefore?: boolean;
@@ -363,6 +368,7 @@ const HIGHLIGHT_ALIASES: ReadonlyMap<string, string> = new Map([
 ]);
 
 const UNSAFE_BACKGROUND = /url\s*\(|image\s*\(|image-set\s*\(|element\s*\(|cross-fade\s*\(/i;
+const UNDERLINE_VALUES = new Set(['single', 'double', 'thick', 'dotted', 'dash', 'wave']);
 
 /** Inline style declarations as a Map, so hostile property names never become object keys. */
 export function parseInlineStyle(element: Element): ReadonlyMap<string, string> {
@@ -533,6 +539,21 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
     if (decoration.includes('line-through')) next.strike = true;
     if (decoration.includes('none')) next.underline = next.strike = false;
   }
+  if (style.get('font-variant')?.toLowerCase().includes('small-caps')) next.smallCaps = true;
+  if (style.get('text-transform')?.trim().toLowerCase() === 'uppercase') next.caps = true;
+  const textUnderline = style.get('text-underline');
+  if (textUnderline !== undefined && textUnderline.length <= 128) {
+    for (const token of textUnderline.trim().split(/\s+/)) {
+      const lower = token.toLowerCase();
+      if (UNDERLINE_VALUES.has(lower)) {
+        next.underline = true;
+        next.underlineVal = lower as HtmlRunProps['underlineVal'];
+      } else {
+        const parsed = parseCssColor(token);
+        if (parsed !== null) next.underlineColor = parsed;
+      }
+    }
+  }
   const color = parseCssColor(style.get('color') ?? '');
   if (color) next.color = color;
   const msoHighlight = highlightNameOf(style.get('mso-highlight'));
@@ -592,12 +613,19 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
     para.spacingAfterTwips = clamp(Math.round(afterPt * 20), 0, 31_680);
   }
   const lineHeight = style.get('line-height')?.trim() ?? '';
-  if (/^\d+(\.\d+)?$/.test(lineHeight) && Number.parseFloat(lineHeight) > 0) {
+  const lineRule = style.get('mso-line-height-rule')?.trim().toLowerCase();
+  const lineHeightPt = parseCssLengthPt(lineHeight);
+  if (lineHeightPt !== null && lineHeightPt > 0) {
+    para.lineTwentieths = clamp(Math.round(lineHeightPt * 20), 24, 31_680);
+    para.lineRule = lineRule === 'at-least' ? 'atLeast' : 'exact';
+  } else if (/^\d+(\.\d+)?$/.test(lineHeight) && Number.parseFloat(lineHeight) > 0) {
     para.lineTwentieths = clamp(Math.round(240 * Number.parseFloat(lineHeight)), 24, 9600);
+    para.lineRule = 'auto';
   } else if (/^\d+(\.\d+)?%$/.test(lineHeight)) {
     const percentage = Number.parseFloat(lineHeight);
     if (percentage > 0) {
       para.lineTwentieths = clamp(Math.round(2.4 * percentage), 24, 9600);
+      para.lineRule = 'auto';
     }
   }
   if (

@@ -98,6 +98,9 @@ describe('copy degrade tiers', () => {
     expect(flavours.text).toBe('whole document');
     expect(flavours.html).not.toBeNull();
     expect(fragmentFromHtml(flavours.html!)).toBeNull();
+    expect(flavours.html).toContain('<table');
+    expect(flavours.html).toContain('<ol');
+    expect(flavours.html).toContain('font-weight:bold');
   });
 
   test('a cell rectangle copies as grid text plus a flattened table, no fragment', () => {

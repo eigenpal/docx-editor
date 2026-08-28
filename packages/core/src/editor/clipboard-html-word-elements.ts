@@ -54,6 +54,39 @@ export function wordBorderCss(edge: OoxmlElement | null): string | null {
   return `${width} ${style} ${color.toLowerCase()}`;
 }
 
+export function wordLineSpacingCss(
+  line: number | null,
+  rule: string | undefined
+): readonly string[] {
+  if (line === null || line <= 0) return [];
+  if (rule === 'exact' || rule === 'atLeast') {
+    const points = `${Math.round((line / 20) * 100) / 100}pt`;
+    return [
+      `line-height:${points}`,
+      `mso-line-height-rule:${rule === 'exact' ? 'exactly' : 'at-least'}`,
+    ];
+  }
+  return [`line-height:${Math.round((line / 240) * 100) / 100}`];
+}
+
+export function wordTableRowCss(height: number | null, rule: string | undefined): string {
+  if (height === null || height <= 0) return '';
+  const points = Math.round((height / 20) * 100) / 100;
+  return `height:${points}pt;mso-height-rule:${rule === 'exact' ? 'exactly' : 'at-least'}`;
+}
+
+export function wordNoteReferenceHtml(node: OoxmlElement): string {
+  if (node.namespaceUri !== WML_NAMESPACE_URI) return '';
+  const footnote = node.localName === 'footnoteReference';
+  if (!footnote && node.localName !== 'endnoteReference') return '';
+  const rawId = attributeValueOf(node, 'id', WML_NAMESPACE_URI);
+  if (rawId === undefined || !/^\d{1,5}$/.test(rawId)) return '';
+  const id = Number.parseInt(rawId, 10);
+  if (id > 32_767) return '';
+  const className = footnote ? 'MsoFootnoteReference' : 'MsoEndnoteReference';
+  return `<sup><span class="${className}">${id}</span></sup>`;
+}
+
 /** Map a closed-enumeration OOXML positional tab to Word clipboard HTML. */
 export function wordPositionalTabHtml(node: OoxmlElement): string {
   if (node.namespaceUri !== WML_NAMESPACE_URI || node.localName !== 'ptab') return '';

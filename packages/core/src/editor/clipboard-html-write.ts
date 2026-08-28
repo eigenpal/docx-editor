@@ -23,11 +23,15 @@ import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
 import { clipboardBookmarkName, clipboardHyperlinkTarget } from './clipboard-html-links.ts';
+import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
 import {
   wordBorderCss,
   wordCssFontFamily,
+  wordLineSpacingCss,
+  wordNoteReferenceHtml,
   wordParagraphClassOf,
   wordPositionalTabHtml,
+  wordTableRowCss,
 } from './clipboard-html-word-elements.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -361,9 +365,7 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
   if (after !== null && after >= 0) rules.push(`margin-bottom:${ptFromTwips(after)}`);
   const line = parseIntValue(foldAttribute(sources, 'spacing', 'line'));
   const lineRule = foldAttribute(sources, 'spacing', 'lineRule');
-  if (line !== null && line > 0 && (lineRule === undefined || lineRule === 'auto')) {
-    rules.push(`line-height:${Math.round((line / 240) * 100) / 100}`);
-  }
+  rules.push(...wordLineSpacingCss(line, lineRule));
 
   const left = parseIntValue(
     foldAttribute(sources, 'ind', 'left') ?? foldAttribute(sources, 'ind', 'start')
@@ -429,47 +431,10 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
   return rules.join(';');
 }
 
-interface NumberingIndex {
-  /** numId → abstractNumId. */
-  readonly numToAbstract: ReadonlyMap<string, string>;
-  /** abstractNumId → (ilvl → numFmt). */
-  readonly levelFormats: ReadonlyMap<string, ReadonlyMap<string, string>>;
-}
-
-function numberingIndexOf(pkg: OoxmlPackage): NumberingIndex {
-  const numToAbstract = new Map<string, string>();
-  const levelFormats = new Map<string, Map<string, string>>();
-  const root = relatedPart(pkg, NUMBERING_REL, '/word/numbering.xml');
-  if (!root) return { numToAbstract, levelFormats };
-  for (const child of root.children) {
-    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName === 'num') {
-      const numId = attributeValueOf(child, 'numId', WML_NAMESPACE_URI);
-      const abstractId = wmlVal(wmlChild(child, 'abstractNumId'));
-      if (numId && abstractId) numToAbstract.set(numId, abstractId);
-      continue;
-    }
-    if (child.localName !== 'abstractNum') continue;
-    const abstractId = attributeValueOf(child, 'abstractNumId', WML_NAMESPACE_URI);
-    if (!abstractId) continue;
-    const levels = new Map<string, string>();
-    for (const lvl of child.children) {
-      if (!isElement(lvl) || lvl.localName !== 'lvl' || lvl.namespaceUri !== WML_NAMESPACE_URI) {
-        continue;
-      }
-      const ilvl = attributeValueOf(lvl, 'ilvl', WML_NAMESPACE_URI);
-      const fmt = wmlVal(wmlChild(lvl, 'numFmt'));
-      if (ilvl !== undefined && fmt !== undefined) levels.set(ilvl, fmt);
-    }
-    levelFormats.set(abstractId, levels);
-  }
-  return { numToAbstract, levelFormats };
-}
-
 interface RenderContext {
   readonly pkg: OoxmlPackage;
   readonly styles: StyleIndex;
-  readonly numbering: NumberingIndex;
+  readonly numbering: HtmlNumberingIndex;
   readonly docRels: readonly RelationshipRecord[];
   readonly maxImageBytes: number;
   readonly maxTotalImageBytes: number;
@@ -495,6 +460,7 @@ interface ListPlacement {
   readonly numId: string;
   readonly level: number;
   readonly fmt: string;
+  readonly start: number;
 }
 
 function listPlacementOf(
@@ -516,7 +482,11 @@ function listPlacementOf(
   if (abstractId === undefined) return null;
   const level = Math.min(Math.max(parseIntValue(ilvl) ?? 0, 0), 8);
   const fmt = ctx.numbering.levelFormats.get(abstractId)?.get(String(level)) ?? 'decimal';
-  return { numId, level, fmt };
+  const start =
+    ctx.numbering.startOverrides.get(`${numId}:${level}`) ??
+    ctx.numbering.levelStarts.get(abstractId)?.get(String(level)) ??
+    1;
+  return { numId, level, fmt, start };
 }
 
 // ---------------------------------------------------------------------------
@@ -605,6 +575,11 @@ function renderRun(
       inner += positionalTab;
       continue;
     }
+    const noteReference = wordNoteReferenceHtml(child);
+    if (noteReference !== '') {
+      inner += noteReference;
+      continue;
+    }
     switch (child.kind) {
       case 'text':
         inner += escapeHtml(textUnder(child));
@@ -654,7 +629,7 @@ function renderInline(
         if (inner === '') break;
         const relId = attributeValueOf(child, 'id', RELATIONSHIPS_NAMESPACE_URI);
         const record = relId
-          ? ctx.docRels.find((r) => r.id === relId && r.targetMode === 'External')
+          ? ctx.docRels.find((r) => r.id === relId && r.type === `${R_NS}/hyperlink`)
           : undefined;
         const target = clipboardHyperlinkTarget(
           record?.rawTarget,
@@ -696,10 +671,6 @@ function renderInline(
   }
   return out;
 }
-
-// ---------------------------------------------------------------------------
-// Blocks
-// ---------------------------------------------------------------------------
 
 function headingLevelOf(
   ctx: RenderContext,
@@ -779,12 +750,26 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): CellPlacement[][] {
   });
 }
 
-function cellCss(tcPr: OoxmlElement | null, tblBorders: OoxmlElement | null): string {
+function cellCss(
+  tcPr: OoxmlElement | null,
+  tblBorders: OoxmlElement | null,
+  rowIndex: number,
+  rowCount: number,
+  cellIndex: number,
+  cellCount: number
+): string {
   const rules: string[] = [];
   const tcBorders = wmlChild(tcPr, 'tcBorders');
+  const tableEdges = {
+    top: rowIndex === 0 ? 'top' : 'insideH',
+    bottom: rowIndex === rowCount - 1 ? 'bottom' : 'insideH',
+    left: cellIndex === 0 ? 'left' : 'insideV',
+    right: cellIndex === cellCount - 1 ? 'right' : 'insideV',
+  } as const;
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
     const border =
-      wordBorderCss(wmlChild(tcBorders, edge)) ?? wordBorderCss(wmlChild(tblBorders, edge));
+      wordBorderCss(wmlChild(tcBorders, edge)) ??
+      wordBorderCss(wmlChild(tblBorders, tableEdges[edge]));
     if (border) rules.push(`border-${edge}:${border}`);
   }
   const fill = cssHexColor(attrOf(wmlChild(tcPr, 'shd'), 'fill', WML_NAMESPACE_URI));
@@ -837,14 +822,21 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
   const tableJc = wmlVal(wmlChild(ownTblPr, 'jc'));
   if (tableJc === 'center') tableRules.push('margin-left:auto', 'margin-right:auto');
   else if (tableJc === 'right') tableRules.push('margin-left:auto', 'margin-right:0');
+  for (const [xmlName, cssName] of [
+    ['insideH', 'insideh'],
+    ['insideV', 'insidev'],
+  ] as const) {
+    const border = wordBorderCss(wmlChild(tblBorders, xmlName));
+    if (border) tableRules.push(`mso-border-${cssName}-alt:${border}`);
+  }
   let out = `<table style="${tableRules.join(';')}">`;
   placements.forEach((rowCells, rowIndex) => {
     const height = wmlChild(wmlChild(rows[rowIndex] ?? null, 'trPr'), 'trHeight');
     const heightValue = parseIntValue(attrOf(height, 'val', WML_NAMESPACE_URI));
-    const rowStyle =
-      heightValue !== null && heightValue > 0 ? ` style="height:${ptFromTwips(heightValue)}"` : '';
+    const rowCss = wordTableRowCss(heightValue, attrOf(height, 'hRule', WML_NAMESPACE_URI));
+    const rowStyle = rowCss === '' ? '' : ` style="${rowCss}"`;
     out += `<tr${rowStyle}>`;
-    for (const placement of rowCells) {
+    for (const [cellIndex, placement] of rowCells.entries()) {
       // A vMerge continuation emits nothing; the restart above spans it.
       if (placement.vMerge === 'continue') continue;
       let rowSpan = 1;
@@ -859,7 +851,14 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
         }
       }
       const tcPr = wmlChild(placement.cell, 'tcPr');
-      const css = cellCss(tcPr, tblBorders);
+      const css = cellCss(
+        tcPr,
+        tblBorders,
+        rowIndex,
+        placements.length,
+        cellIndex,
+        rowCells.length
+      );
       const attrs =
         (placement.span > 1 ? ` colspan="${placement.span}"` : '') +
         (rowSpan > 1 ? ` rowspan="${rowSpan}"` : '') +
@@ -870,8 +869,6 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
   });
   return `${out}</table>`;
 }
-
-// --- block sequence with list grouping ---
 
 interface OpenList {
   readonly tag: 'ol' | 'ul';
@@ -906,7 +903,10 @@ function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): strin
             ? LIST_FMT_TO_CSS[placement.fmt]!
             : 'decimal'
           : null;
-      out += listType ? `<${tag} style="list-style-type:${escapeAttr(listType)}">` : `<${tag}>`;
+      const start = tag === 'ol' && placement.start !== 1 ? ` start="${placement.start}"` : '';
+      out += listType
+        ? `<${tag}${start} style="list-style-type:${escapeAttr(listType)}">`
+        : `<${tag}>`;
       openLists.push({ tag, numId: placement.numId });
     }
     out += renderParagraph(ctx, paragraph, { asListItem: true });
@@ -988,7 +988,7 @@ export function interopHtmlFromFragmentPackage(
   const ctx: RenderContext = {
     pkg,
     styles: styleIndexOf(pkg),
-    numbering: numberingIndexOf(pkg),
+    numbering: htmlNumberingIndexOf(relatedPart(pkg, NUMBERING_REL, '/word/numbering.xml')),
     docRels: relationshipsOf(pkg, pkg.mainDocumentPart),
     maxImageBytes: options?.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     maxTotalImageBytes: options?.maxTotalImageBytes ?? DEFAULT_MAX_TOTAL_IMAGE_BYTES,

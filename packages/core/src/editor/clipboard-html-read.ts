@@ -16,7 +16,6 @@
 
 import { sanitizeHref, escapeXml, escapeXmlAttribute } from '../store/package/sinks.ts';
 import { sniffImageMime, validateRasterHeader } from '../store/package/image-resources.ts';
-import { writeZip, strToU8 } from '../store/package/zip.ts';
 import {
   htmlListKindAndStart,
   numberingPartXml,
@@ -26,6 +25,18 @@ import {
   type HtmlListKind,
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName } from './clipboard-html-links.ts';
+import {
+  writeHtmlFragmentPackage,
+  type HtmlFragmentRel as RelEntry,
+} from './clipboard-html-package.ts';
+import {
+  clipboardNoteDefinitions,
+  clipboardNoteReference,
+  clipboardNotesPartXml,
+  isClipboardNoteList,
+  type ClipboardNoteKind,
+} from './clipboard-html-notes.ts';
+import { xmlSafeText } from './clipboard-html-xml.ts';
 import {
   applyParaCss,
   applyRunCss,
@@ -86,21 +97,13 @@ const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationship
 const WP_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-const RELS_XMLNS = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const CT_XMLNS = 'http://schemas.openxmlformats.org/package/2006/content-types';
-
-const DOCUMENT_CT =
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml';
-const NUMBERING_CT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
-const RELS_CT = 'application/vnd.openxmlformats-package.relationships+xml';
-
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
 /** Whole elements that never contribute anything to the projection. */
 const IGNORED_TAGS = new Set(
   (
     'script style head template iframe object embed noscript svg math ' +
-    'meta link title base select textarea'
+    'meta link title base select textarea hr w:sdtpr'
   ).split(' ')
 );
 
@@ -111,7 +114,7 @@ const PARAGRAPH_TAGS = new Set('p div h1 h2 h3 h4 h5 h6 li blockquote pre'.split
 
 /** Structural containers whose children flow through transparently. */
 const CONTAINER_TAGS = new Set(
-  'thead tbody tfoot tr section article main header footer aside nav figure form body html'.split(
+  'thead tbody tfoot tr section article main header footer aside nav figure form body html w:sdt'.split(
     ' '
   )
 );
@@ -121,19 +124,13 @@ type ParaProps = HtmlParaProps;
 
 type ListState = { readonly numId: string; readonly level: number };
 
-type RelEntry = {
-  readonly id: string;
-  readonly type: string;
-  readonly target: string;
-  readonly external: boolean;
-};
-
 interface FlowContext {
   readonly run: RunProps;
   readonly para: ParaProps;
   readonly paragraphMarkCovered: boolean;
   readonly pre: boolean;
   readonly list: ListState | null;
+  readonly noteBody?: boolean;
 }
 
 interface Projection {
@@ -151,6 +148,7 @@ interface Projection {
   docPrId: number;
   nextBookmarkId: number;
   readonly classAlignments: ReadonlyMap<string, HtmlParagraphAlign>;
+  readonly notes: Record<ClipboardNoteKind, Map<number, readonly string[]>>;
 }
 
 function clamp(value: number, low: number, high: number): number {
@@ -158,26 +156,6 @@ function clamp(value: number, low: number, high: number): number {
 }
 
 // --- XML emission
-
-/** Drop code units XML 1.0 forbids in run text; mirrors the store's `isValidXmlText`. */
-function xmlSafeText(text: string): string {
-  let out = '';
-  for (let i = 0; i < text.length; i += 1) {
-    const unit = text.charCodeAt(i);
-    if (unit !== 0x09 && (unit < 0x20 || unit === 0xfffe || unit === 0xffff)) continue;
-    if (unit >= 0xd800 && unit <= 0xdbff) {
-      const next = text.charCodeAt(i + 1);
-      if (next >= 0xdc00 && next <= 0xdfff) {
-        out += text[i]! + text[i + 1]!;
-        i += 1;
-      }
-      continue;
-    }
-    if (unit >= 0xdc00 && unit <= 0xdfff) continue;
-    out += text[i]!;
-  }
-  return out;
-}
 
 /** `w:rPr`, children in CT_RPr sequence order. */
 function rPrXml(props: RunProps): string {
@@ -188,13 +166,19 @@ function rPrXml(props: RunProps): string {
   }
   if (props.bold) inner += '<w:b/>';
   if (props.italic) inner += '<w:i/>';
+  if (props.caps) inner += '<w:caps/>';
+  if (props.smallCaps) inner += '<w:smallCaps/>';
   if (props.strike) inner += '<w:strike/>';
   if (props.color !== undefined) inner += `<w:color w:val="${props.color}"/>`;
   if (props.szHalfPoints !== undefined) inner += `<w:sz w:val="${props.szHalfPoints}"/>`;
   if (props.highlight !== undefined) {
     inner += `<w:highlight w:val="${escapeXmlAttribute(props.highlight)}"/>`;
   }
-  if (props.underline) inner += '<w:u w:val="single"/>';
+  if (props.underline) {
+    inner += `<w:u w:val="${props.underlineVal ?? 'single'}"${
+      props.underlineColor === undefined ? '' : ` w:color="${props.underlineColor}"`
+    }/>`;
+  }
   if (props.shdFill !== undefined) {
     inner += `<w:shd w:val="clear" w:color="auto" w:fill="${props.shdFill}"/>`;
   }
@@ -257,7 +241,7 @@ function pPrXml(para: ParaProps): string {
       spacing += ` w:after="${para.spacingAfterTwips}"`;
     }
     if (para.lineTwentieths !== undefined) {
-      spacing += ` w:line="${para.lineTwentieths}" w:lineRule="auto"`;
+      spacing += ` w:line="${para.lineTwentieths}" w:lineRule="${para.lineRule ?? 'auto'}"`;
     }
     inner += `${spacing}/>`;
   }
@@ -471,6 +455,14 @@ function collectInline(
   if (IGNORED_TAGS.has(tag)) return;
   const style = parseInlineStyle(node);
   if (isMsoListIgnoreMarker(style)) return; // Word's literal list marker never becomes text.
+  const msoElement = style.get('mso-element')?.trim().toLowerCase();
+  if (
+    msoElement === 'comment-reference' ||
+    style.get('mso-special-character')?.trim().toLowerCase() === 'comment' ||
+    node.classList.contains('msocomanchor')
+  ) {
+    return;
+  }
   if (tag === 'w:ptab') {
     const tab = positionalTabXml(node, ctx.run);
     if (tab.length > 0) runs.push(tab);
@@ -501,6 +493,15 @@ function collectInline(
     run: applyRunCss(applyInlineTag(ctx.run, tag), style),
     pre: ctx.pre || tag === 'pre',
   };
+  const noteReference = tag === 'a' ? clipboardNoteReference(style) : null;
+  if (noteReference !== null) {
+    if (!ctx.noteBody) {
+      const localName =
+        noteReference.kind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
+      runs.push(`<w:r>${rPrXml(nextCtx.run)}<w:${localName} w:id="${noteReference.id}"/></w:r>`);
+    }
+    return;
+  }
   if (tag === 'a') {
     const href = node.getAttribute('href');
     const bookmarkName = clipboardBookmarkName(
@@ -673,6 +674,14 @@ function projectFlow(
         p.nodesLeft -= 1;
         continue;
       }
+      const elementStyle = parseInlineStyle(node);
+      if (
+        isClipboardNoteList(elementStyle) ||
+        elementStyle.get('mso-element')?.trim().toLowerCase() === 'comment-list'
+      ) {
+        p.nodesLeft -= 1;
+        continue;
+      }
       if (PARAGRAPH_TAGS.has(tag)) {
         flush();
         p.nodesLeft -= 1;
@@ -835,57 +844,28 @@ function projectCell(
   return `<w:tc><w:tcPr>${tcPr}</w:tcPr>${blocks.join('')}</w:tc>`;
 }
 
-// --- Zip assembly (entry names mirror the internal fragment extractor)
-
-function relationshipXml(rels: readonly RelEntry[]): string {
-  const rows = rels
-    .map(
-      (rel) =>
-        `<Relationship Id="${escapeXmlAttribute(rel.id)}" Type="${escapeXmlAttribute(rel.type)}" ` +
-        `Target="${escapeXmlAttribute(rel.target)}"${rel.external ? ' TargetMode="External"' : ''}/>`
-    )
-    .join('');
-  return `${XML_DECL}<Relationships xmlns="${RELS_XMLNS}">${rows}</Relationships>`;
-}
-
 function assembleFragment(p: Projection, blocks: readonly string[]): Uint8Array {
-  const entries = new Map<string, Uint8Array>();
   const hasNumbering = p.lists.size > 0;
   if (hasNumbering) allocateRel(p, `${R_NS}/numbering`, 'numbering.xml', false);
-
+  for (const kind of ['footnote', 'endnote'] as const) {
+    if (p.notes[kind].size > 0) allocateRel(p, `${R_NS}/${kind}s`, `${kind}s.xml`, false);
+  }
   const documentXml =
     `${XML_DECL}<w:document xmlns:w="${WML_NS}" xmlns:r="${R_NS}" xmlns:wp="${WP_NS}" ` +
     `xmlns:a="${A_NS}" xmlns:pic="${PIC_NS}"><w:body>${blocks.join('')}</w:body></w:document>`;
-  entries.set('word/document.xml', strToU8(documentXml));
-  entries.set('word/_rels/document.xml.rels', strToU8(relationshipXml(p.rels)));
-  const rootRel = {
-    id: 'rId1',
-    type: `${R_NS}/officeDocument`,
-    target: 'word/document.xml',
-    external: false,
-  };
-  entries.set('_rels/.rels', strToU8(relationshipXml([rootRel])));
-  if (hasNumbering) {
-    entries.set('word/numbering.xml', strToU8(numberingPartXml([...p.lists.values()])));
-  }
-  for (const [name, bytes] of p.media) entries.set(name, bytes);
-
-  let defaults =
-    `<Default Extension="rels" ContentType="${RELS_CT}"/>` +
-    '<Default Extension="xml" ContentType="application/xml"/>';
-  for (const [extension, contentType] of p.mediaExtensions) {
-    defaults += `<Default Extension="${extension}" ContentType="${contentType}"/>`;
-  }
-  const overrides =
-    `<Override PartName="/word/document.xml" ContentType="${DOCUMENT_CT}"/>` +
-    (hasNumbering
-      ? `<Override PartName="/word/numbering.xml" ContentType="${NUMBERING_CT}"/>`
-      : '');
-  entries.set(
-    '[Content_Types].xml',
-    strToU8(`${XML_DECL}<Types xmlns="${CT_XMLNS}">${defaults}${overrides}</Types>`)
-  );
-  return writeZip(entries);
+  return writeHtmlFragmentPackage({
+    documentXml,
+    rels: p.rels,
+    ...(hasNumbering ? { numberingXml: numberingPartXml([...p.lists.values()]) } : {}),
+    ...(p.notes.footnote.size > 0
+      ? { footnotesXml: clipboardNotesPartXml('footnote', p.notes.footnote) }
+      : {}),
+    ...(p.notes.endnote.size > 0
+      ? { endnotesXml: clipboardNotesPartXml('endnote', p.notes.endnote) }
+      : {}),
+    media: p.media,
+    mediaExtensions: p.mediaExtensions,
+  });
 }
 
 // --- Entry point
@@ -931,6 +911,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     docPrId: 0,
     nextBookmarkId: 1,
     classAlignments: wordClassAlignmentsFromDocument(parsed),
+    notes: { footnote: new Map(), endnote: new Map() },
   };
   const blocks: string[] = [];
   const rootCtx: FlowContext = {
@@ -941,6 +922,20 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     list: null,
   };
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
+  const bodyLastMarkCovered = projection.lastMarkCovered;
+  for (const note of clipboardNoteDefinitions(parsed)) {
+    const noteBlocks: string[] = [];
+    projectFlow(
+      Array.from(note.element.childNodes),
+      0,
+      { ...rootCtx, noteBody: true },
+      projection,
+      noteBlocks,
+      true
+    );
+    if (noteBlocks.length > 0) projection.notes[note.kind].set(note.id, noteBlocks);
+  }
+  projection.lastMarkCovered = bodyLastMarkCovered;
   if (blocks.length === 0) return { ok: false, reason: 'no-content' };
   return { ok: true, projection, blocks };
 }

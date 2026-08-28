@@ -156,10 +156,11 @@ describe('interopHtmlFromFragment', () => {
       fragment({
         numbering:
           '<w:abstractNum w:abstractNumId="0">' +
-          '<w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl>' +
+          '<w:lvl w:ilvl="0"><w:start w:val="5"/><w:numFmt w:val="decimal"/></w:lvl>' +
           '<w:lvl w:ilvl="1"><w:numFmt w:val="bullet"/></w:lvl>' +
           '</w:abstractNum>' +
-          '<w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>',
+          '<w:num w:numId="5"><w:abstractNumId w:val="0"/>' +
+          '<w:lvlOverride w:ilvl="0"><w:startOverride w:val="3"/></w:lvlOverride></w:num>',
         body:
           item(0, 'one') +
           item(1, 'sub') +
@@ -167,7 +168,7 @@ describe('interopHtmlFromFragment', () => {
           '<w:p><w:r><w:t>after</w:t></w:r></w:p>',
       })
     );
-    expect(html).toContain('<ol style="list-style-type:decimal">');
+    expect(html).toContain('<ol start="3" style="list-style-type:decimal">');
     expect(count(html, '<li')).toBe(3);
     // The bulleted level nests inside the ordered list and closes before "two".
     const ulOpen = html.indexOf('<ul>');
@@ -198,7 +199,7 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain(
       '<table style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto">'
     );
-    expect(html).toContain('<tr style="height:18pt">');
+    expect(html).toContain('<tr style="height:18pt;mso-height-rule:exactly">');
     expect(html).toContain('colspan="63"');
     expect(html).toContain('rowspan="2"');
     expect(html).toContain('background-color:#ddeeff');
@@ -228,17 +229,38 @@ describe('interopHtmlFromFragment', () => {
     expect(html).not.toContain('border-bottom');
   });
 
+  test('table inside borders remain Word hints and interior cell edges', () => {
+    const cell = (text: string): string => `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:tbl><w:tblPr><w:tblBorders>' +
+          '<w:insideH w:val="dotted" w:sz="4" w:color="112233"/>' +
+          '<w:insideV w:val="dashed" w:sz="8" w:color="445566"/>' +
+          '</w:tblBorders></w:tblPr>' +
+          `<w:tr>${cell('a')}${cell('b')}</w:tr><w:tr>${cell('c')}${cell('d')}</w:tr>` +
+          '</w:tbl>',
+      })
+    );
+    expect(html).toContain('mso-border-insideh-alt:0.5pt dotted #112233');
+    expect(html).toContain('mso-border-insidev-alt:1pt dashed #445566');
+    expect(html).toContain('border-right:1pt dashed #445566');
+    expect(html).toContain('border-bottom:0.5pt dotted #112233');
+  });
+
   test('hyperlinks sanitize their targets; a refused scheme keeps the text only', () => {
     const html = interopHtmlFromFragment(
       fragment({
         docRels:
           `<Relationship Id="rId5" Type="${R}/hyperlink" Target="https://example.com/x" TargetMode="External"/>` +
-          `<Relationship Id="rId6" Type="${R}/hyperlink" Target="javascript:alert(1)" TargetMode="External"/>`,
+          `<Relationship Id="rId6" Type="${R}/hyperlink" Target="javascript:alert(1)" TargetMode="External"/>` +
+          `<Relationship Id="rId7" Type="${R}/hyperlink" Target="#_Ref1"/>`,
         body:
           '<w:p>' +
           '<w:bookmarkStart w:id="1" w:name="_Ref1"/>' +
           '<w:hyperlink r:id="rId5"><w:r><w:t>good</w:t></w:r></w:hyperlink>' +
           '<w:hyperlink r:id="rId6"><w:r><w:t>bad</w:t></w:r></w:hyperlink>' +
+          '<w:hyperlink r:id="rId7"><w:r><w:t>related</w:t></w:r></w:hyperlink>' +
           '<w:hyperlink w:anchor="_Ref1"><w:r><w:t>internal</w:t></w:r></w:hyperlink>' +
           '<w:bookmarkEnd w:id="1"/>' +
           '</w:p>',
@@ -248,8 +270,9 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('bad');
     expect(html).toContain('<a id="_Ref1"></a>');
     expect(html).toContain('<a href="#_Ref1">internal</a>');
+    expect(html).toContain('<a href="#_Ref1">related</a>');
     expect(html).not.toContain('javascript:');
-    expect(count(html, '<a ')).toBe(3);
+    expect(count(html, '<a ')).toBe(4);
   });
 
   test('an in-budget image inlines as a data: URI with px dimensions', () => {
@@ -321,6 +344,7 @@ describe('interopHtmlFromFragment', () => {
           '<w:p><w:pPr>' +
           '<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9026"/></w:tabs>' +
           '<w:pageBreakBefore/><w:keepNext/><w:keepLines/><w:widowControl/>' +
+          '<w:spacing w:line="360" w:lineRule="exact"/>' +
           '<w:shd w:fill="DDEEFF"/>' +
           '<w:pBdr><w:bottom w:val="double" w:sz="12" w:color="112233"/></w:pBdr>' +
           '</w:pPr><w:r><w:t>flow</w:t></w:r></w:p>',
@@ -332,6 +356,8 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('page-break-inside:avoid');
     expect(html).toContain('widows:2');
     expect(html).toContain('orphans:2');
+    expect(html).toContain('line-height:18pt');
+    expect(html).toContain('mso-line-height-rule:exactly');
     expect(html).toContain('background-color:#ddeeff');
     expect(html).toContain('border-bottom:1.5pt double #112233');
     expect(html).toContain('mso-border-bottom-alt:1.5pt double #112233');
@@ -343,6 +369,7 @@ describe('interopHtmlFromFragment', () => {
         body:
           '<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t>' +
           '<w:ptab w:alignment="right" w:relativeTo="margin" w:leader="dot"/>' +
+          '<w:footnoteReference w:id="3"/><w:endnoteReference w:id="2"/>' +
           '<w:br w:type="page"/><w:t>c</w:t><w:br/><w:t>d</w:t></w:r></w:p>',
       })
     );
@@ -350,6 +377,8 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('<w:PTab Alignment="RIGHT" RelativeTo="MARGIN" Leader="DOT"></w:PTab>');
     expect(html).toContain('<br style="page-break-before:always">');
     expect(html).toContain('<br>');
+    expect(html).toContain('<span class="MsoFootnoteReference">3</span>');
+    expect(html).toContain('<span class="MsoEndnoteReference">2</span>');
   });
 
   test('every text value is escaped, never markup', () => {

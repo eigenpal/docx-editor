@@ -302,6 +302,25 @@ describe('rich paste', () => {
     expect(markup).toContain('<w:b/>');
   });
 
+  test('external Word footnotes land as referenced note parts', () => {
+    const target = mount(paragraph(''));
+    putCaret(target.surface, 0);
+    target.surface.pasteRich(
+      'See[1].\nSource note.',
+      '<p>See<a style="mso-footnote-id:ftn1" href="#_ftn1">[1]</a>.</p>' +
+        '<div style="mso-element:footnote-list">' +
+        '<div style="mso-element:footnote" id="ftn1"><p>' +
+        '<a style="mso-footnote-id:ftn1" href="#_ftnref1">[1]</a>Source note.</p>' +
+        '</div></div>'
+    );
+    const documentXml = serializeOoxmlPart(target.surface.session.part());
+    expect(documentXml).toContain('<w:footnoteReference ');
+    expect(documentXml).not.toContain('Source note.');
+    const notes = target.surface.session.currentPackage().parts.get('/word/footnotes.xml');
+    expect(notes).toBeDefined();
+    expect(serializeOoxmlPart(notes!)).toContain('Source note.');
+  });
+
   test('a Word caption keeps its paragraph alignment at a paragraph end', () => {
     const target = mount(paragraph(''));
     putCaret(target.surface, 0);

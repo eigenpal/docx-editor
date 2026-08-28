@@ -188,6 +188,20 @@ describe('run and paragraph mapping', () => {
     expect(onRun!).toContain('<w:b/>');
   });
 
+  test('Word caps and underline variants remain run properties', () => {
+    const { docXml } = openFragment(
+      '<p><span style="font-variant:small-caps">small</span>' +
+        '<span style="text-transform:uppercase">caps</span>' +
+        '<u style="text-underline:red wave">wave</u></p>'
+    );
+    const runs = docXml.split('<w:r>');
+    expect(runs.find((run) => run.includes('small'))).toContain('<w:smallCaps/>');
+    expect(runs.find((run) => run.includes('caps'))).toContain('<w:caps/>');
+    const wave = runs.find((run) => run.includes('wave'));
+    expect(wave).toContain('w:val="wave"');
+    expect(wave).toContain('w:color="FF0000"');
+  });
+
   test('paragraph CSS maps to jc, spacing and ind', () => {
     const { docXml } = openFragment(
       '<p style="text-align:center;line-height:1.5">mid</p>' +
@@ -201,6 +215,19 @@ describe('run and paragraph mapping', () => {
     expect(docXml).toContain('w:hanging="360"');
     expect(docXml).toContain('w:jc w:val="both"');
     expect(docXml).toContain('w:firstLine="360"');
+  });
+
+  test('Word absolute line heights preserve exact and at-least rules', () => {
+    const { docXml } = openFragment(
+      '<p style="line-height:18pt;mso-line-height-rule:exactly">exact</p>' +
+        '<p style="line-height:20pt;mso-line-height-rule:at-least">minimum</p>'
+    );
+    const exact = docXml.split('</w:p>').find((part) => part.includes('exact'));
+    const minimum = docXml.split('</w:p>').find((part) => part.includes('minimum'));
+    expect(exact).toContain('w:line="360"');
+    expect(exact).toContain('w:lineRule="exact"');
+    expect(minimum).toContain('w:line="400"');
+    expect(minimum).toContain('w:lineRule="atLeast"');
   });
 
   test('Word paragraph geometry maps absolute lengths and percentage line spacing', () => {
@@ -567,6 +594,36 @@ describe('hyperlinks', () => {
   });
 });
 
+describe('notes', () => {
+  test('Word footnote and endnote HTML becomes referenced note parts', () => {
+    const { docXml, pkg, relsXml } = openFragment(
+      '<p>See<a style="mso-footnote-id:ftn1" href="#_ftn1">' +
+        '<span class="MsoFootnoteReference">[1]</span></a> and ' +
+        '<a style="mso-endnote-id:edn2" href="#_edn2">[i]</a>.</p>' +
+        '<div style="mso-element:footnote-list">' +
+        '<div style="mso-element:footnote" id="ftn1"><p>' +
+        '<a style="mso-footnote-id:ftn1" href="#_ftnref1">[1]</a>Source note.</p></div></div>' +
+        '<div style="mso-element:endnote-list">' +
+        '<div style="mso-element:endnote" id="edn2"><p>' +
+        '<a style="mso-endnote-id:edn2" href="#_ednref2">[i]</a>End note.</p></div></div>'
+    );
+    expect(docXml).toContain('<w:footnoteReference w:id="1"/>');
+    expect(docXml).toContain('<w:endnoteReference w:id="2"/>');
+    expect(docXml).not.toContain('Source note.');
+    expect(docXml).not.toContain('End note.');
+    expect(relsXml).toContain('relationships/footnotes');
+    expect(relsXml).toContain('relationships/endnotes');
+    const footnotes = strFromU8(pkg.partBytes.get('/word/footnotes.xml')!);
+    const endnotes = strFromU8(pkg.partBytes.get('/word/endnotes.xml')!);
+    expect(footnotes).toContain('<w:footnote w:id="1">');
+    expect(footnotes).toContain('Source note.');
+    expect(footnotes).not.toContain('[1]');
+    expect(endnotes).toContain('<w:endnote w:id="2">');
+    expect(endnotes).toContain('End note.');
+    expect(endnotes).not.toContain('[i]');
+  });
+});
+
 describe('images', () => {
   test('an external image source is dropped with no artifact and no fetch', () => {
     const { docXml, pkg, relsXml } = openFragment(
@@ -736,6 +793,22 @@ describe('whitespace and breaks', () => {
     expect(docXml).toContain('w:alignment="right"');
     expect(docXml).toContain('w:relativeTo="margin"');
     expect(docXml).toContain('w:leader="dot"');
+  });
+
+  test('Word TOC wrappers keep rows while comment and note chrome stays out', () => {
+    const { docXml } = openFragment(
+      '<w:Sdt><w:SdtPr></w:SdtPr><p>first<w:PTab Alignment="RIGHT" ' +
+        'RelativeTo="MARGIN" Leader="DOT"></w:PTab></p><p>second</p></w:Sdt>' +
+        '<a class="msocomanchor" style="mso-element:comment-reference">[1]</a>' +
+        '<div style="mso-element:footnote-list"><div style="mso-element:footnote">' +
+        '<p>note body</p></div></div>'
+    );
+    expect(docXml.match(/<w:p>/g)).toHaveLength(2);
+    expect(docXml).toContain('first');
+    expect(docXml).toContain('second');
+    expect(docXml).toContain('<w:ptab ');
+    expect(docXml).not.toContain('[1]');
+    expect(docXml).not.toContain('note body');
   });
 
   test('pre preserves whitespace, converts newlines to w:br and uses Courier New', () => {
