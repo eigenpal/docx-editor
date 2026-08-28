@@ -321,6 +321,7 @@ describe('image resource validation and cache (task 4)', () => {
 
     test('PNG pHYs ignores aspect-only and excessive density', () => {
       expect(validatePngHeader(pngWithPhysicalDensity(5669, 0))?.dpiX).toBeUndefined();
+      expect(validatePngHeader(pngWithPhysicalDensity(1))?.dpiX).toBeUndefined();
       expect(validatePngHeader(pngWithPhysicalDensity(100_000))?.dpiX).toBeUndefined();
     });
 

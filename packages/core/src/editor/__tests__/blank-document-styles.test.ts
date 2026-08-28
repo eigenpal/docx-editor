@@ -118,6 +118,7 @@ describe("the blank template's style gallery", () => {
       'Heading8',
       'Heading9',
       'Quote',
+      'Caption',
       'NoSpacing',
       'ListParagraph',
     ]);
@@ -141,6 +142,13 @@ describe("the blank template's style gallery", () => {
     expect(editor.exec({ type: 'setParagraphStyle', styleId: 'Heading1' }).ok).toBe(true);
     // 16pt text where the default is 11pt: the line has to grow.
     expect(blockHeights(surface)[0]!).toBeGreaterThan(plain);
+  });
+
+  test('it defines the built-in Caption style for pasted Word captions', async () => {
+    const { editor } = mount(blankDocumentBytes());
+    const styles = await savedStyles(editor);
+    expect(styles).toContain('w:styleId="Caption"');
+    expect(styles).toContain('<w:sz w:val="18"/>');
   });
 });
 

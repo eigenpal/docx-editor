@@ -85,6 +85,15 @@ describe('run and paragraph mapping', () => {
     expect(lastMarkCovered).toBe(true);
   });
 
+  test('Word desktop and online heading classes map to target styles', () => {
+    const { docXml, lastMarkCovered } = openFragment(
+      '<p class="MsoHeading2">Desktop</p><p class="Heading3">Online</p>'
+    );
+    expect(docXml).toContain('<w:pStyle w:val="Heading2"/>');
+    expect(docXml).toContain('<w:pStyle w:val="Heading3"/>');
+    expect(lastMarkCovered).toBe(true);
+  });
+
   test('Word caption classes use target styles and include their paragraph mark', () => {
     const { docXml, lastMarkCovered } = openFragment(
       '<p class="MsoCaption" style="text-align:center">Figure 1</p>'
