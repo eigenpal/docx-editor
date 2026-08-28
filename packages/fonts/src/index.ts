@@ -416,6 +416,8 @@ export interface ResolvedFontFace {
  *
  * Named rather than written inline at each call site so a mismatch reports one line rather
  * than a four-line structural wall.
+ *
+ * @public
  */
 export interface FontOriginRequest {
   /** Families the document declares, already name-validated and capped by the engine. */
@@ -482,7 +484,8 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map
 
 /**
  * The packaged substitutes, served ON DEMAND: an editor-shaped font resolver that loads
- * only the families a document turns out to name.
+ * the families a document turns out to name, plus its default face, rather than every
+ * family this package ships.
  *
  * Same call shape as `googleFonts()` from `@docx-editor.dev/fonts/google`, so the two
  * compose by sitting next to each other rather than by being combined differently:

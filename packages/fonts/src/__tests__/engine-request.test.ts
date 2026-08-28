@@ -27,8 +27,11 @@ import './dom-setup.ts';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { strToU8, zipSync } from 'fflate';
-import { createDocxEditor } from '@docx-editor.dev/core/editor';
-import type { FontResolutionRequest } from '@docx-editor.dev/core/editor';
+import { createDocxEditor, defineFontResolver } from '@docx-editor.dev/core/editor';
+import type {
+  FontConfigurationFragment,
+  FontResolutionRequest,
+} from '@docx-editor.dev/core/editor';
 import { packagedFonts } from '../index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -68,6 +71,17 @@ function countingFetcher(): { fetcher: typeof fetch; files: string[] } {
   return { fetcher, files };
 }
 
+/**
+ * How long the engine gets before this file calls it a failure, and the per-test budget
+ * that has to sit ABOVE it.
+ *
+ * The runner's default budget is five seconds, which beat a more generous guard and
+ * reported a bare timeout instead of the diagnosis. The point of the guard is the message,
+ * so it has to fire first — hence an explicit budget on every test here.
+ */
+const RESOLVE_GIVE_UP = 8_000;
+const TEST_BUDGET = 20_000;
+
 /** Containers this file mounted, so nothing is left on `document` for the serial run. */
 const mounted: HTMLElement[] = [];
 const destroy: (() => void)[] = [];
@@ -77,81 +91,128 @@ afterEach(() => {
   for (const element of mounted.splice(0)) element.remove();
 });
 
-/** Open a document with `fonts`, attached, and wait for the one font resolution. */
-async function open(bytes: Uint8Array, fonts: Parameters<typeof createDocxEditor>[0]['fonts']) {
+/**
+ * Open a document, attached, and wait for the resolver's own work to finish.
+ *
+ * Waits on the RESOLVER, not on a clock. A fixed sleep decides how long the engine gets,
+ * and under-sleeping would turn an assertion that expects zero requests green for the
+ * wrong reason — which is the failure mode this whole file exists to rule out. `resolve`
+ * is wrapped so the wait ends exactly when its promise settles, and both shipped resolvers
+ * await their fetches before returning, so settled means every byte is in.
+ *
+ * A resolver the engine never calls rejects rather than hanging, because "it was never
+ * asked" and "it was asked and answered nothing" must not look alike.
+ */
+async function open(
+  bytes: Uint8Array,
+  resolve: (request: FontResolutionRequest) => Promise<FontConfigurationFragment | undefined>
+) {
+  let called!: () => void;
+  const answered = new Promise<void>((settle) => {
+    called = settle;
+  });
+  const fonts = defineFontResolver(async (request: FontResolutionRequest) => {
+    try {
+      return await resolve(request);
+    } finally {
+      called();
+    }
+  });
+
   const container = document.createElement('div');
   document.body.append(container);
   mounted.push(container);
   const editor = createDocxEditor({ document: bytes, fonts });
   destroy.push(() => editor.destroy());
   editor.attach(container);
-  // The resolver runs after the parse and mount, then the shaper initializes.
-  await new Promise((resolve) => setTimeout(resolve, 400));
+
+  await Promise.race([
+    answered,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('the engine never called the resolver')), RESOLVE_GIVE_UP)
+    ),
+  ]);
   return editor;
 }
 
 describe('the request the engine sends', () => {
-  test('carries Calibri as the default family, whatever the document names', async () => {
-    const seen: FontResolutionRequest[] = [];
-    await open(docxNaming('Montserrat'), (request) => {
-      seen.push(request);
-      return undefined;
-    });
+  test(
+    'carries Calibri as the default family, whatever the document names',
+    async () => {
+      const seen: FontResolutionRequest[] = [];
+      await open(docxNaming('Montserrat'), async (request) => {
+        seen.push(request);
+        return undefined;
+      });
 
-    expect(seen).toHaveLength(1);
-    expect(seen[0]!.families).toEqual(['Montserrat']);
-    // NOT the document's family. `WORD_DEFAULT_FONT.family`, because a function-form
-    // configuration has resolved nothing yet when this call is made. A test that writes
-    // its own `defaultFamily` here can assert anything it likes.
-    expect(seen[0]!.defaultFamily).toBe('Calibri');
-  });
+      expect(seen).toHaveLength(1);
+      expect(seen[0]!.families).toEqual(['Montserrat']);
+      // NOT the document's family. `WORD_DEFAULT_FONT.family`, because a function-form
+      // configuration has resolved nothing yet when this call is made. A test that writes
+      // its own `defaultFamily` here can assert anything it likes.
+      expect(seen[0]!.defaultFamily).toBe('Calibri');
+    },
+    TEST_BUDGET
+  );
 });
 
 describe('packagedFonts under that request', () => {
-  test('loads Carlito for a document that names none of the five', async () => {
-    const { fetcher, files } = countingFetcher();
-    await open(docxNaming('Montserrat'), packagedFonts({ fetcher, install: false }));
+  test(
+    'loads Carlito for a document that names none of the five',
+    async () => {
+      const { fetcher, files } = countingFetcher();
+      await open(docxNaming('Montserrat'), packagedFonts({ fetcher, install: false }));
 
-    // The floor: four Carlito faces for the default family alone. "Costs nothing at all"
-    // was never true through the engine.
-    expect([...files].sort()).toEqual([
-      'Carlito-Bold.ttf',
-      'Carlito-BoldItalic.ttf',
-      'Carlito-Italic.ttf',
-      'Carlito-Regular.ttf',
-    ]);
-  });
+      // The floor: four Carlito faces for the default family alone. "Costs nothing at all"
+      // was never true through the engine.
+      expect([...files].sort()).toEqual([
+        'Carlito-Bold.ttf',
+        'Carlito-BoldItalic.ttf',
+        'Carlito-Italic.ttf',
+        'Carlito-Regular.ttf',
+      ]);
+    },
+    TEST_BUDGET
+  );
 
-  test('loads the named family ON TOP of the default one', async () => {
-    const { fetcher, files } = countingFetcher();
-    await open(docxNaming('Times New Roman'), packagedFonts({ fetcher, install: false }));
+  test(
+    'loads the named family ON TOP of the default one',
+    async () => {
+      const { fetcher, files } = countingFetcher();
+      await open(docxNaming('Times New Roman'), packagedFonts({ fetcher, install: false }));
 
-    // Liberation Serif for what the document names, Carlito for the default it inherits.
-    // A file using only Times New Roman does not cost Liberation Serif alone.
-    expect([...files].sort()).toEqual([
-      'Carlito-Bold.ttf',
-      'Carlito-BoldItalic.ttf',
-      'Carlito-Italic.ttf',
-      'Carlito-Regular.ttf',
-      'LiberationSerif-Bold.ttf',
-      'LiberationSerif-BoldItalic.ttf',
-      'LiberationSerif-Italic.ttf',
-      'LiberationSerif-Regular.ttf',
-    ]);
-  });
+      // Liberation Serif for what the document names, Carlito for the default it inherits.
+      // A file using only Times New Roman does not cost Liberation Serif alone.
+      expect([...files].sort()).toEqual([
+        'Carlito-Bold.ttf',
+        'Carlito-BoldItalic.ttf',
+        'Carlito-Italic.ttf',
+        'Carlito-Regular.ttf',
+        'LiberationSerif-Bold.ttf',
+        'LiberationSerif-BoldItalic.ttf',
+        'LiberationSerif-Italic.ttf',
+        'LiberationSerif-Regular.ttf',
+      ]);
+    },
+    TEST_BUDGET
+  );
 
-  test('reaches zero only through `allow`, never through the document', async () => {
-    // There is no host configuration that moves `defaultFamily` off Calibri for a
-    // resolver: `defaultFont` lives on the font CONFIGURATION, which for a function-form
-    // `fonts` is whatever the resolver returns — and it has not returned yet when the
-    // request is built. `createDocxEditor` has no `defaultFont` option either. So the
-    // Carlito floor is a property of the form, and narrowing is the only lever over it.
-    const { fetcher, files } = countingFetcher();
-    await open(
-      docxNaming('Montserrat'),
-      packagedFonts({ allow: ['Times New Roman'], fetcher, install: false })
-    );
+  test(
+    'reaches zero only through `allow`, never through the document',
+    async () => {
+      // There is no host configuration that moves `defaultFamily` off Calibri for a
+      // resolver: `defaultFont` lives on the font CONFIGURATION, which for a function-form
+      // `fonts` is whatever the resolver returns — and it has not returned yet when the
+      // request is built. `createDocxEditor` has no `defaultFont` option either. So the
+      // Carlito floor is a property of the form, and narrowing is the only lever over it.
+      const { fetcher, files } = countingFetcher();
+      await open(
+        docxNaming('Montserrat'),
+        packagedFonts({ allow: ['Times New Roman'], fetcher, install: false })
+      );
 
-    expect(files).toEqual([]);
-  });
+      expect(files).toEqual([]);
+    },
+    TEST_BUDGET
+  );
 });

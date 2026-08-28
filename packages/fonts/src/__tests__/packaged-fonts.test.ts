@@ -1,9 +1,16 @@
 // `packagedFonts()` — the packaged substitutes served ON DEMAND.
 //
-// The promises pinned here are the ones the interface is for: a document pays only for the
-// families it names, a name outside the closed five buys nothing, the answer is stable
-// regardless of how the file happened to order its `w:rFonts`, and the function carries the
-// mark that tells `useDocxSource` it must not be called as a zero-argument loader.
+// The promises pinned here are the ones the interface is for: a document pays for the
+// families it names PLUS its default face rather than for every packaged family, a name
+// outside the closed five contributes nothing of its own, the answer is stable regardless
+// of how the file happened to order its `w:rFonts`, and the function carries the mark that
+// tells `useDocxSource` it must not be called as a zero-argument loader.
+//
+// These tests hand-write the request. That is the right unit for the resolver's own rules,
+// and it is also how the "costs nothing at all" claim survived four review rounds on a
+// `defaultFamily` the engine cannot produce. Any test whose MEANING depends on the request
+// being realistic belongs in engine-request.test.ts, which gets its request from
+// `createDocxEditor`.
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
@@ -86,17 +93,22 @@ describe('packagedFonts', () => {
 
   test('costs a fraction of loading every packaged face', async () => {
     const lazy = countingFetcher();
+    // The engine's real request for a Times New Roman document: the family it names, and
+    // Calibri as the default face it inherits. This test used to pass
+    // `defaultFamily: 'Times New Roman'`, which the engine never sends — the assertion
+    // held either way, but its premise did not.
     await packagedFonts({ fetcher: lazy.fetcher, install: false })({
-      families: [],
-      defaultFamily: 'Times New Roman',
+      families: ['Times New Roman'],
+      defaultFamily: 'Calibri',
     });
     const eager = countingFetcher();
     await loadDefaultFonts({ fetcher: eager.fetcher });
 
     expect(eager.bytes()).toBe(EVERY_PACKAGED_BYTE);
-    // A Times-New-Roman-only document buys Liberation Serif and nothing else, which is
-    // under a quarter of what the eager loader spends whichever document opens.
-    expect(lazy.bytes()).toBeLessThan(eager.bytes() / 4);
+    // Liberation Serif for the named family and Carlito for the default one: two families
+    // out of five, still well under what the eager loader spends whichever document opens.
+    expect(lazy.bytes()).toBeLessThan(eager.bytes() * 0.6);
+    expect(lazy.bytes()).toBeGreaterThan(0);
   });
 
   test('matches family names case-insensitively, as Word does', async () => {

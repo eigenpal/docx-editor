@@ -49,7 +49,8 @@ export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
  * How a host supplies fonts: one origin, or a list of them in precedence order.
  *
  * `packagedFonts()` and `googleFonts()` are the useful ones — they resolve per document,
- * so only the families a file actually names are loaded. A list composes them first-wins:
+ * loading a family when the file names it or when it is that file's default face, rather
+ * than loading every family they could serve. A list composes them first-wins:
  * `{ fonts: [packagedFonts(), googleFonts()] }` serves the bundled faces and reaches the
  * catalog only for what they do not cover.
  *
@@ -176,9 +177,9 @@ async function resolveEagerOrigin(origin: DocxFontOrigin): Promise<DocxFontsInpu
  * resolver is answered with the families the file declares, which nothing knows until the
  * engine has parsed it, so holding the bytes back would wait on work that only the bytes
  * can start. `document` is released at once, `fonts` is a stable resolver, and the engine
- * re-paginates when the faces land. That one reflow is what buys loading only the faces the
- * document uses; `{ fonts: defaultFonts }` is still there when the no-reflow guarantee
- * matters more than the megabytes.
+ * re-paginates when the faces land. That one reflow is what buys loading the faces a
+ * document uses rather than every face an origin could serve; `{ fonts: defaultFonts }` is
+ * still there when the no-reflow guarantee matters more than the megabytes.
  *
  * A URL is fetched with the browser's own `fetch`, exactly as the caller wrote it. Validate
  * it first if it came from user input: this hook adds no allowlist of its own, and inventing
