@@ -276,10 +276,11 @@ export function resolveRunStyle(
 export function displayText(text: string, style: ResolvedRunStyle): string {
   if (style.caps) return text.toUpperCase();
   // Small caps changes glyph selection rather than the characters, so uppercasing here would
-  // corrupt the text a copy produces. Resolving it belongs to the shaper — which does not do
-  // it yet: no `smcp` feature is requested, so a small-caps run measures as plain lowercase
-  // while paint asks the browser to synthesize it. That leaves the span the wrong WIDTH, but
-  // breaking and caret edges agree with each other, so nothing drifts inside a run.
+  // corrupt the text a copy produces. Resolving it belongs to the shaper, which requests the
+  // `smcp` feature when the face carries small-cap glyphs and hands the run to the CSS
+  // measurer when it does not (`shaped-measurer.ts`). That decision is per FACE, so a span
+  // and every prefix of it measure from one source and the caret edges inside a run agree
+  // with the painted span.
   return text;
 }
 

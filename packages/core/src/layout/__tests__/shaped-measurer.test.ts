@@ -325,7 +325,10 @@ describe('advances are summed glyph advances (task 7.7)', () => {
     expect(plain).toBe(1);
     expect(smallCaps).toBe(2);
     expect(withSmallCaps.measure('abc', style({ smallCaps: true }))).toBe(2);
-    expect(calls).toBe(8);
+    // 26 probe letters shaped twice to settle the FACE's `smcp` support, then one shaped call
+    // per distinct (text, feature) pair. The repeat is served from the cache, and the second
+    // small-caps measurement asks the face nothing: the answer is kept per face, not per text.
+    expect(calls).toBe(26 * 2 + 2);
   });
 
   test('small caps uses CSS measurement when the face has no smcp glyphs', () => {
@@ -334,21 +337,26 @@ describe('advances are summed glyph advances (task 7.7)', () => {
     expect(measure.measure('abc', smallCapsStyle)).toBe(fallback.measure('abc', smallCapsStyle));
   });
 
-  test('partial smcp coverage uses CSS measurement for the complete text', () => {
-    const partial = createShapedMeasurer({
+  /**
+   * A face that substitutes a small-cap glyph for exactly the characters `covered` names.
+   * One glyph per character, so a prefix of the text is a prefix of the glyph run.
+   */
+  const measurerWithSmallCapsFor = (covered: (character: string) => boolean) =>
+    createShapedMeasurer({
       shaper: {
         shape(input) {
           const enabled = input.environment.features.smcp === 1;
+          const substituted = (character: string) => enabled && covered(character);
           return {
             text: input.text,
             direction: 'ltr',
             bidiLevel: 0,
             glyphs: [...input.text].map((character, index) => ({
-              id: enabled && character === 'a' ? 2 : character.codePointAt(0)!,
+              id: substituted(character) ? 2 : character.codePointAt(0)!,
               cluster: index,
               originX: index * 1_000,
               originY: 0,
-              advanceX: 1_000,
+              advanceX: substituted(character) ? 800 : 1_000,
               advanceY: 0,
               offsetX: 0,
               offsetY: 0,
@@ -374,8 +382,39 @@ describe('advances are summed glyph advances (task 7.7)', () => {
       unicodeDataVersion: '15.1',
       fixedPointScale: 1_000,
     });
+
+  test('partial smcp coverage uses CSS measurement for the complete text', () => {
+    const partial = measurerWithSmallCapsFor((character) => character === 'a');
     const smallCapsStyle = style({ smallCaps: true });
     expect(partial.measure('ab', smallCapsStyle)).toBe(fallback.measure('ab', smallCapsStyle));
+  });
+
+  test('a small-caps span and EVERY prefix of it measure from the same source', () => {
+    // `semantic-hit-test` derives every caret edge on a line as
+    // `measureDisplayText(span.text.slice(0, offset), …)` through `measure`. Deciding `smcp`
+    // coverage from the text made a prefix answer differently from the span it belongs to:
+    // with a face carrying `smcp` for `a` alone, `measure('a')` took the shaped path (0.8)
+    // while `measure('ab')` took the fallback (12), so the caret after `a` landed at 7% of
+    // the painted span. The decision is per FACE, so both come from the fallback here.
+    const partial = measurerWithSmallCapsFor((character) => character === 'a');
+    const smallCapsStyle = style({ smallCaps: true });
+    const whole = partial.measure('ab', smallCapsStyle);
+    const prefix = partial.measure('a', smallCapsStyle);
+    expect(prefix).toBe(fallback.measure('a', smallCapsStyle));
+    expect(whole).toBe(fallback.measure('ab', smallCapsStyle));
+    expect(prefix).toBeCloseTo(whole / 2, 6);
+    expect(prefix).toBeLessThan(whole);
+  });
+
+  test('a fully covered face measures the span and its prefixes from the shaped path', () => {
+    // The other direction of the same rule: a face that does carry small caps must not send
+    // a prefix to the fallback, or the caret runs PAST the end of the painted span.
+    const covered = measurerWithSmallCapsFor(() => true);
+    const smallCapsStyle = style({ smallCaps: true });
+    expect(covered.measure('ab', smallCapsStyle)).toBeCloseTo(1.6, 6);
+    expect(covered.measure('a', smallCapsStyle)).toBeCloseTo(0.8, 6);
+    // The plain face still measures at the lowercase advance, from its own cache.
+    expect(covered.measure('ab', style())).toBeCloseTo(2, 6);
   });
 
   test('super/subscript advances are EXACTLY three quarters of the baseline advance', () => {

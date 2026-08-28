@@ -166,6 +166,69 @@ describe('a boxed cell paragraph publishes the whole frame, not just the underli
   });
 });
 
+describe('consecutive cell paragraphs with identical borders are ONE bordered block', () => {
+  /** Word's `HorizontalLine`: a bottom rule and nothing else. */
+  const RULE = '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/></w:pBdr>';
+
+  test('two identically ruled paragraphs draw one rule, not two', () => {
+    const fragments = cellParagraphs(
+      lay(oneCellTable(paragraph('first', RULE) + paragraph('second', RULE)))
+    );
+    expect(fragments).toHaveLength(2);
+    // The run has no `w:between`, so the interior boundary carries nothing at all.
+    expect(fragments[0]!.borders ?? []).toHaveLength(0);
+    expect(sides(fragments[1]!)).toEqual(['bottom']);
+    expect(fragments[0]!.bottomBorder).toBeUndefined();
+  });
+
+  test('a boxed run opens above the first paragraph and closes below the last', () => {
+    const fragments = cellParagraphs(
+      lay(oneCellTable(paragraph('first', BOX) + paragraph('second', BOX)))
+    );
+    expect(sides(fragments[0]!).sort()).toEqual(['left', 'right', 'top']);
+    expect(sides(fragments[1]!).sort()).toEqual(['bottom', 'left', 'right']);
+    // One outline: the side rules meet across the gap between the two paragraphs.
+    const upper = stroke(fragments[0]!, 'left');
+    const lower = stroke(fragments[1]!, 'left');
+    expect(upper.box.y + upper.box.height).toBeCloseTo(lower.box.y, 6);
+  });
+
+  test('an interior boundary carries w:between when the run declares one', () => {
+    const withBetween =
+      '<w:pBdr>' +
+      '<w:top w:val="single" w:sz="8" w:space="4" w:color="C00000"/>' +
+      '<w:between w:val="single" w:sz="4" w:space="2" w:color="00B050"/>' +
+      '<w:bottom w:val="single" w:sz="8" w:space="4" w:color="C00000"/>' +
+      '</w:pBdr>';
+    const fragments = cellParagraphs(
+      lay(oneCellTable(paragraph('first', withBetween) + paragraph('second', withBetween)))
+    );
+    expect(sides(fragments[0]!).sort()).toEqual(['between', 'top']);
+    expect(sides(fragments[1]!)).toEqual(['bottom']);
+    // `bottomBorder` names the block's bottom rule alone; a `between` is a different edge.
+    expect(fragments[0]!.bottomBorder).toBeUndefined();
+    expect(stroke(fragments[0]!, 'between').edge.color).toBe('00B050');
+  });
+
+  test('paragraphs whose borders differ each keep their own frame', () => {
+    const other = BOX.replace(/C00000/g, '0070C0');
+    const fragments = cellParagraphs(
+      lay(oneCellTable(paragraph('first', BOX) + paragraph('second', other)))
+    );
+    expect(sides(fragments[0]!).sort()).toEqual(['bottom', 'left', 'right', 'top']);
+    expect(sides(fragments[1]!).sort()).toEqual(['bottom', 'left', 'right', 'top']);
+  });
+
+  test('a different indent splits the group, exactly as it does in body flow', () => {
+    const indented = `<w:ind w:left="720"/>${BOX}`;
+    const fragments = cellParagraphs(
+      lay(oneCellTable(paragraph('first', BOX) + paragraph('second', indented)))
+    );
+    expect(sides(fragments[0]!)).toContain('bottom');
+    expect(sides(fragments[1]!)).toContain('top');
+  });
+});
+
 describe('a boxed cell paragraph that spans pages opens once and closes once', () => {
   const long = 'word '.repeat(40).trim();
 

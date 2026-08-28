@@ -64,6 +64,12 @@ import {
   type StyleCascadeTable,
   type TableCellStyleFormatting,
 } from './style-cascade.ts';
+import {
+  neighbourBorderGroupKey,
+  paragraphBorderGroupKey,
+  rememberCellBorderGroupKey,
+  type CellBorderGroupContext,
+} from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import {
   MAX_TABLE_NESTING,
@@ -375,6 +381,19 @@ function placeCellParagraph(
     readonly collapseBandAbove?: number;
     /** What the table style says about this cell's paragraphs (17.7.6.6). */
     readonly tableCellStyle?: TableCellStyleFormatting;
+    /**
+     * The blocks either side of this one, for the `w:between` group rule (§17.3.1.24).
+     *
+     * Passed as NODES rather than resolved keys: a paragraph with no borders of its own is in
+     * no group, so it never asks either neighbour anything, and that is nearly every
+     * paragraph in a document. Reading them from the block list rather than tracking a
+     * running key also keeps the answer right when a row splits across a page and the
+     * neighbour was placed on the previous one.
+     */
+    readonly borderNeighbours?: {
+      readonly previous: OoxmlElement | undefined;
+      readonly next: OoxmlElement | undefined;
+    };
   }
 ): {
   readonly fragment: ParagraphFragmentRecord | null;
@@ -386,6 +405,14 @@ function placeCellParagraph(
 } {
   const paragraphId = paragraph.id;
   const listItem = deps.listItems?.get(paragraphId);
+  const layoutInputs = resolveParagraphLayoutInputs(
+    paragraph,
+    cellContentWidth,
+    deps.styleCascade,
+    listItem,
+    options?.tableCellStyle,
+    true
+  );
   const {
     props,
     indent,
@@ -400,14 +427,26 @@ function placeCellParagraph(
     markRunProperties,
     tabStops: cascadedTabStops,
     tabStopsCacheToken: cascadedTabStopsCacheToken,
-  } = resolveParagraphLayoutInputs(
-    paragraph,
-    cellContentWidth,
-    deps.styleCascade,
-    listItem,
-    options?.tableCellStyle,
-    true
-  );
+  } = layoutInputs;
+  // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
+  // bordered block — the box opens above the first and closes below the last, and each
+  // interior boundary carries `w:between` or nothing. This is the cell twin of the body
+  // flow's rule, so one document cannot draw the same callout two ways depending on whether
+  // it sits in a `w:tc`.
+  const borderGroupContext: CellBorderGroupContext = {
+    styleCascade: deps.styleCascade,
+    tableCellStyle: options?.tableCellStyle,
+    listItems: deps.listItems,
+  };
+  const borderGroupKey = paragraphBorderGroupKey(layoutInputs);
+  rememberCellBorderGroupKey(paragraph, borderGroupContext, borderGroupKey);
+  const inSameBorderGroup = (block: OoxmlElement | undefined): boolean =>
+    borderGroupKey !== '' && neighbourBorderGroupKey(block, borderGroupContext) === borderGroupKey;
+  const continuesAbove = inSameBorderGroup(options?.borderNeighbours?.previous);
+  const continuesBelow = inSameBorderGroup(options?.borderNeighbours?.next);
+  const topEdge = continuesAbove ? undefined : borders.top;
+  // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
+  const closingEdge = continuesBelow ? borders.between : bottomBorder;
   // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
   const tabStops = withDefaultTabInterval(cascadedTabStops, deps.defaultTabStopPt);
   const tabStopsCacheToken =
@@ -543,7 +582,7 @@ function placeCellParagraph(
   // is flow height below the last — so the cell's content band has to reserve it or a boxed
   // paragraph's frame paints over the cell's own top border. Reserved on the FIRST fragment
   // only: a paragraph continued onto the next page opens once, the way it closes once.
-  const topExtent = lineStart === 0 && !collapseHeight ? paragraphBorderExtentPt(borders.top) : 0;
+  const topExtent = lineStart === 0 && !collapseHeight ? paragraphBorderExtentPt(topEdge) : 0;
   const rawRecords: LineRecord[] = [];
   let y = top + appliedBefore + topExtent;
   let nextLineIndex = lineStart;
@@ -553,8 +592,8 @@ function placeCellParagraph(
     const pendingLine = lines[lineIndex]!;
     const isLastLine = lineIndex === lines.length - 1;
     const borderExtra =
-      isLastLine && includeBottomBorder && bottomBorder && !collapseHeight
-        ? paragraphBorderExtentPt(bottomBorder)
+      isLastLine && includeBottomBorder && closingEdge && !collapseHeight
+        ? paragraphBorderExtentPt(closingEdge)
         : 0;
     const afterExtra = isLastLine && includeAfter && !collapseHeight ? spacing.after : 0;
     const skipBefore = collapseHeight
@@ -672,11 +711,7 @@ function placeCellParagraph(
   const linesTop = rawRecords[0]!.box.y;
   const linesBottom = y;
   // Every `w:pBdr` edge, in the paint order body flow publishes: open, close, sides, bar.
-  //
-  // `w:between` grouping (§17.3.1.24) is NOT applied inside a cell. Grouping is a decision
-  // about a paragraph's NEIGHBOURS, and cell flow places one paragraph at a time with no
-  // lookahead, so a run of identically bordered cell paragraphs each closes with its own
-  // `w:bottom` — Word would draw one frame around the run.
+  // `topEdge` and `closingEdge` already carry the `w:between` group decision.
   const strokes: ParagraphBorderStrokeRecord[] = [];
   let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
   let contentTop = linesTop;
@@ -693,12 +728,12 @@ function placeCellParagraph(
     ? fragmentX + available + borders.right.spacePt + rightStroke
     : fragmentX + available;
   const boxWidth = Math.max(boxRight - boxLeft, 0);
-  if (topExtent > 0 && borders.top) {
-    const topStroke = paragraphBorderStrokeWidthPt(borders.top);
-    const ruleY = linesTop - borders.top.spacePt - topStroke;
+  if (topExtent > 0 && topEdge) {
+    const topStroke = paragraphBorderStrokeWidthPt(topEdge);
+    const ruleY = linesTop - topEdge.spacePt - topStroke;
     strokes.push({
       side: 'top',
-      edge: borders.top,
+      edge: topEdge,
       box: { x: boxLeft, y: ruleY, width: boxWidth, height: topStroke },
     });
     contentTop = ruleY;
@@ -707,30 +742,39 @@ function placeCellParagraph(
   // fit test charged nothing grows `contentBottom` past the row, and past `maxBottom` on a
   // page's last row. `topExtent` drops the top rule for the same reason, and the two edges
   // have to agree or a boxed terminator paints half its frame.
-  if (complete && includeBottomBorder && bottomBorder && !collapseHeight) {
-    const closeStroke = paragraphBorderStrokeWidthPt(bottomBorder);
-    const ruleY = linesBottom + bottomBorder.spacePt;
+  if (complete && includeBottomBorder && closingEdge && !collapseHeight) {
+    const closeStroke = paragraphBorderStrokeWidthPt(closingEdge);
+    const ruleY = linesBottom + closingEdge.spacePt;
     const box = {
       x: boxLeft,
       y: ruleY,
       width: boxWidth,
       height: closeStroke,
     };
-    bottomBorderRecord = { edge: bottomBorder, box };
-    strokes.push({ side: 'bottom', edge: bottomBorder, box });
+    // `bottomBorder` stays the BOTTOM rule alone: a `between` rule closing a grouped
+    // paragraph is a different edge, and a consumer reading it as the box's bottom would
+    // draw the block's frame at every interior boundary.
+    if (!continuesBelow) bottomBorderRecord = { edge: closingEdge, box };
+    strokes.push({ side: continuesBelow ? 'between' : 'bottom', edge: closingEdge, box });
     contentBottom = ruleY + closeStroke;
   }
+  const appliedAfter = complete && includeAfter && !collapseHeight ? spacing.after : 0;
   // Side rules run corner to corner of THIS fragment's frame. Horizontally they are
   // publish-only: Word draws them outside the text column and never re-breaks the lines for
   // them, which is why `available` above is untouched by a box.
-  const sideHeight = Math.max(contentBottom - contentTop, 0);
+  //
+  // Inside a `w:between` group they run THROUGH the inter-paragraph gap instead, so the box
+  // reads as one outline rather than a ladder — the body flow's rule, in the cell lane.
+  const sideTop = continuesAbove && lineStart === 0 ? top : contentTop;
+  const sideBottom = continuesBelow && complete ? contentBottom + appliedAfter : contentBottom;
+  const sideHeight = Math.max(sideBottom - sideTop, 0);
   if (borders.left) {
     strokes.push({
       side: 'left',
       edge: borders.left,
       box: {
         x: fragmentX - borders.left.spacePt - leftStroke,
-        y: contentTop,
+        y: sideTop,
         width: leftStroke,
         height: sideHeight,
       },
@@ -742,7 +786,7 @@ function placeCellParagraph(
       edge: borders.right,
       box: {
         x: fragmentX + available + borders.right.spacePt,
-        y: contentTop,
+        y: sideTop,
         width: rightStroke,
         height: sideHeight,
       },
@@ -764,7 +808,6 @@ function placeCellParagraph(
       },
     });
   }
-  const appliedAfter = complete && includeAfter && !collapseHeight ? spacing.after : 0;
   const bottom = contentBottom + appliedAfter;
   // Shading fills the FRAME when there is one (a side rule is what makes it a box), and the
   // line area otherwise — the body flow's rule, stated once more for the cell lane.
@@ -1017,6 +1060,10 @@ function flowBlocksInBoxBounded(
         collapseHeight: collapsible,
         collapseBandAbove: y - top,
         ...(tableCellStyle ? { tableCellStyle } : {}),
+        borderNeighbours: {
+          previous: blockIndex > 0 ? blocks[blockIndex - 1] : undefined,
+          next: blocks[blockIndex + 1],
+        },
       }
     );
     if (!placed.fitted || !placed.fragment) {

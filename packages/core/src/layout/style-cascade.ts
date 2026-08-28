@@ -47,6 +47,7 @@ import {
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
 import type { ThemeFonts } from './run-style.ts';
+import { combineStyleToggles, firstToggleInstanceWins } from './style-toggles.ts';
 
 /** Soft ceiling on `basedOn` chain length — enough for real templates, refuses hostile graphs. */
 export const MAX_STYLE_BASED_ON_DEPTH = 32;
@@ -262,6 +263,17 @@ function withoutChangeRecords(props: OoxmlProperty[]): OoxmlProperty[] {
     : props;
 }
 
+/**
+ * A style-level `w:rPr` as the toggle rule of §17.7.3 reads it.
+ *
+ * Every `w:rPr` that belongs to a STYLE (document defaults, a `w:style`, a `w:tblStylePr`)
+ * goes through here, so a level's flattened property list holds at most one instance of each
+ * toggle per source and its last instance is the source closest to the tip.
+ */
+function styleRunProperties(node: OoxmlNode | undefined): readonly OoxmlProperty[] {
+  return firstToggleInstanceWins(withoutChangeRecords(propertiesOf(node)));
+}
+
 function readDocDefaults(stylesRoot: OoxmlElement): {
   run: readonly OoxmlProperty[];
   paragraph: readonly OoxmlProperty[];
@@ -274,7 +286,7 @@ function readDocDefaults(stylesRoot: OoxmlElement): {
   const runNode = findRunProperties(rPrDefault);
   const paragraphNode = findParagraphProperties(pPrDefault);
   return {
-    run: withoutChangeRecords(propertiesOf(runNode)),
+    run: styleRunProperties(runNode),
     paragraph: withoutChangeRecords(propertiesOf(paragraphNode)),
     paragraphNode,
   };
@@ -318,7 +330,7 @@ function readStyleDefinition(
     next,
     isDefault: isDefaultFlag(attributeValue(node, 'default')),
     paragraphProperties: withoutChangeRecords(propertiesOf(paragraphPropertiesNode)),
-    runProperties: withoutChangeRecords(propertiesOf(runPropertiesNode)),
+    runProperties: styleRunProperties(runPropertiesNode),
     paragraphPropertiesNode,
     tablePropertiesNode: childNamed(node, 'tblPr'),
     conditionalTableFormats,
@@ -526,7 +538,7 @@ export function tableCellStyleFormatting(
       paragraphProperties.push(...withoutChangeRecords(propertiesOf(conditionPPr)));
     }
     const conditionRPr = findRunProperties(format);
-    if (conditionRPr) runProperties.push(...withoutChangeRecords(propertiesOf(conditionRPr)));
+    if (conditionRPr) runProperties.push(...styleRunProperties(conditionRPr));
   }
   if (
     paragraphPropertyNodes.length === 0 &&
@@ -638,52 +650,6 @@ function styleIdFromProps(
 }
 
 /**
- * Run toggles combine by parity inside the style hierarchy.
- *
- * A true toggle in a style reverses the inherited state. A false toggle leaves it unchanged.
- * Direct run formatting is not passed here because it sets the final state absolutely.
- */
-const STYLE_TOGGLE_PROPERTIES: ReadonlySet<string> = new Set([
-  'b',
-  'i',
-  'caps',
-  'smallCaps',
-  'strike',
-  'dstrike',
-  'outline',
-  'shadow',
-  'emboss',
-  'imprint',
-  'vanish',
-]);
-
-function styleToggleIsOn(property: OoxmlProperty): boolean {
-  const value = property.attributes?.val;
-  return value === undefined || !(value === '0' || value === 'false' || value === 'off');
-}
-
-function normalizeStyleToggleProperties(
-  properties: readonly OoxmlProperty[]
-): readonly OoxmlProperty[] {
-  const ordinary: OoxmlProperty[] = [];
-  const enabled = new Set<string>();
-  let foundToggle = false;
-  for (const property of properties) {
-    if (!STYLE_TOGGLE_PROPERTIES.has(property.localName)) {
-      ordinary.push(property);
-      continue;
-    }
-    foundToggle = true;
-    if (!styleToggleIsOn(property)) continue;
-    if (enabled.has(property.localName)) enabled.delete(property.localName);
-    else enabled.add(property.localName);
-  }
-  if (!foundToggle) return properties;
-  for (const localName of enabled) ordinary.push({ localName });
-  return ordinary;
-}
-
-/**
  * Resolve the `basedOn` chain base-first, stopping on missing ids, cycles, or depth.
  *
  * The tip must match `expectedType`; other types named by `w:pStyle` / `w:rStyle` contribute
@@ -753,10 +719,16 @@ export function cascadeParagraphFormatting(
   const markProps = propertiesOf(directMarkRun);
 
   // Content runs: defaults → table → paragraph style. Mark `w:pPr/w:rPr` is NOT content.
-  const runProperties = normalizeStyleToggleProperties([
-    ...table.docDefaultsRun,
-    ...(tableCellStyle?.runProperties ?? []),
-    ...chain.flatMap((style) => style.runProperties),
+  //
+  // THREE LEVELS, not one flat list. §17.7.3 combines a toggle property as
+  // `val_table XOR val_paragraph XOR val_character` over the document defaults, and a whole
+  // `basedOn` chain is ONE of those values. The character level joins in
+  // `cascadeRunProperties`; what comes out here is the table and paragraph levels resolved
+  // against the defaults, which is also the answer for a run that names no character style.
+  const runProperties = combineStyleToggles([
+    { properties: table.docDefaultsRun, role: 'defaults', emit: true },
+    { properties: tableCellStyle?.runProperties ?? [], role: 'xor', emit: true },
+    { properties: chain.flatMap((style) => style.runProperties), role: 'xor', emit: true },
   ]);
   const markRunProperties: readonly OoxmlProperty[] =
     markProps.length === 0 ? runProperties : [...runProperties, ...markProps];
@@ -820,10 +792,26 @@ export function cascadeRunProperties(
   if (inheritedRunProperties.length === 0 && characterProps.length === 0) {
     return directRunProperties;
   }
-  const styleProperties = normalizeStyleToggleProperties([
-    ...inheritedRunProperties,
-    ...characterProps,
-  ]);
+  // Nothing to combine and nothing to append: hand back the SAME array. Layout keys and
+  // span merging compare inherited property lists by identity, and rebuilding one for the
+  // overwhelming majority of runs — no character style, no direct `w:rPr` — cost a fresh
+  // allocation and a lost cache hit per run.
+  if (characterProps.length === 0 && directRunProperties.length === 0) {
+    return inheritedRunProperties;
+  }
+  const styleProperties =
+    characterProps.length === 0
+      ? inheritedRunProperties
+      : // `inheritedRunProperties` arrives with the table and paragraph levels already
+        // resolved into one value per toggle, so it enters as ONE level of the XOR and the
+        // character chain is the other. The document defaults are re-read for their short
+        // circuit alone (§17.7.3: "If the value specified by the document defaults is true,
+        // the effective value is true"); their ordinary properties are already inherited.
+        combineStyleToggles([
+          { properties: table?.docDefaultsRun ?? [], role: 'defaults', emit: false },
+          { properties: inheritedRunProperties, role: 'xor', emit: true },
+          { properties: characterProps, role: 'xor', emit: true },
+        ]);
   if (directRunProperties.length === 0) return styleProperties;
   return [...styleProperties, ...directRunProperties];
 }

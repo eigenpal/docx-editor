@@ -109,8 +109,17 @@ const MAX_LINE_GAP_FACE_BOXES = 0.5;
  */
 const MAX_FACE_BOX_EM = 4;
 
-/** Maximum distinct lowercase characters tested for `smcp` support in one font. */
-const MAX_SMALL_CAPS_SUPPORT_PROBES = 256;
+/**
+ * The alphabet a face is asked the `smcp` question with, once per face.
+ *
+ * The question has to be about the FACE and never about the text being measured. Every caret
+ * edge on a line is `measureDisplayText(span.text.slice(0, offset), …)` through this same
+ * entry point, so a span and each of its prefixes must resolve to the same measurement
+ * source. A per-text answer cannot do that: a prefix holds a subset of the span's characters,
+ * so a span that misses coverage while its prefix has it takes the fallback while the prefix
+ * takes the shaped path, and the caret lands wherever the two disagree.
+ */
+const SMALL_CAPS_PROBE_ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
 
 /** Super and subscript draw at three quarters, so they measure at three quarters. */
 const sizeFactorOf = (style: ResolvedRunStyle): number =>
@@ -156,7 +165,10 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
   // building (then hashing) a `identity|size|text` string per call made the KEYS a
   // measurable slice of a large document's cold open. The font level is a WeakMap so a
   // font-epoch swap releases its subtree.
+  // Two roots, not one keyed string: the same text and face have different advances with
+  // `smcp`, so a plain run must not reuse a small-cap run's shaped width or the reverse.
   const widthsByFont = new WeakMap<ResolvedFont, Map<number, Map<string, number>>>();
+  const smallCapsWidthsByFont = new WeakMap<ResolvedFont, Map<number, Map<string, number>>>();
   const linesByFont = new WeakMap<
     ResolvedFont,
     Map<number, { height: number; baseline: number }>
@@ -164,7 +176,7 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
   // Style objects live inside cached broken lines, so one resolution per style OBJECT
   // amortizes the family/weight lookup across every probe of the runs that share it.
   const fontsByStyle = new WeakMap<ResolvedRunStyle, ResolvedFont | null>();
-  const smallCapsSupportByFont = new WeakMap<ResolvedFont, Map<string, boolean>>();
+  const smallCapsSupportByFont = new WeakMap<ResolvedFont, boolean>();
 
   const resolveFontCached = (style: ResolvedRunStyle): ResolvedFont | null => {
     // A stored `null` ("no font resolves") comes back as null, not undefined, so the
@@ -176,11 +188,16 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
     return font;
   };
 
-  const widthsFor = (font: ResolvedFont, halfPoints: number): Map<string, number> => {
-    let bySize = widthsByFont.get(font);
+  const widthsFor = (
+    font: ResolvedFont,
+    halfPoints: number,
+    smallCaps: boolean
+  ): Map<string, number> => {
+    const root = smallCaps ? smallCapsWidthsByFont : widthsByFont;
+    let bySize = root.get(font);
     if (!bySize) {
       bySize = new Map();
-      widthsByFont.set(font, bySize);
+      root.set(font, bySize);
     }
     let byText = bySize.get(halfPoints);
     if (!byText) {
@@ -215,31 +232,33 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
       }),
     });
 
-  const smallCapsCoverText = (
-    text: string,
-    font: ResolvedFont,
-    style: ResolvedRunStyle
-  ): boolean => {
-    let support = smallCapsSupportByFont.get(font);
-    if (!support) {
-      support = new Map();
-      smallCapsSupportByFont.set(font, support);
-    }
-    for (const character of text) {
-      if (character === character.toUpperCase()) continue;
-      let supported = support.get(character);
-      if (supported === undefined) {
-        if (support.size >= MAX_SMALL_CAPS_SUPPORT_PROBES) return false;
-        const featured = shape(character, font, { ...style, smallCaps: true });
-        const plain = shape(character, font, { ...style, smallCaps: false });
-        supported =
-          featured.glyphs.length !== plain.glyphs.length ||
-          featured.glyphs.some((glyph, index) => glyph.id !== plain.glyphs[index]?.id);
-        support.set(character, supported);
+  /**
+   * Does this FACE carry small-cap glyphs? Asked once per face, never per text.
+   *
+   * All of {@link SMALL_CAPS_PROBE_ALPHABET} or none: a face that substitutes only part of it
+   * would shape some characters as small caps and leave the rest as lowercase, while paint
+   * asks the browser to synthesize the ones the face cannot draw. That is the fallback's job,
+   * and taking it for the whole face keeps every measurement of every span on one side of the
+   * decision. Glyph ids do not depend on point size, so the first caller's size may settle it.
+   */
+  const faceHasSmallCaps = (font: ResolvedFont, style: ResolvedRunStyle): boolean => {
+    const cached = smallCapsSupportByFont.get(font);
+    if (cached !== undefined) return cached;
+    let supported = true;
+    for (const character of SMALL_CAPS_PROBE_ALPHABET) {
+      const featured = shape(character, font, { ...style, smallCaps: true });
+      const plain = shape(character, font, { ...style, smallCaps: false });
+      const substituted =
+        featured.glyphs.length !== plain.glyphs.length ||
+        featured.glyphs.some((glyph, index) => glyph.id !== plain.glyphs[index]?.id);
+      if (!substituted) {
+        // A face with no `smcp` at all answers on the first letter, which is the common case.
+        supported = false;
+        break;
       }
-      if (!supported) return false;
     }
-    return true;
+    smallCapsSupportByFont.set(font, supported);
+    return supported;
   };
 
   return {
@@ -248,17 +267,13 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
       const font = resolveFontCached(style);
       if (!font) return fallback.measure(text, style);
 
-      const byText = widthsFor(font, halfPointsOf(style));
-      // The same text and face can have different advances with `smcp`. Keep that feature in
-      // the key so a plain run cannot reuse a small-cap run's shaped width, or the reverse.
-      const shapingKey = style.smallCaps ? `smcp\0${text}` : text;
-      let advance = byText.get(shapingKey);
+      const byText = widthsFor(font, halfPointsOf(style), style.smallCaps);
+      let advance = byText.get(text);
       if (advance === undefined) {
         let total = 0;
         try {
-          // Test each lowercase character separately. A whole-run comparison can hide partial
-          // coverage when a ligature splits after only one character receives `smcp`.
-          if (style.smallCaps && !smallCapsCoverText(text, font, style)) {
+          // Per FACE, so this span and every prefix of it answer the same way.
+          if (style.smallCaps && !faceHasSmallCaps(font, style)) {
             return fallback.measure(text, style);
           }
           const shaped = shape(text, font, style);
@@ -269,7 +284,7 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
           return fallback.measure(text, style);
         }
         advance = total / fixedPointScale;
-        byText.set(shapingKey, advance);
+        byText.set(text, advance);
       }
       // Base-size advance scaled to the drawn size; the cache stays keyed on the base size,
       // so baseline and super/subscript runs of one face share entries.
