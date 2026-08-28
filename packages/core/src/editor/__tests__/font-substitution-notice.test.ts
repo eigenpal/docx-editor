@@ -157,7 +157,9 @@ describe('font substitution notice', () => {
   });
 
   test('a chained redirect resolves whatever order the list is in', async () => {
-    // A -> B -> C, listed so the second hop is seen first. A single pass covers only B.
+    // A -> B -> C, listed first hop first. One pass over the list in order covers only B
+    // (its target is admitted); A is still uncovered when that pass ends, because the hop
+    // that would cover it was read before B joined the set.
     installed = [];
     const editor = createDocxEditor({
       container: document.createElement('div'),

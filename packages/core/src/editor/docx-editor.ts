@@ -817,14 +817,27 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Per-face degradation, reported: an embedded face the validator refused still
       // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
       // turns a silent fixed-measurer fallback into a diagnosable one.
-      const refusedRequests = new Set<string>();
-      for (const source of fonts.sources) {
-        const resolved = shaping.fonts.resolve(source.request);
-        if (resolved instanceof FontResolutionError) {
-          reportFontError(toEditorFontError(resolved));
-          refusedRequests.add(fontRequestKey(source.request));
+      // Every "nothing survived" exit: report the drops, release the shaping that will
+      // never be installed, and leave the fixed measurer in place. Three sites had this
+      // open-coded, and two of them had already lost the drop report once.
+      const bailToFixed = (superseded?: typeof shaping): void => {
+        reportDocumentDrops();
+        if (superseded) disposeLayoutShaping(superseded);
+        fontsResolving = false;
+        bump();
+      };
+      const refusedIn = (snapshot: typeof shaping, composed: typeof fonts) => {
+        const refused = new Set<string>();
+        for (const source of composed.sources ?? []) {
+          const resolved = snapshot.fonts.resolve(source.request);
+          if (resolved instanceof FontResolutionError) {
+            reportFontError(toEditorFontError(resolved));
+            refused.add(fontRequestKey(source.request));
+          }
         }
-      }
+        return refused;
+      };
+      const refusedRequests = refusedIn(shaping, fonts);
       // A refused direct face is worse than no face. Composition drops a substitution
       // whenever a direct source exists, so recompose without every refused request.
       if (refusedRequests.size > 0) {
@@ -847,13 +860,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           { epoch: seq, ...explicit, sources: explicitSurvivors },
           { sources: embeddedSurvivors }
         );
-        if (fonts.sources.length === 0) {
-          reportDocumentDrops();
-          disposeLayoutShaping(superseded);
-          fontsResolving = false;
-          bump();
-          return;
-        }
+        if (fonts.sources.length === 0) return bailToFixed(superseded);
         shaping = await createLayoutShaping(fonts);
         disposeLayoutShaping(superseded);
         if (destroyed || seq !== loadSeq) {
@@ -861,14 +868,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           if (seq === loadSeq) fontsResolving = false;
           return;
         }
-        const refusedAfterRebuild = new Set<string>();
-        for (const source of fonts.sources) {
-          const resolved = shaping.fonts.resolve(source.request);
-          if (resolved instanceof FontResolutionError) {
-            reportFontError(toEditorFontError(resolved));
-            refusedAfterRebuild.add(fontRequestKey(source.request));
-          }
-        }
+        const refusedAfterRebuild = refusedIn(shaping, fonts);
         if (refusedAfterRebuild.size > 0) {
           const admittedExplicit = explicitSurvivors.filter(
             (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
@@ -881,13 +881,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
             { epoch: seq, ...explicit, sources: admittedExplicit },
             { sources: admittedEmbedded }
           );
-          if (fonts.sources.length === 0) {
-            reportDocumentDrops();
-            disposeLayoutShaping(rejected);
-            fontsResolving = false;
-            bump();
-            return;
-          }
+          if (fonts.sources.length === 0) return bailToFixed(rejected);
           shaping = await createLayoutShaping(fonts);
           disposeLayoutShaping(rejected);
           if (destroyed || seq !== loadSeq) {

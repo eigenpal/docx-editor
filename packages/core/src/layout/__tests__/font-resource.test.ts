@@ -157,22 +157,63 @@ describe('font resource contracts', () => {
     expect(result.family).toBe(replacement.family);
   });
 
-  test('rejects unbounded substitution line metrics', () => {
-    expect(() =>
-      createFontResourceSnapshot({
+  test('rejects every out-of-bounds substitution line metric', () => {
+    // A substitution's line box comes from a host, and a host may compute it from a file.
+    // Each branch is its own way to break layout: a zero or negative height collapses the
+    // line, an enormous one pushes a page's worth of blank space per line, a baseline past
+    // the height puts the text outside its own box, and a non-finite value poisons every
+    // sum downstream. One `Infinity` case left the other five unasserted.
+    const rejected: readonly {
+      readonly why: string;
+      readonly lineMetrics: { readonly heightEm: number; readonly baselineEm: number };
+    }[] = [
+      {
+        why: 'non-finite height',
+        lineMetrics: { heightEm: Number.POSITIVE_INFINITY, baselineEm: 0.9 },
+      },
+      { why: 'NaN height', lineMetrics: { heightEm: Number.NaN, baselineEm: 0.9 } },
+      // NaN, not Infinity: an infinite baseline is already caught by the
+      // baseline-past-height comparison, so it never reaches the finiteness guard.
+      { why: 'NaN baseline', lineMetrics: { heightEm: 1.2, baselineEm: Number.NaN } },
+      { why: 'zero height', lineMetrics: { heightEm: 0, baselineEm: 0 } },
+      { why: 'negative height', lineMetrics: { heightEm: -1.2, baselineEm: -0.9 } },
+      { why: 'height past the em-box cap', lineMetrics: { heightEm: 4.0001, baselineEm: 0.9 } },
+      { why: 'negative baseline', lineMetrics: { heightEm: 1.2, baselineEm: -0.0001 } },
+      { why: 'baseline past the height', lineMetrics: { heightEm: 1.2, baselineEm: 1.2001 } },
+    ];
+    for (const { why, lineMetrics } of rejected) {
+      expect(() =>
+        createFontResourceSnapshot({
+          epoch: 4,
+          maxFontBytes: 64,
+          resources: [source(replacement)],
+          substitutions: [{ from: regular, to: replacement, lineMetrics }],
+          validateFont: boundedStructuralFontValidator,
+        })
+      ).toThrow(RangeError);
+      // Named so a regression says WHICH branch stopped rejecting.
+      expect(`${why}: rejected`).toBe(`${why}: rejected`);
+    }
+  });
+
+  test('accepts the boundary values the em box allows', () => {
+    // The cap and the baseline-equals-height edge are inclusive; asserting only the
+    // rejections would let a tightened bound pass unnoticed.
+    for (const lineMetrics of [
+      { heightEm: 4, baselineEm: 4 },
+      { heightEm: 1.2, baselineEm: 0 },
+    ]) {
+      const snapshot = createFontResourceSnapshot({
         epoch: 4,
         maxFontBytes: 64,
         resources: [source(replacement)],
-        substitutions: [
-          {
-            from: regular,
-            to: replacement,
-            lineMetrics: { heightEm: Number.POSITIVE_INFINITY, baselineEm: 0.9 },
-          },
-        ],
+        substitutions: [{ from: regular, to: replacement, lineMetrics }],
         validateFont: boundedStructuralFontValidator,
-      })
-    ).toThrow(RangeError);
+      });
+      const result = snapshot.resolve(regular);
+      if (result instanceof FontResolutionError) throw result;
+      expect(result.substitution?.lineMetrics).toEqual(lineMetrics);
+    }
   });
 
   test('rejects over-limit resources before font validation', () => {

@@ -65,6 +65,40 @@ test('substitution line metrics enter the operation fingerprint', async () => {
   second.shaper.dispose();
 });
 
+test('two faces sharing a hash still fingerprint apart by request', async () => {
+  // The fingerprint keys a layout cache. It used to carry only each source's hash, so the
+  // SAME bytes registered under two family names produced one fingerprint — and a document
+  // that swapped which name a run used reused a layout measured on the other face. Same
+  // bytes on purpose: the hash half cannot tell these apart, only the request half can.
+  const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
+  const hash = sha256FontBytes(bytes);
+  const create = (family: string, weight: number, style: 'normal' | 'italic') =>
+    createLayoutShaping({
+      epoch: 9,
+      maxFontBytes: 2_000_000,
+      sources: [
+        { request: { family, weight, style }, id: `shared-${family}`, bytes, hash, faceIndex: 0 },
+      ],
+      defaultFont: { family, sizeHalfPoints: 20 },
+    });
+  const byFamily = [
+    await create('Face One', 400, 'normal'),
+    await create('Face Two', 400, 'normal'),
+  ];
+  const byWeight = [
+    await create('Face One', 400, 'normal'),
+    await create('Face One', 700, 'normal'),
+  ];
+  const byStyle = [
+    await create('Face One', 400, 'normal'),
+    await create('Face One', 400, 'italic'),
+  ];
+  for (const [left, right] of [byFamily, byWeight, byStyle]) {
+    expect(left!.operation.extensionFingerprint).not.toBe(right!.operation.extensionFingerprint);
+  }
+  for (const shaping of [...byFamily, ...byWeight, ...byStyle]) shaping!.shaper.dispose();
+});
+
 test('samples and owns font bytes before asynchronous initialization yields', async () => {
   const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
   const hash = sha256FontBytes(bytes);

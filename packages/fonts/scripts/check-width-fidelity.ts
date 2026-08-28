@@ -82,9 +82,9 @@ const WIDTH_CASES: readonly WidthCase[] = [
     wordBaselinePt: 9.7119140625,
   },
   // Bold carries its own line box: Century Gothic's bold ascent is 2032 against the
-  // regular 2032-vs-1989 difference, so one shared value put every bold line 0.84 pt
-  // short at 40 pt. Both a text size and a display size, because the width tolerance is
-  // relative and a short display string is where an absolute one stopped meaning 1%.
+  // regular 1989, so one shared value put every bold line 0.84 pt short at 40 pt. Both a
+  // text size and a display size, because the width tolerance is relative and a short
+  // display string is where an absolute one stopped meaning 1%.
   {
     family: 'Century Gothic',
     weight: 700,
@@ -192,14 +192,48 @@ async function bytesFor(testCase: WidthCase): Promise<Uint8Array> {
       candidate.style === testCase.style
   );
   if (!face) throw new Error(`No catalog face for ${testCase.family}`);
-  const response = await fetch(face.url);
-  if (!response.ok) throw new Error(`${face.url}: HTTP ${response.status}`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength !== face.byteLength || sha256FontBytes(bytes) !== face.hash) {
-    throw new Error(`Catalog bytes changed for ${testCase.family}`);
-  }
-  return bytes;
+  return await catalogBytes(face.url, face.byteLength, face.hash, testCase.family);
 }
+
+/**
+ * The only network this gate touches: three Montserrat faces, a few hundred KB.
+ *
+ * Retried, because a CDN blip is not a fidelity regression and reporting it as one trains
+ * people to re-run a red gate. Only the TRANSPORT is retried — a hash or length mismatch
+ * is a real answer and fails on the first attempt, since retrying it would just ask the
+ * same tampered or moved asset again.
+ */
+async function catalogBytes(
+  url: string,
+  byteLength: number,
+  hash: string,
+  family: string
+): Promise<Uint8Array> {
+  const attempts = 3;
+  let lastTransportError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.byteLength !== byteLength || sha256FontBytes(bytes) !== hash) {
+        throw new CatalogBytesChanged(`Catalog bytes changed for ${family} (${url})`);
+      }
+      return bytes;
+    } catch (error) {
+      if (error instanceof CatalogBytesChanged) throw error;
+      lastTransportError = error;
+      if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+    }
+  }
+  throw new Error(
+    `${url}: ${attempts} attempts failed; last error ` +
+      `${lastTransportError instanceof Error ? lastTransportError.message : String(lastTransportError)}`
+  );
+}
+
+/** A content mismatch, which is a result rather than a transport failure. */
+class CatalogBytesChanged extends Error {}
 
 await initializeHarfBuzz();
 const shaper = createHarfBuzzTextShaper();

@@ -52,7 +52,7 @@
     "email": "jedr@eigenpal.com",
     "url": "https://github.com/jedrazb"
   },
-  "license": "Apache-2.0 AND OFL-1.1 AND LPPL-1.3c",
+  "license": "Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License",
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",

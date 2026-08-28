@@ -100,5 +100,8 @@ its PDF export, and prints the families the package does not cover.
 ## Licenses
 
 The packaged fonts keep their licenses in `licenses/`. Carlito, Caladea, and Liberation
-use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License.
+use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License, which has no
+SPDX identifier of its own, so `package.json` names it as
+`LicenseRef-GUST-Font-License`. It is the LaTeX Project Public License 1.3c plus one
+clause, and `licenses/` carries both texts because the GUST license refers to the LPPL.
 The package code uses Apache-2.0.

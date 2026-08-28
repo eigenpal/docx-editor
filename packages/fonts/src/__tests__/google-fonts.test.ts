@@ -2,8 +2,8 @@
 //
 // Pins the promises that make fetching-on-open defensible: nothing goes out for a family
 // the document did not name, a name is only ever a lookup key (never a URL fragment),
-// every URL is pinned to the recorded revision, and a substituted name resolves to its
-// metric-compatible target.
+// every URL is pinned to one of the recorded revisions, and a substituted name resolves
+// to its metric-compatible target.
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
@@ -76,11 +76,34 @@ describe('catalog', () => {
     }
   });
 
-  test('serves static Montserrat families without admitting variable fonts', () => {
+  test('every catalogued URL names a static instance, never a variable file', () => {
+    // The shaper refuses variation axes, so a variable file would render every weight at
+    // its default instance and paginate bold as regular. The generator rejects an `fvar`
+    // table at build time; this is the committed catalog's own witness, and the thing a
+    // variable file is recognisable by in a URL is the axis list in its NAME —
+    // `Montserrat[wght].ttf`, `Family-Italic[wdth,wght].ttf`.
+    for (const face of GOOGLE_FONT_CATALOG) {
+      const file = face.url.slice(face.url.lastIndexOf('/') + 1);
+      expect(`${face.family} ${face.weight}/${face.style}: ${file}`).toMatch(
+        /: [\w-]+-[A-Za-z]+\.ttf$/
+      );
+    }
+  });
+
+  test('Montserrat is served from the last revision that shipped static instances', () => {
+    // Its current upstream family is variable-only, so the two Montserrat entries are
+    // pinned to an older commit than the rest of the catalog. Both halves matter: the
+    // FILES have to be the named static instances, and the revision has to be the one
+    // that still carries them.
     expect(GOOGLE_FONT_FAMILIES).toContain('Montserrat');
     expect(GOOGLE_FONT_FAMILIES).toContain('Montserrat Light');
     const montserrat = GOOGLE_FONT_CATALOG.filter((face) => face.family === 'Montserrat');
-    expect(montserrat).toHaveLength(4);
+    expect(montserrat.map((face) => face.url.slice(face.url.lastIndexOf('/') + 1)).sort()).toEqual([
+      'Montserrat-Bold.ttf',
+      'Montserrat-BoldItalic.ttf',
+      'Montserrat-Italic.ttf',
+      'Montserrat-Regular.ttf',
+    ]);
     expect(montserrat.every((face) => !face.url.includes(`@${GOOGLE_FONTS_REVISION}/`))).toBe(true);
   });
 
@@ -139,9 +162,9 @@ describe('googleFonts resolver', () => {
   });
 
   test('a family the catalog cannot match resolves from the packaged assets', async () => {
-    // No google/fonts family is metric-compatible with Century Gothic, and the closest
-    // The package's own TeX Gyre Adventor answers it, over the SAME fetcher, so
-    // `googleFonts()` is the on-demand path for it and makes no third-party request.
+    // No google/fonts family is metric-compatible with Century Gothic. The package's own
+    // TeX Gyre Adventor answers it, over the SAME fetcher, so `googleFonts()` is the
+    // on-demand path for it and makes no third-party request.
     const { fetcher, requested } = fakeFetcher();
     const fragment = await resolveOnly(['century gothic'], fetcher);
     expect(fragment.sources).toHaveLength(4);
