@@ -1,5 +1,27 @@
 # @docx-editor.dev/pro
 
+## 2.12.0
+
+### Minor Changes
+
+- 9f1b924: Collaboration rooms report their replicated size: `session.resourceUsage()` and the server-side `readCollaborationResourceUsage(ydoc)` return node, tombstone, relationship, part, and media-byte counts next to the hard limits, so a host can archive and re-room before growth turns terminal.
+
+### Patch Changes
+
+- ce9c5cc: Harden the collaboration receive path against a hostile peer: a malformed shared node record no longer crashes `applyUpdate`, the derived-index rebuild, or the materializer on every replica. A crafted value now degrades to an absent node instead of throwing. Fixes #567.
+- 71bc4e0: Collaboration rooms recover cleanly from failure: a failed seed no longer marks the room initialized, `readCollaborationDocument` and session teardown release their document observers, refusal recovery keeps a disconnected status instead of reporting ready, and undo obeys the same gate as every other edit. Fixes #541, #542, #544, #545.
+- b779bb8: An edit committed by a change subscriber while the session installs a remote package now replicates instead of staying on one replica behind a healthy status. Fixes #553.
+- Updated dependencies [531759c]
+- Updated dependencies [40699c8]
+- Updated dependencies [31780e5]
+- Updated dependencies [4c2c119]
+- Updated dependencies [3755b98]
+- Updated dependencies [8fe5920]
+- Updated dependencies [fe3b8a3]
+  - @docx-editor.dev/core@2.12.0
+  - @docx-editor.dev/react@2.12.0
+  - @docx-editor.dev/vue@2.12.0
+
 ## 2.11.0
 
 ### Minor Changes

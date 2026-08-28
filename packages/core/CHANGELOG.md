@@ -1,5 +1,21 @@
 # @docx-editor.dev/core
 
+## 2.12.0
+
+### Minor Changes
+
+- 531759c: Paint theme-coloured DrawingML shapes and grouped vector graphics.
+
+### Patch Changes
+
+- 40699c8: Keep note overflow sheets in separate page rectangles after insertion. Fixes #513.
+- 31780e5: Every authorable op kind and every accepted property, image-wrap, and content-control variant is now proven to replicate through collaboration by a journal replay-convergence fixture, or declared not-expressible with a reason. Adding an editing capability without one fails the coverage gate.
+- 4c2c119: A collaborative edit that moves an existing node while changing its content — a hyperlink inserted across a tracked-change run — now replicates the change instead of duplicating the old text on every receiving peer. Fixes #557.
+- 3755b98: Combine style toggle properties per level of the style hierarchy, shape small capitals with matching advances, and draw one frame around consecutive identically bordered paragraphs in a table cell. Fixes #505.
+- 8fe5920: A relationship, content type, or extra part written through a transaction's `applyPackage` now survives into the package, the save, and one shared undo unit with the story edit, instead of replicating to peers while vanishing from the author's own document. Fixes #558.
+- fe3b8a3: Pasting rich content into non-empty documents no longer degrades to plain text or inserts Word's macOS preview image. Word headings, captions, and image dimensions now retain their source semantics and physical size.
+- @docx-editor.dev/i18n@2.12.0
+
 ## 2.11.0
 
 ### Minor Changes
