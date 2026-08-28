@@ -240,11 +240,20 @@ export function useDocxSource(
   // the file open in it, and re-fetching them on every navigation would be pure waste. The
   // dependency is `fontsShape` rather than `[]` so a host that switches shapes — nothing
   // first, then a loader or a resolver once it is ready — actually gets the fonts it asked
-  // for. Swapping one eager loader for another eager loader does NOT re-run it; the
-  // documented contract is that fonts load once.
+  // for.
+  //
+  // Swapping one eager loader for ANOTHER eager loader does not re-run it here, and does
+  // in Vue, whose watcher keys on the option value. Keying on the value is not open to
+  // this hook: React rebuilds the options object every render, so `{ fonts: [a, b] }`
+  // written inline would re-run the whole eager load on every render. Neither behaviour is
+  // a contract — remount, or load a document, to change fonts deliberately.
   useEffect(() => {
     const fontsSource = latest.current.fonts;
     if (fontsSource === undefined) {
+      // Cleared, not left standing. Removing the option and keeping the previous
+      // composition would hand the editor fonts the host has stopped asking for, and the
+      // Vue twin has always cleared it.
+      setFonts(undefined);
       setFontsSettled(true);
       return undefined;
     }

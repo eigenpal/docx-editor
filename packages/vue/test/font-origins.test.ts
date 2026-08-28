@@ -267,40 +267,74 @@ describe('useFonts takes every origin in the same shape', () => {
     expect(warnings).toHaveLength(1);
   });
 
-  test('an unmarked resolver is read as a value, by arity, not called as a getter', async () => {
-    // No `defineFontResolver`. A one-argument function cannot be a `MaybeRefOrGetter`
-    // getter, so `toValue` must not call it — this is what threw on `main`.
-    const unmarked = (request: FontResolutionRequest) => ({
-      sources: [source(request.defaultFamily, 'unmarked')],
-    });
+  // Every unmarked resolver shape, including the two that report `length === 0` and so
+  // would be read as getters by an arity test. `toValue` calling any of them is the bug
+  // this closes; the React twin has never had it, and now neither adapter can.
+  const unmarkedShapes: readonly [string, (request: FontResolutionRequest) => unknown][] = [
+    ['one declared argument', (request) => ({ sources: [source(request.defaultFamily, 'r')] })],
+    [
+      'a defaulted argument, length 0',
+      ((request = { families: [], defaultFamily: 'Fallback' }) => ({
+        sources: [source(request.defaultFamily, 'r')],
+      })) as (request: FontResolutionRequest) => unknown,
+    ],
+    [
+      'rest arguments, length 0',
+      ((...args: FontResolutionRequest[]) => ({
+        sources: [source(args[0]!.defaultFamily, 'r')],
+      })) as (request: FontResolutionRequest) => unknown,
+    ],
+  ];
 
-    await mounted(
-      () => useFonts(unmarked),
-      async (compose) => {
-        const merged = (await compose(REQUEST)) as { sources: FontSource[] };
-        expect(merged.sources.map((entry) => entry.id)).toEqual(['unmarked']);
-      }
-    );
+  for (const [shape, unmarked] of unmarkedShapes) {
+    test(`an unmarked resolver is a value, never a getter — ${shape}`, async () => {
+      await mounted(
+        () => useFonts(unmarked as never),
+        async (compose) => {
+          const merged = (await compose(REQUEST)) as { sources: FontSource[] };
+          // The DOCUMENT's default family, not a fallback the resolver invented and not a
+          // throw: proof it was handed the real request.
+          expect(merged.sources.map((entry) => entry.request.family)).toEqual(['Calibri']);
+        }
+      );
+    });
+  }
+
+  test('a getter returning another ORIGIN is reported, not composed away', async () => {
+    const warnings: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    try {
+      // `() => packagedFonts()` where `packagedFonts()` was meant. Nothing can tell this
+      // from a resolver, so it is reported rather than composed as an empty fragment.
+      const getterOfOrigin = () =>
+        defineFontResolver(async () => ({ sources: [source('Calibri', 'inner')] }));
+
+      await mounted(
+        () => useFonts(getterOfOrigin as never),
+        async (compose) => {
+          expect(await compose(REQUEST)).toBeUndefined();
+        }
+      );
+    } finally {
+      console.warn = warn;
+    }
+
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0]?.[0])).toContain('answered with a function');
   });
 
-  test('a zero-argument getter is re-read on every resolve, not captured once', async () => {
-    let calls = 0;
-    const getter = () => {
-      calls += 1;
-      return { sources: [source('Calibri', `call-${calls}`)] };
-    };
+  test('a plain-function getter still composes, though it is no longer read by toValue', async () => {
+    const getter = () => ({ sources: [source('Calibri', 'from-getter')] });
 
     await mounted(
       () => useFonts(getter),
       async (compose) => {
-        const first = (await compose(REQUEST)) as { sources: FontSource[] };
-        const second = (await compose(REQUEST)) as { sources: FontSource[] };
-
-        // The getter form exists so a host can compute origins from reactive state; a
-        // resolver that captured the first read would serve the first document's fonts to
-        // every document after it.
-        expect(first.sources.map((entry) => entry.id)).toEqual(['call-1']);
-        expect(second.sources.map((entry) => entry.id)).toEqual(['call-2']);
+        const merged = (await compose(REQUEST)) as { sources: FontSource[] };
+        // Handed the request instead of being called bare, and it ignores it — which is
+        // why dropping the getter branch costs the getter form nothing. That it is re-read
+        // per resolve is `composeFontOrigins`' doing, and is asserted there.
+        expect(merged.sources.map((entry) => entry.id)).toEqual(['from-getter']);
       }
     );
   });

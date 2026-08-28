@@ -47,6 +47,7 @@ import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
 import { FontOrigin } from '@docx-editor.dev/core/editor';
 import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import { FontResolver } from '@docx-editor.dev/core/editor';
+import { FontResolverMark } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
@@ -972,6 +973,9 @@ export interface DocxEditorViewportProps {
 }
 
 // @public
+export type DocxFontOrigin = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>);
+
+// @public
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
 
 // @public
@@ -1082,6 +1086,8 @@ export { FontOrigin }
 export { FontResolutionRequest }
 
 export { FontResolver }
+
+export { FontResolverMark }
 
 // @public
 export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
@@ -1268,6 +1274,8 @@ export interface LocaleProviderProps {
 
 // @public @deprecated (undocumented)
 export function Logo(input: LogoProps): react__default.JSX.Element;
+
+export { MarkedFontResolver }
 
 export { MAX_RESOLVER_FAMILIES }
 

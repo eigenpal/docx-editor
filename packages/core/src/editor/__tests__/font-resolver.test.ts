@@ -262,6 +262,24 @@ describe('composeFontOrigins', () => {
     expect(seen[0]!.resolvedFaces).toBeUndefined();
   });
 
+  test('calls a function origin again on the NEXT composition, never caching its answer', async () => {
+    let calls = 0;
+    const perLoad = defineFontResolver(async () => {
+      calls += 1;
+      return { sources: [source('Calibri', `call-${calls}`)] };
+    });
+
+    // Once per document, and the answer belongs to THAT document. A cached answer would
+    // serve the first file's fonts to every file after it — and it is this, not anything
+    // in the adapters, that makes a plain-function getter re-read per resolve.
+    const first = await composeFontOrigins([perLoad], REQUEST);
+    const second = await composeFontOrigins([perLoad], REQUEST);
+
+    expect(calls).toBe(2);
+    expect(first?.sources?.map((entry) => entry.id)).toEqual(['call-1']);
+    expect(second?.sources?.map((entry) => entry.id)).toEqual(['call-2']);
+  });
+
   test('passes through the coverage IT was told about', async () => {
     const seen: FontResolutionRequest[] = [];
     const record = defineFontResolver(async (request: FontResolutionRequest) => {

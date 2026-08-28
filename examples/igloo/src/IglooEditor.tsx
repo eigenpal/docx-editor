@@ -53,10 +53,11 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
   const iglooT = useChromeTranslate(ICE_LABELS);
 
   // The whole boot: fetch the bytes, load Word's default faces, register them for paint,
-  // compose the configuration, and cancel both if this unmounts. `packagedFonts()` is passed
-  // rather than imported by the hook, so a host bringing its own faces — or none — does not
-  // ship the default font bytes. It resolves per document, so this igloo pays for the
-  // families its file actually names and nothing else.
+  // compose the configuration, and cancel the fetch if this unmounts. `packagedFonts()` is
+  // passed rather than imported by the hook, so a host bringing its own faces — or none —
+  // does not ship the default font bytes. It resolves per document, so this igloo pays for
+  // the families its file actually names and nothing else, and there is no font work in
+  // flight to cancel: none starts until the engine has parsed the document.
   const {
     document: bytes,
     fonts,

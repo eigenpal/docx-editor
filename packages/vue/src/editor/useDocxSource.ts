@@ -1,6 +1,11 @@
 // The Vue twin of the React hook. The two font paths — eager, which holds the document
 // back until fonts settle, and on demand, which cannot — are documented on the React side
 // and behave identically here.
+//
+// One deliberate difference: this watcher keys on the `fonts` VALUE, so swapping one eager
+// loader for another re-runs it. React keys on the option's SHAPE, because it rebuilds the
+// options object every render and keying on the value would re-run the eager load on every
+// one. Neither is a contract; remount, or load a document, to change fonts deliberately.
 
 import { computed, ref, toValue, watch, type ComputedRef } from 'vue';
 import { scopeDispose } from './scope-dispose';

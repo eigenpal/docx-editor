@@ -32,8 +32,8 @@ const { document, fonts } = useDocxSource(url, {
 ```
 
 The list is a precedence order: the first origin that supplies a face wins, and
-later origins are told which families are already covered so they don't load
-them again. Put the origin you'd rather pay for first.
+later origins are told which faces are already covered so they don't load them
+again. Put the origin you'd rather pay for first.
 
 `googleFonts()` fetches from a content delivery network. Nothing else here
 touches the network, and no origin is on by default.

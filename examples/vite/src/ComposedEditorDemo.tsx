@@ -609,7 +609,9 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
 
   // The whole boot in ONE call: fetch the fixture, serve Word's default substitute faces
   // (Carlito for Calibri, Liberation Serif for Times, …), register them for paint, compose
-  // the configuration, and cancel both if this unmounts.
+  // the configuration, and cancel the fetch if this unmounts. Only the fetch — on the
+  // on-demand path there is no font work in flight to cancel, because none starts until
+  // the engine has parsed the document.
   //
   // `packagedFonts()` resolves ON DEMAND: the engine calls it after the parse with the
   // families this fixture declares, so only those faces load. Nothing is fetched from a

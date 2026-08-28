@@ -233,6 +233,41 @@ describe('useFonts keeps every call shape that compiled before the mark existed'
     expect(seen).toEqual([REQUEST]);
     expect(merged.sources.map((entry) => entry.id)).toEqual(['unmarked', 'fragment']);
   });
+
+  // The twin of the Vue table. Both adapters treat every function origin as a value, so
+  // the two shapes that report `length === 0` behave here exactly as they do there —
+  // there is no arity test left in either to diverge on.
+  const unmarkedShapes: readonly [string, (request: FontResolutionRequest) => unknown][] = [
+    ['one declared argument', (request) => ({ sources: [source(request.defaultFamily, 'r')] })],
+    [
+      'a defaulted argument, length 0',
+      ((request = { families: [], defaultFamily: 'Fallback' }) => ({
+        sources: [source(request.defaultFamily, 'r')],
+      })) as (request: FontResolutionRequest) => unknown,
+    ],
+    [
+      'rest arguments, length 0',
+      ((...args: FontResolutionRequest[]) => ({
+        sources: [source(args[0]!.defaultFamily, 'r')],
+      })) as (request: FontResolutionRequest) => unknown,
+    ],
+  ];
+
+  for (const [shape, unmarked] of unmarkedShapes) {
+    test(`an unmarked resolver is a value, never a getter — ${shape}`, async () => {
+      let compose!: unknown;
+      function Probe() {
+        compose = useFonts(unmarked as never);
+        return null;
+      }
+      render(<Probe />);
+
+      const merged = (await (compose as (r: FontResolutionRequest) => Promise<unknown>)(
+        REQUEST
+      )) as { sources: FontSource[] };
+      expect(merged.sources.map((entry) => entry.request.family)).toEqual(['Calibri']);
+    });
+  }
 });
 
 describe('useFonts takes every origin in the same shape', () => {
@@ -401,6 +436,27 @@ describe('useFonts takes every origin in the same shape', () => {
     expect((result.fonts as { sources: FontSource[] }).sources.map((e) => e.id)).toEqual([
       'late-eager',
     ]);
+  });
+
+  test('removing the fonts option clears the composed configuration', async () => {
+    let result!: ReturnType<typeof useDocxSource>;
+
+    function Probe({ withFonts }: { withFonts: boolean }) {
+      result = useDocxSource(BYTES, {
+        ...(withFonts ? { fonts: () => ({ sources: [source('Calibri', 'gone')] }) } : {}),
+      });
+      return null;
+    }
+    const view = render(<Probe withFonts />);
+    await flush();
+    expect((result.fonts as { sources: FontSource[] }).sources).toHaveLength(1);
+
+    view.rerender(<Probe withFonts={false} />);
+    await flush();
+
+    // Left standing, the editor would keep measuring with fonts the host has stopped
+    // asking for. The Vue twin has always cleared it.
+    expect(result.fonts).toBeUndefined();
   });
 
   test('a throwing eager loader is reported, not swallowed', async () => {

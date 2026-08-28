@@ -50,6 +50,7 @@ import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
 import { FontOrigin } from '@docx-editor.dev/core/editor';
 import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import { FontResolver } from '@docx-editor.dev/core/editor';
+import { FontResolverMark } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
@@ -3277,6 +3278,9 @@ export interface DocxEditorViewportProps {
 }
 
 // @public (undocumented)
+export type DocxFontOrigin = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>);
+
+// @public (undocumented)
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
 
 // @public (undocumented)
@@ -3393,6 +3397,8 @@ export { FontOrigin }
 export { FontResolutionRequest }
 
 export { FontResolver }
+
+export { FontResolverMark }
 
 // @public (undocumented)
 export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
@@ -3845,6 +3851,8 @@ export interface LocaleProviderProps {
 export const Logo: vue.DefineComponent<{}, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<{}> & Readonly<{}>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+export { MarkedFontResolver }
 
 export { MAX_RESOLVER_FAMILIES }
 

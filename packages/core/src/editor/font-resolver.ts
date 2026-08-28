@@ -270,6 +270,17 @@ export async function composeFontOrigins(
       // `null` to plenty of hosts, and reading `.sources` off it took every OTHER origin
       // down with it.
       if (answer == null) continue;
+      // An origin can only ever answer a configuration or a fragment. A FUNCTION here is
+      // `() => packagedFonts()` where `packagedFonts()` was meant — a shape nothing can
+      // tell from a resolver, and one that used to compose as a fragment with no sources
+      // and no complaint.
+      if (typeof answer === 'function') {
+        console.warn(
+          '[fonts] a font origin answered with a function and was skipped; pass the ' +
+            'resolver itself rather than a function returning one'
+        );
+        continue;
+      }
       // Read the whole answer BEFORE committing any of it. A malformed source — no
       // `request`, an unusable family — throws in `faceKey`, and an origin half-ingested
       // is worse than one skipped: it would sit in `present` with its faces unrecorded and

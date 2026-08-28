@@ -71,6 +71,7 @@ export {
 export { useFonts, type FontsInput } from './editor/useFonts';
 export {
   useDocxSource,
+  type DocxFontOrigin,
   type DocxFontsInput,
   type DocxFontsSource,
   type DocxSource,
@@ -385,6 +386,8 @@ export {
   type FontOrigin,
   type FontResolutionRequest,
   type FontResolver,
+  type FontResolverMark,
+  type MarkedFontResolver,
   type FontUrlSource,
   type LoadFontsRequest,
   type LoadFontsResult,
