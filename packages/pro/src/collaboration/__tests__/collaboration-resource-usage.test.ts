@@ -9,6 +9,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // the server-side probe agrees with the session's, and that the probe leaks nothing.
 
 import { afterEach, describe, expect, test } from 'bun:test';
+import * as Y from 'yjs';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { readCollaborationResourceUsage } from '../resource-usage.ts';
 import { createPeerHarness } from './document-peer-support.ts';
@@ -58,6 +59,26 @@ describe('collaboration resource usage', () => {
     const afterJoin = session.resourceUsage();
     expect(afterJoin.tombstonedNodes).toBeGreaterThan(0);
     expect(afterJoin.nodes).toBeGreaterThanOrEqual(afterSplit.nodes);
+  });
+
+  test('hostile shared entries never make the probe throw or under-report', async () => {
+    const { alice } = await harness.pair(collaborationDocx());
+    // Mirror the room into a bare doc with no attached registry, so planting the hostile
+    // shapes does not trip the separate observer crash tracked in #567. The probe reads
+    // the pre-existing junk on a fresh registry, which is the server-side path.
+    const mirror = new Y.Doc();
+    Y.applyUpdate(mirror, Y.encodeStateAsUpdate(alice.ydoc));
+    const clean = readCollaborationResourceUsage(mirror);
+    // A hostile peer can write raw shapes the decoded readers skip. The probe must keep
+    // returning numbers — a metrics scraper crashes otherwise — and must count what the
+    // ENFORCING caps count, or it shows a healthy room right up to the terminal failure.
+    mirror.getMap('docx-package-nodes-v1').set('junk-node', 'not-a-map' as never);
+    mirror.getMap('docx-package-parts-v1').set('junk-part', 'not-a-map' as never);
+    const usage = readCollaborationResourceUsage(mirror);
+    expect(usage.nodes).toBe(clean.nodes + 1);
+    expect(usage.parts).toBe(clean.parts + 1);
+    expect(usage.tombstonedNodes).toBe(clean.tombstonedNodes);
+    mirror.destroy();
   });
 
   test('the server-side probe agrees with the session and leaks nothing', async () => {

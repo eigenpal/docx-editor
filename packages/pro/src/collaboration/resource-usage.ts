@@ -14,9 +14,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * before the caps end the session for it.
  */
 
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 import { DocumentRegistry } from './document/index.ts';
-import { NODE_DELETED_FIELD } from './document/schema.ts';
+import { NODE_DELETED_FIELD, isNodeMap } from './document/schema.ts';
 import { MAX_SHARED_BLOB_BYTES, SHARED_BLOBS_KEY, SharedBlobStore } from './shared-blob-store.ts';
 
 /**
@@ -48,12 +48,30 @@ export interface CollaborationResourceUsage {
 function tombstoneCount(registry: DocumentRegistry): number {
   let count = 0;
   registry.schema.nodes.forEach((record) => {
-    if (record.get(NODE_DELETED_FIELD) === true) count += 1;
+    // The nodes map is peer-writable: a hostile update can plant a non-map value, and a
+    // probe that throws on it takes the metrics scraper down with attacker-chosen input.
+    if (isNodeMap(record) && record.get(NODE_DELETED_FIELD) === true) count += 1;
   });
   return count;
 }
 
-/** Read one usage snapshot from a live registry and blob store. */
+/** Raw relationship records, counted exactly the way `limitFailure` counts them. */
+function rawRelationshipCount(registry: DocumentRegistry): number {
+  let count = 0;
+  registry.schema.relationships.forEach((owner) => {
+    count += owner instanceof Y.Map ? owner.size : 0;
+  });
+  return count;
+}
+
+/**
+ * Read one usage snapshot from a live registry and blob store.
+ *
+ * Every count mirrors the ENFORCING read in `limitFailure`, not the decoded projection: the
+ * probe exists to show distance to the caps that end the room, and a hostile peer can pad
+ * shared state with malformed entries the decoded readers skip. A probe that under-reports
+ * against the enforcement would show a healthy room right up to the terminal failure.
+ */
 export function resourceUsageOf(
   registry: DocumentRegistry,
   blobs: SharedBlobStore
@@ -62,9 +80,9 @@ export function resourceUsageOf(
     nodes: registry.nodeCount(),
     tombstonedNodes: tombstoneCount(registry),
     maxNodes: registry.limits.maxNodes,
-    relationships: registry.relationshipCount(),
+    relationships: rawRelationshipCount(registry),
     maxRelationships: registry.limits.maxRelationships,
-    parts: registry.partCount(),
+    parts: registry.schema.parts.size,
     maxParts: registry.limits.maxParts,
     blobBytes: blobs.totalByteLength(),
     maxBlobBytes: MAX_SHARED_BLOB_BYTES,
