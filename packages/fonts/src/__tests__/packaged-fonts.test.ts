@@ -7,12 +7,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import {
-  ALL_WORD_DEFAULT_FAMILIES,
-  FONT_ASSET_MANIFEST,
-  loadDefaultFonts,
-  packagedFonts,
-} from '../index.ts';
+import { FONT_ASSET_MANIFEST, loadDefaultFonts, packagedFonts } from '../index.ts';
 
 const assetsDir = new URL('../../assets/', import.meta.url);
 
@@ -55,8 +50,29 @@ describe('packagedFonts', () => {
     expect(fragment.sources).toHaveLength(8);
   });
 
-  test('a document naming none of the five costs nothing at all', async () => {
+  test('a document naming none of the five still pays for the DEFAULT family', async () => {
     const { fetcher, requested } = countingFetcher();
+    // 'Calibri' because that is what the engine sends — see engine-request.test.ts. This
+    // test used to pass `defaultFamily: 'Montserrat'` and assert that nothing loaded,
+    // which was true of a request the engine cannot produce.
+    const fragment = await packagedFonts({ fetcher, install: false })({
+      families: ['Montserrat', 'Sagona'],
+      defaultFamily: 'Calibri',
+    });
+
+    expect(fragment.families).toEqual(['Calibri']);
+    expect(requested.map((url) => url.slice(url.lastIndexOf('/') + 1)).sort()).toEqual([
+      'Carlito-Bold.ttf',
+      'Carlito-BoldItalic.ttf',
+      'Carlito-Italic.ttf',
+      'Carlito-Regular.ttf',
+    ]);
+  });
+
+  test('nothing loads only when the default family is outside the five too', async () => {
+    const { fetcher, requested } = countingFetcher();
+    // Reachable through `allow`, or by an engine whose default face is not one of the
+    // five. Not reachable by writing a document that names none of them.
     const fragment = await packagedFonts({ fetcher, install: false })({
       families: ['Montserrat', 'Sagona'],
       defaultFamily: 'Montserrat',
@@ -106,12 +122,11 @@ describe('packagedFonts', () => {
     });
 
     expect(forwards.families).toEqual(backwards.families);
-    // The canonical order, which is ALL_WORD_DEFAULT_FAMILIES' — not either document's.
-    expect(forwards.families).toEqual(
-      ALL_WORD_DEFAULT_FAMILIES.filter(
-        (family) => family !== 'Times New Roman' && family !== 'Courier New'
-      )
-    );
+    // Written out rather than derived from ALL_WORD_DEFAULT_FAMILIES. Deriving it made the
+    // assertion restate the implementation, and it also broke the moment that list grew:
+    // a filter over the constant tracks new entries, while the three families this
+    // document actually names do not.
+    expect(forwards.families).toEqual(['Calibri', 'Cambria', 'Arial']);
   });
 
   test('`allow` narrows what a document can ever reach', async () => {

@@ -79,8 +79,8 @@ import { loadDefaultFonts } from './index.ts';
 import type {
   DefaultFontSource,
   DefaultFontSubstitution,
+  FontOriginRequest,
   FontResolverMark,
-  ResolvedFontFace,
 } from './index.ts';
 
 /**
@@ -175,6 +175,14 @@ export interface GoogleFontsOptions {
   readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
 }
 
+/**
+ * What {@link googleFonts} returns: a marked resolver over the pinned catalog.
+ *
+ * @public
+ */
+export type GoogleFontsResolver = ((request: FontOriginRequest) => Promise<GoogleFontsFragment>) &
+  FontResolverMark;
+
 /** What one resolver call produced, for callers that want it without the editor. */
 export interface GoogleFontsFragment {
   readonly sources: readonly DefaultFontSource[];
@@ -254,14 +262,7 @@ async function fetchFace(face: GoogleFontFace, fetcher: typeof fetch): Promise<U
  * Compose it with your own bytes by wrapping it — the resolver is an ordinary async
  * function of the families, so a wrapper can merge fragments before returning.
  */
-export function googleFonts(
-  options: GoogleFontsOptions = {}
-): ((request: {
-  readonly families: readonly string[];
-  readonly defaultFamily: string;
-  readonly resolvedFaces?: readonly ResolvedFontFace[];
-}) => Promise<GoogleFontsFragment>) &
-  FontResolverMark {
+export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolver {
   const fetcher = options.fetcher ?? fetch;
   /**
    * Document family (case-folded) -> catalog family.
@@ -284,11 +285,7 @@ export function googleFonts(
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
 
-  async function resolveGoogleFonts(request: {
-    readonly families: readonly string[];
-    readonly defaultFamily: string;
-    readonly resolvedFaces?: readonly ResolvedFontFace[];
-  }): Promise<GoogleFontsFragment> {
+  async function resolveGoogleFonts(request: FontOriginRequest): Promise<GoogleFontsFragment> {
     // Faces an earlier origin can already PAINT. Skipping them is not only bytes: a face
     // the composition would drop anyway is a CDN request that tells a third party which
     // families this document uses, for nothing at all.

@@ -25,19 +25,23 @@ it from these same packaged bytes only when a document names it.
 
 ## Usage
 
-```ts
+```tsx
 import { packagedFonts } from '@docx-editor.dev/fonts';
-import { useFonts } from '@docx-editor.dev/react';
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
 // A resolver: the editor calls it once per load with the families the file
 // declares, so a document using only Times New Roman loads Liberation Serif and
-// nothing else, and one naming none of the five loads nothing at all.
-//
-// `useFonts` is not optional here. The `fonts` prop rebuilds the editor when its
-// identity changes, and `packagedFonts()` written inline is a new function on
-// every render; `useFonts` keeps one for the component's life.
-const fonts = useFonts(packagedFonts());
-<DocxEditor.Root document={bytes} fonts={fonts} />;
+// Carlito rather than every packaged face. A family loads when the document names
+// it, or when it is that document's default face — which is Calibri unless the
+// resolved configuration says otherwise, so Carlito is a floor. `allow` narrows
+// it further.
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  // `useFonts` is not optional here. The `fonts` prop rebuilds the editor when
+  // its identity changes, and `packagedFonts()` written inline is a new function
+  // on every render; `useFonts` keeps one for the component's life.
+  const fonts = useFonts(packagedFonts());
+  return <DocxEditor.Root document={bytes} fonts={fonts} />;
+}
 ```
 
 Same call shape as `googleFonts()` below, so composing the two is adding an argument:
@@ -45,6 +49,8 @@ Same call shape as `googleFonts()` below, so composing the two is adding an argu
 ```ts
 const fonts = useFonts(packagedFonts(), googleFonts());
 ```
+
+(Both calls belong inside a component — `useFonts` is a hook.)
 
 To load every face up front instead — no re-pagination, all 7.4 MB, whichever document
 opens — use `defaultFonts()`:

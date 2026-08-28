@@ -37,8 +37,9 @@ export function HappyPath() {
   // stays. New must work every time, so it passes fresh `blankDocumentBytes()` instead.
   const [doc, setDoc] = useState<DocumentSource>();
   // The packaged substitute faces, served per document: the engine calls this after the
-  // parse with the families the file names, so only those load and a file naming none of
-  // the five costs nothing. `useFonts` gives it ONE identity for the component's life,
+  // parse with the families the file names, so only those load — plus the document's
+  // default face, which is Calibri, so Carlito comes along whatever the file says.
+  // `useFonts` gives it ONE identity for the component's life,
   // which matters because the `fonts` prop remounts the editor when its identity changes
   // and `packagedFonts()` written inline is a new function every render.
   //

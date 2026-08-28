@@ -56,8 +56,9 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
   // compose the configuration, and cancel the fetch if this unmounts. `packagedFonts()` is
   // passed rather than imported by the hook, so a host bringing its own faces — or none —
   // does not ship the default font bytes. It resolves per document, so this igloo pays for
-  // the families its file actually names and nothing else, and there is no font work in
-  // flight to cancel: none starts until the engine has parsed the document.
+  // the families its file names plus the default face it inherits, rather than every one,
+  // and there is no font work in flight to cancel: none starts until the engine has parsed
+  // the document.
   const {
     document: bytes,
     fonts,

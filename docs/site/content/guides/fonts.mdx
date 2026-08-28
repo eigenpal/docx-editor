@@ -40,14 +40,14 @@ touches the network, and no origin is on by default.
 
 ## Choose a font source
 
-| Source                     | Network on document open     | Loads                             | Measurement                        |
-| -------------------------- | ---------------------------- | --------------------------------- | ---------------------------------- |
-| Fonts embedded in the DOCX | No                           | The faces in the file             | Uses the embedded bytes            |
-| `packagedFonts()`          | No                           | Only the packaged families in use | Uses metric-compatible substitutes |
-| `defaultFonts()`           | No                           | All 20 packaged faces, every time | Uses metric-compatible substitutes |
-| `googleFonts()`            | Yes, for catalogued families | Only the catalog families in use  | Uses the fetched faces             |
-| `loadFonts` with your URLs | Only when your code calls it | The URLs you list                 | Uses admitted files                |
-| No usable source           | No                           | Nothing                           | Fixed-width estimate               |
+| Source                     | Network on document open     | Loads                                               | Measurement                        |
+| -------------------------- | ---------------------------- | --------------------------------------------------- | ---------------------------------- |
+| Fonts embedded in the DOCX | No                           | The faces in the file                               | Uses the embedded bytes            |
+| `packagedFonts()`          | No                           | The packaged families in use, plus the default face | Uses metric-compatible substitutes |
+| `defaultFonts()`           | No                           | All 20 packaged faces, every time                   | Uses metric-compatible substitutes |
+| `googleFonts()`            | Yes, for catalogued families | The catalog families in use, plus the default face  | Uses the fetched faces             |
+| `loadFonts` with your URLs | Only when your code calls it | The URLs you list                                   | Uses admitted files                |
+| No usable source           | No                           | Nothing                                             | Fixed-width estimate               |
 
 Embedded fonts load automatically. The editor registers them under internal
 aliases. A document cannot replace a page-wide font family used by your
@@ -104,12 +104,12 @@ Font binaries load as separate assets. Importing the package fetches nothing.
 `packagedFonts()` and `defaultFonts()` cover the same five families and measure
 identically. They differ in when they run and what that costs.
 
-| Behavior                     | `packagedFonts()`                    | `defaultFonts()`          |
-| ---------------------------- | ------------------------------------ | ------------------------- |
-| Runs                         | After the document is parsed         | Before the document opens |
-| Loads                        | Only the families in the document    | All 20 faces, 7.4 MB      |
-| First layout                 | Fixed measurement, then re-paginates | Correct on the first pass |
-| Undo history across the swap | Cleared when the faces arrive        | Kept                      |
+| Behavior                     | `packagedFonts()`                                   | `defaultFonts()`          |
+| ---------------------------- | --------------------------------------------------- | ------------------------- |
+| Runs                         | After the document is parsed                        | Before the document opens |
+| Loads                        | The families in the document, plus the default face | All 20 faces, 7.4 MB      |
+| First layout                 | Fixed measurement, then re-paginates                | Correct on the first pass |
+| Undo history across the swap | Cleared when the faces arrive                       | Kept                      |
 
 Use `defaultFonts()` when a visible re-pagination is worse than the extra bytes.
 Use `packagedFonts()` otherwise.

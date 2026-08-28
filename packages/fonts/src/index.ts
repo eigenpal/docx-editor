@@ -410,6 +410,22 @@ export interface ResolvedFontFace {
   readonly style: 'normal' | 'italic';
 }
 
+/**
+ * The request both resolvers in this package take, structurally identical to the editor
+ * contract's `FontResolutionRequest`.
+ *
+ * Named rather than written inline at each call site so a mismatch reports one line rather
+ * than a four-line structural wall.
+ */
+export interface FontOriginRequest {
+  /** Families the document declares, already name-validated and capped by the engine. */
+  readonly families: readonly string[];
+  /** The face a run naming no font resolves to. The engine reports Calibri by default. */
+  readonly defaultFamily: string;
+  /** Faces an earlier origin in the same composition can already paint. */
+  readonly resolvedFaces?: readonly ResolvedFontFace[];
+}
+
 /** Case-folded face identity, matching how the engine keys `resolvedFaces`. */
 const faceKey = (family: string, weight: number, style: string): string =>
   `${family.trim().toLowerCase()} ${weight} ${style}`;
@@ -443,6 +459,16 @@ export interface PackagedFontsOptions {
   readonly install?: boolean;
 }
 
+/**
+ * What {@link packagedFonts} returns: a marked resolver over the packaged substitutes.
+ *
+ * @public
+ */
+export type PackagedFontsResolver = ((
+  request: FontOriginRequest
+) => Promise<PackagedFontsFragment>) &
+  FontResolverMark;
+
 /** What one {@link packagedFonts} resolver call produced. */
 export interface PackagedFontsFragment extends DefaultFontsFragment {
   /** The Word families this call actually loaded, in {@link ALL_WORD_DEFAULT_FAMILIES} order. */
@@ -467,10 +493,16 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map
  * ```
  *
  * Prefer this to {@link defaultFonts} unless you need the eager guarantee. `defaultFonts()`
- * loads all twenty faces — several megabytes — whichever document opens, because it is
+ * loads every packaged face — several megabytes — whichever document opens, because it is
  * called before there is a document to ask. This is called AFTER the parse, so a file using
- * only Times New Roman costs Liberation Serif and nothing else, and a file naming none of
- * the five costs nothing at all.
+ * only Times New Roman costs Liberation Serif plus the four Carlito faces, rather than
+ * every packaged face.
+ *
+ * A family loads when a document NAMES it, or when it is that document's DEFAULT face. The
+ * default counts because a run that authors no font still has to be measured in one. The
+ * engine reports Calibri as the default unless the resolved configuration says otherwise,
+ * so Carlito is a floor here: even a document naming none of the five loads it. Narrow that
+ * with {@link PackagedFontsOptions.allow} if a document's families are known in advance.
  *
  * What you trade for that is one reflow. The eager form settles before the first layout, so
  * the document paginates once; this form cannot know the families until the file is parsed,
@@ -482,23 +514,12 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map
  * {@link ALL_WORD_DEFAULT_FAMILIES} list and never used to build a path. A name outside it
  * resolves to nothing here; pair with `googleFonts()` to cover more.
  */
-export function packagedFonts(
-  options: PackagedFontsOptions = {}
-): ((request: {
-  readonly families: readonly string[];
-  readonly defaultFamily: string;
-  readonly resolvedFaces?: readonly ResolvedFontFace[];
-}) => Promise<PackagedFontsFragment>) &
-  FontResolverMark {
+export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFontsResolver {
   const allowed = options.allow
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
 
-  async function resolvePackagedFonts(request: {
-    readonly families: readonly string[];
-    readonly defaultFamily: string;
-    readonly resolvedFaces?: readonly ResolvedFontFace[];
-  }): Promise<PackagedFontsFragment> {
+  async function resolvePackagedFonts(request: FontOriginRequest): Promise<PackagedFontsFragment> {
     // Faces an earlier origin in the composition can already PAINT. Loading them again
     // would spend the bytes on a fragment first-wins composition is bound to drop.
     const already = new Set(

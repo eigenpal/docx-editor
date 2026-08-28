@@ -26,8 +26,11 @@
 //   engine: two `unique symbol` declarations in two packages are two different types,
 //   while two identical string keys are one.
 //
-// Both are set on the function, so neither type nor runtime is telling a story the other
-// cannot back up.
+// Both are set on the function, so the type's claim is one the runtime backs up. Only the
+// SYMBOL is authoritative: `isFontResolver` reads that and nothing else, so a value that
+// spells the string key by hand satisfies the type and still answers `false`. That is the
+// safe direction — such a value has to be built deliberately, and it fails loudly at the
+// first call rather than quietly resolving to the wrong thing.
 //
 // The mark lives on the function OBJECT, so it does not survive `.bind()` or being wrapped
 // in another function. Re-mark the result of either.
@@ -214,7 +217,10 @@ function paintableFaces(
   const faces = new Map(inherited.map((face) => [faceKey(face), face] as const));
   for (const [key, face] of sourceFaces) faces.set(key, face);
   for (const substitution of substitutions) {
-    if (sourceFaces.has(faceKey(substitution.to)) || faces.has(faceKey(substitution.to))) {
+    // `faces`, not `sourceFaces`: it holds every source face plus the inherited ones, and
+    // an inherited face is paintable by definition. Testing `sourceFaces` as well was dead
+    // — `faces` was seeded from it two lines up.
+    if (faces.has(faceKey(substitution.to))) {
       faces.set(faceKey(substitution.from), substitution.from);
     }
   }
