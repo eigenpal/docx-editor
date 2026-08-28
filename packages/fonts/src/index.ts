@@ -434,13 +434,14 @@ const faceKey = (family: string, weight: number, style: string): string =>
 
 /**
  * How {@link packagedFonts} behaves once a document hands it a family list. Every field is
- * optional; `packagedFonts()` with no options serves any of the five families a document
+ * optional; `packagedFonts()` with no options serves any of the six families a document
  * names, over the global `fetch`, warning to the console on failure.
  */
 export interface PackagedFontsOptions {
   /**
-   * Narrow what may ever be loaded. Omitted, any of the five substituted families a
-   * document names is fair game; set it to run against a shorter list.
+   * Narrow what may ever be loaded. Omitted, any of the six substituted families a
+   * document names is fair game — {@link ALL_WORD_DEFAULT_FAMILIES}, not the smaller set
+   * the eager loader defaults to. Set it to run against a shorter list.
    */
   readonly allow?: readonly WordDefaultFamily[];
   /** Injectable for tests; defaults to global `fetch`. */
@@ -477,7 +478,17 @@ export interface PackagedFontsFragment extends DefaultFontsFragment {
   readonly families: readonly WordDefaultFamily[];
 }
 
-/** Case-folded Word family name -> the canonical spelling, built once. */
+/**
+ * Case-folded Word family name -> the canonical spelling, built once.
+ *
+ * ALL six, deliberately, not the five in {@link WORD_DOCUMENT_DEFAULT_FAMILIES}. Those two
+ * lists exist because the eager loader pays for a family on EVERY load, so the set it
+ * defaults to stays as small as correctness allows. This resolver has the opposite cost
+ * shape: a family it can serve costs nothing until a document names it. Century Gothic is
+ * the family that distinction was drawn for, and serving it here is the same on-demand
+ * bargain {@link ALL_WORD_DEFAULT_FAMILIES} points at — from bundled bytes, with no third
+ * party involved.
+ */
 const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map(
   ALL_WORD_DEFAULT_FAMILIES.map((family) => [family.toLowerCase(), family] as const)
 );
@@ -503,9 +514,9 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map
  *
  * A family loads when a document NAMES it, or when it is that document's DEFAULT face. The
  * default counts because a run that authors no font still has to be measured in one. The
- * engine reports Calibri as the default unless the resolved configuration says otherwise,
- * so Carlito is a floor here: even a document naming none of the five loads it. Narrow that
- * with {@link PackagedFontsOptions.allow} if a document's families are known in advance.
+ * engine reports Calibri as the default, so Carlito is a floor here: even a document
+ * naming none of the six loads it. Narrow that with {@link PackagedFontsOptions.allow} if a
+ * document's families are known in advance.
  *
  * What you trade for that is one reflow. The eager form settles before the first layout, so
  * the document paginates once; this form cannot know the families until the file is parsed,

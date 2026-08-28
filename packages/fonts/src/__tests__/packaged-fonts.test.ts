@@ -14,7 +14,13 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { FONT_ASSET_MANIFEST, loadDefaultFonts, packagedFonts } from '../index.ts';
+import { FACES, FAMILY_PLANS, planFaceFile } from '../family-plans.ts';
+import {
+  FONT_ASSET_MANIFEST,
+  WORD_DOCUMENT_DEFAULT_FAMILIES,
+  loadDefaultFonts,
+  packagedFonts,
+} from '../index.ts';
 
 const assetsDir = new URL('../../assets/', import.meta.url);
 
@@ -32,8 +38,24 @@ function countingFetcher(): { fetcher: typeof fetch; requested: string[]; bytes:
   return { fetcher, requested, bytes: () => total };
 }
 
-const EVERY_PACKAGED_BYTE = FONT_ASSET_MANIFEST.reduce(
-  (total, entry) => total + entry.byteLength,
+/**
+ * What the EAGER loader spends by default: every face of every family in
+ * {@link WORD_DOCUMENT_DEFAULT_FAMILIES}.
+ *
+ * Derived from the shipped plan rather than summed over the whole manifest. The manifest
+ * now carries a family the eager loader deliberately does NOT load by default, so summing
+ * it compared this against a total no configuration produces — and said so, loudly, the
+ * first time the two lists diverged.
+ */
+const byteLengthOf = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, entry.byteLength]));
+const EAGER_DEFAULT_BYTES = WORD_DOCUMENT_DEFAULT_FAMILIES.reduce(
+  (total, family) =>
+    total +
+    FACES.reduce(
+      (perFamily, face) =>
+        perFamily + (byteLengthOf.get(planFaceFile(FAMILY_PLANS.get(family)!, face.suffix)) ?? 0),
+      0
+    ),
   0
 );
 
@@ -57,7 +79,7 @@ describe('packagedFonts', () => {
     expect(fragment.sources).toHaveLength(8);
   });
 
-  test('a document naming none of the five still pays for the DEFAULT family', async () => {
+  test('a document naming none of the six still pays for the DEFAULT family', async () => {
     const { fetcher, requested } = countingFetcher();
     // 'Calibri' because that is what the engine sends — see engine-request.test.ts. This
     // test used to pass `defaultFamily: 'Montserrat'` and assert that nothing loaded,
@@ -76,7 +98,7 @@ describe('packagedFonts', () => {
     ]);
   });
 
-  test('nothing loads only when the default family is outside the five too', async () => {
+  test('nothing loads only when the default family is outside the six too', async () => {
     const { fetcher, requested } = countingFetcher();
     // Reachable through `allow`, or by an engine whose default face is not one of the
     // five. Not reachable by writing a document that names none of them.
@@ -104,7 +126,7 @@ describe('packagedFonts', () => {
     const eager = countingFetcher();
     await loadDefaultFonts({ fetcher: eager.fetcher });
 
-    expect(eager.bytes()).toBe(EVERY_PACKAGED_BYTE);
+    expect(eager.bytes()).toBe(EAGER_DEFAULT_BYTES);
     // Liberation Serif for the named family and Carlito for the default one: two families
     // out of five, still well under what the eager loader spends whichever document opens.
     expect(lazy.bytes()).toBeLessThan(eager.bytes() * 0.6);

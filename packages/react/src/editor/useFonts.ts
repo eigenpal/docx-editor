@@ -47,7 +47,7 @@ export type FontsInput =
  * Merge font origins into one stable value for `DocxEditor.Root`'s `fonts` prop.
  *
  * ```tsx
- * // The bundled substitutes, loaded only for the families this document names.
+ * // The bundled substitutes: the families this document names, plus its default face.
  * const fonts = useFonts(packagedFonts());
  *
  * // The same, plus the Google catalog for everything they do not cover.

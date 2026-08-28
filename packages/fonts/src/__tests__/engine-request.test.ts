@@ -3,7 +3,7 @@
 //
 // Every other test in this package hand-writes the request, which leaves each one free to
 // hand-write a request the engine never sends — and one of them did. `defaultFamily` was
-// set to a family outside the packaged five, which no default configuration can produce,
+// set to a family outside the packaged set, which no default configuration can produce,
 // and the assertion that "a document naming none of the five costs nothing at all" passed
 // on a premise the engine contradicts.
 //
@@ -158,7 +158,7 @@ describe('the request the engine sends', () => {
 
 describe('packagedFonts under that request', () => {
   test(
-    'loads Carlito for a document that names none of the five',
+    'loads Carlito for a document that names none of the six',
     async () => {
       const { fetcher, files } = countingFetcher();
       await open(docxNaming('Montserrat'), packagedFonts({ fetcher, install: false }));
@@ -192,6 +192,30 @@ describe('packagedFonts under that request', () => {
         'LiberationSerif-BoldItalic.ttf',
         'LiberationSerif-Italic.ttf',
         'LiberationSerif-Regular.ttf',
+      ]);
+    },
+    TEST_BUDGET
+  );
+
+  test(
+    'serves Century Gothic, the family the two default lists were split for',
+    async () => {
+      const { fetcher, files } = countingFetcher();
+      await open(docxNaming('Century Gothic'), packagedFonts({ fetcher, install: false }));
+
+      // `defaultFonts()` deliberately does NOT load this one — it would cost every
+      // document ~709 KB for a family most never name. On demand is the other half of
+      // that bargain, and it comes from bundled bytes rather than a CDN. `.otf`, unlike
+      // the other five.
+      expect([...files].sort()).toEqual([
+        'Carlito-Bold.ttf',
+        'Carlito-BoldItalic.ttf',
+        'Carlito-Italic.ttf',
+        'Carlito-Regular.ttf',
+        'TeXGyreAdventor-Bold.otf',
+        'TeXGyreAdventor-BoldItalic.otf',
+        'TeXGyreAdventor-Italic.otf',
+        'TeXGyreAdventor-Regular.otf',
       ]);
     },
     TEST_BUDGET

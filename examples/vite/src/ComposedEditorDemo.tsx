@@ -620,7 +620,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   //
   // Nothing is fetched from a third party — the bytes are the ones inside
   // `@docx-editor.dev/fonts`. Add
-  // `googleFonts()` next to it and the catalog covers what the packaged five do not.
+  // `googleFonts()` next to it and the catalog covers what the packaged families do not.
   //
   // The trade is one reflow. Nothing can know the families before the parse, so the
   // document opens on the fixed measurer and re-paginates when the faces land; the eager

@@ -32,9 +32,8 @@ import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 // A resolver: the editor calls it once per load with the families the file
 // declares, so a document using only Times New Roman loads Liberation Serif and
 // Carlito rather than every packaged face. A family loads when the document names
-// it, or when it is that document's default face — which is Calibri unless the
-// resolved configuration says otherwise, so Carlito is a floor. `allow` narrows
-// it further.
+// it, or when it is that document's default face — which is Calibri, so Carlito
+// is a floor. `allow` narrows it further.
 function Editor({ bytes }: { bytes: Uint8Array }) {
   // `useFonts` is not optional here. The `fonts` prop rebuilds the editor when
   // its identity changes, and `packagedFonts()` written inline is a new function
@@ -81,13 +80,14 @@ document names a family the catalog covers.
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 
 // A resolver, not a value: the editor calls it once per load with the families
-// the file declares, and only those are fetched.
+// the file declares plus its default face, and only those are fetched.
 <DocxEditor.Root document={bytes} fonts={googleFonts()} />;
 ```
 
 Open a file that uses only Calibri and one family is fetched (Carlito, its
-metric-compatible stand-in). Open one that names nothing cataloged and no request is
-made at all.
+metric-compatible stand-in). A document's DEFAULT face counts as declared, and that
+face is Calibri — so Carlito is fetched for a document that names nothing
+cataloged too. Narrow that with `allow`.
 
 The catalog is generated, closed, and pinned to immutable google/fonts commits
 (`src/google-catalog.generated.ts`, 107 families). A family a document names is only
@@ -119,7 +119,7 @@ which families a document uses. The engine never supplies one, so opting in stay
 `googleFonts({ allow: ['Tinos', 'Lato'] })` narrows what may ever be fetched. Listed
 after `packagedFonts()`, this resolver is told which FACES are already covered — family,
 weight and style, and only faces actually backed by bytes — and skips a family only when
-every one of its faces is covered. So the packaged five never cost a CDN request, and a
+every one of its faces is covered. So a packaged family never costs a CDN request, and a
 partly covered family is still fetched whole rather than left with missing faces.
 
 Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes).

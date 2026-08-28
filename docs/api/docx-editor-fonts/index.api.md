@@ -79,6 +79,18 @@ export interface FontAssetManifestEntry {
 }
 
 // @public
+export interface FontOriginRequest {
+    readonly defaultFamily: string;
+    readonly families: readonly string[];
+    readonly resolvedFaces?: readonly ResolvedFontFace[];
+}
+
+// @public
+export interface FontResolverMark {
+    readonly 'docx-editor.dev/font-resolver': true;
+}
+
+// @public
 export function installDefaultFontFaces(options?: LoadDefaultFontsOptions & {
     readonly document?: Document;
 }): Promise<number>;
@@ -90,6 +102,32 @@ export function loadDefaultFonts(options?: LoadDefaultFontsOptions): Promise<Def
 export interface LoadDefaultFontsOptions {
     readonly families?: readonly WordDefaultFamily[];
     readonly fetcher?: typeof fetch;
+}
+
+// @public
+export function packagedFonts(options?: PackagedFontsOptions): PackagedFontsResolver;
+
+// @public
+export interface PackagedFontsFragment extends DefaultFontsFragment {
+    readonly families: readonly WordDefaultFamily[];
+}
+
+// @public
+export interface PackagedFontsOptions {
+    readonly allow?: readonly WordDefaultFamily[];
+    readonly fetcher?: typeof fetch;
+    readonly install?: boolean;
+    readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
+}
+
+// @public
+export type PackagedFontsResolver = ((request: FontOriginRequest) => Promise<PackagedFontsFragment>) & FontResolverMark;
+
+// @public
+export interface ResolvedFontFace {
+    readonly family: string;
+    readonly style: 'normal' | 'italic';
+    readonly weight: number;
 }
 
 // @public

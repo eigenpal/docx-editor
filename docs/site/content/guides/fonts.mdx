@@ -101,15 +101,20 @@ Font binaries load as separate assets. Importing the package fetches nothing.
 
 ### Choose between lazy and eager loading
 
-`packagedFonts()` and `defaultFonts()` cover the same five families and measure
-identically. They differ in when they run and what that costs.
+`packagedFonts()` and `defaultFonts()` measure identically for the families they
+share. They differ in when they run, what they cover, and what that costs.
 
-| Behavior                     | `packagedFonts()`                                   | `defaultFonts()`          |
-| ---------------------------- | --------------------------------------------------- | ------------------------- |
-| Runs                         | After the document is parsed                        | Before the document opens |
-| Loads                        | The families in the document, plus the default face | All 20 faces, 7.4 MB      |
-| First layout                 | Fixed measurement, then re-paginates                | Correct on the first pass |
-| Undo history across the swap | Cleared when the faces arrive                       | Kept                      |
+| Behavior                     | `packagedFonts()`                                   | `defaultFonts()`                 |
+| ---------------------------- | --------------------------------------------------- | -------------------------------- |
+| Runs                         | After the document is parsed                        | Before the document opens        |
+| Covers                       | All six substituted families                        | The five Word applies by default |
+| Loads                        | The families in the document, plus the default face | All 20 faces, 7.4 MB             |
+| First layout                 | Fixed measurement, then re-paginates                | Correct on the first pass        |
+| Undo history across the swap | Cleared when the faces arrive                       | Kept                             |
+
+Century Gothic is the family that difference is for. `defaultFonts()` leaves it out
+because it would cost every document about 709 KB for a family most never name.
+`packagedFonts()` serves it from the same bundled bytes when a document asks.
 
 Use `defaultFonts()` when a visible re-pagination is worse than the extra bytes.
 Use `packagedFonts()` otherwise.
@@ -320,11 +325,13 @@ const faceKey = (family: string, weight: number, style: string) =>
   // Case-folded: Word matches font names that way, and so do both shipped resolvers.
   `${family.trim().toLowerCase()} ${weight} ${style}`;
 
-const brandFonts = defineFontResolver(async ({ families, resolvedFaces }) => {
+const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolvedFaces }) => {
   const already = new Set(
     (resolvedFaces ?? []).map((face) => faceKey(face.family, face.weight, face.style))
   );
-  const wanted = families.filter(
+  // `defaultFamily` alongside `families`: a run that authors no font is measured in the
+  // default face, so a resolver that ignores it never serves that run.
+  const wanted = [defaultFamily, ...families].filter(
     (family) =>
       BRAND.has(family) &&
       // Load a family unless EVERY face of it is already covered. Skipping a partly
@@ -334,6 +341,9 @@ const brandFonts = defineFontResolver(async ({ families, resolvedFaces }) => {
   return { sources: await loadBrandFaces(wanted) };
 });
 ```
+
+The request carries `families`, the names that document declares, and `defaultFamily`,
+the face a run naming no font resolves to. Both count as declared.
 
 `resolvedFaces` lists the faces earlier origins in the same composition can already
 paint. It reports faces rather than families, and only faces backed by bytes, so
