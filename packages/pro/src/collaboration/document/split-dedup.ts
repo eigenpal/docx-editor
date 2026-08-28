@@ -34,6 +34,9 @@ export interface SplitDedupContext {
   readonly isPresent: (id: LogicalId) => boolean;
 }
 
+/** Cap on the `splitFrom` walk that classifies a re-split; stops a peer-crafted chain or cycle. */
+const RE_SPLIT_WALK_LIMIT = 256;
+
 export class SplitDedupIndex {
   /** Root origin run id → the runs split off from it, across all replicas. */
   private runsBySplitOrigin = new Map<LogicalId, Set<LogicalId>>();
@@ -81,10 +84,30 @@ export class SplitDedupIndex {
     if (root === runId) return;
     rec.set(NODE_SPLIT_FROM_FIELD, root);
     this.index(root, runId);
-    // A root that is ITSELF a split product means a later round re-split a run an earlier round
-    // made — the tangle the dedup declines. Count it, so the session reconciles the author's
-    // store only on the edit that creates the tangle, not on every keystroke while it persists.
-    if (nodeRecordSplitFrom(this.nodes.get(root)) !== null) this.declinedTangleCount += 1;
+    // A later round re-split a run an earlier round produced, and the shared origin was split by
+    // two replicas — the tangle the dedup declines. Count it, so the session reconciles the
+    // author's store only on the edit that creates the tangle, not on every keystroke while it
+    // persists. A single author re-formatting a paragraph re-splits products too, but its origin
+    // is never contested, so this ignores it — no wasted reconcile without a real conflict.
+    if (this.reSplitOfContestedOrigin(root)) this.declinedTangleCount += 1;
+  }
+
+  /**
+   * True if `root` is itself a split product whose shared origin two replicas split.
+   *
+   * Walks `splitFrom` from `root` to the run the rounds share. A `root` that is an original run
+   * (no `splitFrom`) is a first round, not a re-split. The bound stops a peer-crafted cycle.
+   */
+  private reSplitOfContestedOrigin(root: LogicalId): boolean {
+    if (nodeRecordSplitFrom(this.nodes.get(root)) === null) return false;
+    let current = root;
+    for (let depth = 0; depth < RE_SPLIT_WALK_LIMIT; depth += 1) {
+      if (this.contestedOrigins.has(current) || this.liveRootedOrigins.has(current)) return true;
+      const parent = nodeRecordSplitFrom(this.nodes.get(current));
+      if (parent === null || parent === current) return false;
+      current = parent;
+    }
+    return false;
   }
 
   /** Index a run that already carries a `splitFrom` (a rebuild scan, or a remote arrival). */
