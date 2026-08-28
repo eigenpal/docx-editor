@@ -50,11 +50,34 @@ function drawingId(peer: Peer): string {
   return found;
 }
 
-/** Apply two concurrent edits with the wire paused, reconnect, and assert convergence. */
+function bodyText(peer: Peer): string {
+  const texts: string[] = [];
+  walk(peer.store.bodyStore().part.root, (node) => {
+    if (node.kind === 'textValue') texts.push(node.value);
+  });
+  return texts.join('');
+}
+
+function hasElement(peer: Peer, localName: string): boolean {
+  let present = false;
+  walk(peer.store.bodyStore().part.root, (node) => {
+    if (node.kind !== 'textValue' && node.localName === localName) present = true;
+  });
+  return present;
+}
+
+/**
+ * Apply two concurrent edits with the wire paused, reconnect, and assert convergence.
+ *
+ * Convergence is peer-to-peer equality, which two identically-corrupt replicas also satisfy,
+ * so the caller passes an `expect` that checks the merged document is actually CORRECT — the
+ * edits present, the text intact. Without it a silent drop or a silent duplication passes.
+ */
 async function converges(
   bytes: Uint8Array,
   aliceOp: (peer: Peer) => readonly TreeDocOp[],
   bobOp: (peer: Peer) => readonly TreeDocOp[],
+  check: (peer: Peer) => void,
   scope: StoryScope = BODY
 ): Promise<void> {
   const { alice, bob, pause, resume } = await harness.pair(bytes);
@@ -63,11 +86,14 @@ async function converges(
   harness.apply(bob, bobOp(bob), scope);
   resume();
   harness.expectConverged(alice, bob);
+  check(alice);
+  check(bob);
 }
 
 describe('concurrent variant edits converge', () => {
   test('two indents on DIFFERENT paragraphs', async () => {
-    // Independent property edits merge cleanly — the ordinary collaborative case.
+    // Independent property edits merge cleanly — the ordinary collaborative case. Both
+    // indents survive and neither paragraph's text is disturbed.
     await converges(
       proseDoc(),
       (peer) => [
@@ -83,11 +109,17 @@ describe('concurrent variant edits converge', () => {
           paragraphId: harness.paragraphIdAt(peer, 1),
           properties: [{ localName: 'ind', attributes: { start: '1440' } }],
         },
-      ]
+      ],
+      (peer) => {
+        expect(hasElement(peer, 'ind')).toBe(true);
+        expect(bodyText(peer)).toBe('Alpha bravo canvas delta editorSecond paragraph');
+      }
     );
   });
 
-  test('bold and italic on overlapping ranges', async () => {
+  test('bold and text on different paragraphs', async () => {
+    // Run formatting on one paragraph, text on another: independent, so both apply with the
+    // text intact.
     await converges(
       proseDoc(),
       (peer) => [
@@ -100,15 +132,45 @@ describe('concurrent variant edits converge', () => {
         },
       ],
       (peer) => [
-        {
-          op: 'setRunProperties',
-          paragraphId: harness.paragraphIdAt(peer, 0),
-          start: 3,
-          end: 9,
-          properties: [{ localName: 'i' }],
-        },
-      ]
+        { op: 'insertText', paragraphId: harness.paragraphIdAt(peer, 1), offset: 0, text: 'Z' },
+      ],
+      (peer) => {
+        expect(hasElement(peer, 'b')).toBe(true);
+        expect(bodyText(peer)).toBe('Alpha bravo canvas delta editorZSecond paragraph');
+      }
     );
+  });
+
+  test('same-paragraph run-property edits silently duplicate text (#581)', async () => {
+    // Pinning current CORRUPTION, not endorsing it: two concurrent `setRunProperties` on the
+    // same paragraph rebuild its runs additively, so the merged text doubles on both peers.
+    // The peers still agree (convergence holds), which is why a convergence-only oracle
+    // missed it. When #581 is fixed this expectation flips.
+    const { alice, bob, pause, resume } = await harness.pair(proseDoc());
+    pause();
+    harness.apply(alice, [
+      {
+        op: 'setRunProperties',
+        paragraphId: harness.paragraphIdAt(alice, 0),
+        start: 0,
+        end: 5,
+        properties: [{ localName: 'b' }],
+      },
+    ]);
+    harness.apply(bob, [
+      {
+        op: 'setRunProperties',
+        paragraphId: harness.paragraphIdAt(bob, 0),
+        start: 3,
+        end: 9,
+        properties: [{ localName: 'i' }],
+      },
+    ]);
+    resume();
+    harness.expectConverged(alice, bob);
+    // The bug: paragraph 0's text is duplicated. Documented so a fix visibly flips it.
+    expect(bodyText(alice)).toContain('editorAlpha bravo canvas delta editor');
+    expect(bodyText(bob)).toBe(bodyText(alice));
   });
 
   test('sequential wrap changes on one drawing replicate', async () => {
@@ -131,11 +193,16 @@ describe('concurrent variant edits converge', () => {
     harness.apply(alice, [
       { op: 'setDrawingWrap', drawingNodeId: drawingId(alice), wrap: 'tight' },
     ]);
+    // The wrap must actually reach bob: assert the anchor now carries a wrapTight element,
+    // not merely that a drawing exists.
     expect(bob.room.session.statusSnapshot().status).toBe('ready');
-    expect(drawingId(bob)).toBeTruthy();
+    expect(hasElement(bob, 'wrapTight')).toBe(true);
+    harness.expectConverged(alice, bob);
   });
 
   test('a shared paragraph property and a concurrent text edit', async () => {
+    // Different concerns on one paragraph — a property rebuild and a text insert. They
+    // converge with the text intact (jc present, the inserted X kept, no duplication).
     await converges(
       proseDoc(),
       (peer) => [
@@ -147,7 +214,11 @@ describe('concurrent variant edits converge', () => {
       ],
       (peer) => [
         { op: 'insertText', paragraphId: harness.paragraphIdAt(peer, 0), offset: 0, text: 'X' },
-      ]
+      ],
+      (peer) => {
+        expect(hasElement(peer, 'jc')).toBe(true);
+        expect(bodyText(peer)).toBe('XAlpha bravo canvas delta editorSecond paragraph');
+      }
     );
   });
 
@@ -172,7 +243,12 @@ describe('concurrent variant edits converge', () => {
       },
     ]);
     resume();
-    expect(alice.room.session.statusSnapshot().status).toBe('error');
-    expect(bob.room.session.statusSnapshot().status).toBe('error');
+    // Pin the reason too, so this cannot start passing on some unrelated future error.
+    const aliceSnap = alice.room.session.statusSnapshot();
+    const bobSnap = bob.room.session.statusSnapshot();
+    expect(aliceSnap.status).toBe('error');
+    expect(bobSnap.status).toBe('error');
+    expect(aliceSnap.reason?.code).toBe('remote-apply-failed');
+    expect(bobSnap.reason?.code).toBe('remote-apply-failed');
   });
 });

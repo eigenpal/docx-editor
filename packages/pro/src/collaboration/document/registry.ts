@@ -236,8 +236,7 @@ export class DocumentRegistry {
   record(logicalId: LogicalId): SharedRecord | null {
     if (rejectDangerousKey(logicalId)) return null;
     const rec = this.schema.nodes.get(logicalId);
-    // A peer can plant a scalar in the nodes map; treat it as no such node rather than
-    // reading a field off it inside the materializer.
+    // A peer can plant a scalar here; treat it as no such node (see #567).
     if (!isNodeMap(rec)) return null;
     if (isTextNodeMap(rec)) {
       const text = rec.get(NODE_TEXT_FIELD);
@@ -973,7 +972,9 @@ export class DocumentRegistry {
       prefix: shell.prefix.length > 0 ? shell.prefix : undefined,
       attributes,
       bindings,
-      childIds: this.childArray(logicalId).toArray(),
+      // A peer can plant a map record whose `children` is missing or not a Y.Array; degrade
+      // to an empty list rather than reaching the throwing `childArray` (see #567).
+      childIds: childArrayOf(rec)?.toArray() ?? [],
     };
   }
 

@@ -11,8 +11,9 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import * as Y from 'yjs';
+import type { OoxmlNode } from '@docx-editor.dev/core/store';
 import { DocumentRegistry, PackageMaterializer, MemoryBlobStore } from '../document/index.ts';
-import { createPeerHarness } from './document-peer-support.ts';
+import { createPeerHarness, walk } from './document-peer-support.ts';
 import { collaborationDocx } from './support.ts';
 
 const harness = createPeerHarness('hostile-shapes-room');
@@ -75,5 +76,60 @@ describe('hostile shared shapes on the receive path', () => {
     materializer.destroy();
     registry.destroy();
     mirror.destroy();
+  });
+
+  test('a map-shaped node record with no children array does not crash materialize', async () => {
+    // isNodeMap passes but the inner `children` is missing: the materializer's record reader
+    // reaches childArray, which throws `no children at ...`. Same impact as #567, a different
+    // crafted shape. Overwrite a real reachable element record (a part root) with a bare map.
+    const { alice } = await harness.pair(collaborationDocx());
+    const mirror = new Y.Doc();
+    Y.applyUpdate(mirror, Y.encodeStateAsUpdate(alice.ydoc));
+    const nodes = mirror.getMap<Y.Map<unknown>>(NODES);
+    let victim: string | undefined;
+    nodes.forEach((_record, id) => {
+      if (!victim) victim = id;
+    });
+    expect(victim).toBeTruthy();
+    const bare = new Y.Map<unknown>();
+    bare.set('s', 'generic-p');
+    mirror.transact(() => nodes.set(victim!, bare));
+    const registry = new DocumentRegistry(mirror);
+    expect(() => registry.rebuildDerivedIndexes()).not.toThrow();
+    const materializer = new PackageMaterializer(registry, new MemoryBlobStore());
+    expect(() => materializer.current()).not.toThrow();
+    materializer.destroy();
+    registry.destroy();
+    mirror.destroy();
+  });
+
+  test('a contested placement with a malformed record does not crash resolution', async () => {
+    // Two parents list one child (a contest), and that child's record is a scalar. The
+    // contested-placement walk reads it during resolveParents on the receive path.
+    const { alice, bob } = await harness.pair(collaborationDocx());
+    const bodyRootId = alice.store.bodyStore().part.root.id;
+    let childId: string | undefined;
+    walk(alice.store.bodyStore().part.root, (node: OoxmlNode) => {
+      if (!childId && node.kind === 'paragraph') childId = node.id;
+    });
+    expect(childId).toBeTruthy();
+    expect(() =>
+      deliverHostile(alice.ydoc, bob.ydoc, (doc) => {
+        const nodes = doc.getMap<Y.Map<unknown>>(NODES);
+        // A second parent that also lists the child — the contest — plus the child turned
+        // into a scalar.
+        const rogue = new Y.Map<unknown>();
+        rogue.set('s', 'generic-rogue');
+        const kids = new Y.Array<string>();
+        kids.insert(0, [childId!]);
+        rogue.set('children', kids);
+        nodes.set('rogue-parent', rogue);
+        const bodyChildren = nodes.get(bodyRootId)?.get('children');
+        if (bodyChildren instanceof Y.Array)
+          bodyChildren.insert(bodyChildren.length, ['rogue-parent']);
+        nodes.set(childId!, 'not-a-map' as never);
+      })
+    ).not.toThrow();
+    expect(() => harness.packageOf(bob)).not.toThrow();
   });
 });

@@ -110,16 +110,19 @@ describe('collaboration teardown', () => {
   test('a bootstrap that fails while materializing leaves no observers behind', async () => {
     const host = await seededRoom();
     host.destroy();
-    // Corrupt one element record the way a hostile peer could: drop its child array, which
-    // makes materializing THROW (`no children at …`) rather than refuse with a typed code.
+    // Delete a part-root node record so materialize refuses with `missing-root` and the
+    // factory throws. (A malformed-but-present record no longer throws — the receive-path
+    // hardening degrades it — so the failure has to come from an unmaterializable part.)
     const nodes = host.ydoc.getMap<Y.Map<unknown>>('docx-package-nodes-v1');
-    let corrupted = false;
-    nodes.forEach((record) => {
-      if (corrupted || !(record instanceof Y.Map) || !record.has('children')) return;
-      record.delete('children');
-      corrupted = true;
+    const parts = host.ydoc.getMap<Y.Map<unknown>>('docx-package-parts-v1');
+    let rootId: string | undefined;
+    parts.forEach((entry) => {
+      if (!rootId && entry instanceof Y.Map && typeof entry.get('rootId') === 'string') {
+        rootId = entry.get('rootId') as string;
+      }
     });
-    expect(corrupted).toBe(true);
+    expect(rootId).toBeTruthy();
+    host.ydoc.transact(() => nodes.delete(rootId!));
     const before = totalObservers(host.ydoc);
     const awareness = new Awareness(host.ydoc);
     await expect(

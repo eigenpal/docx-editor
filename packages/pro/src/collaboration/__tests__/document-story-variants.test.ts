@@ -84,6 +84,37 @@ interface StoryCase {
   readonly bytes: () => Uint8Array;
   readonly scope: StoryScope;
   readonly op: (paragraphId: string) => TreeDocOp;
+  /** The element the edit must leave in the receiver's story part. */
+  readonly expectLocalName: string;
+}
+
+const STORY_PART_NAME: Record<string, string> = {
+  headerFooter: '/word/header1.xml',
+  notesPart: '/word/footnotes.xml',
+};
+
+function storyPartFromPackage(peer: Peer, scope: StoryScope): OoxmlNode {
+  const name = STORY_PART_NAME[scope.kind];
+  const part = peer.store.currentPackage().parts.get(name);
+  if (!part) throw new Error(`no ${name} in package`);
+  return part.root;
+}
+
+function containsLocalName(root: OoxmlNode, localName: string): boolean {
+  let present = false;
+  walk(root, (node: OoxmlNode) => {
+    if (node.kind !== 'textValue' && node.localName === localName) present = true;
+  });
+  return present;
+}
+
+function containsParaId(root: OoxmlNode): boolean {
+  let present = false;
+  walk(root, (node: OoxmlNode) => {
+    if (node.kind === 'textValue') return;
+    if (node.attributes.some((attribute) => attribute.localName === 'paraId')) present = true;
+  });
+  return present;
 }
 
 const cases: readonly StoryCase[] = [
@@ -96,6 +127,7 @@ const cases: readonly StoryCase[] = [
       paragraphId,
       properties: [{ localName: 'ind', attributes: { start: '720' } }],
     }),
+    expectLocalName: 'ind',
   },
   {
     name: 'header bold',
@@ -108,6 +140,7 @@ const cases: readonly StoryCase[] = [
       end: 3,
       properties: [{ localName: 'b' }],
     }),
+    expectLocalName: 'b',
   },
   {
     name: 'footnote indent',
@@ -118,6 +151,7 @@ const cases: readonly StoryCase[] = [
       paragraphId,
       properties: [{ localName: 'ind', attributes: { start: '720' } }],
     }),
+    expectLocalName: 'ind',
   },
   {
     name: 'footnote bold',
@@ -130,6 +164,7 @@ const cases: readonly StoryCase[] = [
       end: 3,
       properties: [{ localName: 'b' }],
     }),
+    expectLocalName: 'b',
   },
 ];
 
@@ -139,11 +174,22 @@ describe('property variants replicate in non-body stories', () => {
       const { alice, bob } = await harness.pair(testCase.bytes());
       const paragraphId = textParagraphId(alice, testCase.scope);
       harness.apply(alice, [testCase.op(paragraphId)], testCase.scope);
-      // Open the receiver's story store — the "bob views the header/note" flow — so the
-      // comparison sees the story part bob materialized from shared state, not the
-      // pre-open overlay. Opening it is also what a real reader does before editing there.
-      bob.store.partFor(testCase.scope);
       expect(bob.room.session.statusSnapshot().status).toBe('ready');
+
+      // Gap 2's core claim: the property VALUE replicates into a non-body story WITHOUT the
+      // receiver opening that story store — read it straight from bob's materialized package.
+      const received = storyPartFromPackage(bob, testCase.scope);
+      expect(containsLocalName(received, testCase.expectLocalName)).toBe(true);
+
+      // Known limitation (#580): the received story part lacks `w14:paraId` until bob opens
+      // the store, so a peer that saves a story it never opened loses paragraph identity.
+      // Pinned here so a fix visibly flips it; the author's part keeps its paraId.
+      expect(containsParaId(storyPartFromPackage(alice, testCase.scope))).toBe(true);
+      expect(containsParaId(received)).toBe(false);
+
+      // Once the receiver opens the story — the ordinary "view the header/note" flow — the
+      // two packages fully converge, identity included.
+      bob.store.partFor(testCase.scope);
       harness.expectConverged(alice, bob);
     });
   }
