@@ -362,11 +362,17 @@ async function measureInsertRatio(bytes: Uint8Array): Promise<{
 describe('local keystroke path with a replica attached', () => {
   test('transact replicates on the commit and strands no journal', async () => {
     const bytes = proseBytes();
-    // Measured and logged, never gated — rule 5. This fixture's commit is ~0.1 ms, so its
-    // ratio reports the fixed Yjs write against a baseline too small to hide it, and three
-    // paragraphs cannot show the O(document) cost the ratio gate is for. The 200-page test
-    // below owns that gate. Keeping the numbers here still pays: a jump in this ratio with
-    // the 200-page ratio flat is what a fixed per-commit regression looks like.
+    // The RATIO here is measured and logged, never gated — rule 5. This fixture's commit is
+    // ~0.1 ms, so its ratio reports the fixed Yjs write against a baseline too small to hide
+    // it, and three paragraphs cannot show the O(document) cost the ratio gate is for. The
+    // 200-page test below owns that gate.
+    //
+    // What this fixture CAN gate is the fixed cost itself, as an absolute number, because a
+    // three-paragraph commit is almost entirely that fixed cost. It gets a loose backstop for
+    // the same reason the 200-page test has one: a wide absolute bound over the block minimum
+    // catches a large regression without pretending to resolve small ones. The bound is wide
+    // on purpose — anything tight enough to be interesting is the sub-millisecond wall-clock
+    // budget rule 5 exists to reject.
     const { solo, attached: insertAttached, blockRatios } = await measureInsertRatio(bytes);
 
     const gestures: readonly {
@@ -455,6 +461,17 @@ describe('local keystroke path with a replica attached', () => {
       );
     }
 
+    // The fixed per-commit cost of attaching, as a wall-clock backstop.
+    //
+    // Derived from measurement, with the margin stated so a later reader can retune it rather
+    // than guess: the fastest attached commit reads 0.13-0.17 ms locally — unmoved by 20-way
+    // CPU contention, because the block minimum discards one-sided noise — and 0.23-0.46 ms
+    // on CI hardware. The bound sits at 4 ms, about 9x the worst figure either machine has
+    // produced, so it cannot flake, and it fails on the regression class the ratio gate
+    // cannot see here: a constant added to every commit, such as re-encoding the whole Yjs
+    // document per keystroke. Small regressions pass this deliberately. Nothing on a
+    // three-paragraph fixture can resolve them without becoming the flake rule 5 removed.
+    const ATTACHED_FIXED_COST_MAX_MS = 4;
     // Log before the gates: a gate that fails without its measurement is not diagnosable.
     console.log(
       JSON.stringify({
@@ -462,12 +479,14 @@ describe('local keystroke path with a replica attached', () => {
         attachedInsert: insertAttached,
         blockRatios,
         blockRatioMin: Math.min(...blockRatios),
+        fixedCostBackstopMs: ATTACHED_FIXED_COST_MAX_MS,
         rows,
       })
     );
     // No gesture may leave a journal waiting, and every gesture must reach Yjs on its commit.
     expect(stranded).toEqual([]);
     expect(silent).toEqual([]);
+    expect(insertAttached.minMs).toBeLessThanOrEqual(ATTACHED_FIXED_COST_MAX_MS);
     expect(rows.length).toBe(gestures.length);
   });
 
