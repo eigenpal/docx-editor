@@ -69,13 +69,15 @@ export interface DrawingPaintContext {
   readonly revisionStyles?: RevisionStyleContext;
 }
 
-const MIME_FORMAT_LABEL: Readonly<Record<string, string>> = Object.freeze({
-  'image/svg+xml': 'SVG',
-  'image/tiff': 'TIFF',
-  'image/x-emf': 'EMF',
-  'image/x-wmf': 'WMF',
-  unknown: 'Unknown',
-});
+// A Map, not an object literal: the key is a MIME read off the package, so a value naming a
+// prototype member must answer undefined and fall through to the label below.
+const MIME_FORMAT_LABEL: ReadonlyMap<string, string> = new Map([
+  ['image/svg+xml', 'SVG'],
+  ['image/tiff', 'TIFF'],
+  ['image/x-emf', 'EMF'],
+  ['image/x-wmf', 'WMF'],
+]);
+const UNKNOWN_FORMAT_LABEL = 'Unknown';
 
 interface UrlRegistry {
   readonly urlForReady: (
@@ -287,7 +289,7 @@ function refusalLabel(
       switch (resource.reason) {
         case 'unsupported-format':
           return strings.unsupportedFormat(
-            MIME_FORMAT_LABEL[resource.mime] ?? MIME_FORMAT_LABEL.unknown
+            MIME_FORMAT_LABEL.get(resource.mime) ?? UNKNOWN_FORMAT_LABEL
           );
         case 'non-picture-graphic':
           return strings.nonPictureGraphic(drawing.placeholderGraphicKind ?? 'graphic');
@@ -545,17 +547,9 @@ function paintVectorShape(
   svg.setAttribute('height', '100%');
   svg.style.display = 'block';
 
-  const components = shape.components ?? [
-    {
-      subpathsEmu: shape.subpathsEmu,
-      fillHex: shape.fillHex,
-      fillAlpha: shape.fillAlpha ?? 1,
-      strokeHex: shape.strokeHex,
-      strokeAlpha: shape.strokeAlpha ?? 1,
-      strokeWidthEmu: shape.strokeWidthEmu,
-    },
-  ];
-  for (const component of components) {
+  // `components` is the paint authority and is always non-empty; the top-level `fillHex`
+  // and `strokeHex` describe a one-component shape only.
+  for (const component of shape.components) {
     const path = document.createElementNS(SVG_NAMESPACE, 'path');
     const d = component.subpathsEmu
       .map(

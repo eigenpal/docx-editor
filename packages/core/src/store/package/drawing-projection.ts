@@ -1404,7 +1404,7 @@ export function drawingAccessibility(projection: DrawingProjection): DrawingAcce
  * reports `hidden` and its locks rather than throwing, so an unusable drawing degrades to
  * something the surface can skip.
  */
-function projectDrawingWithTheme(
+export function projectDrawing(
   drawing: OoxmlDrawingNode,
   context: Readonly<{
     ownerPartName: string;
@@ -1562,20 +1562,6 @@ function projectDrawingWithTheme(
   );
 }
 
-/** Project one drawing without package-level theme resolution. */
-export function projectDrawing(
-  drawing: OoxmlDrawingNode,
-  context: Readonly<{
-    ownerPartName: string;
-    supportedMcRequires: ReadonlySet<string>;
-    limits: DrawingProjectionLimits;
-    namespaceScope?: ReadonlyMap<string, string>;
-    resolveRelationship?: RelationshipTargetResolver;
-  }>
-): DrawingProjection | null {
-  return projectDrawingWithTheme(drawing, context);
-}
-
 /** Project a drawing nested under a run-level MC wrapper. */
 export function projectRunLevelMcDrawing(
   wrapper: OoxmlGenericElementNode,
@@ -1596,7 +1582,7 @@ export function projectRunLevelMcDrawing(
     context.limits
   );
   if (atom.drawing === null) return null;
-  const projection = projectDrawingWithTheme(atom.drawing, {
+  const projection = projectDrawing(atom.drawing, {
     ...context,
     namespaceScope: context.namespaceScope,
   });
@@ -1688,7 +1674,7 @@ function collectDrawingsInPartBounded(
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
 
     if (frame.node.kind === 'drawing') {
-      const projected = projectDrawingWithTheme(frame.node, { ...ctx, namespaceScope: scope });
+      const projected = projectDrawing(frame.node, { ...ctx, namespaceScope: scope });
       if (projected) {
         out.push(projected);
         atomIndex?.set(frame.node.id, projected);

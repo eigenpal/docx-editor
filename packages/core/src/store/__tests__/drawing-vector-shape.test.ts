@@ -135,6 +135,48 @@ describe('wps vector shape projection', () => {
     );
   });
 
+  // `word/settings.xml` and `word/theme/theme1.xml` are sender-controlled, so an attribute
+  // name or value that names a prototype member must answer "no mapping" rather than a
+  // function. Before the lookups became Maps, `w:accent1="constructor"` made
+  // `resolveSchemeColor('accent1')` return null and every accent1-filled shape in the
+  // document stop painting.
+  test('a prototype-member name in the colour mapping does not break resolution', () => {
+    const theme = readOoxmlPart(
+      `<a:theme xmlns:a="${A}"><a:themeElements><a:clrScheme name="T">` +
+        '<a:accent1><a:srgbClr val="112233"/></a:accent1>' +
+        '<a:accent2><a:srgbClr val="AABBCC"/></a:accent2>' +
+        '<a:constructor><a:srgbClr val="DDEEFF"/></a:constructor>' +
+        '</a:clrScheme></a:themeElements></a:theme>',
+      { name: '/word/theme/theme1.xml', contentType: 'application/xml' }
+    );
+    const hostile = readOoxmlPart(
+      `<w:settings xmlns:w="${WML_NAMESPACE_URI}">` +
+        '<w:clrSchemeMapping w:accent1="constructor" w:accent2="__proto__" ' +
+        'w:__proto__="accent2" w:constructor="accent2"/>' +
+        '</w:settings>',
+      { name: '/word/settings.xml', contentType: 'application/xml' }
+    );
+    if (!theme.ok || !hostile.ok) throw new Error('test package parts must parse');
+    const resolvers = createPackageShapeThemeResolvers({
+      parts: new Map([
+        ['/word/theme/theme1.xml', theme.part],
+        ['/word/settings.xml', hostile.part],
+      ]),
+      partBytes: new Map(),
+      relationships: new Map(),
+      externalTargets: [],
+      contentTypes: {},
+      mainDocumentPart: OWNER,
+    } as unknown as OoxmlPackage);
+    // Unmappable values leave the default mapping in place, so both slots still resolve.
+    expect(resolvers.resolveSchemeColor('accent1')).toBe('112233');
+    expect(resolvers.resolveSchemeColor('accent2')).toBe('AABBCC');
+    // A prototype member is never a slot, and nothing was polluted along the way.
+    expect(resolvers.resolveSchemeColor('__proto__')).toBeNull();
+    expect(resolvers.resolveSchemeColor('toString')).toBeNull();
+    expect(({} as Record<string, unknown>)['accent2']).toBeUndefined();
+  });
+
   test('MC-wrapped anchored custGeom shape projects with typed vector geometry', () => {
     const part = parsePart(`<w:p><w:r>${mcWrapped(doubleRuleShapeDrawing())}</w:r></w:p>`);
     const atoms = indexInlineDrawingProjectionsInPart(part);
@@ -189,13 +231,35 @@ describe('wps vector shape projection', () => {
     expect(shape.fillAlpha).toBe(0.5);
   });
 
+  // `a:tint` and `a:shade` are a blend in LINEAR light, and `val` is the fraction of the
+  // INPUT colour (ECMA-376 20.1.2.3.34/20.1.2.3.31) — not of white, and not a blend on the
+  // stored channel. Each base/value pair below is picked so all three readings disagree, and
+  // every expectation is the pixel a reference renderer paints for that exact fill:
+  //
+  //   base    transform        this engine   `val` as white-fraction   blend in gamma space
+  //   0000FF  tint  20000      E7E7FF        3333FF                    CCCCFF
+  //   0000FF  shade 20000      00007E        —                         000033
+  //   808080  tint  50000      CCCCCC        C0C0C0                    C0C0C0
+  //   808080  shade 50000      5E5E5E        —                         404040
+  //   336699  tint  60000      ADB8CA        7A94AE                    8FA6BE
+  //   336699  shade 40000      224466        —                         143D5C
+  //
+  // Mid-gray at 50% is exactly where the white-fraction reading and the input-fraction
+  // reading agree, so it cannot be the only tint case.
   test('theme colours apply tint, shade, and luminance offset transforms', () => {
     const cases = [
-      ['tint', '50000', 'C0C0C0'],
-      ['shade', '50000', '404040'],
-      ['lumOff', '10000', '9A9A9A'],
+      ['0000FF', 'tint', '20000', 'E7E7FF'],
+      ['0000FF', 'shade', '20000', '00007E'],
+      ['808080', 'tint', '50000', 'CCCCCC'],
+      ['808080', 'shade', '50000', '5E5E5E'],
+      ['336699', 'tint', '60000', 'ADB8CA'],
+      ['336699', 'shade', '40000', '224466'],
+      // `lumMod`/`lumOff` are NOT linear-light: they stay in HSL over the stored channels.
+      ['808080', 'lumOff', '10000', '9A9A9A'],
+      ['6F55D7', 'lumMod', '50000', '2F1D79'],
+      ['6F55D7', 'lumMod', '75000', '472BB6'],
     ] as const;
-    for (const [transform, value, expected] of cases) {
+    for (const [base, transform, value, expected] of cases) {
       const drawing = doubleRuleShapeDrawing().replace(
         '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
         `<a:solidFill><a:schemeClr val="accent1"><a:${transform} val="${value}"/>` +
@@ -203,10 +267,67 @@ describe('wps vector shape projection', () => {
       );
       const part = parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`);
       const atoms = indexInlineDrawingProjectionsInPart(part, {
-        resolveSchemeColor: () => '808080',
+        resolveSchemeColor: () => base,
       });
       expect([...atoms.values()][0]!.vectorShape?.fillHex).toBe(expected);
     }
+  });
+
+  // A ratio of 100000 is the identity, so the round trip through linear light and back must
+  // return the authored byte. The floor in `channelFromLinear` is one ulp away from turning
+  // every channel into the one below it, which no other case here would catch.
+  test('a full-strength tint or shade returns the authored colour unchanged', () => {
+    for (const transform of ['tint', 'shade'] as const) {
+      const drawing = doubleRuleShapeDrawing().replace(
+        '<a:solidFill><a:srgbClr val="000000"/></a:solidFill>',
+        `<a:solidFill><a:srgbClr val="010203"><a:${transform} val="100000"/></a:srgbClr>` +
+          '</a:solidFill>'
+      );
+      const part = parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`);
+      const atoms = indexInlineDrawingProjectionsInPart(part);
+      expect([...atoms.values()][0]!.vectorShape?.fillHex).toBe('010203');
+    }
+  });
+
+  // One bound (16 entries) covers the fill list, the background fill list based at 1001 and
+  // the line list. The index is file content, so both edges of each range must refuse.
+  test('a style matrix index past the list size resolves to nothing', () => {
+    const entries = (name: string, tag: string): string =>
+      `<a:${name}>` +
+      Array.from({ length: 20 }, (_, index) => `<${tag} n="${index}"/>`).join('') +
+      `</a:${name}>`;
+    const theme = readOoxmlPart(
+      `<a:theme xmlns:a="${A}"><a:themeElements><a:clrScheme name="T">` +
+        '<a:accent1><a:srgbClr val="112233"/></a:accent1>' +
+        '</a:clrScheme><a:fmtScheme name="T">' +
+        entries('fillStyleLst', 'a:solidFill') +
+        entries('lnStyleLst', 'a:ln') +
+        '<a:effectStyleLst/>' +
+        entries('bgFillStyleLst', 'a:gradFill') +
+        '</a:fmtScheme></a:themeElements></a:theme>',
+      { name: '/word/theme/theme1.xml', contentType: 'application/xml' }
+    );
+    if (!theme.ok) throw new Error(theme.reason);
+    const resolvers = createPackageShapeThemeResolvers({
+      parts: new Map([['/word/theme/theme1.xml', theme.part]]),
+      partBytes: new Map(),
+      relationships: new Map(),
+      externalTargets: [],
+      contentTypes: {},
+      mainDocumentPart: OWNER,
+    } as unknown as OoxmlPackage);
+    const resolved = (kind: 'fill' | 'line', index: number): string | null =>
+      resolvers.resolveStyleMatrixReference(kind, index)?.localName ?? null;
+    expect(resolved('fill', 1)).toBe('solidFill');
+    expect(resolved('fill', 16)).toBe('solidFill');
+    expect(resolved('fill', 17)).toBeNull();
+    expect(resolved('fill', 1001)).toBe('gradFill');
+    expect(resolved('fill', 1016)).toBe('gradFill');
+    expect(resolved('fill', 1017)).toBeNull();
+    expect(resolved('line', 16)).toBe('ln');
+    expect(resolved('line', 17)).toBeNull();
+    // A line index never selects the background list, however large it is.
+    expect(resolved('line', 1001)).toBeNull();
   });
 
   test('a shape style fill reference resolves its theme colour', () => {

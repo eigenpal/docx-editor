@@ -13,52 +13,58 @@ const THEME_RELATIONSHIP =
 const SETTINGS_RELATIONSHIP =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
 const HEX = /^[0-9A-Fa-f]{6}$/;
-const SYSTEM_COLORS: Readonly<Record<string, string>> = Object.freeze({
-  window: 'FFFFFF',
-  windowText: '000000',
-});
-const DEFAULT_MAPPING: Readonly<Record<string, string>> = Object.freeze({
-  bg1: 'lt1',
-  tx1: 'dk1',
-  bg2: 'lt2',
-  tx2: 'dk2',
-  accent1: 'accent1',
-  accent2: 'accent2',
-  accent3: 'accent3',
-  accent4: 'accent4',
-  accent5: 'accent5',
-  accent6: 'accent6',
-  hlink: 'hlink',
-  folHlink: 'folHlink',
-});
-const MAPPING_ATTRIBUTE_TO_TOKEN: Readonly<Record<string, string>> = Object.freeze({
-  bg1: 'bg1',
-  t1: 'tx1',
-  bg2: 'bg2',
-  t2: 'tx2',
-  accent1: 'accent1',
-  accent2: 'accent2',
-  accent3: 'accent3',
-  accent4: 'accent4',
-  accent5: 'accent5',
-  accent6: 'accent6',
-  hyperlink: 'hlink',
-  followedHyperlink: 'folHlink',
-});
-const MAPPING_VALUE_TO_SLOT: Readonly<Record<string, string>> = Object.freeze({
-  dark1: 'dk1',
-  light1: 'lt1',
-  dark2: 'dk2',
-  light2: 'lt2',
-  accent1: 'accent1',
-  accent2: 'accent2',
-  accent3: 'accent3',
-  accent4: 'accent4',
-  accent5: 'accent5',
-  accent6: 'accent6',
-  hyperlink: 'hlink',
-  followedHyperlink: 'folHlink',
-});
+/** Entries a `fmtScheme` style list may hold; a reference past it resolves to nothing. */
+const MAX_STYLE_MATRIX_ENTRIES = 16;
+// Every key below is looked up with a value out of `theme*.xml` or `settings.xml`, which
+// the sender controls. These are Maps, not object literals, so a `val` of `__proto__` or
+// `constructor` answers undefined instead of reaching a prototype member — the same reason
+// `SYSTEM_COLORS` used to need `hasOwnProperty`.
+const SYSTEM_COLORS: ReadonlyMap<string, string> = new Map([
+  ['window', 'FFFFFF'],
+  ['windowText', '000000'],
+]);
+const DEFAULT_MAPPING: ReadonlyMap<string, string> = new Map([
+  ['bg1', 'lt1'],
+  ['tx1', 'dk1'],
+  ['bg2', 'lt2'],
+  ['tx2', 'dk2'],
+  ['accent1', 'accent1'],
+  ['accent2', 'accent2'],
+  ['accent3', 'accent3'],
+  ['accent4', 'accent4'],
+  ['accent5', 'accent5'],
+  ['accent6', 'accent6'],
+  ['hlink', 'hlink'],
+  ['folHlink', 'folHlink'],
+]);
+const MAPPING_ATTRIBUTE_TO_TOKEN: ReadonlyMap<string, string> = new Map([
+  ['bg1', 'bg1'],
+  ['t1', 'tx1'],
+  ['bg2', 'bg2'],
+  ['t2', 'tx2'],
+  ['accent1', 'accent1'],
+  ['accent2', 'accent2'],
+  ['accent3', 'accent3'],
+  ['accent4', 'accent4'],
+  ['accent5', 'accent5'],
+  ['accent6', 'accent6'],
+  ['hyperlink', 'hlink'],
+  ['followedHyperlink', 'folHlink'],
+]);
+const MAPPING_VALUE_TO_SLOT: ReadonlyMap<string, string> = new Map([
+  ['dark1', 'dk1'],
+  ['light1', 'lt1'],
+  ['dark2', 'dk2'],
+  ['light2', 'lt2'],
+  ['accent1', 'accent1'],
+  ['accent2', 'accent2'],
+  ['accent3', 'accent3'],
+  ['accent4', 'accent4'],
+  ['accent5', 'accent5'],
+  ['accent6', 'accent6'],
+  ['hyperlink', 'hlink'],
+  ['followedHyperlink', 'folHlink'],
+]);
 
 export type ShapeStyleMatrixKind = 'fill' | 'line';
 
@@ -168,11 +174,7 @@ function colorHex(slot: OoxmlGenericElementNode): string | null {
     value = attribute(color, DRAWINGML_MAIN_NAMESPACE_URI, 'val');
   } else if (color.localName === 'sysClr') {
     const system = attribute(color, DRAWINGML_MAIN_NAMESPACE_URI, 'val') ?? '';
-    value =
-      attribute(color, DRAWINGML_MAIN_NAMESPACE_URI, 'lastClr') ??
-      (Object.prototype.hasOwnProperty.call(SYSTEM_COLORS, system)
-        ? SYSTEM_COLORS[system]
-        : undefined);
+    value = attribute(color, DRAWINGML_MAIN_NAMESPACE_URI, 'lastClr') ?? SYSTEM_COLORS.get(system);
   }
   return value && HEX.test(value) ? value.toUpperCase() : null;
 }
@@ -201,15 +203,15 @@ export function createPackageShapeThemeResolvers(pkg: OoxmlPackage): PackageShap
   const theme = relatedRoot(pkg, THEME_RELATIONSHIP, '/word/theme/theme1.xml');
   const settings = relatedRoot(pkg, SETTINGS_RELATIONSHIP, '/word/settings.xml');
   const colors = collectThemeColorScheme(theme);
-  const mapping = new Map<string, string>(Object.entries(DEFAULT_MAPPING));
+  const mapping = new Map<string, string>(DEFAULT_MAPPING);
   const mappingNode = settings
     ? firstDescendant(settings, WML_NAMESPACE_URI, 'clrSchemeMapping')
     : null;
   if (mappingNode) {
     for (const entry of mappingNode.attributes) {
       if (entry.namespaceUri !== WML_NAMESPACE_URI) continue;
-      const token = MAPPING_ATTRIBUTE_TO_TOKEN[entry.localName];
-      const slot = MAPPING_VALUE_TO_SLOT[entry.value];
+      const token = MAPPING_ATTRIBUTE_TO_TOKEN.get(entry.localName);
+      const slot = MAPPING_VALUE_TO_SLOT.get(entry.value);
       if (!token || !slot) continue;
       mapping.set(token, slot);
     }
@@ -221,19 +223,26 @@ export function createPackageShapeThemeResolvers(pkg: OoxmlPackage): PackageShap
     kind: ShapeStyleMatrixKind,
     index: number
   ): { readonly list: OoxmlElement; readonly offset: number } | null => {
-    if (!formatScheme || !Number.isSafeInteger(index) || index <= 0 || index > 1016) return null;
-    if (kind === 'line') {
-      const list = directGeneric(formatScheme, DRAWINGML_MAIN_NAMESPACE_URI, 'lnStyleLst');
-      return list && index <= 16 ? { list, offset: index - 1 } : null;
-    }
-    const background = index >= 1001;
+    if (!formatScheme) return null;
+    // ECMA-376 20.1.4.1.19/20.1.4.1.24: the index is 1-based into the matching style list,
+    // and a fill index of 1001 or more selects the background list from 1001.
+    const background = kind === 'fill' && index >= 1001;
     const list = directGeneric(
       formatScheme,
       DRAWINGML_MAIN_NAMESPACE_URI,
-      background ? 'bgFillStyleLst' : 'fillStyleLst'
+      kind === 'line' ? 'lnStyleLst' : background ? 'bgFillStyleLst' : 'fillStyleLst'
     );
+    // One total bound, for both lists and both bases: a negative, fractional, huge or NaN
+    // index fails it too. Only the ceiling is observable through the entry walk below — the
+    // walk answers null for any offset it cannot reach — so a second, narrower ceiling
+    // beside this one would be a bound with nothing to hold it in step.
     const offset = background ? index - 1001 : index - 1;
-    return list && offset >= 0 && offset < 16 ? { list, offset } : null;
+    const usable =
+      list !== null &&
+      Number.isSafeInteger(offset) &&
+      offset >= 0 &&
+      offset < MAX_STYLE_MATRIX_ENTRIES;
+    return usable ? { list: list!, offset } : null;
   };
   const result: PackageShapeThemeResolvers = Object.freeze({
     resolveSchemeColor: (token: string): string | null => {

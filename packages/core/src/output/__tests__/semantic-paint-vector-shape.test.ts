@@ -11,26 +11,38 @@ import { DEFAULT_DRAWING_PAINT_STRINGS, paintDrawingRecord } from '../semantic-p
 
 const EXTENT = Object.freeze({ cx: 6_696_075, cy: 47_625 });
 
+const SUBPATHS = Object.freeze([
+  Object.freeze([
+    Object.freeze({ x: 6_696_075, y: 38_100 }),
+    Object.freeze({ x: 0, y: 38_100 }),
+    Object.freeze({ x: 0, y: 47_625 }),
+    Object.freeze({ x: 6_696_075, y: 47_625 }),
+  ]),
+  Object.freeze([
+    Object.freeze({ x: 6_696_075, y: 0 }),
+    Object.freeze({ x: 0, y: 0 }),
+    Object.freeze({ x: 0, y: 9_525 }),
+    Object.freeze({ x: 6_696_075, y: 9_525 }),
+  ]),
+]);
+
 function vectorShape(): VectorShapeProjection {
   return Object.freeze({
     extentEmu: EXTENT,
-    subpathsEmu: Object.freeze([
-      Object.freeze([
-        Object.freeze({ x: 6_696_075, y: 38_100 }),
-        Object.freeze({ x: 0, y: 38_100 }),
-        Object.freeze({ x: 0, y: 47_625 }),
-        Object.freeze({ x: 6_696_075, y: 47_625 }),
-      ]),
-      Object.freeze([
-        Object.freeze({ x: 6_696_075, y: 0 }),
-        Object.freeze({ x: 0, y: 0 }),
-        Object.freeze({ x: 0, y: 9_525 }),
-        Object.freeze({ x: 6_696_075, y: 9_525 }),
-      ]),
-    ]),
+    subpathsEmu: SUBPATHS,
     fillHex: '000000',
     strokeHex: null,
     strokeWidthEmu: 0,
+    components: Object.freeze([
+      Object.freeze({
+        subpathsEmu: SUBPATHS,
+        fillHex: '000000',
+        fillAlpha: 1,
+        strokeHex: null,
+        strokeAlpha: 1,
+        strokeWidthEmu: 0,
+      }),
+    ]),
   });
 }
 

@@ -39,13 +39,15 @@ import type { LayoutBox } from './semantic-records.ts';
 
 export type { DrawingGeometry } from './drawing-geometry.ts';
 
-const GRAPHIC_URI_KIND: Readonly<Record<string, string>> = Object.freeze({
-  'http://schemas.openxmlformats.org/drawingml/2006/chart': 'chart',
-  'http://schemas.openxmlformats.org/drawingml/2006/diagram': 'diagram',
-  'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup': 'group',
-  'http://schemas.microsoft.com/office/word/2010/wordprocessingShape': 'textbox',
-  'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas': 'canvas',
-});
+// A Map, not an object literal: the key is a `graphicData@uri` out of the file, so a value
+// of `__proto__` or `constructor` must answer undefined, not a prototype member.
+const GRAPHIC_URI_KIND: ReadonlyMap<string, string> = new Map([
+  ['http://schemas.openxmlformats.org/drawingml/2006/chart', 'chart'],
+  ['http://schemas.openxmlformats.org/drawingml/2006/diagram', 'diagram'],
+  ['http://schemas.microsoft.com/office/word/2010/wordprocessingGroup', 'group'],
+  ['http://schemas.microsoft.com/office/word/2010/wordprocessingShape', 'textbox'],
+  ['http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas', 'canvas'],
+]);
 
 const EMPTY_TRANSFORM: DrawingTransform = Object.freeze({
   rotationDegrees: 0,
@@ -75,7 +77,7 @@ function drawingPaintFields(projection: DrawingProjection): {
     for (const diagnostic of projection.diagnostics) {
       if (diagnostic.code !== 'unsupported-graphic') continue;
       const uri = diagnostic.detail ?? '';
-      placeholderGraphicKind = GRAPHIC_URI_KIND[uri] ?? 'graphic';
+      placeholderGraphicKind = GRAPHIC_URI_KIND.get(uri) ?? 'graphic';
       break;
     }
     if (placeholderGraphicKind === null) placeholderGraphicKind = 'graphic';

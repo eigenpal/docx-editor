@@ -61,26 +61,36 @@ export function findDirectChild(
 }
 
 /**
- * The renderable subset of a `wps:wsp` non-picture graphic: closed polygon subpaths
- * (`a:custGeom` with move/line/close verbs only, or `a:prstGeom prst="rect"`) with a
- * solid sRGB fill and/or stroke. Anything richer (curves, theme fills, text bodies,
- * rotation) projects as `null` and paints the labelled placeholder instead.
+ * The renderable subset of a `wps:wsp` non-picture graphic, or of one bounded `wpg:wgp`
+ * group of them: closed polygon subpaths (`a:custGeom` with move/line/close/cubicBezTo
+ * verbs, or a supported `a:prstGeom`) with a solid fill and/or stroke. The colour may come
+ * from `a:srgbClr` or from the theme, through `a:schemeClr` or a `wps:style` matrix
+ * reference. Anything richer (gradient and picture fills, text bodies, rotation, a nested
+ * group) projects as `null` and paints the labelled placeholder instead.
  */
 export interface VectorShapeProjection {
   /** The drawing extent that frames the subpath coordinate space. */
   readonly extentEmu: Readonly<{ cx: number; cy: number }>;
-  /** Closed subpath polygons in extent-EMU space; fill rule is even-odd. */
+  /**
+   * Every component's subpath polygons, flattened, in extent-EMU space; fill rule is
+   * even-odd. Painting reads `components`, which keeps each polygon with its own colours;
+   * this stays the geometry summary (bounds, hit tests, wrap holes).
+   */
   readonly subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[];
-  /** Validated 6-digit sRGB hex (no `#`), or null for no fill. */
+  /**
+   * Validated 6-digit sRGB hex (no `#`) of the one component, or null. A group of two or
+   * more components has no single fill, so this is null there as well: null means "no one
+   * fill to name", not "nothing is filled". Read `components` to paint.
+   */
   readonly fillHex: string | null;
   readonly fillAlpha?: number;
-  /** Validated 6-digit sRGB hex (no `#`), or null for no stroke. */
+  /** As `fillHex`, for the stroke: the one component's stroke, else null. */
   readonly strokeHex: string | null;
   readonly strokeAlpha?: number;
-  /** Stroke width in EMU; 0 when absent. */
+  /** The one component's stroke width in EMU; 0 when absent or when grouped. */
   readonly strokeWidthEmu: number;
-  /** Independently styled paths. A direct shape has one component. */
-  readonly components?: readonly VectorShapeComponent[];
+  /** Independently styled paths, always non-empty. A direct shape has one component. */
+  readonly components: readonly VectorShapeComponent[];
 }
 
 export interface VectorShapeComponent {
@@ -140,6 +150,27 @@ function channelsHex(channels: readonly number[]): string {
     )
     .join('')
     .toUpperCase();
+}
+
+/**
+ * DrawingML blends `a:tint` and `a:shade` in linear light, not in the stored sRGB channel.
+ * The colour-space gamma the renderers use for that conversion is 2.3, not the sRGB
+ * piecewise curve, and the linear result truncates back to a byte. Both are load-bearing:
+ * with `Math.round`, or with the sRGB curve, the result drifts 1-2 levels away from the
+ * reference rendering on most inputs. `lumMod`/`lumOff` are NOT linear-light — they stay in
+ * HSL over the stored channels, so they keep `channelsHex`'s rounding.
+ */
+const SHAPE_COLOR_GAMMA = 2.3;
+
+function linearFromChannel(channel: number): number {
+  return (Math.max(0, Math.min(255, channel)) / 255) ** SHAPE_COLOR_GAMMA;
+}
+
+function channelFromLinear(linear: number): number {
+  const channel = Math.max(0, Math.min(1, linear)) ** (1 / SHAPE_COLOR_GAMMA) * 255;
+  // The epsilon only absorbs the round-trip error of the two `**` calls, so a ratio of
+  // 100000 (the identity transform) returns the input channel instead of the one below it.
+  return Math.max(0, Math.min(255, Math.floor(channel + 1e-6)));
 }
 
 function rgbToHsl([red, green, blue]: readonly number[]): [number, number, number] {
@@ -218,13 +249,15 @@ function resolveColorNode(
     if (ratio === null) return null;
     if (child.localName === 'alpha') alpha = ratio;
     else if (child.localName === 'tint') {
-      channels = channels.map((channel) => channel + (255 - channel) * ratio) as [
-        number,
-        number,
-        number,
-      ];
+      // ECMA-376 20.1.2.3.34: `val` is the fraction of the INPUT colour, the rest white.
+      channels = channels.map((channel) =>
+        channelFromLinear(linearFromChannel(channel) * ratio + (1 - ratio))
+      ) as [number, number, number];
     } else if (child.localName === 'shade') {
-      channels = channels.map((channel) => channel * ratio) as [number, number, number];
+      // ECMA-376 20.1.2.3.31: `val` is the fraction of the input colour, the rest black.
+      channels = channels.map((channel) =>
+        channelFromLinear(linearFromChannel(channel) * ratio)
+      ) as [number, number, number];
     } else if (child.localName === 'lumMod' || child.localName === 'lumOff') {
       const hsl = rgbToHsl(channels);
       hsl[2] = Math.max(

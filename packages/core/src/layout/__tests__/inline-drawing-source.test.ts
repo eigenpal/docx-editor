@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import {
   readOoxmlPackage,
   readOoxmlPart,
@@ -11,6 +11,7 @@ import {
   drawingAtomIdentities,
   drawingTokenForTableBlock,
   drawingTokenForTableBlockMemo,
+  vectorShapeLayoutToken,
 } from '../inline-drawing-source.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -204,4 +205,82 @@ test('an undefined epoch always recomputes and never reads or arms the cache', (
   // A warm epoch entry does not leak into the epoch-free path either.
   drawingTokenForTableBlockMemo(table, undefined, counted.fn);
   expect(counted.calls()).toBe(walkCost * 4);
+});
+
+// `vectorShapeLayoutToken` is a DIGEST, not a serialization: it is what stops
+// `isCompatibleWith` from paying ~48 KB of `JSON.stringify` per shape per atom. A digest is
+// only worth having if it still separates shapes that differ, so each case below changes one
+// field and nothing else.
+describe('vector shape layout token', () => {
+  const point = (x: number, y: number) => Object.freeze({ x, y });
+  const shape = (
+    overrides: Partial<{
+      readonly points: readonly Readonly<{ x: number; y: number }>[];
+      readonly fillHex: string | null;
+      readonly fillAlpha: number;
+      readonly strokeHex: string | null;
+      readonly strokeAlpha: number;
+      readonly strokeWidthEmu: number;
+      readonly cx: number;
+      readonly extraComponent: boolean;
+      readonly splitSubpaths: boolean;
+    }> = {}
+  ) => {
+    const points = overrides.points ?? [point(0, 0), point(100, 0), point(100, 50.5)];
+    const component = {
+      subpathsEmu: overrides.splitSubpaths ? [points.slice(0, 1), points.slice(1)] : [points],
+      fillHex: overrides.fillHex === undefined ? '4472C4' : overrides.fillHex,
+      fillAlpha: overrides.fillAlpha ?? 1,
+      strokeHex: overrides.strokeHex ?? null,
+      strokeAlpha: overrides.strokeAlpha ?? 1,
+      strokeWidthEmu: overrides.strokeWidthEmu ?? 0,
+    };
+    return {
+      extentEmu: { cx: overrides.cx ?? 1000, cy: 500 },
+      subpathsEmu: component.subpathsEmu,
+      fillHex: component.fillHex,
+      fillAlpha: component.fillAlpha,
+      strokeHex: component.strokeHex,
+      strokeAlpha: component.strokeAlpha,
+      strokeWidthEmu: component.strokeWidthEmu,
+      components: overrides.extraComponent
+        ? [component, { ...component, fillHex: 'FF0000' }]
+        : [component],
+    };
+  };
+
+  test('equal shapes agree and each single difference separates them', () => {
+    const baseline = vectorShapeLayoutToken(shape());
+    expect(vectorShapeLayoutToken(shape())).toBe(baseline);
+    const differences = {
+      'a moved point': shape({ points: [point(0, 0), point(100, 0), point(100, 50.6)] }),
+      'a sub-unit move': shape({ points: [point(0, 0), point(100, 0), point(100, 50.5001)] }),
+      'a swapped x and y': shape({ points: [point(0, 0), point(0, 100), point(100, 50.5)] }),
+      'a reordered point': shape({ points: [point(100, 0), point(0, 0), point(100, 50.5)] }),
+      'a dropped point': shape({ points: [point(0, 0), point(100, 0)] }),
+      'the same points in two subpaths': shape({ splitSubpaths: true }),
+      'a different fill': shape({ fillHex: '4472C5' }),
+      'no fill': shape({ fillHex: null }),
+      'a different fill opacity': shape({ fillAlpha: 0.5 }),
+      'a stroke': shape({ strokeHex: '000000' }),
+      'a stroke opacity': shape({ strokeAlpha: 0.5 }),
+      'a stroke width': shape({ strokeWidthEmu: 12_700 }),
+      'a different extent': shape({ cx: 1001 }),
+      'a second component': shape({ extraComponent: true }),
+    };
+    for (const [label, changed] of Object.entries(differences)) {
+      expect(`${label} collides: ${vectorShapeLayoutToken(changed) === baseline}`).toBe(
+        `${label} collides: false`
+      );
+    }
+  });
+
+  test('the token stays small for a shape at the point budget', () => {
+    const points = Array.from({ length: 1024 }, (_, index) =>
+      point(index * 37.5, (index * 53) % 100_000)
+    );
+    const token = vectorShapeLayoutToken(shape({ points }));
+    // `JSON.stringify` of the same shape is ~48 KB. Anything near that is the regression.
+    expect(token.length).toBeLessThan(200);
+  });
 });

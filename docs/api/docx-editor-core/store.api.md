@@ -3238,6 +3238,8 @@ export function projectDrawing(drawing: OoxmlDrawingNode, context: Readonly<{
     namespaceScope?: ReadonlyMap<string, string>;
     ownerPartName: string;
     resolveRelationship?: RelationshipTargetResolver;
+    resolveSchemeColor?: ShapeSchemeColorResolver;
+    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
     supportedMcRequires: ReadonlySet<string>;
 }>): DrawingProjection | null;
 
