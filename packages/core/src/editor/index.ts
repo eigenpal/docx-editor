@@ -28,6 +28,7 @@ export {
   composeFontConfiguration,
   type FontConfigurationBase,
   type FontConfigurationFragment,
+  type FontFamilyMetadata,
   type FontResolutionRequest,
   type FontResolver,
 } from './font-composition.ts';

@@ -967,6 +967,14 @@ export const DATASTORE_NAMESPACE_URI = "http://schemas.openxmlformats.org/office
 export function datastoreItemIdFor(seed: string): string;
 
 // @public
+export interface DeclaredFontMetadata {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly panose?: string;
+}
+
+// @public
 export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
 
 // @public
@@ -3251,6 +3259,9 @@ export function propertyContainer(parent: OoxmlNode | null | undefined, kind: 'p
 
 // @public
 export function readCustomXmlNode(pkg: OoxmlPackage, partName: string, nodeId: string): CustomXmlNode | null;
+
+// @public
+export function readDeclaredFontMetadata(fontTable: OoxmlPart | undefined, maxFonts?: number): readonly DeclaredFontMetadata[];
 
 // @public
 export function readEmbeddedFonts(pkg: OoxmlPackage, fontTable: OoxmlPart | undefined, options?: ReadEmbeddedFontsOptions): EmbeddedFont[];

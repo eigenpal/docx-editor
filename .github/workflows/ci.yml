@@ -221,8 +221,11 @@ jobs:
         run: bun run check:i18n-bundle-size
 
       - name: Fonts package manifest check
-        # Baked sha256 hashes in @docx-editor.dev/fonts must match the shipped TTFs.
+        # Baked sha256 hashes in @docx-editor.dev/fonts must match the shipped font files.
         run: bun run check:fonts-manifest
+
+      - name: Word font width fidelity
+        run: bun run check:font-width-fidelity
 
       - name: Docs JSON generation (smoke test)
         # Not committed — `docs/json/` is gitignored. Run as a smoke test

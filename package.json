@@ -52,6 +52,7 @@
     "check:composable-parity": "node scripts/check-composable-parity.mjs",
     "check:export-parity": "node scripts/check-export-parity.mjs",
     "check:feature-parity": "node scripts/check-feature-parity.mjs",
+    "check:font-width-fidelity": "bun packages/fonts/scripts/check-width-fidelity.ts",
     "check:fonts-manifest": "cd packages/fonts && node scripts/generate-manifest.mjs --check",
     "check:i18n-bundle-size": "node scripts/check-i18n-bundle-size.mjs",
     "check:lane-boundaries": "node scripts/check-lane-boundaries.mjs",

@@ -51,6 +51,13 @@ export interface FontConfigurationBase extends FontConfigurationFragment {
   readonly language?: string;
 }
 
+/** Validated metadata from one `word/fontTable.xml` family declaration. */
+export interface FontFamilyMetadata {
+  readonly family: string;
+  /** Ten-byte PANOSE classification as 20 lowercase hexadecimal characters. */
+  readonly panose?: string;
+}
+
 /**
  * What the document turned out to need, handed to an on-demand resolver.
  *
@@ -65,6 +72,8 @@ export interface FontResolutionRequest {
   readonly families: readonly string[];
   /** The face a run naming no font resolves to, so a resolver can cover it too. */
   readonly defaultFamily: string;
+  /** Bounded font-table metadata that a resolver may use to rank closed substitutes. */
+  readonly metadata?: readonly FontFamilyMetadata[];
 }
 
 /**

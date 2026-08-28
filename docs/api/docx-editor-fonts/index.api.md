@@ -60,6 +60,11 @@ export interface DefaultFontSubstitution {
     // (undocumented)
     readonly from: DefaultFontFaceRequest;
     // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
     readonly to: DefaultFontFaceRequest;
 }
 

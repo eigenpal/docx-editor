@@ -984,6 +984,13 @@ export interface FontConfigurationFragment {
 }
 
 // @public
+export interface FontFamilyMetadata {
+    // (undocumented)
+    readonly family: string;
+    readonly panose?: string;
+}
+
+// @public
 export interface FontLoadFailure {
     // (undocumented)
     readonly actualHash?: string;
@@ -1018,6 +1025,7 @@ export interface FontMeasurementState {
 export interface FontResolutionRequest {
     readonly defaultFamily: string;
     readonly families: readonly string[];
+    readonly metadata?: readonly FontFamilyMetadata[];
 }
 
 // @public
@@ -2269,6 +2277,7 @@ export interface TreeDocxSessionView {
     canUndo(): boolean;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
+    declaredFontMetadata(): readonly DeclaredFontMetadata[];
     deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
     deleteComments(comments: readonly {
         readonly commentId: string;

@@ -130,16 +130,32 @@ describe('googleFonts resolver', () => {
     );
   });
 
-  test('Century Gothic resolves through its measured-width stand-in', async () => {
+  test('an uncatalogued family selects a closed candidate by PANOSE and average width', async () => {
     const { fetcher } = fakeFetcher();
-    const fragment = await resolveOnly(['Century Gothic'], fetcher);
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Uncatalogued Sans'],
+      defaultFamily: 'No Such Family',
+      metadata: [{ family: 'Uncatalogued Sans', panose: '02000502050000020004' }],
+    });
     expect(fragment.sources).toHaveLength(4);
-    expect(fragment.sources.every((source) => source.request.family === 'Montserrat')).toBe(true);
+    expect(fragment.sources.every((source) => source.request.family === 'Nobile')).toBe(true);
     expect(
       fragment.substitutions.some(
-        (entry) => entry.from.family === 'Century Gothic' && entry.to.family === 'Montserrat'
+        (entry) => entry.from.family === 'Uncatalogued Sans' && entry.to.family === 'Nobile'
       )
     ).toBe(true);
+  });
+
+  test('a distant PANOSE family does not receive an arbitrary text substitute', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Decorative Face'],
+      defaultFamily: 'No Such Family',
+      metadata: [{ family: 'Decorative Face', panose: '05000502050000020004' }],
+    });
+    expect(requested).toHaveLength(0);
+    expect(fragment.sources).toHaveLength(0);
+    expect(fragment.substitutions).toHaveLength(0);
   });
 
   test('Montserrat family names resolve directly to their static faces', async () => {

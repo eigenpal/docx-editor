@@ -73,6 +73,10 @@ export interface DefaultFontSource {
 export interface DefaultFontSubstitution {
   readonly from: DefaultFontFaceRequest;
   readonly to: DefaultFontFaceRequest;
+  readonly lineMetrics?: {
+    readonly heightEm: number;
+    readonly baselineEm: number;
+  };
 }
 
 /** The common Word families this package can stand in for. */
@@ -123,6 +127,10 @@ interface FamilyPlan {
   readonly substitute: string;
   readonly filePrefix: string;
   readonly extension?: 'otf';
+  readonly lineMetrics?: {
+    readonly heightEm: number;
+    readonly baselineEm: number;
+  };
 }
 
 const FAMILY_PLANS: ReadonlyMap<WordDefaultFamily, FamilyPlan> = new Map([
@@ -137,6 +145,7 @@ const FAMILY_PLANS: ReadonlyMap<WordDefaultFamily, FamilyPlan> = new Map([
       substitute: 'TeX Gyre Adventor',
       filePrefix: 'TeXGyreAdventor',
       extension: 'otf',
+      lineMetrics: { heightEm: 1.19140625, baselineEm: 0.97119140625 },
     },
   ],
 ]);
@@ -205,6 +214,7 @@ export async function loadDefaultFonts(
       substitutions.push({
         from: { family, weight: face.weight, style: face.style },
         to: { family: plan.substitute, weight: face.weight, style: face.style },
+        ...(plan.lineMetrics ? { lineMetrics: plan.lineMetrics } : {}),
       });
       jobs.push(
         (async () => {

@@ -27,9 +27,14 @@ export interface FontRequest {
 export interface FontSubstitution {
   readonly requested: FontRequest;
   readonly resolved: FontRequest;
+  readonly lineMetrics?: {
+    readonly heightEm: number;
+    readonly baselineEm: number;
+  };
 }
 
 const RESOLVED_FONT_BRAND: unique symbol = Symbol('validated-resolved-font');
+const MAX_SUBSTITUTION_LINE_HEIGHT_EM = 4;
 
 /**
  * A face that passed admission: the bytes are present, within limits, hash-verified, and parse as
@@ -144,6 +149,10 @@ export interface FontResourceDefinition {
 export interface DeclaredFontSubstitution {
   readonly from: FontRequest;
   readonly to: FontRequest;
+  readonly lineMetrics?: {
+    readonly heightEm: number;
+    readonly baselineEm: number;
+  };
 }
 
 /** Whether bytes parse as a usable font, with a diagnostic when they do not. */
@@ -223,6 +232,22 @@ const freezeRequest = (request: FontRequest): FontRequest => {
   return Object.freeze({ family: request.family, weight: request.weight, style: request.style });
 };
 
+const freezeLineMetrics = (
+  metrics: NonNullable<DeclaredFontSubstitution['lineMetrics']>
+): NonNullable<FontSubstitution['lineMetrics']> => {
+  if (
+    !Number.isFinite(metrics.heightEm) ||
+    !Number.isFinite(metrics.baselineEm) ||
+    metrics.heightEm <= 0 ||
+    metrics.heightEm > MAX_SUBSTITUTION_LINE_HEIGHT_EM ||
+    metrics.baselineEm < 0 ||
+    metrics.baselineEm > metrics.heightEm
+  ) {
+    throw new RangeError('Font substitution line metrics must fit within a bounded em box');
+  }
+  return Object.freeze({ heightEm: metrics.heightEm, baselineEm: metrics.baselineEm });
+};
+
 /**
  * The canonical string identifying one face request.
  *
@@ -265,6 +290,9 @@ class OwnedResolvedFont implements ResolvedFont {
       this.substitution = Object.freeze({
         requested: freezeRequest(substitution.requested),
         resolved: freezeRequest(substitution.resolved),
+        ...(substitution.lineMetrics
+          ? { lineMetrics: freezeLineMetrics(substitution.lineMetrics) }
+          : {}),
       });
     }
     Object.freeze(this);
@@ -498,18 +526,32 @@ export const createFontResourceSnapshot = (
     );
   }
 
-  const substitutions = new Map<string, FontRequest>();
+  const substitutions = new Map<
+    string,
+    {
+      readonly to: FontRequest;
+      readonly lineMetrics?: NonNullable<FontSubstitution['lineMetrics']>;
+    }
+  >();
   for (const substitution of options.substitutions ?? []) {
     const key = fontRequestKey(substitution.from);
     if (substitutions.has(key)) throw new TypeError(`Duplicate font substitution request: ${key}`);
-    substitutions.set(key, freezeRequest(substitution.to));
+    substitutions.set(
+      key,
+      Object.freeze({
+        to: freezeRequest(substitution.to),
+        ...(substitution.lineMetrics
+          ? { lineMetrics: freezeLineMetrics(substitution.lineMetrics) }
+          : {}),
+      })
+    );
   }
 
   const resolve = (requested: FontRequest): ResolvedFont | FontResolutionError => {
     const safeRequested = freezeRequest(requested);
     const requestedKey = fontRequestKey(safeRequested);
     const substituted = substitutions.get(requestedKey);
-    const resolvedRequest = substituted ?? safeRequested;
+    const resolvedRequest = substituted?.to ?? safeRequested;
     const stored = resources.get(fontRequestKey(resolvedRequest));
     if (!stored) return new FontResolutionError('missing', safeRequested);
     if (stored.kind === 'forbidden') {
@@ -543,7 +585,11 @@ export const createFontResourceSnapshot = (
       },
       trustedFontBytes(stored.font),
       trustedFontTableTags(stored.font),
-      { requested: safeRequested, resolved: substituted }
+      {
+        requested: safeRequested,
+        resolved: substituted.to,
+        ...(substituted.lineMetrics ? { lineMetrics: substituted.lineMetrics } : {}),
+      }
     );
   };
 

@@ -421,6 +421,113 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     editor.destroy();
   });
 
+  test('a rejected explicit face reveals a valid embedded face on the same request', async () => {
+    const malformed = new Uint8Array(4096).fill(0x42);
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docxWithEmbeds(p('embedded survives', 'Original Face'), [
+        { family: 'Original Face', slot: 'embedRegular', bytes: regularBytes },
+      ]),
+      fonts: {
+        sources: [
+          {
+            request: { family: 'Original Face', weight: 400, style: 'normal' },
+            id: 'rejected-explicit',
+            bytes: malformed,
+            hash: sha256FontBytes(malformed),
+            faceIndex: 0,
+          },
+        ],
+      },
+    });
+    await fontsSettled(editor);
+    expect(editor.fontMeasurement().measurer).toBe('shaped');
+    expect(editor.fontMeasurement().producer).toContain(sha256FontBytes(regularBytes));
+    editor.destroy();
+  });
+
+  test('over-limit explicit faces do not consume the embedded-font budget', async () => {
+    const oversized = new Uint8Array(8 * 1024 * 1024);
+    const oversizedHash = sha256FontBytes(oversized);
+    const explicitSources = Array.from({ length: 16 }, (_, index) => ({
+      request: { family: `Rejected ${index}`, weight: 400, style: 'normal' as const },
+      id: `over-limit-${index}`,
+      bytes: oversized,
+      hash: oversizedHash,
+      faceIndex: 0,
+    }));
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docxWithEmbeds(p('embedded budget'), [
+        { family: 'DejaVu Sans', slot: 'embedRegular', bytes: regularBytes },
+      ]),
+      fonts: { maxFontBytes: 1024 * 1024, sources: explicitSources },
+    });
+    await fontsSettled(editor);
+    expect(editor.fontMeasurement().measurer).toBe('shaped');
+    expect(editor.fontMeasurement().producer).toContain(sha256FontBytes(regularBytes));
+    editor.destroy();
+  });
+
+  test('an admitted embedded face suppresses its configured substitution report', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docxWithEmbeds(p('original', 'Original Face'), [
+        { family: 'Original Face', slot: 'embedRegular', bytes: regularBytes },
+      ]),
+      fonts: {
+        sources: [
+          {
+            request: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+            id: 'substitute-target',
+            bytes: regularBytes,
+            hash: sha256FontBytes(regularBytes),
+            faceIndex: 0,
+          },
+        ],
+        substitutions: [
+          {
+            from: { family: 'Original Face', weight: 400, style: 'normal' },
+            to: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+          },
+        ],
+      },
+    });
+    await fontsSettled(editor);
+    expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Original Face');
+    editor.destroy();
+  });
+
+  test('a refused embedded face restores its configured substitution report', async () => {
+    const corrupt = new Uint8Array(4096).fill(0x42);
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docxWithEmbeds(p('substitute', 'Original Face'), [
+        { family: 'Original Face', slot: 'embedRegular', bytes: corrupt },
+      ]),
+      fonts: {
+        sources: [
+          {
+            request: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+            id: 'substitute-target',
+            bytes: regularBytes,
+            hash: sha256FontBytes(regularBytes),
+            faceIndex: 0,
+          },
+        ],
+        substitutions: [
+          {
+            from: { family: 'Original Face', weight: 400, style: 'normal' },
+            to: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+          },
+        ],
+      },
+    });
+    await fontsSettled(editor);
+    expect(editor.snapshot().fontSubstitutions ?? []).toContain('Original Face');
+    editor.destroy();
+  });
+
   test('zero config + no embedded fonts stays fixed with no font work and no errors', async () => {
     const container = document.createElement('div');
     const errors: EditorFontError[] = [];

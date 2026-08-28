@@ -292,6 +292,9 @@ const freezeSubstitution = (
     ? Object.freeze({
         requested: freezeRequest(substitution.requested),
         resolved: freezeRequest(substitution.resolved),
+        ...(substitution.lineMetrics
+          ? { lineMetrics: Object.freeze({ ...substitution.lineMetrics }) }
+          : {}),
       })
     : undefined;
 

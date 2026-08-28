@@ -45,6 +45,37 @@ function resolvedFixture(): ResolvedFont {
   return result;
 }
 
+function resolvedSubstitute(): ResolvedFont {
+  const bytes = new Uint8Array(
+    readFileSync(new URL('./fixtures/fonts/DejaVuSans.ttf', import.meta.url))
+  );
+  const requested: FontRequest = { family: 'Original Face', weight: 400, style: 'normal' };
+  const snapshot = createFontResourceSnapshot({
+    epoch: 1,
+    maxFontBytes: 2_000_000,
+    resources: [
+      {
+        request: REQUEST,
+        id: 'dejavu-substitute',
+        bytes,
+        hash: sha256FontBytes(bytes),
+        faceIndex: 0,
+      },
+    ],
+    substitutions: [
+      {
+        from: requested,
+        to: REQUEST,
+        lineMetrics: { heightEm: 1.2, baselineEm: 0.95 },
+      },
+    ],
+    validateFont: harfBuzzFontValidator,
+  });
+  const result = snapshot.resolve(requested);
+  if (result instanceof FontResolutionError) throw result;
+  return result;
+}
+
 const font = resolvedFixture();
 const fallback = createFixedMeasurer(6, 14);
 
@@ -70,6 +101,12 @@ describe('line metrics come from the font, not from a multiplier (task 7.7)', ()
     expect(metrics.baseline).toBeGreaterThan(0);
     // The baseline is the ascent, so it is strictly inside the line.
     expect(metrics.baseline).toBeLessThan(metrics.height);
+  });
+
+  test('a metric substitute can preserve the requested face line box', () => {
+    const substitute = resolvedSubstitute();
+    const metrics = measurer(() => substitute).lineMetrics(style({ fontSizePt: 10 }));
+    expect(metrics).toEqual({ height: 12, baseline: 9.5 });
   });
 
   test('hhea lineGap is part of the Word line box, below the descent', () => {

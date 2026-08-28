@@ -497,6 +497,11 @@ export interface DeclaredFontSubstitution {
     // (undocumented)
     readonly from: FontRequest;
     // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
     readonly to: FontRequest;
 }
 
@@ -856,6 +861,11 @@ export type FontSlot = 'ascii' | 'hAnsi' | 'eastAsia' | 'cs';
 
 // @public
 export interface FontSubstitution {
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
     // (undocumented)
     readonly requested: FontRequest;
     // (undocumented)

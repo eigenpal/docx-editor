@@ -41,6 +41,7 @@ import { runObservedStoreTransaction } from '../store/package/canonical-primitiv
 import {
   ORIGIN_IDS,
   TreePackageStore,
+  readDeclaredFontMetadata,
   readEmbeddedFonts,
   readOoxmlPackage,
   resolveHeaderFooterParts,
@@ -406,24 +407,31 @@ export function openTreeSession(
   // which COPIES every deobfuscated part — runs at most once per session.
   const FONT_TABLE_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable';
-  let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
-  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
-    if (embeddedFontsCache) return embeddedFontsCache;
+  let fontTablePartResolved = false;
+  let fontTablePart: OoxmlPart | undefined;
+  const resolveFontTablePart = (): OoxmlPart | undefined => {
+    if (fontTablePartResolved) return fontTablePart;
+    fontTablePartResolved = true;
     const live = currentPackage();
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === FONT_TABLE_REL_TYPE
     );
-    let part: OoxmlPart | undefined;
     if (record) {
       const resolved = resolveRelationship(record);
       if (resolved.mode === 'Internal' && resolved.target.ok) {
-        part = live.parts.get(resolved.target.partName);
+        fontTablePart = live.parts.get(resolved.target.partName);
       }
     }
-    part ??= live.parts.get('/word/fontTable.xml');
-    embeddedFontsCache = Object.freeze(readEmbeddedFonts(live, part));
+    fontTablePart ??= live.parts.get('/word/fontTable.xml');
+    return fontTablePart;
+  };
+  let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
+  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
+    if (embeddedFontsCache) return embeddedFontsCache;
+    embeddedFontsCache = Object.freeze(readEmbeddedFonts(currentPackage(), resolveFontTablePart()));
     return embeddedFontsCache;
   };
+  const declaredFontMetadata = Object.freeze(readDeclaredFontMetadata(resolveFontTablePart()));
 
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
   let rendersTextCache: { readonly revision: number; readonly rendersText: boolean } | null = null;
@@ -748,6 +756,7 @@ export function openTreeSession(
         };
         return fontsCache.fonts;
       },
+      declaredFontMetadata: () => declaredFontMetadata,
 
       rendersText() {
         // Same revision key as `documentFonts`, and for the same reason: typing the first

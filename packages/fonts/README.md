@@ -66,6 +66,10 @@ all four static faces present, and the shaper's table checks passed. Variable-on
 families (Roboto, Arimo, Open Sans, …) are excluded, because the shaper refuses
 variation axes and a variable file would render bold at regular weight.
 
+If the catalog has no exact family, the resolver can rank a short candidate list.
+It uses validated PANOSE fields and normalized average advances from the candidate fonts.
+It refuses distant classifications instead of assigning an arbitrary text face.
+
 A fetching resolver makes opening a document perform network requests, and the CDN learns
 which families a document uses. The engine never supplies one, so opting in stays your call.
 `loadDefaultFonts()` remains the zero-network answer, and
@@ -73,7 +77,8 @@ which families a document uses. The engine never supplies one, so opting in stay
 
 Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes);
 `google:check` guards the committed file offline, `google:verify` re-checks it against
-the CDN.
+the CDN. Run `bun run check:font-width-fidelity` to compare privacy-safe synthetic
+strings against recorded Word advances and line metrics.
 
 ## Licenses
 

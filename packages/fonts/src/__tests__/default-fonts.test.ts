@@ -113,6 +113,10 @@ describe('loadDefaultFonts', () => {
       for (const [text, expectedWidth] of cases) {
         expect(measurer.measure(text, style)).toBeCloseTo(expectedWidth, 6);
       }
+      expect(measurer.lineMetrics(style)).toEqual({
+        height: 11.9140625,
+        baseline: 9.7119140625,
+      });
       const resolved = shaping.fonts.resolve({
         family: 'Century Gothic',
         weight: 400,

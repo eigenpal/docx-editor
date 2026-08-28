@@ -35,6 +35,36 @@ test('adapts the public byte-backed font configuration after async HarfBuzz init
   shaping.shaper.dispose();
 });
 
+test('substitution line metrics enter the operation fingerprint', async () => {
+  const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
+  const source = {
+    request: { family: 'DejaVu Sans', weight: 400, style: 'normal' } as const,
+    id: 'fingerprint-source',
+    bytes,
+    hash: sha256FontBytes(bytes),
+    faceIndex: 0,
+  };
+  const create = (heightEm: number) =>
+    createLayoutShaping({
+      epoch: 8,
+      maxFontBytes: 2_000_000,
+      sources: [source],
+      substitutions: [
+        {
+          from: { family: 'Original Face', weight: 400, style: 'normal' },
+          to: source.request,
+          lineMetrics: { heightEm, baselineEm: 0.9 },
+        },
+      ],
+      defaultFont: { family: 'Original Face', sizeHalfPoints: 20 },
+    });
+  const first = await create(1.1);
+  const second = await create(1.2);
+  expect(first.operation.extensionFingerprint).not.toBe(second.operation.extensionFingerprint);
+  first.shaper.dispose();
+  second.shaper.dispose();
+});
+
 test('samples and owns font bytes before asynchronous initialization yields', async () => {
   const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
   const hash = sha256FontBytes(bytes);

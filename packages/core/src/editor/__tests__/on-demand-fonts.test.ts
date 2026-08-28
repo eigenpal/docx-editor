@@ -17,6 +17,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { readFileSync } from 'node:fs';
 import type { EditorFontError } from '../../contracts/editor.ts';
 import { sha256FontBytes } from '../../layout/index.ts';
@@ -31,6 +32,27 @@ const regularBytes = new Uint8Array(
 /** A paragraph whose runs name `family`, so it lands in `documentFonts()`. */
 const runIn = (family: string, text: string) =>
   `<w:p><w:r><w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
+
+function withFontTable(bytes: Uint8Array, family: string, panose: string): Uint8Array {
+  const files = unzipSync(bytes);
+  files['[Content_Types].xml'] = strToU8(
+    strFromU8(files['[Content_Types].xml']!).replace(
+      '</Types>',
+      '<Override PartName="/word/fontTable.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.fontTable+xml"/></Types>'
+    )
+  );
+  files['word/_rels/document.xml.rels'] = strToU8(
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rIdFontTable" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable" Target="fontTable.xml"/>' +
+      '</Relationships>'
+  );
+  files['word/fontTable.xml'] = strToU8(
+    '<w:fonts xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      `<w:font w:name="${family}"><w:panose1 w:val="${panose}"/></w:font>` +
+      '</w:fonts>'
+  );
+  return zipSync(files);
+}
 
 const dejaVuFragment = {
   sources: [
@@ -70,6 +92,27 @@ describe('on-demand font resolution', () => {
     expect(seen[0]!.families).toContain('Garamond');
     expect(seen[0]!.families).toContain('Consolas');
     expect(seen[0]!.defaultFamily).toBe('Calibri');
+    expect(seen[0]!.metadata).toEqual([]);
+    editor.destroy();
+  });
+
+  test('the resolver receives validated font-table metadata', async () => {
+    const seen: FontResolutionRequest[] = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: withFontTable(
+        docx(runIn('Example Sans', 'metadata')),
+        'Example Sans',
+        '02000502050000020004'
+      ),
+      fonts: (request) => {
+        seen.push(request);
+        return undefined;
+      },
+    });
+    await fontsSettled(editor);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.metadata).toEqual([{ family: 'Example Sans', panose: '02000502050000020004' }]);
     editor.destroy();
   });
 
@@ -86,6 +129,44 @@ describe('on-demand font resolution', () => {
     expect(errors).toHaveLength(0);
     expect(editor.exec({ type: 'insertText', text: 'X' })).toEqual({ ok: true, changed: true });
     editor.destroy();
+  });
+
+  test('a rejected substitute target still reports the affected family', async () => {
+    const malformed = new Uint8Array(256).fill(0x42);
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+    (HTMLCanvasElement.prototype as { getContext: unknown }).getContext = () => ({
+      font: '',
+      measureText: (text: string) => ({ width: text.length * 10 }),
+    });
+    let editor: DocxEditorInstance | undefined;
+    try {
+      editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: docx(runIn('Definitely Missing Typeface', 'fallback')),
+        fonts: () => ({
+          sources: [
+            {
+              request: { family: 'Broken Target', weight: 400, style: 'normal' },
+              id: 'broken-substitute-target',
+              bytes: malformed,
+              hash: sha256FontBytes(malformed),
+              faceIndex: 0,
+            },
+          ],
+          substitutions: [
+            {
+              from: { family: 'Definitely Missing Typeface', weight: 400, style: 'normal' },
+              to: { family: 'Broken Target', weight: 400, style: 'normal' },
+            },
+          ],
+        }),
+      });
+      await fontsSettled(editor);
+      expect(editor.snapshot().fontSubstitutions ?? []).toContain('Definitely Missing Typeface');
+    } finally {
+      editor?.destroy();
+      (HTMLCanvasElement.prototype as { getContext: unknown }).getContext = originalGetContext;
+    }
   });
 
   test('what the resolver returns reaches shaped measurement', async () => {
@@ -112,6 +193,25 @@ describe('on-demand font resolution', () => {
     // once a document has been through it.
     expect(editor.getAvailableFonts()).toContain('DejaVu Sans');
     expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('DejaVu Sans');
+    editor.destroy();
+  });
+
+  test('a configured redirect remains visible in the substitution report', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(runIn('Brand Sans', 'substituted')),
+      fonts: () => ({
+        ...dejaVuFragment,
+        substitutions: [
+          {
+            from: { family: 'Brand Sans', weight: 400, style: 'normal' },
+            to: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+          },
+        ],
+      }),
+    });
+    await fontsSettled(editor);
+    expect(editor.snapshot().fontSubstitutions ?? []).toContain('Brand Sans');
     editor.destroy();
   });
 

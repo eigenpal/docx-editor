@@ -136,15 +136,43 @@ describe('font resource contracts', () => {
       epoch: 4,
       maxFontBytes: 64,
       resources: [source(replacement)],
-      substitutions: [{ from: regular, to: replacement }],
+      substitutions: [
+        {
+          from: regular,
+          to: replacement,
+          lineMetrics: { heightEm: 1.2, baselineEm: 0.9 },
+        },
+      ],
       validateFont: boundedStructuralFontValidator,
     });
 
     const result = snapshot.resolve(regular);
     expect(result).not.toBeInstanceOf(FontResolutionError);
     if (result instanceof FontResolutionError) throw result;
-    expect(result.substitution).toEqual({ requested: regular, resolved: replacement });
+    expect(result.substitution).toEqual({
+      requested: regular,
+      resolved: replacement,
+      lineMetrics: { heightEm: 1.2, baselineEm: 0.9 },
+    });
     expect(result.family).toBe(replacement.family);
+  });
+
+  test('rejects unbounded substitution line metrics', () => {
+    expect(() =>
+      createFontResourceSnapshot({
+        epoch: 4,
+        maxFontBytes: 64,
+        resources: [source(replacement)],
+        substitutions: [
+          {
+            from: regular,
+            to: replacement,
+            lineMetrics: { heightEm: Number.POSITIVE_INFINITY, baselineEm: 0.9 },
+          },
+        ],
+        validateFont: boundedStructuralFontValidator,
+      })
+    ).toThrow(RangeError);
   });
 
   test('rejects over-limit resources before font validation', () => {

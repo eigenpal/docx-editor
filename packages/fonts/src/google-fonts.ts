@@ -45,10 +45,8 @@
 // That is inherent to fetching them, which is why nothing here is a default: an app opts
 // in by passing `googleFonts()`, and `defaultFonts()` stays the zero-network answer.
 //
-// Metric compatibility is the reason the substitution maps are short. Carlito/Caladea/
-// Tinos/Cousine have the same advance widths as the Word faces they stand in for. A second
-// internal map records substitutes that pass a measured width gate without claiming exact
-// compatibility. Anything else stays with the app's own `substitute` map.
+// Metric compatibility is the reason the explicit substitution map is short. For another
+// family, validated PANOSE metadata can rank a closed set of measured candidates.
 
 import {
   GOOGLE_FONTS_REVISION,
@@ -79,13 +77,59 @@ export const GOOGLE_METRIC_SUBSTITUTES: Readonly<Record<string, string>> = Objec
   'Courier New': 'Cousine',
 });
 
-/**
- * Recorded fidelity substitutes are close enough for the measured Word strings, but do
- * not claim the identical metrics promised by {@link GOOGLE_METRIC_SUBSTITUTES}.
- */
-const GOOGLE_WIDTH_FIDELITY_SUBSTITUTES: Readonly<Record<string, string>> = Object.freeze({
-  'Century Gothic': 'Montserrat',
-});
+interface MetricCandidate {
+  readonly family: string;
+  readonly panose: string;
+  readonly averageAdvanceEm: number;
+}
+
+/** Static catalog faces measured during substitute selection. */
+const METRIC_CANDIDATES: readonly MetricCandidate[] = Object.freeze([
+  { family: 'B612', panose: '020b0606050000020004', averageAdvanceEm: 0.6435 },
+  { family: 'Fira Sans', panose: '020b0503050000020004', averageAdvanceEm: 0.558 },
+  { family: 'Lato', panose: '020f0502020204030203', averageAdvanceEm: 0.554 },
+  { family: 'Nobile', panose: '02000503050000020004', averageAdvanceEm: 0.4794921875 },
+]);
+
+const PANOSE_FIELD_WEIGHTS = [12, 8, 3, 6, 2, 1, 1, 1, 1, 1] as const;
+const MAX_METRIC_DISTANCE = 40;
+const AVERAGE_ADVANCE_BY_PROPORTION = new Map<number, number>([
+  [2, 0.49],
+  [3, 0.54],
+  [4, 0.6],
+  [5, 0.66],
+  [6, 0.45],
+  [7, 0.72],
+  [8, 0.4],
+  [9, 0.6],
+]);
+
+function panoseBytes(value: string): readonly number[] | null {
+  if (!/^[0-9a-f]{20}$/.test(value)) return null;
+  return Array.from({ length: 10 }, (_, index) =>
+    Number.parseInt(value.slice(index * 2, index * 2 + 2), 16)
+  );
+}
+
+function metricDistance(sourcePanose: string, candidate: MetricCandidate): number {
+  const source = panoseBytes(sourcePanose);
+  const target = panoseBytes(candidate.panose);
+  if (!source || !target || source[0]! <= 1 || source[0] !== target[0]) {
+    return Number.POSITIVE_INFINITY;
+  }
+  let score = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    const left = source[index]!;
+    const right = target[index]!;
+    if (left <= 1 || right <= 1) continue;
+    score += Math.abs(left - right) * PANOSE_FIELD_WEIGHTS[index]!;
+  }
+  const expectedAdvance = AVERAGE_ADVANCE_BY_PROPORTION.get(source[3]!);
+  if (expectedAdvance !== undefined) {
+    score += Math.abs(candidate.averageAdvanceEm - expectedAdvance) * 100;
+  }
+  return score;
+}
 
 /**
  * One catalogued face that did not arrive. Non-fatal: the resolver returns whatever else
@@ -113,8 +157,7 @@ export interface GoogleFontsOptions {
    */
   readonly allow?: readonly string[];
   /**
-   * Extra document-family -> catalog-family mappings, merged over the built-in metric and
-   * measured-width maps. Only metric-compatible pairs guarantee Word-accurate pagination.
+   * Extra document-family -> catalog-family mappings, merged over the built-in metric map.
    */
   readonly substitute?: Readonly<Record<string, string>>;
   /** Injectable for tests and CSP-constrained hosts; defaults to global `fetch`. */
@@ -141,6 +184,23 @@ const catalogByFamily = ((): ReadonlyMap<string, readonly GoogleFontFace[]> => {
   }
   return byFamily;
 })();
+
+function closestMetricCandidate(
+  panose: string,
+  allowed: ReadonlySet<string> | null
+): readonly GoogleFontFace[] | undefined {
+  let best: { readonly score: number; readonly faces: readonly GoogleFontFace[] } | null = null;
+  for (const candidate of METRIC_CANDIDATES) {
+    if (allowed && !allowed.has(candidate.family.toLowerCase())) continue;
+    const faces = catalogByFamily.get(candidate.family.toLowerCase());
+    if (!faces) continue;
+    const score = metricDistance(panose, candidate);
+    if (score <= MAX_METRIC_DISTANCE && (best === null || score < best.score)) {
+      best = { score, faces };
+    }
+  }
+  return best?.faces;
+}
 
 /**
  * Bytes already fetched this session, keyed by pinned URL — and PER FETCHER.
@@ -202,6 +262,7 @@ export function googleFonts(
 ): (request: {
   readonly families: readonly string[];
   readonly defaultFamily: string;
+  readonly metadata?: readonly { readonly family: string; readonly panose?: string }[];
 }) => Promise<GoogleFontsFragment> {
   const fetcher = options.fetcher ?? fetch;
   /**
@@ -217,11 +278,9 @@ export function googleFonts(
    * all while `Calibri` resolved to four faces.
    */
   const substitutes = new Map<string, string>(
-    Object.entries({
-      ...GOOGLE_METRIC_SUBSTITUTES,
-      ...GOOGLE_WIDTH_FIDELITY_SUBSTITUTES,
-      ...options.substitute,
-    }).map(([from, to]) => [from.toLowerCase(), to] as const)
+    Object.entries({ ...GOOGLE_METRIC_SUBSTITUTES, ...options.substitute }).map(
+      ([from, to]) => [from.toLowerCase(), to] as const
+    )
   );
   const allowed = options.allow
     ? new Set(options.allow.map((family) => family.toLowerCase()))
@@ -234,12 +293,19 @@ export function googleFonts(
     const wanted = new Map<string, readonly GoogleFontFace[]>();
     const substitutions: DefaultFontSubstitution[] = [];
     const failures: GoogleFontLoadFailure[] = [];
+    const metadata = new Map(
+      (request.metadata ?? [])
+        .slice(0, 64)
+        .map((entry) => [entry.family.toLowerCase(), entry] as const)
+    );
 
     for (const declared of [request.defaultFamily, ...request.families]) {
       const target = substitutes.get(declared.toLowerCase()) ?? declared;
-      const faces = catalogByFamily.get(target.toLowerCase());
+      let faces = catalogByFamily.get(target.toLowerCase());
+      if (faces && allowed && !allowed.has(faces[0]!.family.toLowerCase())) continue;
+      const panose = metadata.get(declared.toLowerCase())?.panose;
+      if (!faces && panose) faces = closestMetricCandidate(panose, allowed);
       if (!faces) continue;
-      if (allowed && !allowed.has(target.toLowerCase())) continue;
       wanted.set(faces[0]!.family, faces);
       // Only when the document's own name differs from the face being loaded: a run
       // saying "Carlito" needs the bytes, not a Carlito -> Carlito redirect.

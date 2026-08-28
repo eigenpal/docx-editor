@@ -40,6 +40,7 @@ import { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import { FontConfigurationBase } from '@docx-editor.dev/core/editor';
 import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { FontFaceRequest } from '@docx-editor.dev/core/contracts/editor';
+import { FontFamilyMetadata } from '@docx-editor.dev/core/editor';
 import { FontLoadFailure } from '@docx-editor.dev/core/editor';
 import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
 import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
@@ -1034,6 +1035,8 @@ export { FontFaceRequest }
 export interface FontFamilyItemProps extends FontFamilyPartProps {
     value: string;
 }
+
+export { FontFamilyMetadata }
 
 // @public
 export interface FontFamilyNamespace {

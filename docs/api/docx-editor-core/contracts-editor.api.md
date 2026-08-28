@@ -1176,6 +1176,10 @@ export interface FontSource {
 export interface FontSourceSubstitution {
     // (undocumented)
     readonly from: FontFaceRequest;
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
     // (undocumented)
     readonly to: FontFaceRequest;
 }

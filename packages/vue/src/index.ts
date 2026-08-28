@@ -377,6 +377,7 @@ export {
   loadFonts,
   type FontConfigurationBase,
   type FontConfigurationFragment,
+  type FontFamilyMetadata,
   type FontLoadFailure,
   type FontLoadFailureReason,
   type FontResolutionRequest,
