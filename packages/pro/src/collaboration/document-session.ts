@@ -120,6 +120,9 @@ class DocumentSession implements DocumentCollaborationSession {
   private detachPort: (() => void) | null = null;
   private applyingRemote = false;
   private realignedInBatch = false;
+  /** Journals a `change` subscriber committed while a remote install ran. Never dropped. */
+  private readonly journalsHeldDuringRemote: CanonicalPrimitiveJournal[] = [];
+  private drainingHeldJournals = false;
   private remoteCounter = 0;
   private destroyed = false;
   private refusedInARow = 0;
@@ -237,7 +240,17 @@ class DocumentSession implements DocumentCollaborationSession {
     this.port = port;
     this.publishSharedToPort();
     const stopJournal = port.observePrimitiveJournal((journal) => {
-      if (this.destroyed || this.applyingRemote) return;
+      if (this.destroyed) return;
+      // A `change` subscriber that transacts while this session installs a remote package
+      // commits its edit locally and publishes its journal into this window. Dropping it
+      // here left that edit on this replica alone — never replicated, never refused, status
+      // `ready` — which is the silent divergence a refusal exists to prevent. The journal is
+      // held instead and applied the moment the install finishes; see the drain in
+      // `publishSharedToPort` for why its positions stay sound.
+      if (this.applyingRemote) {
+        this.journalsHeldDuringRemote.push(journal);
+        return;
+      }
       // A realign already took shared state back over this store, so every journal still queued
       // behind the refused one describes edits the store no longer holds. Applying them would
       // push content to the room that this author cannot see locally. The refusal status reports
@@ -658,6 +671,42 @@ class DocumentSession implements DocumentCollaborationSession {
       );
     } finally {
       this.applyingRemote = false;
+      this.drainJournalsHeldDuringRemote();
+    }
+  }
+
+  /**
+   * Apply the journals a `change` subscriber committed while the remote install ran.
+   *
+   * Their positions are sound: each was diffed against the tree AFTER
+   * `installAuthoritativePackageSnapshot`, and shared state equals that tree here because the
+   * whole `applyingRemote` window is synchronous — no other shared write can interleave.
+   * Draining after the `finally` also means `identityMap.reset()` has already run, and
+   * `applyJournal` translates at apply time, so freshly minted canonical ids map correctly.
+   * Re-entry is blocked by the `applyingRemote` guard, so the buffer never outlives the
+   * publish call that filled it.
+   *
+   * A refusal mid-drain realigns the store, which invalidates the rest of the buffer the
+   * same way it abandons the rest of a flush batch — those journals describe edits the
+   * realign just took back, so they are cleared, and the refusal status reports the loss.
+   * The re-entrancy guard is what makes that work: the realign's own publish ends before
+   * `realignedInBatch` is set, so an unguarded drain would consume the remaining buffer in
+   * that gap and push the very content the realign took back.
+   */
+  private drainJournalsHeldDuringRemote(): void {
+    if (this.drainingHeldJournals) return;
+    this.drainingHeldJournals = true;
+    try {
+      while (this.journalsHeldDuringRemote.length > 0) {
+        if (this.destroyed || this.realignedInBatch) {
+          this.journalsHeldDuringRemote.length = 0;
+          return;
+        }
+        const journal = this.journalsHeldDuringRemote.shift();
+        if (journal) this.applyJournal(journal);
+      }
+    } finally {
+      this.drainingHeldJournals = false;
     }
   }
 

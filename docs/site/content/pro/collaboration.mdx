@@ -590,6 +590,28 @@ See the
 [server-backed Hocuspocus example](https://github.com/eigenpal/docx-editor/tree/main/examples/collaboration-hocuspocus)
 for persistence and DOCX export.
 
+## The room is the document
+
+While a room is live, the room holds the authoritative copy. An exported `.docx`
+file is a snapshot of the room at one moment, not a branch of it.
+
+A file edited outside the room cannot merge back in. Seeding the edited file
+creates a new room with new identity, and no three-way merge exists between a
+room and an external copy. This is the same rule the
+[recovery flow](#recover-a-diverged-replica) applies within a room: when two
+copies disagree, the room copy wins.
+
+Keep one authority per document at a time:
+
+- While people collaborate, treat the room as the document. Export snapshots for
+  backup, indexing, or review, and treat them as read-only.
+- When collaboration ends, export the room and make the file the authority
+  again.
+- To bring external edits into a live room, apply them as edits inside the room
+  — for example, paste the changed content — rather than re-seeding the file.
+- To restart collaboration on an externally edited file, create a new room from
+  those bytes and retire the old room.
+
 ## Use the replication contracts
 
 `@docx-editor.dev/core/collaboration/replication` holds the seam a replication
