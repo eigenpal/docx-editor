@@ -127,4 +127,42 @@ describe('concurrent run-format convergence (#581)', () => {
     expect(bodyText(bob)).toBe(PARA0 + PARA1);
     expect(markCount(bob, 'b')).toBe(1);
   });
+
+  test('undo of a converged concurrent split does not re-double the text', async () => {
+    // The dropped runs are only skipped, never removed. Undo restores the origin run, so the
+    // dropped set would resurface next to it and re-manifest the duplication unless the origin
+    // being live suppresses them again. Both the peer that undoes and one joining afterward must
+    // agree on the single text.
+    const { alice, bob } = await race(
+      (peer) => runProps(peer, 0, 0, 5, 'b'),
+      (peer) => runProps(peer, 0, 3, 9, 'i')
+    );
+    expect(alice.room.session.undo()).toBe(true);
+    alice.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+    expect(bodyText(alice)).toBe(PARA0 + PARA1);
+    const carol = await harness.join(alice, 'carol');
+    harness.expectConverged(alice, carol);
+    expect(bodyText(carol)).toBe(PARA0 + PARA1);
+  });
+
+  test('concurrent typing and formatting converges without duplicating text', async () => {
+    // The dedup keeps a loser only when its text matches the winner's, so a run a peer grew by
+    // typing is never dropped as a duplicate. This peer's insert grows the origin run in place
+    // rather than splitting it, so the split still discards the typed characters when it copies
+    // the origin (issue #590, a separate concurrency gap); what this pins is that the dedup does
+    // not compound it — the peers converge and the text is not doubled.
+    const { alice, bob } = await race(
+      (peer) => runProps(peer, 0, 0, 5, 'b'),
+      (peer): TreeDocOp => ({
+        op: 'insertText',
+        paragraphId: harness.paragraphIdAt(peer, 0),
+        offset: 15,
+        text: 'ZZZ',
+      })
+    );
+    // Converged (asserted by race), and the base text appears once, not doubled.
+    expect(bodyText(alice)).toBe(PARA0 + PARA1);
+    expect(bodyText(bob)).toBe(PARA0 + PARA1);
+  });
 });

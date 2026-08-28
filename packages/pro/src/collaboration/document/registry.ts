@@ -8,6 +8,7 @@ import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaborat
 import { partNameKey } from '@docx-editor.dev/core/store';
 import { yjsItemKey, type LogicalId, type NodeIdentityMeta, wordFacingIdsOf } from './identity.ts';
 import { SplitDedupIndex } from './split-dedup.ts';
+import { runGroupText, runIsPresent } from './run-text-reads.ts';
 import {
   DEFAULT_DOCUMENT_LIMITS,
   mergeLimits,
@@ -490,7 +491,10 @@ export class DocumentRegistry {
 
   /** Runs a concurrent format split superseded and this replica must not materialize (#581). */
   replacementLoserRuns(): ReadonlySet<LogicalId> {
-    return this.splitDedup.loserRuns((id) => this.isTombstoned(id));
+    return this.splitDedup.loserRuns({
+      isPresent: (id) => runIsPresent(this, id),
+      groupText: (runIds) => runGroupText(this, runIds, this.limits.maxTreeDepth),
+    });
   }
 
   /**
