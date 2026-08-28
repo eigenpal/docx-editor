@@ -31,6 +31,8 @@ import {
   makeRelationshipEntry,
   makeTextRecord,
   namespaceUriOf,
+  nodeRecordReplacedBy,
+  nodeRecordTombstoned,
   packNodeShell,
   packageSchemaOf,
   parseAttributeMapKey,
@@ -234,7 +236,9 @@ export class DocumentRegistry {
   record(logicalId: LogicalId): SharedRecord | null {
     if (rejectDangerousKey(logicalId)) return null;
     const rec = this.schema.nodes.get(logicalId);
-    if (!rec) return null;
+    // A peer can plant a scalar in the nodes map; treat it as no such node rather than
+    // reading a field off it inside the materializer.
+    if (!isNodeMap(rec)) return null;
     if (isTextNodeMap(rec)) {
       const text = rec.get(NODE_TEXT_FIELD);
       const value = text instanceof Y.Text ? text.toString() : '';
@@ -260,12 +264,11 @@ export class DocumentRegistry {
   }
 
   isTombstoned(logicalId: LogicalId): boolean {
-    return this.schema.nodes.get(logicalId)?.get(NODE_DELETED_FIELD) === true;
+    return nodeRecordTombstoned(this.schema.nodes.get(logicalId));
   }
 
   replacedByOf(logicalId: LogicalId): LogicalId | null {
-    const value = this.schema.nodes.get(logicalId)?.get(NODE_REPLACED_BY_FIELD);
-    return typeof value === 'string' && value.length > 0 ? value : null;
+    return nodeRecordReplacedBy(this.schema.nodes.get(logicalId));
   }
 
   adoptedChildren(survivorId: LogicalId): readonly LogicalId[] {
@@ -669,7 +672,7 @@ export class DocumentRegistry {
       for (const childId of childIds) this.addListing(childId, parentId);
     });
     this.schema.nodes.forEach((rec, id) => {
-      if (rec.get(NODE_DELETED_FIELD) === true) this.syncAdoptee(id);
+      if (nodeRecordTombstoned(rec)) this.syncAdoptee(id);
     });
     this.schema.attributes.forEach((packed, key) => {
       if (typeof packed !== 'string' || rejectDangerousKey(key)) return;
@@ -900,9 +903,9 @@ export class DocumentRegistry {
       }
     }
     const rec = this.schema.nodes.get(removedId);
-    const survivor = rec?.get(NODE_REPLACED_BY_FIELD);
-    if (typeof survivor !== 'string' || survivor.length === 0) return;
-    if (rec?.get(NODE_DELETED_FIELD) === true) {
+    const survivor = nodeRecordReplacedBy(rec);
+    if (survivor === null) return;
+    if (nodeRecordTombstoned(rec)) {
       const sources = this.tombstoneSources.get(survivor) ?? new Set<LogicalId>();
       sources.add(removedId);
       this.tombstoneSources.set(survivor, sources);

@@ -19,6 +19,7 @@ import {
   NODE_SHELL_FIELD,
   NODE_TEXT_FIELD,
   childArrayOf,
+  isNodeMap,
   isTextNodeMap,
   unpackNodeShell,
 } from './schema.ts';
@@ -33,7 +34,8 @@ export interface NodeShape {
 /** One node's class, text length and child ids. `children` is fresh, so callers may splice it. */
 export function nodeShapeOf(nodes: Y.Map<Y.Map<unknown>>, logicalId: string): NodeShape | null {
   const rec = nodes.get(logicalId);
-  if (!rec) return null;
+  // The nodes map is peer-writable; a scalar value is not a node.
+  if (!isNodeMap(rec)) return null;
   if (isTextNodeMap(rec)) {
     // `Y.Text.length` is a counter. `toString()` builds the whole paragraph to measure it.
     const text = rec.get(NODE_TEXT_FIELD);
@@ -45,7 +47,7 @@ export function nodeShapeOf(nodes: Y.Map<Y.Map<unknown>>, logicalId: string): No
 /** One node's kind, without building its text or its attribute arrays. */
 export function nodeKindOf(nodes: Y.Map<Y.Map<unknown>>, logicalId: string): string | null {
   const rec = nodes.get(logicalId);
-  if (!rec) return null;
+  if (!isNodeMap(rec)) return null;
   if (isTextNodeMap(rec)) return 'textValue';
   const shell = rec.get(NODE_SHELL_FIELD);
   return unpackNodeShell(typeof shell === 'string' ? shell : '').kind;

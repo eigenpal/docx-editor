@@ -430,15 +430,33 @@ export function writeSchemaVersions(meta: Y.Map<unknown>): void {
   meta.set('initialized', true);
 }
 
-export function childArrayOf(record: Y.Map<unknown>): Y.Array<string> | null {
+export function isNodeMap(value: unknown): value is Y.Map<unknown> {
+  return value instanceof Y.Map;
+}
+
+// The nodes map is peer-writable, so a value read from it is attacker-controlled: a hostile
+// update can plant a scalar where a record belongs. Every reader below takes `unknown` and
+// treats a non-map as "no such node", so a crafted shape degrades to an absent node rather
+// than crashing the observer or the materializer mid-`applyUpdate`.
+
+export function childArrayOf(record: unknown): Y.Array<string> | null {
+  if (!isNodeMap(record)) return null;
   const children = record.get(NODE_CHILDREN_FIELD);
   return children instanceof Y.Array ? children : null;
 }
 
-export function isTextNodeMap(record: Y.Map<unknown>): boolean {
-  return record.get(NODE_TEXT_FIELD) instanceof Y.Text;
+export function isTextNodeMap(record: unknown): boolean {
+  return isNodeMap(record) && record.get(NODE_TEXT_FIELD) instanceof Y.Text;
 }
 
-export function isNodeMap(value: unknown): value is Y.Map<unknown> {
-  return value instanceof Y.Map;
+/** True only when `record` is a node map flagged tombstoned. A non-map reads as not-a-node. */
+export function nodeRecordTombstoned(record: unknown): boolean {
+  return isNodeMap(record) && record.get(NODE_DELETED_FIELD) === true;
+}
+
+/** The survivor a tombstone names, or null when `record` is not a node map or names none. */
+export function nodeRecordReplacedBy(record: unknown): string | null {
+  if (!isNodeMap(record)) return null;
+  const value = record.get(NODE_REPLACED_BY_FIELD);
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }

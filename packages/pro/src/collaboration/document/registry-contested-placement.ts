@@ -20,7 +20,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * is decided by the same first-preorder rule.
  */
 
-import { NODE_DELETED_FIELD, childArrayOf, type PackageSchema } from './schema.ts';
+import { childArrayOf, isNodeMap, nodeRecordTombstoned, type PackageSchema } from './schema.ts';
 import type { LogicalId } from './identity.ts';
 
 export interface ContestContext {
@@ -48,14 +48,13 @@ function compareRanks(left: Rank, right: Rank): number {
 function childrenOf(ctx: ContestContext, id: LogicalId): readonly LogicalId[] {
   const snapshot = ctx.childrenSnapshot.get(id);
   if (snapshot) return snapshot;
-  const rec = ctx.nodes.get(id);
-  return rec ? (childArrayOf(rec)?.toArray() ?? []) : [];
+  return childArrayOf(ctx.nodes.get(id))?.toArray() ?? [];
 }
 
-/** A node the walk would not iterate: missing from shared state, or tombstoned. */
+/** A node the walk would not iterate: missing from shared state, malformed, or tombstoned. */
 function isDead(ctx: ContestContext, id: LogicalId): boolean {
   const rec = ctx.nodes.get(id);
-  return !rec || rec.get(NODE_DELETED_FIELD) === true;
+  return !isNodeMap(rec) || nodeRecordTombstoned(rec);
 }
 
 /**
@@ -189,7 +188,7 @@ export function assignFirstReachableParents(
       }
       if (path.has(id)) continue;
       const rec = nodes.get(id);
-      if (!rec || rec.get(NODE_DELETED_FIELD) === true) continue;
+      if (!isNodeMap(rec) || nodeRecordTombstoned(rec)) continue;
       const children = childrenSnapshot.get(id) ?? childArrayOf(rec)?.toArray() ?? [];
       path.add(id);
       stack.push({ id, parent: null, exit: true });
