@@ -229,6 +229,34 @@ describe('consecutive cell paragraphs with identical borders are ONE bordered bl
     );
   });
 
+  test('the LOWER paragraph of a group opens its side rules at the fragment top', () => {
+    // The other half of the run-through, and it needs its OWN fixture. `w:after` on both
+    // paragraphs collapses the second's applied before-spacing to zero
+    // (`collapsedSpaceBefore(before, prevAfter)` is `max(before, prevAfter) - prevAfter`), so
+    // the second fragment's `top` and its first line coincide and the two candidate origins
+    // for its side rules are indistinguishable. `w:before` with no `w:after` above it is what
+    // pulls them apart: the rule has to start at the FRAGMENT top, 12pt above the text, or
+    // the outline breaks open at every interior boundary.
+    const LEAD = '<w:spacing w:before="240" w:after="0"/>';
+    const fragments = cellParagraphs(
+      lay(oneCellTable(paragraph('first', LEAD + BOX) + paragraph('second', LEAD + BOX)))
+    );
+    expect(fragments).toHaveLength(2);
+    const lower = stroke(fragments[1]!, 'left');
+    const lowerFirstLine = fragments[1]!.lines[0]!;
+    // The before-spacing is real and belongs to the second paragraph.
+    expect(lowerFirstLine.box.y - lower.box.y).toBeCloseTo(12, 6);
+    // And it is the fragment top the rule opens at, not some other point above the text.
+    expect(lower.box.y).toBeCloseTo(fragments[1]!.box.y, 6);
+    // Still one outline: the upper rule closes exactly where the lower one opens.
+    const upper = stroke(fragments[0]!, 'left');
+    expect(upper.box.y + upper.box.height).toBeCloseTo(lower.box.y, 6);
+    // The FIRST paragraph of a group is not affected: it opens at its own top rule, which is
+    // above its text by the box's `w:space` and stroke, not by the before-spacing.
+    const upperTop = stroke(fragments[0]!, 'top');
+    expect(upper.box.y).toBeCloseTo(upperTop.box.y, 6);
+  });
+
   test('an interior boundary carries w:between when the run declares one', () => {
     const withBetween =
       '<w:pBdr>' +

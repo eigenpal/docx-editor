@@ -204,8 +204,26 @@ export function combineStyleToggles(levels: readonly StyleToggleLevel[]): readon
     for (const [localName, on] of levelValues) {
       const state = resolved.get(localName);
       if (level.role === 'direct') {
-        // Absolute, both ways: direct formatting is read before the levels are combined at
-        // all, so neither the parity below it nor the defaults' short circuit reaches it.
+        // The value SETS the state, on or off, and takes the document defaults' short circuit
+        // down with it. That is §17.7.3's first bullet for the piece of content this level is
+        // direct formatting FOR.
+        //
+        // `forced: false` on purpose, and it is the one deliberate departure from `main` in
+        // this change. The paragraph MARK's `w:pPr/w:rPr` is direct formatting for the mark,
+        // and `resolveRunStyle(markRunProperties)` reads it that way — absolute. But
+        // `list-resolve.ts` then uses that same resolved list as the INHERITED base for the
+        // numbering marker, and the marker is a different piece of content: its own direct
+        // formatting is the numbering level's `w:rPr`, which is appended last and is absolute.
+        // The mark's value reaches the marker as ordinary inherited state, so a character
+        // style the numbering level names combines with it as a level. A mark `<w:b/>` under a
+        // bold character style therefore resolves the MARKER regular, where `main` — which
+        // resolved every toggle by last-wins — made it bold.
+        //
+        // `forced: true` is not the alternative it looks like. `forced` means "pinned TRUE",
+        // not "pinned": measured, it leaves a mark `<w:b/>` bold as intended but also turns a
+        // mark `<w:b w:val="0"/>` ON under the same character style. Pinning direct formatting
+        // in both directions needs a flag this model does not have, and would pin the mark
+        // against a character style the mark has no relationship with.
         resolved.set(localName, { value: on, forced: false });
       } else if (!on) {
         // An explicit off IS this level's value: it sets the state and outranks a true

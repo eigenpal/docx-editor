@@ -406,9 +406,34 @@ describe('toggle properties combine across the levels of the style hierarchy', (
       );
       const rStyle = [{ localName: 'rStyle', attributes: { val: 'Chr' } }];
       // The mark stated `on` directly, so the character level's `on` REVERSES it to regular.
+      //
+      // DELIBERATE, and the one place this change departs from `main`, which resolved every
+      // toggle by last-wins and made this bold. The mark's `w:rPr` is direct formatting for
+      // the MARK — and it is absolute there, asserted below — but the numbering marker is a
+      // different piece of content that merely INHERITS the mark's resolved state. See the
+      // `direct` branch in `style-toggles.ts` for why `forced: true` is not the alternative
+      // it looks like.
       expect(
         resolveRunStyle(cascadeRunProperties(cascaded.markRunProperties, rStyle, table)).bold
       ).toBe(false);
+      // Absolute where §17.7.3 says it is: read on its own, the mark keeps what it stated.
+      expect(resolveRunStyle(cascaded.markRunProperties).bold).toBe(true);
+      // And the MARKER's own direct formatting — the numbering level's `w:rPr`, which
+      // `list-resolve.ts` passes as the direct argument — still outranks every level.
+      expect(
+        resolveRunStyle(
+          cascadeRunProperties(
+            cascaded.markRunProperties,
+            [...rStyle, { localName: 'b', attributes: { val: '0' } }],
+            table
+          )
+        ).bold
+      ).toBe(false);
+      expect(
+        resolveRunStyle(
+          cascadeRunProperties(cascaded.markRunProperties, [...rStyle, { localName: 'b' }], table)
+        ).bold
+      ).toBe(true);
       // The paragraph text never met direct formatting, so the defaults still force it true
       // and the same character level cannot reverse it. Two different answers from one
       // document is the point: they prove the mark's `forced` was cleared and the text's was
