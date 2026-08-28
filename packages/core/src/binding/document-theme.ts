@@ -10,6 +10,7 @@
 // receive values this module has already bounded.
 
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { collectThemeColorScheme } from '../store/package/theme-color-resolution.ts';
 
 /**
  * The scheme slots the picker shows, in Word's column order.
@@ -38,14 +39,6 @@ export interface DocumentThemeColorEntry {
   readonly hex: string;
 }
 
-const HEX_COLOR = /^[0-9A-Fa-f]{6}$/;
-
-/** `a:sysClr` values when `lastClr` is absent — the OS colours Word resolves them to. */
-const SYS_COLOR_DEFAULTS: Record<string, string> = {
-  windowText: '000000',
-  window: 'FFFFFF',
-};
-
 function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
 }
@@ -73,27 +66,6 @@ function elementChild(parent: OoxmlElement, localName?: string): OoxmlElement | 
     if (localName === undefined || child.localName === localName) return child;
   }
   return null;
-}
-
-/** The hex a scheme slot resolves to: `a:srgbClr@val`, or `a:sysClr` via `lastClr`. */
-function slotHex(slot: OoxmlElement): string | null {
-  const color = elementChild(slot);
-  if (!color) return null;
-  let raw: string | undefined;
-  if (color.localName === 'srgbClr') {
-    raw = attributeValue(color, 'val');
-  } else if (color.localName === 'sysClr') {
-    // Guarded lookup: the `val` is file content, and a key like `__proto__` must
-    // answer undefined rather than a prototype member.
-    const sys = attributeValue(color, 'val') ?? '';
-    raw =
-      attributeValue(color, 'lastClr') ??
-      (Object.prototype.hasOwnProperty.call(SYS_COLOR_DEFAULTS, sys)
-        ? SYS_COLOR_DEFAULTS[sys]
-        : undefined);
-  }
-  if (raw === undefined || !HEX_COLOR.test(raw)) return null;
-  return raw.toUpperCase();
 }
 
 /** The theme's two font slots, for resolving `w:rFonts` theme attributes. */
@@ -138,14 +110,11 @@ export function collectDocumentThemeFonts(themeRoot: OoxmlElement | null): Docum
 export function collectDocumentThemeColors(
   themeRoot: OoxmlElement | null
 ): readonly DocumentThemeColorEntry[] {
-  if (!themeRoot) return [];
-  const scheme = findElement(themeRoot, 'clrScheme');
-  if (!scheme) return [];
+  const scheme = collectThemeColorScheme(themeRoot);
   const entries: DocumentThemeColorEntry[] = [];
   for (const slot of PICKER_SLOTS) {
-    const element = elementChild(scheme, slot);
-    const hex = element ? slotHex(element) : null;
-    if (hex === null) return [];
+    const hex = scheme.get(slot);
+    if (!hex) return [];
     entries.push({ slot, hex });
   }
   return entries;

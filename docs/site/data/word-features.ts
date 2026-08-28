@@ -563,7 +563,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Charts, groups, canvases, and custom geometry reserve their extent with a placeholder. Unsupported payloads stay generic in the canonical tree.',
+      'Solid rectangles, ellipses, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. Other payloads reserve their extent with a placeholder.',
   },
   {
     id: 'images.crop',

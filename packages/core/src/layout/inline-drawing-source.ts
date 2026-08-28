@@ -32,6 +32,7 @@ import {
   retainValidatedImageBytes,
   type ValidatedImageBytesReleaseToken,
 } from '../store/package/validated-image-bytes.ts';
+import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 
@@ -174,6 +175,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
   const anchor = projection.anchor;
   const picture = projection.picture;
   const wrap = projection.wrapGeometry;
+  const vector = projection.vectorShape;
   return [
     projection.drawingNodeId,
     projection.ownerPartName,
@@ -207,6 +209,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           picture.presetGeometry ?? '',
         ].join(':')
       : '',
+    vector ? JSON.stringify(vector) : '',
     wrap
       ? [
           wrap.element,
@@ -309,8 +312,11 @@ function createPartDrawingContextSlot(options: {
   let resourceEpoch = 0;
 
   const resolveRelationshipTarget = createDrawingRelationshipResolver(pkg, ownerPartName);
+  const theme = createPackageShapeThemeResolvers(pkg);
   const atomProjections = indexInlineDrawingProjectionsInPart(part, {
     resolveRelationship: resolveRelationshipTarget,
+    resolveSchemeColor: theme.resolveSchemeColor,
+    resolveStyleMatrixReference: theme.resolveStyleMatrixReference,
   });
   const atomIdentities = drawingAtomIdentities(part);
 
@@ -456,6 +462,8 @@ function createPartDrawingContextSlot(options: {
       `${ownerPartName}|${resourceEpoch}|${generation}|${atomProjections.size}`,
     drawingTokenForParagraph,
     isCompatibleWith: (nextPart, nextPkg) => {
+      const nextTheme = createPackageShapeThemeResolvers(nextPkg);
+      if (nextTheme.cacheToken !== theme.cacheToken) return false;
       if (nextPart === part) return true;
       const nextAtomIdentities = drawingAtomIdentities(nextPart);
       if (atomIdentities && nextAtomIdentities && atomIdentities.size === nextAtomIdentities.size) {
@@ -470,6 +478,8 @@ function createPartDrawingContextSlot(options: {
       }
       const nextProjections = indexInlineDrawingProjectionsInPart(nextPart, {
         resolveRelationship: createDrawingRelationshipResolver(nextPkg, ownerPartName),
+        resolveSchemeColor: nextTheme.resolveSchemeColor,
+        resolveStyleMatrixReference: nextTheme.resolveStyleMatrixReference,
       });
       if (nextProjections.size !== atomProjections.size) return false;
       for (const [atomId, projection] of atomProjections) {

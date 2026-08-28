@@ -545,22 +545,40 @@ function paintVectorShape(
   svg.setAttribute('height', '100%');
   svg.style.display = 'block';
 
-  const path = document.createElementNS(SVG_NAMESPACE, 'path');
-  const d = shape.subpathsEmu
-    .map(
-      (points) =>
-        `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}Z`
-    )
-    .join('');
-  path.setAttribute('d', d);
-  // SAFE: hex colors are validated 6-digit sRGB at the projection trust boundary.
-  path.setAttribute('fill', shape.fillHex !== null ? `#${shape.fillHex}` : 'none');
-  path.setAttribute('fill-rule', 'evenodd');
-  if (shape.strokeHex !== null) {
-    path.setAttribute('stroke', `#${shape.strokeHex}`);
-    path.setAttribute('stroke-width', finiteStyle(Math.max(1, shape.strokeWidthEmu)));
+  const components = shape.components ?? [
+    {
+      subpathsEmu: shape.subpathsEmu,
+      fillHex: shape.fillHex,
+      fillAlpha: shape.fillAlpha ?? 1,
+      strokeHex: shape.strokeHex,
+      strokeAlpha: shape.strokeAlpha ?? 1,
+      strokeWidthEmu: shape.strokeWidthEmu,
+    },
+  ];
+  for (const component of components) {
+    const path = document.createElementNS(SVG_NAMESPACE, 'path');
+    const d = component.subpathsEmu
+      .map(
+        (points) =>
+          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}Z`
+      )
+      .join('');
+    path.setAttribute('d', d);
+    // SAFE: colours are validated 6-digit sRGB at the projection trust boundary.
+    path.setAttribute('fill', component.fillHex !== null ? `#${component.fillHex}` : 'none');
+    path.setAttribute('fill-rule', 'evenodd');
+    if (component.fillAlpha < 1) {
+      path.setAttribute('fill-opacity', finiteStyle(Math.max(0, component.fillAlpha)));
+    }
+    if (component.strokeHex !== null) {
+      path.setAttribute('stroke', `#${component.strokeHex}`);
+      path.setAttribute('stroke-width', finiteStyle(Math.max(1, component.strokeWidthEmu)));
+      if (component.strokeAlpha < 1) {
+        path.setAttribute('stroke-opacity', finiteStyle(Math.max(0, component.strokeAlpha)));
+      }
+    }
+    svg.append(path);
   }
-  svg.append(path);
   frame.append(svg);
   outer.append(frame);
 

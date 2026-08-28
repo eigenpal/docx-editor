@@ -45,11 +45,14 @@ import {
   type OoxmlPart,
 } from './ooxml-tree.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
+import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
 import {
   findDirectChild,
   parseEmu,
   projectTextboxStory,
   projectVectorShape,
+  type ShapeSchemeColorResolver,
+  type ShapeStyleMatrixResolver,
   type TextboxStoryProjection,
   type VectorShapeProjection,
 } from './drawing-shape-projection.ts';
@@ -264,6 +267,7 @@ export const DEFAULT_SUPPORTED_MC_REQUIRES: ReadonlySet<string> = new Set([
   // Word wraps `wps:wsp` shapes in `mc:Choice Requires="wps"`; the engine renders the
   // solid-geometry subset and placeholders the rest, so the Choice branch is understood.
   'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+  'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup',
 ]);
 
 const PIC_GRAPHIC_DATA_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
@@ -287,6 +291,8 @@ interface ProjectionContext {
   readonly supportedMcRequires: ReadonlySet<string>;
   readonly limits: DrawingProjectionLimits;
   readonly resolveRelationship?: RelationshipTargetResolver;
+  readonly resolveSchemeColor?: ShapeSchemeColorResolver;
+  readonly resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
 }
 
 /** Resolve `(ownerPartName, r:id)` against a package's relationship records. */
@@ -1265,6 +1271,22 @@ function freezeDrawingProjection(projection: DrawingProjection): DrawingProjecti
               Object.freeze(points.map((point) => Object.freeze({ ...point })))
             )
           ),
+          ...(projection.vectorShape.components
+            ? {
+                components: Object.freeze(
+                  projection.vectorShape.components.map((component) =>
+                    Object.freeze({
+                      ...component,
+                      subpathsEmu: Object.freeze(
+                        component.subpathsEmu.map((points) =>
+                          Object.freeze(points.map((point) => Object.freeze({ ...point })))
+                        )
+                      ),
+                    })
+                  )
+                ),
+              }
+            : {}),
         })
       : null,
     // `content` is a canonical-tree node shared with the store; it is not deep-frozen here.
@@ -1382,7 +1404,7 @@ export function drawingAccessibility(projection: DrawingProjection): DrawingAcce
  * reports `hidden` and its locks rather than throwing, so an unusable drawing degrades to
  * something the surface can skip.
  */
-export function projectDrawing(
+function projectDrawingWithTheme(
   drawing: OoxmlDrawingNode,
   context: Readonly<{
     ownerPartName: string;
@@ -1390,6 +1412,8 @@ export function projectDrawing(
     limits: DrawingProjectionLimits;
     namespaceScope?: ReadonlyMap<string, string>;
     resolveRelationship?: RelationshipTargetResolver;
+    resolveSchemeColor?: ShapeSchemeColorResolver;
+    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
   }>
 ): DrawingProjection | null {
   const ctx: ProjectionContext = {
@@ -1397,6 +1421,8 @@ export function projectDrawing(
     supportedMcRequires: context.supportedMcRequires,
     limits: context.limits,
     resolveRelationship: context.resolveRelationship,
+    resolveSchemeColor: context.resolveSchemeColor,
+    resolveStyleMatrixReference: context.resolveStyleMatrixReference,
   };
   const namespaceScope = context.namespaceScope ?? emptyNamespaceScope();
   const compatibilityMode = isCompatibilityDrawing(drawing);
@@ -1487,6 +1513,25 @@ export function projectDrawing(
           allowOverlap: schemaAttributeValue(anchor.attributes, 'allowOverlap') !== '0',
         })
       : null;
+  const vectorShape = pictureResult.picture
+    ? null
+    : projectVectorShape(
+        anchor,
+        extent,
+        compatibilityMode,
+        ctx.resolveSchemeColor,
+        ctx.resolveStyleMatrixReference
+      );
+  const textboxStory = pictureResult.picture
+    ? null
+    : projectTextboxStory(anchor, extent, ctx.resolveSchemeColor, ctx.resolveStyleMatrixReference);
+  if (vectorShape) {
+    for (let index = state.diagnostics.length - 1; index >= 0; index -= 1) {
+      if (state.diagnostics[index]?.code === 'unsupported-graphic') {
+        state.diagnostics.splice(index, 1);
+      }
+    }
+  }
   return freezeDrawingProjection(
     Object.freeze({
       drawingNodeId: drawing.id,
@@ -1507,16 +1552,28 @@ export function projectDrawing(
       position,
       anchor: anchorMeta,
       picture: pictureResult.picture,
-      vectorShape: pictureResult.picture
-        ? null
-        : projectVectorShape(anchor, extent, compatibilityMode),
-      textboxStory: pictureResult.picture ? null : projectTextboxStory(anchor, extent),
+      vectorShape,
+      textboxStory,
       locks,
       effects: pictureResult.effects,
       compatibilityBranchNodeId: state.compatibilityBranchNodeId,
       diagnostics: state.diagnostics,
     })
   );
+}
+
+/** Project one drawing without package-level theme resolution. */
+export function projectDrawing(
+  drawing: OoxmlDrawingNode,
+  context: Readonly<{
+    ownerPartName: string;
+    supportedMcRequires: ReadonlySet<string>;
+    limits: DrawingProjectionLimits;
+    namespaceScope?: ReadonlyMap<string, string>;
+    resolveRelationship?: RelationshipTargetResolver;
+  }>
+): DrawingProjection | null {
+  return projectDrawingWithTheme(drawing, context);
 }
 
 /** Project a drawing nested under a run-level MC wrapper. */
@@ -1528,6 +1585,8 @@ export function projectRunLevelMcDrawing(
     limits: DrawingProjectionLimits;
     namespaceScope: ReadonlyMap<string, string>;
     resolveRelationship?: RelationshipTargetResolver;
+    resolveSchemeColor?: ShapeSchemeColorResolver;
+    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
   }>
 ): DrawingProjection | null {
   const atom = resolveRunLevelMcAtom(
@@ -1537,7 +1596,7 @@ export function projectRunLevelMcDrawing(
     context.limits
   );
   if (atom.drawing === null) return null;
-  const projection = projectDrawing(atom.drawing, {
+  const projection = projectDrawingWithTheme(atom.drawing, {
     ...context,
     namespaceScope: context.namespaceScope,
   });
@@ -1629,7 +1688,7 @@ function collectDrawingsInPartBounded(
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
 
     if (frame.node.kind === 'drawing') {
-      const projected = projectDrawing(frame.node, { ...ctx, namespaceScope: scope });
+      const projected = projectDrawingWithTheme(frame.node, { ...ctx, namespaceScope: scope });
       if (projected) {
         out.push(projected);
         atomIndex?.set(frame.node.id, projected);
@@ -1645,6 +1704,8 @@ function collectDrawingsInPartBounded(
         limits: ctx.limits,
         namespaceScope: scope,
         resolveRelationship: ctx.resolveRelationship,
+        resolveSchemeColor: ctx.resolveSchemeColor,
+        resolveStyleMatrixReference: ctx.resolveStyleMatrixReference,
       });
       if (projected) {
         out.push(projected);
@@ -1683,6 +1744,8 @@ export function projectDrawingsInPart(
     supportedMcRequires: ReadonlySet<string>;
     limits: DrawingProjectionLimits;
     resolveRelationship?: RelationshipTargetResolver;
+    resolveSchemeColor?: ShapeSchemeColorResolver;
+    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
   }>
 ): readonly DrawingProjection[] {
   const ctx: ProjectionContext = {
@@ -1690,6 +1753,8 @@ export function projectDrawingsInPart(
     supportedMcRequires: context?.supportedMcRequires ?? DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: context?.limits ?? DEFAULT_DRAWING_PROJECTION_LIMITS,
     resolveRelationship: context?.resolveRelationship,
+    resolveSchemeColor: context?.resolveSchemeColor,
+    resolveStyleMatrixReference: context?.resolveStyleMatrixReference,
   };
   const out: DrawingProjection[] = [];
   collectDrawingsInPartBounded(part.root, part.name, ctx, out);
@@ -1703,6 +1768,8 @@ export function indexInlineDrawingProjectionsInPart(
     supportedMcRequires: ReadonlySet<string>;
     limits: DrawingProjectionLimits;
     resolveRelationship?: RelationshipTargetResolver;
+    resolveSchemeColor?: ShapeSchemeColorResolver;
+    resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
   }>
 ): ReadonlyMap<string, DrawingProjection> {
   const ctx: ProjectionContext = {
@@ -1710,6 +1777,8 @@ export function indexInlineDrawingProjectionsInPart(
     supportedMcRequires: context?.supportedMcRequires ?? DEFAULT_SUPPORTED_MC_REQUIRES,
     limits: context?.limits ?? DEFAULT_DRAWING_PROJECTION_LIMITS,
     resolveRelationship: context?.resolveRelationship,
+    resolveSchemeColor: context?.resolveSchemeColor,
+    resolveStyleMatrixReference: context?.resolveStyleMatrixReference,
   };
   const out: DrawingProjection[] = [];
   const atomIndex = new Map<string, DrawingProjection>();
@@ -1728,6 +1797,7 @@ export function projectDrawingsInPackage(
   }>
 ): readonly DrawingProjection[] {
   const projections: DrawingProjection[] = [];
+  const theme = createPackageShapeThemeResolvers(pkg);
   for (const [partName, part] of pkg.parts) {
     if (!STORY_PART_RE.test(partName)) continue;
     // Appended in a loop rather than spread: the count is file-controlled, and a spread of
@@ -1735,6 +1805,8 @@ export function projectDrawingsInPackage(
     const inPart = projectDrawingsInPart(part, {
       ...context,
       resolveRelationship: createDrawingRelationshipResolver(pkg, partName),
+      resolveSchemeColor: theme.resolveSchemeColor,
+      resolveStyleMatrixReference: theme.resolveStyleMatrixReference,
     });
     for (const projection of inPart) projections.push(projection);
   }

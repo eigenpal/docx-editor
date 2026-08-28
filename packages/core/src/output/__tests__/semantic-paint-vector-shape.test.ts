@@ -113,4 +113,47 @@ describe('vector shape paint', () => {
     expect(d.startsWith('M6696075 38100L')).toBe(true);
     expect((d.match(/Z/g) ?? []).length).toBe(2);
   });
+
+  test('paints grouped components with independent colours and opacity', () => {
+    const base = shapeRecord();
+    const firstPath = vectorShape().subpathsEmu[0]!;
+    const secondPath = vectorShape().subpathsEmu[1]!;
+    const record = {
+      ...base,
+      vectorShape: {
+        ...vectorShape(),
+        components: [
+          {
+            subpathsEmu: [firstPath],
+            fillHex: '4472C4',
+            fillAlpha: 0.5,
+            strokeHex: null,
+            strokeAlpha: 1,
+            strokeWidthEmu: 0,
+          },
+          {
+            subpathsEmu: [secondPath],
+            fillHex: 'FF0000',
+            fillAlpha: 1,
+            strokeHex: '000000',
+            strokeAlpha: 0.25,
+            strokeWidthEmu: 12_700,
+          },
+        ],
+      },
+    } as InlineDrawingRecord;
+    const element = paintDrawingRecord(
+      document,
+      record,
+      { scale: 1, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: null, inertLinks: true },
+      null
+    )!;
+    const paths = element.querySelectorAll('path');
+    expect(paths).toHaveLength(2);
+    expect(paths[0]!.getAttribute('fill')).toBe('#4472C4');
+    expect(paths[0]!.getAttribute('fill-opacity')).toBe('0.5');
+    expect(paths[1]!.getAttribute('fill')).toBe('#FF0000');
+    expect(paths[1]!.getAttribute('stroke')).toBe('#000000');
+    expect(paths[1]!.getAttribute('stroke-opacity')).toBe('0.25');
+  });
 });
