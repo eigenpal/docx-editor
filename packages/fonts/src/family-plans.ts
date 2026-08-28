@@ -13,20 +13,39 @@ export type WordDefaultFamily =
   | 'Courier New'
   | 'Century Gothic';
 
+/** A line box as em ratios, matching the editor contract's `lineMetrics`. */
+export interface LineBox {
+  readonly heightEm: number;
+  readonly baselineEm: number;
+}
+
 /** One Word family's packaged substitute: the face, its filenames, and its line box. */
 export interface FamilyPlan {
   readonly substitute: string;
   readonly filePrefix: string;
   readonly extension?: 'otf';
   /**
-   * Word's line box for the REQUESTED family, as em ratios, when the substitute's own
-   * vertical metrics differ. Omitted means the substitute's `hhea` already agrees.
+   * Word's line box for the REQUESTED family, when the substitute's own vertical metrics
+   * differ. Omitted means the substitute's `hhea` already agrees.
+   *
+   * Keyed by WEIGHT, because a real family's ascent moves with weight. Century Gothic's
+   * own subsets say so: regular and italic share `hhea` 1989/-451, while bold is
+   * 2032/-451 — a 0.84 pt taller line at 40 pt. One value for all four faces put every
+   * bold line short. Slant does not move it, so italic reads the same entry as upright.
    */
   readonly lineMetrics?: {
-    readonly heightEm: number;
-    readonly baselineEm: number;
+    readonly 400: LineBox;
+    readonly 700?: LineBox;
   };
 }
+
+/** The line box for one face of a plan; bold falls back to regular when unstated. */
+export const planLineBox = (plan: FamilyPlan, weight: number): LineBox | undefined =>
+  plan.lineMetrics === undefined
+    ? undefined
+    : weight >= 700
+      ? (plan.lineMetrics[700] ?? plan.lineMetrics[400])
+      : plan.lineMetrics[400];
 
 export const FAMILY_PLANS: ReadonlyMap<WordDefaultFamily, FamilyPlan> = new Map([
   ['Calibri', { substitute: 'Carlito', filePrefix: 'Carlito' }],
@@ -40,9 +59,16 @@ export const FAMILY_PLANS: ReadonlyMap<WordDefaultFamily, FamilyPlan> = new Map(
       substitute: 'TeX Gyre Adventor',
       filePrefix: 'TeXGyreAdventor',
       extension: 'otf',
-      // Century Gothic's own ascent/descent, read from Word's PDF export. Adventor's
-      // `hhea` is taller, so without this a Century Gothic line paginates ~3% short.
-      lineMetrics: { heightEm: 1.19140625, baselineEm: 0.97119140625 },
+      // Century Gothic's own ascent/descent, read from the `hhea` of the subsets Word
+      // embeds in its own PDF export, over 2048 units per em:
+      //   regular / italic  asc 1989  desc -451  gap 0
+      //   bold / bold italic asc 2032 desc -451  gap 0
+      // Adventor's own `hhea` is taller than either, so without this a Century Gothic
+      // line paginates about 3% short.
+      lineMetrics: {
+        400: { heightEm: 1.19140625, baselineEm: 0.97119140625 },
+        700: { heightEm: 1.21240234375, baselineEm: 0.9921875 },
+      },
     },
   ],
 ]);

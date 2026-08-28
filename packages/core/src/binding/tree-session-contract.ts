@@ -6,7 +6,6 @@
 
 import type {
   BookmarkIndex,
-  DeclaredFontMetadata,
   EmbeddedFont,
   HeaderFooterParts,
   HeaderFooterSectionResolution,
@@ -169,11 +168,6 @@ export interface TreeDocxSessionView {
    * Memoized per package revision.
    */
   documentFonts(): readonly string[];
-  /**
-   * Bounded `word/fontTable.xml` metadata for on-demand substitute ranking.
-   * Family names and PANOSE values are validated before they leave the store lane.
-   */
-  declaredFontMetadata(): readonly DeclaredFontMetadata[];
   /**
    * Whether the document puts any literal character on a page, over the same roots
    * {@link TreeDocxSessionView.documentFonts} reads. Memoized per package revision.

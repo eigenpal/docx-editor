@@ -156,6 +156,38 @@ describe('font substitution notice', () => {
     editor.destroy();
   });
 
+  test('a chained redirect resolves whatever order the list is in', async () => {
+    // A -> B -> C, listed so the second hop is seen first. A single pass covers only B.
+    installed = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(runIn('Brand Display', 'body text')),
+      fonts: {
+        sources: [
+          {
+            request: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+            id: 'redirect-target',
+            bytes: regularBytes,
+            hash: sha256FontBytes(regularBytes),
+            faceIndex: 0,
+          },
+        ],
+        substitutions: [
+          {
+            from: { family: 'Brand Display', weight: 400, style: 'normal' },
+            to: { family: 'Brand Serif', weight: 400, style: 'normal' },
+          },
+          {
+            from: { family: 'Brand Serif', weight: 400, style: 'normal' },
+            to: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+          },
+        ],
+      },
+    });
+    expect(await noticeAfterFonts(editor)).not.toContain('Brand Display');
+    editor.destroy();
+  });
+
   test('a redirect whose target never loaded is not coverage', async () => {
     installed = [];
     const editor = createDocxEditor({

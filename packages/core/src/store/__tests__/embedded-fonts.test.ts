@@ -1,10 +1,7 @@
 // Fonts the document carries with it (task 7.7).
 
 import { describe, expect, test } from 'bun:test';
-import { deobfuscateFont, readDeclaredFontMetadata } from '../package/embedded-fonts.ts';
-import { readOoxmlPart } from '../package/ooxml-tree.ts';
-
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+import { deobfuscateFont } from '../package/embedded-fonts.ts';
 
 describe('embedded-font deobfuscation follows ECMA-376 Part 4 §2.8.1', () => {
   // The spec's own worked example. Byte order is the whole difficulty here: a GUID is
@@ -59,40 +56,5 @@ describe('embedded-font deobfuscation follows ECMA-376 Part 4 §2.8.1', () => {
   test('a font shorter than the header does not read past its end', () => {
     const short = new Uint8Array(8);
     expect(deobfuscateFont(short, GUID)!.length).toBe(8);
-  });
-});
-
-describe('declared font metadata', () => {
-  test('reads validated PANOSE values and bounds the result', () => {
-    const parsed = readOoxmlPart(
-      `<w:fonts xmlns:w="${W}">` +
-        '<w:font w:name="Example Sans"><w:panose1 w:val="020B0502020202020204"/></w:font>' +
-        '<w:font w:name="Second Face"><w:panose1 w:val="not-hex"/></w:font>' +
-        '<w:font w:name="Bad&#x09;Name"><w:panose1 w:val="020B0502020202020204"/></w:font>' +
-        '</w:fonts>',
-      { name: '/word/fontTable.xml', contentType: 'application/xml' }
-    );
-    if (!parsed.ok) throw new Error(parsed.reason);
-    expect(readDeclaredFontMetadata(parsed.part, 1)).toEqual([
-      { family: 'Example Sans', panose: '020b0502020202020204' },
-    ]);
-    expect(readDeclaredFontMetadata(parsed.part)).toEqual([
-      { family: 'Example Sans', panose: '020b0502020202020204' },
-      { family: 'Second Face' },
-    ]);
-  });
-
-  test('ignores foreign and misplaced font metadata', () => {
-    const parsed = readOoxmlPart(
-      `<w:fonts xmlns:w="${W}" xmlns:x="urn:foreign">` +
-        '<x:font w:name="Foreign Element"><w:panose1 w:val="020B0502020202020204"/></x:font>' +
-        '<w:font x:name="Foreign Attribute"><w:panose1 w:val="020B0502020202020204"/></w:font>' +
-        '<w:wrapper><w:font w:name="Nested Font"><w:panose1 w:val="020B0502020202020204"/></w:font></w:wrapper>' +
-        '<w:font w:name="Valid Font"><x:panose1 w:val="020B0502020202020204"/></w:font>' +
-        '</w:fonts>',
-      { name: '/word/fontTable.xml', contentType: 'application/xml' }
-    );
-    if (!parsed.ok) throw new Error(parsed.reason);
-    expect(readDeclaredFontMetadata(parsed.part)).toEqual([{ family: 'Valid Font' }]);
   });
 });

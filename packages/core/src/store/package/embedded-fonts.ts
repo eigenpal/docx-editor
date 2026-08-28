@@ -38,15 +38,6 @@ export interface EmbeddedFont {
   readonly partName: string;
 }
 
-/**
- * Shape-validated font-table metadata an on-demand resolver may use for substitute
- * ranking. Validated, not trusted: both fields still carry values the file chose.
- */
-export interface DeclaredFontMetadata {
-  readonly family: string;
-  readonly panose?: string;
-}
-
 // A MAP, not an object literal. The key is an element name out of a document, and an object
 // literal answers `toString` and `constructor` with something inherited and truthy — so
 // `<w:toString .../>` produced a font whose `style` was a native function while the type said
@@ -105,56 +96,6 @@ const children = (node: OoxmlNode): readonly OoxmlNode[] =>
 
 const localNameOf = (node: OoxmlNode): string =>
   node.kind === 'textValue' || !('localName' in node) ? '' : node.localName;
-
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
-const PANOSE = /^[0-9a-fA-F]{20}$/;
-const WML_NAMESPACE = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-
-const isWmlElement = (node: OoxmlNode, localName: string): boolean =>
-  node.kind !== 'textValue' &&
-  'localName' in node &&
-  node.localName === localName &&
-  node.namespaceUri === WML_NAMESPACE;
-
-const wmlAttribute = (node: OoxmlNode, localName: string): string | undefined => {
-  if (node.kind === 'textValue' || !('attributes' in node)) return undefined;
-  return (node.attributes ?? []).find(
-    (entry) => entry.localName === localName && entry.namespaceUri === WML_NAMESPACE
-  )?.value;
-};
-
-/**
- * Read bounded, validated family metadata from `word/fontTable.xml`.
- *
- * PANOSE and the family name are ATTACKER-CONTROLLED, and they reach whatever
- * `FontResolver` the host installed — a third-party one, through public API, not only the
- * resolvers this repository ships. So the shape is pinned here, at the trust boundary: a
- * family name matching `FONT_NAME`, a PANOSE matching `PANOSE`, at most `maxFonts`
- * entries. What a resolver must then do with them is a REQUIREMENT on the resolver, not a
- * property of the values: treat both as lookup keys against a closed set, and never let
- * either become a URL, an object key, an allocation size, or a loop bound.
- */
-export function readDeclaredFontMetadata(
-  fontTable: OoxmlPart | undefined,
-  maxFonts = 64
-): readonly DeclaredFontMetadata[] {
-  if (!fontTable || !Number.isSafeInteger(maxFonts) || maxFonts <= 0) return [];
-  if (!isWmlElement(fontTable.root, 'fonts')) return [];
-  const found: DeclaredFontMetadata[] = [];
-  for (const node of children(fontTable.root)) {
-    if (found.length >= maxFonts) break;
-    if (!isWmlElement(node, 'font')) continue;
-    const family = wmlAttribute(node, 'name');
-    if (!family || !FONT_NAME.test(family)) continue;
-    const panoseNode = children(node).find((child) => isWmlElement(child, 'panose1'));
-    const rawPanose = panoseNode ? wmlAttribute(panoseNode, 'val') : undefined;
-    found.push({
-      family,
-      ...(rawPanose && PANOSE.test(rawPanose) ? { panose: rawPanose.toLowerCase() } : {}),
-    });
-  }
-  return Object.freeze(found);
-}
 
 /** Resolve a relationship id against the part that declares it. */
 function targetOf(pkg: OoxmlPackage, ownerPart: string, relationshipId: string): string | null {

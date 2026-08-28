@@ -29,7 +29,8 @@
 // Two things can answer a name. Most come from the pinned Google catalog, over the
 // network. A short list comes from the package's OWN bundled assets
 // (`PACKAGED_ONLY_FAMILIES`) because no catalog family is metric-compatible with them —
-// Century Gothic is the one, answered by TeX Gyre Adventor with no network at all.
+// Century Gothic is the one, answered by TeX Gyre Adventor. That path reads the package's
+// own assets, so it makes no third-party request; it is not request-free.
 //
 // It is a `FontResolver`, so the editor calls it once per load with the families the file
 // declares. That is the part to be deliberate about: it makes OPENING A DOCUMENT perform
@@ -38,12 +39,13 @@
 //
 //   - The catalog is generated, closed and pinned (`google-catalog.generated.ts`). A name
 //     is either in it or it is not; nothing is interpolated into a URL, so a crafted
-//     `w:rFonts` cannot point this at a host of its choosing. The PANOSE ranking below
-//     picks from that same closed set, so it widens which names resolve, never where
-//     bytes come from.
-//   - Every URL is pinned to one immutable google/fonts commit and carries a baked
-//     `sha256:`. Bytes are trusted by CONTENT, and the engine's admission path re-derives
-//     the hash, so a swapped CDN asset fails there with a typed `hashMismatch`.
+//     `w:rFonts` cannot point this at a host of its choosing.
+//   - Every URL is pinned to an immutable google/fonts commit and carries a baked
+//     `sha256:`. Most faces share one commit; a family whose current upstream version is
+//     variable-only is pinned to the last commit that carried static instances, so the
+//     catalog records more than one revision. Bytes are trusted by CONTENT, and the
+//     engine's admission path re-derives the hash, so a swapped CDN asset fails there
+//     with a typed `hashMismatch`.
 //   - The editor caps the families it hands over (`MAX_RESOLVER_FAMILIES`), so a file
 //     declaring thousands of faces cannot fan this out into thousands of fetches.
 //
@@ -51,16 +53,16 @@
 // That is inherent to fetching them, which is why nothing here is a default: an app opts
 // in by passing `googleFonts()`, and `defaultFonts()` stays the zero-network answer.
 //
-// Metric compatibility is the reason the explicit substitution map is short: Carlito,
-// Caladea, Tinos and Cousine have the same advance widths as the Word faces they stand in
-// for, so wrap and pagination land where Word puts them.
+// Metric compatibility is the reason the substitution map is short. Carlito/Caladea/
+// Tinos/Cousine have the same advance widths as the Word faces they stand in for, so wrap
+// and pagination land where Word puts them. Century Gothic is answered from this package's
+// own bundled TeX Gyre Adventor, which is close rather than identical (within 1%).
 //
-// For a family with no metric-compatible answer, validated PANOSE metadata ranks a closed
-// set of MEASURED candidates — and refuses when none is close. Refusing is the important
-// half: a substitute picked on classification alone moves line breaks, so anything the
-// ranking cannot vouch for is left to the app's own `substitute` map. The ranking gates on
-// the serif-style digit and will not consider a candidate that leaves its own
-// classification mostly unstated; see `metricDistance`.
+// Anything else would be a guess that moves line breaks, so it is left to the app's own
+// `substitute` map rather than assumed here. A PANOSE-ranked substitute was tried and
+// removed: PANOSE states a CLASSIFICATION, never an advance width, so no threshold on it
+// bounds the width error — the ranking picked faces 22-24% wider than the family a
+// document named, which is worse than the fixed fallback it replaced.
 
 import { FAMILY_PLANS, PACKAGED_ONLY_FAMILIES, type WordDefaultFamily } from './family-plans.ts';
 import {
@@ -69,7 +71,6 @@ import {
   type GoogleFontFace,
 } from './google-catalog.generated.ts';
 import { loadDefaultFonts } from './index.ts';
-import { MAX_METRIC_DISTANCE, METRIC_CANDIDATES, metricDistance } from './metric-candidates.ts';
 import type { DefaultFontSource, DefaultFontSubstitution } from './index.ts';
 
 /**
@@ -116,7 +117,11 @@ export const GOOGLE_METRIC_SUBSTITUTES: Readonly<Record<string, string>> = Objec
  * admission path, which rejects them after this resolver has handed them over.
  */
 export interface GoogleFontLoadFailure {
-  /** The family as the DOCUMENT named it, which may be the substituted-from name. */
+  /**
+   * The family of the face that failed to load — the SERVING name ("Carlito", "TeX Gyre
+   * Adventor"), not the name the document wrote. A document naming Calibri sees "Carlito"
+   * here, because that is the file that did not arrive.
+   */
   readonly family: string;
   /** The pinned catalog URL, or the asset filename for a face served from the bundle. */
   readonly url: string;
@@ -165,23 +170,6 @@ const catalogByFamily = ((): ReadonlyMap<string, readonly GoogleFontFace[]> => {
   }
   return byFamily;
 })();
-
-function closestMetricCandidate(
-  panose: string,
-  allowed: ReadonlySet<string> | null
-): readonly GoogleFontFace[] | undefined {
-  let best: { readonly score: number; readonly faces: readonly GoogleFontFace[] } | null = null;
-  for (const candidate of METRIC_CANDIDATES) {
-    if (allowed && !allowed.has(candidate.family.toLowerCase())) continue;
-    const faces = catalogByFamily.get(candidate.family.toLowerCase());
-    if (!faces) continue;
-    const score = metricDistance(panose, candidate);
-    if (score <= MAX_METRIC_DISTANCE && (best === null || score < best.score)) {
-      best = { score, faces };
-    }
-  }
-  return best?.faces;
-}
 
 /**
  * Bytes already fetched this session, keyed by pinned URL — and PER FETCHER.
@@ -244,7 +232,6 @@ export function googleFonts(
 ): (request: {
   readonly families: readonly string[];
   readonly defaultFamily: string;
-  readonly metadata?: readonly { readonly family: string; readonly panose?: string }[];
 }) => Promise<GoogleFontsFragment> {
   const fetcher = options.fetcher ?? fetch;
   /**
@@ -275,17 +262,17 @@ export function googleFonts(
     const wanted = new Map<string, readonly GoogleFontFace[]>();
     const substitutions: DefaultFontSubstitution[] = [];
     const failures: GoogleFontLoadFailure[] = [];
-    const metadata = new Map(
-      (request.metadata ?? [])
-        .slice(0, 64)
-        .map((entry) => [entry.family.toLowerCase(), entry] as const)
-    );
-
     /** Declared spelling -> the packaged Word family whose bundled bytes answer it. */
     const packaged = new Map<string, WordDefaultFamily>();
 
     for (const declared of [request.defaultFamily, ...request.families]) {
-      const bundled = PACKAGED_ONLY_BY_NAME.get(declared.toLowerCase());
+      const target = substitutes.get(declared.toLowerCase());
+      // The bundled answer is a DEFAULT, so it is checked after the substitution map and
+      // not before it. Checking it first made a packaged family the one name `substitute`
+      // could not override — silently, and worse under `allow`, where naming the override
+      // target excluded the bundled face too and the family resolved to nothing at all.
+      const bundled =
+        target === undefined ? PACKAGED_ONLY_BY_NAME.get(declared.toLowerCase()) : undefined;
       if (bundled) {
         const plan = FAMILY_PLANS.get(bundled);
         if (plan && (!allowed || allowed.has(plan.substitute.toLowerCase()))) {
@@ -293,12 +280,9 @@ export function googleFonts(
         }
         continue;
       }
-      const target = substitutes.get(declared.toLowerCase()) ?? declared;
-      let faces = catalogByFamily.get(target.toLowerCase());
-      if (faces && allowed && !allowed.has(faces[0]!.family.toLowerCase())) continue;
-      const panose = metadata.get(declared.toLowerCase())?.panose;
-      if (!faces && panose) faces = closestMetricCandidate(panose, allowed);
+      const faces = catalogByFamily.get((target ?? declared).toLowerCase());
       if (!faces) continue;
+      if (allowed && !allowed.has(faces[0]!.family.toLowerCase())) continue;
       wanted.set(faces[0]!.family, faces);
       // Only when the document's own name differs from the face being loaded: a run
       // saying "Carlito" needs the bytes, not a Carlito -> Carlito redirect.

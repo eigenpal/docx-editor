@@ -223,9 +223,7 @@ export {
 } from './hf-references.ts';
 export {
   deobfuscateFont,
-  readDeclaredFontMetadata,
   readEmbeddedFonts,
-  type DeclaredFontMetadata,
   type EmbeddedFont,
   type FontStyleKey,
   type ReadEmbeddedFontsOptions,

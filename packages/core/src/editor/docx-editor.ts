@@ -749,7 +749,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           ? await configured({
               families: mounted.session.documentFonts().slice(0, MAX_RESOLVER_FAMILIES),
               defaultFamily: configuredDefaultFontFamily(fontConfiguration()),
-              metadata: mounted.session.declaredFontMetadata().slice(0, MAX_RESOLVER_FAMILIES),
             })
           : configured;
       // Awaiting handed control back: this load may have been superseded (or the editor

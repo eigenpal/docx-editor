@@ -41,7 +41,6 @@ import { runObservedStoreTransaction } from '../store/package/canonical-primitiv
 import {
   ORIGIN_IDS,
   TreePackageStore,
-  readDeclaredFontMetadata,
   readEmbeddedFonts,
   readOoxmlPackage,
   resolveHeaderFooterParts,
@@ -57,7 +56,6 @@ import {
   paragraphTextOf,
   collectRevisionSites,
   type BookmarkIndex,
-  type DeclaredFontMetadata,
   type EmbeddedFont,
   type HeaderFooterParts,
   type HeaderFooterSectionResolution,
@@ -408,37 +406,23 @@ export function openTreeSession(
   // which COPIES every deobfuscated part — runs at most once per session.
   const FONT_TABLE_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/fontTable';
-  let fontTablePartResolved = false;
-  let fontTablePart: OoxmlPart | undefined;
-  const resolveFontTablePart = (): OoxmlPart | undefined => {
-    if (fontTablePartResolved) return fontTablePart;
-    fontTablePartResolved = true;
+  let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
+  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
+    if (embeddedFontsCache) return embeddedFontsCache;
     const live = currentPackage();
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === FONT_TABLE_REL_TYPE
     );
+    let part: OoxmlPart | undefined;
     if (record) {
       const resolved = resolveRelationship(record);
       if (resolved.mode === 'Internal' && resolved.target.ok) {
-        fontTablePart = live.parts.get(resolved.target.partName);
+        part = live.parts.get(resolved.target.partName);
       }
     }
-    fontTablePart ??= live.parts.get('/word/fontTable.xml');
-    return fontTablePart;
-  };
-  let embeddedFontsCache: readonly EmbeddedFont[] | null = null;
-  const resolveEmbeddedFonts = (): readonly EmbeddedFont[] => {
-    if (embeddedFontsCache) return embeddedFontsCache;
-    embeddedFontsCache = Object.freeze(readEmbeddedFonts(currentPackage(), resolveFontTablePart()));
+    part ??= live.parts.get('/word/fontTable.xml');
+    embeddedFontsCache = Object.freeze(readEmbeddedFonts(live, part));
     return embeddedFontsCache;
-  };
-  // Lazy like everything else on this path: only the FUNCTION form of `resolveFonts` ever
-  // asks, and reading it at open time made every session walk `word/fontTable.xml` for an
-  // answer almost none of them wants.
-  let declaredFontMetadataCache: readonly DeclaredFontMetadata[] | null = null;
-  const resolveDeclaredFontMetadata = (): readonly DeclaredFontMetadata[] => {
-    declaredFontMetadataCache ??= Object.freeze(readDeclaredFontMetadata(resolveFontTablePart()));
-    return declaredFontMetadataCache;
   };
 
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
@@ -764,7 +748,6 @@ export function openTreeSession(
         };
         return fontsCache.fonts;
       },
-      declaredFontMetadata: resolveDeclaredFontMetadata,
 
       rendersText() {
         // Same revision key as `documentFonts`, and for the same reason: typing the first

@@ -13,9 +13,10 @@ shaped (HarfBuzz) measurement in the docx-editor engine.
 | Century Gothic  | TeX Gyre Adventor | GUST Font License |
 
 The first five substitutes use identical advance widths. TeX Gyre Adventor is close but
-not identical: across the recorded Century Gothic samples it stays within 1%, the widest
-being -0.85% ("of work" at 40 pt bold). Documents that need exact glyphs can supply
-licensed bytes through `loadFonts` in `@docx-editor.dev/core`.
+not identical: `bun run check:font-width-fidelity` holds it to within 1% of Word's own
+Century Gothic advances, and the widest sample is -0.85% (`of work` at 40 pt bold). That
+1% is the gate's bound, not a description of it. Documents that need exact glyphs can
+supply licensed bytes through `loadFonts` in `@docx-editor.dev/core`.
 
 `loadDefaultFonts()` and `defaultFonts()` load the five families Word applies to a
 document by default. Century Gothic is not one of them and adds about 709 KB, so it is
@@ -73,15 +74,16 @@ families (Roboto, Arimo, Open Sans, …) are excluded, because the shaper refuse
 variation axes and a variable file would render bold at regular weight.
 
 A family the catalog cannot match may still be answered from this package's own assets.
-Century Gothic is the one, served with no network request at all.
+Century Gothic is the one, read from `assets/` rather than the CDN, so it costs no
+third-party request. Your own `substitute` map still overrides it.
 
-Failing that, the resolver ranks the document's validated PANOSE classification against a
-short list of measured candidates, and refuses far more often than it matches. The family
-kind and the SERIF STYLE are gates, not weighted terms, so an old-style serif or a slab
-serif is never answered with a sans; a candidate that leaves its own classification mostly
-unstated is not ranked at all; and a match beyond the distance bound is refused. A refused
-family keeps whatever measurement the host already had, which is the safer answer, because
-a substitute chosen on classification alone moves line breaks.
+A family none of that answers resolves to nothing, and the host's own measurement stands.
+That is deliberate. Only a metric-compatible substitute keeps pagination Word-accurate,
+and a face picked from how a font describes itself is not one: `word/fontTable.xml` states
+a PANOSE classification, never an advance width, so nothing in the file bounds how much
+wider the substitute runs. A ranking over PANOSE was tried here and removed after it
+picked faces 22-24% wider than the family a document named — worse than the fixed fallback
+it replaced. Supply the real bytes through `substitute` or `loadFonts` when you have them.
 
 A fetching resolver makes opening a document perform network requests, and the CDN learns
 which families a document uses. The engine never supplies one, so opting in stays your call.
@@ -90,8 +92,9 @@ which families a document uses. The engine never supplies one, so opting in stay
 
 Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes);
 `google:check` guards the committed file offline, `google:verify` re-checks it against
-the CDN. Run `bun run check:font-width-fidelity` to compare privacy-safe synthetic
-strings against recorded Word advances and line metrics.
+the CDN. `bun run check:font-width-fidelity` compares privacy-safe synthetic strings
+against Word's own advances and line metrics, read from the font subsets Word embeds in
+its PDF export, and prints the families the package does not cover.
 
 ## Licenses
 

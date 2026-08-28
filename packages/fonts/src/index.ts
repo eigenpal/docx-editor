@@ -52,7 +52,7 @@
 // `FontSourceSubstitution` — assignable by shape — so this package has no runtime or
 // type dependency on the engine and the engine has none on it.
 
-import { FACES, FAMILY_PLANS, planFaceFile } from './family-plans.ts';
+import { FACES, FAMILY_PLANS, planFaceFile, planLineBox } from './family-plans.ts';
 import type { WordDefaultFamily } from './family-plans.ts';
 import { FONT_ASSET_MANIFEST } from './manifest.generated.ts';
 
@@ -197,10 +197,11 @@ export async function loadDefaultFonts(
         failures.push({ family, file, diagnostic: 'face missing from packaged manifest' });
         continue;
       }
+      const lineMetrics = planLineBox(plan, face.weight);
       substitutions.push({
         from: { family, weight: face.weight, style: face.style },
         to: { family: plan.substitute, weight: face.weight, style: face.style },
-        ...(plan.lineMetrics ? { lineMetrics: plan.lineMetrics } : {}),
+        ...(lineMetrics ? { lineMetrics } : {}),
       });
       jobs.push(
         (async () => {

@@ -52,7 +52,8 @@ const fonts = await defaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES });
 ```
 
 `googleFonts()` covers it on demand instead. It serves Century Gothic from the
-same packaged bytes, and only when a document names the family.
+same packaged bytes, and only when a document names the family, so it makes no
+third-party request for it.
 
 Load fonts before the first editor mount. This avoids a visible remount and
 keeps the initial caret and undo history.
@@ -207,20 +208,19 @@ can rebuild the editor. `useFonts` keeps one resolver for the component life.
 
 The editor caps the family list passed to a resolver.
 
-`googleFonts()` resolves a family in three steps, all against closed sets:
+`googleFonts()` resolves a family against closed sets, in this order:
 
-1. A direct catalog match, or a built-in metric-compatible redirect such as
-   Calibri to Carlito.
-2. A packaged face for a family the catalog cannot match. Century Gothic is the
-   one, served from the package's own bytes with no network request.
-3. A ranking of the document's declared PANOSE classification against a short
-   list of measured catalog candidates.
+1. A direct catalog match, or a redirect you passed in `substitute`.
+2. A built-in metric-compatible redirect, such as Calibri to Carlito.
+3. A packaged face for a family the catalog cannot match. Century Gothic is the
+   one. It reads the package's own assets, so it makes no third-party request.
 
-Step 3 refuses more often than it matches. It compares the family kind and the
-serif style before anything else, and it returns nothing when the closest
-candidate is still far away. A family it refuses keeps whatever measurement your
-host already had, which is the safer answer: a substitute chosen on
-classification alone moves line breaks.
+A family that none of the three answers resolves to nothing, and keeps whatever
+measurement your host already had. That is deliberate. Only a metric-compatible
+substitute keeps pagination Word-accurate, and a face picked on how a font
+describes itself is not one: `word/fontTable.xml` states a PANOSE
+classification, never an advance width, so nothing in the file bounds how much
+wider the substitute would run.
 
 ## Source precedence
 

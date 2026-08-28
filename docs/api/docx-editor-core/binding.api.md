@@ -129,7 +129,6 @@ export interface TreeDocxSessionView {
     canUndo(): boolean;
     collaborationPort(documentId: string): CollaborationDocumentPort;
     currentPackage(): OoxmlPackage;
-    declaredFontMetadata(): readonly DeclaredFontMetadata[];
     deleteComment(commentId: string, scope?: StoryScope, noteId?: number): boolean;
     deleteComments(comments: readonly {
         readonly commentId: string;

@@ -1,18 +1,26 @@
 // Word font-metric regression gate over privacy-safe synthetic strings.
 //
-// Expected advances come from Word PDF font subsets (`/Widths`, scaled by the run size).
-// The source documents and their text stay outside the repository, and each string here
-// was authored for this gate.
+// PROVENANCE. Every expected number here is a WORD reading, taken from the font subsets
+// Word embeds in its own PDF export of two reference documents. Those documents and their
+// text stay outside the repository; the strings below were authored for this gate.
 //
-// The two halves of the vertical check have different provenance, so read them differently:
+//   - Widths come from the subset's `/Widths` array, summed and scaled by the run size.
+//     A subset's array spans FirstChar..LastChar but carries 0 for every code the source
+//     document did not use, so each string here is built only from codes with a nonzero
+//     entry — an unused code would read as zero-width and silently under-measure.
+//   - Century Gothic's line box comes from its subsets' `hhea` over 2048 upem: regular
+//     1989/-451/0, bold 2032/-451/0. The gate takes the value it FEEDS the snapshot from
+//     the shipped `FAMILY_PLANS` and compares against those Word numbers. Restating the
+//     plan's literal on both sides made the assertion a tautology: a wrong `lineMetrics`
+//     still passed.
+//   - Montserrat's line box comes from its subsets' `hhea`, 968/-251/0 over 1000 upem.
+//     The catalogued face carries the same values, so the engine's own fallback and Word
+//     agree here; the case pins that they keep agreeing.
 //
-//   - Century Gothic's line box is a WORD reading, and the gate takes it from the shipped
-//     `FAMILY_PLANS` rather than restating the numbers. Restating them made the assertion
-//     a tautology: the gate fed its own literal into the snapshot and then checked the
-//     snapshot returned it, so a wrong `lineMetrics` in `src/index.ts` still passed.
-//   - Montserrat's 12.2/9.7 are the FONT's own `hhea` values (ascender 968, descender
-//     -213, gap 38 over 1000 upem), which is what the engine falls back to when no
-//     override exists. They pin that fallback; they are not an independent Word oracle.
+// TOLERANCE is relative, with a floor. The engine measures on a 1/20 pt fixed-point grid,
+// so a 0.05 pt step is inherent; the floor covers it. The ratio is what the package's
+// substitute claims are stated against, so the README's "within 1%" and this gate's bound
+// are the same number.
 
 import { readFileSync } from 'node:fs';
 import {
@@ -29,7 +37,7 @@ import {
   type ResolvedRunStyle,
 } from '../../core/src/layout/index.ts';
 import { GOOGLE_FONT_CATALOG } from '../src/google-catalog.generated.ts';
-import { FAMILY_PLANS, planFaceFile } from '../src/family-plans.ts';
+import { FAMILY_PLANS, planFaceFile, planLineBox } from '../src/family-plans.ts';
 
 /** The Word families this gate covers that resolve through a PACKAGED plan. */
 type PackagedFamily = 'Century Gothic';
@@ -39,20 +47,28 @@ interface WidthCase {
   readonly weight: 400 | 700;
   readonly style: 'normal' | 'italic';
   readonly text: string;
+  /** Run size; 10 pt unless a case is pinning display-size behaviour. */
+  readonly sizePt?: number;
   readonly wordWidthPt: number;
   readonly wordLineHeightPt: number;
   readonly wordBaselinePt: number;
 }
 
-const WIDTH_TOLERANCE_PT = 0.4;
+/** Fraction of the expected advance a substitute may differ by. */
+const WIDTH_TOLERANCE_RATIO = 0.01;
+/** Absolute floor, so a short string is not held tighter than the measurement grid. */
+const WIDTH_TOLERANCE_FLOOR_PT = 0.1;
 const VERTICAL_TOLERANCE_PT = 0.1;
+
+const widthToleranceFor = (expectedPt: number): number =>
+  Math.max(WIDTH_TOLERANCE_FLOOR_PT, expectedPt * WIDTH_TOLERANCE_RATIO);
 const WIDTH_CASES: readonly WidthCase[] = [
   {
     family: 'Century Gothic',
     weight: 400,
     style: 'normal',
     text: 'Document layout',
-    wordWidthPt: 84.95,
+    wordWidthPt: 84.89,
     wordLineHeightPt: 11.9140625,
     wordBaselinePt: 9.7119140625,
   },
@@ -61,56 +77,84 @@ const WIDTH_CASES: readonly WidthCase[] = [
     weight: 400,
     style: 'normal',
     text: 'Reliable page breaks',
-    wordWidthPt: 103.15,
+    wordWidthPt: 103.2,
     wordLineHeightPt: 11.9140625,
     wordBaselinePt: 9.7119140625,
   },
+  // Bold carries its own line box: Century Gothic's bold ascent is 2032 against the
+  // regular 2032-vs-1989 difference, so one shared value put every bold line 0.84 pt
+  // short at 40 pt. Both a text size and a display size, because the width tolerance is
+  // relative and a short display string is where an absolute one stopped meaning 1%.
+  {
+    family: 'Century Gothic',
+    weight: 700,
+    style: 'normal',
+    text: 'Rate of work',
+    wordWidthPt: 60,
+    wordLineHeightPt: 12.1240234375,
+    wordBaselinePt: 9.921875,
+  },
+  {
+    family: 'Century Gothic',
+    weight: 700,
+    style: 'normal',
+    text: 'of work',
+    sizePt: 40,
+    wordWidthPt: 141.6,
+    wordLineHeightPt: 48.49609375,
+    wordBaselinePt: 39.6875,
+  },
+  // Montserrat Regular's subset carries no lowercase, so this case is upper-case only.
   {
     family: 'Montserrat',
     weight: 400,
     style: 'normal',
-    text: 'Page metrics',
-    wordWidthPt: 66.45,
-    wordLineHeightPt: 12.2,
-    wordBaselinePt: 9.7,
+    text: 'SCALE, RULER',
+    wordWidthPt: 72.79,
+    wordLineHeightPt: 12.19,
+    wordBaselinePt: 9.68,
   },
   {
     family: 'Montserrat Light',
     weight: 400,
     style: 'normal',
     text: 'Design project',
-    wordWidthPt: 72.75,
-    wordLineHeightPt: 12.2,
-    wordBaselinePt: 9.7,
+    wordWidthPt: 72.79,
+    wordLineHeightPt: 12.19,
+    wordBaselinePt: 9.68,
   },
   {
     family: 'Montserrat',
     weight: 700,
     style: 'normal',
     text: 'Contact details',
-    wordWidthPt: 79.4,
-    wordLineHeightPt: 12.2,
-    wordBaselinePt: 9.7,
+    wordWidthPt: 79.48,
+    wordLineHeightPt: 12.19,
+    wordBaselinePt: 9.68,
   },
 ];
 
 /**
- * Substituted families this gate does NOT cover yet, and why. Listed rather than left
- * unsaid: #507 asks for the families that cannot meet the tolerance to be recorded, and a
- * gate with five green cases reads like five is all there is.
+ * Families the package does NOT cover, and why. Listed rather than left unsaid: #507 asks
+ * for the families that cannot meet the tolerance to be recorded, and a gate with seven
+ * green cases reads like seven is all there is.
+ *
+ * All three resolve to nothing, which leaves the host's own measurement in place. That is
+ * the deliberate answer: no packaged or catalogued face has their advance widths, and a
+ * substitute picked on classification alone measured 22-24% wide when it was tried.
  */
 const KNOWN_GAPS: readonly { readonly family: string; readonly gap: string }[] = [
   {
     family: 'Garamond',
-    gap: 'no packaged or catalogued face is metric-compatible; the resolvers deliberately return nothing, and Word line pitch at 8pt is 1.125em against the engine fallback 1.2727em (issue #563)',
+    gap: 'no packaged or catalogued face is metric-compatible; Word line pitch at 8pt is 1.125em against the engine fallback 1.2727em (issue #563)',
   },
   {
     family: 'Rockwell',
-    gap: 'slab serif with no metric-compatible answer; the PANOSE ranking refuses it rather than assigning a sans',
+    gap: 'slab serif with no metric-compatible answer in the catalog or the bundle',
   },
   {
     family: 'Sagona',
-    gap: 'commercial face that declares no PANOSE at all, so nothing can be ranked for it',
+    gap: 'commercial face with no open metric-compatible equivalent; only an app-supplied licensed copy can close it',
   },
 ];
 
@@ -194,7 +238,9 @@ try {
               {
                 from: requestedFace,
                 to: resolvedRequest,
-                ...(plan.lineMetrics ? { lineMetrics: plan.lineMetrics } : {}),
+                ...(planLineBox(plan, testCase.weight)
+                  ? { lineMetrics: planLineBox(plan, testCase.weight)! }
+                  : {}),
               },
             ],
           }
@@ -214,16 +260,19 @@ try {
     const runStyle: ResolvedRunStyle = {
       ...DEFAULT_RUN_STYLE,
       fontFamily: testCase.family,
-      fontSizePt: 10,
+      fontSizePt: testCase.sizePt ?? 10,
       bold: testCase.weight === 700,
       italic: testCase.style === 'italic',
     };
     const actual = measurer.measure(testCase.text, runStyle);
     const difference = Math.abs(actual - testCase.wordWidthPt);
-    if (difference > WIDTH_TOLERANCE_PT + Number.EPSILON) {
+    const limit = widthToleranceFor(testCase.wordWidthPt);
+    if (difference > limit + Number.EPSILON) {
       throw new Error(
-        `${testCase.family} ${testCase.weight}/${testCase.style} width ${actual.toFixed(2)}pt ` +
-          `differs from Word by ${difference.toFixed(2)}pt; limit ${WIDTH_TOLERANCE_PT.toFixed(2)}pt`
+        `${testCase.family} ${testCase.weight}/${testCase.style} ${JSON.stringify(testCase.text)} ` +
+          `width ${actual.toFixed(2)}pt differs from Word ${testCase.wordWidthPt.toFixed(2)}pt by ` +
+          `${difference.toFixed(2)}pt (${((difference / testCase.wordWidthPt) * 100).toFixed(2)}%); ` +
+          `limit ${limit.toFixed(2)}pt`
       );
     }
     const line = measurer.lineMetrics(runStyle);
@@ -234,7 +283,7 @@ try {
       baselineDifference > VERTICAL_TOLERANCE_PT + Number.EPSILON
     ) {
       throw new Error(
-        `${testCase.family} ${testCase.weight}/${testCase.style} line metrics ` +
+        `${testCase.family} ${testCase.weight}/${testCase.style} @${runStyle.fontSizePt}pt line metrics ` +
           `${line.height.toFixed(2)}pt/${line.baseline.toFixed(2)}pt differ from Word ` +
           `${testCase.wordLineHeightPt.toFixed(2)}pt/${testCase.wordBaselinePt.toFixed(2)}pt; ` +
           `limit ${VERTICAL_TOLERANCE_PT.toFixed(2)}pt`
@@ -246,7 +295,7 @@ try {
 }
 
 console.log(
-  `font metric fidelity OK (${WIDTH_CASES.length} cases, width ±${WIDTH_TOLERANCE_PT.toFixed(2)}pt, ` +
-    `vertical ±${VERTICAL_TOLERANCE_PT.toFixed(2)}pt)`
+  `font metric fidelity OK (${WIDTH_CASES.length} cases, width ±${(WIDTH_TOLERANCE_RATIO * 100).toFixed(0)}% ` +
+    `(floor ±${WIDTH_TOLERANCE_FLOOR_PT.toFixed(2)}pt), vertical ±${VERTICAL_TOLERANCE_PT.toFixed(2)}pt)`
 );
 for (const { family, gap } of KNOWN_GAPS) console.log(`  known gap: ${family} — ${gap}`);
