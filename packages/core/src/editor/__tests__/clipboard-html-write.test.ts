@@ -127,6 +127,21 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('text-align:center');
   });
 
+  test('Word built-in paragraph styles emit their interop classes', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="Caption"/></w:style>',
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>title</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr><w:r><w:t>caption</w:t></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('<p class="MsoTitle"');
+    expect(html).toContain('<p class="MsoCaption"');
+  });
+
   test('numbered and bulleted levels nest as ol/ul with list-style-type', () => {
     const item = (ilvl: number, text: string): string =>
       `<w:p><w:pPr><w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="5"/></w:numPr></w:pPr>` +
@@ -167,18 +182,23 @@ describe('interopHtmlFromFragment', () => {
       fragment({
         body:
           '<w:tbl>' +
-          `<w:tr>${cell('<w:gridSpan w:val="2"/>', 'head')}</w:tr>` +
+          '<w:tblPr><w:tblW w:w="4320" w:type="dxa"/><w:jc w:val="center"/></w:tblPr>' +
+          `<w:tr><w:trPr><w:trHeight w:val="360" w:hRule="exact"/></w:trPr>${cell('<w:gridSpan w:val="2"/>', 'head')}</w:tr>` +
           `<w:tr>${cell('<w:vMerge w:val="restart"/><w:shd w:val="clear" w:fill="DDEEFF"/>', 'merged')}${cell('<w:vAlign w:val="center"/>', 'b1')}</w:tr>` +
-          `<w:tr>${cell('<w:vMerge/>', '')}${cell('<w:tcW w:w="2400" w:type="dxa"/>', 'b2')}</w:tr>` +
+          `<w:tr>${cell('<w:vMerge/>', '')}${cell('<w:tcW w:w="2400" w:type="dxa"/><w:tcMar><w:left w:w="120" w:type="dxa"/></w:tcMar>', 'b2')}</w:tr>` +
           '</w:tbl>',
       })
     );
-    expect(html).toContain('<table style="border-collapse:collapse">');
+    expect(html).toContain(
+      '<table style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto">'
+    );
+    expect(html).toContain('<tr style="height:18pt">');
     expect(html).toContain('colspan="2"');
     expect(html).toContain('rowspan="2"');
     expect(html).toContain('background-color:#ddeeff');
     expect(html).toContain('vertical-align:middle');
     expect(html).toContain('width:120pt');
+    expect(html).toContain('padding-left:6pt');
     // The continuation cell is spanned, not emitted: 1 + 2 + 1 cells.
     expect(count(html, '<td')).toBe(4);
     expect(count(html, 'merged')).toBe(1);
@@ -210,17 +230,20 @@ describe('interopHtmlFromFragment', () => {
           `<Relationship Id="rId6" Type="${R}/hyperlink" Target="javascript:alert(1)" TargetMode="External"/>`,
         body:
           '<w:p>' +
+          '<w:bookmarkStart w:id="1" w:name="_Ref1"/>' +
           '<w:hyperlink r:id="rId5"><w:r><w:t>good</w:t></w:r></w:hyperlink>' +
           '<w:hyperlink r:id="rId6"><w:r><w:t>bad</w:t></w:r></w:hyperlink>' +
           '<w:hyperlink w:anchor="_Ref1"><w:r><w:t>internal</w:t></w:r></w:hyperlink>' +
+          '<w:bookmarkEnd w:id="1"/>' +
           '</w:p>',
       })
     );
     expect(html).toContain('<a href="https://example.com/x">good</a>');
     expect(html).toContain('bad');
-    expect(html).toContain('internal');
+    expect(html).toContain('<a id="_Ref1"></a>');
+    expect(html).toContain('<a href="#_Ref1">internal</a>');
     expect(html).not.toContain('javascript:');
-    expect(count(html, '<a ')).toBe(1);
+    expect(count(html, '<a ')).toBe(3);
   });
 
   test('an in-budget image inlines as a data: URI with px dimensions', () => {
@@ -285,13 +308,41 @@ describe('interopHtmlFromFragment', () => {
     expect(html).not.toContain('DATE');
   });
 
-  test('tabs and breaks map to pre-space spans and br', () => {
+  test('paragraph flow controls, tabs, shading, and borders become Word-compatible CSS', () => {
     const html = interopHtmlFromFragment(
       fragment({
-        body: '<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t><w:br/><w:t>c</w:t></w:r></w:p>',
+        body:
+          '<w:p><w:pPr>' +
+          '<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="9026"/></w:tabs>' +
+          '<w:pageBreakBefore/><w:keepNext/><w:keepLines/><w:widowControl/>' +
+          '<w:shd w:fill="DDEEFF"/>' +
+          '<w:pBdr><w:bottom w:val="double" w:sz="12" w:color="112233"/></w:pBdr>' +
+          '</w:pPr><w:r><w:t>flow</w:t></w:r></w:p>',
       })
     );
-    expect(html).toContain('<span style="white-space:pre">\t</span>');
+    expect(html).toContain('tab-stops:right dotted 451.3pt');
+    expect(html).toContain('page-break-before:always');
+    expect(html).toContain('page-break-after:avoid');
+    expect(html).toContain('page-break-inside:avoid');
+    expect(html).toContain('widows:2');
+    expect(html).toContain('orphans:2');
+    expect(html).toContain('background-color:#ddeeff');
+    expect(html).toContain('border-bottom:1.5pt double #112233');
+    expect(html).toContain('mso-border-bottom-alt:1.5pt double #112233');
+  });
+
+  test('tabs and typed page breaks map to Word-compatible HTML', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t>' +
+          '<w:ptab w:alignment="right" w:relativeTo="margin" w:leader="dot"/>' +
+          '<w:br w:type="page"/><w:t>c</w:t><w:br/><w:t>d</w:t></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('<span style="white-space:pre;mso-tab-count:1">\t</span>');
+    expect(html).toContain('<w:PTab Alignment="RIGHT" RelativeTo="MARGIN" Leader="DOT"></w:PTab>');
+    expect(html).toContain('<br style="page-break-before:always">');
     expect(html).toContain('<br>');
   });
 

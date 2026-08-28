@@ -1,5 +1,3 @@
-// Outbound interop HTML for the rich clipboard (rich-clipboard-fidelity task 3.2, design D6).
-//
 // Serializes a clipboard fragment package — the miniature WordprocessingML OPC zip the copy
 // lane produces — into the visible half of the `text/html` flavour. Structure comes from the
 // canonical tree (headings, real lists, tables, anchors); formatting comes from a small
@@ -22,8 +20,14 @@ import {
 import { relationshipsOf } from '../store/package/package-edit.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import type { RelationshipRecord } from '../store/package/relationships.ts';
-import { sanitizeHref } from '../store/package/sinks.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { clipboardBase64Of } from './clipboard-html-base64.ts';
+import { clipboardBookmarkName, clipboardHyperlinkTarget } from './clipboard-html-links.ts';
+import {
+  wordBorderCss,
+  wordParagraphClassOf,
+  wordPositionalTabHtml,
+} from './clipboard-html-word-elements.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const STYLES_REL = `${R_NS}/styles`;
@@ -41,10 +45,6 @@ export interface InteropHtmlOptions {
   /** Total image budget. Default 8 MiB. Images beyond either budget are omitted. */
   readonly maxTotalImageBytes?: number;
 }
-
-// ---------------------------------------------------------------------------
-// String-builder primitives — the only way file data reaches the output.
-// ---------------------------------------------------------------------------
 
 function escapeHtml(value: string): string {
   return value
@@ -78,32 +78,6 @@ function parseIntValue(raw: string | undefined): number | null {
   const parsed = Number(raw);
   return Number.isSafeInteger(parsed) ? parsed : null;
 }
-
-const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-
-/** Chunked base64 over raw bytes — no `btoa`, works identically in browser and test hosts. */
-function base64Of(bytes: Uint8Array): string {
-  const chunks: string[] = [];
-  let piece = '';
-  for (let i = 0; i < bytes.length; i += 3) {
-    const a = bytes[i]!;
-    const b = i + 1 < bytes.length ? bytes[i + 1]! : 0;
-    const c = i + 2 < bytes.length ? bytes[i + 2]! : 0;
-    piece += BASE64_ALPHABET[a >> 2]! + BASE64_ALPHABET[((a & 3) << 4) | (b >> 4)]!;
-    piece += i + 1 < bytes.length ? BASE64_ALPHABET[((b & 15) << 2) | (c >> 6)]! : '=';
-    piece += i + 2 < bytes.length ? BASE64_ALPHABET[c & 63]! : '=';
-    if (piece.length >= 0x8000) {
-      chunks.push(piece);
-      piece = '';
-    }
-  }
-  chunks.push(piece);
-  return chunks.join('');
-}
-
-// ---------------------------------------------------------------------------
-// Tree helpers
-// ---------------------------------------------------------------------------
 
 function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
@@ -156,10 +130,6 @@ function findDescendant(
   }
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Styles cascade over the fragment's own styles part
-// ---------------------------------------------------------------------------
 
 interface StyleIndex {
   readonly byId: ReadonlyMap<string, OoxmlElement>;
@@ -416,6 +386,53 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
   else if (firstLine !== null && firstLine !== 0)
     rules.push(`text-indent:${ptFromTwips(firstLine)}`);
 
+  const tabs = lastProperty(sources, 'tabs');
+  if (tabs) {
+    const values: string[] = [];
+    for (const child of tabs.children) {
+      if (!isElement(child) || child.localName !== 'tab') continue;
+      const val = wmlVal(child);
+      const pos = parseIntValue(attributeValueOf(child, 'pos', WML_NAMESPACE_URI));
+      if (
+        pos === null ||
+        pos < 0 ||
+        (val !== 'left' &&
+          val !== 'center' &&
+          val !== 'right' &&
+          val !== 'decimal' &&
+          val !== 'bar')
+      ) {
+        continue;
+      }
+      const leader = wmlVal(child, 'leader');
+      const cssLeader =
+        leader === 'dot'
+          ? 'dotted'
+          : leader === 'hyphen'
+            ? 'dashed'
+            : leader === 'underscore'
+              ? 'lined'
+              : '';
+      values.push(`${val}${cssLeader ? ` ${cssLeader}` : ''} ${ptFromTwips(pos)}`);
+    }
+    if (values.length > 0) rules.push(`tab-stops:${values.join(' ')}`);
+  }
+
+  if (toggleOn(sources, 'pageBreakBefore')) rules.push('page-break-before:always');
+  if (toggleOn(sources, 'keepNext')) rules.push('page-break-after:avoid');
+  if (toggleOn(sources, 'keepLines')) rules.push('page-break-inside:avoid');
+  if (toggleOn(sources, 'widowControl')) rules.push('widows:2', 'orphans:2');
+
+  const shading = cssHexColor(foldAttribute(sources, 'shd', 'fill'));
+  if (shading) rules.push(`background-color:${shading}`);
+  const paragraphBorders = lastProperty(sources, 'pBdr');
+  if (paragraphBorders) {
+    for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
+      const css = wordBorderCss(wmlChild(paragraphBorders, edge));
+      if (css) rules.push(`border-${edge}:${css}`, `mso-border-${edge}-alt:${css}`);
+    }
+  }
+
   return rules.join(';');
 }
 
@@ -562,7 +579,7 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
     cx !== null && cy !== null && cx > 0 && cy > 0
       ? ` width="${Math.round(cx / EMU_PER_PX)}" height="${Math.round(cy / EMU_PER_PX)}"`
       : '';
-  return `<img src="data:${mime};base64,${base64Of(bytes)}"${size}>`;
+  return `<img src="data:${mime};base64,${clipboardBase64Of(bytes)}"${size}>`;
 }
 
 function renderRun(
@@ -594,16 +611,28 @@ function renderRun(
   let inner = '';
   for (const child of run.children) {
     if (!isElement(child)) continue;
+    const positionalTab = wordPositionalTabHtml(child);
+    if (positionalTab !== '') {
+      inner += positionalTab;
+      continue;
+    }
     switch (child.kind) {
       case 'text':
         inner += escapeHtml(textUnder(child));
         break;
       case 'tab':
-        inner += '<span style="white-space:pre">\t</span>';
+        inner += '<span style="white-space:pre;mso-tab-count:1">\t</span>';
         break;
-      case 'hardBreak':
-        inner += '<br>';
+      case 'hardBreak': {
+        const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
+        inner += type === 'page' ? '<br style="page-break-before:always">' : '<br>';
         break;
+      }
+      case 'bookmarkStart': {
+        const name = clipboardBookmarkName(attributeValueOf(child, 'name', WML_NAMESPACE_URI));
+        if (name !== null) inner += `<a id="${escapeAttr(name)}"></a>`;
+        break;
+      }
       case 'drawing':
         inner += renderDrawing(ctx, child);
         break;
@@ -638,10 +667,16 @@ function renderInline(
         const record = relId
           ? ctx.docRels.find((r) => r.id === relId && r.targetMode === 'External')
           : undefined;
-        const href = record ? sanitizeHref(record.rawTarget) : null;
-        // Internal `w:anchor` links have no target in a clipboard context; a refused
-        // external target emits its content without the anchor.
-        out += href?.ok ? `<a href="${escapeAttr(href.href)}">${inner}</a>` : inner;
+        const target = clipboardHyperlinkTarget(
+          record?.rawTarget,
+          attributeValueOf(child, 'anchor', WML_NAMESPACE_URI)
+        );
+        out += target !== null ? `<a href="${escapeAttr(target)}">${inner}</a>` : inner;
+        break;
+      }
+      case 'bookmarkStart': {
+        const name = clipboardBookmarkName(attributeValueOf(child, 'name', WML_NAMESPACE_URI));
+        if (name !== null) out += `<a id="${escapeAttr(name)}"></a>`;
         break;
       }
       case 'fldSimple':
@@ -686,6 +721,14 @@ function headingLevelOf(ctx: RenderContext, ownPPr: OoxmlElement | null): number
   return null;
 }
 
+function paragraphClassOf(ctx: RenderContext, ownPPr: OoxmlElement | null): string | null {
+  for (const style of styleChain(ctx.styles, wmlVal(wmlChild(ownPPr, 'pStyle')))) {
+    const found = wordParagraphClassOf(attributeValueOf(style, 'styleId', WML_NAMESPACE_URI));
+    if (found !== null) return found;
+  }
+  return null;
+}
+
 function renderParagraph(
   ctx: RenderContext,
   paragraph: OoxmlElement,
@@ -702,7 +745,9 @@ function renderParagraph(
   if (options.asListItem) return `<li${styleAttr}>${inner}</li>`;
   const heading = headingLevelOf(ctx, pPr);
   const tag = heading === null ? 'p' : `h${heading}`;
-  return `<${tag}${styleAttr}>${inner}</${tag}>`;
+  const wordClass = heading === null ? paragraphClassOf(ctx, pPr) : null;
+  const classAttr = wordClass === null ? '' : ` class="${wordClass}"`;
+  return `<${tag}${classAttr}${styleAttr}>${inner}</${tag}>`;
 }
 
 // --- tables ---
@@ -732,19 +777,12 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): CellPlacement[][] {
   });
 }
 
-function borderCss(edge: OoxmlElement | null): string | null {
-  if (!edge) return null;
-  const val = wmlVal(edge);
-  if (val === undefined || val === 'nil' || val === 'none') return null;
-  const color = cssHexColor(attributeValueOf(edge, 'color', WML_NAMESPACE_URI)) ?? '#000000';
-  return `1pt solid ${color}`;
-}
-
 function cellCss(tcPr: OoxmlElement | null, tblBorders: OoxmlElement | null): string {
   const rules: string[] = [];
   const tcBorders = wmlChild(tcPr, 'tcBorders');
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
-    const border = borderCss(wmlChild(tcBorders, edge)) ?? borderCss(wmlChild(tblBorders, edge));
+    const border =
+      wordBorderCss(wmlChild(tcBorders, edge)) ?? wordBorderCss(wmlChild(tblBorders, edge));
     if (border) rules.push(`border-${edge}:${border}`);
   }
   const fill = cssHexColor(attrOf(wmlChild(tcPr, 'shd'), 'fill', WML_NAMESPACE_URI));
@@ -759,21 +797,27 @@ function cellCss(tcPr: OoxmlElement | null, tblBorders: OoxmlElement | null): st
   if (width !== null && width > 0 && (widthType === undefined || widthType === 'dxa')) {
     rules.push(`width:${ptFromTwips(width)}`);
   }
+  const margins = wmlChild(tcPr, 'tcMar');
+  for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
+    const margin = wmlChild(margins, edge);
+    const value = parseIntValue(attrOf(margin, 'w', WML_NAMESPACE_URI));
+    if (value !== null && value >= 0 && attrOf(margin, 'type', WML_NAMESPACE_URI) === 'dxa') {
+      rules.push(`padding-${edge}:${ptFromTwips(value)}`);
+    }
+  }
   return rules.join(';');
 }
 
 function renderTable(ctx: RenderContext, table: OoxmlElement): string {
   const tblPr = table.children.find((child) => child.kind === 'tableProperties');
+  const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
   // Table-level borders: the style chain's tblBorders, overridden by the table's own.
   let tblBorders: OoxmlElement | null = null;
-  for (const style of styleChain(
-    ctx.styles,
-    wmlVal(wmlChild(tblPr && isElement(tblPr) ? tblPr : null, 'tblStyle'))
-  )) {
+  for (const style of styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')))) {
     const styleBorders = wmlChild(wmlChild(style, 'tblPr'), 'tblBorders');
     if (styleBorders) tblBorders = styleBorders;
   }
-  const ownBorders = wmlChild(tblPr && isElement(tblPr) ? tblPr : null, 'tblBorders');
+  const ownBorders = wmlChild(ownTblPr, 'tblBorders');
   if (ownBorders) tblBorders = ownBorders;
 
   const rows: OoxmlElement[] = [];
@@ -782,9 +826,22 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
   }
   const placements = cellPlacementsOf(rows);
 
-  let out = '<table style="border-collapse:collapse">';
+  const tableRules = ['border-collapse:collapse'];
+  const tableWidth = wmlChild(ownTblPr, 'tblW');
+  const width = parseIntValue(attrOf(tableWidth, 'w', WML_NAMESPACE_URI));
+  if (width !== null && width > 0 && attrOf(tableWidth, 'type', WML_NAMESPACE_URI) === 'dxa') {
+    tableRules.push(`width:${ptFromTwips(width)}`);
+  }
+  const tableJc = wmlVal(wmlChild(ownTblPr, 'jc'));
+  if (tableJc === 'center') tableRules.push('margin-left:auto', 'margin-right:auto');
+  else if (tableJc === 'right') tableRules.push('margin-left:auto', 'margin-right:0');
+  let out = `<table style="${tableRules.join(';')}">`;
   placements.forEach((rowCells, rowIndex) => {
-    out += '<tr>';
+    const height = wmlChild(wmlChild(rows[rowIndex] ?? null, 'trPr'), 'trHeight');
+    const heightValue = parseIntValue(attrOf(height, 'val', WML_NAMESPACE_URI));
+    const rowStyle =
+      heightValue !== null && heightValue > 0 ? ` style="height:${ptFromTwips(heightValue)}"` : '';
+    out += `<tr${rowStyle}>`;
     for (const placement of rowCells) {
       // A vMerge continuation emits nothing; the restart above spans it.
       if (placement.vMerge === 'continue') continue;

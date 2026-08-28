@@ -203,6 +203,59 @@ describe('run and paragraph mapping', () => {
     expect(docXml).toContain('w:firstLine="360"');
   });
 
+  test('Word paragraph geometry maps absolute lengths and percentage line spacing', () => {
+    const { docXml } = openFragment(
+      '<p style="margin-top:10pt;margin-right:.25in;margin-bottom:20pt;' +
+        'margin-left:.5in;text-indent:-.25in;line-height:115%;' +
+        'page-break-before:always;page-break-after:avoid;page-break-inside:avoid;' +
+        'widows:2;background:#DDEEFF;tab-stops:right dotted 467.5pt;' +
+        'mso-border-bottom-alt:solid #2B6CB0 .75pt">geometry</p>'
+    );
+    const paragraph = docXml.split('</w:p>').find((part) => part.includes('geometry'));
+    expect(paragraph).toBeDefined();
+    expect(paragraph!).toContain('<w:keepNext/>');
+    expect(paragraph!).toContain('<w:keepLines/>');
+    expect(paragraph!).toContain('<w:pageBreakBefore/>');
+    expect(paragraph!).toContain('<w:widowControl/>');
+    expect(paragraph!).toContain('w:before="200"');
+    expect(paragraph!).toContain('w:after="400"');
+    expect(paragraph!).toContain('w:line="276"');
+    expect(paragraph!).toContain('w:lineRule="auto"');
+    expect(paragraph!).toContain('w:left="720"');
+    expect(paragraph!).toContain('w:right="360"');
+    expect(paragraph!).toContain('w:hanging="360"');
+    expect(paragraph!).toContain('<w:tab ');
+    expect(paragraph!).toContain('w:val="right"');
+    expect(paragraph!).toContain('w:pos="9350"');
+    expect(paragraph!).toContain('w:leader="dot"');
+    expect(paragraph!).toContain('<w:bottom ');
+    expect(paragraph!).toContain('w:val="single"');
+    expect(paragraph!).toContain('w:sz="6"');
+    expect(paragraph!).toContain('w:color="2B6CB0"');
+    expect(paragraph!).toContain('w:fill="DDEEFF"');
+    expect(paragraph!.match(/<w:shd/g)).toHaveLength(1);
+  });
+
+  test('Word CSS length units map to equivalent twip values', () => {
+    const { docXml } = openFragment(
+      '<p style="margin-left:1in">in</p>' +
+        '<p style="margin-left:2.54cm">cm</p>' +
+        '<p style="margin-left:25.4mm">mm</p>' +
+        '<p style="margin-left:6pc">pc</p>'
+    );
+    expect(docXml.match(/w:left="1440"/g)).toHaveLength(4);
+  });
+
+  test('unsafe or malformed paragraph CSS does not produce structure', () => {
+    const { docXml } = openFragment(
+      '<p style="tab-stops:right url(https://evil.example);' +
+        'mso-border-bottom-alt:solid url(https://evil.example) 1pt">safe</p>'
+    );
+    expect(docXml).not.toContain('<w:tabs>');
+    expect(docXml).not.toContain('<w:pBdr>');
+    expect(docXml).not.toContain('evil.example');
+  });
+
   test('Word stylesheet text-align on Title/Subtitle is copied as direct jc', () => {
     // Word clipboard HTML puts alignment in a detached <style> block. Title often
     // also carries inline text-align / align=center; Subtitle often does not.
@@ -372,12 +425,37 @@ describe('lists', () => {
     const numberingXml = strFromU8(pkg.partBytes.get('/word/numbering.xml')!);
     expect(numberingXml).toContain('w:numFmt w:val="decimal"');
   });
+
+  test('Word list markers preserve Roman, letter, and restarted decimal numbering', () => {
+    const item = (id: number, marker: string, text: string): string =>
+      `<p style="mso-list:l${id} level1 lfo${id}">` +
+      `<span style="mso-list:Ignore">${marker}</span>${text}</p>`;
+    const { pkg } = openFragment(
+      item(4, 'I.', 'roman') +
+        item(5, 'A.', 'upper letter') +
+        item(6, 'a.', 'lower letter') +
+        item(7, '5.', 'restart')
+    );
+    const numberingXml = strFromU8(pkg.partBytes.get('/word/numbering.xml')!);
+    expect(numberingXml).toContain('w:numFmt w:val="upperRoman"');
+    expect(numberingXml).toContain('w:numFmt w:val="upperLetter"');
+    expect(numberingXml).toContain('w:numFmt w:val="lowerLetter"');
+    expect(numberingXml).toContain('<w:start w:val="5"/>');
+  });
+
+  test('semantic ordered-list type and start attributes remain numbering properties', () => {
+    const { pkg } = openFragment('<ol type="A" start="5"><li>item</li></ol>');
+    const numberingXml = strFromU8(pkg.partBytes.get('/word/numbering.xml')!);
+    expect(numberingXml).toContain('w:numFmt w:val="upperLetter"');
+    expect(numberingXml).toContain('<w:start w:val="5"/>');
+  });
 });
 
 describe('tables', () => {
   test('borders, colspan, shading and th styling project to table properties', () => {
     const { docXml } = openFragment(
-      '<table border="1"><tr><th colspan="2" style="background-color:#ffff00">head</th></tr>' +
+      '<table border="1"><tr><th colspan="2" style="background:#ffff00;padding:4pt 6pt;' +
+        'mso-border-alt:double #2B6CB0 1.5pt">head</th></tr>' +
         '<tr><td>b</td><td style="vertical-align:middle">c</td></tr></table>'
     );
     expect(docXml).toContain('<w:tbl>');
@@ -385,11 +463,53 @@ describe('tables', () => {
     expect(docXml).toContain('w:gridSpan w:val="2"');
     expect(docXml).toContain('w:fill="FFFF00"');
     expect(docXml).toContain('w:vAlign w:val="center"');
+    expect(docXml).toContain('<w:tcBorders>');
+    expect(docXml).toContain('w:val="double"');
+    expect(docXml).toContain('w:sz="12"');
+    expect(docXml).toContain('w:color="2B6CB0"');
+    expect(docXml).toContain('<w:tcMar>');
+    expect(docXml).toContain('<w:top w:type="dxa" w:w="80"/>');
+    expect(docXml).toContain('<w:left w:type="dxa" w:w="120"/>');
     // th → bold runs, centered paragraph.
     expect(docXml).toContain('<w:b/>');
     expect(docXml).toContain('w:jc w:val="center"');
     // Grid carries one w:gridCol per column.
     expect(docXml.split('<w:gridCol').length - 1).toBe(2);
+  });
+
+  test('Word table and cell widths define the fixed grid', () => {
+    const { docXml } = openFragment(
+      '<table align="center" style="width:3in"><tr style="height:18pt;mso-height-rule:exactly">' +
+        '<td style="width:1in">narrow</td><td style="width:2in">wide</td>' +
+        '</tr></table>'
+    );
+    expect(docXml).toContain('<w:tblW ');
+    expect(docXml).toContain('w:w="4320"');
+    expect(docXml).toContain('<w:jc w:val="center"/>');
+    expect(docXml).toContain('<w:gridCol w:w="1440"/>');
+    expect(docXml).toContain('<w:gridCol w:w="2880"/>');
+    expect(docXml).toContain('<w:trHeight w:hRule="exact" w:val="360"/>');
+    expect(docXml.match(/<w:tcW[^>]+w:w="1440"/g)).toHaveLength(1);
+    expect(docXml.match(/<w:tcW[^>]+w:w="2880"/g)).toHaveLength(1);
+  });
+
+  test('Word table border styles and internal borders remain distinct', () => {
+    const { docXml } = openFragment(
+      '<table style="border:none;mso-border-alt:double #112233 1.5pt;' +
+        'mso-border-insideh:.5pt dotted #445566;mso-border-insidev:1pt dashed #778899">' +
+        '<tr><td>a</td><td>b</td></tr></table>'
+    );
+    const properties = docXml.split('</w:tblPr>')[0]!;
+    expect(properties).toContain('<w:top ');
+    expect(properties).toContain('w:val="double"');
+    expect(properties).toContain('w:sz="12"');
+    expect(properties).toContain('w:color="112233"');
+    expect(properties).toContain('<w:insideH ');
+    expect(properties).toContain('w:val="dotted"');
+    expect(properties).toContain('w:color="445566"');
+    expect(properties).toContain('<w:insideV ');
+    expect(properties).toContain('w:val="dashed"');
+    expect(properties).toContain('w:color="778899"');
   });
 
   test('rowspan becomes a vMerge restart plus continuation cells', () => {
@@ -421,6 +541,20 @@ describe('hyperlinks', () => {
     expect(relsXml).toContain('relationships/hyperlink');
     expect(relsXml).toContain('Target="https://x.example/"');
     expect(relsXml).toContain('TargetMode="External"');
+  });
+
+  test('Word bookmarks and same-document links remain internal', () => {
+    const { docXml, relsXml } = openFragment(
+      '<p><a name="_Ref1"></a>target <a href="#_Ref1">jump</a> ' +
+        '<a href="#javascript:bad">unsafe</a></p>'
+    );
+    expect(docXml).toContain('<w:bookmarkStart ');
+    expect(docXml).toContain('w:name="_Ref1"');
+    expect(docXml).toContain('<w:bookmarkEnd ');
+    expect(docXml).toContain('<w:hyperlink w:anchor="_Ref1">');
+    expect(docXml).toContain('unsafe');
+    expect(docXml).not.toContain('javascript:bad');
+    expect(relsXml).not.toContain('Target="#_Ref1"');
   });
 });
 
@@ -483,11 +617,14 @@ describe('images', () => {
     expect(read.package.partBytes.get('/word/media/image1.png')).toBeUndefined();
   });
 
-  test('declared mime must match the magic bytes', () => {
+  test('sniffed image bytes override Word preview MIME labels', () => {
     const { docXml, pkg } = openFragment(
-      `<p>x<img src="data:image/jpeg;base64,${TINY_PNG_BASE64}"></p>`
+      `<p><img src="data:image/jpeg;base64,${TINY_PNG_BASE64}">` +
+        `<img src="data:image/emf;base64,${TINY_PNG_BASE64}"></p>`
     );
-    expect(docXml).not.toContain('w:drawing');
+    expect(docXml.match(/<w:drawing>/g)).toHaveLength(2);
+    expect(pkg.partBytes.get('/word/media/image1.png')).toBeDefined();
+    expect(pkg.partBytes.get('/word/media/image2.png')).toBeDefined();
     expect(pkg.partBytes.get('/word/media/image1.jpeg')).toBeUndefined();
   });
 });
@@ -560,6 +697,30 @@ describe('whitespace and breaks', () => {
   test('br becomes w:br', () => {
     const { docXml } = openFragment('<p>one<br>two</p>');
     expect(docXml).toContain('<w:br/>');
+  });
+
+  test('Word page-break br becomes a typed page break', () => {
+    const { docXml } = openFragment(
+      "<p>before</p><br clear=all style='mso-special-character:line-break;" +
+        "page-break-before:always;mso-break-type:section-break'><p>after</p>"
+    );
+    expect(docXml).toContain('<w:br w:type="page"/>');
+  });
+
+  test('Word tab count and positional tab markup remain semantic tabs', () => {
+    const { docXml } = openFragment(
+      '<p style="tab-stops:right 451.3pt"><b>Left</b>' +
+        "<span style='mso-tab-count:1'> </span>Right</p>" +
+        '<p>Contents<w:PTab Alignment="RIGHT" RelativeTo="MARGIN" Leader="DOT"></w:PTab>4</p>'
+    );
+    expect(docXml).toContain('<w:tabs><w:tab ');
+    expect(docXml).toContain('w:val="right"');
+    expect(docXml).toContain('w:pos="9026"');
+    expect(docXml).toContain('<w:tab/>');
+    expect(docXml).toContain('<w:ptab ');
+    expect(docXml).toContain('w:alignment="right"');
+    expect(docXml).toContain('w:relativeTo="margin"');
+    expect(docXml).toContain('w:leader="dot"');
   });
 
   test('pre preserves whitespace, converts newlines to w:br and uses Courier New', () => {

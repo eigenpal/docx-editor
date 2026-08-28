@@ -1,10 +1,23 @@
-/** A CSS length in points, from `px` or `pt` values only. */
+/** A bounded absolute CSS length in points. Word clipboard HTML commonly uses `in`. */
 export function parseCssLengthPt(value: string): number | null {
-  const match = /^(-?\d+(?:\.\d+)?)(px|pt)$/.exec(value.trim().toLowerCase());
+  const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(px|pt|in|cm|mm|pc)$/.exec(value.trim().toLowerCase());
   if (!match) return null;
   const magnitude = Number.parseFloat(match[1]!);
   if (!Number.isFinite(magnitude)) return null;
-  return match[2] === 'px' ? magnitude * 0.75 : magnitude;
+  switch (match[2]) {
+    case 'px':
+      return magnitude * 0.75;
+    case 'in':
+      return magnitude * 72;
+    case 'cm':
+      return (magnitude * 72) / 2.54;
+    case 'mm':
+      return (magnitude * 72) / 25.4;
+    case 'pc':
+      return magnitude * 12;
+    default:
+      return magnitude;
+  }
 }
 
 /** Whether bare image extents use Word's point-based clipboard convention. */
@@ -272,14 +285,41 @@ export interface HtmlRunProps {
   font?: string;
 }
 
+export type HtmlTabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar';
+export type HtmlTabLeader = 'dot' | 'hyphen' | 'underscore' | 'middleDot' | 'heavy';
+
+export interface HtmlTabStop {
+  readonly val: HtmlTabAlignment;
+  readonly posTwips: number;
+  readonly leader?: HtmlTabLeader;
+}
+
+export type HtmlParagraphBorderEdge = 'top' | 'left' | 'bottom' | 'right';
+
+export interface HtmlParagraphBorder {
+  readonly val: 'single' | 'double' | 'dotted' | 'dashed';
+  readonly szEighthPoints: number;
+  readonly color: string;
+}
+
 export interface HtmlParaProps {
   styleId?: string;
   jc?: HtmlParagraphAlign;
   indLeftTwips?: number;
+  indRightTwips?: number;
   /** Positive → `w:firstLine`, negative → `w:hanging`. */
   firstLineTwips?: number;
+  spacingBeforeTwips?: number;
+  spacingAfterTwips?: number;
   /** `w:spacing w:line` in 240ths, `w:lineRule="auto"`. */
   lineTwentieths?: number;
+  keepNext?: boolean;
+  keepLines?: boolean;
+  pageBreakBefore?: boolean;
+  widowControl?: boolean;
+  shdFill?: string;
+  tabs?: readonly HtmlTabStop[];
+  borders?: Readonly<Partial<Record<HtmlParagraphBorderEdge, HtmlParagraphBorder>>>;
   numPr?: { readonly numId: string; readonly ilvl: number };
 }
 
@@ -287,7 +327,8 @@ const NAMED_COLORS = new Map(
   (
     'black:000000 white:FFFFFF red:FF0000 green:008000 blue:0000FF yellow:FFFF00 gray:808080 ' +
     'grey:808080 silver:C0C0C0 maroon:800000 navy:000080 purple:800080 orange:FFA500 ' +
-    'aqua:00FFFF cyan:00FFFF fuchsia:FF00FF magenta:FF00FF lime:00FF00 olive:808000'
+    'aqua:00FFFF cyan:00FFFF fuchsia:FF00FF magenta:FF00FF lime:00FF00 olive:808000 ' +
+    'windowtext:000000'
   )
     .split(' ')
     .map((pair) => pair.split(':') as [string, string])
@@ -386,6 +427,93 @@ function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));
 }
 
+const TAB_ALIGNMENTS: ReadonlySet<HtmlTabAlignment> = new Set([
+  'left',
+  'center',
+  'right',
+  'decimal',
+  'bar',
+]);
+
+const TAB_LEADERS: ReadonlyMap<string, HtmlTabLeader> = new Map([
+  ['dotted', 'dot'],
+  ['dot', 'dot'],
+  ['dashed', 'hyphen'],
+  ['hyphen', 'hyphen'],
+  ['lined', 'underscore'],
+  ['underscore', 'underscore'],
+  ['middledot', 'middleDot'],
+  ['heavy', 'heavy'],
+]);
+
+function tabStopsOf(value: string | undefined): readonly HtmlTabStop[] | undefined {
+  if (value === undefined || value.length === 0 || value.length > 512) return undefined;
+  let val: HtmlTabAlignment = 'left';
+  let leader: HtmlTabLeader | undefined;
+  const stops: HtmlTabStop[] = [];
+  for (const raw of value.trim().toLowerCase().split(/\s+/)) {
+    if (TAB_ALIGNMENTS.has(raw as HtmlTabAlignment)) {
+      val = raw as HtmlTabAlignment;
+      continue;
+    }
+    const mappedLeader = TAB_LEADERS.get(raw);
+    if (mappedLeader !== undefined) {
+      leader = mappedLeader;
+      continue;
+    }
+    const points = parseCssLengthPt(raw);
+    if (points === null || points < 0) return undefined;
+    stops.push({
+      val,
+      posTwips: clamp(Math.round(points * 20), 0, 31_680),
+      ...(leader === undefined ? {} : { leader }),
+    });
+    if (stops.length >= 32) break;
+    val = 'left';
+    leader = undefined;
+  }
+  return stops.length > 0 ? stops : undefined;
+}
+
+const BORDER_STYLES: ReadonlyMap<string, HtmlParagraphBorder['val']> = new Map([
+  ['solid', 'single'],
+  ['single', 'single'],
+  ['double', 'double'],
+  ['dotted', 'dotted'],
+  ['dashed', 'dashed'],
+]);
+
+function paragraphBorderOf(value: string | undefined): HtmlParagraphBorder | undefined {
+  if (value === undefined || value.length === 0 || value.length > 128) return undefined;
+  let val: HtmlParagraphBorder['val'] | undefined;
+  let points: number | undefined;
+  let color: string | undefined;
+  for (const token of value.trim().split(/\s+/)) {
+    const borderStyle = BORDER_STYLES.get(token.toLowerCase());
+    if (borderStyle !== undefined) {
+      val = borderStyle;
+      continue;
+    }
+    const length = parseCssLengthPt(token);
+    if (length !== null) {
+      points = length;
+      continue;
+    }
+    const parsedColor = parseCssColor(token);
+    if (parsedColor !== null) {
+      color = parsedColor;
+      continue;
+    }
+    return undefined;
+  }
+  if (val === undefined || points === undefined || points <= 0) return undefined;
+  return {
+    val,
+    szEighthPoints: clamp(Math.round(points * 8), 2, 96),
+    color: color ?? '000000',
+  };
+}
+
 export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, string>): HtmlRunProps {
   if (style.size === 0) return base;
   const next: HtmlRunProps = { ...base };
@@ -442,17 +570,61 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   else if (align === 'center') para.jc = 'center';
   else if (align === 'right' || align === 'end') para.jc = 'right';
   else if (align === 'justify') para.jc = 'both';
-  const marginPt = parseCssLengthPt(style.get('margin-left') ?? '');
-  if (marginPt !== null && marginPt > 0) {
-    para.indLeftTwips = clamp(Math.round(marginPt * 20), 0, 31_680);
+  const marginLeftPt = parseCssLengthPt(style.get('margin-left') ?? '');
+  if (marginLeftPt !== null) {
+    para.indLeftTwips = clamp(Math.round(marginLeftPt * 20), -31_680, 31_680);
+  }
+  const marginRightPt = parseCssLengthPt(style.get('margin-right') ?? '');
+  if (marginRightPt !== null) {
+    para.indRightTwips = clamp(Math.round(marginRightPt * 20), -31_680, 31_680);
   }
   const indentPt = parseCssLengthPt(style.get('text-indent') ?? '');
   if (indentPt !== null && indentPt !== 0) {
     const twips = clamp(Math.round(indentPt * 20), -31_680, 31_680);
     if (twips !== 0) para.firstLineTwips = twips;
   }
+  const beforePt = parseCssLengthPt(style.get('margin-top') ?? '');
+  if (beforePt !== null && beforePt >= 0) {
+    para.spacingBeforeTwips = clamp(Math.round(beforePt * 20), 0, 31_680);
+  }
+  const afterPt = parseCssLengthPt(style.get('margin-bottom') ?? '');
+  if (afterPt !== null && afterPt >= 0) {
+    para.spacingAfterTwips = clamp(Math.round(afterPt * 20), 0, 31_680);
+  }
   const lineHeight = style.get('line-height')?.trim() ?? '';
   if (/^\d+(\.\d+)?$/.test(lineHeight) && Number.parseFloat(lineHeight) > 0) {
     para.lineTwentieths = clamp(Math.round(240 * Number.parseFloat(lineHeight)), 24, 9600);
+  } else if (/^\d+(\.\d+)?%$/.test(lineHeight)) {
+    const percentage = Number.parseFloat(lineHeight);
+    if (percentage > 0) {
+      para.lineTwentieths = clamp(Math.round(2.4 * percentage), 24, 9600);
+    }
   }
+  if (
+    style.get('page-break-before')?.trim().toLowerCase() === 'always' ||
+    style.get('break-before')?.trim().toLowerCase() === 'page'
+  ) {
+    para.pageBreakBefore = true;
+  }
+  if (style.get('page-break-after')?.trim().toLowerCase() === 'avoid') para.keepNext = true;
+  if (style.get('page-break-inside')?.trim().toLowerCase() === 'avoid') para.keepLines = true;
+  if (
+    /^[2-9]\d?$/.test(style.get('widows')?.trim() ?? '') ||
+    /^[2-9]\d?$/.test(style.get('orphans')?.trim() ?? '')
+  ) {
+    para.widowControl = true;
+  }
+  const shading =
+    solidBackground(style.get('background')) ?? solidBackground(style.get('background-color'));
+  if (shading) para.shdFill = shading;
+  const tabs = tabStopsOf(style.get('tab-stops'));
+  if (tabs !== undefined) para.tabs = tabs;
+  const borders: Partial<Record<HtmlParagraphBorderEdge, HtmlParagraphBorder>> = {};
+  for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
+    const border =
+      paragraphBorderOf(style.get(`mso-border-${edge}-alt`)) ??
+      paragraphBorderOf(style.get(`border-${edge}`));
+    if (border !== undefined) borders[edge] = border;
+  }
+  if (Object.keys(borders).length > 0) para.borders = borders;
 }

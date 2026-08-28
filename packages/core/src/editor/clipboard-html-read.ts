@@ -15,16 +15,17 @@
 // external HTML through one lane (`readOoxmlPackage` → merge → insertFragment).
 
 import { sanitizeHref, escapeXml, escapeXmlAttribute } from '../store/package/sinks.ts';
-import {
-  sniffImageMime,
-  validateRasterHeader,
-  type SupportedImageMime,
-} from '../store/package/image-resources.ts';
+import { sniffImageMime, validateRasterHeader } from '../store/package/image-resources.ts';
 import { writeZip, strToU8 } from '../store/package/zip.ts';
 import {
+  htmlListKindAndStart,
   numberingPartXml,
+  semanticHtmlListKind,
+  semanticHtmlListStart,
   type HtmlListAllocation as ListAllocation,
+  type HtmlListKind,
 } from './clipboard-html-numbering.ts';
+import { clipboardBookmarkName } from './clipboard-html-links.ts';
 import {
   applyParaCss,
   applyRunCss,
@@ -32,7 +33,6 @@ import {
   imageDimensionPx,
   isElement,
   isWordClipboardHtml,
-  parseCssColor,
   parseInlineStyle,
   tagOf,
   wordClassAlignmentsFromDocument,
@@ -41,6 +41,17 @@ import {
   type HtmlParaProps,
   type HtmlRunProps,
 } from './clipboard-html-styles.ts';
+import {
+  cellCssPropertiesXml,
+  htmlSpanOf,
+  tableBordersXml,
+  tableColumnWidths,
+  tableJustification,
+  tableRowsOf,
+  tableRowPropertiesXml,
+  tableSpanWidth,
+  tableWidthTwips,
+} from './clipboard-html-table-styles.ts';
 
 export interface HtmlProjectionLimits {
   /** UTF-8 size cap applied BEFORE parse. Default 4 MiB. */
@@ -138,6 +149,7 @@ interface Projection {
   semanticListCount: number;
   imageCount: number;
   docPrId: number;
+  nextBookmarkId: number;
   readonly classAlignments: ReadonlyMap<string, HtmlParagraphAlign>;
 }
 
@@ -194,24 +206,66 @@ function textRunXml(text: string, props: RunProps): string {
   return `<w:r>${rPrXml(props)}<w:t xml:space="preserve">${escapeXml(xmlSafeText(text))}</w:t></w:r>`;
 }
 
-/** `w:pPr`, children in CT_PPr sequence order: numPr, spacing, ind, jc. */
+/** `w:pPr`, children in CT_PPr sequence order. */
 function pPrXml(para: ParaProps): string {
   let inner = '';
   if (para.styleId !== undefined) {
     inner += `<w:pStyle w:val="${escapeXmlAttribute(para.styleId)}"/>`;
   }
+  if (para.keepNext) inner += '<w:keepNext/>';
+  if (para.keepLines) inner += '<w:keepLines/>';
+  if (para.pageBreakBefore) inner += '<w:pageBreakBefore/>';
+  if (para.widowControl) inner += '<w:widowControl/>';
   if (para.numPr) {
     inner +=
       `<w:numPr><w:ilvl w:val="${para.numPr.ilvl}"/>` +
       `<w:numId w:val="${escapeXmlAttribute(para.numPr.numId)}"/></w:numPr>`;
   }
-  if (para.lineTwentieths !== undefined) {
-    inner += `<w:spacing w:line="${para.lineTwentieths}" w:lineRule="auto"/>`;
+  if (para.borders !== undefined) {
+    let borders = '';
+    for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
+      const border = para.borders[edge];
+      if (border === undefined) continue;
+      borders +=
+        `<w:${edge} w:val="${border.val}" w:sz="${border.szEighthPoints}" ` +
+        `w:space="0" w:color="${border.color}"/>`;
+    }
+    if (borders.length > 0) inner += `<w:pBdr>${borders}</w:pBdr>`;
+  }
+  if (para.shdFill !== undefined) {
+    inner += `<w:shd w:val="clear" w:color="auto" w:fill="${para.shdFill}"/>`;
+  }
+  if (para.tabs !== undefined && para.tabs.length > 0) {
+    inner += `<w:tabs>${para.tabs
+      .map(
+        (tab) =>
+          `<w:tab w:val="${tab.val}" w:pos="${tab.posTwips}"` +
+          (tab.leader === undefined ? '/>' : ` w:leader="${tab.leader}"/>`)
+      )
+      .join('')}</w:tabs>`;
+  }
+  if (
+    para.spacingBeforeTwips !== undefined ||
+    para.spacingAfterTwips !== undefined ||
+    para.lineTwentieths !== undefined
+  ) {
+    let spacing = '<w:spacing';
+    if (para.spacingBeforeTwips !== undefined) {
+      spacing += ` w:before="${para.spacingBeforeTwips}"`;
+    }
+    if (para.spacingAfterTwips !== undefined) {
+      spacing += ` w:after="${para.spacingAfterTwips}"`;
+    }
+    if (para.lineTwentieths !== undefined) {
+      spacing += ` w:line="${para.lineTwentieths}" w:lineRule="auto"`;
+    }
+    inner += `${spacing}/>`;
   }
   const first = para.firstLineTwips;
-  if (para.indLeftTwips !== undefined || first !== undefined) {
+  if (para.indLeftTwips !== undefined || para.indRightTwips !== undefined || first !== undefined) {
     let ind = '<w:ind';
     if (para.indLeftTwips !== undefined) ind += ` w:left="${para.indLeftTwips}"`;
+    if (para.indRightTwips !== undefined) ind += ` w:right="${para.indRightTwips}"`;
     if (first !== undefined) {
       ind += first >= 0 ? ` w:firstLine="${first}"` : ` w:hanging="${-first}"`;
     }
@@ -267,7 +321,7 @@ function decodeBase64(data: string, maxBytes: number): Uint8Array | null {
   return at === byteLength ? out : null;
 }
 
-const DATA_IMAGE_RE = /^data:image\/(png|jpeg|jpg|gif);base64,([A-Za-z0-9+/=]+)$/;
+const DATA_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|gif|emf);base64,([A-Za-z0-9+/=]+)$/i;
 
 /** Project a `data:` image into a media part + rel + inline `w:drawing` run. */
 function projectImage(element: Element, runs: string[], p: Projection): void {
@@ -275,12 +329,11 @@ function projectImage(element: Element, runs: string[], p: Projection): void {
   if (src === null || src.length > p.maxImageBytes * 2) return;
   const match = DATA_IMAGE_RE.exec(src);
   if (!match) return; // External/blob/http sources drop with no fetch.
-  const declared: SupportedImageMime =
-    match[1] === 'png' ? 'image/png' : match[1] === 'gif' ? 'image/gif' : 'image/jpeg';
-  const bytes = decodeBase64(match[2]!, p.maxImageBytes);
+  const bytes = decodeBase64(match[1]!, p.maxImageBytes);
   if (bytes === null) return;
-  if (sniffImageMime(bytes) !== declared) return; // Magic bytes must match the claim.
-  const header = validateRasterHeader(bytes, declared);
+  const sniffed = sniffImageMime(bytes);
+  if (sniffed !== 'image/png' && sniffed !== 'image/jpeg' && sniffed !== 'image/gif') return;
+  const header = validateRasterHeader(bytes, sniffed);
 
   const style = parseInlineStyle(element);
   let widthPx = imageDimensionPx(element, style, 'width', p.wordHtml);
@@ -297,10 +350,10 @@ function projectImage(element: Element, runs: string[], p: Projection): void {
   const cx = widthPx === null ? 3_810_000 : clamp(Math.round(widthPx * 9525), 9525, 30_000_000);
   const cy = heightPx === null ? 2_540_000 : clamp(Math.round(heightPx * 9525), 9525, 30_000_000);
 
-  const extension = declared === 'image/png' ? 'png' : declared === 'image/gif' ? 'gif' : 'jpeg';
+  const extension = sniffed === 'image/png' ? 'png' : sniffed === 'image/gif' ? 'gif' : 'jpeg';
   p.imageCount += 1;
   p.media.set(`word/media/image${p.imageCount}.${extension}`, bytes);
-  if (!p.mediaExtensions.has(extension)) p.mediaExtensions.set(extension, declared);
+  if (!p.mediaExtensions.has(extension)) p.mediaExtensions.set(extension, sniffed);
   const relId = allocateRel(p, `${R_NS}/image`, `media/image${p.imageCount}.${extension}`, false);
   p.docPrId += 1;
   runs.push(
@@ -324,11 +377,11 @@ function allocateRel(p: Projection, type: string, target: string, external: bool
   return id;
 }
 
-function allocateList(p: Projection, key: string, kind: 'ordered' | 'bullet'): string {
+function allocateList(p: Projection, key: string, kind: HtmlListKind, start = 1): string {
   const existing = p.lists.get(key);
   if (existing) return existing.numId;
   const numId = String(1001 + p.lists.size);
-  p.lists.set(key, { numId, kind });
+  p.lists.set(key, { numId, kind, start });
   return numId;
 }
 
@@ -352,6 +405,40 @@ function applyInlineTag(base: RunProps, tag: string): RunProps {
   }
   return base;
 }
+
+function positionalTabXml(element: Element, props: RunProps): string {
+  const alignment = element.getAttribute('alignment')?.trim().toLowerCase();
+  const relativeTo = element.getAttribute('relativeto')?.trim().toLowerCase();
+  const leader = element.getAttribute('leader')?.trim().toLowerCase();
+  if (alignment !== 'left' && alignment !== 'center' && alignment !== 'right') return '';
+  if (relativeTo !== 'margin' && relativeTo !== 'indent') return '';
+  if (
+    leader !== 'none' &&
+    leader !== 'dot' &&
+    leader !== 'hyphen' &&
+    leader !== 'underscore' &&
+    leader !== 'middledot'
+  ) {
+    return '';
+  }
+  const normalizedLeader = leader === 'middledot' ? 'middleDot' : leader;
+  return (
+    `<w:r>${rPrXml(props)}<w:ptab w:alignment="${alignment}" ` +
+    `w:relativeTo="${relativeTo}" w:leader="${normalizedLeader}"/></w:r>`
+  );
+}
+
+const TAB_RUN_CONTENTS = [
+  '',
+  '<w:tab/>',
+  '<w:tab/><w:tab/>',
+  '<w:tab/><w:tab/><w:tab/>',
+  '<w:tab/><w:tab/><w:tab/><w:tab/>',
+  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
+  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
+  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
+  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
+] as const;
 
 function collectInline(
   node: Node,
@@ -383,8 +470,25 @@ function collectInline(
   if (IGNORED_TAGS.has(tag)) return;
   const style = parseInlineStyle(node);
   if (isMsoListIgnoreMarker(style)) return; // Word's literal list marker never becomes text.
+  if (tag === 'w:ptab') {
+    const tab = positionalTabXml(node, ctx.run);
+    if (tab.length > 0) runs.push(tab);
+    return;
+  }
+  const tabCount = style.get('mso-tab-count');
+  const tabContent =
+    tabCount !== undefined && /^\d$/.test(tabCount.trim())
+      ? TAB_RUN_CONTENTS[Number.parseInt(tabCount, 10)]
+      : undefined;
+  if (tabContent !== undefined && tabContent.length > 0) {
+    runs.push(`<w:r>${rPrXml(ctx.run)}${tabContent}</w:r>`);
+    return;
+  }
   if (tag === 'br') {
-    runs.push(`<w:r>${rPrXml(ctx.run)}<w:br/></w:r>`);
+    const pageBreak =
+      style.get('page-break-before')?.trim().toLowerCase() === 'always' ||
+      style.get('break-before')?.trim().toLowerCase() === 'page';
+    runs.push(`<w:r>${rPrXml(ctx.run)}${pageBreak ? '<w:br w:type="page"/>' : '<w:br/>'}</w:r>`);
     return;
   }
   if (tag === 'img') {
@@ -398,18 +502,33 @@ function collectInline(
   };
   if (tag === 'a') {
     const href = node.getAttribute('href');
+    const bookmarkName = clipboardBookmarkName(
+      node.getAttribute('name') ?? node.getAttribute('id')
+    );
     const inner: string[] = [];
     for (const child of Array.from(node.childNodes)) {
       collectInline(child, depth + 1, nextCtx, inner, p);
     }
-    const sanitized = href === null ? null : sanitizeHref(href);
-    if (sanitized !== null && sanitized.ok && sanitized.href.length > 0) {
-      const relId = allocateRel(p, `${R_NS}/hyperlink`, sanitized.href, true);
-      runs.push(`<w:hyperlink r:id="${relId}">${inner.join('')}</w:hyperlink>`);
+    const anchor = href?.startsWith('#') ? clipboardBookmarkName(href.slice(1)) : null;
+    let content = inner.join('');
+    if (href?.startsWith('#')) {
+      if (anchor !== null) {
+        content = `<w:hyperlink w:anchor="${escapeXmlAttribute(anchor)}">${content}</w:hyperlink>`;
+      }
     } else {
-      // A refused href drops the link wrapper but keeps its text.
-      for (const run of inner) runs.push(run);
+      const sanitized = href === null ? null : sanitizeHref(href);
+      if (sanitized !== null && sanitized.ok && sanitized.href.length > 0) {
+        const relId = allocateRel(p, `${R_NS}/hyperlink`, sanitized.href, true);
+        content = `<w:hyperlink r:id="${relId}">${content}</w:hyperlink>`;
+      }
     }
+    if (bookmarkName !== null) {
+      const id = String(p.nextBookmarkId++);
+      content =
+        `<w:bookmarkStart w:id="${id}" w:name="${escapeXmlAttribute(bookmarkName)}"/>` +
+        `${content}<w:bookmarkEnd w:id="${id}"/>`;
+    }
+    runs.push(content);
     return;
   }
   for (const child of Array.from(node.childNodes)) {
@@ -429,8 +548,8 @@ function msoListNumPr(
   if (!match) return undefined;
   const ilvl = clamp(Number.parseInt(match[2]!, 10) - 1, 0, 8);
   const marker = msoMarkerText(element, p);
-  const kind: 'ordered' | 'bullet' = /\d|[a-z][.)]/i.test(marker) ? 'ordered' : 'bullet';
-  return { numId: allocateList(p, `mso:l${match[1]}`, kind), ilvl };
+  const { kind, start } = htmlListKindAndStart(marker);
+  return { numId: allocateList(p, `mso:l${match[1]}`, kind, start), ilvl };
 }
 
 /** The text of the `mso-list:Ignore` marker span, for number-vs-bullet detection. */
@@ -476,7 +595,10 @@ function projectParagraph(
   if (mso) para.numPr = mso;
   applyWordParagraphAlignment(para, element, p.classAlignments);
   applyParaCss(para, style);
-  run = applyRunCss(run, style);
+  const runStyle = new Map(style);
+  runStyle.delete('background');
+  runStyle.delete('background-color');
+  run = applyRunCss(run, runStyle);
   const next: FlowContext = {
     run,
     para,
@@ -496,12 +618,15 @@ function projectList(
 ): void {
   if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
   p.nodesLeft -= 1;
-  const kind: 'ordered' | 'bullet' = tagOf(element) === 'ol' ? 'ordered' : 'bullet';
+  const kind = semanticHtmlListKind(element);
   // One numId per distinct top-level list; nested lists share their root's definition.
   if (!ctx.list) p.semanticListCount += 1;
   const state: ListState = ctx.list
     ? { numId: ctx.list.numId, level: Math.min(ctx.list.level + 1, 8) }
-    : { numId: allocateList(p, `sem:${p.semanticListCount}`, kind), level: 0 };
+    : {
+        numId: allocateList(p, `sem:${p.semanticListCount}`, kind, semanticHtmlListStart(element)),
+        level: 0,
+      };
   const itemCtx: FlowContext = {
     ...ctx,
     list: state,
@@ -582,30 +707,6 @@ function projectFlow(
 
 const TABLE_TOTAL_TWIPS = 9360; // 6.5 inches, Word's default content width.
 
-function tableRowsOf(table: Element): Element[] {
-  return Array.from(table.children).flatMap((child) => {
-    const tag = tagOf(child);
-    if (tag === 'tr') return [child];
-    if (tag !== 'thead' && tag !== 'tbody' && tag !== 'tfoot') return [];
-    return Array.from(child.children).filter((inner) => tagOf(inner) === 'tr');
-  });
-}
-
-function spanOf(cell: Element, attribute: 'colspan' | 'rowspan', max: number): number {
-  const raw = cell.getAttribute(attribute);
-  if (raw === null || !/^\d{1,4}$/.test(raw.trim())) return 1;
-  return clamp(Number.parseInt(raw, 10), 1, max);
-}
-
-function tableHasVisibleBorders(table: Element, style: ReadonlyMap<string, string>): boolean {
-  const attr = table.getAttribute('border');
-  if (attr !== null && attr.trim() !== '0' && attr.trim() !== '') return true;
-  const border = style.get('border') ?? style.get('border-width');
-  if (border === undefined) return false;
-  const lowered = border.toLowerCase();
-  return !(lowered.includes('none') || lowered.includes('hidden') || /^0(px)?$/.test(lowered));
-}
-
 type RowSpanCarry = { remaining: number; readonly span: number };
 
 function projectTable(
@@ -624,21 +725,18 @@ function projectTable(
   for (const row of rows) {
     let count = 0;
     for (const cell of Array.from(row.children)) {
-      if (/^t[dh]$/.test(tagOf(cell))) count += spanOf(cell, 'colspan', 63);
+      if (/^t[dh]$/.test(tagOf(cell))) count += htmlSpanOf(cell, 'colspan', 63);
     }
     columns = Math.max(columns, count);
   }
   columns = Math.min(columns, 63);
-  const columnWidth = Math.floor(TABLE_TOTAL_TWIPS / columns);
 
-  const style = parseInlineStyle(table);
-  const edges = ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']
-    .map((edge) => `<w:${edge} w:val="single" w:sz="4" w:space="0" w:color="auto"/>`)
-    .join('');
-  const borders = tableHasVisibleBorders(table, style)
-    ? `<w:tblBorders>${edges}</w:tblBorders>`
-    : '';
-  const grid = Array.from({ length: columns }, () => `<w:gridCol w:w="${columnWidth}"/>`).join('');
+  const totalWidth = tableWidthTwips(table, TABLE_TOTAL_TWIPS);
+  const columnWidths = tableColumnWidths(rows, columns, totalWidth);
+  const borders = tableBordersXml(table);
+  const justification = tableJustification(table);
+  const jc = justification === undefined ? '' : `<w:jc w:val="${justification}"/>`;
+  const grid = columnWidths.map((width) => `<w:gridCol w:w="${width}"/>`).join('');
 
   const carry: Array<RowSpanCarry | null> = new Array<RowSpanCarry | null>(columns).fill(null);
   const rowXml: string[] = [];
@@ -660,7 +758,7 @@ function projectTable(
         const span = carried.span;
         const gridSpan = span > 1 ? `<w:gridSpan w:val="${span}"/>` : '';
         cells.push(
-          `<w:tc><w:tcPr><w:tcW w:w="${columnWidth * span}" w:type="dxa"/>` +
+          `<w:tc><w:tcPr><w:tcW w:w="${tableSpanWidth(columnWidths, column, span)}" w:type="dxa"/>` +
             `${gridSpan}<w:vMerge/></w:tcPr><w:p/></w:tc>`
         );
         carried.remaining -= 1;
@@ -671,23 +769,33 @@ function projectTable(
       const cell = sourceCells[sourceAt];
       if (cell === undefined) {
         cells.push(
-          `<w:tc><w:tcPr><w:tcW w:w="${columnWidth}" w:type="dxa"/></w:tcPr><w:p/></w:tc>`
+          `<w:tc><w:tcPr><w:tcW w:w="${columnWidths[column]}" w:type="dxa"/></w:tcPr><w:p/></w:tc>`
         );
         column += 1;
         continue;
       }
       sourceAt += 1;
-      const span = Math.min(spanOf(cell, 'colspan', 63), columns - column);
-      const rowSpan = spanOf(cell, 'rowspan', 1000);
+      const span = Math.min(htmlSpanOf(cell, 'colspan', 63), columns - column);
+      const rowSpan = htmlSpanOf(cell, 'rowspan', 1000);
       if (rowSpan > 1) carry[column] = { remaining: rowSpan - 1, span };
-      cells.push(projectCell(cell, span, columnWidth, rowSpan > 1, depth, ctx, p));
+      cells.push(
+        projectCell(
+          cell,
+          span,
+          tableSpanWidth(columnWidths, column, span),
+          rowSpan > 1,
+          depth,
+          ctx,
+          p
+        )
+      );
       column += span;
     }
-    rowXml.push(`<w:tr>${cells.join('')}</w:tr>`);
+    rowXml.push(`<w:tr>${tableRowPropertiesXml(row)}${cells.join('')}</w:tr>`);
   }
 
   out.push(
-    `<w:tbl><w:tblPr><w:tblW w:w="${TABLE_TOTAL_TWIPS}" w:type="dxa"/>${borders}</w:tblPr>` +
+    `<w:tbl><w:tblPr><w:tblW w:w="${totalWidth}" w:type="dxa"/>${jc}${borders}</w:tblPr>` +
       `<w:tblGrid>${grid}</w:tblGrid>${rowXml.join('')}</w:tbl>`
   );
   p.lastMarkCovered = false;
@@ -696,28 +804,17 @@ function projectTable(
 function projectCell(
   cell: Element,
   span: number,
-  columnWidth: number,
+  width: number,
   vMergeRestart: boolean,
   depth: number,
   ctx: FlowContext,
   p: Projection
 ): string {
   const isHeader = tagOf(cell) === 'th';
-  const style = parseInlineStyle(cell);
-  let tcPr = `<w:tcW w:w="${columnWidth * span}" w:type="dxa"/>`;
+  let tcPr = `<w:tcW w:w="${width}" w:type="dxa"/>`;
   if (span > 1) tcPr += `<w:gridSpan w:val="${span}"/>`;
   if (vMergeRestart) tcPr += '<w:vMerge w:val="restart"/>';
-  const background = style.get('background-color');
-  if (background !== undefined) {
-    const fill = parseCssColor(background);
-    if (fill) tcPr += `<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/>`;
-  }
-  const verticalAlign =
-    style.get('vertical-align')?.toLowerCase() ?? cell.getAttribute('valign')?.toLowerCase();
-  if (verticalAlign === 'top') tcPr += '<w:vAlign w:val="top"/>';
-  else if (verticalAlign === 'middle' || verticalAlign === 'center') {
-    tcPr += '<w:vAlign w:val="center"/>';
-  } else if (verticalAlign === 'bottom') tcPr += '<w:vAlign w:val="bottom"/>';
+  tcPr += cellCssPropertiesXml(cell);
 
   const cellCtx: FlowContext = {
     run: isHeader ? { ...ctx.run, bold: true } : ctx.run,
@@ -829,6 +926,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     semanticListCount: 0,
     imageCount: 0,
     docPrId: 0,
+    nextBookmarkId: 1,
     classAlignments: wordClassAlignmentsFromDocument(parsed),
   };
   const blocks: string[] = [];
