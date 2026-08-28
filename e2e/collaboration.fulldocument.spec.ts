@@ -1,6 +1,11 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
-const ORIGIN = 'http://localhost:5276';
+// The port the config actually started the dev server on. Hardcoding it meant
+// `COLLAB_E2E_PORT=… bun run test:e2e:collab` started a server on one port and drove a
+// browser at another, and every test failed with ERR_CONNECTION_REFUSED — a confusing
+// way to learn that only three of the five collaboration entry points read the variable.
+const PORT = process.env.COLLAB_E2E_PORT ?? '5276';
+const ORIGIN = `http://localhost:${PORT}`;
 const CONNECT = /^Connect$/;
 const SCROLLER = '.docx-editor__scroll-container';
 
