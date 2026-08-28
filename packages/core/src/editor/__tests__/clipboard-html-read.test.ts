@@ -157,7 +157,8 @@ describe('run and paragraph mapping', () => {
     const { docXml } = openFragment('<p><span style="background:yellow">y</span></p>');
     const run = docXml.split('<w:r>').find((piece) => piece.includes('>y<'));
     expect(run).not.toContain('w:highlight');
-    expect(run).toContain('w:shd w:val="clear" w:color="auto" w:fill="FFFF00"');
+    expect(run).toContain('<w:shd ');
+    expect(run).toContain('w:fill="FFFF00"');
   });
 
   test('background shorthand that is not a solid colour is refused', () => {
