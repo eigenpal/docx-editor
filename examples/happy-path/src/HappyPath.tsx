@@ -3,10 +3,10 @@
 // library cannot decide for you: where bytes come from, where they go, and what to call them.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DocxEditor, type DocxEditorRef } from '@docx-editor.dev/react';
+import { DocxEditor, useFonts, type DocxEditorRef } from '@docx-editor.dev/react';
 import type { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
-import { blankDocumentBytes, type FontConfigurationFragment } from '@docx-editor.dev/core/editor';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import { reviewModule } from '@docx-editor.dev/pro';
 import { DocxEditorReview } from '@docx-editor.dev/pro/react';
 import './styles.css';
@@ -36,22 +36,25 @@ export function HappyPath() {
   // value: the prop never changes identity, nothing reloads, and whatever the user typed
   // stays. New must work every time, so it passes fresh `blankDocumentBytes()` instead.
   const [doc, setDoc] = useState<DocumentSource>();
-  // Fonts are read at MOUNT and their identity remounts the editor, so nothing may open a
-  // document before they land: the remount would rebuild from the bytes and drop whatever
-  // had been typed in between. New and Open wait for this rather than racing it. Without
-  // fonts at all, layout estimates wrap points instead of matching Word.
-  const [fonts, setFonts] = useState<FontConfigurationFragment>();
-  const ready = fonts !== undefined;
+  // The packaged substitute faces, served per document: the engine calls this after the
+  // parse with the families the file names, so only those load and a file naming none of
+  // the five costs nothing. `useFonts` gives it ONE identity for the component's life,
+  // which matters because the `fonts` prop remounts the editor when its identity changes
+  // and `packagedFonts()` written inline is a new function every render.
+  //
+  // NOTHING GATES ON FONTS any more. The document opens on the fixed measurer and
+  // re-paginates when the faces land; that remount rebuilds from the CURRENT tree, so an
+  // edit made in between survives it — the undo stack behind it does not, which is the one
+  // thing the eager `await defaultFonts()` still buys.
+  const fonts = useFonts(packagedFonts());
   const [name, setName] = useState('sample');
 
   useEffect(() => {
-    const sample = fetch('/sample.docx').then((response) => response.arrayBuffer());
-    void Promise.all([defaultFonts(), sample]).then(([faces, bytes]) => {
-      setFonts(faces);
+    void fetch('/sample.docx')
+      .then((response) => response.arrayBuffer())
       // Keep whatever is already loaded: New or Open can win this race, and the sample
       // must not land on top of the document the user picked.
-      setDoc((chosen) => chosen ?? bytes);
-    });
+      .then((bytes) => setDoc((chosen) => chosen ?? bytes));
   }, []);
 
   const open = useCallback((source: DocumentSource, title: string) => {
@@ -75,7 +78,7 @@ export function HappyPath() {
         title={name}
         onTitleChange={setName}
         onSave={() => void save()}
-        onOpen={() => ready && picker.current?.click()}
+        onOpen={() => picker.current?.click()}
         renderTitleBarRight={() => (
           <div className="happy-actions">
             <input
@@ -97,16 +100,10 @@ export function HappyPath() {
               type="button"
               className="happy-button"
               onClick={() => open(blankDocumentBytes(), UNTITLED)}
-              disabled={!ready}
             >
               New
             </button>
-            <button
-              type="button"
-              className="happy-button"
-              onClick={() => picker.current?.click()}
-              disabled={!ready}
-            >
+            <button type="button" className="happy-button" onClick={() => picker.current?.click()}>
               Open
             </button>
             <button

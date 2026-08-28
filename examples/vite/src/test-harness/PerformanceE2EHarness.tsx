@@ -6,7 +6,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import { reviewModule } from '@docx-editor.dev/pro';
 import { DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { DocxEditor, useDocxEditor, useDocxSource } from '@docx-editor.dev/react';
@@ -38,7 +38,7 @@ export function PerformanceE2EHarness({ fixtureUrl }: { fixtureUrl: string }) {
     fonts,
     error: loadError,
   } = useDocxSource(fixtureUrl, {
-    fonts: defaultFonts,
+    fonts: packagedFonts(),
   });
 
   return (

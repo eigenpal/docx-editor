@@ -158,17 +158,21 @@ It loads embedded document fonts without configuration.
 Some documents reference Word default fonts without embedding them.
 For these documents, `@docx-editor.dev/fonts` supplies metric-compatible substitutes.
 
-Use this example to load the substitute fonts:
+`packagedFonts()` supplies them per document: the editor calls it after parsing
+with the families that file declares, so only those faces load and no request
+leaves your origin.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
-const fonts = await loadDefaultFonts();
-
-<DocxEditor document={bytes} fonts={fonts} />;
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const fonts = useFonts(packagedFonts());
+  return <DocxEditor document={bytes} fonts={fonts} />;
+}
 ```
 
 </Framework>
@@ -176,16 +180,10 @@ const fonts = await loadDefaultFonts();
 
 ```vue
 <script setup lang="ts">
-import { shallowRef } from 'vue';
-import { DocxEditor, type FontConfigurationFragment } from '@docx-editor.dev/vue';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
-// Resolve into a ref. A top-level `await` here would make this an async
-// component, which renders nothing without a <Suspense> ancestor.
-const fonts = shallowRef<FontConfigurationFragment>();
-void loadDefaultFonts().then((loaded) => {
-  fonts.value = loaded;
-});
+const fonts = useFonts(packagedFonts());
 </script>
 
 <template>

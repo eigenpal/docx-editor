@@ -39,6 +39,7 @@ export interface GoogleFontLoadFailure {
 export function googleFonts(options?: GoogleFontsOptions): (request: {
     readonly defaultFamily: string;
     readonly families: readonly string[];
+    readonly resolvedFamilies?: readonly string[];
 }) => Promise<GoogleFontsFragment>;
 
 // @public

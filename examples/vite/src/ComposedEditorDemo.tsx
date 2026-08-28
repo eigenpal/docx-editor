@@ -30,7 +30,7 @@ import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { SourceLink } from '../../shared/SourceLink';
@@ -607,20 +607,24 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [citationForm, setCitationForm] = useState<CitationFormState | null>(null);
   const closeCitationForm = useCallback(() => setCitationForm(null), []);
 
-  // The whole boot in ONE call: fetch the fixture, load Word's default substitute faces
+  // The whole boot in ONE call: fetch the fixture, serve Word's default substitute faces
   // (Carlito for Calibri, Liberation Serif for Times, …), register them for paint, compose
   // the configuration, and cancel both if this unmounts.
   //
-  // The hook holds `document` back until fonts SETTLE — resolved or failed — because layout
-  // measures with them: handing the editor bytes first paginates the whole document on the
-  // fixed fallback and then re-paginates, which reads as the text jumping. A font failure
-  // still releases it, and the editor opens on the fixed measurer, the documented
-  // degradation.
+  // `packagedFonts()` resolves ON DEMAND: the engine calls it after the parse with the
+  // families this fixture declares, so only those faces load. Nothing is fetched from a
+  // third party — the bytes are the ones inside `@docx-editor.dev/fonts`. Add
+  // `googleFonts()` next to it and the catalog covers what the packaged five do not.
+  //
+  // The trade is one reflow. Nothing can know the families before the parse, so the
+  // document opens on the fixed measurer and re-paginates when the faces land; the eager
+  // `{ fonts: defaultFonts }` still holds `document` back until fonts settle, at the cost
+  // of every packaged face on every document.
   const {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
+  } = useDocxSource(fixtureUrl, { fonts: packagedFonts() });
 
   const activeDocument = collaboration.document ?? bytes;
 

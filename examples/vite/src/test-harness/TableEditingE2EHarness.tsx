@@ -6,7 +6,7 @@
 import { useEffect, useRef } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
 import { DocxEditor, useDocxEditor, useDocxSource } from '@docx-editor.dev/react';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import { createDocxEditorE2EHook } from './table-editing-e2e-hook.ts';
 
 function E2EBridge() {
@@ -30,7 +30,7 @@ export function TableEditingE2EHarness({ fixtureUrl }: { fixtureUrl: string }) {
     fonts,
     error: loadError,
   } = useDocxSource(fixtureUrl, {
-    fonts: defaultFonts,
+    fonts: packagedFonts(),
   });
 
   return (

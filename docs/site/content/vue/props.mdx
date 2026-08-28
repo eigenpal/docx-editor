@@ -122,18 +122,17 @@ See [Dark mode](/docs/2.x/guides/dark-mode) for canvas behavior.
 
 Embedded fonts load from the document. Configured fonts extend that set.
 
+Use `packagedFonts()` for the Word default substitutes. It resolves per document,
+so only the families that document declares load, and nothing is fetched from a
+third party. `useFonts()` keeps one resolver identity, which the `fonts` prop
+needs.
+
 ```vue
 <script setup lang="ts">
-import { shallowRef } from 'vue';
-import { DocxEditor, type FontConfigurationFragment } from '@docx-editor.dev/vue';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
-// Resolve into a ref. A top-level `await` here would make this an async
-// component, which renders nothing without a <Suspense> ancestor.
-const fonts = shallowRef<FontConfigurationFragment>();
-void loadDefaultFonts().then((loaded) => {
-  fonts.value = loaded;
-});
+const fonts = useFonts(packagedFonts());
 
 function reportFontError(error: { code: string }) {
   report(error.code);
@@ -145,19 +144,12 @@ function reportFontError(error: { code: string }) {
 </template>
 ```
 
-Use `useFonts()` to keep a resolver identity stable.
+Add an origin by adding an argument. Arguments compose first-wins:
 
-```vue
-<script setup lang="ts">
-import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+```ts
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 
-const fonts = useFonts(googleFonts());
-</script>
-
-<template>
-  <DocxEditor :document="bytes" :fonts="fonts" />
-</template>
+const fonts = useFonts(packagedFonts(), googleFonts());
 ```
 
 See [Fonts and measurement](/docs/2.x/guides/fonts) for font sources and

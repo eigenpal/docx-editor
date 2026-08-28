@@ -1,47 +1,28 @@
 import { toValue } from 'vue';
 import {
-  composeFontConfiguration,
-  type FontConfigurationFragment,
+  composeFontOrigins,
+  isFontResolver,
+  type FontOrigin,
   type FontResolutionRequest,
   type FontResolver,
 } from '@docx-editor.dev/core/editor';
-import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 import type { MaybeRefOrGetter } from '../maybe-ref-or-getter';
 
 /** @public */
-export type FontsInput =
-  | FontConfiguration
-  | FontConfigurationFragment
-  | FontResolver
-  | Promise<FontConfiguration | FontConfigurationFragment | undefined>
-  | undefined;
+export type FontsInput = FontOrigin;
 
 /** @public */
-export function useFonts(
-  source: MaybeRefOrGetter<FontsInput>,
-  ...fragments: readonly MaybeRefOrGetter<FontConfigurationFragment | undefined>[]
-): FontResolver {
-  const reactiveSource = source;
-  const reactiveFragments = fragments;
-  const readInputs = () => ({
-    source: toValue(reactiveSource),
-    fragments: reactiveFragments.map((fragment) => toValue(fragment)),
-  });
+export function useFonts(...origins: readonly MaybeRefOrGetter<FontsInput>[]): FontResolver {
+  const reactiveOrigins = origins;
+  // `toValue` calls a plain function to read a getter, which is exactly what a resolver
+  // must NOT be subjected to: `googleFonts()` invoked with no argument reads
+  // `request.defaultFamily` off `undefined` and throws. A marked resolver is the value,
+  // never a getter for one.
+  const readOrigins = (): readonly FontsInput[] =>
+    reactiveOrigins.map((origin) => (isFontResolver(origin) ? origin : toValue(origin)));
 
-  const resolver: FontResolver = async (request: FontResolutionRequest) => {
-    const current = readInputs();
-    const resolved =
-      typeof current.source === 'function' ? await current.source(request) : await current.source;
-    const origins = [resolved, ...current.fragments].filter(
-      (origin): origin is FontConfiguration | FontConfigurationFragment => origin !== undefined
-    );
-    if (origins.length === 0) return undefined;
-    const { epoch: _perLoad, ...merged } = composeFontConfiguration(
-      origins[0]!,
-      ...origins.slice(1)
-    );
-    return merged;
-  };
+  const resolver: FontResolver = (request: FontResolutionRequest) =>
+    composeFontOrigins(readOrigins(), request);
 
   return resolver;
 }

@@ -119,33 +119,32 @@ Use `useFontFamily()` to read that list.
 | `fonts`       | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | None    | Font bytes or a resolver called for each load.                          |
 | `onFontError` | `(error: EditorFontError) => void`                               | None    | Reports failures such as corrupt data, HTTP errors, or hash mismatches. |
 
-Use `loadDefaultFonts()` to load the default font set:
-
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
-
-const fonts = await loadDefaultFonts();
-
-<DocxEditor document={bytes} fonts={fonts} onFontError={(error) => report(error.code)} />;
-```
-
-The editor samples `fonts` at mount.
-Changing its identity remounts the editor.
-
-You can pass a resolver function.
-The editor calls it once per load with the declared font families.
-Use `useFonts` to keep the resolver identity stable:
+Use `packagedFonts()` for the Word default substitutes.
+The editor calls it once per load with the families that document declares, so
+only those faces load and nothing is fetched from a third party.
+Wrap it in `useFonts` to keep one resolver identity:
 
 ```tsx
 import { DocxEditor, useFonts } from '@docx-editor.dev/react';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
 function Editor({ bytes }: { bytes: Uint8Array }) {
-  const fonts = useFonts(googleFonts());
-  return <DocxEditor document={bytes} fonts={fonts} />;
+  const fonts = useFonts(packagedFonts());
+  return <DocxEditor document={bytes} fonts={fonts} onFontError={(error) => report(error.code)} />;
 }
 ```
+
+Add an origin by adding an argument. Arguments compose first-wins:
+
+```tsx
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const fonts = useFonts(packagedFonts(), googleFonts());
+```
+
+The editor samples `fonts` at mount.
+Changing its identity remounts the editor, which is why an inline resolver needs
+`useFonts`.
 
 A resolver can make network requests while the editor opens a document.
 The editor does not fetch external fonts without a configured resolver.

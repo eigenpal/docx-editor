@@ -17,11 +17,13 @@ import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
+import { composeFontOrigins } from '@docx-editor.dev/core/editor';
 import { ComputedRef } from 'vue';
 import { ContentControlSummary } from '@docx-editor.dev/core';
 import { ContentControlType } from '@docx-editor.dev/core';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'vue';
+import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
@@ -45,6 +47,7 @@ import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { FontFaceRequest } from '@docx-editor.dev/core/contracts/editor';
 import { FontLoadFailure } from '@docx-editor.dev/core/editor';
 import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
+import { FontOrigin } from '@docx-editor.dev/core/editor';
 import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import { FontResolver } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
@@ -55,6 +58,7 @@ import { ImageDecodePort } from '@docx-editor.dev/core/editor';
 import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
 import { InjectionKey } from 'vue';
+import { isFontResolver } from '@docx-editor.dev/core/editor';
 import { loadFonts } from '@docx-editor.dev/core/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
@@ -126,6 +130,8 @@ export type ChromeTranslate = (key: string, params?: Record<string, string | num
 export { commandForSlot }
 
 export { composeFontConfiguration }
+
+export { composeFontOrigins }
 
 // @public (undocumented)
 export const CONTENT_CONTROL_SLOTS: {
@@ -1984,6 +1990,8 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
 
 export { createFontSource }
 
+export { defineFontResolver }
+
 // @public @deprecated (undocumented)
 export const DocumentName: vue.DefineComponent<vue.ExtractPropTypes<{
     onChange: {
@@ -3271,7 +3279,7 @@ export interface DocxEditorViewportProps {
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
 
 // @public (undocumented)
-export type DocxFontsSource = DocxFontsInput | Promise<DocxFontsInput> | (() => DocxFontsInput | Promise<DocxFontsInput>);
+export type DocxFontsSource = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>) | readonly FontOrigin[];
 
 // @public (undocumented)
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
@@ -3379,12 +3387,14 @@ export { FontLoadFailure }
 
 export { FontLoadFailureReason }
 
+export { FontOrigin }
+
 export { FontResolutionRequest }
 
 export { FontResolver }
 
 // @public (undocumented)
-export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+export type FontsInput = FontOrigin;
 
 export { FontSource }
 
@@ -3794,6 +3804,8 @@ export interface IndentUpdate {
 
 // @public (undocumented)
 export function isFieldLink(link: SurfaceHyperlink): boolean;
+
+export { isFontResolver }
 
 export { loadFonts }
 
@@ -5412,7 +5424,7 @@ export interface UseDocxSourceResult {
     // (undocumented)
     readonly error: ComputedRef<Error | null>;
     // (undocumented)
-    readonly fonts: ComputedRef<FontConfiguration | undefined>;
+    readonly fonts: ComputedRef<FontConfiguration | FontResolver | undefined>;
     // (undocumented)
     readonly isLoading: ComputedRef<boolean>;
 }
@@ -5454,7 +5466,7 @@ export interface UseFontFamilyResult {
 }
 
 // @public (undocumented)
-export function useFonts(source: MaybeRefOrGetter<FontsInput>, ...fragments: readonly MaybeRefOrGetter<FontConfigurationFragment | undefined>[]): FontResolver;
+export function useFonts(...origins: readonly MaybeRefOrGetter<FontsInput>[]): FontResolver;
 
 // @public (undocumented)
 export function useHeaderFooterState(): ShallowRef<HeaderFooterState | null>;

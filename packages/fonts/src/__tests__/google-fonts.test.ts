@@ -437,4 +437,39 @@ describe('googleFonts resolver', () => {
     const second = await resolve(['Cousine', 'Tinos'], fetcher);
     expect(first.sources.map((source) => source.id)).toEqual(second.sources.map((s) => s.id));
   });
+
+  test('never asks the CDN for a WORD name an earlier origin already substituted for', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    // Only the document's own name is reported, which is what `packagedFonts()` covering
+    // Calibri looks like from here. Carlito must not be fetched on its account.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Cousine'],
+      defaultFamily: 'Calibri',
+      resolvedFamilies: ['calibri'],
+    });
+
+    expect(requested.some((url) => url.includes('Carlito'))).toBe(false);
+    expect(requested).toHaveLength(4);
+    expect(new Set(fragment.sources.map((source) => source.request.family))).toEqual(
+      new Set(['Cousine'])
+    );
+  });
+
+  test('never asks the CDN for a catalog FACE an earlier origin already supplied', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    // Only the FACE is reported — an origin that handed over Carlito bytes without saying
+    // which Word name they stand in for. The substitution here maps Calibri onto exactly
+    // that face, so matching on the declared name alone would fetch it a second time.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Cousine'],
+      defaultFamily: 'Calibri',
+      resolvedFamilies: ['Carlito'],
+    });
+
+    expect(requested.every((url) => url.includes('Cousine'))).toBe(true);
+    expect(requested).toHaveLength(4);
+    expect(new Set(fragment.sources.map((source) => source.request.family))).toEqual(
+      new Set(['Cousine'])
+    );
+  });
 });

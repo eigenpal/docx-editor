@@ -13,7 +13,7 @@
  * ```ts
  * import { googleFonts } from '@docx-editor.dev/fonts/google';
  *
- * const editor = createDocxEditor({ document: bytes, resolveFonts: googleFonts() });
+ * const editor = createDocxEditor({ document: bytes, fonts: googleFonts() });
  * ```
  *
  * @packageDocumentation
@@ -85,6 +85,13 @@ import type { DefaultFontSource, DefaultFontSubstitution } from './index.ts';
 const PACKAGED_ONLY_BY_NAME: ReadonlyMap<string, WordDefaultFamily> = new Map(
   PACKAGED_ONLY_FAMILIES.map((family) => [family.toLowerCase(), family] as const)
 );
+
+/**
+ * Same registered symbol `packagedFonts` and the engine's `defineFontResolver` use, so
+ * `useDocxSource` can tell an on-demand resolver from a zero-argument loader. Spelled out
+ * rather than imported, to keep this package free of any dependency on the engine.
+ */
+const FONT_RESOLVER_BRAND: unique symbol = Symbol.for('docx-editor.dev/font-resolver') as never;
 
 export { GOOGLE_FONTS_REVISION, GOOGLE_FONT_CATALOG, type GoogleFontFace };
 
@@ -223,6 +230,10 @@ async function fetchFace(face: GoogleFontFace, fetcher: typeof fetch): Promise<U
  * <DocxEditor.Root fonts={googleFonts()} />
  * ```
  *
+ * Same call shape as `packagedFonts()` from `@docx-editor.dev/fonts`, so the two compose
+ * by sitting next to each other: `useFonts(packagedFonts(), googleFonts())` serves the
+ * bundled faces first and reaches the catalog only for what they do not cover.
+ *
  * Compose it with your own bytes by wrapping it — the resolver is an ordinary async
  * function of the families, so a wrapper can merge fragments before returning.
  */
@@ -231,6 +242,7 @@ export function googleFonts(
 ): (request: {
   readonly families: readonly string[];
   readonly defaultFamily: string;
+  readonly resolvedFamilies?: readonly string[];
 }) => Promise<GoogleFontsFragment> {
   const fetcher = options.fetcher ?? fetch;
   /**
@@ -254,7 +266,15 @@ export function googleFonts(
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
 
-  return async function resolveGoogleFonts(request) {
+  async function resolveGoogleFonts(request: {
+    readonly families: readonly string[];
+    readonly defaultFamily: string;
+    readonly resolvedFamilies?: readonly string[];
+  }): Promise<GoogleFontsFragment> {
+    // Faces an earlier origin already supplied. Skipping them is not only bytes: a face
+    // the composition would drop anyway is a CDN request that tells a third party which
+    // families this document uses, for nothing at all.
+    const already = new Set((request.resolvedFamilies ?? []).map((family) => family.toLowerCase()));
     // The default family counts as declared: a document whose runs name no font still
     // renders in one, and leaving it out would fetch nothing for a file that is entirely
     // default-styled.
@@ -265,6 +285,7 @@ export function googleFonts(
     const packaged = new Map<string, WordDefaultFamily>();
 
     for (const declared of [request.defaultFamily, ...request.families]) {
+      if (already.has(declared.toLowerCase())) continue;
       const target = substitutes.get(declared.toLowerCase());
       // The bundled answer is a DEFAULT, so it is checked after the substitution map and
       // not before it. Checking it first made a packaged family the one name `substitute`
@@ -274,7 +295,13 @@ export function googleFonts(
         target === undefined ? PACKAGED_ONLY_BY_NAME.get(declared.toLowerCase()) : undefined;
       if (bundled) {
         const plan = FAMILY_PLANS.get(bundled);
-        if (plan && (!allowed || allowed.has(plan.substitute.toLowerCase()))) {
+        // The packaged face too: an earlier origin that already supplied TeX Gyre Adventor
+        // has covered what this would read from the bundle.
+        if (
+          plan &&
+          (!allowed || allowed.has(plan.substitute.toLowerCase())) &&
+          !already.has(plan.substitute.toLowerCase())
+        ) {
           packaged.set(declared, bundled);
         }
         continue;
@@ -282,6 +309,9 @@ export function googleFonts(
       const faces = catalogByFamily.get((target ?? declared).toLowerCase());
       if (!faces) continue;
       if (allowed && !allowed.has(faces[0]!.family.toLowerCase())) continue;
+      // The catalog face too: an earlier origin that supplied Carlito directly has covered
+      // what this would fetch, whatever name the document used to ask for it.
+      if (already.has(faces[0]!.family.toLowerCase())) continue;
       wanted.set(faces[0]!.family, faces);
       // Only when the document's own name differs from the face being loaded: a run
       // saying "Carlito" needs the bytes, not a Carlito -> Carlito redirect.
@@ -357,5 +387,12 @@ export function googleFonts(
     // composes to the same configuration fingerprint on every load.
     sources.sort((left, right) => left.id.localeCompare(right.id));
     return { sources, substitutions, failures };
-  };
+  }
+
+  Object.defineProperty(resolveGoogleFonts, FONT_RESOLVER_BRAND, {
+    value: true,
+    enumerable: false,
+    configurable: true,
+  });
+  return resolveGoogleFonts;
 }

@@ -17,10 +17,12 @@ import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
+import { composeFontOrigins } from '@docx-editor.dev/core/editor';
 import { ContentControlSummary } from '@docx-editor.dev/core';
 import { ContentControlType } from '@docx-editor.dev/core';
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { CSSProperties } from 'react';
+import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { DocumentChange } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentHandle } from '@docx-editor.dev/core/contracts/editor';
 import { DocumentSource } from '@docx-editor.dev/core/contracts/editor';
@@ -42,6 +44,7 @@ import { FontConfigurationFragment } from '@docx-editor.dev/core/editor';
 import { FontFaceRequest } from '@docx-editor.dev/core/contracts/editor';
 import { FontLoadFailure } from '@docx-editor.dev/core/editor';
 import { FontLoadFailureReason } from '@docx-editor.dev/core/editor';
+import { FontOrigin } from '@docx-editor.dev/core/editor';
 import { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import { FontResolver } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
@@ -53,6 +56,7 @@ import { HTMLAttributes } from 'react';
 import { ImageDecodePort } from '@docx-editor.dev/core/editor';
 import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
 import { IndentFormatting } from '@docx-editor.dev/core/contracts/editor';
+import { isFontResolver } from '@docx-editor.dev/core/editor';
 import { loadFonts } from '@docx-editor.dev/core/editor';
 import { LoadFontsRequest } from '@docx-editor.dev/core/editor';
 import { LoadFontsResult } from '@docx-editor.dev/core/editor';
@@ -122,6 +126,8 @@ export type ChromeTranslate = (key: string, params?: Record<string, string | num
 export { commandForSlot }
 
 export { composeFontConfiguration }
+
+export { composeFontOrigins }
 
 // @public
 export const CONTENT_CONTROL_SLOTS: {
@@ -336,6 +342,8 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
 }
 
 export { createFontSource }
+
+export { defineFontResolver }
 
 // @public @deprecated (undocumented)
 export function DocumentName(input: DocumentNameProps): react__default.JSX.Element;
@@ -966,7 +974,7 @@ export interface DocxEditorViewportProps {
 export type DocxFontsInput = FontConfiguration | FontConfigurationFragment;
 
 // @public
-export type DocxFontsSource = DocxFontsInput | Promise<DocxFontsInput> | (() => DocxFontsInput | Promise<DocxFontsInput>);
+export type DocxFontsSource = FontOrigin | (() => DocxFontsInput | Promise<DocxFontsInput>) | readonly FontOrigin[];
 
 // @public
 export type DocxSource = string | URL | Uint8Array | ArrayBuffer;
@@ -1068,12 +1076,14 @@ export { FontLoadFailure }
 
 export { FontLoadFailureReason }
 
+export { FontOrigin }
+
 export { FontResolutionRequest }
 
 export { FontResolver }
 
 // @public
-export type FontsInput = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+export type FontsInput = FontOrigin;
 
 export { FontSource }
 
@@ -1233,6 +1243,8 @@ export interface IndentUpdate {
 
 // @public
 export function isFieldLink(link: SurfaceHyperlink): boolean;
+
+export { isFontResolver }
 
 export { loadFonts }
 
@@ -2177,7 +2189,7 @@ export interface UseDocxSourceOptions {
 export interface UseDocxSourceResult {
     readonly document: Uint8Array | undefined;
     readonly error: Error | null;
-    readonly fonts: FontConfiguration | undefined;
+    readonly fonts: FontConfiguration | FontResolver | undefined;
     readonly isLoading: boolean;
 }
 
@@ -2214,7 +2226,7 @@ export interface UseFontFamilyResult {
 }
 
 // @public
-export function useFonts(source: FontsInput, ...fragments: readonly (FontConfigurationFragment | undefined)[]): FontResolver;
+export function useFonts(...origins: readonly FontsInput[]): FontResolver;
 
 // @public
 export function useHeaderFooterState(): HeaderFooterState | null;

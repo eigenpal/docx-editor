@@ -13,46 +13,42 @@
 
 import { useMemo, useRef } from 'react';
 import {
-  composeFontConfiguration,
-  type FontConfigurationFragment,
+  composeFontOrigins,
+  type FontOrigin,
   type FontResolutionRequest,
   type FontResolver,
 } from '@docx-editor.dev/core/editor';
-import type { FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
 
 /**
  * Anything that can describe fonts: a resolved configuration, a bare fragment, a promise
  * for either (what a loader like `defaultFonts()` returns), or an on-demand
- * {@link FontResolver}.
+ * {@link FontResolver} (what `packagedFonts()` and `googleFonts()` return).
  *
  * @public
  */
-export type FontsInput =
-  | FontConfiguration
-  | FontConfigurationFragment
-  | FontResolver
-  | Promise<FontConfiguration | FontConfigurationFragment | undefined>
-  | undefined;
+export type FontsInput = FontOrigin;
 
 /**
  * Merge font origins into one stable value for `DocxEditor.Root`'s `fonts` prop.
  *
  * ```tsx
- * // On demand: only the families this document names are fetched.
- * const fonts = useFonts(googleFonts());
+ * // The bundled substitutes, loaded only for the families this document names.
+ * const fonts = useFonts(packagedFonts());
  *
- * // On demand, plus brand faces you always want.
- * const fonts = useFonts(googleFonts(), brandFragment);
+ * // The same, plus the Google catalog for everything they do not cover.
+ * const fonts = useFonts(packagedFonts(), googleFonts());
  *
- * // Eager, from the bundled substitutes.
- * const fonts = useFonts(defaultFonts());
+ * // Brand faces first, then whatever is left.
+ * const fonts = useFonts(brandFragment, packagedFonts());
  *
  * return <DocxEditor.Root fonts={fonts}>{children}</DocxEditor.Root>;
  * ```
  *
- * Origins compose first-wins in argument order, exactly like `composeFontConfiguration`:
- * the first argument beats later ones, and any of them beats a substitution for a family
- * some origin supplies directly.
+ * EVERY argument takes the same union, so adding an origin is adding an argument and
+ * never a change of shape. Origins compose first-wins in argument order, exactly like
+ * `composeFontConfiguration`: the first argument beats later ones, and any of them beats
+ * a substitution for a family some origin supplies directly. They resolve concurrently,
+ * so two fetching origins overlap rather than queue.
  *
  * The returned resolver never changes identity, so the editor is never rebuilt on account
  * of this prop — which also means the arguments are re-read per LOAD rather than per
@@ -61,35 +57,13 @@ export type FontsInput =
  *
  * @public
  */
-export function useFonts(
-  source: FontsInput,
-  ...fragments: readonly (FontConfigurationFragment | undefined)[]
-): FontResolver {
+export function useFonts(...origins: readonly FontsInput[]): FontResolver {
   // Read at resolve time, not captured: the resolver below outlives every render.
-  const latest = useRef<{
-    source: FontsInput;
-    fragments: readonly (FontConfigurationFragment | undefined)[];
-  }>({ source, fragments });
-  latest.current = { source, fragments };
+  const latest = useRef<readonly FontsInput[]>(origins);
+  latest.current = origins;
 
   return useMemo<FontResolver>(
-    () => async (request: FontResolutionRequest) => {
-      const current = latest.current;
-      const resolved =
-        typeof current.source === 'function' ? await current.source(request) : await current.source;
-      const origins = [resolved, ...current.fragments].filter(
-        (origin): origin is FontConfiguration | FontConfigurationFragment => origin !== undefined
-      );
-      if (origins.length === 0) return undefined;
-      // Composed WITHOUT an epoch: the engine stamps the load sequence onto whatever a
-      // resolver returns, and a fixed epoch from here would label every document's byte
-      // set as the same one.
-      const { epoch: _perLoad, ...merged } = composeFontConfiguration(
-        origins[0]!,
-        ...origins.slice(1)
-      );
-      return merged;
-    },
+    () => (request: FontResolutionRequest) => composeFontOrigins(latest.current, request),
     []
   );
 }

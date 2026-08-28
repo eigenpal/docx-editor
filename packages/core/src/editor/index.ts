@@ -31,6 +31,13 @@ export {
   type FontResolutionRequest,
   type FontResolver,
 } from './font-composition.ts';
+export {
+  FONT_RESOLVER_BRAND,
+  composeFontOrigins,
+  defineFontResolver,
+  isFontResolver,
+  type FontOrigin,
+} from './font-resolver.ts';
 export { blankDocumentBytes } from './blank-document.ts';
 export { clipboardDropLandsText, clipboardPasteLandsContent } from './clipboard-file-lane.ts';
 /**

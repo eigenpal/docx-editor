@@ -92,7 +92,7 @@ import {
   CustomNodeContextMenu,
   DocxEditorReview,
 } from '@docx-editor.dev/pro/vue';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import EditorChrome from './EditorChrome.vue';
 import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
@@ -130,7 +130,7 @@ const {
   fonts,
   error: loadError,
 } = useDocxSource(props.fixtureUrl, {
-  fonts: defaultFonts,
+  fonts: packagedFonts(),
 });
 
 function onFontError(error: { code: string; message: string }): void {

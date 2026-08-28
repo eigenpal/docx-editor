@@ -627,6 +627,9 @@ export interface CommentRecord {
 export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
 
 // @public
+export function composeFontOrigins(origins: readonly FontOrigin[], request: FontResolutionRequest): Promise<FontConfigurationFragment | undefined>;
+
+// @public
 export type ContainerRef = {
     part: 'body';
 } | {
@@ -696,6 +699,9 @@ export function createFontSource(bytes: Uint8Array, request: FontFaceRequest & {
 } | {
     readonly failure: FontLoadFailure;
 };
+
+// @public
+export function defineFontResolver<T extends FontResolver>(resolve: T): T;
 
 // @public
 export interface DocAnchor {
@@ -1855,9 +1861,13 @@ export interface FontMeasurementState {
 }
 
 // @public
+export type FontOrigin = FontConfiguration | FontConfigurationFragment | FontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+
+// @public
 export interface FontResolutionRequest {
     readonly defaultFamily: string;
     readonly families: readonly string[];
+    readonly resolvedFamilies?: readonly string[];
 }
 
 // @public
@@ -2066,6 +2076,9 @@ export type InteractionOutcome<T> = {
 
 // @public
 export type InteractionOutcomeCode = 'pendingLayout' | 'pendingSelection' | 'readOnly' | 'invalidTarget' | 'unsupported';
+
+// @public
+export function isFontResolver(value: unknown): value is FontResolver;
 
 // @public
 export function loadFonts(request: LoadFontsRequest): Promise<LoadFontsResult>;

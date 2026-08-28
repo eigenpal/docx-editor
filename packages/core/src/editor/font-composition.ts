@@ -65,6 +65,18 @@ export interface FontResolutionRequest {
   readonly families: readonly string[];
   /** The face a run naming no font resolves to, so a resolver can cover it too. */
   readonly defaultFamily: string;
+  /**
+   * Families an EARLIER origin in the same composition already answered for — both the
+   * names the document wrote and the faces that were loaded for them.
+   *
+   * Absent when the engine calls a resolver directly, and empty for the first origin of a
+   * composition. Honouring it is an OPTIMIZATION, never a correctness requirement:
+   * composition is first-wins, so a resolver that ignores this only spends bytes on a face
+   * that goes on to lose. Ignoring it is what made `[packagedFonts(), googleFonts()]`
+   * fetch Carlito from a CDN after the packaged copy had already been read from disk —
+   * twice the bytes, and a third party told which families the document uses for nothing.
+   */
+  readonly resolvedFamilies?: readonly string[];
 }
 
 /**

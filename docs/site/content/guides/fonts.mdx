@@ -11,15 +11,43 @@ fixed-width estimate.
 The document still opens with fixed measurement. Line wraps and page breaks can
 differ from Word.
 
+## Start here
+
+Every font origin has the same shape: call it, and pass the result. To add
+another origin, add another argument.
+
+```ts
+import { packagedFonts } from '@docx-editor.dev/fonts';
+
+const { document, fonts } = useDocxSource(url, { fonts: packagedFonts() });
+```
+
+```ts
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const { document, fonts } = useDocxSource(url, {
+  fonts: [packagedFonts(), googleFonts()],
+});
+```
+
+The list is a precedence order: the first origin that supplies a face wins, and
+later origins are told which families are already covered so they don't load
+them again. Put the origin you'd rather pay for first.
+
+`googleFonts()` fetches from a content delivery network. Nothing else here
+touches the network, and no origin is on by default.
+
 ## Choose a font source
 
-| Source                     | Network on document open         | Measurement                        | Painted glyphs                          |
-| -------------------------- | -------------------------------- | ---------------------------------- | --------------------------------------- |
-| Fonts embedded in the DOCX | No                               | Uses the embedded bytes            | Registers an isolated browser alias     |
-| `@docx-editor.dev/fonts`   | Only when your code loads assets | Uses metric-compatible substitutes | Optional browser registration           |
-| `loadFonts` with your URLs | Only when your code calls it     | Uses admitted files                | Register faces separately when required |
-| Resolver function          | Depends on your resolver         | Uses matched files                 | Depends on returned sources             |
-| No usable source           | No                               | Fixed-width estimate               | Browser fallback                        |
+| Source                     | Network on document open     | Loads                             | Measurement                        |
+| -------------------------- | ---------------------------- | --------------------------------- | ---------------------------------- |
+| Fonts embedded in the DOCX | No                           | The faces in the file             | Uses the embedded bytes            |
+| `packagedFonts()`          | No                           | Only the packaged families in use | Uses metric-compatible substitutes |
+| `defaultFonts()`           | No                           | All 20 packaged faces, every time | Uses metric-compatible substitutes |
+| `googleFonts()`            | Yes, for catalogued families | Only the catalog families in use  | Uses the fetched faces             |
+| `loadFonts` with your URLs | Only when your code calls it | The URLs you list                 | Uses admitted files                |
+| No usable source           | No                           | Nothing                           | Fixed-width estimate               |
 
 Embedded fonts load automatically. The editor registers them under internal
 aliases. A document cannot replace a page-wide font family used by your
@@ -62,30 +90,47 @@ const fonts = await defaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES });
 same packaged bytes, and only when a document names the family, so it makes no
 third-party request for it.
 
-Load fonts before the first editor mount. This avoids a visible remount and
-keeps the initial caret and undo history.
+`packagedFonts()` loads a family only when a document names it, or when it is
+that document's default face. Narrow it further with `allow`:
+
+```ts
+const fonts = packagedFonts({ allow: ['Calibri'] });
+```
+
+Font binaries load as separate assets. Importing the package fetches nothing.
+
+### Choose between lazy and eager loading
+
+`packagedFonts()` and `defaultFonts()` cover the same five families and measure
+identically. They differ in when they run and what that costs.
+
+| Behavior                     | `packagedFonts()`                    | `defaultFonts()`          |
+| ---------------------------- | ------------------------------------ | ------------------------- |
+| Runs                         | After the document is parsed         | Before the document opens |
+| Loads                        | Only the families in the document    | All 20 faces, 7.4 MB      |
+| First layout                 | Fixed measurement, then re-paginates | Correct on the first pass |
+| Undo history across the swap | Cleared when the faces arrive        | Kept                      |
+
+Use `defaultFonts()` when a visible re-pagination is worse than the extra bytes.
+Use `packagedFonts()` otherwise.
 
 ```ts
 import { defaultFonts } from '@docx-editor.dev/fonts';
 
-const fonts = await defaultFonts();
+const { document, fonts } = useDocxSource(url, { fonts: defaultFonts });
 ```
 
-Pass `fonts` to `DocxEditor.Root` or `DocxEditorRoot`. You can limit the load:
-
-```ts
-const fonts = await defaultFonts({ families: ['Calibri'] });
-```
-
-Font binaries load as separate assets. Importing the package fetches nothing.
+With `defaultFonts`, `useDocxSource` holds `document` back until the fonts
+settle, so the reader never sees the text reflow. An on-demand resolver has
+nothing to hold for: the families it answers about come from the parse, so the
+bytes have to go through first.
 
 ## Load your own fonts
 
 Use `loadFonts` for brand fonts or licensed Word fonts.
 
 ```ts
-import { composeFontConfiguration, loadFonts } from '@docx-editor.dev/core/editor';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { loadFonts } from '@docx-editor.dev/core/editor';
 
 const brand = await loadFonts({
   sources: [
@@ -104,8 +149,15 @@ const brand = await loadFonts({
     },
   ],
 });
+```
 
-const fonts = composeFontConfiguration(brand, await loadDefaultFonts());
+`brand` is a fragment. Compose it with the packaged substitutes the same way you
+compose any two origins, and put it first so your own faces win:
+
+```ts
+import { packagedFonts } from '@docx-editor.dev/fonts';
+
+const { document, fonts } = useDocxSource(url, { fonts: [brand, packagedFonts()] });
 ```
 
 | `loadFonts` behavior | Result                                                                 |
@@ -148,20 +200,24 @@ descriptors or bytes.
 
 ## Load fonts on demand
 
-The `fonts` prop also accepts a resolver. The editor calls it once per document
-load after parsing. It receives the family names declared by that document.
+`packagedFonts()` and `googleFonts()` are resolvers. The editor calls a resolver
+once per document load, after parsing, with the family names that document
+declares.
 
-Use `useFonts` to keep the resolver identity stable across renders.
+`useDocxSource` handles the identity of a resolver for you. When you pass one
+directly to the `fonts` prop, use `useFonts` instead: an inline resolver is a new
+function on each render, and that identity change rebuilds the editor.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
 function Editor({ bytes }: { bytes: Uint8Array }) {
-  const fonts = useFonts(googleFonts());
+  const fonts = useFonts(packagedFonts(), googleFonts());
   return <DocxEditor.Root document={bytes} fonts={fonts} />;
 }
 ```
@@ -171,11 +227,12 @@ function Editor({ bytes }: { bytes: Uint8Array }) {
 
 ```vue
 <script setup lang="ts">
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { DocxEditorRoot, useFonts } from '@docx-editor.dev/vue';
 
 defineProps<{ bytes: Uint8Array }>();
-const fonts = useFonts(googleFonts());
+const fonts = useFonts(packagedFonts(), googleFonts());
 </script>
 
 <template>
@@ -185,6 +242,9 @@ const fonts = useFonts(googleFonts());
 
 </Framework>
 </FrameworkTabs>
+
+Every argument to `useFonts` takes the same union: a resolver, a fragment, a
+configuration, or a promise for one. Arguments compose first-wins, in order.
 
 `googleFonts()` uses a generated catalog. Each face is pinned to an immutable
 `google/fonts` commit and includes a checked `sha256:` value. Most faces share
@@ -208,10 +268,7 @@ metric-compatible substitute when layout must remain stable.
 | URL construction           | Never build a URL from a document family name.                        |
 | Privacy                    | A remote font host can learn which families the document uses.        |
 | Updates                    | Load another document or remount to apply changed resolver arguments. |
-| Composition                | `useFonts(googleFonts(), brandFragment)` combines sources.            |
-
-An inline resolver creates a new function on each render. That identity change
-can rebuild the editor. `useFonts` keeps one resolver for the component life.
+| Composition                | `useFonts(packagedFonts(), googleFonts())` combines sources.          |
 
 The editor caps the family list passed to a resolver.
 
@@ -233,6 +290,27 @@ substitute keeps pagination Word-accurate, and a face picked on how a font
 describes itself is not one: `word/fontTable.xml` states a PANOSE
 classification, never an advance width, so nothing in the file bounds how much
 wider the substitute would run.
+
+### Write your own resolver
+
+Wrap it in `defineFontResolver`. That mark is how `useDocxSource` tells a
+resolver, which it calls with a request, from a loader such as `defaultFonts`,
+which it calls with no arguments. TypeScript cannot separate the two, because a
+zero-argument function is assignable to a one-argument function type.
+
+```ts
+import { defineFontResolver } from '@docx-editor.dev/core/editor';
+
+const brandFonts = defineFontResolver(async ({ families, resolvedFamilies }) => {
+  const already = new Set(resolvedFamilies ?? []);
+  const wanted = families.filter((family) => BRAND.has(family) && !already.has(family));
+  return { sources: await loadBrandFaces(wanted) };
+});
+```
+
+`resolvedFamilies` lists what earlier origins in the same composition already
+supplied. Skipping those is an optimization, not a requirement: composition drops
+a duplicate face either way, so ignoring the list only costs bytes.
 
 ## Source precedence
 

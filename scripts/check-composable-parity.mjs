@@ -372,6 +372,47 @@ export interface Editor {}
     process.exit(1);
   }
 
+  // A rest parameter of wrapped values. `MaybeRefOrGetter<T>[]` unwraps to `T[]` when `T`
+  // is a bare identifier; parenthesizing it unconditionally reported drift against an
+  // identical React signature.
+  const restOk = `
+export function useSample(...origins: readonly FontsInput[]): FontResolver;
+export type FontsInput = string;
+export interface FontResolver {}
+`;
+  const restVue = `
+export function useSample(...origins: readonly MaybeRefOrGetter<FontsInput>[]): FontResolver;
+export type FontsInput = string;
+export interface FontResolver {}
+`;
+  ({ issues } = runComposableParityCheck({ reactSnap: restOk, vueSnap: restVue }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: wrapped rest parameter should normalize');
+    for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
+  // …and a compound inner type still needs its parentheses, or `A | B[]` would compare
+  // equal to `(A | B)[]`.
+  const restUnion = `
+export function useSample(...origins: readonly (A | B)[]): FontResolver;
+export interface A {}
+export interface B {}
+export interface FontResolver {}
+`;
+  const restUnionDrift = `
+export function useSample(...origins: readonly MaybeRefOrGetter<A | B>[]): FontResolver;
+export interface A {}
+export interface B {}
+export interface FontResolver {}
+`;
+  ({ issues } = runComposableParityCheck({ reactSnap: restUnion, vueSnap: restUnionDrift }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: compound wrapped rest parameter should keep its parens');
+    for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
   const functionReturn = `
 export function useToolbarLabel(): (key: string) => string;
 `;

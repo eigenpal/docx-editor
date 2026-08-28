@@ -26,23 +26,35 @@ it from these same packaged bytes only when a document names it.
 ## Usage
 
 ```ts
-import { loadDefaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
-const fragment = await loadDefaultFonts(); // or { families: ['Calibri'] }
+// A resolver: the editor calls it once per load with the families the file
+// declares, so a document using only Times New Roman loads Liberation Serif and
+// nothing else, and one naming none of the five loads nothing at all.
+<DocxEditor.Root document={bytes} fonts={packagedFonts()} />;
+```
 
-// The editor's `fonts` option accepts the fragment directly —
-// createDocxEditor({ container, document: bytes, fonts: fragment })
-// or <DocxEditor.Root document={bytes} fonts={fragment} /> in the adapters.
-// To merge several origins, use composeFontConfiguration (re-exported by
-// @docx-editor.dev/react and @docx-editor.dev/vue).
+Same call shape as `googleFonts()` below, so composing the two is adding an argument:
 
-// Optional paint fidelity: register the substitutes with the browser under the Word
-// family names so painted glyphs match the measured metrics.
+```ts
+const fonts = useFonts(packagedFonts(), googleFonts());
+```
+
+To load every face up front instead — no re-pagination, all 7.4 MB, whichever document
+opens — use `defaultFonts()`:
+
+```ts
+import { defaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';
+
+const fragment = await defaultFonts(); // or { families: ['Calibri'] }
+
+// `defaultFonts` already registers the paint-side faces. `loadDefaultFonts` is the
+// same load without that half, and `installDefaultFontFaces` is that half alone.
 await installDefaultFontFaces();
 ```
 
-Nothing loads until you call `loadDefaultFonts`: importing the package fetches no
-bytes, and the editor engine never calls in here on its own.
+Nothing loads until you call one of these: importing the package fetches no bytes, and
+the editor engine never calls in here on its own.
 
 Font binaries ship as separate files (`assets/*.ttf` and `assets/*.otf`) fetched per requested
 family. Each face's `sha256:` hash is baked at packaging time
@@ -91,8 +103,10 @@ it replaced; issue #576 records the measurements. Supply the real bytes through
 
 A fetching resolver makes opening a document perform network requests, and the CDN learns
 which families a document uses. The engine never supplies one, so opting in stays your call.
-`loadDefaultFonts()` remains the zero-network answer, and
-`googleFonts({ allow: ['Tinos', 'Lato'] })` narrows what may ever be fetched.
+`packagedFonts()` remains the zero-network answer, and
+`googleFonts({ allow: ['Tinos', 'Lato'] })` narrows what may ever be fetched. Listed
+after `packagedFonts()`, this resolver is told which families are already covered and
+skips them, so the packaged five never cost a CDN request.
 
 Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes).
 
