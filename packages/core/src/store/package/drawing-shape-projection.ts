@@ -51,7 +51,7 @@ export function parseEmu(value: string | undefined, clamp = true): number | null
  */
 function schemaFlagIsUnset(value: string | undefined): boolean {
   if (value === undefined) return true;
-  const collapsed = collapseSchemaFlag(value);
+  const collapsed = collapseSchemaWhitespace(value);
   return collapsed === '0' || collapsed === 'false';
 }
 
@@ -67,13 +67,35 @@ function schemaFlagIsUnset(value: string | undefined): boolean {
  */
 export function schemaFlagIsSet(value: string | undefined): boolean {
   if (value === undefined) return false;
-  const collapsed = collapseSchemaFlag(value);
+  const collapsed = collapseSchemaWhitespace(value);
   return collapsed === '1' || collapsed === 'true';
 }
 
-function collapseSchemaFlag(value: string): string {
-  // XML whitespace is exactly space, tab, LF and CR — not `\s`, which is wider.
+/**
+ * Apply the fixed `whiteSpace="collapse"` facet every `xsd:` simple type below carries.
+ *
+ * XML 1.0's `S` production is exactly `#x20 | #x9 | #xD | #xA`. JavaScript's `\s` is wider —
+ * it also matches `\v`, `\f`, NBSP and U+FEFF — so using it here would accept a `val` the
+ * schema does not.
+ */
+function collapseSchemaWhitespace(value: string): string {
   return value.replace(/[ \t\n\r]+/g, ' ').trim();
+}
+
+/**
+ * `rot` on an `a:xfrm`, tested for "not rotated".
+ *
+ * `ST_Angle` derives from `xsd:int`, so it carries the same collapse facet as `xsd:boolean`
+ * and the same freedom over sign and leading zeros: ` 0 `, `00`, `+0` and `-0` are all a
+ * zero rotation. Comparing the raw string to `'0'` refused every one of them and dropped the
+ * shape to a placeholder. A non-zero angle still refuses — the engine cannot paint a rotated
+ * vector shape — and so does anything that is not a legal `xsd:int`.
+ */
+function schemaAngleIsZero(value: string | undefined): boolean {
+  if (value === undefined) return true;
+  const collapsed = collapseSchemaWhitespace(value);
+  // Bounded digit count: `rot` is an int, and this only ever compares it against zero.
+  return /^[+-]?\d{1,12}$/.test(collapsed) && Number(collapsed) === 0;
 }
 
 export function findDirectChild(
@@ -281,13 +303,18 @@ function hslToRgb([hue, saturation, lightness]: readonly number[]): [number, num
  *
  * - The 1000ths-of-a-percent integer (`50000`). This is `ST_Percentage`'s Transitional
  *   spelling (ECMA-376 Part 4), and it is what Word writes, so it is the common case.
- * - The percentage literal (`50%`, `12.5%`). This is the Strict spelling (Part 1
- *   20.1.10.40/20.1.10.41) and the one the spec's own worked examples use. Refusing it
- *   dropped the shape to a placeholder card.
+ * - The percentage literal (`50%`, `12.5%`). This is the Strict spelling
+ *   (`ST_PositiveFixedPercentage`, Part 1 20.1.10.45, whose pattern is 22.9.2.10) and the
+ *   one the spec's own worked examples use. Refusing it dropped the shape to a placeholder.
  *
  * Both regexes are anchored, bounded and have no nested quantifier, so a hostile `val`
  * cannot make either backtrack. Anything else — a sign, an exponent, whitespace, 7 digits —
  * refuses, and the caller fails the whole colour closed rather than guessing.
+ *
+ * The percentage PATTERN is wider than the value space it belongs to: 22.9.2.10 admits
+ * `100.99%`, which is 1.0099 as a ratio. The explicit ceiling below is what keeps the
+ * result in 0..1, not the regex, and it refuses the overshoot the same way the integer
+ * branch refuses `100001`.
  */
 function transformRatio(node: OoxmlElement): number | null {
   const value = schemaAttributeValue(node.attributes, 'val');
@@ -297,8 +324,8 @@ function transformRatio(node: OoxmlElement): number | null {
     return Number.isInteger(parsed) && parsed >= 0 && parsed <= 100_000 ? parsed / 100_000 : null;
   }
   if (/^(?:100|\d{1,2})(?:\.\d{1,2})?%$/.test(value)) {
-    // The regex already bounds this to 0..100, so the divide cannot leave the ratio range.
-    return Number(value.slice(0, -1)) / 100;
+    const percent = Number(value.slice(0, -1));
+    return percent >= 0 && percent <= 100 ? percent / 100 : null;
   }
   return null;
 }
@@ -583,8 +610,7 @@ function projectWspComponent(
     localName: 'xfrm',
   });
   if (xfrm) {
-    const rot = schemaAttributeValue(xfrm.attributes, 'rot');
-    if (rot !== undefined && rot !== '0') return null;
+    if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
     if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;
     if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))) return null;
   }
@@ -794,8 +820,7 @@ export function projectVectorShape(
       : null;
     if (!group || !childExtent) return null;
     if (xfrm) {
-      const rotation = schemaAttributeValue(xfrm.attributes, 'rot');
-      if (rotation !== undefined && rotation !== '0') return null;
+      if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
       if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;
       if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))) return null;
     }

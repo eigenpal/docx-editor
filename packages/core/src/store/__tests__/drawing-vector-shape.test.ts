@@ -336,7 +336,21 @@ describe('wps vector shape projection', () => {
       expect(fillFor(percent)).not.toBeNull();
     }
     // Everything else refuses, and a refused transform fails the whole colour closed.
-    for (const rejected of ['101%', '-5%', ' 50% ', '50.123%', '1e2%', '%', '50 %', '1000000']) {
+    // `100.99%` is the case the PATTERN admits but the value space does not: 22.9.2.10's
+    // regex matches it, and it is 1.0099 as a ratio. The explicit ceiling refuses it, the
+    // same way the integer branch refuses `100001`.
+    for (const rejected of [
+      '101%',
+      '100.99%',
+      '100.1%',
+      '-5%',
+      ' 50% ',
+      '50.123%',
+      '1e2%',
+      '%',
+      '50 %',
+      '1000000',
+    ]) {
       expect(`${rejected}: ${fillFor(rejected)}`).toBe(`${rejected}: null`);
     }
   });
@@ -424,6 +438,54 @@ describe('wps vector shape projection', () => {
       for (const [value, paints] of spellings) {
         const attrs = value === undefined ? '' : ` ${site.attr}="${escapeAttribute(value)}"`;
         const part = parsePart(`<w:p><w:r>${site.drawing(attrs)}</w:r></w:p>`);
+        const shape = [
+          ...indexInlineDrawingProjectionsInPart(part, {
+            resolveSchemeColor: () => '4472C4',
+          }).values(),
+        ][0]?.vectorShape;
+        const label = `${site.name}=${JSON.stringify(value)}`;
+        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(`${label}: ${paints}`);
+      }
+    }
+  });
+
+  // `rot` is `ST_Angle`, which derives from `xsd:int` — so it carries the same fixed
+  // `whiteSpace="collapse"` facet as the flip flags, plus a sign and leading zeros. Every
+  // spelling of zero below is a shape Word paints upright; comparing the raw string to `'0'`
+  // refused all but the bare one. Both `a:xfrm` sites read `rot`, so both are driven.
+  test('every legal spelling of a zero rotation paints, and any real angle refuses', () => {
+    const spellings = [
+      [undefined, true],
+      ['0', true],
+      [' 0 ', true],
+      ['\n0\n', true],
+      ['00', true],
+      ['+0', true],
+      ['-0', true],
+      ['000000', true],
+      // A real angle: the engine cannot paint a rotated vector shape.
+      ['60000', false],
+      ['-60000', false],
+      ['1', false],
+      // Not a legal `xsd:int` at all.
+      ['0.0', false],
+      ['0deg', false],
+      ['', false],
+      ['0 0', false],
+    ] as const;
+
+    const SHAPE_XFRM = '<a:xfrm><a:off x="0" y="0"/><a:ext cx="6696075" cy="47625"/></a:xfrm>';
+    const GROUP_XFRM = '<a:xfrm><a:chOff x="0" y="0"/><a:chExt cx="200000" cy="100000"/></a:xfrm>';
+    const sites = [
+      { name: 'shape rot', base: SHAPE_XFRM, drawing: doubleRuleShapeDrawing },
+      { name: 'group rot', base: GROUP_XFRM, drawing: groupShapeDrawing },
+    ];
+
+    for (const site of sites) {
+      for (const [value, paints] of spellings) {
+        const attrs = value === undefined ? '' : ` rot="${escapeAttribute(value)}"`;
+        const xml = site.drawing().replace(site.base, `<a:xfrm${attrs}>${site.base.slice(9)}`);
+        const part = parsePart(`<w:p><w:r>${xml}</w:r></w:p>`);
         const shape = [
           ...indexInlineDrawingProjectionsInPart(part, {
             resolveSchemeColor: () => '4472C4',

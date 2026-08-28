@@ -536,17 +536,30 @@ export function validateTiffHeader(bytes: Uint8Array): ValidatedRasterHeader | n
   return { pixelWidth, pixelHeight };
 }
 
-/** CSS absolute length units, in CSS pixels. Percentages are not intrinsic and are refused. */
-const CSS_ABSOLUTE_UNIT_PX: Readonly<Record<string, number>> = Object.freeze({
-  '': 1,
-  px: 1,
-  pt: 96 / 72,
-  pc: 16,
-  in: 96,
-  cm: 96 / 2.54,
-  mm: 96 / 25.4,
-  q: 96 / 101.6,
-});
+/**
+ * CSS absolute length units, in CSS pixels. Percentages are not intrinsic and are refused.
+ *
+ * A Map, not an object literal. Unlike the content-type lookup above, this key IS reachable
+ * from file content — it is the unit suffix of an embedded SVG's root `width`/`height`, so
+ * `width="1constructor"` indexed the literal to `Object` and sailed past the
+ * `scale === undefined` guard.
+ *
+ * No input changes its answer either way, and that is worth stating rather than implying a
+ * fix that is not one: every member of `Object.prototype` is a function or an object, so
+ * `number * scale` is always `NaN` and the finiteness check below already returns null. The
+ * Map removes a read that only luck made safe, so a later edit to that check cannot turn it
+ * into a live defect.
+ */
+const CSS_ABSOLUTE_UNIT_PX: ReadonlyMap<string, number> = new Map([
+  ['', 1],
+  ['px', 1],
+  ['pt', 96 / 72],
+  ['pc', 16],
+  ['in', 96],
+  ['cm', 96 / 2.54],
+  ['mm', 96 / 25.4],
+  ['q', 96 / 101.6],
+]);
 
 /** A CSS absolute length in px, or null for a percentage, a bad unit, or a non-number. */
 function parseCssAbsoluteLength(raw: string): number | null {
@@ -572,7 +585,7 @@ function parseCssAbsoluteLength(raw: string): number | null {
     }
     if (digits > 0) index = scan;
   }
-  const scale = CSS_ABSOLUTE_UNIT_PX[value.slice(index).trim().toLowerCase()];
+  const scale = CSS_ABSOLUTE_UNIT_PX.get(value.slice(index).trim().toLowerCase());
   if (scale === undefined) return null;
   const px = number * scale;
   return Number.isFinite(px) && px > 0 ? px : null;
