@@ -39,6 +39,7 @@ import {
   TREE_DOC_OP_KINDS,
   type TreeDocOp,
 } from '../store/tree-ops.ts';
+import { COLLABORATION_UNCOVERED } from '../store/collaboration-coverage-contract.ts';
 import { readOoxmlPart } from '../package/ooxml-tree.ts';
 
 const repoRoot = path.resolve(import.meta.dir, '../../../../../');
@@ -141,6 +142,15 @@ describe('authorable mutation manifest freeze (task 0.5)', () => {
       expect(applied.ok).toBe(false);
       if (!applied.ok) expect(applied.reason).toBe('unsupported');
     }
+  });
+
+  test('the frozen unsupported set matches the collaboration coverage contract', () => {
+    // The manifest freeze and the contract that gates collaboration coverage name the same
+    // not-expressible ops, so a change that promotes one to replicable cannot leave the other
+    // claiming it is still unsupported.
+    expect([...COLLABORATION_UNCOVERED.opKinds.keys()].sort()).toEqual(
+      [...manifest.applyPathSets.unsupported].sort()
+    );
   });
 
   test('property, control, and wrap vocabularies match the freeze', () => {

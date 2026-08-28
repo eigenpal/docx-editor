@@ -85,6 +85,23 @@ The bundle-graph test follows real `import` statements through re-export barrels
 to prove it, because one `export *` is enough to put a transport stack in every
 consumer's bundle while every manifest still looks correct.
 
+**Every single-session action is collaboration-expressible.** Collaboration
+replays a canonical primitive journal onto peers, so an authorable action that
+does not capture into that journal replicates to nobody. Every `TreeDocOp` kind,
+and every member of the accepted property, wrap, and content-control
+vocabularies (`ACCEPTED_PARAGRAPH_PROPERTIES`, `ACCEPTED_RUN_PROPERTIES`,
+`IMAGE_WRAP_TARGETS`, `INSERTABLE_CONTENT_CONTROL_TYPES`), MUST have a
+replay-convergence fixture: `canonical-primitive-journal-coverage.test.ts`
+captures the action's journal, proves it is author-deterministic, replays it
+onto a fresh replica, and compares the two by fingerprint and save/reopen
+digest. Adding an op kind or a vocabulary member with no fixture fails that
+gate. The one escape is an explicit, reasoned entry in
+`COLLABORATION_UNCOVERED` (`store/store/collaboration-coverage-contract.ts`):
+the gate accepts a declared reason in place of a fixture, so an action that
+genuinely cannot cross the collaboration boundary is recorded and reviewed,
+never dropped silently. When you add an editing capability, add its fixture, or
+add its reason.
+
 ## Guards must fail loudly
 
 Every guard scans a lane by path and calls `collectSources` on the result.
