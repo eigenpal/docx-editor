@@ -304,6 +304,25 @@ export function insertableText(text: string): string {
 }
 
 /**
+ * True when the engine's paste router will land content from this `text/html` flavour —
+ * an embedded fragment, a `data:` image, or visible text.
+ *
+ * This is the adapters' stand-down predicate for the image-FILE paste lane. Word on macOS
+ * puts a rendered PNG of the copied TEXT on the pasteboard next to the HTML; a host that
+ * inserts the file whenever one is present pastes that rendering ON TOP of the text the
+ * engine lands. The file lane is only for payloads the engine ignores: a bare screenshot
+ * (no HTML at all), or a browser "copy image" whose HTML is a single external `<img>` the
+ * projection drops by design — both of which carry no visible text.
+ *
+ * @public
+ */
+export function clipboardHtmlLandsContent(html: string): boolean {
+  if (html.length === 0) return false;
+  if (html.includes('data-docx-fragment') || html.includes('data:image')) return true;
+  return plainTextFromHtml(html).length > 0;
+}
+
+/**
  * The text a paste or drop should insert, whatever flavours the payload carries.
  *
  * `text/plain` wins whenever it is present — it is what the source application chose to

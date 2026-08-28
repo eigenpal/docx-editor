@@ -9,6 +9,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import {
+  clipboardHtmlLandsContent,
   insertableText,
   plainTextFromHtml,
   plainTextFromTransfer,
@@ -259,5 +260,26 @@ describe('the visible text of an HTML fragment', () => {
     const started = performance.now();
     expect(plainTextFromHtml(hostile)).toContain('z');
     expect(performance.now() - started).toBeLessThan(2_000);
+  });
+});
+
+describe('clipboardHtmlLandsContent — the image-file stand-down predicate for adapters', () => {
+  test('a Word-for-Mac text copy (HTML with text, PNG file beside it) stands the file lane down', () => {
+    const wordHtml =
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office"><head>' +
+      '<meta name=ProgId content=Word.Document><style>p.MsoNormal{margin:0}</style></head>' +
+      '<body><!--StartFragment--><p class=MsoNormal align=center><b>' +
+      '<span style="font-size:26.0pt">DOCX TITLE</span></b></p><!--EndFragment--></body></html>';
+    expect(clipboardHtmlLandsContent(wordHtml)).toBe(true);
+  });
+
+  test('an embedded fragment or a data: image lands through the engine', () => {
+    expect(clipboardHtmlLandsContent('<div data-docx-fragment="AAAA"></div>')).toBe(true);
+    expect(clipboardHtmlLandsContent('<img src="data:image/png;base64,AAAA">')).toBe(true);
+  });
+
+  test('a browser copy-image payload and a bare screenshot keep the file lane', () => {
+    expect(clipboardHtmlLandsContent('<img src="https://example.com/x.png">')).toBe(false);
+    expect(clipboardHtmlLandsContent('')).toBe(false);
   });
 });

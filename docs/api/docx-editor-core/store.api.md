@@ -794,7 +794,7 @@ export interface CreateImageResourceCacheOptions {
 }
 
 // @public
-export function createNodeIdAllocator(part: OoxmlPart): () => string;
+export function createNodeIdAllocator(part: OoxmlPart, family?: string): () => string;
 
 // @public
 export function createNoteReferenceScanBudget(maxVisited?: number, maxParts?: number): NoteReferenceScanBudget;

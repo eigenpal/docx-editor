@@ -7,6 +7,7 @@ import {
   shallowRef,
   watch,
 } from 'vue';
+import { clipboardHtmlLandsContent } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
@@ -56,11 +57,12 @@ export const DocxEditorContent = defineComponent({
       const items = event.clipboardData;
       if (!items) return;
       if (!hasImageFile(items)) return;
-      // STAND DOWN only for payloads the ENGINE will land (fragment or `data:` image in
-      // the HTML). External `<img src>` payloads and bare screenshots still need this
-      // file lane. Mirrors the React adapter exactly.
+      // STAND DOWN whenever the ENGINE will land content from the HTML flavour (fragment,
+      // `data:` image, or visible text — Word on macOS ships a rendered PNG beside copied
+      // text). External `<img src>` payloads and bare screenshots still need this file
+      // lane. Mirrors the React adapter exactly.
       const html = typeof items.getData === 'function' ? (items.getData('text/html') ?? '') : '';
-      if (html.includes('data-docx-fragment') || html.includes('data:image')) return;
+      if (clipboardHtmlLandsContent(html)) return;
       event.preventDefault();
       void insert.insertFromDataTransfer(items);
     };

@@ -8,6 +8,7 @@
 // Paste and drop of supported raster formats route through the shared image-insert path.
 
 import { useCallback, useLayoutEffect, useRef } from 'react';
+import { clipboardHtmlLandsContent } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
 import { useImageInsertOptional } from './images/ImageInsert';
 import { ImageSelectionOverlay } from './images/ImageSelectionOverlay.tsx';
@@ -61,15 +62,15 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
       const items = event.clipboardData;
       if (!items) return;
       if (!hasImageFile(items)) return;
-      // STAND DOWN only for payloads the ENGINE will land. Real word-processor clipboards
-      // carry `text/html` AND an image file for the same content, and the engine's paste
-      // router lands that image through the fragment or `data:` lane — intercepting here
-      // inserted it twice. But a browser "copy image" payload carries `text/html` with an
-      // EXTERNAL `<img src>` the projection drops by design, and a bare screenshot has no
-      // HTML at all; both still need this file lane. (`defaultPrevented` says nothing —
-      // the engine prevents every paste, even ones it ignores.)
+      // STAND DOWN whenever the ENGINE will land content from the HTML flavour — an
+      // embedded fragment, a `data:` image, or plain visible text. Word on macOS pastes a
+      // rendered PNG of copied TEXT beside the HTML; taking this file lane for it inserted
+      // that rendering on top of the text. A browser "copy image" payload (external
+      // `<img src>`, no text) and a bare screenshot (no HTML) still need this lane.
+      // (`defaultPrevented` says nothing — the engine prevents every paste, even ones it
+      // ignores.)
       const html = typeof items.getData === 'function' ? (items.getData('text/html') ?? '') : '';
-      if (html.includes('data-docx-fragment') || html.includes('data:image')) return;
+      if (clipboardHtmlLandsContent(html)) return;
       event.preventDefault();
       void imageInsert.insertFromDataTransfer(items);
     },

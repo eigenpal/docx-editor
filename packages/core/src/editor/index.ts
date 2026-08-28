@@ -32,6 +32,7 @@ export {
   type FontResolver,
 } from './font-composition.ts';
 export { blankDocumentBytes } from './blank-document.ts';
+export { clipboardHtmlLandsContent } from './clipboard-plain-text.ts';
 /**
  * The part a node id names, read from the live package.
  *

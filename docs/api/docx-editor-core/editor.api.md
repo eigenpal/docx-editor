@@ -678,6 +678,9 @@ export function chromeSlotId(group: {
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean;
 
 // @public
+export function clipboardHtmlLandsContent(html: string): boolean;
+
+// @public
 export interface CollaborationModuleContribution {
     readonly session: EditorCollaborationSession;
 }

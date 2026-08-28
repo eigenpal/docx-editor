@@ -158,18 +158,24 @@ export function collectNodeIds(part: OoxmlPart): Set<string> {
  * can never coincide, and the counter skips anything already taken so repeated edits in one
  * session stay unique.
  *
+ * The collision check only sees nodes that are IN the tree. A caller that clones a subtree
+ * and attaches it LATER — after other ops have replaced the root and reset the counter —
+ * must mint in its own `family`: two `new`-family allocators over different roots can hand
+ * out the same id, one to a detached clone and one to the tree, and the clone's insertion
+ * then fails the duplicate-id invariant.
+ *
  * Checks the part's node index directly rather than copying every id into a fresh set: the
  * copy was O(document) per op, and an allocator is created for every op.
  */
-export function createNodeIdAllocator(part: OoxmlPart): () => string {
+export function createNodeIdAllocator(part: OoxmlPart, family = 'new'): () => string {
   const index = nodeIndexFor(part.root);
   const minted = new Set<string>();
   let counter = index.mintFrontier;
   return () => {
-    let id = `${part.name}#new:${counter}`;
+    let id = `${part.name}#${family}:${counter}`;
     while (index.nodes.has(id) || minted.has(id)) {
       counter += 1;
-      id = `${part.name}#new:${counter}`;
+      id = `${part.name}#${family}:${counter}`;
     }
     minted.add(id);
     counter += 1;

@@ -170,6 +170,11 @@ export function withRequiredNamespaceBindings(
     }
     const need = (prefix: string | undefined, namespaceUri: string): void => {
       if (prefix === undefined || prefix.length === 0 || namespaceUri.length === 0) return;
+      // `xml` and `xmlns` are bound by the XML spec itself, never by a declaration. Every
+      // real document copy carries `xml:space="preserve"`, so treating `xml` as unbound
+      // rebuilt the root for virtually every paste — and a rebuilt root resets the id-mint
+      // frontier, which is what made rich pastes into non-empty documents fail wholesale.
+      if (prefix === 'xml' || prefix === 'xmlns') return;
       if (local.get(prefix) === namespaceUri) return;
       if (rootBindings.get(prefix) === namespaceUri) return;
       if (rootBindings.has(prefix) || additions.has(prefix)) {
@@ -226,7 +231,13 @@ export function applyInsertFragment(
   // Clone every block with fresh node ids and fresh paragraph identities: the fragment's
   // ids belong to another document, and a second paste of the same payload must not
   // collide with the first.
-  const nextId = createNodeIdAllocator(hostPart);
+  //
+  // The clones stay DETACHED until the split/merge sequence below lands them, and every op
+  // in that sequence replaces the root — which resets the shared mint frontier, so a later
+  // `new`-family mint can re-issue an id a clone already holds. A dedicated family keeps
+  // the two disjoint by construction; in-tree occupancy (a prior paste) is still skipped by
+  // the allocator's index check.
+  const nextId = createNodeIdAllocator(hostPart, 'paste');
   const paraIds = new Set(usedParaIds(hostPart.root as OoxmlElement));
   const counter = { value: 0 };
   const blocks = op.blocks.map((block, index) =>
