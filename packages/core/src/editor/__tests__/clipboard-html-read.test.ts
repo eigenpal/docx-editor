@@ -192,7 +192,9 @@ describe('run and paragraph mapping', () => {
     const { docXml } = openFragment(
       '<p><span style="font-variant:small-caps">small</span>' +
         '<span style="text-transform:uppercase">caps</span>' +
-        '<u style="text-underline:red wave">wave</u></p>'
+        '<u style="text-underline:red wave;letter-spacing:1.5pt">wave</u>' +
+        '<span style="text-decoration-line:line-through;text-decoration-style:double">' +
+        'double</span></p>'
     );
     const runs = docXml.split('<w:r>');
     expect(runs.find((run) => run.includes('small'))).toContain('<w:smallCaps/>');
@@ -200,6 +202,17 @@ describe('run and paragraph mapping', () => {
     const wave = runs.find((run) => run.includes('wave'));
     expect(wave).toContain('w:val="wave"');
     expect(wave).toContain('w:color="FF0000"');
+    expect(wave).toContain('<w:spacing w:val="30"/>');
+    expect(runs.find((run) => run.includes('double'))).toContain('<w:dstrike/>');
+  });
+
+  test('HTML language and right-to-left direction remain semantic', () => {
+    const { docXml } = openFragment(
+      '<p dir="rtl"><span lang="ar-SA" style="direction:rtl">مرحبا</span></p>'
+    );
+    expect(docXml).toContain('<w:bidi/>');
+    expect(docXml).toContain('<w:rtl/>');
+    expect(docXml).toContain('<w:lang w:val="ar-SA"/>');
   });
 
   test('paragraph CSS maps to jc, spacing and ind', () => {

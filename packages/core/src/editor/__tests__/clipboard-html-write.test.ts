@@ -20,6 +20,8 @@ interface FragmentInput {
   readonly body: string;
   readonly styles?: string;
   readonly numbering?: string;
+  readonly footnotes?: string;
+  readonly endnotes?: string;
   /** Extra `<Relationship .../>` rows for word/_rels/document.xml.rels. */
   readonly docRels?: string;
   /** Media entries by zip name, e.g. `word/media/image1.png`. */
@@ -48,6 +50,15 @@ function fragment(input: FragmentInput): Uint8Array {
       '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
     );
     docRels += `<Relationship Id="rId9002" Type="${R}/numbering" Target="numbering.xml"/>`;
+  }
+  for (const kind of ['footnotes', 'endnotes'] as const) {
+    const xml = input[kind];
+    if (xml === undefined) continue;
+    entries.set(`word/${kind}.xml`, strToU8(`<w:${kind} xmlns:w="${W}">${xml}</w:${kind}>`));
+    overrides.push(
+      `<Override PartName="/word/${kind}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${kind}+xml"/>`
+    );
+    docRels += `<Relationship Id="rId-${kind}" Type="${R}/${kind}" Target="${kind}.xml"/>`;
   }
   for (const [name, bytes] of Object.entries(input.media ?? {})) entries.set(name, bytes);
 
@@ -95,9 +106,11 @@ describe('interopHtmlFromFragment', () => {
     const html = interopHtmlFromFragment(
       fragment({
         body:
-          '<w:p><w:r><w:rPr>' +
+          '<w:p><w:pPr><w:bidi/></w:pPr><w:r><w:rPr>' +
           '<w:rFonts w:eastAsia="微软雅黑"/><w:b/><w:i/>' +
-          '<w:color w:val="FF0000"/><w:sz w:val="28"/><w:u w:val="single"/>' +
+          '<w:color w:val="FF0000"/><w:spacing w:val="30"/><w:sz w:val="28"/>' +
+          '<w:u w:val="wave" w:color="00AAFF"/>' +
+          '<w:rtl/><w:lang w:val="ar-SA"/>' +
           '</w:rPr><w:t>styled</w:t></w:r></w:p>',
       })
     );
@@ -107,6 +120,11 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('font-size:14pt');
     expect(html).toContain('font-family:&quot;微软雅黑&quot;');
     expect(html).toContain('text-decoration:underline');
+    expect(html).toContain('text-decoration-style:wavy');
+    expect(html).toContain('text-decoration-color:#00aaff');
+    expect(html).toContain('letter-spacing:1.5pt');
+    expect(html).toContain('<p dir="rtl"');
+    expect(html).toContain('lang="ar-SA" dir="rtl"');
     expect(html).toContain('>styled<');
   });
 
@@ -134,15 +152,19 @@ describe('interopHtmlFromFragment', () => {
     const html = interopHtmlFromFragment(
       fragment({
         styles:
+          '<w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/></w:style>' +
           '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/></w:style>' +
           '<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="Caption"/></w:style>' +
           '<w:style w:type="paragraph" w:styleId="Heading7"><w:name w:val="heading 7"/></w:style>',
         body:
+          '<w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr><w:r><w:t>normal</w:t></w:r></w:p>' +
           '<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>title</w:t></w:r></w:p>' +
           '<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr><w:r><w:t>caption</w:t></w:r></w:p>' +
           '<w:p><w:pPr><w:pStyle w:val="Heading7"/></w:pPr><w:r><w:t>deep</w:t></w:r></w:p>',
       })
     );
+    expect(html).toContain('<p class="MsoNormal"');
     expect(html).toContain('<p class="MsoTitle"');
     expect(html).toContain('<p class="MsoCaption"');
     expect(html).toContain('<p class="MsoHeading7"');
@@ -150,10 +172,14 @@ describe('interopHtmlFromFragment', () => {
 
   test('numbered and bulleted levels nest as ol/ul with list-style-type', () => {
     const item = (ilvl: number, text: string): string =>
-      `<w:p><w:pPr><w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="5"/></w:numPr></w:pPr>` +
+      `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:numPr>` +
+      `<w:ilvl w:val="${ilvl}"/><w:numId w:val="5"/></w:numPr></w:pPr>` +
       `<w:r><w:t>${text}</w:t></w:r></w:p>`;
     const html = interopHtmlFromFragment(
       fragment({
+        styles:
+          '<w:style w:type="paragraph" w:styleId="ListParagraph">' +
+          '<w:name w:val="List Paragraph"/></w:style>',
         numbering:
           '<w:abstractNum w:abstractNumId="0">' +
           '<w:lvl w:ilvl="0"><w:start w:val="5"/><w:numFmt w:val="decimal"/></w:lvl>' +
@@ -169,6 +195,7 @@ describe('interopHtmlFromFragment', () => {
       })
     );
     expect(html).toContain('<ol start="3" style="list-style-type:decimal">');
+    expect(html).toContain('<li class="MsoListParagraph"');
     expect(count(html, '<li')).toBe(3);
     // The bulleted level nests inside the ordered list and closes before "two".
     const ulOpen = html.indexOf('<ul>');
@@ -366,6 +393,12 @@ describe('interopHtmlFromFragment', () => {
   test('tabs and typed page breaks map to Word-compatible HTML', () => {
     const html = interopHtmlFromFragment(
       fragment({
+        footnotes:
+          '<w:footnote w:id="3"><w:p><w:r><w:footnoteReference w:id="3"/>' +
+          '<w:t>Foot body.</w:t></w:r></w:p></w:footnote>',
+        endnotes:
+          '<w:endnote w:id="2"><w:p><w:r><w:endnoteReference w:id="2"/>' +
+          '<w:t>End body.</w:t></w:r></w:p></w:endnote>',
         body:
           '<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t>' +
           '<w:ptab w:alignment="right" w:relativeTo="margin" w:leader="dot"/>' +
@@ -377,8 +410,14 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('<w:PTab Alignment="RIGHT" RelativeTo="MARGIN" Leader="DOT"></w:PTab>');
     expect(html).toContain('<br style="page-break-before:always">');
     expect(html).toContain('<br>');
-    expect(html).toContain('<span class="MsoFootnoteReference">3</span>');
-    expect(html).toContain('<span class="MsoEndnoteReference">2</span>');
+    expect(html).toContain('<span class="MsoFootnoteReference">');
+    expect(html).toContain('<span class="MsoEndnoteReference">');
+    expect(html).toContain('[3]');
+    expect(html).toContain('[2]');
+    expect(html).toContain('mso-element:footnote-list');
+    expect(html).toContain('mso-element:endnote-list');
+    expect(html).toContain('Foot body.');
+    expect(html).toContain('End body.');
   });
 
   test('every text value is escaped, never markup', () => {

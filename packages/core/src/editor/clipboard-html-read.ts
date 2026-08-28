@@ -25,6 +25,7 @@ import {
   type HtmlListKind,
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName } from './clipboard-html-links.ts';
+import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import {
   writeHtmlFragmentPackage,
   type HtmlFragmentRel as RelEntry,
@@ -168,8 +169,12 @@ function rPrXml(props: RunProps): string {
   if (props.italic) inner += '<w:i/>';
   if (props.caps) inner += '<w:caps/>';
   if (props.smallCaps) inner += '<w:smallCaps/>';
-  if (props.strike) inner += '<w:strike/>';
+  if (props.doubleStrike) inner += '<w:dstrike/>';
+  else if (props.strike) inner += '<w:strike/>';
   if (props.color !== undefined) inner += `<w:color w:val="${props.color}"/>`;
+  if (props.charSpacingTwentieths !== undefined) {
+    inner += `<w:spacing w:val="${props.charSpacingTwentieths}"/>`;
+  }
   if (props.szHalfPoints !== undefined) inner += `<w:sz w:val="${props.szHalfPoints}"/>`;
   if (props.highlight !== undefined) {
     inner += `<w:highlight w:val="${escapeXmlAttribute(props.highlight)}"/>`;
@@ -183,6 +188,8 @@ function rPrXml(props: RunProps): string {
     inner += `<w:shd w:val="clear" w:color="auto" w:fill="${props.shdFill}"/>`;
   }
   if (props.vertAlign !== undefined) inner += `<w:vertAlign w:val="${props.vertAlign}"/>`;
+  if (props.rtl) inner += '<w:rtl/>';
+  if (props.lang !== undefined) inner += `<w:lang w:val="${escapeXmlAttribute(props.lang)}"/>`;
   return inner.length > 0 ? `<w:rPr>${inner}</w:rPr>` : '';
 }
 
@@ -228,6 +235,7 @@ function pPrXml(para: ParaProps): string {
       )
       .join('')}</w:tabs>`;
   }
+  if (para.bidi) inner += '<w:bidi/>';
   if (
     para.spacingBeforeTwips !== undefined ||
     para.spacingAfterTwips !== undefined ||
@@ -493,6 +501,9 @@ function collectInline(
     run: applyRunCss(applyInlineTag(ctx.run, tag), style),
     pre: ctx.pre || tag === 'pre',
   };
+  const language = clipboardLanguageTag(node.getAttribute('lang'));
+  if (language !== null) nextCtx.run.lang = language;
+  if (node.getAttribute('dir')?.trim().toLowerCase() === 'rtl') nextCtx.run.rtl = true;
   const noteReference = tag === 'a' ? clipboardNoteReference(style) : null;
   if (noteReference !== null) {
     if (!ctx.noteBody) {
@@ -603,6 +614,12 @@ function projectParagraph(
   runStyle.delete('background');
   runStyle.delete('background-color');
   run = applyRunCss(run, runStyle);
+  const language = clipboardLanguageTag(element.getAttribute('lang'));
+  if (language !== null) run.lang = language;
+  if (element.getAttribute('dir')?.trim().toLowerCase() === 'rtl') {
+    run.rtl = true;
+    para.bidi = true;
+  }
   const next: FlowContext = {
     run,
     para,

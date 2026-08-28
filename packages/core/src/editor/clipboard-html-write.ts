@@ -23,7 +23,9 @@ import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
 import { clipboardBookmarkName, clipboardHyperlinkTarget } from './clipboard-html-links.ts';
+import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
+import { wordTableCellCss } from './clipboard-html-write-table-styles.ts';
 import {
   wordBorderCss,
   wordCssFontFamily,
@@ -32,11 +34,14 @@ import {
   wordParagraphClassOf,
   wordPositionalTabHtml,
   wordTableRowCss,
+  wordUnderlineCss,
 } from './clipboard-html-word-elements.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const STYLES_REL = `${R_NS}/styles`;
 const NUMBERING_REL = `${R_NS}/numbering`;
+const FOOTNOTES_REL = `${R_NS}/footnotes`;
+const ENDNOTES_REL = `${R_NS}/endnotes`;
 
 /** `basedOn` chains are file-supplied; a cycle must not become a loop bound. */
 const MAX_STYLE_CHAIN = 16;
@@ -304,10 +309,14 @@ interface RunCss {
   readonly css: string;
   readonly vanish: boolean;
   readonly vertAlign: 'superscript' | 'subscript' | null;
+  readonly lang: string | null;
+  readonly rtl: boolean;
 }
 
 function runCssOf(sources: readonly OoxmlElement[]): RunCss {
-  if (toggleOn(sources, 'vanish')) return { css: '', vanish: true, vertAlign: null };
+  if (toggleOn(sources, 'vanish')) {
+    return { css: '', vanish: true, vertAlign: null, lang: null, rtl: false };
+  }
   const rules: string[] = [];
 
   const font =
@@ -326,11 +335,16 @@ function runCssOf(sources: readonly OoxmlElement[]): RunCss {
   const decorations: string[] = [];
   const underline = lastProperty(sources, 'u');
   if (underline && wmlVal(underline) !== 'none') decorations.push('underline');
-  if (toggleOn(sources, 'strike')) decorations.push('line-through');
+  const doubleStrike = toggleOn(sources, 'dstrike');
+  if (toggleOn(sources, 'strike') || doubleStrike) decorations.push('line-through');
   if (decorations.length > 0) rules.push(`text-decoration:${decorations.join(' ')}`);
+  rules.push(...wordUnderlineCss(underline));
+  if (doubleStrike && underline === null) rules.push('text-decoration-style:double');
 
   const color = cssHexColor(foldAttribute(sources, 'color', 'val'));
   if (color) rules.push(`color:${color}`);
+  const spacing = parseIntValue(foldAttribute(sources, 'spacing', 'val'));
+  if (spacing !== null) rules.push(`letter-spacing:${Math.round((spacing / 20) * 100) / 100}pt`);
 
   // Highlight wins over shading when both are present.
   const highlightVal = wmlVal(lastProperty(sources, 'highlight'));
@@ -348,8 +362,13 @@ function runCssOf(sources: readonly OoxmlElement[]): RunCss {
   const vertAlignVal = wmlVal(lastProperty(sources, 'vertAlign'));
   const vertAlign =
     vertAlignVal === 'superscript' || vertAlignVal === 'subscript' ? vertAlignVal : null;
+  const lang = clipboardLanguageTag(
+    foldAttribute(sources, 'lang', 'val') ??
+      foldAttribute(sources, 'lang', 'bidi') ??
+      foldAttribute(sources, 'lang', 'eastAsia')
+  );
 
-  return { css: rules.join(';'), vanish: false, vertAlign };
+  return { css: rules.join(';'), vanish: false, vertAlign, lang, rtl: toggleOn(sources, 'rtl') };
 }
 
 function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolean): string {
@@ -440,6 +459,7 @@ interface RenderContext {
   readonly maxTotalImageBytes: number;
   /** Running total of media bytes already inlined, shared across the whole document. */
   imageBytesUsed: number;
+  readonly noteBody: boolean;
 }
 
 /** Complex-field state, one per paragraph. Runs render only when every open field is past
@@ -575,7 +595,7 @@ function renderRun(
       inner += positionalTab;
       continue;
     }
-    const noteReference = wordNoteReferenceHtml(child);
+    const noteReference = wordNoteReferenceHtml(child, ctx.noteBody);
     if (noteReference !== '') {
       inner += noteReference;
       continue;
@@ -608,7 +628,11 @@ function renderRun(
   if (inner === '') return '';
   if (style.vertAlign === 'superscript') inner = `<sup>${inner}</sup>`;
   else if (style.vertAlign === 'subscript') inner = `<sub>${inner}</sub>`;
-  return style.css === '' ? inner : `<span style="${escapeAttr(style.css)}">${inner}</span>`;
+  const attributes =
+    `${style.lang === null ? '' : ` lang="${style.lang}"`}` +
+    `${style.rtl ? ' dir="rtl"' : ''}` +
+    `${style.css === '' ? '' : ` style="${escapeAttr(style.css)}"`}`;
+  return attributes === '' ? inner : `<span${attributes}>${inner}</span>`;
 }
 
 function renderInline(
@@ -711,13 +735,14 @@ function renderParagraph(
   const fields: FieldState = { stack: [] };
   const inner = renderInline(ctx, paragraph.children, pPr, fields);
   const styleAttr = css === '' ? '' : ` style="${escapeAttr(css)}"`;
+  const dirAttr = toggleOn(sources, 'bidi') ? ' dir="rtl"' : '';
+  const wordClass = paragraphClassOf(ctx, pPr);
+  const classAttr = wordClass === null ? '' : ` class="${wordClass}"`;
 
-  if (options.asListItem) return `<li${styleAttr}>${inner}</li>`;
+  if (options.asListItem) return `<li${classAttr}${dirAttr}${styleAttr}>${inner}</li>`;
   const heading = headingLevelOf(ctx, pPr, sources);
   const tag = heading === null ? 'p' : `h${heading}`;
-  const wordClass = heading === null ? paragraphClassOf(ctx, pPr) : null;
-  const classAttr = wordClass === null ? '' : ` class="${wordClass}"`;
-  return `<${tag}${classAttr}${styleAttr}>${inner}</${tag}>`;
+  return `<${tag}${heading === null ? classAttr : ''}${dirAttr}${styleAttr}>${inner}</${tag}>`;
 }
 
 // --- tables ---
@@ -748,51 +773,6 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): CellPlacement[][] {
     }
     return placements;
   });
-}
-
-function cellCss(
-  tcPr: OoxmlElement | null,
-  tblBorders: OoxmlElement | null,
-  rowIndex: number,
-  rowCount: number,
-  cellIndex: number,
-  cellCount: number
-): string {
-  const rules: string[] = [];
-  const tcBorders = wmlChild(tcPr, 'tcBorders');
-  const tableEdges = {
-    top: rowIndex === 0 ? 'top' : 'insideH',
-    bottom: rowIndex === rowCount - 1 ? 'bottom' : 'insideH',
-    left: cellIndex === 0 ? 'left' : 'insideV',
-    right: cellIndex === cellCount - 1 ? 'right' : 'insideV',
-  } as const;
-  for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
-    const border =
-      wordBorderCss(wmlChild(tcBorders, edge)) ??
-      wordBorderCss(wmlChild(tblBorders, tableEdges[edge]));
-    if (border) rules.push(`border-${edge}:${border}`);
-  }
-  const fill = cssHexColor(attrOf(wmlChild(tcPr, 'shd'), 'fill', WML_NAMESPACE_URI));
-  if (fill) rules.push(`background-color:${fill}`);
-  const vAlign = wmlVal(wmlChild(tcPr, 'vAlign'));
-  if (vAlign === 'center') rules.push('vertical-align:middle');
-  else if (vAlign === 'bottom') rules.push('vertical-align:bottom');
-  else if (vAlign === 'top') rules.push('vertical-align:top');
-  const tcW = wmlChild(tcPr, 'tcW');
-  const widthType = attrOf(tcW, 'type', WML_NAMESPACE_URI);
-  const width = parseIntValue(attrOf(tcW, 'w', WML_NAMESPACE_URI));
-  if (width !== null && width > 0 && (widthType === undefined || widthType === 'dxa')) {
-    rules.push(`width:${ptFromTwips(width)}`);
-  }
-  const margins = wmlChild(tcPr, 'tcMar');
-  for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
-    const margin = wmlChild(margins, edge);
-    const value = parseIntValue(attrOf(margin, 'w', WML_NAMESPACE_URI));
-    if (value !== null && value >= 0 && attrOf(margin, 'type', WML_NAMESPACE_URI) === 'dxa') {
-      rules.push(`padding-${edge}:${ptFromTwips(value)}`);
-    }
-  }
-  return rules.join(';');
 }
 
 function renderTable(ctx: RenderContext, table: OoxmlElement): string {
@@ -851,7 +831,7 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
         }
       }
       const tcPr = wmlChild(placement.cell, 'tcPr');
-      const css = cellCss(
+      const css = wordTableCellCss(
         tcPr,
         tblBorders,
         rowIndex,
@@ -951,9 +931,24 @@ function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): strin
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Entry point
-// ---------------------------------------------------------------------------
+function renderNoteList(
+  ctx: RenderContext,
+  kind: 'footnote' | 'endnote',
+  root: OoxmlElement | null
+): string {
+  if (root === null) return '';
+  let notes = '';
+  for (const child of root.children) {
+    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
+    if (child.localName !== kind) continue;
+    const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
+    if (id === undefined || !/^[1-9]\d{0,4}$/.test(id)) continue;
+    const inner = renderBlocks({ ...ctx, noteBody: true }, child.children);
+    if (inner !== '')
+      notes += `<div style="mso-element:${kind}" id="${kind === 'footnote' ? 'ftn' : 'edn'}${id}">${inner}</div>`;
+  }
+  return notes === '' ? '' : `<div style="mso-element:${kind}-list">${notes}</div>`;
+}
 
 /**
  * Interop HTML for the fragment package's document body. Returns '' when the package
@@ -993,6 +988,11 @@ export function interopHtmlFromFragmentPackage(
     maxImageBytes: options?.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     maxTotalImageBytes: options?.maxTotalImageBytes ?? DEFAULT_MAX_TOTAL_IMAGE_BYTES,
     imageBytesUsed: 0,
+    noteBody: false,
   };
-  return renderBlocks(ctx, body.children);
+  return (
+    renderBlocks(ctx, body.children) +
+    renderNoteList(ctx, 'footnote', relatedPart(pkg, FOOTNOTES_REL, '/word/footnotes.xml')) +
+    renderNoteList(ctx, 'endnote', relatedPart(pkg, ENDNOTES_REL, '/word/endnotes.xml'))
+  );
 }

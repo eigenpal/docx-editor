@@ -1,3 +1,5 @@
+import { clipboardLanguageTag } from './clipboard-html-language.ts';
+
 /** A bounded absolute CSS length in points. Word clipboard HTML commonly uses `in`. */
 export function parseCssLengthPt(value: string): number | null {
   const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(px|pt|in|cm|mm|pc)$/.exec(value.trim().toLowerCase());
@@ -276,6 +278,7 @@ export interface HtmlRunProps {
   underlineVal?: 'single' | 'double' | 'thick' | 'dotted' | 'dash' | 'wave';
   underlineColor?: string;
   strike?: boolean;
+  doubleStrike?: boolean;
   caps?: boolean;
   smallCaps?: boolean;
   vertAlign?: 'subscript' | 'superscript';
@@ -287,6 +290,9 @@ export interface HtmlRunProps {
   shdFill?: string;
   szHalfPoints?: number;
   font?: string;
+  charSpacingTwentieths?: number;
+  lang?: string;
+  rtl?: boolean;
 }
 
 export type HtmlTabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar';
@@ -326,6 +332,7 @@ export interface HtmlParaProps {
   tabs?: readonly HtmlTabStop[];
   borders?: Readonly<Partial<Record<HtmlParagraphBorderEdge, HtmlParagraphBorder>>>;
   numPr?: { readonly numId: string; readonly ilvl: number };
+  bidi?: boolean;
 }
 
 const NAMED_COLORS = new Map(
@@ -554,6 +561,16 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
       }
     }
   }
+  const decorationStyle = style.get('text-decoration-style')?.trim().toLowerCase();
+  if (decorationStyle === 'double' && next.strike) next.doubleStrike = true;
+  if (next.underline) {
+    if (decorationStyle === 'double') next.underlineVal = 'double';
+    else if (decorationStyle === 'dotted') next.underlineVal = 'dotted';
+    else if (decorationStyle === 'dashed') next.underlineVal = 'dash';
+    else if (decorationStyle === 'wavy') next.underlineVal = 'wave';
+    const decorationColor = parseCssColor(style.get('text-decoration-color') ?? '');
+    if (decorationColor !== null) next.underlineColor = decorationColor;
+  }
   const color = parseCssColor(style.get('color') ?? '');
   if (color) next.color = color;
   const msoHighlight = highlightNameOf(style.get('mso-highlight'));
@@ -579,9 +596,20 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
       .replace(/^['"]|['"]$/g, '');
     if (first.length > 0 && first.length <= 64) next.font = first;
   }
+  const letterSpacing = parseCssLengthPt(style.get('letter-spacing') ?? '');
+  if (letterSpacing !== null) {
+    next.charSpacingTwentieths = clamp(Math.round(letterSpacing * 20), -31_680, 31_680);
+  }
   const vertical = style.get('vertical-align');
   if (vertical === 'sub') next.vertAlign = 'subscript';
   else if (vertical === 'super') next.vertAlign = 'superscript';
+  const language = clipboardLanguageTag(
+    style.get('mso-ansi-language') ??
+      style.get('mso-fareast-language') ??
+      style.get('mso-bidi-language')
+  );
+  if (language !== null) next.lang = language;
+  if (style.get('direction')?.trim().toLowerCase() === 'rtl') next.rtl = true;
   return next;
 }
 
@@ -591,6 +619,7 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   else if (align === 'center') para.jc = 'center';
   else if (align === 'right' || align === 'end') para.jc = 'right';
   else if (align === 'justify') para.jc = 'both';
+  if (style.get('direction')?.trim().toLowerCase() === 'rtl') para.bidi = true;
   const marginLeftPt = parseCssLengthPt(style.get('margin-left') ?? '');
   if (marginLeftPt !== null) {
     para.indLeftTwips = clamp(Math.round(marginLeftPt * 20), -31_680, 31_680);

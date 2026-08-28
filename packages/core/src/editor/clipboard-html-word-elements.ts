@@ -2,10 +2,13 @@ import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tre
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 
 const WORD_PARAGRAPH_CLASSES: Readonly<Record<string, string>> = {
+  Normal: 'MsoNormal',
+  ListParagraph: 'MsoListParagraph',
   Title: 'MsoTitle',
   Subtitle: 'MsoSubtitle',
   Caption: 'MsoCaption',
   Quote: 'MsoQuote',
+  IntenseQuote: 'MsoIntenseQuote',
 };
 
 export function wordParagraphClassOf(styleId: string | undefined): string | null {
@@ -69,22 +72,51 @@ export function wordLineSpacingCss(
   return [`line-height:${Math.round((line / 240) * 100) / 100}`];
 }
 
+export function wordUnderlineCss(underline: OoxmlElement | null): readonly string[] {
+  if (underline === null) return [];
+  const value = attributeValueOf(underline, 'val', WML_NAMESPACE_URI);
+  const style =
+    value === 'double'
+      ? 'double'
+      : value === 'dotted'
+        ? 'dotted'
+        : value === 'dash'
+          ? 'dashed'
+          : value === 'wave'
+            ? 'wavy'
+            : 'solid';
+  const rules = [`text-decoration-style:${style}`];
+  const color = attributeValueOf(underline, 'color', WML_NAMESPACE_URI);
+  if (color !== undefined && /^[0-9A-Fa-f]{6}$/.test(color)) {
+    rules.push(`text-decoration-color:#${color.toLowerCase()}`);
+  }
+  if (value === 'thick') rules.push('text-decoration-thickness:2px');
+  return rules;
+}
+
 export function wordTableRowCss(height: number | null, rule: string | undefined): string {
   if (height === null || height <= 0) return '';
   const points = Math.round((height / 20) * 100) / 100;
   return `height:${points}pt;mso-height-rule:${rule === 'exact' ? 'exactly' : 'at-least'}`;
 }
 
-export function wordNoteReferenceHtml(node: OoxmlElement): string {
+export function wordNoteReferenceHtml(node: OoxmlElement, inNoteBody = false): string {
   if (node.namespaceUri !== WML_NAMESPACE_URI) return '';
   const footnote = node.localName === 'footnoteReference';
   if (!footnote && node.localName !== 'endnoteReference') return '';
   const rawId = attributeValueOf(node, 'id', WML_NAMESPACE_URI);
-  if (rawId === undefined || !/^\d{1,5}$/.test(rawId)) return '';
+  if (rawId === undefined || !/^[1-9]\d{0,4}$/.test(rawId)) return '';
   const id = Number.parseInt(rawId, 10);
   if (id > 32_767) return '';
   const className = footnote ? 'MsoFootnoteReference' : 'MsoEndnoteReference';
-  return `<sup><span class="${className}">${id}</span></sup>`;
+  const prefix = footnote ? 'ftn' : 'edn';
+  const href = inNoteBody ? `#_${prefix}ref${id}` : `#_${prefix}${id}`;
+  const name = inNoteBody ? `_${prefix}${id}` : `_${prefix}ref${id}`;
+  return (
+    `<a style="mso-${footnote ? 'footnote' : 'endnote'}-id:${prefix}${id}" ` +
+    `href="${href}" name="${name}"><span class="${className}">` +
+    `<span style="mso-special-character:footnote">[${id}]</span></span></a>`
+  );
 }
 
 /** Map a closed-enumeration OOXML positional tab to Word clipboard HTML. */
