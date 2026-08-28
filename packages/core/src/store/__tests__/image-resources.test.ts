@@ -237,9 +237,29 @@ function forgedPng(wrongChunkLength: boolean): Uint8Array {
   return out;
 }
 
-function pngWithPhysicalDensity(pixelsPerMeter: number): Uint8Array {
+function pngWithPhysicalDensity(pixelsPerMeter: number, unit = 1): Uint8Array {
   const phys = Uint8Array.from([
-    0, 0, 0, 9, 0x70, 0x48, 0x59, 0x73, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+    0,
+    0,
+    0,
+    9,
+    0x70,
+    0x48,
+    0x59,
+    0x73,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    unit,
+    0,
+    0,
+    0,
+    0,
   ]);
   for (const offset of [8, 12]) {
     phys[offset] = (pixelsPerMeter >>> 24) & 0xff;
@@ -297,6 +317,11 @@ describe('image resource validation and cache (task 4)', () => {
       const header = validatePngHeader(pngWithPhysicalDensity(5669));
       expect(header?.dpiX).toBeCloseTo(144, 1);
       expect(header?.dpiY).toBeCloseTo(144, 1);
+    });
+
+    test('PNG pHYs ignores aspect-only and excessive density', () => {
+      expect(validatePngHeader(pngWithPhysicalDensity(5669, 0))?.dpiX).toBeUndefined();
+      expect(validatePngHeader(pngWithPhysicalDensity(100_000))?.dpiX).toBeUndefined();
     });
 
     test('GIF logical screen validates nonzero dimensions', () => {
@@ -655,6 +680,19 @@ describe('image resource validation and cache (task 4)', () => {
       expect(state.resourceKey).toContain('sha256:');
       expect('validatedBytesFor' in cache).toBe(false);
       expect(Object.isFrozen(state)).toBe(true);
+    });
+
+    test('ready PNG prefers physical header density over decoder defaults', async () => {
+      const loaded = buildPackage({
+        media: { 'word/media/image1.png': pngWithPhysicalDensity(5669) },
+      });
+      if (!loaded.ok) throw new Error(loaded.reason);
+      const cache = createImageResourceCache(loaded.package, { decodePort: mockDecodePort() });
+      const state = await cache.resolveEmbedded('/word/document.xml', 'rId2');
+      expect(state.kind).toBe('ready');
+      if (state.kind !== 'ready') return;
+      expect(state.dpiX).toBeCloseTo(144, 1);
+      expect(state.dpiY).toBeCloseTo(144, 1);
     });
 
     test('decoder receives a copy; package bytes and hash stay stable after mutation', async () => {

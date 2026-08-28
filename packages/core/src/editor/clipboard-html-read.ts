@@ -50,7 +50,7 @@ export type HtmlProjectionResult =
       readonly ok: true;
       /** A fragment package zip, readable by `readOoxmlPackage`. */
       readonly fragmentBytes: Uint8Array;
-      /** Whether the source identified the final Word paragraph mark as selected. */
+      /** True when the final projected paragraph carries a mapped Word style. */
       readonly lastMarkCovered: boolean;
       /** How many `data:` images the projection accepted into the fragment. */
       readonly imageCount: number;
@@ -143,6 +143,7 @@ type RelEntry = {
 interface FlowContext {
   readonly run: RunProps;
   readonly para: ParaProps;
+  readonly paragraphMarkCovered: boolean;
   readonly pre: boolean;
   readonly list: ListState | null;
 }
@@ -405,8 +406,8 @@ function projectImage(element: Element, runs: string[], p: Projection): void {
   let widthPx = imageDimensionPx(element, style, 'width', p.wordHtml);
   let heightPx = imageDimensionPx(element, style, 'height', p.wordHtml);
   if (widthPx === null && heightPx === null && header) {
-    widthPx = header.pixelWidth;
-    heightPx = header.pixelHeight;
+    widthPx = (header.pixelWidth * 96) / (header.dpiX ?? 96);
+    heightPx = (header.pixelHeight * 96) / (header.dpiY ?? 96);
   } else if (widthPx !== null && heightPx === null) {
     heightPx = header ? (widthPx * header.pixelHeight) / header.pixelWidth : (widthPx * 2) / 3;
   } else if (widthPx === null && heightPx !== null) {
@@ -595,9 +596,14 @@ function projectParagraph(
   if (mso) para.numPr = mso;
   applyParaCss(para, style);
   run = applyRunCss(run, style);
-  const next: FlowContext = { run, para, pre, list: ctx.list };
+  const next: FlowContext = {
+    run,
+    para,
+    paragraphMarkCovered: styleId !== undefined,
+    pre,
+    list: ctx.list,
+  };
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true);
-  p.lastMarkCovered = styleId !== undefined;
 }
 
 function projectList(
@@ -646,7 +652,7 @@ function projectFlow(
   const flush = (): void => {
     if (pending.length > 0) {
       out.push(paragraphXml(ctx.para, pending));
-      p.lastMarkCovered = false;
+      p.lastMarkCovered = ctx.paragraphMarkCovered;
     }
     pending = [];
   };
@@ -687,7 +693,7 @@ function projectFlow(
   // An explicit block emits its paragraph even when empty.
   if (forceEmit && out.length === before) {
     out.push(paragraphXml(ctx.para, []));
-    p.lastMarkCovered = false;
+    p.lastMarkCovered = ctx.paragraphMarkCovered;
   }
 }
 
@@ -835,6 +841,7 @@ function projectCell(
   const cellCtx: FlowContext = {
     run: isHeader ? { ...ctx.run, bold: true } : ctx.run,
     para: isHeader ? { jc: 'center' } : {},
+    paragraphMarkCovered: false,
     pre: false,
     list: null,
   };
@@ -942,7 +949,13 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     docPrId: 0,
   };
   const blocks: string[] = [];
-  const rootCtx: FlowContext = { run: {}, para: {}, pre: false, list: null };
+  const rootCtx: FlowContext = {
+    run: {},
+    para: {},
+    paragraphMarkCovered: false,
+    pre: false,
+    list: null,
+  };
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
   if (blocks.length === 0) return { ok: false, reason: 'no-content' };
   return { ok: true, projection, blocks };

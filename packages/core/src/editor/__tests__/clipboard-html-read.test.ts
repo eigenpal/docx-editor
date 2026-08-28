@@ -16,6 +16,28 @@ import { strFromU8 } from '../../store/package/zip.ts';
 const TINY_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
+function pngWithPhysicalSize(width: number, height: number, pixelsPerMeter: number): string {
+  const source = Uint8Array.from(atob(TINY_PNG_BASE64), (char) => char.charCodeAt(0));
+  const writeUint32 = (bytes: Uint8Array, offset: number, value: number): void => {
+    bytes[offset] = (value >>> 24) & 0xff;
+    bytes[offset + 1] = (value >>> 16) & 0xff;
+    bytes[offset + 2] = (value >>> 8) & 0xff;
+    bytes[offset + 3] = value & 0xff;
+  };
+  writeUint32(source, 16, width);
+  writeUint32(source, 20, height);
+  const phys = Uint8Array.from([
+    0, 0, 0, 9, 0x70, 0x48, 0x59, 0x73, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+  ]);
+  writeUint32(phys, 8, pixelsPerMeter);
+  writeUint32(phys, 12, pixelsPerMeter);
+  const bytes = new Uint8Array(source.length + phys.length);
+  bytes.set(source.subarray(0, 33));
+  bytes.set(phys, 33);
+  bytes.set(source.subarray(33), 33 + phys.length);
+  return btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(''));
+}
+
 interface OpenedFragment {
   readonly pkg: OoxmlPackage;
   readonly docXml: string;
@@ -43,12 +65,13 @@ function openFragment(html: string): OpenedFragment {
 
 describe('run and paragraph mapping', () => {
   test('headings become bold direct formatting at Word sizes', () => {
-    const { docXml } = openFragment('<h1>Alpha</h1><h3>Beta</h3>');
+    const { docXml, lastMarkCovered } = openFragment('<h1>Alpha</h1><h3>Beta</h3>');
     expect(docXml).toContain('w:sz w:val="64"');
     expect(docXml).toContain('w:sz w:val="44"');
     expect(docXml).toContain('<w:b/>');
     expect(docXml).toContain('Alpha');
     expect(docXml).toContain('Beta');
+    expect(lastMarkCovered).toBe(false);
   });
 
   test('Word heading tags use target styles and include their paragraph mark', () => {
@@ -73,6 +96,13 @@ describe('run and paragraph mapping', () => {
 
   test('generic paragraphs keep the host paragraph mark', () => {
     const { lastMarkCovered } = openFragment('<p>ordinary</p>');
+    expect(lastMarkCovered).toBe(false);
+  });
+
+  test('only the final projected block controls paragraph mark coverage', () => {
+    const { lastMarkCovered } = openFragment(
+      '<p class="MsoCaption">caption</p><p>ordinary tail</p>'
+    );
     expect(lastMarkCovered).toBe(false);
   });
 
@@ -255,6 +285,14 @@ describe('images', () => {
     // 10pt and 20pt expressed as CSS pixels, then converted to EMU.
     expect(docXml).toContain('cx="127000"');
     expect(docXml).toContain('cy="254000"');
+  });
+
+  test('an unsized PNG uses its physical density', () => {
+    const png = pngWithPhysicalSize(144, 72, 5669);
+    const { docXml } = openFragment(`<p><img src="data:image/png;base64,${png}"></p>`);
+    // Integer pixels-per-metre metadata is approximately 144 dpi.
+    expect(docXml).toContain('cx="914447"');
+    expect(docXml).toContain('cy="457223"');
   });
 
   test('a data: image above the per-image cap is dropped', () => {
