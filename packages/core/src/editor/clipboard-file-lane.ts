@@ -33,8 +33,7 @@ function flavourOf(transfer: DataTransfer, type: string): string {
  *
  * In order of cost: visible `text/plain` (the plain lane's unconditional fallback), visible
  * HTML text (the projection and the plain lane's HTML fallback both land it), a
- * zip-shaped embedded fragment, and finally the projection probe for text-free HTML — the
- * exact decision the paste router makes for `data:` images, without paying for the zip.
+ * zip-shaped embedded fragment, and finally the projection probe for text-free HTML.
  *
  * Deliberate asymmetries against the router's letter: text made only of invisible
  * characters (zero-width wrappers, bidi marks, a bare newline) does not count — the router
@@ -43,13 +42,7 @@ function flavourOf(transfer: DataTransfer, type: string): string {
  * selections, the force-plain window) are ignored; in those states the engine may land
  * nothing where this predicate said it would.
  *
- * One trade the adapter cannot win: a payload whose `text/plain` is just the copied file's
- * own name or URL stands the lane down and pastes that text without the picture. The
- * engine's plain lane inserts any visible text REGARDLESS of what a host does, so the only
- * alternative is the path text AND the picture — a duplicate, which is the bug this
- * predicate exists to prevent.
- *
- * @public
+ * @internal
  */
 export function clipboardPasteLandsContent(transfer: DataTransfer | null | undefined): boolean {
   if (!transfer) return false;
@@ -80,7 +73,7 @@ export function clipboardPasteLandsContent(transfer: DataTransfer | null | undef
  * that carries an image file beside it (Word's rendering PNG again) always carries the
  * text in HTML too.
  *
- * @public
+ * @internal
  */
 export function clipboardDropLandsText(transfer: DataTransfer | null | undefined): boolean {
   if (!transfer) return false;

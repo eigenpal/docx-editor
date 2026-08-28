@@ -26,12 +26,20 @@ import {
   type HtmlListAllocation as ListAllocation,
 } from './clipboard-html-numbering.ts';
 import {
+  applyParaCss,
+  applyRunCss,
+  applyWordParagraphAlignment,
   imageDimensionPx,
   isElement,
   isWordClipboardHtml,
-  parseCssLengthPt,
+  parseCssColor,
+  parseInlineStyle,
   tagOf,
+  wordClassAlignmentsFromDocument,
   wordParagraphStyleId,
+  type HtmlParagraphAlign,
+  type HtmlParaProps,
+  type HtmlRunProps,
 } from './clipboard-html-styles.ts';
 
 export interface HtmlProjectionLimits {
@@ -97,39 +105,8 @@ const CONTAINER_TAGS = new Set(
   )
 );
 
-const NAMED_COLORS = new Map(
-  (
-    'black:000000 white:FFFFFF red:FF0000 green:008000 blue:0000FF yellow:FFFF00 gray:808080 ' +
-    'grey:808080 silver:C0C0C0 maroon:800000 navy:000080 purple:800080 orange:FFA500'
-  )
-    .split(' ')
-    .map((pair) => pair.split(':') as [string, string])
-);
-
-interface RunProps {
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  strike?: boolean;
-  vertAlign?: 'subscript' | 'superscript';
-  /** RRGGBB uppercase. */
-  color?: string;
-  /** RRGGBB uppercase, run shading fill. */
-  shdFill?: string;
-  szHalfPoints?: number;
-  font?: string;
-}
-
-interface ParaProps {
-  styleId?: string;
-  jc?: 'left' | 'center' | 'right' | 'both';
-  indLeftTwips?: number;
-  /** Positive → `w:firstLine`, negative → `w:hanging`. */
-  firstLineTwips?: number;
-  /** `w:spacing w:line` in 240ths, `w:lineRule="auto"`. */
-  lineTwentieths?: number;
-  numPr?: { readonly numId: string; readonly ilvl: number };
-}
+type RunProps = HtmlRunProps;
+type ParaProps = HtmlParaProps;
 
 type ListState = { readonly numId: string; readonly level: number };
 
@@ -161,111 +138,11 @@ interface Projection {
   semanticListCount: number;
   imageCount: number;
   docPrId: number;
-}
-
-// --- CSS reading (inline `style` attributes only — no stylesheet cascade)
-
-/** Inline style declarations as a Map, so hostile property names never become object keys. */
-function parseInlineStyle(element: Element): ReadonlyMap<string, string> {
-  const out = new Map<string, string>();
-  const raw = element.getAttribute('style');
-  if (!raw || raw.length > 8192) return out;
-  for (const declaration of raw.split(';')) {
-    const colon = declaration.indexOf(':');
-    if (colon <= 0) continue;
-    const name = declaration.slice(0, colon).trim().toLowerCase();
-    const value = declaration.slice(colon + 1).trim();
-    if (name.length > 0 && value.length > 0 && !out.has(name)) out.set(name, value);
-  }
-  return out;
-}
-
-/** Normalize a CSS color to RRGGBB uppercase hex, or null when it does not parse. */
-function parseCssColor(value: string): string | null {
-  const v = value.trim().toLowerCase();
-  const named = NAMED_COLORS.get(v);
-  if (named) return named;
-  const hex6 = /^#([0-9a-f]{6})$/.exec(v);
-  if (hex6) return hex6[1]!.toUpperCase();
-  const hex3 = /^#([0-9a-f]{3})$/.exec(v);
-  if (hex3) {
-    const [r, g, b] = hex3[1]!;
-    return `${r}${r}${g}${g}${b}${b}`.toUpperCase();
-  }
-  const rgb = /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,[^)]*)?\)$/.exec(v);
-  if (rgb) {
-    const channel = (part: string): string =>
-      Math.min(255, Number.parseInt(part, 10)).toString(16).padStart(2, '0');
-    return `${channel(rgb[1]!)}${channel(rgb[2]!)}${channel(rgb[3]!)}`.toUpperCase();
-  }
-  return null;
+  readonly classAlignments: ReadonlyMap<string, HtmlParagraphAlign>;
 }
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));
-}
-
-function applyRunCss(base: RunProps, style: ReadonlyMap<string, string>): RunProps {
-  if (style.size === 0) return base;
-  const next: RunProps = { ...base };
-  const weight = style.get('font-weight')?.toLowerCase();
-  if (weight !== undefined) {
-    const numeric = Number.parseInt(weight, 10);
-    if (weight === 'bold' || numeric >= 600) next.bold = true;
-    else if (weight === 'normal' || numeric < 600) next.bold = false;
-  }
-  const fontStyle = style.get('font-style');
-  if (fontStyle !== undefined) next.italic = fontStyle.toLowerCase().includes('italic');
-  const decoration = (
-    style.get('text-decoration') ?? style.get('text-decoration-line')
-  )?.toLowerCase();
-  if (decoration !== undefined) {
-    if (decoration.includes('underline')) next.underline = true;
-    if (decoration.includes('line-through')) next.strike = true;
-    if (decoration.includes('none')) next.underline = next.strike = false;
-  }
-  const color = parseCssColor(style.get('color') ?? '');
-  if (color) next.color = color;
-  const background = style.get('background-color');
-  if (background !== undefined && background.toLowerCase() !== 'transparent') {
-    const parsed = parseCssColor(background);
-    if (parsed) next.shdFill = parsed;
-  }
-  const pt = parseCssLengthPt(style.get('font-size') ?? '');
-  if (pt !== null && pt > 0) next.szHalfPoints = clamp(Math.round(pt * 2), 2, 3276);
-  const family = style.get('font-family');
-  if (family !== undefined) {
-    const first = family
-      .split(',')[0]!
-      .trim()
-      .replace(/^['"]|['"]$/g, '');
-    if (first.length > 0 && first.length <= 64) next.font = first;
-  }
-  const vertical = style.get('vertical-align');
-  if (vertical === 'sub') next.vertAlign = 'subscript';
-  else if (vertical === 'super') next.vertAlign = 'superscript';
-  return next;
-}
-
-function applyParaCss(para: ParaProps, style: ReadonlyMap<string, string>): void {
-  const align = style.get('text-align')?.toLowerCase();
-  if (align === 'left' || align === 'start') para.jc = 'left';
-  else if (align === 'center') para.jc = 'center';
-  else if (align === 'right' || align === 'end') para.jc = 'right';
-  else if (align === 'justify') para.jc = 'both';
-  const marginPt = parseCssLengthPt(style.get('margin-left') ?? '');
-  if (marginPt !== null && marginPt > 0) {
-    para.indLeftTwips = clamp(Math.round(marginPt * 20), 0, 31_680);
-  }
-  const indentPt = parseCssLengthPt(style.get('text-indent') ?? '');
-  if (indentPt !== null && indentPt !== 0) {
-    const twips = clamp(Math.round(indentPt * 20), -31_680, 31_680);
-    if (twips !== 0) para.firstLineTwips = twips;
-  }
-  const lineHeight = style.get('line-height')?.trim() ?? '';
-  if (/^\d+(\.\d+)?$/.test(lineHeight) && Number.parseFloat(lineHeight) > 0) {
-    para.lineTwentieths = clamp(Math.round(240 * Number.parseFloat(lineHeight)), 24, 9600);
-  }
 }
 
 // --- XML emission
@@ -302,6 +179,9 @@ function rPrXml(props: RunProps): string {
   if (props.strike) inner += '<w:strike/>';
   if (props.color !== undefined) inner += `<w:color w:val="${props.color}"/>`;
   if (props.szHalfPoints !== undefined) inner += `<w:sz w:val="${props.szHalfPoints}"/>`;
+  if (props.highlight !== undefined) {
+    inner += `<w:highlight w:val="${escapeXmlAttribute(props.highlight)}"/>`;
+  }
   if (props.underline) inner += '<w:u w:val="single"/>';
   if (props.shdFill !== undefined) {
     inner += `<w:shd w:val="clear" w:color="auto" w:fill="${props.shdFill}"/>`;
@@ -594,6 +474,7 @@ function projectParagraph(
   if (tag === 'pre') run.font = 'Courier New';
   const mso = msoListNumPr(element, style, p);
   if (mso) para.numPr = mso;
+  applyWordParagraphAlignment(para, element, p.classAlignments);
   applyParaCss(para, style);
   run = applyRunCss(run, style);
   const next: FlowContext = {
@@ -927,7 +808,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   let parsed: Document;
   try {
     // The result stays detached. The bounded allowlist walker emits escaped XML only.
-    parsed = new DOMParser().parseFromString(html, 'text/html'); // lgtm[js/xss]
+    // codeql[js/xss]
+    parsed = new DOMParser().parseFromString(html, 'text/html');
   } catch {
     return { ok: false, reason: 'parse-unavailable' };
   }
@@ -947,6 +829,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     semanticListCount: 0,
     imageCount: 0,
     docPrId: 0,
+    classAlignments: wordClassAlignmentsFromDocument(parsed),
   };
   const blocks: string[] = [];
   const rootCtx: FlowContext = {
