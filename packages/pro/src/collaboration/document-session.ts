@@ -621,8 +621,8 @@ class DocumentSession implements DocumentCollaborationSession {
     // author would keep a clean view while every other replica converges on the duplicated one.
     if (transaction.origin === this.localOrigin) {
       // Reconcile only on the edit that CREATES a tangle, not on every later keystroke while it
-      // persists: the event count rises once per tangle, so a steady stream of edits in an
-      // already-tangled document takes the early return with no materialize.
+      // persists: the marker changes on each tangle-creating edit, so a steady stream of edits
+      // in an already-tangled document takes the early return with no materialize.
       const tangles = this.registry.declinedSplitTangleEvents();
       if (tangles !== this.seenDeclinedTangles) {
         this.seenDeclinedTangles = tangles;

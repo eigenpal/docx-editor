@@ -51,10 +51,11 @@ export class SplitDedupIndex {
    */
   private liveRootedOrigins = new Set<LogicalId>();
   /**
-   * How many times a local edit re-split a run an earlier round produced — the declined tangle
-   * (#581). Monotonic across the session and NOT cleared by `reset()`: it counts edit events,
-   * not current state, so the session compares it against its last-seen value to reconcile the
-   * author's store exactly once per new tangle instead of on every later keystroke.
+   * A monotonic marker bumped whenever a local edit re-splits a run inside a contested lineage —
+   * the declined tangle (#581). It rises by however many product runs that one edit mints, so it
+   * is a CHANGE signal, not a tangle count. NOT cleared by `reset()`: the session compares it
+   * against its last-seen value and reconciles the author's store once per tangle-creating edit,
+   * never on the steady keystrokes in between.
    */
   private declinedTangleCount = 0;
 
