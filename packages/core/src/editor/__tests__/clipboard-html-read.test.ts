@@ -20,13 +20,13 @@ interface OpenedFragment {
   readonly pkg: OoxmlPackage;
   readonly docXml: string;
   readonly relsXml: string;
+  readonly lastMarkCovered: boolean;
 }
 
 /** Project, read back through the bounded package reader, and serialize the body. */
 function openFragment(html: string): OpenedFragment {
   const projected = projectExternalHtml(html);
   if (!projected.ok) throw new Error(`projection refused: ${projected.reason}`);
-  expect(projected.lastMarkCovered).toBe(false);
   const read = readOoxmlPackage(projected.fragmentBytes);
   if (!read.ok) throw new Error(`read-back refused: ${read.reason}`);
   const pkg = read.package;
@@ -37,6 +37,7 @@ function openFragment(html: string): OpenedFragment {
     pkg,
     docXml: serializeOoxmlPart(part),
     relsXml: relsBytes ? strFromU8(relsBytes) : '',
+    lastMarkCovered: projected.lastMarkCovered,
   };
 }
 
@@ -48,6 +49,31 @@ describe('run and paragraph mapping', () => {
     expect(docXml).toContain('<w:b/>');
     expect(docXml).toContain('Alpha');
     expect(docXml).toContain('Beta');
+  });
+
+  test('Word heading tags use target styles and include their paragraph mark', () => {
+    const html =
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office"><body>' +
+      '<h2>Target heading</h2></body></html>';
+    const { docXml, lastMarkCovered } = openFragment(html);
+    expect(docXml).toContain('<w:pStyle w:val="Heading2"/>');
+    expect(docXml).not.toContain('w:sz w:val="52"');
+    expect(docXml).not.toContain('<w:b/>');
+    expect(lastMarkCovered).toBe(true);
+  });
+
+  test('Word caption classes use target styles and include their paragraph mark', () => {
+    const { docXml, lastMarkCovered } = openFragment(
+      '<p class="MsoCaption" style="text-align:center">Figure 1</p>'
+    );
+    expect(docXml).toContain('<w:pStyle w:val="Caption"/>');
+    expect(docXml).toContain('<w:jc w:val="center"/>');
+    expect(lastMarkCovered).toBe(true);
+  });
+
+  test('generic paragraphs keep the host paragraph mark', () => {
+    const { lastMarkCovered } = openFragment('<p>ordinary</p>');
+    expect(lastMarkCovered).toBe(false);
   });
 
   test('inline tags and CSS map to run properties', () => {
@@ -218,6 +244,17 @@ describe('images', () => {
     expect(media).toBeDefined();
     expect(media!.length).toBeGreaterThan(8);
     expect(relsXml).toContain('Target="media/image1.png"');
+  });
+
+  test('Word bare image dimensions use points', () => {
+    const html =
+      '<html xmlns:o="urn:schemas-microsoft-com:office:office"><body><p>' +
+      `<img src="data:image/png;base64,${TINY_PNG_BASE64}" width="10" height="20">` +
+      '</p></body></html>';
+    const { docXml } = openFragment(html);
+    // 10pt and 20pt expressed as CSS pixels, then converted to EMU.
+    expect(docXml).toContain('cx="127000"');
+    expect(docXml).toContain('cy="254000"');
   });
 
   test('a data: image above the per-image cap is dropped', () => {

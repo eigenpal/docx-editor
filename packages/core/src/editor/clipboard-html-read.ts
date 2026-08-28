@@ -25,6 +25,14 @@ import {
   numberingPartXml,
   type HtmlListAllocation as ListAllocation,
 } from './clipboard-html-numbering.ts';
+import {
+  imageDimensionPx,
+  isElement,
+  isWordClipboardHtml,
+  parseCssLengthPt,
+  tagOf,
+  wordParagraphStyleId,
+} from './clipboard-html-styles.ts';
 
 export interface HtmlProjectionLimits {
   /** UTF-8 size cap applied BEFORE parse. Default 4 MiB. */
@@ -42,7 +50,7 @@ export type HtmlProjectionResult =
       readonly ok: true;
       /** A fragment package zip, readable by `readOoxmlPackage`. */
       readonly fragmentBytes: Uint8Array;
-      /** Always false: the last projected paragraph merges into the host paragraph. */
+      /** Whether the source identified the final Word paragraph mark as selected. */
       readonly lastMarkCovered: boolean;
       /** How many `data:` images the projection accepted into the fragment. */
       readonly imageCount: number;
@@ -113,6 +121,7 @@ interface RunProps {
 }
 
 interface ParaProps {
+  styleId?: string;
   jc?: 'left' | 'center' | 'right' | 'both';
   indLeftTwips?: number;
   /** Positive → `w:firstLine`, negative → `w:hanging`. */
@@ -142,6 +151,8 @@ interface Projection {
   nodesLeft: number;
   readonly maxDepth: number;
   readonly maxImageBytes: number;
+  readonly wordHtml: boolean;
+  lastMarkCovered: boolean;
   readonly rels: RelEntry[];
   readonly media: Map<string, Uint8Array>;
   readonly mediaExtensions: Map<string, string>;
@@ -187,15 +198,6 @@ function parseCssColor(value: string): string | null {
     return `${channel(rgb[1]!)}${channel(rgb[2]!)}${channel(rgb[3]!)}`.toUpperCase();
   }
   return null;
-}
-
-/** A CSS length in points, from `px` or `pt` values only. */
-function parseCssLengthPt(value: string): number | null {
-  const match = /^(-?\d+(?:\.\d+)?)(px|pt)$/.exec(value.trim().toLowerCase());
-  if (!match) return null;
-  const magnitude = Number.parseFloat(match[1]!);
-  if (!Number.isFinite(magnitude)) return null;
-  return match[2] === 'px' ? magnitude * 0.75 : magnitude;
 }
 
 function clamp(value: number, low: number, high: number): number {
@@ -314,6 +316,9 @@ function textRunXml(text: string, props: RunProps): string {
 /** `w:pPr`, children in CT_PPr sequence order: numPr, spacing, ind, jc. */
 function pPrXml(para: ParaProps): string {
   let inner = '';
+  if (para.styleId !== undefined) {
+    inner += `<w:pStyle w:val="${escapeXmlAttribute(para.styleId)}"/>`;
+  }
   if (para.numPr) {
     inner +=
       `<w:numPr><w:ilvl w:val="${para.numPr.ilvl}"/>` +
@@ -383,17 +388,6 @@ function decodeBase64(data: string, maxBytes: number): Uint8Array | null {
 
 const DATA_IMAGE_RE = /^data:image\/(png|jpeg|jpg|gif);base64,([A-Za-z0-9+/=]+)$/;
 
-function cssOrAttributePx(
-  element: Element,
-  style: ReadonlyMap<string, string>,
-  axis: 'width' | 'height'
-): number | null {
-  const pt = parseCssLengthPt(style.get(axis) ?? '');
-  if (pt !== null && pt > 0) return pt / 0.75;
-  const attr = element.getAttribute(axis) ?? '';
-  return /^[1-9]\d{0,4}$/.test(attr.trim()) ? Number.parseInt(attr, 10) : null;
-}
-
 /** Project a `data:` image into a media part + rel + inline `w:drawing` run. */
 function projectImage(element: Element, runs: string[], p: Projection): void {
   const src = element.getAttribute('src');
@@ -408,8 +402,8 @@ function projectImage(element: Element, runs: string[], p: Projection): void {
   const header = validateRasterHeader(bytes, declared);
 
   const style = parseInlineStyle(element);
-  let widthPx = cssOrAttributePx(element, style, 'width');
-  let heightPx = cssOrAttributePx(element, style, 'height');
+  let widthPx = imageDimensionPx(element, style, 'width', p.wordHtml);
+  let heightPx = imageDimensionPx(element, style, 'height', p.wordHtml);
   if (widthPx === null && heightPx === null && header) {
     widthPx = header.pixelWidth;
     heightPx = header.pixelHeight;
@@ -458,14 +452,6 @@ function allocateList(p: Projection, key: string, kind: 'ordered' | 'bullet'): s
 }
 
 // --- Walk
-
-function isElement(node: Node): node is Element {
-  return node.nodeType === 1; // ELEMENT_NODE
-}
-
-function tagOf(element: Element): string {
-  return element.tagName.toLowerCase();
-}
 
 /** True for the literal marker span Word emits beside `mso-list` paragraphs. */
 function isMsoListIgnoreMarker(style: ReadonlyMap<string, string>): boolean {
@@ -593,11 +579,13 @@ function projectParagraph(
   const tag = tagOf(element);
   const style = parseInlineStyle(element);
   const para: ParaProps = {};
+  const styleId = wordParagraphStyleId(element, p.wordHtml);
+  if (styleId !== undefined) para.styleId = styleId;
   if (ctx.para.numPr) para.numPr = ctx.para.numPr;
   if (ctx.para.jc) para.jc = ctx.para.jc;
   let run = { ...ctx.run };
   const heading = HEADING_SZ[tag];
-  if (heading !== undefined) {
+  if (heading !== undefined && styleId === undefined) {
     run.bold = true;
     run.szHalfPoints = heading;
   }
@@ -609,6 +597,7 @@ function projectParagraph(
   run = applyRunCss(run, style);
   const next: FlowContext = { run, para, pre, list: ctx.list };
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true);
+  p.lastMarkCovered = styleId !== undefined;
 }
 
 function projectList(
@@ -655,7 +644,10 @@ function projectFlow(
   const before = out.length;
   let pending: string[] = [];
   const flush = (): void => {
-    if (pending.length > 0) out.push(paragraphXml(ctx.para, pending));
+    if (pending.length > 0) {
+      out.push(paragraphXml(ctx.para, pending));
+      p.lastMarkCovered = false;
+    }
     pending = [];
   };
   for (const node of nodes) {
@@ -693,7 +685,10 @@ function projectFlow(
   }
   flush();
   // An explicit block emits its paragraph even when empty.
-  if (forceEmit && out.length === before) out.push(paragraphXml(ctx.para, []));
+  if (forceEmit && out.length === before) {
+    out.push(paragraphXml(ctx.para, []));
+    p.lastMarkCovered = false;
+  }
 }
 
 // --- Tables
@@ -808,6 +803,7 @@ function projectTable(
     `<w:tbl><w:tblPr><w:tblW w:w="${TABLE_TOTAL_TWIPS}" w:type="dxa"/>${borders}</w:tblPr>` +
       `<w:tblGrid>${grid}</w:tblGrid>${rowXml.join('')}</w:tbl>`
   );
+  p.lastMarkCovered = false;
 }
 
 function projectCell(
@@ -923,7 +919,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   if (typeof DOMParser === 'undefined') return { ok: false, reason: 'parse-unavailable' };
   let parsed: Document;
   try {
-    parsed = new DOMParser().parseFromString(html, 'text/html');
+    // The result stays detached. The bounded allowlist walker emits escaped XML only.
+    parsed = new DOMParser().parseFromString(html, 'text/html'); // lgtm[js/xss]
   } catch {
     return { ok: false, reason: 'parse-unavailable' };
   }
@@ -934,6 +931,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     nodesLeft: limits.maxNodes ?? DEFAULT_MAX_NODES,
     maxDepth: limits.maxDepth ?? DEFAULT_MAX_DEPTH,
     maxImageBytes: limits.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
+    wordHtml: isWordClipboardHtml(html),
+    lastMarkCovered: false,
     rels: [],
     media: new Map(),
     mediaExtensions: new Map(),
@@ -965,7 +964,7 @@ export function projectExternalHtml(
   return {
     ok: true,
     fragmentBytes: assembleFragment(projected.projection, projected.blocks),
-    lastMarkCovered: false,
+    lastMarkCovered: projected.projection.lastMarkCovered,
     imageCount: projected.projection.imageCount,
   };
 }

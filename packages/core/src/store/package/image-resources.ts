@@ -136,6 +136,8 @@ export interface ImageResourceLookup {
 
 const PNG_SIGNATURE = Object.freeze([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const DEFAULT_DPI = 96;
+const MAX_PNG_METADATA_SCAN = 65_536;
+const MAX_RASTER_DPI = 10_000;
 const MAX_JPEG_MARKER_SCAN = 65_536;
 /** Maximum prefix inspected for SVG root detection (exported for bounded-scan tests). */
 export const MAX_SVG_SNIFF_BYTES = 512;
@@ -166,6 +168,10 @@ const CONTENT_TYPE_TO_MIME: Readonly<Record<string, RenderableImageMime | Preser
 export interface ValidatedRasterHeader {
   readonly pixelWidth: number;
   readonly pixelHeight: number;
+  /** Horizontal physical density when bounded header metadata supplies it. */
+  readonly dpiX?: number;
+  /** Vertical physical density when bounded header metadata supplies it. */
+  readonly dpiY?: number;
 }
 
 function bytesStartWith(bytes: Uint8Array, prefix: readonly number[]): boolean {
@@ -321,6 +327,43 @@ function isValidPngColorTypeAndBitDepth(colorType: number, bitDepth: number): bo
   }
 }
 
+function readUint32Be(bytes: Uint8Array, offset: number): number {
+  return (
+    ((bytes[offset]! << 24) >>> 0) |
+    (bytes[offset + 1]! << 16) |
+    (bytes[offset + 2]! << 8) |
+    bytes[offset + 3]!
+  );
+}
+
+function pngPhysicalDensity(
+  bytes: Uint8Array
+): { readonly dpiX: number; readonly dpiY: number } | null {
+  const scanLimit = Math.min(bytes.length, MAX_PNG_METADATA_SCAN);
+  let offset = 33;
+  while (offset + 12 <= scanLimit) {
+    const length = readUint32Be(bytes, offset);
+    const chunkEnd = offset + 12 + length;
+    if (chunkEnd > scanLimit) return null;
+    const type =
+      String.fromCharCode(bytes[offset + 4]!) +
+      String.fromCharCode(bytes[offset + 5]!) +
+      String.fromCharCode(bytes[offset + 6]!) +
+      String.fromCharCode(bytes[offset + 7]!);
+    if (type === 'IDAT' || type === 'IEND') return null;
+    if (type === 'pHYs' && length === 9 && bytes[offset + 16] === 1) {
+      const dpiX = readUint32Be(bytes, offset + 8) * 0.0254;
+      const dpiY = readUint32Be(bytes, offset + 12) * 0.0254;
+      if (dpiX > 0 && dpiX <= MAX_RASTER_DPI && dpiY > 0 && dpiY <= MAX_RASTER_DPI) {
+        return { dpiX, dpiY };
+      }
+      return null;
+    }
+    offset = chunkEnd;
+  }
+  return null;
+}
+
 /** Structural PNG IHDR validation before decode. */
 export function validatePngHeader(bytes: Uint8Array): ValidatedRasterHeader | null {
   if (!bytesStartWith(bytes, PNG_SIGNATURE)) return null;
@@ -344,7 +387,8 @@ export function validatePngHeader(bytes: Uint8Array): ValidatedRasterHeader | nu
   if (!isValidPngColorTypeAndBitDepth(colorType, bitDepth)) return null;
   if (compression !== 0 || filter !== 0) return null;
   if (interlace !== 0 && interlace !== 1) return null;
-  return { pixelWidth, pixelHeight };
+  const density = pngPhysicalDensity(bytes);
+  return density ? { pixelWidth, pixelHeight, ...density } : { pixelWidth, pixelHeight };
 }
 
 /** Structural GIF logical screen descriptor validation before decode. */

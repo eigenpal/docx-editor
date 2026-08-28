@@ -4806,6 +4806,8 @@ export function usedParaIds(root: OoxmlElement): ReadonlySet<string>;
 
 // @public
 export interface ValidatedRasterHeader {
+    readonly dpiX?: number;
+    readonly dpiY?: number;
     // (undocumented)
     readonly pixelHeight: number;
     // (undocumented)

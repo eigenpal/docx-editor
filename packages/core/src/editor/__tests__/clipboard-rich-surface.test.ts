@@ -301,4 +301,35 @@ describe('rich paste', () => {
     expect(markup).toContain('w:jc');
     expect(markup).toContain('<w:b/>');
   });
+
+  test('a Word caption keeps its paragraph alignment at a paragraph end', () => {
+    const target = mount(paragraph(''));
+    putCaret(target.surface, 0);
+    target.surface.pasteRich(
+      'image\ncaption',
+      '<p style="text-align:center">image</p>' +
+        '<p class="MsoCaption" style="text-align:center">caption</p>'
+    );
+    const markup = serializeOoxmlPart(target.surface.session.part());
+    const caption = markup.split('</w:p>').find((entry) => entry.includes('caption'));
+    expect(caption).toContain('<w:pStyle w:val="Caption"/>');
+    expect(caption).toContain('w:jc w:val="center"');
+  });
+
+  test('a Word heading pasted within text remains a heading paragraph', () => {
+    const target = mount(paragraph('host'));
+    putCaret(target.surface, 2);
+    target.surface.pasteRich(
+      'Word heading',
+      '<html xmlns:w="urn:schemas-microsoft-com:office:word"><body>' +
+        '<h2>Word heading</h2></body></html>'
+    );
+    const markup = serializeOoxmlPart(target.surface.session.part());
+    const heading = markup.split('</w:p>').find((entry) => entry.includes('Word heading'));
+    expect(heading).toContain('<w:pStyle w:val="Heading2"/>');
+    const pastedRun = heading!.split('</w:r>').find((entry) => entry.includes('Word heading'));
+    expect(pastedRun).not.toContain('w:sz w:val="52"');
+    expect(pastedRun).not.toContain('<w:b/>');
+    expect(target.surface.session.bodyText()).toContain('Word heading');
+  });
 });

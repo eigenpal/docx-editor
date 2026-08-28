@@ -237,6 +237,23 @@ function forgedPng(wrongChunkLength: boolean): Uint8Array {
   return out;
 }
 
+function pngWithPhysicalDensity(pixelsPerMeter: number): Uint8Array {
+  const phys = Uint8Array.from([
+    0, 0, 0, 9, 0x70, 0x48, 0x59, 0x73, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+  ]);
+  for (const offset of [8, 12]) {
+    phys[offset] = (pixelsPerMeter >>> 24) & 0xff;
+    phys[offset + 1] = (pixelsPerMeter >>> 16) & 0xff;
+    phys[offset + 2] = (pixelsPerMeter >>> 8) & 0xff;
+    phys[offset + 3] = pixelsPerMeter & 0xff;
+  }
+  const out = new Uint8Array(PNG_1X1.length + phys.length);
+  out.set(PNG_1X1.subarray(0, 33));
+  out.set(phys, 33);
+  out.set(PNG_1X1.subarray(33), 33 + phys.length);
+  return out;
+}
+
 describe('image resource validation and cache (task 4)', () => {
   describe('signature sniffing', () => {
     test.each([
@@ -274,6 +291,12 @@ describe('image resource validation and cache (task 4)', () => {
   describe('structural raster headers', () => {
     test('PNG IHDR validates 1x1 dimensions', () => {
       expect(validatePngHeader(PNG_1X1)).toEqual({ pixelWidth: 1, pixelHeight: 1 });
+    });
+
+    test('PNG pHYs supplies bounded physical density', () => {
+      const header = validatePngHeader(pngWithPhysicalDensity(5669));
+      expect(header?.dpiX).toBeCloseTo(144, 1);
+      expect(header?.dpiY).toBeCloseTo(144, 1);
     });
 
     test('GIF logical screen validates nonzero dimensions', () => {
