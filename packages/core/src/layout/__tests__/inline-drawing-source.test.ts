@@ -224,11 +224,17 @@ describe('vector shape layout token', () => {
       readonly cx: number;
       readonly extraComponent: boolean;
       readonly splitSubpaths: boolean;
+      readonly splitAt: number;
     }> = {}
   ) => {
     const points = overrides.points ?? [point(0, 0), point(100, 0), point(100, 50.5)];
     const component = {
-      subpathsEmu: overrides.splitSubpaths ? [points.slice(0, 1), points.slice(1)] : [points],
+      subpathsEmu:
+        overrides.splitAt !== undefined
+          ? [points.slice(0, overrides.splitAt), points.slice(overrides.splitAt)]
+          : overrides.splitSubpaths
+            ? [points.slice(0, 1), points.slice(1)]
+            : [points],
       fillHex: overrides.fillHex === undefined ? '4472C4' : overrides.fillHex,
       fillAlpha: overrides.fillAlpha ?? 1,
       strokeHex: overrides.strokeHex ?? null,
@@ -248,6 +254,16 @@ describe('vector shape layout token', () => {
         : [component],
     };
   };
+
+  // The point stream and the subpath COUNT are both equal here, so only the per-subpath
+  // length in the token separates them: 8 points split [3,5] against the same 8 split [4,4]
+  // produce identical FNV accumulators.
+  test('two subpaths of the same points split at a different index differ', () => {
+    const points = Array.from({ length: 8 }, (_, index) => point(index * 11, index * 7.25));
+    expect(vectorShapeLayoutToken(shape({ points, splitAt: 3 }))).not.toBe(
+      vectorShapeLayoutToken(shape({ points, splitAt: 4 }))
+    );
+  });
 
   test('equal shapes agree and each single difference separates them', () => {
     const baseline = vectorShapeLayoutToken(shape());
@@ -283,4 +299,95 @@ describe('vector shape layout token', () => {
     // `JSON.stringify` of the same shape is ~48 KB. Anything near that is the regression.
     expect(token.length).toBeLessThan(200);
   });
+});
+
+// A theme swap has to invalidate the drawing slot.
+//
+// `isCompatibleWith` short-circuits on `nextPart === part`, which is true whenever only
+// `theme1.xml` or `settings.xml` moved — the document part is untouched. Without the
+// `cacheToken` comparison ahead of that short-circuit, every drawing keeps the colours the
+// OLD theme resolved and nothing is left to invalidate them for the rest of the session.
+test('a theme-part swap refuses the slot even though the document part is identical', () => {
+  const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+  const THEME_PART = '/word/theme/theme1.xml';
+
+  const themeXml = (accent1: string) =>
+    `<a:theme xmlns:a="${A}" name="T"><a:themeElements><a:clrScheme name="T">` +
+    `<a:accent1><a:srgbClr val="${accent1}"/></a:accent1>` +
+    '</a:clrScheme></a:themeElements></a:theme>';
+
+  const bytes = zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        `<Override PartName="${THEME_PART}" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>` +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/theme/theme1.xml': strToU8(themeXml('6F55D7')),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+        '<w:body><w:p><w:r><w:drawing>' +
+        '<wp:inline distT="0" distB="0" distL="0" distR="0">' +
+        '<wp:extent cx="457200" cy="457200"/><wp:docPr id="1" name="Rect"/>' +
+        `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:cNvSpPr/><wps:spPr>` +
+        '<a:xfrm><a:off x="0" y="0"/><a:ext cx="457200" cy="457200"/></a:xfrm>' +
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>' +
+        '<a:solidFill><a:schemeClr val="accent1"/></a:solidFill><a:ln><a:noFill/></a:ln>' +
+        '</wps:spPr><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>' +
+        '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>'
+    ),
+  });
+  const loaded = readOoxmlPackage(bytes);
+  if (!loaded.ok) throw new Error(loaded.reason);
+  let pkg = loaded.package;
+  // The document part object never changes; only the theme part does.
+  const documentPart = pkg.parts.get(pkg.mainDocumentPart)!;
+  let revision = 0;
+  const session = {
+    packageRevision: () => revision,
+    currentPackage: () => pkg,
+    part: () => documentPart,
+  };
+  const resourceLookup: ImageResourceLookup = {
+    resolveEmbedded: async () => Object.freeze({ kind: 'missing' as const }),
+    resolveLinked: () => Object.freeze({ kind: 'missing' as const }),
+    resolveForProjection: async () => Object.freeze({ kind: 'missing' as const }),
+    liveReferenceCount: () => 0,
+    dispose: () => {},
+  };
+  const bundle = createInlineDrawingLayoutBundle({
+    session,
+    decodePort: Object.freeze({
+      decode: async () => {
+        throw new Error('unused');
+      },
+    }),
+    resourceLookup,
+    onResourcesChanged: () => {},
+  });
+
+  const atomId = [...(drawingAtomIdentities(documentPart)?.keys() ?? [])][0]!;
+  const fill = () => bundle.bodyContext.projectionForAtom?.(atomId)?.vectorShape?.fillHex ?? null;
+  expect(fill()).toBe('6F55D7');
+
+  const swapped = readOoxmlPart(themeXml('79C9B1'), {
+    name: THEME_PART,
+    contentType: 'application/vnd.openxmlformats-officedocument.theme+xml',
+  });
+  if (!swapped.ok) throw new Error(swapped.reason);
+  // Only the theme part moves: `partBytes`, `relationships` and `contentTypes` keep their
+  // identity, so `resetPackage` takes the substrate-unchanged path and asks the slot.
+  pkg = Object.freeze({ ...pkg, parts: new Map(pkg.parts).set(THEME_PART, swapped.part) });
+  revision += 1;
+  bundle.sync(session);
+
+  expect(fill()).toBe('79C9B1');
 });

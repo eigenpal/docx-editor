@@ -234,15 +234,15 @@ describe('wps vector shape projection', () => {
   // `a:tint` and `a:shade` are a blend in LINEAR light, and `val` is the fraction of the
   // INPUT colour (ECMA-376 20.1.2.3.34/20.1.2.3.31) — not of white, and not a blend on the
   // stored channel. Each base/value pair below is picked so all three readings disagree, and
-  // every expectation is the pixel a reference renderer paints for that exact fill:
+  // every expectation is the pixel LibreOffice paints for that exact fill:
   //
   //   base    transform        this engine   `val` as white-fraction   blend in gamma space
   //   0000FF  tint  20000      E7E7FF        3333FF                    CCCCFF
   //   0000FF  shade 20000      00007E        —                         000033
   //   808080  tint  50000      CCCCCC        C0C0C0                    C0C0C0
   //   808080  shade 50000      5E5E5E        —                         404040
-  //   336699  tint  60000      ADB8CA        7A94AE                    8FA6BE
-  //   336699  shade 40000      224466        —                         143D5C
+  //   336699  tint  60000      ADB8CA        ADC2D6                    85A3C2
+  //   336699  shade 40000      224466        —                         14293D
   //
   // Mid-gray at 50% is exactly where the white-fraction reading and the input-fraction
   // reading agree, so it cannot be the only tint case.
@@ -276,6 +276,11 @@ describe('wps vector shape projection', () => {
   // A ratio of 100000 is the identity, so the round trip through linear light and back must
   // return the authored byte. The floor in `channelFromLinear` is one ulp away from turning
   // every channel into the one below it, which no other case here would catch.
+  //
+  // This is the ONE expectation in this file asserted from first principles rather than
+  // measured: LibreOffice renders `010203` + `tint val="100000"` as `000103`, because it
+  // quantises through an integer percentage and loses the bottom channel. A 100% tint is by
+  // definition a no-op, so do not "correct" this toward the oracle.
   test('a full-strength tint or shade returns the authored colour unchanged', () => {
     for (const transform of ['tint', 'shade'] as const) {
       const drawing = doubleRuleShapeDrawing().replace(
@@ -286,6 +291,40 @@ describe('wps vector shape projection', () => {
       const part = parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`);
       const atoms = indexInlineDrawingProjectionsInPart(part);
       expect([...atoms.values()][0]!.vectorShape?.fillHex).toBe('010203');
+    }
+  });
+
+  // `flipH`/`flipV` are `xsd:boolean`. The engine cannot paint a flip, so a set flag refuses
+  // the shape — and a spelling the schema does not allow must refuse too, not fall through
+  // to "unset" and paint the shape the wrong way round.
+  test('an unset flip paints and any other spelling refuses', () => {
+    const cases = [
+      [undefined, true],
+      ['0', true],
+      ['false', true],
+      ['1', false],
+      ['true', false],
+      ['TRUE', false],
+      ['True', false],
+      ['yes', false],
+      ['2', false],
+      ['', false],
+    ] as const;
+    for (const [value, paints] of cases) {
+      const xfrm =
+        value === undefined
+          ? '<a:xfrm><a:off x="0" y="0"/><a:ext cx="6696075" cy="47625"/></a:xfrm>'
+          : `<a:xfrm flipH="${value}"><a:off x="0" y="0"/>` +
+            '<a:ext cx="6696075" cy="47625"/></a:xfrm>';
+      const drawing = doubleRuleShapeDrawing().replace(
+        '<a:xfrm><a:off x="0" y="0"/><a:ext cx="6696075" cy="47625"/></a:xfrm>',
+        xfrm
+      );
+      const part = parsePart(`<w:p><w:r>${drawing}</w:r></w:p>`);
+      const shape = [...indexInlineDrawingProjectionsInPart(part).values()][0]?.vectorShape;
+      expect(`flipH=${value}: ${shape !== null && shape !== undefined}`).toBe(
+        `flipH=${value}: ${paints}`
+      );
     }
   });
 

@@ -36,6 +36,17 @@ export function parseEmu(value: string | undefined, clamp = true): number | null
   return parsed;
 }
 
+/**
+ * An `xsd:boolean` attribute read fail-closed.
+ *
+ * The schema allows exactly `0`, `1`, `false` and `true`. Only `0`, `false` and an absent
+ * attribute mean "not set"; every other spelling — `TRUE`, `yes`, `2` — is schema-invalid,
+ * and the sender chose it, so it refuses the shape rather than painting as if unset.
+ */
+function schemaFlagIsUnset(value: string | undefined): boolean {
+  return value === undefined || value === '0' || value === 'false';
+}
+
 export function findDirectChild(
   nodes: readonly OoxmlNode[],
   options: {
@@ -153,12 +164,27 @@ function channelsHex(channels: readonly number[]): string {
 }
 
 /**
- * DrawingML blends `a:tint` and `a:shade` in linear light, not in the stored sRGB channel.
- * The colour-space gamma the renderers use for that conversion is 2.3, not the sRGB
- * piecewise curve, and the linear result truncates back to a byte. Both are load-bearing:
- * with `Math.round`, or with the sRGB curve, the result drifts 1-2 levels away from the
- * reference rendering on most inputs. `lumMod`/`lumOff` are NOT linear-light — they stay in
- * HSL over the stored channels, so they keep `channelsHex`'s rounding.
+ * DrawingML blends `a:tint` and `a:shade` in linear light, not on the stored sRGB channel.
+ * The conversion uses a plain 2.3 colour-space gamma, not the sRGB piecewise curve, and the
+ * linear result truncates back to a byte rather than rounding.
+ *
+ * Where those two constants come from, precisely, because they look arbitrary:
+ *
+ * - Measured against LibreOffice, rendering purpose-built `.docx` files to PDF and sampling
+ *   the pixel. Word was not available on the machine that wrote this, so it is NOT the
+ *   oracle here. Treat this as one renderer's behaviour reproduced exactly (47 of 47
+ *   base/ratio pairs), not as Word's behaviour confirmed. Note also that 2.3 is LibreOffice's
+ *   own colour-space gamma, so agreement with it is partly circular.
+ * - The one independent, spec-side check: ECMA-376 20.1.2.3.31's worked `a:shade` example,
+ *   `00FF00` at `val="50000"`, gives `00BC00`. This model reproduces that exactly; a blend on
+ *   the stored channel gives `007F00`.
+ *
+ * Both constants are load-bearing. With `Math.round` the result moves one level on most
+ * inputs; with the sRGB piecewise curve it moves up to four (`336699` + `shade 40000` is
+ * `224466` here and `1E4164` through sRGB).
+ *
+ * `lumMod`/`lumOff` are NOT linear-light: they stay in HSL over the stored channels and keep
+ * `channelsHex`'s rounding. That path is confirmed against Word itself, so do not fold it in.
  */
 const SHAPE_COLOR_GAMMA = 2.3;
 
@@ -500,10 +526,8 @@ function projectWspComponent(
   if (xfrm) {
     const rot = schemaAttributeValue(xfrm.attributes, 'rot');
     if (rot !== undefined && rot !== '0') return null;
-    const flipHorizontal = schemaAttributeValue(xfrm.attributes, 'flipH');
-    const flipVertical = schemaAttributeValue(xfrm.attributes, 'flipV');
-    if (flipHorizontal === '1' || flipHorizontal === 'true') return null;
-    if (flipVertical === '1' || flipVertical === 'true') return null;
+    if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;
+    if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))) return null;
   }
 
   const authoredFill = directFill(spPr, resolveSchemeColor);
@@ -712,11 +736,9 @@ export function projectVectorShape(
     if (!group || !childExtent) return null;
     if (xfrm) {
       const rotation = schemaAttributeValue(xfrm.attributes, 'rot');
-      const flipHorizontal = schemaAttributeValue(xfrm.attributes, 'flipH');
-      const flipVertical = schemaAttributeValue(xfrm.attributes, 'flipV');
       if (rotation !== undefined && rotation !== '0') return null;
-      if (flipHorizontal === '1' || flipHorizontal === 'true') return null;
-      if (flipVertical === '1' || flipVertical === 'true') return null;
+      if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;
+      if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))) return null;
     }
     const chOffX = childOffset
       ? (parseEmu(schemaAttributeValue(childOffset.attributes, 'x'), false) ?? 0)

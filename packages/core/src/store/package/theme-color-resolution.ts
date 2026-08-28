@@ -232,10 +232,11 @@ export function createPackageShapeThemeResolvers(pkg: OoxmlPackage): PackageShap
       DRAWINGML_MAIN_NAMESPACE_URI,
       kind === 'line' ? 'lnStyleLst' : background ? 'bgFillStyleLst' : 'fillStyleLst'
     );
-    // One total bound, for both lists and both bases: a negative, fractional, huge or NaN
-    // index fails it too. Only the ceiling is observable through the entry walk below — the
-    // walk answers null for any offset it cannot reach — so a second, narrower ceiling
-    // beside this one would be a bound with nothing to hold it in step.
+    // One bound, for both lists and both bases. Only the ceiling has a test: the entry walk
+    // below already answers null for any offset it cannot reach, so the floor and the
+    // integer check are defence in depth against a future direct index, not behaviour a
+    // caller can observe today. That is also why there is no second, narrower ceiling — it
+    // would be a bound with nothing to hold it in step.
     const offset = background ? index - 1001 : index - 1;
     const usable =
       list !== null &&

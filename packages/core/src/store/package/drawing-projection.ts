@@ -1271,22 +1271,20 @@ function freezeDrawingProjection(projection: DrawingProjection): DrawingProjecti
               Object.freeze(points.map((point) => Object.freeze({ ...point })))
             )
           ),
-          ...(projection.vectorShape.components
-            ? {
-                components: Object.freeze(
-                  projection.vectorShape.components.map((component) =>
-                    Object.freeze({
-                      ...component,
-                      subpathsEmu: Object.freeze(
-                        component.subpathsEmu.map((points) =>
-                          Object.freeze(points.map((point) => Object.freeze({ ...point })))
-                        )
-                      ),
-                    })
+          // `components` is required and non-empty: paint iterates it, so a conditional
+          // spread that ever took the empty branch would strip the field and throw.
+          components: Object.freeze(
+            projection.vectorShape.components.map((component) =>
+              Object.freeze({
+                ...component,
+                subpathsEmu: Object.freeze(
+                  component.subpathsEmu.map((points) =>
+                    Object.freeze(points.map((point) => Object.freeze({ ...point })))
                   )
                 ),
-              }
-            : {}),
+              })
+            )
+          ),
         })
       : null,
     // `content` is a canonical-tree node shared with the store; it is not deep-frozen here.
