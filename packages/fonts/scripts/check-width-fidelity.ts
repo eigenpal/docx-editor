@@ -37,6 +37,7 @@ import {
   type ResolvedRunStyle,
 } from '../../core/src/layout/index.ts';
 import { GOOGLE_FONT_CATALOG } from '../src/google-catalog.generated.ts';
+import { GOOGLE_METRIC_SUBSTITUTES } from '../src/google-fonts.ts';
 import { FAMILY_PLANS, planFaceFile, planLineBox } from '../src/family-plans.ts';
 
 /** The Word families this gate covers that resolve through a PACKAGED plan. */
@@ -105,6 +106,11 @@ const WIDTH_CASES: readonly WidthCase[] = [
     wordBaselinePt: 39.6875,
   },
   // Montserrat Regular's subset carries no lowercase, so this case is upper-case only.
+  //
+  // The next two share `wordWidthPt` and it is not a copy-paste: two different strings on
+  // two different subsets both sum to exactly 7279 units per em. Their measured values do
+  // differ (72.70 against 72.65), which is what makes the coincidence visible rather than
+  // suspicious.
   {
     family: 'Montserrat',
     weight: 400,
@@ -159,6 +165,18 @@ const KNOWN_GAPS: readonly { readonly family: string; readonly gap: string }[] =
   },
 ];
 
+/**
+ * Whether either resolver can now answer a family: a packaged plan, a catalog entry under
+ * its own name, or a built-in substitution. This is the whole set of ways a name resolves,
+ * so a family that passes it is no longer a gap.
+ */
+function coveredByThePackage(family: string): boolean {
+  const folded = family.toLowerCase();
+  if ([...FAMILY_PLANS.keys()].some((planned) => planned.toLowerCase() === folded)) return true;
+  if (GOOGLE_FONT_CATALOG.some((face) => face.family.toLowerCase() === folded)) return true;
+  return Object.keys(GOOGLE_METRIC_SUBSTITUTES).some((from) => from.toLowerCase() === folded);
+}
+
 const assetsDir = new URL('../assets/', import.meta.url);
 
 /** The shipped plan for a packaged family; the gate reads it, never restates it. */
@@ -199,9 +217,10 @@ async function bytesFor(testCase: WidthCase): Promise<Uint8Array> {
  * The only network this gate touches: three Montserrat faces, a few hundred KB.
  *
  * Retried, because a CDN blip is not a fidelity regression and reporting it as one trains
- * people to re-run a red gate. Only the TRANSPORT is retried — a hash or length mismatch
- * is a real answer and fails on the first attempt, since retrying it would just ask the
- * same tampered or moved asset again.
+ * people to re-run a red gate. A CONTENT mismatch is not retried: bytes that arrived and
+ * hashed wrong are a real answer, and asking the same immutable URL again returns the
+ * same wrong bytes. An HTTP status IS retried, 404 included — a pinned jsDelivr path does
+ * not stop existing, so a 404 here is far more likely to be the edge than the catalog.
  */
 async function catalogBytes(
   url: string,
@@ -333,4 +352,15 @@ console.log(
   `font metric fidelity OK (${WIDTH_CASES.length} cases, width ±${(WIDTH_TOLERANCE_RATIO * 100).toFixed(0)}% ` +
     `(floor ±${WIDTH_TOLERANCE_FLOOR_PT.toFixed(2)}pt), vertical ±${VERTICAL_TOLERANCE_PT.toFixed(2)}pt)`
 );
+// Printed AND asserted. A list that is only printed goes stale the moment a family gains
+// a plan or a catalog entry: it would keep announcing a gap that had been closed, and the
+// gate would stay green while its own output lied.
+const closed = KNOWN_GAPS.filter(({ family }) => coveredByThePackage(family));
+if (closed.length > 0) {
+  throw new Error(
+    `${closed.map(({ family }) => family).join(', ')} ` +
+      `${closed.length === 1 ? 'now resolves' : 'now resolve'}; remove ` +
+      `${closed.length === 1 ? 'it' : 'them'} from KNOWN_GAPS and add a width case instead`
+  );
+}
 for (const { family, gap } of KNOWN_GAPS) console.log(`  known gap: ${family} — ${gap}`);

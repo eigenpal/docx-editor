@@ -779,7 +779,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         initialExplicitSources,
         maxFontBytes
       );
+      // Once, on whatever path this load exits by. The set is not final until the refusal
+      // loop settles — a rejected explicit source hands budget back and un-drops an
+      // embedded face — so it cannot be reported eagerly, and the loop `await`s twice, so
+      // a throw in there must not take the diagnostics with it. `finally` plus this flag
+      // gives both: latest set, reported exactly once.
+      let documentDropsReported = false;
       const reportDocumentDrops = (): void => {
+        if (documentDropsReported) return;
+        documentDropsReported = true;
         for (const drop of fromDocument.dropped) {
           reportFontError(embeddedFontDropError(drop));
         }
@@ -807,25 +815,28 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return;
       }
       let shaping = await createLayoutShaping(fonts);
-      if (destroyed || seq !== loadSeq) {
-        // This shaping can never be installed; release its wasm objects rather than
-        // dropping it unreferenced. Every load builds a new shaper.
+      // A newer load (or a destroy) landed while this one awaited: the shaping can never
+      // be installed, so release its wasm objects rather than dropping it unreferenced,
+      // and clear the in-flight flag only if this load is still the current one. Reads
+      // `shaping` at call time, so it disposes whichever snapshot the caller just built.
+      const supersededNow = (): boolean => {
+        if (!destroyed && seq === loadSeq) return false;
         disposeLayoutShaping(shaping);
         if (seq === loadSeq) fontsResolving = false;
-        return;
-      }
-      // Per-face degradation, reported: an embedded face the validator refused still
-      // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
-      // turns a silent fixed-measurer fallback into a diagnosable one.
+        return true;
+      };
+      if (supersededNow()) return;
       // Every "nothing survived" exit: report the drops, release the shaping that will
-      // never be installed, and leave the fixed measurer in place. Three sites had this
-      // open-coded, and two of them had already lost the drop report once.
+      // never be installed, and leave the fixed measurer in place.
       const bailToFixed = (superseded?: typeof shaping): void => {
         reportDocumentDrops();
         if (superseded) disposeLayoutShaping(superseded);
         fontsResolving = false;
         bump();
       };
+      // Per-face degradation, reported: an embedded face the validator refused still
+      // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
+      // turns a silent fixed-measurer fallback into a diagnosable one.
       const refusedIn = (snapshot: typeof shaping, composed: typeof fonts) => {
         const refused = new Set<string>();
         for (const source of composed.sources ?? []) {
@@ -840,58 +851,53 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const refusedRequests = refusedIn(shaping, fonts);
       // A refused direct face is worse than no face. Composition drops a substitution
       // whenever a direct source exists, so recompose without every refused request.
-      if (refusedRequests.size > 0) {
-        const explicitSurvivors = initialExplicitSources.filter(
-          (source) => !refusedRequests.has(fontRequestKey(source.request))
-        );
-        const rejectedExplicit = explicitSurvivors.length !== initialExplicitSources.length;
-        if (rejectedExplicit) {
-          fromDocument = embeddedFontSourcesAfterExplicit(
-            embedded,
-            explicitSurvivors,
-            maxFontBytes
+      try {
+        if (refusedRequests.size > 0) {
+          const explicitSurvivors = initialExplicitSources.filter(
+            (source) => !refusedRequests.has(fontRequestKey(source.request))
           );
-        }
-        const embeddedSurvivors = fromDocument.sources.filter(
-          (source) => rejectedExplicit || !refusedRequests.has(fontRequestKey(source.request))
-        );
-        const superseded = shaping;
-        fonts = composeFontConfiguration(
-          { epoch: seq, ...explicit, sources: explicitSurvivors },
-          { sources: embeddedSurvivors }
-        );
-        if (fonts.sources.length === 0) return bailToFixed(superseded);
-        shaping = await createLayoutShaping(fonts);
-        disposeLayoutShaping(superseded);
-        if (destroyed || seq !== loadSeq) {
-          disposeLayoutShaping(shaping);
-          if (seq === loadSeq) fontsResolving = false;
-          return;
-        }
-        const refusedAfterRebuild = refusedIn(shaping, fonts);
-        if (refusedAfterRebuild.size > 0) {
-          const admittedExplicit = explicitSurvivors.filter(
-            (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
+          const rejectedExplicit = explicitSurvivors.length !== initialExplicitSources.length;
+          if (rejectedExplicit) {
+            fromDocument = embeddedFontSourcesAfterExplicit(
+              embedded,
+              explicitSurvivors,
+              maxFontBytes
+            );
+          }
+          const embeddedSurvivors = fromDocument.sources.filter(
+            (source) => rejectedExplicit || !refusedRequests.has(fontRequestKey(source.request))
           );
-          const admittedEmbedded = fromDocument.sources.filter(
-            (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
-          );
-          const rejected = shaping;
+          const superseded = shaping;
           fonts = composeFontConfiguration(
-            { epoch: seq, ...explicit, sources: admittedExplicit },
-            { sources: admittedEmbedded }
+            { epoch: seq, ...explicit, sources: explicitSurvivors },
+            { sources: embeddedSurvivors }
           );
-          if (fonts.sources.length === 0) return bailToFixed(rejected);
+          if (fonts.sources.length === 0) return bailToFixed(superseded);
           shaping = await createLayoutShaping(fonts);
-          disposeLayoutShaping(rejected);
-          if (destroyed || seq !== loadSeq) {
-            disposeLayoutShaping(shaping);
-            if (seq === loadSeq) fontsResolving = false;
-            return;
+          disposeLayoutShaping(superseded);
+          if (supersededNow()) return;
+          const refusedAfterRebuild = refusedIn(shaping, fonts);
+          if (refusedAfterRebuild.size > 0) {
+            const admittedExplicit = explicitSurvivors.filter(
+              (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
+            );
+            const admittedEmbedded = fromDocument.sources.filter(
+              (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
+            );
+            const rejected = shaping;
+            fonts = composeFontConfiguration(
+              { epoch: seq, ...explicit, sources: admittedExplicit },
+              { sources: admittedEmbedded }
+            );
+            if (fonts.sources.length === 0) return bailToFixed(rejected);
+            shaping = await createLayoutShaping(fonts);
+            disposeLayoutShaping(rejected);
+            if (supersededNow()) return;
           }
         }
+      } finally {
+        reportDocumentDrops();
       }
-      reportDocumentDrops();
       // Paint-side twin, BEFORE the remount so the first shaped paint already carries the
       // glyphs. Only faces the validator ADMITTED are handed over, and each resolves
       // through the shaping snapshot so the bytes registered are the validated, owned
@@ -923,8 +929,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       );
       if (destroyed || seq !== loadSeq) {
         registration.dispose();
-        disposeLayoutShaping(shaping);
-        if (seq === loadSeq) fontsResolving = false;
+        supersededNow();
         return;
       }
       disposeEmbeddedFaces();

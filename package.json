@@ -54,6 +54,7 @@
     "check:feature-parity": "node scripts/check-feature-parity.mjs",
     "check:font-width-fidelity": "bun packages/fonts/scripts/check-width-fidelity.ts",
     "check:fonts-manifest": "cd packages/fonts && node scripts/generate-manifest.mjs --check",
+    "check:google-catalog": "cd packages/fonts && node scripts/generate-google-catalog.mjs --check",
     "check:i18n-bundle-size": "node scripts/check-i18n-bundle-size.mjs",
     "check:lane-boundaries": "node scripts/check-lane-boundaries.mjs",
     "check:core-css-compiled": "node scripts/check-core-css-compiled.mjs",

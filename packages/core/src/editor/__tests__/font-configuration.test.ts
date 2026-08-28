@@ -9,6 +9,10 @@ import {
 } from '../font-configuration.ts';
 
 const fontUrl = new URL('../../layout/__tests__/fixtures/fonts/DejaVuSans.ttf', import.meta.url);
+const boldFontUrl = new URL(
+  '../../layout/__tests__/fixtures/fonts/DejaVuSans-Bold.ttf',
+  import.meta.url
+);
 
 test('adapts the public byte-backed font configuration after async HarfBuzz initialization', async () => {
   const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
@@ -97,6 +101,62 @@ test('two faces sharing a hash still fingerprint apart by request', async () => 
     expect(left!.operation.extensionFingerprint).not.toBe(right!.operation.extensionFingerprint);
   }
   for (const shaping of [...byFamily, ...byWeight, ...byStyle]) shaping!.shaper.dispose();
+});
+
+test('the same request backed by different bytes fingerprints apart', async () => {
+  // The request half cannot see this one: same family, weight, style and faceIndex, only
+  // the BYTES differ. Swapping which file a family resolves to has to invalidate a layout
+  // measured on the previous one.
+  const create = async (url: URL) => {
+    const bytes = new Uint8Array(await Bun.file(url).arrayBuffer());
+    return createLayoutShaping({
+      epoch: 11,
+      maxFontBytes: 2_000_000,
+      sources: [
+        {
+          request: { family: 'Swapped Face', weight: 400, style: 'normal' as const },
+          id: 'swapped',
+          bytes,
+          hash: sha256FontBytes(bytes),
+          faceIndex: 0,
+        },
+      ],
+      defaultFont: { family: 'Swapped Face', sizeHalfPoints: 20 },
+    });
+  };
+  const first = await create(fontUrl);
+  const second = await create(boldFontUrl);
+  expect(first.operation.extensionFingerprint).not.toBe(second.operation.extensionFingerprint);
+  first.shaper.dispose();
+  second.shaper.dispose();
+});
+
+test('two faces of one collection fingerprint apart by faceIndex', async () => {
+  // A TrueType Collection is ONE file: same bytes, same hash, and the face is chosen by
+  // index. Without that term in the fingerprint, face 0 and face 1 of the same .ttc are
+  // indistinguishable, so a layout measured on one is reused for the other.
+  const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
+  const hash = sha256FontBytes(bytes);
+  const create = (faceIndex: number) =>
+    createLayoutShaping({
+      epoch: 10,
+      maxFontBytes: 2_000_000,
+      sources: [
+        {
+          request: { family: 'Collection Face', weight: 400, style: 'normal' as const },
+          id: `collection-${faceIndex}`,
+          bytes,
+          hash,
+          faceIndex,
+        },
+      ],
+      defaultFont: { family: 'Collection Face', sizeHalfPoints: 20 },
+    });
+  const first = await create(0);
+  const second = await create(1);
+  expect(first.operation.extensionFingerprint).not.toBe(second.operation.extensionFingerprint);
+  first.shaper.dispose();
+  second.shaper.dispose();
 });
 
 test('samples and owns font bytes before asynchronous initialization yields', async () => {

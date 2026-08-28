@@ -73,9 +73,12 @@ all four static faces present, and the shaper's table checks passed. Variable-on
 families (Roboto, Arimo, Open Sans, …) are excluded, because the shaper refuses
 variation axes and a variable file would render bold at regular weight.
 
-A family the catalog cannot match may still be answered from this package's own assets.
-Century Gothic is the one, read from `assets/` rather than the CDN, so it costs no
-third-party request. Your own `substitute` map still overrides it.
+The substitution map is consulted FIRST, and your `substitute` entries are merged over the
+built-in one, so you can redirect any family — a catalogued one, or one this package
+answers from its own assets.
+
+A family the catalog cannot match may still be answered from those assets. Century Gothic
+is the one, read from `assets/` rather than the CDN, so it costs no third-party request.
 
 A family none of that answers resolves to nothing, and the host's own measurement stands.
 That is deliberate. Only a metric-compatible substitute keeps pagination Word-accurate,
@@ -91,17 +94,25 @@ which families a document uses. The engine never supplies one, so opting in stay
 `loadDefaultFonts()` remains the zero-network answer, and
 `googleFonts({ allow: ['Tinos', 'Lato'] })` narrows what may ever be fetched.
 
-Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes);
-`google:check` guards the committed file offline, `google:verify` re-checks it against
-the CDN. `bun run check:font-width-fidelity` compares privacy-safe synthetic strings
-against Word's own advances and line metrics, read from the font subsets Word embeds in
-its PDF export, and prints the families the package does not cover.
+Regenerate the catalog with `bun run google:catalog` (downloads ~90 MB, pins hashes).
+
+`bun run check:google-catalog` guards the committed file offline and runs in CI. It is
+what enforces the revision pin: every URL has to name one of the commits the generator
+records, so a regenerated catalog cannot quietly point at a mutable branch tip. Run
+`google:verify` from this package to re-download every catalogued face and compare hashes
+against the CDN.
+
+`bun run check:font-width-fidelity` compares privacy-safe synthetic strings against Word's
+own advances and line metrics, read from the font subsets Word embeds in its PDF export,
+and prints the families the package does not cover.
 
 ## Licenses
 
 The packaged fonts keep their licenses in `licenses/`. Carlito, Caladea, and Liberation
 use the SIL Open Font License. TeX Gyre Adventor uses the GUST Font License, which has no
-SPDX identifier of its own, so `package.json` names it as
-`LicenseRef-GUST-Font-License`. It is the LaTeX Project Public License 1.3c plus one
-clause, and `licenses/` carries both texts because the GUST license refers to the LPPL.
-The package code uses Apache-2.0.
+SPDX identifier of its own, so `package.json` names it `LicenseRef-GUST-Font-License`.
+Its operative terms are the LaTeX Project Public License 1.3c or, at your option, any
+later version; the one clause it adds on top asks you to rename a modified font, and says
+so as a request rather than a legal requirement. `licenses/` carries both texts, because
+the GUST license states its terms by reference to the LPPL. The package code uses
+Apache-2.0.

@@ -224,6 +224,13 @@ jobs:
         # Baked sha256 hashes in @docx-editor.dev/fonts must match the shipped font files.
         run: bun run check:fonts-manifest
 
+      - name: Fonts package Google catalog check
+        # Offline. The generator owns the list of revisions a catalogued URL may be pinned
+        # to; this is the only thing that enforces it. Without it a regenerated catalog
+        # could point at a mutable branch tip and every unit test would still pass, because
+        # a test can only assert the SHAPE of a URL, not which commits are allowed.
+        run: bun run check:google-catalog
+
       - name: Word font width fidelity
         # The only step here that reaches the network: three Montserrat faces from
         # jsDelivr, hash-verified, retried three times on transport failure. Bounded so a

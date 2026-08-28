@@ -14,7 +14,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
 import type { EditorFontError } from '../../contracts/editor.ts';
@@ -22,6 +22,9 @@ import { sha256FontBytes } from '../../layout/index.ts';
 import { deobfuscateFont } from '../../store/package/embedded-fonts.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { embeddedFontSources } from '../embedded-font-sources.ts';
+import * as fontConfiguration from '../font-configuration.ts';
+const createLayoutShapingReal = fontConfiguration.createLayoutShaping;
+const disposeLayoutShapingReal = fontConfiguration.disposeLayoutShaping;
 import { stubReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -548,6 +551,67 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     // on the metrics the app chose for it.
     expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Original Face');
     editor.destroy();
+  });
+
+  test('a superseded shaping is released, not leaked', async () => {
+    // The recompose builds a SECOND shaper and the first one has to go: it owns wasm
+    // memory that nothing collects. Counted rather than eyeballed, because a dropped
+    // dispose leaks silently — every test still passes and the page still renders.
+    const corrupt = new Uint8Array(4096).fill(0x42);
+    const created: unknown[] = [];
+    const disposed: unknown[] = [];
+    const createSpy = spyOn(fontConfiguration, 'createLayoutShaping').mockImplementation(
+      async (configuration) => {
+        const shaping = await createLayoutShapingReal(configuration);
+        created.push(shaping.shaper);
+        return shaping;
+      }
+    );
+    const disposeSpy = spyOn(fontConfiguration, 'disposeLayoutShaping').mockImplementation(
+      (shaping) => {
+        disposed.push(shaping.shaper);
+        disposeLayoutShapingReal(shaping);
+      }
+    );
+    try {
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: docxWithEmbeds(p('substitute', 'Original Face'), [
+          { family: 'Original Face', slot: 'embedRegular', bytes: corrupt },
+        ]),
+        fonts: {
+          sources: [
+            {
+              request: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+              id: 'substitute-target',
+              bytes: regularBytes,
+              hash: sha256FontBytes(regularBytes),
+              faceIndex: 0,
+            },
+          ],
+          substitutions: [
+            {
+              from: { family: 'Original Face', weight: 400, style: 'normal' },
+              to: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+            },
+          ],
+        },
+      });
+      await fontsSettled(editor);
+      // Two built (the first attempt and the recompose), and the superseded one released.
+      expect(created.length).toBeGreaterThan(1);
+      expect(disposed).toContain(created[0]);
+      expect(created.filter((shaper) => !disposed.includes(shaper))).toHaveLength(1);
+      editor.destroy();
+    } finally {
+      createSpy.mockRestore();
+      disposeSpy.mockRestore();
+    }
+    // These patch a SHARED module record, so every other file in the same process sees
+    // them until they are put back. Asserted, not assumed: a spy that outlived this test
+    // would only show up in the serial run, as someone else's failure.
+    expect(fontConfiguration.createLayoutShaping).toBe(createLayoutShapingReal);
+    expect(fontConfiguration.disposeLayoutShaping).toBe(disposeLayoutShapingReal);
   });
 
   test('an over-budget drop is reported even when nothing else survives validation', async () => {

@@ -38,8 +38,15 @@ The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes
 | Courier New     | Liberation Mono   | SIL OFL           | Yes               |
 | Century Gothic  | TeX Gyre Adventor | GUST Font License | No                |
 
-These fonts match advance widths. Rare kerning differences can still change an
-edge case. Supply licensed font bytes when pixels must match the original face.
+The first five match advance widths exactly. Rare kerning differences can still
+change an edge case.
+
+TeX Gyre Adventor is close, not exact. It runs slightly narrow against Century
+Gothic across the recorded samples: 0.22%, 0.34%, 0.67%, and 0.85% at 40 pt
+bold. `bun run check:font-width-fidelity` holds it within 1%. Over a long line
+that is a fraction of a character, and a wrap point can still move.
+
+Supply licensed font bytes when pixels must match the original face.
 
 `defaultFonts()` loads the five families Word applies to a document by default.
 Century Gothic is not one of them, and its four assets add about 709 KB to every
@@ -210,10 +217,15 @@ The editor caps the family list passed to a resolver.
 
 `googleFonts()` resolves a family against closed sets, in this order:
 
-1. A direct catalog match, or a redirect you passed in `substitute`.
-2. A built-in metric-compatible redirect, such as Calibri to Carlito.
-3. A packaged face for a family the catalog cannot match. Century Gothic is the
+1. A redirect from the substitution map: your `substitute` entries merged over
+   the built-in metric map, such as Calibri to Carlito. Your entries win, and
+   they win over the other two steps as well, so you can redirect any family.
+2. A packaged face for a family the catalog cannot match. Century Gothic is the
    one. It reads the package's own assets, so it makes no third-party request.
+3. A direct catalog match on the name the document wrote.
+
+Step 1 comes first, so `substitute: { Lato: 'Tinos' }` redirects Lato even
+though Lato is catalogued under its own name.
 
 A family that none of the three answers resolves to nothing, and keeps whatever
 measurement your host already had. That is deliberate. Only a metric-compatible

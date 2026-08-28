@@ -181,19 +181,25 @@ describe('font resource contracts', () => {
       { why: 'negative baseline', lineMetrics: { heightEm: 1.2, baselineEm: -0.0001 } },
       { why: 'baseline past the height', lineMetrics: { heightEm: 1.2, baselineEm: 1.2001 } },
     ];
-    for (const { why, lineMetrics } of rejected) {
-      expect(() =>
+    // `why` is folded into the assertion rather than asserted beside it: a separate
+    // `expect(why).toBe(why)` compares a value with itself and never runs anyway, because
+    // the `toThrow` above it fails first. Mapping the whole list to an outcome names the
+    // branch that stopped rejecting IN the diff.
+    const outcomes = rejected.map(({ why, lineMetrics }) => {
+      try {
         createFontResourceSnapshot({
           epoch: 4,
           maxFontBytes: 64,
           resources: [source(replacement)],
           substitutions: [{ from: regular, to: replacement, lineMetrics }],
           validateFont: boundedStructuralFontValidator,
-        })
-      ).toThrow(RangeError);
-      // Named so a regression says WHICH branch stopped rejecting.
-      expect(`${why}: rejected`).toBe(`${why}: rejected`);
-    }
+        });
+        return `${why}: ACCEPTED`;
+      } catch (error) {
+        return `${why}: ${error instanceof RangeError ? 'rejected' : `threw ${String(error)}`}`;
+      }
+    });
+    expect(outcomes).toEqual(rejected.map(({ why }) => `${why}: rejected`));
   });
 
   test('accepts the boundary values the em box allows', () => {

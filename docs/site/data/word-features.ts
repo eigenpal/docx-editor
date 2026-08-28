@@ -118,7 +118,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Register custom fonts with the fonts prop. The editor fetches your URLs and checks each hash. Theme fonts come from the OOXML theme. Word-accurate wrap and pagination need real font bytes, so the optional @docx-editor.dev/fonts package supplies metric-compatible substitutes for common Word fonts: Word\'s five document defaults, plus Century Gothic on demand. Its googleFonts() resolver adds a pinned open-licensed catalog. A family with no metric-compatible substitute keeps your own measurement rather than being given an arbitrary face. The fonts prop also takes a resolver, so an app can load only the families a document declares.',
+      'Register custom fonts with the fonts prop. The editor fetches your URLs and checks each hash. Theme fonts come from the OOXML theme. Word-accurate wrap and pagination need real font bytes, so the optional @docx-editor.dev/fonts package supplies substitutes for common Word fonts. Word\'s five document defaults match advance widths exactly. Century Gothic loads on demand and runs within 1%, so a wrap point can still move. Its googleFonts() resolver adds a pinned open-licensed catalog. A family with no metric-compatible substitute keeps your own measurement rather than being given an arbitrary face. The fonts prop also takes a resolver, so an app can load only the families a document declares.',
   },
   {
     id: 'text.embedded-fonts',

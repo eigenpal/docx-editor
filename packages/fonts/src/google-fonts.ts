@@ -78,10 +78,9 @@ import type { DefaultFontSource, DefaultFontSubstitution } from './index.ts';
  * case-folded name a document would write.
  *
  * Century Gothic is the concrete one: no google/fonts family is metric-compatible with
- * it, and ranking the closest catalog candidate lands ~6% narrow, while the packaged TeX
- * Gyre Adventor lands on Word's own widths. Serving it from the bundle here is what makes
- * `googleFonts()` the ON-DEMAND path for it, so `defaultFonts()` does not have to load
- * ~709 KB of it for every document that never asks.
+ * it, while the packaged TeX Gyre Adventor lands within 1% of Word's own widths. Serving
+ * it from the bundle here is what makes `googleFonts()` the ON-DEMAND path for it, so
+ * `defaultFonts()` does not have to load ~709 KB of it for every document that never asks.
  */
 const PACKAGED_ONLY_BY_NAME: ReadonlyMap<string, WordDefaultFamily> = new Map(
   PACKAGED_ONLY_FAMILIES.map((family) => [family.toLowerCase(), family] as const)

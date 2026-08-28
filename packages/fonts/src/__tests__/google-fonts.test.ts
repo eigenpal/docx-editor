@@ -60,16 +60,42 @@ const resolveOnly = (
     defaultFamily: 'No Such Family',
   });
 
+/**
+ * The ONLY commits a catalogued URL may name.
+ *
+ * Written out rather than pattern-matched. A 40-hex regex says "this looks like a commit",
+ * which a mutable branch tip also satisfies — and the whole safety argument for fetching a
+ * document-declared family is that the bytes come from a commit nobody can move. A
+ * regeneration that re-pins anything has to change this list, in a diff a human reads.
+ *
+ * `bun run check:google-catalog` enforces the same rule from the generator's own
+ * `ALLOWED_REVISIONS`; this is its offline twin, so the pin is guarded on both sides.
+ */
+const PINNED_REVISIONS: readonly string[] = [
+  // The main catalog revision, re-exported by the generated file.
+  GOOGLE_FONTS_REVISION,
+  // Montserrat and Montserrat Light: the last revision that shipped static instances.
+  '160c7fe82ecb74b108d886ed8d27762f6e346163',
+];
+
 describe('catalog', () => {
-  test('every family ships all four faces, pinned to an immutable revision', () => {
+  test('every family ships all four faces, pinned to one of the recorded revisions', () => {
     const byFamily = new Map<string, Set<string>>();
+    const offPin: string[] = [];
     for (const face of GOOGLE_FONT_CATALOG) {
-      expect(face.url).toMatch(/^https:\/\/cdn\.jsdelivr\.net\/gh\/google\/fonts@[0-9a-f]{40}\//);
+      const revision = face.url.match(
+        /^https:\/\/cdn\.jsdelivr\.net\/gh\/google\/fonts@([0-9a-f]{40})\//
+      )?.[1];
+      if (revision === undefined || !PINNED_REVISIONS.includes(revision)) {
+        offPin.push(`${face.family} ${face.weight}/${face.style}: ${face.url}`);
+      }
       expect(face.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
       const faces = byFamily.get(face.family) ?? new Set<string>();
       faces.add(`${face.weight}/${face.style}`);
       byFamily.set(face.family, faces);
     }
+    // Collected, so a regeneration that moved several faces names them all at once.
+    expect(offPin).toEqual([]);
     expect(byFamily.size).toBe(GOOGLE_FONT_FAMILIES.length);
     for (const [family, faces] of byFamily) {
       expect(`${family}:${faces.size}`).toBe(`${family}:4`);
@@ -97,14 +123,32 @@ describe('catalog', () => {
     // that still carries them.
     expect(GOOGLE_FONT_FAMILIES).toContain('Montserrat');
     expect(GOOGLE_FONT_FAMILIES).toContain('Montserrat Light');
-    const montserrat = GOOGLE_FONT_CATALOG.filter((face) => face.family === 'Montserrat');
-    expect(montserrat.map((face) => face.url.slice(face.url.lastIndexOf('/') + 1)).sort()).toEqual([
-      'Montserrat-Bold.ttf',
-      'Montserrat-BoldItalic.ttf',
-      'Montserrat-Italic.ttf',
-      'Montserrat-Regular.ttf',
-    ]);
-    expect(montserrat.every((face) => !face.url.includes(`@${GOOGLE_FONTS_REVISION}/`))).toBe(true);
+    // BOTH families, not just the base one. `Montserrat Light` is the same directory at
+    // the same old commit, drawing the Light/SemiBold instances; re-pinning it to head
+    // would name four files that do not exist there.
+    const expected: Readonly<Record<string, readonly string[]>> = {
+      Montserrat: [
+        'Montserrat-Bold.ttf',
+        'Montserrat-BoldItalic.ttf',
+        'Montserrat-Italic.ttf',
+        'Montserrat-Regular.ttf',
+      ],
+      'Montserrat Light': [
+        'Montserrat-Light.ttf',
+        'Montserrat-LightItalic.ttf',
+        'Montserrat-SemiBold.ttf',
+        'Montserrat-SemiBoldItalic.ttf',
+      ],
+    };
+    for (const [family, files] of Object.entries(expected)) {
+      const faces = GOOGLE_FONT_CATALOG.filter((face) => face.family === family);
+      expect(faces.map((face) => face.url.slice(face.url.lastIndexOf('/') + 1)).sort()).toEqual([
+        ...files,
+      ]);
+      expect(
+        faces.map((face) => `${family}: ${face.url.includes(`@${GOOGLE_FONTS_REVISION}/`)}`)
+      ).toEqual(faces.map(() => `${family}: false`));
+    }
   });
 
   test('every metric substitute target is actually catalogued', () => {
@@ -289,11 +333,30 @@ describe('googleFonts resolver', () => {
   });
 
   test('an app substitution overrides the built-in map', async () => {
+    // Calibri, not an uncatalogued name: the built-in map already answers Calibri with
+    // Carlito, so this is the entry being OVERRIDDEN rather than merely added.
     const { fetcher } = fakeFetcher();
-    const fragment = await resolve(['Georgia'], fetcher, { substitute: { Georgia: 'Tinos' } });
+    const fragment = await resolveOnly(['Calibri'], fetcher, { substitute: { Calibri: 'Tinos' } });
+    expect(fragment.sources.every((source) => source.request.family === 'Tinos')).toBe(true);
     expect(
-      fragment.substitutions.some(
-        (entry) => entry.from.family === 'Georgia' && entry.to.family === 'Tinos'
+      fragment.substitutions.every(
+        (entry) => entry.from.family === 'Calibri' && entry.to.family === 'Tinos'
+      )
+    ).toBe(true);
+  });
+
+  test('an app substitution beats a direct catalog match on the same name', async () => {
+    // The substitution map is consulted BEFORE the catalog, so a family catalogued under
+    // its own name can still be redirected. Documented order; nothing covered it, and the
+    // guide described the reverse.
+    const { fetcher, requested } = fakeFetcher();
+    expect(GOOGLE_FONT_FAMILIES).toContain('Lato');
+    const fragment = await resolveOnly(['Lato'], fetcher, { substitute: { Lato: 'Tinos' } });
+    expect(fragment.sources.every((source) => source.request.family === 'Tinos')).toBe(true);
+    expect(requested.every((url) => url.includes('/tinos/'))).toBe(true);
+    expect(
+      fragment.substitutions.every(
+        (entry) => entry.from.family === 'Lato' && entry.to.family === 'Tinos'
       )
     ).toBe(true);
   });

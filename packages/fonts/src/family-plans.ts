@@ -90,7 +90,7 @@ export const planFaceFile = (plan: FamilyPlan, suffix: string): string =>
 
 /**
  * Families this package substitutes for that the pinned Google catalog CANNOT serve, so
- * `googleFonts()` loads their packaged bytes instead of ranking a distant candidate.
+ * `googleFonts()` loads their packaged bytes rather than leaving them unresolved.
  *
  * Calibri, Cambria, Times New Roman and Courier New are absent because the catalog has
  * metric-compatible answers for them (Carlito, Caladea, Tinos, Cousine). Arial's would be

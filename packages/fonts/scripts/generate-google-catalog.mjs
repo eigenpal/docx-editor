@@ -374,12 +374,22 @@ function check() {
 /** Networked guard: re-download every catalogued URL and compare hashes. */
 async function verify() {
   const current = readFileSync(outPath, 'utf8');
-  const pattern = /url: '([^']+)', byteLength: (\d+), hash: '(sha256:[0-9a-f]{64})'/g;
+  // `\s*` between fields, not a literal space: the committed file is prettier-formatted
+  // one field per line, so a single-line pattern matched NOTHING and this reported
+  // "verified 0 catalogued faces" with exit 0 — a green network guard that never made a
+  // request. `check()` has used the multi-line form all along; both now agree.
+  const pattern = /url: '([^']+)',\s*byteLength: (\d+),\s*hash: '(sha256:[0-9a-f]{64})'/g;
   const recorded = [...current.matchAll(pattern)].map(([, url, byteLength, hash]) => ({
     url,
     byteLength: Number(byteLength),
     hash,
   }));
+  // The same zero guard `check()` carries, and for the same reason: a generated shape this
+  // cannot parse must fail loudly rather than verify an empty list.
+  if (recorded.length === 0) {
+    console.error('packages/fonts: catalog parsed to zero faces; the generated shape changed.');
+    process.exit(1);
+  }
   let bad = 0;
   await pooled(recorded, 8, async (entry) => {
     try {
