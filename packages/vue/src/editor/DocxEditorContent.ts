@@ -85,9 +85,13 @@ export const DocxEditorContent = defineComponent({
       if (clipboardDropLandsText(transfer)) {
         // Only an EDITABLE target fires `insertFromDrop`. Anywhere else the browser's
         // default action for a file-carrying transfer is to NAVIGATE to the file — which
-        // destroys the session — so the drop is swallowed instead of released.
-        const target = event.target as HTMLElement | null;
-        if (target?.isContentEditable) return;
+        // destroys the session — so the drop is swallowed instead of released. Resolved
+        // through the nearest annotated ancestor: `isContentEditable` does not exist on
+        // SVG elements (painted vector shapes). Mirrors the React adapter.
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('[contenteditable]')?.getAttribute('contenteditable') === 'true') {
+          return;
+        }
         event.preventDefault();
         return;
       }

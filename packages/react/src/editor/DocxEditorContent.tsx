@@ -95,9 +95,13 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
         // Only an EDITABLE target fires `insertFromDrop`. Anywhere else (page furniture,
         // an inactive header band), the browser's default action for a file-carrying
         // transfer is to NAVIGATE to the file — which destroys the session — so the drop
-        // is swallowed instead of released.
-        const target = event.target as HTMLElement | null;
-        if (target?.isContentEditable) return;
+        // is swallowed instead of released. Resolved through the nearest annotated
+        // ancestor: `isContentEditable` does not exist on SVG elements (painted vector
+        // shapes), where a direct read answered undefined for an editable position.
+        const target = event.target instanceof Element ? event.target : null;
+        if (target?.closest('[contenteditable]')?.getAttribute('contenteditable') === 'true') {
+          return;
+        }
         event.preventDefault();
         return;
       }

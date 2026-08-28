@@ -352,19 +352,14 @@ describe('clipboardPasteLandsContent — the image-file stand-down predicate for
     expect(clipboardPasteLandsContent(transfer({ 'text/plain': 'plain words' }))).toBe(true);
   });
 
-  test('text/plain that is just the image file name, path, or URL keeps the file lane', () => {
-    // File managers mirror the copied file into text/plain; it describes the image, so
-    // the picture wins over pasting a literal path.
-    expect(clipboardPasteLandsContent(transfer({ 'text/plain': 'photo.png' }))).toBe(false);
+  test('bidi format characters are invisible too', () => {
+    // Directional marks around an external image render as nothing; counting them stood
+    // the file lane down and pasted two invisible characters instead of the picture.
     expect(
-      clipboardPasteLandsContent(transfer({ 'text/plain': 'file:///Users/a/photo.png' }))
+      clipboardPasteLandsContent(
+        transfer({ 'text/html': '&#x200E;<img src="https://x/y.png">&#x200F;' })
+      )
     ).toBe(false);
-    expect(
-      clipboardPasteLandsContent(transfer({ 'text/plain': 'https://cdn.example.com/x.jpeg' }))
-    ).toBe(false);
-    expect(clipboardPasteLandsContent(transfer({ 'text/plain': 'see photo.png attached' }))).toBe(
-      true
-    );
   });
 
   test('visible text/plain wins even when the HTML flavour carries none', () => {

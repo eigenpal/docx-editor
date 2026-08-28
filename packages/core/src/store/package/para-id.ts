@@ -19,7 +19,7 @@
 // requires, and the collision bump provides it.
 
 import { MC_NAMESPACE_URI, W14_NAMESPACE_URI, WML_NAMESPACE_URI } from './ooxml-shared.ts';
-import { parentNodeOf } from './ooxml-edit.ts';
+import { carryIndexToRebuiltRoot, parentNodeOf } from './ooxml-edit.ts';
 import type { OoxmlAttribute, OoxmlElement, OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 import { validateOoxmlPart } from './ooxml-validate.ts';
 
@@ -357,6 +357,9 @@ export function normalizeParagraphIdentity(part: OoxmlPart): OoxmlPart {
     root = freezeElement({ ...root, namespaceBindings: bindings, attributes } as OoxmlElement);
   }
 
+  // A rebuilt root outside the edit primitives carries its index — a no-op at document
+  // open (no index exists yet), load-bearing when a story replacement normalizes mid-life.
+  carryIndexToRebuiltRoot(part.root, root);
   // Frozen like every part the edit primitives publish — layout memos key on part identity,
   // and the freeze discipline is what makes that identity trustworthy.
   const normalized: OoxmlPart = Object.freeze({ ...part, root });

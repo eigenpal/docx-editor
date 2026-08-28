@@ -268,6 +268,10 @@ function stealPatchedIndex(oldRoot: OoxmlElement, newRoot: OoxmlElement): void {
  * the fragment lane binding namespace prefixes — must do the same, or the new root starts
  * an orphaned index: the next lookup re-walks the whole part, and the mint frontier
  * restarts at 0 underneath ids already handed out.
+ *
+ * The carry STEALS, like every op executor: when a refusal path later discards the new
+ * root, the still-published old root re-walks once on its next lookup. That direction is
+ * accepted — refusals are exceptional, while the carried case is every successful landing.
  */
 export function carryIndexToRebuiltRoot(oldRoot: OoxmlElement, newRoot: OoxmlElement): void {
   stealPatchedIndex(oldRoot, newRoot);

@@ -321,11 +321,12 @@ export function insertableText(text: string): string {
 
 /**
  * A character the reader can actually see: not whitespace, and not one of the zero-width
- * or invisible-format characters (`U+200B`–`U+200D`, `U+2060`, `U+FEFF`, soft hyphen) some
+ * or invisible-format characters (zero-widths, bidi marks and isolates, `U+2060`,
+ * `U+FEFF`, soft hyphen) some
  * applications wrap around inline content. Those survive `trim()` and would make an
  * effectively empty payload read as "carries text".
  */
-const VISIBLE_CHAR = /[^\s\u200B-\u200D\u2060\uFEFF\u00AD]/;
+const VISIBLE_CHAR = /[^\s\u200B-\u200F\u2060\u2066-\u2069\u061C\uFEFF\u00AD]/;
 
 /** Whether the text holds at least one character the reader can see. */
 export function hasVisibleChar(text: string): boolean {

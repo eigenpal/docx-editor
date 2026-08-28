@@ -13,7 +13,6 @@
 // oversized payload, a malformed fragment attribute) correctly keeps the file lane and an
 // html flavour it lands correctly stands it down.
 
-import { readOoxmlPackage } from '@docx-editor.dev/core/store';
 import { fragmentFromHtml } from './clipboard-fragment-codec.ts';
 import { probeExternalHtml } from './clipboard-html-read.ts';
 import { hasVisibleChar, htmlHasVisibleText } from './clipboard-plain-text.ts';
@@ -29,44 +28,41 @@ function flavourOf(transfer: DataTransfer, type: string): string {
 }
 
 /**
- * A `text/plain` flavour that is just the copied FILE's name, path, or URL — one line,
- * ending in a raster extension. File managers and some browsers mirror the file into
- * `text/plain` this way; it describes the image rather than accompanying it, so it must
- * not stand the file lane down. Word-style text copies never look like this.
- */
-const IMAGE_PATH_TEXT =
-  /^\s*(?:(?:file|https?):\/\/\S+|[A-Za-z]:\\\S+|\/\S+|[^\s\\/]+)\.(?:png|jpe?g|gif|bmp|webp|tiff?)\s*$/i;
-
-/**
  * True when the engine's PASTE lanes will land user-visible content from this payload, so
  * a host's image-FILE lane must stand down or insert a duplicate.
  *
  * In order of cost: visible `text/plain` (the plain lane's unconditional fallback), visible
- * HTML text (the projection and the plain lane's HTML fallback both land it), a readable
- * embedded fragment, and finally the projection probe for text-free HTML — the exact
- * decision the paste router makes for `data:` images, without paying for the zip.
+ * HTML text (the projection and the plain lane's HTML fallback both land it), a
+ * zip-shaped embedded fragment, and finally the projection probe for text-free HTML — the
+ * exact decision the paste router makes for `data:` images, without paying for the zip.
  *
  * Deliberate asymmetries against the router's letter: text made only of invisible
- * characters (zero-width wrappers, a bare newline) does not count — the router technically
- * lands it, but standing down for it would drop a real image for characters nobody can
- * see. A `text/plain` that is just the image's own filename or URL does not count either.
- * And engine-state gates the adapter cannot observe (suggesting mode, cell selections,
- * the force-plain window) are ignored; in those states the engine may land nothing where
- * this predicate said it would.
+ * characters (zero-width wrappers, bidi marks, a bare newline) does not count — the router
+ * technically lands it, but standing down for it would drop a real image for characters
+ * nobody can see. And engine-state gates the adapter cannot observe (suggesting mode, cell
+ * selections, the force-plain window) are ignored; in those states the engine may land
+ * nothing where this predicate said it would.
+ *
+ * One trade the adapter cannot win: a payload whose `text/plain` is just the copied file's
+ * own name or URL stands the lane down and pastes that text without the picture. The
+ * engine's plain lane inserts any visible text REGARDLESS of what a host does, so the only
+ * alternative is the path text AND the picture — a duplicate, which is the bug this
+ * predicate exists to prevent.
  *
  * @public
  */
 export function clipboardPasteLandsContent(transfer: DataTransfer | null | undefined): boolean {
   if (!transfer) return false;
-  const text = flavourOf(transfer, 'text/plain');
-  if (hasVisibleChar(text) && !IMAGE_PATH_TEXT.test(text)) return true;
+  if (hasVisibleChar(flavourOf(transfer, 'text/plain'))) return true;
   const html = flavourOf(transfer, 'text/html');
   if (html.length === 0) return false;
   if (htmlHasVisibleText(html)) return true;
-  // Text-free HTML. An embedded fragment counts only when it READS as a package — the
-  // router refuses undecodable bytes and would land nothing.
+  // Text-free HTML. An embedded fragment counts only when its bytes are at least
+  // zip-shaped — the router refuses everything else and would land nothing. (A zip that
+  // fails deeper package reads still slips through; fully validating it here would
+  // duplicate the router's whole bounded open per gesture.)
   const embedded = fragmentFromHtml(html);
-  if (embedded !== null && readOoxmlPackage(embedded.bytes).ok) return true;
+  if (embedded !== null && embedded.bytes[0] === 0x50 && embedded.bytes[1] === 0x4b) return true;
   // Otherwise only a projected IMAGE counts. The projection also lands invisible runs and
   // empty paragraphs as blocks, and standing down for those would trade a real image file
   // for content nobody can see.
