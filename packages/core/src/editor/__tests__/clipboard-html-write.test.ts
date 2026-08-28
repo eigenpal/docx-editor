@@ -96,7 +96,7 @@ describe('interopHtmlFromFragment', () => {
       fragment({
         body:
           '<w:p><w:r><w:rPr>' +
-          '<w:rFonts w:ascii="Courier New"/><w:b/><w:i/>' +
+          '<w:rFonts w:eastAsia="微软雅黑"/><w:b/><w:i/>' +
           '<w:color w:val="FF0000"/><w:sz w:val="28"/><w:u w:val="single"/>' +
           '</w:rPr><w:t>styled</w:t></w:r></w:p>',
       })
@@ -105,7 +105,7 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('font-style:italic');
     expect(html).toContain('color:#ff0000');
     expect(html).toContain('font-size:14pt');
-    expect(html).toContain("font-family:'Courier New'");
+    expect(html).toContain('font-family:&quot;微软雅黑&quot;');
     expect(html).toContain('text-decoration:underline');
     expect(html).toContain('>styled<');
   });
@@ -114,8 +114,11 @@ describe('interopHtmlFromFragment', () => {
     const html = interopHtmlFromFragment(
       fragment({
         styles:
+          '<w:style w:type="paragraph" w:styleId="Heading1">' +
+          '<w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style>' +
           '<w:style w:type="paragraph" w:styleId="Heading2">' +
-          '<w:name w:val="heading 2"/><w:pPr><w:spacing w:before="240"/><w:jc w:val="center"/></w:pPr>' +
+          '<w:basedOn w:val="Heading1"/><w:name w:val="heading 2"/>' +
+          '<w:pPr><w:outlineLvl w:val="1"/><w:spacing w:before="240"/><w:jc w:val="center"/></w:pPr>' +
           '</w:style>' +
           '<w:style w:type="paragraph" w:styleId="Fancy"><w:basedOn w:val="Heading2"/></w:style>',
         body: '<w:p><w:pPr><w:pStyle w:val="Fancy"/></w:pPr>' + '<w:r><w:t>Title</w:t></w:r></w:p>',
@@ -132,14 +135,17 @@ describe('interopHtmlFromFragment', () => {
       fragment({
         styles:
           '<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/></w:style>' +
-          '<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="Caption"/></w:style>',
+          '<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="Caption"/></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Heading7"><w:name w:val="heading 7"/></w:style>',
         body:
           '<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>title</w:t></w:r></w:p>' +
-          '<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr><w:r><w:t>caption</w:t></w:r></w:p>',
+          '<w:p><w:pPr><w:pStyle w:val="Caption"/></w:pPr><w:r><w:t>caption</w:t></w:r></w:p>' +
+          '<w:p><w:pPr><w:pStyle w:val="Heading7"/></w:pPr><w:r><w:t>deep</w:t></w:r></w:p>',
       })
     );
     expect(html).toContain('<p class="MsoTitle"');
     expect(html).toContain('<p class="MsoCaption"');
+    expect(html).toContain('<p class="MsoHeading7"');
   });
 
   test('numbered and bulleted levels nest as ol/ul with list-style-type', () => {
@@ -183,7 +189,7 @@ describe('interopHtmlFromFragment', () => {
         body:
           '<w:tbl>' +
           '<w:tblPr><w:tblW w:w="4320" w:type="dxa"/><w:jc w:val="center"/></w:tblPr>' +
-          `<w:tr><w:trPr><w:trHeight w:val="360" w:hRule="exact"/></w:trPr>${cell('<w:gridSpan w:val="2"/>', 'head')}</w:tr>` +
+          `<w:tr><w:trPr><w:trHeight w:val="360" w:hRule="exact"/></w:trPr>${cell('<w:gridSpan w:val="999"/>', 'head')}</w:tr>` +
           `<w:tr>${cell('<w:vMerge w:val="restart"/><w:shd w:val="clear" w:fill="DDEEFF"/>', 'merged')}${cell('<w:vAlign w:val="center"/>', 'b1')}</w:tr>` +
           `<w:tr>${cell('<w:vMerge/>', '')}${cell('<w:tcW w:w="2400" w:type="dxa"/><w:tcMar><w:left w:w="120" w:type="dxa"/></w:tcMar>', 'b2')}</w:tr>` +
           '</w:tbl>',
@@ -193,7 +199,7 @@ describe('interopHtmlFromFragment', () => {
       '<table style="border-collapse:collapse;width:216pt;margin-left:auto;margin-right:auto">'
     );
     expect(html).toContain('<tr style="height:18pt">');
-    expect(html).toContain('colspan="2"');
+    expect(html).toContain('colspan="63"');
     expect(html).toContain('rowspan="2"');
     expect(html).toContain('background-color:#ddeeff');
     expect(html).toContain('vertical-align:middle');
@@ -372,7 +378,7 @@ describe('interopHtmlFromFragment', () => {
       })
     );
     // The unstyled run resolves through docDefaults and the default style.
-    expect(html).toContain('font-family:Arial');
+    expect(html).toContain('font-family:&quot;Arial&quot;');
     expect(html).toContain('font-size:11pt');
     expect(html).toContain('color:#222222');
     // Direct formatting wins over both.

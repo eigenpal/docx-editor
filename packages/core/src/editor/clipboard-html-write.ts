@@ -25,6 +25,7 @@ import { clipboardBase64Of } from './clipboard-html-base64.ts';
 import { clipboardBookmarkName, clipboardHyperlinkTarget } from './clipboard-html-links.ts';
 import {
   wordBorderCss,
+  wordCssFontFamily,
   wordParagraphClassOf,
   wordPositionalTabHtml,
 } from './clipboard-html-word-elements.ts';
@@ -55,13 +56,6 @@ function escapeHtml(value: string): string {
 }
 
 const escapeAttr = escapeHtml;
-
-/** A CSS font-family value from a file-supplied name: allowlist characters, quote if needed. */
-function cssFontFamily(raw: string): string | null {
-  const cleaned = raw.replace(/[^A-Za-z0-9 _.,-]/g, '').trim();
-  if (cleaned.length === 0) return null;
-  return /^[A-Za-z][A-Za-z0-9-]*$/.test(cleaned) ? cleaned : `'${cleaned}'`;
-}
 
 function cssHexColor(raw: string | undefined): string | null {
   if (raw === undefined || raw.toLowerCase() === 'auto') return null;
@@ -273,10 +267,6 @@ function toggleOn(sources: readonly OoxmlElement[], localName: string): boolean 
   return state;
 }
 
-// ---------------------------------------------------------------------------
-// CSS mapping
-// ---------------------------------------------------------------------------
-
 const HIGHLIGHT_COLORS: Readonly<Record<string, string>> = {
   yellow: 'yellow',
   green: 'green',
@@ -316,9 +306,12 @@ function runCssOf(sources: readonly OoxmlElement[]): RunCss {
   if (toggleOn(sources, 'vanish')) return { css: '', vanish: true, vertAlign: null };
   const rules: string[] = [];
 
-  const ascii = foldAttribute(sources, 'rFonts', 'ascii');
-  if (ascii !== undefined) {
-    const family = cssFontFamily(ascii);
+  const font =
+    foldAttribute(sources, 'rFonts', 'ascii') ??
+    foldAttribute(sources, 'rFonts', 'hAnsi') ??
+    foldAttribute(sources, 'rFonts', 'eastAsia');
+  if (font !== undefined) {
+    const family = wordCssFontFamily(font);
     if (family) rules.push(`font-family:${family}`);
   }
   const sz = parseIntValue(foldAttribute(sources, 'sz', 'val'));
@@ -435,10 +428,6 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
 
   return rules.join(';');
 }
-
-// ---------------------------------------------------------------------------
-// Rendering context
-// ---------------------------------------------------------------------------
 
 interface NumberingIndex {
   /** numId → abstractNumId. */
@@ -712,9 +701,16 @@ function renderInline(
 // Blocks
 // ---------------------------------------------------------------------------
 
-function headingLevelOf(ctx: RenderContext, ownPPr: OoxmlElement | null): number | null {
-  for (const style of styleChain(ctx.styles, wmlVal(wmlChild(ownPPr, 'pStyle')))) {
-    const id = attributeValueOf(style, 'styleId', WML_NAMESPACE_URI);
+function headingLevelOf(
+  ctx: RenderContext,
+  ownPPr: OoxmlElement | null,
+  sources: readonly OoxmlElement[]
+): number | null {
+  const outline = parseIntValue(wmlVal(lastProperty(sources, 'outlineLvl')));
+  if (outline !== null && outline >= 0 && outline <= 5) return outline + 1;
+  const chain = styleChain(ctx.styles, wmlVal(wmlChild(ownPPr, 'pStyle')));
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const id = attributeValueOf(chain[index]!, 'styleId', WML_NAMESPACE_URI);
     const match = id ? /^Heading([1-6])$/.exec(id) : null;
     if (match) return Number(match[1]);
   }
@@ -722,8 +718,11 @@ function headingLevelOf(ctx: RenderContext, ownPPr: OoxmlElement | null): number
 }
 
 function paragraphClassOf(ctx: RenderContext, ownPPr: OoxmlElement | null): string | null {
-  for (const style of styleChain(ctx.styles, wmlVal(wmlChild(ownPPr, 'pStyle')))) {
-    const found = wordParagraphClassOf(attributeValueOf(style, 'styleId', WML_NAMESPACE_URI));
+  const chain = styleChain(ctx.styles, wmlVal(wmlChild(ownPPr, 'pStyle')));
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const found = wordParagraphClassOf(
+      attributeValueOf(chain[index]!, 'styleId', WML_NAMESPACE_URI)
+    );
     if (found !== null) return found;
   }
   return null;
@@ -743,7 +742,7 @@ function renderParagraph(
   const styleAttr = css === '' ? '' : ` style="${escapeAttr(css)}"`;
 
   if (options.asListItem) return `<li${styleAttr}>${inner}</li>`;
-  const heading = headingLevelOf(ctx, pPr);
+  const heading = headingLevelOf(ctx, pPr, sources);
   const tag = heading === null ? 'p' : `h${heading}`;
   const wordClass = heading === null ? paragraphClassOf(ctx, pPr) : null;
   const classAttr = wordClass === null ? '' : ` class="${wordClass}"`;
@@ -766,7 +765,10 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): CellPlacement[][] {
     for (const child of row.children) {
       if (!isElement(child) || child.kind !== 'tableCell') continue;
       const tcPr = wmlChild(child, 'tcPr');
-      const span = Math.max(parseIntValue(wmlVal(wmlChild(tcPr, 'gridSpan'))) ?? 1, 1);
+      const span = Math.min(
+        Math.max(parseIntValue(wmlVal(wmlChild(tcPr, 'gridSpan'))) ?? 1, 1),
+        63
+      );
       const vMergeNode = wmlChild(tcPr, 'vMerge');
       const vMerge =
         vMergeNode === null ? null : wmlVal(vMergeNode) === 'restart' ? 'restart' : 'continue';

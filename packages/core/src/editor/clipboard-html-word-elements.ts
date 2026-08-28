@@ -9,7 +9,27 @@ const WORD_PARAGRAPH_CLASSES: Readonly<Record<string, string>> = {
 };
 
 export function wordParagraphClassOf(styleId: string | undefined): string | null {
-  return styleId === undefined ? null : (WORD_PARAGRAPH_CLASSES[styleId] ?? null);
+  if (styleId === undefined) return null;
+  if (/^Heading[7-9]$/.test(styleId)) return `Mso${styleId}`;
+  return WORD_PARAGRAPH_CLASSES[styleId] ?? null;
+}
+
+/** Quote a file-supplied font name without removing Unicode letters. */
+export function wordCssFontFamily(raw: string): string | null {
+  const value = raw.trim();
+  if (value.length === 0 || value.length > 255) return null;
+  let escaped = '';
+  for (const char of value) {
+    const code = char.codePointAt(0)!;
+    if (code === 0 || code === 0x0a || code === 0x0d || code === 0x0c) {
+      escaped += '\\a ';
+    } else if (char === '\\' || char === '"') {
+      escaped += `\\${char}`;
+    } else if (code >= 0x20 && code !== 0x7f) {
+      escaped += char;
+    }
+  }
+  return escaped.length === 0 ? null : `"${escaped}"`;
 }
 
 export function wordBorderCss(edge: OoxmlElement | null): string | null {

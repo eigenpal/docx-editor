@@ -334,17 +334,18 @@ function projectImage(element: Element, runs: string[], p: Projection): void {
   const sniffed = sniffImageMime(bytes);
   if (sniffed !== 'image/png' && sniffed !== 'image/jpeg' && sniffed !== 'image/gif') return;
   const header = validateRasterHeader(bytes, sniffed);
+  if (header === null) return;
 
   const style = parseInlineStyle(element);
   let widthPx = imageDimensionPx(element, style, 'width', p.wordHtml);
   let heightPx = imageDimensionPx(element, style, 'height', p.wordHtml);
-  if (widthPx === null && heightPx === null && header) {
+  if (widthPx === null && heightPx === null) {
     widthPx = (header.pixelWidth * 96) / (header.dpiX ?? 96);
     heightPx = (header.pixelHeight * 96) / (header.dpiY ?? 96);
   } else if (widthPx !== null && heightPx === null) {
-    heightPx = header ? (widthPx * header.pixelHeight) / header.pixelWidth : (widthPx * 2) / 3;
+    heightPx = (widthPx * header.pixelHeight) / header.pixelWidth;
   } else if (widthPx === null && heightPx !== null) {
-    widthPx = header ? (heightPx * header.pixelWidth) / header.pixelHeight : (heightPx * 3) / 2;
+    widthPx = (heightPx * header.pixelWidth) / header.pixelHeight;
   }
   // Unknown extent falls back to 300x200pt.
   const cx = widthPx === null ? 3_810_000 : clamp(Math.round(widthPx * 9525), 9525, 30_000_000);
@@ -549,7 +550,9 @@ function msoListNumPr(
   const ilvl = clamp(Number.parseInt(match[2]!, 10) - 1, 0, 8);
   const marker = msoMarkerText(element, p);
   const { kind, start } = htmlListKindAndStart(marker);
-  return { numId: allocateList(p, `mso:l${match[1]}`, kind, start), ilvl };
+  const lfo = /\blfo(\d{1,4})\b/i.exec(declaration);
+  const key = `mso:l${match[1]}${lfo ? `:lfo${lfo[1]}` : ''}`;
+  return { numId: allocateList(p, key, kind, start), ilvl };
 }
 
 /** The text of the `mso-list:Ignore` marker span, for number-vs-bullet detection. */

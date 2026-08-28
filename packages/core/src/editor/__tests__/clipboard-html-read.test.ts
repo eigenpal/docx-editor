@@ -426,6 +426,15 @@ describe('lists', () => {
     expect(numberingXml).toContain('w:numFmt w:val="decimal"');
   });
 
+  test('Word lfo values allocate distinct instances of one list definition', () => {
+    const item = (lfo: number, text: string): string =>
+      `<p style="mso-list:l3 level1 lfo${lfo}">` +
+      `<span style="mso-list:Ignore">1.</span>${text}</p>`;
+    const { docXml } = openFragment(item(5, 'first') + item(6, 'restart'));
+    expect(docXml).toContain('w:numId w:val="1001"');
+    expect(docXml).toContain('w:numId w:val="1002"');
+  });
+
   test('Word list markers preserve Roman, letter, and restarted decimal numbering', () => {
     const item = (id: number, marker: string, text: string): string =>
       `<p style="mso-list:l${id} level1 lfo${id}">` +
@@ -625,6 +634,12 @@ describe('images', () => {
     expect(docXml.match(/<w:drawing>/g)).toHaveLength(2);
     expect(pkg.partBytes.get('/word/media/image1.png')).toBeDefined();
     expect(pkg.partBytes.get('/word/media/image2.png')).toBeDefined();
+    expect(pkg.partBytes.get('/word/media/image1.jpeg')).toBeUndefined();
+  });
+
+  test('a recognized image signature with an invalid header is dropped', () => {
+    const { docXml, pkg } = openFragment('<p><img src="data:image/jpeg;base64,/9j/"></p>');
+    expect(docXml).not.toContain('w:drawing');
     expect(pkg.partBytes.get('/word/media/image1.jpeg')).toBeUndefined();
   });
 });
