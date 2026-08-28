@@ -5,6 +5,7 @@ import { normalizeParagraphIdentity, paraIdOf } from '../../store/package/para-i
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { TreePackageStore } from '../../store/store/tree-package-store.ts';
 import { ORIGIN_IDS } from '../../store/registry/frozen-ids.ts';
+import type { CollaborationApplyResult } from '../replication.ts';
 
 function bytesWithParagraphIds(ids: readonly (string | null)[]): Uint8Array {
   const paragraphs = ids
@@ -117,7 +118,7 @@ describe('canonical collaboration document port', () => {
       actorId: 'bob',
       operationId: 'bob-bad-id-1',
     };
-    const refused = { ok: false, reason: 'unknown-paragraph-id' };
+    const refused: CollaborationApplyResult = { ok: false, reason: 'unknown-paragraph-id' };
 
     expect(
       port.applyParagraphTexts(
