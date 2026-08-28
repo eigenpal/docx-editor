@@ -22,6 +22,8 @@ interface FragmentInput {
   readonly numbering?: string;
   readonly footnotes?: string;
   readonly endnotes?: string;
+  readonly footnotesRels?: string;
+  readonly endnotesRels?: string;
   /** Extra `<Relationship .../>` rows for word/_rels/document.xml.rels. */
   readonly docRels?: string;
   /** Media entries by zip name, e.g. `word/media/image1.png`. */
@@ -54,11 +56,21 @@ function fragment(input: FragmentInput): Uint8Array {
   for (const kind of ['footnotes', 'endnotes'] as const) {
     const xml = input[kind];
     if (xml === undefined) continue;
-    entries.set(`word/${kind}.xml`, strToU8(`<w:${kind} xmlns:w="${W}">${xml}</w:${kind}>`));
+    entries.set(
+      `word/${kind}.xml`,
+      strToU8(`<w:${kind} xmlns:w="${W}" xmlns:r="${R}">${xml}</w:${kind}>`)
+    );
     overrides.push(
       `<Override PartName="/word/${kind}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${kind}+xml"/>`
     );
     docRels += `<Relationship Id="rId-${kind}" Type="${R}/${kind}" Target="${kind}.xml"/>`;
+    const rels = input[`${kind}Rels`];
+    if (rels !== undefined) {
+      entries.set(
+        `word/_rels/${kind}.xml.rels`,
+        strToU8(`<Relationships xmlns="${REL}">${rels}</Relationships>`)
+      );
+    }
   }
   for (const [name, bytes] of Object.entries(input.media ?? {})) entries.set(name, bytes);
 
@@ -397,10 +409,14 @@ describe('interopHtmlFromFragment', () => {
     const html = interopHtmlFromFragment(
       fragment({
         footnotes:
-          '<w:footnote w:id="3"><w:p><w:r><w:footnoteReference w:id="3"/>' +
-          '<w:t>Foot body.</w:t></w:r></w:p></w:footnote>',
+          '<w:footnote w:id="3"><w:p><w:r><w:footnoteRef/><w:t>Foot body.</w:t></w:r>' +
+          '<w:hyperlink r:id="rIdNote"><w:r><w:t>source</w:t></w:r></w:hyperlink>' +
+          '</w:p></w:footnote>',
+        footnotesRels:
+          `<Relationship Id="rIdNote" Type="${R}/hyperlink" ` +
+          'Target="https://notes.example/source" TargetMode="External"/>',
         endnotes:
-          '<w:endnote w:id="2"><w:p><w:r><w:endnoteReference w:id="2"/>' +
+          '<w:endnote w:id="2"><w:p><w:r><w:endnoteRef/>' +
           '<w:t>End body.</w:t></w:r></w:p></w:endnote>',
         body:
           '<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t>' +
@@ -421,6 +437,7 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('mso-element:endnote-list');
     expect(html).toContain('Foot body.');
     expect(html).toContain('End body.');
+    expect(html).toContain('<a href="https://notes.example/source">source</a>');
   });
 
   test('every text value is escaped, never markup', () => {

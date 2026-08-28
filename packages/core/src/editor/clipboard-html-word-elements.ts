@@ -100,14 +100,42 @@ export function wordTableRowCss(height: number | null, rule: string | undefined)
   return `height:${points}pt;mso-height-rule:${rule === 'exact' ? 'exactly' : 'at-least'}`;
 }
 
-export function wordNoteReferenceHtml(node: OoxmlElement, inNoteBody = false): string {
+export interface WordNoteBodyContext {
+  readonly kind: 'footnote' | 'endnote';
+  readonly id: number;
+}
+
+export function wordNoteReferenceHtml(
+  node: OoxmlElement,
+  noteBody: WordNoteBodyContext | null
+): string {
   if (node.namespaceUri !== WML_NAMESPACE_URI) return '';
-  const footnote = node.localName === 'footnoteReference';
-  if (!footnote && node.localName !== 'endnoteReference') return '';
+  const bodyKind =
+    node.localName === 'footnoteRef'
+      ? 'footnote'
+      : node.localName === 'endnoteRef'
+        ? 'endnote'
+        : null;
+  const referenceKind =
+    node.localName === 'footnoteReference'
+      ? 'footnote'
+      : node.localName === 'endnoteReference'
+        ? 'endnote'
+        : null;
+  const kind = bodyKind ?? referenceKind;
+  if (kind === null) return '';
   const rawId = attributeValueOf(node, 'id', WML_NAMESPACE_URI);
-  if (rawId === undefined || !/^[1-9]\d{0,4}$/.test(rawId)) return '';
-  const id = Number.parseInt(rawId, 10);
+  const id =
+    bodyKind === null
+      ? rawId !== undefined && /^[1-9]\d{0,4}$/.test(rawId)
+        ? Number.parseInt(rawId, 10)
+        : undefined
+      : noteBody?.id;
+  if (id === undefined || !Number.isInteger(id) || id < 1) return '';
+  if (bodyKind !== null && noteBody?.kind !== bodyKind) return '';
   if (id > 32_767) return '';
+  const footnote = kind === 'footnote';
+  const inNoteBody = bodyKind !== null;
   const className = footnote ? 'MsoFootnoteReference' : 'MsoEndnoteReference';
   const prefix = footnote ? 'ftn' : 'edn';
   const href = inNoteBody ? `#_${prefix}ref${id}` : `#_${prefix}${id}`;

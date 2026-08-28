@@ -35,6 +35,7 @@ import {
   wordPositionalTabHtml,
   wordTableRowCss,
   wordUnderlineCss,
+  type WordNoteBodyContext,
 } from './clipboard-html-word-elements.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -43,7 +44,6 @@ const NUMBERING_REL = `${R_NS}/numbering`;
 const FOOTNOTES_REL = `${R_NS}/footnotes`;
 const ENDNOTES_REL = `${R_NS}/endnotes`;
 
-/** `basedOn` chains are file-supplied; a cycle must not become a loop bound. */
 const MAX_STYLE_CHAIN = 16;
 const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -459,7 +459,7 @@ interface RenderContext {
   readonly maxTotalImageBytes: number;
   /** Running total of media bytes already inlined, shared across the whole document. */
   imageBytesUsed: number;
-  readonly noteBody: boolean;
+  readonly noteBody: WordNoteBodyContext | null;
 }
 
 /** Complex-field state, one per paragraph. Runs render only when every open field is past
@@ -508,10 +508,6 @@ function listPlacementOf(
     1;
   return { numId, level, fmt, start };
 }
-
-// ---------------------------------------------------------------------------
-// Inline content
-// ---------------------------------------------------------------------------
 
 function hasChildOfKind(run: OoxmlElement, kind: string): boolean {
   return run.children.some((child) => child.kind === kind);
@@ -745,8 +741,6 @@ function renderParagraph(
   return `<${tag}${heading === null ? classAttr : ''}${dirAttr}${styleAttr}>${inner}</${tag}>`;
 }
 
-// --- tables ---
-
 interface CellPlacement {
   readonly cell: OoxmlElement;
   readonly startColumn: number;
@@ -778,7 +772,6 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): CellPlacement[][] {
 function renderTable(ctx: RenderContext, table: OoxmlElement): string {
   const tblPr = table.children.find((child) => child.kind === 'tableProperties');
   const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
-  // Table-level borders: the style chain's tblBorders, overridden by the table's own.
   let tblBorders: OoxmlElement | null = null;
   for (const style of styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')))) {
     const styleBorders = wmlChild(wmlChild(style, 'tblPr'), 'tblBorders');
@@ -817,7 +810,6 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
     const rowStyle = rowCss === '' ? '' : ` style="${rowCss}"`;
     out += `<tr${rowStyle}>`;
     for (const [cellIndex, placement] of rowCells.entries()) {
-      // A vMerge continuation emits nothing; the restart above spans it.
       if (placement.vMerge === 'continue') continue;
       let rowSpan = 1;
       if (placement.vMerge === 'restart') {
@@ -938,13 +930,21 @@ function renderNoteList(
   root: OoxmlElement | null
 ): string {
   if (root === null) return '';
+  let ownerPart = `/word/${kind}s.xml`;
+  for (const [name, part] of ctx.pkg.parts) {
+    if (part.root === root) ownerPart = name;
+  }
+  const noteRels = relationshipsOf(ctx.pkg, ownerPart);
   let notes = '';
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName !== kind) continue;
     const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
     if (id === undefined || !/^[1-9]\d{0,4}$/.test(id)) continue;
-    const inner = renderBlocks({ ...ctx, noteBody: true }, child.children);
+    const inner = renderBlocks(
+      { ...ctx, noteBody: { kind, id: Number.parseInt(id, 10) }, docRels: noteRels },
+      child.children
+    );
     if (inner !== '')
       notes += `<div style="mso-element:${kind}" id="${kind === 'footnote' ? 'ftn' : 'edn'}${id}">${inner}</div>`;
   }
@@ -989,7 +989,7 @@ export function interopHtmlFromFragmentPackage(
     maxImageBytes: options?.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     maxTotalImageBytes: options?.maxTotalImageBytes ?? DEFAULT_MAX_TOTAL_IMAGE_BYTES,
     imageBytesUsed: 0,
-    noteBody: false,
+    noteBody: null,
   };
   return (
     renderBlocks(ctx, body.children) +
