@@ -298,11 +298,11 @@ export function openTreeSession(
     return stylesRoot;
   };
 
-  let numberingRootResolved = false;
+  let numberingRootRevision = -1;
   let numberingRoot: OoxmlElement | null = null;
   const resolveNumberingRoot = (): OoxmlElement | null => {
-    if (numberingRootResolved) return numberingRoot;
-    numberingRootResolved = true;
+    if (numberingRootRevision === packageStore.packageRevision) return numberingRoot;
+    numberingRootRevision = packageStore.packageRevision;
     const live = currentPackage();
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === NUMBERING_REL_TYPE
@@ -1098,7 +1098,7 @@ export function openTreeSession(
             const ensured = ensureListDefinition(currentPackage(), kind);
             if (!ensured) return null;
             packageStore.replacePackageShell(ensured.pkg);
-            numberingRootResolved = false;
+            numberingRootRevision = -1;
             numberingRoot = null;
             return ensured.numId;
           },
@@ -1119,7 +1119,7 @@ export function openTreeSession(
             if (!ensured) return { ok: false, changed: false };
             if (ensured !== before) {
               packageStore.replacePackageShell(ensured);
-              numberingRootResolved = false;
+              numberingRootRevision = -1;
               numberingRoot = null;
               return { ok: true, changed: true };
             }

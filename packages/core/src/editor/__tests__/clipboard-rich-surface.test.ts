@@ -302,6 +302,26 @@ describe('rich paste', () => {
     expect(markup).toContain('<w:b/>');
   });
 
+  test('Word list markers resolve after a blank document has already laid out', () => {
+    const target = mount(paragraph(''));
+    target.surface.layout();
+    putCaret(target.surface, 0);
+    const item = (level: number, marker: string, text: string): string =>
+      `<p class="MsoListParagraph" style="margin-left:${level * 0.5}in;` +
+      `text-indent:-.25in;mso-list:l0 level${level} lfo2">` +
+      `<span style="mso-list:Ignore">${marker} </span>${text}</p>`;
+    target.surface.pasteRich('First\nNested', item(1, '•', 'First') + item(2, '○', 'Nested'));
+
+    const paragraphs = target.surface
+      .layout()
+      .pages.flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.kind === 'paragraph' && fragment.marker !== undefined);
+    expect(paragraphs.map((fragment) => fragment.marker?.text)).toEqual(['•', 'o']);
+    expect(paragraphs.map((fragment) => fragment.indent.left)).toEqual([36, 72]);
+    const markup = serializeOoxmlPart(target.surface.session.part());
+    expect(markup.match(/<w:numPr>/g)).toHaveLength(2);
+  });
+
   test('external Word footnotes land as referenced note parts', () => {
     const target = mount(paragraph(''));
     putCaret(target.surface, 0);

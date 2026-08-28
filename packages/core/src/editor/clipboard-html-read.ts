@@ -633,7 +633,7 @@ function projectParagraph(
   const next: FlowContext = {
     run,
     para,
-    paragraphMarkCovered: styleId !== undefined,
+    paragraphMarkCovered: Object.keys(para).length > 0,
     pre,
     list: ctx.list,
     ...(ctx.noteBody ? { noteBody: true } : {}),
