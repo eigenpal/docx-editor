@@ -495,4 +495,37 @@ describe('googleFonts resolver', () => {
     expect(requested).toHaveLength(4);
     expect(fragment.substitutions).toHaveLength(4);
   });
+
+  test('never re-reads a BUNDLED family an earlier origin already supplied', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    // The composition this package advertises: `[packagedFonts(), googleFonts()]` on a
+    // document naming Century Gothic. Both resolvers answer that family from the SAME
+    // bundled bytes, so without this the pair read TeX Gyre Adventor twice — 709,200
+    // duplicate bytes, in exactly the shape `resolvedFaces` exists to prevent.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Century Gothic'],
+      defaultFamily: 'Tinos',
+      resolvedFaces: allFacesOf('TeX Gyre Adventor'),
+    });
+
+    expect(requested.some((url) => url.includes('TeXGyreAdventor'))).toBe(false);
+    expect(fragment.sources.some((source) => source.request.family === 'TeX Gyre Adventor')).toBe(
+      false
+    );
+  });
+
+  test('a PARTLY covered bundled family is read whole, so no face is left without bytes', async () => {
+    const { fetcher } = fakeFetcher();
+    // Regular only. The same all-faces-or-none rule the catalog path uses: skipping here
+    // would leave bold and the italics with no bytes at all.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Century Gothic'],
+      defaultFamily: 'Tinos',
+      resolvedFaces: [{ family: 'TeX Gyre Adventor', weight: 400, style: 'normal' }],
+    });
+
+    expect(
+      fragment.sources.filter((source) => source.request.family === 'TeX Gyre Adventor')
+    ).toHaveLength(4);
+  });
 });

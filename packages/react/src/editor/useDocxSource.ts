@@ -178,7 +178,7 @@ async function resolveEagerOrigin(origin: DocxFontOrigin): Promise<DocxFontsInpu
  * engine has parsed it, so holding the bytes back would wait on work that only the bytes
  * can start. `document` is released at once, `fonts` is a stable resolver, and the engine
  * re-paginates when the faces land. That one reflow is what buys loading the faces a
- * document uses rather than every face an origin could serve; `{ fonts: defaultFonts }` is
+ * document uses rather than everything an origin would load up front; `{ fonts: defaultFonts }` is
  * still there when the no-reflow guarantee matters more than the megabytes.
  *
  * A URL is fetched with the browser's own `fetch`, exactly as the caller wrote it. Validate

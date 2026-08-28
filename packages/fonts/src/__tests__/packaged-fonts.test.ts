@@ -1,8 +1,8 @@
 // `packagedFonts()` — the packaged substitutes served ON DEMAND.
 //
 // The promises pinned here are the ones the interface is for: a document pays for the
-// families it names PLUS its default face rather than for every packaged family, a name
-// outside the closed five contributes nothing of its own, the answer is stable regardless
+// families it names PLUS its default face rather than for all 20 eager faces, a name
+// outside the closed six contributes nothing of its own, the answer is stable regardless
 // of how the file happened to order its `w:rFonts`, and the function carries the mark that
 // tells `useDocxSource` it must not be called as a zero-argument loader.
 //
@@ -101,7 +101,7 @@ describe('packagedFonts', () => {
   test('nothing loads only when the default family is outside the six too', async () => {
     const { fetcher, requested } = countingFetcher();
     // Reachable through `allow`, or by an engine whose default face is not one of the
-    // five. Not reachable by writing a document that names none of them.
+    // six. Not reachable by writing a document that names none of them.
     const fragment = await packagedFonts({ fetcher, install: false })({
       families: ['Montserrat', 'Sagona'],
       defaultFamily: 'Montserrat',
@@ -113,7 +113,7 @@ describe('packagedFonts', () => {
     expect(fragment.substitutions).toHaveLength(0);
   });
 
-  test('costs a fraction of loading every packaged face', async () => {
+  test('costs a fraction of what the eager loader spends', async () => {
     const lazy = countingFetcher();
     // The engine's real request for a Times New Roman document: the family it names, and
     // Calibri as the default face it inherits. This test used to pass

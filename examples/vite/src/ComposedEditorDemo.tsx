@@ -616,7 +616,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   // `packagedFonts()` resolves ON DEMAND: the engine calls it after the parse with the
   // families this fixture declares. A family loads when the document names it, or when it
   // is the document's default face — Calibri here, so Carlito comes along whatever the
-  // fixture says. What it avoids is loading every packaged family.
+  // fixture says. What it avoids is loading all five eager families up front.
   //
   // Nothing is fetched from a third party — the bytes are the ones inside
   // `@docx-editor.dev/fonts`. Add
@@ -625,7 +625,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   // The trade is one reflow. Nothing can know the families before the parse, so the
   // document opens on the fixed measurer and re-paginates when the faces land; the eager
   // `{ fonts: defaultFonts }` still holds `document` back until fonts settle, at the cost
-  // of every packaged face on every document.
+  // of all 20 eager faces on every document.
   const {
     document: bytes,
     fonts,

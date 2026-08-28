@@ -31,7 +31,7 @@ import { DocxEditor, useFonts } from '@docx-editor.dev/react';
 
 // A resolver: the editor calls it once per load with the families the file
 // declares, so a document using only Times New Roman loads Liberation Serif and
-// Carlito rather than every packaged face. A family loads when the document names
+// Carlito rather than all 20 eager faces. A family loads when the document names
 // it, or when it is that document's default face — which is Calibri, so Carlito
 // is a floor. `allow` narrows it further.
 function Editor({ bytes }: { bytes: Uint8Array }) {
@@ -51,8 +51,8 @@ const fonts = useFonts(packagedFonts(), googleFonts());
 
 (Both calls belong inside a component — `useFonts` is a hook.)
 
-To load every face up front instead — no re-pagination, all 7.4 MB, whichever document
-opens — use `defaultFonts()`:
+To load Word's five document defaults up front instead — no re-pagination, all 20 faces
+and 7.4 MB whichever document opens — use `defaultFonts()`:
 
 ```ts
 import { defaultFonts, installDefaultFontFaces } from '@docx-editor.dev/fonts';

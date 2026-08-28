@@ -366,7 +366,7 @@ describe('useFonts takes every origin in the same shape', () => {
         fonts: [
           // Unmarked and zero-argument: the older loader form, sharing a list with a
           // resolver. Handed the request instead, `defaultFonts` would silently change
-          // from "every packaged face" to "the ones this document names".
+          // from "all 20 eager faces" to "the ones this document names".
           (...args: unknown[]) => {
             sawArguments = args;
             return { sources: [source('Cambria', 'loader')] };

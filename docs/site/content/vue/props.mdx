@@ -124,8 +124,8 @@ Embedded fonts load from the document. Configured fonts extend that set.
 
 Use `packagedFonts()` for the Word default substitutes. It resolves per document,
 loading a family when that document names it, or when that family is the
-document's default face. So a document pays for what it uses instead of every
-packaged family, and nothing is fetched from a third party.
+document's default face. So a document pays for what it declares instead of all
+20 eager faces, and nothing is fetched from a third party.
 
 The default face counts because a run that names no font still has to be measured
 in one. That face is Calibri, so Carlito loads for every document.

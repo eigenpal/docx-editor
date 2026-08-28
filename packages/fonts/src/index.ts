@@ -16,7 +16,7 @@
  * const editor = createDocxEditor({ document: bytes, fonts: packagedFonts() });
  * ```
  *
- * @example Load every packaged face up front instead
+ * @example Load Word's five document defaults up front instead
  * ```ts
  * import { defaultFonts } from '@docx-editor.dev/fonts';
  *
@@ -43,8 +43,10 @@
 //
 // The first five are Word's DOCUMENT defaults, so they are what `loadDefaultFonts()` loads
 // when `families` is omitted. Century Gothic is not a document default and most files never
-// name it, so its four ~175 KB assets are opt-in: pass `families` to include it, or use
-// `googleFonts()`, which loads the same packaged bytes only when a document asks for it.
+// name it, so its four ~175 KB assets are opt-in: use `packagedFonts()`, which loads the
+// packaged bytes for any of the six only when a document asks — no network either way — or
+// pass `families` explicitly to the eager loader. `googleFonts()` serves it from the same
+// bundled bytes too, for an app already opted into the catalog.
 //
 // `loadDefaultFonts()` fetches the packaged font files (lazily, only the families asked for)
 // and returns a configuration FRAGMENT — sources plus the Word-name→substitute map —
@@ -164,8 +166,10 @@ export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Obje
  * const fonts = await defaultFonts({ families: ALL_WORD_DEFAULT_FAMILIES });
  * ```
  *
- * `googleFonts()` covers the extra families on demand instead, so a document that never
- * names Century Gothic never pays for its assets.
+ * {@link packagedFonts} covers the extra families on demand instead, so a document that
+ * never names Century Gothic never pays for its assets — from these same bundled bytes,
+ * with no network involved. `googleFonts()` covers them too, for an app already opted into
+ * the catalog.
  */
 export const ALL_WORD_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Object.freeze([
   ...WORD_DOCUMENT_DEFAULT_FAMILIES,
@@ -507,10 +511,10 @@ const wordFamiliesByFoldedName: ReadonlyMap<string, WordDefaultFamily> = new Map
  * ```
  *
  * Prefer this to {@link defaultFonts} unless you need the eager guarantee. `defaultFonts()`
- * loads every packaged face — several megabytes — whichever document opens, because it is
- * called before there is a document to ask. This is called AFTER the parse, so a file using
- * only Times New Roman costs Liberation Serif plus the four Carlito faces, rather than
- * every packaged face.
+ * loads all 20 faces of {@link WORD_DOCUMENT_DEFAULT_FAMILIES} — 7.4 MB — whichever
+ * document opens, because it is called before there is a document to ask. This is called
+ * AFTER the parse, so a file using only Times New Roman costs Liberation Serif plus the
+ * four Carlito faces instead.
  *
  * A family loads when a document NAMES it, or when it is that document's DEFAULT face. The
  * default counts because a run that authors no font still has to be measured in one. The
