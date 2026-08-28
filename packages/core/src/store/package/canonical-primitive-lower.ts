@@ -111,8 +111,23 @@ function nodeDescriptor(node: OoxmlNode): CanonicalNodeDescriptor {
   };
 }
 
-function expandInserted(node: OoxmlNode, knownIds?: KnownIds): void {
-  if (knownIds?.has(node.id)) return;
+function expandInserted(
+  node: OoxmlNode,
+  knownIds?: KnownIds,
+  previousNodes?: ReadonlyMap<string, OoxmlNode>
+): void {
+  if (knownIds?.has(node.id)) {
+    // A node the document already holds is MOVED here, not created — re-expanding it would
+    // duplicate its text on replay. But a move can carry an edit: `insertHyperlink` moves
+    // the split `w:ins` inside the new `w:hyperlink` WITH its children replaced. The subtree
+    // index from the enclosing capture holds the previous version, so the move lowers as a
+    // same-identity diff. Skipping the diff left the journal silent about the moved node's
+    // new content, and every receiving replica kept its OLD subtree beside the split pieces
+    // the journal did describe — duplicated text on every peer but the author.
+    const prior = previousNodes?.get(node.id);
+    if (prior && prior !== node) lowerSameIdentity(prior, node, knownIds, previousNodes);
+    return;
+  }
   recordPutNode(nodeDescriptor(node));
   if (node.kind === 'textValue') {
     // Initial fill of a shell this journal put. Apply replaces the node's current value,
@@ -127,7 +142,7 @@ function expandInserted(node: OoxmlNode, knownIds?: KnownIds): void {
     recordSetNamespaceBinding(node.id, binding.prefix, binding.namespaceUri);
   }
   if (node.children.length === 0) return;
-  for (const child of node.children) expandInserted(child, knownIds);
+  for (const child of node.children) expandInserted(child, knownIds, previousNodes);
   recordSpliceChildren(
     node.id,
     0,
@@ -216,8 +231,10 @@ function lowerChildList(
       continue;
     }
     // Existing document nodes that MOVE into this parent must not be re-expanded. Re-emitting
-    // putNode/spliceText for a joined run duplicates its text on replay.
-    if (!knownIds?.has(node.id)) expandInserted(node, knownIds);
+    // putNode/spliceText for a joined run duplicates its text on replay. `expandInserted`
+    // still diffs a moved node against its indexed previous version, so a move that also
+    // edits the subtree reaches the journal.
+    expandInserted(node, knownIds, previousNodes);
   }
   recordSpliceChildren(
     parentLogicalId,
@@ -286,7 +303,11 @@ export function captureReplaceNode(
   if (!parent) return;
   const index = parent.children.findIndex((child) => child.id === previous.id);
   if (index < 0) return;
-  if (!knownIds?.has(replacement.id)) expandInserted(replacement, knownIds);
+  // Index the replaced subtree, so a known node MOVED into the replacement still lowers as a
+  // same-identity diff of its edit rather than replaying with its previous content.
+  const previousNodes = new Map<string, OoxmlNode>();
+  indexSubtree(previous, previousNodes);
+  expandInserted(replacement, knownIds, previousNodes);
   recordSpliceChildren(parent.id, index, 1, [replacement.id]);
 }
 
