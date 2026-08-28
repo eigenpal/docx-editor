@@ -17,6 +17,7 @@
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from '../package/para-id.ts';
 import { openStoryPartsOf, openStoryTokenOf } from './open-story-parts.ts';
+import { packageEditTouchesShell } from './package-shell-delta.ts';
 import { settingsPartOf } from '../package/note-properties.ts';
 import { ensureListParagraphContextualSpacing } from '../package/list-style-part.ts';
 import { withPart, type OoxmlExternalTarget, type OoxmlPackage } from '../package/ooxml-package.ts';
@@ -407,6 +408,12 @@ export class TreePackageStore {
     const commentTargets = new Set<string>();
     let turnsListOn = false;
     let listStyleId: string | undefined;
+    // A `ctx.applyPackage` edit can write beyond the story part — a relationship, a content
+    // type, another part. The story sync after the commit cannot carry those, so the tail
+    // promotes to a package unit when one did. Detected at the edit, input against output,
+    // because comparing whole packages afterwards would blame pre-existing drift on this
+    // transaction.
+    let packageShellTouched = false;
     const result = store.transact(
       (ctx) => {
         build({
@@ -414,6 +421,14 @@ export class TreePackageStore {
           // `applyPackage` are how a transaction writes the comment or numbering part in the
           // same unit as the story, and rebuilding the object dropped them.
           ...ctx,
+          applyPackage: (edit) =>
+            ctx.applyPackage((current) => {
+              const next = edit(current);
+              if (next !== current && !packageShellTouched) {
+                packageShellTouched = packageEditTouchesShell(current, next, story.partName);
+              }
+              return next;
+            }),
           apply: (op) => {
             if (op.op === 'setListNumbering' && op.numId !== null) turnsListOn = true;
             if (op.op === 'setParagraphProperties') {
@@ -479,6 +494,20 @@ export class TreePackageStore {
     }
 
     this.syncPackageFromStore(store);
+    // The shell write the sync above cannot carry: adopt the transaction's working package,
+    // exactly as the image and paste lanes promote theirs. Without this the write reached
+    // the primitive journal (peers replayed it) while `currentPackage()` lost it — the
+    // author saved dangling references to relationships every other replica had.
+    let promotedShellWrite = false;
+    if (result.change && packageShellTouched) {
+      this.installPackageSnapshotInternal(store.package);
+      if (!compositionWasOpen) {
+        store.restoreHistoryStacks(checkpoint);
+      } else if (this.compositionSession) {
+        this.compositionSession.packageWideEffects = true;
+      }
+      promotedShellWrite = true;
+    }
     if (turnsListOn && listStyleId) {
       const repaired = ensureListParagraphContextualSpacing(this.pkg, listStyleId);
       if (repaired) this.replacePackageShell(repaired);
@@ -537,9 +566,10 @@ export class TreePackageStore {
 
     if (result.change) {
       this.packageRev += 1;
-      if (!compositionWasOpen && (store.historyDepth > beforeDepth || cascaded)) {
-        if (cascaded) {
-          // Promote to package undo so reference+body restore together.
+      const promoted = cascaded || promotedShellWrite;
+      if (!compositionWasOpen && (store.historyDepth > beforeDepth || promoted)) {
+        if (promoted) {
+          // Promote to package undo so the story edit and the package write restore together.
           this.pushUndoPointer({
             kind: 'package',
             before: beforePackage,
@@ -549,10 +579,10 @@ export class TreePackageStore {
           this.pushUndoPointer({ kind: 'story', partName: story.partName, story });
         }
       }
-      const change = cascaded
+      const change = promoted
         ? this.publishSynthetic(result.change.origin, 'global', story, result.change.created)
         : result.change;
-      if (!cascaded) this.publish(change);
+      if (!promoted) this.publish(change);
       return { ok: true, change };
     }
     return { ok: true, change: result.change };

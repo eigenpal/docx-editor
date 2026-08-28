@@ -745,8 +745,11 @@ describe('full-document collaboration replicates every authorable change class',
     expect(nodesOf(alice, 'hyperlink')).toHaveLength(1);
     expect(nodesOf(bob, 'hyperlink')).toHaveLength(1);
     expect(textOf(bob)).toContain('Alpha');
-    // The authoring store copies only the story part after applyPackage, so alice.store
-    // does not hold the new `.rels` part. Peers that materialize from shared state do.
+    // The AUTHOR keeps the relationship too: the transact promotes the applyPackage write to
+    // a package unit, so alice's package and save agree with the journal every peer
+    // replayed. Losing it here saved a `w:hyperlink` whose rId resolved to nothing (#558).
+    const authorRecords = packageOf(alice).relationships.get(owner) ?? [];
+    expect(authorRecords.some((record) => record.id === relationshipId)).toBe(true);
     const carol = await joinPeer(alice, 'carol');
     expectConverged(bob, carol);
   });
