@@ -49,6 +49,25 @@ describe('CJK text wraps at the column width', () => {
     ).toEqual(['天地玄黄宇宙洪荒日月', '盈昃辰宿列张寒来暑往', '秋收冬藏']);
   });
 
+  test('ideographic break opportunities do not fragment the painted spans', () => {
+    // Break opportunities between ideographs make every character its own placement
+    // candidate; the closed line merges them back, so a clause paints as one span per
+    // style run rather than one per character.
+    const lines = breakParagraph(
+      paragraph(`<w:p>${run('天地玄黄宇宙洪荒日月盈昃辰宿列张寒来暑往秋收冬藏')}</w:p>`),
+      'p',
+      0,
+      60,
+      measurer,
+      undefined,
+      null
+    );
+    expect(lines.map((line) => line.spans.length)).toEqual([1, 1, 1]);
+    expect(lines[0]!.spans[0]!.text).toBe('天地玄黄宇宙洪荒日月');
+    expect(lines[0]!.spans[0]!.range).toEqual({ paragraphId: 'p', start: 0, end: 10 });
+    expect(lines[0]!.spans[0]!.box.width).toBeCloseTo(60, 5);
+  });
+
   test('a CJK clause split across runs wraps at the margin, not at the run seam (#526)', () => {
     // Seven ideographs per run. Under space-only rules the seam was the only boundary, so
     // the first line carried seven characters and the margin was ignored.

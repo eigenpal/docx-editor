@@ -2,6 +2,7 @@
 // budgets, before placement publishes a LineRecord from it. Extracted from paragraph-flow
 // so the flow module stays under its line budget; paragraph-flow re-exports everything here.
 
+import { isIdeographicForLineBreak, lastCodePointOf } from './cjk-line-break.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 import type { InlineDrawingRecord } from './drawing-layout.ts';
@@ -41,6 +42,75 @@ export interface PendingLine {
   exclusionSkipBefore?: number;
   /** Tracked anchored-drawing attributions on this line; see {@link LineRecord.anchorRevisions}. */
   anchorRevisions?: readonly RevisionAttribution[];
+}
+
+/**
+ * Everything outside a span's range, text and box, compared by reference.
+ *
+ * Two spans that share every decoration share the objects, because they come from one run's
+ * one resolution. Reference equality is therefore the exact test, and it is also the safe
+ * one: a decoration this function has never heard of still blocks the merge.
+ */
+function decorationsMatch(previous: StyleSpanRecord, current: StyleSpanRecord): boolean {
+  const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
+  keys.delete('range');
+  keys.delete('text');
+  keys.delete('box');
+  for (const key of keys) {
+    const left = (previous as unknown as Record<string, unknown>)[key];
+    const right = (current as unknown as Record<string, unknown>)[key];
+    if (left !== right) return false;
+  }
+  return true;
+}
+
+/** Whether one ideographic seam between two closed spans carries no information. */
+function seamIsMergeable(previous: StyleSpanRecord, current: StyleSpanRecord): boolean {
+  // `caretEdges` is measured against a span's own text, so a merge would invalidate it.
+  // Placement attaches it AFTER this runs; the guard keeps that ordering from being load-bearing.
+  if (previous.caretEdges !== undefined || current.caretEdges !== undefined) return false;
+  const before = lastCodePointOf(previous.text);
+  const after = current.text.codePointAt(0);
+  if (before === undefined || after === undefined) return false;
+  if (!isIdeographicForLineBreak(before) || !isIdeographicForLineBreak(after)) return false;
+  if (previous.range.paragraphId !== current.range.paragraphId) return false;
+  if (previous.range.end !== current.range.start) return false;
+  if (Math.abs(previous.box.x + previous.box.width - current.box.x) > 0.01) return false;
+  if (previous.box.height !== current.box.height) return false;
+  return decorationsMatch(previous, current);
+}
+
+/**
+ * Merge a closed line's ideographic span seams back into one span per style run.
+ *
+ * Ideographic word boundaries make every character a placement candidate, so the placement
+ * loop emits one span per ideograph. The break decisions are right, but a clause that used
+ * to paint as a single span now paints and hit-tests as dozens. Once the line is closed
+ * those seams carry no information, so they merge back.
+ *
+ * Latin word seams are deliberately left alone: their trailing spaces are where
+ * justification stretches, and their span shape predates ideographic breaking.
+ */
+export function coalesceIdeographicSpans(line: PendingLine): void {
+  if (line.spans.length < 2) return;
+  const merged: StyleSpanRecord[] = [line.spans[0]!];
+  for (let index = 1; index < line.spans.length; index += 1) {
+    const current = line.spans[index]!;
+    const previous = merged[merged.length - 1]!;
+    if (!seamIsMergeable(previous, current)) {
+      merged.push(current);
+      continue;
+    }
+    merged[merged.length - 1] = {
+      ...previous,
+      range: { ...previous.range, end: current.range.end },
+      text: previous.text + current.text,
+      box: { ...previous.box, width: previous.box.width + current.box.width },
+    };
+  }
+  if (merged.length === line.spans.length) return;
+  line.spans.length = 0;
+  for (const span of merged) line.spans.push(span);
 }
 
 /** Vertical extent of a pending line for flow/pagination budget checks (skip + box + optional tail). */

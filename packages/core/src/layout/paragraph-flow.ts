@@ -422,12 +422,19 @@ function positionalTabDestination(
 // The pending-line record and its budget/freeze helpers live in pending-line.ts;
 // re-exported so every existing import through this module stays stable.
 import {
+  coalesceIdeographicSpans,
   frozenLine,
   pendingLineFlowExtent,
   pendingLineFlowExtentAtPlacement,
   type PendingLine,
 } from './pending-line.ts';
-export { frozenLine, pendingLineFlowExtent, pendingLineFlowExtentAtPlacement, type PendingLine };
+export {
+  coalesceIdeographicSpans,
+  frozenLine,
+  pendingLineFlowExtent,
+  pendingLineFlowExtentAtPlacement,
+  type PendingLine,
+};
 
 /**
  * Soft ceiling on an indent, in twips (31_680 ≈ 22"), matching the paragraph-spacing and
@@ -1254,6 +1261,9 @@ export function breakParagraph(
       else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
     };
     finalizeTopAndBottomClearance();
+    // Before `markWrapAdvances`, so wrap-advance marking sees the merged shape — which is
+    // the shape paint gets.
+    coalesceIdeographicSpans(line);
     markWrapAdvances();
     const deleted = deletedWithin(line.start, line.end);
     if (deleted.length > 0) line.deletedRanges = deleted;
