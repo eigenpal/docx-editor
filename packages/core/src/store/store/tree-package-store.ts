@@ -414,6 +414,14 @@ export class TreePackageStore {
     // because comparing whole packages afterwards would blame pre-existing drift on this
     // transaction.
     let packageShellTouched = false;
+    // The working package must start at the coordinator's truth. Shell writes made through
+    // lifecycle ops, package undo, remote installs, or the comment lanes never reach this
+    // story store's own package, so an `applyPackage` edit basing on the stale copy would
+    // commit — and the promotion below would install — a document that has forgotten them:
+    // a footnote part inserted a moment earlier would vanish from the author's save. The
+    // graft is the same precondition the comment and custom-node lanes take before their
+    // transactions, and it is one memoized read plus one assignment.
+    store.graftPackage(() => this.currentPackage());
     const result = store.transact(
       (ctx) => {
         build({
@@ -567,7 +575,13 @@ export class TreePackageStore {
     if (result.change) {
       this.packageRev += 1;
       const promoted = cascaded || promotedShellWrite;
-      if (!compositionWasOpen && (store.historyDepth > beforeDepth || promoted)) {
+      // `recordsHistory: false` opts a caller out of undo entirely; the promoted branch must
+      // not push a package pointer for it either.
+      if (
+        !compositionWasOpen &&
+        options.recordsHistory !== false &&
+        (store.historyDepth > beforeDepth || promoted)
+      ) {
         if (promoted) {
           // Promote to package undo so the story edit and the package write restore together.
           this.pushUndoPointer({

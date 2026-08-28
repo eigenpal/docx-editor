@@ -120,6 +120,32 @@ describe('applyPackage shell writes inside transact', () => {
     expect(relationshipTargets(store)).toEqual(before);
   });
 
+  test('the promotion keeps shell state the working package never saw', () => {
+    const store = storeOf();
+    // A lifecycle op writes /word/footnotes.xml, its relationship, and its content-type
+    // override into the COORDINATOR's package; the body store's own working package never
+    // sees them. A promotion that installed the stale working package erased all three —
+    // the author's save silently dropped every footnote.
+    const inserted = store.applyLifecycleOp({
+      op: 'insertNote',
+      noteKind: 'footnote',
+      paragraphId: firstParagraphId(store),
+      offset: 5,
+    });
+    if (!inserted.ok) throw new Error(inserted.reason);
+    expect(store.currentPackage().parts.has('/word/footnotes.xml')).toBe(true);
+    linkThroughApplyPackage(store);
+    const pkg = store.currentPackage();
+    expect(pkg.parts.has('/word/footnotes.xml')).toBe(true);
+    expect(pkg.contentTypes.overrides.has('/word/footnotes.xml')).toBe(true);
+    const records = pkg.relationships.get(pkg.mainDocumentPart) ?? [];
+    expect(records.some((record) => record.rawTarget.includes('footnotes.xml'))).toBe(true);
+    expect(records.some((record) => record.rawTarget === 'https://example.com/doc')).toBe(true);
+    const reopened = readOoxmlPackage(writeOoxmlPackage(pkg));
+    if (!reopened.ok) throw new Error(reopened.reason);
+    expect(reopened.package.parts.has('/word/footnotes.xml')).toBe(true);
+  });
+
   test('a story-only applyPackage keeps its own change classification', () => {
     const store = storeOf();
     let published: TreeModelChange | null = null;
