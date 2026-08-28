@@ -41,6 +41,28 @@ const PNG_1X1 = Uint8Array.from(
   (c) => c.charCodeAt(0)
 );
 
+function pngWithPhysicalSize(width: number, height: number, pixelsPerMeter: number): Uint8Array {
+  const source = PNG_1X1.slice();
+  const writeUint32 = (bytes: Uint8Array, offset: number, value: number): void => {
+    bytes[offset] = (value >>> 24) & 0xff;
+    bytes[offset + 1] = (value >>> 16) & 0xff;
+    bytes[offset + 2] = (value >>> 8) & 0xff;
+    bytes[offset + 3] = value & 0xff;
+  };
+  writeUint32(source, 16, width);
+  writeUint32(source, 20, height);
+  const phys = Uint8Array.from([
+    0, 0, 0, 9, 0x70, 0x48, 0x59, 0x73, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0,
+  ]);
+  writeUint32(phys, 8, pixelsPerMeter);
+  writeUint32(phys, 12, pixelsPerMeter);
+  const out = new Uint8Array(source.length + phys.length);
+  out.set(source.subarray(0, 33));
+  out.set(phys, 33);
+  out.set(source.subarray(33), 33 + phys.length);
+  return out;
+}
+
 const JPEG_1X1 = Uint8Array.from([
   0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
   0x00, 0x01, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x08, 0x06, 0x06, 0x07, 0x06, 0x05, 0x08,
@@ -334,6 +356,14 @@ describe('inserts validated image files', () => {
     if (!refused.ok) {
       expect(refused.reasonKey).toBe('imageInsert.errors.unsupportedFormat');
     }
+  });
+
+  test('uses PNG physical resolution for the inserted size', () => {
+    const normalized = normalizeImageBytes(pngWithPhysicalSize(144, 72, 5669));
+    expect(normalized.ok).toBe(true);
+    if (!normalized.ok) return;
+    expect(normalized.widthPoints).toBe(72);
+    expect(normalized.heightPoints).toBe(36);
   });
 
   test('insert button preserves caret on mousedown', async () => {

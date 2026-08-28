@@ -172,6 +172,14 @@ const STYLES =
   `<w:pPr><w:spacing w:before="160"/><w:jc w:val="center"/></w:pPr>` +
   `<w:rPr><w:i/><w:iCs/><w:color w:val="404040"/></w:rPr>` +
   `</w:style>` +
+  // Caption gives pasted Word captions built-in 9pt italic metrics instead of Normal.
+  `<w:style w:type="paragraph" w:styleId="Caption">` +
+  `<w:name w:val="caption"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/>` +
+  `<w:uiPriority w:val="35"/><w:semiHidden/><w:unhideWhenUsed/>` +
+  `<w:pPr><w:spacing w:after="0"/></w:pPr>` +
+  `<w:rPr><w:i/><w:iCs/><w:color w:val="404040"/>` +
+  `<w:sz w:val="18"/><w:szCs w:val="18"/></w:rPr>` +
+  `</w:style>` +
   // No Spacing is the one style that does NOT build on Normal: its whole purpose is to
   // drop the defaults' space-after and 1.08 lines, which `w:basedOn` would reinstate.
   `<w:style w:type="paragraph" w:styleId="NoSpacing">` +

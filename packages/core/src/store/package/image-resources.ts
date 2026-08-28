@@ -17,6 +17,7 @@ import {
 } from './relationships.ts';
 import { projectDrawingsInPackage, type DrawingProjection } from './drawing-projection.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
+import { readPngPhysicalDensity } from './png-physical-density.ts';
 import {
   IMAGE_RESOURCE_HARD_CEILINGS,
   resolveImageResourceLimits,
@@ -166,6 +167,10 @@ const CONTENT_TYPE_TO_MIME: Readonly<Record<string, RenderableImageMime | Preser
 export interface ValidatedRasterHeader {
   readonly pixelWidth: number;
   readonly pixelHeight: number;
+  /** Horizontal physical density when bounded header metadata supplies it. */
+  readonly dpiX?: number;
+  /** Vertical physical density when bounded header metadata supplies it. */
+  readonly dpiY?: number;
 }
 
 function bytesStartWith(bytes: Uint8Array, prefix: readonly number[]): boolean {
@@ -344,7 +349,8 @@ export function validatePngHeader(bytes: Uint8Array): ValidatedRasterHeader | nu
   if (!isValidPngColorTypeAndBitDepth(colorType, bitDepth)) return null;
   if (compression !== 0 || filter !== 0) return null;
   if (interlace !== 0 && interlace !== 1) return null;
-  return { pixelWidth, pixelHeight };
+  const density = readPngPhysicalDensity(bytes);
+  return density ? { pixelWidth, pixelHeight, ...density } : { pixelWidth, pixelHeight };
 }
 
 /** Structural GIF logical screen descriptor validation before decode. */
@@ -1109,8 +1115,8 @@ function createImageResourceCacheInternal(
                 mime: convertedSniffed,
                 pixelWidth: convertedHeader.pixelWidth,
                 pixelHeight: convertedHeader.pixelHeight,
-                dpiX: DEFAULT_DPI,
-                dpiY: DEFAULT_DPI,
+                dpiX: convertedHeader.dpiX ?? DEFAULT_DPI,
+                dpiY: convertedHeader.dpiY ?? DEFAULT_DPI,
               })
             );
           } catch (error) {
@@ -1208,10 +1214,12 @@ function createImageResourceCacheInternal(
             return;
           }
 
-          const dpiX =
+          const decodedDpiX =
             Number.isFinite(decoded.dpiX) && decoded.dpiX > 0 ? decoded.dpiX : DEFAULT_DPI;
-          const dpiY =
+          const decodedDpiY =
             Number.isFinite(decoded.dpiY) && decoded.dpiY > 0 ? decoded.dpiY : DEFAULT_DPI;
+          const dpiX = header.dpiX ?? decodedDpiX;
+          const dpiY = header.dpiY ?? decodedDpiY;
 
           const resourceKey = resourceKeyOf(ownerPartName, resolvedPartName, contentId);
           const validatedHandle = validatedBytesRegistry.acquire(

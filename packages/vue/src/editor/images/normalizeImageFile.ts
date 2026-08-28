@@ -79,8 +79,8 @@ export function normalizeImageBytes(bytes: Uint8Array): NormalizedImagePayload {
   const { widthPoints, heightPoints } = naturalPoints(
     header.pixelWidth,
     header.pixelHeight,
-    DEFAULT_DPI,
-    DEFAULT_DPI
+    header.dpiX ?? DEFAULT_DPI,
+    header.dpiY ?? DEFAULT_DPI
   );
   return Object.freeze({
     ok: true,
