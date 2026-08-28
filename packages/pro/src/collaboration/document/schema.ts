@@ -29,6 +29,16 @@ export const NODE_TEXT_FIELD = 't';
 export const NODE_CHILDREN_FIELD = 'children';
 export const NODE_DELETED_FIELD = 'deleted';
 export const NODE_REPLACED_BY_FIELD = 'replacedBy';
+/**
+ * The run this run was split off from — the original run id a format split superseded.
+ *
+ * Written once by the peer that minted the run, so two peers splitting the same original
+ * concurrently write it on their OWN (different) run records, never racing one shared
+ * container. Both carry the same origin id, so materialize can group the concurrent splits
+ * and keep one replica's runs deterministically, dropping the duplicated text (#581).
+ * Internal shared state, never serialized to the `.docx`.
+ */
+export const NODE_SPLIT_FROM_FIELD = 'splitFrom';
 
 /** Unit separator. XML names and NCName prefixes cannot hold this character. */
 export const FIELD_SEP = '\u001f';
@@ -458,5 +468,12 @@ export function nodeRecordTombstoned(record: unknown): boolean {
 export function nodeRecordReplacedBy(record: unknown): string | null {
   if (!isNodeMap(record)) return null;
   const value = record.get(NODE_REPLACED_BY_FIELD);
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/** The original run a split produced this one from, guarded against peer-planted shapes. */
+export function nodeRecordSplitFrom(record: unknown): string | null {
+  if (!isNodeMap(record)) return null;
+  const value = record.get(NODE_SPLIT_FROM_FIELD);
   return typeof value === 'string' && value.length > 0 ? value : null;
 }

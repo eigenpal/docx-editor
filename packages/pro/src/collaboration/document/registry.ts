@@ -7,6 +7,7 @@ import * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
 import { yjsItemKey, type LogicalId, type NodeIdentityMeta, wordFacingIdsOf } from './identity.ts';
+import { SplitDedupIndex } from './split-dedup.ts';
 import {
   DEFAULT_DOCUMENT_LIMITS,
   mergeLimits,
@@ -55,10 +56,10 @@ import {
   resolveContestedPlacements,
 } from './registry-contested-placement.ts';
 import {
+  applyAttributeMapEvent,
+  applyBindingMapEvent,
   deleteSharedAttribute,
   deleteSharedBinding,
-  removeIndexedAttribute,
-  removeIndexedBinding,
   upsertIndexedAttribute,
   upsertIndexedBinding,
   writeSharedAttribute,
@@ -102,6 +103,8 @@ export class DocumentRegistry {
   private tombstoneSurvivor = new Map<LogicalId, LogicalId>();
   private attributesByNode = new Map<LogicalId, Map<string, EncodedAttribute>>();
   private bindingsByNode = new Map<LogicalId, Map<string, EncodedBinding>>();
+  /** Deterministic dedup of concurrent format splits (#581). */
+  private readonly splitDedup: SplitDedupIndex;
   private bulkLoad = 0;
   private unobservedWrites = 0;
   /** Node total as of the last observed event batch. Negative means "not counted yet". */
@@ -121,6 +124,7 @@ export class DocumentRegistry {
   ) {
     this.schema = packageSchemaOf(doc);
     this.limits = mergeLimits(limits);
+    this.splitDedup = new SplitDedupIndex(this.schema.nodes, this.limits.maxTreeDepth);
     this.stopObserving = observeRegistrySchema(this.schema, {
       onNodeEvents: (events) => {
         if (this.bulkLoad > 0) return;
@@ -479,6 +483,16 @@ export class DocumentRegistry {
     if (replacedBy) rec.set(NODE_REPLACED_BY_FIELD, replacedBy);
   }
 
+  /** Stamp each run a format split minted with the origin it superseded (#581). */
+  recordSplitFrom(originalId: LogicalId, runId: LogicalId): void {
+    this.splitDedup.record(originalId, runId);
+  }
+
+  /** Runs a concurrent format split superseded and this replica must not materialize (#581). */
+  replacementLoserRuns(): ReadonlySet<LogicalId> {
+    return this.splitDedup.loserRuns((id) => this.isTombstoned(id));
+  }
+
   /**
    * Drop from a node's child array the children this replica had already seen there.
    *
@@ -662,6 +676,7 @@ export class DocumentRegistry {
     this.tombstoneSurvivor = new Map();
     this.attributesByNode = new Map();
     this.bindingsByNode = new Map();
+    this.splitDedup.reset();
     this.schema.nodes.forEach((rec, parentId) => {
       if (rejectDangerousKey(parentId)) return;
       const children = childArrayOf(rec);
@@ -672,6 +687,7 @@ export class DocumentRegistry {
     });
     this.schema.nodes.forEach((rec, id) => {
       if (nodeRecordTombstoned(rec)) this.syncAdoptee(id);
+      this.splitDedup.indexExisting(id);
     });
     this.schema.attributes.forEach((packed, key) => {
       if (typeof packed !== 'string' || rejectDangerousKey(key)) return;
@@ -729,6 +745,9 @@ export class DocumentRegistry {
             this.nodeCountCache += change.action === 'add' ? 1 : -1;
           }
           if (change.action === 'delete' || rejectDangerousKey(String(key))) continue;
+          // A run a peer split off carries its origin; index it so the loser-dedup sees the
+          // concurrent split the moment the remote record arrives, not only after a rebuild.
+          this.splitDedup.indexExisting(String(key));
           for (const childId of this.syncChildListings(String(key))) changed.add(childId);
         }
         continue;
@@ -753,54 +772,12 @@ export class DocumentRegistry {
 
   private applyAttributeMapEvent(event: Y.YMapEvent<string>): void {
     this.unobservedWrites = 0;
-    for (const [key, change] of event.changes.keys) {
-      const parsed = parseAttributeMapKey(String(key));
-      if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.localName)) {
-        continue;
-      }
-      if (change.action === 'delete') {
-        removeIndexedAttribute(
-          this.attributesByNode,
-          parsed.logicalId,
-          parsed.namespaceId,
-          parsed.localName
-        );
-        continue;
-      }
-      const packed = this.schema.attributes.get(String(key));
-      if (typeof packed !== 'string') continue;
-      upsertIndexedAttribute(
-        this.schema,
-        this.attributesByNode,
-        parsed.logicalId,
-        parsed.namespaceId,
-        parsed.localName,
-        packed
-      );
-    }
+    applyAttributeMapEvent(this.schema, this.attributesByNode, event);
   }
 
   private applyBindingMapEvent(event: Y.YMapEvent<string>): void {
     this.unobservedWrites = 0;
-    for (const [key, change] of event.changes.keys) {
-      const parsed = parseBindingMapKey(String(key));
-      if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.prefix)) {
-        continue;
-      }
-      if (change.action === 'delete') {
-        removeIndexedBinding(this.bindingsByNode, parsed.logicalId, parsed.prefix);
-        continue;
-      }
-      const namespaceId = this.schema.bindings.get(String(key));
-      if (typeof namespaceId !== 'string') continue;
-      upsertIndexedBinding(
-        this.schema,
-        this.bindingsByNode,
-        parsed.logicalId,
-        parsed.prefix,
-        namespaceId
-      );
-    }
+    applyBindingMapEvent(this.schema, this.bindingsByNode, event);
   }
 
   private syncChildListings(parentId: LogicalId): LogicalId[] {
