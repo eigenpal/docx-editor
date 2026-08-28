@@ -22,6 +22,7 @@ import {
   captureOneJournal,
   openStore,
   replayAndCompare,
+  walkNodes,
 } from './canonical-primitive-journal-coverage-support.ts';
 
 const fixtures = authorableCoverageFixtures();
@@ -102,7 +103,8 @@ describe('canonical primitive journal completeness (tasks 3.6 and 3.8)', () => {
     ...variants.wrapTargets,
     ...variants.contentControlTypes,
   ];
-  for (const { token, fixture } of everyVariant) {
+  for (const variant of everyVariant) {
+    const { token, fixture, expectLocalName } = variant;
     test(`variant ${fixture.kind}:${token} journal replays to an equivalent replica`, () => {
       const first = openStore(fixture.bytes);
       const second = openStore(fixture.bytes);
@@ -111,6 +113,17 @@ describe('canonical primitive journal completeness (tasks 3.6 and 3.8)', () => {
       expect(captured.result.ok).toBe(true);
       if (!captured.result.ok) throw new Error(captured.result.reason ?? token);
       expect(captured.journal).not.toBeNull();
+      // Convergence of an EMPTY change is not coverage: a property the applier cannot express
+      // would leave the tree unchanged and still converge. Where the token names an element,
+      // assert the fixture actually produced it, so a passing gate means the variant is
+      // expressed, not merely survived.
+      if (expectLocalName) {
+        let present = false;
+        walkNodes(first.bodyStore().part.root, (node) => {
+          if (node.kind !== 'textValue' && node.localName === expectLocalName) present = true;
+        });
+        expect(present).toBe(true);
+      }
       const again = captureOneJournal(second, () => fixture.apply(second));
       expect(JSON.stringify(again.journal)).toBe(JSON.stringify(captured.journal));
       replayAndCompare(replica, first, captured.journal!);

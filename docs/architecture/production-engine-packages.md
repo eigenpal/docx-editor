@@ -85,22 +85,33 @@ The bundle-graph test follows real `import` statements through re-export barrels
 to prove it, because one `export *` is enough to put a transport stack in every
 consumer's bundle while every manifest still looks correct.
 
-**Every single-session action is collaboration-expressible.** Collaboration
-replays a canonical primitive journal onto peers, so an authorable action that
-does not capture into that journal replicates to nobody. Every `TreeDocOp` kind,
-and every member of the accepted property, wrap, and content-control
-vocabularies (`ACCEPTED_PARAGRAPH_PROPERTIES`, `ACCEPTED_RUN_PROPERTIES`,
+**Every authorable op and accepted variant is collaboration-expressible.**
+Collaboration replays a canonical primitive journal onto peers, so an authorable
+action that does not capture into that journal replicates to nobody. Every
+`TreeDocOp` kind, and every member of the open-ended allow-list vocabularies
+(`ACCEPTED_PARAGRAPH_PROPERTIES`, `ACCEPTED_RUN_PROPERTIES`,
 `IMAGE_WRAP_TARGETS`, `INSERTABLE_CONTENT_CONTROL_TYPES`), MUST have a
 replay-convergence fixture: `canonical-primitive-journal-coverage.test.ts`
 captures the action's journal, proves it is author-deterministic, replays it
 onto a fresh replica, and compares the two by fingerprint and save/reopen
-digest. Adding an op kind or a vocabulary member with no fixture fails that
-gate. The one escape is an explicit, reasoned entry in
-`COLLABORATION_UNCOVERED` (`store/store/collaboration-coverage-contract.ts`):
-the gate accepts a declared reason in place of a fixture, so an action that
-genuinely cannot cross the collaboration boundary is recorded and reviewed,
-never dropped silently. When you add an editing capability, add its fixture, or
-add its reason.
+digest. A property fixture also asserts its element is present in the author
+tree, so a variant that converges to an empty change cannot pass. Adding an op
+kind or a vocabulary member with no fixture fails that gate.
+
+Those four vocabularies are gated at the variant level because a new member
+introduces a new element or localName — a new tree shape. Enumerated attribute
+values on an already-covered op (a new `w:numFmt`, a section orientation, a
+transform action) are NOT separately gated: the journal lowerer is a generic
+tree diff with no per-enum branching, so a new enum value replicates through the
+same path its op's kind fixture already proves. A brand-new op, or one that
+writes a part the journal does not capture, is still caught by the op-kind gate
+and the manifest apply-path partition.
+
+The one escape is an explicit, reasoned entry in `COLLABORATION_UNCOVERED`
+(`store/store/collaboration-coverage-contract.ts`): the gate accepts a declared
+reason in place of a fixture, so an action that genuinely cannot cross the
+collaboration boundary is recorded and reviewed, never dropped silently. When
+you add an editing capability, add its fixture, or add its reason.
 
 ## Guards must fail loudly
 

@@ -30,15 +30,32 @@ import {
 export interface VariantFixture {
   readonly token: string;
   readonly fixture: JournalCoverageFixture;
+  /**
+   * The element localName the applied fixture must leave in the author tree.
+   *
+   * Convergence alone is not enough: a property authored as a flat `OoxmlProperty` that the
+   * applier cannot express would create an EMPTY element (or none), and an empty change
+   * converges to a document that expresses the variant nowhere — a passing gate proving
+   * nothing. Naming the element the fixture must produce closes that: the gate asserts it is
+   * present before it trusts the convergence. Set for the property vocabularies, where a token
+   * IS a localName; the wrap and control fixtures assert convergence of a whole structural op
+   * instead.
+   */
+  readonly expectLocalName?: string;
 }
 
 function bodyVariant(
   kind: JournalCoverageFixture['kind'],
   token: string,
   bytes: Uint8Array,
-  op: (store: TreePackageStore) => TreeDocOp
+  op: (store: TreePackageStore) => TreeDocOp,
+  expectLocalName?: string
 ): VariantFixture {
-  return { token, fixture: { kind, bytes, apply: (store) => transactBody(store, op(store)) } };
+  return {
+    token,
+    fixture: { kind, bytes, apply: (store) => transactBody(store, op(store)) },
+    ...(expectLocalName ? { expectLocalName } : {}),
+  };
 }
 
 // --- Paragraph properties -------------------------------------------------------------------
@@ -67,11 +84,17 @@ function paraProp(
   token: AcceptedParagraphProperty,
   property: { readonly localName: string; readonly attributes?: Record<string, string> }
 ): VariantFixture {
-  return bodyVariant('setParagraphProperties', token, plainDoc(), (store) => ({
-    op: 'setParagraphProperties',
-    paragraphId: firstParagraphId(store),
-    properties: [property],
-  }));
+  return bodyVariant(
+    'setParagraphProperties',
+    token,
+    plainDoc(),
+    (store) => ({
+      op: 'setParagraphProperties',
+      paragraphId: firstParagraphId(store),
+      properties: [property],
+    }),
+    property.localName
+  );
 }
 
 const PARAGRAPH_PROPERTY_FIXTURES: readonly VariantFixture[] = [
@@ -95,17 +118,29 @@ const PARAGRAPH_PROPERTY_FIXTURES: readonly VariantFixture[] = [
     attributes: { val: 'clear', color: 'auto', fill: 'FFFF00' },
   }),
   // Child-carrying properties: `OoxmlProperty` is flat, so their dedicated ops author them.
-  bodyVariant('setParagraphTabStops', 'tabs', plainDoc(), (store) => ({
-    op: 'setParagraphTabStops',
-    paragraphId: firstParagraphId(store),
-    stops: [{ positionTwips: 1440, alignment: 'left' }],
-  })),
-  bodyVariant('setListNumbering', 'numPr', listDoc(), (store) => ({
-    op: 'setListNumbering',
-    paragraphId: paragraphIds(store)[1]!,
-    numId: '1',
-    level: 0,
-  })),
+  bodyVariant(
+    'setParagraphTabStops',
+    'tabs',
+    plainDoc(),
+    (store) => ({
+      op: 'setParagraphTabStops',
+      paragraphId: firstParagraphId(store),
+      stops: [{ positionTwips: 1440, alignment: 'left' }],
+    }),
+    'tabs'
+  ),
+  bodyVariant(
+    'setListNumbering',
+    'numPr',
+    listDoc(),
+    (store) => ({
+      op: 'setListNumbering',
+      paragraphId: paragraphIds(store)[1]!,
+      numId: '1',
+      level: 0,
+    }),
+    'numPr'
+  ),
 ];
 
 // --- Run properties -------------------------------------------------------------------------
@@ -114,13 +149,19 @@ function runProp(
   token: AcceptedRunProperty,
   property: { readonly localName: string; readonly attributes?: Record<string, string> }
 ): VariantFixture {
-  return bodyVariant('setRunProperties', token, plainDoc(), (store) => ({
-    op: 'setRunProperties',
-    paragraphId: firstParagraphId(store),
-    start: 0,
-    end: 3,
-    properties: [property],
-  }));
+  return bodyVariant(
+    'setRunProperties',
+    token,
+    plainDoc(),
+    (store) => ({
+      op: 'setRunProperties',
+      paragraphId: firstParagraphId(store),
+      start: 0,
+      end: 3,
+      properties: [property],
+    }),
+    property.localName
+  );
 }
 
 const RUN_PROPERTY_FIXTURES: readonly VariantFixture[] = [
