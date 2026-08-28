@@ -47,6 +47,13 @@ export class SplitDedupIndex {
    * the stale products the same way the peer that undid does through its sticky contested set.
    */
   private liveRootedOrigins = new Set<LogicalId>();
+  /**
+   * How many times a local edit re-split a run an earlier round produced — the declined tangle
+   * (#581). Monotonic across the session and NOT cleared by `reset()`: it counts edit events,
+   * not current state, so the session compares it against its last-seen value to reconcile the
+   * author's store exactly once per new tangle instead of on every later keystroke.
+   */
+  private declinedTangleCount = 0;
 
   constructor(private readonly nodes: Y.Map<Y.Map<unknown>>) {}
 
@@ -74,6 +81,10 @@ export class SplitDedupIndex {
     if (root === runId) return;
     rec.set(NODE_SPLIT_FROM_FIELD, root);
     this.index(root, runId);
+    // A root that is ITSELF a split product means a later round re-split a run an earlier round
+    // made — the tangle the dedup declines. Count it, so the session reconciles the author's
+    // store only on the edit that creates the tangle, not on every keystroke while it persists.
+    if (nodeRecordSplitFrom(this.nodes.get(root)) !== null) this.declinedTangleCount += 1;
   }
 
   /** Index a run that already carries a `splitFrom` (a rebuild scan, or a remote arrival). */
@@ -117,17 +128,15 @@ export class SplitDedupIndex {
    * peers — a duplicated but CONVERGENT tree, never one replica disagreeing with another.
    */
   /**
-   * True if a contested origin was split again in a later round — the tangle the dedup declines.
+   * How many declined tangles this replica's local edits have created (#581).
    *
-   * The materialized tree then differs from what the local author authored, so the session must
-   * reconcile the author's store to it or the author would keep a clean view while every other
-   * replica sees the duplicated one. Cheap and read straight off shared state, so all replicas
-   * agree.
+   * The session reconciles the author's store to the materialized tree when this rises, because
+   * the edit that creates a tangle leaves the author with a clean view while every other replica
+   * converges on the duplicated one. It rises only on the tangle-creating edit, so steady typing
+   * in an already-tangled document costs nothing.
    */
-  hasDeclinedTangle(): boolean {
-    for (const root of this.contestedOrigins) if (this.isReSplit(root)) return true;
-    for (const root of this.liveRootedOrigins) if (this.isReSplit(root)) return true;
-    return false;
+  declinedTangleEvents(): number {
+    return this.declinedTangleCount;
   }
 
   private isReSplit(root: LogicalId): boolean {

@@ -501,13 +501,13 @@ export class DocumentRegistry {
   }
 
   /**
-   * True when a run a concurrent split produced was split again — a tangle the dedup declines,
-   * so the materialized tree differs from what the local author authored (#581). The session
-   * reconciles the author's store to the materialization when this holds, keeping every replica
-   * on the same tree.
+   * How many times a local edit re-split a run a concurrent split produced — a tangle the dedup
+   * declines, leaving the materialized tree different from what the author authored (#581). The
+   * session reconciles the author's store when this rises, so every replica stays on one tree
+   * without a per-keystroke cost once the document is tangled.
    */
-  hasDeclinedSplitTangle(): boolean {
-    return this.splitDedup.hasDeclinedTangle();
+  declinedSplitTangleEvents(): number {
+    return this.splitDedup.declinedTangleEvents();
   }
 
   /**

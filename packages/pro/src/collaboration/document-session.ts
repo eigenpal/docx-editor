@@ -125,6 +125,8 @@ class DocumentSession implements DocumentCollaborationSession {
   private readonly journalsHeldDuringRemote: CanonicalPrimitiveJournal[] = [];
   private drainingHeldJournals = false;
   private remoteCounter = 0;
+  /** Declined-tangle events already reconciled into the author's store (#581). */
+  private seenDeclinedTangles = 0;
   private destroyed = false;
   private refusedInARow = 0;
   private readonly stopBlobWatch: () => void;
@@ -618,7 +620,14 @@ class DocumentSession implements DocumentCollaborationSession {
     // tree then differs from what the store authored, and without reconciling it here the
     // author would keep a clean view while every other replica converges on the duplicated one.
     if (transaction.origin === this.localOrigin) {
-      if (this.registry.hasDeclinedSplitTangle()) this.publishSharedToPort();
+      // Reconcile only on the edit that CREATES a tangle, not on every later keystroke while it
+      // persists: the event count rises once per tangle, so a steady stream of edits in an
+      // already-tangled document takes the early return with no materialize.
+      const tangles = this.registry.declinedSplitTangleEvents();
+      if (tangles !== this.seenDeclinedTangles) {
+        this.seenDeclinedTangles = tangles;
+        this.publishSharedToPort();
+      }
       return;
     }
     // Nothing is published from here. A journal describes the tree as it stood when its
