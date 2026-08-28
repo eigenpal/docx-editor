@@ -32,6 +32,10 @@ export {
   type DocumentCollaborationSession,
 } from './document-session.ts';
 export {
+  readCollaborationResourceUsage,
+  type CollaborationResourceUsage,
+} from './resource-usage.ts';
+export {
   MAX_BASELINE_BYTES,
   PROTOCOL_VERSION,
   SCHEMA_VERSION,

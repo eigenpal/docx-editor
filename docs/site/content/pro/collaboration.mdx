@@ -791,5 +791,28 @@ Most exceeded limits produce a typed failure code.
 Presence reads return only the first 256 participants. For Hocuspocus, increase
 `syncedTimeoutMs` when the initial synchronization needs more time.
 
+### Watch a room's size
+
+A room only grows. Deletion writes a tombstone, and deleted media bytes stay in
+the shared state, so a long-lived room under heavy editing moves toward the
+node and media limits. Crossing a limit is a terminal error for the room.
+
+Watch the growth and archive the room before that happens.
+`session.resourceUsage()` returns the replicated counts next to the limits:
+
+```ts
+const usage = session.resourceUsage();
+if (usage.nodes > usage.maxNodes * 0.8) {
+  // Export the room and create a new one from the saved bytes.
+}
+```
+
+On a server, call `readCollaborationResourceUsage(ydoc)` from
+`@docx-editor.dev/pro/collaboration`. It reads a synchronized `Y.Doc` the same
+way `readCollaborationDocument` does: it joins nothing and writes nothing.
+
+Both probes walk the node map once per call. Read them on a schedule, not on
+every edit.
+
 For module registration and licensing, see the
 [Pro package documentation](/docs/2.x/pro).

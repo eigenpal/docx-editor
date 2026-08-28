@@ -61,6 +61,7 @@ import {
   waitForSharedInitialization,
 } from './document-bootstrap.ts';
 import { LogicalIdentityMap } from './document-identity.ts';
+import { resourceUsageOf, type CollaborationResourceUsage } from './resource-usage.ts';
 import {
   AWARENESS_FIELD,
   MAX_AWARENESS_STATES,
@@ -200,6 +201,10 @@ class DocumentSession implements DocumentCollaborationSession {
 
   statusSnapshot(): CollaborationStatusSnapshot {
     return this.statusState.snapshot();
+  }
+
+  resourceUsage(): CollaborationResourceUsage {
+    return resourceUsageOf(this.registry, this.blobs);
   }
 
   subscribeStatus(
@@ -760,6 +765,16 @@ export interface DocumentCollaborationSession extends TextCollaborationSession {
    * runtime property is ignored.
    */
   setIdentity(update: CollaborationIdentityUpdate): void;
+
+  /**
+   * One reading of the room's replicated size against this replica's hard limits.
+   *
+   * A room only grows — deletion is a tombstone — and the limits that bound hostile
+   * amplification turn terminal when crossed. Watch this to archive and re-room before that
+   * happens. The tombstone count walks the node map once per call, so read it on your own
+   * schedule rather than per keystroke.
+   */
+  resourceUsage(): CollaborationResourceUsage;
 }
 
 /** Owned full-document collaboration replica. @public */

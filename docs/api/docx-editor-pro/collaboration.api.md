@@ -52,6 +52,25 @@ export interface CollaborationModuleOptions extends ProLicenseOptions {
 }
 
 // @public
+export interface CollaborationResourceUsage {
+    readonly blobBytes: number;
+    // (undocumented)
+    readonly maxBlobBytes: number;
+    // (undocumented)
+    readonly maxNodes: number;
+    // (undocumented)
+    readonly maxParts: number;
+    // (undocumented)
+    readonly maxRelationships: number;
+    readonly nodes: number;
+    // (undocumented)
+    readonly parts: number;
+    // (undocumented)
+    readonly relationships: number;
+    readonly tombstonedNodes: number;
+}
+
+// @public
 export class CollaborationSchemaError extends Error {
     constructor(code: CollaborationFailureCode, detail?: string | undefined);
     // (undocumented)
@@ -133,6 +152,7 @@ export type DocumentCollaborationHandle = CollaborationHandle<DocumentCollaborat
 
 // @public
 export interface DocumentCollaborationSession extends TextCollaborationSession {
+    resourceUsage(): CollaborationResourceUsage;
     setIdentity(update: CollaborationIdentityUpdate): void;
 }
 
@@ -144,6 +164,9 @@ export const PROTOCOL_VERSION = 1;
 
 // @public
 export function readCollaborationDocument(ydoc: Y.Doc): Uint8Array;
+
+// @public
+export function readCollaborationResourceUsage(ydoc: Y.Doc): CollaborationResourceUsage;
 
 // @public
 export const SCHEMA_VERSION = 1;
