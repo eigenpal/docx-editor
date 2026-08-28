@@ -51,7 +51,7 @@ export interface SectionPageFurniture {
 }
 
 /** 24pt gutter between sheets, for the scroll surface. */
-const SHEET_GUTTER_PT = 24;
+export const SHEET_GUTTER_PT = 24;
 
 export function createSectionPageFurniture(
   inputs: SectionPageFurnitureInputs

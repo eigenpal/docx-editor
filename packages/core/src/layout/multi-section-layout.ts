@@ -36,6 +36,7 @@ import {
   type OverflowPageShell,
   type PageContentInsets,
 } from './page-furniture-insets.ts';
+import { SHEET_GUTTER_PT } from './section-page-furniture.ts';
 
 export interface SectionLayoutResult {
   readonly layout: SemanticLayout;
@@ -561,7 +562,7 @@ export function layoutMultiSectionDocument(
       for (const page of laid.pages.slice(1)) {
         const next = remapPage(page, pages.length + built.length, sheetY);
         built.push(next);
-        sheetY = next.box.y + next.box.height + 24;
+        sheetY = next.box.y + next.box.height + SHEET_GUTTER_PT;
       }
       // Local page 0 lived on the host; overflow pages start at displayedStart + 1.
       // SECTIONPAGES counts the host contribution plus overflow sheets.
@@ -578,7 +579,7 @@ export function layoutMultiSectionDocument(
       for (const page of remapped) {
         pages.push(page);
         remappedAll.push(page);
-        sheetY = page.box.y + page.box.height + 24;
+        sheetY = page.box.y + page.box.height + SHEET_GUTTER_PT;
       }
       nextDisplayed = displayedStart + remapped.length;
     } else {
@@ -593,7 +594,7 @@ export function layoutMultiSectionDocument(
           format
         );
         built.push(next);
-        sheetY = next.box.y + next.box.height + 24;
+        sheetY = next.box.y + next.box.height + SHEET_GUTTER_PT;
       }
       remapped = built;
       for (const page of remapped) {

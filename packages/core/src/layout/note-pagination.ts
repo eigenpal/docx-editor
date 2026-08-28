@@ -45,6 +45,7 @@ import {
   type LayoutNoteStoryOptions,
 } from './note-layout.ts';
 import { noteMarkKey, type NoteMarkContext } from './note-projection.ts';
+import { reindexAndRestackPages } from './page-restacking.ts';
 import type {
   BlockFragmentRecord,
   LineRecord,
@@ -1627,20 +1628,13 @@ function sectionEndInsertBound(
   return pages.length;
 }
 
-function reindexPages(pages: readonly PageRecord[]): PageRecord[] {
-  return pages.map((page, index) => {
-    if (page.index === index && page.id === `page-${index}`) return page;
-    return { ...page, id: `page-${index}`, index };
-  });
-}
-
 /**
  * After note overflow insertion, reindex sheets and re-project allowlisted PAGE fields.
  * Inserted overflow pages already carry a `pageFieldSource` cloned from the section template;
  * document-level NUMPAGES and furniture text need finalize against the new page count.
  */
 function reindexAndFinalizeFields(pages: readonly PageRecord[]): PageRecord[] {
-  const reindexed = reindexPages(pages);
+  const reindexed = reindexAndRestackPages(pages);
   return [...finalizePageFieldProjection({ revision: 0, pages: reindexed }).pages];
 }
 

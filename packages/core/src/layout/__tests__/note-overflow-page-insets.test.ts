@@ -20,6 +20,7 @@ import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
 import { enumerateDocumentSections, geometryOfSection } from '../index.ts';
 import type { NotesLayoutInput } from '../note-pagination.ts';
+import { SHEET_GUTTER_PT } from '../section-page-furniture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -125,6 +126,14 @@ describe('note overflow sheets on a title-page section', () => {
 
     const drain = layout.pages.filter((page) => page.noteStream === 'footnote-drain');
     expect(drain.length).toBeGreaterThan(0);
+    expect(new Set(layout.pages.map((page) => page.box.y)).size).toBe(layout.pages.length);
+    for (let index = 1; index < layout.pages.length; index += 1) {
+      const previous = layout.pages[index - 1]!;
+      expect(layout.pages[index]!.box.y).toBeCloseTo(
+        previous.box.y + previous.box.height + SHEET_GUTTER_PT,
+        6
+      );
+    }
     for (const page of drain) {
       // The box AND the furniture come from the same variant. Taking one without the other
       // paints an empty band exactly a header high.
