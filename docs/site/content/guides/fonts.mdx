@@ -302,6 +302,17 @@ zero-argument function is assignable to a one-argument function type.
 never accepted a loader, so there is nothing to disambiguate and a bare resolver
 still works there.
 
+In Vue, a function origin is always the value, never a getter to call. To build an
+origin lazily, use a `computed`:
+
+```ts
+const fonts = useFonts(computed(() => packagedFonts()));
+```
+
+`useFonts(() => packagedFonts())` cannot work: nothing distinguishes it from a
+resolver that ignores its request. The editor reports it rather than composing an
+empty result.
+
 ```ts
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 

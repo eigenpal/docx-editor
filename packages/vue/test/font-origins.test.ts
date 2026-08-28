@@ -10,7 +10,7 @@
 import './dom-setup.ts';
 
 import { describe, expect, test } from 'bun:test';
-import { createApp, ref } from 'vue';
+import { computed, createApp, ref } from 'vue';
 import { defineFontResolver, isFontResolver } from '@docx-editor.dev/core/editor';
 import type { FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import type { FontSource } from '@docx-editor.dev/core/contracts/editor';
@@ -322,6 +322,22 @@ describe('useFonts takes every origin in the same shape', () => {
 
     expect(warnings).toHaveLength(1);
     expect(String(warnings[0]?.[0])).toContain('answered with a function');
+  });
+
+  test('a computed IS the escape hatch for a lazily built origin', async () => {
+    // What the docs now tell a host to write instead of `() => packagedFonts()`. A
+    // `computed` is a ref, so `toValue` unwraps it and the resolver inside is reached.
+    const origin = computed(() =>
+      defineFontResolver(async () => ({ sources: [source('Calibri', 'from-computed')] }))
+    );
+
+    await mounted(
+      () => useFonts(origin),
+      async (compose) => {
+        const merged = (await compose(REQUEST)) as { sources: FontSource[] };
+        expect(merged.sources.map((entry) => entry.id)).toEqual(['from-computed']);
+      }
+    );
   });
 
   test('a plain-function getter still composes, though it is no longer read by toValue', async () => {
