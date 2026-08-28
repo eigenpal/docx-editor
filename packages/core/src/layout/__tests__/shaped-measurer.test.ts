@@ -417,6 +417,56 @@ describe('advances are summed glyph advances (task 7.7)', () => {
     expect(covered.measure('ab', style())).toBeCloseTo(2, 6);
   });
 
+  test('a face whose smcp shaping throws answers once and stays answered', () => {
+    // Hit-testing measures once per caret prefix. Re-running the 26-letter probe on every
+    // uncached prefix — and throwing out of it every time — turned one hostile face into the
+    // cost of the whole line, so the refusal is cached exactly as an answer is.
+    let calls = 0;
+    const hostile = createShapedMeasurer({
+      shaper: {
+        shape(input) {
+          calls += 1;
+          if (input.environment.features.smcp === 1) throw new Error('refused');
+          return {
+            text: input.text,
+            direction: 'ltr',
+            bidiLevel: 0,
+            glyphs: [...input.text].map((character, index) => ({
+              id: character.codePointAt(0)!,
+              cluster: index,
+              originX: index * 1_000,
+              originY: 0,
+              advanceX: 1_000,
+              advanceY: 0,
+              offsetX: 0,
+              offsetY: 0,
+              outline: { path: '', unitsPerEm: 1_000 },
+            })),
+            clusters: [],
+            fontSpans: [],
+            metrics: { ascent: 9_000, descent: 2_000, lineGap: 0 },
+          };
+        },
+      },
+      resolveFont: () => font,
+      fallback,
+      shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+      unicodeDataVersion: '15.1',
+      fixedPointScale: 1_000,
+    });
+    const smallCapsStyle = style({ smallCaps: true });
+    expect(hostile.measure('abc', smallCapsStyle)).toBe(fallback.measure('abc', smallCapsStyle));
+    const afterFirst = calls;
+    // The probe throws on its first letter, so it costs exactly one call and never more.
+    expect(afterFirst).toBe(1);
+    for (const prefix of ['a', 'ab', 'abc', 'abcd']) {
+      expect(hostile.measure(prefix, smallCapsStyle)).toBe(
+        fallback.measure(prefix, smallCapsStyle)
+      );
+    }
+    expect(calls).toBe(afterFirst);
+  });
+
   test('super/subscript advances are EXACTLY three quarters of the baseline advance', () => {
     // Paint draws super/subscript at 0.75 of the run size, so measurement must be 0.75 of
     // the baseline advance — not the advance at the nearest whole half-point. At 11pt the

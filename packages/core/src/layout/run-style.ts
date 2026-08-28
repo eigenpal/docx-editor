@@ -12,6 +12,9 @@
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
+// One reading of `CT_OnOff` for the whole lane. The style cascade combines toggle levels with
+// it and this resolver reads the combined result with it, so the two cannot drift apart.
+import { styleToggleIsOn as toggle } from './style-toggles.ts';
 
 /** `w:vertAlign` — script position, which also scales the run's effective size. */
 export type VerticalAlign = 'baseline' | 'superscript' | 'subscript';
@@ -101,12 +104,6 @@ export const DEFAULT_RUN_STYLE: ResolvedRunStyle = Object.freeze({
 });
 
 const HEX_COLOR = /^[0-9A-Fa-f]{6}$/;
-
-/** OOXML toggle semantics: present means on unless `w:val` says otherwise. */
-function toggle(property: OoxmlProperty): boolean {
-  const value = property.attributes?.val;
-  return value === undefined || !(value === '0' || value === 'false' || value === 'off');
-}
 
 function integer(raw: string | undefined, allowNegative = false): number | null {
   if (raw === undefined) return null;

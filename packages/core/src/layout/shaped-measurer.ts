@@ -238,24 +238,38 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
    * All of {@link SMALL_CAPS_PROBE_ALPHABET} or none: a face that substitutes only part of it
    * would shape some characters as small caps and leave the rest as lowercase, while paint
    * asks the browser to synthesize the ones the face cannot draw. That is the fallback's job,
-   * and taking it for the whole face keeps every measurement of every span on one side of the
+   * and taking it for the whole face keeps every measurement of one span on one side of the
    * decision. Glyph ids do not depend on point size, so the first caller's size may settle it.
+   *
+   * The probe is LATIN lowercase, so a face carrying `smcp` for Latin alone answers yes and a
+   * mixed-script small-caps run shapes its Greek or Cyrillic lowercase at plain advances while
+   * paint synthesizes small caps for them. A span and its prefixes still come from one source,
+   * which is what the caret needs; the absolute width of that span is still a fraction out.
+   * Widening the probe to every script a face might cover is the fix for the width, and it is
+   * not this one.
    */
   const faceHasSmallCaps = (font: ResolvedFont, style: ResolvedRunStyle): boolean => {
     const cached = smallCapsSupportByFont.get(font);
     if (cached !== undefined) return cached;
     let supported = true;
-    for (const character of SMALL_CAPS_PROBE_ALPHABET) {
-      const featured = shape(character, font, { ...style, smallCaps: true });
-      const plain = shape(character, font, { ...style, smallCaps: false });
-      const substituted =
-        featured.glyphs.length !== plain.glyphs.length ||
-        featured.glyphs.some((glyph, index) => glyph.id !== plain.glyphs[index]?.id);
-      if (!substituted) {
-        // A face with no `smcp` at all answers on the first letter, which is the common case.
-        supported = false;
-        break;
+    try {
+      for (const character of SMALL_CAPS_PROBE_ALPHABET) {
+        const featured = shape(character, font, { ...style, smallCaps: true });
+        const plain = shape(character, font, { ...style, smallCaps: false });
+        const substituted =
+          featured.glyphs.length !== plain.glyphs.length ||
+          featured.glyphs.some((glyph, index) => glyph.id !== plain.glyphs[index]?.id);
+        if (!substituted) {
+          // A face with no `smcp` at all answers on the first letter, the common case.
+          supported = false;
+          break;
+        }
       }
+    } catch {
+      // A face whose shaping refuses the probe cannot answer yes, and the answer is CACHED:
+      // hit-testing measures once per caret prefix, and re-throwing 52 times per prefix
+      // turned one hostile face into the cost of the whole line.
+      supported = false;
     }
     smallCapsSupportByFont.set(font, supported);
     return supported;
