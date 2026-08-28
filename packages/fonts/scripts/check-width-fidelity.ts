@@ -141,7 +141,8 @@ const WIDTH_CASES: readonly WidthCase[] = [
  *
  * All three resolve to nothing, which leaves the host's own measurement in place. That is
  * the deliberate answer: no packaged or catalogued face has their advance widths, and a
- * substitute picked on classification alone measured 22-24% wide when it was tried.
+ * substitute picked on classification alone measured 22-24% wide when it was tried
+ * (issue #576).
  */
 const KNOWN_GAPS: readonly { readonly family: string; readonly gap: string }[] = [
   {

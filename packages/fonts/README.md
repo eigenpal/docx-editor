@@ -83,7 +83,8 @@ and a face picked from how a font describes itself is not one: `word/fontTable.x
 a PANOSE classification, never an advance width, so nothing in the file bounds how much
 wider the substitute runs. A ranking over PANOSE was tried here and removed after it
 picked faces 22-24% wider than the family a document named — worse than the fixed fallback
-it replaced. Supply the real bytes through `substitute` or `loadFonts` when you have them.
+it replaced; issue #576 records the measurements. Supply the real bytes through
+`substitute` or `loadFonts` when you have them.
 
 A fetching resolver makes opening a document perform network requests, and the CDN learns
 which families a document uses. The engine never supplies one, so opting in stays your call.
