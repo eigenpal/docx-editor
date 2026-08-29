@@ -177,6 +177,16 @@ export const ALL_WORD_DEFAULT_FAMILIES: readonly WordDefaultFamily[] = Object.fr
 ]);
 
 /**
+ * Source id for a packaged file. Built here and parsed by {@link installDefaultFontFaces}
+ * to find bytes it would otherwise refetch, so the two must not drift; keeping both sides
+ * in one place is what stops them.
+ */
+const SOURCE_ID_PREFIX = 'default-fonts:';
+const sourceIdForFile = (file: string): string => `${SOURCE_ID_PREFIX}${file}`;
+const fileFromSourceId = (id: string): string | undefined =>
+  id.startsWith(SOURCE_ID_PREFIX) ? id.slice(SOURCE_ID_PREFIX.length) : undefined;
+
+/**
  * Load the packaged substitute faces for the given Word families
  * ({@link WORD_DOCUMENT_DEFAULT_FAMILIES} by default) and return a configuration
  * fragment: byte-backed sources for the SUBSTITUTE families plus the Word-name →
@@ -233,7 +243,7 @@ export async function loadDefaultFonts(
             }
             sources.push({
               request: { family: plan.substitute, weight: face.weight, style: face.style },
-              id: `default-fonts:${file}`,
+              id: sourceIdForFile(file),
               bytes,
               // Baked at packaging time and CI-verified; the engine's admission path
               // re-derives and compares, so a swapped asset still fails loudly there.
@@ -283,11 +293,24 @@ const startedInstalls = new WeakMap<FontFaceSet, Set<string>>();
  * diagnostic hint rather than a success signal.
  */
 export async function installDefaultFontFaces(
-  options: LoadDefaultFontsOptions & { readonly document?: Document } = {}
+  options: LoadDefaultFontsOptions & {
+    readonly document?: Document;
+    /**
+     * Sources {@link loadDefaultFonts} already produced. A face found here registers from
+     * those bytes; anything missing still registers by URL, so a standalone call with no
+     * loader behind it behaves exactly as before.
+     */
+    readonly loaded?: readonly DefaultFontSource[];
+  } = {}
 ): Promise<number> {
   const doc = options.document ?? (typeof document !== 'undefined' ? document : undefined);
   const fontSet = (doc as { fonts?: FontFaceSet } | undefined)?.fonts;
   if (!doc || !fontSet || typeof FontFace === 'undefined') return 0;
+  const preloaded = new Map<string, Uint8Array>();
+  for (const source of options.loaded ?? []) {
+    const file = fileFromSourceId(source.id);
+    if (file !== undefined) preloaded.set(file, source.bytes);
+  }
   let started = startedInstalls.get(fontSet);
   if (!started) {
     started = new Set();
@@ -315,7 +338,19 @@ export async function installDefaultFontFaces(
       jobs.push(
         (async () => {
           try {
-            const fontFace = new FontFace(family, `url(${assetUrl(file).href})`, {
+            const bytes = preloaded.get(file);
+            // A copy. These exact buffers also go to the engine as `FontSource.bytes` and
+            // get shaped there, so handing the original to the browser's font machinery
+            // would share one ArrayBuffer between the two. Unlike the engine's own
+            // registration, this is not guarding a windowed view — `bytes` is always a
+            // fresh full-length array — it is keeping the two consumers unaliased.
+            //
+            // No bytes means the face failed to load, and the URL form still registers it.
+            // That request is the one `fetcher` cannot intercept.
+            const source: string | ArrayBuffer = bytes
+              ? (bytes.slice().buffer as ArrayBuffer)
+              : `url(${assetUrl(file).href})`;
+            const fontFace = new FontFace(family, source, {
               weight: String(face.weight),
               style: face.style,
             });
@@ -359,7 +394,9 @@ export async function defaultFonts(
   }
   // Not awaited: painting can start on the platform's substitute and swap when the real
   // face arrives, and blocking the document on it would delay first paint for nothing.
-  void installDefaultFontFaces(loadOptions);
+  // The fragment goes with it, so registration reuses these bytes rather than asking the
+  // browser to fetch each face a second time.
+  void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
   return fragment;
 }
 
@@ -457,11 +494,10 @@ export interface PackagedFontsOptions {
    * {@link installDefaultFontFaces} performs. Measurement is unaffected; painted glyphs
    * fall back to whatever the platform substitutes for the Word family name.
    *
-   * The registration goes through the BROWSER's own loader (`new FontFace(family,
-   * 'url(…)')`), which cannot be given {@link PackagedFontsOptions.fetcher} — so an
-   * injected fetcher measures the byte cost of the measurement half only, and a real
-   * browser makes a second request per face. Same-origin and immutable, so it is normally
-   * served from cache; the registration is idempotent per document either way.
+   * Registration reuses the bytes the resolver already loaded, so a face that loaded costs
+   * no second request and {@link PackagedFontsOptions.fetcher} sees every byte read for it.
+   * A face that FAILED to load has no bytes to reuse and still registers by URL, which
+   * `fetcher` cannot intercept. The registration is idempotent per document.
    */
   readonly install?: boolean;
 }
@@ -583,7 +619,9 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     }
     // Not awaited, exactly as in `defaultFonts`: painting can start on the platform's
     // substitute and swap when the real face arrives.
-    if (options.install !== false) void installDefaultFontFaces(loadOptions);
+    if (options.install !== false) {
+      void installDefaultFontFaces({ ...loadOptions, loaded: fragment.sources });
+    }
     return { ...fragment, families };
   }
 

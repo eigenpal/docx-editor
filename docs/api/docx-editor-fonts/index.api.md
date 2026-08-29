@@ -93,6 +93,7 @@ export interface FontResolverMark {
 // @public
 export function installDefaultFontFaces(options?: LoadDefaultFontsOptions & {
     readonly document?: Document;
+    readonly loaded?: readonly DefaultFontSource[];
 }): Promise<number>;
 
 // @public
