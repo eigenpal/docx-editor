@@ -105,7 +105,7 @@ import {
   type DocumentProperties,
 } from '../store/package/document-properties.ts';
 import { createCollaborationDocumentPort } from '../collaboration/replication.ts';
-import { commitSessionTreeOps } from './tree-session-apply.ts';
+import { commitSessionTreeOps, commitSessionTreeOpsAtomic } from './tree-session-apply.ts';
 
 // The session view contract (TreeApplyResult + TreeDocxSessionView) lives in
 // tree-session-contract.ts; re-exported so every existing import through this module stays
@@ -666,6 +666,10 @@ export function openTreeSession(
           scope,
           options
         );
+      },
+
+      applyTreeOpsAtomic(groups, options = {}) {
+        return commitSessionTreeOpsAtomic(packageStore, groups, options);
       },
 
       projectDoc: () => treeToDoc(bodyStore().part),

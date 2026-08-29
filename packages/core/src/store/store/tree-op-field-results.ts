@@ -301,6 +301,23 @@ export function locateFieldResults(paragraph: OoxmlElement): readonly LocatedFie
   return out;
 }
 
+/**
+ * Why a paragraph's field results may not be rewritten, or null when they may.
+ *
+ * ONE statement of the content-control rules, shared by validation below and by the
+ * save-time PLANNER: validation rejects the WHOLE op (all-or-nothing is the transaction
+ * contract), so the planner must exclude these paragraphs up front or one locked field
+ * would silently starve every other stale field in the part.
+ */
+export function fieldResultUpdateRefusal(
+  part: OoxmlPart,
+  paragraphId: string
+): 'bound' | 'locked' | null {
+  if (isBoundAt(part, paragraphId)) return 'bound';
+  if (effectiveContentLockAt(part, paragraphId).content) return 'locked';
+  return null;
+}
+
 export function validateRefreshFieldResults(
   part: OoxmlPart,
   op: RefreshFieldResultsOp
@@ -326,8 +343,8 @@ export function validateRefreshFieldResults(
     }
     const paragraph = findNode(part, update.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') return 'unknown-paragraph';
-    if (isBoundAt(part, update.paragraphId)) return 'bound';
-    if (effectiveContentLockAt(part, update.paragraphId).content) return 'locked';
+    const refusal = fieldResultUpdateRefusal(part, update.paragraphId);
+    if (refusal) return refusal;
   }
   return null;
 }

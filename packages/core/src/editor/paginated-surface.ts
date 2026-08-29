@@ -4490,33 +4490,36 @@ export function mountPaginatedSurface(
    * the pages paint. Planning is read-only — the note parts are read from the package,
    * never through `partFor`, which would durably open a notes store — so a document whose
    * results are already fresh commits no transaction, bumps no revision and adds no undo
-   * entry. Each stale story commits one ordinary journaled transaction against its own
-   * scope — undoable, like a TOC refresh. Viewing writes nothing.
+   * entry. Every stale story commits together as ONE transaction and ONE undo unit
+   * (`applyTreeOpsAtomic`): a refusal anywhere rolls the whole refresh back, so the saved
+   * file can never mix refreshed and stale values, and a single undo restores the exact
+   * pre-save document. Viewing and a non-editable session write nothing.
+   *
+   * COLLABORATIVE SESSIONS SKIP THE REFRESH: the collaboration gate admits only body
+   * insert/delete text ops, so the rewrite cannot journal to peers. The save then exports
+   * the cached results (the pre-refresh behavior; Word refreshes fields on open), and the
+   * `false` return says so rather than claiming freshness.
    */
   function refreshRefFieldResults(): boolean {
-    if (editingMode === 'view') return true;
+    if (editingMode === 'view' || !session.editable) return true;
+    if (collaborationSession) return false;
     const refreshOptions = {
       package: session.currentPackage(),
       styleCascade: styleCascade(),
       numberingIndex: numberingIndex(),
       displayMode: revisionDisplayMode(),
     };
-    // Both plans read before either write lands, and they share one memoized resolution
+    // Both plans read before the write lands, and they share one memoized resolution
     // context — the note values are the ones the pages painted, per calibration verdict.
     const bodyOp = planRefFieldResultRefresh(session.part(), refreshOptions);
     const notePlans = planNoteRefFieldResultRefreshes(session.part(), refreshOptions);
-    let committed = true;
-    if (bodyOp) {
-      committed = applyJournaledOps([bodyOp], undefined, undefined, BODY_STORY).committed;
-    }
+    if (!bodyOp && notePlans.length === 0) return true;
+    const groups: { scope: StoryScope; ops: readonly TreeDocOp[] }[] = [];
+    if (bodyOp) groups.push({ scope: BODY_STORY, ops: [bodyOp] });
     for (const plan of notePlans) {
-      const applied = applyJournaledOps([plan.op], undefined, undefined, {
-        kind: 'notesPart',
-        noteKind: plan.noteKind,
-      });
-      committed = applied.committed && committed;
+      groups.push({ scope: { kind: 'notesPart', noteKind: plan.noteKind }, ops: [plan.op] });
     }
-    return committed;
+    return session.applyTreeOpsAtomic(groups).committed;
   }
 
   // Which range a destructive or replacing gesture acts on, and where content replacing it

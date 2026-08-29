@@ -17,6 +17,8 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { semanticDigest } from '../../store/package/ooxml-digest.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { mountPaginatedSurface } from '../paginated-surface.ts';
+import { stubCollaborationSession } from './collaboration-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -255,5 +257,82 @@ describe('save() refreshes stale REF results inside note parts', () => {
     };
     expect(digestOf(secondSave)).toEqual(digestOf(firstSave));
     reopened.destroy();
+  });
+
+  test('a locked content control keeps its cache without starving the other stale fields', async () => {
+    // Validation rejects a WHOLE refreshFieldResults op for a bound or content-locked
+    // paragraph, so the planner must exclude the locked field — otherwise one locked
+    // outlier silently keeps every other stale field in the part unrefreshed.
+    const lockedCitation =
+      '<w:sdt><w:sdtPr><w:lock w:val="sdtContentLocked"/></w:sdtPr><w:sdtContent>' +
+      `<w:p>${refField(' REF term \\h ', '<w:r><w:t>Closing Date</w:t></w:r>')}</w:p>` +
+      '</w:sdtContent></w:sdt>';
+    const plainCitation = `<w:p>${refField(
+      ' REF term \\h ',
+      '<w:r><w:t>Closing Date</w:t></w:r>'
+    )}</w:p>`;
+    const editor = mount(
+      docx(`<w:p>${bookmarked('term', 'Closing Date')}</w:p>` + lockedCitation + plainCitation, {})
+    );
+    editTarget(editor);
+    const xml = await savedPartXml(editor, 'word/document.xml');
+    // The plain field refreshed; the locked one saved exactly as loaded.
+    expect(xml).toContain('<w:t>Closing Dates</w:t>');
+    const lockedRegion = xml.slice(xml.indexOf('<w:sdt>'), xml.indexOf('</w:sdt>'));
+    expect(lockedRegion).toContain('<w:t>Closing Date</w:t>');
+    expect(lockedRegion).not.toContain('Closing Dates');
+    editor.destroy();
+  });
+
+  test('one undo after save restores the pre-save document across body and note parts', async () => {
+    const body =
+      `<w:p>${bookmarked('term', 'Closing Date')}</w:p>` +
+      `<w:p>${refField(' REF term \\h ', '<w:r><w:t>Closing Date</w:t></w:r>')}</w:p>` +
+      `<w:p><w:r><w:t>cites</w:t><w:footnoteReference w:id="1"/></w:r></w:p>`;
+    const editor = mount(docx(body, { footnote: freshNoteContent() }));
+    editTarget(editor);
+    const session = editor.surface!.session;
+    const beforeSave = new Uint8Array(session.save());
+    const saved = new Uint8Array(await editor.save());
+    // Both parts refreshed in the save...
+    expect(strFromU8(unzipSync(saved)['word/document.xml']!)).toContain('Closing Dates</w:t>');
+    expect(strFromU8(unzipSync(saved)['word/footnotes.xml']!)).toContain('Closing Dates');
+    // ...as ONE undo unit: a single undo restores the exact pre-save document. (`undo()`
+    // returns the restored SELECTION, which a field rewrite legitimately lacks — the byte
+    // comparison below is the oracle, `canUndo` only proves an entry existed.)
+    expect(session.canUndo()).toBe(true);
+    session.undo();
+    expect(new Uint8Array(session.save())).toEqual(beforeSave);
+    editor.destroy();
+  });
+
+  test('a collaborative session skips the refresh instead of claiming freshness', () => {
+    // The collaboration gate admits only body insert/delete text ops, so the rewrite cannot
+    // journal to peers. The refresh must skip CLEANLY — no transaction, no revision bump —
+    // and return false so the caller knows the save exports cached results.
+    const body =
+      `<w:p>${bookmarked('term', 'Closing Date')}</w:p>` +
+      `<w:p>${refField(' REF term \\h ', '<w:r><w:t>Closing Date</w:t></w:r>')}</w:p>`;
+    const container = document.createElement('div');
+    const mounted = mountPaginatedSurface(container, docx(body, {}), {
+      scale: 1,
+      collaborationModel: { session: stubCollaborationSession() },
+    });
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const surface = mounted.surface;
+    const edited = surface.session.applyTreeOps([
+      {
+        op: 'insertText',
+        paragraphId: surface.session.part().root.id.replace(/#.*$/, '#0.0.0'),
+        offset: 'Closing Date'.length,
+        text: 's',
+      },
+    ]);
+    expect(edited.committed).toBe(true);
+    const revisionAfterEdit = surface.session.packageRevision();
+    expect(surface.refreshRefFieldResults()).toBe(false);
+    expect(surface.session.packageRevision()).toBe(revisionAfterEdit);
+    surface.destroy();
+    container.remove();
   });
 });

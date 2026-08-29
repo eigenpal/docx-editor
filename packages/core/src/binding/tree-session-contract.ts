@@ -105,6 +105,18 @@ export interface TreeDocxSessionView {
     options?: TreeApplyOptions
   ): TreeApplyResult;
   /**
+   * Commit several stories' ops as ONE transaction and ONE undo unit.
+   *
+   * `applyTreeOps` addresses one story; a write that must land in the body AND note parts
+   * together — the save-time field-result refresh — needs all-or-nothing semantics, or a
+   * mid-sequence refusal exports a file mixing refreshed and stale values and a single undo
+   * restores only the last part. Any refusal rolls every group back. Lifecycle ops refuse.
+   */
+  applyTreeOpsAtomic(
+    groups: readonly { readonly scope: StoryScope; readonly ops: readonly TreeDocOp[] }[],
+    options?: TreeApplyOptions
+  ): TreeApplyResult;
+  /**
    * Every part that holds a story, body first, then headers, footers and note parts.
    *
    * A READ: parts come from the package, so this opens no story store and spends none of the

@@ -2287,6 +2287,10 @@ export interface TreeDocxSessionView {
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
+    applyTreeOpsAtomic(groups: readonly {
+        readonly ops: readonly TreeDocOp[];
+        readonly scope: StoryScope;
+    }[], options?: TreeApplyOptions): TreeApplyResult;
     // (undocumented)
     beginComposition(scope?: StoryScope): void;
     bodyText(): string;

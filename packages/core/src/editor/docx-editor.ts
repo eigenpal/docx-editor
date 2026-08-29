@@ -1837,7 +1837,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!surface) return Promise.reject(editorError('notFound', 'no document is loaded'));
       // Ctrl+S can race a typing burst: queued keystrokes belong in the bytes.
       surface.flushPendingInput();
-      // Stale REF results rewrite first (bytes carry the paint); fresh commits nothing.
+      // Stale REF results rewrite first; false (collab skip) exports cached results anyway.
       surface.refreshRefFieldResults();
       // A fresh copy, so the returned ArrayBuffer is exactly the document — not a window
       // into a larger allocation.

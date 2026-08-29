@@ -24,6 +24,7 @@ import { resolveNotesPart } from '../store/package/note-references.ts';
 import type { NoteKind } from '../store/package/note-nodes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import {
+  fieldResultUpdateRefusal,
   locateFieldResults,
   MAX_FIELD_RESULT_TEXT_CHARS,
   MAX_FIELD_RESULT_UPDATES,
@@ -109,6 +110,7 @@ function resolveRefreshContext(
  * cached runs exactly as loaded.
  */
 function collectStaleResultUpdates(
+  owningPart: OoxmlPart,
   paragraphs: Iterable<OoxmlElement>,
   context: RefFieldContext,
   updates: { paragraphId: string; fieldNodeId: string; text: string }[]
@@ -118,6 +120,10 @@ function collectStaleResultUpdates(
     // The context already scanned every paragraph; only the ones holding recognized REF
     // specs are worth the locate walk.
     if (context.tokenForParagraph(paragraph.id) === '') continue;
+    // Validation rejects the WHOLE op for a bound or content-locked paragraph, so the plan
+    // must exclude it here — one locked field must not starve every other stale field in
+    // the part. The same predicate validation applies, asked against the owning RAW part.
+    if (fieldResultUpdateRefusal(owningPart, paragraph.id) !== null) continue;
     for (const located of locateFieldResults(paragraph)) {
       if (updates.length >= MAX_FIELD_RESULT_UPDATES) return;
       if (!located.rewritable) continue;
@@ -148,7 +154,7 @@ export function planRefFieldResultRefresh(
   const { blocks, context } = resolveRefreshContext(part, options);
   if (context === null) return null;
   const updates: { paragraphId: string; fieldNodeId: string; text: string }[] = [];
-  collectStaleResultUpdates(walkStoryParagraphs(blocks), context, updates);
+  collectStaleResultUpdates(part, walkStoryParagraphs(blocks), context, updates);
   if (updates.length === 0) return null;
   return { op: 'refreshFieldResults', updates };
 }
@@ -179,7 +185,7 @@ export function planNoteRefFieldResultRefreshes(
     const updates: { paragraphId: string; fieldNodeId: string; text: string }[] = [];
     for (const story of noteStoriesOfPart(notesPart)) {
       if (updates.length >= MAX_FIELD_RESULT_UPDATES) break;
-      collectStaleResultUpdates(walkStoryParagraphs(story), context, updates);
+      collectStaleResultUpdates(notesPart, walkStoryParagraphs(story), context, updates);
     }
     if (updates.length > 0) plans.push({ noteKind, op: { op: 'refreshFieldResults', updates } });
   }
