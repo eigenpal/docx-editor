@@ -22,9 +22,7 @@ function widthPointsOf(element: Element): number | null {
 }
 
 function cellSpanOf(cell: Element): number {
-  const raw = cell.getAttribute('colspan')?.trim();
-  if (raw === undefined || !/^\d{1,2}$/.test(raw)) return 1;
-  return clamp(Number.parseInt(raw, 10), 1, 63);
+  return htmlSpanOf(cell, 'colspan', 63);
 }
 
 export function tableRowsOf(table: Element): Element[] {
@@ -149,6 +147,16 @@ const BORDER_VALUES: ReadonlyMap<string, BorderValue['val']> = new Map([
   ['hidden', 'nil'],
 ]);
 
+const BORDER_WIDTH_KEYWORD_PT: ReadonlyMap<string, number> = new Map([
+  ['thin', 0.75],
+  ['medium', 2.25],
+  ['thick', 3.75],
+]);
+
+function borderSizeOf(points: number): number {
+  return clamp(Math.round(points * 8), 2, 96);
+}
+
 function borderValueOf(value: string | undefined): BorderValue | undefined {
   if (value === undefined || value.length === 0 || value.length > 128) return undefined;
   let val: BorderValue['val'] | undefined;
@@ -160,7 +168,7 @@ function borderValueOf(value: string | undefined): BorderValue | undefined {
       val = mapped;
       continue;
     }
-    const length = parseCssLengthPt(token);
+    const length = BORDER_WIDTH_KEYWORD_PT.get(token.toLowerCase()) ?? parseCssLengthPt(token);
     if (length !== null) {
       points = length;
       continue;
@@ -174,10 +182,36 @@ function borderValueOf(value: string | undefined): BorderValue | undefined {
   }
   if (val === undefined) return undefined;
   if (val === 'nil') return { val, size: 0, color: color ?? 'auto' };
-  if (points === undefined || points <= 0) return undefined;
+  // A visible style with no width takes Word's default hairline, like `border:solid`.
+  if (points === undefined) return { val, size: 4, color: color ?? '000000' };
+  if (points <= 0) return undefined;
+  return { val, size: borderSizeOf(points), color: color ?? '000000' };
+}
+
+/** Compose a border from `-style`/`-width`/`-color` longhands when no shorthand is set. */
+function longhandBorderOf(
+  style: ReadonlyMap<string, string>,
+  prefix: string
+): BorderValue | undefined {
+  const styleValue = style.get(`${prefix}-style`)?.trim();
+  if (styleValue === undefined || styleValue.length === 0 || styleValue.length > 64) {
+    return undefined;
+  }
+  const val = BORDER_VALUES.get(styleValue.split(/\s+/)[0]!.toLowerCase());
+  if (val === undefined) return undefined;
+  if (val === 'nil') return { val, size: 0, color: 'auto' };
+  const widthToken = style.get(`${prefix}-width`)?.trim().split(/\s+/)[0];
+  const points =
+    widthToken === undefined || widthToken.length > 64
+      ? null
+      : (BORDER_WIDTH_KEYWORD_PT.get(widthToken.toLowerCase()) ?? parseCssLengthPt(widthToken));
+  if (points !== null && points <= 0) return undefined;
+  const colorToken = style.get(`${prefix}-color`)?.trim().split(/\s+/)[0];
+  const color =
+    colorToken === undefined || colorToken.length > 64 ? null : parseCssColor(colorToken);
   return {
     val,
-    size: clamp(Math.round(points * 8), 2, 96),
+    size: points === null ? 4 : borderSizeOf(points),
     color: color ?? '000000',
   };
 }
@@ -192,7 +226,9 @@ function borderElementXml(name: string, border: BorderValue): string {
 /** Preserve Word's table border styles instead of replacing them with generic black lines. */
 export function tableBordersXml(table: Element): string {
   const style = parseInlineStyle(table);
-  const common = borderValueOf(style.get('mso-border-alt') ?? style.get('border'));
+  const common =
+    borderValueOf(style.get('mso-border-alt') ?? style.get('border')) ??
+    longhandBorderOf(style, 'border');
   const fallback =
     common ??
     (table.getAttribute('border')?.trim() && table.getAttribute('border')?.trim() !== '0'
@@ -212,6 +248,7 @@ export function tableBordersXml(table: Element): string {
       borderValueOf(style.get(`mso-border-${cssName}-alt`)) ??
       borderValueOf(style.get(`mso-border-${cssName}`)) ??
       borderValueOf(style.get(`border-${cssName}`)) ??
+      longhandBorderOf(style, `border-${cssName}`) ??
       fallback;
     if (border !== undefined) inner += borderElementXml(xmlName, border);
   }
@@ -253,12 +290,15 @@ function cellMarginsXml(style: ReadonlyMap<string, string>): string {
 /** Emit cell borders, shading, margins, and vertical alignment in CT_TcPr order. */
 export function cellCssPropertiesXml(cell: Element): string {
   const style = parseInlineStyle(cell);
-  const common = borderValueOf(style.get('mso-border-alt') ?? style.get('border'));
+  const common =
+    borderValueOf(style.get('mso-border-alt') ?? style.get('border')) ??
+    longhandBorderOf(style, 'border');
   let borders = '';
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
     const border =
       borderValueOf(style.get(`mso-border-${edge}-alt`)) ??
       borderValueOf(style.get(`border-${edge}`)) ??
+      longhandBorderOf(style, `border-${edge}`) ??
       common;
     if (border !== undefined) borders += borderElementXml(edge, border);
   }

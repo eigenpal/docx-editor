@@ -54,10 +54,15 @@ export function clipboardNotesPartXml(
   for (const [id, blocks] of notes) {
     inner += `<w:${kind} w:id="${id}">${blocks.join('')}</w:${kind}>`;
   }
+  // Note bodies can carry projected `w:drawing` runs, so the part declares the same
+  // drawing namespaces as the document part.
   return (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     `<w:${kind}s xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" ` +
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ' +
+    'xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" ' +
+    'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
+    'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">' +
     `${inner}</w:${kind}s>`
   );
 }

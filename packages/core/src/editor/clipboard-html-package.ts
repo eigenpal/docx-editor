@@ -91,7 +91,9 @@ export function writeHtmlFragmentPackage(input: HtmlFragmentPackageInput): Uint8
     `<Default Extension="rels" ContentType="${RELS_CT}"/>` +
     '<Default Extension="xml" ContentType="application/xml"/>';
   for (const [extension, contentType] of input.mediaExtensions) {
-    defaults += `<Default Extension="${extension}" ContentType="${contentType}"/>`;
+    defaults +=
+      `<Default Extension="${escapeXmlAttribute(extension)}" ` +
+      `ContentType="${escapeXmlAttribute(contentType)}"/>`;
   }
   entries.set(
     '[Content_Types].xml',

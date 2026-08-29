@@ -5,7 +5,7 @@
 // Hyperlinks pass `sanitizeHref`, and images accept bounded `data:` URIs only.
 // XML emission escapes all file-derived text and attributes.
 import { sanitizeHref, escapeXml, escapeXmlAttribute } from '../store/package/sinks.ts';
-import { sniffImageMime, validateRasterHeader } from '../store/package/image-resources.ts';
+import { projectHtmlImage } from './clipboard-html-images.ts';
 import {
   htmlListKindAndStart,
   semanticHtmlListKind,
@@ -30,7 +30,6 @@ import {
   applyParaCss,
   applyRunCss,
   applyWordParagraphAlignment,
-  imageDimensionPx,
   isElement,
   isWordClipboardHtml,
   parseInlineStyle,
@@ -89,7 +88,6 @@ const DEFAULT_MAX_DEPTH = 64;
 const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 const IGNORED_TAGS = new Set(
   (
     'script style head template iframe object embed noscript svg math ' +
@@ -119,7 +117,8 @@ interface FlowContext {
   readonly paragraphMarkCovered: boolean;
   readonly pre: boolean;
   readonly list: ListState | null;
-  readonly noteBody?: boolean;
+  /** Set while projecting a note definition body: the note the blocks belong to. */
+  readonly noteBody?: { readonly kind: ClipboardNoteKind; readonly id: number };
   readonly rels?: RelEntry[];
 }
 
@@ -140,6 +139,8 @@ interface Projection {
   readonly classAlignments: ReadonlyMap<string, HtmlParagraphAlign>;
   readonly notes: Record<ClipboardNoteKind, Map<number, readonly string[]>>;
   readonly noteRels: Record<ClipboardNoteKind, RelEntry[]>;
+  /** Ids with a collected definition — the only ids a live note reference may carry. */
+  readonly definedNotes: Record<ClipboardNoteKind, ReadonlySet<number>>;
 }
 
 function clamp(value: number, low: number, high: number): number {
@@ -259,103 +260,6 @@ function paragraphXml(para: ParaProps, runs: readonly string[]): string {
   return `<w:p>${pPrXml(para)}${runs.join('')}</w:p>`;
 }
 
-// --- Images: bounded base64 `data:` URIs only, never a fetch
-
-const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-const BASE64_LOOKUP: Int16Array = (() => {
-  const table = new Int16Array(128).fill(-1);
-  for (let i = 0; i < BASE64_ALPHABET.length; i += 1) {
-    table[BASE64_ALPHABET.charCodeAt(i)] = i;
-  }
-  return table;
-})();
-
-/** Strict bounded base64 decode: the size cap applies BEFORE any allocation. */
-function decodeBase64(data: string, maxBytes: number): Uint8Array | null {
-  if (data.length === 0 || data.length % 4 !== 0) return null;
-  const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
-  const byteLength = (data.length / 4) * 3 - padding;
-  if (byteLength <= 0 || byteLength > maxBytes) return null;
-  const out = new Uint8Array(byteLength);
-  let at = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    let chunk = 0;
-    let bits = 0;
-    for (let j = 0; j < 4; j += 1) {
-      const code = data.charCodeAt(i + j);
-      if (code === 0x3d) {
-        // `=` only in the final positions.
-        if (i + j < data.length - padding) return null;
-        continue;
-      }
-      const value = code < 128 ? BASE64_LOOKUP[code]! : -1;
-      if (value < 0) return null;
-      chunk = (chunk << 6) | value;
-      bits += 6;
-    }
-    chunk <<= 24 - bits;
-    if (bits >= 12) out[at++] = (chunk >>> 16) & 0xff;
-    if (bits >= 18) out[at++] = (chunk >>> 8) & 0xff;
-    if (bits >= 24) out[at++] = chunk & 0xff;
-  }
-  return at === byteLength ? out : null;
-}
-
-const DATA_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|gif|emf);base64,([A-Za-z0-9+/=]+)$/i;
-
-/** Project a `data:` image into a media part + rel + inline `w:drawing` run. */
-function projectImage(element: Element, runs: string[], p: Projection, rels: RelEntry[]): void {
-  const src = element.getAttribute('src');
-  if (src === null || src.length > p.maxImageBytes * 2) return;
-  const match = DATA_IMAGE_RE.exec(src);
-  if (!match) return; // External/blob/http sources drop with no fetch.
-  const bytes = decodeBase64(match[1]!, p.maxImageBytes);
-  if (bytes === null) return;
-  const sniffed = sniffImageMime(bytes);
-  if (sniffed !== 'image/png' && sniffed !== 'image/jpeg' && sniffed !== 'image/gif') return;
-  const header = validateRasterHeader(bytes, sniffed);
-  if (header === null) return;
-
-  const style = parseInlineStyle(element);
-  let widthPx = imageDimensionPx(element, style, 'width', p.wordHtml);
-  let heightPx = imageDimensionPx(element, style, 'height', p.wordHtml);
-  if (widthPx === null && heightPx === null) {
-    widthPx = (header.pixelWidth * 96) / (header.dpiX ?? 96);
-    heightPx = (header.pixelHeight * 96) / (header.dpiY ?? 96);
-  } else if (widthPx !== null && heightPx === null) {
-    heightPx = (widthPx * header.pixelHeight) / header.pixelWidth;
-  } else if (widthPx === null && heightPx !== null) {
-    widthPx = (heightPx * header.pixelWidth) / header.pixelHeight;
-  }
-  // Unknown extent falls back to 300x200pt.
-  const cx = widthPx === null ? 3_810_000 : clamp(Math.round(widthPx * 9525), 9525, 30_000_000);
-  const cy = heightPx === null ? 2_540_000 : clamp(Math.round(heightPx * 9525), 9525, 30_000_000);
-
-  const extension = sniffed === 'image/png' ? 'png' : sniffed === 'image/gif' ? 'gif' : 'jpeg';
-  p.imageCount += 1;
-  p.media.set(`word/media/image${p.imageCount}.${extension}`, bytes);
-  if (!p.mediaExtensions.has(extension)) p.mediaExtensions.set(extension, sniffed);
-  const relId = allocateRel(
-    p,
-    `${R_NS}/image`,
-    `media/image${p.imageCount}.${extension}`,
-    false,
-    rels
-  );
-  p.docPrId += 1;
-  runs.push(
-    '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
-      `<wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${p.docPrId}" name=""/>` +
-      `<wp:cNvGraphicFramePr/><a:graphic><a:graphicData uri="${PIC_NS}"><pic:pic>` +
-      '<pic:nvPicPr><pic:cNvPr id="0" name="" descr=""/><pic:cNvPicPr/></pic:nvPicPr>' +
-      `<pic:blipFill><a:blip r:embed="${relId}"/>` +
-      '<a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
-      `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
-      '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
-      '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>'
-  );
-}
-
 // --- Allocation
 
 function allocateRel(
@@ -455,7 +359,9 @@ function collectInline(
     return;
   }
   if (tag === 'img') {
-    projectImage(node, runs, p, ctx.rels ?? p.rels);
+    projectHtmlImage(node, runs, p, (target) =>
+      allocateRel(p, `${R_NS}/image`, target, false, ctx.rels ?? p.rels)
+    );
     return;
   }
   let taggedRun = applyInlineTag(ctx.run, tag);
@@ -464,24 +370,34 @@ function collectInline(
   if (noteReference === null && isClipboardHyperlink(linkHref)) {
     taggedRun = { ...taggedRun, color: '0563C1', underline: true };
   }
+  // Never mutate the shared context run: helpers return `base` by identity when idle.
+  let nextRun = applyRunCss(taggedRun, style);
+  const language = clipboardLanguageTag(node.getAttribute('lang'));
+  if (language !== null) nextRun = { ...nextRun, lang: language };
+  if (node.getAttribute('dir')?.trim().toLowerCase() === 'rtl') nextRun = { ...nextRun, rtl: true };
   const nextCtx: FlowContext = {
     ...ctx,
-    run: applyRunCss(taggedRun, style),
+    run: nextRun,
     pre: ctx.pre || tag === 'pre',
   };
-  const language = clipboardLanguageTag(node.getAttribute('lang'));
-  if (language !== null) nextCtx.run.lang = language;
-  if (node.getAttribute('dir')?.trim().toLowerCase() === 'rtl') nextCtx.run.rtl = true;
   if (noteReference !== null) {
-    if (ctx.noteBody) {
+    if (
+      ctx.noteBody !== undefined &&
+      ctx.noteBody.kind === noteReference.kind &&
+      ctx.noteBody.id === noteReference.id
+    ) {
+      // The note's own number mark, inside its own body.
       const localName = noteReference.kind === 'footnote' ? 'footnoteRef' : 'endnoteRef';
       runs.push(`<w:r>${rPrXml(nextCtx.run)}<w:${localName}/></w:r>`);
-    } else {
+      return;
+    }
+    if (ctx.noteBody === undefined && p.definedNotes[noteReference.kind].has(noteReference.id)) {
       const localName =
         noteReference.kind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
       runs.push(`<w:r>${rPrXml(nextCtx.run)}<w:${localName} w:id="${noteReference.id}"/></w:r>`);
+      return;
     }
-    return;
+    // A dangling or cross-note reference keeps its visible text instead of a live mark.
   }
   if (tag === 'a') {
     const href = node.getAttribute('href');
@@ -511,7 +427,7 @@ function collectInline(
         `<w:bookmarkStart w:id="${id}" w:name="${escapeXmlAttribute(bookmarkName)}"/>` +
         `${content}<w:bookmarkEnd w:id="${id}"/>`;
     }
-    runs.push(content);
+    if (content.length > 0) runs.push(content);
     return;
   }
   for (const child of Array.from(node.childNodes)) {
@@ -595,10 +511,13 @@ function projectParagraph(
   const next: FlowContext = {
     run,
     para,
-    paragraphMarkCovered: Object.keys(para).length > 0,
+    // Only mark-defining properties (style, numbering) justify replacing the host
+    // paragraph's mark on paste; incidental CSS (margins, alignment) must not force
+    // the structural path for a plain single-paragraph snippet.
+    paragraphMarkCovered: para.styleId !== undefined || para.numPr !== undefined,
     pre,
     list: ctx.list,
-    ...(ctx.noteBody ? { noteBody: true } : {}),
+    ...(ctx.noteBody ? { noteBody: ctx.noteBody } : {}),
     ...(ctx.rels ? { rels: ctx.rels } : {}),
   };
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true, undefined, false);
@@ -877,7 +796,7 @@ function projectCell(
     paragraphMarkCovered: false,
     pre: false,
     list: null,
-    ...(ctx.noteBody ? { noteBody: true } : {}),
+    ...(ctx.noteBody ? { noteBody: ctx.noteBody } : {}),
     ...(ctx.rels ? { rels: ctx.rels } : {}),
   };
   const blocks: string[] = [];
@@ -927,6 +846,12 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   const body = parsed.body;
   if (!body) return { ok: false, reason: 'no-content' };
 
+  const noteDefinitions = clipboardNoteDefinitions(parsed);
+  const definedNotes: Record<ClipboardNoteKind, Set<number>> = {
+    footnote: new Set(),
+    endnote: new Set(),
+  };
+  for (const note of noteDefinitions) definedNotes[note.kind].add(note.id);
   const projection: Projection = {
     nodesLeft: limits.maxNodes ?? DEFAULT_MAX_NODES,
     maxDepth: limits.maxDepth ?? DEFAULT_MAX_DEPTH,
@@ -944,6 +869,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     classAlignments: wordClassAlignmentsFromDocument(parsed),
     notes: { footnote: new Map(), endnote: new Map() },
     noteRels: { footnote: [], endnote: [] },
+    definedNotes,
   };
   const blocks: string[] = [];
   const rootCtx: FlowContext = {
@@ -955,12 +881,16 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   };
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
   const bodyLastMarkCovered = projection.lastMarkCovered;
-  for (const note of clipboardNoteDefinitions(parsed)) {
+  for (const note of noteDefinitions) {
     const noteBlocks: string[] = [];
     projectFlow(
       Array.from(note.element.childNodes),
       0,
-      { ...rootCtx, noteBody: true, rels: projection.noteRels[note.kind] },
+      {
+        ...rootCtx,
+        noteBody: { kind: note.kind, id: note.id },
+        rels: projection.noteRels[note.kind],
+      },
       projection,
       noteBlocks,
       true

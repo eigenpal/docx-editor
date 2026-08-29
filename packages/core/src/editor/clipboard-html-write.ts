@@ -27,6 +27,8 @@ import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
 import { wordTableCellCss } from './clipboard-html-write-table-styles.ts';
 import {
+  WORD_HIGHLIGHT_COLORS,
+  WORD_JC_TO_TEXT_ALIGN,
   wordBorderCss,
   wordCssFontFamily,
   wordLineSpacingCss,
@@ -276,35 +278,6 @@ function toggleOn(sources: readonly OoxmlElement[], localName: string): boolean 
   return state;
 }
 
-const HIGHLIGHT_COLORS: Readonly<Record<string, string>> = {
-  yellow: 'yellow',
-  green: 'green',
-  cyan: 'cyan',
-  magenta: 'magenta',
-  blue: 'blue',
-  red: 'red',
-  darkBlue: 'darkblue',
-  darkCyan: 'darkcyan',
-  darkGreen: 'darkgreen',
-  darkMagenta: 'darkmagenta',
-  darkRed: 'darkred',
-  darkYellow: '#808000',
-  darkGray: '#a9a9a9',
-  lightGray: '#d3d3d3',
-  black: 'black',
-  white: 'white',
-};
-
-const JC_TO_TEXT_ALIGN: Readonly<Record<string, string>> = {
-  left: 'left',
-  start: 'left',
-  center: 'center',
-  right: 'right',
-  end: 'right',
-  both: 'justify',
-  distribute: 'justify',
-};
-
 interface RunCss {
   readonly css: string;
   readonly vanish: boolean;
@@ -349,8 +322,8 @@ function runCssOf(sources: readonly OoxmlElement[]): RunCss {
   // Highlight wins over shading when both are present.
   const highlightVal = wmlVal(lastProperty(sources, 'highlight'));
   const highlight =
-    highlightVal !== undefined && Object.hasOwn(HIGHLIGHT_COLORS, highlightVal)
-      ? HIGHLIGHT_COLORS[highlightVal]
+    highlightVal !== undefined && Object.hasOwn(WORD_HIGHLIGHT_COLORS, highlightVal)
+      ? WORD_HIGHLIGHT_COLORS[highlightVal]
       : undefined;
   const shdFill = cssHexColor(foldAttribute(sources, 'shd', 'fill'));
   if (highlight) rules.push(`background-color:${highlight}`);
@@ -375,7 +348,9 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
   const rules: string[] = [];
   const jc = wmlVal(lastProperty(sources, 'jc'));
   const align =
-    jc !== undefined && Object.hasOwn(JC_TO_TEXT_ALIGN, jc) ? JC_TO_TEXT_ALIGN[jc] : undefined;
+    jc !== undefined && Object.hasOwn(WORD_JC_TO_TEXT_ALIGN, jc)
+      ? WORD_JC_TO_TEXT_ALIGN[jc]
+      : undefined;
   if (align) rules.push(`text-align:${align}`);
 
   const before = parseIntValue(foldAttribute(sources, 'spacing', 'before'));
@@ -457,8 +432,9 @@ interface RenderContext {
   readonly docRels: readonly RelationshipRecord[];
   readonly maxImageBytes: number;
   readonly maxTotalImageBytes: number;
-  /** Running total of media bytes already inlined, shared across the whole document. */
-  imageBytesUsed: number;
+  /** Running total of inlined media bytes — one shared object, so per-note context
+   *  forks (`{ ...ctx }`) keep charging the same whole-document budget. */
+  readonly imageBudget: { used: number };
   readonly noteBody: WordNoteBodyContext | null;
 }
 
@@ -544,8 +520,8 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
           : null;
   if (!mime) return '';
   if (bytes.byteLength > ctx.maxImageBytes) return '';
-  if (ctx.imageBytesUsed + bytes.byteLength > ctx.maxTotalImageBytes) return '';
-  ctx.imageBytesUsed += bytes.byteLength;
+  if (ctx.imageBudget.used + bytes.byteLength > ctx.maxTotalImageBytes) return '';
+  ctx.imageBudget.used += bytes.byteLength;
 
   const extent = findDescendant(inline, 'extent', WP_NAMESPACE_URI);
   const cx = extent ? parseIntValue(attributeValueOf(extent, 'cx', '')) : null;
@@ -651,8 +627,16 @@ function renderInline(
         const record = relId
           ? ctx.docRels.find((r) => r.id === relId && r.type === `${R_NS}/hyperlink`)
           : undefined;
+        // An internal-mode rel target is a part path, not a URL — only its fragment
+        // form (a same-document anchor) survives into the interop flavour.
+        const rawTarget =
+          record === undefined
+            ? undefined
+            : record.targetMode === 'External' || record.rawTarget.startsWith('#')
+              ? record.rawTarget
+              : undefined;
         const target = clipboardHyperlinkTarget(
-          record?.rawTarget,
+          rawTarget,
           attributeValueOf(child, 'anchor', WML_NAMESPACE_URI)
         );
         out += target !== null ? `<a href="${escapeAttr(target)}">${inner}</a>` : inner;
@@ -941,8 +925,11 @@ function renderNoteList(
     if (child.localName !== kind) continue;
     const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
     if (id === undefined || !/^[1-9]\d{0,4}$/.test(id)) continue;
+    // Same cap as wordNoteReferenceHtml, so no note body ships without its reference.
+    const idValue = Number.parseInt(id, 10);
+    if (idValue > 32_767) continue;
     const inner = renderBlocks(
-      { ...ctx, noteBody: { kind, id: Number.parseInt(id, 10) }, docRels: noteRels },
+      { ...ctx, noteBody: { kind, id: idValue }, docRels: noteRels },
       child.children
     );
     if (inner !== '')
@@ -988,7 +975,7 @@ export function interopHtmlFromFragmentPackage(
     docRels: relationshipsOf(pkg, pkg.mainDocumentPart),
     maxImageBytes: options?.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     maxTotalImageBytes: options?.maxTotalImageBytes ?? DEFAULT_MAX_TOTAL_IMAGE_BYTES,
-    imageBytesUsed: 0,
+    imageBudget: { used: 0 },
     noteBody: null,
   };
   return (

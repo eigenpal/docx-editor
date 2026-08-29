@@ -17,6 +17,37 @@ export function wordParagraphClassOf(styleId: string | undefined): string | null
   return WORD_PARAGRAPH_CLASSES[styleId] ?? null;
 }
 
+/** ST_HighlightColor names to CSS colors. */
+export const WORD_HIGHLIGHT_COLORS: Readonly<Record<string, string>> = {
+  yellow: 'yellow',
+  green: 'green',
+  cyan: 'cyan',
+  magenta: 'magenta',
+  blue: 'blue',
+  red: 'red',
+  darkBlue: 'darkblue',
+  darkCyan: 'darkcyan',
+  darkGreen: 'darkgreen',
+  darkMagenta: 'darkmagenta',
+  darkRed: 'darkred',
+  darkYellow: '#808000',
+  darkGray: '#a9a9a9',
+  lightGray: '#d3d3d3',
+  black: 'black',
+  white: 'white',
+};
+
+/** `w:jc` values to CSS `text-align`. */
+export const WORD_JC_TO_TEXT_ALIGN: Readonly<Record<string, string>> = {
+  left: 'left',
+  start: 'left',
+  center: 'center',
+  right: 'right',
+  end: 'right',
+  both: 'justify',
+  distribute: 'justify',
+};
+
 /** Quote a file-supplied font name without removing Unicode letters. */
 export function wordCssFontFamily(raw: string): string | null {
   const value = raw.trim();

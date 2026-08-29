@@ -1,19 +1,12 @@
-const TAB_RUN_CONTENTS = [
-  '',
-  '<w:tab/>',
-  '<w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
-] as const;
+// The file-supplied count never reaches `.repeat()` unclamped.
+const MAX_TAB_RUN = 64;
 
-/** Map Word's bounded `mso-tab-count` to semantic tab elements. */
+/** Map Word's `mso-tab-count` to semantic tab elements, clamped to a fixed bound. */
 export function htmlTabRunContents(raw: string | undefined): string {
-  if (raw === undefined || !/^\d$/.test(raw.trim())) return '';
-  return TAB_RUN_CONTENTS[Number.parseInt(raw, 10)] ?? '';
+  if (raw === undefined) return '';
+  const trimmed = raw.trim();
+  if (!/^\d{1,4}$/.test(trimmed)) return '';
+  return '<w:tab/>'.repeat(Math.min(Number.parseInt(trimmed, 10), MAX_TAB_RUN));
 }
 
 /** Map Word's closed positional-tab attributes to a semantic `w:ptab`. */

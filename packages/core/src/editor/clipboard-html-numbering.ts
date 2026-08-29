@@ -53,15 +53,25 @@ export function htmlListKindAndStart(marker: string): {
   readonly kind: HtmlListKind;
   readonly start: number;
 } {
-  const trimmed = marker.trim();
+  // Word wraps some formats in parentheses — '(1)', '(a)' — so the matchers see the
+  // ordinal itself. The closing bracket then satisfies the `[.)]` terminator.
+  const trimmed = marker.trim().replace(/^\(/, '');
   const decimal = /^(\d{1,5})[.)]/.exec(trimmed);
   if (decimal) {
     return { kind: 'decimal', start: Math.min(32_767, Number.parseInt(decimal[1]!, 10)) };
   }
-  if (/^[IVXLCDM]+[.)]/.test(trimmed)) return { kind: 'upperRoman', start: 1 };
-  if (/^[ivxlcdm]+[.)]/.test(trimmed)) return { kind: 'lowerRoman', start: 1 };
-  if (/^[A-Z][.)]/.test(trimmed)) return { kind: 'upperLetter', start: 1 };
-  if (/^[a-z][.)]/.test(trimmed)) return { kind: 'lowerLetter', start: 1 };
+  // A multi-letter roman run is unambiguous. A single letter is roman only for 'i' —
+  // the marker a roman list's first item carries; 'c.' or 'v.' is a letter list that
+  // starts mid-alphabet.
+  if (/^(?:[IVXLCDM]{2,}|I)[.)]/.test(trimmed)) return { kind: 'upperRoman', start: 1 };
+  if (/^(?:[ivxlcdm]{2,}|i)[.)]/.test(trimmed)) return { kind: 'lowerRoman', start: 1 };
+  const letter = /^([A-Za-z])[.)]/.exec(trimmed);
+  if (letter) {
+    const code = letter[1]!.charCodeAt(0);
+    return code >= 97
+      ? { kind: 'lowerLetter', start: code - 96 }
+      : { kind: 'upperLetter', start: code - 64 };
+  }
   return { kind: 'bullet', start: 1 };
 }
 

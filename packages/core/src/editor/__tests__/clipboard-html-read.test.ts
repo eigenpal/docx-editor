@@ -751,10 +751,10 @@ describe('images', () => {
     expect(pkg.partBytes.get('/word/media/image1.jpeg')).toBeUndefined();
   });
 
-  test('a recognized image signature with an invalid header is dropped', () => {
+  test('a recognized image signature with an unparseable header keeps fallback extents', () => {
     const { docXml, pkg } = openFragment('<p><img src="data:image/jpeg;base64,/9j/"></p>');
-    expect(docXml).not.toContain('w:drawing');
-    expect(pkg.partBytes.get('/word/media/image1.jpeg')).toBeUndefined();
+    expect(docXml).toContain('<wp:extent cx="3810000" cy="2540000"/>');
+    expect(pkg.partBytes.get('/word/media/image1.jpeg')).toBeDefined();
   });
 });
 
