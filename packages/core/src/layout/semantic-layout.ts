@@ -2197,7 +2197,11 @@ function layoutBlocksPass(
         markRunProperties.length === 0
           ? DEFAULT_RUN_STYLE
           : resolveRunStyle(markRunProperties, styleCascade?.themeFonts);
-      const firstTail = lines.length <= 1 ? borderExtent + spacing.after : 0;
+      // Spacing-after never decides its own line's fit (§17.3.1.33): Word fits the LINE box,
+      // and trailing space that crosses the page boundary clips at the break. Only the closing
+      // border rule is real painted content below the last line, so only it joins the budget.
+      // An oversized `w:after` — the signature-block idiom — otherwise mints blank pages.
+      const firstTail = lines.length <= 1 ? borderExtent : 0;
       const prospectiveFirstTop = cursorY + lead + topExtent;
       const firstZones = placementZonesForLine(
         entry,
@@ -2577,7 +2581,10 @@ function layoutBlocksPass(
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
       const pendingLine = lines[lineIndex]!;
       const isLastLine = lineIndex === lines.length - 1;
-      const tail = isLastLine ? borderExtent + spacing.after : 0;
+      // Spacing-after stays out of the fit budget (see the firstTail note above): it moves
+      // where the NEXT paragraph starts, never whether this line fits, and it clips at the
+      // page boundary rather than carrying over.
+      const tail = isLastLine ? borderExtent : 0;
       if (lineIndex === fragmentFirstLine) {
         fragmentParagraphStartY = cursorY;
         if (paragraphHasAnchors && paragraphAnchorOrigin === null && fragmentIndex === 0) {
