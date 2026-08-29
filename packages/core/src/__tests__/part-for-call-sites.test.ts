@@ -28,7 +28,10 @@ const PINNED_CALL_SITES: Readonly<Record<string, number>> = {
   'core/src/automation/server-host.ts': 2,
   'core/src/binding/tree-session.ts': 5, // the facade definition moved to tree-session-contract.ts
   'core/src/binding/tree-session-contract.ts': 1, // the session view's partFor declaration
-  'core/src/binding/tree-session-apply.ts': 1,
+  // Two writes: the collaboration part-name resolution, and the atomic multi-story commit
+  // resolving each extra group's part BEFORE its transaction writes it — the slot is spent
+  // by the write either way.
+  'core/src/binding/tree-session-apply.ts': 2,
   'core/src/editor/doc-target-resolution.ts': 2,
   'core/src/editor/docx-editor-derive.ts': 1,
   'core/src/editor/docx-editor-images.ts': 1,
