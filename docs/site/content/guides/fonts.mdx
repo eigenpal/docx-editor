@@ -296,6 +296,67 @@ describes itself is not one: `word/fontTable.xml` states a PANOSE
 classification, never an advance width, so nothing in the file bounds how much
 wider the substitute would run.
 
+### Serve the catalog from your own origin
+
+`googleFonts()` fetches from a content delivery network. To send those requests
+somewhere else, pass `fetcher`. It replaces the `fetch` the resolver uses, so
+your function decides where every byte comes from:
+
+```ts
+googleFonts({
+  fetcher: (input) => fetch(rewriteToYourMirror(String(input))),
+});
+```
+
+`packagedFonts()` and `defaultFonts()` take the same option. Their assets ship
+inside the package, so they read your own origin either way.
+
+The bytes suit a mirror well. Each face is pinned to an immutable commit and
+carries a `sha256:` value that the engine re-derives on admission, so a
+substituted or corrupted file fails loudly rather than rendering.
+
+Use `fetcher` for caching too. The resolver keeps fetched bytes in memory,
+keyed by the fetcher you passed, which is what a browser tab needs. A server
+that renders in short-lived processes gets no reuse: nothing is written to disk
+and nothing is shared between workers. Wrapping `fetcher` is where you add
+that:
+
+```ts
+googleFonts({
+  fetcher: async (input) => {
+    const url = String(input);
+    const hit = await yourCache.get(url);
+    if (hit) return new Response(hit);
+    const response = await fetch(url);
+    const bytes = new Uint8Array(await response.clone().arrayBuffer());
+    await yourCache.set(url, bytes);
+    return response;
+  },
+});
+```
+
+### Run without access to the network
+
+A face that cannot be fetched is dropped, and the family it belonged to measures
+on the engine's fixed fallback instead.
+
+Treat that as a layout problem, not a cosmetic one. Substitute bytes are what
+keep wrapping and pagination close to Word, so a blocked request changes where
+your pages break rather than only how the text looks.
+
+The document still opens. Each dropped face goes to the resolver's own
+`onFailure` option, which writes a console warning when you pass no handler:
+
+```ts
+googleFonts({
+  onFailure: ({ family, url, diagnostic }) => report(family, url, diagnostic),
+});
+```
+
+If your deployment cannot reach a content delivery network, either point
+`fetcher` at a mirror you control or leave `googleFonts()` out and use
+`packagedFonts()` alone, which reads only the bytes inside the package.
+
 ### Write your own resolver
 
 Wrap it in `defineFontResolver`. That mark is how `useDocxSource` tells a
