@@ -1028,19 +1028,20 @@ function layoutBlocksPass(
    * full-height overflow page, so a block taller than the limit still terminates, and the
    * search reads "produced a second page" as "does not fit".
    */
-  const contentHeight = (): number => {
-    // Reserves are keyed by DOCUMENT page index (computeFootnoteReserves); this pass fills
-    // the document page at `pageIndexStart + pages.length`. A continuous section's local
-    // page 0 IS the previous section's last sheet: both passes read the same document slot,
-    // so every flow sharing the sheet stops above the same note area.
-    const base = Math.max(
-      1,
-      insetsFor(pages.length).height - (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0)
-    );
+  const contentHeightOf = (reservedPt: number): number => {
+    const base = Math.max(1, insetsFor(pages.length).height - reservedPt);
     return columnRegionBottom !== undefined && pages.length === 0
       ? Math.max(1, Math.min(base, columnRegionBottom))
       : base;
   };
+  const contentHeight = (): number =>
+    // Reserves are keyed by DOCUMENT page index (computeFootnoteReserves); this pass fills
+    // the document page at `pageIndexStart + pages.length`. A continuous section's local
+    // page 0 IS the previous section's last sheet: both passes read the same document slot,
+    // so every flow sharing the sheet stops above the same note area.
+    contentHeightOf(pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0);
+  /** The same band with the footnote reserve ignored — the table paginator's recovery. */
+  const unreservedContentHeight = (): number => contentHeightOf(0);
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -1923,6 +1924,7 @@ function layoutBlocksPass(
       columnWidth,
       columnLeft,
       contentHeight,
+      unreservedContentHeight,
       advanceColumn: () => {
         cursorY = flow.cursorY;
         advanceColumn();

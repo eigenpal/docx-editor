@@ -226,6 +226,115 @@ describe('oversized footnote starts on its reference page (issue #608)', () => {
     expectNoStarvedPages(layout);
   });
 
+  test('a cantSplit table row taller than the reserve-shrunk band takes the full page', () => {
+    // Paragraph 2 references a footnote whose carry reserves most of the next page; the
+    // w:cantSplit row (40 lines, ~509pt) exceeds the band the reserve leaves but fits the
+    // full column. The paginator must place it against the full band — never abort layout
+    // over a row+reserve collision — and the notes then drain past the row's page.
+    const rowParas = Array.from(
+      { length: 40 },
+      (_, i) => `<w:p><w:r><w:t>Row line ${i}</w:t></w:r></w:p>`
+    ).join('');
+    const tableXml =
+      '<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="9360"/></w:tblGrid>' +
+      '<w:tr><w:trPr><w:cantSplit/></w:trPr>' +
+      `<w:tc><w:tcPr><w:tcW w:w="9360" w:type="dxa"/></w:tcPr>${rowParas}</w:tc></w:tr>` +
+      '</w:tbl>';
+    const body =
+      '<w:p><w:r><w:t>Lead paragraph</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>Reference here</w:t><w:footnoteReference w:id="1"/></w:r></w:p>' +
+      tableXml +
+      Array.from({ length: 6 }, (_, i) => `<w:p><w:r><w:t>Tail ${i}</w:t></w:r></w:p>`).join('');
+    const layout = layoutOf(packageXml(body, singleRunFootnote(1, 9000)), 'fn-cantsplit');
+
+    // The row landed whole: one table fragment, taller than any reserve-shrunk band.
+    const tableFragments = layout.pages.flatMap((page) =>
+      page.fragments.filter((fragment) => fragment.kind === 'table')
+    );
+    expect(tableFragments.length).toBe(1);
+    expect(tableFragments[0]!.box.height).toBeGreaterThan(400);
+
+    // Footnote areas never overlap body content on any page.
+    for (const page of layout.pages) {
+      if (!page.footnotes) continue;
+      let bodyBottom = 0;
+      for (const fragment of page.fragments) {
+        bodyBottom = Math.max(bodyBottom, fragment.box.y + fragment.box.height);
+      }
+      expect(page.footnotes.box.y).toBeGreaterThanOrEqual(page.contentBox.y + bodyBottom - 0.5);
+    }
+
+    const noteLines = Math.ceil(9000 / CHARS_PER_LINE);
+    const expected = Math.ceil(
+      ((8 + 40 + noteLines) * LINE_H) / layout.pages[0]!.contentBox.height
+    );
+    expect(Math.abs(layout.pages.length - expected)).toBeLessThanOrEqual(1);
+    expectFullyDrained(layout, noteLines);
+  });
+
+  test('a page hosting several references sizes each note to its own reference line', () => {
+    // 12 references over the first 48 paragraphs, all on page 0 of a body-only layout.
+    // Sizing the page's reserve against the LOWEST reference line strangles every note to
+    // the sliver under it — stably, because the resulting layout reproduces the same floor.
+    // Per-reference floors let the first notes push body (and later references) forward.
+    const refs = new Map(Array.from({ length: 12 }, (_, i) => [(i + 1) * 4, i + 1] as const));
+    const notesXml = Array.from(
+      { length: 12 },
+      (_, i) =>
+        `<w:footnote w:id="${i + 1}"><w:p><w:r><w:t>${'n'.repeat(800)}</w:t></w:r></w:p></w:footnote>`
+    ).join('');
+    const layout = layoutOf(packageXml(bodyParas(60, refs), notesXml), 'fn-multi-ref');
+
+    // Page 0 keeps only the body above the accumulated note stack — not 48 lines with a
+    // strangled 1-line note region.
+    expect(bodyLineCount(layout.pages[0]!)).toBeLessThanOrEqual(30);
+    expect(placedNoteHeight(layout.pages[0]!)).toBeGreaterThan(300);
+
+    const noteLines = 12 * Math.ceil(800 / CHARS_PER_LINE);
+    const expected = Math.ceil(((60 + noteLines) * LINE_H) / layout.pages[0]!.contentBox.height);
+    expect(Math.abs(layout.pages.length - expected)).toBeLessThanOrEqual(1);
+    expectFullyDrained(layout, noteLines);
+    expectNoStarvedPages(layout);
+  });
+
+  test('many mid-size footnotes adopt recomputed reserves instead of accumulating stale ones', () => {
+    // 24 notes of ~18 lines across ~13 pages: every reserve pass shifts references forward,
+    // so a monotonic union of pass maps keeps reserves at every slot any pass ever wanted —
+    // runs of one-line pages whose reservation nothing fills (the real-document shape behind
+    // issue #608). Adoption stays within a page of the hand-computed packing cold, and the
+    // session-seeded passes continue the iteration to the interleaved fixed point.
+    const refs = new Map(Array.from({ length: 24 }, (_, i) => [(i + 1) * 8, i + 1] as const));
+    const notesXml = Array.from(
+      { length: 24 },
+      (_, i) =>
+        `<w:footnote w:id="${i + 1}"><w:p><w:r><w:t>${'n'.repeat(1500)}</w:t></w:r></w:p></w:footnote>`
+    ).join('');
+    const bytes = packageXml(bodyParas(200, refs), notesXml);
+
+    const noteLines = 24 * Math.ceil(1500 / CHARS_PER_LINE);
+    const cold = layoutOf(bytes, 'fn-adoption');
+    const expected = Math.ceil(((200 + noteLines) * LINE_H) / cold.pages[0]!.contentBox.height);
+    expect(Math.abs(cold.pages.length - expected)).toBeLessThanOrEqual(1);
+    expectFullyDrained(cold, noteLines);
+    expectNoStarvedPages(cold);
+
+    // Session-seeded passes continue the reserve iteration where the cold pass stopped;
+    // by the third the packing is interleaved everywhere and a further pass changes nothing.
+    const session = createLayoutSession();
+    let settled = layoutOf(bytes, 'fn-adoption', session);
+    for (let pass = 0; pass < 3; pass += 1) {
+      settled = layoutOf(bytes, 'fn-adoption', session, 2 + pass);
+    }
+    const again = layoutOf(bytes, 'fn-adoption', session, 5);
+    expect(shapeOf(again)).toBe(shapeOf(settled));
+    expect(settled.pages.length).toBe(cold.pages.length);
+    expectFullyDrained(settled, noteLines);
+    expectNoStarvedPages(settled);
+    // Fully settled, every note interleaves beside its reference — no drain sheets remain.
+    expect(settled.pages.every((page) => page.noteStream === undefined)).toBe(true);
+  });
+
   test('warm session converges to the cold layout after an edit near the reference', () => {
     const footnotes = singleRunFootnote(1, 9000);
     const session = createLayoutSession();

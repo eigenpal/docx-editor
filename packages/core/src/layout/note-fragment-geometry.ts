@@ -80,37 +80,41 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
 }
 
 /**
- * Bottom (content-relative pt) of the lowest body line on `page` that carries one of
- * `refs` — the band body text must KEEP when a footnote reserve is measured for the page.
+ * Bottom (content-relative pt) of the body line on `page` that carries `ref` — the band
+ * body text must KEEP for this reference when its footnote reserve is measured.
  *
  * Word's rule: a footnote STARTS on the page that references it. A reserve capped only by
  * the minimum body band (`MIN_FOOTNOTE_BODY_BAND_PT`) can exceed the room below the
- * referencing line, which
- * evicts that line — and with it the reference — to the next page. The next reserve pass
- * then follows the reference forward, the reflow loop oscillates between the two placements,
- * and the fingerprint lock freezes whichever phase it happens to be in: the referencing page
- * ends with body only, and a later page keeps a reservation nothing fills. Flooring the
- * reserve at this line keeps the reference together with the note's first fragment and gives
- * the loop a fixed point.
+ * referencing line, which evicts that line — and with it the reference — to the next page.
+ * The next reserve pass then follows the reference forward, the reflow loop oscillates
+ * between the two placements, and the fingerprint lock freezes whichever phase it happens
+ * to be in: the referencing page ends with body only, and a later page keeps a reservation
+ * nothing fills. Flooring the reserve at this line keeps the reference together with the
+ * note's first fragment and gives the loop a fixed point.
  *
- * A ref inside a table floors at the TABLE fragment's bottom: nested line geometry is not in
- * page-content coordinates, and keeping the whole block band is the conservative reading of
- * the same rule. A ref no fragment on this page owns contributes nothing.
+ * PER REFERENCE, never the page's lowest reference: notes accumulate top-down, and each
+ * note may push body down to ITS OWN reference line. On a page carrying many references, a
+ * single floor at the lowest one strangles every note above it to the sliver under that
+ * line — and that state is a fixed point, so the reflow loop keeps it. The caller sizes
+ * note `i`'s room against reference `i`'s floor; references whose room reaches zero simply
+ * carry forward, and the next pass finds them on the page body pushed them to.
+ *
+ * A ref inside a table floors at the TABLE fragment's bottom: nested line geometry is not
+ * in page-content coordinates, and keeping the whole block band is the conservative reading
+ * of the same rule. A ref no fragment on this page owns floors at zero.
  */
 export function noteReferenceFloorPt(
   page: PageRecord,
-  refs: readonly { readonly paragraphId: string; readonly atomOffset: number }[]
+  ref: { readonly paragraphId: string; readonly atomOffset: number }
 ): number {
   let floor = 0;
   for (const block of page.fragments) {
     if (block.kind === 'paragraph') {
-      for (const ref of refs) {
-        if (!fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) continue;
-        floor = Math.max(floor, referenceLineBottom(block, ref) ?? block.box.y + block.box.height);
-      }
+      if (!fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) continue;
+      floor = Math.max(floor, referenceLineBottom(block, ref) ?? block.box.y + block.box.height);
       continue;
     }
-    if (tableOwnsAnyRef(block, refs)) {
+    if (tableOwnsAnyRef(block, [ref])) {
       floor = Math.max(floor, block.box.y + block.box.height);
     }
   }
