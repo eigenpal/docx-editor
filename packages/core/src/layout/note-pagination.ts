@@ -45,6 +45,11 @@ import {
   type LayoutNoteStoryOptions,
 } from './note-layout.ts';
 import { noteMarkKey, type NoteMarkContext } from './note-projection.ts';
+import {
+  fragmentFlowBottom,
+  noteReferenceFloorPt,
+  shiftFragments,
+} from './note-fragment-geometry.ts';
 import { reindexAndRestackPages } from './page-restacking.ts';
 import type {
   BlockFragmentRecord,
@@ -549,66 +554,6 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
   };
 }
 
-function shiftParagraphFragment(
-  fragment: ParagraphFragmentRecord,
-  dy: number
-): ParagraphFragmentRecord {
-  if (dy === 0) return fragment;
-  return {
-    ...fragment,
-    box: { ...fragment.box, y: fragment.box.y + dy },
-    ...(fragment.shadingBox
-      ? { shadingBox: { ...fragment.shadingBox, y: fragment.shadingBox.y + dy } }
-      : {}),
-    ...(fragment.bottomBorder
-      ? {
-          bottomBorder: {
-            ...fragment.bottomBorder,
-            box: { ...fragment.bottomBorder.box, y: fragment.bottomBorder.box.y + dy },
-          },
-        }
-      : {}),
-    ...(fragment.borders
-      ? {
-          borders: fragment.borders.map((stroke) => ({
-            ...stroke,
-            box: { ...stroke.box, y: stroke.box.y + dy },
-          })),
-        }
-      : {}),
-    ...(fragment.marker
-      ? {
-          marker: {
-            ...fragment.marker,
-            box: { ...fragment.marker.box, y: fragment.marker.box.y + dy },
-          },
-        }
-      : {}),
-    lines: fragment.lines.map((line) => ({
-      ...line,
-      box: { ...line.box, y: line.box.y + dy },
-      spans: line.spans.map((span) => ({
-        ...span,
-        box: { ...span.box, y: span.box.y + dy },
-      })),
-    })),
-  };
-}
-
-function shiftFragments(
-  fragments: readonly BlockFragmentRecord[],
-  dy: number
-): BlockFragmentRecord[] {
-  if (dy === 0) return [...fragments];
-  return fragments.map((fragment) => {
-    if (fragment.kind === 'paragraph') return shiftParagraphFragment(fragment, dy);
-    return {
-      ...fragment,
-      box: { ...fragment.box, y: fragment.box.y + dy },
-    };
-  });
-}
-
 /**
  * Split one paragraph fragment at a line boundary so the head fits under `availableBottom`
  * (story-relative). Empty head means no line fits — caller must defer the fragment.
@@ -701,14 +646,6 @@ function splitParagraphFragmentByBottom(
       : {}),
   };
   return { head, tail };
-}
-
-function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): number {
-  let bottom = 0;
-  for (const fragment of fragments) {
-    bottom = Math.max(bottom, fragment.box.y + fragment.box.height);
-  }
-  return bottom;
 }
 
 /**
@@ -1129,6 +1066,15 @@ function buildFootnoteArea(
      * reserve measurement so height is not clipped before body reflow.
      */
     readonly reserveColumnBudget?: boolean;
+    /**
+     * Body band (content-relative pt) the reserve budget must additionally keep — the
+     * bottom of the page's lowest referencing line ({@link noteReferenceFloorPt}). Keeps a
+     * note's first fragment on its reference page: a budget that ignores where the
+     * reference sits evicts the referencing line itself, and the reflow loop then chases
+     * the reference across pages instead of converging. Only read with
+     * {@link reserveColumnBudget}; attach passes size from real body slack instead.
+     */
+    readonly reserveBodyFloorPt?: number;
     readonly separatorCache?: NoteSeparatorCache;
   }
 ): { area: NoteAreaRecord | undefined; nextCarry: NoteCarryMap } {
@@ -1173,7 +1119,9 @@ function buildFootnoteArea(
   );
   const columnBudget = Math.max(
     0,
-    page.contentBox.height - MIN_FOOTNOTE_BODY_BAND_PT - separator.flowHeight
+    page.contentBox.height -
+      Math.max(MIN_FOOTNOTE_BODY_BAND_PT, options?.reserveBodyFloorPt ?? 0) -
+      separator.flowHeight
   );
   const availableForNotes = options?.reserveColumnBudget ? columnBudget : slackBudget;
   const fullNoteColumn = Math.max(0, page.contentBox.height - separator.flowHeight);
@@ -2158,8 +2106,17 @@ export function computeFootnoteReserves(
     }
 
     // Column budget for the note stack (separator is added inside buildFootnoteArea).
-    // Cap so body retains MIN_FOOTNOTE_BODY_BAND_PT for a referencing line to land.
-    const maxArea = Math.max(0, bodyPage.contentBox.height - MIN_FOOTNOTE_BODY_BAND_PT);
+    // The body keeps everything down to the LOWEST referencing line (Word starts a footnote
+    // on the page that references it), never less than MIN_FOOTNOTE_BODY_BAND_PT. A reserve
+    // that ignores the reference evicts its own line to the next page, and the reflow loop
+    // then oscillates between the two placements until the fingerprint lock freezes one —
+    // the shape behind reference pages with zero note height and later pages holding a
+    // reservation nothing fills.
+    const referenceFloor = fnRefs.length > 0 ? noteReferenceFloorPt(bodyPage, fnRefs) : 0;
+    const maxArea = Math.max(
+      0,
+      bodyPage.contentBox.height - Math.max(MIN_FOOTNOTE_BODY_BAND_PT, referenceFloor)
+    );
 
     const carryWasEmpty = carry.size === 0;
     const reasonsBefore = reasons.length;
@@ -2171,7 +2128,7 @@ export function computeFootnoteReserves(
       props.pos,
       carry,
       reasons,
-      { reserveColumnBudget: true, separatorCache }
+      { reserveColumnBudget: true, reserveBodyFloorPt: referenceFloor, separatorCache }
     );
     carry = nextCarry;
     const needed = Math.min(area?.box.height ?? 0, maxArea);
