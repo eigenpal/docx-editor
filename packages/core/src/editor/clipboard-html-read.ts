@@ -4,7 +4,7 @@
 // It never attaches parsed nodes, executes markup, or fetches remote resources.
 // Hyperlinks pass `sanitizeHref`, and images accept bounded `data:` URIs only.
 // XML emission escapes all file-derived text and attributes.
-import { sanitizeHref, escapeXml, escapeXmlAttribute } from '../store/package/sinks.ts';
+import { sanitizeHref, escapeXmlAttribute } from '../store/package/sinks.ts';
 import { projectHtmlImage } from './clipboard-html-images.ts';
 import {
   htmlListKindAndStart,
@@ -26,7 +26,7 @@ import {
   isClipboardNoteList,
   type ClipboardNoteKind,
 } from './clipboard-html-notes.ts';
-import { xmlSafeText } from './clipboard-html-xml.ts';
+import { paragraphXml, rPrXml, textRunXml } from './clipboard-html-run-xml.ts';
 import {
   applyParaCss,
   applyRunCss,
@@ -148,119 +148,6 @@ function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));
 }
 
-/** `w:rPr`, children in CT_RPr sequence order. */
-function rPrXml(props: RunProps): string {
-  let inner = '';
-  if (props.font !== undefined) {
-    const face = escapeXmlAttribute(xmlSafeText(props.font));
-    inner += `<w:rFonts w:ascii="${face}" w:hAnsi="${face}"/>`;
-  }
-  if (props.bold) inner += '<w:b/>';
-  if (props.italic) inner += '<w:i/>';
-  if (props.caps) inner += '<w:caps/>';
-  if (props.smallCaps) inner += '<w:smallCaps/>';
-  if (props.doubleStrike) inner += '<w:dstrike/>';
-  else if (props.strike) inner += '<w:strike/>';
-  if (props.color !== undefined) inner += `<w:color w:val="${props.color}"/>`;
-  if (props.charSpacingTwentieths !== undefined) {
-    inner += `<w:spacing w:val="${props.charSpacingTwentieths}"/>`;
-  }
-  if (props.szHalfPoints !== undefined) inner += `<w:sz w:val="${props.szHalfPoints}"/>`;
-  if (props.highlight !== undefined) {
-    inner += `<w:highlight w:val="${escapeXmlAttribute(props.highlight)}"/>`;
-  }
-  if (props.underline) {
-    inner += `<w:u w:val="${props.underlineVal ?? 'single'}"${
-      props.underlineColor === undefined ? '' : ` w:color="${props.underlineColor}"`
-    }/>`;
-  }
-  if (props.shdFill !== undefined) {
-    inner += `<w:shd w:val="clear" w:color="auto" w:fill="${props.shdFill}"/>`;
-  }
-  if (props.vertAlign !== undefined) inner += `<w:vertAlign w:val="${props.vertAlign}"/>`;
-  if (props.rtl) inner += '<w:rtl/>';
-  if (props.lang !== undefined) inner += `<w:lang w:val="${escapeXmlAttribute(props.lang)}"/>`;
-  return inner.length > 0 ? `<w:rPr>${inner}</w:rPr>` : '';
-}
-
-function textRunXml(text: string, props: RunProps): string {
-  return `<w:r>${rPrXml(props)}<w:t xml:space="preserve">${escapeXml(xmlSafeText(text))}</w:t></w:r>`;
-}
-
-/** `w:pPr`, children in CT_PPr sequence order. */
-function pPrXml(para: ParaProps): string {
-  let inner = '';
-  if (para.styleId !== undefined) {
-    inner += `<w:pStyle w:val="${escapeXmlAttribute(para.styleId)}"/>`;
-  }
-  if (para.keepNext) inner += '<w:keepNext/>';
-  if (para.keepLines) inner += '<w:keepLines/>';
-  if (para.pageBreakBefore) inner += '<w:pageBreakBefore/>';
-  if (para.widowControl) inner += '<w:widowControl/>';
-  if (para.numPr) {
-    inner +=
-      `<w:numPr><w:ilvl w:val="${para.numPr.ilvl}"/>` +
-      `<w:numId w:val="${escapeXmlAttribute(para.numPr.numId)}"/></w:numPr>`;
-  }
-  if (para.borders !== undefined) {
-    let borders = '';
-    for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
-      const border = para.borders[edge];
-      if (border === undefined) continue;
-      borders +=
-        `<w:${edge} w:val="${border.val}" w:sz="${border.szEighthPoints}" ` +
-        `w:space="0" w:color="${border.color}"/>`;
-    }
-    if (borders.length > 0) inner += `<w:pBdr>${borders}</w:pBdr>`;
-  }
-  if (para.shdFill !== undefined) {
-    inner += `<w:shd w:val="clear" w:color="auto" w:fill="${para.shdFill}"/>`;
-  }
-  if (para.tabs !== undefined && para.tabs.length > 0) {
-    inner += `<w:tabs>${para.tabs
-      .map(
-        (tab) =>
-          `<w:tab w:val="${tab.val}" w:pos="${tab.posTwips}"` +
-          (tab.leader === undefined ? '/>' : ` w:leader="${tab.leader}"/>`)
-      )
-      .join('')}</w:tabs>`;
-  }
-  if (para.bidi) inner += '<w:bidi/>';
-  if (
-    para.spacingBeforeTwips !== undefined ||
-    para.spacingAfterTwips !== undefined ||
-    para.lineTwentieths !== undefined
-  ) {
-    let spacing = '<w:spacing';
-    if (para.spacingBeforeTwips !== undefined) {
-      spacing += ` w:before="${para.spacingBeforeTwips}"`;
-    }
-    if (para.spacingAfterTwips !== undefined) {
-      spacing += ` w:after="${para.spacingAfterTwips}"`;
-    }
-    if (para.lineTwentieths !== undefined) {
-      spacing += ` w:line="${para.lineTwentieths}" w:lineRule="${para.lineRule ?? 'auto'}"`;
-    }
-    inner += `${spacing}/>`;
-  }
-  const first = para.firstLineTwips;
-  if (para.indLeftTwips !== undefined || para.indRightTwips !== undefined || first !== undefined) {
-    let ind = '<w:ind';
-    if (para.indLeftTwips !== undefined) ind += ` w:left="${para.indLeftTwips}"`;
-    if (para.indRightTwips !== undefined) ind += ` w:right="${para.indRightTwips}"`;
-    if (first !== undefined) {
-      ind += first >= 0 ? ` w:firstLine="${first}"` : ` w:hanging="${-first}"`;
-    }
-    inner += `${ind}/>`;
-  }
-  if (para.jc !== undefined) inner += `<w:jc w:val="${para.jc}"/>`;
-  return inner.length > 0 ? `<w:pPr>${inner}</w:pPr>` : '';
-}
-
-function paragraphXml(para: ParaProps, runs: readonly string[]): string {
-  return `<w:p>${pPrXml(para)}${runs.join('')}</w:p>`;
-}
-
 // --- Allocation
 
 function allocateRel(
@@ -275,11 +162,21 @@ function allocateRel(
   return id;
 }
 
-function allocateList(p: Projection, key: string, kind: HtmlListKind, start = 1): string {
+function allocateList(
+  p: Projection,
+  key: string,
+  kind: HtmlListKind,
+  start = 1,
+  level = 0
+): string {
   const existing = p.lists.get(key);
-  if (existing) return existing.numId;
+  if (existing) {
+    // First observation per level wins; other levels stay open for later markers.
+    if (!existing.levels.has(level)) existing.levels.set(level, { kind, start });
+    return existing.numId;
+  }
   const numId = String(1001 + p.lists.size);
-  p.lists.set(key, { numId, kind, start });
+  p.lists.set(key, { numId, levels: new Map([[level, { kind, start }]]) });
   return numId;
 }
 
@@ -342,6 +239,16 @@ function collectInline(
   ) {
     return;
   }
+  // A collected note definition reached through an inline wrapper projects only via
+  // the notes pass; landing it here would duplicate the note text into the body.
+  if (isClipboardNoteList(style)) return;
+  const inlineNoteDefinition = clipboardNoteDefinitionRef(node, style);
+  if (
+    inlineNoteDefinition !== null &&
+    p.definedNotes[inlineNoteDefinition.kind].has(inlineNoteDefinition.id)
+  ) {
+    return;
+  }
   if (tag === 'w:ptab') {
     const tab = htmlPositionalTabXml(node);
     if (tab.length > 0) runs.push(`<w:r>${rPrXml(ctx.run)}${tab}</w:r>`);
@@ -350,7 +257,9 @@ function collectInline(
   const tabContent = htmlTabRunContents(style.get('mso-tab-count'));
   if (tabContent.length > 0) {
     runs.push(`<w:r>${rPrXml(ctx.run)}${tabContent}</w:r>`);
-    return;
+    // Word's tab spans hold only spacer whitespace; an element with real content
+    // keeps its text and children after the tabs.
+    if ((node.textContent ?? '').trim().length === 0) return;
   }
   if (tag === 'br') {
     const pageBreak =
@@ -451,7 +360,7 @@ function msoListNumPr(
   const { kind, start } = htmlListKindAndStart(marker);
   const lfo = /\blfo(\d{1,4})\b/i.exec(declaration);
   const key = `mso:l${match[1]}${lfo ? `:lfo${lfo[1]}` : ''}`;
-  return { numId: allocateList(p, key, kind, start), ilvl };
+  return { numId: allocateList(p, key, kind, start, ilvl), ilvl };
 }
 
 /** The text of the `mso-list:Ignore` marker span, for number-vs-bullet detection. */
@@ -562,7 +471,8 @@ function projectList(
   if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
   p.nodesLeft -= 1;
   const kind = semanticHtmlListKind(element);
-  // One numId per distinct top-level list; nested lists share their root's definition.
+  // One numId per distinct top-level list; nested lists share their root's definition
+  // and record their own format at their level.
   if (!ctx.list) p.semanticListCount += 1;
   const state: ListState = ctx.list
     ? { numId: ctx.list.numId, level: Math.min(ctx.list.level + 1, 8) }
@@ -570,6 +480,13 @@ function projectList(
         numId: allocateList(p, `sem:${p.semanticListCount}`, kind, semanticHtmlListStart(element)),
         level: 0,
       };
+  if (ctx.list) {
+    for (const allocation of p.lists.values()) {
+      if (allocation.numId === state.numId && !allocation.levels.has(state.level)) {
+        allocation.levels.set(state.level, { kind, start: semanticHtmlListStart(element) });
+      }
+    }
+  }
   const itemCtx: FlowContext = {
     ...ctx,
     list: state,
@@ -583,7 +500,9 @@ function projectList(
       projectParagraph(child, depth + 1, itemCtx, p, out, pendingPageBreak);
       pendingPageBreak = false;
     } else if (childTag === 'ol' || childTag === 'ul') {
-      projectList(child, depth + 1, { ...ctx, list: state }, p, out);
+      const beforeNested = out.length;
+      projectList(child, depth + 1, { ...ctx, list: state }, p, out, pendingPageBreak);
+      if (out.length > beforeNested) pendingPageBreak = false;
     }
   }
 }

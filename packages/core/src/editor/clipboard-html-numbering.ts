@@ -16,10 +16,15 @@ export type HtmlListKind =
   | 'upperLetter'
   | 'lowerLetter';
 
-export type HtmlListAllocation = {
-  readonly numId: string;
+export type HtmlListLevel = {
   readonly kind: HtmlListKind;
   readonly start: number;
+};
+
+export type HtmlListAllocation = {
+  readonly numId: string;
+  /** Format and start per OBSERVED `w:ilvl`; unobserved levels take defaults. */
+  readonly levels: Map<number, HtmlListLevel>;
 };
 
 // Symbol-font codepoints Word writes (private-use range), as escapes so they are not
@@ -44,7 +49,7 @@ function levelXml(kind: HtmlListKind, start: number, ilvl: number): string {
     );
   }
   return (
-    `<w:lvl w:ilvl="${ilvl}"><w:start w:val="${ilvl === 0 ? start : 1}"/>` +
+    `<w:lvl w:ilvl="${ilvl}"><w:start w:val="${start}"/>` +
     `<w:numFmt w:val="${kind}"/>` +
     `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="left"/>${indent}</w:lvl>`
   );
@@ -72,6 +77,21 @@ export function htmlListKindAndStart(marker: string): {
     return code >= 97
       ? { kind: 'lowerLetter', start: code - 96 }
       : { kind: 'upperLetter', start: code - 64 };
+  }
+  // Word letter lists repeat past 'z': 'aa.' is item 27.
+  const repeated = /^(([A-Za-z])\2{1,4})[.)]/.exec(trimmed);
+  if (repeated) {
+    const code = repeated[2]!.charCodeAt(0);
+    const start = Math.min(
+      32_767,
+      (repeated[1]!.length - 1) * 26 + (code >= 97 ? code - 96 : code - 64)
+    );
+    return { kind: code >= 97 ? 'lowerLetter' : 'upperLetter', start };
+  }
+  // Any remaining digit-bearing marker ('3', '1º', 'Article 1') stays an ordered list.
+  const digits = /\d{1,5}/.exec(trimmed);
+  if (digits) {
+    return { kind: 'decimal', start: Math.min(32_767, Number.parseInt(digits[0]!, 10)) };
   }
   return { kind: 'bullet', start: 1 };
 }
@@ -110,9 +130,15 @@ export function semanticHtmlListStart(element: Element): number {
 export function numberingPartXml(allocations: readonly HtmlListAllocation[]): string {
   const abstracts = allocations
     .map((allocation, index) => {
-      const levels = Array.from({ length: 9 }, (_, ilvl) =>
-        levelXml(allocation.kind, allocation.start, ilvl)
-      ).join('');
+      const fallback: HtmlListLevel = allocation.levels.get(0) ??
+        allocation.levels.values().next().value ?? { kind: 'decimal', start: 1 };
+      const levels = Array.from({ length: 9 }, (_, ilvl) => {
+        // An observed level keeps its detected format and start; the rest default —
+        // bullets cascade, ordered lists restart as decimal.
+        const observed = allocation.levels.get(ilvl);
+        if (observed) return levelXml(observed.kind, observed.start, ilvl);
+        return levelXml(fallback.kind === 'bullet' ? 'bullet' : 'decimal', 1, ilvl);
+      }).join('');
       return (
         `<w:abstractNum w:abstractNumId="${index}">` +
         `<w:multiLevelType w:val="hybridMultilevel"/>${levels}</w:abstractNum>`

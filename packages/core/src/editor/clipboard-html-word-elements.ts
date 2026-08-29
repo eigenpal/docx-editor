@@ -14,7 +14,8 @@ const WORD_PARAGRAPH_CLASSES: Readonly<Record<string, string>> = {
 export function wordParagraphClassOf(styleId: string | undefined): string | null {
   if (styleId === undefined) return null;
   if (/^Heading[7-9]$/.test(styleId)) return `Mso${styleId}`;
-  return WORD_PARAGRAPH_CLASSES[styleId] ?? null;
+  // The style id is file-derived: guard the record lookup against prototype keys.
+  return Object.hasOwn(WORD_PARAGRAPH_CLASSES, styleId) ? WORD_PARAGRAPH_CLASSES[styleId]! : null;
 }
 
 /** ST_HighlightColor names to CSS colors. */

@@ -8,12 +8,18 @@ export interface ClipboardNoteDefinition {
   readonly element: Element;
 }
 
-const NOTE_ID = /^(?:ftn|edn)([1-9]\d{0,4})$/i;
+const NOTE_ID = /^(ftn|edn)([1-9]\d{0,4})$/i;
+const NOTE_PREFIX: Readonly<Record<ClipboardNoteKind, string>> = {
+  footnote: 'ftn',
+  endnote: 'edn',
+};
 
-function noteIdOf(raw: string | null): number | null {
+/** An id token counts only when its prefix matches the note kind: `ftn` ids never
+ *  alias endnotes and vice versa. */
+function noteIdOf(raw: string | null, kind: ClipboardNoteKind): number | null {
   const match = raw === null ? null : NOTE_ID.exec(raw);
-  if (!match) return null;
-  const id = Number.parseInt(match[1]!, 10);
+  if (!match || match[1]!.toLowerCase() !== NOTE_PREFIX[kind]) return null;
+  const id = Number.parseInt(match[2]!, 10);
   return id <= 32_767 ? id : null;
 }
 
@@ -22,7 +28,7 @@ export function clipboardNoteReference(
 ): { readonly kind: ClipboardNoteKind; readonly id: number } | null {
   for (const kind of ['footnote', 'endnote'] as const) {
     const raw = style.get(`mso-${kind}-id`);
-    const id = noteIdOf(raw ?? null);
+    const id = noteIdOf(raw ?? null, kind);
     if (id !== null) return { kind, id };
   }
   return null;
@@ -35,7 +41,7 @@ export function clipboardNoteDefinitionRef(
 ): { readonly kind: ClipboardNoteKind; readonly id: number } | null {
   const msoElement = style.get('mso-element')?.trim().toLowerCase();
   if (msoElement !== 'footnote' && msoElement !== 'endnote') return null;
-  const id = noteIdOf(element.getAttribute('id'));
+  const id = noteIdOf(element.getAttribute('id'), msoElement);
   return id === null ? null : { kind: msoElement, id };
 }
 

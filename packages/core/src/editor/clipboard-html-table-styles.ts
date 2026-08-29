@@ -47,16 +47,15 @@ export function tableWidthTwips(table: Element, fallback: number): number {
   return points === null ? fallback : clamp(Math.round(points * 20), 1, MAX_TABLE_TWIPS);
 }
 
-/** Map HTML table alignment to OOXML table justification. */
+/** Map HTML table alignment to OOXML table justification. `text-align` is NOT a
+ *  table-position signal — it centers the cells' inline text, never the table box. */
 export function tableJustification(table: Element): 'left' | 'center' | 'right' | undefined {
   const style = parseInlineStyle(table);
   const positioned = style.get('mso-table-left')?.trim().toLowerCase();
   const value =
     (positioned === 'left' || positioned === 'center' || positioned === 'right'
       ? positioned
-      : undefined) ??
-    table.getAttribute('align')?.trim().toLowerCase() ??
-    style.get('text-align')?.trim().toLowerCase();
+      : undefined) ?? table.getAttribute('align')?.trim().toLowerCase();
   return value === 'left' || value === 'center' || value === 'right' ? value : undefined;
 }
 
@@ -105,7 +104,9 @@ export function tableColumnWidths(
       const span = Math.min(cellSpanOf(cell), columns - column);
       const points = widthPointsOf(cell);
       if (points !== null) {
-        const each = Math.max(1, Math.round((points * 20) / span));
+        // Clamp per column so a hostile huge width cannot overflow the later
+        // normalization into NaN attribute values.
+        const each = clamp(Math.round((points * 20) / span), 1, MAX_TABLE_TWIPS);
         for (let offset = 0; offset < span; offset += 1) candidate[column + offset] = each;
         score += span;
       }
@@ -268,24 +269,48 @@ export function tableRowPropertiesXml(row: Element): string {
 }
 
 function cellMarginsXml(style: ReadonlyMap<string, string>): string {
+  const edges: Record<'top' | 'right' | 'bottom' | 'left', number | null> = {
+    top: null,
+    right: null,
+    bottom: null,
+    left: null,
+  };
   const value = style.get('padding');
-  if (value === undefined || value.length > 128) return '';
-  const parsed = value
-    .trim()
-    .split(/\s+/)
-    .map((token) => parseCssLengthPt(token));
-  if (parsed.length < 1 || parsed.length > 4 || parsed.some((item) => item === null || item < 0)) {
-    return '';
+  if (value !== undefined && value.length <= 128) {
+    const parsed = value
+      .trim()
+      .split(/\s+/)
+      .map((token) => parseCssLengthPt(token));
+    if (
+      parsed.length >= 1 &&
+      parsed.length <= 4 &&
+      !parsed.some((item) => item === null || item < 0)
+    ) {
+      const [top, right = top, bottom = top, left = right] =
+        parsed.length === 2
+          ? [parsed[0], parsed[1], parsed[0], parsed[1]]
+          : parsed.length === 3
+            ? [parsed[0], parsed[1], parsed[2], parsed[1]]
+            : parsed;
+      edges.top = top ?? null;
+      edges.right = right ?? null;
+      edges.bottom = bottom ?? null;
+      edges.left = left ?? null;
+    }
   }
-  const [top, right = top, bottom = top, left = right] =
-    parsed.length === 2
-      ? [parsed[0], parsed[1], parsed[0], parsed[1]]
-      : parsed.length === 3
-        ? [parsed[0], parsed[1], parsed[2], parsed[1]]
-        : parsed;
-  const edge = (name: string, points: number | null | undefined): string =>
-    `<w:${name} w:w="${clamp(Math.round((points ?? 0) * 20), 0, MAX_TABLE_TWIPS)}" w:type="dxa"/>`;
-  return `<w:tcMar>${edge('top', top)}${edge('left', left)}${edge('bottom', bottom)}${edge('right', right)}</w:tcMar>`;
+  // The outbound writer emits `padding-<edge>` longhands; they override the shorthand.
+  for (const name of ['top', 'right', 'bottom', 'left'] as const) {
+    const points = parseCssLengthPt(style.get(`padding-${name}`) ?? '');
+    if (points !== null && points >= 0) edges[name] = points;
+  }
+  let inner = '';
+  // CT_TcMar sequence order: top, left, bottom, right.
+  for (const name of ['top', 'left', 'bottom', 'right'] as const) {
+    const points = edges[name];
+    if (points === null) continue;
+    inner += `<w:${name} w:w="${clamp(Math.round(points * 20), 0, MAX_TABLE_TWIPS)}" w:type="dxa"/>`;
+  }
+  return inner.length > 0 ? `<w:tcMar>${inner}</w:tcMar>` : '';
 }
 
 /** Emit cell borders, shading, margins, and vertical alignment in CT_TcPr order. */

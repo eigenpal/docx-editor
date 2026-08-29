@@ -7,10 +7,11 @@ export function clipboardBookmarkName(raw: string | null | undefined): string | 
     : null;
 }
 
-/** Tell whether an HTML target can remain an active hyperlink. */
+/** Tell whether an HTML target can remain an active hyperlink. Fragment names Word
+ *  cannot store as bookmarks still land as external-rel hyperlinks. */
 export function isClipboardHyperlink(raw: string | null): boolean {
   if (raw === null) return false;
-  if (raw.startsWith('#')) return clipboardBookmarkName(raw.slice(1)) !== null;
+  if (raw.startsWith('#')) return raw.length > 1;
   const target = sanitizeHref(raw);
   return target?.ok === true && target.href.length > 0;
 }

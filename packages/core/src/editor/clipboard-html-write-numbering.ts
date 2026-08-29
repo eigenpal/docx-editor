@@ -1,37 +1,12 @@
-import {
-  WML_NAMESPACE_URI,
-  type OoxmlElement,
-  type OoxmlNode,
-} from '../store/package/ooxml-tree.ts';
+import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
 
 export interface HtmlNumberingIndex {
   readonly numToAbstract: ReadonlyMap<string, string>;
   readonly levelFormats: ReadonlyMap<string, ReadonlyMap<string, string>>;
   readonly levelStarts: ReadonlyMap<string, ReadonlyMap<string, number>>;
   readonly startOverrides: ReadonlyMap<string, number>;
-}
-
-function isElement(node: OoxmlNode): node is OoxmlElement {
-  return node.kind !== 'textValue';
-}
-
-function wmlChild(parent: OoxmlElement | null, localName: string): OoxmlElement | null {
-  if (!parent) return null;
-  for (const child of parent.children) {
-    if (
-      isElement(child) &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === localName
-    ) {
-      return child;
-    }
-  }
-  return null;
-}
-
-function wmlVal(element: OoxmlElement | null): string | undefined {
-  return element ? attributeValueOf(element, 'val', WML_NAMESPACE_URI) : undefined;
 }
 
 function boundedStart(raw: string | undefined): number | null {
@@ -54,7 +29,13 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
       if (numId && abstractId) numToAbstract.set(numId, abstractId);
       if (!numId) continue;
       for (const override of child.children) {
-        if (!isElement(override) || override.localName !== 'lvlOverride') continue;
+        if (
+          !isElement(override) ||
+          override.localName !== 'lvlOverride' ||
+          override.namespaceUri !== WML_NAMESPACE_URI
+        ) {
+          continue;
+        }
         const ilvl = attributeValueOf(override, 'ilvl', WML_NAMESPACE_URI);
         const start = boundedStart(wmlVal(wmlChild(override, 'startOverride')));
         if (ilvl !== undefined && start !== null) startOverrides.set(`${numId}:${ilvl}`, start);
@@ -67,7 +48,13 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
     const formats = new Map<string, string>();
     const starts = new Map<string, number>();
     for (const level of child.children) {
-      if (!isElement(level) || level.localName !== 'lvl') continue;
+      if (
+        !isElement(level) ||
+        level.localName !== 'lvl' ||
+        level.namespaceUri !== WML_NAMESPACE_URI
+      ) {
+        continue;
+      }
       const ilvl = attributeValueOf(level, 'ilvl', WML_NAMESPACE_URI);
       if (ilvl === undefined) continue;
       const format = wmlVal(wmlChild(level, 'numFmt'));

@@ -510,6 +510,12 @@ export function splitBorderTokens(value: string): readonly string[] {
     .split(/\s+/);
 }
 
+const BORDER_WIDTH_KEYWORD_PT: ReadonlyMap<string, number> = new Map([
+  ['thin', 0.75],
+  ['medium', 2.25],
+  ['thick', 3.75],
+]);
+
 function paragraphBorderOf(value: string | undefined): HtmlParagraphBorder | undefined {
   if (value === undefined || value.length === 0 || value.length > 128) return undefined;
   let val: HtmlParagraphBorder['val'] | undefined;
@@ -521,7 +527,7 @@ function paragraphBorderOf(value: string | undefined): HtmlParagraphBorder | und
       val = borderStyle;
       continue;
     }
-    const length = parseCssLengthPt(token);
+    const length = BORDER_WIDTH_KEYWORD_PT.get(token.toLowerCase()) ?? parseCssLengthPt(token);
     if (length !== null) {
       points = length;
       continue;
@@ -533,7 +539,10 @@ function paragraphBorderOf(value: string | undefined): HtmlParagraphBorder | und
     }
     return undefined;
   }
-  if (val === undefined || points === undefined || points <= 0) return undefined;
+  if (val === undefined) return undefined;
+  // A visible style with no width takes Word's default hairline.
+  if (points === undefined) return { val, szEighthPoints: 4, color: color ?? '000000' };
+  if (points <= 0) return undefined;
   return {
     val,
     szEighthPoints: clamp(Math.round(points * 8), 2, 96),

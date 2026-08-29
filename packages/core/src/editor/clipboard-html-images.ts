@@ -83,7 +83,8 @@ export function projectHtmlImage(
   const style = parseInlineStyle(element);
   let widthPx = imageDimensionPx(element, style, 'width', p.wordHtml);
   let heightPx = imageDimensionPx(element, style, 'height', p.wordHtml);
-  // A sniffed image whose header does not parse keeps its declared CSS extents.
+  // A sniffed image whose header does not parse keeps its declared CSS extents,
+  // completing a missing axis at the 3:2 fallback ratio.
   if (header !== null) {
     if (widthPx === null && heightPx === null) {
       widthPx = (header.pixelWidth * 96) / (header.dpiX ?? 96);
@@ -93,6 +94,10 @@ export function projectHtmlImage(
     } else if (widthPx === null && heightPx !== null) {
       widthPx = (heightPx * header.pixelWidth) / header.pixelHeight;
     }
+  } else if (widthPx !== null && heightPx === null) {
+    heightPx = (widthPx * 2) / 3;
+  } else if (widthPx === null && heightPx !== null) {
+    widthPx = (heightPx * 3) / 2;
   }
   // Unknown extent falls back to 300x200pt.
   const cx = widthPx === null ? 3_810_000 : clamp(Math.round(widthPx * 9525), 9525, 30_000_000);

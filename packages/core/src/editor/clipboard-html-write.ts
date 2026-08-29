@@ -22,6 +22,15 @@ import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
+import {
+  attrOf,
+  findDescendant,
+  isElement,
+  parseIntValue,
+  textUnder,
+  wmlChild,
+  wmlVal,
+} from './clipboard-html-write-tree.ts';
 import { clipboardBookmarkName, clipboardHyperlinkTarget } from './clipboard-html-links.ts';
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
@@ -76,64 +85,6 @@ function cssHexColor(raw: string | undefined): string | null {
 /** Twips → pt, trimmed to two decimals. */
 function ptFromTwips(twips: number): string {
   return `${Math.round((twips / 20) * 100) / 100}pt`;
-}
-
-function parseIntValue(raw: string | undefined): number | null {
-  if (raw === undefined || !/^-?\d+$/.test(raw)) return null;
-  const parsed = Number(raw);
-  return Number.isSafeInteger(parsed) ? parsed : null;
-}
-
-function isElement(node: OoxmlNode): node is OoxmlElement {
-  return node.kind !== 'textValue';
-}
-
-function wmlChild(parent: OoxmlNode | null | undefined, localName: string): OoxmlElement | null {
-  if (!parent || parent.kind === 'textValue') return null;
-  for (const child of parent.children) {
-    if (
-      isElement(child) &&
-      child.localName === localName &&
-      child.namespaceUri === WML_NAMESPACE_URI
-    ) {
-      return child;
-    }
-  }
-  return null;
-}
-
-function wmlVal(node: OoxmlElement | null, localName = 'val'): string | undefined {
-  return node ? attributeValueOf(node, localName, WML_NAMESPACE_URI) : undefined;
-}
-
-function attrOf(
-  node: OoxmlElement | null,
-  localName: string,
-  namespaceUri: string
-): string | undefined {
-  return node ? attributeValueOf(node, localName, namespaceUri) : undefined;
-}
-
-function textUnder(node: OoxmlNode): string {
-  if (node.kind === 'textValue') return node.value;
-  let out = '';
-  for (const child of node.children) out += textUnder(child);
-  return out;
-}
-
-/** First descendant element with the expanded name, depth-first. */
-function findDescendant(
-  node: OoxmlNode,
-  localName: string,
-  namespaceUri: string
-): OoxmlElement | null {
-  if (node.kind === 'textValue') return null;
-  if (node.localName === localName && node.namespaceUri === namespaceUri) return node;
-  for (const child of node.children) {
-    const found = findDescendant(child, localName, namespaceUri);
-    if (found) return found;
-  }
-  return null;
 }
 
 interface StyleIndex {
@@ -526,9 +477,13 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
   const extent = findDescendant(inline, 'extent', WP_NAMESPACE_URI);
   const cx = extent ? parseIntValue(attributeValueOf(extent, 'cx', '')) : null;
   const cy = extent ? parseIntValue(attributeValueOf(extent, 'cy', '')) : null;
+  // The pt CSS extents are unit-explicit, so a reader parses them the same way in
+  // both its Word and plain conventions; the px attributes serve plain receivers.
+  const ptOf = (emu: number): number => Math.round((emu / 12_700) * 100) / 100;
   const size =
     cx !== null && cy !== null && cx > 0 && cy > 0
-      ? ` width="${Math.round(cx / EMU_PER_PX)}" height="${Math.round(cy / EMU_PER_PX)}"`
+      ? ` width="${Math.round(cx / EMU_PER_PX)}" height="${Math.round(cy / EMU_PER_PX)}"` +
+        ` style="width:${ptOf(cx)}pt;height:${ptOf(cy)}pt"`
       : '';
   return `<img src="data:${mime};base64,${clipboardBase64Of(bytes)}"${size}>`;
 }
@@ -681,13 +636,18 @@ function headingLevelOf(
   ownPPr: OoxmlElement | null,
   sources: readonly OoxmlElement[]
 ): number | null {
-  const outline = parseIntValue(wmlVal(lastProperty(sources, 'outlineLvl')));
-  if (outline !== null && outline >= 0 && outline <= 5) return outline + 1;
-  const chain = styleChain(ctx.styles, wmlVal(wmlChild(ownPPr, 'pStyle')));
+  const styleId = wmlVal(wmlChild(ownPPr, 'pStyle'));
+  const chain = styleChain(ctx.styles, styleId);
   for (let index = chain.length - 1; index >= 0; index -= 1) {
     const id = attributeValueOf(chain[index]!, 'styleId', WML_NAMESPACE_URI);
     const match = id ? /^Heading([1-6])$/.exec(id) : null;
     if (match) return Number(match[1]);
+  }
+  // An outline level promotes to <h1>-<h6> only without a named style: a custom
+  // style that sets w:outlineLvl for the TOC must not round-trip into HeadingN.
+  if (styleId === undefined) {
+    const outline = parseIntValue(wmlVal(lastProperty(sources, 'outlineLvl')));
+    if (outline !== null && outline >= 0 && outline <= 5) return outline + 1;
   }
   return null;
 }

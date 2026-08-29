@@ -1,20 +1,7 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { wordBorderCss } from './clipboard-html-word-elements.ts';
-
-function wmlChild(parent: OoxmlElement | null, localName: string): OoxmlElement | null {
-  if (parent === null) return null;
-  for (const child of parent.children) {
-    if (
-      child.kind !== 'textValue' &&
-      child.namespaceUri === WML_NAMESPACE_URI &&
-      child.localName === localName
-    ) {
-      return child;
-    }
-  }
-  return null;
-}
+import { wmlChild } from './clipboard-html-write-tree.ts';
 
 function intAttribute(element: OoxmlElement | null, name: string): number | null {
   if (element === null) return null;
