@@ -351,13 +351,19 @@ export function piecesOfParagraph(
     });
     if (synthesis) {
       const extras = carried();
-      // A body page-field placeholder rides the same field-atom marker its finalize pass reads.
-      const withPageField = synthesis.pageField
-        ? {
-            ...extras,
-            fieldAtom: { formField: pending.formField, pageField: synthesis.pageField },
-          }
-        : extras;
+      // A body page-field / PAGEREF placeholder rides the same field-atom marker its finalize
+      // pass reads.
+      const withPageField =
+        synthesis.pageField || synthesis.pageRefField
+          ? {
+              ...extras,
+              fieldAtom: {
+                formField: pending.formField,
+                ...(synthesis.pageField ? { pageField: synthesis.pageField } : {}),
+                ...(synthesis.pageRefField ? { pageRef: synthesis.pageRefField } : {}),
+              },
+            }
+          : extras;
       push(synthesis.text, synthesis.props, synthesis.style, true, start, end, withPageField);
     }
     pending = null;
@@ -906,6 +912,7 @@ export function piecesOfParagraph(
       fieldAtom: {
         formField: false,
         ...(projected.pageField ? { pageField: projected.pageField } : {}),
+        ...(projected.pageRef ? { pageRef: projected.pageRef } : {}),
       },
       ...(projected.link ? { linkOverride: projected.link } : {}),
     });

@@ -54,6 +54,7 @@ import {
   contentControlRecordsInPart,
   contentControlsInLayout,
   layoutSemanticDocument,
+  pageRefPageNumbersFromLayout,
   planRefFieldResultRefresh,
   resolveNumberingLevel,
   positionPastDeletion,
@@ -4509,6 +4510,11 @@ export function mountPaginatedSurface(
       styleCascade: styleCascade(),
       numberingIndex: numberingIndex(),
       displayMode: revisionDisplayMode(),
+      // PAGEREF results refresh from the CURRENT finalized pages, through the same index
+      // finalize substitution reads, so the saved numbers are the painted ones. Body plan
+      // only — the note planner ignores it, since note-story PAGEREF fields paint their
+      // cache.
+      pageRefPageNumberOf: pageRefPageNumbersFromLayout(surface.layout()),
     };
     // Both plans read before the write lands, and they share one memoized resolution
     // context — the note values are the ones the pages painted, per calibration verdict.

@@ -354,6 +354,8 @@ export { noteMarkKey, projectedNoteMarkText, type NoteMarkContext } from './note
 export {
   parseRefInstruction,
   resolveStoryRefFields,
+  type PageRefCalibrationCell,
+  type PageRefFieldProjection,
   type RefFieldContext,
   type RefFieldSpec,
   type RefNoteParts,
@@ -363,7 +365,11 @@ export {
   type AutonumFieldKind,
   type AutonumFieldSpec,
 } from './field-autonum.ts';
-export { planRefFieldResultRefresh, type RefFieldRefreshOptions } from './field-ref-refresh.ts';
+export {
+  pageRefPageNumbersFromLayout,
+  planRefFieldResultRefresh,
+  type RefFieldRefreshOptions,
+} from './field-ref-refresh.ts';
 export { storyBlocks, noteStoryBlocks, MAX_SDT_NESTING } from './story-roots.ts';
 export {
   emptyTocPlaceholderParagraphIds,

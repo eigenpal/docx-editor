@@ -32,6 +32,13 @@ import {
 } from '../store/store/tree-op-field-results.ts';
 import { noteRefNumberingForPart } from './field-noteref.ts';
 import {
+  buildPageRefTargetIndex,
+  formatPageNumber,
+  pageRefCalibrationVerdict,
+  type PageRefHostRecord,
+} from './field-page-furniture.ts';
+import type { SemanticLayout } from './semantic-records.ts';
+import {
   noteStoriesOfPart,
   parseRefInstruction,
   resolveStoryRefFieldsWithNoteNumbers,
@@ -56,6 +63,30 @@ export interface RefFieldRefreshOptions {
   readonly numberingIndex?: NumberingIndex;
   /** The mode the surface painted under, so the saved values match the painted ones. */
   readonly displayMode?: RevisionDisplayMode;
+  /**
+   * The DISPLAYED page number of one paragraph in the current finalized layout, or null when
+   * it is not placed. PAGEREF results ride the plan through this: the value is pagination's,
+   * so only a caller holding the laid-out pages can answer, and a plan without it keeps every
+   * PAGEREF result as loaded. The same calibration verdict paint took gates each rewrite.
+   */
+  readonly pageRefPageNumberOf?: (targetParagraphId: string) => string | null;
+}
+
+/**
+ * A {@link RefFieldRefreshOptions.pageRefPageNumberOf} source over one finalized layout.
+ *
+ * Builds the target → host-page index once, on first demand, and answers every field from
+ * it — the same walk finalize substitution takes, so the saved number is the painted one.
+ */
+export function pageRefPageNumbersFromLayout(
+  layout: SemanticLayout
+): (targetParagraphId: string) => string | null {
+  let hosts: ReadonlyMap<string, PageRefHostRecord> | null | undefined;
+  return (targetParagraphId) => {
+    if (hosts === undefined) hosts = buildPageRefTargetIndex(layout.pages)?.hosts ?? null;
+    const host = hosts?.get(targetParagraphId);
+    return host ? formatPageNumber(host.pageNumber, host.format) : null;
+  };
 }
 
 /** One notes part's refresh, tagged with the story scope its transaction must target. */
@@ -114,7 +145,8 @@ function collectStaleResultUpdates(
   owningPart: OoxmlPart,
   paragraphs: Iterable<OoxmlElement>,
   context: RefFieldContext,
-  updates: { paragraphId: string; fieldNodeId: string; text: string }[]
+  updates: { paragraphId: string; fieldNodeId: string; text: string }[],
+  pageRefPageNumberOf?: (targetParagraphId: string) => string | null
 ): void {
   for (const paragraph of paragraphs) {
     if (updates.length >= MAX_FIELD_RESULT_UPDATES) return;
@@ -132,8 +164,23 @@ function collectStaleResultUpdates(
       if (spec === null) continue;
       // The locator's field id IS the calibration anchor (begin fldChar / fldSimple node),
       // so this read returns exactly what the pages paint — or null for a field painting
-      // its cache, which then saves as loaded.
-      const value = context.liveValueOf(located.fieldNodeId, spec);
+      // its cache, which then saves as loaded. A PAGEREF answers through the deferred
+      // projection instead: the caller supplies the target's displayed page number, and the
+      // same sticky verdict paint's finalize took gates the rewrite.
+      let value = context.liveValueOf(located.fieldNodeId, spec);
+      if (value === null && pageRefPageNumberOf && context.pageRefProjectionOf) {
+        const pageRef = context.pageRefProjectionOf(located.fieldNodeId, spec);
+        if (pageRef) {
+          const computed = pageRefPageNumberOf(pageRef.targetParagraphId);
+          if (
+            computed !== null &&
+            computed.length > 0 &&
+            pageRefCalibrationVerdict(pageRef.calibration, pageRef.cached, computed)
+          ) {
+            value = computed;
+          }
+        }
+      }
       if (value === null || value === located.cachedText) continue;
       // The op's own bounds, applied per field so one outlier cannot refuse the whole plan:
       // length-capped, and no line breaks (a rewrite expresses tabs, never `w:br`).
@@ -155,7 +202,15 @@ export function planRefFieldResultRefresh(
   const { blocks, context } = resolveRefreshContext(part, options);
   if (context === null) return null;
   const updates: { paragraphId: string; fieldNodeId: string; text: string }[] = [];
-  collectStaleResultUpdates(part, walkStoryParagraphs(blocks), context, updates);
+  // PAGEREF refresh is BODY-only on purpose: note-story PAGEREF fields paint their cache
+  // (notes have no substitute pass), and a save must carry what the pages paint.
+  collectStaleResultUpdates(
+    part,
+    walkStoryParagraphs(blocks),
+    context,
+    updates,
+    options.pageRefPageNumberOf
+  );
   if (updates.length === 0) return null;
   return { op: 'refreshFieldResults', updates };
 }

@@ -724,6 +724,7 @@ export interface FieldAtomMarker {
         readonly kind: AllowlistedPageField;
         readonly picture?: string;
     };
+    readonly pageRef?: PageRefFieldProjection;
 }
 
 // @public
@@ -1823,7 +1824,21 @@ export interface PageRecord {
 }
 
 // @public
+export type PageRefCalibrationCell = Readonly<Record<never, never>>;
+
+// @public
+export interface PageRefFieldProjection {
+    readonly cached: string;
+    // (undocumented)
+    readonly calibration: PageRefCalibrationCell;
+    readonly targetParagraphId: string;
+}
+
+// @public
 export type PageRefIndex = ReadonlyMap<string, readonly PageRefHit[]>;
+
+// @public
+export function pageRefPageNumbersFromLayout(layout: SemanticLayout): (targetParagraphId: string) => string | null;
 
 // @public
 export function pagesToMaterialize(input: MaterializationInput): Set<number>;
@@ -2147,6 +2162,7 @@ displayMode?: RevisionDisplayMode): SemanticTableStructure | null;
 export interface RefFieldContext {
     autonumValueOf?(anchorId: string): string | null;
     liveValueOf(anchorId: string, spec: RefFieldSpec): string | null;
+    pageRefProjectionOf?(anchorId: string, spec: RefFieldSpec): PageRefFieldProjection | null;
     tokenForParagraph(paragraphId: string): string;
     readonly valuesToken: string;
 }
@@ -2157,6 +2173,7 @@ export interface RefFieldRefreshOptions {
     // (undocumented)
     readonly numberingIndex?: NumberingIndex;
     readonly package?: OoxmlPackage;
+    readonly pageRefPageNumberOf?: (targetParagraphId: string) => string | null;
     // (undocumented)
     readonly styleCascade?: StyleCascadeTable;
 }

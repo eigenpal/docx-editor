@@ -139,18 +139,28 @@ interface RefSpecModifiers {
   readonly suppressNonDelimiterText: boolean;
   /** The instruction was `NOTEREF`: paint the bookmarked note reference's display number. */
   readonly noteRef: boolean;
+  /** The instruction was `PAGEREF`: paint the page number of the bookmark target's page. */
+  readonly pageRef: boolean;
 }
 const REF_MODS_NONE: RefSpecModifiers = Object.freeze({
   suppressNonDelimiterText: false,
   noteRef: false,
+  pageRef: false,
 });
 const REF_MODS_SUPPRESS: RefSpecModifiers = Object.freeze({
   suppressNonDelimiterText: true,
   noteRef: false,
+  pageRef: false,
 });
 const REF_MODS_NOTEREF: RefSpecModifiers = Object.freeze({
   suppressNonDelimiterText: false,
   noteRef: true,
+  pageRef: false,
+});
+const REF_MODS_PAGEREF: RefSpecModifiers = Object.freeze({
+  suppressNonDelimiterText: false,
+  noteRef: false,
+  pageRef: true,
 });
 const refSpecModifiers = new WeakMap<RefFieldSpec, RefSpecModifiers>();
 
@@ -205,7 +215,7 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null {
   const tokens = tokenizeInstruction(collapsed);
   if (tokens === null || tokens.length < 2) return null;
   const keyword = tokens[0]!.toUpperCase();
-  if (keyword !== 'REF' && keyword !== 'NOTEREF') return null;
+  if (keyword !== 'REF' && keyword !== 'NOTEREF' && keyword !== 'PAGEREF') return null;
   const bookmark = tokens[1]!;
   if (
     bookmark.length === 0 ||
@@ -215,6 +225,7 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null {
     return null;
   }
   if (keyword === 'NOTEREF') return parseNoteRefSwitches(tokens, bookmark);
+  if (keyword === 'PAGEREF') return parsePageRefSwitches(tokens, bookmark);
   let sawN = false;
   let sawR = false;
   let sawW = false;
@@ -255,6 +266,28 @@ function parseNoteRefSwitches(tokens: readonly string[], bookmark: string): RefF
 }
 
 /**
+ * The PAGEREF switch arm: `\h` inert, `\* MERGEFORMAT` inert, anything else fails closed.
+ *
+ * `\p` (the "above/below" relative form) is unrecognized ON PURPOSE — such a field keeps its
+ * cached result, never a guessed position word. The value itself is a property of pagination,
+ * so the projection paints the cache and marks the span for the document finalize pass
+ * (`finalizePageFieldProjection`) to substitute the target's page number.
+ */
+function parsePageRefSwitches(tokens: readonly string[], bookmark: string): RefFieldSpec | null {
+  let hyperlink = false;
+  for (let index = 2; index < tokens.length; index += 1) {
+    const token = tokens[index]!.toUpperCase();
+    if (token === '\\H') hyperlink = true;
+    else if (token === '\\*' && tokens[index + 1]?.toUpperCase() === 'MERGEFORMAT') index += 1;
+    else if (token === '\\*MERGEFORMAT') continue;
+    else return null;
+  }
+  const spec: RefFieldSpec = { bookmark, numberSwitch: null, hyperlink };
+  refSpecModifiers.set(spec, REF_MODS_PAGEREF);
+  return spec;
+}
+
+/**
  * The story's resolved REF inputs for one layout pass.
  *
  * Threaded as a runtime rider on the layout options (see `layoutSemanticDocument`) rather
@@ -289,6 +322,39 @@ export interface RefFieldContext {
    * Optional so hand-built contexts predating it stay valid.
    */
   autonumValueOf?(anchorId: string): string | null;
+  /**
+   * The deferred projection of ONE `PAGEREF` field, or null to keep the cached result
+   * (missing bookmark, unsupported switches, or an anchor this scan never saw).
+   *
+   * A `PAGEREF` value is a property of pagination, so the scan cannot compute it — it hands
+   * the projection the resolved TARGET and the calibration inputs instead, and document
+   * finalize (`finalizePageFieldProjection`) substitutes the page number the target's first
+   * fragment lands on. Optional so hand-built contexts predating it stay valid.
+   */
+  pageRefProjectionOf?(anchorId: string, spec: RefFieldSpec): PageRefFieldProjection | null;
+}
+
+/**
+ * Sticky calibration identity for one `PAGEREF` field.
+ *
+ * An opaque frozen object rather than a mutable verdict holder because span markers are
+ * serialized into fragment signatures — a verdict written into the marker would move a
+ * signature that no painted output moved. The verdict itself lives beside the finalize pass
+ * (`field-page-furniture.ts`), keyed weakly on this object; the registry below carries the
+ * object across passes the same way REF verdicts are carried.
+ */
+export type PageRefCalibrationCell = Readonly<Record<never, never>>;
+
+/**
+ * What a `PAGEREF` span carries to document finalize: the resolved target, the normalized
+ * authored cache (the calibration oracle), and the sticky calibration identity.
+ */
+export interface PageRefFieldProjection {
+  /** Canonical id of the paragraph the bookmark names — first declaration wins. */
+  readonly targetParagraphId: string;
+  /** The authored cached result, whitespace-collapsed — what the computed number must reproduce. */
+  readonly cached: string;
+  readonly calibration: PageRefCalibrationCell;
 }
 
 /** One scanned REF or AUTONUM-family field: instruction, anchor node id, NORMALIZED cache. */
@@ -569,6 +635,27 @@ function carriedVerdicts(blocks: readonly OoxmlElement[]): Map<string, boolean> 
   return carried;
 }
 
+/**
+ * PAGEREF calibration cells for one story, keyed by field anchor id — the same carry idiom
+ * as {@link refVerdictsByAnchorBlock}, and bounded the same way. The cell must survive the
+ * pass, not the verdict: finalize compares the computed page number against the cache the
+ * first time it meets a cell, and keying that verdict on a per-pass object would re-calibrate
+ * after every keystroke — flipping every live TOC number back to its stale cache.
+ */
+const pageRefCellsByAnchorBlock = new WeakMap<OoxmlElement, Map<string, PageRefCalibrationCell>>();
+
+function carriedPageRefCells(blocks: readonly OoxmlElement[]): Map<string, PageRefCalibrationCell> {
+  const first = blocks[0];
+  const last = blocks[blocks.length - 1];
+  const carried =
+    (first ? pageRefCellsByAnchorBlock.get(first) : undefined) ??
+    (last ? pageRefCellsByAnchorBlock.get(last) : undefined) ??
+    new Map<string, PageRefCalibrationCell>();
+  if (first) pageRefCellsByAnchorBlock.set(first, carried);
+  if (last) pageRefCellsByAnchorBlock.set(last, carried);
+  return carried;
+}
+
 /** Word trims one trailing period off a referenced number: `1.` → `1`, `1.2` stays `1.2`. */
 function trimTrailingPeriod(marker: string): string {
   return marker.length > 1 && marker.endsWith('.') ? marker.slice(0, -1) : marker;
@@ -695,6 +782,8 @@ function buildRefFieldContext(
 
   const resolve = (spec: RefFieldSpec): string | null => {
     const mods = refSpecModifiersOf(spec);
+    // A PAGEREF value is pagination's to compute — it must never resolve as bookmark text.
+    if (mods.pageRef) return null;
     const target = targets.get(spec.bookmark);
     if (!target) return null;
     if (mods.noteRef) {
@@ -769,9 +858,14 @@ function buildRefFieldContext(
   // would flip it back to stale. The token folds the PAINTED output — the live value when
   // calibrated, the session-constant cache otherwise — so it moves exactly when paint moves.
   const verdicts = carriedVerdicts(blocks);
+  const pageRefCells = carriedPageRefCells(blocks);
   const liveByAnchor = new Map<
     string,
     { readonly spec: RefFieldSpec; readonly live: string | null }
+  >();
+  const pageRefByAnchor = new Map<
+    string,
+    { readonly spec: RefFieldSpec; readonly projection: PageRefFieldProjection }
   >();
   const tokens = new Map<string, string>();
   const storyParts: string[] = [];
@@ -784,6 +878,28 @@ function buildRefFieldContext(
       if (field.spec === null) {
         const value = field.autonum ? (autonumByAnchor.get(field.anchorId) ?? null) : null;
         pieces.push(value !== null ? `a\u0001${value}` : `c\u0002${field.cached}`);
+        continue;
+      }
+      // A PAGEREF defers: the scan resolves the TARGET and finalize computes the number, so
+      // its verdict is finalize's to take (against the pagination, not against this walk).
+      // The token folds the cache, which is what this pass paints — the substituted number
+      // rides the finalize memo keys, not the block keys, exactly like a body PAGE field.
+      if (refSpecModifiersOf(field.spec).pageRef) {
+        const target = targets.get(field.spec.bookmark);
+        if (target) {
+          let cell = pageRefCells.get(field.anchorId);
+          if (cell === undefined && pageRefCells.size < MAX_REF_VERDICTS) {
+            cell = Object.freeze({});
+            pageRefCells.set(field.anchorId, cell);
+          }
+          if (cell !== undefined) {
+            pageRefByAnchor.set(field.anchorId, {
+              spec: field.spec,
+              projection: { targetParagraphId: target.id, cached: field.cached, calibration: cell },
+            });
+          }
+        }
+        pieces.push(`c\u0002${field.cached}`);
         continue;
       }
       const computed = computedOf(field.spec);
@@ -826,6 +942,18 @@ function buildRefFieldContext(
       return entry.live;
     },
     autonumValueOf: (anchorId) => autonumByAnchor.get(anchorId) ?? null,
+    pageRefProjectionOf: (anchorId, spec) => {
+      const entry = pageRefByAnchor.get(anchorId);
+      if (!entry) return null;
+      // Same agreement rule as liveValueOf: the anchor must still name this instruction.
+      if (
+        entry.spec.bookmark !== spec.bookmark ||
+        refSpecModifiersOf(entry.spec) !== refSpecModifiersOf(spec)
+      ) {
+        return null;
+      }
+      return entry.projection;
+    },
   };
 }
 

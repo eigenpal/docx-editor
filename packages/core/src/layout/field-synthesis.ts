@@ -23,13 +23,14 @@ import { formFieldResult } from './field-form.ts';
 import {
   numericPictureApplies,
   pageFieldPlaceholder,
+  PAGE_FIELD_PLACEHOLDER,
   projectPageFieldValue,
   type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
-import type { RefFieldContext } from './field-ref.ts';
+import type { PageRefFieldProjection, RefFieldContext } from './field-ref.ts';
 import { symbolFieldGlyph } from './field-symbol.ts';
 import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 
@@ -48,6 +49,12 @@ export interface AtomicFieldSynthesis {
     /** The field's `\#` numeric picture, carried to the substitute pass. */
     readonly picture?: string;
   };
+  /**
+   * Present when this is a BODY `PAGEREF`: {@link text} is the cached result (or the
+   * placeholder digit for an empty cache) and document finalize substitutes the number of
+   * the page the resolved target lands on. The caller carries this onto the span marker.
+   */
+  readonly pageRefField?: PageRefFieldProjection;
 }
 
 /** Document-global inputs the synthesis reads, none of them per-run. */
@@ -104,6 +111,34 @@ export function synthesizeAtomicField(
   if (pending.refSpec && ctx.refFields) {
     const value = ctx.refFields.liveValueOf(pending.beginId, pending.refSpec);
     if (value !== null) return { text: value, props: pending.props, style: pending.style };
+  }
+  // A BODY PAGEREF defers to document finalize the way a body PAGE does: the value is a
+  // property of pagination, so this paints the cached result — the width every value it can
+  // be replaced by usually shares, since TOC caches are page numbers — and marks the span
+  // with the resolved target. Empty cache paints the placeholder digit (gated on a result
+  // the file did not hide, like every synthesis). Gated on `bodyPageFields` because notes
+  // and text boxes have no substitute pass, and furniture keeps its cache (its projector
+  // knows its own page, not the target's).
+  if (pending.refSpec && ctx.refFields?.pageRefProjectionOf && ctx.bodyPageFields) {
+    const projection = ctx.refFields.pageRefProjectionOf(pending.beginId, pending.refSpec);
+    if (projection) {
+      if (pending.cachedText.length > 0) {
+        return {
+          text: pending.cachedText,
+          props: pending.props,
+          style: pending.style,
+          pageRefField: projection,
+        };
+      }
+      if (!pending.sawResultContent) {
+        return {
+          text: PAGE_FIELD_PLACEHOLDER,
+          props: pending.props,
+          style: pending.style,
+          pageRefField: projection,
+        };
+      }
+    }
   }
   // An AUTONUM-family field has no separator and no cached result — Word computes the number
   // at display time and never stores it — so the synthesized sequential value is its only

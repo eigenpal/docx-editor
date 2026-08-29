@@ -101,7 +101,11 @@ describe('parseRefInstruction', () => {
     expect(parseRefInstruction(`REF ${'x'.repeat(257)}`)).toBeNull();
     expect(parseRefInstruction('REF "unterminated')).toBeNull();
     // Other keywords are not this field.
-    expect(parseRefInstruction('PAGEREF _Ref1 \\h')).toBeNull();
+    expect(parseRefInstruction('SEQ figure')).toBeNull();
+    // PAGEREF parses (its value defers to pagination finalize), but only `\h` and the inert
+    // `\* MERGEFORMAT` are in its grammar — `\p` keeps the cache.
+    expect(parseRefInstruction('PAGEREF _Ref1 \\h')?.bookmark).toBe('_Ref1');
+    expect(parseRefInstruction('PAGEREF _Ref1 \\p')).toBeNull();
     // Over the shared instruction cap fails closed.
     expect(parseRefInstruction(`REF ${'y'.repeat(MAX_FIELD_INSTRUCTION_CHARS)}`)).toBeNull();
   });

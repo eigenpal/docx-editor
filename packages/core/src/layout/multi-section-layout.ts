@@ -10,6 +10,7 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
+import { pageRefAssignmentToken } from './field-page-furniture.ts';
 import { numericPictureApplies } from './field-page-furniture.ts';
 import {
   remapPage,
@@ -184,6 +185,7 @@ function ensureMultiState(
     previousRemapped: [],
     previousFinalized: null,
     previousPageCount: -1,
+    previousPageRefToken: '',
   };
   session.multi = fresh;
   return fresh;
@@ -631,6 +633,7 @@ export function layoutMultiSectionDocument(
       multi.previousRemapped = laid.pages;
       multi.previousFinalized = finalized;
       multi.previousPageCount = finalized.pages.length;
+      multi.previousPageRefToken = pageRefAssignmentToken(laid.pages);
     }
     if (session) {
       adoptMultiSectionResult(session, finalized, lineCounter);
@@ -646,12 +649,16 @@ export function layoutMultiSectionDocument(
 
   const freshlyFinalized = finalizePageFieldProjection({ revision, pages });
   let finalized = freshlyFinalized;
+  const pageRefToken = pageRefAssignmentToken(pages);
 
-  // Restore prior finalized page identities when the remapped source and total count hold.
+  // Restore prior finalized page identities when the remapped source and total count hold —
+  // and the PAGEREF assignments too: a target that changed sheets leaves the TOC page's raw
+  // record identity-unchanged, so without the token the restore hands back its stale numbers.
   if (
     multi?.previousFinalized &&
     multi.previousPageCount === freshlyFinalized.pages.length &&
-    multi.previousRemapped.length === remappedAll.length
+    multi.previousRemapped.length === remappedAll.length &&
+    multi.previousPageRefToken === pageRefToken
   ) {
     const prevFinal = multi.previousFinalized.pages;
     const prevRemapped = multi.previousRemapped;
@@ -669,6 +676,7 @@ export function layoutMultiSectionDocument(
     multi.previousRemapped = remappedAll;
     multi.previousFinalized = finalized;
     multi.previousPageCount = finalized.pages.length;
+    multi.previousPageRefToken = pageRefToken;
   }
 
   if (session) {

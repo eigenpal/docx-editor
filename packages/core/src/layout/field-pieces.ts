@@ -18,7 +18,7 @@ import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
-import type { RefFieldSpec } from './field-ref.ts';
+import type { PageRefFieldProjection, RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -68,6 +68,15 @@ export interface FieldAtomMarker {
     /** The field's `\#` numeric picture, applied when finalize substitutes the value. */
     readonly picture?: string;
   };
+  /**
+   * A BODY `PAGEREF` atom whose value is the page number its bookmark target lands on.
+   *
+   * Deferred exactly like {@link pageField}: the paragraph walk paints the field's cached
+   * result (or the placeholder digit when the file cached none) and records the resolved
+   * target here; document finalize substitutes the number of the page hosting the target's
+   * first fragment, gated per field on the calibration verdict.
+   */
+  readonly pageRef?: PageRefFieldProjection;
 }
 
 /**

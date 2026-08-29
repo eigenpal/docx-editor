@@ -80,6 +80,12 @@ export interface MultiSectionLayoutState {
   previousRemapped: readonly PageRecord[];
   previousFinalized: SemanticLayout | null;
   previousPageCount: number;
+  /**
+   * The PAGEREF assignment token of the pages behind `previousFinalized`. A target can move
+   * sheets while the TOC page's own remapped record stays identity-unchanged, so the finalized
+   * restore must compare this before handing back a previously substituted sheet.
+   */
+  previousPageRefToken: string;
 }
 
 /**
