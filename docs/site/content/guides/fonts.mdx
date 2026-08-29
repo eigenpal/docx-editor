@@ -324,9 +324,9 @@ so call `loadDefaultFonts()` instead when you need that guarantee.
 
 Use `fetcher` for caching too. `googleFonts()` keeps its catalog fetches in
 memory, keyed by the fetcher you passed, which is what a browser tab needs.
-Nothing else caches: the packaged assets are re-read on every call, and a server
-that renders in short-lived processes gets no reuse either way, because nothing
-is written to disk and nothing is shared between workers. Wrapping `fetcher` is
+Nothing else caches. The packaged assets are re-read on every call. A server
+that renders in short-lived processes gets no reuse either way. Nothing is
+written to disk, and nothing is shared between workers. Wrapping `fetcher` is
 where you add that:
 
 ```ts
