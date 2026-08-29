@@ -299,8 +299,8 @@ wider the substitute would run.
 ### Serve the catalog from your own origin
 
 `googleFonts()` fetches from a content delivery network. To send those requests
-somewhere else, pass `fetcher`. It replaces the `fetch` the resolver uses, so
-your function decides where every byte comes from:
+somewhere else, pass `fetcher`. It replaces the `fetch` that resolver uses, so
+your function decides where each catalogued face comes from:
 
 ```ts
 googleFonts({
@@ -308,18 +308,26 @@ googleFonts({
 });
 ```
 
-`packagedFonts()` and `defaultFonts()` take the same option. Their assets ship
-inside the package, so they read your own origin either way.
-
 The bytes suit a mirror well. Each face is pinned to an immutable commit and
-carries a `sha256:` value that the engine re-derives on admission, so a
-substituted or corrupted file fails loudly rather than rendering.
+carries a `sha256:` value. The engine re-derives that hash when it admits the
+bytes, so a substituted or corrupted file fails loudly rather than rendering.
 
-Use `fetcher` for caching too. The resolver keeps fetched bytes in memory,
-keyed by the fetcher you passed, which is what a browser tab needs. A server
-that renders in short-lived processes gets no reuse: nothing is written to disk
-and nothing is shared between workers. Wrapping `fetcher` is where you add
-that:
+`packagedFonts()` and `defaultFonts()` accept `fetcher` too, and their assets
+ship inside the package, so they read your own origin with or without it.
+
+Both also register faces for painting, and that step can reach the browser's own
+`FontFace` loader, which takes a URL rather than your function. To be certain
+every byte goes through `fetcher`, pass `install: false` to `packagedFonts()`.
+Measurement is unaffected: painted glyphs then fall back to whatever the
+platform substitutes for the family name. `defaultFonts()` has no such option,
+so call `loadDefaultFonts()` instead when you need that guarantee.
+
+Use `fetcher` for caching too. `googleFonts()` keeps its catalog fetches in
+memory, keyed by the fetcher you passed, which is what a browser tab needs.
+Nothing else caches: the packaged assets are re-read on every call, and a server
+that renders in short-lived processes gets no reuse either way, because nothing
+is written to disk and nothing is shared between workers. Wrapping `fetcher` is
+where you add that:
 
 ```ts
 googleFonts({
@@ -341,8 +349,8 @@ A face that cannot be fetched is dropped, and the family it belonged to measures
 on the engine's fixed fallback instead.
 
 Treat that as a layout problem, not a cosmetic one. Substitute bytes are what
-keep wrapping and pagination close to Word, so a blocked request changes where
-your pages break rather than only how the text looks.
+keep wrapping and pagination close to Word. A blocked request therefore changes
+where your pages break, not only how the text looks.
 
 The document still opens. Each dropped face goes to the resolver's own
 `onFailure` option, which writes a console warning when you pass no handler:
@@ -353,8 +361,8 @@ googleFonts({
 });
 ```
 
-If your deployment cannot reach a content delivery network, either point
-`fetcher` at a mirror you control or leave `googleFonts()` out and use
+Two options work when your deployment cannot reach a content delivery network.
+Point `fetcher` at a mirror you control. Or leave `googleFonts()` out and use
 `packagedFonts()` alone, which reads only the bytes inside the package.
 
 ### Write your own resolver
