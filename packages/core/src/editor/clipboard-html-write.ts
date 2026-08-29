@@ -24,9 +24,13 @@ import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
 import {
   attrOf,
+  cssHexColor,
+  escapeAttr,
+  escapeHtml,
   findDescendant,
   isElement,
   parseIntValue,
+  ptFromTwips,
   textUnder,
   wmlChild,
   wmlVal,
@@ -65,26 +69,6 @@ export interface InteropHtmlOptions {
   readonly maxImageBytes?: number;
   /** Total image budget. Default 8 MiB. Images beyond either budget are omitted. */
   readonly maxTotalImageBytes?: number;
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-const escapeAttr = escapeHtml;
-
-function cssHexColor(raw: string | undefined): string | null {
-  if (raw === undefined || raw.toLowerCase() === 'auto') return null;
-  return /^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw.toLowerCase()}` : null;
-}
-
-/** Twips → pt, trimmed to two decimals. */
-function ptFromTwips(twips: number): string {
-  return `${Math.round((twips / 20) * 100) / 100}pt`;
 }
 
 interface StyleIndex {
@@ -168,27 +152,40 @@ function paragraphPropertySources(index: StyleIndex, ownPPr: OoxmlElement | null
   return sources;
 }
 
-function runPropertySources(
+/** Run property sources grouped by cascade level, so toggles can XOR per level. */
+interface RunPropertyLayers {
+  /** Every source lowest-precedence first, for the non-toggle folds. */
+  readonly all: readonly OoxmlElement[];
+  readonly defaults: readonly OoxmlElement[];
+  readonly paragraphLevel: readonly OoxmlElement[];
+  readonly characterLevel: readonly OoxmlElement[];
+  readonly direct: OoxmlElement | null;
+}
+
+function runPropertyLayers(
   index: StyleIndex,
   paragraphPPr: OoxmlElement | null,
   ownRPr: OoxmlElement | null
-): OoxmlElement[] {
-  const sources: OoxmlElement[] = [];
-  if (index.docDefaultsRPr) sources.push(index.docDefaultsRPr);
+): RunPropertyLayers {
+  const defaults: OoxmlElement[] = [];
+  if (index.docDefaultsRPr) defaults.push(index.docDefaultsRPr);
+  const paragraphLevel: OoxmlElement[] = [];
   for (const style of styleChain(index, index.defaultParagraphStyleId ?? undefined)) {
     const rPr = wmlChild(style, 'rPr');
-    if (rPr) sources.push(rPr);
+    if (rPr) paragraphLevel.push(rPr);
   }
   for (const style of styleChain(index, wmlVal(wmlChild(paragraphPPr, 'pStyle')))) {
     const rPr = wmlChild(style, 'rPr');
-    if (rPr) sources.push(rPr);
+    if (rPr) paragraphLevel.push(rPr);
   }
+  const characterLevel: OoxmlElement[] = [];
   for (const style of styleChain(index, wmlVal(wmlChild(ownRPr, 'rStyle')))) {
     const rPr = wmlChild(style, 'rPr');
-    if (rPr) sources.push(rPr);
+    if (rPr) characterLevel.push(rPr);
   }
-  if (ownRPr) sources.push(ownRPr);
-  return sources;
+  const all = [...defaults, ...paragraphLevel, ...characterLevel];
+  if (ownRPr) all.push(ownRPr);
+  return { all, defaults, paragraphLevel, characterLevel, direct: ownRPr };
 }
 
 /** The last source carrying the named property child wins. */
@@ -217,7 +214,8 @@ function foldAttribute(
   return value;
 }
 
-/** Toggle semantics: presence with `w:val` absent is on; "0"/"false"/"none" is off. */
+/** Plain boolean semantics: the last source carrying the property wins.
+ *  For paragraph booleans and non-toggle run booleans (`w:rtl`). */
 function toggleOn(sources: readonly OoxmlElement[], localName: string): boolean {
   let state = false;
   for (const source of sources) {
@@ -229,6 +227,36 @@ function toggleOn(sources: readonly OoxmlElement[], localName: string): boolean 
   return state;
 }
 
+/** The resolved value of a toggle within ONE style level, or undefined when unset. */
+function toggleLevelValue(
+  sources: readonly OoxmlElement[],
+  localName: string
+): boolean | undefined {
+  let value: boolean | undefined;
+  for (const source of sources) {
+    const child = wmlChild(source, localName);
+    if (!child) continue;
+    const val = wmlVal(child);
+    value = !(val === '0' || val === 'false' || val === 'none');
+  }
+  return value;
+}
+
+/** ECMA-376 §17.7.3 toggle semantics, matching `layout/style-cascade.ts`: direct
+ *  formatting is absolute; otherwise the docDefaults base XORs with each style
+ *  LEVEL (paragraph, character) that resolves the toggle to true. */
+function runToggleOn(layers: RunPropertyLayers, localName: string): boolean {
+  const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
+  if (direct) {
+    const val = wmlVal(direct);
+    return !(val === '0' || val === 'false' || val === 'none');
+  }
+  let on = toggleLevelValue(layers.defaults, localName) ?? false;
+  if (toggleLevelValue(layers.paragraphLevel, localName) === true) on = !on;
+  if (toggleLevelValue(layers.characterLevel, localName) === true) on = !on;
+  return on;
+}
+
 interface RunCss {
   readonly css: string;
   readonly vanish: boolean;
@@ -237,8 +265,9 @@ interface RunCss {
   readonly rtl: boolean;
 }
 
-function runCssOf(sources: readonly OoxmlElement[]): RunCss {
-  if (toggleOn(sources, 'vanish')) {
+function runCssOf(layers: RunPropertyLayers): RunCss {
+  const sources = layers.all;
+  if (runToggleOn(layers, 'vanish')) {
     return { css: '', vanish: true, vertAlign: null, lang: null, rtl: false };
   }
   const rules: string[] = [];
@@ -253,14 +282,14 @@ function runCssOf(sources: readonly OoxmlElement[]): RunCss {
   }
   const sz = parseIntValue(foldAttribute(sources, 'sz', 'val'));
   if (sz !== null && sz > 0) rules.push(`font-size:${Math.round((sz / 2) * 100) / 100}pt`);
-  if (toggleOn(sources, 'b')) rules.push('font-weight:bold');
-  if (toggleOn(sources, 'i')) rules.push('font-style:italic');
+  if (runToggleOn(layers, 'b')) rules.push('font-weight:bold');
+  if (runToggleOn(layers, 'i')) rules.push('font-style:italic');
 
   const decorations: string[] = [];
   const underline = lastProperty(sources, 'u');
   if (underline && wmlVal(underline) !== 'none') decorations.push('underline');
-  const doubleStrike = toggleOn(sources, 'dstrike');
-  if (toggleOn(sources, 'strike') || doubleStrike) decorations.push('line-through');
+  const doubleStrike = runToggleOn(layers, 'dstrike');
+  if (runToggleOn(layers, 'strike') || doubleStrike) decorations.push('line-through');
   if (decorations.length > 0) rules.push(`text-decoration:${decorations.join(' ')}`);
   rules.push(...wordUnderlineCss(underline));
   if (doubleStrike && underline === null) rules.push('text-decoration-style:double');
@@ -277,11 +306,15 @@ function runCssOf(sources: readonly OoxmlElement[]): RunCss {
       ? WORD_HIGHLIGHT_COLORS[highlightVal]
       : undefined;
   const shdFill = cssHexColor(foldAttribute(sources, 'shd', 'fill'));
-  if (highlight) rules.push(`background-color:${highlight}`);
-  else if (shdFill) rules.push(`background-color:${shdFill}`);
+  if (highlight) {
+    // The mso declaration lets a reader reconstruct w:highlight instead of shading.
+    rules.push(`background-color:${highlight}`, `mso-highlight:${highlightVal}`);
+  } else if (shdFill) {
+    rules.push(`background-color:${shdFill}`);
+  }
 
-  if (toggleOn(sources, 'caps')) rules.push('text-transform:uppercase');
-  if (toggleOn(sources, 'smallCaps')) rules.push('font-variant:small-caps');
+  if (runToggleOn(layers, 'caps')) rules.push('text-transform:uppercase');
+  if (runToggleOn(layers, 'smallCaps')) rules.push('font-variant:small-caps');
 
   const vertAlignVal = wmlVal(lastProperty(sources, 'vertAlign'));
   const vertAlign =
@@ -510,8 +543,8 @@ function renderRun(
   if (fields.stack.some((mode) => mode === 'instr')) return '';
 
   const rPr = run.children.find((child) => child.kind === 'runProperties');
-  const sources = runPropertySources(ctx.styles, paragraphPPr, rPr && isElement(rPr) ? rPr : null);
-  const style = runCssOf(sources);
+  const layers = runPropertyLayers(ctx.styles, paragraphPPr, rPr && isElement(rPr) ? rPr : null);
+  const style = runCssOf(layers);
   if (style.vanish) return '';
 
   let inner = '';

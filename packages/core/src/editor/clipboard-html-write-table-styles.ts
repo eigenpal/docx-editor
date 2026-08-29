@@ -39,9 +39,13 @@ export function wordTableCellCss(
     right: cellIndex === cellCount - 1 ? 'right' : 'insideV',
   } as const;
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
+    // An explicit cell `nil`/`none` SUPPRESSES the edge; only an absent cell border
+    // falls back to the table grid.
+    const cellEdge = wmlChild(tcBorders, edge);
     const border =
-      wordBorderCss(wmlChild(tcBorders, edge)) ??
-      wordBorderCss(wmlChild(tblBorders, tableEdges[edge]));
+      cellEdge !== null
+        ? wordBorderCss(cellEdge)
+        : wordBorderCss(wmlChild(tblBorders, tableEdges[edge]));
     if (border) rules.push(`border-${edge}:${border}`);
   }
   const fill = colorAttribute(wmlChild(tcPr, 'shd'), 'fill');

@@ -241,7 +241,7 @@ function collectInline(
   }
   // A collected note definition reached through an inline wrapper projects only via
   // the notes pass; landing it here would duplicate the note text into the body.
-  if (isClipboardNoteList(style)) return;
+  // Uncollected definitions descend normally, so their text stays lossless.
   const inlineNoteDefinition = clipboardNoteDefinitionRef(node, style);
   if (
     inlineNoteDefinition !== null &&
@@ -406,10 +406,10 @@ function paragraphContextOf(
   if (mso) para.numPr = mso;
   applyWordParagraphAlignment(para, element, p.classAlignments);
   applyParaCss(para, style);
-  const runStyle = new Map(style);
-  runStyle.delete('background');
-  runStyle.delete('background-color');
-  run = applyRunCss(run, runStyle);
+  // The background lands on BOTH the paragraph (w:pPr/w:shd) and its runs: the
+  // single-paragraph inline paste path keeps only run content, so a run-level fill
+  // is what survives a mid-paragraph paste.
+  run = applyRunCss(run, style);
   const language = clipboardLanguageTag(element.getAttribute('lang'));
   if (language !== null) run.lang = language;
   if (element.getAttribute('dir')?.trim().toLowerCase() === 'rtl') {
@@ -557,11 +557,26 @@ function projectFlow(
         continue;
       }
       const elementStyle = parseInlineStyle(node);
-      if (
-        isClipboardNoteList(elementStyle) ||
-        elementStyle.get('mso-element')?.trim().toLowerCase() === 'comment-list'
-      ) {
+      if (elementStyle.get('mso-element')?.trim().toLowerCase() === 'comment-list') {
         p.nodesLeft -= 1;
+        continue;
+      }
+      // The note-list wrapper is transparent: collected definitions inside it are
+      // skipped below (they re-emit through the notes pass), while definitions past
+      // the collection caps project into the body — ugly but lossless.
+      if (isClipboardNoteList(elementStyle)) {
+        flush();
+        p.nodesLeft -= 1;
+        projectFlow(
+          Array.from(node.childNodes),
+          depth + 1,
+          ctx,
+          p,
+          out,
+          false,
+          pageBreak,
+          extractPageBreakBlocks
+        );
         continue;
       }
       // A collected note definition projects only through the notes pass; walking it
@@ -667,12 +682,24 @@ function projectTable(
   const rows = tableRowsOf(table);
   if (rows.length === 0) return;
 
+  // Count columns INCLUDING rowspan carry-over: a row that receives carried columns
+  // still owns its trailing cells, which would otherwise be dropped.
   let columns = 1;
+  let carrySpans: Array<{ remaining: number; readonly span: number }> = [];
   for (const row of rows) {
     let count = 0;
+    for (const carried of carrySpans) count += carried.span;
+    const nextCarry = carrySpans
+      .map((carried) => ({ remaining: carried.remaining - 1, span: carried.span }))
+      .filter((carried) => carried.remaining > 0);
     for (const cell of Array.from(row.children)) {
-      if (/^t[dh]$/.test(tagOf(cell))) count += htmlSpanOf(cell, 'colspan', 63);
+      if (!/^t[dh]$/.test(tagOf(cell))) continue;
+      const span = htmlSpanOf(cell, 'colspan', 63);
+      count += span;
+      const rowSpan = htmlSpanOf(cell, 'rowspan', 1000);
+      if (rowSpan > 1) nextCarry.push({ remaining: rowSpan - 1, span });
     }
+    carrySpans = nextCarry;
     columns = Math.max(columns, count);
   }
   columns = Math.min(columns, 63);
@@ -821,7 +848,6 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     footnote: new Set(),
     endnote: new Set(),
   };
-  for (const note of noteDefinitions) definedNotes[note.kind].add(note.id);
   const projection: Projection = {
     nodesLeft: limits.maxNodes ?? DEFAULT_MAX_NODES,
     maxDepth: limits.maxDepth ?? DEFAULT_MAX_DEPTH,
@@ -841,7 +867,6 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     noteRels: { footnote: [], endnote: [] },
     definedNotes,
   };
-  const blocks: string[] = [];
   const rootCtx: FlowContext = {
     run: {},
     para: {},
@@ -849,9 +874,12 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     pre: false,
     list: null,
   };
-  projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
-  const bodyLastMarkCovered = projection.lastMarkCovered;
+  // Notes project FIRST, so the body pass emits a live reference only for a note
+  // whose body actually landed. A note the walk budget starved out stays out of
+  // `definedNotes`, and its reference keeps the anchor's visible text instead of
+  // pointing at a blank note.
   for (const note of noteDefinitions) {
+    if (projection.nodesLeft <= 0) break;
     const noteBlocks: string[] = [];
     projectFlow(
       Array.from(note.element.childNodes),
@@ -865,11 +893,42 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       noteBlocks,
       true
     );
-    if (noteBlocks.length > 0) projection.notes[note.kind].set(note.id, noteBlocks);
+    if (noteBlocks.length > 0) {
+      projection.notes[note.kind].set(note.id, noteBlocks);
+      definedNotes[note.kind].add(note.id);
+    }
   }
-  projection.lastMarkCovered = bodyLastMarkCovered;
+  projection.lastMarkCovered = false;
+  const blocks: string[] = [];
+  projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
   if (blocks.length === 0) return { ok: false, reason: 'no-content' };
   return { ok: true, projection, blocks };
+}
+
+// One paste gesture probes and then projects the SAME string; the single-entry memo
+// keeps the second call from re-running the full parse + walk on a multi-MiB payload.
+let memoizedProjection: {
+  readonly html: string;
+  readonly limitsKey: string;
+  readonly projected: ProjectedBlocks;
+} | null = null;
+
+function limitsKeyOf(limits: HtmlProjectionLimits): string {
+  return `${limits.maxHtmlBytes ?? ''}:${limits.maxNodes ?? ''}:${limits.maxDepth ?? ''}:${limits.maxImageBytes ?? ''}`;
+}
+
+function projectBlocksMemoized(html: string, limits: HtmlProjectionLimits): ProjectedBlocks {
+  const limitsKey = limitsKeyOf(limits);
+  if (
+    memoizedProjection !== null &&
+    memoizedProjection.html === html &&
+    memoizedProjection.limitsKey === limitsKey
+  ) {
+    return memoizedProjection.projected;
+  }
+  const projected = projectBlocks(html, limits);
+  memoizedProjection = { html, limitsKey, projected };
+  return projected;
 }
 
 /** Project external `text/html` into a bounded WordprocessingML fragment package. */
@@ -877,7 +936,9 @@ export function projectExternalHtml(
   html: string,
   limits: HtmlProjectionLimits = {}
 ): HtmlProjectionResult {
-  const projected = projectBlocks(html, limits);
+  const projected = projectBlocksMemoized(html, limits);
+  // The gesture is over once the fragment is assembled; do not retain the payload.
+  memoizedProjection = null;
   if (!projected.ok) return projected;
   return {
     ok: true,
@@ -892,7 +953,7 @@ export function probeExternalHtml(
   html: string,
   limits: HtmlProjectionLimits = {}
 ): { readonly lands: boolean; readonly imageCount: number } {
-  const projected = projectBlocks(html, limits);
+  const projected = projectBlocksMemoized(html, limits);
   if (!projected.ok) return { lands: false, imageCount: 0 };
   return { lands: true, imageCount: projected.projection.imageCount };
 }

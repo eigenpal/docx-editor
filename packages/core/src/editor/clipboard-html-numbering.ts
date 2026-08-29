@@ -55,6 +55,30 @@ function levelXml(kind: HtmlListKind, start: number, ilvl: number): string {
   );
 }
 
+const ROMAN_DIGIT_VALUES: ReadonlyMap<string, number> = new Map([
+  ['i', 1],
+  ['v', 5],
+  ['x', 10],
+  ['l', 50],
+  ['c', 100],
+  ['d', 500],
+  ['m', 1000],
+]);
+
+/** The ordinal a roman marker names ('iv' → 4), or 1 when it does not parse. */
+function romanValueOf(token: string): number {
+  let total = 0;
+  let previous = 0;
+  for (const char of token.toLowerCase()) {
+    const value = ROMAN_DIGIT_VALUES.get(char);
+    if (value === undefined) return 1;
+    total += value;
+    if (previous > 0 && previous < value) total -= 2 * previous;
+    previous = value;
+  }
+  return total > 0 && total <= 32_767 ? total : 1;
+}
+
 export function htmlListKindAndStart(marker: string): {
   readonly kind: HtmlListKind;
   readonly start: number;
@@ -68,9 +92,12 @@ export function htmlListKindAndStart(marker: string): {
   }
   // A multi-letter roman run is unambiguous. A single letter is roman only for 'i' —
   // the marker a roman list's first item carries; 'c.' or 'v.' is a letter list that
-  // starts mid-alphabet.
-  if (/^(?:[IVXLCDM]{2,}|I)[.)]/.test(trimmed)) return { kind: 'upperRoman', start: 1 };
-  if (/^(?:[ivxlcdm]{2,}|i)[.)]/.test(trimmed)) return { kind: 'lowerRoman', start: 1 };
+  // starts mid-alphabet. The start parses from the numeral so a pasted slice keeps
+  // its visible numbers.
+  const upperRoman = /^([IVXLCDM]{2,8}|I)[.)]/.exec(trimmed);
+  if (upperRoman) return { kind: 'upperRoman', start: romanValueOf(upperRoman[1]!) };
+  const lowerRoman = /^([ivxlcdm]{2,8}|i)[.)]/.exec(trimmed);
+  if (lowerRoman) return { kind: 'lowerRoman', start: romanValueOf(lowerRoman[1]!) };
   const letter = /^([A-Za-z])[.)]/.exec(trimmed);
   if (letter) {
     const code = letter[1]!.charCodeAt(0);

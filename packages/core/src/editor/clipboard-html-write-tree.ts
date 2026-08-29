@@ -1,6 +1,6 @@
-// Shared canonical-tree walkers for the outbound clipboard HTML writer modules —
-// split from clipboard-html-write.ts at the max-lines cap and de-duplicated across
-// the write-table-styles and write-numbering modules.
+// Shared canonical-tree walkers and small emit helpers for the outbound clipboard
+// HTML writer modules — split from clipboard-html-write.ts at the max-lines cap and
+// de-duplicated across the write-table-styles and write-numbering modules.
 
 import {
   WML_NAMESPACE_URI,
@@ -68,4 +68,24 @@ export function parseIntValue(raw: string | undefined): number | null {
   if (raw === undefined || !/^-?\d+$/.test(raw)) return null;
   const parsed = Number(raw);
   return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export const escapeAttr = escapeHtml;
+
+export function cssHexColor(raw: string | undefined): string | null {
+  if (raw === undefined || raw.toLowerCase() === 'auto') return null;
+  return /^[0-9A-Fa-f]{6}$/.test(raw) ? `#${raw.toLowerCase()}` : null;
+}
+
+/** Twips → pt, trimmed to two decimals. */
+export function ptFromTwips(twips: number): string {
+  return `${Math.round((twips / 20) * 100) / 100}pt`;
 }

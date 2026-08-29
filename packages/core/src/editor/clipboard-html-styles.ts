@@ -357,6 +357,7 @@ const HIGHLIGHT_ALIASES: ReadonlyMap<string, string> = new Map([
   ['fuchsia', 'magenta'],
   ['magenta', 'magenta'],
   ['lime', 'green'],
+  ['green', 'green'],
   ['olive', 'darkYellow'],
   ['red', 'red'],
   ['blue', 'blue'],
@@ -623,7 +624,7 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
   if (letterSpacing !== null) {
     next.charSpacingTwentieths = clamp(Math.round(letterSpacing * 20), -31_680, 31_680);
   }
-  const vertical = style.get('vertical-align');
+  const vertical = style.get('vertical-align')?.trim().toLowerCase();
   if (vertical === 'sub') next.vertAlign = 'subscript';
   else if (vertical === 'super') next.vertAlign = 'superscript';
   const language = clipboardLanguageTag(

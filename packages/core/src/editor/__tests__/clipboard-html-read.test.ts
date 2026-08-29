@@ -273,7 +273,9 @@ describe('run and paragraph mapping', () => {
     expect(paragraph!).toContain('w:sz="6"');
     expect(paragraph!).toContain('w:color="2B6CB0"');
     expect(paragraph!).toContain('w:fill="DDEEFF"');
-    expect(paragraph!.match(/<w:shd/g)).toHaveLength(1);
+    // The fill lands on the paragraph mark AND the run, so a mid-paragraph inline
+    // paste (which keeps only run content) does not lose it.
+    expect(paragraph!.match(/<w:shd/g)).toHaveLength(2);
   });
 
   test('Word CSS length units map to equivalent twip values', () => {
@@ -905,11 +907,11 @@ describe('whitespace and breaks', () => {
   });
 
   test('Word TOC wrappers keep rows while comment and note chrome stays out', () => {
-    const { docXml } = openFragment(
+    const { docXml, pkg } = openFragment(
       '<w:Sdt><w:SdtPr></w:SdtPr><p>first<w:PTab Alignment="RIGHT" ' +
         'RelativeTo="MARGIN" Leader="DOT"></w:PTab></p><p>second</p></w:Sdt>' +
         '<a class="msocomanchor" style="mso-element:comment-reference">[1]</a>' +
-        '<div style="mso-element:footnote-list"><div style="mso-element:footnote">' +
+        '<div style="mso-element:footnote-list"><div style="mso-element:footnote" id="ftn1">' +
         '<p>note body</p></div></div>'
     );
     expect(docXml.match(/<w:p>/g)).toHaveLength(2);
@@ -917,7 +919,17 @@ describe('whitespace and breaks', () => {
     expect(docXml).toContain('second');
     expect(docXml).toContain('<w:ptab ');
     expect(docXml).not.toContain('[1]');
+    // The collected definition re-emits only through the footnotes part.
     expect(docXml).not.toContain('note body');
+    expect(pkg.partBytes.get('/word/footnotes.xml')).toBeDefined();
+  });
+
+  test('a note definition the collector cannot claim projects losslessly into the body', () => {
+    const { docXml } = openFragment(
+      '<p>body</p><div style="mso-element:footnote-list">' +
+        '<div style="mso-element:footnote"><p>orphan note text</p></div></div>'
+    );
+    expect(docXml).toContain('orphan note text');
   });
 
   test('a wrapped block SDT keeps its child paragraphs separate', () => {
