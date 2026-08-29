@@ -175,7 +175,9 @@ function collectStaleResultUpdates(
           if (
             computed !== null &&
             computed.length > 0 &&
-            pageRefCalibrationVerdict(pageRef.calibration, pageRef.cached, computed)
+            // NaN revision: a save-time check can neither collide with nor revoke a layout
+            // pass's provisional latch (NaN never equals any revision).
+            pageRefCalibrationVerdict(pageRef.calibration, pageRef.cached, computed, Number.NaN)
           ) {
             value = computed;
           }
