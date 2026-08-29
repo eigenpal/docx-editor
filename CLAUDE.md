@@ -398,7 +398,10 @@ dev` → `http://localhost:5173/`. Live demo `http://docx-editor.dev/editor`.
   Area/Priority single-select fields. An option name must keep matching its
   label slug (lowercase, spaces→dashes) or the sync warns and skips; an issue
   with no `area:*` label is removed from the board; two labels of one prefix
-  clear the field. When you file an issue, set both labels.
+  clear the field. ALWAYS file an issue with both labels AND a native issue
+  type: `gh issue create --type Bug|Feature|Task --label "area:...,priority:..."`
+  (`gh issue edit <N> --type ...` to fix one). Never leave an issue without a
+  type or an area.
 - **ESM only** — no `require()`.
 - **Tailwind** — scoped to `.docx-editor`; the scoping is baked into `dist/editor.css`
   at core build time (`scripts/build-core-styles.mjs` + `packages/core/tailwind.dist.config.cjs`),
