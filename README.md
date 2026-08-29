@@ -12,9 +12,7 @@
   <a href="https://www.docx-editor.dev/docs"><img src="https://img.shields.io/badge/Docs-3B5BDB?style=flat-square&logo=readthedocs&logoColor=white" alt="Documentation" /></a>
 </p>
 
-Open-source WYSIWYG `.docx` editor for React and Vue. Word-faithful pagination, tracked changes, comments, and lossless round-trip: untouched content and unsupported OOXML survive the save. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)** | **[Roadmap](ROADMAP.md)**
-
-Curious where the project is heading? See the **[roadmap](ROADMAP.md)** and the **[public roadmap board](https://github.com/orgs/eigenpal/projects/2)**.
+Open-source WYSIWYG `.docx` editor for React and Vue. Word-faithful pagination, tracked changes, comments, and lossless round-trip: untouched content and unsupported OOXML survive the save. **[Live demo](https://docx-editor.dev/editor)** | **[Documentation](https://www.docx-editor.dev/docs)** | **[Roadmap](https://github.com/orgs/eigenpal/projects/2)**
 
 ## Quick Start
 
