@@ -1607,9 +1607,12 @@ function sectionEndInsertBound(
  * Inserted overflow pages already carry a `pageFieldSource` cloned from the section template;
  * document-level NUMPAGES and furniture text need finalize against the new page count.
  */
-function reindexAndFinalizeFields(pages: readonly PageRecord[]): PageRecord[] {
+function reindexAndFinalizeFields(pages: readonly PageRecord[], revision: number): PageRecord[] {
   const reindexed = reindexAndRestackPages(pages);
-  return [...finalizePageFieldProjection({ revision: 0, pages: reindexed }).pages];
+  // The REAL revision, not a sentinel: PAGEREF calibration may revoke a live latch only when
+  // a re-finalize of the SAME revision moved a target (overflow sheets shifting body pages),
+  // so this finalize has to identify itself as the body pass's own second word.
+  return [...finalizePageFieldProjection({ revision, pages: reindexed }).pages];
 }
 
 /**
@@ -2501,7 +2504,7 @@ export function attachNotesToLayout(
   if (pages.length !== pageCountBeforeOverflow) {
     // Every insertion is done, so a minted sheet's array position is the page index it keeps.
     pages = resettleMintedSheets(pages, layout);
-    pages = reindexAndFinalizeFields(pages);
+    pages = reindexAndFinalizeFields(pages, layout.revision);
   }
 
   // Body was laid with provisional marks; publish page-aware citation digits without reflow.

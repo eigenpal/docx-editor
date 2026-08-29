@@ -305,28 +305,43 @@ export interface PageRefHostRecord {
 }
 
 /**
- * Sticky PAGEREF calibration verdicts, keyed weakly on each field's calibration cell.
+ * Sticky PAGEREF calibration latches, keyed weakly on each field's calibration cell.
  *
- * The cell (minted and carried across passes by `field-ref.ts`) is the identity; the verdict
+ * The cell (minted and carried across passes by `field-ref.ts`) is the identity; the latch
  * lives here so writing it never mutates a span marker that fragment signatures serialize.
- * Sticky in the LIVE direction only: once a field's computed number reproduced its cache it
- * stays live — after an edit the two diverge by design, and re-comparing would flip every
- * fresh TOC number back to stale. A FAILED compare is re-taken on later finalizes instead,
- * because pagination is not final when the first finalize runs: the note pass can insert
- * overflow sheets and re-finalize, and a verdict frozen against the pre-note numbering would
- * keep a correct field on its cache forever.
+ * The latch records the REVISION it was taken at because one document revision can finalize
+ * more than once — the body pass first, then the note pass after overflow sheets shifted
+ * body pages — and only the pass's LAST word is the pagination the calibration rule speaks
+ * about. So the latch is provisional within its own revision (a same-revision re-finalize
+ * whose computed number no longer reproduces the cache revokes it) and sticky across
+ * revisions (after an edit the live value diverges from the cache by design, and re-comparing
+ * would flip every fresh TOC number back to stale). A compare that FAILS re-checks on later
+ * finalizes, so a field whose cache matches only the post-note numbering still goes live.
  */
-const pageRefLiveVerdicts = new WeakSet<object>();
+const pageRefLiveLatches = new WeakMap<object, { revision: number }>();
 
 /**
- * Whether one PAGEREF field paints its computed number, taking the calibration once against
- * a non-empty cache. Shared with the save-time result refresh so the exported bytes and the
- * painted pages read the same verdict.
+ * Whether one PAGEREF field paints its computed number, taking the calibration against a
+ * non-empty cache under the rules above. Shared with the save-time result refresh so the
+ * exported bytes and the painted pages read the same verdict; the refresh passes `NaN` as
+ * its revision, which can neither latch-collide with nor revoke a layout pass's latch.
  */
-export function pageRefCalibrationVerdict(cell: object, cached: string, computed: string): boolean {
-  if (pageRefLiveVerdicts.has(cell)) return true;
+export function pageRefCalibrationVerdict(
+  cell: object,
+  cached: string,
+  computed: string,
+  revision: number
+): boolean {
+  const latch = pageRefLiveLatches.get(cell);
+  if (latch) {
+    if (cached.length > 0 && computed !== cached && latch.revision === revision) {
+      pageRefLiveLatches.delete(cell);
+      return false;
+    }
+    return true;
+  }
   const live = cached.length === 0 || cached === computed;
-  if (live) pageRefLiveVerdicts.add(cell);
+  if (live) pageRefLiveLatches.set(cell, { revision });
   return live;
 }
 
@@ -383,7 +398,21 @@ interface PageRefTargetIndex {
  * but runs only when a marker exists. The token folds every assignment, so a finalize memo
  * keyed on it re-substitutes exactly when repagination moved a target.
  */
+/**
+ * Memo per page-list identity: finalize and the multi-section restore gate both index the
+ * same array in one pass, and the walk should run once, not once per asker.
+ */
+const pageRefIndexMemos = new WeakMap<readonly PageRecord[], PageRefTargetIndex | null>();
+
 export function buildPageRefTargetIndex(pages: readonly PageRecord[]): PageRefTargetIndex | null {
+  const memo = pageRefIndexMemos.get(pages);
+  if (memo !== undefined) return memo;
+  const built = buildPageRefTargetIndexUncached(pages);
+  pageRefIndexMemos.set(pages, built);
+  return built;
+}
+
+function buildPageRefTargetIndexUncached(pages: readonly PageRecord[]): PageRefTargetIndex | null {
   let wanted: Set<string> | null = null;
   for (const page of pages) {
     if (page.hasBodyPageFields === false) continue;
@@ -432,7 +461,7 @@ export function pageRefAssignmentToken(pages: readonly PageRecord[]): string {
 function substituteBodyPageFieldLine(
   line: LineRecord,
   context: FieldPageContext,
-  pageRefHosts?: ReadonlyMap<string, PageRefHostRecord>
+  pageRefs?: PageRefSubstitution
 ): LineRecord {
   let spans: StyleSpanRecord[] | null = null;
   for (let index = 0; index < line.spans.length; index += 1) {
@@ -440,14 +469,24 @@ function substituteBodyPageFieldLine(
     const pageRef = span.fieldAtom?.pageRef;
     if (pageRef) {
       // The target never placed (deleted target, or a bookmark in furniture): keep the cache.
-      const hostPage = pageRefHosts?.get(pageRef.targetParagraphId);
+      const hostPage = pageRefs?.hosts.get(pageRef.targetParagraphId);
       if (!hostPage) continue;
       const computed = formatPageNumber(hostPage.pageNumber, hostPage.format);
       if (computed.length === 0) continue;
-      if (!pageRefCalibrationVerdict(pageRef.calibration, pageRef.cached, computed)) continue;
-      if (computed === span.text) continue;
+      const live = pageRefCalibrationVerdict(
+        pageRef.calibration,
+        pageRef.cached,
+        computed,
+        pageRefs!.revision
+      );
+      // A revoked latch must also UNDO: the note pass re-finalizes pages an earlier finalize
+      // of the same revision already substituted, and leaving the span alone would keep the
+      // pre-note number — neither the cache nor the truth. A never-live field already paints
+      // its cache, so the restore is an identity no-op there.
+      const text = live ? computed : pageRef.cached;
+      if (text.length === 0 || text === span.text) continue;
       if (!spans) spans = line.spans.slice();
-      spans[index] = { ...span, text: computed };
+      spans[index] = { ...span, text };
       continue;
     }
     const marker = span.fieldAtom?.pageField;
@@ -469,10 +508,17 @@ function substituteBodyPageFieldLine(
  * mirroring {@link finalizePageFieldProjection}'s identity discipline so incremental layout keeps
  * reusing untouched pages.
  */
+/** The PAGEREF inputs one finalize substitutes under: the host index and its revision. */
+export interface PageRefSubstitution {
+  readonly hosts: ReadonlyMap<string, PageRefHostRecord>;
+  /** The finalizing layout's revision — the calibration latch's provisional-revoke scope. */
+  readonly revision: number;
+}
+
 export function substituteBodyPageFields(
   blocks: readonly BlockFragmentRecord[],
   context: FieldPageContext,
-  pageRefHosts?: ReadonlyMap<string, PageRefHostRecord>
+  pageRefs?: PageRefSubstitution
 ): readonly BlockFragmentRecord[] {
   let next: BlockFragmentRecord[] | null = null;
   for (let index = 0; index < blocks.length; index += 1) {
@@ -482,7 +528,7 @@ export function substituteBodyPageFields(
       let mutatedLines: LineRecord[] | null = null;
       for (let lineIndex = 0; lineIndex < block.lines.length; lineIndex += 1) {
         const line = block.lines[lineIndex]!;
-        const nextLine = substituteBodyPageFieldLine(line, context, pageRefHosts);
+        const nextLine = substituteBodyPageFieldLine(line, context, pageRefs);
         if (nextLine === line) continue;
         if (!mutatedLines) mutatedLines = block.lines.slice();
         mutatedLines[lineIndex] = nextLine;
@@ -495,7 +541,7 @@ export function substituteBodyPageFields(
         let mutatedCells: (typeof row.cells)[number][] | null = null;
         for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
           const cell = row.cells[cellIndex]!;
-          const cellBlocks = substituteBodyPageFields(cell.blocks, context, pageRefHosts);
+          const cellBlocks = substituteBodyPageFields(cell.blocks, context, pageRefs);
           if (cellBlocks === cell.blocks) continue;
           if (!mutatedCells) mutatedCells = row.cells.slice();
           mutatedCells[cellIndex] = { ...cell, blocks: cellBlocks };
@@ -676,7 +722,11 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     const fragments =
       page.hasBodyPageFields === false
         ? page.fragments
-        : substituteBodyPageFields(page.fragments, context, pageRefIndex?.hosts);
+        : substituteBodyPageFields(
+            page.fragments,
+            context,
+            pageRefIndex ? { hosts: pageRefIndex.hosts, revision: layout.revision } : undefined
+          );
     // Reachable only for pages with NO live projector and NO body substitution: `project`
     // always mints a fresh record for a projector-bearing story (the rest-spread above), so
     // this identity entry can never publish — or memoize as final — a record that still

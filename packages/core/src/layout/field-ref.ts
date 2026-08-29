@@ -882,8 +882,12 @@ function buildRefFieldContext(
       }
       // A PAGEREF defers: the scan resolves the TARGET and finalize computes the number, so
       // its verdict is finalize's to take (against the pagination, not against this walk).
-      // The token folds the cache, which is what this pass paints — the substituted number
-      // rides the finalize memo keys, not the block keys, exactly like a body PAGE field.
+      // The token folds the cache — what this pass paints; the substituted number rides the
+      // finalize memo keys, not the block keys, exactly like a body PAGE field — AND the
+      // resolved target id. The target is what the marker carries, and a bookmark edit can
+      // re-resolve the name while the field's own paragraph stays byte-identical: without
+      // the id in the token, the cached fragment keeps its old marker and finalize
+      // substitutes the OLD target's page forever.
       if (refSpecModifiersOf(field.spec).pageRef) {
         const target = targets.get(field.spec.bookmark);
         if (target) {
@@ -899,7 +903,7 @@ function buildRefFieldContext(
             });
           }
         }
-        pieces.push(`c\u0002${field.cached}`);
+        pieces.push(`c\u0002${field.cached}\u0002${target?.id ?? ''}`);
         continue;
       }
       const computed = computedOf(field.spec);

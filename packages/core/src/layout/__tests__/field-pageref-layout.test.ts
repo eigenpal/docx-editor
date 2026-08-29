@@ -13,6 +13,7 @@ import { createLayoutSession } from '../layout-session.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { paragraphFragmentsOf, type PageGeometry, type SemanticLayout } from '../index.ts';
 import { planRefFieldResultRefresh } from '../field-ref-refresh.ts';
+import { pageRefCalibrationVerdict } from '../field-page-furniture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
@@ -168,6 +169,70 @@ describe('a repagination repaints dependent PAGEREF fields in a warm session', (
     ]);
     const warm = layoutSemanticDocument(after, 2, options);
     expect(warm.pages).toHaveLength(3);
+    expect(textsOf(warm)).toContain('page 3');
+    expect(textsOf(warm).join('|')).not.toContain('page 2');
+  });
+});
+
+describe('the calibration latch is provisional within a revision, sticky across them', () => {
+  test('a same-revision re-finalize that moved the target revokes the latch', () => {
+    // The body finalize matches the cache; the note pass then re-finalizes the SAME revision
+    // with the target shifted by an inserted overflow sheet. The pass's last word is that the
+    // cache is not reproduced, so the field must stay cached.
+    const cell = {};
+    expect(pageRefCalibrationVerdict(cell, '5', '5', 7)).toBe(true);
+    expect(pageRefCalibrationVerdict(cell, '5', '6', 7)).toBe(false);
+    expect(pageRefCalibrationVerdict(cell, '5', '6', 7)).toBe(false);
+  });
+
+  test('a later revision cannot revoke: an edit diverges the live value by design', () => {
+    const cell = {};
+    expect(pageRefCalibrationVerdict(cell, '5', '5', 7)).toBe(true);
+    expect(pageRefCalibrationVerdict(cell, '5', '6', 8)).toBe(true);
+    expect(pageRefCalibrationVerdict(cell, '5', '9', 9)).toBe(true);
+  });
+
+  test('an empty cache is always live and never revoked', () => {
+    const cell = {};
+    expect(pageRefCalibrationVerdict(cell, '', '5', 7)).toBe(true);
+    expect(pageRefCalibrationVerdict(cell, '', '6', 7)).toBe(true);
+  });
+
+  test('a failed first compare re-checks and can go live on the post-note numbering', () => {
+    const cell = {};
+    expect(pageRefCalibrationVerdict(cell, '6', '5', 7)).toBe(false);
+    expect(pageRefCalibrationVerdict(cell, '6', '6', 7)).toBe(true);
+    expect(pageRefCalibrationVerdict(cell, '6', '9', 8)).toBe(true);
+  });
+});
+
+describe('a bookmark edit re-resolves the target in a warm session', () => {
+  test('removing the winning declaration moves the field to the next one', () => {
+    // Two paragraphs declare the same name; first declaration wins, so the field paints the
+    // page of the FIRST. Removing that paragraph re-resolves the name to the survivor on the
+    // next page — while the field's own paragraph survives the edit by identity, so only the
+    // target id folded into its ref token can invalidate its cached fragment.
+    const before = load(
+      pageRefParagraph(' PAGEREF target \\h ') +
+        filler(5) +
+        heading('target', 'First winner') +
+        filler(6, 'gap') +
+        `<w:p><w:bookmarkStart w:id="2" w:name="target"/><w:r><w:t>Second</w:t></w:r>` +
+        `<w:bookmarkEnd w:id="2"/></w:p>`
+    );
+    const options = {
+      measurer,
+      geometry: SMALL,
+      session: createLayoutSession(),
+      cache: createParagraphLayoutCache(),
+    };
+    const first = layoutSemanticDocument(before, 1, options);
+    expect(textsOf(first)).toContain('page 2');
+
+    const after = withBlocks(before, (blocks) => blocks.filter((block) => block !== blocks[6]));
+    const warm = layoutSemanticDocument(after, 2, options);
+    const oracle = layoutSemanticDocument(after, 1, { measurer, geometry: SMALL });
+    expect(textsOf(oracle)).toContain('page 3');
     expect(textsOf(warm)).toContain('page 3');
     expect(textsOf(warm).join('|')).not.toContain('page 2');
   });
