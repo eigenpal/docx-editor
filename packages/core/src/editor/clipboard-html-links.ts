@@ -11,7 +11,8 @@ export function clipboardBookmarkName(raw: string | null | undefined): string | 
 export function isClipboardHyperlink(raw: string | null): boolean {
   if (raw === null) return false;
   if (raw.startsWith('#')) return clipboardBookmarkName(raw.slice(1)) !== null;
-  return sanitizeHref(raw)?.ok === true;
+  const target = sanitizeHref(raw);
+  return target?.ok === true && target.href.length > 0;
 }
 
 /** Resolve an external target, internal anchor, or their safe combination for HTML output. */

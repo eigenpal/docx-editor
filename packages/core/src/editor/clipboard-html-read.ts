@@ -664,6 +664,7 @@ function projectFlow(
 ): void {
   if (depth > p.maxDepth) return;
   const before = out.length;
+  const ownsPageBreakState = pageBreakState === undefined;
   let pending: string[] = [];
   const pageBreak = pageBreakState ?? { pending: false, skipSpacer: false };
   const flush = (): void => {
@@ -711,9 +712,12 @@ function projectFlow(
       }
       if (tag === 'ol' || tag === 'ul') {
         flush();
+        const beforeList = out.length;
         projectList(node, depth, ctx, p, out, pageBreak.pending);
-        pageBreak.pending = false;
-        pageBreak.skipSpacer = false;
+        if (out.length > beforeList) {
+          pageBreak.pending = false;
+          pageBreak.skipSpacer = false;
+        }
         continue;
       }
       if (tag === 'table') {
@@ -743,6 +747,12 @@ function projectFlow(
     collectInline(node, depth, ctx, pending, p);
   }
   flush();
+  if (ownsPageBreakState && pageBreak.pending) {
+    appendPageBreak(out);
+    pageBreak.pending = false;
+    pageBreak.skipSpacer = false;
+    p.lastMarkCovered = false;
+  }
   // An explicit block emits its paragraph even when empty.
   if (forceEmit && out.length === before) {
     out.push(paragraphXml(ctx.para, []));

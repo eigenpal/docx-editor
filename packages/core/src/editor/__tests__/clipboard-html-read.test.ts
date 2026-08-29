@@ -599,6 +599,13 @@ describe('hyperlinks', () => {
     expect(relsXml).not.toContain('javascript');
   });
 
+  test('an empty href stays plain text', () => {
+    const { docXml } = openFragment('<p><a href="">plain</a></p>');
+    expect(docXml).not.toContain('w:hyperlink');
+    expect(docXml).not.toContain('w:color w:val="0563C1"');
+    expect(docXml).not.toContain('<w:u ');
+  });
+
   test('an https href becomes an External hyperlink relationship', () => {
     const { docXml, relsXml } = openFragment('<p><a href="https://x.example/">go</a></p>');
     expect(docXml).toContain('<w:hyperlink');
@@ -853,6 +860,13 @@ describe('whitespace and breaks', () => {
     );
     expect(table.docXml.split('<w:tbl>')[0]).toContain('<w:br w:type="page"/>');
     expect(table.docXml).toContain('<w:tbl>');
+  });
+
+  test('an empty list does not consume a pending or trailing page break', () => {
+    const followed = openFragment("<br style='page-break-before:always'><ol></ol><p>after</p>");
+    expect(followed.docXml).toContain('<w:pageBreakBefore/>');
+    const trailing = openFragment("<p>before</p><br style='page-break-before:always'>");
+    expect(trailing.docXml).toContain('<w:br w:type="page"/>');
   });
 
   test('only Word office-space paragraphs are removed after page breaks', () => {
