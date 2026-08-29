@@ -356,12 +356,13 @@ export function projectSimpleFieldResult(args: {
     }
   }
 
-  // A simple REF resolves live exactly like the complex shape: the value from the bookmark
-  // target wins over the stale cached display; an unresolvable reference falls through to it.
+  // A simple REF resolves live exactly like the complex shape, gated per field (by the
+  // `w:fldSimple` node id) on the calibration verdict; an unresolvable or uncalibrated
+  // reference falls through to the cached display.
   if (args.refFields) {
     const refSpec = parseRefInstruction(instr);
     if (refSpec) {
-      const value = args.refFields.valueOf(refSpec);
+      const value = args.refFields.liveValueOf(simple.id, refSpec);
       if (value !== null) {
         const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
         if (style.hidden) return null;

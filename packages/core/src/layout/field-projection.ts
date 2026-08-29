@@ -567,6 +567,7 @@ export function piecesOfParagraph(
             // macros never); `formField` below stays presence-based so an unreadable payload
             // still shades.
             formData: legacyFormFieldDataOf(grand),
+            beginId: grand.id,
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),
             atomStart: offset,

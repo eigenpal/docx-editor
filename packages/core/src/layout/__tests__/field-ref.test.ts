@@ -1,16 +1,23 @@
-// REF instruction recognition and story resolution (field-ref.ts).
+// REF instruction recognition, story resolution and calibration (field-ref.ts).
 //
 // The instruction is attacker-controlled: everything outside the supported grammar must
 // resolve to null so the field keeps its cached result. Resolution reads the bookmark target
 // and the resolved list items; a missing bookmark or an unnumbered target under a number
-// switch resolves to null the same way.
+// switch resolves to null the same way. Live values are gated per field by CALIBRATION: a
+// non-empty authored cache the computed value cannot reproduce keeps that cache permanently.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlElement, type OoxmlPart } from '@docx-editor.dev/core/store';
-import { parseRefInstruction, resolveStoryRefFields } from '../field-ref.ts';
+import {
+  isFldSimple,
+  readOoxmlPart,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
+import { parseRefInstruction, resolveStoryRefFields, type RefFieldSpec } from '../field-ref.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { resolveStoryListItems } from '../list-resolve.ts';
-import { MAX_FIELD_INSTRUCTION_CHARS } from '../field-instruction.ts';
+import { isFldChar, MAX_FIELD_INSTRUCTION_CHARS } from '../field-instruction.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -37,8 +44,17 @@ describe('parseRefInstruction', () => {
     expect(parseRefInstruction('REF "quoted name" \\h')?.bookmark).toBe('quoted name');
   });
 
+  test('several number switches take the deterministic precedence n over r over w', () => {
+    // Real instructions write `\w \n \h` and cache the `\n`-shaped value.
+    expect(parseRefInstruction('REF x \\w \\n \\h')?.numberSwitch).toBe('n');
+    expect(parseRefInstruction('REF x \\r \\w')?.numberSwitch).toBe('r');
+    expect(parseRefInstruction('REF x \\w \\r')?.numberSwitch).toBe('r');
+  });
+
   test('anything outside the supported grammar stays inert (null)', () => {
-    // Unknown switches fall back to the cached result — never a guess.
+    // Unknown switches fall back to the cached result — never a guess. `\t` in particular is
+    // common in real documents and stays unsupported on purpose.
+    expect(parseRefInstruction('REF target \\t')).toBeNull();
     expect(parseRefInstruction('REF target \\p')).toBeNull();
     expect(parseRefInstruction('REF target \\f')).toBeNull();
     expect(parseRefInstruction('REF target \\d "-"')).toBeNull();
@@ -63,18 +79,8 @@ describe('parseRefInstruction', () => {
   });
 });
 
-const NUMBERING = `
-  <w:abstractNum w:abstractNumId="0">
-    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
-      <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>
-    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
-      <w:lvlText w:val="%1.%2"/><w:lvlJc w:val="left"/></w:lvl>
-  </w:abstractNum>
-  <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
-`;
-
-function numberingIndex() {
-  const result = readOoxmlPart(`<w:numbering xmlns:w="${W}">${NUMBERING}</w:numbering>`, {
+function numberingOf(xml: string) {
+  const result = readOoxmlPart(`<w:numbering xmlns:w="${W}">${xml}</w:numbering>`, {
     name: '/word/numbering.xml',
     contentType: 'application/xml',
   });
@@ -100,42 +106,83 @@ function blocksOf(part: OoxmlPart): OoxmlElement[] {
   );
 }
 
+/** Field anchor ids (begin `w:fldChar` / `w:fldSimple`) in document order, for lookups. */
+function refAnchorIds(part: OoxmlPart): string[] {
+  const ids: string[] = [];
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (isFldChar(node, 'begin') || isFldSimple(node)) ids.push(node.id);
+    for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return ids;
+}
+
 const numbered = (ilvl: number, inner: string) =>
   `<w:p><w:pPr><w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="5"/></w:numPr></w:pPr>${inner}</w:p>`;
 const bookmarked = (name: string, text: string) =>
   `<w:bookmarkStart w:id="1" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
   `<w:bookmarkEnd w:id="1"/>`;
-const refField = (instr: string) =>
+/** A complex REF; an empty `cached` writes NO result run (always calibration-eligible). */
+const refField = (instr: string, cached = '') =>
   '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
   '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-  '<w:r><w:t>stale</w:t></w:r>' +
+  (cached ? `<w:r><w:t>${cached}</w:t></w:r>` : '') +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
 
-function contextFor(part: OoxmlPart) {
+const TWO_LEVEL_NUMBERING = `
+  <w:abstractNum w:abstractNumId="0">
+    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1.%2"/><w:lvlJc w:val="left"/></w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
+`;
+
+function contextUnder(numberingXml: string, part: OoxmlPart) {
   const blocks = blocksOf(part);
-  const listItems = resolveStoryListItems(blocks, numberingIndex(), undefined);
+  const listItems = resolveStoryListItems(blocks, numberingOf(numberingXml), undefined);
   return resolveStoryRefFields(blocks, listItems);
 }
+
+/** The live value the `ordinal`-th field (document order) paints, or null for its cache. */
+function liveAt(
+  part: OoxmlPart,
+  context: ReturnType<typeof resolveStoryRefFields>,
+  ordinal: number,
+  spec: RefFieldSpec
+): string | null {
+  const anchorId = refAnchorIds(part)[ordinal];
+  if (anchorId === undefined) throw new Error('no such field');
+  return context!.liveValueOf(anchorId, spec);
+}
+
+const spec = (
+  bookmark: string,
+  numberSwitch: RefFieldSpec['numberSwitch'] = null
+): RefFieldSpec => ({ bookmark, numberSwitch, hyperlink: false });
 
 describe('resolveStoryRefFields', () => {
   test('a story with no REF field resolves to null', () => {
     const part = document(numbered(0, bookmarked('_Ref1', 'Heading')) + '<w:p/>');
-    expect(contextFor(part)).toBeNull();
+    expect(contextUnder(TWO_LEVEL_NUMBERING, part)).toBeNull();
   });
 
-  test('number switches resolve the marker with the trailing period trimmed', () => {
+  test('number switches resolve the number with the trailing period trimmed', () => {
     const part = document(
       numbered(0, bookmarked('top', 'One')) +
         numbered(1, bookmarked('sub', 'One point one')) +
         refField(' REF top \\r ') +
-        refField(' REF sub \\w ')
+        refField(' REF sub \\w ') +
+        refField(' REF sub \\n ')
     );
-    const context = contextFor(part)!;
+    const context = contextUnder(TWO_LEVEL_NUMBERING, part);
     // `1.` trims its bare trailing period; `1.1` keeps its interior one.
-    expect(context.valueOf({ bookmark: 'top', numberSwitch: 'r', hyperlink: false })).toBe('1');
-    expect(context.valueOf({ bookmark: 'sub', numberSwitch: 'w', hyperlink: false })).toBe('1.1');
-    expect(context.valueOf({ bookmark: 'sub', numberSwitch: 'n', hyperlink: false })).toBe('1.1');
+    expect(liveAt(part, context, 0, spec('top', 'r'))).toBe('1');
+    expect(liveAt(part, context, 1, spec('sub', 'w'))).toBe('1.1');
+    expect(liveAt(part, context, 2, spec('sub', 'n'))).toBe('1.1');
   });
 
   test('a plain REF extracts the bookmarked text, capped inside the target paragraph', () => {
@@ -144,21 +191,19 @@ describe('resolveStoryRefFields', () => {
         `<w:r><w:t> tail</w:t></w:r></w:p>` +
         refField(' REF term ')
     );
-    const context = contextFor(part)!;
-    expect(context.valueOf({ bookmark: 'term', numberSwitch: null, hyperlink: false })).toBe(
-      'Closing Date'
-    );
+    const context = contextUnder(TWO_LEVEL_NUMBERING, part);
+    expect(liveAt(part, context, 0, spec('term'))).toBe('Closing Date');
   });
 
   test('missing bookmark and unnumbered target resolve to null (cached fallback)', () => {
     const part = document(
-      `<w:p>${bookmarked('plain', 'no number here')}</w:p>` + refField(' REF plain \\r ')
+      `<w:p>${bookmarked('plain', 'no number here')}</w:p>` +
+        refField(' REF absent ') +
+        refField(' REF plain \\r ')
     );
-    const context = contextFor(part)!;
-    expect(
-      context.valueOf({ bookmark: 'absent', numberSwitch: null, hyperlink: false })
-    ).toBeNull();
-    expect(context.valueOf({ bookmark: 'plain', numberSwitch: 'r', hyperlink: false })).toBeNull();
+    const context = contextUnder(TWO_LEVEL_NUMBERING, part);
+    expect(liveAt(part, context, 0, spec('absent'))).toBeNull();
+    expect(liveAt(part, context, 1, spec('plain', 'r'))).toBeNull();
   });
 
   test('the first declaration of a duplicated name wins, in document order', () => {
@@ -167,8 +212,15 @@ describe('resolveStoryRefFields', () => {
         numbered(0, bookmarked('dup', 'second')) +
         refField(' REF dup \\r ')
     );
-    const context = contextFor(part)!;
-    expect(context.valueOf({ bookmark: 'dup', numberSwitch: 'r', hyperlink: false })).toBe('1');
+    const context = contextUnder(TWO_LEVEL_NUMBERING, part);
+    expect(liveAt(part, context, 0, spec('dup', 'r'))).toBe('1');
+  });
+
+  test('a spec that disagrees with the scanned field fails to the cache', () => {
+    const part = document(numbered(0, bookmarked('t', 'A')) + refField(' REF t \\r '));
+    const context = contextUnder(TWO_LEVEL_NUMBERING, part);
+    expect(liveAt(part, context, 0, spec('t', 'w'))).toBeNull();
+    expect(liveAt(part, context, 0, spec('other', 'r'))).toBeNull();
   });
 
   test('paragraph tokens and the story token move with the resolved values', () => {
@@ -184,8 +236,8 @@ describe('resolveStoryRefFields', () => {
         numbered(0, '<w:r><w:t>B</w:t></w:r>') +
         refField(' REF t \\r ')
     );
-    const beforeContext = contextFor(before)!;
-    const afterContext = contextFor(after)!;
+    const beforeContext = contextUnder(TWO_LEVEL_NUMBERING, before)!;
+    const afterContext = contextUnder(TWO_LEVEL_NUMBERING, after)!;
     expect(beforeContext.valuesToken).not.toBe(afterContext.valuesToken);
     const refParagraphBefore = blocksOf(before).at(-1)!;
     const refParagraphAfter = blocksOf(after).at(-1)!;
@@ -212,18 +264,7 @@ const LEGAL_NUMBERING = `
   <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
 `;
 
-function contextUnder(numberingXml: string, part: OoxmlPart) {
-  const result = readOoxmlPart(`<w:numbering xmlns:w="${W}">${numberingXml}</w:numbering>`, {
-    name: '/word/numbering.xml',
-    contentType: 'application/xml',
-  });
-  if (!result.ok) throw new Error(result.reason);
-  const blocks = blocksOf(part);
-  const listItems = resolveStoryListItems(blocks, buildNumberingIndex(result.part.root), undefined);
-  return resolveStoryRefFields(blocks, listItems);
-}
-
-describe('number switches compose the FULL-CONTEXT number from the counter path', () => {
+describe('number switches compose from the counter path', () => {
   // Counters at the deep targets: 1, 2, 3, 2 — the `(c)` marker alone is not the number a
   // reader cites; Word's cached result says `1.2(c)`, and the live value must match it.
   const body =
@@ -235,29 +276,30 @@ describe('number switches compose the FULL-CONTEXT number from the counter path'
     numbered(2, bookmarked('clause', 'Clause (c)')) +
     numbered(3, '<w:r><w:t>(i)</w:t></w:r>') +
     numbered(3, bookmarked('item', 'Item (ii)')) +
-    // The target index only holds REFERENCED names, so every probed bookmark needs a field.
     refField(' REF clause \\w ') +
     refField(' REF item \\r ') +
     refField(' REF sec \\w ') +
-    refField(' REF art \\r ');
+    refField(' REF art \\r ') +
+    refField(' REF clause \\n ') +
+    refField(' REF item \\n ');
+  const part = document(body);
+  const context = contextUnder(LEGAL_NUMBERING, part);
 
-  const value = (bookmark: string, numberSwitch: 'r' | 'w' | 'n') =>
-    contextUnder(LEGAL_NUMBERING, document(body))!.valueOf({
-      bookmark,
-      numberSwitch,
-      hyperlink: false,
-    });
-
-  test('a deep target paints its ancestors, not its bare marker', () => {
-    expect(value('clause', 'w')).toBe('1.2(c)');
-    expect(value('item', 'r')).toBe('1.2(c)(ii)');
+  test('`\\r` / `\\w` paint the full context, not the bare marker', () => {
+    expect(liveAt(part, context, 0, spec('clause', 'w'))).toBe('1.2(c)');
+    expect(liveAt(part, context, 1, spec('item', 'r'))).toBe('1.2(c)(ii)');
   });
 
   test('a level whose placeholder a deeper kept text displays is dropped once, not twice', () => {
     // lvl0's %1 appears in lvl1's `%1.%2`, so `1.` is dropped and the result is not `1.1.2`.
-    expect(value('sec', 'w')).toBe('1.2');
+    expect(liveAt(part, context, 2, spec('sec', 'w'))).toBe('1.2');
     // The shallowest target keeps only itself; the bare trailing period trims.
-    expect(value('art', 'r')).toBe('1');
+    expect(liveAt(part, context, 3, spec('art', 'r'))).toBe('1');
+  });
+
+  test('`\\n` paints the target level alone, without its ancestors', () => {
+    expect(liveAt(part, context, 4, spec('clause', 'n'))).toBe('(c)');
+    expect(liveAt(part, context, 5, spec('item', 'n'))).toBe('(ii)');
   });
 
   test('w:isLgl renders inherited placeholders decimal in the composition too', () => {
@@ -270,15 +312,15 @@ describe('number switches compose the FULL-CONTEXT number from the counter path'
       </w:abstractNum>
       <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
     `;
-    const part = document(
+    const lglPart = document(
       numbered(0, '<w:r><w:t>I.</w:t></w:r>') +
         numbered(1, bookmarked('lgl', 'legal item')) +
         refField(' REF lgl \\w ')
     );
-    const context = contextUnder(numbering, part)!;
+    const lglContext = contextUnder(numbering, lglPart);
     // The upperRoman `%1` renders decimal under the legal level, exactly as its marker does:
     // `1.1`, never `I.1`.
-    expect(context.valueOf({ bookmark: 'lgl', numberSwitch: 'w', hyperlink: false })).toBe('1.1');
+    expect(liveAt(lglPart, lglContext, 0, spec('lgl', 'w'))).toBe('1.1');
   });
 
   test('a bullet target still falls back to the cached result, never a glyph', () => {
@@ -289,8 +331,58 @@ describe('number switches compose the FULL-CONTEXT number from the counter path'
       </w:abstractNum>
       <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
     `;
-    const part = document(numbered(0, bookmarked('b', 'bulleted')) + refField(' REF b \\r '));
-    const context = contextUnder(numbering, part)!;
-    expect(context.valueOf({ bookmark: 'b', numberSwitch: 'r', hyperlink: false })).toBeNull();
+    const bulletPart = document(numbered(0, bookmarked('b', 'bulleted')) + refField(' REF b \\r '));
+    const bulletContext = contextUnder(numbering, bulletPart);
+    expect(liveAt(bulletPart, bulletContext, 0, spec('b', 'r'))).toBeNull();
+  });
+});
+
+describe('calibration: the authored cache is the oracle', () => {
+  // A mixed roman/letter/decimal chain whose level texts never chain: the composition joins
+  // every ancestor (`II` + `b.3`) while Word's cache reads `2.3`. Such a field must stay on
+  // its cache verbatim, while a field the composition reproduces goes live.
+  const MIXED_NUMBERING = `
+    <w:abstractNum w:abstractNumId="0">
+      <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/>
+        <w:lvlText w:val="%1"/><w:lvlJc w:val="left"/></w:lvl>
+      <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/>
+        <w:lvlText w:val="%2."/><w:lvlJc w:val="left"/></w:lvl>
+      <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+        <w:lvlText w:val="%2.%3"/><w:lvlJc w:val="left"/></w:lvl>
+    </w:abstractNum>
+    <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
+  `;
+  const body =
+    numbered(0, '<w:r><w:t>First</w:t></w:r>') +
+    numbered(0, '<w:r><w:t>Second</w:t></w:r>') +
+    numbered(1, '<w:r><w:t>a</w:t></w:r>') +
+    numbered(1, '<w:r><w:t>b</w:t></w:r>') +
+    numbered(2, '<w:r><w:t>one</w:t></w:r>') +
+    numbered(2, '<w:r><w:t>two</w:t></w:r>') +
+    numbered(2, bookmarked('deep', 'three')) +
+    // Word's cache is `2.3`; the composition joins `IIb.3` — this field must stay cached.
+    refField(' REF deep \\w ', '2.3') +
+    // The own-level `\n` value IS `b.3`; this field calibrates and goes live.
+    refField(' REF deep \\n ', 'b.3');
+
+  test('a mismatching field keeps its cache, a matching one goes live', () => {
+    const part = document(body);
+    const context = contextUnder(MIXED_NUMBERING, part)!;
+    expect(liveAt(part, context, 0, spec('deep', 'w'))).toBeNull();
+    expect(liveAt(part, context, 1, spec('deep', 'n'))).toBe('b.3');
+    // The token carries the painted output of both: the constant cache and the live value.
+    const refParagraphs = blocksOf(part).slice(-2);
+    expect(context.tokenForParagraph(refParagraphs[0]!.id)).toContain('2.3');
+    expect(context.tokenForParagraph(refParagraphs[1]!.id)).toContain('b.3');
+  });
+
+  test('normalization: NBSP and whitespace runs do not fail an otherwise exact match', () => {
+    const part = document(
+      numbered(0, bookmarked('t', 'A')) +
+        // The cache says `1` with a leading NBSP and a trailing space.
+        refField(' REF t \\r ', '\u00A01 ')
+    );
+    const context = contextUnder(TWO_LEVEL_NUMBERING, part);
+    expect(liveAt(part, context, 0, spec('t', 'r'))).toBe('1');
   });
 });

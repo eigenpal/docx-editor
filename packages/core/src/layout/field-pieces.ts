@@ -282,6 +282,14 @@ export interface PendingFieldProjection {
    * ffData present with an unreadable payload still shades as a form field.
    */
   formData: LegacyFormFieldData | null;
+  /**
+   * Canonical node id of the field's begin `w:fldChar`.
+   *
+   * The per-field key REF calibration verdicts live under (`RefFieldContext.liveValueOf`):
+   * node ids survive edits, so the projection and the context's token fold read the same
+   * verdict for the same field however either walk collected its cached text.
+   */
+  beginId: string;
   /** True when this pending field is a well-formed atomic unit (begin will close). */
   atomic: boolean;
   /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */

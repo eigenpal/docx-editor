@@ -52,14 +52,17 @@ const numbered = (inner: string) =>
 const bookmarked = (name: string, text: string) =>
   `<w:bookmarkStart w:id="1" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r>` +
   `<w:bookmarkEnd w:id="1"/>`;
-/** A complex REF with a deliberately stale cached result. */
-const refField = (instr: string, cached = 'stale') =>
+/**
+ * A complex REF. An empty `cached` writes NO result run — always calibration-eligible; a
+ * non-empty one is the authored cache the computed value must reproduce to go live.
+ */
+const refField = (instr: string, cached = '') =>
   '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
   `<w:r><w:instrText>${instr}</w:instrText></w:r>` +
   '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-  `<w:r><w:t>${cached}</w:t></w:r>` +
+  (cached ? `<w:r><w:t>${cached}</w:t></w:r>` : '') +
   '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
-const refParagraph = (instr: string, cached = 'stale') =>
+const refParagraph = (instr: string, cached = '') =>
   `<w:p><w:r><w:t>see </w:t></w:r>${refField(instr, cached)}</w:p>`;
 
 /** Every fragment's text per page — what a reader sees, independent of node identity. */
@@ -89,14 +92,24 @@ function layoutOf(body: string): SemanticLayout {
 }
 
 describe('complex REF fields resolve live in body layout', () => {
-  test('a number-switch REF paints the resolved number over the stale cache', () => {
+  test('a number-switch REF with no cached result paints the resolved number', () => {
     const layout = layoutOf(
       numbered(bookmarked('_RefA', 'First')) +
         numbered(bookmarked('_RefB', 'Second')) +
-        refParagraph(' REF _RefB \\r \\h \\* MERGEFORMAT ', '9.9')
+        refParagraph(' REF _RefB \\r \\h \\* MERGEFORMAT ')
     );
     expect(textsOf(layout)).toContain('see 2');
-    expect(textsOf(layout).join('|')).not.toContain('9.9');
+  });
+
+  test('a cached result the computed value cannot reproduce paints verbatim', () => {
+    // The reference resolves ('2'), but the authored cache disagrees — the document's own
+    // cache is the calibration oracle, so this field never goes live.
+    const layout = layoutOf(
+      numbered(bookmarked('_RefA', 'First')) +
+        numbered(bookmarked('_RefB', 'Second')) +
+        refParagraph(' REF _RefB \\r ', 'Section 2 of Annex A')
+    );
+    expect(textsOf(layout)).toContain('see Section 2 of Annex A');
   });
 
   test('an instruction split across several w:instrText runs still resolves', () => {
@@ -106,7 +119,6 @@ describe('complex REF fields resolve live in body layout', () => {
       '<w:r><w:instrText>fB \\r </w:instrText></w:r>' +
       '<w:r><w:instrText>\\* MERGEFORMAT </w:instrText></w:r>' +
       '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-      '<w:r><w:t>9.9</w:t></w:r>' +
       '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>';
     const layout = layoutOf(
       numbered(bookmarked('_RefA', 'First')) + numbered(bookmarked('_RefB', 'Second')) + split
@@ -137,22 +149,28 @@ describe('complex REF fields resolve live in body layout', () => {
   });
 
   test('\\n paints the number without its trailing period', () => {
-    const layout = layoutOf(
-      numbered(bookmarked('one', 'First')) + refParagraph(' REF one \\n ', '7')
-    );
+    const layout = layoutOf(numbered(bookmarked('one', 'First')) + refParagraph(' REF one \\n '));
     expect(textsOf(layout)).toContain('see 1');
   });
 });
 
 describe('w:fldSimple REF fields resolve live', () => {
-  test('the simple shape replaces its stale cached display', () => {
+  test('the simple shape with no cached display paints the resolved number', () => {
     const layout = layoutOf(
       numbered(bookmarked('_RefA', 'First')) +
         numbered(bookmarked('_RefB', 'Second')) +
-        '<w:p><w:fldSimple w:instr=" REF _RefB \\r \\h "><w:r><w:t>9.9</w:t></w:r></w:fldSimple></w:p>'
+        '<w:p><w:fldSimple w:instr=" REF _RefB \\r \\h "/></w:p>'
     );
     expect(textsOf(layout)).toContain('2');
-    expect(textsOf(layout).join('|')).not.toContain('9.9');
+  });
+
+  test('a matching simple cached display calibrates and goes live', () => {
+    const layout = layoutOf(
+      numbered(bookmarked('_RefA', 'First')) +
+        numbered(bookmarked('_RefB', 'Second')) +
+        '<w:p><w:fldSimple w:instr=" REF _RefB \\r "><w:r><w:t>2</w:t></w:r></w:fldSimple></w:p>'
+    );
+    expect(textsOf(layout)).toContain('2');
   });
 
   test('an unsupported simple REF keeps its cached display', () => {
@@ -169,7 +187,7 @@ describe('a REF inside a table cell resolves live', () => {
     const table =
       '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
       '<w:tr><w:tc><w:tcPr/>' +
-      refParagraph(' REF _RefB \\r ', '9.9') +
+      refParagraph(' REF _RefB \\r ') +
       '</w:tc></w:tr></w:tbl>';
     const layout = layoutOf(
       numbered(bookmarked('_RefA', 'First')) + numbered(bookmarked('_RefB', 'Second')) + table
@@ -212,8 +230,11 @@ describe('a renumbering edit repaints dependent REF fields incrementally', () =>
   // The REF paragraph comes FIRST and never changes: its node survives the edit by identity,
   // so every memo keyed on it (prepared block, break cache, flow key) would happily serve the
   // pre-edit value. Removing a numbered paragraph BELOW it renumbers the target from 2 to 1.
+  // The cache is EMPTY so the field is live in both the warm and the cold pass — that keeps
+  // the cold oracle valid (a sticky calibrated cache diverges from a cold pass by design; see
+  // the sticky test below).
   const body =
-    refParagraph(' REF target \\r ', '9.9') +
+    refParagraph(' REF target \\r ') +
     numbered('<w:r><w:t>gone soon</w:t></w:r>') +
     numbered(bookmarked('target', 'The section')) +
     '<w:p><w:r><w:t>tail</w:t></w:r></w:p>';
@@ -242,10 +263,42 @@ describe('a renumbering edit repaints dependent REF fields incrementally', () =>
   test('the differential is not vacuous: the two trees paint different references', () => {
     const before = layoutOf(body);
     const afterBody =
-      refParagraph(' REF target \\r ', '9.9') +
+      refParagraph(' REF target \\r ') +
       numbered(bookmarked('target', 'The section')) +
       '<w:p><w:r><w:t>tail</w:t></w:r></w:p>';
     expect(shapeOf(before)).not.toEqual(shapeOf(layoutOf(afterBody)));
+  });
+
+  test('a calibrated field stays live across the edit (sticky verdict)', () => {
+    // The authored cache MATCHES the initial computed value ('2'), so the field calibrates
+    // live; the session edit then renumbers the target and the live value must keep winning
+    // even though it no longer matches the cache. A FRESH OPEN of the same edited markup has
+    // no verdict registry (all-new nodes), re-calibrates against the now-stale cache, and
+    // keeps it — by design, so an opened stale document never renders worse than its cache.
+    const editedMarkup =
+      refParagraph(' REF target \\r ', '2') +
+      numbered(bookmarked('target', 'The section')) +
+      '<w:p><w:r><w:t>tail</w:t></w:r></w:p>';
+    const before = load(
+      refParagraph(' REF target \\r ', '2') +
+        numbered('<w:r><w:t>gone soon</w:t></w:r>') +
+        numbered(bookmarked('target', 'The section')) +
+        '<w:p><w:r><w:t>tail</w:t></w:r></w:p>'
+    );
+    const options = {
+      measurer,
+      numberingIndex,
+      session: createLayoutSession(),
+      cache: createParagraphLayoutCache(),
+    };
+    const first = layoutSemanticDocument(before, 1, options);
+    expect(textsOf(first)).toContain('see 2');
+
+    const after = withBlocks(before, (blocks) => blocks.filter((_, index) => index !== 1));
+    const warm = layoutSemanticDocument(after, 2, options);
+    expect(textsOf(warm)).toContain('see 1');
+    const freshOpen = layoutSemanticDocument(load(editedMarkup), 1, { measurer, numberingIndex });
+    expect(textsOf(freshOpen)).toContain('see 2');
   });
 
   test('a no-change pass over a REF document returns the previous pages by identity', () => {
@@ -318,16 +371,24 @@ describe('self-oracle: on an unedited document the live value equals the cached 
     expect(texts).toContain('see 1.2(c)(ii)');
   });
 
-  test('after a renumbering edit the live value wins over the now-stale cache', () => {
-    // Dropping the `(a)` clause shifts the target from `(c)` to `(b)`; the cache still says
+  test('after a session renumbering edit the calibrated live value wins over the cache', () => {
+    // First pass calibrates: `1.2(c)` reproduces the cache, so the field is live. Dropping
+    // the `(a)` clause then shifts the target from `(c)` to `(b)`; the cache still says
     // `1.2(c)` and must lose.
-    const edited = chain.replace(legalNumbered(2, '<w:r><w:t>(a)</w:t></w:r>'), '');
-    const layout = layoutSemanticDocument(
-      load(edited + refParagraph(' REF clause \\w \\h ', '1.2(c)')),
-      1,
-      { measurer, numberingIndex: legalNumberingIndex }
-    );
-    const texts = textsOf(layout);
+    const before = load(chain + refParagraph(' REF clause \\w \\h ', '1.2(c)'));
+    const options = {
+      measurer,
+      numberingIndex: legalNumberingIndex,
+      session: createLayoutSession(),
+      cache: createParagraphLayoutCache(),
+    };
+    const first = layoutSemanticDocument(before, 1, options);
+    expect(textsOf(first)).toContain('see 1.2(c)');
+
+    // Blocks: 0..7 are the chain; index 3 is the `(a)` clause. Surviving nodes keep identity.
+    const after = withBlocks(before, (blocks) => blocks.filter((_, index) => index !== 3));
+    const warm = layoutSemanticDocument(after, 2, options);
+    const texts = textsOf(warm);
     expect(texts).toContain('see 1.2(b)');
     expect(texts.join('|')).not.toContain('1.2(c)');
   });

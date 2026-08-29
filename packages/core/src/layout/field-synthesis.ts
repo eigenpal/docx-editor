@@ -97,11 +97,12 @@ export function synthesizeAtomicField(
   }
   // A REF resolves live from its bookmark target and the resolved numbering — the cached
   // result is exactly what goes stale after a renumbering edit, so here the live value wins
-  // over a non-empty cache. Unresolvable (missing bookmark, unnumbered target for a number
-  // switch, no context for this story) falls through to the cache below, never to the raw
-  // instruction. The result-run style captured off the cache keeps the field's formatting.
+  // over a non-empty cache. Gated per field (by begin node id) on the calibration verdict:
+  // a field whose computed value never matched its authored cache stays on that cache, and
+  // an unresolvable reference falls through to it too — never to the raw instruction. The
+  // result-run style captured off the cache keeps the field's formatting.
   if (pending.refSpec && ctx.refFields) {
-    const value = ctx.refFields.valueOf(pending.refSpec);
+    const value = ctx.refFields.liveValueOf(pending.beginId, pending.refSpec);
     if (value !== null) return { text: value, props: pending.props, style: pending.style };
   }
   // A non-empty cached result is what Word last painted; it wins over synthesis.

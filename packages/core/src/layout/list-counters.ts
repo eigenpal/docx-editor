@@ -227,8 +227,14 @@ export interface FullContextNumberSource {
  * is dropped (the standard `%1.` / `%1.%2` shape would otherwise paint `1.1.2`). Bullet /
  * `none` / empty levels contribute nothing; a target that is one resolves to null (the caller
  * falls back). Bounded: at most nine levels, each expansion under the marker-length caps.
+ *
+ * `ownLevelOnly` keeps just the target level's expansion — what a `REF \n` paints (`(c)`,
+ * `(ii)`), per Word's own cached values for that switch.
  */
-export function composeFullContextNumber(source: FullContextNumberSource): string | null {
+export function composeFullContextNumber(
+  source: FullContextNumberSource,
+  ownLevelOnly = false
+): string | null {
   const { index, numId, ilvl, expandCounters } = source;
   if (ilvl < 0 || ilvl > 8) return null;
   const levels: (NumberingLevel | null)[] = [];
@@ -251,6 +257,7 @@ export function composeFullContextNumber(source: FullContextNumberSource): strin
   const kept: number[] = [];
   const keptTexts: string[] = [];
   for (let lvl = ilvl; lvl >= 0; lvl -= 1) {
+    if (ownLevelOnly && lvl !== ilvl) break;
     const level = levels[lvl];
     if (!numbered(level)) continue;
     if (lvl !== ilvl && keptTexts.some((text) => text.includes(`%${lvl + 1}`))) continue;
