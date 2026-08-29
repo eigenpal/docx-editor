@@ -601,8 +601,10 @@ describe('incremental notes layout (reserve persistence)', () => {
     expect(session.notePageBottomReserves).not.toBeNull();
     expect(session.notePageBottomReserves!.size).toBeGreaterThan(0);
     const fullPassesAfterCold = session.stats.fullPasses;
-    // Cold start: empty seed then reserved reflow → two full body passes.
-    expect(fullPassesAfterCold).toBe(2);
+    // Cold start: empty seed, the reserved reflow, then one hold-out round — the page
+    // before a reference-opening page claims its slack so the opening line cannot pull
+    // back, which is one more adoption than the pre-keep-whole pipeline needed.
+    expect(fullPassesAfterCold).toBe(3);
 
     const second = layoutSemanticDocument(part, 2, {
       measurer: notes.measurer,

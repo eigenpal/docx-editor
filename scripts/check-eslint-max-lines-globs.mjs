@@ -45,7 +45,7 @@ const BLANKET_DISABLES = new Map([
   ['packages/core/src/editor/paginated-surface.ts', 6242],
   ['packages/core/src/store/store/tree-op-apply.ts', 3495],
   ['packages/core/src/output/semantic-paint.ts', 3005],
-  ['packages/core/src/layout/note-pagination.ts', 3018],
+  ['packages/core/src/layout/note-pagination.ts', 2839],
   ['packages/core/src/store/package/note-lifecycle.ts', 1320],
 ]);
 

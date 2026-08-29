@@ -1,7 +1,7 @@
 // Fragment geometry for note pagination: story-relative shifts, flow bottoms, and the
 // body band a page must keep so its footnote references stay with their first fragment.
 
-import { fragmentOwnsPosition, lineSegments } from './line-segments.ts';
+import { fragmentOwnsPosition, lineSegments, segmentOwnsAtomOffset } from './line-segments.ts';
 import type {
   BlockFragmentRecord,
   PageRecord,
@@ -118,21 +118,6 @@ export function firstBodyContentTopPt(page: PageRecord): number {
 }
 
 /**
- * Whether a line segment owns the atom at `atomOffset` for `paragraphId` — half-open
- * `[start, end)` with downstream boundary affinity, ONE predicate for every reader that
- * pairs a note reference with the line that draws it.
- */
-export function segmentOwnsAtomOffset(
-  segment: { readonly paragraphId: string; readonly start: number; readonly end: number },
-  paragraphId: string,
-  atomOffset: number
-): boolean {
-  return (
-    segment.paragraphId === paragraphId && atomOffset >= segment.start && atomOffset < segment.end
-  );
-}
-
-/**
  * The body band (content-relative pt) of the line on `page` that carries `ref`.
  *
  * `bottom` is the band body text must KEEP for this reference when its footnote reserve is
@@ -164,6 +149,8 @@ export interface NoteReferenceLineBand {
   readonly top: number;
   /** Bottom of the referencing line — the floor a same-page reserve must not rise above. */
   readonly bottom: number;
+  /** Top of the owning block's fragment — where the line lands when its block moves whole. */
+  readonly blockTop: number;
   /** Whether the reserve may claim the line itself to move the reference forward. */
   readonly evictable: boolean;
 }
@@ -174,6 +161,7 @@ export function noteReferenceLineBandPt(
 ): NoteReferenceLineBand {
   let top = 0;
   let bottom = 0;
+  let blockTop = 0;
   let evictable = false;
   for (const block of page.fragments) {
     if (block.kind === 'paragraph') {
@@ -184,6 +172,7 @@ export function noteReferenceLineBandPt(
       if (lineBottom > bottom) {
         top = lineTop;
         bottom = lineBottom;
+        blockTop = block.box.y;
         // Only a located LINE may be evicted; an ownership match without a line segment
         // (merged/projected offsets) falls back to the fragment band and stays put.
         evictable = line !== null;
@@ -200,7 +189,17 @@ export function noteReferenceLineBandPt(
     }
   }
   const clamp = (value: number): number => Math.min(Math.max(0, value), page.contentBox.height);
-  return { top: clamp(top), bottom: clamp(bottom), evictable };
+  const clampedTop = clamp(top);
+  const clampedBottom = clamp(bottom);
+  return {
+    top: clampedTop,
+    bottom: clampedBottom,
+    blockTop: clamp(blockTop),
+    // A band the clamp collapsed (a line at or below the content bottom — overflow the
+    // body pass tolerated) must not evict: the eviction reserve computed from its top
+    // would be zero, and the reference's note would be neither placed nor carried.
+    evictable: evictable && clampedBottom > clampedTop,
+  };
 }
 
 /** The owning line's band inside a fragment already known to own the ref, or null. */
@@ -245,4 +244,27 @@ function tableOwnsAnyRef(
     }
   }
   return false;
+}
+
+/** Remove note-pass output before recomputing it from canonical references. */
+export function bodyOnlyPage(page: PageRecord): PageRecord {
+  // IDENTITY WHEN THERE IS NOTHING TO STRIP. The rest-destructure allocates a new object
+  // every time, and a page record is what the painter reuses BY IDENTITY — so a document
+  // with a notes part and no notes at all handed the painter a whole new set of pages on
+  // every pass, and every visible page's DOM was rebuilt on every keystroke. The lane runs
+  // for any package that HAS a footnotes or endnotes part, which is nearly every Word file.
+  // Its three siblings — `withPageFieldSources`, `attachContentControlBoundaries` and
+  // `reprojectBodyNoteMarks` — all return the original page when nothing moved.
+  if (
+    page.footnotes === undefined &&
+    page.endnotes === undefined &&
+    page.noteStream === undefined
+  ) {
+    return page;
+  }
+  const { footnotes, endnotes, noteStream, ...body } = page;
+  void footnotes;
+  void endnotes;
+  void noteStream;
+  return body;
 }

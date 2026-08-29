@@ -7,7 +7,7 @@ import { MAX_NOTE_FRAGMENTS, type NoteStoryLayout } from './note-layout.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 /** The one fallback splitting itself can raise; the pagination reason union includes it. */
-export type NoteSplitFallbackReason = 'note-line-exceeds-page';
+type NoteSplitFallbackReason = 'note-line-exceeds-page';
 
 /**
  * Split one paragraph fragment at a line boundary so the head fits under `availableBottom`

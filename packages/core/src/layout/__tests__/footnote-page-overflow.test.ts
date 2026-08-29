@@ -324,6 +324,19 @@ describe('oversized footnote starts on its reference page (issue #608)', () => {
     expectFullyDrained(cold, noteLines);
     expectNoStarvedPages(cold);
 
+    // Anti-avalanche co-location gate over the same cold layout: no note may start after
+    // its reference's page, and no page-column-sized note may split at all. This is the
+    // real-document failure shape — notes trailing their references by whole pages, every
+    // record a bare "continuation" with no mark.
+    for (const [paragraphIndex, id] of refs) {
+      const refPages = pagesOwningParagraph(cold, paragraphIndex);
+      const head = noteHeadPage(cold, id);
+      expect(head).not.toBeNull();
+      expect(refPages).toContain(head!);
+      // ~19-line notes fit a page column whole, so none of them may split.
+      expect(noteRecordCount(cold, id)).toBe(1);
+    }
+
     // Session-seeded passes continue the reserve iteration where the cold pass stopped;
     // by the third the packing is interleaved everywhere and a further pass changes nothing.
     const session = createLayoutSession();
@@ -464,30 +477,6 @@ describe('a footnote that cannot fit below its reference moves with it (keep-who
 
     expect(noteRecordCount(layout, 1)).toBe(1);
     expect(noteHeadPage(layout, 1)).toBe(pagesOwningParagraph(layout, refAt)[0]!);
-  });
-
-  // Anti-avalanche gate over a reference-dense document: no note may start after its
-  // reference's page, and no page-column-sized note may split at all. This is the
-  // real-document failure shape — notes trailing their references by whole pages, every
-  // record a bare "continuation" with no mark.
-  test('every note starts on the page that references it', () => {
-    const refs = new Map(Array.from({ length: 24 }, (_, i) => [(i + 1) * 8, i + 1] as const));
-    const notesXml = Array.from(
-      { length: 24 },
-      (_, i) =>
-        `<w:footnote w:id="${i + 1}"><w:p><w:r><w:t>${'n'.repeat(1500)}</w:t></w:r></w:p></w:footnote>`
-    ).join('');
-    const layout = layoutOf(packageXml(bodyParas(200, refs), notesXml), 'fn-colocation');
-
-    for (const [paragraphIndex, id] of refs) {
-      const refPages = pagesOwningParagraph(layout, paragraphIndex);
-      const head = noteHeadPage(layout, id);
-      expect(head).not.toBeNull();
-      expect(refPages).toContain(head!);
-      // ~19-line notes fit a page column whole, so none of them may split.
-      expect(noteRecordCount(layout, id)).toBe(1);
-    }
-    expectNoStarvedPages(layout);
   });
 });
 

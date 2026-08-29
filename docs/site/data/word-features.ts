@@ -689,7 +689,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. Overflow sheets retain separate page rectangles for painting and hit testing. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Tracked note inserts and notes in headers and footers are out of scope.',
+      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. A footnote stays whole with its reference: when it cannot fit below the referencing line, the line moves to the next page instead of the note splitting, and only a note taller than the page note column splits across pages. Overflow sheets retain separate page rectangles for painting and hit testing. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Tracked note inserts and notes in headers and footers are out of scope.',
   },
   {
     id: 'layout.columns',

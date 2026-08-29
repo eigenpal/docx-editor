@@ -32,6 +32,21 @@ export interface LineSegment {
   readonly drawings: readonly InlineDrawingRecord[];
 }
 
+/**
+ * Whether a line segment owns the atom at `atomOffset` for `paragraphId` — half-open
+ * `[start, end)` with downstream boundary affinity, ONE predicate for every reader that
+ * pairs a position with the segment that draws it.
+ */
+export function segmentOwnsAtomOffset(
+  segment: LineSegment,
+  paragraphId: string,
+  atomOffset: number
+): boolean {
+  return (
+    segment.paragraphId === paragraphId && atomOffset >= segment.start && atomOffset < segment.end
+  );
+}
+
 /** Cached per line: a mixed line is rare, and asking costs a walk of every span. */
 const lineSegmentsCache = new WeakMap<LineRecord, readonly LineSegment[]>();
 
