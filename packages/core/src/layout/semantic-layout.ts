@@ -171,7 +171,12 @@ import {
   withResolvedListItemsForSession,
   type ResolvedListItem,
 } from './list-resolve.ts';
-import { refTokenForTableBlock, resolveStoryRefFields, type RefFieldContext } from './field-ref.ts';
+import { noteRefNumberingFromNotes } from './field-noteref.ts';
+import {
+  refTokenForTableBlock,
+  resolveStoryRefFieldsWithNoteNumbers,
+  type RefFieldContext,
+} from './field-ref.ts';
 import { publishListMarker } from './list-marker.ts';
 import {
   NO_DEFERRED_DRAWINGS,
@@ -614,12 +619,16 @@ export function layoutSemanticDocument(
   // so the context is built here — the one place that sees both — and rides the options
   // spreads into every section pass. Note stories join the context (their REF fields cite
   // body targets), so paint agrees across stories. Null for the common REF-free document.
-  const refFields = resolveStoryRefFields(
+  // NOTEREF fields number against THIS walk's section bounds paired with the notes input's
+  // per-section properties — the pairing `attachNotesToLayout` numbers the note areas with,
+  // so field and area agree by construction.
+  const refFields = resolveStoryRefFieldsWithNoteNumbers(
     blocks,
     optionsWithLists.listItems,
     options.notes
       ? { footnotesPart: options.notes.footnotesPart, endnotesPart: options.notes.endnotesPart }
-      : undefined
+      : undefined,
+    options.notes ? noteRefNumberingFromNotes(options.notes, sections) : undefined
   );
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 

@@ -27,7 +27,12 @@ import {
   MAX_FIELD_RESULT_UPDATES,
   type RefreshFieldResultsOp,
 } from '../store/store/tree-op-field-results.ts';
-import { parseRefInstruction, resolveStoryRefFields, type RefNoteParts } from './field-ref.ts';
+import { noteRefNumberingForPart } from './field-noteref.ts';
+import {
+  parseRefInstruction,
+  resolveStoryRefFieldsWithNoteNumbers,
+  type RefNoteParts,
+} from './field-ref.ts';
 import { walkStoryParagraphs, withResolvedListItems } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
@@ -72,7 +77,14 @@ export function planRefFieldResultRefresh(
         endnotesPart: resolveNotesPart(options.package, 'endnote'),
       }
     : undefined;
-  const context = resolveStoryRefFields(blocks, listItems, notes);
+  // NOTEREF results ride the same plan: the numbering input rebuilds from the package the
+  // way the surface builds its notes input, so a refreshed result carries the painted value.
+  const context = resolveStoryRefFieldsWithNoteNumbers(
+    blocks,
+    listItems,
+    notes,
+    options.package ? noteRefNumberingForPart(options.package, part, blocks) : undefined
+  );
   if (context === null) return null;
 
   const updates: { paragraphId: string; fieldNodeId: string; text: string }[] = [];

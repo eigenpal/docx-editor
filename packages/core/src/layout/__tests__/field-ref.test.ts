@@ -51,10 +51,45 @@ describe('parseRefInstruction', () => {
     expect(parseRefInstruction('REF x \\w \\r')?.numberSwitch).toBe('r');
   });
 
+  test('the `\\t` switch parses, stacked or alone, without changing the public members', () => {
+    // The suppress flag rides the modifier side channel, so the spec object stays this shape.
+    expect(parseRefInstruction('REF target \\t')).toEqual({
+      bookmark: 'target',
+      numberSwitch: null,
+      hyperlink: false,
+    });
+    // The certificate-template stack: number switches, hyperlink, `\t`, MERGEFORMAT.
+    expect(parseRefInstruction(' REF _Ref1 \\w \\n \\h \\t \\* MERGEFORMAT ')).toEqual({
+      bookmark: '_Ref1',
+      numberSwitch: 'n',
+      hyperlink: true,
+    });
+  });
+
+  test('NOTEREF parses its bookmark, `\\h` and MERGEFORMAT — nothing else', () => {
+    expect(parseRefInstruction(' NOTEREF _Ref9 ')).toEqual({
+      bookmark: '_Ref9',
+      numberSwitch: null,
+      hyperlink: false,
+    });
+    expect(parseRefInstruction('noteref _Ref9 \\h \\* MERGEFORMAT')).toEqual({
+      bookmark: '_Ref9',
+      numberSwitch: null,
+      hyperlink: true,
+    });
+    // `\p` (above/below text) and `\f` (note-style formatting) are out of scope on purpose:
+    // their presence keeps the whole field on its cached result.
+    expect(parseRefInstruction('NOTEREF _Ref9 \\p')).toBeNull();
+    expect(parseRefInstruction('NOTEREF _Ref9 \\f')).toBeNull();
+    expect(parseRefInstruction('NOTEREF _Ref9 \\h \\p')).toBeNull();
+    // Number switches belong to REF, not NOTEREF.
+    expect(parseRefInstruction('NOTEREF _Ref1 \\r')).toBeNull();
+    expect(parseRefInstruction('NOTEREF')).toBeNull();
+    expect(parseRefInstruction(`NOTEREF ${'x'.repeat(257)}`)).toBeNull();
+  });
+
   test('anything outside the supported grammar stays inert (null)', () => {
-    // Unknown switches fall back to the cached result — never a guess. `\t` in particular is
-    // common in real documents and stays unsupported on purpose.
-    expect(parseRefInstruction('REF target \\t')).toBeNull();
+    // Unknown switches fall back to the cached result — never a guess.
     expect(parseRefInstruction('REF target \\p')).toBeNull();
     expect(parseRefInstruction('REF target \\f')).toBeNull();
     expect(parseRefInstruction('REF target \\d "-"')).toBeNull();
@@ -66,7 +101,6 @@ describe('parseRefInstruction', () => {
     expect(parseRefInstruction(`REF ${'x'.repeat(257)}`)).toBeNull();
     expect(parseRefInstruction('REF "unterminated')).toBeNull();
     // Other keywords are not this field.
-    expect(parseRefInstruction('NOTEREF _Ref1 \\r')).toBeNull();
     expect(parseRefInstruction('PAGEREF _Ref1 \\h')).toBeNull();
     // Over the shared instruction cap fails closed.
     expect(parseRefInstruction(`REF ${'y'.repeat(MAX_FIELD_INSTRUCTION_CHARS)}`)).toBeNull();
@@ -376,6 +410,15 @@ describe('calibration: the authored cache is the oracle', () => {
     expect(context.tokenForParagraph(refParagraphs[1]!.id)).toContain('b.3');
   });
 
+  test('a `\\t` value that cannot reproduce the authored cache keeps that cache', () => {
+    // The filter yields `1`, the cache says `Section 1` — the field stays cached forever.
+    const part = document(
+      numbered(0, bookmarked('t', 'A')) + refField(' REF t \\r \\t ', 'Section 1')
+    );
+    const context = contextUnder(TWO_LEVEL_NUMBERING, part);
+    expect(liveAt(part, context, 0, parseRefInstruction(' REF t \\r \\t ')!)).toBeNull();
+  });
+
   test('normalization: NBSP and whitespace runs do not fail an otherwise exact match', () => {
     const part = document(
       numbered(0, bookmarked('t', 'A')) +
@@ -384,5 +427,58 @@ describe('calibration: the authored cache is the oracle', () => {
     );
     const context = contextUnder(TWO_LEVEL_NUMBERING, part);
     expect(liveAt(part, context, 0, spec('t', 'r'))).toBe('1');
+  });
+});
+
+/** Level texts with literal words — what the `\t` switch exists to suppress. */
+const WORDY_NUMBERING = `
+  <w:abstractNum w:abstractNumId="0">
+    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="Section %1."/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="Section %1.%2"/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/>
+      <w:lvlText w:val="(%3)"/><w:lvlJc w:val="left"/></w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
+`;
+
+describe('the \\t switch suppresses non-delimiter text in the referenced number', () => {
+  // Counters at the targets: `Section 1.2` (ilvl 1, second item) and `(c)` (ilvl 2, third).
+  const body =
+    numbered(0, '<w:r><w:t>Section one</w:t></w:r>') +
+    numbered(1, '<w:r><w:t>1.1</w:t></w:r>') +
+    numbered(1, bookmarked('sec', 'Section 1.2')) +
+    numbered(2, '<w:r><w:t>(a)</w:t></w:r>') +
+    numbered(2, '<w:r><w:t>(b)</w:t></w:r>') +
+    numbered(2, bookmarked('clause', 'Clause (c)')) +
+    refField(' REF sec \\w \\t ') +
+    refField(' REF sec \\w ') +
+    refField(' REF clause \\n \\t ') +
+    refField(' REF clause \\w \\n \\h \\t \\* MERGEFORMAT ') +
+    refField(' REF clause \\w \\t ') +
+    refField(' REF sec \\t ');
+  const part = document(body);
+  const context = contextUnder(WORDY_NUMBERING, part);
+
+  test('`Section %1.%2` yields `1.2`; without `\\t` the words stay', () => {
+    expect(liveAt(part, context, 0, parseRefInstruction(' REF sec \\w \\t ')!)).toBe('1.2');
+    expect(liveAt(part, context, 1, spec('sec', 'w'))).toBe('Section 1.2');
+  });
+
+  test('a letter level `(%3)` keeps `(c)` — parentheses are delimiters, wherever they sit', () => {
+    expect(liveAt(part, context, 2, parseRefInstruction(' REF clause \\n \\t ')!)).toBe('(c)');
+    // The full stacked shape: `\n` outranks `\w`; `\h` and MERGEFORMAT stay inert.
+    expect(
+      liveAt(part, context, 3, parseRefInstruction(' REF clause \\w \\n \\h \\t \\* MERGEFORMAT ')!)
+    ).toBe('(c)');
+  });
+
+  test('`\\w \\t` filters every kept level of the full context', () => {
+    expect(liveAt(part, context, 4, parseRefInstruction(' REF clause \\w \\t ')!)).toBe('1.2(c)');
+  });
+
+  test('`\\t` on a plain REF has no counter template to filter — cached fallback', () => {
+    expect(liveAt(part, context, 5, parseRefInstruction(' REF sec \\t ')!)).toBeNull();
   });
 });

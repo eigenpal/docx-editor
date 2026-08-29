@@ -206,6 +206,40 @@ export function expandCountersOf(advance: ListCounterAdvance): readonly number[]
   return expandCountersByAdvance.get(advance) ?? advance.counters;
 }
 
+/** Matches what the `\t` filter drops from a `w:lvlText`: literal letters and whitespace. */
+const SUPPRESSED_LVL_TEXT_CHAR = /[\p{L}\s]/u;
+
+/**
+ * The `REF \t` filter over one level's `w:lvlText`: keep the counter placeholders and the
+ * delimiter characters, drop the literal words.
+ *
+ * DESIGN DECISION — what counts as a delimiter: every non-letter, non-whitespace character
+ * (`.`, `(`, `)`, `-`, `/`, `:`, literal digits) is KEPT wherever it sits, including the
+ * leading and trailing parentheses of `(%3)` — Word's cached `\t` values for such levels
+ * read `(c)`, not `c`. Literal LETTERS drop (they are the text the switch suppresses), and
+ * whitespace drops with them: it exists to set the dropped words off, and Word's cached
+ * values show compact joins (`Section 4.2` caches as `4.2`). The filter runs on the
+ * TEMPLATE, never the expanded string, because expanded a letter or roman COUNTER (`(c)`,
+ * `(ii)`) is indistinguishable from a literal word. One linear pass over a length-capped
+ * string; the per-field calibration gate in `field-ref.ts` keeps any document whose cached
+ * values disagree on its cache.
+ */
+function suppressNonDelimiterLvlText(lvlText: string): string {
+  let out = '';
+  for (let index = 0; index < lvlText.length; index += 1) {
+    const char = lvlText[index]!;
+    const next = lvlText[index + 1];
+    if (char === '%' && next !== undefined && next >= '1' && next <= '9') {
+      out += char + next;
+      index += 1;
+      continue;
+    }
+    if (SUPPRESSED_LVL_TEXT_CHAR.test(char)) continue;
+    out += char;
+  }
+  return out;
+}
+
 /**
  * What composing a paragraph's FULL-CONTEXT number needs: the linked index its levels resolve
  * through and the substitution-ready counters captured when the paragraph was counted.
@@ -229,11 +263,15 @@ export interface FullContextNumberSource {
  * falls back). Bounded: at most nine levels, each expansion under the marker-length caps.
  *
  * `ownLevelOnly` keeps just the target level's expansion — what a `REF \n` paints (`(c)`,
- * `(ii)`), per Word's own cached values for that switch.
+ * `(ii)`), per Word's own cached values for that switch. `suppressNonDelimiterText` applies
+ * the `REF \t` template filter (see {@link suppressNonDelimiterLvlText}) to every kept level
+ * before it expands. The keep/drop decisions above it read the ORIGINAL texts — the filter
+ * preserves placeholders, so both views agree on which levels contribute.
  */
 export function composeFullContextNumber(
   source: FullContextNumberSource,
-  ownLevelOnly = false
+  ownLevelOnly = false,
+  suppressNonDelimiterText = false
 ): string | null {
   const { index, numId, ilvl, expandCounters } = source;
   if (ilvl < 0 || ilvl > 8) return null;
@@ -269,11 +307,10 @@ export function composeFullContextNumber(
   let out = '';
   for (const lvl of kept) {
     const level = levels[lvl]!;
-    out += expandLvlText(
-      level.lvlText,
-      expandCounters,
-      legalEffectiveFormats(formats, level.isLgl)
-    );
+    const template = suppressNonDelimiterText
+      ? suppressNonDelimiterLvlText(level.lvlText)
+      : level.lvlText;
+    out += expandLvlText(template, expandCounters, legalEffectiveFormats(formats, level.isLgl));
   }
   return out.length > 0 ? out : null;
 }

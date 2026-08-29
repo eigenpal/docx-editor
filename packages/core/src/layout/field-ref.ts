@@ -5,7 +5,12 @@
 // quote-aware tokenize pass over a length-capped string; anything outside the supported
 // grammar — an unknown switch (`\p`, `\f`, `\d`, `\#`, …), a missing bookmark argument, an
 // over-long name — resolves to null and the field keeps painting its cached result exactly as
-// before. `\* MERGEFORMAT` is inert; `\h` only parses (navigation is not wired here).
+// before. `\* MERGEFORMAT` is inert; `\h` only parses (navigation is not wired here). `\t`
+// suppresses the number's literal text (the template filter in `list-counters.ts` states the
+// delimiter rule). The same tokenizer also recognizes `NOTEREF <bookmark> [\h]` — the number
+// of the note whose reference mark sits inside the bookmark, resolved by `field-noteref.ts`
+// through the painter's own numbering; its `\p` / `\f` switches stay out of the grammar on
+// purpose, so such fields keep their cache.
 //
 // Resolution reads three story-derived inputs, all bounded:
 //   - bookmark name → target paragraph, indexed ONLY for referenced names (the index can never
@@ -69,6 +74,11 @@ import {
   onFldCharEnd,
   onFldCharSeparate,
 } from './field-instruction.ts';
+import {
+  firstNoteReferenceIdInBookmark,
+  noteRefMarkIndex,
+  type NoteRefNumberingInput,
+} from './field-noteref.ts';
 import { composeFullContextNumber } from './list-counters.ts';
 import {
   listItemNumberSource,
@@ -94,6 +104,38 @@ export interface RefFieldSpec {
   readonly numberSwitch: 'r' | 'w' | 'n' | null;
   /** `\h` parsed and inert — the reference paints; navigation is a follow-up. */
   readonly hyperlink: boolean;
+}
+
+/**
+ * The modifiers a parse attaches beyond the public members: `\t` (suppress the number's
+ * literal text) and the NOTEREF field kind. A side channel rather than members — the same
+ * idiom `ListCounterAdvance` uses, for the same reason: `RefFieldSpec` is public API, and a
+ * hand-built spec without an entry must mean "no modifiers", which the default below encodes.
+ * Values are the frozen singletons, so agreement between two independent parses of the same
+ * instruction is an identity comparison.
+ */
+interface RefSpecModifiers {
+  /** `\t`: drop non-delimiter literal text from the referenced number. */
+  readonly suppressNonDelimiterText: boolean;
+  /** The instruction was `NOTEREF`: paint the bookmarked note reference's display number. */
+  readonly noteRef: boolean;
+}
+const REF_MODS_NONE: RefSpecModifiers = Object.freeze({
+  suppressNonDelimiterText: false,
+  noteRef: false,
+});
+const REF_MODS_SUPPRESS: RefSpecModifiers = Object.freeze({
+  suppressNonDelimiterText: true,
+  noteRef: false,
+});
+const REF_MODS_NOTEREF: RefSpecModifiers = Object.freeze({
+  suppressNonDelimiterText: false,
+  noteRef: true,
+});
+const refSpecModifiers = new WeakMap<RefFieldSpec, RefSpecModifiers>();
+
+function refSpecModifiersOf(spec: RefFieldSpec): RefSpecModifiers {
+  return refSpecModifiers.get(spec) ?? REF_MODS_NONE;
 }
 
 /**
@@ -127,12 +169,14 @@ function tokenizeInstruction(collapsed: string): string[] | null {
 }
 
 /**
- * Recognize `REF <bookmark> [\r|\w|\n] [\h] [\* MERGEFORMAT]`, or null for anything else.
+ * Recognize `REF <bookmark> [\r|\w|\n] [\t] [\h] [\* MERGEFORMAT]` or
+ * `NOTEREF <bookmark> [\h] [\* MERGEFORMAT]`, or null for anything else.
  *
  * The keyword matches case-insensitively; the bookmark name keeps its authored case (it is a
  * lookup key into a Map, never an object property, so hostile names like `__proto__` are just
  * names that resolve to nothing). Any unrecognized switch fails the parse so the field falls
- * back to its cached result — never the raw instruction, never a guess.
+ * back to its cached result — never the raw instruction, never a guess. NOTEREF's `\p`
+ * (above/below position text) and `\f` (note-style formatting) are unrecognized on purpose.
  */
 export function parseRefInstruction(raw: string): RefFieldSpec | null {
   if (raw.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
@@ -140,7 +184,8 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null {
   if (collapsed.length > MAX_FIELD_INSTRUCTION_CHARS) return null;
   const tokens = tokenizeInstruction(collapsed);
   if (tokens === null || tokens.length < 2) return null;
-  if (tokens[0]!.toUpperCase() !== 'REF') return null;
+  const keyword = tokens[0]!.toUpperCase();
+  if (keyword !== 'REF' && keyword !== 'NOTEREF') return null;
   const bookmark = tokens[1]!;
   if (
     bookmark.length === 0 ||
@@ -149,15 +194,18 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null {
   ) {
     return null;
   }
+  if (keyword === 'NOTEREF') return parseNoteRefSwitches(tokens, bookmark);
   let sawN = false;
   let sawR = false;
   let sawW = false;
+  let sawT = false;
   let hyperlink = false;
   for (let index = 2; index < tokens.length; index += 1) {
     const token = tokens[index]!.toUpperCase();
     if (token === '\\R') sawR = true;
     else if (token === '\\W') sawW = true;
     else if (token === '\\N') sawN = true;
+    else if (token === '\\T') sawT = true;
     else if (token === '\\H') hyperlink = true;
     else if (token === '\\*' && tokens[index + 1]?.toUpperCase() === 'MERGEFORMAT') index += 1;
     else if (token === '\\*MERGEFORMAT') continue;
@@ -166,7 +214,24 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null {
   // Several number switches in one instruction: `\n` outranks `\r` outranks `\w`. Real
   // documents write `\w \n \h` and cache the `\n`-shaped value; calibration guards the rest.
   const numberSwitch: RefFieldSpec['numberSwitch'] = sawN ? 'n' : sawR ? 'r' : sawW ? 'w' : null;
-  return { bookmark, numberSwitch, hyperlink };
+  const spec: RefFieldSpec = { bookmark, numberSwitch, hyperlink };
+  if (sawT) refSpecModifiers.set(spec, REF_MODS_SUPPRESS);
+  return spec;
+}
+
+/** The NOTEREF switch arm: `\h` inert, `\* MERGEFORMAT` inert, anything else fails closed. */
+function parseNoteRefSwitches(tokens: readonly string[], bookmark: string): RefFieldSpec | null {
+  let hyperlink = false;
+  for (let index = 2; index < tokens.length; index += 1) {
+    const token = tokens[index]!.toUpperCase();
+    if (token === '\\H') hyperlink = true;
+    else if (token === '\\*' && tokens[index + 1]?.toUpperCase() === 'MERGEFORMAT') index += 1;
+    else if (token === '\\*MERGEFORMAT') continue;
+    else return null;
+  }
+  const spec: RefFieldSpec = { bookmark, numberSwitch: null, hyperlink };
+  refSpecModifiers.set(spec, REF_MODS_NOTEREF);
+  return spec;
 }
 
 /**
@@ -562,6 +627,7 @@ interface RefContextMemoEntry {
   readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
   readonly footnotesPart: OoxmlPart | null;
   readonly endnotesPart: OoxmlPart | null;
+  readonly noteNumbering: NoteRefNumberingInput | undefined;
   readonly context: RefFieldContext | null;
 }
 /**
@@ -575,7 +641,8 @@ const refContextMemos = new WeakMap<readonly OoxmlElement[], RefContextMemoEntry
 function buildRefFieldContext(
   blocks: readonly OoxmlElement[],
   listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
-  notes: RefNoteParts | undefined
+  notes: RefNoteParts | undefined,
+  noteNumbering: NoteRefNumberingInput | undefined
 ): RefFieldContext | null {
   const fieldsByParagraph = new Map<string, readonly ScannedRefField[]>();
   const blockScans: BlockRefScan[] = [];
@@ -616,8 +683,18 @@ function buildRefFieldContext(
   }
 
   const resolve = (spec: RefFieldSpec): string | null => {
+    const mods = refSpecModifiersOf(spec);
     const target = targets.get(spec.bookmark);
     if (!target) return null;
+    if (mods.noteRef) {
+      // NOTEREF: the display number of the note whose reference mark sits inside the
+      // bookmark. The index derives through the painter's own numbering path; a pass with
+      // no numbering input (a story laid out without notes) keeps the cache.
+      if (noteNumbering === undefined) return null;
+      const referenceNodeId = firstNoteReferenceIdInBookmark(target, spec.bookmark);
+      if (referenceNodeId === null) return null;
+      return noteRefMarkIndex(blocks, noteNumbering).get(referenceNodeId) ?? null;
+    }
     if (spec.numberSwitch !== null) {
       const item = listItems?.get(target.id);
       if (!item) return null;
@@ -625,26 +702,43 @@ function buildRefFieldContext(
       // and painting bare `(c)` for a `1.2(c)` target is worse than the stale cache. `\n`:
       // the target's own level only, per Word's cached values for that switch. Items built
       // outside `resolveStoryListItems` carry no counter source; their marker is the bounded
-      // fallback.
+      // fallback — except under `\t`, whose filter runs on the level TEMPLATES and cannot
+      // strip an already-expanded marker, so that pairing keeps the cache.
       const source = listItemNumberSource(item);
       const composed =
-        source !== undefined ? composeFullContextNumber(source, spec.numberSwitch === 'n') : null;
+        source !== undefined
+          ? composeFullContextNumber(
+              source,
+              spec.numberSwitch === 'n',
+              mods.suppressNonDelimiterText
+            )
+          : null;
       // A bullet has a marker but no number a reader can cite — cached fallback, not a glyph.
       const fallback =
-        item.numFmt !== 'bullet' && item.numFmt !== 'none' && item.markerText.length > 0
+        !mods.suppressNonDelimiterText &&
+        item.numFmt !== 'bullet' &&
+        item.numFmt !== 'none' &&
+        item.markerText.length > 0
           ? item.markerText
           : null;
       const value = composed ?? fallback;
       if (value === null) return null;
       return trimTrailingPeriod(value);
     }
+    // `\t` on a plain REF would filter the bookmarked TEXT, which has no counter template to
+    // filter against — cached fallback, the pre-existing degradation for that shape.
+    if (mods.suppressNonDelimiterText) return null;
     const text = bookmarkRangeText(target, spec.bookmark);
     return text.length > 0 ? text : null;
   };
 
   const computedValues = new Map<string, string | null>();
   const computedOf = (spec: RefFieldSpec): string | null => {
-    const key = `${spec.numberSwitch ?? 't'}\u0000${spec.bookmark}`;
+    // The modifier singletons join the key, so `REF x \w`, `REF x \w \t` and `NOTEREF x`
+    // never share a computed value.
+    const mods = refSpecModifiersOf(spec);
+    const modKey = mods === REF_MODS_SUPPRESS ? 't' : mods === REF_MODS_NOTEREF ? 'x' : '';
+    const key = `${spec.numberSwitch ?? '-'}${modKey}\u0000${spec.bookmark}`;
     if (computedValues.has(key)) return computedValues.get(key) ?? null;
     const value = resolve(spec);
     computedValues.set(key, value);
@@ -694,8 +788,13 @@ function buildRefFieldContext(
       const entry = liveByAnchor.get(anchorId);
       if (!entry || entry.live === null) return null;
       // The projection parsed the same instruction this scan did; a disagreement means the
-      // anchor id names some other field now — fail to the cache.
-      if (entry.spec.bookmark !== spec.bookmark || entry.spec.numberSwitch !== spec.numberSwitch) {
+      // anchor id names some other field now — fail to the cache. Modifiers are frozen
+      // singletons, so identity compares them.
+      if (
+        entry.spec.bookmark !== spec.bookmark ||
+        entry.spec.numberSwitch !== spec.numberSwitch ||
+        refSpecModifiersOf(entry.spec) !== refSpecModifiersOf(spec)
+      ) {
         return null;
       }
       return entry.live;
@@ -716,6 +815,22 @@ export function resolveStoryRefFields(
   listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
   notes?: RefNoteParts
 ): RefFieldContext | null {
+  return resolveStoryRefFieldsWithNoteNumbers(blocks, listItems, notes, undefined);
+}
+
+/**
+ * {@link resolveStoryRefFields} plus the numbering input NOTEREF resolution needs. A separate
+ * entry (not re-exported from the layout index) so the public signature stays put; callers
+ * that cannot supply the input keep every NOTEREF field on its cached result. The input is
+ * memoized by its producers (`noteRefNumberingFromNotes`), so the identity check below still
+ * serves the no-change pass.
+ */
+export function resolveStoryRefFieldsWithNoteNumbers(
+  blocks: readonly OoxmlElement[],
+  listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
+  notes: RefNoteParts | undefined,
+  noteNumbering: NoteRefNumberingInput | undefined
+): RefFieldContext | null {
   const footnotesPart = notes?.footnotesPart ?? null;
   const endnotesPart = notes?.endnotesPart ?? null;
   const memo = refContextMemos.get(blocks);
@@ -723,12 +838,13 @@ export function resolveStoryRefFields(
     memo &&
     memo.listItems === listItems &&
     memo.footnotesPart === footnotesPart &&
-    memo.endnotesPart === endnotesPart
+    memo.endnotesPart === endnotesPart &&
+    memo.noteNumbering === noteNumbering
   ) {
     return memo.context;
   }
-  const context = buildRefFieldContext(blocks, listItems, notes);
-  refContextMemos.set(blocks, { listItems, footnotesPart, endnotesPart, context });
+  const context = buildRefFieldContext(blocks, listItems, notes, noteNumbering);
+  refContextMemos.set(blocks, { listItems, footnotesPart, endnotesPart, noteNumbering, context });
   return context;
 }
 
