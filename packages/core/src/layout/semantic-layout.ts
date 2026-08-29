@@ -610,10 +610,17 @@ export function layoutSemanticDocument(
         blocks
       );
 
-  // REF cross-references resolve against the whole story's bookmarks and resolved numbering,
+  // REF cross-references resolve against the document's bookmarks and resolved numbering,
   // so the context is built here — the one place that sees both — and rides the options
-  // spreads into every section pass. Null for the common REF-free document.
-  const refFields = resolveStoryRefFields(blocks, optionsWithLists.listItems);
+  // spreads into every section pass. Note stories join the context (their REF fields cite
+  // body targets), so paint agrees across stories. Null for the common REF-free document.
+  const refFields = resolveStoryRefFields(
+    blocks,
+    optionsWithLists.listItems,
+    options.notes
+      ? { footnotesPart: options.notes.footnotesPart, endnotesPart: options.notes.endnotesPart }
+      : undefined
+  );
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
   const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
@@ -678,10 +685,13 @@ export function layoutSemanticDocument(
 
   // Notes inherit the body's projector seams and document properties (link, field link, doc
   // props) unless the notes input pinned its own — see `inheritNotesLayoutInput`. The REF
-  // context deliberately does NOT ride along: note stories keep painting cached REF results
-  // until their flow keys learn to fold the resolved values (threading the values without
-  // keying on them would serve stale note breaks after a renumbering edit).
-  const notesInput = inheritNotesLayoutInput(options.notes, options);
+  // context rides along the same way: the note flow folds each paragraph's resolved values
+  // into its break key and the notes-pass fingerprint folds the values token, so a
+  // renumbering edit repaints the notes that cite the renumbered target.
+  const notesInput = inheritNotesLayoutInput(
+    options.notes,
+    refFields ? { ...options, refFields } : options
+  );
   return finish(
     layoutSemanticDocumentWithNotes(part, sections, optionsForBody, notesInput, runBody)
   );

@@ -27,6 +27,15 @@ import {
 const TWO_P =
   '<w:p><w:r><w:t>Hello</w:t></w:r></w:p><w:p><w:r><w:t>World</w:t></w:r></w:p><w:sectPr/>';
 
+const REF_FIELD_BODY =
+  '<w:p><w:bookmarkStart w:id="1" w:name="_Ref1"/><w:r><w:t>Target</w:t></w:r>' +
+  '<w:bookmarkEnd w:id="1"/></w:p>' +
+  '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+  '<w:r><w:instrText xml:space="preserve"> REF _Ref1 \\h </w:instrText></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+  '<w:r><w:t>old</w:t></w:r>' +
+  '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p><w:sectPr/>';
+
 const MATH_P =
   '<w:p><w:r><w:t>A</w:t></w:r><m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>' +
   '<w:r><w:t>Z</w:t></w:r></w:p><w:p><w:r><w:t>y</w:t></w:r></w:p><w:sectPr/>';
@@ -657,6 +666,18 @@ export function authorableCoverageFixtures(): JournalCoverageFixture[] {
         op: 'rewriteTocPageNumbers',
         tocId: toc.id,
         updates: [{ paragraphId: toc.resultParagraphIds[0]!, pageNumberText: '9' }],
+      };
+    }),
+    story('refreshFieldResults', zipDoc({ body: REF_FIELD_BODY }), (store) => {
+      // The field anchor is the begin `w:fldChar` node — the first one in document order.
+      let beginId: string | undefined;
+      walkNodes(store.bodyStore().part.root, (node) => {
+        if (beginId === undefined && node.kind === 'fldChar') beginId = node.id;
+      });
+      if (beginId === undefined) throw new Error('missing field begin fldChar');
+      return {
+        op: 'refreshFieldResults',
+        updates: [{ paragraphId: paragraphIds(store)[1]!, fieldNodeId: beginId, text: 'new' }],
       };
     }),
   ];

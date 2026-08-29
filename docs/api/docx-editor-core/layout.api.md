@@ -1638,6 +1638,7 @@ export interface NotesLayoutInput {
     // (undocumented)
     readonly projectFieldLink?: FieldLinkProjector;
     readonly projectLink?: HyperlinkProjector;
+    readonly refFields?: RefFieldContext;
     // (undocumented)
     readonly styleCascade?: StyleCascadeTable;
 }
@@ -2059,6 +2060,9 @@ export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: str
 export function parsePageNumbering(sectPr: OoxmlNode): SectionPageNumbering | undefined;
 
 // @public
+export function parseRefInstruction(raw: string): RefFieldSpec | null;
+
+// @public
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties;
 
 // @public
@@ -2077,6 +2081,9 @@ export interface PlacedCell {
     // (undocumented)
     readonly tableId: string;
 }
+
+// @public
+export function planRefFieldResultRefresh(part: OoxmlPart, options: RefFieldRefreshOptions): RefreshFieldResultsOp | null;
 
 // @public
 export function positionPastDeletion(layout: SemanticLayout, position: SemanticPosition): SemanticPosition;
@@ -2118,6 +2125,39 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
 // @public
 export function readTableStructure(table: OoxmlNode, contentWidthPt: number, depth: number, styleCascade?: StyleCascadeTable,
 displayMode?: RevisionDisplayMode): SemanticTableStructure | null;
+
+// @public
+export interface RefFieldContext {
+    liveValueOf(anchorId: string, spec: RefFieldSpec): string | null;
+    tokenForParagraph(paragraphId: string): string;
+    readonly valuesToken: string;
+}
+
+// @public (undocumented)
+export interface RefFieldRefreshOptions {
+    readonly displayMode?: RevisionDisplayMode;
+    // (undocumented)
+    readonly numberingIndex?: NumberingIndex;
+    readonly package?: OoxmlPackage;
+    // (undocumented)
+    readonly styleCascade?: StyleCascadeTable;
+}
+
+// @public
+export interface RefFieldSpec {
+    // (undocumented)
+    readonly bookmark: string;
+    readonly hyperlink: boolean;
+    readonly numberSwitch: 'r' | 'w' | 'n' | null;
+}
+
+// @public
+export interface RefNoteParts {
+    // (undocumented)
+    readonly endnotesPart: OoxmlPart | null;
+    // (undocumented)
+    readonly footnotesPart: OoxmlPart | null;
+}
 
 // @public
 export function resetGraphemeBoundary(): void;
@@ -2295,6 +2335,9 @@ export function resolveRunStyle(props: readonly OoxmlProperty[], themeFonts?: Th
 
 // @public
 export function resolveStoryListItems(blocks: readonly OoxmlElement[], index: NumberingIndex, styleCascade: StyleCascadeTable | undefined, isFontAvailable?: (family: string) => boolean): ReadonlyMap<string, ResolvedListItem>;
+
+// @public
+export function resolveStoryRefFields(blocks: readonly OoxmlElement[], listItems: ReadonlyMap<string, ResolvedListItem> | undefined, notes?: RefNoteParts): RefFieldContext | null;
 
 // @public
 export function resolveStrictHexFill(raw: string | undefined): string | undefined;

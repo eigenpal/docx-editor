@@ -51,7 +51,10 @@ import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
+  type OoxmlPart,
 } from '@docx-editor.dev/core/store';
+import { isNormalNote, notesOf, MAX_NOTES_PER_PART } from '../store/package/note-nodes.ts';
+import { noteStoryBlocks } from './story-roots.ts';
 import {
   consumeScanNode,
   createFieldParseState,
@@ -172,7 +175,8 @@ export function parseRefInstruction(raw: string): RefFieldSpec | null {
  * Threaded as a runtime rider on the layout options (see `layoutSemanticDocument`) rather
  * than a `SemanticLayoutOptions` member, so the public options surface stays put. Absent
  * means every REF field paints its cached result — the pre-existing degradation, and the one
- * header/footer, note and text-box stories still take.
+ * header/footer and text-box stories still take. Note stories receive the body's context
+ * through `NotesLayoutInput.refFields`.
  */
 export interface RefFieldContext {
   /**
@@ -525,8 +529,39 @@ function bookmarkRangeText(paragraph: OoxmlElement, name: string): string {
   return text;
 }
 
+/**
+ * Note parts whose stories join the context: their REF fields resolve against the body's
+ * bookmarks and numbering (a footnote citing "Section 1.2(c)" targets a body paragraph),
+ * and their bookmark declarations become plain-REF targets. Number switches aimed AT a
+ * note paragraph still fall back to the cached result — the list map is the body's.
+ */
+export interface RefNoteParts {
+  readonly footnotesPart: OoxmlPart | null;
+  readonly endnotesPart: OoxmlPart | null;
+}
+
+/** Normal-note story block arrays of one notes part, memoized on the immutable part. */
+const notePartStories = new WeakMap<OoxmlPart, readonly (readonly OoxmlElement[])[]>();
+
+function noteStoriesOfPart(part: OoxmlPart | null): readonly (readonly OoxmlElement[])[] {
+  if (!part) return [];
+  const cached = notePartStories.get(part);
+  if (cached) return cached;
+  const stories: (readonly OoxmlElement[])[] = [];
+  for (const note of notesOf(part.root)) {
+    if (stories.length >= MAX_NOTES_PER_PART) break;
+    if (!isNormalNote(note)) continue;
+    const blocks = noteStoryBlocks(note);
+    if (blocks.length > 0) stories.push(blocks);
+  }
+  notePartStories.set(part, stories);
+  return stories;
+}
+
 interface RefContextMemoEntry {
   readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+  readonly footnotesPart: OoxmlPart | null;
+  readonly endnotesPart: OoxmlPart | null;
   readonly context: RefFieldContext | null;
 }
 /**
@@ -539,20 +574,30 @@ const refContextMemos = new WeakMap<readonly OoxmlElement[], RefContextMemoEntry
 
 function buildRefFieldContext(
   blocks: readonly OoxmlElement[],
-  listItems: ReadonlyMap<string, ResolvedListItem> | undefined
+  listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
+  notes: RefNoteParts | undefined
 ): RefFieldContext | null {
   const fieldsByParagraph = new Map<string, readonly ScannedRefField[]>();
   const blockScans: BlockRefScan[] = [];
   let totalFields = 0;
-  for (const block of blocks) {
-    const scan = scanBlockRefs(block);
-    blockScans.push(scan);
-    if (!scan.fieldsByParagraph) continue;
-    for (const [paragraphId, fields] of scan.fieldsByParagraph) {
-      if (totalFields >= MAX_REF_FIELDS_PER_STORY) break;
-      fieldsByParagraph.set(paragraphId, fields);
-      totalFields += fields.length;
+  const scanStory = (storyBlocks: readonly OoxmlElement[]): void => {
+    for (const block of storyBlocks) {
+      const scan = scanBlockRefs(block);
+      blockScans.push(scan);
+      if (!scan.fieldsByParagraph) continue;
+      for (const [paragraphId, fields] of scan.fieldsByParagraph) {
+        if (totalFields >= MAX_REF_FIELDS_PER_STORY) break;
+        fieldsByParagraph.set(paragraphId, fields);
+        totalFields += fields.length;
+      }
     }
+  };
+  scanStory(blocks);
+  // Note stories join AFTER the body, so the shared cap and the first-declaration rule
+  // both prefer body content — the story a reference overwhelmingly lives in and targets.
+  if (notes) {
+    for (const story of noteStoriesOfPart(notes.footnotesPart)) scanStory(story);
+    for (const story of noteStoriesOfPart(notes.endnotesPart)) scanStory(story);
   }
   if (fieldsByParagraph.size === 0) return null;
 
@@ -659,20 +704,31 @@ function buildRefFieldContext(
 }
 
 /**
- * Resolve the story's REF fields for one layout pass, or null when it has none.
+ * Resolve the document's REF fields for one layout pass, or null when it has none.
  *
- * Bookmarks and REF fields resolve within one story: a body REF finds body bookmarks. Other
- * stories (headers, footers, notes, text boxes) are not given a context and keep painting
- * cached results.
+ * Bookmarks and REF fields resolve across the body story and (when `notes` is given) the
+ * footnote/endnote stories, against ONE shared target index — a footnote REF finds the
+ * body bookmark it cites. Header/footer and text-box stories are not given a context and
+ * keep painting cached results.
  */
 export function resolveStoryRefFields(
   blocks: readonly OoxmlElement[],
-  listItems: ReadonlyMap<string, ResolvedListItem> | undefined
+  listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
+  notes?: RefNoteParts
 ): RefFieldContext | null {
+  const footnotesPart = notes?.footnotesPart ?? null;
+  const endnotesPart = notes?.endnotesPart ?? null;
   const memo = refContextMemos.get(blocks);
-  if (memo && memo.listItems === listItems) return memo.context;
-  const context = buildRefFieldContext(blocks, listItems);
-  refContextMemos.set(blocks, { listItems, context });
+  if (
+    memo &&
+    memo.listItems === listItems &&
+    memo.footnotesPart === footnotesPart &&
+    memo.endnotesPart === endnotesPart
+  ) {
+    return memo.context;
+  }
+  const context = buildRefFieldContext(blocks, listItems, notes);
+  refContextMemos.set(blocks, { listItems, footnotesPart, endnotesPart, context });
   return context;
 }
 

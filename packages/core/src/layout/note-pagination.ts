@@ -183,6 +183,13 @@ export interface NotesLayoutInput {
   /** Document properties for a document-property field inside a note story. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /**
+   * The document's resolved REF inputs, so a footnote's cross-reference paints the live
+   * value the body paints. Normally injected by `semantic-layout` from the context it built
+   * over the body and note stories; its values token joins the notes-pass fingerprint so a
+   * renumbering edit repaints the notes that cite the renumbered target.
+   */
+  readonly refFields?: import('./field-ref.ts').RefFieldContext;
+  /**
    * Inline drawing support per notes part. Absent means note paragraphs flow without
    * drawing records, which is what a headless caller with no image port wants.
    */
@@ -280,6 +287,9 @@ function fingerprintNotesInput(input: NotesLayoutInput): string | null {
     input.producer,
     input.defaultTabStopPt ?? '',
     input.drawingLayoutEpoch ?? '',
+    // By CONTENT, not identity: a keystroke rebuilds the context object while every
+    // resolved value stands still, and only a value move should invalidate the memo.
+    input.refFields?.valuesToken ?? '',
     fingerprintNoteProps(input.documentFootnoteProps),
     fingerprintNoteProps(input.documentEndnoteProps),
     input.footnotePropsBySection.map(fingerprintNoteProps).join(';'),
@@ -589,6 +599,7 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
     projectLink: input.projectLink,
     projectFieldLink: input.projectFieldLink,
     documentProperties: input.documentProperties,
+    refFields: input.refFields,
     noteMarks,
     drawingsForPart: input.drawingsForPart,
   };
@@ -2814,16 +2825,19 @@ export function inheritNotesLayoutInput(
     readonly projectLink?: NotesLayoutInput['projectLink'];
     readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
     readonly documentProperties?: NotesLayoutInput['documentProperties'];
+    readonly refFields?: NotesLayoutInput['refFields'];
   }
 ): NotesLayoutInput {
   const projectLink = notes.projectLink ?? body.projectLink;
   const projectFieldLink = notes.projectFieldLink ?? body.projectFieldLink;
   const documentProperties = notes.documentProperties ?? body.documentProperties;
+  const refFields = notes.refFields ?? body.refFields;
   return {
     ...notes,
     ...(projectLink ? { projectLink } : {}),
     ...(projectFieldLink ? { projectFieldLink } : {}),
     ...(documentProperties ? { documentProperties } : {}),
+    ...(refFields ? { refFields } : {}),
   };
 }
 

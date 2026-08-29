@@ -67,6 +67,7 @@ import {
   validateReplaceTocResult,
   validateRewriteTocPageNumbers,
 } from './tree-op-toc.ts';
+import { validateRefreshFieldResults } from './tree-op-field-results.ts';
 import { validateInsertTable } from './tree-op-insert-table.ts';
 import { validateReplaceStoryBlocks } from './tree-op-story-replace.ts';
 import {
@@ -374,6 +375,9 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   }
   if (op.op === 'rewriteTocPageNumbers') {
     return validateRewriteTocPageNumbers(part, op);
+  }
+  if (op.op === 'refreshFieldResults') {
+    return validateRefreshFieldResults(part, op);
   }
 
   if (op.op === 'setSectionProperties') {

@@ -54,6 +54,7 @@ import {
   contentControlRecordsInPart,
   contentControlsInLayout,
   layoutSemanticDocument,
+  planRefFieldResultRefresh,
   resolveNumberingLevel,
   positionPastDeletion,
   withNumberingStyleLinks,
@@ -4483,6 +4484,25 @@ export function mountPaginatedSurface(
     return true;
   }
 
+  /**
+   * Rewrite stale REF field results in the body story, so a save exports what the pages
+   * paint. Planning is read-only: a document whose results are already fresh commits no
+   * transaction, bumps no revision and adds no undo entry. A refresh that does rewrite is
+   * one ordinary journaled transaction — undoable, like a TOC refresh. Viewing writes
+   * nothing; note-part results still save cached (see `field-ref-refresh.ts`).
+   */
+  function refreshRefFieldResults(): boolean {
+    if (editingMode === 'view') return true;
+    const op = planRefFieldResultRefresh(session.part(), {
+      package: session.currentPackage(),
+      styleCascade: styleCascade(),
+      numberingIndex: numberingIndex(),
+      displayMode: revisionDisplayMode(),
+    });
+    if (!op) return true;
+    return applyJournaledOps([op], undefined, undefined, BODY_STORY).committed;
+  }
+
   // Which range a destructive or replacing gesture acts on, and where content replacing it
   // lands once a tracked strike has had its say. Wired ABOVE the surface object on purpose:
   // `createHeaderFooterOps` and `createImageOps` below take `deleteSelectionOps`,
@@ -5144,6 +5164,7 @@ export function mountPaginatedSurface(
     insertToc,
     canRefreshToc,
     refreshToc,
+    refreshRefFieldResults,
     isInsideToc: (paragraphId) =>
       detectBodyTocs(session.part()).some(
         (toc) =>

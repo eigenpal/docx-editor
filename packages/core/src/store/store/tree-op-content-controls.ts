@@ -478,6 +478,8 @@ const TREE_OP_REACH: {
   }),
   // Page numbers rewrite runs in the result paragraphs the op names, and nothing else.
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
+  // A field-result refresh rewrites result runs in the paragraphs the op names, nothing else.
+  refreshFieldResults: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   replaceStoryBlocks: (op) => ({
     kind: 'nodes',
     targets: [{ nodeId: op.storyRootId, structural: true }],
