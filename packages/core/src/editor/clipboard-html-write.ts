@@ -23,6 +23,19 @@ import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
 import {
+  foldAttribute,
+  lastProperty,
+  paragraphPropertySources,
+  relatedPart,
+  runPropertyLayers,
+  runToggleOn,
+  styleChain,
+  styleIndexOf,
+  toggleOn,
+  type RunPropertyLayers,
+  type StyleIndex,
+} from './clipboard-html-write-cascade.ts';
+import {
   attrOf,
   cssHexColor,
   escapeAttr,
@@ -54,12 +67,10 @@ import {
 } from './clipboard-html-word-elements.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const STYLES_REL = `${R_NS}/styles`;
 const NUMBERING_REL = `${R_NS}/numbering`;
 const FOOTNOTES_REL = `${R_NS}/footnotes`;
 const ENDNOTES_REL = `${R_NS}/endnotes`;
 
-const MAX_STYLE_CHAIN = 16;
 const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_IMAGE_BYTES = 8 * 1024 * 1024;
 const EMU_PER_PX = 9525;
@@ -69,192 +80,6 @@ export interface InteropHtmlOptions {
   readonly maxImageBytes?: number;
   /** Total image budget. Default 8 MiB. Images beyond either budget are omitted. */
   readonly maxTotalImageBytes?: number;
-}
-
-interface StyleIndex {
-  readonly byId: ReadonlyMap<string, OoxmlElement>;
-  readonly docDefaultsRPr: OoxmlElement | null;
-  readonly docDefaultsPPr: OoxmlElement | null;
-  readonly defaultParagraphStyleId: string | null;
-}
-
-function relatedPart(pkg: OoxmlPackage, relType: string, fallback: string): OoxmlElement | null {
-  for (const record of relationshipsOf(pkg, pkg.mainDocumentPart)) {
-    if (record.type !== relType || record.targetMode === 'External') continue;
-    const resolved = resolveInternalTarget(record.ownerPart, record.rawTarget);
-    if (resolved.ok) {
-      const part = pkg.parts.get(resolved.partName);
-      if (part && isElement(part.root)) return part.root;
-    }
-  }
-  const part = pkg.parts.get(fallback);
-  return part && isElement(part.root) ? part.root : null;
-}
-
-function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
-  const root = relatedPart(pkg, STYLES_REL, '/word/styles.xml');
-  const byId = new Map<string, OoxmlElement>();
-  let docDefaultsRPr: OoxmlElement | null = null;
-  let docDefaultsPPr: OoxmlElement | null = null;
-  let defaultParagraphStyleId: string | null = null;
-  if (!root) return { byId, docDefaultsRPr, docDefaultsPPr, defaultParagraphStyleId };
-  for (const child of root.children) {
-    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName === 'docDefaults') {
-      docDefaultsRPr = wmlChild(wmlChild(child, 'rPrDefault'), 'rPr');
-      docDefaultsPPr = wmlChild(wmlChild(child, 'pPrDefault'), 'pPr');
-      continue;
-    }
-    if (child.localName !== 'style') continue;
-    const id = attributeValueOf(child, 'styleId', WML_NAMESPACE_URI);
-    if (!id) continue;
-    byId.set(id, child);
-    const isDefault = attributeValueOf(child, 'default', WML_NAMESPACE_URI);
-    const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
-    if ((isDefault === '1' || isDefault === 'true') && type === 'paragraph') {
-      defaultParagraphStyleId = id;
-    }
-  }
-  return { byId, docDefaultsRPr, docDefaultsPPr, defaultParagraphStyleId };
-}
-
-/** The `basedOn` chain, base style FIRST, cycle-capped. */
-function styleChain(index: StyleIndex, styleId: string | undefined): OoxmlElement[] {
-  const chain: OoxmlElement[] = [];
-  const seen = new Set<string>();
-  let current = styleId;
-  while (current && !seen.has(current) && chain.length < MAX_STYLE_CHAIN) {
-    seen.add(current);
-    const style = index.byId.get(current);
-    if (!style) break;
-    chain.unshift(style);
-    current = wmlVal(wmlChild(style, 'basedOn'));
-  }
-  return chain;
-}
-
-/**
- * Ordered property sources, lowest precedence first: docDefaults, the default paragraph
- * style chain, the paragraph style chain, the run style chain, then direct formatting.
- */
-function paragraphPropertySources(index: StyleIndex, ownPPr: OoxmlElement | null): OoxmlElement[] {
-  const sources: OoxmlElement[] = [];
-  if (index.docDefaultsPPr) sources.push(index.docDefaultsPPr);
-  for (const style of styleChain(index, index.defaultParagraphStyleId ?? undefined)) {
-    const pPr = wmlChild(style, 'pPr');
-    if (pPr) sources.push(pPr);
-  }
-  for (const style of styleChain(index, wmlVal(wmlChild(ownPPr, 'pStyle')))) {
-    const pPr = wmlChild(style, 'pPr');
-    if (pPr) sources.push(pPr);
-  }
-  if (ownPPr) sources.push(ownPPr);
-  return sources;
-}
-
-/** Run property sources grouped by cascade level, so toggles can XOR per level. */
-interface RunPropertyLayers {
-  /** Every source lowest-precedence first, for the non-toggle folds. */
-  readonly all: readonly OoxmlElement[];
-  readonly defaults: readonly OoxmlElement[];
-  readonly paragraphLevel: readonly OoxmlElement[];
-  readonly characterLevel: readonly OoxmlElement[];
-  readonly direct: OoxmlElement | null;
-}
-
-function runPropertyLayers(
-  index: StyleIndex,
-  paragraphPPr: OoxmlElement | null,
-  ownRPr: OoxmlElement | null
-): RunPropertyLayers {
-  const defaults: OoxmlElement[] = [];
-  if (index.docDefaultsRPr) defaults.push(index.docDefaultsRPr);
-  const paragraphLevel: OoxmlElement[] = [];
-  for (const style of styleChain(index, index.defaultParagraphStyleId ?? undefined)) {
-    const rPr = wmlChild(style, 'rPr');
-    if (rPr) paragraphLevel.push(rPr);
-  }
-  for (const style of styleChain(index, wmlVal(wmlChild(paragraphPPr, 'pStyle')))) {
-    const rPr = wmlChild(style, 'rPr');
-    if (rPr) paragraphLevel.push(rPr);
-  }
-  const characterLevel: OoxmlElement[] = [];
-  for (const style of styleChain(index, wmlVal(wmlChild(ownRPr, 'rStyle')))) {
-    const rPr = wmlChild(style, 'rPr');
-    if (rPr) characterLevel.push(rPr);
-  }
-  const all = [...defaults, ...paragraphLevel, ...characterLevel];
-  if (ownRPr) all.push(ownRPr);
-  return { all, defaults, paragraphLevel, characterLevel, direct: ownRPr };
-}
-
-/** The last source carrying the named property child wins. */
-function lastProperty(sources: readonly OoxmlElement[], localName: string): OoxmlElement | null {
-  let found: OoxmlElement | null = null;
-  for (const source of sources) {
-    const child = wmlChild(source, localName);
-    if (child) found = child;
-  }
-  return found;
-}
-
-/** Fold one attribute across every source carrying the property (per-attribute later-wins). */
-function foldAttribute(
-  sources: readonly OoxmlElement[],
-  propertyName: string,
-  attributeName: string
-): string | undefined {
-  let value: string | undefined;
-  for (const source of sources) {
-    const child = wmlChild(source, propertyName);
-    if (!child) continue;
-    const attr = attributeValueOf(child, attributeName, WML_NAMESPACE_URI);
-    if (attr !== undefined) value = attr;
-  }
-  return value;
-}
-
-/** Plain boolean semantics: the last source carrying the property wins.
- *  For paragraph booleans and non-toggle run booleans (`w:rtl`). */
-function toggleOn(sources: readonly OoxmlElement[], localName: string): boolean {
-  let state = false;
-  for (const source of sources) {
-    const child = wmlChild(source, localName);
-    if (!child) continue;
-    const val = wmlVal(child);
-    state = !(val === '0' || val === 'false' || val === 'none');
-  }
-  return state;
-}
-
-/** The resolved value of a toggle within ONE style level, or undefined when unset. */
-function toggleLevelValue(
-  sources: readonly OoxmlElement[],
-  localName: string
-): boolean | undefined {
-  let value: boolean | undefined;
-  for (const source of sources) {
-    const child = wmlChild(source, localName);
-    if (!child) continue;
-    const val = wmlVal(child);
-    value = !(val === '0' || val === 'false' || val === 'none');
-  }
-  return value;
-}
-
-/** ECMA-376 §17.7.3 toggle semantics, matching `layout/style-cascade.ts`: direct
- *  formatting is absolute; otherwise the docDefaults base XORs with each style
- *  LEVEL (paragraph, character) that resolves the toggle to true. */
-function runToggleOn(layers: RunPropertyLayers, localName: string): boolean {
-  const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
-  if (direct) {
-    const val = wmlVal(direct);
-    return !(val === '0' || val === 'false' || val === 'none');
-  }
-  let on = toggleLevelValue(layers.defaults, localName) ?? false;
-  if (toggleLevelValue(layers.paragraphLevel, localName) === true) on = !on;
-  if (toggleLevelValue(layers.characterLevel, localName) === true) on = !on;
-  return on;
 }
 
 interface RunCss {
@@ -348,16 +173,36 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
   const lineRule = foldAttribute(sources, 'spacing', 'lineRule');
   rules.push(...wordLineSpacingCss(line, lineRule));
 
-  const left = parseIntValue(
-    foldAttribute(sources, 'ind', 'left') ?? foldAttribute(sources, 'ind', 'start')
-  );
+  // Fold w:ind per SOURCE, like layout/style-cascade.ts: hanging/firstLine are one
+  // mutually exclusive pair per statement, so a direct `w:firstLine="0"` cancels a
+  // style's hanging instead of coexisting with it.
+  let left: number | null = null;
+  let right: number | null = null;
+  let hanging: number | null = null;
+  let firstLine: number | null = null;
+  for (const source of sources) {
+    const ind = wmlChild(source, 'ind');
+    if (!ind) continue;
+    const leftValue = parseIntValue(
+      attrOf(ind, 'left', WML_NAMESPACE_URI) ?? attrOf(ind, 'start', WML_NAMESPACE_URI)
+    );
+    if (leftValue !== null) left = leftValue;
+    const rightValue = parseIntValue(
+      attrOf(ind, 'right', WML_NAMESPACE_URI) ?? attrOf(ind, 'end', WML_NAMESPACE_URI)
+    );
+    if (rightValue !== null) right = rightValue;
+    const hangingValue = parseIntValue(attrOf(ind, 'hanging', WML_NAMESPACE_URI));
+    const firstLineValue = parseIntValue(attrOf(ind, 'firstLine', WML_NAMESPACE_URI));
+    if (hangingValue !== null) {
+      hanging = hangingValue;
+      firstLine = null;
+    } else if (firstLineValue !== null) {
+      firstLine = firstLineValue;
+      hanging = null;
+    }
+  }
   if (!omitLeftMargin && left !== null) rules.push(`margin-left:${ptFromTwips(left)}`);
-  const right = parseIntValue(
-    foldAttribute(sources, 'ind', 'right') ?? foldAttribute(sources, 'ind', 'end')
-  );
   if (right !== null) rules.push(`margin-right:${ptFromTwips(right)}`);
-  const hanging = parseIntValue(foldAttribute(sources, 'ind', 'hanging'));
-  const firstLine = parseIntValue(foldAttribute(sources, 'ind', 'firstLine'));
   if (hanging !== null && hanging !== 0) rules.push(`text-indent:${ptFromTwips(-hanging)}`);
   else if (firstLine !== null && firstLine !== 0)
     rules.push(`text-indent:${ptFromTwips(firstLine)}`);
@@ -441,9 +286,25 @@ const LIST_FMT_TO_CSS: Readonly<Record<string, string>> = {
 
 interface ListPlacement {
   readonly numId: string;
+  readonly abstractId: string;
   readonly level: number;
   readonly fmt: string;
   readonly start: number;
+}
+
+/** The declared format and start of one level of a numbering definition. */
+function listLevelInfo(
+  ctx: RenderContext,
+  numId: string,
+  abstractId: string,
+  level: number
+): { readonly fmt: string; readonly start: number } {
+  const fmt = ctx.numbering.levelFormats.get(abstractId)?.get(String(level)) ?? 'decimal';
+  const start =
+    ctx.numbering.startOverrides.get(`${numId}:${level}`) ??
+    ctx.numbering.levelStarts.get(abstractId)?.get(String(level)) ??
+    1;
+  return { fmt, start };
 }
 
 function listPlacementOf(
@@ -476,12 +337,8 @@ function listPlacementOf(
     if (resolved !== undefined) abstractId = resolved;
   }
   const level = Math.min(Math.max(parseIntValue(ilvl) ?? 0, 0), 8);
-  const fmt = ctx.numbering.levelFormats.get(abstractId)?.get(String(level)) ?? 'decimal';
-  const start =
-    ctx.numbering.startOverrides.get(`${numId}:${level}`) ??
-    ctx.numbering.levelStarts.get(abstractId)?.get(String(level)) ??
-    1;
-  return { numId, level, fmt, start };
+  const info = listLevelInfo(ctx, numId, abstractId, level);
+  return { numId, abstractId, level, fmt: info.fmt, start: info.start };
 }
 
 function hasChildOfKind(run: OoxmlElement, kind: string): boolean {
@@ -730,7 +587,10 @@ function renderParagraph(
   if (options.asListItem) return `<li${classAttr}${dirAttr}${styleAttr}>${inner}</li>`;
   const heading = headingLevelOf(ctx, pPr, sources);
   const tag = heading === null ? 'p' : `h${heading}`;
-  return `<${tag}${heading === null ? classAttr : ''}${dirAttr}${styleAttr}>${inner}</${tag}>`;
+  // The `Heading<N>` class is the marker the read lane maps back to the style in
+  // every dialect, so a heading survives when only text/html crosses the trip.
+  const headingAttr = heading === null ? classAttr : ` class="Heading${heading}"`;
+  return `<${tag}${headingAttr}${dirAttr}${styleAttr}>${inner}</${tag}>`;
 }
 
 interface CellPlacement {
@@ -780,7 +640,15 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
 
   const rows: OoxmlElement[] = [];
   for (const child of table.children) {
-    if (isElement(child) && child.kind === 'tableRow') rows.push(child);
+    // A typed row, or a `w:tr` the canonical tree demoted to generic — the same
+    // tolerance the cell walk applies via isRowCell.
+    if (
+      isElement(child) &&
+      (child.kind === 'tableRow' ||
+        (child.localName === 'tr' && child.namespaceUri === WML_NAMESPACE_URI))
+    ) {
+      rows.push(child);
+    }
   }
   const placements = cellPlacementsOf(rows);
 
@@ -849,6 +717,8 @@ interface OpenList {
 function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): string {
   let out = '';
   const openLists: OpenList[] = [];
+  /** Items already emitted per `numId:level`, so a reopened list resumes numbering. */
+  const listProgress = new Map<string, number>();
 
   const closeTopList = (): void => {
     const top = openLists.pop();
@@ -867,18 +737,33 @@ function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): strin
       closeTopList();
     }
     while (openLists.length < depth) {
-      const tag: 'ol' | 'ul' = placement.fmt === 'bullet' ? 'ul' : 'ol';
+      // Each opened level uses ITS OWN declared format, and a reopened list resumes
+      // from the running counter so an interrupting paragraph does not renumber it.
+      const levelIndex = openLists.length;
+      const info = listLevelInfo(ctx, placement.numId, placement.abstractId, levelIndex);
+      const consumed = listProgress.get(`${placement.numId}:${levelIndex}`) ?? 0;
+      const startValue = info.start + consumed;
+      const tag: 'ol' | 'ul' = info.fmt === 'bullet' ? 'ul' : 'ol';
       const listType =
         tag === 'ol'
-          ? Object.hasOwn(LIST_FMT_TO_CSS, placement.fmt)
-            ? LIST_FMT_TO_CSS[placement.fmt]!
+          ? Object.hasOwn(LIST_FMT_TO_CSS, info.fmt)
+            ? LIST_FMT_TO_CSS[info.fmt]!
             : 'decimal'
           : null;
-      const start = tag === 'ol' && placement.start !== 1 ? ` start="${placement.start}"` : '';
+      const start = tag === 'ol' && startValue !== 1 ? ` start="${startValue}"` : '';
       out += listType
         ? `<${tag}${start} style="list-style-type:${escapeAttr(listType)}">`
         : `<${tag}>`;
       openLists.push({ tag, numId: placement.numId });
+    }
+    const progressKey = `${placement.numId}:${placement.level}`;
+    listProgress.set(progressKey, (listProgress.get(progressKey) ?? 0) + 1);
+    // Word restarts sub-levels after each parent item.
+    for (const key of listProgress.keys()) {
+      const [keyNumId, keyLevel] = key.split(':');
+      if (keyNumId === placement.numId && Number(keyLevel) > placement.level) {
+        listProgress.delete(key);
+      }
     }
     out += renderParagraph(ctx, paragraph, { asListItem: true });
   };

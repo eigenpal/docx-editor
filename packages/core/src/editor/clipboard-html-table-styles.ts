@@ -103,14 +103,22 @@ export function tableColumnWidths(
     const candidate = Array.from({ length: columns }, () => equal);
     let score = 0;
     let column = 0;
+    // Snapshot the carries entering THIS row, then age every entry exactly once —
+    // the same discipline as the cell placement walk.
+    const carriedNow: Array<number | null> = carry.map((entry) => (entry ? entry.span : null));
+    for (let index = 0; index < columns; index += 1) {
+      const entry = carry[index];
+      if (entry) {
+        entry.remaining -= 1;
+        if (entry.remaining <= 0) carry[index] = null;
+      }
+    }
     const cells = Array.from(row.children).filter((cell) => /^t[dh]$/.test(tagOf(cell)));
     let sourceAt = 0;
     while (column < columns) {
-      const carried = carry[column];
-      if (carried) {
-        carried.remaining -= 1;
-        if (carried.remaining <= 0) carry[column] = null;
-        column += carried.span;
+      const carriedSpan = carriedNow[column];
+      if (carriedSpan !== null) {
+        column += carriedSpan;
         continue;
       }
       const cell = cells[sourceAt];

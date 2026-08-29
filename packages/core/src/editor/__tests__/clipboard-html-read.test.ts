@@ -65,14 +65,20 @@ function openFragment(html: string): OpenedFragment {
 }
 
 describe('run and paragraph mapping', () => {
-  test('heading tags map to the built-in Heading styles in every dialect', () => {
+  test('headings become bold direct formatting at Word sizes', () => {
     const { docXml, lastMarkCovered } = openFragment('<h1>Alpha</h1><h3>Beta</h3>');
-    expect(docXml).toContain('<w:pStyle w:val="Heading1"/>');
-    expect(docXml).toContain('<w:pStyle w:val="Heading3"/>');
-    expect(docXml).not.toContain('<w:b/>');
+    expect(docXml).toContain('w:sz w:val="64"');
+    expect(docXml).toContain('w:sz w:val="44"');
+    expect(docXml).toContain('<w:b/>');
     expect(docXml).toContain('Alpha');
     expect(docXml).toContain('Beta');
-    expect(lastMarkCovered).toBe(true);
+    expect(lastMarkCovered).toBe(false);
+  });
+
+  test('a Heading class on a heading tag maps to the style in every dialect', () => {
+    const { docXml } = openFragment('<h2 class="Heading2">Marked</h2>');
+    expect(docXml).toContain('<w:pStyle w:val="Heading2"/>');
+    expect(docXml).not.toContain('<w:b/>');
   });
 
   test('Word heading tags use target styles and include their paragraph mark', () => {
@@ -910,16 +916,18 @@ describe('whitespace and breaks', () => {
     const { docXml, pkg } = openFragment(
       '<w:Sdt><w:SdtPr></w:SdtPr><p>first<w:PTab Alignment="RIGHT" ' +
         'RelativeTo="MARGIN" Leader="DOT"></w:PTab></p><p>second</p></w:Sdt>' +
+        '<p>body<a style="mso-footnote-id:ftn1" href="#_ftn1">[1]</a></p>' +
         '<a class="msocomanchor" style="mso-element:comment-reference">[1]</a>' +
         '<div style="mso-element:footnote-list"><div style="mso-element:footnote" id="ftn1">' +
         '<p>note body</p></div></div>'
     );
-    expect(docXml.match(/<w:p>/g)).toHaveLength(2);
+    expect(docXml.match(/<w:p>/g)).toHaveLength(3);
     expect(docXml).toContain('first');
     expect(docXml).toContain('second');
     expect(docXml).toContain('<w:ptab ');
+    expect(docXml).toContain('<w:footnoteReference w:id="1"/>');
     expect(docXml).not.toContain('[1]');
-    // The collected definition re-emits only through the footnotes part.
+    // The referenced definition re-emits only through the footnotes part.
     expect(docXml).not.toContain('note body');
     expect(pkg.partBytes.get('/word/footnotes.xml')).toBeDefined();
   });

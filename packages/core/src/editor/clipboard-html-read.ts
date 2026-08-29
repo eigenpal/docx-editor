@@ -20,7 +20,6 @@ import {
   type HtmlFragmentRel as RelEntry,
 } from './clipboard-html-package.ts';
 import {
-  clipboardNoteDefinitionRef,
   clipboardNoteDefinitions,
   clipboardNoteReference,
   isClipboardNoteList,
@@ -55,6 +54,9 @@ import {
 } from './clipboard-html-table-styles.ts';
 import { htmlPositionalTabXml, htmlTabRunContents } from './clipboard-html-tabs.ts';
 import {
+  CONTAINER_TAGS,
+  PARAGRAPH_TAGS,
+  hasBlockChild,
   isWordPageBreakBlock,
   isWordPageBreakSpacer,
   wordBlockSdtNodes,
@@ -99,14 +101,6 @@ const IGNORED_TAGS = new Set(
 /** Heading direct formatting: bold plus these sizes in half-points (h1=32pt … h6=14pt). */
 const HEADING_SZ: Record<string, number> = { h1: 64, h2: 52, h3: 44, h4: 36, h5: 32, h6: 28 };
 
-const PARAGRAPH_TAGS = new Set('p div h1 h2 h3 h4 h5 h6 li blockquote pre'.split(' '));
-
-const CONTAINER_TAGS = new Set(
-  'thead tbody tfoot tr section article main header footer aside nav figure form body html'.split(
-    ' '
-  )
-);
-
 type RunProps = HtmlRunProps;
 type ParaProps = HtmlParaProps;
 
@@ -140,8 +134,11 @@ interface Projection {
   readonly classAlignments: ReadonlyMap<string, HtmlParagraphAlign>;
   readonly notes: Record<ClipboardNoteKind, Map<number, readonly string[]>>;
   readonly noteRels: Record<ClipboardNoteKind, RelEntry[]>;
-  /** Ids with a collected definition — the only ids a live note reference may carry. */
+  /** Ids with a PROJECTED definition — the only ids a live note reference may carry. */
   readonly definedNotes: Record<ClipboardNoteKind, ReadonlySet<number>>;
+  /** The exact definition elements the notes pass consumed; only these skip the body
+   *  walk, so a duplicate-id or unreferenced definition stays lossless in the body. */
+  readonly definedNoteElements: ReadonlySet<Element>;
 }
 
 function clamp(value: number, low: number, high: number): number {
@@ -239,16 +236,10 @@ function collectInline(
   ) {
     return;
   }
-  // A collected note definition reached through an inline wrapper projects only via
-  // the notes pass; landing it here would duplicate the note text into the body.
-  // Uncollected definitions descend normally, so their text stays lossless.
-  const inlineNoteDefinition = clipboardNoteDefinitionRef(node, style);
-  if (
-    inlineNoteDefinition !== null &&
-    p.definedNotes[inlineNoteDefinition.kind].has(inlineNoteDefinition.id)
-  ) {
-    return;
-  }
+  // A note definition the notes pass consumed projects only there; landing it here
+  // would duplicate the note text into the body. Unconsumed definitions descend
+  // normally, so their text stays lossless.
+  if (p.definedNoteElements.has(node)) return;
   if (tag === 'w:ptab') {
     const tab = htmlPositionalTabXml(node);
     if (tab.length > 0) runs.push(`<w:r>${rPrXml(ctx.run)}${tab}</w:r>`);
@@ -391,7 +382,7 @@ function paragraphContextOf(
   const style = parseInlineStyle(element);
   const para: ParaProps = {};
   if (pageBreakBefore) para.pageBreakBefore = true;
-  const styleId = wordParagraphStyleId(element);
+  const styleId = wordParagraphStyleId(element, p.wordHtml);
   if (styleId !== undefined) para.styleId = styleId;
   if (ctx.para.numPr) para.numPr = ctx.para.numPr;
   if (ctx.para.jc) para.jc = ctx.para.jc;
@@ -442,23 +433,6 @@ function projectParagraph(
   if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
   const next = paragraphContextOf(element, ctx, p, pageBreakBefore);
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true, undefined, false);
-}
-
-const BLOCK_CHILD_TAGS = new Set([
-  ...PARAGRAPH_TAGS,
-  ...CONTAINER_TAGS,
-  'table',
-  'ol',
-  'ul',
-  'w:sdt',
-]);
-
-/** True when a `div` is a wrapper over block flow (Word's `WordSection1`), not a leaf. */
-function hasBlockChild(element: Element): boolean {
-  for (let index = 0; index < element.children.length; index += 1) {
-    if (BLOCK_CHILD_TAGS.has(tagOf(element.children[index]!))) return true;
-  }
-  return false;
 }
 
 function projectList(
@@ -585,10 +559,9 @@ function projectFlow(
         );
         continue;
       }
-      // A collected note definition projects only through the notes pass; walking it
+      // A note definition the notes pass consumed projects only there; walking it
       // here would land the note text twice, once in the body.
-      const noteDefinition = clipboardNoteDefinitionRef(node, elementStyle);
-      if (noteDefinition !== null && p.definedNotes[noteDefinition.kind].has(noteDefinition.id)) {
+      if (p.definedNoteElements.has(node)) {
         p.nodesLeft -= 1;
         continue;
       }
@@ -734,6 +707,16 @@ function projectTable(
   for (const row of rows) {
     if (p.nodesLeft <= 0) break;
     p.nodesLeft -= 1;
+    // Snapshot the carries entering THIS row, then age every entry exactly once —
+    // a colspan cell that jumps a carried column must not leave it un-aged.
+    const carriedNow: Array<number | null> = carry.map((entry) => (entry ? entry.span : null));
+    for (let index = 0; index < columns; index += 1) {
+      const entry = carry[index];
+      if (entry) {
+        entry.remaining -= 1;
+        if (entry.remaining <= 0) carry[index] = null;
+      }
+    }
     const sourceCells = Array.from(row.children).filter((cell) => /^t[dh]$/.test(tagOf(cell)));
     let sourceAt = 0;
     const cells: string[] = [];
@@ -741,17 +724,15 @@ function projectTable(
     while (column < columns) {
       p.nodesLeft -= 1;
       if (p.nodesLeft <= 0) break;
-      const carried = carry[column];
-      if (carried) {
-        const span = carried.span;
-        const gridSpan = span > 1 ? `<w:gridSpan w:val="${span}"/>` : '';
+      const carriedSpan = carriedNow[column];
+      if (carriedSpan !== null) {
+        const gridSpan = carriedSpan > 1 ? `<w:gridSpan w:val="${carriedSpan}"/>` : '';
         cells.push(
-          `<w:tc><w:tcPr><w:tcW w:w="${tableSpanWidth(columnWidths, column, span)}" w:type="dxa"/>` +
+          `<w:tc><w:tcPr>` +
+            `<w:tcW w:w="${tableSpanWidth(columnWidths, column, carriedSpan)}" w:type="dxa"/>` +
             `${gridSpan}<w:vMerge/></w:tcPr><w:p/></w:tc>`
         );
-        carried.remaining -= 1;
-        if (carried.remaining <= 0) carry[column] = null;
-        column += span;
+        column += carriedSpan;
         continue;
       }
       const cell = sourceCells[sourceAt];
@@ -865,6 +846,18 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     footnote: new Set(),
     endnote: new Set(),
   };
+  const definedNoteElements = new Set<Element>();
+  // Only definitions a body anchor actually references become notes; the rest stay
+  // visible body text instead of unreachable note bodies.
+  const referencedNotes: Record<ClipboardNoteKind, Set<number>> = {
+    footnote: new Set(),
+    endnote: new Set(),
+  };
+  const anchors = parsed.getElementsByTagName('a');
+  for (let index = 0; index < anchors.length && index < 20_000; index += 1) {
+    const reference = clipboardNoteReference(parseInlineStyle(anchors[index]!));
+    if (reference !== null) referencedNotes[reference.kind].add(reference.id);
+  }
   const projection: Projection = {
     nodesLeft: limits.maxNodes ?? DEFAULT_MAX_NODES,
     maxDepth: limits.maxDepth ?? DEFAULT_MAX_DEPTH,
@@ -883,6 +876,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     notes: { footnote: new Map(), endnote: new Map() },
     noteRels: { footnote: [], endnote: [] },
     definedNotes,
+    definedNoteElements,
   };
   const rootCtx: FlowContext = {
     run: {},
@@ -900,6 +894,9 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   projection.nodesLeft -= bodyReserve;
   for (const note of noteDefinitions) {
     if (projection.nodesLeft <= 0) break;
+    // Unreferenced or duplicate-id definitions are left for the body walk.
+    if (!referencedNotes[note.kind].has(note.id)) continue;
+    if (projection.notes[note.kind].has(note.id)) continue;
     const noteBlocks: string[] = [];
     projectFlow(
       Array.from(note.element.childNodes),
@@ -916,6 +913,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     if (noteBlocks.length > 0) {
       projection.notes[note.kind].set(note.id, noteBlocks);
       definedNotes[note.kind].add(note.id);
+      definedNoteElements.add(note.element);
     }
   }
   projection.nodesLeft = Math.max(projection.nodesLeft, 0) + bodyReserve;

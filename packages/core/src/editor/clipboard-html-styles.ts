@@ -1,4 +1,5 @@
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
+import { WORD_CLASS_PARAGRAPH_STYLES } from './clipboard-html-word-elements.ts';
 
 /** A bounded absolute CSS length in points. Word clipboard HTML commonly uses `in`. */
 export function parseCssLengthPt(value: string): number | null {
@@ -33,21 +34,22 @@ export function isWordClipboardHtml(html: string): boolean {
 }
 
 /** A built-in Word style named by Word desktop's clipboard HTML class. */
-export function wordParagraphStyleId(element: Element): string | undefined {
+export function wordParagraphStyleId(element: Element, wordHtml: boolean): string | undefined {
   for (const className of element.classList) {
     const heading = /^MsoHeading([1-9])$/.exec(className);
     if (heading) return `Heading${heading[1]}`;
     const onlineHeading = /^Heading([1-9])$/.exec(className);
     if (onlineHeading) return `Heading${onlineHeading[1]}`;
-    if (className === 'MsoCaption') return 'Caption';
-    if (className === 'MsoTitle') return 'Title';
-    if (className === 'MsoSubtitle') return 'Subtitle';
-    if (className === 'MsoQuote') return 'Quote';
+    // One canonical pair table with the write lane, so the two cannot drift.
+    const paired = WORD_CLASS_PARAGRAPH_STYLES.get(className);
+    if (paired !== undefined) return paired;
   }
-  // Heading TAGS map to the built-in styles in every dialect — the engine's own
-  // outbound HTML carries no Word marker classes, and the mapping is what keeps a
-  // heading a heading when only text/html survives the trip.
-  const headingTag = /^h([1-6])$/.exec(tagOf(element));
+  // Heading TAGS map to styles only in word-processor HTML, where the target
+  // document defines the Heading styles. A plain web <h1> keeps the direct
+  // bold+size fallback instead of referencing a style the host may not carry;
+  // the engine's own writer marks headings with a `Heading<N>` CLASS, which the
+  // loop above maps in every dialect.
+  const headingTag = wordHtml ? /^h([1-6])$/.exec(tagOf(element)) : null;
   return headingTag ? `Heading${headingTag[1]}` : undefined;
 }
 

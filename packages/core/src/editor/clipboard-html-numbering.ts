@@ -38,20 +38,25 @@ const BULLET_LEVELS = [
 /** One `w:lvl` in strict CT_Lvl order: start, numFmt, lvlText, lvlJc, pPr, rPr. */
 function levelXml(kind: HtmlListKind, start: number, ilvl: number): string {
   const left = 720 * (ilvl + 1);
-  const indent = `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>`;
   if (kind === 'bullet') {
     const bullet = BULLET_LEVELS[ilvl % BULLET_LEVELS.length]!;
     return (
       `<w:lvl w:ilvl="${ilvl}"><w:start w:val="1"/><w:numFmt w:val="bullet"/>` +
-      `<w:lvlText w:val="${escapeXmlAttribute(bullet.text)}"/><w:lvlJc w:val="left"/>${indent}` +
+      `<w:lvlText w:val="${escapeXmlAttribute(bullet.text)}"/><w:lvlJc w:val="left"/>` +
+      `<w:pPr><w:ind w:left="${left}" w:hanging="360"/></w:pPr>` +
       `<w:rPr><w:rFonts w:ascii="${bullet.font}" w:hAnsi="${bullet.font}" w:hint="default"/></w:rPr>` +
       '</w:lvl>'
     );
   }
+  // Word right-aligns roman markers in a narrower 180-twip hanging slot — the same
+  // geometry the store's numbering writer synthesizes, so pasted and toolbar-made
+  // lists match.
+  const roman = kind === 'lowerRoman' || kind === 'upperRoman';
   return (
     `<w:lvl w:ilvl="${ilvl}"><w:start w:val="${start}"/>` +
     `<w:numFmt w:val="${kind}"/>` +
-    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="left"/>${indent}</w:lvl>`
+    `<w:lvlText w:val="%${ilvl + 1}."/><w:lvlJc w:val="${roman ? 'right' : 'left'}"/>` +
+    `<w:pPr><w:ind w:left="${left}" w:hanging="${roman ? 180 : 360}"/></w:pPr></w:lvl>`
   );
 }
 
@@ -65,18 +70,22 @@ const ROMAN_DIGIT_VALUES: ReadonlyMap<string, number> = new Map([
   ['m', 1000],
 ]);
 
-/** The ordinal a roman marker names ('iv' → 4), or 1 when it does not parse. */
-function romanValueOf(token: string): number {
+const ROMAN_GRAMMAR = /^m{0,4}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/;
+
+/** The ordinal a valid roman marker names ('iv' → 4), or null for invalid grammar. */
+function romanValueOf(token: string): number | null {
+  const lower = token.toLowerCase();
+  if (!ROMAN_GRAMMAR.test(lower)) return null;
   let total = 0;
   let previous = 0;
-  for (const char of token.toLowerCase()) {
+  for (const char of lower) {
     const value = ROMAN_DIGIT_VALUES.get(char);
-    if (value === undefined) return 1;
+    if (value === undefined) return null;
     total += value;
     if (previous > 0 && previous < value) total -= 2 * previous;
     previous = value;
   }
-  return total > 0 && total <= 32_767 ? total : 1;
+  return total > 0 && total <= 32_767 ? total : null;
 }
 
 export function htmlListKindAndStart(marker: string): {
@@ -90,30 +99,35 @@ export function htmlListKindAndStart(marker: string): {
   if (decimal) {
     return { kind: 'decimal', start: Math.min(32_767, Number.parseInt(decimal[1]!, 10)) };
   }
-  // A multi-letter roman run is unambiguous. A single letter is roman only for 'i' —
-  // the marker a roman list's first item carries; 'c.' or 'v.' is a letter list that
-  // starts mid-alphabet. The start parses from the numeral so a pasted slice keeps
-  // its visible numbers.
-  const upperRoman = /^([IVXLCDM]{2,8}|I)[.)]/.exec(trimmed);
-  if (upperRoman) return { kind: 'upperRoman', start: romanValueOf(upperRoman[1]!) };
-  const lowerRoman = /^([ivxlcdm]{2,8}|i)[.)]/.exec(trimmed);
-  if (lowerRoman) return { kind: 'lowerRoman', start: romanValueOf(lowerRoman[1]!) };
+  // A single letter is roman only for 'i' — the marker a roman list's first item
+  // carries; 'c.' or 'v.' is a letter list that starts mid-alphabet.
   const letter = /^([A-Za-z])[.)]/.exec(trimmed);
-  if (letter) {
+  if (letter && !/^[iI]$/.test(letter[1]!)) {
     const code = letter[1]!.charCodeAt(0);
     return code >= 97
       ? { kind: 'lowerLetter', start: code - 96 }
       : { kind: 'upperLetter', start: code - 64 };
   }
-  // Word letter lists repeat past 'z': 'aa.' is item 27.
-  const repeated = /^(([A-Za-z])\2{1,4})[.)]/.exec(trimmed);
-  if (repeated) {
-    const code = repeated[2]!.charCodeAt(0);
-    const start = Math.min(
-      32_767,
-      (repeated[1]!.length - 1) * 26 + (code >= 97 ? code - 96 : code - 64)
-    );
-    return { kind: code >= 97 ? 'lowerLetter' : 'upperLetter', start };
+  if (letter) return { kind: letter[1] === 'i' ? 'lowerRoman' : 'upperRoman', start: 1 };
+  const run = /^([A-Za-z]{2,8})[.)]/.exec(trimmed);
+  if (run) {
+    const token = run[1]!;
+    const lower = token === token.toLowerCase();
+    const sameLetter = /^([A-Za-z])\1+$/.test(token);
+    // Same-letter runs are letter lists past 'z' ('cc.' is item 29) — EXCEPT an
+    // 'i' run, which is overwhelmingly a roman 2 or 3. Mixed runs must parse as
+    // valid roman grammar; the start keeps the slice's visible numbers.
+    if (!sameLetter || /^[iI]+$/.test(token)) {
+      const roman = romanValueOf(token);
+      if (roman !== null) {
+        return { kind: lower ? 'lowerRoman' : 'upperRoman', start: roman };
+      }
+    }
+    if (sameLetter) {
+      const code = token.toLowerCase().charCodeAt(0);
+      const start = Math.min(32_767, (token.length - 1) * 26 + (code - 96));
+      return { kind: lower ? 'lowerLetter' : 'upperLetter', start };
+    }
   }
   // Any remaining digit-bearing marker ('3', '1º', 'Article 1') stays an ordered list.
   const digits = /\d{1,5}/.exec(trimmed);

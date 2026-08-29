@@ -11,6 +11,17 @@ const WORD_PARAGRAPH_CLASSES: Readonly<Record<string, string>> = {
   IntenseQuote: 'MsoIntenseQuote',
 };
 
+/**
+ * Class → style id, the read lane's inverse of the table above. `MsoNormal` is
+ * omitted ON PURPOSE: stamping `pStyle Normal` on every plain Word paragraph would
+ * cover each paragraph mark and force the structural paste path.
+ */
+export const WORD_CLASS_PARAGRAPH_STYLES: ReadonlyMap<string, string> = new Map(
+  Object.entries(WORD_PARAGRAPH_CLASSES)
+    .filter(([styleId]) => styleId !== 'Normal')
+    .map(([styleId, className]) => [className, styleId])
+);
+
 export function wordParagraphClassOf(styleId: string | undefined): string | null {
   if (styleId === undefined) return null;
   if (/^Heading[7-9]$/.test(styleId)) return `Mso${styleId}`;

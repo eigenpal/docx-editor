@@ -38,6 +38,33 @@ export function isWordPageBreakSpacer(element: Element): boolean {
   return text.includes('\u00a0') && text.replace(/[\s\u00a0]/g, '').length === 0;
 }
 
+export const PARAGRAPH_TAGS: ReadonlySet<string> = new Set(
+  'p div h1 h2 h3 h4 h5 h6 li blockquote pre'.split(' ')
+);
+
+export const CONTAINER_TAGS: ReadonlySet<string> = new Set(
+  'thead tbody tfoot tr section article main header footer aside nav figure form body html'.split(
+    ' '
+  )
+);
+
+const BLOCK_CHILD_TAGS: ReadonlySet<string> = new Set([
+  ...PARAGRAPH_TAGS,
+  ...CONTAINER_TAGS,
+  'table',
+  'ol',
+  'ul',
+  'w:sdt',
+]);
+
+/** True when a `div` is a wrapper over block flow (Word's `WordSection1`), not a leaf. */
+export function hasBlockChild(element: Element): boolean {
+  for (let index = 0; index < element.children.length; index += 1) {
+    if (BLOCK_CHILD_TAGS.has(tagOf(element.children[index]!))) return true;
+  }
+  return false;
+}
+
 const SDT_BLOCK_TAGS = new Set([
   'p',
   'div',
