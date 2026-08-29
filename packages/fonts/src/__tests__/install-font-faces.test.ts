@@ -105,13 +105,14 @@ describe('installDefaultFontFaces', () => {
   test('falls back to the URL form when no loaded sources are supplied', async () => {
     const capture = captureRegistrations();
     active = capture;
-    const installed = await installDefaultFontFaces({
+    await installDefaultFontFaces({
       families: ['Calibri'],
       document: capture.document,
     });
 
-    // The source shape is the claim. `installed` cannot carry it: the stub resolves
-    // `load()` whatever it was handed, so it counts 4 for a broken fallback too.
+    // The source shape is the claim, and the return value is deliberately not asserted:
+    // the stub resolves `load()` whatever it was handed, so a count of 4 would hold for a
+    // broken fallback too.
     expect(capture.registered.map((entry) => typeof entry.source)).toEqual([
       'string',
       'string',
