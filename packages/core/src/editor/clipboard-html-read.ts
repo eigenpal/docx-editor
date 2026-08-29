@@ -1,19 +1,9 @@
-// External `text/html` projected into a WordprocessingML clipboard fragment package
-// (rich-clipboard-fidelity tasks 5.1-5.4, design D2).
-//
-// A pasted payload is attacker-controlled, so the projection reuses the bounded
-// file-open trust boundary instead of trusting the markup: the HTML is size-capped
-// BEFORE parse, parsed with `DOMParser` into an INERT document that is never attached
-// to the live document, and walked under node-count and depth caps. This module parses;
-// it is not an HTML sink — no `innerHTML`/`outerHTML`/`insertAdjacentHTML` anywhere,
-// nothing executes (scripts, styles and event handlers are simply never projected),
-// and nothing here fetches: hrefs pass `sanitizeHref`, images are accepted from
-// bounded `data:` URIs only, and every external image source is dropped.
-//
-// The output is the SAME shape the internal copy lane produces — a minimal OPC zip
-// readable by `readOoxmlPackage` — so the paste router feeds internal fragments and
-// external HTML through one lane (`readOoxmlPackage` → merge → insertFragment).
-
+// Project attacker-controlled HTML into a bounded WordprocessingML fragment.
+// HTML is size-capped before `DOMParser` creates an inert, detached document.
+// The allowlist walker has fixed node and depth limits.
+// It never attaches parsed nodes, executes markup, or fetches remote resources.
+// Hyperlinks pass `sanitizeHref`, and images accept bounded `data:` URIs only.
+// XML emission escapes all file-derived text and attributes.
 import { sanitizeHref, escapeXml, escapeXmlAttribute } from '../store/package/sinks.ts';
 import { sniffImageMime, validateRasterHeader } from '../store/package/image-resources.ts';
 import {
@@ -23,7 +13,7 @@ import {
   type HtmlListAllocation as ListAllocation,
   type HtmlListKind,
 } from './clipboard-html-numbering.ts';
-import { clipboardBookmarkName } from './clipboard-html-links.ts';
+import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-links.ts';
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import {
   writeProjectedHtmlPackage,
@@ -57,11 +47,18 @@ import {
   tableBordersXml,
   tableColumnWidths,
   tableJustification,
+  tablePositionXml,
   tableRowsOf,
   tableRowPropertiesXml,
   tableSpanWidth,
   tableWidthTwips,
 } from './clipboard-html-table-styles.ts';
+import { htmlPositionalTabXml, htmlTabRunContents } from './clipboard-html-tabs.ts';
+import {
+  isWordPageBreakBlock,
+  isWordPageBreakSpacer,
+  wordBlockSdtNodes,
+} from './clipboard-html-word-structure.ts';
 
 export interface HtmlProjectionLimits {
   /** UTF-8 size cap applied BEFORE parse. Default 4 MiB. */
@@ -93,7 +90,6 @@ const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-/** Whole elements that never contribute anything to the projection. */
 const IGNORED_TAGS = new Set(
   (
     'script style head template iframe object embed noscript svg math ' +
@@ -106,9 +102,8 @@ const HEADING_SZ: Record<string, number> = { h1: 64, h2: 52, h3: 44, h4: 36, h5:
 
 const PARAGRAPH_TAGS = new Set('p div h1 h2 h3 h4 h5 h6 li blockquote pre'.split(' '));
 
-/** Structural containers whose children flow through transparently. */
 const CONTAINER_TAGS = new Set(
-  'thead tbody tfoot tr section article main header footer aside nav figure form body html w:sdt'.split(
+  'thead tbody tfoot tr section article main header footer aside nav figure form body html'.split(
     ' '
   )
 );
@@ -150,8 +145,6 @@ interface Projection {
 function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));
 }
-
-// --- XML emission
 
 /** `w:rPr`, children in CT_RPr sequence order. */
 function rPrXml(props: RunProps): string {
@@ -406,40 +399,6 @@ function applyInlineTag(base: RunProps, tag: string): RunProps {
   return base;
 }
 
-function positionalTabXml(element: Element, props: RunProps): string {
-  const alignment = element.getAttribute('alignment')?.trim().toLowerCase();
-  const relativeTo = element.getAttribute('relativeto')?.trim().toLowerCase();
-  const leader = element.getAttribute('leader')?.trim().toLowerCase();
-  if (alignment !== 'left' && alignment !== 'center' && alignment !== 'right') return '';
-  if (relativeTo !== 'margin' && relativeTo !== 'indent') return '';
-  if (
-    leader !== 'none' &&
-    leader !== 'dot' &&
-    leader !== 'hyphen' &&
-    leader !== 'underscore' &&
-    leader !== 'middledot'
-  ) {
-    return '';
-  }
-  const normalizedLeader = leader === 'middledot' ? 'middleDot' : leader;
-  return (
-    `<w:r>${rPrXml(props)}<w:ptab w:alignment="${alignment}" ` +
-    `w:relativeTo="${relativeTo}" w:leader="${normalizedLeader}"/></w:r>`
-  );
-}
-
-const TAB_RUN_CONTENTS = [
-  '',
-  '<w:tab/>',
-  '<w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
-  '<w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/><w:tab/>',
-] as const;
-
 function collectInline(
   node: Node,
   depth: number,
@@ -479,16 +438,12 @@ function collectInline(
     return;
   }
   if (tag === 'w:ptab') {
-    const tab = positionalTabXml(node, ctx.run);
-    if (tab.length > 0) runs.push(tab);
+    const tab = htmlPositionalTabXml(node);
+    if (tab.length > 0) runs.push(`<w:r>${rPrXml(ctx.run)}${tab}</w:r>`);
     return;
   }
-  const tabCount = style.get('mso-tab-count');
-  const tabContent =
-    tabCount !== undefined && /^\d$/.test(tabCount.trim())
-      ? TAB_RUN_CONTENTS[Number.parseInt(tabCount, 10)]
-      : undefined;
-  if (tabContent !== undefined && tabContent.length > 0) {
+  const tabContent = htmlTabRunContents(style.get('mso-tab-count'));
+  if (tabContent.length > 0) {
     runs.push(`<w:r>${rPrXml(ctx.run)}${tabContent}</w:r>`);
     return;
   }
@@ -503,15 +458,20 @@ function collectInline(
     projectImage(node, runs, p, ctx.rels ?? p.rels);
     return;
   }
+  let taggedRun = applyInlineTag(ctx.run, tag);
+  const linkHref = tag === 'a' ? node.getAttribute('href') : null;
+  const noteReference = tag === 'a' ? clipboardNoteReference(style) : null;
+  if (noteReference === null && isClipboardHyperlink(linkHref)) {
+    taggedRun = { ...taggedRun, color: '0563C1', underline: true };
+  }
   const nextCtx: FlowContext = {
     ...ctx,
-    run: applyRunCss(applyInlineTag(ctx.run, tag), style),
+    run: applyRunCss(taggedRun, style),
     pre: ctx.pre || tag === 'pre',
   };
   const language = clipboardLanguageTag(node.getAttribute('lang'));
   if (language !== null) nextCtx.run.lang = language;
   if (node.getAttribute('dir')?.trim().toLowerCase() === 'rtl') nextCtx.run.rtl = true;
-  const noteReference = tag === 'a' ? clipboardNoteReference(style) : null;
   if (noteReference !== null) {
     if (ctx.noteBody) {
       const localName = noteReference.kind === 'footnote' ? 'footnoteRef' : 'endnoteRef';
@@ -598,12 +558,14 @@ function projectParagraph(
   depth: number,
   ctx: FlowContext,
   p: Projection,
-  out: string[]
+  out: string[],
+  pageBreakBefore = false
 ): void {
   if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
   const tag = tagOf(element);
   const style = parseInlineStyle(element);
   const para: ParaProps = {};
+  if (pageBreakBefore) para.pageBreakBefore = true;
   const styleId = wordParagraphStyleId(element, p.wordHtml);
   if (styleId !== undefined) para.styleId = styleId;
   if (ctx.para.numPr) para.numPr = ctx.para.numPr;
@@ -639,7 +601,7 @@ function projectParagraph(
     ...(ctx.noteBody ? { noteBody: true } : {}),
     ...(ctx.rels ? { rels: ctx.rels } : {}),
   };
-  projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true);
+  projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true, undefined, false);
 }
 
 function projectList(
@@ -647,7 +609,8 @@ function projectList(
   depth: number,
   ctx: FlowContext,
   p: Projection,
-  out: string[]
+  out: string[],
+  pageBreakBefore = false
 ): void {
   if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
   p.nodesLeft -= 1;
@@ -665,14 +628,28 @@ function projectList(
     list: state,
     para: { numPr: { numId: state.numId, ilvl: state.level } },
   };
+  let pendingPageBreak = pageBreakBefore;
   for (const child of Array.from(element.childNodes)) {
     if (!isElement(child)) continue;
     const childTag = tagOf(child);
-    if (childTag === 'li') projectParagraph(child, depth + 1, itemCtx, p, out);
-    else if (childTag === 'ol' || childTag === 'ul') {
+    if (childTag === 'li') {
+      projectParagraph(child, depth + 1, itemCtx, p, out, pendingPageBreak);
+      pendingPageBreak = false;
+    } else if (childTag === 'ol' || childTag === 'ul') {
       projectList(child, depth + 1, { ...ctx, list: state }, p, out);
     }
   }
+}
+
+type PageBreakState = { pending: boolean; skipSpacer: boolean };
+
+function appendPageBreak(out: string[]): void {
+  const last = out[out.length - 1];
+  if (last?.endsWith('</w:p>')) {
+    out[out.length - 1] = `${last.slice(0, -6)}<w:r><w:br w:type="page"/></w:r></w:p>`;
+    return;
+  }
+  out.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
 }
 
 function projectFlow(
@@ -681,13 +658,14 @@ function projectFlow(
   ctx: FlowContext,
   p: Projection,
   out: string[],
-  forceEmit = false
+  forceEmit = false,
+  pageBreakState?: PageBreakState,
+  extractPageBreakBlocks = true
 ): void {
-  // Container chains (`<section>` in `<section>` …) recurse here too; without the cap a
-  // deep chain overflowed the stack instead of degrading.
   if (depth > p.maxDepth) return;
   const before = out.length;
   let pending: string[] = [];
+  const pageBreak = pageBreakState ?? { pending: false, skipSpacer: false };
   const flush = (): void => {
     if (pending.length > 0) {
       out.push(paragraphXml(ctx.para, pending));
@@ -699,6 +677,14 @@ function projectFlow(
     if (p.nodesLeft <= 0) break;
     if (isElement(node)) {
       const tag = tagOf(node);
+      const blockSdtNodes = tag === 'w:sdt' ? wordBlockSdtNodes(node) : null;
+      if (extractPageBreakBlocks && isWordPageBreakBlock(node)) {
+        flush();
+        p.nodesLeft -= 1;
+        pageBreak.pending = true;
+        pageBreak.skipSpacer = true;
+        continue;
+      }
       if (IGNORED_TAGS.has(tag)) {
         p.nodesLeft -= 1;
         continue;
@@ -714,23 +700,43 @@ function projectFlow(
       if (PARAGRAPH_TAGS.has(tag)) {
         flush();
         p.nodesLeft -= 1;
-        projectParagraph(node, depth, ctx, p, out);
+        if (pageBreak.pending && pageBreak.skipSpacer && isWordPageBreakSpacer(node)) {
+          pageBreak.skipSpacer = false;
+          continue;
+        }
+        projectParagraph(node, depth, ctx, p, out, pageBreak.pending);
+        pageBreak.pending = false;
+        pageBreak.skipSpacer = false;
         continue;
       }
       if (tag === 'ol' || tag === 'ul') {
         flush();
-        projectList(node, depth, ctx, p, out);
+        projectList(node, depth, ctx, p, out, pageBreak.pending);
+        pageBreak.pending = false;
+        pageBreak.skipSpacer = false;
         continue;
       }
       if (tag === 'table') {
         flush();
+        if (pageBreak.pending) appendPageBreak(out);
         projectTable(node, depth, ctx, p, out);
+        pageBreak.pending = false;
+        pageBreak.skipSpacer = false;
         continue;
       }
-      if (CONTAINER_TAGS.has(tag)) {
+      if (CONTAINER_TAGS.has(tag) || blockSdtNodes !== null) {
         flush();
         p.nodesLeft -= 1;
-        projectFlow(Array.from(node.childNodes), depth + 1, ctx, p, out);
+        projectFlow(
+          blockSdtNodes ?? Array.from(node.childNodes),
+          depth + 1,
+          ctx,
+          p,
+          out,
+          false,
+          pageBreak,
+          extractPageBreakBlocks
+        );
         continue;
       }
     }
@@ -775,6 +781,7 @@ function projectTable(
   const totalWidth = tableWidthTwips(table, TABLE_TOTAL_TWIPS);
   const columnWidths = tableColumnWidths(rows, columns, totalWidth);
   const borders = tableBordersXml(table);
+  const position = tablePositionXml(table);
   const justification = tableJustification(table);
   const jc = justification === undefined ? '' : `<w:jc w:val="${justification}"/>`;
   const grid = columnWidths.map((width) => `<w:gridCol w:w="${width}"/>`).join('');
@@ -789,9 +796,6 @@ function projectTable(
     const cells: string[] = [];
     let column = 0;
     while (column < columns) {
-      // Every emitted cell — carried continuation and missing-cell fill included — charges
-      // the node budget: the fill loop synthesizes up to 63 cells per row, and uncharged
-      // fills let a small payload amplify into hundreds of megabytes of strings.
       p.nodesLeft -= 1;
       if (p.nodesLeft <= 0) break;
       const carried = carry[column];
@@ -836,7 +840,7 @@ function projectTable(
   }
 
   out.push(
-    `<w:tbl><w:tblPr><w:tblW w:w="${totalWidth}" w:type="dxa"/>${jc}${borders}</w:tblPr>` +
+    `<w:tbl><w:tblPr>${position}<w:tblW w:w="${totalWidth}" w:type="dxa"/>${jc}${borders}</w:tblPr>` +
       `<w:tblGrid>${grid}</w:tblGrid>${rowXml.join('')}</w:tbl>`
   );
   p.lastMarkCovered = false;
@@ -886,8 +890,6 @@ function assembleFragment(p: Projection, blocks: readonly string[]): Uint8Array 
     mediaExtensions: p.mediaExtensions,
   });
 }
-
-// --- Entry point
 
 type ProjectedBlocks =
   | { readonly ok: true; readonly projection: Projection; readonly blocks: string[] }
@@ -960,13 +962,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   return { ok: true, projection, blocks };
 }
 
-/**
- * Project external `text/html` into a WordprocessingML fragment package.
- *
- * Pure over its input: parses into an inert document, walks under caps, and returns
- * fragment bytes the paste router reads through `readOoxmlPackage`. Never attaches
- * parsed nodes anywhere, never fetches, never executes.
- */
+/** Project external `text/html` into a bounded WordprocessingML fragment package. */
 export function projectExternalHtml(
   html: string,
   limits: HtmlProjectionLimits = {}
@@ -981,13 +977,7 @@ export function projectExternalHtml(
   };
 }
 
-/**
- * What the projection WOULD land, without paying for zip assembly.
- *
- * The file-lane stand-down predicate asks this per paste gesture; running the full
- * projection just to read a boolean doubled the parse-and-deflate cost of every
- * image-bearing paste (the router runs the real projection right after).
- */
+/** Probe projected content without paying for zip assembly. */
 export function probeExternalHtml(
   html: string,
   limits: HtmlProjectionLimits = {}

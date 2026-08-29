@@ -50,10 +50,39 @@ export function tableWidthTwips(table: Element, fallback: number): number {
 
 /** Map HTML table alignment to OOXML table justification. */
 export function tableJustification(table: Element): 'left' | 'center' | 'right' | undefined {
+  const style = parseInlineStyle(table);
+  const positioned = style.get('mso-table-left')?.trim().toLowerCase();
   const value =
+    (positioned === 'left' || positioned === 'center' || positioned === 'right'
+      ? positioned
+      : undefined) ??
     table.getAttribute('align')?.trim().toLowerCase() ??
-    parseInlineStyle(table).get('text-align')?.trim().toLowerCase();
+    style.get('text-align')?.trim().toLowerCase();
   return value === 'left' || value === 'center' || value === 'right' ? value : undefined;
+}
+
+/** Map Word's positioned-table CSS to bounded `w:tblpPr` attributes. */
+export function tablePositionXml(table: Element): string {
+  const style = parseInlineStyle(table);
+  const horizontal = style.get('mso-table-anchor-horizontal')?.trim().toLowerCase();
+  const vertical = style.get('mso-table-anchor-vertical')?.trim().toLowerCase();
+  if (horizontal === undefined && vertical === undefined) return '';
+  const anchor = (value: string | undefined): 'text' | 'margin' | 'page' =>
+    value === 'margin' || value === 'page' ? value : 'text';
+  let attributes = ` w:horzAnchor="${anchor(horizontal)}"` + ` w:vertAnchor="${anchor(vertical)}"`;
+  const left = style.get('mso-table-left')?.trim().toLowerCase();
+  if (left === 'left' || left === 'center' || left === 'right') {
+    attributes += ` w:tblpXSpec="${left}"`;
+  } else {
+    const x = parseCssLengthPt(left ?? '');
+    if (x !== null)
+      attributes += ` w:tblpX="${clamp(Math.round(x * 20), -MAX_TABLE_TWIPS, MAX_TABLE_TWIPS)}"`;
+  }
+  const top = parseCssLengthPt(style.get('mso-table-top') ?? '');
+  if (top !== null) {
+    attributes += ` w:tblpY="${clamp(Math.round(top * 20), -MAX_TABLE_TWIPS, MAX_TABLE_TWIPS)}"`;
+  }
+  return `<w:tblpPr${attributes}/>`;
 }
 
 /**

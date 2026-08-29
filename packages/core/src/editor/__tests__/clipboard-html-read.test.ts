@@ -542,6 +542,20 @@ describe('tables', () => {
     expect(docXml.match(/<w:tcW[^>]+w:w="2880"/g)).toHaveLength(1);
   });
 
+  test('Word floating table center position overrides its fallback left alignment', () => {
+    const { docXml } = openFragment(
+      '<table align="left" style="width:250pt;mso-table-anchor-horizontal:margin;' +
+        'mso-table-anchor-vertical:paragraph;mso-table-left:center;mso-table-top:10pt">' +
+        '<tr><td>centered fallback</td></tr></table>'
+    );
+    expect(docXml).toContain('<w:tblpPr ');
+    expect(docXml).toContain('w:horzAnchor="margin"');
+    expect(docXml).toContain('w:vertAnchor="text"');
+    expect(docXml).toContain('w:tblpXSpec="center"');
+    expect(docXml).toContain('w:tblpY="200"');
+    expect(docXml).toContain('<w:jc w:val="center"/>');
+  });
+
   test('Word table border styles and internal borders remain distinct', () => {
     const { docXml } = openFragment(
       '<table style="border:none;mso-border-alt:double #112233 1.5pt;' +
@@ -580,6 +594,8 @@ describe('hyperlinks', () => {
     const { docXml, relsXml } = openFragment('<p><a href="javascript:alert(1)">click</a></p>');
     expect(docXml).not.toContain('w:hyperlink');
     expect(docXml).toContain('click');
+    expect(docXml).not.toContain('w:color w:val="0563C1"');
+    expect(docXml).not.toContain('<w:u ');
     expect(relsXml).not.toContain('javascript');
   });
 
@@ -590,6 +606,17 @@ describe('hyperlinks', () => {
     expect(relsXml).toContain('relationships/hyperlink');
     expect(relsXml).toContain('Target="https://x.example/"');
     expect(relsXml).toContain('TargetMode="External"');
+    expect(docXml).toContain('<w:color w:val="0563C1"/>');
+    expect(docXml).toContain('<w:u w:val="single"/>');
+  });
+
+  test('an explicit Word link span can override the default hyperlink appearance', () => {
+    const { docXml } = openFragment(
+      '<p><a href="#target"><span style="color:windowtext;text-decoration:none">TOC</span></a></p>'
+    );
+    expect(docXml).toContain('<w:hyperlink w:anchor="target">');
+    expect(docXml).toContain('<w:color w:val="000000"/>');
+    expect(docXml).not.toContain('<w:u w:val="single"/>');
   });
 
   test('Word bookmarks and same-document links remain internal', () => {
@@ -623,6 +650,8 @@ describe('notes', () => {
     );
     expect(docXml).toContain('<w:footnoteReference w:id="1"/>');
     expect(docXml).toContain('<w:endnoteReference w:id="2"/>');
+    expect(docXml).not.toContain('w:color w:val="0563C1"');
+    expect(docXml).not.toContain('<w:u ');
     expect(docXml).not.toContain('Source note.');
     expect(docXml).not.toContain('End note.');
     expect(relsXml).toContain('relationships/footnotes');
@@ -792,12 +821,57 @@ describe('whitespace and breaks', () => {
     expect(docXml).toContain('<w:br/>');
   });
 
-  test('Word page-break br becomes a typed page break', () => {
+  test('Word top-level page-break and spacer become pageBreakBefore on the next paragraph', () => {
     const { docXml } = openFragment(
-      "<p>before</p><br clear=all style='mso-special-character:line-break;" +
-        "page-break-before:always;mso-break-type:section-break'><p>after</p>"
+      "<p>before</p><span><br clear=all style='mso-special-character:line-break;" +
+        "page-break-before:always;mso-break-type:section-break'></span>" +
+        '<p><o:p>&nbsp;</o:p></p><h1>after</h1>'
     );
+    expect(docXml).toContain('<w:pageBreakBefore/>');
+    expect(docXml).not.toContain('<w:br w:type="page"/>');
+    expect(docXml.match(/<w:p>/g)).toHaveLength(2);
+  });
+
+  test('a page-break br inside a paragraph remains a typed run break', () => {
+    const { docXml } = openFragment("<p>before<br style='page-break-before:always'>after</p>");
     expect(docXml).toContain('<w:br w:type="page"/>');
+  });
+
+  test('a nested page break remains pending for the next outer paragraph', () => {
+    const { docXml } = openFragment(
+      "<section><br style='page-break-before:always'></section><p>after</p>"
+    );
+    expect(docXml).toContain('<w:pageBreakBefore/>');
+  });
+
+  test('a page break applies to a following list and remains before a following table', () => {
+    const list = openFragment("<br style='page-break-before:always'><ol><li>item</li></ol>");
+    expect(list.docXml).toContain('<w:pageBreakBefore/>');
+    expect(list.docXml).toContain('<w:numPr>');
+    const table = openFragment(
+      "<p>before</p><br style='page-break-before:always'><table><tr><td>cell</td></tr></table>"
+    );
+    expect(table.docXml.split('<w:tbl>')[0]).toContain('<w:br w:type="page"/>');
+    expect(table.docXml).toContain('<w:tbl>');
+  });
+
+  test('only Word office-space paragraphs are removed after page breaks', () => {
+    const { docXml } = openFragment(
+      "<br style='page-break-before:always'>" +
+        '<p><a name="_Keep"></a></p><p style="text-align:center"></p><p>after</p>'
+    );
+    expect(docXml).toContain('w:name="_Keep"');
+    expect(docXml).toContain('<w:jc w:val="center"/>');
+    expect(docXml).toContain('after');
+  });
+
+  test('inline Word checkbox SDTs do not split their host paragraphs', () => {
+    const { docXml } = openFragment(
+      '<p><w:Sdt CheckBox="t"><span>☒</span></w:Sdt> Task completed</p>'
+    );
+    expect(docXml.match(/<w:p>/g)).toHaveLength(1);
+    expect(docXml).toContain('☒');
+    expect(docXml).toContain(' Task completed');
   });
 
   test('Word tab count and positional tab markup remain semantic tabs', () => {
@@ -830,6 +904,13 @@ describe('whitespace and breaks', () => {
     expect(docXml).toContain('<w:ptab ');
     expect(docXml).not.toContain('[1]');
     expect(docXml).not.toContain('note body');
+  });
+
+  test('a wrapped block SDT keeps its child paragraphs separate', () => {
+    const { docXml } = openFragment(
+      '<w:Sdt><span><section><p>first</p><p>second</p></section></span></w:Sdt>'
+    );
+    expect(docXml.match(/<w:p>/g)).toHaveLength(2);
   });
 
   test('pre preserves whitespace, converts newlines to w:br and uses Courier New', () => {
