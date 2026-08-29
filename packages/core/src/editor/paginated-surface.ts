@@ -72,6 +72,7 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
+import { planNoteRefFieldResultRefreshes } from '../layout/field-ref-refresh.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   type RevisionDisplayMode,
@@ -4485,22 +4486,37 @@ export function mountPaginatedSurface(
   }
 
   /**
-   * Rewrite stale REF field results in the body story, so a save exports what the pages
-   * paint. Planning is read-only: a document whose results are already fresh commits no
-   * transaction, bumps no revision and adds no undo entry. A refresh that does rewrite is
-   * one ordinary journaled transaction — undoable, like a TOC refresh. Viewing writes
-   * nothing; note-part results still save cached (see `field-ref-refresh.ts`).
+   * Rewrite stale REF field results in the body and note stories, so a save exports what
+   * the pages paint. Planning is read-only — the note parts are read from the package,
+   * never through `partFor`, which would durably open a notes store — so a document whose
+   * results are already fresh commits no transaction, bumps no revision and adds no undo
+   * entry. Each stale story commits one ordinary journaled transaction against its own
+   * scope — undoable, like a TOC refresh. Viewing writes nothing.
    */
   function refreshRefFieldResults(): boolean {
     if (editingMode === 'view') return true;
-    const op = planRefFieldResultRefresh(session.part(), {
+    const refreshOptions = {
       package: session.currentPackage(),
       styleCascade: styleCascade(),
       numberingIndex: numberingIndex(),
       displayMode: revisionDisplayMode(),
-    });
-    if (!op) return true;
-    return applyJournaledOps([op], undefined, undefined, BODY_STORY).committed;
+    };
+    // Both plans read before either write lands, and they share one memoized resolution
+    // context — the note values are the ones the pages painted, per calibration verdict.
+    const bodyOp = planRefFieldResultRefresh(session.part(), refreshOptions);
+    const notePlans = planNoteRefFieldResultRefreshes(session.part(), refreshOptions);
+    let committed = true;
+    if (bodyOp) {
+      committed = applyJournaledOps([bodyOp], undefined, undefined, BODY_STORY).committed;
+    }
+    for (const plan of notePlans) {
+      const applied = applyJournaledOps([plan.op], undefined, undefined, {
+        kind: 'notesPart',
+        noteKind: plan.noteKind,
+      });
+      committed = applied.committed && committed;
+    }
+    return committed;
   }
 
   // Which range a destructive or replacing gesture acts on, and where content replacing it

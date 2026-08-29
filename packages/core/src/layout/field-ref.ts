@@ -608,7 +608,12 @@ export interface RefNoteParts {
 /** Normal-note story block arrays of one notes part, memoized on the immutable part. */
 const notePartStories = new WeakMap<OoxmlPart, readonly (readonly OoxmlElement[])[]>();
 
-function noteStoriesOfPart(part: OoxmlPart | null): readonly (readonly OoxmlElement[])[] {
+/**
+ * Normal-note stories of one notes part, in part order. Exported for the save-time refresh
+ * planner: walking the SAME story arrays this context scanned keeps its anchor ids and the
+ * planner's located fields aligned by construction.
+ */
+export function noteStoriesOfPart(part: OoxmlPart | null): readonly (readonly OoxmlElement[])[] {
   if (!part) return [];
   const cached = notePartStories.get(part);
   if (cached) return cached;

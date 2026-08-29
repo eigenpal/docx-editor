@@ -1,25 +1,27 @@
-// Save-time REF result refresh: plan the one `refreshFieldResults` op that makes the saved
+// Save-time REF result refresh: plan the `refreshFieldResults` ops that make the saved
 // bytes carry what the pages paint.
 //
 // Painted REF values are a layout projection; the file keeps Word's cached result runs, so
-// an export after a renumbering edit is stale until Word refreshes fields. The plan reuses
+// an export after a renumbering edit is stale until Word refreshes fields. The plans reuse
 // the layout's own resolution (`resolveStoryRefFields` — grammar, bookmark index, number
 // composition AND the per-field calibration verdict, all shared, so save and paint cannot
-// drift) and pairs it with the store's result locator, then keeps only the fields whose
+// drift) and pair it with the store's result locator, then keep only the fields whose
 // plain-run cached text differs from the LIVE value. `liveValueOf` answers null for a field
 // that failed calibration, so a field painting its cache keeps that cache on save too —
 // rewriting it would export the very value the calibration gate exists to suppress. A fresh
-// document plans NOTHING: the caller sees null, runs no transaction, bumps no revision, and
-// the save is byte-identical to one without the refresh.
+// document plans NOTHING: the caller sees null (body) or no plans (notes), runs no
+// transaction, bumps no revision, and the save is byte-identical to one without the refresh.
 //
-// Scope: the BODY story. Note-story results still paint live through the shared context but
-// keep their cached runs on save — rewriting them needs per-note-part transactions, tracked
-// with the notes half of the follow-up. The field INSTRUCTION is never modified, and any
-// result the locator calls non-rewritable (revision markup, nested fields, locks, anything
-// but plain runs) keeps its cache untouched.
+// Scope: the BODY story plus the footnote/endnote stories. Note plans carry the note kind
+// so the caller can commit each one against its own notes-part scope — the store keeps one
+// transaction lane per part, and a plan is pure reading (never `partFor`, which durably
+// opens a notes store). The field INSTRUCTION is never modified, and any result the locator
+// calls non-rewritable (revision markup, nested fields, locks, anything but plain runs)
+// keeps its cache untouched.
 
-import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlElement, OoxmlPart } from '@docx-editor.dev/core/store';
 import { resolveNotesPart } from '../store/package/note-references.ts';
+import type { NoteKind } from '../store/package/note-nodes.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import {
   locateFieldResults,
@@ -29,8 +31,10 @@ import {
 } from '../store/store/tree-op-field-results.ts';
 import { noteRefNumberingForPart } from './field-noteref.ts';
 import {
+  noteStoriesOfPart,
   parseRefInstruction,
   resolveStoryRefFieldsWithNoteNumbers,
+  type RefFieldContext,
   type RefNoteParts,
 } from './field-ref.ts';
 import { walkStoryParagraphs, withResolvedListItems } from './list-resolve.ts';
@@ -53,19 +57,28 @@ export interface RefFieldRefreshOptions {
   readonly displayMode?: RevisionDisplayMode;
 }
 
+/** One notes part's refresh, tagged with the story scope its transaction must target. */
+export interface NoteRefFieldRefreshPlan {
+  readonly noteKind: NoteKind;
+  readonly op: RefreshFieldResultsOp;
+}
+
+interface RefRefreshResolution {
+  readonly blocks: readonly OoxmlElement[];
+  readonly notes: RefNoteParts | undefined;
+  readonly context: RefFieldContext | null;
+}
+
 /**
- * Plan the refresh for one body part, or null when every supported REF result is already
- * fresh (the no-op save path — no transaction, no revision bump, no undo entry).
- *
- * Every skip is conservative and per-field: an unrecognized instruction or switch, a
- * missing bookmark, an unnumbered target under a number switch, a non-plain result, a
- * locked field and a field whose calibration verdict is "keeps the cache" all keep their
- * cached runs exactly as loaded.
+ * The shared resolution both planners read: body blocks, the note parts joined to the scan,
+ * and ONE context. Every input is the memoized identity paint resolves through
+ * (`storyBlocks`, `withResolvedListItems`, `resolveStoryRefFields`), so the body and note
+ * plans of one save read the same context object and the same calibration verdicts.
  */
-export function planRefFieldResultRefresh(
+function resolveRefreshContext(
   part: OoxmlPart,
   options: RefFieldRefreshOptions
-): RefreshFieldResultsOp | null {
+): RefRefreshResolution {
   const blocks = storyBlocks(part, options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE);
   const listItems = withResolvedListItems(
     { numberingIndex: options.numberingIndex, styleCascade: options.styleCascade },
@@ -85,16 +98,28 @@ export function planRefFieldResultRefresh(
     notes,
     options.package ? noteRefNumberingForPart(options.package, part, blocks) : undefined
   );
-  if (context === null) return null;
+  return { blocks, notes, context };
+}
 
-  const updates: { paragraphId: string; fieldNodeId: string; text: string }[] = [];
-  for (const paragraph of walkStoryParagraphs(blocks)) {
-    if (updates.length >= MAX_FIELD_RESULT_UPDATES) break;
+/**
+ * Collect the stale-but-calibrated fields of one story walk into `updates`, up to the op's
+ * cap. Every skip is conservative and per-field: an unrecognized instruction or switch, a
+ * missing bookmark, an unnumbered target under a number switch, a non-plain result, a
+ * locked field and a field whose calibration verdict is "keeps the cache" all keep their
+ * cached runs exactly as loaded.
+ */
+function collectStaleResultUpdates(
+  paragraphs: Iterable<OoxmlElement>,
+  context: RefFieldContext,
+  updates: { paragraphId: string; fieldNodeId: string; text: string }[]
+): void {
+  for (const paragraph of paragraphs) {
+    if (updates.length >= MAX_FIELD_RESULT_UPDATES) return;
     // The context already scanned every paragraph; only the ones holding recognized REF
     // specs are worth the locate walk.
     if (context.tokenForParagraph(paragraph.id) === '') continue;
     for (const located of locateFieldResults(paragraph)) {
-      if (updates.length >= MAX_FIELD_RESULT_UPDATES) break;
+      if (updates.length >= MAX_FIELD_RESULT_UPDATES) return;
       if (!located.rewritable) continue;
       const spec = parseRefInstruction(located.instruction);
       if (spec === null) continue;
@@ -110,6 +135,53 @@ export function planRefFieldResultRefresh(
       updates.push({ paragraphId: paragraph.id, fieldNodeId: located.fieldNodeId, text: value });
     }
   }
+}
+
+/**
+ * Plan the refresh for one body part, or null when every supported REF result is already
+ * fresh (the no-op save path — no transaction, no revision bump, no undo entry).
+ */
+export function planRefFieldResultRefresh(
+  part: OoxmlPart,
+  options: RefFieldRefreshOptions
+): RefreshFieldResultsOp | null {
+  const { blocks, context } = resolveRefreshContext(part, options);
+  if (context === null) return null;
+  const updates: { paragraphId: string; fieldNodeId: string; text: string }[] = [];
+  collectStaleResultUpdates(walkStoryParagraphs(blocks), context, updates);
   if (updates.length === 0) return null;
   return { op: 'refreshFieldResults', updates };
+}
+
+/**
+ * Plan the refresh for the footnote and endnote parts, empty when every note result is
+ * fresh — the same no-op contract as the body plan, per part: a part with no stale field
+ * gets no plan, so its store is never opened and its bytes save exactly as loaded.
+ *
+ * `part` is the BODY part: the context resolves against body bookmarks and numbering, the
+ * targets a citing note overwhelmingly names. The note stories walked here are the SAME
+ * arrays the context scanned (`noteStoriesOfPart`), so a located field's anchor id reads
+ * its own calibration verdict.
+ */
+export function planNoteRefFieldResultRefreshes(
+  part: OoxmlPart,
+  options: RefFieldRefreshOptions
+): readonly NoteRefFieldRefreshPlan[] {
+  const { notes, context } = resolveRefreshContext(part, options);
+  if (context === null || notes === undefined) return [];
+  const plans: NoteRefFieldRefreshPlan[] = [];
+  const noteParts: readonly { noteKind: NoteKind; notesPart: OoxmlPart | null }[] = [
+    { noteKind: 'footnote', notesPart: notes.footnotesPart },
+    { noteKind: 'endnote', notesPart: notes.endnotesPart },
+  ];
+  for (const { noteKind, notesPart } of noteParts) {
+    if (!notesPart) continue;
+    const updates: { paragraphId: string; fieldNodeId: string; text: string }[] = [];
+    for (const story of noteStoriesOfPart(notesPart)) {
+      if (updates.length >= MAX_FIELD_RESULT_UPDATES) break;
+      collectStaleResultUpdates(walkStoryParagraphs(story), context, updates);
+    }
+    if (updates.length > 0) plans.push({ noteKind, op: { op: 'refreshFieldResults', updates } });
+  }
+  return plans;
 }
