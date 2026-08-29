@@ -287,12 +287,15 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
 
   const decorations: string[] = [];
   const underline = lastProperty(sources, 'u');
-  if (underline && wmlVal(underline) !== 'none') decorations.push('underline');
+  const underlineOn = underline !== null && wmlVal(underline) !== 'none';
+  if (underlineOn) decorations.push('underline');
   const doubleStrike = runToggleOn(layers, 'dstrike');
   if (runToggleOn(layers, 'strike') || doubleStrike) decorations.push('line-through');
   if (decorations.length > 0) rules.push(`text-decoration:${decorations.join(' ')}`);
-  rules.push(...wordUnderlineCss(underline));
-  if (doubleStrike && underline === null) rules.push('text-decoration-style:double');
+  // A `w:u w:val="none"` must not emit decoration styling, and the double-strike
+  // marker only travels when no underline claims text-decoration-style.
+  if (underlineOn) rules.push(...wordUnderlineCss(underline));
+  if (doubleStrike && !underlineOn) rules.push('text-decoration-style:double');
 
   const color = cssHexColor(foldAttribute(sources, 'color', 'val'));
   if (color) rules.push(`color:${color}`);
@@ -458,8 +461,20 @@ function listPlacementOf(
     if (level !== undefined) ilvl = level;
   }
   if (numId === undefined || numId === '0') return null;
-  const abstractId = ctx.numbering.numToAbstract.get(numId);
+  let abstractId = ctx.numbering.numToAbstract.get(numId);
   if (abstractId === undefined) return null;
+  // A level-less abstractNum can delegate through w:numStyleLink: the linked
+  // numbering STYLE names the numId whose abstract holds the real levels.
+  if ((ctx.numbering.levelFormats.get(abstractId)?.size ?? 0) === 0) {
+    const linkedStyle = ctx.numbering.styleLinks.get(abstractId);
+    const style = linkedStyle === undefined ? undefined : ctx.styles.byId.get(linkedStyle);
+    const linkedNumId = wmlVal(
+      wmlChild(wmlChild(wmlChild(style ?? null, 'pPr'), 'numPr'), 'numId')
+    );
+    const resolved =
+      linkedNumId === undefined ? undefined : ctx.numbering.numToAbstract.get(linkedNumId);
+    if (resolved !== undefined) abstractId = resolved;
+  }
   const level = Math.min(Math.max(parseIntValue(ilvl) ?? 0, 0), 8);
   const fmt = ctx.numbering.levelFormats.get(abstractId)?.get(String(level)) ?? 'decimal';
   const start =

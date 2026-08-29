@@ -7,6 +7,8 @@ export interface HtmlNumberingIndex {
   readonly levelFormats: ReadonlyMap<string, ReadonlyMap<string, string>>;
   readonly levelStarts: ReadonlyMap<string, ReadonlyMap<string, number>>;
   readonly startOverrides: ReadonlyMap<string, number>;
+  /** `w:numStyleLink` per abstract id: the numbering style holding the real levels. */
+  readonly styleLinks: ReadonlyMap<string, string>;
 }
 
 function boundedStart(raw: string | undefined): number | null {
@@ -19,7 +21,8 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
   const levelFormats = new Map<string, Map<string, string>>();
   const levelStarts = new Map<string, Map<string, number>>();
   const startOverrides = new Map<string, number>();
-  if (!root) return { numToAbstract, levelFormats, levelStarts, startOverrides };
+  const styleLinks = new Map<string, string>();
+  if (!root) return { numToAbstract, levelFormats, levelStarts, startOverrides, styleLinks };
 
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
@@ -45,6 +48,8 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
     if (child.localName !== 'abstractNum') continue;
     const abstractId = attributeValueOf(child, 'abstractNumId', WML_NAMESPACE_URI);
     if (!abstractId) continue;
+    const styleLink = wmlVal(wmlChild(child, 'numStyleLink'));
+    if (styleLink !== undefined) styleLinks.set(abstractId, styleLink);
     const formats = new Map<string, string>();
     const starts = new Map<string, number>();
     for (const level of child.children) {
@@ -65,5 +70,5 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
     levelFormats.set(abstractId, formats);
     levelStarts.set(abstractId, starts);
   }
-  return { numToAbstract, levelFormats, levelStarts, startOverrides };
+  return { numToAbstract, levelFormats, levelStarts, startOverrides, styleLinks };
 }

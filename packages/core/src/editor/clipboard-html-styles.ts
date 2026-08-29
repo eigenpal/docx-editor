@@ -33,7 +33,7 @@ export function isWordClipboardHtml(html: string): boolean {
 }
 
 /** A built-in Word style named by Word desktop's clipboard HTML class. */
-export function wordParagraphStyleId(element: Element, wordHtml: boolean): string | undefined {
+export function wordParagraphStyleId(element: Element): string | undefined {
   for (const className of element.classList) {
     const heading = /^MsoHeading([1-9])$/.exec(className);
     if (heading) return `Heading${heading[1]}`;
@@ -44,7 +44,10 @@ export function wordParagraphStyleId(element: Element, wordHtml: boolean): strin
     if (className === 'MsoSubtitle') return 'Subtitle';
     if (className === 'MsoQuote') return 'Quote';
   }
-  const headingTag = wordHtml ? /^h([1-6])$/.exec(tagOf(element)) : null;
+  // Heading TAGS map to the built-in styles in every dialect — the engine's own
+  // outbound HTML carries no Word marker classes, and the mapping is what keeps a
+  // heading a heading when only text/html survives the trip.
+  const headingTag = /^h([1-6])$/.exec(tagOf(element));
   return headingTag ? `Heading${headingTag[1]}` : undefined;
 }
 
@@ -586,7 +589,8 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
     }
   }
   const decorationStyle = style.get('text-decoration-style')?.trim().toLowerCase();
-  if (decorationStyle === 'double' && next.strike) next.doubleStrike = true;
+  // With an underline present, a double decoration style describes the underline.
+  if (decorationStyle === 'double' && next.strike && !next.underline) next.doubleStrike = true;
   if (next.underline) {
     if (decorationStyle === 'double') next.underlineVal = 'double';
     else if (decorationStyle === 'dotted') next.underlineVal = 'dotted';

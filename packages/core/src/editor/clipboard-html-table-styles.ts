@@ -95,13 +95,30 @@ export function tableColumnWidths(
   const equal = Math.max(1, Math.floor(totalTwips / columns));
   let bestScore = -1;
   let best = Array.from({ length: columns }, () => equal);
+  // Track rowspan carry-over the way the cell placement walk does, so a row's widths
+  // land in the grid columns its cells actually occupy.
+  type Carry = { remaining: number; readonly span: number };
+  const carry: Array<Carry | null> = new Array<Carry | null>(columns).fill(null);
   for (const row of rows) {
     const candidate = Array.from({ length: columns }, () => equal);
     let score = 0;
     let column = 0;
-    for (const cell of Array.from(row.children)) {
-      if (!/^t[dh]$/.test(tagOf(cell)) || column >= columns) continue;
+    const cells = Array.from(row.children).filter((cell) => /^t[dh]$/.test(tagOf(cell)));
+    let sourceAt = 0;
+    while (column < columns) {
+      const carried = carry[column];
+      if (carried) {
+        carried.remaining -= 1;
+        if (carried.remaining <= 0) carry[column] = null;
+        column += carried.span;
+        continue;
+      }
+      const cell = cells[sourceAt];
+      if (cell === undefined) break;
+      sourceAt += 1;
       const span = Math.min(cellSpanOf(cell), columns - column);
+      const rowSpan = htmlSpanOf(cell, 'rowspan', 1000);
+      if (rowSpan > 1) carry[column] = { remaining: rowSpan - 1, span };
       const points = widthPointsOf(cell);
       if (points !== null) {
         // Clamp per column so a hostile huge width cannot overflow the later

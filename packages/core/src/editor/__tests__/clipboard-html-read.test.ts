@@ -65,14 +65,14 @@ function openFragment(html: string): OpenedFragment {
 }
 
 describe('run and paragraph mapping', () => {
-  test('headings become bold direct formatting at Word sizes', () => {
+  test('heading tags map to the built-in Heading styles in every dialect', () => {
     const { docXml, lastMarkCovered } = openFragment('<h1>Alpha</h1><h3>Beta</h3>');
-    expect(docXml).toContain('w:sz w:val="64"');
-    expect(docXml).toContain('w:sz w:val="44"');
-    expect(docXml).toContain('<w:b/>');
+    expect(docXml).toContain('<w:pStyle w:val="Heading1"/>');
+    expect(docXml).toContain('<w:pStyle w:val="Heading3"/>');
+    expect(docXml).not.toContain('<w:b/>');
     expect(docXml).toContain('Alpha');
     expect(docXml).toContain('Beta');
-    expect(lastMarkCovered).toBe(false);
+    expect(lastMarkCovered).toBe(true);
   });
 
   test('Word heading tags use target styles and include their paragraph mark', () => {

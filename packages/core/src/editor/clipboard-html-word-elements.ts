@@ -117,7 +117,8 @@ export function wordUnderlineCss(underline: OoxmlElement | null): readonly strin
           : value === 'wave'
             ? 'wavy'
             : 'solid';
-  const rules = [`text-decoration-style:${style}`];
+  // Solid is the CSS default; emitting it would shadow the double-strike marker.
+  const rules = style === 'solid' ? [] : [`text-decoration-style:${style}`];
   const color = attributeValueOf(underline, 'color', WML_NAMESPACE_URI);
   if (color !== undefined && /^[0-9A-Fa-f]{6}$/.test(color)) {
     rules.push(`text-decoration-color:#${color.toLowerCase()}`);

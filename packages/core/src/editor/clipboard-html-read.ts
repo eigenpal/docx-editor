@@ -312,7 +312,7 @@ function collectInline(
   if (tag === 'a') {
     const href = node.getAttribute('href');
     const bookmarkName = clipboardBookmarkName(
-      node.getAttribute('name') ?? node.getAttribute('id')
+      node.getAttribute('name') || node.getAttribute('id')
     );
     const inner: string[] = [];
     for (const child of Array.from(node.childNodes)) {
@@ -324,9 +324,10 @@ function collectInline(
       content = `<w:hyperlink w:anchor="${escapeXmlAttribute(anchor)}">${content}</w:hyperlink>`;
     } else if (href !== null) {
       // A fragment name Word cannot store (hyphens, length) stays an external-rel
-      // hyperlink rather than dropping the link.
+      // hyperlink rather than dropping the link; a bare '#' is a JS anchor and
+      // never becomes a relationship.
       const sanitized = sanitizeHref(href);
-      if (sanitized.ok && sanitized.href.length > 0) {
+      if (sanitized.ok && sanitized.href.length > 0 && sanitized.href !== '#') {
         const relId = allocateRel(p, `${R_NS}/hyperlink`, sanitized.href, true, ctx.rels ?? p.rels);
         content = `<w:hyperlink r:id="${relId}">${content}</w:hyperlink>`;
       }
@@ -390,7 +391,7 @@ function paragraphContextOf(
   const style = parseInlineStyle(element);
   const para: ParaProps = {};
   if (pageBreakBefore) para.pageBreakBefore = true;
-  const styleId = wordParagraphStyleId(element, p.wordHtml);
+  const styleId = wordParagraphStyleId(element);
   if (styleId !== undefined) para.styleId = styleId;
   if (ctx.para.numPr) para.numPr = ctx.para.numPr;
   if (ctx.para.jc) para.jc = ctx.para.jc;
@@ -535,7 +536,12 @@ function projectFlow(
   const pageBreak = pageBreakState ?? { pending: false, skipSpacer: false };
   const flush = (): void => {
     if (pending.length > 0) {
-      out.push(paragraphXml(ctx.para, pending));
+      // Bare inline text consumes a pending Word page break like a block would,
+      // so the break lands BEFORE the text, not appended after it.
+      const para = pageBreak.pending ? { ...ctx.para, pageBreakBefore: true } : ctx.para;
+      out.push(paragraphXml(para, pending));
+      pageBreak.pending = false;
+      pageBreak.skipSpacer = false;
       p.lastMarkCovered = ctx.paragraphMarkCovered;
     }
     pending = [];
@@ -596,7 +602,9 @@ function projectFlow(
         if (tag === 'div' && hasBlockChild(node)) {
           // Word's section wrapper (`WordSection1`): block flow continues through it,
           // so page-break extraction and the spacer state must survive the descent.
+          // A break declared ON the wrapper carries to its first child paragraph.
           const wrapperCtx = paragraphContextOf(node, ctx, p, false);
+          if (wrapperCtx.para.pageBreakBefore) pageBreak.pending = true;
           projectFlow(
             Array.from(node.childNodes),
             depth + 1,
@@ -683,23 +691,32 @@ function projectTable(
   if (rows.length === 0) return;
 
   // Count columns INCLUDING rowspan carry-over: a row that receives carried columns
-  // still owns its trailing cells, which would otherwise be dropped.
+  // still owns its trailing cells, which would otherwise be dropped. The pre-count
+  // charges the shared walk budget and stops at the 63-column cap, so a crafted
+  // rowspan lattice cannot spin here.
   let columns = 1;
-  let carrySpans: Array<{ remaining: number; readonly span: number }> = [];
+  const carrySpans: Array<{ remaining: number; span: number }> = [];
   for (const row of rows) {
+    if (p.nodesLeft <= 0 || columns >= 63) break;
     let count = 0;
-    for (const carried of carrySpans) count += carried.span;
-    const nextCarry = carrySpans
-      .map((carried) => ({ remaining: carried.remaining - 1, span: carried.span }))
-      .filter((carried) => carried.remaining > 0);
+    let keep = 0;
+    for (const carried of carrySpans) {
+      count += carried.span;
+      carried.remaining -= 1;
+      if (carried.remaining > 0) carrySpans[keep++] = carried;
+    }
+    carrySpans.length = keep;
     for (const cell of Array.from(row.children)) {
+      p.nodesLeft -= 1;
+      if (p.nodesLeft <= 0) break;
       if (!/^t[dh]$/.test(tagOf(cell))) continue;
       const span = htmlSpanOf(cell, 'colspan', 63);
       count += span;
       const rowSpan = htmlSpanOf(cell, 'rowspan', 1000);
-      if (rowSpan > 1) nextCarry.push({ remaining: rowSpan - 1, span });
+      if (rowSpan > 1 && carrySpans.length < 63) {
+        carrySpans.push({ remaining: rowSpan - 1, span });
+      }
     }
-    carrySpans = nextCarry;
     columns = Math.max(columns, count);
   }
   columns = Math.min(columns, 63);
@@ -877,7 +894,10 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   // Notes project FIRST, so the body pass emits a live reference only for a note
   // whose body actually landed. A note the walk budget starved out stays out of
   // `definedNotes`, and its reference keeps the anchor's visible text instead of
-  // pointing at a blank note.
+  // pointing at a blank note. The notes may spend at most HALF the walk budget:
+  // the body is the primary content and must never be starved into a refusal.
+  const bodyReserve = Math.ceil(projection.nodesLeft / 2);
+  projection.nodesLeft -= bodyReserve;
   for (const note of noteDefinitions) {
     if (projection.nodesLeft <= 0) break;
     const noteBlocks: string[] = [];
@@ -898,6 +918,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       definedNotes[note.kind].add(note.id);
     }
   }
+  projection.nodesLeft = Math.max(projection.nodesLeft, 0) + bodyReserve;
   projection.lastMarkCovered = false;
   const blocks: string[] = [];
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
@@ -905,8 +926,10 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   return { ok: true, projection, blocks };
 }
 
-// One paste gesture probes and then projects the SAME string; the single-entry memo
-// keeps the second call from re-running the full parse + walk on a multi-MiB payload.
+// One paste gesture probes and projects the SAME string (in either order); the
+// single-entry memo keeps the second call from re-running the full parse + walk on
+// a multi-MiB payload. A scheduled clear drops the retained payload as soon as the
+// gesture's synchronous handlers finish, so attacker-sized bytes never idle here.
 let memoizedProjection: {
   readonly html: string;
   readonly limitsKey: string;
@@ -927,7 +950,11 @@ function projectBlocksMemoized(html: string, limits: HtmlProjectionLimits): Proj
     return memoizedProjection.projected;
   }
   const projected = projectBlocks(html, limits);
-  memoizedProjection = { html, limitsKey, projected };
+  const entry = { html, limitsKey, projected };
+  memoizedProjection = entry;
+  setTimeout(() => {
+    if (memoizedProjection === entry) memoizedProjection = null;
+  }, 0);
   return projected;
 }
 
@@ -937,8 +964,6 @@ export function projectExternalHtml(
   limits: HtmlProjectionLimits = {}
 ): HtmlProjectionResult {
   const projected = projectBlocksMemoized(html, limits);
-  // The gesture is over once the fragment is assembled; do not retain the payload.
-  memoizedProjection = null;
   if (!projected.ok) return projected;
   return {
     ok: true,
