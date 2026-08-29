@@ -386,7 +386,8 @@ export function computeDoubleBorderMetricsPt(widthPt: number): CompoundBorderMet
 
 // @public
 export function computeFootnoteReserves(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, noteMarks: NoteMarkContext,
-passMemo?: unknown): {
+passMemo?: unknown,
+previousReserves?: ReadonlyMap<number, number>): {
     readonly reasons: readonly NotePaginationFallbackReason[];
     readonly reserves: ReadonlyMap<number, number>;
     readonly stable: boolean;
@@ -1476,7 +1477,7 @@ export const MAX_NOTE_FRAGMENTS = 512;
 export const MAX_NOTE_OVERFLOW_PAGES = 256;
 
 // @public
-export const MAX_NOTE_REFLOW_ATTEMPTS = 8;
+export const MAX_NOTE_REFLOW_ATTEMPTS = 64;
 
 // @public
 export const MAX_NOTES_LAID_OUT = 10000;
