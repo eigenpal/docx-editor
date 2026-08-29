@@ -315,7 +315,12 @@ describe('oversized footnote starts on its reference page (issue #608)', () => {
     const noteLines = 24 * Math.ceil(1500 / CHARS_PER_LINE);
     const cold = layoutOf(bytes, 'fn-adoption');
     const expected = Math.ceil(((200 + noteLines) * LINE_H) / cold.pages[0]!.contentBox.height);
-    expect(Math.abs(cold.pages.length - expected)).toBeLessThanOrEqual(1);
+    // Within TWO pages of the dense hand-packing, not one: a note that cannot fit whole
+    // below its reference moves forward with its reference line (Word keeps a footnote
+    // whole unless it exceeds the note column), and each such move can leave up to a
+    // note's height of legitimate slack at a page bottom. Starvation — the failure this
+    // gate exists for — is still asserted exactly by expectNoStarvedPages below.
+    expect(Math.abs(cold.pages.length - expected)).toBeLessThanOrEqual(2);
     expectFullyDrained(cold, noteLines);
     expectNoStarvedPages(cold);
 
@@ -357,6 +362,130 @@ describe('oversized footnote starts on its reference page (issue #608)', () => {
     const clean = layoutOf(editedBytes, 'fn-warm-converge', undefined, 2);
     expect(shapeOf(warm)).toBe(shapeOf(clean));
     expectNoStarvedPages(warm);
+  });
+});
+
+/** Pages (in order) whose body fragments draw `paragraph "Body para <n>"` text. */
+function pagesOwningParagraph(layout: SemanticLayout, paragraphIndex: number): number[] {
+  const needle = `Body para ${paragraphIndex}`;
+  const found: number[] = [];
+  for (const page of layout.pages) {
+    for (const fragment of page.fragments) {
+      if (fragment.kind !== 'paragraph') continue;
+      const text = fragment.lines.flatMap((line) => line.spans.map((span) => span.text)).join('');
+      if (text.includes(needle)) {
+        found.push(page.index);
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+/** The page index that hosts note `id`'s FIRST (non-continuation) record, or null. */
+function noteHeadPage(layout: SemanticLayout, id: number): number | null {
+  for (const page of layout.pages) {
+    for (const note of page.footnotes?.notes ?? []) {
+      if (note.noteId === id && note.continuation !== true) return page.index;
+    }
+  }
+  return null;
+}
+
+function noteRecordCount(layout: SemanticLayout, id: number): number {
+  let count = 0;
+  for (const page of layout.pages) {
+    for (const note of page.footnotes?.notes ?? []) {
+      if (note.noteId === id) count += 1;
+    }
+  }
+  return count;
+}
+
+describe('a footnote that cannot fit below its reference moves with it (keep-whole)', () => {
+  // ~50 body lines fill a page; the reference sits close to the bottom, and the 4-line
+  // note cannot fit below it. Word does not split a footnote that fits in a page's note
+  // column: the reference LINE moves to the next page and the note lays out whole there.
+  test('short note near the page bottom does not split', () => {
+    const refAt = 47;
+    const layout = layoutOf(
+      packageXml(bodyParas(60, new Map([[refAt, 1]])), singleRunFootnote(1, 300)),
+      'fn-keep-whole'
+    );
+
+    expect(noteRecordCount(layout, 1)).toBe(1);
+    const refPages = pagesOwningParagraph(layout, refAt);
+    expect(refPages).toHaveLength(1);
+    expect(noteHeadPage(layout, 1)).toBe(refPages[0]!);
+    expectNoStarvedPages(layout);
+  });
+
+  // The reported real-document shape: earlier references' notes stack down to a later
+  // reference's line, its own note gets no room, and the note used to render whole as an
+  // unmarked "continuation" on the next page — or split mid-sentence — while body text
+  // stayed put. The reference and its whole note must travel together instead.
+  test('a reference starved by the stack above it keeps its note', () => {
+    const refs = new Map([
+      [10, 1],
+      [44, 2],
+    ]);
+    const layout = layoutOf(
+      packageXml(bodyParas(60, refs), singleRunFootnote(1, 3200) + singleRunFootnote(2, 300)),
+      'fn-starved-ref'
+    );
+
+    for (const id of [1, 2]) {
+      expect(noteRecordCount(layout, id)).toBe(1);
+      const refPages = pagesOwningParagraph(layout, id === 1 ? 10 : 44);
+      expect(noteHeadPage(layout, id)).toBe(refPages[0]!);
+    }
+    expectNoStarvedPages(layout);
+  });
+
+  // The fit rule admits a paragraph without charging its `w:spacing w:after`, but the
+  // fragment box includes it. The note passes must measure the body the same way, or the
+  // reserve under-claims by the trailing after-spacing and the attach pass splits a note
+  // the reserve fitted whole.
+  test('trailing paragraph after-spacing does not shrink the note area', () => {
+    const refAt = 40;
+    const spaced = Array.from({ length: 60 }, (_, i) => {
+      const ref = refs40(i) === undefined ? '' : `<w:footnoteReference w:id="${refs40(i)!}"/>`;
+      return (
+        '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr>' +
+        `<w:r><w:t>Body para ${i}</w:t>${ref}</w:r></w:p>`
+      );
+    }).join('');
+    function refs40(i: number): number | undefined {
+      return i === refAt ? 1 : undefined;
+    }
+    const layout = layoutOf(packageXml(spaced, singleRunFootnote(1, 400)), 'fn-after-spacing');
+
+    expect(noteRecordCount(layout, 1)).toBe(1);
+    expect(noteHeadPage(layout, 1)).toBe(pagesOwningParagraph(layout, refAt)[0]!);
+  });
+
+  // Anti-avalanche gate over a reference-dense document: no note may start after its
+  // reference's page, and no page-column-sized note may split at all. This is the
+  // real-document failure shape — notes trailing their references by whole pages, every
+  // record a bare "continuation" with no mark.
+  test('every note starts on the page that references it', () => {
+    const refs = new Map(Array.from({ length: 24 }, (_, i) => [(i + 1) * 8, i + 1] as const));
+    const notesXml = Array.from(
+      { length: 24 },
+      (_, i) =>
+        `<w:footnote w:id="${i + 1}"><w:p><w:r><w:t>${'n'.repeat(1500)}</w:t></w:r></w:p></w:footnote>`
+    ).join('');
+    const layout = layoutOf(packageXml(bodyParas(200, refs), notesXml), 'fn-colocation');
+
+    for (const [paragraphIndex, id] of refs) {
+      const refPages = pagesOwningParagraph(layout, paragraphIndex);
+      const head = noteHeadPage(layout, id);
+      expect(head).not.toBeNull();
+      expect(refPages).toContain(head!);
+      // ~19-line notes fit a page column whole, so none of them may split.
+      expect(noteRecordCount(layout, id)).toBe(1);
+    }
+    expectNoStarvedPages(layout);
   });
 });
 

@@ -80,11 +80,11 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
 }
 
 /**
- * Bottom (content-relative pt) of the body line on `page` that carries `ref` — the band
- * body text must KEEP for this reference when its footnote reserve is measured.
+ * The body band (content-relative pt) of the line on `page` that carries `ref`.
  *
- * Word's rule: a footnote STARTS on the page that references it. A reserve capped only by
- * the minimum body band (`MIN_FOOTNOTE_BODY_BAND_PT`) can exceed the room below the
+ * `bottom` is the band body text must KEEP for this reference when its footnote reserve is
+ * measured. Word's rule: a footnote STARTS on the page that references it. A reserve capped
+ * only by the minimum body band (`MIN_FOOTNOTE_BODY_BAND_PT`) can exceed the room below the
  * referencing line, which evicts that line — and with it the reference — to the next page.
  * The next reserve pass then follows the reference forward, the reflow loop oscillates
  * between the two placements, and the fingerprint lock freezes whichever phase it happens
@@ -96,41 +96,70 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
  * note may push body down to ITS OWN reference line. On a page carrying many references, a
  * single floor at the lowest one strangles every note above it to the sliver under that
  * line — and that state is a fixed point, so the reflow loop keeps it. The caller sizes
- * note `i`'s room against reference `i`'s floor; references whose room reaches zero simply
- * carry forward, and the next pass finds them on the page body pushed them to.
+ * note `i`'s room against reference `i`'s floor; a reference whose note cannot even START
+ * in that room moves forward instead: `top` is where the reserve must reach to evict the
+ * reference's own line, so the next pass finds the reference — and lays its note whole —
+ * on the page the shrunken body pushes it to.
  *
- * A ref inside a table floors at the TABLE fragment's bottom: nested line geometry is not
- * in page-content coordinates, and keeping the whole block band is the conservative reading
- * of the same rule. A ref no fragment on this page owns floors at zero.
+ * `evictable` is false when the line's geometry cannot support that move: a ref inside a
+ * table (nested line geometry is not in page-content coordinates; the band is the TABLE
+ * fragment's box, and evicting a whole table for one note is not the conservative reading),
+ * and a ref no fragment on this page owns (band zero).
  */
-export function noteReferenceFloorPt(
+export interface NoteReferenceLineBand {
+  /** Top of the referencing line (content-relative pt); reserve past this evicts the line. */
+  readonly top: number;
+  /** Bottom of the referencing line — the floor a same-page reserve must not rise above. */
+  readonly bottom: number;
+  /** Whether the reserve may claim the line itself to move the reference forward. */
+  readonly evictable: boolean;
+}
+
+export function noteReferenceLineBandPt(
   page: PageRecord,
   ref: { readonly paragraphId: string; readonly atomOffset: number }
-): number {
-  let floor = 0;
+): NoteReferenceLineBand {
+  let top = 0;
+  let bottom = 0;
+  let evictable = false;
   for (const block of page.fragments) {
     if (block.kind === 'paragraph') {
       if (!fragmentOwnsPosition(block, ref.paragraphId, ref.atomOffset)) continue;
-      floor = Math.max(floor, referenceLineBottom(block, ref) ?? block.box.y + block.box.height);
+      const line = referenceLineBand(block, ref);
+      const lineTop = line?.top ?? block.box.y;
+      const lineBottom = line?.bottom ?? block.box.y + block.box.height;
+      if (lineBottom > bottom) {
+        top = lineTop;
+        bottom = lineBottom;
+        // Only a located LINE may be evicted; an ownership match without a line segment
+        // (merged/projected offsets) falls back to the fragment band and stays put.
+        evictable = line !== null;
+      }
       continue;
     }
     if (tableOwnsAnyRef(block, [ref])) {
-      floor = Math.max(floor, block.box.y + block.box.height);
+      const blockBottom = block.box.y + block.box.height;
+      if (blockBottom > bottom) {
+        top = block.box.y;
+        bottom = blockBottom;
+        evictable = false;
+      }
     }
   }
-  return Math.min(Math.max(0, floor), page.contentBox.height);
+  const clamp = (value: number): number => Math.min(Math.max(0, value), page.contentBox.height);
+  return { top: clamp(top), bottom: clamp(bottom), evictable };
 }
 
-/** The owning line's bottom inside a fragment already known to own the ref, or null. */
-function referenceLineBottom(
+/** The owning line's band inside a fragment already known to own the ref, or null. */
+function referenceLineBand(
   fragment: ParagraphFragmentRecord,
   ref: { readonly paragraphId: string; readonly atomOffset: number }
-): number | null {
+): { readonly top: number; readonly bottom: number } | null {
   for (const line of fragment.lines) {
     for (const segment of lineSegments(line)) {
       if (segment.paragraphId !== ref.paragraphId) continue;
       if (ref.atomOffset < segment.start || ref.atomOffset >= segment.end) continue;
-      return line.box.y + line.box.height;
+      return { top: line.box.y, bottom: line.box.y + line.box.height };
     }
   }
   return null;
