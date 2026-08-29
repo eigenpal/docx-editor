@@ -3,7 +3,11 @@
 
 import { flattenContentControls } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
-import { createListCounterState } from './list-counters.ts';
+import {
+  createListCounterState,
+  expandCountersOf,
+  type FullContextNumberSource,
+} from './list-counters.ts';
 import {
   EMPTY_NUMBERING_INDEX,
   MAX_LEVEL_INDENT_PT,
@@ -123,6 +127,20 @@ export interface ResolvedListItem {
   readonly markerStyle: ResolvedRunStyle;
   /** Fingerprint for layout cache keys (indent, marker text, marker face). */
   readonly cacheToken: string;
+}
+
+/**
+ * What composing an item's full-context number needs, keyed on the item object itself.
+ *
+ * A side channel rather than a `ResolvedListItem` member because the item type is public API
+ * and only cross-reference resolution reads this. Entries ride the item maps the memos above
+ * reuse by identity, and die with them.
+ */
+const listItemNumberSources = new WeakMap<ResolvedListItem, FullContextNumberSource>();
+
+/** The composition inputs captured when `item` was counted, or undefined off this resolver. */
+export function listItemNumberSource(item: ResolvedListItem): FullContextNumberSource | undefined {
+  return listItemNumberSources.get(item);
 }
 
 function isElement(node: OoxmlNode): node is OoxmlElement {
@@ -492,7 +510,7 @@ export function resolveStoryListItems(
       markerMeasureToken(markerStyle),
     ].join('|');
 
-    map.set(paragraph.id, {
+    const item: ResolvedListItem = {
       numId: advanced.numId,
       ilvl: advanced.ilvl,
       abstractNumId: advanced.abstractNumId,
@@ -503,7 +521,14 @@ export function resolveStoryListItems(
       indent,
       markerStyle,
       cacheToken,
+    };
+    listItemNumberSources.set(item, {
+      index: linked,
+      numId: advanced.numId,
+      ilvl: advanced.ilvl,
+      expandCounters: expandCountersOf(advanced),
     });
+    map.set(paragraph.id, item);
   }
   return map;
 }

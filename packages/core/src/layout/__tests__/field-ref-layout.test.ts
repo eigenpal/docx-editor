@@ -260,3 +260,75 @@ describe('a renumbering edit repaints dependent REF fields incrementally', () =>
     expect(layoutSemanticDocument(part, 2, options).pages).toBe(first.pages);
   });
 });
+
+/** The standard legal shape: deep levels state only their own placeholder. */
+const LEGAL_NUMBERING = `
+  <w:abstractNum w:abstractNumId="1">
+    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1.%2"/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/>
+      <w:lvlText w:val="(%3)"/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="3"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/>
+      <w:lvlText w:val="(%4)"/><w:lvlJc w:val="left"/></w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="9"><w:abstractNumId w:val="1"/></w:num>
+`;
+
+function legalNumberingIndexOf() {
+  const result = readOoxmlPart(`<w:numbering xmlns:w="${W}">${LEGAL_NUMBERING}</w:numbering>`, {
+    name: '/word/numbering.xml',
+    contentType: 'application/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  return buildNumberingIndex(result.part.root);
+}
+const legalNumberingIndex = legalNumberingIndexOf();
+
+const legalNumbered = (ilvl: number, inner: string) =>
+  `<w:p><w:pPr><w:numPr><w:ilvl w:val="${ilvl}"/><w:numId w:val="9"/></w:numPr></w:pPr>${inner}</w:p>`;
+
+describe('self-oracle: on an unedited document the live value equals the cached result', () => {
+  // Word's own cached results for the two deep targets are `1.2(c)` and `1.2(c)(ii)`. The
+  // live path replaces them — with the SAME strings, because nothing has been edited. Any
+  // divergence here is a composition bug, not a stale cache.
+  const chain =
+    legalNumbered(0, '<w:r><w:t>Article</w:t></w:r>') +
+    legalNumbered(1, '<w:r><w:t>1.1</w:t></w:r>') +
+    legalNumbered(1, '<w:r><w:t>1.2</w:t></w:r>') +
+    legalNumbered(2, '<w:r><w:t>(a)</w:t></w:r>') +
+    legalNumbered(2, '<w:r><w:t>(b)</w:t></w:r>') +
+    legalNumbered(2, bookmarked('clause', 'Clause')) +
+    legalNumbered(3, '<w:r><w:t>(i)</w:t></w:r>') +
+    legalNumbered(3, bookmarked('item', 'Item'));
+
+  test('deep \\w and \\r values reproduce the authored caches exactly', () => {
+    const layout = layoutSemanticDocument(
+      load(
+        chain +
+          refParagraph(' REF clause \\w \\h ', '1.2(c)') +
+          refParagraph(' REF item \\r \\h \\* MERGEFORMAT ', '1.2(c)(ii)')
+      ),
+      1,
+      { measurer, numberingIndex: legalNumberingIndex }
+    );
+    const texts = textsOf(layout);
+    expect(texts).toContain('see 1.2(c)');
+    expect(texts).toContain('see 1.2(c)(ii)');
+  });
+
+  test('after a renumbering edit the live value wins over the now-stale cache', () => {
+    // Dropping the `(a)` clause shifts the target from `(c)` to `(b)`; the cache still says
+    // `1.2(c)` and must lose.
+    const edited = chain.replace(legalNumbered(2, '<w:r><w:t>(a)</w:t></w:r>'), '');
+    const layout = layoutSemanticDocument(
+      load(edited + refParagraph(' REF clause \\w \\h ', '1.2(c)')),
+      1,
+      { measurer, numberingIndex: legalNumberingIndex }
+    );
+    const texts = textsOf(layout);
+    expect(texts).toContain('see 1.2(b)');
+    expect(texts.join('|')).not.toContain('1.2(c)');
+  });
+});

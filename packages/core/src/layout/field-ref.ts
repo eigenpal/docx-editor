@@ -10,14 +10,16 @@
 // Resolution reads three story-derived inputs, all bounded:
 //   - bookmark name → target paragraph, indexed ONLY for referenced names (the index can never
 //     outgrow the capped reference count), first declaration in document order wins;
-//   - a number switch (`\r` / `\w` / `\n`) → the target's `ResolvedListItem.markerText`;
+//   - a number switch (`\r` / `\w` / `\n`) → the target's number in FULL CONTEXT, composed
+//     from the counter path by `composeFullContextNumber` — a deep legal level like `(%3)`
+//     states only its own placeholder, so its marker (`(c)`) is not the number a reader
+//     cites; the composition paints `1.2(c)` the way Word's cached result does;
 //   - a plain REF → the bookmarked text inside the target paragraph, length-capped.
 //
 // DEVIATION: `\r` (relative context) and `\w` (full context) both paint the full-context
-// marker. For multilevel `w:lvlText` like `%1.%2` the marker text IS the full-context number;
-// deriving Word's relative form would need the referencing paragraph's own list position and
-// is out of scope. All three number switches share Word's trailing-period trim (`1.2` stays
-// `1.2`, a bare `1.` becomes `1`).
+// number. Deriving Word's relative form would need the referencing paragraph's own list
+// position and is out of scope. All three number switches share Word's trailing-period trim
+// (`1.2` stays `1.2`, a bare `1.` becomes `1`).
 //
 // DEVIATION: plain-REF extraction stays inside the target paragraph. A bookmark whose end
 // marker sits outside that paragraph contributes the start paragraph's tail only — the cap
@@ -49,7 +51,12 @@ import {
   onFldCharEnd,
   onFldCharSeparate,
 } from './field-instruction.ts';
-import { walkStoryParagraphs, type ResolvedListItem } from './list-resolve.ts';
+import { composeFullContextNumber } from './list-counters.ts';
+import {
+  listItemNumberSource,
+  walkStoryParagraphs,
+  type ResolvedListItem,
+} from './list-resolve.ts';
 
 /** Word's own bookmark-name limit is 40; this is the fail-closed bound, not a fidelity claim. */
 const MAX_REF_BOOKMARK_NAME_CHARS = 256;
@@ -435,9 +442,22 @@ function buildRefFieldContext(
     const target = targets.get(spec.bookmark);
     if (!target) return null;
     if (spec.numberSwitch !== null) {
-      const marker = listItems?.get(target.id)?.markerText ?? '';
-      if (marker.length === 0) return null;
-      return trimTrailingPeriod(marker);
+      const item = listItems?.get(target.id);
+      if (!item) return null;
+      // Full context first: a deep level's marker states only its own placeholder, and
+      // painting bare `(c)` for a `1.2(c)` target is worse than the stale cache. Items built
+      // outside `resolveStoryListItems` carry no counter source; their marker (already the
+      // full context in the shapes that reach them) is the bounded fallback.
+      const source = listItemNumberSource(item);
+      const composed = source !== undefined ? composeFullContextNumber(source) : null;
+      // A bullet has a marker but no number a reader can cite — cached fallback, not a glyph.
+      const fallback =
+        item.numFmt !== 'bullet' && item.numFmt !== 'none' && item.markerText.length > 0
+          ? item.markerText
+          : null;
+      const value = composed ?? fallback;
+      if (value === null) return null;
+      return trimTrailingPeriod(value);
     }
     const text = bookmarkRangeText(target, spec.bookmark);
     return text.length > 0 ? text : null;

@@ -196,3 +196,101 @@ describe('resolveStoryRefFields', () => {
     expect(beforeContext.tokenForParagraph(blocksOf(before)[0]!.id)).toBe('');
   });
 });
+
+/** The standard legal shape: deep levels state only their OWN placeholder. */
+const LEGAL_NUMBERING = `
+  <w:abstractNum w:abstractNumId="0">
+    <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1.%2"/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="2"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/>
+      <w:lvlText w:val="(%3)"/><w:lvlJc w:val="left"/></w:lvl>
+    <w:lvl w:ilvl="3"><w:start w:val="1"/><w:numFmt w:val="lowerRoman"/>
+      <w:lvlText w:val="(%4)"/><w:lvlJc w:val="left"/></w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
+`;
+
+function contextUnder(numberingXml: string, part: OoxmlPart) {
+  const result = readOoxmlPart(`<w:numbering xmlns:w="${W}">${numberingXml}</w:numbering>`, {
+    name: '/word/numbering.xml',
+    contentType: 'application/xml',
+  });
+  if (!result.ok) throw new Error(result.reason);
+  const blocks = blocksOf(part);
+  const listItems = resolveStoryListItems(blocks, buildNumberingIndex(result.part.root), undefined);
+  return resolveStoryRefFields(blocks, listItems);
+}
+
+describe('number switches compose the FULL-CONTEXT number from the counter path', () => {
+  // Counters at the deep targets: 1, 2, 3, 2 — the `(c)` marker alone is not the number a
+  // reader cites; Word's cached result says `1.2(c)`, and the live value must match it.
+  const body =
+    numbered(0, bookmarked('art', 'Article one')) +
+    numbered(1, '<w:r><w:t>1.1</w:t></w:r>') +
+    numbered(1, bookmarked('sec', 'Section 1.2')) +
+    numbered(2, '<w:r><w:t>(a)</w:t></w:r>') +
+    numbered(2, '<w:r><w:t>(b)</w:t></w:r>') +
+    numbered(2, bookmarked('clause', 'Clause (c)')) +
+    numbered(3, '<w:r><w:t>(i)</w:t></w:r>') +
+    numbered(3, bookmarked('item', 'Item (ii)')) +
+    // The target index only holds REFERENCED names, so every probed bookmark needs a field.
+    refField(' REF clause \\w ') +
+    refField(' REF item \\r ') +
+    refField(' REF sec \\w ') +
+    refField(' REF art \\r ');
+
+  const value = (bookmark: string, numberSwitch: 'r' | 'w' | 'n') =>
+    contextUnder(LEGAL_NUMBERING, document(body))!.valueOf({
+      bookmark,
+      numberSwitch,
+      hyperlink: false,
+    });
+
+  test('a deep target paints its ancestors, not its bare marker', () => {
+    expect(value('clause', 'w')).toBe('1.2(c)');
+    expect(value('item', 'r')).toBe('1.2(c)(ii)');
+  });
+
+  test('a level whose placeholder a deeper kept text displays is dropped once, not twice', () => {
+    // lvl0's %1 appears in lvl1's `%1.%2`, so `1.` is dropped and the result is not `1.1.2`.
+    expect(value('sec', 'w')).toBe('1.2');
+    // The shallowest target keeps only itself; the bare trailing period trims.
+    expect(value('art', 'r')).toBe('1');
+  });
+
+  test('w:isLgl renders inherited placeholders decimal in the composition too', () => {
+    const numbering = `
+      <w:abstractNum w:abstractNumId="0">
+        <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="upperRoman"/>
+          <w:lvlText w:val="%1."/><w:lvlJc w:val="left"/></w:lvl>
+        <w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:isLgl/>
+          <w:lvlText w:val="%1.%2"/><w:lvlJc w:val="left"/></w:lvl>
+      </w:abstractNum>
+      <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
+    `;
+    const part = document(
+      numbered(0, '<w:r><w:t>I.</w:t></w:r>') +
+        numbered(1, bookmarked('lgl', 'legal item')) +
+        refField(' REF lgl \\w ')
+    );
+    const context = contextUnder(numbering, part)!;
+    // The upperRoman `%1` renders decimal under the legal level, exactly as its marker does:
+    // `1.1`, never `I.1`.
+    expect(context.valueOf({ bookmark: 'lgl', numberSwitch: 'w', hyperlink: false })).toBe('1.1');
+  });
+
+  test('a bullet target still falls back to the cached result, never a glyph', () => {
+    const numbering = `
+      <w:abstractNum w:abstractNumId="0">
+        <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/>
+          <w:lvlText w:val="•"/><w:lvlJc w:val="left"/></w:lvl>
+      </w:abstractNum>
+      <w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>
+    `;
+    const part = document(numbered(0, bookmarked('b', 'bulleted')) + refField(' REF b \\r '));
+    const context = contextUnder(numbering, part)!;
+    expect(context.valueOf({ bookmark: 'b', numberSwitch: 'r', hyperlink: false })).toBeNull();
+  });
+});
