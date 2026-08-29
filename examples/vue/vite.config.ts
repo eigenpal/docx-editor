@@ -117,6 +117,13 @@ export default defineConfig({
             find: '@docx-editor.dev/pro',
             replacement: path.join(monorepoRoot, 'packages/pro/src/index.ts'),
           },
+          // Before the bare `fonts` entry: matching is prefix-based, so the shorter find
+          // would rewrite `@docx-editor.dev/fonts/google` to `…/src/index.ts/google` and
+          // fail with "Not a directory". The React config carries the same pair.
+          {
+            find: '@docx-editor.dev/fonts/google',
+            replacement: path.join(monorepoRoot, 'packages/fonts/src/google-fonts.ts'),
+          },
           {
             find: '@docx-editor.dev/fonts',
             replacement: path.join(monorepoRoot, 'packages/fonts/src/index.ts'),
