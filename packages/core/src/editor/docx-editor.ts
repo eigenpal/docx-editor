@@ -401,14 +401,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * at resolution, so a file whose own fonts are arriving must not flash a notice first.
    *
    * The notice reads `renderedFontFamilies()`, never `documentFonts()`: a family joins it
-   * only when a rendered glyph resolves to it through the style cascade. A declaration
-   * alone renders nothing — Word's `w:docDefaults` declares Calibri over a brand-new
-   * empty document, and its latent Balloon Text style names Segoe UI in files that never
-   * render a character in either — so a declaration-based notice warned about text that
-   * does not exist. A brand-new blank document answers `[]` for the same reason, and the
-   * first typed character moves the answer. No `rendersText()` gate on top: it counts
-   * only literal `w:t`, and a stricter pre-gate would hide a document whose only glyphs
-   * are marks (note references, tab leaders) rendering in a substitute face.
+   * only when a rendered glyph resolves to it through the style cascade, so a declaration
+   * with no glyph behind it (a blank document's `w:docDefaults` Calibri, a latent Balloon
+   * Text style) answers `[]` and the first typed character moves the answer. No
+   * `rendersText()` gate on top: it counts only literal `w:t` and would hide a document
+   * whose only glyphs are marks (note references, tab leaders) in a substitute face.
    */
   const deriveFontSubstitutions = (): readonly string[] => {
     if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
