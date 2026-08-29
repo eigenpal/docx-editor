@@ -42,6 +42,17 @@ export const AUTO_PARAGRAPH_SPACING_PT = 14;
 // @public
 export const AUTO_PREFERRED_WIDTH: PreferredWidth;
 
+// @public (undocumented)
+export type AutonumFieldKind = 'AUTONUM' | 'AUTONUMLGL' | 'AUTONUMOUT';
+
+// @public
+export interface AutonumFieldSpec {
+    // (undocumented)
+    readonly kind: AutonumFieldKind;
+    readonly numFmt: string | null;
+    readonly suppressPeriod: boolean;
+}
+
 // @public
 export function baselineShiftPtOf(style: ResolvedRunStyle): number;
 
@@ -2057,6 +2068,9 @@ export function paragraphTabStops(pPr: OoxmlNode | undefined): ResolvedTabStops;
 export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: string): string;
 
 // @public
+export function parseAutonumInstruction(raw: string): AutonumFieldSpec | null;
+
+// @public
 export function parsePageNumbering(sectPr: OoxmlNode): SectionPageNumbering | undefined;
 
 // @public
@@ -2128,6 +2142,7 @@ displayMode?: RevisionDisplayMode): SemanticTableStructure | null;
 
 // @public
 export interface RefFieldContext {
+    autonumValueOf?(anchorId: string): string | null;
     liveValueOf(anchorId: string, spec: RefFieldSpec): string | null;
     tokenForParagraph(paragraphId: string): string;
     readonly valuesToken: string;

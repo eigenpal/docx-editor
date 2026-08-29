@@ -20,6 +20,7 @@ import { parseButtonInstruction, type ButtonFieldSpec } from './field-button.ts'
 import { parseDocPropertyInstruction, type DocPropertyField } from './field-doc-property.ts';
 import { normalizeFieldInstruction } from './field-instruction.ts';
 import { parseHyperlinkInstruction, type HyperlinkFieldSpec } from './field-link.ts';
+import { parseAutonumInstruction, type AutonumFieldSpec } from './field-autonum.ts';
 import { parseRefInstruction, type RefFieldSpec } from './field-ref.ts';
 import { parseSymbolInstruction, type SymbolFieldSpec } from './field-symbol.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
@@ -56,6 +57,7 @@ export interface CapturedInstructionSpecs {
   buttonSpec: ButtonFieldSpec | null;
   docPropertySpec: DocPropertyField | null;
   refSpec: RefFieldSpec | null;
+  autonumSpec: AutonumFieldSpec | null;
 }
 
 /**
@@ -75,6 +77,8 @@ export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: 
   pending.docPropertySpec = parseDocPropertyInstruction(raw);
   if (pending.docPropertySpec) return;
   pending.refSpec = parseRefInstruction(raw);
+  if (pending.refSpec) return;
+  pending.autonumSpec = parseAutonumInstruction(raw);
 }
 
 /** The synthesized form-field result: text plus the props/style the piece should carry. */

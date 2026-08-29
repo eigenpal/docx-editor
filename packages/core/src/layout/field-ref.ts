@@ -79,6 +79,12 @@ import {
   noteRefMarkIndex,
   type NoteRefNumberingInput,
 } from './field-noteref.ts';
+import {
+  autonumDisplayText,
+  parseAutonumInstruction,
+  type AutonumFieldKind,
+  type AutonumFieldSpec,
+} from './field-autonum.ts';
 import { composeFullContextNumber } from './list-counters.ts';
 import {
   listItemNumberSource,
@@ -261,6 +267,14 @@ export interface RefFieldContext {
    * calibration verdict, however each walk collected the field's cached text.
    */
   liveValueOf(anchorId: string, spec: RefFieldSpec): string | null;
+  /**
+   * The synthesized display of ONE AUTONUM-family field, keyed by its begin / `w:fldSimple`
+   * node id, or null to paint nothing (unsupported switches, or an anchor this scan never
+   * saw — both the field's historical rendering). These fields carry no cached result at
+   * all, so there is no calibration: the sequential value is the only display they have.
+   * Optional so hand-built contexts predating it stay valid.
+   */
+  autonumValueOf?(anchorId: string): string | null;
 }
 
 function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
@@ -272,9 +286,12 @@ function wmlAttribute(node: OoxmlElement, localName: string): string | undefined
   return undefined;
 }
 
-/** One scanned REF field: its instruction, its anchor node id, and its NORMALIZED cache. */
+/** One scanned REF or AUTONUM-family field: instruction, anchor node id, NORMALIZED cache. */
 interface ScannedRefField {
-  readonly spec: RefFieldSpec;
+  /** The recognized REF/NOTEREF instruction, or null when {@link autonum} answers instead. */
+  readonly spec: RefFieldSpec | null;
+  /** The recognized AUTONUM-family instruction; such fields have no cache and no bookmark. */
+  readonly autonum: AutonumFieldSpec | null;
   /** Begin `w:fldChar` / `w:fldSimple` node id — stable across edits, the calibration key. */
   readonly anchorId: string;
   /** The authored cached result, whitespace-collapsed (NBSP = space) — the oracle. */
@@ -351,8 +368,13 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
   const budget = createScanBudget();
   const field = createFieldParseState();
 
-  /** The open level-1 REF field being collected, if its instruction parsed. */
-  let pending: { spec: RefFieldSpec; anchorId: string; cached: string } | null = null;
+  /** The open level-1 REF / AUTONUM field being collected, if its instruction parsed. */
+  let pending: {
+    spec: RefFieldSpec | null;
+    autonum: AutonumFieldSpec | null;
+    anchorId: string;
+    cached: string;
+  } | null = null;
   let levelOneBeginId: string | null = null;
 
   const captureLevelOne = (): void => {
@@ -360,12 +382,21 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
     const effective = effectiveFieldInstruction(field);
     if (effective.overflow || levelOneBeginId === null) return;
     const spec = parseRefInstruction(effective.instruction);
-    if (spec) pending = { spec, anchorId: levelOneBeginId, cached: '' };
+    if (spec) {
+      pending = { spec, autonum: null, anchorId: levelOneBeginId, cached: '' };
+      return;
+    }
+    // AUTONUM-family fields ride the same scan: begin/instrText/end with NO separator and no
+    // cached result, so this capture (which fires at the outermost end too) is the one place
+    // that sees them.
+    const autonum = parseAutonumInstruction(effective.instruction);
+    if (autonum) pending = { spec: null, autonum, anchorId: levelOneBeginId, cached: '' };
   };
   const finalizePending = (): void => {
     if (!pending) return;
     (fields ??= []).push({
       spec: pending.spec,
+      autonum: pending.autonum,
       anchorId: pending.anchorId,
       cached: normalizeResultText(pending.cached),
     });
@@ -429,10 +460,13 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
     if (isFldSimple(node)) {
       // The outer instruction only: a field nested in a simple field's cached result is never
       // live-projected as a REF, so descending would key on values nothing paints.
-      const spec = parseRefInstruction(fldSimpleInstr(node) ?? '');
-      if (spec) {
+      const instr = fldSimpleInstr(node) ?? '';
+      const spec = parseRefInstruction(instr);
+      const autonum = spec === null ? parseAutonumInstruction(instr) : null;
+      if (spec || autonum) {
         (fields ??= []).push({
           spec,
+          autonum,
           anchorId: node.id,
           cached: normalizeResultText(fldSimpleCachedText(node, budget)),
         });
@@ -672,13 +706,34 @@ function buildRefFieldContext(
   // never an object: bookmark names are attacker-chosen keys.
   const referenced = new Set<string>();
   for (const fields of fieldsByParagraph.values()) {
-    for (const field of fields) referenced.add(field.spec.bookmark);
+    for (const field of fields) {
+      if (field.spec) referenced.add(field.spec.bookmark);
+    }
   }
   const targets = new Map<string, OoxmlElement>();
   for (const scan of blockScans) {
     if (!scan.bookmarkOwners) continue;
     for (const [name, paragraph] of scan.bookmarkOwners) {
       if (referenced.has(name) && !targets.has(name)) targets.set(name, paragraph);
+    }
+  }
+
+  // AUTONUM prepass: one counter per kind, advanced in document order over the SAME scan (a
+  // Map iterates in insertion order, and note stories joined after the body). Computed before
+  // any REF resolves because a REF number switch aimed at an AUTONUM paragraph reads the
+  // paragraph's first value — Word numbers those targets from the field, not from a list.
+  const autonumByAnchor = new Map<string, string>();
+  const autonumByParagraph = new Map<string, string>();
+  const autonumCounters = new Map<AutonumFieldKind, number>();
+  for (const [paragraphId, fields] of fieldsByParagraph) {
+    for (const field of fields) {
+      if (!field.autonum) continue;
+      const next = (autonumCounters.get(field.autonum.kind) ?? 0) + 1;
+      autonumCounters.set(field.autonum.kind, next);
+      const value = autonumDisplayText(field.autonum, next);
+      if (value.length === 0) continue;
+      autonumByAnchor.set(field.anchorId, value);
+      if (!autonumByParagraph.has(paragraphId)) autonumByParagraph.set(paragraphId, value);
     }
   }
 
@@ -697,7 +752,14 @@ function buildRefFieldContext(
     }
     if (spec.numberSwitch !== null) {
       const item = listItems?.get(target.id);
-      if (!item) return null;
+      if (!item) {
+        // The target's number can come from an AUTONUM-family field rather than a list —
+        // the same documents use both, and the reference cites the synthesized value. `\t`
+        // has no template to filter there, so that pairing keeps the cache.
+        if (mods.suppressNonDelimiterText) return null;
+        const autonum = autonumByParagraph.get(target.id);
+        return autonum !== undefined ? trimTrailingPeriod(autonum) : null;
+      }
       // `\r` / `\w`: full context — a deep level's marker states only its own placeholder,
       // and painting bare `(c)` for a `1.2(c)` target is worse than the stale cache. `\n`:
       // the target's own level only, per Word's cached values for that switch. Items built
@@ -760,6 +822,14 @@ function buildRefFieldContext(
   for (const [paragraphId, fields] of fieldsByParagraph) {
     const pieces: string[] = [];
     for (const field of fields) {
+      // An AUTONUM-family field has no cache to calibrate against: its synthesized value is
+      // the only display it has, and the token folds it so inserting or removing an earlier
+      // field of the same kind repaints every later one.
+      if (field.spec === null) {
+        const value = field.autonum ? (autonumByAnchor.get(field.anchorId) ?? null) : null;
+        pieces.push(value !== null ? `a\u0001${value}` : `c\u0002${field.cached}`);
+        continue;
+      }
       const computed = computedOf(field.spec);
       let verdict = verdicts.get(field.anchorId);
       if (verdict === undefined) {
@@ -799,6 +869,7 @@ function buildRefFieldContext(
       }
       return entry.live;
     },
+    autonumValueOf: (anchorId) => autonumByAnchor.get(anchorId) ?? null,
   };
 }
 

@@ -563,6 +563,7 @@ export function piecesOfParagraph(
             buttonSpec: null,
             docPropertySpec: null,
             refSpec: null,
+            autonumSpec: null,
             // Bounded ffData STATE read (checkbox checked/size, dropdown entries/selection —
             // macros never); `formField` below stays presence-based so an unreadable payload
             // still shades.

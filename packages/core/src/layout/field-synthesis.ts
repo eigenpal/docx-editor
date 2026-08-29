@@ -105,6 +105,14 @@ export function synthesizeAtomicField(
     const value = ctx.refFields.liveValueOf(pending.beginId, pending.refSpec);
     if (value !== null) return { text: value, props: pending.props, style: pending.style };
   }
+  // An AUTONUM-family field has no separator and no cached result — Word computes the number
+  // at display time and never stores it — so the synthesized sequential value is its only
+  // display, and it wins over whatever stray cache a producer wrote. An anchor the scan never
+  // saw paints nothing, the field's historical rendering.
+  if (pending.autonumSpec && ctx.refFields?.autonumValueOf) {
+    const value = ctx.refFields.autonumValueOf(pending.beginId);
+    if (value !== null) return { text: value, props: pending.props, style: pending.style };
+  }
   // A non-empty cached result is what Word last painted; it wins over synthesis.
   if (pending.cachedText.length > 0) {
     return { text: pending.cachedText, props: pending.props, style: pending.style };

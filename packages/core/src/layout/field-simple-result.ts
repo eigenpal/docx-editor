@@ -19,6 +19,7 @@ import { parseButtonInstruction } from './field-button.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
+import { parseAutonumInstruction } from './field-autonum.ts';
 import { parseRefInstruction, type RefFieldContext } from './field-ref.ts';
 import {
   modelTextOfRunChild,
@@ -363,6 +364,15 @@ export function projectSimpleFieldResult(args: {
     const refSpec = parseRefInstruction(instr);
     if (refSpec) {
       const value = args.refFields.liveValueOf(simple.id, refSpec);
+      if (value !== null) {
+        const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+        if (style.hidden) return null;
+        return { text: value, props, style };
+      }
+    } else if (args.refFields.autonumValueOf && parseAutonumInstruction(instr)) {
+      // A simple AUTONUM-family field synthesizes exactly like the complex shape: the
+      // sequential value is the only display these fields have.
+      const value = args.refFields.autonumValueOf(simple.id);
       if (value !== null) {
         const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
         if (style.hidden) return null;

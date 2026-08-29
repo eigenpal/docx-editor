@@ -16,6 +16,7 @@ import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
+import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
@@ -276,6 +277,14 @@ export interface PendingFieldProjection {
    * number switch) falls back to the cache, never to the raw instruction.
    */
   refSpec: RefFieldSpec | null;
+  /**
+   * Recognized AUTONUM / AUTONUMLGL / AUTONUMOUT instruction, or null when the field is none.
+   *
+   * Captured at the same points as {@link symbolSpec}. These fields carry NO separator and NO
+   * cached result — Word computes the number at display time and never stores it — so the
+   * synthesized sequential value is the only display they have; there is no cache to prefer.
+   */
+  autonumSpec: AutonumFieldSpec | null;
   /**
    * Bounded `w:ffData` render state read at `begin` (`legacyFormFieldDataOf` — state only,
    * macros never), or null when absent or malformed. {@link formField} stays presence-based:

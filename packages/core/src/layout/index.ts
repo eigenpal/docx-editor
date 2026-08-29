@@ -358,6 +358,11 @@ export {
   type RefFieldSpec,
   type RefNoteParts,
 } from './field-ref.ts';
+export {
+  parseAutonumInstruction,
+  type AutonumFieldKind,
+  type AutonumFieldSpec,
+} from './field-autonum.ts';
 export { planRefFieldResultRefresh, type RefFieldRefreshOptions } from './field-ref-refresh.ts';
 export { storyBlocks, noteStoryBlocks, MAX_SDT_NESTING } from './story-roots.ts';
 export {
