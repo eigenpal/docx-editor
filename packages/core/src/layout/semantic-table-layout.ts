@@ -455,8 +455,9 @@ function placeCellParagraph(
   // offset. Contextual spacing is a body-flow question (it compares document neighbours),
   // so it is not applied per cell.
   // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
-  // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
-  // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
+  // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
+  // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
+  // the next tab stop past an overflowing one (§17.9.30).
   const firstLineOffset = firstLineShift(listItem, indent, deps.measurer, tabStops, available);
   const rawZones = deps.pageExclusionZones?.() ?? Object.freeze([]);
   const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;

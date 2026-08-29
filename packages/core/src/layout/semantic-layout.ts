@@ -2056,8 +2056,9 @@ function layoutBlocksPass(
     // The schema treats them as mutually exclusive; where a producer writes both, hanging
     // wins, which is how Word reads it.
     // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
-    // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
-    // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
+    // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
+    // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
+    // the next tab stop past an overflowing one (§17.9.30).
     let firstLineOffset = firstLineOffsetOf(entry);
     const paragraphId = paragraph.id;
     // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE

@@ -144,39 +144,65 @@ function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undef
 }
 
 /**
- * Read `w:numPr` from cascaded paragraph-property nodes (last wins).
+ * One `w:numPr` tier read per FIELD. `undefined` means the tier does not state the field.
+ *
+ * `numId: null` is a tier that states "no numbering": `w:val="0"` (§17.9.18 — the null
+ * numbering definition), a `w:numId` with no value, or an oversized value (hostile-input
+ * guard). `ilvl: null` is a stated level outside 0–8, which invalidates the tier's
+ * numbering the same way; an unparseable level reads as 0, as before.
+ */
+function numPrFieldsOf(
+  node: OoxmlNode
+): { numId: string | null | undefined; ilvl: number | null | undefined } | null {
+  if (!isElement(node)) return null;
+  const numPr = childNamed(node, 'numPr');
+  if (!numPr) return null;
+  const numIdNode = childNamed(numPr, 'numId');
+  const ilvlNode = childNamed(numPr, 'ilvl');
+  let numId: string | null | undefined;
+  if (numIdNode) {
+    const val = attrVal(numIdNode, 'val');
+    numId = val !== undefined && val !== '0' && val.length <= 64 ? val : null;
+  }
+  let ilvl: number | null | undefined;
+  if (ilvlNode) {
+    const raw = attrVal(ilvlNode, 'val');
+    const parsed = /^\d{1,2}$/.test(raw ?? '') ? Number(raw) : 0;
+    ilvl = parsed <= 8 ? parsed : null;
+  }
+  return { numId, ilvl };
+}
+
+/**
+ * Read `w:numPr` from cascaded paragraph-property nodes (lowest precedence first).
  *
  * Flat `OoxmlProperty[]` bags drop nested `ilvl`/`numId`, so this walks the tree nodes
  * the same way borders and tabs do.
+ *
+ * `w:ilvl` and `w:numId` inherit INDEPENDENTLY through the style chain and the direct
+ * `w:pPr` (§17.3.1.19): a tier stating only the level keeps the id it inherits — Word's
+ * standard Heading2–Heading9 shape, where only Heading1 names the `w:num` — and a tier
+ * stating only the id keeps the inherited level. Treating each `w:numPr` node as a full
+ * replacement dropped the id at every level-only tier and unnumbered the paragraph. A
+ * stated `w:numId w:val="0"` (or an invalid value) still switches numbering off at that
+ * tier even when a lower tier set one; a higher tier stating a valid id re-enables. A
+ * level-only tier with no id inherited from below resolves to no numbering.
  */
 export function readNumPr(
   paragraphPropertyNodes: readonly OoxmlNode[]
 ): { numId: string; ilvl: number } | null {
-  let found: { numId: string; ilvl: number } | null = null;
+  let numId: string | null = null;
+  let ilvl = 0;
   for (const node of paragraphPropertyNodes) {
-    if (!isElement(node)) continue;
-    const numPr = childNamed(node, 'numPr');
-    if (!numPr) continue;
-    const ilvlNode = childNamed(numPr, 'ilvl');
-    const numIdNode = childNamed(numPr, 'numId');
-    const numId = numIdNode ? attrVal(numIdNode, 'val') : undefined;
-    const ilvlRaw = ilvlNode ? attrVal(ilvlNode, 'val') : '0';
-    if (!numId || numId === '0') {
-      found = null;
-      continue;
+    const fields = numPrFieldsOf(node);
+    if (!fields) continue;
+    if (fields.numId !== undefined) numId = fields.numId;
+    if (fields.ilvl !== undefined) {
+      if (fields.ilvl === null) numId = null;
+      else ilvl = fields.ilvl;
     }
-    if (numId.length > 64) {
-      found = null;
-      continue;
-    }
-    const ilvl = /^\d{1,2}$/.test(ilvlRaw ?? '') ? Number(ilvlRaw) : 0;
-    if (ilvl < 0 || ilvl > 8) {
-      found = null;
-      continue;
-    }
-    found = { numId, ilvl };
   }
-  return found;
+  return numId === null ? null : { numId, ilvl };
 }
 
 /**
@@ -193,8 +219,11 @@ function numIdForStyle(styleCascade: StyleCascadeTable, styleId: string): string
     if (seen.has(current.styleId)) return undefined;
     seen.add(current.styleId);
     const node = current.paragraphPropertiesNode;
-    const numPr = node ? readNumPr([node]) : null;
-    if (numPr) return numPr.numId;
+    const fields = node ? numPrFieldsOf(node) : null;
+    // The NEAREST style that states `w:numId` decides, exactly as the merged read above
+    // does: a stated `w:val="0"` switches numbering off rather than deferring to the
+    // base, and a level-only `w:numPr` keeps walking for the id it inherits.
+    if (fields && fields.numId !== undefined) return fields.numId ?? undefined;
     current = current.basedOn === null ? undefined : styleCascade.styles.get(current.basedOn);
   }
   return undefined;
@@ -795,10 +824,18 @@ function resolveStoryListItemsStable(
 }
 
 /**
- * Horizontal marker box inside the hanging indent slot.
+ * Horizontal marker box inside the first-line indent slot.
  *
  * Coordinates are relative to the same origin as paragraph content (`indent.left` is the
  * text start). Returns null when there is nothing to paint.
+ *
+ * `w:hanging` and a positive `w:firstLine` are one mutually exclusive slot
+ * (§17.3.1.10, §17.3.1.12), so the marker has two placements, not an interaction:
+ * a hanging level puts the marker BEFORE the text start (`left - hanging`); a
+ * positive-firstLine level puts it AFTER (`left + firstLine`) — the standard legal
+ * shape `w:ind w:left="0" w:firstLine="720"` numbers at 0.5" while continuation
+ * lines return to the margin. Reading only the hanging model painted every such
+ * marker at the left margin.
  */
 export function listMarkerBox(
   item: ResolvedListItem,
@@ -813,15 +850,20 @@ export function listMarkerBox(
 
   const textLeft = item.indent.left;
   const hanging = item.indent.hanging;
+  // The hanging spelling wins when a hostile file states both (Word's collapse); a
+  // NEGATIVE firstLine is the hang spelled the other way and stays on the hanging model.
+  const firstLine = hanging > 0 ? 0 : Math.max(0, item.indent.firstLine);
   // Markers stop at the content origin — except for a paragraph the author pulled INTO the
   // margin with a negative `w:ind` (§17.3.1.12), where pinning the marker at zero would put
   // the number to the RIGHT of the text it numbers.
   const floor = Math.min(0, textLeft);
-  const slotLeft = Math.max(floor, textLeft - hanging);
+  const slotLeft = firstLine > 0 ? textLeft + firstLine : Math.max(floor, textLeft - hanging);
   const slotWidth = Math.max(hanging, markerWidth);
   let x = slotLeft;
   if (item.markerAlign === 'right') {
-    x = textLeft - markerWidth;
+    // The alignment anchor is the slot's right edge: the text start for a hanging level,
+    // the shifted slot's end for a first-line level.
+    x = firstLine > 0 ? slotLeft + slotWidth - markerWidth : textLeft - markerWidth;
   } else if (item.markerAlign === 'center') {
     x = slotLeft + (slotWidth - markerWidth) / 2;
   }
@@ -841,6 +883,11 @@ export function listMarkerBox(
  * - `w:suff="tab"` with a marker WIDER than its slot (`viii.`, `%1.%2.%3.`) — the suffix tab
  *   advances to the next tab stop past the marker, so the first line moves right instead of
  *   the marker being painted over its own first word.
+ *
+ * A positive-firstLine level's marker ends PAST the text start, so its suffix tab always
+ * takes the stop lookup. `tabStops` is the PARAGRAPH's resolved stops: a `w:tab` the level
+ * itself states (`w:num` at the next grid stop is the shape Word writes) is not folded in,
+ * and the default half-inch grid lands on the same destination.
  */
 export function listFirstLineOffset(
   item: ResolvedListItem,
