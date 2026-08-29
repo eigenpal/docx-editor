@@ -400,18 +400,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * While font work is still in flight the answer would flicker: embedded faces register
    * at resolution, so a file whose own fonts are arriving must not flash a notice first.
    *
-   * A document that renders no character has nothing a substitute face could get wrong.
-   * That is not a special case for the blank template but the notice's own definition:
-   * `documentFonts()` reports DECLARED families, and Word's `w:docDefaults` declares
-   * Calibri over a document with no runs at all — so the first thing a user saw on a page
-   * they had just created was a warning about text that does not exist. The gate lifts on
-   * the first typed character, when the claim becomes true.
+   * The notice reads `renderedFontFamilies()`, never `documentFonts()`: a family joins it
+   * only when a rendered glyph resolves to it through the style cascade. A declaration
+   * alone renders nothing — Word's `w:docDefaults` declares Calibri over a brand-new
+   * empty document, and its latent Balloon Text style names Segoe UI in files that never
+   * render a character in either — so a declaration-based notice warned about text that
+   * does not exist. A brand-new blank document answers `[]` for the same reason, and the
+   * first typed character moves the answer. No `rendersText()` gate on top: it counts
+   * only literal `w:t`, and a stricter pre-gate would hide a document whose only glyphs
+   * are marks (note references, tab leaders) rendering in a substitute face.
    */
   const deriveFontSubstitutions = (): readonly string[] => {
     if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
-    if (!surface.session.rendersText()) return EMPTY_FONT_SUBSTITUTIONS;
     return detectFontSubstitutions(
-      surface.session.documentFonts(),
+      surface.session.renderedFontFamilies(),
       fontFamilyCovered,
       probeLocalFont
     );

@@ -169,6 +169,17 @@ export interface TreeDocxSessionView {
    */
   documentFonts(): readonly string[];
   /**
+   * Font families the document's RENDERED text resolves to, over the story roots only:
+   * direct run `w:rFonts` of text-bearing runs plus the style chains those runs,
+   * paragraphs and tables actually reference — never a declaration in an unused style.
+   * Memoized per package revision.
+   *
+   * The font-substitution notice reads this one: `documentFonts` reports what the
+   * document DECLARES, and Word writes latent styles (Balloon Text naming Segoe UI)
+   * into documents that never render a character in them.
+   */
+  renderedFontFamilies(): readonly string[];
+  /**
    * Whether the document puts any literal character on a page, over the same roots
    * {@link TreeDocxSessionView.documentFonts} reads. Memoized per package revision.
    *

@@ -78,6 +78,7 @@ import {
   paragraphStyleId,
   type DocumentOutlineEntry,
 } from './document-outline.ts';
+import { collectRenderedFontFamilies } from './document-rendered-fonts.ts';
 import { collectTextMatches, type DocumentSearchResult } from './document-search.ts';
 import {
   collectDocumentThemeColors,
@@ -426,24 +427,34 @@ export function openTreeSession(
   };
 
   let fontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null = null;
+  let renderedFontsCache: {
+    readonly revision: number;
+    readonly styles: OoxmlElement | null;
+    readonly families: readonly string[];
+  } | null = null;
   let rendersTextCache: { readonly revision: number; readonly rendersText: boolean } | null = null;
   let stylesCache: readonly DocumentStyleEntry[] | null = null;
   let themeColorsCache: readonly DocumentThemeColorEntry[] | null = null;
   let themeFontsCache: DocumentThemeFonts | null = null;
   /**
-   * Live body, styles, headers, footers, and notes used by both document-wide catalogs.
-   * Including notes ensures their fonts load. Callers memoize each answer by package revision.
+   * Live body, headers, footers, and notes — the roots whose content RENDERS. Including
+   * notes ensures their fonts load. Callers memoize each answer by package revision.
    */
-  const catalogRoots = (): OoxmlElement[] => {
+  const storyCatalogRoots = (): OoxmlElement[] => {
     const roots: OoxmlElement[] = [bodyStore().part.root];
-    const styles = resolveStylesRoot();
-    if (styles) roots.push(styles);
     const seen = new Set<OoxmlPart>();
     for (const part of furnitureAndNoteParts()) {
       if (seen.has(part)) continue;
       seen.add(part);
       roots.push(part.root);
     }
+    return roots;
+  };
+  const catalogRoots = (): OoxmlElement[] => {
+    const roots = storyCatalogRoots();
+    const styles = resolveStylesRoot();
+    // Body first, then styles, then furniture — first-seen casing follows reading order.
+    if (styles) roots.splice(1, 0, styles);
     return roots;
   };
 
@@ -747,6 +758,30 @@ export function openTreeSession(
           ),
         };
         return fontsCache.fonts;
+      },
+
+      renderedFontFamilies() {
+        // Keyed on the package revision AND the styles root: `resolveStylesRoot` swaps the
+        // root by identity when the styles part is repaired or replaced, and the style
+        // chains this derivation walks live there.
+        const styles = resolveStylesRoot();
+        if (
+          renderedFontsCache &&
+          renderedFontsCache.revision === packageStore.packageRevision &&
+          renderedFontsCache.styles === styles
+        ) {
+          return renderedFontsCache.families;
+        }
+        renderedFontsCache = {
+          revision: packageStore.packageRevision,
+          styles,
+          families: collectRenderedFontFamilies(
+            storyCatalogRoots(),
+            styles,
+            collectDocumentThemeFonts(resolveThemeRoot())
+          ),
+        };
+        return renderedFontsCache.families;
       },
 
       rendersText() {

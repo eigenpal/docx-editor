@@ -174,6 +174,7 @@ export interface TreeDocxSessionView {
         readonly target: string;
     } | null;
     removeCustomNode(controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
+    renderedFontFamilies(): readonly string[];
     rendersText(): boolean;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
     replyToComment(parentCommentId: string | null, anchor: {

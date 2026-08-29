@@ -20,6 +20,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { zipSync, strToU8 } from 'fflate';
 import { readFileSync } from 'node:fs';
 import { sha256FontBytes } from '../../layout/index.ts';
 import { blankDocumentBytes } from '../blank-document.ts';
@@ -75,6 +76,31 @@ afterAll(() => {
 const runIn = (family: string, text: string) =>
   `<w:p><w:r><w:rPr><w:rFonts w:ascii="${family}" w:hAnsi="${family}"/></w:rPr><w:t>${text}</w:t></w:r></w:p>`;
 
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const CT_NS = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+/** Like `docx(body)`, with a styles part carrying the given `w:style` elements. */
+function docxWithStyles(body: string, styleElements: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT_NS}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL_NS}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL_NS}"><Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
+    ),
+    'word/styles.xml': strToU8(`<w:styles xmlns:w="${W}">${styleElements}</w:styles>`),
+  });
+}
+
 describe('font substitution notice', () => {
   test('a brand-new blank document reports no substitution', () => {
     installed = [];
@@ -101,6 +127,27 @@ describe('font substitution notice', () => {
     editor.destroy();
   });
 
+  test('a family declared only by an unused style is not reported', () => {
+    // Word writes latent styles into real files — Balloon Text names Segoe UI in nearly
+    // every document — and no rendered character resolves to them. The notice reads the
+    // RENDERED families, so the declaration stays in the picker and out of the warning.
+    installed = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docxWithStyles(
+        runIn('Garamond', 'body text'),
+        '<w:style w:type="paragraph" w:styleId="BalloonText">' +
+          '<w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI"/></w:rPr></w:style>' +
+          '<w:style w:type="table" w:styleId="TableGrid1">' +
+          '<w:rPr><w:rFonts w:ascii="Times New Roman Bold"/></w:rPr></w:style>'
+      ),
+    });
+    // Both are still DECLARED — the picker reports them — but neither renders.
+    expect(editor.getDocumentFonts()).toContain('Segoe UI');
+    expect(editor.snapshot().fontSubstitutions ?? []).toEqual(['Garamond']);
+    editor.destroy();
+  });
+
   test('a document whose text renders in an unavailable face reports it', () => {
     installed = [];
     const editor = createDocxEditor({
@@ -108,6 +155,21 @@ describe('font substitution notice', () => {
       document: docx(runIn('Garamond', 'body text')),
     });
     expect(editor.snapshot().fontSubstitutions ?? []).toContain('Garamond');
+    editor.destroy();
+  });
+
+  test('a document whose only glyphs are marks still reports their face', () => {
+    // No w:t anywhere: the only rendered glyph is a note-reference-style mark whose run
+    // names a face. A literal-text pre-gate would hide it; the derivation must not.
+    installed = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(
+        '<w:p><w:r><w:rPr><w:rFonts w:ascii="Marker Face" w:hAnsi="Marker Face"/></w:rPr>' +
+          '<w:noBreakHyphen/></w:r></w:p>'
+      ),
+    });
+    expect(editor.snapshot().fontSubstitutions ?? []).toEqual(['Marker Face']);
     editor.destroy();
   });
 
