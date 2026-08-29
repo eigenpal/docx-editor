@@ -77,11 +77,16 @@ jobs:
       - name: Run tests
         run: bun run test
 
-      # The React demo builds from LOCAL source, so this is the gate that a change to the
+      # BOTH demos build from LOCAL source, so this is the gate that a change to the
       # engine or the shipped stylesheet still produces a working app. `build:packages`
       # below does not catch it: a stylesheet that no CSS parser accepts passes typecheck,
       # the whole suite and the adapter-CSS check, and only fails when an app bundles it.
-      - name: React demo app builds
+      #
+      # Both, because each demo resolves the workspace through its OWN vite alias list.
+      # A subpath added to one and not the other builds on one side and fails on the
+      # other, and no parity gate sees it: check:parity and check:adapter-mirror compare
+      # the PACKAGES, not the apps that consume them.
+      - name: Demo apps build
         run: bun run check:app-build
 
       # The three Chromium gates that used to run here (`verify:a11y-tree`,
