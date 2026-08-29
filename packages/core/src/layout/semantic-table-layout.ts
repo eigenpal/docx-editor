@@ -36,7 +36,11 @@ import type {
   FieldPageContext,
   HyperlinkProjector,
 } from './field-projection.ts';
-import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
+import {
+  paragraphLayoutKey,
+  withDrawingContext,
+  type ParagraphLayoutCache,
+} from './layout-cache.ts';
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
@@ -497,11 +501,15 @@ function placeCellParagraph(
     ],
     width: available,
     producer: deps.producer,
-    ...(deps.drawingTokenForParagraph?.(paragraph)
-      ? { drawingToken: deps.drawingTokenForParagraph(paragraph) }
-      : deps.drawingLayoutToken
-        ? { drawingToken: deps.drawingLayoutToken }
-        : {}),
+    // The inline-drawing CONTEXT joins the token exactly as it does in the body flow: the
+    // context changes how a paragraph breaks (drawings become measured atoms), so a
+    // token-less pass with the context may not share cell entries with one without it.
+    // `||`, not `??`: a per-paragraph callback answering `''` falls through to the
+    // document-wide token, as it always has.
+    drawingToken: withDrawingContext(
+      deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '',
+      deps.inlineDrawingLayout !== undefined
+    ),
     ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
   });
   if (deps.cache) deps.onCellBreakKey?.(key);
