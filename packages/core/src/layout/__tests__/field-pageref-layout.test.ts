@@ -241,7 +241,10 @@ describe('a bookmark edit re-resolves the target in a warm session', () => {
 describe('save-time PAGEREF result refresh', () => {
   test('a fresh result plans nothing; a moved target plans the painted value', () => {
     const part = load(TWO_PAGE_BODY('2'));
-    // Computed equals the cache: the field calibrates live and nothing needs rewriting.
+    // Paint first: the layout finalize is what latches the calibration (a save-time check
+    // alone never latches — its NaN revision could not be revoked by the note pass).
+    layoutSemanticDocument(part, 1, { measurer, geometry: SMALL });
+    // Computed equals the cache: the field is live and nothing needs rewriting.
     expect(planRefFieldResultRefresh(part, { pageRefPageNumberOf: () => '2' })).toBeNull();
     // Same document object, so the sticky live verdict carries; the target now reports
     // page 3 and the plan rewrites the result to what the pages paint.
