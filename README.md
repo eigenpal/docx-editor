@@ -128,7 +128,7 @@ Contributions welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests, 
 
 ### Issue conventions
 
-Every issue gets exactly one `area:*` label and one `priority:*` label. These labels drive the [public roadmap board](https://github.com/orgs/eigenpal/projects/2): a workflow mirrors them into the board's **Area** and **Priority** fields automatically, so the board is only as good as the labels.
+Every issue gets exactly one `area:*` label and one `priority:*` label. Maintainers assign them during triage — you don't need to (and can't) set labels when filing. The labels drive the [public roadmap board](https://github.com/orgs/eigenpal/projects/2): a workflow mirrors them into the board's **Area** and **Priority** fields, adds an issue to the board when it gets an area label, and removes it from the board when the area label is removed.
 
 | Area | What belongs in it |
 | ---- | ------------------ |

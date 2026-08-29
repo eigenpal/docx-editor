@@ -4,64 +4,102 @@ on:
   issues:
     types: [labeled, unlabeled]
 
+permissions: {}
+
 env:
   ORG: eigenpal
   PROJECT_NUMBER: 2
 
+# Serialize runs per issue: a label swap fires unlabeled + labeled as two
+# runs with no ordering guarantee. The group makes them run one at a time,
+# and each run reconciles from the issue's live labels, so whichever runs
+# last lands on the right answer.
+concurrency:
+  group: sync-labels-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
   sync:
+    if: startsWith(github.event.label.name, 'area:') || startsWith(github.event.label.name, 'priority:')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Reconcile Area and Priority from labels
         env:
           GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          EVENT_LABEL: ${{ github.event.label.name }}
           ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
 
-          # Which field does the changed label belong to?
-          case "$EVENT_LABEL" in
-            area:*)     FIELD_NAME="Area"     ; PREFIX="area:"     ;;
-            priority:*) FIELD_NAME="Priority" ; PREFIX="priority:" ;;
-            *) echo "Not an area/priority label, skipping."; exit 0 ;;
-          esac
-          echo "Reconciling $FIELD_NAME for issue #$ISSUE_NUMBER"
+          require() {
+            if [ -z "$2" ] || [ "$2" = "null" ]; then
+              echo "::error::$1 did not resolve; check the board's fields."
+              exit 1
+            fi
+          }
 
           # Re-read the issue's CURRENT labels rather than trusting the event.
-          # A label swap fires unlabeled + labeled as two runs; reading live
-          # state means whichever runs last still lands on the right answer.
-          SLUG=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json labels \
-            | jq -r --arg p "$PREFIX" '
-                [.labels[].name | select(startswith($p)) | ltrimstr($p)]
-                | if length == 1 then .[0] else "" end')
+          LABELS=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json labels)
 
-          if [ -z "$SLUG" ]; then
-            echo "No single $PREFIX label present — will clear the field."
-          else
-            echo "Resolved to: $SLUG"
-          fi
+          AREA_COUNT=$(echo "$LABELS" | jq '[.labels[].name | select(startswith("area:"))] | length')
+          AREA_SLUG=$(echo "$LABELS" | jq -r '
+            [.labels[].name | select(startswith("area:")) | ltrimstr("area:")]
+            | if length == 1 then .[0] else "" end')
+          PRIO_COUNT=$(echo "$LABELS" | jq '[.labels[].name | select(startswith("priority:"))] | length')
+          PRIO_SLUG=$(echo "$LABELS" | jq -r '
+            [.labels[].name | select(startswith("priority:")) | ltrimstr("priority:")]
+            | if length == 1 then .[0] else "" end')
 
-          # Look up project id, field id, and option ids
+          # Look up project id plus both fields and their option ids.
           PROJECT_JSON=$(gh api graphql -f query='
-            query($org: String!, $number: Int!, $field: String!) {
+            query($org: String!, $number: Int!) {
               organization(login: $org) {
                 projectV2(number: $number) {
                   id
-                  field(name: $field) {
-                    ... on ProjectV2SingleSelectField {
-                      id
-                      options { id name }
-                    }
+                  area: field(name: "Area") {
+                    ... on ProjectV2SingleSelectField { id options { id name } }
+                  }
+                  priority: field(name: "Priority") {
+                    ... on ProjectV2SingleSelectField { id options { id name } }
                   }
                 }
               }
-            }' -f org="$ORG" -F number="$PROJECT_NUMBER" -f field="$FIELD_NAME")
+            }' -f org="$ORG" -F number="$PROJECT_NUMBER")
 
           PROJECT_ID=$(echo "$PROJECT_JSON" | jq -r '.data.organization.projectV2.id')
-          FIELD_ID=$(echo "$PROJECT_JSON"   | jq -r '.data.organization.projectV2.field.id')
+          AREA_FIELD_ID=$(echo "$PROJECT_JSON" | jq -r '.data.organization.projectV2.area.id')
+          PRIO_FIELD_ID=$(echo "$PROJECT_JSON" | jq -r '.data.organization.projectV2.priority.id')
+          require "project id" "$PROJECT_ID"
+          require "Area field id" "$AREA_FIELD_ID"
+          require "Priority field id" "$PRIO_FIELD_ID"
+
+          # Membership follows the area label: no area label, no board item.
+          if [ "$AREA_COUNT" -eq 0 ]; then
+            ITEM_ID=$(gh api graphql -f query='
+              query($issue: ID!) {
+                node(id: $issue) {
+                  ... on Issue {
+                    projectItems(first: 50) { nodes { id project { id } } }
+                  }
+                }
+              }' -f issue="$ISSUE_NODE_ID" \
+              | jq -r --arg pid "$PROJECT_ID" '
+                  first(.data.node.projectItems.nodes[] | select(.project.id == $pid) | .id) // ""')
+            if [ -z "$ITEM_ID" ]; then
+              echo "No area label and not on the board — nothing to do."
+              exit 0
+            fi
+            gh api graphql -f query='
+              mutation($project: ID!, $item: ID!) {
+                deleteProjectV2Item(input: {projectId: $project, itemId: $item}) {
+                  deletedItemId
+                }
+              }' -f project="$PROJECT_ID" -f item="$ITEM_ID" > /dev/null
+            echo "No area label — removed issue #$ISSUE_NUMBER from the board."
+            exit 0
+          fi
 
           # Add to the project if it isn't there. Idempotent — returns the
           # existing item id if the issue is already on the board.
@@ -72,38 +110,53 @@ jobs:
               }
             }' -f project="$PROJECT_ID" -f content="$ISSUE_NODE_ID" \
             | jq -r '.data.addProjectV2ItemById.item.id')
+          require "item id" "$ITEM_ID"
 
-          if [ -z "$SLUG" ]; then
-            gh api graphql -f query='
-              mutation($project: ID!, $item: ID!, $field: ID!) {
-                clearProjectV2ItemFieldValue(input: {
-                  projectId: $project, itemId: $item, fieldId: $field
-                }) { projectV2Item { id } }
-              }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$FIELD_ID"
-            echo "Cleared $FIELD_NAME."
-            exit 0
-          fi
+          AREA_OPTIONS=$(echo "$PROJECT_JSON" | jq '.data.organization.projectV2.area.options')
+          PRIO_OPTIONS=$(echo "$PROJECT_JSON" | jq '.data.organization.projectV2.priority.options')
 
-          # Match option by normalising its name: lowercase, spaces -> dashes.
-          # "Word fidelity" matches label "area:word-fidelity".
-          OPTION_ID=$(echo "$PROJECT_JSON" | jq -r --arg slug "$SLUG" '
-            .data.organization.projectV2.field.options[]
-            | select((.name | ascii_downcase | gsub(" "; "-")) == ($slug | ascii_downcase))
-            | .id')
+          sync_field() {
+            local field_name="$1" field_id="$2" options="$3" count="$4" slug="$5"
+            if [ "$count" -eq 1 ]; then
+              # Match an option by normalising its name: lowercase, spaces ->
+              # dashes, so "Word fidelity" matches label "area:word-fidelity".
+              # first(...) keeps the id single-line even if two option names
+              # normalise to the same slug.
+              local option_id
+              option_id=$(echo "$options" | jq -r --arg slug "$slug" '
+                first(.[]
+                  | select((.name | ascii_downcase | gsub(" "; "-")) == ($slug | ascii_downcase))
+                  | .id) // ""')
+              if [ -z "$option_id" ]; then
+                echo "::warning::No '$field_name' option matches '$slug'. Add the option or fix the label."
+                return 0
+              fi
+              gh api graphql -f query='
+                mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $project
+                    itemId: $item
+                    fieldId: $field
+                    value: { singleSelectOptionId: $option }
+                  }) { projectV2Item { id } }
+                }' -f project="$PROJECT_ID" -f item="$ITEM_ID" \
+                   -f field="$field_id" -f option="$option_id" > /dev/null
+              echo "Set $field_name to '$slug'."
+            else
+              if [ "$count" -gt 1 ]; then
+                echo "::warning::Issue #$ISSUE_NUMBER carries $count $field_name labels — clearing the field for a human to fix."
+              fi
+              gh api graphql -f query='
+                mutation($project: ID!, $item: ID!, $field: ID!) {
+                  clearProjectV2ItemFieldValue(input: {
+                    projectId: $project, itemId: $item, fieldId: $field
+                  }) { projectV2Item { id } }
+                }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$field_id" > /dev/null
+              echo "Cleared $field_name."
+            fi
+          }
 
-          if [ -z "$OPTION_ID" ] || [ "$OPTION_ID" = "null" ]; then
-            echo "::warning::No '$FIELD_NAME' option matches '$SLUG'. Add the option or fix the label."
-            exit 0
-          fi
-
-          gh api graphql -f query='
-            mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
-              updateProjectV2ItemFieldValue(input: {
-                projectId: $project
-                itemId: $item
-                fieldId: $field
-                value: { singleSelectOptionId: $option }
-              }) { projectV2Item { id } }
-            }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$FIELD_ID" -f option="$OPTION_ID"
-
-          echo "Set $FIELD_NAME to '$SLUG'."
+          # Reconcile both fields on every run, so an issue re-added after a
+          # transient label removal gets its Priority back, not just its Area.
+          sync_field "Area" "$AREA_FIELD_ID" "$AREA_OPTIONS" "$AREA_COUNT" "$AREA_SLUG"
+          sync_field "Priority" "$PRIO_FIELD_ID" "$PRIO_OPTIONS" "$PRIO_COUNT" "$PRIO_SLUG"
