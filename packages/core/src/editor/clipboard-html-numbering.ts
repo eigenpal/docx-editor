@@ -70,6 +70,85 @@ const ROMAN_DIGIT_VALUES: ReadonlyMap<string, number> = new Map([
   ['m', 1000],
 ]);
 
+const WORD_LEVEL_FORMATS: ReadonlyMap<string, HtmlListKind> = new Map([
+  ['alpha-lower', 'lowerLetter'],
+  ['alpha-upper', 'upperLetter'],
+  ['roman-lower', 'lowerRoman'],
+  ['roman-upper', 'upperRoman'],
+  ['bullet', 'bullet'],
+  ['image', 'bullet'],
+  ['decimal', 'decimal'],
+  ['arabic', 'decimal'],
+]);
+
+export interface WordListLevelDefinition {
+  readonly kind: HtmlListKind;
+  readonly start: number | null;
+}
+
+// Bounded: the block is a character class capped at 2048 (no backtracking blowup).
+const WORD_LIST_LEVEL_RULE =
+  /@list\s+l(\d{1,4}):level([1-9])(?:\s+lfo\d{1,4})?\s*\{([^{}]{0,2048})\}/g;
+
+/**
+ * Bounded scan of Word's head `@list lN:levelM` rules: the STRUCTURED number format
+ * and start-at, so marker-glyph sniffing is only a fallback. A rule with no
+ * `mso-level-number-format` is decimal (Word omits the default); an unknown format
+ * yields no entry and leaves the level to the sniffer.
+ */
+export function wordListDefinitionsFromStyleText(
+  css: string
+): ReadonlyMap<string, WordListLevelDefinition> {
+  const out = new Map<string, WordListLevelDefinition>();
+  if (css.length === 0 || css.length > 40_000) return out;
+  WORD_LIST_LEVEL_RULE.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let rules = 0;
+  while ((match = WORD_LIST_LEVEL_RULE.exec(css)) !== null && rules < 512) {
+    rules += 1;
+    let kind: HtmlListKind | null = 'decimal';
+    let start: number | null = null;
+    for (const declaration of match[3]!.split(';')) {
+      const colon = declaration.indexOf(':');
+      if (colon <= 0) continue;
+      const name = declaration.slice(0, colon).trim().toLowerCase();
+      const value = declaration
+        .slice(colon + 1)
+        .trim()
+        .toLowerCase();
+      if (name === 'mso-level-number-format') {
+        kind = WORD_LEVEL_FORMATS.get(value) ?? null;
+      } else if (name === 'mso-level-start-at' && /^\d{1,5}$/.test(value)) {
+        start = Math.min(32_767, Number.parseInt(value, 10));
+      }
+    }
+    if (kind === null) continue;
+    const key = `l${match[1]}:level${match[2]}`;
+    if (!out.has(key)) out.set(key, { kind, start });
+  }
+  return out;
+}
+
+/** The ordinal a marker glyph names UNDER a known format, or null when it does not parse. */
+export function htmlListStartFromMarker(marker: string, kind: HtmlListKind): number | null {
+  const trimmed = marker.trim().replace(/^\(/, '');
+  if (kind === 'decimal') {
+    const digits = /^(\d{1,5})/.exec(trimmed);
+    return digits ? Math.min(32_767, Number.parseInt(digits[1]!, 10)) : null;
+  }
+  if (kind === 'lowerRoman' || kind === 'upperRoman') {
+    const run = /^([A-Za-z]{1,8})/.exec(trimmed);
+    return run ? romanValueOf(run[1]!) : null;
+  }
+  if (kind === 'lowerLetter' || kind === 'upperLetter') {
+    const run = /^(([A-Za-z])\2{0,4})(?![A-Za-z])/.exec(trimmed);
+    if (!run) return null;
+    const code = run[2]!.toLowerCase().charCodeAt(0);
+    return Math.min(32_767, (run[1]!.length - 1) * 26 + (code - 96));
+  }
+  return null;
+}
+
 const ROMAN_GRAMMAR = /^m{0,4}(cm|cd|d?c{0,3})(xc|xl|l?x{0,3})(ix|iv|v?i{0,3})$/;
 
 /** The ordinal a valid roman marker names ('iv' → 4), or null for invalid grammar. */

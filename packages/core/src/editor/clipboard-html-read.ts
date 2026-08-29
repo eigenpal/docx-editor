@@ -8,10 +8,13 @@ import { sanitizeHref, escapeXmlAttribute } from '../store/package/sinks.ts';
 import { projectHtmlImage } from './clipboard-html-images.ts';
 import {
   htmlListKindAndStart,
+  htmlListStartFromMarker,
   semanticHtmlListKind,
   semanticHtmlListStart,
+  wordListDefinitionsFromStyleText,
   type HtmlListAllocation as ListAllocation,
   type HtmlListKind,
+  type WordListLevelDefinition,
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-links.ts';
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
@@ -27,15 +30,18 @@ import {
 } from './clipboard-html-notes.ts';
 import { paragraphXml, rPrXml, textRunXml } from './clipboard-html-run-xml.ts';
 import {
+  applyInlineTag,
   applyParaCss,
   applyRunCss,
   applyWordParagraphAlignment,
   isElement,
+  isMsoListIgnoreMarker,
   isWordClipboardHtml,
   parseInlineStyle,
   tagOf,
   wordClassAlignmentsFromDocument,
   wordParagraphStyleId,
+  wordStyleTextFromDocument,
   type HtmlParagraphAlign,
   type HtmlParaProps,
   type HtmlRunProps,
@@ -55,6 +61,7 @@ import {
 import { htmlPositionalTabXml, htmlTabRunContents } from './clipboard-html-tabs.ts';
 import {
   CONTAINER_TAGS,
+  IGNORED_TAGS,
   PARAGRAPH_TAGS,
   hasBlockChild,
   isWordPageBreakBlock,
@@ -91,12 +98,6 @@ const DEFAULT_MAX_DEPTH = 64;
 const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const IGNORED_TAGS = new Set(
-  (
-    'script style head template iframe object embed noscript svg math ' +
-    'meta link title base select textarea hr w:sdtpr'
-  ).split(' ')
-);
 
 /** Heading direct formatting: bold plus these sizes in half-points (h1=32pt … h6=14pt). */
 const HEADING_SZ: Record<string, number> = { h1: 64, h2: 52, h3: 44, h4: 36, h5: 32, h6: 28 };
@@ -132,6 +133,8 @@ interface Projection {
   docPrId: number;
   nextBookmarkId: number;
   readonly classAlignments: ReadonlyMap<string, HtmlParagraphAlign>;
+  /** Word's structured `@list lN:levelM` head rules, keyed `l<N>:level<M>`. */
+  readonly listDefinitions: ReadonlyMap<string, WordListLevelDefinition>;
   readonly notes: Record<ClipboardNoteKind, Map<number, readonly string[]>>;
   readonly noteRels: Record<ClipboardNoteKind, RelEntry[]>;
   /** Ids with a PROJECTED definition — the only ids a live note reference may carry. */
@@ -178,25 +181,6 @@ function allocateList(
 }
 
 // --- Walk
-
-/** True for the literal marker span Word emits beside `mso-list` paragraphs. */
-function isMsoListIgnoreMarker(style: ReadonlyMap<string, string>): boolean {
-  const value = style.get('mso-list');
-  return value !== undefined && value.toLowerCase().includes('ignore');
-}
-
-function applyInlineTag(base: RunProps, tag: string): RunProps {
-  if (tag === 'b' || tag === 'strong') return { ...base, bold: true };
-  if (tag === 'i' || tag === 'em') return { ...base, italic: true };
-  if (tag === 'u' || tag === 'ins') return { ...base, underline: true };
-  if (tag === 's' || tag === 'strike' || tag === 'del') return { ...base, strike: true };
-  if (tag === 'sub') return { ...base, vertAlign: 'subscript' };
-  if (tag === 'sup') return { ...base, vertAlign: 'superscript' };
-  if (tag === 'code' || tag === 'tt' || tag === 'kbd' || tag === 'samp') {
-    return { ...base, font: 'Courier New' };
-  }
-  return base;
-}
 
 function collectInline(
   node: Node,
@@ -248,9 +232,9 @@ function collectInline(
   const tabContent = htmlTabRunContents(style.get('mso-tab-count'));
   if (tabContent.length > 0) {
     runs.push(`<w:r>${rPrXml(ctx.run)}${tabContent}</w:r>`);
-    // Word's tab spans hold only spacer whitespace; an element with real content
-    // keeps its text and children after the tabs.
-    if ((node.textContent ?? '').trim().length === 0) return;
+    // Word's tab spans hold only spacer whitespace; an element with real content —
+    // text OR element children like an image — keeps it after the tabs.
+    if ((node.textContent ?? '').trim().length === 0 && node.children.length === 0) return;
   }
   if (tag === 'br') {
     const pageBreak =
@@ -349,7 +333,18 @@ function msoListNumPr(
   if (!match) return undefined;
   const ilvl = clamp(Number.parseInt(match[2]!, 10) - 1, 0, 8);
   const marker = msoMarkerText(element, p);
-  const { kind, start } = htmlListKindAndStart(marker);
+  // The head's structured @list rule names the format; the visible marker then
+  // names THIS slice's first ordinal under that format. Glyph sniffing alone is
+  // only the fallback — it cannot tell 'i.' the roman 1 from 'i.' the 9th letter.
+  const definition = p.listDefinitions.get(`l${match[1]}:level${match[2]}`);
+  let kind: HtmlListKind;
+  let start: number;
+  if (definition !== undefined) {
+    kind = definition.kind;
+    start = htmlListStartFromMarker(marker, kind) ?? definition.start ?? 1;
+  } else {
+    ({ kind, start } = htmlListKindAndStart(marker));
+  }
   const lfo = /\blfo(\d{1,4})\b/i.exec(declaration);
   const key = `mso:l${match[1]}${lfo ? `:lfo${lfo[1]}` : ''}`;
   return { numId: allocateList(p, key, kind, start, ilvl), ilvl };
@@ -665,12 +660,13 @@ function projectTable(
 
   // Count columns INCLUDING rowspan carry-over: a row that receives carried columns
   // still owns its trailing cells, which would otherwise be dropped. The pre-count
-  // charges the shared walk budget and stops at the 63-column cap, so a crafted
-  // rowspan lattice cannot spin here.
+  // is bounded by its OWN copy of the remaining budget (so a crafted rowspan lattice
+  // cannot spin) without consuming the shared budget the emission walk charges.
   let columns = 1;
+  let precountLeft = p.nodesLeft;
   const carrySpans: Array<{ remaining: number; span: number }> = [];
   for (const row of rows) {
-    if (p.nodesLeft <= 0 || columns >= 63) break;
+    if (precountLeft <= 0 || columns >= 63) break;
     let count = 0;
     let keep = 0;
     for (const carried of carrySpans) {
@@ -680,8 +676,8 @@ function projectTable(
     }
     carrySpans.length = keep;
     for (const cell of Array.from(row.children)) {
-      p.nodesLeft -= 1;
-      if (p.nodesLeft <= 0) break;
+      precountLeft -= 1;
+      if (precountLeft <= 0) break;
       if (!/^t[dh]$/.test(tagOf(cell))) continue;
       const span = htmlSpanOf(cell, 'colspan', 63);
       count += span;
@@ -853,10 +849,24 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     footnote: new Set(),
     endnote: new Set(),
   };
+  // A definition body carries its own back-link anchor with the same id style; it
+  // must not count as a body reference, or an orphan definition would be consumed.
+  const definitionElements = new Set(noteDefinitions.map((note) => note.element));
+  const insideDefinition = (element: Element): boolean => {
+    let current: Element | null = element.parentElement;
+    for (let hops = 0; current !== null && hops < 128; hops += 1) {
+      if (definitionElements.has(current)) return true;
+      current = current.parentElement;
+    }
+    return false;
+  };
   const anchors = parsed.getElementsByTagName('a');
   for (let index = 0; index < anchors.length && index < 20_000; index += 1) {
-    const reference = clipboardNoteReference(parseInlineStyle(anchors[index]!));
-    if (reference !== null) referencedNotes[reference.kind].add(reference.id);
+    const anchor = anchors[index]!;
+    const reference = clipboardNoteReference(parseInlineStyle(anchor));
+    if (reference !== null && !insideDefinition(anchor)) {
+      referencedNotes[reference.kind].add(reference.id);
+    }
   }
   const projection: Projection = {
     nodesLeft: limits.maxNodes ?? DEFAULT_MAX_NODES,
@@ -873,6 +883,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     docPrId: 0,
     nextBookmarkId: 1,
     classAlignments: wordClassAlignmentsFromDocument(parsed),
+    listDefinitions: wordListDefinitionsFromStyleText(wordStyleTextFromDocument(parsed)),
     notes: { footnote: new Map(), endnote: new Map() },
     noteRels: { footnote: [], endnote: [] },
     definedNotes,
@@ -910,6 +921,10 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       noteBlocks,
       true
     );
+    // A walk the budget starved mid-note stays unregistered (forceEmit would have
+    // pushed an empty paragraph regardless), so the body walk keeps the text and
+    // no live reference points at a blank note.
+    if (projection.nodesLeft <= 0) break;
     if (noteBlocks.length > 0) {
       projection.notes[note.kind].set(note.id, noteBlocks);
       definedNotes[note.kind].add(note.id);

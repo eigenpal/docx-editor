@@ -431,8 +431,12 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('<br>');
     expect(html).toContain('<span class="MsoFootnoteReference">');
     expect(html).toContain('<span class="MsoEndnoteReference">');
-    expect(html).toContain('[3]');
-    expect(html).toContain('[2]');
+    // The visible text shows the display ordinal, not the raw w:id; the id stays in
+    // the machine-readable attributes.
+    expect(html).toContain('mso-footnote-id:ftn3');
+    expect(html).toContain('mso-endnote-id:edn2');
+    expect(html).toContain('[1]');
+    expect(html).not.toContain('[3]');
     expect(html).toContain('mso-element:footnote-list');
     expect(html).toContain('mso-element:endnote-list');
     expect(html).toContain('Foot body.');
@@ -485,7 +489,10 @@ describe('interopHtmlFromFragment', () => {
           '</w:rPr><w:t>note</w:t></w:r></w:p>',
       })
     );
-    expect(html).toContain('background-color:yellow');
+    // The painter's own hex for the yellow highlighter, plus the machine-readable
+    // mso-highlight name the read lane reconstructs w:highlight from.
+    expect(html).toContain('background-color:#ffff00');
+    expect(html).toContain('mso-highlight:yellow');
     expect(html).not.toContain('background-color:#00ff00');
     expect(html).not.toContain('font-weight:bold');
     expect(html).toContain('<sup>note</sup>');

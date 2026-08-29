@@ -23,7 +23,7 @@ export function clipboardHyperlinkTarget(
 ): string | null {
   const href = rawTarget === undefined ? null : sanitizeHref(rawTarget);
   const anchor = clipboardBookmarkName(rawAnchor);
-  if (href?.ok === true) {
+  if (href?.ok === true && href.href.length > 0) {
     return `${href.href}${anchor !== null && !href.href.includes('#') ? `#${anchor}` : ''}`;
   }
   return anchor === null ? null : `#${anchor}`;

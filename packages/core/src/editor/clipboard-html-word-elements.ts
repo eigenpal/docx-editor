@@ -1,5 +1,6 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { HIGHLIGHT_COLOR_HEX } from '../output/semantic-paint.ts';
 
 const WORD_PARAGRAPH_CLASSES: Readonly<Record<string, string>> = {
   Normal: 'MsoNormal',
@@ -29,25 +30,10 @@ export function wordParagraphClassOf(styleId: string | undefined): string | null
   return Object.hasOwn(WORD_PARAGRAPH_CLASSES, styleId) ? WORD_PARAGRAPH_CLASSES[styleId]! : null;
 }
 
-/** ST_HighlightColor names to CSS colors. */
-export const WORD_HIGHLIGHT_COLORS: Readonly<Record<string, string>> = {
-  yellow: 'yellow',
-  green: 'green',
-  cyan: 'cyan',
-  magenta: 'magenta',
-  blue: 'blue',
-  red: 'red',
-  darkBlue: 'darkblue',
-  darkCyan: 'darkcyan',
-  darkGreen: 'darkgreen',
-  darkMagenta: 'darkmagenta',
-  darkRed: 'darkred',
-  darkYellow: '#808000',
-  darkGray: '#a9a9a9',
-  lightGray: '#d3d3d3',
-  black: 'black',
-  white: 'white',
-};
+/** ST_HighlightColor names to CSS colors — the painter's own table, so copied HTML
+ *  shows exactly the highlight the editor paints. */
+export const WORD_HIGHLIGHT_COLORS: Readonly<Record<string, string>> =
+  Object.fromEntries(HIGHLIGHT_COLOR_HEX);
 
 /** `w:jc` values to CSS `text-align`. */
 export const WORD_JC_TO_TEXT_ALIGN: Readonly<Record<string, string>> = {
@@ -151,7 +137,8 @@ export interface WordNoteBodyContext {
 
 export function wordNoteReferenceHtml(
   node: OoxmlElement,
-  noteBody: WordNoteBodyContext | null
+  noteBody: WordNoteBodyContext | null,
+  ordinalOf: (kind: 'footnote' | 'endnote', id: number) => number
 ): string {
   if (node.namespaceUri !== WML_NAMESPACE_URI) return '';
   const bodyKind =
@@ -184,10 +171,12 @@ export function wordNoteReferenceHtml(
   const prefix = footnote ? 'ftn' : 'edn';
   const href = inNoteBody ? `#_${prefix}ref${id}` : `#_${prefix}${id}`;
   const name = inNoteBody ? `_${prefix}${id}` : `_${prefix}ref${id}`;
+  // The visible text shows the note's DISPLAY ordinal (ids are arbitrary after
+  // edits); the id stays in the machine-readable attributes for the definition pair.
   return (
     `<a style="mso-${footnote ? 'footnote' : 'endnote'}-id:${prefix}${id}" ` +
     `href="${href}" name="${name}"><span class="${className}">` +
-    `<span style="mso-special-character:footnote">[${id}]</span></span></a>`
+    `<span style="mso-special-character:footnote">[${ordinalOf(kind, id)}]</span></span></a>`
   );
 }
 

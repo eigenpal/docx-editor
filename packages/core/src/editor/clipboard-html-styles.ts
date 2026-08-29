@@ -232,6 +232,21 @@ export function wordClassAlignmentsFromDocument(
   return out;
 }
 
+/** Concatenated `textContent` of inert `<style>` elements, bounded; '' over the caps. */
+export function wordStyleTextFromDocument(doc: Document): string {
+  const styles = doc.getElementsByTagName('style');
+  if (styles.length > WORD_STYLE_ELEMENT_MAX) return '';
+  let total = '';
+  for (let index = 0; index < styles.length; index += 1) {
+    const raw = styles[index]?.textContent ?? '';
+    if (raw.length > WORD_STYLE_TEXT_MAX || total.length + raw.length > WORD_STYLE_TEXT_MAX) {
+      return '';
+    }
+    total += `\n${raw}`;
+  }
+  return total;
+}
+
 /**
  * Stylesheet class `text-align`, then the HTML `align` attribute Word still emits.
  * Inline CSS wins afterwards in `applyParaCss`.
@@ -554,6 +569,25 @@ function paragraphBorderOf(value: string | undefined): HtmlParagraphBorder | und
     szEighthPoints: clamp(Math.round(points * 8), 2, 96),
     color: color ?? '000000',
   };
+}
+
+/** True for the literal marker span Word emits beside `mso-list` paragraphs. */
+export function isMsoListIgnoreMarker(style: ReadonlyMap<string, string>): boolean {
+  const value = style.get('mso-list');
+  return value !== undefined && value.toLowerCase().includes('ignore');
+}
+
+export function applyInlineTag(base: HtmlRunProps, tag: string): HtmlRunProps {
+  if (tag === 'b' || tag === 'strong') return { ...base, bold: true };
+  if (tag === 'i' || tag === 'em') return { ...base, italic: true };
+  if (tag === 'u' || tag === 'ins') return { ...base, underline: true };
+  if (tag === 's' || tag === 'strike' || tag === 'del') return { ...base, strike: true };
+  if (tag === 'sub') return { ...base, vertAlign: 'subscript' };
+  if (tag === 'sup') return { ...base, vertAlign: 'superscript' };
+  if (tag === 'code' || tag === 'tt' || tag === 'kbd' || tag === 'samp') {
+    return { ...base, font: 'Courier New' };
+  }
+  return base;
 }
 
 export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, string>): HtmlRunProps {

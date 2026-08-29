@@ -38,6 +38,13 @@ export function isWordPageBreakSpacer(element: Element): boolean {
   return text.includes('\u00a0') && text.replace(/[\s\u00a0]/g, '').length === 0;
 }
 
+export const IGNORED_TAGS: ReadonlySet<string> = new Set(
+  (
+    'script style head template iframe object embed noscript svg math ' +
+    'meta link title base select textarea hr w:sdtpr'
+  ).split(' ')
+);
+
 export const PARAGRAPH_TAGS: ReadonlySet<string> = new Set(
   'p div h1 h2 h3 h4 h5 h6 li blockquote pre'.split(' ')
 );

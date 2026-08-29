@@ -24,8 +24,12 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
   const styleLinks = new Map<string, string>();
   if (!root) return { numToAbstract, levelFormats, levelStarts, startOverrides, styleLinks };
 
+  // The same definition-count cap the layout lane's numbering index enforces.
+  let definitionsLeft = 4096;
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
+    if (definitionsLeft <= 0) break;
+    definitionsLeft -= 1;
     if (child.localName === 'num') {
       const numId = attributeValueOf(child, 'numId', WML_NAMESPACE_URI);
       const abstractId = wmlVal(wmlChild(child, 'abstractNumId'));

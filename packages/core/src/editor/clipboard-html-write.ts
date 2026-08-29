@@ -267,7 +267,21 @@ interface RenderContext {
   /** Running total of inlined media bytes — one shared object, so per-note context
    *  forks (`{ ...ctx }`) keep charging the same whole-document budget. */
   readonly imageBudget: { used: number };
+  /** `data:` URI per media part — the budget charges each part ONCE, and repeated
+   *  references reuse the encoding. */
+  readonly imageDataUris: Map<string, string | null>;
+  /** Display ordinal per note id, assigned in body reference order. */
+  readonly noteOrdinals: Record<'footnote' | 'endnote', Map<number, number>>;
   readonly noteBody: WordNoteBodyContext | null;
+}
+
+function noteOrdinalOf(ctx: RenderContext, kind: 'footnote' | 'endnote', id: number): number {
+  const map = ctx.noteOrdinals[kind];
+  const existing = map.get(id);
+  if (existing !== undefined) return existing;
+  const ordinal = map.size + 1;
+  map.set(id, ordinal);
+  return ordinal;
 }
 
 /** Complex-field state, one per paragraph. Runs render only when every open field is past
@@ -375,9 +389,21 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
           ? 'image/gif'
           : null;
   if (!mime) return '';
-  if (bytes.byteLength > ctx.maxImageBytes) return '';
-  if (ctx.imageBudget.used + bytes.byteLength > ctx.maxTotalImageBytes) return '';
-  ctx.imageBudget.used += bytes.byteLength;
+  // Encode and charge each media part ONCE; later references reuse the data URI.
+  let dataUri = ctx.imageDataUris.get(resolved.partName);
+  if (dataUri === undefined) {
+    if (
+      bytes.byteLength > ctx.maxImageBytes ||
+      ctx.imageBudget.used + bytes.byteLength > ctx.maxTotalImageBytes
+    ) {
+      dataUri = null;
+    } else {
+      ctx.imageBudget.used += bytes.byteLength;
+      dataUri = `data:${mime};base64,${clipboardBase64Of(bytes)}`;
+    }
+    ctx.imageDataUris.set(resolved.partName, dataUri);
+  }
+  if (dataUri === null) return '';
 
   const extent = findDescendant(inline, 'extent', WP_NAMESPACE_URI);
   const cx = extent ? parseIntValue(attributeValueOf(extent, 'cx', '')) : null;
@@ -390,7 +416,7 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
       ? ` width="${Math.round(cx / EMU_PER_PX)}" height="${Math.round(cy / EMU_PER_PX)}"` +
         ` style="width:${ptOf(cx)}pt;height:${ptOf(cy)}pt"`
       : '';
-  return `<img src="data:${mime};base64,${clipboardBase64Of(bytes)}"${size}>`;
+  return `<img src="${dataUri}"${size}>`;
 }
 
 function renderRun(
@@ -427,7 +453,9 @@ function renderRun(
       inner += positionalTab;
       continue;
     }
-    const noteReference = wordNoteReferenceHtml(child, ctx.noteBody);
+    const noteReference = wordNoteReferenceHtml(child, ctx.noteBody, (kind, id) =>
+      noteOrdinalOf(ctx, kind, id)
+    );
     if (noteReference !== '') {
       inner += noteReference;
       continue;
@@ -571,13 +599,15 @@ function paragraphClassOf(ctx: RenderContext, ownPPr: OoxmlElement | null): stri
 function renderParagraph(
   ctx: RenderContext,
   paragraph: OoxmlElement,
-  options: { readonly asListItem: boolean }
+  options: { readonly asListItem: boolean },
+  // The field state spans paragraphs: a complex field's instruction region can
+  // cross a paragraph mark, and its content must stay out of the flavour.
+  fields: FieldState
 ): string {
   const pPrNode = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   const pPr = pPrNode && isElement(pPrNode) ? pPrNode : null;
   const sources = paragraphPropertySources(ctx.styles, pPr);
   const css = paragraphCssOf(sources, options.asListItem);
-  const fields: FieldState = { stack: [] };
   const inner = renderInline(ctx, paragraph.children, pPr, fields);
   const styleAttr = css === '' ? '' : ` style="${escapeAttr(css)}"`;
   const dirAttr = toggleOn(sources, 'bidi') ? ' dir="rtl"' : '';
@@ -719,6 +749,7 @@ function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): strin
   const openLists: OpenList[] = [];
   /** Items already emitted per `numId:level`, so a reopened list resumes numbering. */
   const listProgress = new Map<string, number>();
+  const fields: FieldState = { stack: [] };
 
   const closeTopList = (): void => {
     const top = openLists.pop();
@@ -758,14 +789,18 @@ function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): strin
     }
     const progressKey = `${placement.numId}:${placement.level}`;
     listProgress.set(progressKey, (listProgress.get(progressKey) ?? 0) + 1);
-    // Word restarts sub-levels after each parent item.
+    // Word restarts sub-levels after each parent item. The level is the digits
+    // after the LAST separator, so a file-supplied numId containing ':' cannot
+    // confuse the prefix match.
+    const prefix = `${placement.numId}:`;
     for (const key of listProgress.keys()) {
-      const [keyNumId, keyLevel] = key.split(':');
-      if (keyNumId === placement.numId && Number(keyLevel) > placement.level) {
+      if (!key.startsWith(prefix)) continue;
+      const levelPart = key.slice(prefix.length);
+      if (/^\d+$/.test(levelPart) && Number(levelPart) > placement.level) {
         listProgress.delete(key);
       }
     }
-    out += renderParagraph(ctx, paragraph, { asListItem: true });
+    out += renderParagraph(ctx, paragraph, { asListItem: true }, fields);
   };
 
   const visit = (nodes: readonly OoxmlNode[]): void => {
@@ -780,7 +815,7 @@ function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): strin
             emitListItem(child, placement);
           } else {
             closeAllLists();
-            out += renderParagraph(ctx, child, { asListItem: false });
+            out += renderParagraph(ctx, child, { asListItem: false }, fields);
           }
           break;
         }
@@ -875,6 +910,8 @@ export function interopHtmlFromFragmentPackage(
     maxImageBytes: options?.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     maxTotalImageBytes: options?.maxTotalImageBytes ?? DEFAULT_MAX_TOTAL_IMAGE_BYTES,
     imageBudget: { used: 0 },
+    imageDataUris: new Map(),
+    noteOrdinals: { footnote: new Map(), endnote: new Map() },
     noteBody: null,
   };
   return (

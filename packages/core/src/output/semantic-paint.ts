@@ -554,7 +554,7 @@ const UNDERLINE_STYLE = new Map<string, string>(
   })
 );
 
-const HIGHLIGHT = new Map<string, string>(
+export const HIGHLIGHT_COLOR_HEX = new Map<string, string>(
   Object.entries({
     black: '#000000',
     blue: '#0000ff',
@@ -705,7 +705,7 @@ function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: P
       : `"${family}", ${DEFAULT_CANVAS_FONT_STACK}`;
   }
   if (style.color && HEX.test(style.color)) css.color = `#${style.color}`;
-  const highlight = style.highlight ? HIGHLIGHT.get(style.highlight) : undefined;
+  const highlight = style.highlight ? HIGHLIGHT_COLOR_HEX.get(style.highlight) : undefined;
   if (highlight) {
     css.backgroundColor = highlight;
     // Marked so dark mode can counter-invert it: a highlight keeps its authored colour in
