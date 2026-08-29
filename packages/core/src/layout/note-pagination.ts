@@ -34,9 +34,11 @@ import {
 } from './note-numbering.ts';
 import {
   layoutNoteById,
+  layoutNoteCached,
   layoutNoteSeparator,
   noteSeparatorAreaBox,
   MAX_NOTES_LAID_OUT,
+  type NoteStoryLayoutCache,
   type NoteLayoutFallbackReason,
   type NoteSeparatorLayout,
   type NoteStoryDrawings,
@@ -51,6 +53,7 @@ import {
   notesReserveContextKey,
   MIN_FOOTNOTE_BODY_BAND_PT,
   noteColumnBudgetPt,
+  recordFootnoteReserve,
   RESERVE_BOUNDARY_BACKOFF_PT,
 } from './note-reserves.ts';
 export { notesReserveContextKey };
@@ -63,11 +66,7 @@ import {
   type NoteReferenceLineBand,
 } from './note-fragment-geometry.ts';
 import { splitNoteFragments } from './note-splitting.ts';
-import {
-  holdOutReserveNeed,
-  layoutNoteCached,
-  type NoteStoryLayoutCache,
-} from './note-reserve-holdout.ts';
+import { holdOutReserveNeed } from './note-reserve-holdout.ts';
 import { reindexAndRestackPages } from './page-restacking.ts';
 import type {
   BlockFragmentRecord,
@@ -575,6 +574,35 @@ function createNoteSeparatorCache(): NoteSeparatorCache {
   };
 }
 
+/** Whether a footnote position collects at a section or document end (no per-page area). */
+function collectsAtEnd(pos: FootnotePosition): boolean {
+  return pos === 'sectEnd' || pos === 'docEnd';
+}
+
+/**
+ * Note story layouts per mark-context identity. One reflow search shares one marks object
+ * across all of its rounds, so each note lays out once per search; a new pass mints new
+ * marks and the old cache is released with them.
+ */
+const noteStoryCachesByMarks = new WeakMap<NoteMarkContext, NoteStoryLayoutCache>();
+
+/** ONE cache-or-layout separator fetch, so the fallback-reason handling has one shape. */
+function separatorLayoutOf(
+  cache: NoteSeparatorCache | undefined,
+  part: OoxmlPart | null | undefined,
+  kind: 'separator' | 'continuationSeparator',
+  contentWidth: number,
+  noteKind: NoteKind,
+  maxFlowHeightPt: number,
+  opts: LayoutNoteStoryOptions,
+  reasons: NotePaginationFallbackReason[]
+): NoteSeparatorLayout {
+  if (cache) return cache.get(part, kind, contentWidth, noteKind, maxFlowHeightPt, opts, reasons);
+  const laid = layoutNoteSeparator(part, kind, contentWidth, opts, noteKind, maxFlowHeightPt);
+  if (laid.fallbackReason) reasons.push(laid.fallbackReason);
+  return laid;
+}
+
 /** Scan an OOXML part's laid-out paragraph ids → refs already collected from the package. */
 export function buildPageRefHits(
   refs: readonly {
@@ -936,6 +964,13 @@ function buildFootnoteArea(
     readonly separatorCache?: NoteSeparatorCache;
     /** Pass-local note story layouts shared with the hold-out (reserve mode). */
     readonly noteLayoutCache?: NoteStoryLayoutCache;
+    /**
+     * Whether the keep-whole eviction may fire (reserve mode). False when the NEXT page's
+     * content geometry differs (a section boundary): the eviction guard measures the
+     * destination with THIS page's column, and the hold-out refuses cross-geometry pages,
+     * so an eviction there could never reach its fixed point — split instead.
+     */
+    readonly evictionAllowed?: boolean;
   }
 ): {
   area: NoteAreaRecord | undefined;
@@ -951,59 +986,41 @@ function buildFootnoteArea(
   const contentWidth = page.contentBox.width;
   const opts = layoutOpts(input, noteMarks);
 
-  // Continuations from previous page first.
   const notes: NoteStoryRecord[] = [];
   let stackHeight = 0;
   let fragmentBudget = MAX_NOTE_AREA_FRAGMENTS;
   const separatorKind =
     continuationCarry.size > 0 ? ('continuationSeparator' as const) : ('separator' as const);
   const maxSepHeight = Math.max(0, page.contentBox.height);
-  const fetchSeparator = (kind: 'separator' | 'continuationSeparator'): NoteSeparatorLayout => {
-    if (options?.separatorCache) {
-      return options.separatorCache.get(
-        input.footnotesPart,
-        kind,
-        contentWidth,
-        'footnote',
-        maxSepHeight,
-        opts,
-        reasons
-      );
-    }
-    const laid = layoutNoteSeparator(
+  const fetchSeparator = (kind: 'separator' | 'continuationSeparator'): NoteSeparatorLayout =>
+    separatorLayoutOf(
+      options?.separatorCache,
       input.footnotesPart,
       kind,
       contentWidth,
-      opts,
       'footnote',
-      maxSepHeight
+      maxSepHeight,
+      opts,
+      reasons
     );
-    if (laid.fallbackReason) reasons.push(laid.fallbackReason);
-    return laid;
-  };
   const separator = fetchSeparator(separatorKind);
 
-  const slackBudget = Math.max(
-    0,
-    page.contentBox.height - bodyFitBottomPt(page) - separator.flowHeight
-  );
+  const textBottom = bodyFitBottomPt(page);
+  const slackBudget = Math.max(0, page.contentBox.height - textBottom - separator.flowHeight);
   const columnBudget = noteColumnBudgetPt(page.contentBox.height, separator.flowHeight);
   const availableForNotes = options?.reserveColumnBudget ? columnBudget : slackBudget;
   const fullNoteColumn = Math.max(0, page.contentBox.height - separator.flowHeight);
   const splitOpts = { fullContentHeight: fullNoteColumn, reasons };
   // The keep-whole guard's budget is carry-INDEPENDENT: the hold-out on the previous page
   // re-derives the same test without knowing this page's carry state, and the two must be
-  // exact complements or a note is neither evicted nor held out and the loop orbits.
-  // Lazy — only the eviction branch reads it, and on a carry page it costs a second
-  // separator fetch.
-  let keepWholeBudgetLazy: number | undefined;
-  const keepWholeBudget = (): number =>
-    (keepWholeBudgetLazy ??= noteColumnBudgetPt(
-      page.contentBox.height,
-      (separatorKind === 'separator' ? separator : fetchSeparator('separator')).flowHeight
-    ));
-  let firstContentTopLazy: number | undefined;
-  const firstContentTop = (): number => (firstContentTopLazy ??= firstBodyContentTopPt(page));
+  // exact complements or a note is neither evicted nor held out and the loop orbits. Only
+  // reserve mode evicts, so only reserve mode pays the plain-separator fetch.
+  const keepWholeBudget = !options?.reserveBandOf
+    ? 0
+    : separatorKind === 'separator'
+      ? columnBudget
+      : noteColumnBudgetPt(page.contentBox.height, fetchSeparator('separator').flowHeight);
+  const firstContentTop = options?.reserveBandOf ? firstBodyContentTopPt(page) : 0;
 
   // Continuations from the previous page place first.
   for (const [scopeId, carry] of continuationCarry) {
@@ -1083,8 +1100,17 @@ function buildFootnoteArea(
     // A reference at or below an eviction point moves with the evicted line; its note lays
     // out with it on the destination page. References ABOVE the point (document order is
     // not y order beside a float exclusion zone, or across columns) stay put and keep
-    // their notes in this page's reserve.
-    if (evictionTopPt !== undefined && band && band.bottom >= evictionTopPt - 0.001) {
+    // their notes in this page's reserve. Only a LINE-precise band may skip: a table ref's
+    // band is the whole table box, whose bottom clears the eviction point even when the
+    // referencing row stays on this page — its note must keep reserving here.
+    // Strictly BELOW the point: an edge-to-edge line whose bottom equals the eviction top
+    // is the line directly above it, which stays on the page and must keep its reserve.
+    if (
+      evictionTopPt !== undefined &&
+      band &&
+      band.evictable &&
+      band.bottom > evictionTopPt + 0.001
+    ) {
       continue;
     }
     const laid = layoutNoteCached(
@@ -1131,9 +1157,10 @@ function buildFootnoteArea(
     if (
       band &&
       band.evictable &&
+      options?.evictionAllowed !== false &&
       laid.flowHeight > room + 0.001 &&
-      laid.flowHeight <= keepWholeBudget() - (band.bottom - band.blockTop) + 0.001 &&
-      band.top > firstContentTop() + 0.001 &&
+      laid.flowHeight <= keepWholeBudget - (band.bottom - band.blockTop) + 0.001 &&
+      band.top > firstContentTop + 0.001 &&
       band.top >= MIN_FOOTNOTE_BODY_BAND_PT
     ) {
       evictionTopPt = evictionTopPt === undefined ? band.top : Math.min(evictionTopPt, band.top);
@@ -1196,7 +1223,6 @@ function buildFootnoteArea(
   // Budgets measure without trailing after-spacing ({@link bodyFitBottomPt}); PLACEMENT
   // keeps the painted flow bottom and rises into the after-spacing band only when the
   // stack needs the room, which is also where Word draws the separator in that case.
-  const textBottom = bodyFitBottomPt(page);
   const flowBottom = fragmentFlowBottom(page.fragments);
   let areaTop: number;
   if (placement === 'beneathText') {
@@ -1562,28 +1588,16 @@ function buildEndnoteArea(
   // still use the endnotes-area chrome (Word draws the endnote separator for doc-end notes).
   const sepPart = input.endnotesPart ?? input.footnotesPart;
   const maxSepHeight = Math.max(0, page.contentBox.height);
-  const separator = options?.separatorCache
-    ? options.separatorCache.get(
-        sepPart,
-        separatorKind,
-        contentWidth,
-        'endnote',
-        maxSepHeight,
-        opts,
-        reasons
-      )
-    : (() => {
-        const laid = layoutNoteSeparator(
-          sepPart,
-          separatorKind,
-          contentWidth,
-          opts,
-          'endnote',
-          maxSepHeight
-        );
-        if (laid.fallbackReason) reasons.push(laid.fallbackReason);
-        return laid;
-      })();
+  const separator = separatorLayoutOf(
+    options?.separatorCache,
+    sepPart,
+    separatorKind,
+    contentWidth,
+    'endnote',
+    maxSepHeight,
+    opts,
+    reasons
+  );
   const sepHeight = separator.flowHeight;
   // Endnotes anchor beneath the PAINTED flow (full boxes, trailing after-spacing kept):
   // they hang off the body in leftover room rather than joining the footnote reserve's
@@ -2021,12 +2035,7 @@ export function computeFootnoteReserves(
    * absent, the hold-out releases the ambiguous cases — a caller outside the reflow loop
    * must not manufacture holds the loop never observed.
    */
-  previousReserves?: ReadonlyMap<number, number>,
-  /**
-   * Pass-carried note story layouts. The reflow loop supplies one cache for all of its
-   * rounds — marks and parts are fixed across them; see {@link NoteStoryLayoutCache}.
-   */
-  passNoteLayoutCache?: NoteStoryLayoutCache
+  previousReserves?: ReadonlyMap<number, number>
 ): {
   readonly reserves: ReadonlyMap<number, number>;
   readonly stable: boolean;
@@ -2038,25 +2047,25 @@ export function computeFootnoteReserves(
   let carry: NoteCarryMap = new Map();
   const refIndex = buildPageRefIndex(allRefs);
   const separatorCache = createNoteSeparatorCache();
-  const noteLayoutCache: NoteStoryLayoutCache = passNoteLayoutCache ?? new Map();
+  // Keyed on the mark-context object: the reflow loop's rounds all share one marks
+  // object, so every round of a search lays each note once; a new pass mints new marks
+  // and with them a fresh cache (see {@link NoteStoryLayoutCache} for what the key omits).
+  let noteLayoutCache = noteStoryCachesByMarks.get(noteMarks);
+  if (!noteLayoutCache) {
+    noteLayoutCache = new Map();
+    noteStoryCachesByMarks.set(noteMarks, noteLayoutCache);
+  }
   const holdOutOpts = layoutOpts(input, noteMarks);
-  const isPageBottomFootnoteRef = (ref: PageRefHit): boolean => {
-    if (ref.noteKind !== 'footnote') return false;
-    const pos = footnotePropsFor(input, ref.sectionIndex).pos;
-    return pos !== 'sectEnd' && pos !== 'docEnd';
-  };
+  const isPageBottomFootnoteRef = (ref: PageRefHit): boolean =>
+    ref.noteKind === 'footnote' && !collectsAtEnd(footnotePropsFor(input, ref.sectionIndex).pos);
   // A document with no page-bottom footnote reference at all (footnote-free, or every
   // section collects at sectEnd/docEnd) has nothing for the hold-out to pull, so the
   // per-page scan is skipped wholesale.
   const anyPageBottomFootnoteRefs = allRefs.some(isPageBottomFootnoteRef);
   const pageBottomRefsOf = (page: PageRecord): readonly PageRefHit[] =>
     filterRefsOnPage(page, allRefs, refIndex).filter(isPageBottomFootnoteRef);
-  /** Clamp-and-merge, stated once: zero entries are OMITTED (convergence compares key sets). */
-  const recordReserve = (pageIndex: number, needed: number, cap: number): void => {
-    const clamped = Math.min(needed, cap);
-    if (clamped <= 0) return;
-    reserves.set(pageIndex, Math.max(reserves.get(pageIndex) ?? 0, clamped));
-  };
+  const recordReserve = (pageIndex: number, needed: number, cap: number): void =>
+    recordFootnoteReserve(reserves, pageIndex, Math.min(needed, cap));
 
   for (let pageAt = 0; pageAt < layout.pages.length; pageAt += 1) {
     const page = layout.pages[pageAt]!;
@@ -2071,16 +2080,10 @@ export function computeFootnoteReserves(
     const usedReservePt = previousReserves ? (previousReserves.get(page.index) ?? 0) : undefined;
     // The reserve ceiling: the note column beside the minimum body band.
     const maxArea = noteColumnBudgetPt(bodyPage.contentBox.height, 0);
-    // Hold-out: the fixed point of an eviction. Once the body pass has pushed a reference
-    // line forward, THIS page's recomputed reserve no longer sees that reference — the
-    // note-stack height alone under-claims, the next round pulls the line back, and the
-    // loop orbits the two placements forever. When the next page OPENS with a reference
-    // whose note cannot return here, this page's assignment is final under Word's rule
-    // (the note stays whole with its reference), so the reserve claims the remaining
-    // slack and reproduces itself round over round. Deliberately NOT memoized: it reads
-    // the NEIGHBOUR page, and a memo entry that must enumerate foreign inputs by hand is
-    // how stale reserves happen; the scan starts from a memoized page-refs answer and
-    // lays notes through the pass cache.
+    // The eviction's fixed point ({@link holdOutReserveNeed}). Deliberately NOT memoized:
+    // it reads the NEIGHBOUR page, and a memo entry that must enumerate foreign inputs by
+    // hand is how stale reserves happen; the scan starts from a memoized page-refs answer
+    // and lays notes through the pass cache.
     const holdOutFor = (existingAreaHeight: number): number =>
       anyPageBottomFootnoteRefs
         ? holdOutReserveNeed({
@@ -2103,7 +2106,7 @@ export function computeFootnoteReserves(
             noteLayoutCache,
           })
         : 0;
-    if (props.pos === 'sectEnd' || props.pos === 'docEnd') {
+    if (collectsAtEnd(props.pos)) {
       // No per-page reservation for THIS page's refs — collected later. The hold-out
       // still runs: a ref-free page in a mixed-position document (or one whose only
       // reference was evicted) answers section 0 here, and skipping it would let the
@@ -2147,6 +2150,10 @@ export function computeFootnoteReserves(
         reserveBandOf: (ref) => noteReferenceLineBandPt(bodyPage, ref),
         separatorCache,
         noteLayoutCache,
+        evictionAllowed:
+          !nextPage ||
+          (nextPage.contentBox.width === bodyPage.contentBox.width &&
+            nextPage.contentBox.height === bodyPage.contentBox.height),
       }
     );
     carry = nextCarry;
@@ -2181,7 +2188,7 @@ export function computeFootnoteReserves(
   for (const page of layout.pages) {
     const needed = reserves.get(page.index) ?? 0;
     if (needed <= 0) continue;
-    const used = bodyFitBottomPt(bodyOnlyPage(page));
+    const used = bodyFitBottomPt(page);
     if (used + needed > page.contentBox.height + 0.5) {
       stable = false;
       break;
@@ -2670,14 +2677,15 @@ export function layoutSemanticDocumentWithNotes<
     // footnotes deserves the full search, not the keystroke cap).
     const attemptCap =
       seeded && usedReserves.size > 0 ? MAX_SEEDED_NOTE_REFLOW_ATTEMPTS : MAX_NOTE_REFLOW_ATTEMPTS;
-    // One note-story layout per note for the WHOLE search: marks and parts are fixed
-    // across rounds, so every round's reserve compute shares this cache.
-    const passNoteLayoutCache: NoteStoryLayoutCache = new Map();
     // Consecutive page-count growth is the runaway signature (an eviction chain minting a
     // near-blank sheet per round on a shape none of the guards recognized); the fingerprint
     // exits never fire on it because every round's map is new. Cut it off early rather
     // than paying the full attempt cap for a degraded answer.
     let previousPageCount = bodyLayout.pages.length;
+    // Scaled with the document: legitimate cold convergence of a large document can grow
+    // the page count for more consecutive rounds than a small one (the settled prefix
+    // extends a few pages per round), while a runaway keeps growing regardless of size.
+    const growthCutoff = Math.max(8, Math.ceil(previousPageCount / 16));
     let consecutiveGrowth = 0;
     for (let attempt = 0; attempt < attemptCap; attempt += 1) {
       const computed = computeFootnoteReserves(
@@ -2686,8 +2694,7 @@ export function layoutSemanticDocumentWithNotes<
         notesInput,
         noteMarks,
         notesMemo,
-        usedReserves,
-        passNoteLayoutCache
+        usedReserves
       );
       fallbackReasons = [...computed.reasons];
       // Published pages must reflect the reserves used to produce them — not a later map.
@@ -2698,9 +2705,9 @@ export function layoutSemanticDocumentWithNotes<
         fallbackReasons.push('note-reflow-exhausted');
         break;
       }
-      // Eight: legitimate convergence oscillates (its growth streaks measure ~3 rounds on
-      // the reference-dense fixture); only a runaway grows monotonically.
-      if (consecutiveGrowth >= 8) {
+      // Legitimate convergence oscillates (its growth streaks measure ~3 rounds on the
+      // reference-dense fixture); only a runaway grows monotonically.
+      if (consecutiveGrowth >= growthCutoff) {
         fallbackReasons.push('note-reflow-exhausted');
         break;
       }

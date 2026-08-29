@@ -320,6 +320,30 @@ export function layoutNoteById(
 }
 
 /**
+ * Pass-local note story layouts, keyed by part, note id and width. Valid for exactly one
+ * layout pass: every other input rides `opts`, which the caller builds once per pass from
+ * a fixed mark context — the key deliberately omits it, so a cache must never outlive the
+ * pass (or the marks) it was created for.
+ */
+export type NoteStoryLayoutCache = Map<string, NoteStoryLayout | null>;
+
+export function layoutNoteCached(
+  part: OoxmlPart | null,
+  noteId: number,
+  contentWidth: number,
+  opts: LayoutNoteStoryOptions,
+  cache: NoteStoryLayoutCache | undefined
+): NoteStoryLayout | null {
+  if (!cache) return layoutNoteById(part, noteId, contentWidth, opts);
+  const key = `${part?.name ?? 'none'}\0${noteId}\0${contentWidth}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  const laid = layoutNoteById(part, noteId, contentWidth, opts);
+  cache.set(key, laid);
+  return laid;
+}
+
+/**
  * Word-default paint style for a separator marker.
  *
  * Footnote and endnote separators both use a short single rule. A full-width double

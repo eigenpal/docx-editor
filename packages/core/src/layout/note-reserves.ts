@@ -76,6 +76,20 @@ export function notesReserveContextKey(
   return `|nr:${entries.map(([localSlot, height]) => `${localSlot}=${height}`).join(',')}`;
 }
 
+/**
+ * Merge one entry into a reserve map: monotonic per-slot maximum, and non-positive heights
+ * are OMITTED rather than stored — convergence compares maps by key set, and body layout
+ * treats a missing slot as zero.
+ */
+export function recordFootnoteReserve(
+  reserves: Map<number, number>,
+  pageIndex: number,
+  height: number
+): void {
+  if (height <= 0) return;
+  reserves.set(pageIndex, Math.max(reserves.get(pageIndex) ?? 0, height));
+}
+
 /** Drop non-positive heights so missing and zero compare equal. */
 export function compactFootnoteReserves(
   reserves: ReadonlyMap<number, number>

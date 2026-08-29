@@ -93,10 +93,15 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
 export function bodyFitBottomPt(page: PageRecord): number {
   let bottom = 0;
   for (const fragment of page.fragments) {
-    const trailingAfter = fragment.kind === 'paragraph' ? fragment.spacing.after : 0;
-    bottom = Math.max(bottom, fragment.box.y + fragment.box.height - trailingAfter);
+    bottom = Math.max(bottom, fragmentFitBottomPt(fragment));
   }
   return bottom;
+}
+
+/** One fragment's fit-rule bottom — its box minus a paragraph's trailing after-spacing. */
+export function fragmentFitBottomPt(fragment: BlockFragmentRecord): number {
+  const trailingAfter = fragment.kind === 'paragraph' ? fragment.spacing.after : 0;
+  return fragment.box.y + fragment.box.height - trailingAfter;
 }
 
 /**
@@ -155,7 +160,34 @@ export interface NoteReferenceLineBand {
   readonly evictable: boolean;
 }
 
+/**
+ * Memoized per fragments-array identity and ref object identity: the reserve pass asks for
+ * the same page's bands as `bodyPage` and again as the previous page's hold-out neighbour,
+ * every reflow round, and both the fragment arrays and the ref objects are identity-stable
+ * across rounds.
+ */
+const referenceLineBandMemos = new WeakMap<
+  readonly BlockFragmentRecord[],
+  WeakMap<object, NoteReferenceLineBand>
+>();
+
 export function noteReferenceLineBandPt(
+  page: PageRecord,
+  ref: { readonly paragraphId: string; readonly atomOffset: number }
+): NoteReferenceLineBand {
+  let perPage = referenceLineBandMemos.get(page.fragments);
+  if (!perPage) {
+    perPage = new WeakMap();
+    referenceLineBandMemos.set(page.fragments, perPage);
+  }
+  const cached = perPage.get(ref);
+  if (cached) return cached;
+  const band = computeReferenceLineBand(page, ref);
+  perPage.set(ref, band);
+  return band;
+}
+
+function computeReferenceLineBand(
   page: PageRecord,
   ref: { readonly paragraphId: string; readonly atomOffset: number }
 ): NoteReferenceLineBand {
