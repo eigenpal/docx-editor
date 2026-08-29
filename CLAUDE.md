@@ -26,16 +26,16 @@ the legal license files or `LicenseRef-EigenPal-Pro-Evaluation-1.0` metadata.
 
 One engine. Thin chrome on top.
 
-| Package       | What                                                                                                                                                                                           | Status                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `core`        | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react` |
-| `react`       | The adapter: provider + hooks, holds no editing state                                                                                                                                          | published                      |
-| `i18n`        | Shared strings                                                                                                                                                                                 | published                      |
-| `editor-api`  | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license         |
-| `pro`         | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license         |
-| `fonts`       | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                      |
-| `vue`         | The Vue 3 adapter twin, parity-gated against `react`                                                                                                                                           | published                      |
-| `nuxt`        | Nuxt module over the Vue adapter                                                                                                                                                               | WIP, private                   |
+| Package      | What                                                                                                                                                                                           | Status                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `core`       | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react` |
+| `react`      | The adapter: provider + hooks, holds no editing state                                                                                                                                          | published                      |
+| `i18n`       | Shared strings                                                                                                                                                                                 | published                      |
+| `editor-api` | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license         |
+| `pro`        | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license         |
+| `fonts`      | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                      |
+| `vue`        | The Vue 3 adapter twin, parity-gated against `react`                                                                                                                                           | published                      |
+| `nuxt`       | Nuxt module over the Vue adapter                                                                                                                                                               | WIP, private                   |
 
 React and Vue both ship; the parity gates below keep them from drifting.
 
@@ -175,6 +175,14 @@ openspec validate typed-ooxml-paragraph-editor --strict
   what CI runs. `bun test` still works and is the one to reach for when you want
   a single file, `-t`, or `--watch`; `bun run test:serial` is the whole suite the
   old way.
+- The pool is machine-aware, and must stay that way: the heavy OOXML-oracle files
+  peak at multiple GiB each and slowest-first starts them together, which once
+  froze a 48 GiB machine (fourteen workers, ~94 GiB footprint, WindowServer
+  watchdog death). The runner caps width by installed memory, splits width and
+  budget between concurrent runs on the machine (tmpdir registry), and gates
+  dispatch on each file's measured peak footprint plus live memory pressure.
+  `--jobs` pins the width but never lifts the gate. A single test file that needs
+  more than a few GiB is a bug to file, not a budget to raise.
 - A file that leaves state on `document` can only be caught by the serial run —
   per-file processes hide it. Scope DOM queries to the container you mounted.
 - `git commit --no-verify` is fine locally, but `bun run format` and `bun run lint` are not
