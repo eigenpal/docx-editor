@@ -141,6 +141,15 @@ export interface ParagraphFlowOptions {
    */
   readonly bodyPageFields?: import('./field-page-furniture.ts').BodyPageFieldContext | false;
   /**
+   * The story's resolved REF inputs (bookmark targets + numbering), for live REF results.
+   *
+   * Supplied by the body flow, whose block cache keys fold the resolved values — a flow that
+   * threads this WITHOUT keying on those values would serve stale breaks after a renumbering
+   * edit. Absent means REF fields paint their cached results, the safe degradation every
+   * other story (headers/footers, notes, text boxes) currently takes.
+   */
+  readonly refFields?: import('./field-ref.ts').RefFieldContext;
+  /**
    * Which revisions this break resolves away.
    *
    * A different mode is a different break — the proposed result drops deleted text, so lines
@@ -618,7 +627,8 @@ export function breakParagraph(
     flow?.themeFonts,
     flow?.projectFieldLink,
     flow?.documentProperties,
-    flow?.bodyPageFields ?? false
+    flow?.bodyPageFields ?? false,
+    flow?.refFields
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {

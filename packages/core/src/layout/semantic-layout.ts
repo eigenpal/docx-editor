@@ -171,6 +171,7 @@ import {
   withResolvedListItemsForSession,
   type ResolvedListItem,
 } from './list-resolve.ts';
+import { refTokenForTableBlock, resolveStoryRefFields, type RefFieldContext } from './field-ref.ts';
 import { publishListMarker } from './list-marker.ts';
 import {
   NO_DEFERRED_DRAWINGS,
@@ -409,6 +410,12 @@ interface PreparedBlockMemo {
    * that has to be right.
    */
   readonly listToken: string;
+  /**
+   * The resolved REF values this block paints, for the same reason {@link listToken} is
+   * here: a renumbering or bookmark edit moves a REF's painted text while the block's node,
+   * width and producer all stay identical. `''` for the common REF-free block.
+   */
+  readonly refToken: string;
   readonly entry: PreparedBlock;
 }
 
@@ -506,6 +513,12 @@ export interface SectionPrepass {
   readonly keepsNext: boolean[];
   readonly markerTexts: (string | undefined)[];
   readonly tocToken: string;
+  /**
+   * The story-wide REF values token. Compared WHOLE, like {@link tocToken} and for the same
+   * shape of reason: a renumbering edit in one section moves a REF value painted in another
+   * whose blocks and list map are identity-unchanged, so no per-section input sees it.
+   */
+  readonly refToken: string;
   readonly flowKeys: string[];
 }
 
@@ -597,6 +610,12 @@ export function layoutSemanticDocument(
         blocks
       );
 
+  // REF cross-references resolve against the whole story's bookmarks and resolved numbering,
+  // so the context is built here — the one place that sees both — and rides the options
+  // spreads into every section pass. Null for the common REF-free document.
+  const refFields = resolveStoryRefFields(blocks, optionsWithLists.listItems);
+  const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
+
   const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
     if (sections.length > 1) {
       return layoutMultiSectionDocument(blocks, sections, revision, opts, layoutBlocksWithGeometry);
@@ -654,14 +673,17 @@ export function layoutSemanticDocument(
       options.session.notes = null;
       options.session.notePageBottomReserves = null;
     }
-    return finish(runBody(optionsWithLists));
+    return finish(runBody(optionsForBody));
   }
 
   // Notes inherit the body's projector seams and document properties (link, field link, doc
-  // props) unless the notes input pinned its own — see `inheritNotesLayoutInput`.
+  // props) unless the notes input pinned its own — see `inheritNotesLayoutInput`. The REF
+  // context deliberately does NOT ride along: note stories keep painting cached REF results
+  // until their flow keys learn to fold the resolved values (threading the values without
+  // keying on them would serve stale note breaks after a renumbering edit).
   const notesInput = inheritNotesLayoutInput(options.notes, options);
   return finish(
-    layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, notesInput, runBody)
+    layoutSemanticDocumentWithNotes(part, sections, optionsForBody, notesInput, runBody)
   );
 }
 
@@ -727,6 +749,13 @@ type BlockLayoutOptions = SemanticLayoutOptions & {
    * knows the format — see {@link numericPictureApplies}.
    */
   readonly bodyPageNumberFormat?: string;
+  /**
+   * The story's resolved REF inputs, built once in `layoutSemanticDocument` and riding the
+   * options spreads (single-section `runBody` and the multi-section `...rest`) as a runtime
+   * property — deliberately NOT a `SemanticLayoutOptions` member, so the public options
+   * surface stays put. Absent for stories without REF fields and for non-body lanes.
+   */
+  readonly refFields?: RefFieldContext;
 };
 
 /**
@@ -888,6 +917,7 @@ function layoutBlocksPass(
   // cannot reuse breaks measured under another inheritance table.
   const styleCascade = options.styleCascade;
   const listItems = options.listItems;
+  const refFields = options.refFields;
   // The default-tab interval moves every default-interval tab, and the prepared-block memo
   // is keyed by producer — so it belongs here rather than only in the per-paragraph token.
   const defaultTabStopPt = options.defaultTabStopPt;
@@ -1079,13 +1109,22 @@ function layoutBlocksPass(
       (block.kind === 'table'
         ? listTokenForTableBlock(block, listItems)
         : (listItems?.get(block.id)?.cacheToken ?? '')) + hostedListToken;
+    // The RESOLVED VALUES this block's REF fields paint. The block's own subtree is identical
+    // after a renumbering edit elsewhere, so only this token can invalidate its memo and key.
+    const refToken =
+      refFields === undefined
+        ? ''
+        : block.kind === 'table'
+          ? refTokenForTableBlock(block, refFields)
+          : refFields.tokenForParagraph(block.id);
     const memo = preparedBlocks.get(block);
     if (
       memo &&
       memo.contentWidth === availableWidth &&
       memo.producer === producer &&
       memo.drawingToken === paragraphDrawingToken &&
-      memo.listToken === listToken
+      memo.listToken === listToken &&
+      memo.refToken === refToken
     ) {
       return memo.entry;
     }
@@ -1097,9 +1136,12 @@ function layoutBlocksPass(
         table: block,
         key: paragraphLayoutKey({
           paragraph: block,
-          properties: hostedListToken
-            ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
-            : [],
+          properties: [
+            ...(hostedListToken
+              ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
+              : []),
+            ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
+          ],
           width: availableWidth,
           producer,
           ...(paragraphDrawingToken ? { drawingToken: paragraphDrawingToken } : {}),
@@ -1176,6 +1218,7 @@ function layoutBlocksPass(
             ...(hostedListToken
               ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
               : []),
+            ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
           ],
           width: available,
           producer,
@@ -1188,6 +1231,7 @@ function layoutBlocksPass(
       producer,
       drawingToken: paragraphDrawingToken,
       listToken,
+      refToken,
       entry,
     });
     return entry;
@@ -1214,6 +1258,7 @@ function layoutBlocksPass(
     prepassMemo.styleCascade === styleCascade &&
     prepassMemo.listItems === listItems &&
     prepassMemo.tocToken === tocToken &&
+    prepassMemo.refToken === (refFields?.valuesToken ?? '') &&
     prepassMemo.bodies.length === bodies.length &&
     prepassMemo.bodies.every((block, index) => block === bodies[index]);
   const prepass: SectionPrepass = prepassValid ? prepassMemo : buildSectionPrepass();
@@ -1275,6 +1320,7 @@ function layoutBlocksPass(
       keepsNext,
       markerTexts,
       tocToken,
+      refToken: refFields?.valuesToken ?? '',
       flowKeys: flow,
     };
   }
@@ -1660,6 +1706,7 @@ function layoutBlocksPass(
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     // Body flow: page fields in table cells paint a placeholder for document finalize to fill.
     bodyPageFields: bodyPageFieldContext,
+    ...(refFields ? { refFields } : {}),
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
     ...(options.drawingTokenForParagraph
@@ -1739,12 +1786,18 @@ function layoutBlocksPass(
       options.drawingTokenForParagraph?.(entry.paragraph) ??
       options.drawingLayoutToken ??
       (options.inlineDrawingLayout ? 'drawing' : undefined);
+    // The drawing/exclusion key path rebuilds from `entry.props`, which cannot see a REF
+    // value move — fold the paragraph's ref token in so a float-adjacent reference is not
+    // served its pre-renumber break.
+    const refToken = refFields?.tokenForParagraph(paragraphId) ?? '';
     const cacheKey =
       cache && !suppressChrome
         ? exclusionToken || drawingKeyed
           ? paragraphLayoutKey({
               paragraph: entry.paragraph,
-              properties: entry.props,
+              properties: refToken
+                ? [...entry.props, { localName: 'refFields', attributes: { token: refToken } }]
+                : entry.props,
               width: available,
               producer,
               ...(drawingKeyed ? { drawingToken: drawingKeyed } : {}),
@@ -1788,6 +1841,7 @@ function layoutBlocksPass(
         ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
         // Body flow: an empty-cache page field paints a placeholder finalize substitutes per page.
         bodyPageFields: bodyPageFieldContext,
+        ...(refFields ? { refFields } : {}),
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...(options.inlineDrawingLayout

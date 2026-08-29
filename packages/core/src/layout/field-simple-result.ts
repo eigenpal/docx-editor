@@ -19,6 +19,7 @@ import { parseButtonInstruction } from './field-button.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
+import { parseRefInstruction, type RefFieldContext } from './field-ref.ts';
 import {
   modelTextOfRunChild,
   runPropertiesOf,
@@ -301,6 +302,8 @@ export function projectSimpleFieldResult(args: {
   readonly documentProperties?: DocumentProperties;
   /** True in BODY flow: an empty-cache page field paints a placeholder for finalize to fill. */
   readonly bodyPageFields?: BodyPageFieldContext | false;
+  /** The story's resolved REF inputs; absent keeps a REF simple field on its cached result. */
+  readonly refFields?: RefFieldContext;
 }): SimpleFieldProjection | null {
   const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
   const display = collectSimpleFieldDisplay(args);
@@ -350,6 +353,20 @@ export function projectSimpleFieldResult(args: {
     if (glyph) {
       if (glyph.style.hidden) return null;
       return { text: glyph.text, props: glyph.props, style: glyph.style };
+    }
+  }
+
+  // A simple REF resolves live exactly like the complex shape: the value from the bookmark
+  // target wins over the stale cached display; an unresolvable reference falls through to it.
+  if (args.refFields) {
+    const refSpec = parseRefInstruction(instr);
+    if (refSpec) {
+      const value = args.refFields.valueOf(refSpec);
+      if (value !== null) {
+        const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+        if (style.hidden) return null;
+        return { text: value, props, style };
+      }
     }
   }
 
