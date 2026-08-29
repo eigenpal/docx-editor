@@ -20,6 +20,7 @@ import {
   type HtmlFragmentRel as RelEntry,
 } from './clipboard-html-package.ts';
 import {
+  clipboardNoteDefinitionRef,
   clipboardNoteDefinitions,
   clipboardNoteReference,
   isClipboardNoteList,
@@ -410,13 +411,13 @@ function collectInline(
     }
     const anchor = href?.startsWith('#') ? clipboardBookmarkName(href.slice(1)) : null;
     let content = inner.join('');
-    if (href?.startsWith('#')) {
-      if (anchor !== null) {
-        content = `<w:hyperlink w:anchor="${escapeXmlAttribute(anchor)}">${content}</w:hyperlink>`;
-      }
-    } else {
-      const sanitized = href === null ? null : sanitizeHref(href);
-      if (sanitized !== null && sanitized.ok && sanitized.href.length > 0) {
+    if (anchor !== null) {
+      content = `<w:hyperlink w:anchor="${escapeXmlAttribute(anchor)}">${content}</w:hyperlink>`;
+    } else if (href !== null) {
+      // A fragment name Word cannot store (hyphens, length) stays an external-rel
+      // hyperlink rather than dropping the link.
+      const sanitized = sanitizeHref(href);
+      if (sanitized.ok && sanitized.href.length > 0) {
         const relId = allocateRel(p, `${R_NS}/hyperlink`, sanitized.href, true, ctx.rels ?? p.rels);
         content = `<w:hyperlink r:id="${relId}">${content}</w:hyperlink>`;
       }
@@ -469,15 +470,13 @@ function msoMarkerText(element: Element, p: Projection): string {
   return found;
 }
 
-function projectParagraph(
+/** The styled flow context a paragraph-shaped element hands its children. */
+function paragraphContextOf(
   element: Element,
-  depth: number,
   ctx: FlowContext,
   p: Projection,
-  out: string[],
-  pageBreakBefore = false
-): void {
-  if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
+  pageBreakBefore: boolean
+): FlowContext {
   const tag = tagOf(element);
   const style = parseInlineStyle(element);
   const para: ParaProps = {};
@@ -508,7 +507,7 @@ function projectParagraph(
     run.rtl = true;
     para.bidi = true;
   }
-  const next: FlowContext = {
+  return {
     run,
     para,
     // Only mark-defining properties (style, numbering) justify replacing the host
@@ -520,7 +519,36 @@ function projectParagraph(
     ...(ctx.noteBody ? { noteBody: ctx.noteBody } : {}),
     ...(ctx.rels ? { rels: ctx.rels } : {}),
   };
+}
+
+function projectParagraph(
+  element: Element,
+  depth: number,
+  ctx: FlowContext,
+  p: Projection,
+  out: string[],
+  pageBreakBefore = false
+): void {
+  if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
+  const next = paragraphContextOf(element, ctx, p, pageBreakBefore);
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true, undefined, false);
+}
+
+const BLOCK_CHILD_TAGS = new Set([
+  ...PARAGRAPH_TAGS,
+  ...CONTAINER_TAGS,
+  'table',
+  'ol',
+  'ul',
+  'w:sdt',
+]);
+
+/** True when a `div` is a wrapper over block flow (Word's `WordSection1`), not a leaf. */
+function hasBlockChild(element: Element): boolean {
+  for (let index = 0; index < element.children.length; index += 1) {
+    if (BLOCK_CHILD_TAGS.has(tagOf(element.children[index]!))) return true;
+  }
+  return false;
 }
 
 function projectList(
@@ -617,11 +645,34 @@ function projectFlow(
         p.nodesLeft -= 1;
         continue;
       }
+      // A collected note definition projects only through the notes pass; walking it
+      // here would land the note text twice, once in the body.
+      const noteDefinition = clipboardNoteDefinitionRef(node, elementStyle);
+      if (noteDefinition !== null && p.definedNotes[noteDefinition.kind].has(noteDefinition.id)) {
+        p.nodesLeft -= 1;
+        continue;
+      }
       if (PARAGRAPH_TAGS.has(tag)) {
         flush();
         p.nodesLeft -= 1;
         if (pageBreak.pending && pageBreak.skipSpacer && isWordPageBreakSpacer(node)) {
           pageBreak.skipSpacer = false;
+          continue;
+        }
+        if (tag === 'div' && hasBlockChild(node)) {
+          // Word's section wrapper (`WordSection1`): block flow continues through it,
+          // so page-break extraction and the spacer state must survive the descent.
+          const wrapperCtx = paragraphContextOf(node, ctx, p, false);
+          projectFlow(
+            Array.from(node.childNodes),
+            depth + 1,
+            wrapperCtx,
+            p,
+            out,
+            false,
+            pageBreak,
+            extractPageBreakBlocks
+          );
           continue;
         }
         projectParagraph(node, depth, ctx, p, out, pageBreak.pending);

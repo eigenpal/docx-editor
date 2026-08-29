@@ -28,15 +28,24 @@ export function clipboardNoteReference(
   return null;
 }
 
+/** The note definition an element declares via `mso-element` plus a `ftnN`/`ednN` id. */
+export function clipboardNoteDefinitionRef(
+  element: Element,
+  style: ReadonlyMap<string, string>
+): { readonly kind: ClipboardNoteKind; readonly id: number } | null {
+  const msoElement = style.get('mso-element')?.trim().toLowerCase();
+  if (msoElement !== 'footnote' && msoElement !== 'endnote') return null;
+  const id = noteIdOf(element.getAttribute('id'));
+  return id === null ? null : { kind: msoElement, id };
+}
+
 export function clipboardNoteDefinitions(doc: Document): readonly ClipboardNoteDefinition[] {
   const definitions: ClipboardNoteDefinition[] = [];
   const divs = doc.getElementsByTagName('div');
   for (let index = 0; index < divs.length && definitions.length < 128; index += 1) {
     const element = divs[index]!;
-    const msoElement = parseInlineStyle(element).get('mso-element')?.trim().toLowerCase();
-    if (msoElement !== 'footnote' && msoElement !== 'endnote') continue;
-    const id = noteIdOf(element.getAttribute('id'));
-    if (id !== null) definitions.push({ kind: msoElement, id, element });
+    const ref = clipboardNoteDefinitionRef(element, parseInlineStyle(element));
+    if (ref !== null) definitions.push({ ...ref, element });
   }
   return definitions;
 }

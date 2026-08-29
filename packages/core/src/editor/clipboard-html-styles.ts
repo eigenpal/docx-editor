@@ -469,13 +469,19 @@ function tabStopsOf(value: string | undefined): readonly HtmlTabStop[] | undefin
       val = raw as HtmlTabAlignment;
       continue;
     }
+    // Word writes `list` on list paragraphs; it behaves as a left tab.
+    if (raw === 'list') {
+      val = 'left';
+      continue;
+    }
     const mappedLeader = TAB_LEADERS.get(raw);
     if (mappedLeader !== undefined) {
       leader = mappedLeader;
       continue;
     }
     const points = parseCssLengthPt(raw);
-    if (points === null || points < 0) return undefined;
+    // Tolerate unknown tokens: keep the stops that do parse.
+    if (points === null || points < 0) continue;
     stops.push({
       val,
       posTwips: clamp(Math.round(points * 20), 0, 31_680),
@@ -496,12 +502,20 @@ const BORDER_STYLES: ReadonlyMap<string, HtmlParagraphBorder['val']> = new Map([
   ['dashed', 'dashed'],
 ]);
 
+/** Whitespace-split a border shorthand without shattering `rgb(0, 0, 0)` tokens. */
+export function splitBorderTokens(value: string): readonly string[] {
+  return value
+    .trim()
+    .replace(/\([^)]*\)/g, (group) => group.replace(/\s+/g, ''))
+    .split(/\s+/);
+}
+
 function paragraphBorderOf(value: string | undefined): HtmlParagraphBorder | undefined {
   if (value === undefined || value.length === 0 || value.length > 128) return undefined;
   let val: HtmlParagraphBorder['val'] | undefined;
   let points: number | undefined;
   let color: string | undefined;
-  for (const token of value.trim().split(/\s+/)) {
+  for (const token of splitBorderTokens(value)) {
     const borderStyle = BORDER_STYLES.get(token.toLowerCase());
     if (borderStyle !== undefined) {
       val = borderStyle;
@@ -620,13 +634,15 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   else if (align === 'right' || align === 'end') para.jc = 'right';
   else if (align === 'justify') para.jc = 'both';
   if (style.get('direction')?.trim().toLowerCase() === 'rtl') para.bidi = true;
+  // Zero margins stay unset: a `margin-left:0` reset must not override a numbering
+  // level's indent with a direct `w:ind w:left="0"`.
   const marginLeftPt = parseCssLengthPt(style.get('margin-left') ?? '');
-  if (marginLeftPt !== null) {
-    para.indLeftTwips = clamp(Math.round(marginLeftPt * 20), -31_680, 31_680);
+  if (marginLeftPt !== null && marginLeftPt > 0) {
+    para.indLeftTwips = clamp(Math.round(marginLeftPt * 20), 0, 31_680);
   }
   const marginRightPt = parseCssLengthPt(style.get('margin-right') ?? '');
-  if (marginRightPt !== null) {
-    para.indRightTwips = clamp(Math.round(marginRightPt * 20), -31_680, 31_680);
+  if (marginRightPt !== null && marginRightPt > 0) {
+    para.indRightTwips = clamp(Math.round(marginRightPt * 20), 0, 31_680);
   }
   const indentPt = parseCssLengthPt(style.get('text-indent') ?? '');
   if (indentPt !== null && indentPt !== 0) {
@@ -646,7 +662,8 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   const lineHeightPt = parseCssLengthPt(lineHeight);
   if (lineHeightPt !== null && lineHeightPt > 0) {
     para.lineTwentieths = clamp(Math.round(lineHeightPt * 20), 24, 31_680);
-    para.lineRule = lineRule === 'at-least' ? 'atLeast' : 'exact';
+    // Word only writes the rule for `exactly`; a bare absolute line-height is at-least.
+    para.lineRule = lineRule === 'exactly' ? 'exact' : 'atLeast';
   } else if (/^\d+(\.\d+)?$/.test(lineHeight) && Number.parseFloat(lineHeight) > 0) {
     para.lineTwentieths = clamp(Math.round(240 * Number.parseFloat(lineHeight)), 24, 9600);
     para.lineRule = 'auto';
@@ -676,11 +693,14 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   if (shading) para.shdFill = shading;
   const tabs = tabStopsOf(style.get('tab-stops'));
   if (tabs !== undefined) para.tabs = tabs;
+  // Word writes only the shorthand when all four edges match.
+  const commonBorder = paragraphBorderOf(style.get('mso-border-alt') ?? style.get('border'));
   const borders: Partial<Record<HtmlParagraphBorderEdge, HtmlParagraphBorder>> = {};
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
     const border =
       paragraphBorderOf(style.get(`mso-border-${edge}-alt`)) ??
-      paragraphBorderOf(style.get(`border-${edge}`));
+      paragraphBorderOf(style.get(`border-${edge}`)) ??
+      commonBorder;
     if (border !== undefined) borders[edge] = border;
   }
   if (Object.keys(borders).length > 0) para.borders = borders;

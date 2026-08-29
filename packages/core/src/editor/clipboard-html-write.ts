@@ -732,12 +732,18 @@ interface CellPlacement {
   readonly vMerge: 'restart' | 'continue' | null;
 }
 
+/** A typed cell, or a `w:tc` the canonical tree demoted to generic — both occupy a column. */
+function isRowCell(child: OoxmlElement): boolean {
+  if (child.kind === 'tableCell') return true;
+  return child.localName === 'tc' && child.namespaceUri === WML_NAMESPACE_URI;
+}
+
 function cellPlacementsOf(rows: readonly OoxmlElement[]): CellPlacement[][] {
   return rows.map((row) => {
     const placements: CellPlacement[] = [];
     let column = 0;
     for (const child of row.children) {
-      if (!isElement(child) || child.kind !== 'tableCell') continue;
+      if (!isElement(child) || !isRowCell(child)) continue;
       const tcPr = wmlChild(child, 'tcPr');
       const span = Math.min(
         Math.max(parseIntValue(wmlVal(wmlChild(tcPr, 'gridSpan'))) ?? 1, 1),

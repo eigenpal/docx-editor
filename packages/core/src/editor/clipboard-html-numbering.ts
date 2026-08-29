@@ -3,6 +3,7 @@
 // produces; the projection allocates the numIds and this module renders the definitions.
 
 import { escapeXmlAttribute } from '../store/package/sinks.ts';
+import { parseInlineStyle } from './clipboard-html-styles.ts';
 
 const WML_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
@@ -75,8 +76,22 @@ export function htmlListKindAndStart(marker: string): {
   return { kind: 'bullet', start: 1 };
 }
 
+const LIST_STYLE_TYPE_KINDS: ReadonlyMap<string, HtmlListKind> = new Map([
+  ['decimal', 'decimal'],
+  ['upper-alpha', 'upperLetter'],
+  ['upper-latin', 'upperLetter'],
+  ['lower-alpha', 'lowerLetter'],
+  ['lower-latin', 'lowerLetter'],
+  ['upper-roman', 'upperRoman'],
+  ['lower-roman', 'lowerRoman'],
+]);
+
 export function semanticHtmlListKind(element: Element): HtmlListKind {
   if (element.localName.toLowerCase() !== 'ol') return 'bullet';
+  // The outbound writer emits `list-style-type` CSS, not the legacy attribute.
+  const listStyle = parseInlineStyle(element).get('list-style-type')?.trim().toLowerCase();
+  const fromCss = listStyle === undefined ? undefined : LIST_STYLE_TYPE_KINDS.get(listStyle);
+  if (fromCss !== undefined) return fromCss;
   const type = element.getAttribute('type');
   if (type === 'A') return 'upperLetter';
   if (type === 'a') return 'lowerLetter';

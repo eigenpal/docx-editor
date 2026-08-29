@@ -3,6 +3,7 @@ import {
   parseCssLengthPt,
   parseInlineStyle,
   solidBackground,
+  splitBorderTokens,
   tagOf,
 } from './clipboard-html-styles.ts';
 
@@ -162,7 +163,7 @@ function borderValueOf(value: string | undefined): BorderValue | undefined {
   let val: BorderValue['val'] | undefined;
   let points: number | undefined;
   let color: string | undefined;
-  for (const token of value.trim().split(/\s+/)) {
+  for (const token of splitBorderTokens(value)) {
     const mapped = BORDER_VALUES.get(token.toLowerCase());
     if (mapped !== undefined) {
       val = mapped;
