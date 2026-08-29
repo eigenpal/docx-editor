@@ -713,8 +713,14 @@ describe('the eastAsia font slot cascades from docDefaults to the painted spans'
     });
     const spans = linesOf(layout).flatMap((line) => line.spans);
     expect(spans.map((span) => span.text)).toEqual(['甲方', 'shall']);
-    expect(spans[0]!.style.fontFamily).toBe('SimSun');
-    expect(spans[1]!.style.fontFamily).toBe('Grandview');
+    // The span keeps the run's REAL resolution — both faces — and carries the slot
+    // beside it; the face swap happens at the measurer/paint boundary. Formatting
+    // readback and the format painter therefore see one Latin answer for both spans.
+    expect(spans[0]!.fontSlot).toBe('eastAsia');
+    expect(spans[1]!.fontSlot).toBeUndefined();
+    expect(spans[0]!.style).toBe(spans[1]!.style);
+    expect(spans[0]!.style.fontFamily).toBe('Grandview');
+    expect(spans[0]!.style.fontFamilyEastAsia).toBe('SimSun');
     // Model offsets stay contiguous across the split, so the caret walks through it.
     expect(spans[0]!.range.end).toBe(spans[1]!.range.start);
     // The measurer saw the CJK text only under the eastAsia face, never the Latin one.

@@ -3147,12 +3147,16 @@ export interface StyleDefinition {
 }
 
 // @public
+export function styleForFontSlot(style: ResolvedRunStyle, slot: FontSlot | undefined): ResolvedRunStyle;
+
+// @public
 export interface StyleSpanRecord {
     // (undocumented)
     readonly box: LayoutBox;
     readonly caretEdges?: readonly number[];
     readonly equation?: EquationSpanRecord;
     readonly fieldAtom?: FieldAtomMarker;
+    readonly fontSlot?: FontSlot;
     readonly link?: SpanLinkRecord;
     readonly noteNav?: {
         readonly direction: 'to-note' | 'to-body';

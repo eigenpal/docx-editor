@@ -79,6 +79,7 @@ import { synthesizeAtomicField } from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
+  applyEastAsiaFontSlots,
   positionalTabOf,
   type FieldAtomMarker,
   type FieldAwarePiece,
@@ -114,7 +115,6 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
-import { splitByEastAsiaSlot } from './script-itemization.ts';
 import { equationRunStyle } from './equation-layout.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import {
@@ -279,37 +279,17 @@ export function piecesOfParagraph(
       return;
     }
     if (text.length === 0) return;
-    const emit = (
-      sliceText: string,
-      sliceStyle: ResolvedRunStyle,
-      sliceStart: number,
-      sliceEnd: number
-    ): void => {
-      pieces.push({
-        text: sliceText,
-        props,
-        style: sliceStyle,
-        start: sliceStart,
-        end: sliceEnd,
-        ...(extras?.positionalTab ? { positionalTab: extras.positionalTab } : {}),
-        ...(extras?.breakKind ? { breakKind: extras.breakKind } : {}),
-        ...link,
-        ...attribution,
-      });
-    };
-    // A run with an eastAsia face that differs from its Latin face is split into
-    // slot-homogeneous pieces, so measurement, paint and hit-testing all see one face per
-    // piece without any of them re-itemizing. Piece boundaries are NOT break
-    // opportunities (`opensWord` in `paragraph-flow.ts` carries words across them), so the
-    // split changes which face a character resolves to and nothing else. Tabs and hard
-    // breaks are single control characters and skip the scan.
-    const slices =
-      extras?.positionalTab || extras?.breakKind ? null : splitByEastAsiaSlot(text, style, start);
-    if (slices) {
-      for (const piece of slices) emit(piece.text, piece.style, piece.start, piece.end);
-    } else {
-      emit(text, style, start, end);
-    }
+    pieces.push({
+      text,
+      props,
+      style,
+      start,
+      end,
+      ...(extras?.positionalTab ? { positionalTab: extras.positionalTab } : {}),
+      ...(extras?.breakKind ? { breakKind: extras.breakKind } : {}),
+      ...link,
+      ...attribution,
+    });
   };
 
   const commitAtomicField = (): void => {
@@ -880,7 +860,7 @@ export function piecesOfParagraph(
    * their nesting. Content-control nesting shares {@link MAX_CONTENT_CONTROL_NESTING} with
    * block flattening; field-scan depth stays separate.
    */
-  if (!consumeScanNode(budget)) return pieces;
+  if (!consumeScanNode(budget)) return applyEastAsiaFontSlots(pieces);
   const paragraphScope = emptyNamespaceScope();
 
   /**
@@ -998,5 +978,7 @@ export function piecesOfParagraph(
   // Malformed field missing end: demote — surface cached/buffered text, no live projection.
   abandonPending();
 
-  return pieces;
+  // Slot resolution is a paragraph-wide question (Common characters inherit across run
+  // boundaries), so it runs after the walk, over the assembled pieces.
+  return applyEastAsiaFontSlots(pieces);
 }

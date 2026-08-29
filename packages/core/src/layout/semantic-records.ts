@@ -24,6 +24,7 @@ import type { FieldAtomMarker, ModelRange } from './field-pieces.ts';
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
+import type { FontSlot } from './script-itemization.ts';
 import type { ResolvedCellBorders } from './table-borders.ts';
 import type { EquationSpanRecord } from './equation-layout.ts';
 
@@ -132,6 +133,14 @@ export interface StyleSpanRecord {
    * point put the caret where no glyph is.
    */
   readonly style: ResolvedRunStyle;
+  /**
+   * The `w:rFonts` slot this span's text resolves its face through; absent means the base
+   * (ascii/hAnsi) slots. {@link style} stays the run's full resolution — with both
+   * `fontFamily` and `fontFamilyEastAsia` — so formatting readback and the format painter
+   * see the run as authored; measurement, paint and hit-testing resolve the effective face
+   * with `styleForFontSlot(span.style, span.fontSlot)`.
+   */
+  readonly fontSlot?: FontSlot;
   readonly box: LayoutBox;
   /**
    * Cumulative advances from {@link box}.x to each UTF-16 caret boundary in {@link text}.

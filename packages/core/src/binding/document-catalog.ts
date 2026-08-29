@@ -9,6 +9,7 @@
 
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
+import { themeFontFamilyOf, type ThemeSchemeFaces } from '../store/package/theme-font-scheme.ts';
 
 /**
  * The same shape `semantic-paint.ts` enforces at the CSS sink (its `FONT_NAME`):
@@ -47,7 +48,7 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
  */
 export function collectDocumentFonts(
   roots: readonly OoxmlElement[],
-  themeFonts?: { readonly major: string | null; readonly minor: string | null }
+  themeFonts?: ThemeSchemeFaces
 ): readonly string[] {
   const byFold = new Map<string, string>();
   // Composed from per-subtree memos: every keystroke publishes a new root whose children
@@ -73,6 +74,8 @@ export function collectDocumentFonts(
 interface SubtreeFontsMemo {
   readonly major: string | null;
   readonly minor: string | null;
+  readonly majorEastAsia: string | null;
+  readonly minorEastAsia: string | null;
   readonly byFold: ReadonlyMap<string, string>;
 }
 const subtreeFontsMemos = new WeakMap<OoxmlElement, SubtreeFontsMemo>();
@@ -88,13 +91,26 @@ const MAX_COMPOSE_DEPTH = 32;
 
 function subtreeFontsOf(
   subtree: OoxmlElement,
-  themeFonts: { readonly major: string | null; readonly minor: string | null } | undefined,
+  themeFonts: ThemeSchemeFaces | undefined,
   depth = 0
 ): ReadonlyMap<string, string> {
   const major = themeFonts?.major ?? null;
   const minor = themeFonts?.minor ?? null;
+  // The East Asian faces are part of the memo key for the same reason the Latin pair is:
+  // the theme decides what a theme slot reference contributes, so a memo keyed on fewer
+  // faces than the resolution reads would answer stale fonts after a retheme.
+  const majorEastAsia = themeFonts?.majorEastAsia ?? null;
+  const minorEastAsia = themeFonts?.minorEastAsia ?? null;
   const cached = subtreeFontsMemos.get(subtree);
-  if (cached && cached.major === major && cached.minor === minor) return cached.byFold;
+  if (
+    cached &&
+    cached.major === major &&
+    cached.minor === minor &&
+    cached.majorEastAsia === majorEastAsia &&
+    cached.minorEastAsia === minorEastAsia
+  ) {
+    return cached.byFold;
+  }
   if (
     subtree.children.length >= COMPOSE_CHILD_THRESHOLD &&
     depth < MAX_COMPOSE_DEPTH &&
@@ -107,7 +123,7 @@ function subtreeFontsOf(
         if (!merged.has(fold)) merged.set(fold, family);
       }
     }
-    subtreeFontsMemos.set(subtree, { major, minor, byFold: merged });
+    subtreeFontsMemos.set(subtree, { major, minor, majorEastAsia, minorEastAsia, byFold: merged });
     return merged;
   }
   const byFold = new Map<string, string>();
@@ -133,16 +149,13 @@ function subtreeFontsOf(
       // theme otherwise reported "no fonts" while every run rendered in one.
       if (themeFonts) {
         for (const attr of RFONTS_THEME_ATTRS) {
-          const slot = attributeValue(node, attr);
-          if (slot === undefined) continue;
-          if (slot.startsWith('major')) add(themeFonts.major);
-          else if (slot.startsWith('minor')) add(themeFonts.minor);
+          add(themeFontFamilyOf(attributeValue(node, attr), themeFonts));
         }
       }
     }
     for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);
   }
-  subtreeFontsMemos.set(subtree, { major, minor, byFold });
+  subtreeFontsMemos.set(subtree, { major, minor, majorEastAsia, minorEastAsia, byFold });
   return byFold;
 }
 

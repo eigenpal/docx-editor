@@ -165,14 +165,20 @@ function runPropertiesOf(style: ResolvedRunStyle): readonly SurfaceProperty[] {
   // measured in the surface's own default, which is not a document fact and must not be
   // written into a paragraph as if it were.
   //
-  // `ascii` and `hAnsi` only. `w:rFonts` merges per SLOT (`mergedFontProperty`), so a target
-  // keeps its East Asian and complex-script faces — deliberately, and for the same reason a
-  // CJK list marker keeps its own face when the Latin text beside it changes. The resolver
-  // publishes ONE family, so there is no East Asian answer to copy even if that were wanted.
-  if (style.fontFamily) {
+  // Per SLOT, matching how `w:rFonts` merges (`mergedFontProperty`): `style.fontFamily` is
+  // the ascii/hAnsi answer and `style.fontFamilyEastAsia` the eastAsia one, so a copy that
+  // starts on CJK text writes the East Asian face into `w:eastAsia` — never into the
+  // target's Latin slots. A source with no resolved East Asian face leaves the target's
+  // `w:eastAsia` alone, for the same reason a CJK list marker keeps its own face when the
+  // Latin text beside it changes. The complex-script face is not resolved yet, so `w:cs`
+  // stays untouched.
+  if (style.fontFamily || style.fontFamilyEastAsia) {
     properties.push({
       localName: 'rFonts',
-      attributes: { ascii: style.fontFamily, hAnsi: style.fontFamily },
+      attributes: {
+        ...(style.fontFamily ? { ascii: style.fontFamily, hAnsi: style.fontFamily } : {}),
+        ...(style.fontFamilyEastAsia ? { eastAsia: style.fontFamilyEastAsia } : {}),
+      },
     });
   }
   return properties;

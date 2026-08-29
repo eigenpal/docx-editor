@@ -179,6 +179,28 @@ describe('the capture', () => {
     });
   });
 
+  test('a copy starting on CJK text keeps each face in its own w:rFonts slot', () => {
+    // The source run resolves BOTH faces. The capture must write the Latin one into
+    // `w:ascii`/`w:hAnsi` and the East Asian one into `w:eastAsia` — copying from a CJK
+    // span must never put the East Asian face onto the target's Latin text.
+    const CJK = p(
+      textRun('甲方shall', '<w:rPr><w:rFonts w:ascii="Georgia" w:eastAsia="SimSun"/></w:rPr>')
+    );
+    withEditor(CJK + PLAIN, (editor) => {
+      // The selection starts ON the CJK span of the mixed run.
+      select(editor, [0, 0], [0, 2]);
+      expect(editor.exec({ type: 'copyFormatting' })).toMatchObject({ ok: true });
+      select(editor, [1, 0], [1, 5]);
+      expect(editor.exec({ type: 'pasteFormatting' })).toMatchObject({ ok: true });
+
+      expect(runPropertyAttributes(editor, 1, 'rFonts')).toEqual({
+        ascii: 'Georgia',
+        hAnsi: 'Georgia',
+        eastAsia: 'SimSun',
+      });
+    });
+  });
+
   test('a range inside one paragraph copies character formatting alone', () => {
     withEditor(STYLED + PLAIN, (editor) => {
       // Two characters short of the paragraph's end, so no paragraph mark is covered.

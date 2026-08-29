@@ -631,6 +631,11 @@ export function formattingAt(
   // docDefaults, theme fonts). A caret in an empty paragraph inherits too.
   const hasDirect = (span: (typeof spans)[number], localName: string): boolean =>
     span.props.some((property) => property.localName === localName);
+  // The LATIN (ascii/hAnsi) face, deliberately, even for a span whose text paints through
+  // the eastAsia slot: a span's `style` carries the run's full resolution, so a mixed
+  // CJK+Latin run answers ONE family here, and it is the same slot the font picker writes
+  // (`w:ascii`/`w:hAnsi`) — pick a font and this readback reflects it. Word's single font
+  // box behaves the same way; a per-slot readback needs a per-slot control first.
   const familyOf = (span: (typeof spans)[number]): string | null =>
     span.style.fontFamily ?? inherited?.(span.range.paragraphId, span.props).fontFamily ?? null;
   const sizeOf = (span: (typeof spans)[number]): number =>

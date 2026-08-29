@@ -11,6 +11,7 @@
 // which is what the D8 boundary covers.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 // One reading of `CT_OnOff` for the whole lane. The style cascade combines toggle levels with
 // it and this resolver reads the combined result with it, so the two cannot drift apart.
@@ -153,25 +154,6 @@ export const NO_THEME_FONTS: ThemeFonts = {
 };
 
 /**
- * A LATIN `w:rFonts` theme attribute resolved to a typeface.
- *
- * `minorBidi`/`majorBidi` name the `a:cs` face this lane does not read yet, and an honest
- * null — which falls back to the explicit attribute beside it — beats the wrong font.
- */
-function themeFamilyOf(value: string | undefined, themeFonts: ThemeFonts): string | null {
-  if (value === 'minorAscii' || value === 'minorHAnsi') return themeFonts.minor;
-  if (value === 'majorAscii' || value === 'majorHAnsi') return themeFonts.major;
-  return null;
-}
-
-/** The `w:eastAsiaTheme` counterpart of {@link themeFamilyOf}, over the `a:ea` typefaces. */
-function themeEastAsiaFamilyOf(value: string | undefined, themeFonts: ThemeFonts): string | null {
-  if (value === 'minorEastAsia') return themeFonts.minorEastAsia ?? null;
-  if (value === 'majorEastAsia') return themeFonts.majorEastAsia ?? null;
-  return null;
-}
-
-/**
  * Resolve one run's direct formatting.
  *
  * Unrecognised values are DROPPED rather than guessed: a `w:sz` of `"large"` leaves the
@@ -201,8 +183,8 @@ export function resolveRunStyle(
         // nothing, because a stale face still beats no face at all.
         const attributes = property.attributes;
         const themed = themeFonts
-          ? (themeFamilyOf(attributes?.asciiTheme, themeFonts) ??
-            themeFamilyOf(attributes?.hAnsiTheme, themeFonts))
+          ? (themeFontFamilyOf(attributes?.asciiTheme, themeFonts) ??
+            themeFontFamilyOf(attributes?.hAnsiTheme, themeFonts))
           : null;
         const family = themed ?? attributes?.ascii ?? attributes?.hAnsi;
         if (family && family.length <= 128) style.fontFamily = family;
@@ -211,7 +193,7 @@ export function resolveRunStyle(
         // which is how the docDefaults' `w:eastAsiaTheme` survives a style chain that only
         // ever re-states `w:ascii`.
         const themedEastAsia = themeFonts
-          ? themeEastAsiaFamilyOf(attributes?.eastAsiaTheme, themeFonts)
+          ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts)
           : null;
         const familyEastAsia = themedEastAsia ?? attributes?.eastAsia;
         if (familyEastAsia && familyEastAsia.length <= 128) {
@@ -309,24 +291,28 @@ export function resolveRunStyle(
   return style;
 }
 
-const eastAsiaSlotStyles = new WeakMap<ResolvedRunStyle, ResolvedRunStyle>();
+const derivedFamilyStyles = new WeakMap<ResolvedRunStyle, Map<string, ResolvedRunStyle>>();
 
 /**
- * The style an eastAsia-slot piece measures and paints in: the same resolution with the
- * eastAsia typeface as its effective family.
+ * `style` with `family` as its effective `fontFamily`, memoized per (style, family).
  *
- * Memoized PER STYLE OBJECT, because the shaped measurer amortizes font resolution over
- * style object identity — a fresh derived object per piece would re-resolve the face on
- * every measurement probe.
+ * The one sanctioned way to derive a style that differs only in face: measurers amortize
+ * font resolution and width caches over STYLE OBJECT IDENTITY, so a fresh derived object
+ * per call would re-resolve the face on every measurement probe. Serves the font-slot
+ * resolution at the measurer boundary ({@link styleForFontSlot} in `script-itemization.ts`)
+ * and the equation face in `equation-layout.ts` — one memo, not one per caller.
  */
-export function eastAsiaSlotStyle(style: ResolvedRunStyle): ResolvedRunStyle {
-  if (style.fontFamilyEastAsia === null || style.fontFamilyEastAsia === style.fontFamily) {
-    return style;
+export function withFontFamily(style: ResolvedRunStyle, family: string): ResolvedRunStyle {
+  if (style.fontFamily === family) return style;
+  let byFamily = derivedFamilyStyles.get(style);
+  if (!byFamily) {
+    byFamily = new Map();
+    derivedFamilyStyles.set(style, byFamily);
   }
-  let derived = eastAsiaSlotStyles.get(style);
+  let derived = byFamily.get(family);
   if (!derived) {
-    derived = Object.freeze({ ...style, fontFamily: style.fontFamilyEastAsia });
-    eastAsiaSlotStyles.set(style, derived);
+    derived = Object.freeze({ ...style, fontFamily: family });
+    byFamily.set(family, derived);
   }
   return derived;
 }

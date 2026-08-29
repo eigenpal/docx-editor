@@ -12,6 +12,7 @@ import { WML_NAMESPACE_URI, type OoxmlNode, type OoxmlProperty } from '@docx-edi
 import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
+import { eastAsiaRunsOfSegments, type FontSlot } from './script-itemization.ts';
 import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
@@ -138,6 +139,13 @@ export interface FieldAwarePiece {
   readonly revisions?: readonly RevisionAttribution[];
   /** Present when this piece is a field's displayed result; literal or projected. */
   readonly fieldAtom?: FieldAtomMarker;
+  /**
+   * The `w:rFonts` slot this piece's text resolves its face through; absent means the base
+   * (ascii/hAnsi) slots. Set by {@link applyEastAsiaFontSlots}, and carried through to the
+   * style spans, so every consumer that measures or paints the text resolves the face with
+   * `styleForFontSlot` while the piece's `style` stays the run's real resolution.
+   */
+  readonly fontSlot?: FontSlot;
 }
 
 /** A half-open model-offset range, in the paragraph's own UTF-16 offset space. */
@@ -372,4 +380,126 @@ export interface PendingFieldProjection {
    * the one run in the link painting with no href.
    */
   resultLink?: SpanLinkRecord;
+}
+
+/** A slice of `piece` covering `[from, to)` of its text, in the given font slot. */
+function fontSlotSlice(
+  piece: FieldAwarePiece,
+  from: number,
+  to: number,
+  fontSlot: FontSlot | undefined
+): FieldAwarePiece {
+  return {
+    ...piece,
+    text: piece.text.slice(from, to),
+    start: piece.start + from,
+    end: piece.start + to,
+    ...(fontSlot ? { fontSlot } : {}),
+  };
+}
+
+/**
+ * Mark the text that resolves through the `eastAsia` font slot, after a paragraph's pieces
+ * are all assembled.
+ *
+ * A post-pass over the WHOLE paragraph, not a per-piece one, because Common characters
+ * inherit their slot from strong neighbours and `w:t`/run boundaries are not script
+ * boundaries: a fullwidth comma alone in its own run between two CJK runs is East Asian
+ * text, and only a pass that sees both neighbours can say so. Classification is
+ * `eastAsiaRunsOfSegments`; this function owns which pieces participate and how the answer
+ * lands on them:
+ *
+ * - Ordinary literal text (model range 1:1 with its text) is SPLIT into slot-homogeneous
+ *   pieces. Piece boundaries are not break opportunities (`opensWord` in
+ *   `paragraph-flow.ts` carries words across them), so the split changes which face a
+ *   character resolves to and nothing else.
+ * - Layout-owned text — projected results, field atoms, note marks, `measureText`
+ *   reservations — stays WHOLE: its spans publish the piece's model range, and slicing
+ *   that range would corrupt offsets. Such a piece takes the slot only when ALL of its
+ *   text resolves eastAsia; a mixed one keeps the base face, which is what it painted
+ *   before slots existed.
+ * - Control pieces (tabs, breaks, drawings, equations) neither classify nor split.
+ *
+ * The style objects are untouched: a piece carries the run's real resolution and the slot
+ * beside it, and the face is derived at the measurer/paint boundary via `styleForFontSlot`.
+ */
+export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
+  // Nothing to resolve unless some run authors a DISTINCT East Asian face. This is the
+  // cheap common-case exit for Latin-defaulted documents; documents whose docDefaults
+  // author one for every run instead lean on the pure-ASCII prescan inside
+  // `eastAsiaRunsOfSegments`, which costs two compares per character.
+  if (
+    !pieces.some(
+      ({ style }) =>
+        style.fontFamilyEastAsia !== null && style.fontFamilyEastAsia !== style.fontFamily
+    )
+  ) {
+    return pieces;
+  }
+
+  /** Indices of the pieces whose text joins the classification, in paragraph order. */
+  const streamed: number[] = [];
+  const segments: string[] = [];
+  for (let index = 0; index < pieces.length; index += 1) {
+    const piece = pieces[index]!;
+    if (piece.positionalTab || piece.breakKind || piece.inlineDrawing) continue;
+    if (piece.anchoredAtom || piece.equation) continue;
+    if (piece.text.length === 0) continue;
+    streamed.push(index);
+    segments.push(piece.text);
+  }
+  const ranges = eastAsiaRunsOfSegments(segments);
+  if (ranges.length === 0) return pieces;
+
+  const rangesBySegment = new Map<number, { from: number; to: number }[]>();
+  for (const range of ranges) {
+    const list = rangesBySegment.get(range.segment);
+    if (list) list.push({ from: range.from, to: range.to });
+    else rangesBySegment.set(range.segment, [{ from: range.from, to: range.to }]);
+  }
+
+  const out: FieldAwarePiece[] = [];
+  let segment = 0;
+  for (let index = 0; index < pieces.length; index += 1) {
+    const piece = pieces[index]!;
+    if (streamed[segment] !== index) {
+      out.push(piece);
+      continue;
+    }
+    const pieceRanges = rangesBySegment.get(segment);
+    segment += 1;
+    const { style } = piece;
+    if (
+      !pieceRanges ||
+      style.fontFamilyEastAsia === null ||
+      style.fontFamilyEastAsia === style.fontFamily
+    ) {
+      out.push(piece);
+      continue;
+    }
+    const literal =
+      !piece.projected &&
+      !piece.fieldAtom &&
+      !piece.noteNav &&
+      piece.measureText === undefined &&
+      piece.end - piece.start === piece.text.length;
+    if (!literal) {
+      const whole =
+        pieceRanges.length === 1 &&
+        pieceRanges[0]!.from === 0 &&
+        pieceRanges[0]!.to === piece.text.length;
+      out.push(whole ? { ...piece, fontSlot: 'eastAsia' } : piece);
+      continue;
+    }
+    let cursor = 0;
+    for (const range of pieceRanges) {
+      if (range.from > cursor) out.push(fontSlotSlice(piece, cursor, range.from, undefined));
+      out.push(fontSlotSlice(piece, range.from, range.to, 'eastAsia'));
+      cursor = range.to;
+    }
+    if (cursor < piece.text.length) {
+      out.push(fontSlotSlice(piece, cursor, piece.text.length, undefined));
+    }
+  }
+  return out;
 }

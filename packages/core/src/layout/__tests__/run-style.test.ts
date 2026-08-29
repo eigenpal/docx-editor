@@ -4,10 +4,11 @@ import { describe, expect, test } from 'bun:test';
 import {
   DEFAULT_RUN_STYLE,
   displayText,
-  eastAsiaSlotStyle,
   resolveRunStyle,
   runStylesEqual,
+  withFontFamily,
 } from '../run-style.ts';
+import { styleForFontSlot } from '../script-itemization.ts';
 
 const resolve = (localName: string, attributes?: Record<string, string>) =>
   resolveRunStyle([attributes ? { localName, attributes } : { localName }]);
@@ -198,6 +199,14 @@ describe('the w:rFonts eastAsia slot resolves beside the Latin one', () => {
     ).toBe('PMingLiU');
   });
 
+  test('the East Asian tokens are legal on the LATIN theme attributes too', () => {
+    // Word's "use East Asian fonts also on Latin text" writes `w:asciiTheme="minorEastAsia"`;
+    // both scripts then paint in the East Asian face rather than Latin falling to the default.
+    const style = resolved({ asciiTheme: 'minorEastAsia', eastAsiaTheme: 'minorEastAsia' });
+    expect(style.fontFamily).toBe('SimSun');
+    expect(style.fontFamilyEastAsia).toBe('SimSun');
+  });
+
   test('styles differing only in the eastAsia face are not equal', () => {
     expect(
       runStylesEqual(resolved({ eastAsia: 'SimSun' }), resolved({ eastAsia: 'MS Mincho' }))
@@ -205,23 +214,45 @@ describe('the w:rFonts eastAsia slot resolves beside the Latin one', () => {
   });
 });
 
-describe('eastAsiaSlotStyle derives the face an eastAsia piece uses', () => {
-  test('swaps the eastAsia family into fontFamily and memoizes per style object', () => {
+describe('withFontFamily — the one memoized face derivation', () => {
+  test('swaps the family and memoizes per (style, family)', () => {
     const style = resolveRunStyle([
       { localName: 'rFonts', attributes: { ascii: 'Arial', eastAsia: 'SimSun' } },
     ]);
-    const derived = eastAsiaSlotStyle(style);
+    const derived = withFontFamily(style, 'SimSun');
     expect(derived.fontFamily).toBe('SimSun');
+    expect(derived.fontFamilyEastAsia).toBe('SimSun');
     expect(derived.fontSizePt).toBe(style.fontSizePt);
-    expect(eastAsiaSlotStyle(style)).toBe(derived);
+    expect(withFontFamily(style, 'SimSun')).toBe(derived);
+    expect(withFontFamily(style, 'Cambria Math')).not.toBe(derived);
   });
 
-  test('answers the style itself when the slot adds nothing', () => {
-    expect(eastAsiaSlotStyle(DEFAULT_RUN_STYLE)).toBe(DEFAULT_RUN_STYLE);
+  test('answers the style itself when the family already matches', () => {
+    const same = resolveRunStyle([{ localName: 'rFonts', attributes: { ascii: 'SimSun' } }]);
+    expect(withFontFamily(same, 'SimSun')).toBe(same);
+  });
+});
+
+describe('styleForFontSlot resolves the face a slotted piece measures and paints in', () => {
+  test('the eastAsia slot answers the eastAsia face, memoized', () => {
+    const style = resolveRunStyle([
+      { localName: 'rFonts', attributes: { ascii: 'Arial', eastAsia: 'SimSun' } },
+    ]);
+    const derived = styleForFontSlot(style, 'eastAsia');
+    expect(derived.fontFamily).toBe('SimSun');
+    expect(styleForFontSlot(style, 'eastAsia')).toBe(derived);
+  });
+
+  test('no slot, no eastAsia face, or a matching face answer the style itself', () => {
+    const style = resolveRunStyle([
+      { localName: 'rFonts', attributes: { ascii: 'Arial', eastAsia: 'SimSun' } },
+    ]);
+    expect(styleForFontSlot(style, undefined)).toBe(style);
+    expect(styleForFontSlot(DEFAULT_RUN_STYLE, 'eastAsia')).toBe(DEFAULT_RUN_STYLE);
     const same = resolveRunStyle([
       { localName: 'rFonts', attributes: { ascii: 'SimSun', eastAsia: 'SimSun' } },
     ]);
-    expect(eastAsiaSlotStyle(same)).toBe(same);
+    expect(styleForFontSlot(same, 'eastAsia')).toBe(same);
   });
 });
 

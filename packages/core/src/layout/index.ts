@@ -84,6 +84,7 @@ export { setHarfBuzzWasmUrl } from './harfbuzz-wasm-binary.ts';
 export {
   UnsupportedScriptError,
   itemizeScriptFontSlots,
+  styleForFontSlot,
   type FontSlot,
   type ScriptItem,
 } from './script-itemization.ts';
