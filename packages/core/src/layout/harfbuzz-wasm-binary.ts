@@ -175,7 +175,7 @@ export function harfBuzzUnsupportedRuntimeDiagnostic(cause: unknown): string {
   const detail = redactUrlsIn(cause instanceof Error ? cause.message : String(cause));
   return (
     'the text shaper cannot start on this Node version: the ESM build reaches Node ' +
-    'builtins through `process.getBuiltinModule`, added in Node 20.16 and 22.3. Upgrade ' +
+    'builtins through `process.getBuiltinModule`, added in Node 20.16.0 and 22.3.0. Upgrade ' +
     `Node; \`setHarfBuzzWasmUrl\` does not apply here. (${detail})`
   );
 }

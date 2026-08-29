@@ -171,11 +171,17 @@ describe('a Node runtime without process.getBuiltinModule', () => {
 
     // Every version the prose names must appear in the range, and vice versa, so adding
     // one to either side without the other fails here rather than shipping.
-    // Deduplicated: the diagnostic appends the underlying cause, which repeats them.
+    // FULL versions, not major.minor. `^20.16.0` pins the patch, because 20.16.0 is the
+    // exact release the backport landed in — comparing `20.16` would accept a manifest
+    // saying `^20.16.5` beside prose saying 20.16, which is the disagreement most likely
+    // to happen. Deduplicated, because the diagnostic appends the underlying cause; that
+    // cause writes `20.16+`, which has no patch and so does not match here at all.
     const versionsIn = (text: string): string[] =>
-      [...new Set([...text.matchAll(/\d+\.\d+/g)].map((match) => match[0]))].sort();
+      [...new Set([...text.matchAll(/\d+\.\d+\.\d+/g)].map((match) => match[0]))].sort();
     expect(declared).toBeDefined();
     expect(versionsIn(diagnostic)).toEqual(versionsIn(declared ?? ''));
+    // Guards the comparison itself: two empty lists would satisfy it.
+    expect(versionsIn(declared ?? '')).toHaveLength(2);
   });
 });
 
