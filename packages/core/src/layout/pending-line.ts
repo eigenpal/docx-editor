@@ -45,21 +45,41 @@ export interface PendingLine {
 }
 
 /**
+ * Every {@link StyleSpanRecord} field outside range, text and box, as a checked record:
+ * a new field fails to compile here until it is added (blocking the merge below when it
+ * differs) or consciously exempted beside range/text/box in the `Exclude`.
+ */
+const SPAN_DECORATIONS: Record<Exclude<keyof StyleSpanRecord, 'range' | 'text' | 'box'>, true> = {
+  props: true,
+  style: true,
+  fontSlot: true,
+  caretEdges: true,
+  tabLeader: true,
+  tabLeaderAdvancePt: true,
+  link: true,
+  wrapAdvanceBefore: true,
+  revisions: true,
+  fieldAtom: true,
+  projected: true,
+  equation: true,
+  noteNav: true,
+  lineEndWhitespace: true,
+};
+
+const SPAN_DECORATION_KEYS = Object.keys(SPAN_DECORATIONS) as readonly (keyof StyleSpanRecord)[];
+
+/**
  * Everything outside a span's range, text and box, compared by reference.
  *
  * Two spans that share every decoration share the objects, because they come from one run's
- * one resolution. Reference equality is therefore the exact test, and it is also the safe
- * one: a decoration this function has never heard of still blocks the merge.
+ * one resolution — placement passes `piece.revisions`, `piece.link` and the rest through
+ * without copying. Reference equality is therefore the exact test; the span-count tests in
+ * `cjk-line-breaking.test.ts` pin a revised and a linked run so a future defensive copy on
+ * that path cannot silently return CJK to one span per ideograph.
  */
 function decorationsMatch(previous: StyleSpanRecord, current: StyleSpanRecord): boolean {
-  const keys = new Set([...Object.keys(previous), ...Object.keys(current)]);
-  keys.delete('range');
-  keys.delete('text');
-  keys.delete('box');
-  for (const key of keys) {
-    const left = (previous as unknown as Record<string, unknown>)[key];
-    const right = (current as unknown as Record<string, unknown>)[key];
-    if (left !== right) return false;
+  for (const key of SPAN_DECORATION_KEYS) {
+    if (previous[key] !== current[key]) return false;
   }
   return true;
 }
@@ -93,20 +113,43 @@ function seamIsMergeable(previous: StyleSpanRecord, current: StyleSpanRecord): b
  */
 export function coalesceIdeographicSpans(line: PendingLine): void {
   if (line.spans.length < 2) return;
-  const merged: StyleSpanRecord[] = [line.spans[0]!];
-  for (let index = 1; index < line.spans.length; index += 1) {
-    const current = line.spans[index]!;
-    const previous = merged[merged.length - 1]!;
-    if (!seamIsMergeable(previous, current)) {
-      merged.push(current);
+  const merged: StyleSpanRecord[] = [];
+  for (let index = 0; index < line.spans.length; ) {
+    // Scan the whole mergeable group first, then build ONE span from it — merging into a
+    // growing accumulator re-copied every seam, an O(m²) cost per group. Adjacent-pair
+    // seams test the same conditions the accumulator did: the decoration and height
+    // checks are transitive, and the x-abutment check against the true neighbour is
+    // tighter than against an accumulated width.
+    let groupEnd = index;
+    while (
+      groupEnd + 1 < line.spans.length &&
+      seamIsMergeable(line.spans[groupEnd]!, line.spans[groupEnd + 1]!)
+    ) {
+      groupEnd += 1;
+    }
+    const first = line.spans[index]!;
+    if (groupEnd === index) {
+      merged.push(first);
+      index += 1;
       continue;
     }
-    merged[merged.length - 1] = {
-      ...previous,
-      range: { ...previous.range, end: current.range.end },
-      text: previous.text + current.text,
-      box: { ...previous.box, width: previous.box.width + current.box.width },
-    };
+    const parts: string[] = [];
+    // The merged width is the SUM of the per-ideograph advances the line was broken and
+    // justified against, not a re-measure of the joined text: paint must fill exactly the
+    // box the line reserved, and a face that kerned across ideograph seams would make the
+    // two disagree. CJK faces advance ideographs uniformly, so the sum is also the shape.
+    let width = 0;
+    for (let cursor = index; cursor <= groupEnd; cursor += 1) {
+      parts.push(line.spans[cursor]!.text);
+      width += line.spans[cursor]!.box.width;
+    }
+    merged.push({
+      ...first,
+      range: { ...first.range, end: line.spans[groupEnd]!.range.end },
+      text: parts.join(''),
+      box: { ...first.box, width },
+    });
+    index = groupEnd + 1;
   }
   if (merged.length === line.spans.length) return;
   line.spans.length = 0;

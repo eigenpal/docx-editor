@@ -104,9 +104,11 @@ describe('kinsoku prohibitions', () => {
   });
 
   test('no wrap position violates kinsoku across a punctuated paragraph', () => {
+    // Widths below 36 push clauses through the wider-than-empty-line chop, which must
+    // uphold the same prohibitions as the boundary rules.
     const text =
       '甲方（以下简称「买方」）应当按照本合同第３条、第４条之约定，向乙方支付全部价款。逾期未付的，每日加收０．５％。';
-    for (const width of [36, 48, 60, 72, 90]) {
+    for (const width of [7, 13, 25, 36, 48, 60, 72, 90]) {
       const lines = linesOf(`<w:p>${run(text)}</w:p>`, width);
       expect(lines.join('')).toBe(text);
       for (const line of lines) {
@@ -125,6 +127,127 @@ describe('kinsoku prohibitions', () => {
       '安全管理职责 ，因此',
       '甲乙双方',
     ]);
+  });
+});
+
+describe('kinsoku beside tabs and inside the chop', () => {
+  test('a tab keeps its stop when a no-break-before character follows it', () => {
+    // The ー veto must not cancel the forced word-open a tab grants: with it cancelled,
+    // an overflow at ー took the mid-word carry, re-laid the tab with a stale advance
+    // that no longer reached its stop, and closed the first line seven characters early.
+    const body = `<w:p>${run('AA BBBB')}<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:tab/></w:r>${run('ー天地玄黄宇宙洪')}</w:p>`;
+    const lines = breakParagraph(paragraph(body), 'p', 0, 60, measurer, undefined, null);
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+      'AA BBBB\t',
+      'ー天地玄黄宇宙洪',
+    ]);
+    const tab = lines[0]!.spans.find((span) => span.text === '\t')!;
+    expect(tab.box.x + tab.box.width).toBeCloseTo(60, 5);
+  });
+
+  test('unit signs outside the ideographic ranges cannot change Latin wrapping', () => {
+    // ‰ ′ ″ ℃ appear in ordinary scientific prose; while they sat in the no-break-before
+    // set the veto applied with no East Asian context at all, and 'aa bb ℃cccc' wrapped
+    // differently from 'aa bb Ccccc' against the byte-identical guarantee.
+    expect(linesOf(`<w:p>${run('aa bb ℃cccc')}</w:p>`)).toEqual(['aa bb ', '℃cccc']);
+  });
+
+  test('the ideographic space and the middle dot never open a line', () => {
+    expect(linesOf(`<w:p>${run('天地玄黄宇宙洪荒日月　盈昃')}</w:p>`)).toEqual([
+      '天地玄黄宇宙洪荒日',
+      '月　盈昃',
+    ]);
+    expect(linesOf(`<w:p>${run('天地玄黄宇宙洪荒日月・盈昃')}</w:p>`)).toEqual([
+      '天地玄黄宇宙洪荒日',
+      '月・盈昃',
+    ]);
+  });
+
+  test('half-width katakana wraps at the margin, not the run seam', () => {
+    expect(linesOf(`<w:p>${run('ｱｲｳｴｵｶｷｸ')}${run('ｹｺｻｼｽｾｿﾀ')}</w:p>`)).toEqual([
+      'ｱｲｳｴｵｶｷｸｹｺ',
+      'ｻｼｽｾｿﾀ',
+    ]);
+  });
+
+  test('the half-width prolonged-sound mark never opens a line', () => {
+    // ｰ sat in the no-break-before set but outside every ideographic range, so no
+    // boundary could reach it; its carrier must wrap down with it.
+    expect(linesOf(`<w:p>${run('ｱｲｳｴｵｶｷｸｹｺｰｻｼ')}</w:p>`)).toEqual(['ｱｲｳｴｵｶｷｸｹ', 'ｺｰｻｼ']);
+  });
+
+  test('NFD kana never orphans its combining voicing mark', () => {
+    const nfd = 'あ' + 'が'.repeat(7);
+    const lines = linesOf(`<w:p>${run(nfd)}</w:p>`, 54);
+    expect(lines.join('')).toBe(nfd);
+    for (const line of lines) expect(line.charCodeAt(0)).not.toBe(0x3099);
+  });
+
+  test('the chop upholds kinsoku at a one- and a two-character measure', () => {
+    for (const width of [7, 13]) {
+      expect(linesOf(`<w:p>${run('天。地。人。')}</w:p>`, width)).toEqual(['天。', '地。', '人。']);
+    }
+  });
+
+  test('the chop never cuts inside a surrogate pair', () => {
+    const text = '𠀋𠀌𠀍𠀎';
+    const lines = linesOf(`<w:p>${run(text)}</w:p>`, 13);
+    expect(lines.join('')).toBe(text);
+    for (const line of lines) expect(line.length % 2).toBe(0);
+  });
+});
+
+describe('span merging under decorations', () => {
+  // decorationsMatch works by reference equality, which holds only because placement
+  // passes piece.revisions / piece.link through without copying — these pin that a
+  // defensive copy on that path cannot silently return CJK to one span per ideograph.
+  test('a tracked-insert CJK run still paints one span per line', () => {
+    const ins = `<w:ins w:id="1" w:author="QA" w:date="2026-03-26T11:00:00Z">${run('天地玄黄宇宙洪荒日月盈昃辰宿')}</w:ins>`;
+    const lines = breakParagraph(
+      paragraph(`<w:p>${ins}</w:p>`),
+      'p',
+      0,
+      60,
+      measurer,
+      undefined,
+      null
+    );
+    expect(lines.map((line) => line.spans.length)).toEqual([1, 1]);
+    expect(lines[0]!.spans[0]!.revisions?.length).toBe(1);
+  });
+
+  test('a hyperlinked CJK run still paints one span per line', () => {
+    const body = `<w:p><w:hyperlink w:anchor="top">${run('天地玄黄宇宙洪荒日月盈昃辰宿')}</w:hyperlink></w:p>`;
+    const lines = breakParagraph(
+      paragraph(body),
+      'p',
+      0,
+      60,
+      measurer,
+      undefined,
+      null,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      { projectLink: () => ({ id: 'link', kind: 'internal', href: '#top', anchor: 'top' }) }
+    );
+    expect(lines.map((line) => line.spans.length)).toEqual([1, 1]);
+    expect(lines[0]!.spans[0]!.link).toBeDefined();
+  });
+});
+
+describe('layout-owned pieces stay whole', () => {
+  test('a CJK field result neither splits per ideograph nor wraps mid-result', () => {
+    // Every span of a layout-owned piece publishes the piece's whole model range, so a
+    // per-ideograph split painted dozens of spans all claiming the same range and let a
+    // DATE/REF/TOC result wrap in the middle.
+    const body =
+      '<w:p><w:fldSimple w:instr=" DATE "><w:r><w:t>二〇二六年八月三十日签署完成生效</w:t></w:r></w:fldSimple></w:p>';
+    const lines = breakParagraph(paragraph(body), 'p', 0, 60, measurer, undefined, null);
+    expect(lines.length).toBe(1);
+    expect(lines[0]!.spans.length).toBe(1);
+    expect(lines[0]!.spans[0]!.text).toBe('二〇二六年八月三十日签署完成生效');
   });
 });
 

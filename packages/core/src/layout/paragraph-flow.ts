@@ -33,12 +33,7 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
-import {
-  CJK_NO_BREAK_AFTER,
-  CJK_NO_BREAK_BEFORE,
-  cjkBreakAllowedBetween,
-  lastCodePointOf,
-} from './cjk-line-break.ts';
+import { cjkChopCutAllowedAt, wordBoundaries, wordOpensAt } from './cjk-line-break.ts';
 import {
   EMPTY_TAB_STOPS,
   nextTabDestination,
@@ -254,56 +249,6 @@ interface Piece {
 
 export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
   return propertiesOfRunContainer(container);
-}
-
-/**
- * Dashes a line may break AFTER, the way Word wraps "ALPHA-PRIME" as "ALPHA-" / "PRIME":
- * hyphen-minus, hyphen, en dash, em dash. U+2011 NON-BREAKING HYPHEN is deliberately
- * absent — its whole meaning is "no wrap here".
- */
-const BREAK_AFTER_DASH = new Set(['-', '‐', '–', '—']);
-
-/**
- * Break points inside a piece: after each run of spaces (words stay whole), after a dash
- * that sits between non-space text, with each tab as its own atom so tab-stop geometry can
- * size `\t` independently of neighbouring text — and between ideographic characters, where
- * UAX #14 allows a line to end (kinsoku vetoes aside, see `cjk-line-break.ts`).
- *
- * A dash run breaks only after its LAST dash, mirroring how a run of spaces is one
- * boundary; a dash beside a space adds nothing the space boundary does not already give.
- */
-function wordBoundaries(text: string): number[] {
-  const boundaries: number[] = [];
-  for (let index = 0; index < text.length; index += 1) {
-    const ch = text[index]!;
-    if (ch === '\t') {
-      if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
-      boundaries.push(index + 1);
-    } else if (ch === ' ') {
-      boundaries.push(index + 1);
-    } else if (
-      BREAK_AFTER_DASH.has(ch) &&
-      index > 0 &&
-      text[index - 1] !== ' ' &&
-      index + 1 < text.length &&
-      text[index + 1] !== ' ' &&
-      !BREAK_AFTER_DASH.has(text[index + 1]!)
-    ) {
-      boundaries.push(index + 1);
-    }
-  }
-  // CJK pass, by code point so a supplementary-plane ideograph is never cut inside its
-  // surrogate pair. Kept separate from the loop above so the Latin rules stay byte-identical.
-  for (let index = 0; index < text.length; ) {
-    const before = text.codePointAt(index)!;
-    const next = index + (before > 0xffff ? 2 : 1);
-    if (next >= text.length) break;
-    if (cjkBreakAllowedBetween(before, text.codePointAt(next)!)) boundaries.push(next);
-    index = next;
-  }
-  const ordered = [...new Set(boundaries)].sort((a, b) => a - b);
-  if (ordered[ordered.length - 1] !== text.length) ordered.push(text.length);
-  return ordered;
 }
 
 /**
@@ -790,6 +735,14 @@ export function breakParagraph(
     let probeLineStart = 0;
     let probeWidth = 0;
     let probeLineIndex = 0;
+    // Mirrors the placement loop's word state — the same open decision (`wordOpensAt`)
+    // and the same mid-word carry — so the probe's predicted line starts cannot diverge
+    // from real placement on a kinsoku line. A veto-less probe put the predicted start
+    // one character off whenever a closing mark wrapped down with its carrier, and
+    // `zoneApplies` then keyed off the wrong line.
+    let probeLastEmitted = '';
+    let probeWordStart = 0;
+    let probeWordStartWidth = -1;
     const probeLineOffset = (): number => (probeLineIndex === 0 ? firstLineOffset : 0);
     const probeLineAvail = (): number => Math.max(1, available - probeLineOffset());
     const closeProbeLine = (nextStart: number): void => {
@@ -804,6 +757,8 @@ export function breakParagraph(
         if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
         if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
         probeWidth += width;
+        probeLastEmitted = '';
+        probeWordStartWidth = -1;
         continue;
       }
       if (piece.inlineDrawing) {
@@ -811,23 +766,46 @@ export function breakParagraph(
         if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
         if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
         probeWidth += width;
+        probeLastEmitted = '';
+        probeWordStartWidth = -1;
         continue;
       }
       if (piece.text === '\n' || piece.text === PAGE_BREAK_CHAR) {
         closeProbeLine(piece.end);
         continue;
       }
+      const probePieceLayoutOwned =
+        Boolean(piece.projected) ||
+        Boolean(piece.positionalTab) ||
+        piece.end - piece.start !== piece.text.length;
       let consumed = 0;
-      for (const boundary of wordBoundaries(piece.text)) {
+      for (const boundary of wordBoundaries(piece.text, !probePieceLayoutOwned)) {
         const candidate = piece.text.slice(consumed, boundary);
         if (candidate.length === 0) continue;
         const style = styleForFontSlot(piece.style, piece.fontSlot);
         const width = measurer.measure(candidate, style);
         const modelStart = piece.start + consumed;
-        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(modelStart);
+        const opens = wordOpensAt(probeLastEmitted, candidate, consumed > 0);
+        if (opens) {
+          probeWordStart = modelStart;
+          probeWordStartWidth = probeWidth;
+        }
+        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) {
+          if (opens || probeWordStartWidth <= 0) {
+            closeProbeLine(modelStart);
+          } else {
+            // Mid-word overflow: placement carries the whole word down, so the next
+            // probe line starts at the word start, not at this candidate.
+            const carried = probeWidth - probeWordStartWidth;
+            closeProbeLine(probeWordStart);
+            probeWidth = carried;
+          }
+          probeWordStartWidth = 0;
+        }
         if (sameParagraphAnchorStarts.includes(modelStart)) out.set(modelStart, probeLineStart);
         if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
         probeWidth += width;
+        probeLastEmitted = candidate;
         consumed = boundary;
       }
     }
@@ -1454,21 +1432,24 @@ export function breakParagraph(
     // resolution — plus the slot, and re-resolve through the same helper.
     const faceStyle = styleForFontSlot(piece.style, piece.fontSlot);
     const metrics = measurer.lineMetrics(faceStyle);
+    // Projected PAGE/NUMPAGES digits publish the suppressed cached-result model range (or a
+    // zero-width insertion point when the cache was empty) so surrounding source offsets
+    // stay aligned with binding / paragraphTextOf.
+    // A projected field publishes the model range it stands in for; a `w:ptab` publishes
+    // its ZERO-WIDTH insertion point, because it contributes no text to the paragraph.
+    // Defensive: any piece whose display length disagrees with its model range is also
+    // layout-owned (inert DATE/TOC/REF/… cache before `projected` was set).
+    // Layout-owned pieces get no ideographic boundaries: they are documented below as
+    // staying whole, and a per-ideograph split wrapped a CJK field result mid-text with
+    // every span claiming the same model range.
+    const layoutOwned =
+      Boolean(piece.projected) ||
+      Boolean(piece.positionalTab) ||
+      piece.end - piece.start !== piece.text.length;
     let consumed = 0;
-    for (const boundary of wordBoundaries(piece.text)) {
+    for (const boundary of wordBoundaries(piece.text, !layoutOwned)) {
       const candidate = piece.text.slice(consumed, boundary);
       if (candidate.length === 0) continue;
-      // Projected PAGE/NUMPAGES digits publish the suppressed cached-result model range (or a
-      // zero-width insertion point when the cache was empty) so surrounding source offsets
-      // stay aligned with binding / paragraphTextOf.
-      // A projected field publishes the model range it stands in for; a `w:ptab` publishes
-      // its ZERO-WIDTH insertion point, because it contributes no text to the paragraph.
-      // Defensive: any piece whose display length disagrees with its model range is also
-      // layout-owned (inert DATE/TOC/REF/… cache before `projected` was set).
-      const layoutOwned =
-        Boolean(piece.projected) ||
-        Boolean(piece.positionalTab) ||
-        piece.end - piece.start !== piece.text.length;
       const spanRange = layoutOwned
         ? { paragraphId, start: piece.start, end: piece.end }
         : { paragraphId, start: piece.start + consumed, end: piece.start + boundary };
@@ -1558,29 +1539,9 @@ export function breakParagraph(
       // a wider measureText (eachPage) while painting the real digits.
       const measureSource = piece.measureText ?? candidate;
       let width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
-      // A candidate may open a line only at a real break opportunity. Within a piece,
-      // `wordBoundaries` cuts after spaces, dashes, tabs and between ideographs, so every
-      // candidate but the first is one. The FIRST candidate of a piece continues whatever
-      // the previous piece ended with, so it is a break opportunity only if that ended in
-      // whitespace \u2014 or in a dash or an ideograph, which stay break opportunities across
-      // run boundaries (a tracked change can split "ALPHA-" and "PRIME" into different runs
-      // without gluing them, and a CJK clause split across runs must not wrap at the seam
-      // instead of the margin, #526). The kinsoku sets then veto the whole decision: no
-      // opportunity ever puts \u3002\uff0c\u3001\u300d at a line start or leaves \u300c\uff08 at a line end \u2014 a space
-      // or a run seam directly before a closing mark would otherwise create one.
-      const previousCodePoint = lastCodePointOf(lastEmitted);
-      const firstCodePoint = candidate.codePointAt(0)!;
-      const opensWord =
-        (consumed > 0 ||
-          lastEmitted === '' ||
-          /[\s\u00a0]$/.test(lastEmitted) ||
-          /^[\s\u00a0]/.test(candidate) ||
-          (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
-            !BREAK_AFTER_DASH.has(candidate[0]!)) ||
-          (previousCodePoint !== undefined &&
-            cjkBreakAllowedBetween(previousCodePoint, firstCodePoint))) &&
-        !CJK_NO_BREAK_BEFORE.has(firstCodePoint) &&
-        !(previousCodePoint !== undefined && CJK_NO_BREAK_AFTER.has(previousCodePoint));
+      // A candidate may open a line only at a real break opportunity — the shared
+      // decision in `wordOpensAt`, which the anchor-line probe above consumes too.
+      const opensWord = wordOpensAt(lastEmitted, candidate, consumed > 0);
       if (opensWord) {
         wordStartSpan = line.spans.length;
         wordStartWidth = line.width;
@@ -1688,6 +1649,9 @@ export function breakParagraph(
           },
           closeLine,
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
+          // The measured fit knows nothing about kinsoku: at a one-character measure
+          // 天。地。人。 chopped every other line onto a leading 。.
+          cutAllowedAt: cjkChopCutAllowedAt,
         });
         remaining = chopped.text;
         remainingStart = chopped.modelStart;
@@ -1698,25 +1662,34 @@ export function breakParagraph(
           wordStartEnd = line.end;
         }
       }
-      line.spans.push({
-        range: layoutOwned
-          ? spanRange
-          : { paragraphId, start: remainingStart, end: piece.start + boundary },
-        text: remaining,
-        props: piece.props,
-        style: piece.style,
-        box: { x: lineOrigin() + line.width, y: 0, width: remainingWidth, height: metrics.height },
-        ...(piece.link ? { link: piece.link } : {}),
-        ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
-        ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
-        ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
-        ...(lineEndWhitespace ? { lineEndWhitespace: true as const } : {}),
-        ...revisionsOf(piece),
-      });
-      line.width += remainingWidth;
-      line.height = Math.max(line.height, metrics.height);
-      line.baseline = Math.max(line.baseline, metrics.baseline);
-      line.end = layoutOwned ? piece.end : piece.start + boundary;
+      // A kinsoku push-out can consume the whole candidate (天。 at a one-character measure):
+      // the chop emitted it as one overflowing line and left nothing for this placement.
+      if (remaining.length > 0) {
+        line.spans.push({
+          range: layoutOwned
+            ? spanRange
+            : { paragraphId, start: remainingStart, end: piece.start + boundary },
+          text: remaining,
+          props: piece.props,
+          style: piece.style,
+          box: {
+            x: lineOrigin() + line.width,
+            y: 0,
+            width: remainingWidth,
+            height: metrics.height,
+          },
+          ...(piece.link ? { link: piece.link } : {}),
+          ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
+          ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+          ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
+          ...(lineEndWhitespace ? { lineEndWhitespace: true as const } : {}),
+          ...revisionsOf(piece),
+        });
+        line.width += remainingWidth;
+        line.height = Math.max(line.height, metrics.height);
+        line.baseline = Math.max(line.baseline, metrics.baseline);
+        line.end = layoutOwned ? piece.end : piece.start + boundary;
+      }
       lastEmitted = candidate;
       consumed = boundary;
     }
