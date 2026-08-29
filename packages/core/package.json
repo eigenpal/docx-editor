@@ -3,6 +3,9 @@
   "version": "2.12.0",
   "description": "Framework-agnostic core for docx-editor.dev: OOXML parse/serialize, the canonical document tree, layout and paint, and the Editor contract the adapters render.",
   "type": "module",
+  "engines": {
+    "node": "^20.16.0 || >=22.3.0"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",

@@ -10,6 +10,23 @@ Use one of these supported framework versions:
 - React `^18 || ^19`
 - Vue `^3.3`
 
+## Node version
+
+To run the engine outside a browser, use Node `^20.16.0 || >=22.3.0`.
+
+Anything that measures text needs the text shaper, and the shaper reaches Node
+builtins through `process.getBuiltinModule`, which arrived in Node 20.16 and
+22.3. On an earlier version the shaper does not start, and the engine reports
+that the cause is the Node version rather than a missing binary.
+
+This applies to server-side rendering, headless automation with
+`@docx-editor.dev/editor-api`, and build-time rendering. A browser-only app is
+unaffected.
+
+The floor matters more than it looks. Measurement decides where lines wrap and
+pages break, so a shaper that cannot start is not a degraded mode. It changes
+your page count.
+
 ## Pick a package
 
 Each adapter declares the engine as a peer dependency. Install the engine and one adapter.

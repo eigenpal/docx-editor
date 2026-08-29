@@ -158,6 +158,25 @@ describe('a Node runtime without process.getBuiltinModule', () => {
     expect(diagnostic).toContain('does not apply');
     expect(diagnostic).not.toContain('serve `@docx-editor.dev/core/harfbuzz.wasm` yourself');
   });
+
+  test('names the same two versions the manifest declares (#595)', async () => {
+    // The floor lives in two places that cannot see each other: this diagnostic, which a
+    // consumer reads after it breaks, and `engines.node`, which their installer reads
+    // before. One moving without the other leaves whichever they hit first lying to them.
+    const manifest = (await import('../../../package.json', { with: { type: 'json' } })) as {
+      default: { engines?: { node?: string } };
+    };
+    const declared = manifest.default.engines?.node;
+    const diagnostic = harfBuzzUnsupportedRuntimeDiagnostic(shimAbort);
+
+    // Every version the prose names must appear in the range, and vice versa, so adding
+    // one to either side without the other fails here rather than shipping.
+    // Deduplicated: the diagnostic appends the underlying cause, which repeats them.
+    const versionsIn = (text: string): string[] =>
+      [...new Set([...text.matchAll(/\d+\.\d+/g)].map((match) => match[0]))].sort();
+    expect(declared).toBeDefined();
+    expect(versionsIn(diagnostic)).toEqual(versionsIn(declared ?? ''));
+  });
 });
 
 describe('URL redaction of credentials', () => {

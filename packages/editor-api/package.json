@@ -3,6 +3,9 @@
   "version": "2.12.0",
   "description": "Document automation for DOCX: a batching object model that drives a document from a server or from an editor already open in a page",
   "sideEffects": false,
+  "engines": {
+    "node": "^20.16.0 || >=22.3.0"
+  },
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
