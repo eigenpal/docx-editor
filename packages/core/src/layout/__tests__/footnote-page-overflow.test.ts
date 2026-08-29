@@ -367,13 +367,18 @@ describe('oversized footnote starts on its reference page (issue #608)', () => {
 
 /** Pages (in order) whose body fragments draw `paragraph "Body para <n>"` text. */
 function pagesOwningParagraph(layout: SemanticLayout, paragraphIndex: number): number[] {
-  const needle = `Body para ${paragraphIndex}`;
+  // Word boundary, not a substring: "Body para 8" must not also claim "Body para 80".
+  const needle = new RegExp(`Body para ${paragraphIndex}\\b`);
   const found: number[] = [];
   for (const page of layout.pages) {
     for (const fragment of page.fragments) {
       if (fragment.kind !== 'paragraph') continue;
-      const text = fragment.lines.flatMap((line) => line.spans.map((span) => span.text)).join('');
-      if (text.includes(needle)) {
+      // Projected spans (the citation mark digits) are excluded: the mark "1" is its own
+      // span right after "Body para 40", and concatenating it would read "Body para 401".
+      const text = fragment.lines
+        .flatMap((line) => line.spans.filter((span) => !span.projected).map((span) => span.text))
+        .join('');
+      if (needle.test(text)) {
         found.push(page.index);
         break;
       }
@@ -449,15 +454,12 @@ describe('a footnote that cannot fit below its reference moves with it (keep-who
   test('trailing paragraph after-spacing does not shrink the note area', () => {
     const refAt = 40;
     const spaced = Array.from({ length: 60 }, (_, i) => {
-      const ref = refs40(i) === undefined ? '' : `<w:footnoteReference w:id="${refs40(i)!}"/>`;
+      const ref = i === refAt ? '<w:footnoteReference w:id="1"/>' : '';
       return (
         '<w:p><w:pPr><w:spacing w:after="120"/></w:pPr>' +
         `<w:r><w:t>Body para ${i}</w:t>${ref}</w:r></w:p>`
       );
     }).join('');
-    function refs40(i: number): number | undefined {
-      return i === refAt ? 1 : undefined;
-    }
     const layout = layoutOf(packageXml(spaced, singleRunFootnote(1, 400)), 'fn-after-spacing');
 
     expect(noteRecordCount(layout, 1)).toBe(1);

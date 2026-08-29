@@ -1,6 +1,39 @@
 // Footnote reserve maps: page-slot → bottom reserve height (points). The compute lives in
-// note-pagination.ts (computeFootnoteReserves); this module holds the pure map algebra the
-// reflow loop and the section context keys share.
+// note-pagination.ts (computeFootnoteReserves); this module holds the pure map algebra and
+// the shared reserve constants the reflow loop and the section context keys share.
+
+/**
+ * Minimum body band (points) retained when computing footnote bottom reserves.
+ *
+ * Reserving the full content column would shrink body flow to 1pt and chase blank
+ * sheets as every reference line fails to land. Oversized notes split/continue into
+ * the shared overflow budget instead of evacuating the referencing page.
+ */
+export const MIN_FOOTNOTE_BODY_BAND_PT = 14;
+
+/**
+ * The tallest footnote stack a page can host beside the minimum body band. ONE formula:
+ * the eviction guard ("could this note fit whole on a page?") and the hold-out's
+ * oversized-note test must be exact complements, or a note is neither evicted nor held
+ * out and the reflow loop orbits.
+ */
+export function noteColumnBudgetPt(contentHeight: number, separatorHeight: number): number {
+  return Math.max(0, contentHeight - MIN_FOOTNOTE_BODY_BAND_PT - separatorHeight);
+}
+
+/**
+ * Half-point back-off applied to reserves derived from an observed line boundary (eviction,
+ * hold-out), so the body budget falls mid-line instead of edge-to-edge on a kept line's
+ * exact bottom, where the body pass's strict fit compare flips on float drift.
+ */
+export const RESERVE_BOUNDARY_BACKOFF_PT = 0.5;
+
+/**
+ * How far apart two reserve values may sit and still count as "the same hold". A re-derived
+ * hold differs from the applied one by at most the boundary back-off plus float drift, so
+ * the tolerance is stated in terms of the back-off rather than as a free constant.
+ */
+export const HELD_RESERVE_TOLERANCE_PT = 2 * RESERVE_BOUNDARY_BACKOFF_PT;
 
 /**
  * The note-reserve slice of one section's layout context key.

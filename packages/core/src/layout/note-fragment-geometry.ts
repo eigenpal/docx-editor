@@ -80,6 +80,59 @@ export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): n
 }
 
 /**
+ * Body bottom (content-relative pt) the note passes BUDGET against.
+ *
+ * MINUS each paragraph's trailing after-spacing: the page-fit decision admits a paragraph
+ * without charging its `w:spacing w:after` (it moves to the next page with the flow), but
+ * the fragment BOX includes it — so a page whose last paragraph carries after-spacing
+ * "uses" more height here than the fit rule budgeted, the reserve the reflow settles on
+ * under-claims by that amount, and the attach pass splits a note the reserve fit whole.
+ * Word lets the footnote area rise into that blank band the same way. PLACEMENT of an
+ * area that hangs off the body keeps {@link fragmentFlowBottom} unless the room is needed.
+ */
+export function bodyFitBottomPt(page: PageRecord): number {
+  let bottom = 0;
+  for (const fragment of page.fragments) {
+    const trailingAfter = fragment.kind === 'paragraph' ? fragment.spacing.after : 0;
+    bottom = Math.max(bottom, fragment.box.y + fragment.box.height - trailingAfter);
+  }
+  return bottom;
+}
+
+/**
+ * Top (content-relative pt) of the page's topmost body content, or 0 on an empty page.
+ *
+ * The MINIMUM over every fragment, not the first one's: document order is not y order
+ * when a float exclusion zone displaces the first paragraph below a later block, and the
+ * eviction guard that reads this must never conclude a page's true first line has content
+ * above it.
+ */
+export function firstBodyContentTopPt(page: PageRecord): number {
+  let top = Number.POSITIVE_INFINITY;
+  for (const fragment of page.fragments) {
+    const fragmentTop =
+      fragment.kind === 'paragraph' ? (fragment.lines[0]?.box.y ?? fragment.box.y) : fragment.box.y;
+    top = Math.min(top, fragmentTop);
+  }
+  return Number.isFinite(top) ? top : 0;
+}
+
+/**
+ * Whether a line segment owns the atom at `atomOffset` for `paragraphId` — half-open
+ * `[start, end)` with downstream boundary affinity, ONE predicate for every reader that
+ * pairs a note reference with the line that draws it.
+ */
+export function segmentOwnsAtomOffset(
+  segment: { readonly paragraphId: string; readonly start: number; readonly end: number },
+  paragraphId: string,
+  atomOffset: number
+): boolean {
+  return (
+    segment.paragraphId === paragraphId && atomOffset >= segment.start && atomOffset < segment.end
+  );
+}
+
+/**
  * The body band (content-relative pt) of the line on `page` that carries `ref`.
  *
  * `bottom` is the band body text must KEEP for this reference when its footnote reserve is
@@ -157,8 +210,7 @@ function referenceLineBand(
 ): { readonly top: number; readonly bottom: number } | null {
   for (const line of fragment.lines) {
     for (const segment of lineSegments(line)) {
-      if (segment.paragraphId !== ref.paragraphId) continue;
-      if (ref.atomOffset < segment.start || ref.atomOffset >= segment.end) continue;
+      if (!segmentOwnsAtomOffset(segment, ref.paragraphId, ref.atomOffset)) continue;
       return { top: line.box.y, bottom: line.box.y + line.box.height };
     }
   }
