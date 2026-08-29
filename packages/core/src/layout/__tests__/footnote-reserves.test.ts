@@ -143,6 +143,9 @@ function paraFrag(
   paragraphId: string,
   opts: { atomEnd: number; y: number; height: number; width?: number }
 ): ParagraphFragmentRecord {
+  // One line at the fragment top covering the whole atom range — real layout always
+  // publishes lines, and the reserve pass reads the referencing LINE's bottom from them.
+  const lineHeight = Math.min(14, opts.height);
   return {
     kind: 'paragraph',
     id: `${paragraphId}-frag`,
@@ -153,7 +156,17 @@ function paraFrag(
     props: [],
     spacing: { before: 0, after: 0, line: null, lineRule: 'auto' },
     indent: { start: 0, end: 0, firstLine: 0, hanging: 0 },
-    lines: [],
+    lines: [
+      {
+        id: `${paragraphId}-line-0`,
+        range: { paragraphId, start: 0, end: opts.atomEnd },
+        spans: [],
+        box: { x: 0, y: opts.y, width: opts.width ?? 400, height: lineHeight },
+        contentX: 0,
+        baseline: lineHeight * 0.8,
+        leading: 0,
+      },
+    ],
   };
 }
 

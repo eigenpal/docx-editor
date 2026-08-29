@@ -1024,6 +1024,20 @@ export type TreeDocOp =
         readonly paragraphId: string;
         readonly pageNumberText: string;
       }[];
+    }
+  | {
+      /**
+       * Rewrite recognized fields' cached RESULT runs in place — between the `separate` and
+       * `end` fldChars, or a `w:fldSimple`'s content. The instruction is never modified; a
+       * result holding anything but plain runs is skipped (see `tree-op-field-results.ts`).
+       */
+      readonly op: 'refreshFieldResults';
+      readonly updates: readonly {
+        readonly paragraphId: string;
+        /** Node id of the field's begin `w:fldChar`, or of the `w:fldSimple` element. */
+        readonly fieldNodeId: string;
+        readonly text: string;
+      }[];
     };
 
 /** Drawing mutation ops from typed-drawings-and-images task 11. */
@@ -1122,6 +1136,7 @@ export const TREE_DOC_OP_KINDS = [
   'insertToc',
   'replaceTocResult',
   'rewriteTocPageNumbers',
+  'refreshFieldResults',
 ] as const satisfies readonly TreeDocOpKind[];
 
 // Compile-time exhaustiveness, matching the legacy `DOC_OP_KINDS` guard: a new op must be

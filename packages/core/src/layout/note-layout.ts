@@ -152,6 +152,12 @@ export interface LayoutNoteStoryOptions {
   readonly projectFieldLink?: FieldLinkProjector;
   /** Document properties for a document-property field inside a note story. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
+  /**
+   * The document's resolved REF inputs, so a footnote's cross-reference paints the live
+   * value the body paints. The flow folds each paragraph's resolved values into its break
+   * key, which is what repaints a note after a renumbering edit it cannot otherwise see.
+   */
+  readonly refFields?: import('./field-ref.ts').RefFieldContext;
   /** Derived display marks for noteRef projection inside the note body. */
   readonly noteMarks?: NoteMarkContext;
   /**
@@ -249,6 +255,7 @@ export function layoutNoteStory(
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+    ...(options.refFields ? { refFields: options.refFields } : {}),
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),

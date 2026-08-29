@@ -34,6 +34,9 @@ export const SECTION_PREPASS_GUARDS = {
   // tokens WITHOUT an epoch keeps the recompute path (`drawingEpoch !== null`).
   drawingEpoch: 'validity-checked',
   tocToken: 'validity-checked',
+  // The story-wide REF values token. A renumbering edit moves a REF value in a section whose
+  // blocks, list map and TOC shape are all identity-unchanged; this clause is what sees it.
+  refToken: 'validity-checked',
   prepared: 'derived-covered',
   keys: 'derived-covered',
   paragraphDocumentOrder: 'derived-covered',

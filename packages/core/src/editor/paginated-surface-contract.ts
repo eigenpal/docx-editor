@@ -714,6 +714,12 @@ export interface PaginatedSurface {
   insertToc(): boolean;
   /** Refresh cached TOC entries and/or page numbers through the two-pass layout pipeline. */
   refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
+  /**
+   * Rewrite stale REF field results in the body story so a save exports what the pages
+   * paint. Fresh results commit nothing (no transaction, no revision bump, no undo entry);
+   * a rewrite is one ordinary journaled transaction. Viewing writes nothing.
+   */
+  refreshRefFieldResults(): boolean;
   /** Whether a body paragraph belongs to a detected TOC boundary or cached result. */
   isInsideToc(paragraphId: string): boolean;
   /**

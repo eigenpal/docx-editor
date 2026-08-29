@@ -17,6 +17,7 @@ import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
+import type { RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -267,11 +268,28 @@ export interface PendingFieldProjection {
    */
   docPropertySpec: DocPropertyField | null;
   /**
+   * Recognized REF cross-reference instruction, or null when the field is not one.
+   *
+   * Captured at the same points as {@link symbolSpec}. Unlike {@link buttonSpec}, a resolved
+   * value WINS over a non-empty cached result — the stale cache is exactly what a REF field
+   * exists to replace — and an unresolvable spec (missing bookmark, unnumbered target for a
+   * number switch) falls back to the cache, never to the raw instruction.
+   */
+  refSpec: RefFieldSpec | null;
+  /**
    * Bounded `w:ffData` render state read at `begin` (`legacyFormFieldDataOf` — state only,
    * macros never), or null when absent or malformed. {@link formField} stays presence-based:
    * ffData present with an unreadable payload still shades as a form field.
    */
   formData: LegacyFormFieldData | null;
+  /**
+   * Canonical node id of the field's begin `w:fldChar`.
+   *
+   * The per-field key REF calibration verdicts live under (`RefFieldContext.liveValueOf`):
+   * node ids survive edits, so the projection and the context's token fold read the same
+   * verdict for the same field however either walk collected its cached text.
+   */
+  beginId: string;
   /** True when this pending field is a well-formed atomic unit (begin will close). */
   atomic: boolean;
   /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */

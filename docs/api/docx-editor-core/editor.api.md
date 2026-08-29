@@ -1464,6 +1464,7 @@ export interface PaginatedSurface {
     publishedLayout(): SemanticLayout;
     // (undocumented)
     redo(): void;
+    refreshRefFieldResults(): boolean;
     refreshTableInteractionLabels(): void;
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;

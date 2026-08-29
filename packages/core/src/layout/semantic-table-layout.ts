@@ -225,6 +225,11 @@ export interface TableFlowDeps {
    * in a header/footer keeps this false and its own live page path.
    */
   readonly bodyPageFields?: import('./field-page-furniture.ts').BodyPageFieldContext | false;
+  /**
+   * The story's resolved REF inputs — a REF field in a table cell is an ordinary field.
+   * Present only in body flow, which folds the resolved values into every cell break key.
+   */
+  readonly refFields?: import('./field-ref.ts').RefFieldContext;
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
   readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
@@ -455,8 +460,9 @@ function placeCellParagraph(
   // offset. Contextual spacing is a body-flow question (it compares document neighbours),
   // so it is not applied per cell.
   // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
-  // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
-  // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
+  // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
+  // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
+  // the next tab stop past an overflowing one (§17.9.30).
   const firstLineOffset = firstLineShift(listItem, indent, deps.measurer, tabStops, available);
   const rawZones = deps.pageExclusionZones?.() ?? Object.freeze([]);
   const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
@@ -476,6 +482,9 @@ function placeCellParagraph(
   // the wrapped break of the one that does not.
   const exclusionToken = exclusionLayoutToken(pageZones);
   const positionedExclusionToken = exclusionToken ? `${top.toFixed(3)}|${exclusionToken}` : '';
+  // The cell paragraph's resolved REF values, keyed exactly as the body flow keys them: a
+  // renumbering edit moves the painted reference while the cell's subtree stays identical.
+  const refToken = deps.refFields?.tokenForParagraph(paragraphId) ?? '';
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -484,6 +493,7 @@ function placeCellParagraph(
       ...markRunProperties,
       { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
       ...(listItem ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }] : []),
+      ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
     ],
     width: available,
     producer: deps.producer,
@@ -519,6 +529,7 @@ function placeCellParagraph(
       ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
       ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
       ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
+      ...(deps.refFields ? { refFields: deps.refFields } : {}),
       displayMode: deps.displayMode,
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
       ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),

@@ -10,8 +10,10 @@
 //   1. SYMBOL — synthesized glyph wins over any stale cached text.
 //   2. legacy form field — checkbox from ffData state, dropdown from the selected entry.
 //   3. allowlisted PAGE-family — live value from the page context.
-//   4. cached result — a non-empty cache is what Word last painted; it wins over synthesis.
-//   5. empty cache only (and no hidden-but-present result): a document-property value, else a
+//   4. REF — the value resolved from the bookmark target wins over the stale cache; an
+//      unresolvable reference falls through to it instead.
+//   5. cached result — a non-empty cache is what Word last painted; it wins over synthesis.
+//   6. empty cache only (and no hidden-but-present result): a document-property value, else a
 //      MACROBUTTON / GOTOBUTTON display.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
@@ -27,6 +29,7 @@ import {
 } from './field-page-furniture.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
+import type { RefFieldContext } from './field-ref.ts';
 import { symbolFieldGlyph } from './field-symbol.ts';
 import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 
@@ -58,6 +61,11 @@ export interface AtomicSynthesisContext {
    * which keep their live path or deferral — a placeholder there would never be substituted.
    */
   readonly bodyPageFields?: BodyPageFieldContext | false;
+  /**
+   * The story's resolved REF inputs (bookmark targets + numbering), or absent for stories
+   * that keep REF fields on their cached results (headers/footers, notes, text boxes).
+   */
+  readonly refFields?: RefFieldContext;
 }
 
 /**
@@ -86,6 +94,16 @@ export function synthesizeAtomicField(
       props: pending.props,
       style: pending.style,
     };
+  }
+  // A REF resolves live from its bookmark target and the resolved numbering — the cached
+  // result is exactly what goes stale after a renumbering edit, so here the live value wins
+  // over a non-empty cache. Gated per field (by begin node id) on the calibration verdict:
+  // a field whose computed value never matched its authored cache stays on that cache, and
+  // an unresolvable reference falls through to it too — never to the raw instruction. The
+  // result-run style captured off the cache keeps the field's formatting.
+  if (pending.refSpec && ctx.refFields) {
+    const value = ctx.refFields.liveValueOf(pending.beginId, pending.refSpec);
+    if (value !== null) return { text: value, props: pending.props, style: pending.style };
   }
   // A non-empty cached result is what Word last painted; it wins over synthesis.
   if (pending.cachedText.length > 0) {
