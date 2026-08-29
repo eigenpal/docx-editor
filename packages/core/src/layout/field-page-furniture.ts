@@ -341,7 +341,9 @@ export function pageRefCalibrationVerdict(
     return true;
   }
   const live = cached.length === 0 || cached === computed;
-  if (live) pageRefLiveLatches.set(cell, { revision });
+  // Only a real layout revision may latch: a save-time (NaN) latch could never be revoked
+  // by the note pass, so it must stay a one-shot answer.
+  if (live && Number.isFinite(revision)) pageRefLiveLatches.set(cell, { revision });
   return live;
 }
 
