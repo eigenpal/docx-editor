@@ -1,0 +1,109 @@
+name: Sync labels to project fields
+
+on:
+  issues:
+    types: [labeled, unlabeled]
+
+env:
+  ORG: eigenpal
+  PROJECT_NUMBER: 2
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Reconcile Area and Priority from labels
+        env:
+          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          EVENT_LABEL: ${{ github.event.label.name }}
+          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Which field does the changed label belong to?
+          case "$EVENT_LABEL" in
+            area:*)     FIELD_NAME="Area"     ; PREFIX="area:"     ;;
+            priority:*) FIELD_NAME="Priority" ; PREFIX="priority:" ;;
+            *) echo "Not an area/priority label, skipping."; exit 0 ;;
+          esac
+          echo "Reconciling $FIELD_NAME for issue #$ISSUE_NUMBER"
+
+          # Re-read the issue's CURRENT labels rather than trusting the event.
+          # A label swap fires unlabeled + labeled as two runs; reading live
+          # state means whichever runs last still lands on the right answer.
+          SLUG=$(gh issue view "$ISSUE_NUMBER" --repo "$REPO" --json labels \
+            | jq -r --arg p "$PREFIX" '
+                [.labels[].name | select(startswith($p)) | ltrimstr($p)]
+                | if length == 1 then .[0] else "" end')
+
+          if [ -z "$SLUG" ]; then
+            echo "No single $PREFIX label present — will clear the field."
+          else
+            echo "Resolved to: $SLUG"
+          fi
+
+          # Look up project id, field id, and option ids
+          PROJECT_JSON=$(gh api graphql -f query='
+            query($org: String!, $number: Int!, $field: String!) {
+              organization(login: $org) {
+                projectV2(number: $number) {
+                  id
+                  field(name: $field) {
+                    ... on ProjectV2SingleSelectField {
+                      id
+                      options { id name }
+                    }
+                  }
+                }
+              }
+            }' -f org="$ORG" -F number="$PROJECT_NUMBER" -f field="$FIELD_NAME")
+
+          PROJECT_ID=$(echo "$PROJECT_JSON" | jq -r '.data.organization.projectV2.id')
+          FIELD_ID=$(echo "$PROJECT_JSON"   | jq -r '.data.organization.projectV2.field.id')
+
+          # Add to the project if it isn't there. Idempotent — returns the
+          # existing item id if the issue is already on the board.
+          ITEM_ID=$(gh api graphql -f query='
+            mutation($project: ID!, $content: ID!) {
+              addProjectV2ItemById(input: {projectId: $project, contentId: $content}) {
+                item { id }
+              }
+            }' -f project="$PROJECT_ID" -f content="$ISSUE_NODE_ID" \
+            | jq -r '.data.addProjectV2ItemById.item.id')
+
+          if [ -z "$SLUG" ]; then
+            gh api graphql -f query='
+              mutation($project: ID!, $item: ID!, $field: ID!) {
+                clearProjectV2ItemFieldValue(input: {
+                  projectId: $project, itemId: $item, fieldId: $field
+                }) { projectV2Item { id } }
+              }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$FIELD_ID"
+            echo "Cleared $FIELD_NAME."
+            exit 0
+          fi
+
+          # Match option by normalising its name: lowercase, spaces -> dashes.
+          # "Word fidelity" matches label "area:word-fidelity".
+          OPTION_ID=$(echo "$PROJECT_JSON" | jq -r --arg slug "$SLUG" '
+            .data.organization.projectV2.field.options[]
+            | select((.name | ascii_downcase | gsub(" "; "-")) == ($slug | ascii_downcase))
+            | .id')
+
+          if [ -z "$OPTION_ID" ] || [ "$OPTION_ID" = "null" ]; then
+            echo "::warning::No '$FIELD_NAME' option matches '$SLUG'. Add the option or fix the label."
+            exit 0
+          fi
+
+          gh api graphql -f query='
+            mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $project
+                itemId: $item
+                fieldId: $field
+                value: { singleSelectOptionId: $option }
+              }) { projectV2Item { id } }
+            }' -f project="$PROJECT_ID" -f item="$ITEM_ID" -f field="$FIELD_ID" -f option="$OPTION_ID"
+
+          echo "Set $FIELD_NAME to '$SLUG'."

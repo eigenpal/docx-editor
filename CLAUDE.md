@@ -390,6 +390,16 @@ fails until it gets an attribution path; `packages/fonts` carries OFL text in
 - **Bugs** — `gh issue view <N> --repo eigenpal/docx-editor`. Dev server `bun run
 dev` → `http://localhost:5173/`. Live demo `http://docx-editor.dev/editor`.
   Commit `fix: ... (fixes #N)`. Screenshots → `screenshots/`.
+- **Issue labels** — every issue gets exactly ONE `area:*` and ONE `priority:*`
+  label when filed. Areas: `area:word-fidelity`, `area:performance`,
+  `area:collaboration`, `area:agent-ready`, `area:ux`,
+  `area:developer-experience`. Priorities: `priority:high|medium|low`. Optional
+  `component:*` names the package. These labels are the source of truth for the
+  public roadmap board (org project 2):
+  `.github/workflows/sync-labels-to-project.yml` mirrors them into the board's
+  Area/Priority single-select fields, and an option name must keep matching its
+  label slug (lowercase, spaces→dashes) or the sync warns and skips. When you
+  file an issue, set both labels; two labels of one prefix clear the field.
 - **ESM only** — no `require()`.
 - **Tailwind** — scoped to `.docx-editor`; the scoping is baked into `dist/editor.css`
   at core build time (`scripts/build-core-styles.mjs` + `packages/core/tailwind.dist.config.cjs`),
