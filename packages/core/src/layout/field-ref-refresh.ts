@@ -83,7 +83,8 @@ export function planRefFieldResultRefresh(
     blocks,
     listItems,
     notes,
-    options.package ? noteRefNumberingForPart(options.package, part, blocks) : undefined
+    options.package ? noteRefNumberingForPart(options.package, part, blocks) : undefined,
+    options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE
   );
   if (context === null) return null;
 

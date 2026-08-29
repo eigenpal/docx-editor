@@ -53,11 +53,17 @@
 import {
   fldSimpleInstr,
   isFldSimple,
-  WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
+import {
+  bookmarkRangeText,
+  fldSimpleCachedText,
+  isDrawingHost,
+  MAX_REF_TEXT_CHARS,
+  wmlAttribute,
+} from './field-ref-text.ts';
 import { isNormalNote, notesOf, MAX_NOTES_PER_PART } from '../store/package/note-nodes.ts';
 import { noteStoryBlocks } from './story-roots.ts';
 import {
@@ -87,6 +93,16 @@ import {
 } from './field-autonum.ts';
 import { composeFullContextNumber } from './list-counters.ts';
 import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  NO_REVISIONS,
+  isRevisionWrapper,
+  revisionAttributionOf,
+  revisionsVisible,
+  withRevision,
+  type RevisionAttribution,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
+import {
   listItemNumberSource,
   walkStoryParagraphs,
   type ResolvedListItem,
@@ -96,8 +112,6 @@ import {
 const MAX_REF_BOOKMARK_NAME_CHARS = 256;
 /** Ceiling on live-resolved REF fields per story; fields past it keep their cached results. */
 const MAX_REF_FIELDS_PER_STORY = 512;
-/** Length cap on a plain REF's extracted text — file data must not inflate keys or spans. */
-const MAX_REF_TEXT_CHARS = 1024;
 /** Ceiling on bookmark names remembered per top-level block (hostile declaration spam). */
 const MAX_REF_BOOKMARKS_PER_BLOCK = 2048;
 /** Ceiling on sticky calibration verdicts carried for one story across a session. */
@@ -277,15 +291,6 @@ export interface RefFieldContext {
   autonumValueOf?(anchorId: string): string | null;
 }
 
-function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
-  for (const attribute of node.attributes) {
-    if (attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName) {
-      return attribute.value;
-    }
-  }
-  return undefined;
-}
-
 /** One scanned REF or AUTONUM-family field: instruction, anchor node id, NORMALIZED cache. */
 interface ScannedRefField {
   /** The recognized REF/NOTEREF instruction, or null when {@link autonum} answers instead. */
@@ -296,6 +301,15 @@ interface ScannedRefField {
   readonly anchorId: string;
   /** The authored cached result, whitespace-collapsed (NBSP = space) — the oracle. */
   readonly cached: string;
+  /**
+   * The revision wrappers enclosing the field's begin marker, outermost first.
+   *
+   * Recorded raw (the scan is memoized per paragraph node, shared across display modes) and
+   * resolved against the mode in the AUTONUM prepass: a `w:del`-wrapped field does not exist
+   * in the proposed view, so it must not advance the counter there — Word after accepting
+   * the deletion renumbers the survivors.
+   */
+  readonly revisions: readonly RevisionAttribution[];
 }
 
 /** REF fields and bookmark names one paragraph carries; shared empty for the common case. */
@@ -321,35 +335,6 @@ function normalizeResultText(value: string): string {
 /** Memoized per immutable paragraph node — an edit republishes only touched paragraphs. */
 const paragraphRefScans = new WeakMap<OoxmlElement, ParagraphRefScan>();
 
-/** A drawing hosts its own story; its bookmarks and fields are not this paragraph's. */
-function isDrawingHost(node: OoxmlElement): boolean {
-  return node.kind === 'drawing' || node.localName === 'drawing' || node.localName === 'pict';
-}
-
-/** The `w:t` text of a `w:fldSimple`'s cached display, bounded and depth-capped. */
-function fldSimpleCachedText(
-  simple: OoxmlElement,
-  budget: ReturnType<typeof createScanBudget>
-): string {
-  let text = '';
-  const visit = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || text.length >= MAX_REF_TEXT_CHARS) return;
-    if (budget.exhausted || depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
-    if (!consumeScanNode(budget)) return;
-    if (node.kind === 'text') {
-      for (const value of node.children) {
-        if (value.kind === 'textValue') {
-          text += value.value.slice(0, MAX_REF_TEXT_CHARS - text.length);
-        }
-      }
-      return;
-    }
-    for (const child of node.children) visit(child, depth + 1);
-  };
-  for (const child of simple.children) visit(child, 1);
-  return text;
-}
-
 /**
  * Bounded scan of one paragraph: level-1 complex REF fields (the only ones projection
  * live-paints) with their anchor ids and cached results, `w:fldSimple` REF fields, and
@@ -374,8 +359,13 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
     autonum: AutonumFieldSpec | null;
     anchorId: string;
     cached: string;
+    revisions: readonly RevisionAttribution[];
   } | null = null;
   let levelOneBeginId: string | null = null;
+  /** The revision wrappers the walk is currently inside — captured at the field's begin. */
+  let revisions: readonly RevisionAttribution[] = NO_REVISIONS;
+  /** The stack at the level-1 begin, so the capture at separate/end reads the field's own. */
+  let levelOneRevisions: readonly RevisionAttribution[] = NO_REVISIONS;
 
   const captureLevelOne = (): void => {
     if (field.nesting !== 1 || field.phase !== 'instruction' || field.nestingOverflow) return;
@@ -383,14 +373,28 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
     if (effective.overflow || levelOneBeginId === null) return;
     const spec = parseRefInstruction(effective.instruction);
     if (spec) {
-      pending = { spec, autonum: null, anchorId: levelOneBeginId, cached: '' };
+      pending = {
+        spec,
+        autonum: null,
+        anchorId: levelOneBeginId,
+        cached: '',
+        revisions: levelOneRevisions,
+      };
       return;
     }
     // AUTONUM-family fields ride the same scan: begin/instrText/end with NO separator and no
     // cached result, so this capture (which fires at the outermost end too) is the one place
     // that sees them.
     const autonum = parseAutonumInstruction(effective.instruction);
-    if (autonum) pending = { spec: null, autonum, anchorId: levelOneBeginId, cached: '' };
+    if (autonum) {
+      pending = {
+        spec: null,
+        autonum,
+        anchorId: levelOneBeginId,
+        cached: '',
+        revisions: levelOneRevisions,
+      };
+    }
   };
   const finalizePending = (): void => {
     if (!pending) return;
@@ -399,6 +403,7 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
       autonum: pending.autonum,
       anchorId: pending.anchorId,
       cached: normalizeResultText(pending.cached),
+      revisions: pending.revisions,
     });
     pending = null;
   };
@@ -421,6 +426,7 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
           onFldCharBegin(field);
           if (field.nesting === 1) {
             levelOneBeginId = grand.id;
+            levelOneRevisions = revisions;
             pending = null;
           }
           continue;
@@ -469,12 +475,26 @@ function scanParagraphRefs(paragraph: OoxmlElement): ParagraphRefScan {
           autonum,
           anchorId: node.id,
           cached: normalizeResultText(fldSimpleCachedText(node, budget)),
+          revisions,
         });
       }
       return;
     }
     if (isDrawingHost(node)) return;
     if (!consumeScanNode(budget)) return;
+    // A revision wrapper decides whether its fields EXIST in a display mode, so the stack
+    // rides the descent — the AUTONUM prepass reads it to keep a deleted field from
+    // advancing the counter in the view that resolved the deletion away.
+    if (isRevisionWrapper(node)) {
+      const attribution = revisionAttributionOf(node);
+      if (attribution) {
+        const enclosing = revisions;
+        revisions = withRevision(enclosing, attribution);
+        for (const child of node.children) visit(child, depth + 1);
+        revisions = enclosing;
+        return;
+      }
+    }
     for (const child of node.children) visit(child, depth + 1);
   };
   for (const child of paragraph.children) {
@@ -554,80 +574,6 @@ function trimTrailingPeriod(marker: string): string {
   return marker.length > 1 && marker.endsWith('.') ? marker.slice(0, -1) : marker;
 }
 
-/** Plain-REF text per (target paragraph, name), memoized on the immutable paragraph. */
-const bookmarkTextMemos = new WeakMap<OoxmlElement, Map<string, string>>();
-
-/**
- * The bookmarked text inside the target paragraph: from the named `w:bookmarkStart` to the
- * `w:bookmarkEnd` carrying the same `w:id`, or to the paragraph's end when the range runs
- * past it. Length-capped; collects `w:t` and tabs only — deleted text, field chrome and
- * drawings never join a computed result.
- */
-function bookmarkRangeText(paragraph: OoxmlElement, name: string): string {
-  let memo = bookmarkTextMemos.get(paragraph);
-  const cached = memo?.get(name);
-  if (cached !== undefined) return cached;
-
-  let collecting = false;
-  let done = false;
-  let endId: string | undefined;
-  let text = '';
-  const budget = createScanBudget();
-
-  const append = (value: string): void => {
-    const room = MAX_REF_TEXT_CHARS - text.length;
-    if (room <= 0) {
-      done = true;
-      return;
-    }
-    text += value.length > room ? value.slice(0, room) : value;
-  };
-
-  const visit = (node: OoxmlNode, depth: number): void => {
-    if (done || node.kind === 'textValue') return;
-    if (budget.exhausted || depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
-    if (node.kind === 'bookmarkStart') {
-      if (!collecting && wmlAttribute(node, 'name') === name) {
-        collecting = true;
-        endId = wmlAttribute(node, 'id');
-      }
-      return;
-    }
-    if (node.kind === 'bookmarkEnd') {
-      if (collecting && endId !== undefined && wmlAttribute(node, 'id') === endId) done = true;
-      return;
-    }
-    if (node.kind === 'run') {
-      if (!collecting) return;
-      for (const grand of node.children) {
-        if (done || !consumeScanNode(budget)) return;
-        if (grand.kind === 'text') {
-          for (const value of grand.children) {
-            if (value.kind === 'textValue') append(value.value);
-          }
-        } else if (grand.kind === 'tab') {
-          append('\t');
-        }
-      }
-      return;
-    }
-    if (isDrawingHost(node) || isFldSimple(node)) return;
-    if (!consumeScanNode(budget)) return;
-    for (const child of node.children) visit(child, depth + 1);
-  };
-  for (const child of paragraph.children) {
-    if (done || !consumeScanNode(budget)) break;
-    visit(child, 1);
-  }
-
-  if (!memo) {
-    memo = new Map();
-    bookmarkTextMemos.set(paragraph, memo);
-  }
-  memo.set(name, text);
-  return text;
-}
-
 /**
  * Note parts whose stories join the context: their REF fields resolve against the body's
  * bookmarks and numbering (a footnote citing "Section 1.2(c)" targets a body paragraph),
@@ -662,6 +608,7 @@ interface RefContextMemoEntry {
   readonly footnotesPart: OoxmlPart | null;
   readonly endnotesPart: OoxmlPart | null;
   readonly noteNumbering: NoteRefNumberingInput | undefined;
+  readonly displayMode: RevisionDisplayMode;
   readonly context: RefFieldContext | null;
 }
 /**
@@ -676,7 +623,8 @@ function buildRefFieldContext(
   blocks: readonly OoxmlElement[],
   listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
   notes: RefNoteParts | undefined,
-  noteNumbering: NoteRefNumberingInput | undefined
+  noteNumbering: NoteRefNumberingInput | undefined,
+  displayMode: RevisionDisplayMode
 ): RefFieldContext | null {
   const fieldsByParagraph = new Map<string, readonly ScannedRefField[]>();
   const blockScans: BlockRefScan[] = [];
@@ -728,6 +676,9 @@ function buildRefFieldContext(
   for (const [paragraphId, fields] of fieldsByParagraph) {
     for (const field of fields) {
       if (!field.autonum) continue;
+      // A field the display mode resolves away does not exist in that view, so it must not
+      // advance the counter: Word after accepting a deletion renumbers the survivors.
+      if (!revisionsVisible(field.revisions, displayMode)) continue;
       const next = (autonumCounters.get(field.autonum.kind) ?? 0) + 1;
       autonumCounters.set(field.autonum.kind, next);
       const value = autonumDisplayText(field.autonum, next);
@@ -900,7 +851,8 @@ export function resolveStoryRefFieldsWithNoteNumbers(
   blocks: readonly OoxmlElement[],
   listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
   notes: RefNoteParts | undefined,
-  noteNumbering: NoteRefNumberingInput | undefined
+  noteNumbering: NoteRefNumberingInput | undefined,
+  displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE
 ): RefFieldContext | null {
   const footnotesPart = notes?.footnotesPart ?? null;
   const endnotesPart = notes?.endnotesPart ?? null;
@@ -910,12 +862,20 @@ export function resolveStoryRefFieldsWithNoteNumbers(
     memo.listItems === listItems &&
     memo.footnotesPart === footnotesPart &&
     memo.endnotesPart === endnotesPart &&
-    memo.noteNumbering === noteNumbering
+    memo.noteNumbering === noteNumbering &&
+    memo.displayMode === displayMode
   ) {
     return memo.context;
   }
-  const context = buildRefFieldContext(blocks, listItems, notes, noteNumbering);
-  refContextMemos.set(blocks, { listItems, footnotesPart, endnotesPart, noteNumbering, context });
+  const context = buildRefFieldContext(blocks, listItems, notes, noteNumbering, displayMode);
+  refContextMemos.set(blocks, {
+    listItems,
+    footnotesPart,
+    endnotesPart,
+    noteNumbering,
+    displayMode,
+    context,
+  });
   return context;
 }
 

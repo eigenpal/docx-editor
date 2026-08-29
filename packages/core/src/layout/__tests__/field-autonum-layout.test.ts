@@ -118,6 +118,27 @@ describe('AUTONUM-family fields synthesize sequential numbers in layout', () => 
     expect(textsOf(layout)).toEqual(['1. via fldSimple']);
   });
 
+  test('a revision-hidden field does not advance the counter in the resolved views', () => {
+    // A `w:del`-wrapped field does not exist in the proposed view: Word after accepting the
+    // deletion renumbers the survivors, so the third field must paint 2., not 3. The
+    // all-markup view keeps every field and numbers straight through.
+    const body =
+      autonumParagraph(' AUTONUM ', 'first') +
+      `<w:p><w:del w:id="9" w:author="a">${autonumField(' AUTONUM ')}</w:del>` +
+      `<w:r><w:t> second</w:t></w:r></w:p>` +
+      autonumParagraph(' AUTONUM ', 'third');
+    const proposed = layoutSemanticDocument(load(body), 1, {
+      measurer,
+      displayMode: 'proposed',
+    });
+    expect(textsOf(proposed)).toEqual(['1. first', 'second', '2. third']);
+    const allMarkup = layoutSemanticDocument(load(body), 1, {
+      measurer,
+      displayMode: 'all-markup',
+    });
+    expect(textsOf(allMarkup)).toEqual(['1. first', '2. second', '3. third']);
+  });
+
   test('a REF number switch resolves against a bookmarked AUTONUM paragraph', () => {
     const layout = layoutOf(
       `<w:p><w:bookmarkStart w:id="1" w:name="annexB"/>` +

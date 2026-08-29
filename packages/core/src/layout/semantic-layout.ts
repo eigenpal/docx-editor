@@ -628,7 +628,8 @@ export function layoutSemanticDocument(
     options.notes
       ? { footnotesPart: options.notes.footnotesPart, endnotesPart: options.notes.endnotesPart }
       : undefined,
-    options.notes ? noteRefNumberingFromNotes(options.notes, sections) : undefined
+    options.notes ? noteRefNumberingFromNotes(options.notes, sections) : undefined,
+    displayMode
   );
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
