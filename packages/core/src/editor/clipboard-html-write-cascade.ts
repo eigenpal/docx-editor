@@ -7,10 +7,13 @@ import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { relationshipsOf } from '../store/package/package-edit.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { MAX_STYLE_BASED_ON_DEPTH } from '../layout/style-cascade.ts';
 import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
 
 const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
-const MAX_STYLE_CHAIN = 16;
+// The layout cascade's own depth cap, so copy output resolves the same chains the
+// painter does.
+const MAX_STYLE_CHAIN = MAX_STYLE_BASED_ON_DEPTH;
 
 export interface StyleIndex {
   readonly byId: ReadonlyMap<string, OoxmlElement>;

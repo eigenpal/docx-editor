@@ -138,7 +138,8 @@ export interface WordNoteBodyContext {
 export function wordNoteReferenceHtml(
   node: OoxmlElement,
   noteBody: WordNoteBodyContext | null,
-  ordinalOf: (kind: 'footnote' | 'endnote', id: number) => number
+  ordinalOf: (kind: 'footnote' | 'endnote', id: number) => number,
+  hasDefinition: (kind: 'footnote' | 'endnote', id: number) => boolean
 ): string {
   if (node.namespaceUri !== WML_NAMESPACE_URI) return '';
   const bodyKind =
@@ -165,6 +166,10 @@ export function wordNoteReferenceHtml(
   if (id === undefined || !Number.isInteger(id) || id < 1) return '';
   if (bodyKind !== null && noteBody?.kind !== bodyKind) return '';
   if (id > 32_767) return '';
+  // A reference whose definition the package does not carry (a note referenced only
+  // from another note's body, or a dangling id) renders nothing: a dead anchor
+  // would skew visible ordinals and point at a nonexistent note on paste.
+  if (bodyKind === null && !hasDefinition(kind, id)) return '';
   const footnote = kind === 'footnote';
   const inNoteBody = bodyKind !== null;
   const className = footnote ? 'MsoFootnoteReference' : 'MsoEndnoteReference';

@@ -226,6 +226,8 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
         continue;
       }
       const leader = wmlVal(child, 'leader');
+      // The read side accepts every token here, so the engine's own round trip
+      // keeps middleDot and heavy leaders too.
       const cssLeader =
         leader === 'dot'
           ? 'dotted'
@@ -233,7 +235,11 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
             ? 'dashed'
             : leader === 'underscore'
               ? 'lined'
-              : '';
+              : leader === 'middleDot'
+                ? 'middledot'
+                : leader === 'heavy'
+                  ? 'heavy'
+                  : '';
       values.push(`${val}${cssLeader ? ` ${cssLeader}` : ''} ${ptFromTwips(pos)}`);
     }
     if (values.length > 0) rules.push(`tab-stops:${values.join(' ')}`);
@@ -272,6 +278,9 @@ interface RenderContext {
   readonly imageDataUris: Map<string, string | null>;
   /** Display ordinal per note id, assigned in body reference order. */
   readonly noteOrdinals: Record<'footnote' | 'endnote', Map<number, number>>;
+  /** Ids with a definition in the package's notes parts; a reference to any other
+   *  id is dangling and renders nothing instead of a dead anchor. */
+  readonly availableNotes: Record<'footnote' | 'endnote', ReadonlySet<number>>;
   readonly noteBody: WordNoteBodyContext | null;
 }
 
@@ -284,10 +293,15 @@ function noteOrdinalOf(ctx: RenderContext, kind: 'footnote' | 'endnote', id: num
   return ordinal;
 }
 
-/** Complex-field state, one per paragraph. Runs render only when every open field is past
- *  its separator (the cached result); instruction and fldChar runs emit nothing. */
+/** Complex-field state, one per block sequence — a field's instruction region can
+ *  cross paragraph marks and tables. Runs render only when every open field is past
+ *  its separator (the cached result); instruction and fldChar runs emit nothing.
+ *  `inert` disarms the machinery when the sequence's fldChars are UNBALANCED (note
+ *  bodies bypass extraction's balance pass): field results then render as plain
+ *  content rather than an open `instr` blanking everything after it. */
 interface FieldState {
   readonly stack: Array<'instr' | 'result'>;
+  readonly inert: boolean;
 }
 
 const LIST_FMT_TO_CSS: Readonly<Record<string, string>> = {
@@ -313,7 +327,10 @@ function listLevelInfo(
   abstractId: string,
   level: number
 ): { readonly fmt: string; readonly start: number } {
-  const fmt = ctx.numbering.levelFormats.get(abstractId)?.get(String(level)) ?? 'decimal';
+  const fmt =
+    ctx.numbering.formatOverrides.get(`${numId}:${level}`) ??
+    ctx.numbering.levelFormats.get(abstractId)?.get(String(level)) ??
+    'decimal';
   const start =
     ctx.numbering.startOverrides.get(`${numId}:${level}`) ??
     ctx.numbering.levelStarts.get(abstractId)?.get(String(level)) ??
@@ -389,21 +406,17 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
           ? 'image/gif'
           : null;
   if (!mime) return '';
-  // Encode and charge each media part ONCE; later references reuse the data URI.
+  // The budget charges PER EMITTED REFERENCE — every `<img>` duplicates the data URI
+  // in the output, so a hostile file cannot amplify one part into unbounded output.
+  // The encoding itself is cached and computed once per part.
+  if (bytes.byteLength > ctx.maxImageBytes) return '';
+  if (ctx.imageBudget.used + bytes.byteLength > ctx.maxTotalImageBytes) return '';
+  ctx.imageBudget.used += bytes.byteLength;
   let dataUri = ctx.imageDataUris.get(resolved.partName);
-  if (dataUri === undefined) {
-    if (
-      bytes.byteLength > ctx.maxImageBytes ||
-      ctx.imageBudget.used + bytes.byteLength > ctx.maxTotalImageBytes
-    ) {
-      dataUri = null;
-    } else {
-      ctx.imageBudget.used += bytes.byteLength;
-      dataUri = `data:${mime};base64,${clipboardBase64Of(bytes)}`;
-    }
+  if (dataUri === undefined || dataUri === null) {
+    dataUri = `data:${mime};base64,${clipboardBase64Of(bytes)}`;
     ctx.imageDataUris.set(resolved.partName, dataUri);
   }
-  if (dataUri === null) return '';
 
   const extent = findDescendant(inline, 'extent', WP_NAMESPACE_URI);
   const cx = extent ? parseIntValue(attributeValueOf(extent, 'cx', '')) : null;
@@ -443,11 +456,11 @@ function renderRun(
 ): string {
   // Field machinery first: fldChar runs drive the state and never render themselves.
   if (hasChildOfKind(run, 'fldChar')) {
-    advanceFieldState(run, fields);
+    if (!fields.inert) advanceFieldState(run, fields);
     return '';
   }
   if (hasChildOfKind(run, 'instrText')) return '';
-  if (fields.stack.some((mode) => mode === 'instr')) return '';
+  if (!fields.inert && fields.stack.some((mode) => mode === 'instr')) return '';
 
   const rPr = run.children.find((child) => child.kind === 'runProperties');
   const layers = runPropertyLayers(ctx.styles, paragraphPPr, rPr && isElement(rPr) ? rPr : null);
@@ -462,8 +475,11 @@ function renderRun(
       inner += positionalTab;
       continue;
     }
-    const noteReference = wordNoteReferenceHtml(child, ctx.noteBody, (kind, id) =>
-      noteOrdinalOf(ctx, kind, id)
+    const noteReference = wordNoteReferenceHtml(
+      child,
+      ctx.noteBody,
+      (kind, id) => noteOrdinalOf(ctx, kind, id),
+      (kind, id) => ctx.availableNotes[kind].has(id)
     );
     if (noteReference !== '') {
       inner += noteReference;
@@ -576,11 +592,7 @@ function renderInline(
   return out;
 }
 
-function headingLevelOf(
-  ctx: RenderContext,
-  ownPPr: OoxmlElement | null,
-  sources: readonly OoxmlElement[]
-): number | null {
+function headingLevelOf(ctx: RenderContext, ownPPr: OoxmlElement | null): number | null {
   const styleId = wmlVal(wmlChild(ownPPr, 'pStyle'));
   const chain = styleChain(ctx.styles, styleId);
   for (let index = chain.length - 1; index >= 0; index -= 1) {
@@ -588,10 +600,11 @@ function headingLevelOf(
     const match = id ? /^Heading([1-6])$/.exec(id) : null;
     if (match) return Number(match[1]);
   }
-  // An outline level promotes to <h1>-<h6> only without a named style: a custom
-  // style that sets w:outlineLvl for the TOC must not round-trip into HeadingN.
+  // An outline level promotes to <h1>-<h6> only as DIRECT formatting on an unstyled
+  // paragraph: a custom style, Normal, or docDefaults setting w:outlineLvl for the
+  // TOC must not turn body text into HeadingN on a round trip.
   if (styleId === undefined) {
-    const outline = parseIntValue(wmlVal(lastProperty(sources, 'outlineLvl')));
+    const outline = parseIntValue(wmlVal(wmlChild(ownPPr, 'outlineLvl')));
     if (outline !== null && outline >= 0 && outline <= 5) return outline + 1;
   }
   return null;
@@ -627,7 +640,7 @@ function renderParagraph(
   const classAttr = wordClass === null ? '' : ` class="${wordClass}"`;
 
   if (options.asListItem) return `<li${classAttr}${dirAttr}${styleAttr}>${inner}</li>`;
-  const heading = headingLevelOf(ctx, pPr, sources);
+  const heading = headingLevelOf(ctx, pPr);
   const tag = heading === null ? 'p' : `h${heading}`;
   // The `Heading<N>` class is the marker the read lane maps back to the style in
   // every dialect, so a heading survives when only text/html crosses the trip.
@@ -669,7 +682,7 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): CellPlacement[][] {
   });
 }
 
-function renderTable(ctx: RenderContext, table: OoxmlElement): string {
+function renderTable(ctx: RenderContext, table: OoxmlElement, fields: FieldState): string {
   const tblPr = table.children.find((child) => child.kind === 'tableProperties');
   const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
   let tblBorders: OoxmlElement | null = null;
@@ -710,6 +723,14 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
     const border = wordBorderCss(wmlChild(tblBorders, xmlName));
     if (border) tableRules.push(`mso-border-${cssName}-alt:${border}`);
   }
+  // Outer-vs-inside edges classify by GRID COLUMN, not placement index: a ragged
+  // short row's last cell sits mid-grid and must take the inside border.
+  let gridColumns = 1;
+  for (const rowCells of placements) {
+    for (const placement of rowCells) {
+      gridColumns = Math.max(gridColumns, placement.startColumn + placement.span);
+    }
+  }
   let out = `<table style="${tableRules.join(';')}">`;
   placements.forEach((rowCells, rowIndex) => {
     const height = wmlChild(wmlChild(rows[rowIndex] ?? null, 'trPr'), 'trHeight');
@@ -717,7 +738,7 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
     const rowCss = wordTableRowCss(heightValue, attrOf(height, 'hRule', WML_NAMESPACE_URI));
     const rowStyle = rowCss === '' ? '' : ` style="${rowCss}"`;
     out += `<tr${rowStyle}>`;
-    for (const [cellIndex, placement] of rowCells.entries()) {
+    for (const placement of rowCells) {
       if (placement.vMerge === 'continue') continue;
       let rowSpan = 1;
       if (placement.vMerge === 'restart') {
@@ -737,14 +758,14 @@ function renderTable(ctx: RenderContext, table: OoxmlElement): string {
         rowIndex,
         placements.length,
         rowSpan,
-        cellIndex,
-        rowCells.length
+        placement.startColumn === 0,
+        placement.startColumn + placement.span >= gridColumns
       );
       const attrs =
         (placement.span > 1 ? ` colspan="${placement.span}"` : '') +
         (rowSpan > 1 ? ` rowspan="${rowSpan}"` : '') +
         (css === '' ? '' : ` style="${escapeAttr(css)}"`);
-      out += `<td${attrs}>${renderBlocks(ctx, placement.cell.children)}</td>`;
+      out += `<td${attrs}>${renderBlocks(ctx, placement.cell.children, fields)}</td>`;
     }
     out += '</tr>';
   });
@@ -756,12 +777,28 @@ interface OpenList {
   readonly numId: string;
 }
 
-function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): string {
+function renderBlocks(
+  ctx: RenderContext,
+  children: readonly OoxmlNode[],
+  // A field can span from a body paragraph into a table cell; the table's cells
+  // continue the CALLER's field state instead of resetting it.
+  sharedFields?: FieldState
+): string {
   let out = '';
   const openLists: OpenList[] = [];
   /** Items already emitted per `numId:level`, so a reopened list resumes numbering. */
   const listProgress = new Map<string, number>();
-  const fields: FieldState = { stack: [] };
+  let fields = sharedFields;
+  if (fields === undefined) {
+    // Probe balance first: a sequence with unbalanced fldChars (note bodies bypass
+    // extraction's balance pass) renders with the field machinery disarmed, so an
+    // open `instr` cannot blank everything after it.
+    const probe: FieldState = { stack: [], inert: false };
+    for (const child of children) {
+      if (isElement(child)) advanceFieldState(child, probe);
+    }
+    fields = { stack: [], inert: probe.stack.length > 0 };
+  }
 
   const closeTopList = (): void => {
     const top = openLists.pop();
@@ -833,7 +870,7 @@ function renderBlocks(ctx: RenderContext, children: readonly OoxmlNode[]): strin
         }
         case 'table':
           closeAllLists();
-          out += renderTable(ctx, child);
+          out += renderTable(ctx, child, fields);
           break;
         case 'contentControl': {
           const content = child.children.find((inner) => inner.kind === 'contentControlContent');
@@ -918,6 +955,8 @@ export function interopHtmlFromFragmentPackage(
   const body = documentPart.root.children.find((child) => child.kind === 'body');
   if (!body || !isElement(body)) return '';
 
+  const footnotesRoot = relatedPart(pkg, FOOTNOTES_REL, '/word/footnotes.xml');
+  const endnotesRoot = relatedPart(pkg, ENDNOTES_REL, '/word/endnotes.xml');
   const ctx: RenderContext = {
     pkg,
     styles: styleIndexOf(pkg),
@@ -928,11 +967,28 @@ export function interopHtmlFromFragmentPackage(
     imageBudget: { used: 0 },
     imageDataUris: new Map(),
     noteOrdinals: { footnote: new Map(), endnote: new Map() },
+    availableNotes: {
+      footnote: noteIdsOf(footnotesRoot, 'footnote'),
+      endnote: noteIdsOf(endnotesRoot, 'endnote'),
+    },
     noteBody: null,
   };
   return (
     renderBlocks(ctx, body.children) +
-    renderNoteList(ctx, 'footnote', relatedPart(pkg, FOOTNOTES_REL, '/word/footnotes.xml')) +
-    renderNoteList(ctx, 'endnote', relatedPart(pkg, ENDNOTES_REL, '/word/endnotes.xml'))
+    renderNoteList(ctx, 'footnote', footnotesRoot) +
+    renderNoteList(ctx, 'endnote', endnotesRoot)
   );
+}
+
+/** The note ids a notes part actually defines. */
+function noteIdsOf(root: OoxmlElement | null, kind: 'footnote' | 'endnote'): ReadonlySet<number> {
+  const ids = new Set<number>();
+  if (root === null) return ids;
+  for (const child of root.children) {
+    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
+    if (child.localName !== kind) continue;
+    const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
+    if (id !== undefined && /^[1-9]\d{0,4}$/.test(id)) ids.add(Number.parseInt(id, 10));
+  }
+  return ids;
 }

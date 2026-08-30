@@ -1,5 +1,6 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { MAX_NUMBERING_DEFINITIONS } from '../layout/numbering-index.ts';
 import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
 
 export interface HtmlNumberingIndex {
@@ -7,13 +8,16 @@ export interface HtmlNumberingIndex {
   readonly levelFormats: ReadonlyMap<string, ReadonlyMap<string, string>>;
   readonly levelStarts: ReadonlyMap<string, ReadonlyMap<string, number>>;
   readonly startOverrides: ReadonlyMap<string, number>;
+  /** `w:lvlOverride/w:lvl` replacement formats, keyed `numId:ilvl`. */
+  readonly formatOverrides: ReadonlyMap<string, string>;
   /** `w:numStyleLink` per abstract id: the numbering style holding the real levels. */
   readonly styleLinks: ReadonlyMap<string, string>;
 }
 
+/** Same 9999 clamp the layout lane's numbering index applies to `w:start`. */
 function boundedStart(raw: string | undefined): number | null {
   if (raw === undefined || !/^\d{1,5}$/.test(raw)) return null;
-  return Math.min(Math.max(Number.parseInt(raw, 10), 1), 32_767);
+  return Math.min(Math.max(Number.parseInt(raw, 10), 1), 9_999);
 }
 
 export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIndex {
@@ -21,11 +25,20 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
   const levelFormats = new Map<string, Map<string, string>>();
   const levelStarts = new Map<string, Map<string, number>>();
   const startOverrides = new Map<string, number>();
+  const formatOverrides = new Map<string, string>();
   const styleLinks = new Map<string, string>();
-  if (!root) return { numToAbstract, levelFormats, levelStarts, startOverrides, styleLinks };
+  if (!root) {
+    return {
+      numToAbstract,
+      levelFormats,
+      levelStarts,
+      startOverrides,
+      formatOverrides,
+      styleLinks,
+    };
+  }
 
-  // The same definition-count cap the layout lane's numbering index enforces.
-  let definitionsLeft = 4096;
+  let definitionsLeft = MAX_NUMBERING_DEFINITIONS;
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (definitionsLeft <= 0) break;
@@ -44,8 +57,17 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
           continue;
         }
         const ilvl = attributeValueOf(override, 'ilvl', WML_NAMESPACE_URI);
+        if (ilvl === undefined) continue;
         const start = boundedStart(wmlVal(wmlChild(override, 'startOverride')));
-        if (ilvl !== undefined && start !== null) startOverrides.set(`${numId}:${ilvl}`, start);
+        if (start !== null) startOverrides.set(`${numId}:${ilvl}`, start);
+        // A replacement `w:lvl` inside the override carries its own format/start.
+        const replacement = wmlChild(override, 'lvl');
+        if (replacement !== null) {
+          const format = wmlVal(wmlChild(replacement, 'numFmt'));
+          if (format !== undefined) formatOverrides.set(`${numId}:${ilvl}`, format);
+          const replacementStart = boundedStart(wmlVal(wmlChild(replacement, 'start')));
+          if (replacementStart !== null) startOverrides.set(`${numId}:${ilvl}`, replacementStart);
+        }
       }
       continue;
     }
@@ -74,5 +96,5 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
     levelFormats.set(abstractId, formats);
     levelStarts.set(abstractId, starts);
   }
-  return { numToAbstract, levelFormats, levelStarts, startOverrides, styleLinks };
+  return { numToAbstract, levelFormats, levelStarts, startOverrides, formatOverrides, styleLinks };
 }

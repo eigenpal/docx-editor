@@ -27,16 +27,16 @@ export function wordTableCellCss(
   rowIndex: number,
   rowCount: number,
   rowSpan: number,
-  cellIndex: number,
-  cellCount: number
+  firstGridColumn: boolean,
+  lastGridColumn: boolean
 ): string {
   const rules: string[] = [];
   const tcBorders = wmlChild(tcPr, 'tcBorders');
   const tableEdges = {
     top: rowIndex === 0 ? 'top' : 'insideH',
     bottom: rowIndex + rowSpan >= rowCount ? 'bottom' : 'insideH',
-    left: cellIndex === 0 ? 'left' : 'insideV',
-    right: cellIndex === cellCount - 1 ? 'right' : 'insideV',
+    left: firstGridColumn ? 'left' : 'insideV',
+    right: lastGridColumn ? 'right' : 'insideV',
   } as const;
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
     // An explicit cell `nil`/`none` SUPPRESSES the edge; only an absent cell border
