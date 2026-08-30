@@ -1,8 +1,8 @@
 /**
  * `@docx-editor.dev/fonts/google` — Google-hosted faces, fetched on demand.
  *
- * Nothing is bundled and nothing is fetched until a document turns out to name a family the
- * pinned catalog covers. Open a file using only Calibri and exactly one family is fetched.
+ * Nothing is fetched until a document turns out to name a family this module can answer.
+ * Open a file using only Calibri and exactly one family is fetched.
  *
  * Be deliberate about this: it makes OPENING A DOCUMENT perform network requests, which the
  * engine never does on its own. What keeps it safe is that a document-declared family is only
@@ -13,7 +13,7 @@
  * ```ts
  * import { googleFonts } from '@docx-editor.dev/fonts/google';
  *
- * const editor = createDocxEditor({ document: bytes, resolveFonts: googleFonts() });
+ * const editor = createDocxEditor({ document: bytes, fonts: googleFonts() });
  * ```
  *
  * @packageDocumentation
@@ -21,11 +21,16 @@
  */
 // @docx-editor.dev/fonts/google — Google-hosted faces, fetched on demand.
 //
-// `defaultFonts()` ships five families in the bundle and loads them whichever document
-// opens. `googleFonts()` inverts both halves: nothing is bundled, and nothing is fetched
-// until a document turns out to name a family the catalog covers. Open a file that uses
-// only Calibri and exactly one family is fetched; open one that uses none of the catalog
-// and no request is made at all.
+// `defaultFonts()` loads Word's five document-default families whichever document opens.
+// `googleFonts()` inverts that: nothing loads until a document turns out to name a family
+// this module can answer. Open a file that uses only Calibri and exactly one family is
+// fetched; open one that names nothing it covers and no request is made at all.
+//
+// Two things can answer a name. Most come from the pinned Google catalog, over the
+// network. A short list comes from the package's OWN bundled assets
+// (`PACKAGED_ONLY_FAMILIES`) because no catalog family is metric-compatible with them —
+// Century Gothic is the one, answered by TeX Gyre Adventor. That path reads the package's
+// own assets, so it makes no third-party request; it is not request-free.
 //
 // It is a `FontResolver`, so the editor calls it once per load with the families the file
 // declares. That is the part to be deliberate about: it makes OPENING A DOCUMENT perform
@@ -35,9 +40,12 @@
 //   - The catalog is generated, closed and pinned (`google-catalog.generated.ts`). A name
 //     is either in it or it is not; nothing is interpolated into a URL, so a crafted
 //     `w:rFonts` cannot point this at a host of its choosing.
-//   - Every URL is pinned to one immutable google/fonts commit and carries a baked
-//     `sha256:`. Bytes are trusted by CONTENT, and the engine's admission path re-derives
-//     the hash, so a swapped CDN asset fails there with a typed `hashMismatch`.
+//   - Every URL is pinned to an immutable google/fonts commit and carries a baked
+//     `sha256:`. Most faces share one commit; a family whose current upstream version is
+//     variable-only is pinned to the last commit that carried static instances, so the
+//     catalog records more than one revision. Bytes are trusted by CONTENT, and the
+//     engine's admission path re-derives the hash, so a swapped CDN asset fails there
+//     with a typed `hashMismatch`.
 //   - The editor caps the families it hands over (`MAX_RESOLVER_FAMILIES`), so a file
 //     declaring thousands of faces cannot fan this out into thousands of fetches.
 //
@@ -47,15 +55,60 @@
 //
 // Metric compatibility is the reason the substitution map is short. Carlito/Caladea/
 // Tinos/Cousine have the same advance widths as the Word faces they stand in for, so wrap
-// and pagination land where Word puts them. Anything else would be a guess that moves line
-// breaks, so it is left to the app's own `substitute` map rather than assumed here.
+// and pagination land where Word puts them. Century Gothic is answered from this package's
+// own bundled TeX Gyre Adventor, which is close rather than identical (within 1%).
+//
+// Anything else would be a guess that moves line breaks, so it is left to the app's own
+// `substitute` map rather than assumed here. A PANOSE-ranked substitute was tried and
+// removed: PANOSE states a CLASSIFICATION, never an advance width, so no threshold on it
+// bounds the width error — the ranking picked faces 22-24% wider than the family a
+// document named, which is worse than the fixed fallback it replaced.
 
+import {
+  FACES,
+  FAMILY_PLANS,
+  PACKAGED_ONLY_FAMILIES,
+  type WordDefaultFamily,
+} from './family-plans.ts';
 import {
   GOOGLE_FONTS_REVISION,
   GOOGLE_FONT_CATALOG,
   type GoogleFontFace,
 } from './google-catalog.generated.ts';
-import type { DefaultFontSource, DefaultFontSubstitution } from './index.ts';
+import { loadDefaultFonts } from './index.ts';
+import type {
+  DefaultFontSource,
+  DefaultFontSubstitution,
+  FontOriginRequest,
+  FontResolverMark,
+} from './index.ts';
+
+/**
+ * Word families the package ships bytes for that the catalog cannot serve, keyed by the
+ * case-folded name a document would write.
+ *
+ * Century Gothic is the concrete one: no google/fonts family is metric-compatible with
+ * it, while the packaged TeX Gyre Adventor lands within 1% of Word's own widths. Serving
+ * it from the bundle here is what makes `googleFonts()` the ON-DEMAND path for it, so
+ * `defaultFonts()` does not have to load ~709 KB of it for every document that never asks.
+ */
+const PACKAGED_ONLY_BY_NAME: ReadonlyMap<string, WordDefaultFamily> = new Map(
+  PACKAGED_ONLY_FAMILIES.map((family) => [family.toLowerCase(), family] as const)
+);
+
+/**
+ * Same registered symbol `packagedFonts` and the engine's `defineFontResolver` use, so
+ * `useDocxSource` can tell an on-demand resolver from a zero-argument loader. Spelled out
+ * rather than imported, to keep this package free of any dependency on the engine.
+ */
+const FONT_RESOLVER_BRAND: unique symbol = Symbol.for('docx-editor.dev/font-resolver') as never;
+
+/** The string half of the same mark; see `FontResolverMark` in the package entry. */
+const FONT_RESOLVER_MARK_KEY = 'docx-editor.dev/font-resolver';
+
+/** Case-folded face identity, matching how the engine keys `resolvedFaces`. */
+const faceKey = (family: string, weight: number, style: string): string =>
+  `${family.trim().toLowerCase()} ${weight} ${style}`;
 
 export { GOOGLE_FONTS_REVISION, GOOGLE_FONT_CATALOG, type GoogleFontFace };
 
@@ -80,15 +133,20 @@ export const GOOGLE_METRIC_SUBSTITUTES: Readonly<Record<string, string>> = Objec
 });
 
 /**
- * One catalogued face that did not arrive. Non-fatal: the resolver returns whatever else
- * succeeded, and the affected family falls back to the engine's fixed measurement.
+ * One face that did not arrive. Non-fatal: the resolver returns whatever else succeeded,
+ * and the affected family falls back to the engine's fixed measurement.
  *
  * A `hashMismatch` does NOT appear here — bytes are trusted by content at the engine's
  * admission path, which rejects them after this resolver has handed them over.
  */
 export interface GoogleFontLoadFailure {
-  /** The family as the DOCUMENT named it, which may be the substituted-from name. */
+  /**
+   * The family of the face that failed to load — the SERVING name ("Carlito", "TeX Gyre
+   * Adventor"), not the name the document wrote. A document naming Calibri sees "Carlito"
+   * here, because that is the file that did not arrive.
+   */
   readonly family: string;
+  /** The pinned catalog URL, or the asset filename for a face served from the bundle. */
   readonly url: string;
   readonly diagnostic: string;
 }
@@ -100,8 +158,9 @@ export interface GoogleFontLoadFailure {
  */
 export interface GoogleFontsOptions {
   /**
-   * Narrow what may ever be fetched, by catalog family name. Omitted, any catalogued
-   * family a document names is fair game; set it to run against a closed short list.
+   * Narrow what may ever load, by the name of the face that would SERVE the request
+   * ("Carlito", "TeX Gyre Adventor"). Omitted, any family this module can answer is fair
+   * game; set it to run against a closed short list.
    */
   readonly allow?: readonly string[];
   /**
@@ -115,6 +174,14 @@ export interface GoogleFontsOptions {
   /** Per-face failures. Defaults to a console warning; pass a handler to route them. */
   readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
 }
+
+/**
+ * What {@link googleFonts} returns: a marked resolver over the pinned catalog.
+ *
+ * @public
+ */
+export type GoogleFontsResolver = ((request: FontOriginRequest) => Promise<GoogleFontsFragment>) &
+  FontResolverMark;
 
 /** What one resolver call produced, for callers that want it without the editor. */
 export interface GoogleFontsFragment {
@@ -181,21 +248,21 @@ async function fetchFace(face: GoogleFontFace, fetcher: typeof fetch): Promise<U
 
 /**
  * A {@link FontResolver} that serves the document's declared families from the pinned
- * Google catalog, fetching only what that document turned out to need.
+ * Google catalog — plus the package's own bundled faces for families the catalog has no
+ * metric-compatible answer for — loading only what that document turned out to need.
  *
  * ```ts
  * <DocxEditor.Root fonts={googleFonts()} />
  * ```
  *
+ * Same call shape as `packagedFonts()` from `@docx-editor.dev/fonts`, so the two compose
+ * by sitting next to each other: `useFonts(packagedFonts(), googleFonts())` serves the
+ * bundled faces first and reaches the catalog only for what they do not cover.
+ *
  * Compose it with your own bytes by wrapping it — the resolver is an ordinary async
  * function of the families, so a wrapper can merge fragments before returning.
  */
-export function googleFonts(
-  options: GoogleFontsOptions = {}
-): (request: {
-  readonly families: readonly string[];
-  readonly defaultFamily: string;
-}) => Promise<GoogleFontsFragment> {
+export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolver {
   const fetcher = options.fetcher ?? fetch;
   /**
    * Document family (case-folded) -> catalog family.
@@ -218,19 +285,62 @@ export function googleFonts(
     ? new Set(options.allow.map((family) => family.toLowerCase()))
     : null;
 
-  return async function resolveGoogleFonts(request) {
+  async function resolveGoogleFonts(request: FontOriginRequest): Promise<GoogleFontsFragment> {
+    // Faces an earlier origin can already PAINT. Skipping them is not only bytes: a face
+    // the composition would drop anyway is a CDN request that tells a third party which
+    // families this document uses, for nothing at all.
+    const already = new Set(
+      (request.resolvedFaces ?? []).map((face) => faceKey(face.family, face.weight, face.style))
+    );
     // The default family counts as declared: a document whose runs name no font still
     // renders in one, and leaving it out would fetch nothing for a file that is entirely
     // default-styled.
     const wanted = new Map<string, readonly GoogleFontFace[]>();
     const substitutions: DefaultFontSubstitution[] = [];
     const failures: GoogleFontLoadFailure[] = [];
+    /** Declared spelling -> the packaged Word family whose bundled bytes answer it. */
+    const packaged = new Map<string, WordDefaultFamily>();
 
     for (const declared of [request.defaultFamily, ...request.families]) {
-      const target = substitutes.get(declared.toLowerCase()) ?? declared;
-      const faces = catalogByFamily.get(target.toLowerCase());
+      const target = substitutes.get(declared.toLowerCase());
+      // The bundled answer is a DEFAULT, so it is checked after the substitution map and
+      // not before it. Checking it first made a packaged family the one name `substitute`
+      // could not override — silently, and worse under `allow`, where naming the override
+      // target excluded the bundled face too and the family resolved to nothing at all.
+      const bundled =
+        target === undefined ? PACKAGED_ONLY_BY_NAME.get(declared.toLowerCase()) : undefined;
+      if (bundled) {
+        const plan = FAMILY_PLANS.get(bundled);
+        // EVERY packaged face, or none — the same rule the catalog path below applies, and
+        // for the same reason: this reads a family whole, so skipping one whose regular is
+        // covered but whose bold is not would leave the bold with no bytes at all.
+        const bundledCovered =
+          plan !== undefined &&
+          FACES.every(
+            (face) =>
+              already.has(faceKey(declared, face.weight, face.style)) ||
+              already.has(faceKey(plan.substitute, face.weight, face.style))
+          );
+        if (plan && (!allowed || allowed.has(plan.substitute.toLowerCase())) && !bundledCovered) {
+          packaged.set(declared, bundled);
+        }
+        continue;
+      }
+      const faces = catalogByFamily.get((target ?? declared).toLowerCase());
       if (!faces) continue;
-      if (allowed && !allowed.has(target.toLowerCase())) continue;
+      if (allowed && !allowed.has(faces[0]!.family.toLowerCase())) continue;
+      // EVERY catalogued face, or none. A family is fetched whole, so skipping one whose
+      // regular is covered but whose bold is not would leave the bold with neither bytes
+      // nor a substitution. Each face counts as covered under the name the document wrote
+      // OR under the catalog family this would fetch, because an earlier origin may have
+      // reported either — `packagedFonts()` reports both, a raw byte fragment only the
+      // face it supplied.
+      const covered = faces.every(
+        (face) =>
+          already.has(faceKey(declared, face.weight, face.style)) ||
+          already.has(faceKey(face.family, face.weight, face.style))
+      );
+      if (covered) continue;
       wanted.set(faces[0]!.family, faces);
       // Only when the document's own name differs from the face being loaded: a run
       // saying "Carlito" needs the bytes, not a Carlito -> Carlito redirect.
@@ -251,8 +361,35 @@ export function googleFonts(
     }
 
     const sources: DefaultFontSource[] = [];
-    await Promise.all(
-      [...wanted.values()].flat().map(async (face) => {
+    const packagedJob = async (): Promise<void> => {
+      if (packaged.size === 0) return;
+      const fragment = await loadDefaultFonts({
+        families: [...new Set(packaged.values())],
+        fetcher,
+      });
+      sources.push(...fragment.sources);
+      // Re-keyed onto the DOCUMENT's spelling for the same reason the catalog path does
+      // it: the painter finds a face's alias under the name the run actually wrote.
+      for (const [declared, family] of packaged) {
+        for (const entry of fragment.substitutions) {
+          if (entry.from.family !== family) continue;
+          substitutions.push({ ...entry, from: { ...entry.from, family: declared } });
+        }
+      }
+      for (const failure of fragment.failures) {
+        const record = {
+          family: failure.family,
+          url: failure.file,
+          diagnostic: failure.diagnostic,
+        };
+        failures.push(record);
+        if (options.onFailure) options.onFailure(record);
+        else console.warn(`[fonts] ${record.family} (${record.url}): ${record.diagnostic}`);
+      }
+    };
+    await Promise.all([
+      packagedJob(),
+      ...[...wanted.values()].flat().map(async (face) => {
         try {
           const bytes = await fetchFace(face, fetcher);
           sources.push({
@@ -272,12 +409,17 @@ export function googleFonts(
           if (options.onFailure) options.onFailure(failure);
           else console.warn(`[fonts] ${face.family} (${face.url}): ${failure.diagnostic}`);
         }
-      })
-    );
+      }),
+    ]);
 
     // Deterministic regardless of which response landed first, so the same document
     // composes to the same configuration fingerprint on every load.
     sources.sort((left, right) => left.id.localeCompare(right.id));
     return { sources, substitutions, failures };
-  };
+  }
+
+  const descriptor = { value: true, enumerable: false, configurable: true } as const;
+  Object.defineProperty(resolveGoogleFonts, FONT_RESOLVER_BRAND, descriptor);
+  Object.defineProperty(resolveGoogleFonts, FONT_RESOLVER_MARK_KEY, descriptor);
+  return resolveGoogleFonts as typeof resolveGoogleFonts & FontResolverMark;
 }

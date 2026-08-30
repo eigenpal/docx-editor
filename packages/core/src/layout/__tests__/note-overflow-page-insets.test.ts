@@ -312,11 +312,13 @@ describe('note overflow sheets under even/odd headers', () => {
    * the variant — and with it the content box — of the wrong page number.
    */
   /**
-   * `footnoteLines` is tuned to drain exactly ONE sheet. An odd drain count is what makes the
-   * bug visible: an even one shifts every endnote sheet by an even number of pages, and
-   * even/odd parity survives that unchanged.
+   * `footnoteLines` is tuned to drain an ODD number of sheets, which is what makes the bug
+   * visible: an even count shifts every endnote sheet by an even number of pages, and
+   * even/odd parity survives that unchanged. The count depends on how much of the note the
+   * reference page itself hosts (its reserve keeps the referencing line), so retune here
+   * when reserve sizing changes.
    */
-  function parityDoc(footnoteLines = 10): Uint8Array {
+  function parityDoc(footnoteLines = 20): Uint8Array {
     const footnoteParas = Array.from(
       { length: footnoteLines },
       (_, i) => `<w:p><w:r><w:t>Footnote ${i} ${'x'.repeat(60)}</w:t></w:r></w:p>`

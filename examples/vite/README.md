@@ -2,6 +2,9 @@
 
 This Vite and React app shows the editor composition API with custom chrome.
 
+The demo combines `packagedFonts()` with `googleFonts()`. Packaged substitutes
+load first. A document can cause CDN requests for other declared font families.
+
 ## Run the example
 
 From the repository root, run:
@@ -46,8 +49,11 @@ function Editor({ file }: { file: ArrayBuffer }) {
 ```
 
 `document` takes an `ArrayBuffer`, a `Uint8Array`, or an existing
-`DocumentHandle`. `fonts` is optional: omit it and the engine resolves faces
-from the document's own embedded fonts.
+`DocumentHandle`. The editor loads embedded fonts without a resolver.
+
+Pass usable font bytes for Word-accurate measurement. Without them, fallback
+measurement does not guarantee Word-compatible layout. Use `packagedFonts()`
+for local substitutes. `googleFonts()` opts your application into CDN requests.
 
 ## Build custom chrome
 

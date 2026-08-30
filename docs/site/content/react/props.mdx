@@ -119,33 +119,44 @@ Use `useFontFamily()` to read that list.
 | `fonts`       | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | None    | Font bytes or a resolver called for each load.                          |
 | `onFontError` | `(error: EditorFontError) => void`                               | None    | Reports failures such as corrupt data, HTTP errors, or hash mismatches. |
 
-Use `loadDefaultFonts()` to load the default font set:
+Use `packagedFonts()` for the Word default substitutes.
+The editor calls it once per load with the families that document declares.
+It loads a family when the document names it, or when that family is the
+document's default face, so a document pays for what it declares instead of all
+20 eager faces. Nothing is fetched from a third party.
 
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+The default face counts because a run that names no font still has to be measured
+in one. That face is Calibri, so Carlito loads for every document.
 
-const fonts = await loadDefaultFonts();
-
-<DocxEditor document={bytes} fonts={fonts} onFontError={(error) => report(error.code)} />;
-```
-
-The editor samples `fonts` at mount.
-Changing its identity remounts the editor.
-
-You can pass a resolver function.
-The editor calls it once per load with the declared font families.
-Use `useFonts` to keep the resolver identity stable:
+Wrap it in `useFonts` to keep one resolver identity:
 
 ```tsx
 import { DocxEditor, useFonts } from '@docx-editor.dev/react';
-import { googleFonts } from '@docx-editor.dev/fonts/google';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
 function Editor({ bytes }: { bytes: Uint8Array }) {
-  const fonts = useFonts(googleFonts());
-  return <DocxEditor document={bytes} fonts={fonts} />;
+  const fonts = useFonts(packagedFonts());
+  return <DocxEditor document={bytes} fonts={fonts} onFontError={(error) => report(error.code)} />;
 }
 ```
+
+Add an origin by adding an argument. Arguments compose first-wins:
+
+```tsx
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+
+const fonts = useFonts(packagedFonts(), googleFonts());
+```
+
+The editor samples `fonts` at mount.
+Changing its identity remounts the editor, which is why an inline resolver needs
+`useFonts`.
+
+`packagedFonts()` resolves after the document is parsed, so the first layout uses
+fixed measurement and the editor re-paginates when the faces arrive. Edits made in
+between survive that; the undo history behind them does not. For a document that
+must paginate correctly on the first pass, use `defaultFonts()` instead. For more
+information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
 
 A resolver can make network requests while the editor opens a document.
 The editor does not fetch external fonts without a configured resolver.

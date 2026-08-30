@@ -119,6 +119,10 @@ export interface TreeDocxSessionView {
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
+    applyTreeOpsAtomic(groups: readonly {
+        readonly ops: readonly TreeDocOp[];
+        readonly scope: StoryScope;
+    }[], options?: TreeApplyOptions): TreeApplyResult;
     // (undocumented)
     beginComposition(scope?: StoryScope): void;
     bodyText(): string;
@@ -174,6 +178,7 @@ export interface TreeDocxSessionView {
         readonly target: string;
     } | null;
     removeCustomNode(controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
+    renderedFontFamilies(): readonly string[];
     rendersText(): boolean;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
     replyToComment(parentCommentId: string | null, anchor: {

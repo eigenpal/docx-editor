@@ -20,6 +20,7 @@ import {
   parseTocInstruction,
   planTocEntries,
   readViewSettings,
+  relationshipTargetIn,
   resolveTocRowHeadings,
   validateTreeOp,
   type DetectedToc,
@@ -54,6 +55,8 @@ import {
   contentControlRecordsInPart,
   contentControlsInLayout,
   layoutSemanticDocument,
+  pageRefPageNumbersFromLayout,
+  planRefFieldResultRefresh,
   resolveNumberingLevel,
   positionPastDeletion,
   withNumberingStyleLinks,
@@ -71,6 +74,7 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
+import { planNoteRefFieldResultRefreshes } from '../layout/field-ref-refresh.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   type RevisionDisplayMode,
@@ -847,17 +851,26 @@ export function mountPaginatedSurface(
    * produces the sanitized projection; everything downstream — paint, click routing, the
    * popover, the clipboard — consumes only that.
    */
-  const projectLink = (link: Parameters<typeof hyperlinkTargetOf>[0]) => {
-    const target = hyperlinkTargetOf(link, (id) => session.relationshipTarget(id));
-    if (link.kind === 'textValue') return null;
-    return {
-      id: link.id,
-      kind: target.kind,
-      href: target.href,
-      ...(target.anchor !== undefined ? { anchor: target.anchor } : {}),
-      ...(target.tooltip !== undefined ? { tooltip: target.tooltip } : {}),
+  const projectLinkResolvedBy =
+    (resolveRel: Parameters<typeof hyperlinkTargetOf>[1]) =>
+    (link: Parameters<typeof hyperlinkTargetOf>[0]) => {
+      if (link.kind === 'textValue') return null;
+      const target = hyperlinkTargetOf(link, resolveRel);
+      return {
+        id: link.id,
+        kind: target.kind,
+        href: target.href,
+        ...(target.anchor !== undefined ? { anchor: target.anchor } : {}),
+        ...(target.tooltip !== undefined ? { tooltip: target.tooltip } : {}),
+      };
     };
-  };
+  const projectLink = projectLinkResolvedBy((id) => session.relationshipTarget(id));
+  // The SAME boundary scoped to one notes part: a `w:hyperlink` in `footnotes.xml` or
+  // `endnotes.xml` declares its `r:id` in that part's own `.rels`, so resolving through the
+  // body's relationships either found nothing or — when both parts assign one id — the
+  // body's target.
+  const projectLinkForPart = (partName: string) =>
+    projectLinkResolvedBy((id) => relationshipTargetIn(session.currentPackage(), partName, id));
 
   /**
    * The SAME boundary for HYPERLINK fields: the raw instruction target crosses
@@ -1197,6 +1210,7 @@ export function mountPaginatedSurface(
       drawingTokenForParagraphForPart: (partName, paragraph) =>
         drawingBundle.drawingTokenForParagraph(paragraph, partName),
       drawingLayoutEpochForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
+      projectLinkForPart,
     });
     return layoutSemanticDocument(session.part(), revision, {
       measurer,
@@ -3739,7 +3753,7 @@ export function mountPaginatedSurface(
         });
       }
     }
-    const byKey = keyedRangeRects(currentLayout, ranges, pages);
+    const byKey = keyedRangeRects(currentLayout, ranges, pages, measurer);
     const rects: (OverlayRect & { key: string })[] = [];
     for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });
     commentRectCache = { layout: currentLayout, revision, pages, rects };
@@ -4123,8 +4137,8 @@ export function mountPaginatedSurface(
     const rects = cellSelection
       ? cellSelectionRects(currentLayout, cellSelection.cellIds)
       : retainedSelection
-        ? selectionRects(currentLayout, retainedSelection, paragraphOrder())
-        : selectionMarkRects(currentLayout, selection, paragraphOrder());
+        ? selectionRects(currentLayout, retainedSelection, paragraphOrder(), measurer)
+        : selectionMarkRects(currentLayout, selection, paragraphOrder(), measurer);
     paintSelectionOverlay(
       overlayLayer,
       currentLayout,
@@ -4167,6 +4181,7 @@ export function mountPaginatedSurface(
       colorForAuthor: remotePresenceColor,
       declaredColorFor: declaredPresenceColor,
       labelHost: remoteCaretLabelHost,
+      measurer,
     });
   }
 
@@ -4481,6 +4496,48 @@ export function mountPaginatedSurface(
     }
 
     return true;
+  }
+
+  /**
+   * Rewrite stale REF field results in the body and note stories, so a save exports what
+   * the pages paint. Planning is read-only — the note parts are read from the package,
+   * never through `partFor`, which would durably open a notes store — so a document whose
+   * results are already fresh commits no transaction, bumps no revision and adds no undo
+   * entry. Every stale story commits together as ONE transaction and ONE undo unit
+   * (`applyTreeOpsAtomic`): a refusal anywhere rolls the whole refresh back, so the saved
+   * file can never mix refreshed and stale values, and a single undo restores the exact
+   * pre-save document. Viewing and a non-editable session write nothing.
+   *
+   * COLLABORATIVE SESSIONS SKIP THE REFRESH: the collaboration gate admits only body
+   * insert/delete text ops, so the rewrite cannot journal to peers. The save then exports
+   * the cached results (the pre-refresh behavior; Word refreshes fields on open), and the
+   * `false` return says so rather than claiming freshness.
+   */
+  function refreshRefFieldResults(): boolean {
+    if (editingMode === 'view' || !session.editable) return true;
+    if (collaborationSession) return false;
+    const refreshOptions = {
+      package: session.currentPackage(),
+      styleCascade: styleCascade(),
+      numberingIndex: numberingIndex(),
+      displayMode: revisionDisplayMode(),
+      // PAGEREF results refresh from the CURRENT finalized pages, through the same index
+      // finalize substitution reads, so the saved numbers are the painted ones. Body plan
+      // only — the note planner ignores it, since note-story PAGEREF fields paint their
+      // cache.
+      pageRefPageNumberOf: pageRefPageNumbersFromLayout(surface.layout()),
+    };
+    // Both plans read before the write lands, and they share one memoized resolution
+    // context — the note values are the ones the pages painted, per calibration verdict.
+    const bodyOp = planRefFieldResultRefresh(session.part(), refreshOptions);
+    const notePlans = planNoteRefFieldResultRefreshes(session.part(), refreshOptions);
+    if (!bodyOp && notePlans.length === 0) return true;
+    const groups: { scope: StoryScope; ops: readonly TreeDocOp[] }[] = [];
+    if (bodyOp) groups.push({ scope: BODY_STORY, ops: [bodyOp] });
+    for (const plan of notePlans) {
+      groups.push({ scope: { kind: 'notesPart', noteKind: plan.noteKind }, ops: [plan.op] });
+    }
+    return session.applyTreeOpsAtomic(groups).committed;
   }
 
   // Which range a destructive or replacing gesture acts on, and where content replacing it
@@ -5144,6 +5201,7 @@ export function mountPaginatedSurface(
     insertToc,
     canRefreshToc,
     refreshToc,
+    refreshRefFieldResults,
     isInsideToc: (paragraphId) =>
       detectBodyTocs(session.part()).some(
         (toc) =>

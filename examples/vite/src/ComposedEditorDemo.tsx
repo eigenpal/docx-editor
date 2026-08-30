@@ -30,7 +30,8 @@ import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
 import { CustomNodeContextMenu, DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { useWebrtcCollaboration } from '@docx-editor.dev/pro/react/webrtc';
 import { blankDocumentBytes } from '@docx-editor.dev/core/editor';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { SourceLink } from '../../shared/SourceLink';
@@ -607,20 +608,37 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const [citationForm, setCitationForm] = useState<CitationFormState | null>(null);
   const closeCitationForm = useCallback(() => setCitationForm(null), []);
 
-  // The whole boot in ONE call: fetch the fixture, load Word's default substitute faces
+  // The whole boot in ONE call: fetch the fixture, serve Word's default substitute faces
   // (Carlito for Calibri, Liberation Serif for Times, …), register them for paint, compose
-  // the configuration, and cancel both if this unmounts.
+  // the configuration, and cancel the fetch if this unmounts. Only the fetch — on the
+  // on-demand path there is no font work in flight to cancel, because none starts until
+  // the engine has parsed the document.
   //
-  // The hook holds `document` back until fonts SETTLE — resolved or failed — because layout
-  // measures with them: handing the editor bytes first paginates the whole document on the
-  // fixed fallback and then re-paginates, which reads as the text jumping. A font failure
-  // still releases it, and the editor opens on the fixed measurer, the documented
-  // degradation.
+  // Both resolvers resolve ON DEMAND: the engine calls them after the parse with the
+  // families this fixture declares. A family loads when the document names it, or when it
+  // is the document's default face — Calibri here, so Carlito comes along whatever the
+  // fixture says. What it avoids is loading all five eager families up front.
+  //
+  // ORDER IS PRECEDENCE, and this direction is the point. `packagedFonts()` answers first
+  // from bytes inside `@docx-editor.dev/fonts`, so a document naming Calibri never touches
+  // the network. `googleFonts()` sees what the packaged origin already covers and fetches
+  // only the rest, so composing the two never downloads the same face twice. Reverse them
+  // and a local byte would lose to a CDN round trip.
+  //
+  // The catalog IS a third party: naming a family the bundle does not carry costs a
+  // request to jsdelivr. The family name never becomes part of that URL — it is a lookup
+  // key against a closed, commit-pinned catalog — and a failed fetch degrades to the fixed
+  // measurer rather than breaking the document.
+  //
+  // The trade is one reflow. Nothing can know the families before the parse, so the
+  // document opens on the fixed measurer and re-paginates when the faces land; the eager
+  // `{ fonts: defaultFonts }` still holds `document` back until fonts settle, at the cost
+  // of all 20 eager faces on every document.
   const {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
+  } = useDocxSource(fixtureUrl, { fonts: [packagedFonts(), googleFonts()] });
 
   const activeDocument = collaboration.document ?? bytes;
 

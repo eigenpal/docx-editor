@@ -960,8 +960,8 @@ export function spanOffsetX(
   const length = span.range.end - span.range.start;
   if (length <= 0) return span.box.x;
   const within = Math.max(0, Math.min(offset - span.range.start, length));
-  // Layout-published cluster edges win: they are the authority task 13.5 carries onto the
-  // span so caret and hit-test never re-derive a prefix that can disagree with the box.
+  // Published cluster edges win WHEN PRESENT (a producer may attach them); layout itself
+  // measures prefixes on demand instead of publishing eager per-character arrays.
   const edges = span.caretEdges;
   if (edges && within < edges.length) return span.box.x + edges[within]!;
   // Layout-owned advances (tabs, projected fields): always use the published box. Measuring

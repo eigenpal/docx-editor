@@ -15,6 +15,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import type { HeaderFooterStoryRecord } from '../../layout/semantic-records.ts';
+import { framedTokenJoin } from '../../layout/layout-cache.ts';
 import {
   CT_NS,
   DRAWING_NS,
@@ -172,15 +173,21 @@ describe('header/footer picture resources reach the page', () => {
     };
     // The clip drops the picture's fragment, so no laid-out record carries it...
     expect(textboxStoryDrawingKinds(surface.layout().pages[0]!.header)).toEqual([]);
-    // ...but the clipped-resource token still names its pending resource.
-    expect(clippedTokenOf()).toContain('pending:');
+    // ...but the clipped-resource token still names its pending resource. Tokens are
+    // length-framed, so the assertion targets the framed (kind, resource key) pair — a
+    // bare substring like 'pending' could also match a key that contains the word.
+    const resourceKey = 'embed:/word/header1.xml:rIdImg';
+    expect(clippedTokenOf()).toContain(framedTokenJoin(['pending', resourceKey]));
     const before = surface.layout().pages[0]!;
     release();
     await settle();
     // The settle rebuilt the pages: the clipped token moved the furniture context, so the
     // unchanged-pass early exit could not return `before` by identity.
     expect(surface.layout().pages[0]!).not.toBe(before);
-    expect(clippedTokenOf()).toContain('ready:');
+    // The ready resource re-keys under its content identity, so only the framed kind
+    // marker is stable to assert on.
+    expect(clippedTokenOf()).toContain(framedTokenJoin(['ready']));
+    expect(clippedTokenOf()).not.toContain(framedTokenJoin(['pending', resourceKey]));
     surface.destroy();
     container.remove();
   });

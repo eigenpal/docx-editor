@@ -10,8 +10,10 @@
 //   1. SYMBOL — synthesized glyph wins over any stale cached text.
 //   2. legacy form field — checkbox from ffData state, dropdown from the selected entry.
 //   3. allowlisted PAGE-family — live value from the page context.
-//   4. cached result — a non-empty cache is what Word last painted; it wins over synthesis.
-//   5. empty cache only (and no hidden-but-present result): a document-property value, else a
+//   4. REF — the value resolved from the bookmark target wins over the stale cache; an
+//      unresolvable reference falls through to it instead.
+//   5. cached result — a non-empty cache is what Word last painted; it wins over synthesis.
+//   6. empty cache only (and no hidden-but-present result): a document-property value, else a
 //      MACROBUTTON / GOTOBUTTON display.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
@@ -21,12 +23,14 @@ import { formFieldResult } from './field-form.ts';
 import {
   numericPictureApplies,
   pageFieldPlaceholder,
+  PAGE_FIELD_PLACEHOLDER,
   projectPageFieldValue,
   type BodyPageFieldContext,
   type FieldPageContext,
 } from './field-page-furniture.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
 import type { PendingFieldProjection } from './field-pieces.ts';
+import type { PageRefFieldProjection, RefFieldContext } from './field-ref.ts';
 import { symbolFieldGlyph } from './field-symbol.ts';
 import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 
@@ -45,6 +49,12 @@ export interface AtomicFieldSynthesis {
     /** The field's `\#` numeric picture, carried to the substitute pass. */
     readonly picture?: string;
   };
+  /**
+   * Present when this is a BODY `PAGEREF`: {@link text} is the cached result (or the
+   * placeholder digit for an empty cache) and document finalize substitutes the number of
+   * the page the resolved target lands on. The caller carries this onto the span marker.
+   */
+  readonly pageRefField?: PageRefFieldProjection;
 }
 
 /** Document-global inputs the synthesis reads, none of them per-run. */
@@ -58,6 +68,11 @@ export interface AtomicSynthesisContext {
    * which keep their live path or deferral — a placeholder there would never be substituted.
    */
   readonly bodyPageFields?: BodyPageFieldContext | false;
+  /**
+   * The story's resolved REF inputs (bookmark targets + numbering), or absent for stories
+   * that keep REF fields on their cached results (headers/footers, notes, text boxes).
+   */
+  readonly refFields?: RefFieldContext;
 }
 
 /**
@@ -86,6 +101,52 @@ export function synthesizeAtomicField(
       props: pending.props,
       style: pending.style,
     };
+  }
+  // A REF resolves live from its bookmark target and the resolved numbering — the cached
+  // result is exactly what goes stale after a renumbering edit, so here the live value wins
+  // over a non-empty cache. Gated per field (by begin node id) on the calibration verdict:
+  // a field whose computed value never matched its authored cache stays on that cache, and
+  // an unresolvable reference falls through to it too — never to the raw instruction. The
+  // result-run style captured off the cache keeps the field's formatting.
+  if (pending.refSpec && ctx.refFields) {
+    const value = ctx.refFields.liveValueOf(pending.beginId, pending.refSpec);
+    if (value !== null) return { text: value, props: pending.props, style: pending.style };
+  }
+  // A BODY PAGEREF defers to document finalize the way a body PAGE does: the value is a
+  // property of pagination, so this paints the cached result — the width every value it can
+  // be replaced by usually shares, since TOC caches are page numbers — and marks the span
+  // with the resolved target. Empty cache paints the placeholder digit (gated on a result
+  // the file did not hide, like every synthesis). Gated on `bodyPageFields` because notes
+  // and text boxes have no substitute pass, and furniture keeps its cache (its projector
+  // knows its own page, not the target's).
+  if (pending.refSpec && ctx.refFields?.pageRefProjectionOf && ctx.bodyPageFields) {
+    const projection = ctx.refFields.pageRefProjectionOf(pending.beginId, pending.refSpec);
+    if (projection) {
+      if (pending.cachedText.length > 0) {
+        return {
+          text: pending.cachedText,
+          props: pending.props,
+          style: pending.style,
+          pageRefField: projection,
+        };
+      }
+      if (!pending.sawResultContent) {
+        return {
+          text: PAGE_FIELD_PLACEHOLDER,
+          props: pending.props,
+          style: pending.style,
+          pageRefField: projection,
+        };
+      }
+    }
+  }
+  // An AUTONUM-family field has no separator and no cached result — Word computes the number
+  // at display time and never stores it — so the synthesized sequential value is its only
+  // display, and it wins over whatever stray cache a producer wrote. An anchor the scan never
+  // saw paints nothing, the field's historical rendering.
+  if (pending.autonumSpec && ctx.refFields?.autonumValueOf) {
+    const value = ctx.refFields.autonumValueOf(pending.beginId);
+    if (value !== null) return { text: value, props: pending.props, style: pending.style };
   }
   // A non-empty cached result is what Word last painted; it wins over synthesis.
   if (pending.cachedText.length > 0) {

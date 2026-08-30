@@ -13,7 +13,7 @@ const assetsDir = join(root, 'assets');
 const outPath = join(root, 'src', 'manifest.generated.ts');
 
 const files = readdirSync(assetsDir)
-  .filter((name) => name.endsWith('.ttf'))
+  .filter((name) => name.endsWith('.ttf') || name.endsWith('.otf'))
   .sort();
 
 const entries = files.map((name) => {

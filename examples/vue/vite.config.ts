@@ -85,6 +85,15 @@ export default defineConfig({
             find: /^@docx-editor\.dev\/vue$/,
             replacement: path.join(monorepoRoot, 'packages/vue/src/index.ts'),
           },
+          // `packages/vue/src/styles/editor.css` imports core's stylesheet by package
+          // specifier, which the export map points at `dist/`. Without this the demo
+          // cannot build until `build:packages` has run, so a source-only check fails on
+          // a clean checkout. The React demo sidesteps it by importing core's stylesheet
+          // from source with a relative path in its own `styles.css`.
+          {
+            find: '@docx-editor.dev/core/styles/editor.css',
+            replacement: path.join(monorepoRoot, 'packages/core/src/styles/editor.css'),
+          },
           {
             find: '@docx-editor.dev/core/editor',
             replacement: path.join(monorepoRoot, 'packages/core/src/editor/index.ts'),
@@ -116,6 +125,13 @@ export default defineConfig({
           {
             find: '@docx-editor.dev/pro',
             replacement: path.join(monorepoRoot, 'packages/pro/src/index.ts'),
+          },
+          // Before the bare `fonts` entry: matching is prefix-based, so the shorter find
+          // would rewrite `@docx-editor.dev/fonts/google` to `…/src/index.ts/google` and
+          // fail with "Not a directory". The React config carries the same pair.
+          {
+            find: '@docx-editor.dev/fonts/google',
+            replacement: path.join(monorepoRoot, 'packages/fonts/src/google-fonts.ts'),
           },
           {
             find: '@docx-editor.dev/fonts',

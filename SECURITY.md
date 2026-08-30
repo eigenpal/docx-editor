@@ -1,16 +1,19 @@
-# Security Policy
+# Security policy
 
-## Supported Versions
+## Supported versions
 
-  | Version      | Supported          |
-  | ------------ | ------------------ |
-  | 1.x (`main`) | :white_check_mark: |
-  | 0.x          | :x:                |
+| Version | Supported |
+| ------- | --------- |
+| 2.x     | Yes       |
+| 1.x     | No        |
+| 0.x     | No        |
 
-The 1.x version (`main`) is actively supported. 0.x is no longer maintained, please upgrade.
+Upgrade to 2.x before you report an issue that affects an older version.
 
-## Reporting a Vulnerability
+## Report a vulnerability
 
-Report vulnerabilities privately via [GitHub Security Advisories](https://github.com/eigenpal/docx-editor/security/advisories/new). Please do not open a public issue.
+Use a [GitHub Security Advisory](https://github.com/eigenpal/docx-editor/security/advisories/new)
+to report a vulnerability. Do not open a public issue.
 
-We aim to acknowledge reports within 5 business days and will keep you updated on the fix and disclosure timeline.
+We aim to acknowledge reports within five business days. We will provide updates
+about the fix and disclosure timeline.

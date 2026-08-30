@@ -20,6 +20,8 @@ import {
   namespaceIdOf,
   namespaceUriOf,
   packAttributeValue,
+  parseAttributeMapKey,
+  parseBindingMapKey,
   unpackAttributeValue,
   type EncodedAttribute,
   type EncodedBinding,
@@ -144,4 +146,53 @@ export function removeIndexedBinding(
   if (!bucket) return;
   bucket.delete(prefix);
   if (bucket.size === 0) index.delete(logicalId);
+}
+
+/** Apply one attribute-map event to the derived index. Peer-controlled keys are skipped. */
+export function applyAttributeMapEvent(
+  schema: PackageSchema,
+  index: AttributeIndex,
+  event: import('yjs').YMapEvent<string>
+): void {
+  for (const [key, change] of event.changes.keys) {
+    const parsed = parseAttributeMapKey(String(key));
+    if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.localName)) {
+      continue;
+    }
+    if (change.action === 'delete') {
+      removeIndexedAttribute(index, parsed.logicalId, parsed.namespaceId, parsed.localName);
+      continue;
+    }
+    const packed = schema.attributes.get(String(key));
+    if (typeof packed !== 'string') continue;
+    upsertIndexedAttribute(
+      schema,
+      index,
+      parsed.logicalId,
+      parsed.namespaceId,
+      parsed.localName,
+      packed
+    );
+  }
+}
+
+/** Apply one binding-map event to the derived index. Peer-controlled keys are skipped. */
+export function applyBindingMapEvent(
+  schema: PackageSchema,
+  index: BindingIndex,
+  event: import('yjs').YMapEvent<string>
+): void {
+  for (const [key, change] of event.changes.keys) {
+    const parsed = parseBindingMapKey(String(key));
+    if (!parsed || rejectDangerousKey(parsed.logicalId) || rejectDangerousKey(parsed.prefix)) {
+      continue;
+    }
+    if (change.action === 'delete') {
+      removeIndexedBinding(index, parsed.logicalId, parsed.prefix);
+      continue;
+    }
+    const namespaceId = schema.bindings.get(String(key));
+    if (typeof namespaceId !== 'string') continue;
+    upsertIndexedBinding(schema, index, parsed.logicalId, parsed.prefix, namespaceId);
+  }
 }

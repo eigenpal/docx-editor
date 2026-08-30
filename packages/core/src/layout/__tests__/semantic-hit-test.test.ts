@@ -525,8 +525,8 @@ describe('the caches key on everything their answer depends on', () => {
       measure: (text) => text.length * 2,
       lineMetrics: () => ({ height: 14, baseline: 11 }),
     };
-    // Layout always publishes caretEdges now; those win over a live measurer (covered
-    // below). Strip them so this case still exercises the measurer-keyed prefix cache.
+    // Layout publishes no eager caretEdges (issue #632); stripping stays as a guard so
+    // this case exercises the measurer-keyed prefix cache even if a producer adds them.
     const laid = lay(p('abcdefghij'), wide);
     const layout: SemanticLayout = {
       ...laid,
@@ -610,12 +610,11 @@ describe('the caret sits at a glyph edge', () => {
     const span = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
     // True edge after "iii" is 3 narrow glyphs; interpolation would say half of 96.
     expect(spanOffsetX(span, 3, proportional)).toBe(span.box.x + 6);
-    // Published caretEdges are layout authority even without a live measurer.
-    expect(span.caretEdges?.[3]).toBe(6);
-    expect(spanOffsetX(span, 3, undefined)).toBe(span.box.x + 6);
-    // Interpolation remains the fallback only when edges were never published.
-    const naked = { ...span, caretEdges: undefined };
-    expect(spanOffsetX(naked, 3, undefined)).toBe(span.box.x + span.box.width / 2);
+    // Layout publishes no eager per-character edges (issue #632): prefix widths are
+    // measured on demand, so a caller WITHOUT a measurer gets the stated interpolation
+    // fallback, never a stale array.
+    expect(span.caretEdges).toBeUndefined();
+    expect(spanOffsetX(span, 3, undefined)).toBe(span.box.x + span.box.width / 2);
   });
 
   test('and caretAt uses it, so the caret and the hit test agree', () => {
@@ -628,19 +627,21 @@ describe('the caret sits at a glyph edge', () => {
   });
 
   test('published caretEdges win over a disagreeing measurer', () => {
-    // Once layout freezes cluster edges on the span, interaction must not re-measure a
-    // prefix that could disagree (canvas vs CSS, or a swapped host measurer).
+    // When a span DOES carry published edges (a producer may attach them), interaction
+    // must not re-measure a prefix that could disagree (canvas vs CSS, or a swapped host
+    // measurer). Layout itself no longer publishes them eagerly (issue #632), so the
+    // contract is pinned on a span given explicit edges.
     const layout = lay(p('Irurein'), proportional);
-    const span = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
-    expect(span.caretEdges).toBeDefined();
+    const laid = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
+    const edges = [0, 2, 4, 6, 8, 10, 12, 14];
+    const span = { ...laid, caretEdges: edges };
     const beforeE = 4; // Irur|
-    const published = span.box.x + span.caretEdges![beforeE]!;
+    const published = span.box.x + edges[beforeE]!;
     const liar: TextMeasurer = {
       measure: () => 999,
       lineMetrics: () => ({ height: 14, baseline: 11 }),
     };
     expect(spanOffsetX(span, beforeE, liar)).toBe(published);
-    expect(caretAt(layout, { paragraphId: P0, offset: beforeE }, liar)!.x).toBe(published);
   });
 
   test('after a justified space the caret sits with the next word, not inside the gap', () => {
@@ -679,8 +680,7 @@ describe('a w:caps run is measured as it is DRAWN', () => {
     const span = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!.spans[0]!;
     // Drawn as "ABCDEF": six wide glyphs, and the reserved advance already said so.
     expect(span.box.width).toBe(60);
-    // Measuring the source "abc" would publish 18 here and disagree with that box.
-    expect(span.caretEdges?.[3]).toBe(30);
+    // Measuring the source "abc" would answer 18 here and disagree with that box.
     expect(spanOffsetX(span, 3, cased)).toBe(span.box.x + 30);
   });
 

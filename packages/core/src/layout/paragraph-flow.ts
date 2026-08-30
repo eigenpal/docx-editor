@@ -141,6 +141,15 @@ export interface ParagraphFlowOptions {
    */
   readonly bodyPageFields?: import('./field-page-furniture.ts').BodyPageFieldContext | false;
   /**
+   * The story's resolved REF inputs (bookmark targets + numbering), for live REF results.
+   *
+   * Supplied by the body flow, whose block cache keys fold the resolved values — a flow that
+   * threads this WITHOUT keying on those values would serve stale breaks after a renumbering
+   * edit. Absent means REF fields paint their cached results, the safe degradation every
+   * other story (headers/footers, notes, text boxes) currently takes.
+   */
+  readonly refFields?: import('./field-ref.ts').RefFieldContext;
+  /**
    * Which revisions this break resolves away.
    *
    * A different mode is a different break — the proposed result drops deleted text, so lines
@@ -464,40 +473,10 @@ function endsWithExpandableSpace(text: string): boolean {
 }
 
 /**
- * Per-UTF-16 caret edges from the span origin, matching {@link TextMeasurer.measure} prefixes.
- *
- * Tabs and non-1:1 projections collapse to the published box endpoints — measuring `\t` or
- * projected ink would disagree with breakParagraph's reserved advance.
- */
-function caretEdgesForSpan(span: StyleSpanRecord, measurer: TextMeasurer): readonly number[] {
-  const length = span.range.end - span.range.start;
-  if (length <= 0 || span.text === '\t' || span.projected || span.text.length !== length) {
-    return Object.freeze([0, span.box.width]);
-  }
-  const edges: number[] = [0];
-  for (let index = 1; index <= span.text.length; index += 1) {
-    // Measured as DRAWN, exactly as `breakParagraph` reserved the advance: `w:caps` paints
-    // uppercase glyphs, which are wider, so edges taken from the source text put the caret
-    // progressively further left of the glyphs the reader is clicking on.
-    edges.push(measureDisplayText(span.text.slice(0, index), span.style, measurer));
-  }
-  return Object.freeze(edges);
-}
-
-function withCaretEdges(
-  spans: readonly StyleSpanRecord[],
-  measurer: TextMeasurer
-): readonly StyleSpanRecord[] {
-  return spans.map((span) =>
-    span.caretEdges ? span : { ...span, caretEdges: caretEdgesForSpan(span, measurer) }
-  );
-}
-
-/**
  * Shift a line's spans to satisfy the paragraph alignment.
  *
  * Layout is the only geometry authority: hit testing and the caret read published span boxes
- * (and {@link StyleSpanRecord.caretEdges}). Paint starts the line at `LineRecord.contentX` —
+ * and measure intra-span prefixes on demand. Paint starts the line at `LineRecord.contentX` —
  * the first span's x whenever there is one — and flows inline, so justification slack must
  * land on the same inter-word spaces `word-spacing` expands, not on every style-span boundary.
  *
@@ -514,7 +493,7 @@ export function alignSpans(
   lineUsedWidth?: number
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
-  if (alignment === 'left') return withCaretEdges(spans, measurer);
+  if (alignment === 'left') return spans;
 
   // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
   // is what Word does and what stops a line ending in a space from looking misaligned.
@@ -530,11 +509,11 @@ export function alignSpans(
     visible === last.text ? 0 : last.box.width - measureDisplayText(visible, last.style, measurer);
   const used = lineUsedWidth ?? last.box.x - indentLeft + last.box.width - trailing;
   const slack = available - used;
-  if (slack <= 0) return withCaretEdges(spans, measurer);
+  if (slack <= 0) return spans;
 
   // The last line of a justified paragraph is set flush left, never stretched.
   if (alignment === 'both') {
-    if (isLastLine) return withCaretEdges(spans, measurer);
+    if (isLastLine) return spans;
     // Only boundaries after an expandable space receive slack — the same slots paint stretches
     // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
     // run splits and drifted every later caret by N×step.
@@ -542,24 +521,18 @@ export function alignSpans(
     for (let index = 1; index < spans.length; index += 1) {
       if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
     }
-    if (gapBefore.length === 0) return withCaretEdges(spans, measurer);
+    if (gapBefore.length === 0) return spans;
     const step = slack / gapBefore.length;
     const gapSet = new Set(gapBefore);
     let shift = 0;
-    return withCaretEdges(
-      spans.map((span, index) => {
-        if (gapSet.has(index)) shift += step;
-        return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
-      }),
-      measurer
-    );
+    return spans.map((span, index) => {
+      if (gapSet.has(index)) shift += step;
+      return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
+    });
   }
 
   const offset = alignment === 'center' ? slack / 2 : slack;
-  return withCaretEdges(
-    spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } })),
-    measurer
-  );
+  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
 }
 
 /** Shift inline drawing boxes for paragraph alignment the same way {@link alignSpans} does. */
@@ -618,7 +591,8 @@ export function breakParagraph(
     flow?.themeFonts,
     flow?.projectFieldLink,
     flow?.documentProperties,
-    flow?.bodyPageFields ?? false
+    flow?.bodyPageFields ?? false,
+    flow?.refFields
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {

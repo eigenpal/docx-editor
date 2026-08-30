@@ -1,0 +1,100 @@
+---
+title: 'Fields and cross-references'
+description: 'Understand which Word fields update in the editor, which results refresh during save, and which field codes stay inert.'
+category: 'Guides'
+seoTitle: 'DOCX fields and cross-references'
+---
+
+Word fields contain an instruction and an optional saved result. The editor
+preserves both forms when it opens and saves a DOCX file.
+
+The editor evaluates a defined set of display-only fields. It never runs macros,
+DDE instructions, or external include instructions.
+
+## Supported fields
+
+| Field                                     | Behavior                                                            |
+| ----------------------------------------- | ------------------------------------------------------------------- |
+| `PAGE`, `NUMPAGES`, and `SECTIONPAGES`    | Update in headers and footers. Empty-cache body fields also update. |
+| `REF`                                     | Resolves bookmark text or numbering in the document body and notes. |
+| `NOTEREF`                                 | Resolves a bookmarked footnote or endnote reference number.         |
+| `AUTONUM`, `AUTONUMLGL`, and `AUTONUMOUT` | Generate separate document-order number sequences.                  |
+| `SYMBOL`                                  | Renders the requested character, font, and size.                    |
+| Selected metadata fields                  | Render sanitized values from document properties.                   |
+
+The editor also renders saved results for other complex and simple fields.
+Unsupported instructions keep their saved result.
+
+## `REF` fields
+
+`REF` resolves bookmark text and numbered paragraph references. The editor
+supports the `\r`, `\w`, `\n`, `\t`, `\h`, and `\* MERGEFORMAT` switches.
+
+The `\t` switch removes text that is not a number delimiter from a referenced
+number. It needs `\r`, `\w`, or `\n`. The `\h` switch parses without adding
+hyperlink behavior.
+
+The editor checks a non-empty saved result once. A matching result enables live
+updates after later edits. A mismatch keeps Word's saved result for that field.
+
+An empty saved result remains eligible for live updates.
+
+The editor also keeps the saved result for missing bookmarks, bullet targets,
+and unsupported switches. Bookmark text resolution stops at the target
+paragraph boundary.
+
+The `\r` switch uses the same full-context number as `\w`. It does not calculate
+Word's relative number.
+
+Live `REF` resolution covers the document body, footnotes, and endnotes. Header,
+footer, and text-box results keep their saved values.
+
+## `NOTEREF` fields
+
+`NOTEREF` resolves the display number of a bookmarked footnote or endnote
+reference. It honors section number formats and `eachSect` restarts.
+
+The editor keeps the saved result for `\p`, `\f`, `eachPage` restarts, and custom
+note marks. The `\h` switch does not add hyperlink behavior.
+
+## `AUTONUM` fields
+
+Each `AUTONUM` field kind has its own sequence. The editor numbers each sequence
+in document order.
+
+Word can restart these counters by heading context. The editor does not apply
+that restart behavior.
+
+The `\*` switch supports Arabic, alphabetic, Roman, ordinal, cardinal text,
+ordinal text, and hexadecimal formats. The `\e` switch removes the trailing
+period.
+
+An unsupported switch produces no generated value. Save does not add result
+runs because Word does not store results for these fields.
+
+## Save-time refresh
+
+`save()` updates calibrated, writable `REF` and `NOTEREF` results in the body,
+footnotes, and endnotes. It commits all updated parts in one undo step.
+
+The editor skips locked fields, revision markup, nested or unsafe result
+structures, and protected content controls. A skipped field keeps its saved
+result.
+
+View mode and read-only sessions do not rewrite results. A collaborative session
+also exports the saved results without rewriting them.
+
+## Fields that stay inert
+
+`DATE`, `TIME`, `FILENAME`, `SEQ`, `LISTNUM`, `EQ`, `CITATION`, and
+`BIBLIOGRAPHY` do not calculate a new value. The editor displays a saved result
+when one exists.
+
+The editor preserves field instructions through save. It does not execute
+macros, DDE instructions, OLE content, or external include instructions.
+
+## Next steps
+
+- [Headers and footers](/docs/2.x/guides/headers-footers): Add page-number fields.
+- [Loading and saving](/docs/2.x/guides/loading-and-saving): Save updated field results.
+- [Word fidelity](/docs/2.x/word-fidelity): Review field support status.

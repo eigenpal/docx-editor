@@ -24,8 +24,17 @@
 // rather than silently measuring it with the fallback.
 
 import type { EmbeddedFont, FontStyleKey } from '@docx-editor.dev/core/store';
-import type { FontFaceRequest, FontSource } from '@docx-editor.dev/core/contracts/editor';
-import { fontRequestKey, sha256FontBytes } from '@docx-editor.dev/core/layout';
+import {
+  EditorFontError,
+  type FontFaceRequest,
+  type FontSource,
+} from '@docx-editor.dev/core/contracts/editor';
+import {
+  HARD_MAX_AGGREGATE_FONT_BYTES,
+  HARD_MAX_FONT_BYTES,
+  fontRequestKey,
+  sha256FontBytes,
+} from '@docx-editor.dev/core/layout';
 
 /** Word's four embed slots, in the vocabulary the resolver requests faces in. */
 const STYLE_REQUESTS: Record<FontStyleKey, { weight: number; style: 'normal' | 'italic' }> = {
@@ -44,6 +53,64 @@ export interface DroppedEmbeddedFont {
 export interface EmbeddedFontSources {
   readonly sources: readonly FontSource[];
   readonly dropped: readonly DroppedEmbeddedFont[];
+}
+
+export const explicitFontBudgetError = (source: FontSource): EditorFontError =>
+  new EditorFontError('overLimit', `font source ${source.id} exceeds the font byte budget`, {
+    request: source.request,
+  });
+
+export const embeddedFontDropError = (drop: DroppedEmbeddedFont): EditorFontError =>
+  new EditorFontError(
+    drop.reason,
+    drop.reason === 'overLimit'
+      ? `embedded font ${drop.request.family} (${drop.partName}) exceeds the font byte budget`
+      : `embedded font part ${drop.partName} declares an invalid family name`,
+    { request: drop.request }
+  );
+
+/** Apply engine byte ceilings before explicit sources can reduce the document budget. */
+export function boundedExplicitFontSources(
+  sources: readonly FontSource[],
+  maxFontBytes: number
+): { readonly sources: readonly FontSource[]; readonly dropped: readonly FontSource[] } {
+  const admitted: FontSource[] = [];
+  const dropped: FontSource[] = [];
+  let aggregateBytes = 0;
+  for (const source of sources) {
+    const size = source.bytes.byteLength;
+    if (
+      !Number.isSafeInteger(size) ||
+      size > maxFontBytes ||
+      size > HARD_MAX_FONT_BYTES ||
+      size > HARD_MAX_AGGREGATE_FONT_BYTES - aggregateBytes
+    ) {
+      dropped.push(source);
+      continue;
+    }
+    aggregateBytes += size;
+    admitted.push(source);
+  }
+  return { sources: admitted, dropped };
+}
+
+/** Map document fonts after admitted explicit sources take precedence and budget. */
+export function embeddedFontSourcesAfterExplicit(
+  embedded: readonly EmbeddedFont[],
+  explicit: readonly FontSource[],
+  maxFontBytes: number
+): EmbeddedFontSources {
+  const explicitBytes = explicit.reduce((total, source) => total + source.bytes.byteLength, 0);
+  const shadowedRequests = new Set(
+    explicit
+      .filter((source) => source.request.family.trim().length > 0)
+      .map((source) => fontRequestKey(source.request))
+  );
+  return embeddedFontSources(embedded, {
+    maxFontBytes,
+    aggregateBudget: Math.max(0, HARD_MAX_AGGREGATE_FONT_BYTES - explicitBytes),
+    shadowedRequests,
+  });
 }
 
 /**

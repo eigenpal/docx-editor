@@ -158,6 +158,31 @@ describe('a Node runtime without process.getBuiltinModule', () => {
     expect(diagnostic).toContain('does not apply');
     expect(diagnostic).not.toContain('serve `@docx-editor.dev/core/harfbuzz.wasm` yourself');
   });
+
+  test('names the same two versions the manifest declares (#595)', async () => {
+    // The floor lives in two places that cannot see each other: this diagnostic, which a
+    // consumer reads after it breaks, and `engines.node`, which their installer reads
+    // before. One moving without the other leaves whichever they hit first lying to them.
+    const manifest = (await import('../../../package.json', { with: { type: 'json' } })) as {
+      default: { engines?: { node?: string } };
+    };
+    const declared = manifest.default.engines?.node;
+    const diagnostic = harfBuzzUnsupportedRuntimeDiagnostic(shimAbort);
+
+    // Every version the prose names must appear in the range, and vice versa, so adding
+    // one to either side without the other fails here rather than shipping.
+    // FULL versions, not major.minor. `^20.16.0` pins the patch, because 20.16.0 is the
+    // exact release the backport landed in — comparing `20.16` would accept a manifest
+    // saying `^20.16.5` beside prose saying 20.16, which is the disagreement most likely
+    // to happen. Deduplicated, because the diagnostic appends the underlying cause; that
+    // cause writes `20.16+`, which has no patch and so does not match here at all.
+    const versionsIn = (text: string): string[] =>
+      [...new Set([...text.matchAll(/\d+\.\d+\.\d+/g)].map((match) => match[0]))].sort();
+    expect(declared).toBeDefined();
+    expect(versionsIn(diagnostic)).toEqual(versionsIn(declared ?? ''));
+    // Guards the comparison itself: two empty lists would satisfy it.
+    expect(versionsIn(declared ?? '')).toHaveLength(2);
+  });
 });
 
 describe('URL redaction of credentials', () => {

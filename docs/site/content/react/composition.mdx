@@ -27,9 +27,9 @@ see the [Pro package documentation](/docs/2.x/pro).
 
 <Callout>
   The [Igloo customization example](https://igloo.docx-editor.dev/) implements these patterns with
-  custom markup. Open the demo, or read the
-  [source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo) and run it with `bun
-  run dev:igloo`.
+  custom markup. Open the demo, or read the [Igloo example
+  source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo) and run it with `bun run
+  dev:igloo`.
 </Callout>
 
 ## Primitives
@@ -355,8 +355,8 @@ This example replaces the packaged loading content:
 Pass `overlay` to position the loading screen over its nearest positioned
 ancestor.
 The opaque overlay covers the previous document while the next document opens.
-A brief delay hides the overlay on loads that finish quickly, to avoid a visible
-flash.
+The overlay does not appear when loading finishes before the delay. This
+prevents a visible flash.
 `<DocxEditor />` mounts this overlay by default.
 
 ```tsx
@@ -444,7 +444,7 @@ Mount a part only when your layout needs its interface:
 | `DocxEditor.PageNumber`         | Current and total page count during scrolling |
 | `DocxEditor.AuthorStyle`        | Review style for one author                   |
 | `DocxEditor.ColorByChangeType`  | Tracked-change colors by change type          |
-| `DocxEditor.FontNotice`         | List of substituted document fonts            |
+| `DocxEditor.FontNotice`         | Rendered families without a compatible face   |
 | `DocxEditor.DocumentOutline`    | Standalone heading list with caret navigation |
 | `DocxEditor.HeaderFooterChrome` | Header and footer editing controls            |
 | `DocxEditor.NotesChrome`        | Footnote and endnote controls                 |
@@ -696,8 +696,8 @@ Apply the same behavior to custom chrome.
 
 ## Next steps
 
-- [Igloo customization example](https://igloo.docx-editor.dev/), and its
-  [source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo)
+- [Igloo customization example](https://igloo.docx-editor.dev/)
+- [Igloo example source](https://github.com/eigenpal/docx-editor/tree/main/examples/igloo)
 - [Custom nodes example](https://github.com/eigenpal/docx-editor/tree/main/examples/custom-nodes)
 - [React hooks](/docs/2.x/react/hooks)
 - [Toolbar guide](/docs/2.x/guides/toolbar)

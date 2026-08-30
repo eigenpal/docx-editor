@@ -197,9 +197,18 @@ function unwrapRefWrappers(type) {
 function unwrapMaybeRefOrGetter(type) {
   let t = type;
   for (let i = 0; i < 8; i++) {
-    const next = t.replace(/MaybeRefOrGetter(?:_\d+)?<([^>]+)>(\[\])?/g, (_, inner, suffix = '') =>
-      suffix ? `(${inner})${suffix}` : inner
-    );
+    const next = t.replace(/MaybeRefOrGetter(?:_\d+)?<([^>]+)>(\[\])?/g, (_, inner, suffix = '') => {
+      if (!suffix) return inner;
+      // `X[]` only needs the parentheses when `X` is compound — a union, an
+      // intersection, a function type, a conditional or a `keyof`/`typeof` operand all
+      // bind looser than `[]`. Adding them to a bare identifier makes
+      // `MaybeRefOrGetter<FontsInput>[]` normalize to `(FontsInput)[]` and read as drift
+      // against React's identical `FontsInput[]`. Anything but a plain type reference (an
+      // identifier, its dotted qualifiers and its type arguments) keeps its parentheses:
+      // an allowlist, so a form nobody thought of is parenthesized rather than mangled.
+      const compound = !/^[\w$.]+(<.*>)?$/.test(inner.trim());
+      return compound ? `(${inner})${suffix}` : `${inner}${suffix}`;
+    });
     if (next === t) break;
     t = next;
   }

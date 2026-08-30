@@ -60,17 +60,24 @@ export interface ParagraphLayoutCache<T> {
   readonly stats: LayoutCacheStats;
 }
 
-/** Serialize a property list stably: element order matters, attribute order does not. */
+/**
+ * Serialize a property list stably: element order matters, attribute order does not.
+ *
+ * Boundaries are NUL-framed because attribute VALUES carry file-derived text (marker
+ * `w:lvlText`, resolved REF results). A printable join would let a crafted value spell out
+ * another property's serialization, and two different property lists would alias to one
+ * cache key. XML text cannot carry U+0000, so no file-derived value can forge a boundary.
+ */
 function propertyToken(property: OoxmlProperty): string {
   const attributes = Object.entries(property.attributes ?? {})
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([name, value]) => `${name}=${value}`)
-    .join(',');
-  return `${property.localName}(${attributes})`;
+    .join('\0,');
+  return `${property.localName}(\0${attributes}\0)`;
 }
 
 function propertiesToken(properties: readonly OoxmlProperty[]): string {
-  return properties.map(propertyToken).join(';');
+  return properties.map(propertyToken).join('\0;');
 }
 
 /**
@@ -96,6 +103,98 @@ const nodeTokens = new WeakMap<object, string>();
  * bounds retention while leaving every realistic paragraph and table memoized.
  */
 const MAX_MEMOIZED_TOKEN_LENGTH = 1 << 18;
+
+/**
+ * Namespaces a break-cache token by the inline-drawing CONTEXT that minted it.
+ *
+ * The context changes how a paragraph breaks — inline drawings are measured as atoms only
+ * when it is present — so two passes over the same bytes may not share cache entries just
+ * because their per-block tokens agree. One helper for every key path (body blocks, table
+ * cells, the section-prepass epoch), so the namespace cannot diverge per lane.
+ */
+export function withDrawingContext(token: string, inlineDrawingContext: boolean): string {
+  return `${token}|${inlineDrawingContext ? 'drawing' : ''}`;
+}
+
+/**
+ * Injective token join: every part is length-prefixed (netstring framing), so NO content —
+ * file-controlled text, other framed joins, even a part containing digits and colons — can
+ * forge a part boundary. Two part lists concatenate to one string only when they are the
+ * same list. Use this for every cache/reuse token composed over file-influenced strings; a
+ * printable separator, and even a NUL separator once parts may themselves contain NUL, lets
+ * two different states alias and a reused page paint the stale one.
+ */
+export function framedTokenJoin(parts: readonly string[]): string {
+  let out = '';
+  for (const part of parts) out += `${part.length}:${part}`;
+  return out;
+}
+
+/**
+ * Aggregate the list tokens of every paragraph a table contains, memoized per (table,
+ * listItems) pair — both immutable, so the walk runs once per numbering state instead of
+ * once per pass.
+ *
+ * NUL-framed, with an empty slot for every unlisted paragraph: a `cacheToken` embeds
+ * file-controlled marker text (`w:lvlText` may contain any printable separator), so a
+ * printable join — or skipping the unlisted paragraphs — lets two different token
+ * SEQUENCES over one byte-identical subtree concatenate to the same string, and the cache
+ * serves the pre-renumber table. The NUL join is sound HERE because every part is either
+ * `''` or a {@link framedTokenJoin} output over XML text, which cannot carry U+0000; a
+ * part that may itself contain NUL must switch this join to {@link framedTokenJoin}.
+ */
+const tableListTokens = new WeakMap<object, WeakMap<object, string>>();
+export function listTokenForTableBlock(
+  table: OoxmlNode,
+  listItems: ReadonlyMap<string, { readonly cacheToken: string }> | undefined
+): string {
+  if (!listItems || listItems.size === 0) return '';
+  // Nested weak keying: neither the table nor the list map is retained by the memo, and two
+  // consumers preparing one table under different list maps both stay warm.
+  let byListItems = tableListTokens.get(table);
+  const cached = byListItems?.get(listItems);
+  if (cached !== undefined) return cached;
+  const token = aggregateParagraphTokensForTableBlock(
+    table,
+    (paragraph) => listItems.get(paragraph.id)?.cacheToken ?? ''
+  );
+  if (token.length <= MAX_MEMOIZED_TOKEN_LENGTH) {
+    if (!byListItems) {
+      byListItems = new WeakMap();
+      tableListTokens.set(table, byListItems);
+    }
+    byListItems.set(listItems, token);
+  }
+  return token;
+}
+
+/**
+ * ONE walk for every per-paragraph token aggregate over a table subtree (list state,
+ * drawing state), so the framing rule cannot drift between copies. NUL-framed, with an
+ * empty slot for every token-less paragraph: the tokens embed file-controlled text, so a
+ * printable join — or skipping the empty slots — lets two different token SEQUENCES over
+ * one byte-identical subtree concatenate to the same string, and a cache then serves the
+ * stale table. Empty when no paragraph carries a token, so token-free tables keep keying
+ * as before. Callers own their memoization.
+ */
+export function aggregateParagraphTokensForTableBlock(
+  table: OoxmlNode,
+  tokenForParagraph: (paragraph: OoxmlNode) => string
+): string {
+  const tokens: string[] = [];
+  let any = false;
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'paragraph') {
+      const token = tokenForParagraph(node);
+      if (token) any = true;
+      tokens.push(token);
+      return;
+    }
+    if ('children' in node) for (const child of node.children) visit(child);
+  };
+  visit(table);
+  return any ? tokens.join('\0') : '';
+}
 
 function nodeToken(node: OoxmlNode): string {
   if (node.kind === 'textValue') return `t:${node.value}`;

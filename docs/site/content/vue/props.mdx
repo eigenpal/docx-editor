@@ -122,18 +122,22 @@ See [Dark mode](/docs/2.x/guides/dark-mode) for canvas behavior.
 
 Embedded fonts load from the document. Configured fonts extend that set.
 
+Use `packagedFonts()` for the Word default substitutes. It resolves per document,
+loading a family when that document names it, or when that family is the
+document's default face. So a document pays for what it declares instead of all
+20 eager faces, and nothing is fetched from a third party.
+
+The default face counts because a run that names no font still has to be measured
+in one. That face is Calibri, so Carlito loads for every document.
+
+`useFonts()` keeps one resolver identity, which the `fonts` prop needs.
+
 ```vue
 <script setup lang="ts">
-import { shallowRef } from 'vue';
-import { DocxEditor, type FontConfigurationFragment } from '@docx-editor.dev/vue';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
-// Resolve into a ref. A top-level `await` here would make this an async
-// component, which renders nothing without a <Suspense> ancestor.
-const fonts = shallowRef<FontConfigurationFragment>();
-void loadDefaultFonts().then((loaded) => {
-  fonts.value = loaded;
-});
+const fonts = useFonts(packagedFonts());
 
 function reportFontError(error: { code: string }) {
   report(error.code);
@@ -145,20 +149,19 @@ function reportFontError(error: { code: string }) {
 </template>
 ```
 
-Use `useFonts()` to keep a resolver identity stable.
+Add an origin by adding an argument. Arguments compose first-wins:
 
-```vue
-<script setup lang="ts">
-import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+```ts
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 
-const fonts = useFonts(googleFonts());
-</script>
-
-<template>
-  <DocxEditor :document="bytes" :fonts="fonts" />
-</template>
+const fonts = useFonts(packagedFonts(), googleFonts());
 ```
+
+`packagedFonts()` resolves after the document is parsed, so the first layout uses
+fixed measurement and the editor re-paginates when the faces arrive. Edits made in
+between survive that; the undo history behind them does not. For a document that
+must paginate correctly on the first pass, use `defaultFonts()` instead. For more
+information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
 
 See [Fonts and measurement](/docs/2.x/guides/fonts) for font sources and
 on-demand loading.

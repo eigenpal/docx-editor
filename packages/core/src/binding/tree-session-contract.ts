@@ -105,6 +105,18 @@ export interface TreeDocxSessionView {
     options?: TreeApplyOptions
   ): TreeApplyResult;
   /**
+   * Commit several stories' ops as ONE transaction and ONE undo unit.
+   *
+   * `applyTreeOps` addresses one story; a write that must land in the body AND note parts
+   * together — the save-time field-result refresh — needs all-or-nothing semantics, or a
+   * mid-sequence refusal exports a file mixing refreshed and stale values and a single undo
+   * restores only the last part. Any refusal rolls every group back. Lifecycle ops refuse.
+   */
+  applyTreeOpsAtomic(
+    groups: readonly { readonly scope: StoryScope; readonly ops: readonly TreeDocOp[] }[],
+    options?: TreeApplyOptions
+  ): TreeApplyResult;
+  /**
    * Every part that holds a story, body first, then headers, footers and note parts.
    *
    * A READ: parts come from the package, so this opens no story store and spends none of the
@@ -168,6 +180,17 @@ export interface TreeDocxSessionView {
    * Memoized per package revision.
    */
   documentFonts(): readonly string[];
+  /**
+   * Font families the document's RENDERED text resolves to, over the story roots only:
+   * direct run `w:rFonts` of text-bearing runs plus the style chains those runs,
+   * paragraphs and tables actually reference — never a declaration in an unused style.
+   * Memoized per package revision.
+   *
+   * The font-substitution notice reads this one: `documentFonts` reports what the
+   * document DECLARES, and Word writes latent styles (Balloon Text naming Segoe UI)
+   * into documents that never render a character in them.
+   */
+  renderedFontFamilies(): readonly string[];
   /**
    * Whether the document puts any literal character on a page, over the same roots
    * {@link TreeDocxSessionView.documentFonts} reads. Memoized per package revision.

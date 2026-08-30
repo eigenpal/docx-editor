@@ -7,8 +7,8 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 73,
-    "singlePartApply": 61,
+    "treeDocOpKinds": 74,
+    "singlePartApply": 62,
     "headerFooterLifecycle": 5,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
@@ -109,7 +109,8 @@
       "transformDrawing",
       "insertToc",
       "replaceTocResult",
-      "rewriteTocPageNumbers"
+      "rewriteTocPageNumbers",
+      "refreshFieldResults"
     ],
     "headerFooterLifecycle": [
       "createHeaderFooter",
@@ -200,7 +201,8 @@
     "transformDrawing",
     "insertToc",
     "replaceTocResult",
-    "rewriteTocPageNumbers"
+    "rewriteTocPageNumbers",
+    "refreshFieldResults"
   ],
   "authorableVariants": {
     "insertText": {
@@ -1019,6 +1021,15 @@
       "commandExposure": ["refreshToc"],
       "packageIntents": [],
       "openSpec": ["typed-toc-refresh"]
+    },
+    {
+      "kind": "refreshFieldResults",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body"],
+      "storyParity": "bodyOnly",
+      "commandExposure": ["refreshRefFieldResults"],
+      "packageIntents": [],
+      "openSpec": []
     }
   ],
   "packageIntents": [

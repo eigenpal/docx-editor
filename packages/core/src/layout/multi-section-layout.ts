@@ -10,13 +10,10 @@
 
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
+import { pageRefAssignmentToken } from './field-page-furniture.ts';
+import { framedTokenJoin } from './layout-cache.ts';
 import { numericPictureApplies } from './field-page-furniture.ts';
-import {
-  remapPage,
-  storyDrawingResourceToken,
-  storyListMarkerToken,
-  type HeaderFooterStoryLayout,
-} from './hf-layout.ts';
+import { framedStoryEntry, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   createLayoutSession,
   type LayoutSession,
@@ -70,21 +67,21 @@ export type LayoutSectionFn = (
 
 function furnitureStoryEntries(
   stories: ReadonlyMap<string, HeaderFooterStoryLayout>,
-  includeContent: boolean
+  includeContent: boolean,
+  prefix: string
 ): string {
-  return [...stories]
-    .map(([variant, story]) =>
-      includeContent
-        ? // `contentKey` describes the AUTHORED part, so it misses everything a story resolves
-          // from ANOTHER part: the images it paints and the list markers it resolves from
-          // `numbering.xml`. Both tokens ride along for the same reason they do in
-          // `furnitureLayoutContext` — without them a reused section keeps a stale header.
-          `${variant}=${story.flowHeight}@${story.contentKey}` +
-          `${storyDrawingResourceToken(story)}${storyListMarkerToken(story)}`
-        : `${variant}=${story.flowHeight}`
-    )
-    .sort()
-    .join(',');
+  // Length-framed like `furnitureLayoutContext`, with the header/footer role INSIDE the
+  // framed label: the marker and resource tokens embed file-controlled text, so a
+  // printable entry join or a printable section marker is a forgeable boundary.
+  return framedTokenJoin(
+    [...stories]
+      .map(([variant, story]) =>
+        includeContent
+          ? framedStoryEntry(`${prefix}${variant}`, story)
+          : `${prefix}${variant}=${story.flowHeight}`
+      )
+      .sort()
+  );
 }
 
 /**
@@ -96,7 +93,7 @@ function furnitureStoryEntries(
  */
 function furnitureGeometryFingerprint(furniture: PageFurniture | undefined): string {
   if (!furniture) return '';
-  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, false)};f:${furnitureStoryEntries(furniture.footers, false)}`;
+  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, false, 'h')};f:${furnitureStoryEntries(furniture.footers, false, 'f')}`;
 }
 
 /**
@@ -106,7 +103,7 @@ function furnitureGeometryFingerprint(furniture: PageFurniture | undefined): str
  */
 export function furnitureFingerprint(furniture: PageFurniture | undefined): string {
   if (!furniture) return '';
-  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, true)};f:${furnitureStoryEntries(furniture.footers, true)}`;
+  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, true, 'h')};f:${furnitureStoryEntries(furniture.footers, true, 'f')}`;
 }
 
 export function furnitureForSection(
@@ -133,19 +130,22 @@ export function multiSectionStructureKey(
   sections: readonly DocumentSection[],
   options: SemanticLayoutOptions
 ): string {
-  return sections
-    .map((section, index) => {
-      const geometry = geometryOfSection(section.properties);
-      const furniture = furnitureForSection(options, index, sections.length);
-      const pn = section.properties.pageNumbering;
-      // Empty `{}` and absent both key as no authored numbering; attribute edits must bust
-      // incremental reuse so PAGE start/fmt / SECTIONPAGES stay correct.
-      const pnKey = pn
-        ? `pn:${pn.start ?? ''},${pn.fmt ?? ''},${pn.chapStyle ?? ''},${pn.chapSep ?? ''}`
-        : 'pn:';
-      const columns = section.properties.columns;
-      const columnsKey = `cols:${columns.count},${columns.gapTwips},${columns.equalWidth === false ? 0 : 1},${columns.separator ? 1 : 0};${(columns.definitions ?? []).map((column) => `${column.widthTwips}/${column.gapTwips}`).join(',')}`;
-      return [
+  const entries = sections.map((section, index) => {
+    const geometry = geometryOfSection(section.properties);
+    const furniture = furnitureForSection(options, index, sections.length);
+    const pn = section.properties.pageNumbering;
+    // A bare `<w:pgNumType/>` keys its empty attributes while an ABSENT element keys
+    // `pn:` — a conservative split (extra rebuild, never a stale reuse); attribute edits
+    // must bust incremental reuse so PAGE start/fmt / SECTIONPAGES stay correct.
+    // Length-framed: `w:fmt` and the chapter fields are free file text, so a printable
+    // separator would let two different section lists alias one structure key.
+    const pnKey = pn
+      ? `pn:${framedTokenJoin([pn.start ?? '', pn.fmt ?? '', pn.chapStyle ?? '', pn.chapSep ?? ''].map(String))}`
+      : 'pn:';
+    const columns = section.properties.columns;
+    const columnsKey = `cols:${columns.count},${columns.gapTwips},${columns.equalWidth === false ? 0 : 1},${columns.separator ? 1 : 0};${(columns.definitions ?? []).map((column) => `${column.widthTwips}/${column.gapTwips}`).join(',')}`;
+    return framedTokenJoin(
+      [
         section.properties.breakType,
         geometry.width,
         geometry.height,
@@ -158,9 +158,10 @@ export function multiSectionStructureKey(
         furnitureGeometryFingerprint(furniture),
         pnKey,
         columnsKey,
-      ].join(':');
-    })
-    .join('|');
+      ].map(String)
+    );
+  });
+  return framedTokenJoin(entries);
 }
 
 function ensureMultiState(
@@ -184,6 +185,7 @@ function ensureMultiState(
     previousRemapped: [],
     previousFinalized: null,
     previousPageCount: -1,
+    previousPageRefToken: '',
   };
   session.multi = fresh;
   return fresh;
@@ -631,6 +633,7 @@ export function layoutMultiSectionDocument(
       multi.previousRemapped = laid.pages;
       multi.previousFinalized = finalized;
       multi.previousPageCount = finalized.pages.length;
+      multi.previousPageRefToken = pageRefAssignmentToken(laid.pages);
     }
     if (session) {
       adoptMultiSectionResult(session, finalized, lineCounter);
@@ -646,12 +649,16 @@ export function layoutMultiSectionDocument(
 
   const freshlyFinalized = finalizePageFieldProjection({ revision, pages });
   let finalized = freshlyFinalized;
+  const pageRefToken = pageRefAssignmentToken(pages);
 
-  // Restore prior finalized page identities when the remapped source and total count hold.
+  // Restore prior finalized page identities when the remapped source and total count hold —
+  // and the PAGEREF assignments too: a target that changed sheets leaves the TOC page's raw
+  // record identity-unchanged, so without the token the restore hands back its stale numbers.
   if (
     multi?.previousFinalized &&
     multi.previousPageCount === freshlyFinalized.pages.length &&
-    multi.previousRemapped.length === remappedAll.length
+    multi.previousRemapped.length === remappedAll.length &&
+    multi.previousPageRefToken === pageRefToken
   ) {
     const prevFinal = multi.previousFinalized.pages;
     const prevRemapped = multi.previousRemapped;
@@ -669,6 +676,7 @@ export function layoutMultiSectionDocument(
     multi.previousRemapped = remappedAll;
     multi.previousFinalized = finalized;
     multi.previousPageCount = finalized.pages.length;
+    multi.previousPageRefToken = pageRefToken;
   }
 
   if (session) {

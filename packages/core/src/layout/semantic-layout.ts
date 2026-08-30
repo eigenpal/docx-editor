@@ -25,9 +25,12 @@ import {
   type HyperlinkProjector,
 } from './field-projection.ts';
 import {
+  framedTokenJoin,
+  listTokenForTableBlock,
   paragraphLayoutKey,
   registerTableCellBreakKeys,
   retainLiveBreakKeys,
+  withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
 import {
@@ -171,6 +174,12 @@ import {
   withResolvedListItemsForSession,
   type ResolvedListItem,
 } from './list-resolve.ts';
+import { noteRefNumberingFromNotes } from './field-noteref.ts';
+import {
+  refTokenForTableBlock,
+  resolveStoryRefFieldsWithNoteNumbers,
+  type RefFieldContext,
+} from './field-ref.ts';
 import { publishListMarker } from './list-marker.ts';
 import {
   NO_DEFERRED_DRAWINGS,
@@ -181,7 +190,7 @@ import {
 } from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
-import { hostedTextboxListToken, layoutTextboxStory } from './textbox-story-layout.ts';
+import { hostedListTokenDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 
 /** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
 const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
@@ -409,26 +418,19 @@ interface PreparedBlockMemo {
    * that has to be right.
    */
   readonly listToken: string;
+  /**
+   * The resolved REF values this block paints, for the same reason {@link listToken} is
+   * here: a renumbering or bookmark edit moves a REF's painted text while the block's node,
+   * width and producer all stay identical. `''` for the common REF-free block.
+   */
+  readonly refToken: string;
+  /**
+   * Whether the inline-drawing context was present. Pass-constant, but the memo lives
+   * across passes, so it must be compared here for {@link PreparedBlock.key} (which folds
+   * it via `withDrawingContext`) to stay current when a caller toggles the context.
+   */
+  readonly drawingContext: boolean;
   readonly entry: PreparedBlock;
-}
-
-/** Aggregate the list tokens of every paragraph a table contains, for its memo key. */
-function listTokenForTableBlock(
-  table: OoxmlNode,
-  listItems: ReadonlyMap<string, ResolvedListItem> | undefined
-): string {
-  if (!listItems || listItems.size === 0) return '';
-  const tokens: string[] = [];
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'paragraph') {
-      const token = listItems.get(node.id)?.cacheToken;
-      if (token) tokens.push(token);
-      return;
-    }
-    if ('children' in node) for (const child of node.children) visit(child);
-  };
-  visit(table);
-  return tokens.join(';');
 }
 
 const preparedBlocks = new WeakMap<OoxmlNode, PreparedBlockMemo>();
@@ -499,6 +501,13 @@ export interface SectionPrepass {
   readonly contentWidth: number;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
+  /**
+   * The numbering index `hostedTextboxListToken` reads. Compared by IDENTITY: a story with
+   * no numbered paragraphs of its own can host a text box whose list a numbering edit
+   * renumbers, and then `listItems` is the same (empty) map while every hosted token in
+   * `entry.key` is stale.
+   */
+  readonly numberingIndex: NumberingIndex | undefined;
   readonly drawingEpoch: string;
   readonly prepared: PreparedBlock[];
   readonly keys: string[];
@@ -506,6 +515,12 @@ export interface SectionPrepass {
   readonly keepsNext: boolean[];
   readonly markerTexts: (string | undefined)[];
   readonly tocToken: string;
+  /**
+   * The story-wide REF values token. Compared WHOLE, like {@link tocToken} and for the same
+   * shape of reason: a renumbering edit in one section moves a REF value painted in another
+   * whose blocks and list map are identity-unchanged, so no per-section input sees it.
+   */
+  readonly refToken: string;
   readonly flowKeys: string[];
 }
 
@@ -597,6 +612,24 @@ export function layoutSemanticDocument(
         blocks
       );
 
+  // REF cross-references resolve against the document's bookmarks and resolved numbering,
+  // so the context is built here — the one place that sees both — and rides the options
+  // spreads into every section pass. Note stories join the context (their REF fields cite
+  // body targets), so paint agrees across stories. Null for the common REF-free document.
+  // NOTEREF fields number against THIS walk's section bounds paired with the notes input's
+  // per-section properties — the pairing `attachNotesToLayout` numbers the note areas with,
+  // so field and area agree by construction.
+  const refFields = resolveStoryRefFieldsWithNoteNumbers(
+    blocks,
+    optionsWithLists.listItems,
+    options.notes
+      ? { footnotesPart: options.notes.footnotesPart, endnotesPart: options.notes.endnotesPart }
+      : undefined,
+    options.notes ? noteRefNumberingFromNotes(options.notes, sections) : undefined,
+    displayMode
+  );
+  const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
+
   const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
     if (sections.length > 1) {
       return layoutMultiSectionDocument(blocks, sections, revision, opts, layoutBlocksWithGeometry);
@@ -654,14 +687,20 @@ export function layoutSemanticDocument(
       options.session.notes = null;
       options.session.notePageBottomReserves = null;
     }
-    return finish(runBody(optionsWithLists));
+    return finish(runBody(optionsForBody));
   }
 
   // Notes inherit the body's projector seams and document properties (link, field link, doc
-  // props) unless the notes input pinned its own — see `inheritNotesLayoutInput`.
-  const notesInput = inheritNotesLayoutInput(options.notes, options);
+  // props) unless the notes input pinned its own — see `inheritNotesLayoutInput`. The REF
+  // context rides along the same way: the note flow folds each paragraph's resolved values
+  // into its break key and the notes-pass fingerprint folds the values token, so a
+  // renumbering edit repaints the notes that cite the renumbered target.
+  const notesInput = inheritNotesLayoutInput(
+    options.notes,
+    refFields ? { ...options, refFields } : options
+  );
   return finish(
-    layoutSemanticDocumentWithNotes(part, sections, optionsWithLists, notesInput, runBody)
+    layoutSemanticDocumentWithNotes(part, sections, optionsForBody, notesInput, runBody)
   );
 }
 
@@ -727,6 +766,13 @@ type BlockLayoutOptions = SemanticLayoutOptions & {
    * knows the format — see {@link numericPictureApplies}.
    */
   readonly bodyPageNumberFormat?: string;
+  /**
+   * The story's resolved REF inputs, built once in `layoutSemanticDocument` and riding the
+   * options spreads (single-section `runBody` and the multi-section `...rest`) as a runtime
+   * property — deliberately NOT a `SemanticLayoutOptions` member, so the public options
+   * surface stays put. Absent for stories without REF fields and for non-body lanes.
+   */
+  readonly refFields?: RefFieldContext;
 };
 
 /**
@@ -888,6 +934,7 @@ function layoutBlocksPass(
   // cannot reuse breaks measured under another inheritance table.
   const styleCascade = options.styleCascade;
   const listItems = options.listItems;
+  const refFields = options.refFields;
   // The default-tab interval moves every default-interval tab, and the prepared-block memo
   // is keyed by producer — so it belongs here rather than only in the per-paragraph token.
   const defaultTabStopPt = options.defaultTabStopPt;
@@ -1028,19 +1075,20 @@ function layoutBlocksPass(
    * full-height overflow page, so a block taller than the limit still terminates, and the
    * search reads "produced a second page" as "does not fit".
    */
-  const contentHeight = (): number => {
-    // Reserves are keyed by DOCUMENT page index (computeFootnoteReserves); this pass fills
-    // the document page at `pageIndexStart + pages.length`. A continuous section's local
-    // page 0 IS the previous section's last sheet: both passes read the same document slot,
-    // so every flow sharing the sheet stops above the same note area.
-    const base = Math.max(
-      1,
-      insetsFor(pages.length).height - (pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0)
-    );
+  const contentHeightOf = (reservedPt: number): number => {
+    const base = Math.max(1, insetsFor(pages.length).height - reservedPt);
     return columnRegionBottom !== undefined && pages.length === 0
       ? Math.max(1, Math.min(base, columnRegionBottom))
       : base;
   };
+  const contentHeight = (): number =>
+    // Reserves are keyed by DOCUMENT page index (computeFootnoteReserves); this pass fills
+    // the document page at `pageIndexStart + pages.length`. A continuous section's local
+    // page 0 IS the previous section's last sheet: both passes read the same document slot,
+    // so every flow sharing the sheet stops above the same note area.
+    contentHeightOf(pageBottomReserves?.get(pageIndexStart + pages.length) ?? 0);
+  /** The same band with the footnote reserve ignored — the table paginator's recovery. */
+  const unreservedContentHeight = (): number => contentHeightOf(0);
 
   // Prepass: everything needed to KEY a paragraph, before any of them is placed. Resuming
   // means knowing where the first change is, and that cannot be discovered while walking.
@@ -1050,17 +1098,31 @@ function layoutBlocksPass(
   // and the producer. Recomputing the key — a serialization of the paragraph's subtree —
   // for every paragraph on every pass made the prepass, not placement, the cost of an
   // incremental layout: a one-character edit re-keyed the entire document.
+  // Constant per pass. `withDrawingContext` folds it into EVERY per-block drawing token
+  // and into the prepass epoch below, so key namespacing and memo validity can never
+  // disagree about which context minted a key — including a caller that supplies tokens
+  // while toggling the context, which a fallback-only namespace could not separate.
+  const hasInlineDrawingContext = options.inlineDrawingLayout !== undefined;
+  // ONE provider for every fold of this flow — the prepass block fold and the cell-lane
+  // deps below hand `hostedTextboxListToken` the same (index, cascade, mode) tuple.
+  const hostedListDeps = hostedListTokenDeps(options.numberingIndex, styleCascade, displayMode);
   const prepareBlock = (block: OoxmlElement, availableWidth: number): PreparedBlock => {
+    // The RAW token, compared by the memo below so a table's kilobyte aggregate keeps its
+    // identity fast path; the context joins only when a key is actually built. `||`, not
+    // `??`, matching the cell lane: a per-paragraph callback answering `''` falls through
+    // to the document-wide token.
     const paragraphDrawingToken =
       block.kind === 'paragraph'
-        ? (options.drawingTokenForParagraph?.(block) ?? options.drawingLayoutToken ?? '')
+        ? options.drawingTokenForParagraph?.(block) || options.drawingLayoutToken || ''
         : block.kind === 'table' && options.drawingTokenForParagraph
           ? drawingTokenForTableBlockMemo(
               block,
               options.drawingLayoutEpoch,
               options.drawingTokenForParagraph
-            )
-          : '';
+            ) ||
+            options.drawingLayoutToken ||
+            ''
+          : options.drawingLayoutToken || '';
     // A TABLE'S LIST STATE IS ITS CELLS'. `listItems` is keyed by PARAGRAPH, and a numbered
     // list that continues inside a table cell has its markers there — so reading the table's
     // own id gave an empty token, and a renumbering that left the table's flow key untouched
@@ -1069,40 +1131,56 @@ function layoutBlocksPass(
     // The list state of any text-box story this block hosts, for the same reason the drawing
     // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
     // numbering edit moves nothing else in this block's key.
-    const hostedListToken = hostedTextboxListToken(
-      block,
-      options.numberingIndex,
-      styleCascade,
-      displayMode
-    );
-    const listToken =
-      (block.kind === 'table'
+    const hostedListToken = hostedListDeps.hostedListTokenForParagraph?.(block) ?? '';
+    // Length-framed pair: both sides embed file-influenced marker text (and the table
+    // aggregate itself contains NULs), so no separator join stays injective.
+    const ownListToken =
+      block.kind === 'table'
         ? listTokenForTableBlock(block, listItems)
-        : (listItems?.get(block.id)?.cacheToken ?? '')) + hostedListToken;
+        : (listItems?.get(block.id)?.cacheToken ?? '');
+    const listToken =
+      ownListToken === '' && hostedListToken === ''
+        ? ''
+        : framedTokenJoin([ownListToken, hostedListToken]);
+    // The RESOLVED VALUES this block's REF fields paint. The block's own subtree is identical
+    // after a renumbering edit elsewhere, so only this token can invalidate its memo and key.
+    const refToken =
+      refFields === undefined
+        ? ''
+        : block.kind === 'table'
+          ? refTokenForTableBlock(block, refFields)
+          : refFields.tokenForParagraph(block.id);
     const memo = preparedBlocks.get(block);
     if (
       memo &&
       memo.contentWidth === availableWidth &&
       memo.producer === producer &&
       memo.drawingToken === paragraphDrawingToken &&
-      memo.listToken === listToken
+      memo.listToken === listToken &&
+      memo.refToken === refToken &&
+      memo.drawingContext === hasInlineDrawingContext
     ) {
       return memo.entry;
     }
+    const keyedDrawingToken = withDrawingContext(paragraphDrawingToken, hasInlineDrawingContext);
     let entry: PreparedBlock;
     if (block.kind === 'table') {
-      // `nodeToken` hashes the whole subtree, so one key covers every cell edit.
+      // `nodeToken` hashes the whole subtree, so one key covers every cell edit. The list
+      // token is the CELL aggregate plus any hosted text-box stories: a renumbering that
+      // only moves ordinals inside a cell leaves the subtree byte-identical, and this token
+      // is the only thing that can move the key with it.
       entry = {
         kind: 'table',
         table: block,
         key: paragraphLayoutKey({
           paragraph: block,
-          properties: hostedListToken
-            ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
-            : [],
+          properties: [
+            ...(listToken ? [{ localName: 'list', attributes: { token: listToken } }] : []),
+            ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
+          ],
           width: availableWidth,
           producer,
-          ...(paragraphDrawingToken ? { drawingToken: paragraphDrawingToken } : {}),
+          drawingToken: keyedDrawingToken,
         }),
       };
     } else {
@@ -1176,10 +1254,11 @@ function layoutBlocksPass(
             ...(hostedListToken
               ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
               : []),
+            ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
           ],
           width: available,
           producer,
-          ...(paragraphDrawingToken ? { drawingToken: paragraphDrawingToken } : {}),
+          drawingToken: keyedDrawingToken,
         }),
       };
     }
@@ -1188,6 +1267,8 @@ function layoutBlocksPass(
       producer,
       drawingToken: paragraphDrawingToken,
       listToken,
+      refToken,
+      drawingContext: hasInlineDrawingContext,
       entry,
     });
     return entry;
@@ -1198,12 +1279,15 @@ function layoutBlocksPass(
   // arrays anyway made the prepass, not placement, the floor cost of a keystroke.
   // `drawingLayoutEpoch` stands in for the per-block drawing tokens (the epoch moves
   // whenever any drawing projection or resource in the part does); a caller that threads
-  // per-paragraph drawing tokens WITHOUT an epoch keeps the recompute path, because the
-  // memo could not see a token move.
+  // per-paragraph drawing tokens WITHOUT an epoch keeps the recompute path (null), because
+  // the memo could not see a token move. The inline-drawing context joins the epoch
+  // exactly as it joins every per-block token, so a session that toggles the context
+  // between passes is never served the other context's keys.
   const drawingEpoch =
-    options.drawingTokenForParagraph === undefined && options.drawingLayoutToken === undefined
-      ? (options.drawingLayoutEpoch ?? '')
-      : (options.drawingLayoutEpoch ?? null);
+    (options.drawingTokenForParagraph !== undefined || options.drawingLayoutToken !== undefined) &&
+    options.drawingLayoutEpoch === undefined
+      ? null
+      : withDrawingContext(options.drawingLayoutEpoch ?? '', hasInlineDrawingContext);
   const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
   const prepassValid =
     prepassMemo != null &&
@@ -1213,7 +1297,9 @@ function layoutBlocksPass(
     prepassMemo.contentWidth === contentWidth &&
     prepassMemo.styleCascade === styleCascade &&
     prepassMemo.listItems === listItems &&
+    prepassMemo.numberingIndex === options.numberingIndex &&
     prepassMemo.tocToken === tocToken &&
+    prepassMemo.refToken === (refFields?.valuesToken ?? '') &&
     prepassMemo.bodies.length === bodies.length &&
     prepassMemo.bodies.every((block, index) => block === bodies[index]);
   const prepass: SectionPrepass = prepassValid ? prepassMemo : buildSectionPrepass();
@@ -1263,6 +1349,7 @@ function layoutBlocksPass(
       contentWidth,
       styleCascade,
       listItems,
+      numberingIndex: options.numberingIndex,
       drawingEpoch: drawingEpoch ?? '',
       prepared,
       keys,
@@ -1275,6 +1362,7 @@ function layoutBlocksPass(
       keepsNext,
       markerTexts,
       tocToken,
+      refToken: refFields?.valuesToken ?? '',
       flowKeys: flow,
     };
   }
@@ -1660,8 +1748,13 @@ function layoutBlocksPass(
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     // Body flow: page fields in table cells paint a placeholder for document finalize to fill.
     bodyPageFields: bodyPageFieldContext,
+    ...(refFields ? { refFields } : {}),
     ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
-    ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
+    // `!== undefined`, matching how every key lane derives the context bit, so the cell
+    // lane's namespace can never disagree with the body's about whether a context exists.
+    ...(options.inlineDrawingLayout !== undefined
+      ? { inlineDrawingLayout: options.inlineDrawingLayout }
+      : {}),
     ...(options.drawingTokenForParagraph
       ? { drawingTokenForParagraph: options.drawingTokenForParagraph }
       : options.drawingLayoutToken
@@ -1672,6 +1765,10 @@ function layoutBlocksPass(
           anchorFrameBase,
           pageContentClip,
           layoutTextboxStoryFor: layoutTextboxStoryForBody,
+          // The CELL lane folds only where stories can render (`layoutTextboxStoryFor`
+          // above). The body block fold in `prepareBlock` stays ungated on purpose: it
+          // predates this gate and fails open — extra invalidation, never a stale reuse.
+          ...hostedListDeps,
           publishAnchoredDrawings: collectAnchoredDrawings,
           collectAnchoredDrawings,
           columnBoxForParagraph: anchorColumnBox,
@@ -1735,32 +1832,31 @@ function layoutBlocksPass(
       return true;
     });
     const exclusionToken = exclusionLayoutToken(pageZones);
-    const drawingKeyed =
-      options.drawingTokenForParagraph?.(entry.paragraph) ??
-      options.drawingLayoutToken ??
-      (options.inlineDrawingLayout ? 'drawing' : undefined);
-    const cacheKey =
-      cache && !suppressChrome
-        ? exclusionToken || drawingKeyed
-          ? paragraphLayoutKey({
-              paragraph: entry.paragraph,
-              properties: entry.props,
-              width: available,
-              producer,
-              ...(drawingKeyed ? { drawingToken: drawingKeyed } : {}),
-              // `cursorY` belongs in the key: the zones are page-content bands, so the same
-              // text at the same width breaks differently depending on where down the page
-              // it starts. Keying on zone geometry alone lets a paragraph clear of the float
-              // reuse the wrapped break of an identical one that crosses it.
-              ...(exclusionToken
-                ? { exclusionToken: `${flowColumnIndex}|${cursorY.toFixed(3)}|${exclusionToken}` }
-                : {}),
-              ...(startOffset > 0 ? { startOffset } : {}),
-            })
-          : startOffset === 0
-            ? entry.key
-            : `${entry.key}|from:${startOffset}`
-        : null;
+    // `entry.key` already folds the content, the cascade props, the tab stops, and the
+    // list/textbox/drawing/REF tokens — `prepareBlock` memo-validates each per pass, and
+    // `refFields` is one frozen projection per pass, so nothing here can drift from the
+    // prepass. This used to rebuild from `entry.props` whenever a drawing token was
+    // present, which dropped the list token: a renumbered ordinal that crossed its tab
+    // stop kept its pre-renumber first line and the wider marker painted over it. Only
+    // what varies per PLACEMENT joins below; the common path must stay `entry.key` BY
+    // IDENTITY, because retention names the prepass keys (suffixed and off-prepass-width
+    // keys are transient by design) and V8 caches the shared string's hash.
+    // A new placement-varying input joins BOTH this suffix chain and the cell path's
+    // `paragraphLayoutKey` call in `semantic-table-layout.ts` — the roles map in
+    // `layout-cache.ts` guards only the typed inputs, not these suffixes.
+    let cacheKey: string | null = null;
+    if (cache && !suppressChrome) {
+      // `cursorY` belongs in the key: the zones are page-content bands, so the same text at
+      // the same width breaks differently depending on where down the page it starts. Keying
+      // on zone geometry alone lets a paragraph clear of the float reuse the wrapped break
+      // of an identical one that crosses it. NUL-framed: XML text cannot carry U+0000, so
+      // no file-derived token can forge a suffix boundary.
+      cacheKey = entry.key;
+      if (exclusionToken) {
+        cacheKey += `\0excl:${flowColumnIndex}|${cursorY.toFixed(3)}|${exclusionToken}`;
+      }
+      if (startOffset > 0) cacheKey += `\0from:${startOffset}`;
+    }
     const usePageColumnCoords = columnCount > 1;
     return breakParagraph(
       entry.paragraph,
@@ -1788,6 +1884,7 @@ function layoutBlocksPass(
         ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
         // Body flow: an empty-cache page field paints a placeholder finalize substitutes per page.
         bodyPageFields: bodyPageFieldContext,
+        ...(refFields ? { refFields } : {}),
         displayMode,
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...(options.inlineDrawingLayout
@@ -1923,6 +2020,7 @@ function layoutBlocksPass(
       columnWidth,
       columnLeft,
       contentHeight,
+      unreservedContentHeight,
       advanceColumn: () => {
         cursorY = flow.cursorY;
         advanceColumn();
@@ -2056,8 +2154,9 @@ function layoutBlocksPass(
     // The schema treats them as mutually exclusive; where a producer writes both, hanging
     // wins, which is how Word reads it.
     // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
-    // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
-    // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
+    // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
+    // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
+    // the next tab stop past an overflowing one (§17.9.30).
     let firstLineOffset = firstLineOffsetOf(entry);
     const paragraphId = paragraph.id;
     // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
@@ -2121,7 +2220,11 @@ function layoutBlocksPass(
         markRunProperties.length === 0
           ? DEFAULT_RUN_STYLE
           : resolveRunStyle(markRunProperties, styleCascade?.themeFonts);
-      const firstTail = lines.length <= 1 ? borderExtent + spacing.after : 0;
+      // Spacing-after never decides its own line's fit (§17.3.1.33): Word fits the LINE box,
+      // and trailing space that crosses the page boundary clips at the break. Only the closing
+      // border rule is real painted content below the last line, so only it joins the budget.
+      // An oversized `w:after` — the signature-block idiom — otherwise mints blank pages.
+      const firstTail = lines.length <= 1 ? borderExtent : 0;
       const prospectiveFirstTop = cursorY + lead + topExtent;
       const firstZones = placementZonesForLine(
         entry,
@@ -2140,9 +2243,14 @@ function layoutBlocksPass(
       // ONCE per chain, at its head — a member whose predecessor keeps too already moved with
       // the group. A chain that cannot fit a page of its own is abandoned.
       if (keeps.keepNext && !keepsNext[index - 1]) {
+        // Members are measured at THIS column's width, not the `prepared` entries': the
+        // prepass builds at column 0's width, and a section with unequal explicit column
+        // widths would otherwise price a group placed into a narrower or wider column with
+        // the wrong line breaks, landing the keep break on the wrong block. Equal-width
+        // sections re-prepare into a memo hit, so the lookahead still re-measures nothing.
         const group = keepNextGroupHeight(prepared, index, previousSpaceAfter, (at) => {
-          const member = prepared[at];
-          return member?.kind === 'paragraph' ? breakBlock(member, at).map((l) => l.height) : [];
+          const member = prepareBlock(bodies[at]!, columnWidth());
+          return member.kind === 'paragraph' ? breakBlock(member, at).map((l) => l.height) : [];
         });
         if (group !== null && group + topExtent <= contentHeight()) {
           needed = Math.max(needed, group + topExtent);
@@ -2501,7 +2609,10 @@ function layoutBlocksPass(
     for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
       const pendingLine = lines[lineIndex]!;
       const isLastLine = lineIndex === lines.length - 1;
-      const tail = isLastLine ? borderExtent + spacing.after : 0;
+      // Spacing-after stays out of the fit budget (see the firstTail note above): it moves
+      // where the NEXT paragraph starts, never whether this line fits, and it clips at the
+      // page boundary rather than carrying over.
+      const tail = isLastLine ? borderExtent : 0;
       if (lineIndex === fragmentFirstLine) {
         fragmentParagraphStartY = cursorY;
         if (paragraphHasAnchors && paragraphAnchorOrigin === null && fragmentIndex === 0) {

@@ -61,7 +61,12 @@ Every composable the packaged chrome uses is public: `useDocxEditor`, `useEditor
 
 ## SSR and Nuxt
 
-The editor is client-only. On the server, `DocxEditorRoot` skips instance creation so you do not get a bare `window is not defined` error. Mount the editor inside `<ClientOnly>` or load it with `defineAsyncComponent`. The [`@docx-editor.dev/nuxt`](/docs/2.x/frameworks) module auto-imports the Vue surface client-side.
+The editor is client-only. On the server, `DocxEditorRoot` skips instance
+creation. Mount the editor inside `<ClientOnly>` or load it with
+`defineAsyncComponent`.
+
+The Nuxt module remains a private workspace package. External applications
+should follow the [Nuxt guide](https://www.docx-editor.dev/docs/2.x/frameworks/nuxt).
 
 ## Docs and demo
 

@@ -16,7 +16,9 @@ import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
 import type { AllowlistedPageField } from './field-instruction.ts';
+import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
+import type { PageRefFieldProjection, RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -66,6 +68,15 @@ export interface FieldAtomMarker {
     /** The field's `\#` numeric picture, applied when finalize substitutes the value. */
     readonly picture?: string;
   };
+  /**
+   * A BODY `PAGEREF` atom whose value is the page number its bookmark target lands on.
+   *
+   * Deferred exactly like {@link pageField}: the paragraph walk paints the field's cached
+   * result (or the placeholder digit when the file cached none) and records the resolved
+   * target here; document finalize substitutes the number of the page hosting the target's
+   * first fragment, gated per field on the calibration verdict.
+   */
+  readonly pageRef?: PageRefFieldProjection;
 }
 
 /**
@@ -267,11 +278,36 @@ export interface PendingFieldProjection {
    */
   docPropertySpec: DocPropertyField | null;
   /**
+   * Recognized REF cross-reference instruction, or null when the field is not one.
+   *
+   * Captured at the same points as {@link symbolSpec}. Unlike {@link buttonSpec}, a resolved
+   * value WINS over a non-empty cached result — the stale cache is exactly what a REF field
+   * exists to replace — and an unresolvable spec (missing bookmark, unnumbered target for a
+   * number switch) falls back to the cache, never to the raw instruction.
+   */
+  refSpec: RefFieldSpec | null;
+  /**
+   * Recognized AUTONUM / AUTONUMLGL / AUTONUMOUT instruction, or null when the field is none.
+   *
+   * Captured at the same points as {@link symbolSpec}. These fields carry NO separator and NO
+   * cached result — Word computes the number at display time and never stores it — so the
+   * synthesized sequential value is the only display they have; there is no cache to prefer.
+   */
+  autonumSpec: AutonumFieldSpec | null;
+  /**
    * Bounded `w:ffData` render state read at `begin` (`legacyFormFieldDataOf` — state only,
    * macros never), or null when absent or malformed. {@link formField} stays presence-based:
    * ffData present with an unreadable payload still shades as a form field.
    */
   formData: LegacyFormFieldData | null;
+  /**
+   * Canonical node id of the field's begin `w:fldChar`.
+   *
+   * The per-field key REF calibration verdicts live under (`RefFieldContext.liveValueOf`):
+   * node ids survive edits, so the projection and the context's token fold read the same
+   * verdict for the same field however either walk collected its cached text.
+   */
+  beginId: string;
   /** True when this pending field is a well-formed atomic unit (begin will close). */
   atomic: boolean;
   /** True when this closed FORMTEXT field exposes its authored result as ordinary text. */

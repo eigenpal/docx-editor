@@ -775,6 +775,10 @@ continue editing, enable [`offlineEditing`](#edit-offline).
 
 The session undo manager treats one typing run as one undo step.
 
+One simultaneous run-formatting split converges without duplicate text. A later
+split after one concurrent run-formatting round can duplicate text. All replicas
+still converge on the same document.
+
 ### Numeric limits
 
 Most exceeded limits produce a typed failure code.

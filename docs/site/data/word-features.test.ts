@@ -71,11 +71,13 @@ describe('word-features — images lane honesty', () => {
     }
   });
 
-  test('tracked image revision is not claimed as editable or rendered', () => {
+  test('tracked image revisions report insert and delete support', () => {
     const row = feature('images.tracked');
-    expect(row.editing).toBe('none');
-    expect(row.rendering).toBe('preserved');
-    expect(row.roundTrip).toBe('preserved');
+    expect(row.editing).toBe('partial');
+    expect(row.rendering).toBe('full');
+    expect(row.roundTrip).toBe('full');
+    expect(row.notes).toMatch(/insertion and deletion/);
+    expect(row.notes).toMatch(/property edits are unavailable/);
   });
 
   test('crop renders fully; React-only properties editing is partial', () => {

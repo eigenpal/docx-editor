@@ -439,3 +439,49 @@ describe('linesOf still walks every line when spacing and borders are present', 
     expect(lines[0]!.range).toMatchObject({ start: 0, end: 5 });
   });
 });
+
+// Spacing-after never decides its own line's fit (§17.3.1.33, issue #615): Word fits the
+// LINE box, and trailing space that crosses the page boundary clips at the break. The
+// signature-block idiom (`w:after="10867"` on an empty paragraph) otherwise mints a blank
+// trailing page Word does not produce.
+describe('after-spacing stays out of the page-fit decision', () => {
+  // SMALL content height is 80pt; each fixed-measurer line is 14pt.
+
+  test('an empty final paragraph with oversized after does not mint a trailing page', () => {
+    const body =
+      Array.from({ length: 4 }, (_, index) => paragraph(`line ${index}`)).join('') +
+      paragraph('', '<w:spacing w:after="10867"/>');
+    const layout = lay(load(body), SMALL);
+    // Lines sit at 0/14/28/42; the empty mark's line fits at 56..70 of 80.
+    expect(layout.pages).toHaveLength(1);
+    const withoutTrailing = lay(
+      load(Array.from({ length: 4 }, (_, index) => paragraph(`line ${index}`)).join('')),
+      SMALL
+    );
+    expect(layout.pages.length).toBe(withoutTrailing.pages.length);
+  });
+
+  test('a line that fits stays on its page even when line + after overflows', () => {
+    const body =
+      Array.from({ length: 4 }, (_, index) => paragraph(`line ${index}`)).join('') +
+      paragraph('fits', '<w:spacing w:after="800"/>') +
+      paragraph('next');
+    const layout = lay(load(body), SMALL);
+    expect(layout.pages).toHaveLength(2);
+    const fits = layout.pages[0]!.fragments.filter((f) => f.kind === 'paragraph').at(-1)!;
+    if (fits.kind !== 'paragraph') throw new Error('expected paragraph');
+    expect(fits.lines[0]!.spans.map((span) => span.text).join('')).toBe('fits');
+    expect(fits.lines[0]!.box.y).toBe(56);
+    // The clipped after-spacing leaves no residual: the next paragraph opens page 2 at 0.
+    const next = layout.pages[1]!.fragments.find((f) => f.kind === 'paragraph')!;
+    if (next.kind !== 'paragraph') throw new Error('expected paragraph');
+    expect(next.lines[0]!.spans.map((span) => span.text).join('')).toBe('next');
+    expect(next.spacing.before).toBe(0);
+    expect(next.lines[0]!.box.y).toBe(0);
+  });
+
+  test('a lone paragraph whose after exceeds the page keeps to one page', () => {
+    const layout = lay(load(paragraph('only', '<w:spacing w:after="10867"/>')), SMALL);
+    expect(layout.pages).toHaveLength(1);
+  });
+});

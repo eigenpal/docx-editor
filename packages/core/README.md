@@ -25,6 +25,8 @@ types to write a function signature.
 npm install @docx-editor.dev/core
 ```
 
+Node use requires `^20.16.0 || >=22.3.0`.
+
 ## Entry points
 
 ```ts
@@ -36,20 +38,22 @@ The root covers most uses: creating an editor, the `Editor` contract it implemen
 the chrome registry, and the document model types. Subpaths expose the canonical tree, the
 layout pass, and the paint step directly.
 
-| Subpath                   | What's there                                                                                 |
-| ------------------------- | -------------------------------------------------------------------------------------------- |
-| `.`                       | Create an editor, the contract, fonts, the chrome registry, the document model.              |
-| `./editor`                | Everything the root re-exports, plus the paginated surface and ruler geometry.               |
-| `./contracts/editor`      | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`.                     |
-| `./contracts/document`    | The document-level edit and query vocabulary.                                                |
-| `./contracts/interaction` | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
-| `./contracts/types`       | Document model types.                                                                        |
-| `./contracts/modules`     | `EditorModule` — the shape `@docx-editor.dev/pro` implements.                                |
-| `./store`                 | The canonical tree and its transactional store.                                              |
-| `./layout`                | The DOM-free layout pass.                                                                    |
-| `./output`                | Serialization.                                                                               |
-| `./automation`            | The object model behind `@docx-editor.dev/editor-api`.                                       |
-| `./styles/editor.css`     | The one editor stylesheet, shared by packaged and custom chrome.                             |
+| Subpath                       | What's there                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| `.`                           | Create an editor, the contract, fonts, the chrome registry, the document model.              |
+| `./editor`                    | Everything the root re-exports, plus the paginated surface and ruler geometry.               |
+| `./contracts/editor`          | `Editor`, `EditorCommand`, `EditorQuery`, `EditorSnapshot`, `PageSetup`.                     |
+| `./contracts/document`        | The document-level edit and query vocabulary.                                                |
+| `./contracts/interaction`     | Semantic addressing (`SemanticTarget`) and the `InteractionOutcome` an attempt answers with. |
+| `./contracts/types`           | Document model types.                                                                        |
+| `./contracts/modules`         | `EditorModule` — the shape `@docx-editor.dev/pro` implements.                                |
+| `./store`                     | The canonical tree and its transactional store.                                              |
+| `./layout`                    | The DOM-free layout pass.                                                                    |
+| `./output`                    | Serialization.                                                                               |
+| `./automation`                | The object model behind `@docx-editor.dev/editor-api`.                                       |
+| `./collaboration`             | Provider-neutral collaboration session contracts.                                            |
+| `./collaboration/replication` | Replication helpers for collaboration providers.                                             |
+| `./styles/editor.css`         | The one editor stylesheet, shared by packaged and custom chrome.                             |
 
 ## Architecture
 

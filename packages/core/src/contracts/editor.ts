@@ -155,6 +155,11 @@ export interface FontSource {
 export interface FontSourceSubstitution {
   readonly from: FontFaceRequest;
   readonly to: FontFaceRequest;
+  /** Word line-box metrics for the requested face, expressed as em ratios. */
+  readonly lineMetrics?: {
+    readonly heightEm: number;
+    readonly baselineEm: number;
+  };
 }
 
 /**
@@ -1617,11 +1622,18 @@ export interface EditorSnapshot {
    */
   readonly lastRejection?: string | null;
   /**
-   * Document font families rendering in a substitute face: declared by the document but
-   * not resolvable on this platform, not embedded in the file, and not supplied by the
-   * app's font configuration. Chrome shows a compatibility notice from this the way Word
-   * does. Optional and additive like `canUndo`: absent means the implementation has not
-   * derived it; empty means every family resolved (or no document is loaded).
+   * Document font families that are NOT AVAILABLE: declared by the document, but with no
+   * byte source admitted for them, no configured redirect to an admitted face, nothing
+   * embedded in the file, and nothing the platform could resolve. Chrome shows a
+   * compatibility notice from this the way Word does.
+   *
+   * A family the app deliberately answers with a metric-compatible stand-in — Word's
+   * Times New Roman with Liberation Serif, say — is AVAILABLE and stays out of the list.
+   * The glyph outlines differ; the advance widths do not, so wrap and pagination land
+   * where Word puts them and there is nothing for a fidelity notice to report.
+   *
+   * Optional and additive like `canUndo`: absent means the implementation has not derived
+   * it; empty means every family resolved (or no document is loaded).
    */
   readonly fontSubstitutions?: readonly string[];
   /**

@@ -53,7 +53,7 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
   return node.attributes.find((attribute) => attribute.localName === localName)?.value;
 }
 
-function validStyleId(raw: string | undefined): string | null {
+export function validStyleId(raw: string | undefined): string | null {
   if (raw === undefined || raw.length === 0 || raw.length > STYLE_ID_MAX) return null;
   if (CONTROL_CHARS.test(raw)) return null;
   return raw;
@@ -79,7 +79,10 @@ function themeFamilyOf(value: string | undefined, themeFonts: DocumentThemeFonts
  * use. Reading it in preference would make this answer a different font from the one the
  * document is painted in, which is what the font box would then display.
  */
-function familyFromRFonts(rFonts: OoxmlElement, themeFonts: DocumentThemeFonts): string | null {
+export function familyFromRFonts(
+  rFonts: OoxmlElement,
+  themeFonts: DocumentThemeFonts
+): string | null {
   const themed =
     themeFamilyOf(attributeValue(rFonts, 'asciiTheme'), themeFonts) ??
     themeFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);

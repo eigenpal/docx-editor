@@ -1,5 +1,5 @@
 ---
-title: 'Images & drawings'
+title: 'Images and drawings'
 description: 'Inline and floating DrawingML pictures in DOCX: supported formats, wrap modes, authoring them from React or Vue, accessibility, and the security boundaries.'
 category: 'Guides'
 seoTitle: 'Images and floating pictures'
@@ -167,7 +167,7 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 - Hyperlinks on drawings (`a:hlinkClick`) require an explicit gesture and pass through `sanitizeHref`.
 - Optional explicit download-and-embed path for external targets is user-initiated only (bounded size/content-type).
 
-## Current limits
+## Drawing limits
 
 | Drawing content                                         | Status                                               |
 | ------------------------------------------------------- | ---------------------------------------------------- |
@@ -178,11 +178,12 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 | Inline text boxes, linked chains, autofit, and rotation | Show a placeholder                                   |
 | VML (`w:pict`)                                          | Preserve inertly; do not render or edit watermarks   |
 | `w:object` and `w:altChunk`                             | Preserve as generic content with diagnostics         |
-| Tracked-change decisions on drawings                    | Preserve the markup without accept or reject actions |
+| Tracked image insertion and deletion                    | Record the change in suggesting mode                 |
+| Tracked image property edits                            | Stay unavailable in suggesting mode                  |
 | Artistic effects (`a:effectLst`)                        | Do not render; authored markup round-trips           |
 
 ## Next steps
 
 - [Toolbar customization](/docs/2.x/guides/toolbar): override the toolbar's `ImageWrap` part and its siblings
 - [Word fidelity matrix](/docs/2.x/word-fidelity): live support claims
-- [Headers & footers](/docs/2.x/guides/headers-footers): letterhead anchors in furniture bands
+- [Headers and footers](/docs/2.x/guides/headers-footers): letterhead anchors in page bands

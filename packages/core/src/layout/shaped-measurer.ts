@@ -328,51 +328,60 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
 
       let metrics: { height: number; baseline: number };
       let scalable = true;
-      try {
-        // Vertical metrics are a property of the FACE, not of the text, so any string
-        // yields them; a single space is the cheapest to shape.
-        const shaped = shape(' ', font, style);
-        const ascent = shaped.metrics.ascent / fixedPointScale;
-        const descent = shaped.metrics.descent / fixedPointScale;
-        // Word's single-spaced line box is ascent + descent + lineGap, and the leading sits
-        // BELOW the descent — the same total GDI reports as `tmHeight + tmExternalLeading`.
-        // Dropping the gap is what made a 10 pt Arial line 11.17 pt where Word draws 11.50
-        // (Liberation Sans and Liberation Serif both carry Arial's and Times New Roman's own
-        // gap, so both land on Word's 1.1499 em). Faces with no gap — Carlito, Caladea,
-        // Liberation Mono — are unaffected, which is why the error only showed on the two
-        // faces that have one.
-        //
-        // BOUNDED IN THE EM, because all three numbers are `hhea` int16 read from a font a
-        // DOCX can embed and nothing downstream bounds a line box. The shaper admits any
-        // safe integer over any `upem > 0`, so `ascender = 32767` over `upem = 16` is a face
-        // box of ~2048 em on its own — bounding the gap against the face box alone would
-        // have clamped one attacker-controlled number against another.
-        //
-        // The face box is clamped first, absolutely, against the drawn size. Ascent and
-        // descent scale together so the baseline stays where it sits inside the box. Then
-        // the gap: non-negative, because external leading is non-negative on Windows and in
-        // GDI and a face declaring `lineGap = -(ascender - descender) + 1` would otherwise
-        // give every run in that family a one-unit line that the `height > 0` guard does not
-        // catch; and at most half a face box above.
+      const substitutionMetrics = font.substitution?.lineMetrics;
+      if (substitutionMetrics) {
         const baseSizePt = halfPoints / 2;
-        const rawFaceBox = ascent + descent;
-        const faceBoxCeiling = baseSizePt * MAX_FACE_BOX_EM;
-        const squeeze = rawFaceBox > faceBoxCeiling ? faceBoxCeiling / rawFaceBox : 1;
-        const faceBox = rawFaceBox * squeeze;
-        const lineGap = Math.min(
-          Math.max(0, shaped.metrics.lineGap / fixedPointScale),
-          faceBox * MAX_LINE_GAP_FACE_BOXES
-        );
-        const height = faceBox + lineGap;
-        if (height > 0) {
-          metrics = { height, baseline: ascent * squeeze };
-        } else {
+        metrics = {
+          height: substitutionMetrics.heightEm * baseSizePt,
+          baseline: substitutionMetrics.baselineEm * baseSizePt,
+        };
+      } else {
+        try {
+          // Vertical metrics are a property of the FACE, not of the text, so any string
+          // yields them; a single space is the cheapest to shape.
+          const shaped = shape(' ', font, style);
+          const ascent = shaped.metrics.ascent / fixedPointScale;
+          const descent = shaped.metrics.descent / fixedPointScale;
+          // Word's single-spaced line box is ascent + descent + lineGap, and the leading sits
+          // BELOW the descent — the same total GDI reports as `tmHeight + tmExternalLeading`.
+          // Dropping the gap is what made a 10 pt Arial line 11.17 pt where Word draws 11.50
+          // (Liberation Sans and Liberation Serif both carry Arial's and Times New Roman's own
+          // gap, so both land on Word's 1.1499 em). Faces with no gap — Carlito, Caladea,
+          // Liberation Mono — are unaffected, which is why the error only showed on the two
+          // faces that have one.
+          //
+          // BOUNDED IN THE EM, because all three numbers are `hhea` int16 read from a font a
+          // DOCX can embed and nothing downstream bounds a line box. The shaper admits any
+          // safe integer over any `upem > 0`, so `ascender = 32767` over `upem = 16` is a face
+          // box of ~2048 em on its own — bounding the gap against the face box alone would
+          // have clamped one attacker-controlled number against another.
+          //
+          // The face box is clamped first, absolutely, against the drawn size. Ascent and
+          // descent scale together so the baseline stays where it sits inside the box. Then
+          // the gap: non-negative, because external leading is non-negative on Windows and in
+          // GDI and a face declaring `lineGap = -(ascender - descender) + 1` would otherwise
+          // give every run in that family a one-unit line that the `height > 0` guard does not
+          // catch; and at most half a face box above.
+          const baseSizePt = halfPoints / 2;
+          const rawFaceBox = ascent + descent;
+          const faceBoxCeiling = baseSizePt * MAX_FACE_BOX_EM;
+          const squeeze = rawFaceBox > faceBoxCeiling ? faceBoxCeiling / rawFaceBox : 1;
+          const faceBox = rawFaceBox * squeeze;
+          const lineGap = Math.min(
+            Math.max(0, shaped.metrics.lineGap / fixedPointScale),
+            faceBox * MAX_LINE_GAP_FACE_BOXES
+          );
+          const height = faceBox + lineGap;
+          if (height > 0) {
+            metrics = { height, baseline: ascent * squeeze };
+          } else {
+            metrics = fallback.lineMetrics(style);
+            scalable = false;
+          }
+        } catch {
           metrics = fallback.lineMetrics(style);
           scalable = false;
         }
-      } catch {
-        metrics = fallback.lineMetrics(style);
-        scalable = false;
       }
       // Fallback answers are already at the drawn size; only face metrics shaped at the base
       // size are cached and rescaled.

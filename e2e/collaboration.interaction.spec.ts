@@ -1,6 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 
-const ORIGIN = 'http://localhost:5276';
+// See the note in collaboration.fulldocument.spec.ts: the config honours this, so the
+// specs it drives have to as well.
+const PORT = process.env.COLLAB_E2E_PORT ?? '5276';
+const ORIGIN = `http://localhost:${PORT}`;
 const CONNECT = /^Connect$/;
 
 async function waitForEditor(page: Page, url = ORIGIN): Promise<void> {
@@ -20,7 +23,11 @@ async function createRoom(page: Page, name: string): Promise<string> {
   const connectedDialog = page.getByRole('dialog', { name: 'Collaboration room' });
   await expect(connectedDialog.getByText('Connected', { exact: true })).toBeVisible();
   const invite = await connectedDialog.getByLabel('Invite link').inputValue();
-  expect(invite).toMatch(/^http:\/\/localhost:5276\/\?room=[A-Za-z0-9_-]{24,256}$/);
+  // Anchored at both ends, exactly as before: only the PORT is parameterized here. This
+  // assertion currently fails because the invite link gained a `#collab=` fragment in
+  // #499 and the spec was never updated — a live regression on main, and not this file's
+  // to decide. Relaxing the anchor here would hide it.
+  expect(invite).toMatch(new RegExp(`^http://localhost:${PORT}/\\?room=[A-Za-z0-9_-]{24,256}$`));
   await connectedDialog.getByRole('button', { name: 'Done' }).click();
   await expect(connectedDialog).toHaveCount(0);
   return invite;

@@ -155,11 +155,11 @@ describe('concurrent variant edits converge', () => {
     );
   });
 
-  test('same-paragraph run-property edits silently duplicate text (#581)', async () => {
-    // Pinning current CORRUPTION, not endorsing it: two concurrent `setRunProperties` on the
-    // same paragraph rebuild its runs additively, so the merged text doubles on both peers.
-    // The peers still agree (convergence holds), which is why a convergence-only oracle
-    // missed it. When #581 is fixed this expectation flips.
+  test('same-paragraph run-property edits converge without duplicating text (#581)', async () => {
+    // Two concurrent `setRunProperties` on the same paragraph each split its runs; both
+    // peers stamp their new runs with the origin they replaced, and materialize keeps one
+    // replica's runs deterministically. The text is intact, not doubled, and one peer's
+    // formatting wins (last-writer-loses-formatting, never last-writer-loses-content).
     const { alice, bob, pause, resume } = await harness.pair(proseDoc());
     pause();
     harness.apply(alice, [
@@ -182,9 +182,9 @@ describe('concurrent variant edits converge', () => {
     ]);
     resume();
     harness.expectConverged(alice, bob);
-    // The bug: paragraph 0's text is duplicated. Documented so a fix visibly flips it.
-    expect(bodyText(alice)).toContain('editorAlpha bravo canvas delta editor');
-    expect(bodyText(bob)).toBe(bodyText(alice));
+    // Text intact and not duplicated; a formatting mark from the winning split survives.
+    expect(bodyText(alice)).toBe('Alpha bravo canvas delta editorSecond paragraph');
+    expect(hasElement(alice, 'b') || hasElement(alice, 'i')).toBe(true);
   });
 
   test('sequential wrap changes on one drawing replicate', async () => {

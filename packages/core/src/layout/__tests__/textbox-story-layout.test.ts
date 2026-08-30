@@ -14,6 +14,7 @@ import {
   enumerateDocumentSections,
   geometryOfSection,
   layoutSemanticDocument,
+  storyBlocks,
   type PageFurniture,
   type SemanticLayout,
 } from '../index.ts';
@@ -23,7 +24,11 @@ import {
   type HeaderFooterStoryLayout,
 } from '../hf-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
+import { createParagraphLayoutCache, type ParagraphLayoutCache } from '../layout-cache.ts';
+import { flowBlocksInBox } from '../semantic-table-layout.ts';
+import type { PendingLine } from '../paragraph-flow.ts';
 import {
+  hostedListTokenDeps,
   layoutTextboxStory,
   MAX_TEXTBOX_STORY_NESTING,
   type TextboxStoryLayout,
@@ -152,7 +157,8 @@ function drawingLayoutFor(part: OoxmlPart): InlineDrawingLayoutContext {
 function layoutFooterStory(
   part: OoxmlPart,
   geometry: ReturnType<typeof geometryOfSection>,
-  numberingIndex?: ReturnType<typeof buildNumberingIndex>
+  numberingIndex?: ReturnType<typeof buildNumberingIndex>,
+  cache?: ParagraphLayoutCache<readonly PendingLine[]>
 ) {
   const width = geometry.width - geometry.margin.left - geometry.margin.right;
   return layoutHeaderFooterStory(
@@ -160,7 +166,7 @@ function layoutFooterStory(
     width,
     measurer,
     'test',
-    undefined,
+    cache,
     undefined,
     undefined,
     undefined,
@@ -599,16 +605,20 @@ describe('list markers inside textbox stories', () => {
 
   const NS = `xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}"`;
 
-  function bodyTextboxPart(): OoxmlPart {
-    const doc = readOoxmlPart(
-      `<w:document ${NS}><w:body>` +
-        `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
-        '<w:p><w:r><w:t>after the box</w:t></w:r></w:p>' +
-        '</w:body></w:document>',
-      { name: '/word/document.xml', contentType: 'app/xml' }
-    );
+  function documentPart(bodyXml: string): OoxmlPart {
+    const doc = readOoxmlPart(`<w:document ${NS}><w:body>${bodyXml}</w:body></w:document>`, {
+      name: '/word/document.xml',
+      contentType: 'app/xml',
+    });
     if (!doc.ok) throw new Error(doc.reason);
     return doc.part;
+  }
+
+  function bodyTextboxPart(): OoxmlPart {
+    return documentPart(
+      `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
+        '<w:p><w:r><w:t>after the box</w:t></w:r></w:p>'
+    );
   }
 
   test('a numbered paragraph inside a body text box paints a marker (fixes #466)', () => {
@@ -647,23 +657,41 @@ describe('list markers inside textbox stories', () => {
     expect(boxMarkers(lay(2, '(%1)'))).toEqual(['(1)', '(2)']);
   });
 
-  test('a numbering change reaches a text box hosted in a table cell', () => {
-    const doc = readOoxmlPart(
-      `<w:document ${NS}><w:body>` +
-        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
+  /** A one-cell table whose paragraph hosts a text box with a two-item numbered list. */
+  function cellTextboxPart(): OoxmlPart {
+    return documentPart(
+      '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
         '<w:tblGrid><w:gridCol w:w="9000"/></w:tblGrid>' +
         '<w:tr><w:tc><w:tcPr><w:tcW w:w="9000" w:type="dxa"/></w:tcPr>' +
         `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
         '</w:tc></w:tr></w:tbl>' +
-        '<w:p><w:r><w:t>after the table</w:t></w:r></w:p>' +
-        '</w:body></w:document>',
-      { name: '/word/document.xml', contentType: 'app/xml' }
+        '<w:p><w:r><w:t>after the table</w:t></w:r></w:p>'
     );
-    if (!doc.ok) throw new Error(doc.reason);
+  }
+
+  /**
+   * Keys move with the numbering state, and only with it: distinct states never share a
+   * key list, identical states re-key identically (no gratuitous invalidation).
+   */
+  function expectKeysTrackNumbering(keysFor: (lvlText: string) => string[]): void {
+    const decimal = keysFor('%1.');
+    expect(decimal.length).toBeGreaterThan(0);
+    expect(keysFor('(%1)')).not.toEqual(decimal);
+    expect(keysFor('%1.')).toEqual(decimal);
+  }
+
+  /**
+   * HOST keys only: the box's own story breaks under a `|txbx:`-namespaced producer and
+   * its keys move with the numbering regardless of the host fold under test.
+   */
+  const hostKeysOnly = (keys: string[]): string[] => keys.filter((key) => !key.includes('|txbx:'));
+
+  test('a numbering change reaches a text box hosted in a table cell', () => {
+    const part = cellTextboxPart();
     const session = createLayoutSession();
-    const drawingLayout = drawingLayoutFor(doc.part);
+    const drawingLayout = drawingLayoutFor(part);
     const boxMarkers = (revision: number, lvlText: string): string[] => {
-      const layout = layoutSemanticDocument(doc.part, revision, {
+      const layout = layoutSemanticDocument(part, revision, {
         measurer,
         producer: 'test',
         inlineDrawingLayout: drawingLayout,
@@ -678,6 +706,76 @@ describe('list markers inside textbox stories', () => {
     // The TABLE block's flow key must move too: its cell paragraphs carry no numbering of
     // their own, so only the hosted-story token distinguishes the two numbering states.
     expect(boxMarkers(2, '(%1)')).toEqual(['(1)', '(2)']);
+  });
+
+  test('the cell paragraph break key folds the hosted text-box list state (fixes #622)', () => {
+    // `flowBlocksInBox` is the cell/header lane. The host paragraph's subtree, list item,
+    // and drawing token are byte-identical across a numbering edit, so this token is the
+    // only key input that can move: the cell lane's break cache and retention must key the
+    // same inputs the body lane keys, or the lanes drift.
+    const host = storyBlocks(bodyTextboxPart())[0]!;
+    const keysFor = (lvlText: string): string[] => {
+      const numberingIndex = numberingIndexFor(lvlText);
+      const keys: string[] = [];
+      flowBlocksInBox([host], 0, 400, 0, 0, {
+        measurer,
+        cache: createParagraphLayoutCache(),
+        producer: 'test',
+        nextLineId: (paragraphId, start, lineIndex) => `${paragraphId}-${start}-${lineIndex}`,
+        ...hostedListTokenDeps(numberingIndex, undefined, 'all-markup'),
+        onCellBreakKey: (key) => keys.push(key),
+      });
+      return keys;
+    };
+    expectKeysTrackNumbering(keysFor);
+  });
+
+  /** A cache that records every key the flow asks for, so tests can watch keys move. */
+  function recordingCache(keys: string[]): ParagraphLayoutCache<readonly PendingLine[]> {
+    const inner = createParagraphLayoutCache<readonly PendingLine[]>();
+    return {
+      ...inner,
+      get(key) {
+        keys.push(key);
+        return inner.get(key);
+      },
+      // The spread SNAPSHOTS accessor results; stats must keep reading the live counters.
+      get stats() {
+        return inner.stats;
+      },
+    };
+  }
+
+  test('the body flow wires hosted list state into cell break keys', () => {
+    // The production wiring, not a hand-built provider: dropping the `hostedListTokenDeps`
+    // spread from the body flow's table deps must fail this test.
+    const part = cellTextboxPart();
+    const keysFor = (lvlText: string): string[] => {
+      const keys: string[] = [];
+      layoutSemanticDocument(part, 1, {
+        measurer,
+        producer: 'test',
+        cache: recordingCache(keys),
+        inlineDrawingLayout: drawingLayoutFor(part),
+        numberingIndex: numberingIndexFor(lvlText),
+      });
+      return hostKeysOnly(keys);
+    };
+    expectKeysTrackNumbering(keysFor);
+  });
+
+  test('the header/footer drawing branch wires hosted list state into break keys', () => {
+    const bytes = footerTextboxDoc(textboxDrawing(numberedParagraph('alpha')), 5);
+    const pkg = openPackage(bytes);
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const geometry = geometryOfSection(enumerateDocumentSections(main)[0]!.properties);
+    const footerPart = [...resolveHeaderFooterPartsBySection(pkg)[0]!.footers.values()][0]!;
+    const keysFor = (lvlText: string): string[] => {
+      const keys: string[] = [];
+      layoutFooterStory(footerPart, geometry, numberingIndexFor(lvlText), recordingCache(keys));
+      return hostKeysOnly(keys);
+    };
+    expectKeysTrackNumbering(keysFor);
   });
 
   test('a text-box list restarts at w:start, independent of the host story', () => {

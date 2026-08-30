@@ -60,6 +60,11 @@ export interface DefaultFontSubstitution {
     // (undocumented)
     readonly from: DefaultFontFaceRequest;
     // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
     readonly to: DefaultFontFaceRequest;
 }
 
@@ -74,8 +79,21 @@ export interface FontAssetManifestEntry {
 }
 
 // @public
+export interface FontOriginRequest {
+    readonly defaultFamily: string;
+    readonly families: readonly string[];
+    readonly resolvedFaces?: readonly ResolvedFontFace[];
+}
+
+// @public
+export interface FontResolverMark {
+    readonly 'docx-editor.dev/font-resolver': true;
+}
+
+// @public
 export function installDefaultFontFaces(options?: LoadDefaultFontsOptions & {
     readonly document?: Document;
+    readonly loaded?: readonly DefaultFontSource[];
 }): Promise<number>;
 
 // @public
@@ -88,7 +106,36 @@ export interface LoadDefaultFontsOptions {
 }
 
 // @public
-export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New';
+export function packagedFonts(options?: PackagedFontsOptions): PackagedFontsResolver;
+
+// @public
+export interface PackagedFontsFragment extends DefaultFontsFragment {
+    readonly families: readonly WordDefaultFamily[];
+}
+
+// @public
+export interface PackagedFontsOptions {
+    readonly allow?: readonly WordDefaultFamily[];
+    readonly fetcher?: typeof fetch;
+    readonly install?: boolean;
+    readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
+}
+
+// @public
+export type PackagedFontsResolver = ((request: FontOriginRequest) => Promise<PackagedFontsFragment>) & FontResolverMark;
+
+// @public
+export interface ResolvedFontFace {
+    readonly family: string;
+    readonly style: 'normal' | 'italic';
+    readonly weight: number;
+}
+
+// @public
+export const WORD_DOCUMENT_DEFAULT_FAMILIES: readonly WordDefaultFamily[];
+
+// @public
+export type WordDefaultFamily = 'Calibri' | 'Cambria' | 'Times New Roman' | 'Arial' | 'Courier New' | 'Century Gothic';
 
 // (No @packageDocumentation comment for this package)
 

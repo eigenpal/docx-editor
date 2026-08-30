@@ -87,7 +87,6 @@ import type {
 import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import {
   FontResolutionError,
-  HARD_MAX_AGGREGATE_FONT_BYTES,
   HARD_MAX_FONT_BYTES,
   HARFBUZZ_SHAPING_LIBRARY,
   HarfBuzzShapingError,
@@ -178,8 +177,17 @@ import {
   type FontConfigurationBase,
 } from './font-composition.ts';
 import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
-import { embeddedFontSources } from './embedded-font-sources.ts';
-import { createLocalFontProbe, detectFontSubstitutions } from './font-availability.ts';
+import {
+  boundedExplicitFontSources,
+  embeddedFontDropError,
+  embeddedFontSourcesAfterExplicit,
+  explicitFontBudgetError,
+} from './embedded-font-sources.ts';
+import {
+  coveredFontFamiliesOf,
+  createLocalFontProbe,
+  detectFontSubstitutions,
+} from './font-availability.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   registerEmbeddedFontFaces,
@@ -381,52 +389,28 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return localFontProbe(family);
   };
   /**
-   * Families the app's font configuration supplies or substitutes, case-folded.
-   *
-   * Derived rather than captured at construction: an on-demand resolver's coverage is not
-   * known until a document has been loaded, and a set frozen at construction would report
-   * every family the resolver went on to supply as rendering in a substitute face.
-   * Memoized on the configuration's identity, which moves at most once per load.
+   * Families the active document can be laid out in, from {@link coveredFontFamiliesOf}.
+   * Rebuilt per load, because an on-demand resolver's coverage is not known until a
+   * document has asked.
    */
-  let coveredFamiliesCache: {
-    readonly configuration: FontConfigurationBase | undefined;
-    readonly families: ReadonlySet<string>;
-  } | null = null;
-  const configCoveredFamilies = (): ReadonlySet<string> => {
-    const configuration = fontConfiguration();
-    if (coveredFamiliesCache === null || coveredFamiliesCache.configuration !== configuration) {
-      coveredFamiliesCache = {
-        configuration,
-        families: new Set<string>(
-          [
-            ...(configuration?.sources ?? []).map((source) => source.request.family),
-            ...(configuration?.substitutions ?? []).map((substitution) => substitution.from.family),
-          ]
-            .filter((family) => typeof family === 'string' && family.trim().length > 0)
-            .map((family) => family.toLowerCase())
-        ),
-      };
-    }
-    return coveredFamiliesCache.families;
-  };
+  let coveredFontFamilies: ReadonlySet<string> = new Set();
   const fontFamilyCovered = (family: string): boolean =>
-    configCoveredFamilies().has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
+    coveredFontFamilies.has(family.toLowerCase()) || embeddedFaces?.alias(family) !== undefined;
   /**
    * While font work is still in flight the answer would flicker: embedded faces register
    * at resolution, so a file whose own fonts are arriving must not flash a notice first.
    *
-   * A document that renders no character has nothing a substitute face could get wrong.
-   * That is not a special case for the blank template but the notice's own definition:
-   * `documentFonts()` reports DECLARED families, and Word's `w:docDefaults` declares
-   * Calibri over a document with no runs at all — so the first thing a user saw on a page
-   * they had just created was a warning about text that does not exist. The gate lifts on
-   * the first typed character, when the claim becomes true.
+   * The notice reads `renderedFontFamilies()`, never `documentFonts()`: a family joins it
+   * only when a rendered glyph resolves to it through the style cascade, so a declaration
+   * with no glyph behind it (a blank document's `w:docDefaults` Calibri, a latent Balloon
+   * Text style) answers `[]` and the first typed character moves the answer. No
+   * `rendersText()` gate on top: it counts only literal `w:t` and would hide a document
+   * whose only glyphs are marks (note references, tab leaders) in a substitute face.
    */
   const deriveFontSubstitutions = (): readonly string[] => {
     if (!surface || fontsResolving) return EMPTY_FONT_SUBSTITUTIONS;
-    if (!surface.session.rendersText()) return EMPTY_FONT_SUBSTITUTIONS;
     return detectFontSubstitutions(
-      surface.session.documentFonts(),
+      surface.session.renderedFontFamilies(),
       fontFamilyCovered,
       probeLocalFont
     );
@@ -680,6 +664,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // An on-demand answer describes the document that asked for it. Carrying it into the
     // next one would offer the previous file's families in this file's font picker.
     resolvedFontConfiguration = undefined;
+    coveredFontFamilies = new Set();
     disposeEmbeddedFaces();
     // A superseded in-flight resolution belongs to the PREVIOUS sequence; its stale
     // guard will refuse to touch state, so the flag must reset here or a load that
@@ -783,42 +768,39 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       const maxFontBytes =
         (explicit && 'maxFontBytes' in explicit ? explicit.maxFontBytes : undefined) ??
         HARD_MAX_FONT_BYTES;
-      // Embedded faces spend only what explicit sources left of the aggregate budget: a
-      // file must not be able to starve the fonts the app itself supplied.
-      const explicitBytes = (explicit?.sources ?? []).reduce(
-        (total, source) => total + source.bytes.byteLength,
-        0
-      );
-      // Faces the app's explicit sources already cover can never win composition:
-      // skipped up front so they spend neither budget nor hashing time. Key derivation
-      // is guarded by the same validity rule the mapper applies per-face.
-      const shadowedRequests = new Set(
-        (explicit?.sources ?? [])
-          .filter((source) => source.request.family.trim().length > 0)
-          .map((source) => fontRequestKey(source.request))
-      );
-      const fromDocument = embeddedFontSources(embedded, {
-        maxFontBytes,
-        aggregateBudget: Math.max(0, HARD_MAX_AGGREGATE_FONT_BYTES - explicitBytes),
-        shadowedRequests,
-      });
-      for (const drop of fromDocument.dropped) {
-        reportFontError(
-          new EditorFontError(
-            drop.reason,
-            drop.reason === 'overLimit'
-              ? `embedded font ${drop.request.family} (${drop.partName}) exceeds the font byte budget`
-              : `embedded font part ${drop.partName} declares an invalid family name`,
-            { request: drop.request }
-          )
-        );
+      const boundedExplicit = boundedExplicitFontSources(explicit?.sources ?? [], maxFontBytes);
+      const initialExplicitSources = boundedExplicit.sources;
+      for (const source of boundedExplicit.dropped) {
+        reportFontError(explicitFontBudgetError(source));
       }
-      const fonts = composeFontConfiguration({ epoch: seq, ...explicit }, fromDocument);
+      let fromDocument = embeddedFontSourcesAfterExplicit(
+        embedded,
+        initialExplicitSources,
+        maxFontBytes
+      );
+      // Once, on whatever path this load exits by. The set is not final until the refusal
+      // loop settles — a rejected explicit source hands budget back and un-drops an
+      // embedded face — so it cannot be reported eagerly, and the loop `await`s twice, so
+      // a throw in there must not take the diagnostics with it. `finally` plus this flag
+      // gives both: latest set, reported exactly once.
+      let documentDropsReported = false;
+      const reportDocumentDrops = (): void => {
+        if (documentDropsReported) return;
+        documentDropsReported = true;
+        for (const drop of fromDocument.dropped) {
+          reportFontError(embeddedFontDropError(drop));
+        }
+      };
+      let fonts = composeFontConfiguration(
+        { epoch: seq, ...explicit, sources: initialExplicitSources },
+        fromDocument
+      );
       // Nothing to shape: the fixed measurer stays. An app that DID supply a
       // configuration deserves to hear that it contributed no usable source (every
       // fetch failed, or the fragment was substitutions-only against no document
       // faces) rather than a byte-limit error from the validator.
       if (fonts.sources.length === 0) {
+        reportDocumentDrops();
         fontsResolving = false;
         bump();
         if (explicit) {
@@ -832,47 +814,88 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return;
       }
       let shaping = await createLayoutShaping(fonts);
-      if (destroyed || seq !== loadSeq) {
-        // This shaping can never be installed; release its wasm objects rather than
-        // dropping it unreferenced. Every load builds a new shaper.
+      // A newer load (or a destroy) landed while this one awaited: the shaping can never
+      // be installed, so release its wasm objects rather than dropping it unreferenced,
+      // and clear the in-flight flag only if this load is still the current one. Reads
+      // `shaping` at call time, so it disposes whichever snapshot the caller just built.
+      const supersededNow = (): boolean => {
+        if (!destroyed && seq === loadSeq) return false;
         disposeLayoutShaping(shaping);
         if (seq === loadSeq) fontsResolving = false;
-        return;
-      }
+        return true;
+      };
+      if (supersededNow()) return;
+      // Every "nothing survived" exit: report the drops, release the shaping that will
+      // never be installed, and leave the fixed measurer in place.
+      const bailToFixed = (superseded?: typeof shaping): void => {
+        reportDocumentDrops();
+        if (superseded) disposeLayoutShaping(superseded);
+        fontsResolving = false;
+        bump();
+      };
       // Per-face degradation, reported: an embedded face the validator refused still
       // resolves — to a typed error. Probing here (map lookups, no shaping work) is what
       // turns a silent fixed-measurer fallback into a diagnosable one.
-      const refusedEmbedded = new Set<string>();
-      for (const source of fromDocument.sources) {
-        const resolved = shaping.fonts.resolve(source.request);
-        if (resolved instanceof FontResolutionError) {
-          reportFontError(toEditorFontError(resolved));
-          refusedEmbedded.add(source.id);
+      const refusedIn = (snapshot: typeof shaping, composed: typeof fonts) => {
+        const refused = new Set<string>();
+        for (const source of composed.sources ?? []) {
+          const resolved = snapshot.fonts.resolve(source.request);
+          if (resolved instanceof FontResolutionError) {
+            reportFontError(toEditorFontError(resolved));
+            refused.add(fontRequestKey(source.request));
+          }
         }
-      }
-      // A refused embedded face is worse than no embedded face: composition drops a
-      // substitution whenever a DIRECT source exists for that family, so a damaged
-      // (or crafted) embedded "Calibri" would disable a perfectly good Carlito for the
-      // whole document. Composition cannot know admission outcomes, so recompose once
-      // without the refused faces and let the substitutions come back.
-      if (refusedEmbedded.size > 0 && refusedEmbedded.size < fromDocument.sources.length) {
-        const survivors = fromDocument.sources.filter((source) => !refusedEmbedded.has(source.id));
-        const superseded = shaping;
-        shaping = await createLayoutShaping(
-          composeFontConfiguration({ epoch: seq, ...explicit }, { sources: survivors })
-        );
-        disposeLayoutShaping(superseded);
-        if (destroyed || seq !== loadSeq) {
-          disposeLayoutShaping(shaping);
-          if (seq === loadSeq) fontsResolving = false;
-          return;
+        return refused;
+      };
+      const refusedRequests = refusedIn(shaping, fonts);
+      // A refused direct face is worse than no face. Composition drops a substitution
+      // whenever a direct source exists, so recompose without every refused request.
+      try {
+        if (refusedRequests.size > 0) {
+          const explicitSurvivors = initialExplicitSources.filter(
+            (source) => !refusedRequests.has(fontRequestKey(source.request))
+          );
+          const rejectedExplicit = explicitSurvivors.length !== initialExplicitSources.length;
+          if (rejectedExplicit) {
+            fromDocument = embeddedFontSourcesAfterExplicit(
+              embedded,
+              explicitSurvivors,
+              maxFontBytes
+            );
+          }
+          const embeddedSurvivors = fromDocument.sources.filter(
+            (source) => rejectedExplicit || !refusedRequests.has(fontRequestKey(source.request))
+          );
+          const superseded = shaping;
+          fonts = composeFontConfiguration(
+            { epoch: seq, ...explicit, sources: explicitSurvivors },
+            { sources: embeddedSurvivors }
+          );
+          if (fonts.sources.length === 0) return bailToFixed(superseded);
+          shaping = await createLayoutShaping(fonts);
+          disposeLayoutShaping(superseded);
+          if (supersededNow()) return;
+          const refusedAfterRebuild = refusedIn(shaping, fonts);
+          if (refusedAfterRebuild.size > 0) {
+            const admittedExplicit = explicitSurvivors.filter(
+              (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
+            );
+            const admittedEmbedded = fromDocument.sources.filter(
+              (source) => !refusedAfterRebuild.has(fontRequestKey(source.request))
+            );
+            const rejected = shaping;
+            fonts = composeFontConfiguration(
+              { epoch: seq, ...explicit, sources: admittedExplicit },
+              { sources: admittedEmbedded }
+            );
+            if (fonts.sources.length === 0) return bailToFixed(rejected);
+            shaping = await createLayoutShaping(fonts);
+            disposeLayoutShaping(rejected);
+            if (supersededNow()) return;
+          }
         }
-      } else if (refusedEmbedded.size === fromDocument.sources.length && !explicit) {
-        // Nothing embedded survived and the app supplied nothing: the fixed measurer is
-        // already the right answer, and every failure has been reported.
-        fontsResolving = false;
-        bump();
-        return;
+      } finally {
+        reportDocumentDrops();
       }
       // Paint-side twin, BEFORE the remount so the first shaped paint already carries the
       // glyphs. Only faces the validator ADMITTED are handed over, and each resolves
@@ -884,8 +907,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // name, so a document laid out on Carlito metrics would be drawn in something else
       // — correct pagination, wrong glyphs. Aliasing (rather than registering the family
       // name itself) is what keeps that safe; see `embedded-font-faces.ts`.
-      const admitted = [...(explicit?.sources ?? []), ...fromDocument.sources]
-        .filter((source) => !refusedEmbedded.has(source.id))
+      const admitted = fonts.sources
         .map((source) => {
           const resolved = shaping.fonts.resolve(source.request);
           return resolved instanceof FontResolutionError || resolved.id !== source.id
@@ -906,12 +928,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       );
       if (destroyed || seq !== loadSeq) {
         registration.dispose();
-        disposeLayoutShaping(shaping);
-        if (seq === loadSeq) fontsResolving = false;
+        supersededNow();
         return;
       }
       disposeEmbeddedFaces();
       embeddedFaces = registration;
+      coveredFontFamilies = coveredFontFamiliesOf(admitted, fonts.substitutions ?? []);
       // HarfBuzz can only shape faces whose bytes reached its resource snapshot. A run may
       // still name a locally installed browser face (Helvetica is the common macOS case):
       // paint resolves that face through CSS, so falling back to the deterministic monospace
@@ -1815,6 +1837,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!surface) return Promise.reject(editorError('notFound', 'no document is loaded'));
       // Ctrl+S can race a typing burst: queued keystrokes belong in the bytes.
       surface.flushPendingInput();
+      // Stale REF results rewrite first; false (collab skip) exports cached results anyway.
+      surface.refreshRefFieldResults();
       // A fresh copy, so the returned ArrayBuffer is exactly the document — not a window
       // into a larger allocation.
       const bytes = surface.session.save();

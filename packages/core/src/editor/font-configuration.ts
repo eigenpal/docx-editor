@@ -158,6 +158,7 @@ export async function createLayoutShaping(
       substitutions: configuration.substitutions?.map((substitution) => ({
         from: publicRequest(substitution.from),
         to: publicRequest(substitution.to),
+        ...(substitution.lineMetrics ? { lineMetrics: { ...substitution.lineMetrics } } : {}),
       })),
       defaultFont: Object.freeze({
         family: configuration.defaultFont.family,
@@ -199,9 +200,15 @@ export async function createLayoutShaping(
       operation: Object.freeze({
         resourceEpoch: fonts.epoch,
         configEpoch: sampled.epoch,
-        extensionFingerprint: `fonts:${sampled.sources
-          .map((source) => `${source.hash}#${source.faceIndex}`)
-          .join(',')}`,
+        extensionFingerprint: `fonts:${JSON.stringify(
+          sampled.sources.map((source) => [
+            source.request.family,
+            source.request.weight,
+            source.request.style,
+            source.hash,
+            source.faceIndex,
+          ])
+        )};substitutions:${JSON.stringify(sampled.substitutions ?? [])}`,
         shapingHash: `hb:${HARFBUZZ_SHAPING_LIBRARY.version}:kern+liga`,
         producerVersion: 1,
       }),

@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { DocxEditor, useDocxEditor, useDocxSource } from '@docx-editor.dev/react';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 import { reviewModule } from '@docx-editor.dev/pro';
 import {
   DocxEditorCollaboration,
@@ -401,7 +401,7 @@ export function App() {
     document: bytes,
     fonts,
     error: loadError,
-  } = useDocxSource(DOCUMENT_URL, { fonts: defaultFonts });
+  } = useDocxSource(DOCUMENT_URL, { fonts: packagedFonts() });
 
   // Only the room's identity keys the connection, so this object does not need to be stable —
   // but building it in a memo keeps the branch that decides "no room yet" in one place.

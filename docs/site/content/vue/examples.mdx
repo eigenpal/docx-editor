@@ -149,10 +149,10 @@ import {
   DocxEditorContent,
   useDocxSource,
 } from '@docx-editor.dev/vue';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
 const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
-  fonts: defaultFonts,
+  fonts: packagedFonts(),
 });
 </script>
 

@@ -88,6 +88,44 @@ describe('on-demand font resolution', () => {
     editor.destroy();
   });
 
+  test('a rejected substitute target still reports the affected family', async () => {
+    const malformed = new Uint8Array(256).fill(0x42);
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
+    (HTMLCanvasElement.prototype as { getContext: unknown }).getContext = () => ({
+      font: '',
+      measureText: (text: string) => ({ width: text.length * 10 }),
+    });
+    let editor: DocxEditorInstance | undefined;
+    try {
+      editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: docx(runIn('Definitely Missing Typeface', 'fallback')),
+        fonts: () => ({
+          sources: [
+            {
+              request: { family: 'Broken Target', weight: 400, style: 'normal' },
+              id: 'broken-substitute-target',
+              bytes: malformed,
+              hash: sha256FontBytes(malformed),
+              faceIndex: 0,
+            },
+          ],
+          substitutions: [
+            {
+              from: { family: 'Definitely Missing Typeface', weight: 400, style: 'normal' },
+              to: { family: 'Broken Target', weight: 400, style: 'normal' },
+            },
+          ],
+        }),
+      });
+      await fontsSettled(editor);
+      expect(editor.snapshot().fontSubstitutions ?? []).toContain('Definitely Missing Typeface');
+    } finally {
+      editor?.destroy();
+      (HTMLCanvasElement.prototype as { getContext: unknown }).getContext = originalGetContext;
+    }
+  });
+
   test('what the resolver returns reaches shaped measurement', async () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),
@@ -112,6 +150,28 @@ describe('on-demand font resolution', () => {
     // once a document has been through it.
     expect(editor.getAvailableFonts()).toContain('DejaVu Sans');
     expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('DejaVu Sans');
+    editor.destroy();
+  });
+
+  test('a configured redirect counts as available, not as a substitution to warn about', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(runIn('Brand Sans', 'substituted')),
+      fonts: () => ({
+        ...dejaVuFragment,
+        substitutions: [
+          {
+            from: { family: 'Brand Sans', weight: 400, style: 'normal' },
+            to: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+          },
+        ],
+      }),
+    });
+    await fontsSettled(editor);
+    // The notice reports what is UNAVAILABLE. A resolver that deliberately answers this
+    // family has made it available: the run measures and paints on the face the app chose,
+    // so telling the user the font "isn't available" would be the opposite of the truth.
+    expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Brand Sans');
     editor.destroy();
   });
 

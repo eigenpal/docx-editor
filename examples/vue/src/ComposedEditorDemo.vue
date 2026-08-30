@@ -92,7 +92,8 @@ import {
   CustomNodeContextMenu,
   DocxEditorReview,
 } from '@docx-editor.dev/pro/vue';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
 import EditorChrome from './EditorChrome.vue';
 import PerfHud from './PerfHud.vue';
 import CitationDialog from './CitationDialog.vue';
@@ -125,12 +126,18 @@ const title = ref(
 const colorMode = ref<'light' | 'dark'>('light');
 const citationForm = ref<CitationFormState | null>(null);
 
+// ORDER IS PRECEDENCE. `packagedFonts()` answers first from bytes inside
+// `@docx-editor.dev/fonts`, so a document naming Calibri never touches the network.
+// `googleFonts()` is told which faces the packaged origin already covers and fetches only
+// the rest, so composing the two never downloads the same face twice. The catalog IS a
+// third party: naming a family the bundle does not carry costs a request to jsdelivr, and
+// a failed fetch reaches `onFontError` below and degrades to the fixed measurer.
 const {
   document: bytes,
   fonts,
   error: loadError,
 } = useDocxSource(props.fixtureUrl, {
-  fonts: defaultFonts,
+  fonts: [packagedFonts(), googleFonts()],
 });
 
 function onFontError(error: { code: string; message: string }): void {

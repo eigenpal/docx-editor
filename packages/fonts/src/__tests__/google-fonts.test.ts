@@ -2,9 +2,10 @@
 //
 // Pins the promises that make fetching-on-open defensible: nothing goes out for a family
 // the document did not name, a name is only ever a lookup key (never a URL fragment),
-// every URL is pinned to the recorded revision, and a substituted name resolves to its
-// metric-compatible target.
+// every URL is pinned to one of the recorded revisions, and a substituted name resolves
+// to its metric-compatible target.
 
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 import {
   GOOGLE_FONTS_REVISION,
@@ -14,12 +15,19 @@ import {
   googleFonts,
 } from '../google-fonts.ts';
 
-/** A fetcher that serves catalogued byte lengths without touching the network. */
+/**
+ * A fetcher that serves catalogued byte lengths without touching the network, and reads
+ * the package's OWN assets from disk — `googleFonts()` answers a family the catalog
+ * cannot match from the bundle, over this same fetcher.
+ */
 function fakeFetcher(): { fetcher: typeof fetch; requested: string[] } {
   const requested: string[] = [];
   const fetcher = ((input: RequestInfo | URL) => {
     const url = String(input);
     requested.push(url);
+    if (url.startsWith('file:')) {
+      return Promise.resolve(new Response(new Uint8Array(readFileSync(new URL(url)))));
+    }
     const face = GOOGLE_FONT_CATALOG.find((entry) => entry.url === url);
     if (!face) return Promise.resolve(new Response(null, { status: 404 }));
     return Promise.resolve(new Response(new Uint8Array(face.byteLength)));
@@ -52,21 +60,94 @@ const resolveOnly = (
     defaultFamily: 'No Such Family',
   });
 
+/**
+ * The ONLY commits a catalogued URL may name.
+ *
+ * Written out rather than pattern-matched. A 40-hex regex says "this looks like a commit",
+ * which a mutable branch tip also satisfies — and the whole safety argument for fetching a
+ * document-declared family is that the bytes come from a commit nobody can move. A
+ * regeneration that re-pins anything has to change this list, in a diff a human reads.
+ *
+ * `bun run check:google-catalog` enforces the same rule from the generator's own
+ * `ALLOWED_REVISIONS`; this is its offline twin, so the pin is guarded on both sides.
+ */
+const PINNED_REVISIONS: readonly string[] = [
+  // The main catalog revision, re-exported by the generated file.
+  GOOGLE_FONTS_REVISION,
+  // Montserrat and Montserrat Light: the last revision that shipped static instances.
+  '160c7fe82ecb74b108d886ed8d27762f6e346163',
+];
+
 describe('catalog', () => {
-  test('every family ships all four faces, pinned to the recorded revision', () => {
+  test('every family ships all four faces, pinned to one of the recorded revisions', () => {
     const byFamily = new Map<string, Set<string>>();
+    const offPin: string[] = [];
     for (const face of GOOGLE_FONT_CATALOG) {
-      expect(face.url).toStartWith(
-        `https://cdn.jsdelivr.net/gh/google/fonts@${GOOGLE_FONTS_REVISION}/`
-      );
+      const revision = face.url.match(
+        /^https:\/\/cdn\.jsdelivr\.net\/gh\/google\/fonts@([0-9a-f]{40})\//
+      )?.[1];
+      if (revision === undefined || !PINNED_REVISIONS.includes(revision)) {
+        offPin.push(`${face.family} ${face.weight}/${face.style}: ${face.url}`);
+      }
       expect(face.hash).toMatch(/^sha256:[0-9a-f]{64}$/);
       const faces = byFamily.get(face.family) ?? new Set<string>();
       faces.add(`${face.weight}/${face.style}`);
       byFamily.set(face.family, faces);
     }
+    // Collected, so a regeneration that moved several faces names them all at once.
+    expect(offPin).toEqual([]);
     expect(byFamily.size).toBe(GOOGLE_FONT_FAMILIES.length);
     for (const [family, faces] of byFamily) {
       expect(`${family}:${faces.size}`).toBe(`${family}:4`);
+    }
+  });
+
+  test('every catalogued URL names a static instance, never a variable file', () => {
+    // The shaper refuses variation axes, so a variable file would render every weight at
+    // its default instance and paginate bold as regular. The generator rejects an `fvar`
+    // table at build time; this is the committed catalog's own witness, and the thing a
+    // variable file is recognisable by in a URL is the axis list in its NAME —
+    // `Montserrat[wght].ttf`, `Family-Italic[wdth,wght].ttf`.
+    for (const face of GOOGLE_FONT_CATALOG) {
+      const file = face.url.slice(face.url.lastIndexOf('/') + 1);
+      expect(`${face.family} ${face.weight}/${face.style}: ${file}`).toMatch(
+        /: [\w-]+-[A-Za-z]+\.ttf$/
+      );
+    }
+  });
+
+  test('Montserrat is served from the last revision that shipped static instances', () => {
+    // Its current upstream family is variable-only, so the two Montserrat entries are
+    // pinned to an older commit than the rest of the catalog. Both halves matter: the
+    // FILES have to be the named static instances, and the revision has to be the one
+    // that still carries them.
+    expect(GOOGLE_FONT_FAMILIES).toContain('Montserrat');
+    expect(GOOGLE_FONT_FAMILIES).toContain('Montserrat Light');
+    // BOTH families, not just the base one. `Montserrat Light` is the same directory at
+    // the same old commit, drawing the Light/SemiBold instances; re-pinning it to head
+    // would name four files that do not exist there.
+    const expected: Readonly<Record<string, readonly string[]>> = {
+      Montserrat: [
+        'Montserrat-Bold.ttf',
+        'Montserrat-BoldItalic.ttf',
+        'Montserrat-Italic.ttf',
+        'Montserrat-Regular.ttf',
+      ],
+      'Montserrat Light': [
+        'Montserrat-Light.ttf',
+        'Montserrat-LightItalic.ttf',
+        'Montserrat-SemiBold.ttf',
+        'Montserrat-SemiBoldItalic.ttf',
+      ],
+    };
+    for (const [family, files] of Object.entries(expected)) {
+      const faces = GOOGLE_FONT_CATALOG.filter((face) => face.family === family);
+      expect(faces.map((face) => face.url.slice(face.url.lastIndexOf('/') + 1)).sort()).toEqual([
+        ...files,
+      ]);
+      expect(
+        faces.map((face) => `${family}: ${face.url.includes(`@${GOOGLE_FONTS_REVISION}/`)}`)
+      ).toEqual(faces.map(() => `${family}: false`));
     }
   });
 
@@ -122,6 +203,85 @@ describe('googleFonts resolver', () => {
     expect(fragment.sources.every((source) => source.request.family !== 'Times New Roman')).toBe(
       true
     );
+  });
+
+  test('a family the catalog cannot match resolves from the packaged assets', async () => {
+    // No google/fonts family is metric-compatible with Century Gothic. The package's own
+    // TeX Gyre Adventor answers it, over the SAME fetcher, so `googleFonts()` is the
+    // on-demand path for it and makes no third-party request.
+    const { fetcher, requested } = fakeFetcher();
+    const fragment = await resolveOnly(['century gothic'], fetcher);
+    expect(fragment.sources).toHaveLength(4);
+    expect(fragment.sources.every((source) => source.request.family === 'TeX Gyre Adventor')).toBe(
+      true
+    );
+    expect(requested.every((url) => url.includes('TeXGyreAdventor'))).toBe(true);
+    // Keyed on the document's own spelling, and carrying Word's line box for the family —
+    // PER WEIGHT, because Century Gothic's bold ascent is 2032 against the regular 1989.
+    expect(
+      fragment.substitutions.map(
+        (entry) =>
+          `${entry.from.family}/${entry.from.weight}/${entry.from.style}->${entry.to.family}@${entry.lineMetrics?.heightEm}`
+      )
+    ).toEqual([
+      'century gothic/400/normal->TeX Gyre Adventor@1.19140625',
+      'century gothic/700/normal->TeX Gyre Adventor@1.21240234375',
+      'century gothic/400/italic->TeX Gyre Adventor@1.19140625',
+      'century gothic/700/italic->TeX Gyre Adventor@1.21240234375',
+    ]);
+  });
+
+  test('Montserrat family names resolve directly to their static faces', async () => {
+    const { fetcher } = fakeFetcher();
+    const fragment = await resolveOnly(['Montserrat', 'Montserrat Light'], fetcher);
+    expect(fragment.sources).toHaveLength(8);
+    expect(new Set(fragment.sources.map((source) => source.request.family))).toEqual(
+      new Set(['Montserrat', 'Montserrat Light'])
+    );
+    expect(fragment.substitutions).toHaveLength(0);
+  });
+
+  test('allow names the SERVING face for a packaged family, not the Word name', async () => {
+    // `allow` is a list of faces that may load, so a packaged family is named by its
+    // substitute. Naming the Word family instead resolves to nothing — correct per the
+    // documented semantics, and a foot-gun worth pinning in both directions.
+    const served = fakeFetcher();
+    const byServingName = await resolveOnly(['Century Gothic'], served.fetcher, {
+      allow: ['TeX Gyre Adventor'],
+    });
+    expect(byServingName.sources).toHaveLength(4);
+    expect(
+      byServingName.sources.every((source) => source.request.family === 'TeX Gyre Adventor')
+    ).toBe(true);
+
+    const wordName = fakeFetcher();
+    const byWordName = await resolveOnly(['Century Gothic'], wordName.fetcher, {
+      allow: ['Century Gothic'],
+    });
+    expect(byWordName.sources).toHaveLength(0);
+    expect(byWordName.substitutions).toHaveLength(0);
+    expect(wordName.requested).toHaveLength(0);
+  });
+
+  test('an explicit substitute overrides the packaged answer for that family', async () => {
+    // The bundled face is a DEFAULT, not a floor. Checking it before the substitution map
+    // made Century Gothic the one family `substitute` could not redirect, and under
+    // `allow` the two options together resolved to nothing at all.
+    const { fetcher, requested } = fakeFetcher();
+    const fragment = await resolveOnly(['Century Gothic'], fetcher, {
+      substitute: { 'Century Gothic': 'Lato' },
+    });
+    expect(fragment.sources.every((source) => source.request.family === 'Lato')).toBe(true);
+    expect(fragment.sources).toHaveLength(4);
+    expect(requested.some((url) => url.includes('TeXGyreAdventor'))).toBe(false);
+
+    const narrowed = fakeFetcher();
+    const allowed = await resolveOnly(['Century Gothic'], narrowed.fetcher, {
+      allow: ['Lato'],
+      substitute: { 'Century Gothic': 'Lato' },
+    });
+    expect(allowed.sources).toHaveLength(4);
+    expect(allowed.sources.every((source) => source.request.family === 'Lato')).toBe(true);
   });
 
   test('a family named directly needs no substitution entry', async () => {
@@ -195,11 +355,36 @@ describe('googleFonts resolver', () => {
   });
 
   test('an app substitution overrides the built-in map', async () => {
+    // Calibri, not an uncatalogued name: the built-in map already answers Calibri with
+    // Carlito, so this is the entry being OVERRIDDEN rather than merely added.
     const { fetcher } = fakeFetcher();
-    const fragment = await resolve(['Georgia'], fetcher, { substitute: { Georgia: 'Tinos' } });
+    const fragment = await resolveOnly(['Calibri'], fetcher, { substitute: { Calibri: 'Tinos' } });
+    // Counted before the `every`, which is vacuously true on an empty list.
+    expect(fragment.sources).toHaveLength(4);
+    expect(fragment.sources.every((source) => source.request.family === 'Tinos')).toBe(true);
+    expect(fragment.substitutions).toHaveLength(4);
     expect(
-      fragment.substitutions.some(
-        (entry) => entry.from.family === 'Georgia' && entry.to.family === 'Tinos'
+      fragment.substitutions.every(
+        (entry) => entry.from.family === 'Calibri' && entry.to.family === 'Tinos'
+      )
+    ).toBe(true);
+  });
+
+  test('an app substitution beats a direct catalog match on the same name', async () => {
+    // The substitution map is consulted BEFORE the catalog, so a family catalogued under
+    // its own name can still be redirected. Documented order; nothing covered it, and the
+    // guide described the reverse.
+    const { fetcher, requested } = fakeFetcher();
+    expect(GOOGLE_FONT_FAMILIES).toContain('Lato');
+    const fragment = await resolveOnly(['Lato'], fetcher, { substitute: { Lato: 'Tinos' } });
+    expect(fragment.sources).toHaveLength(4);
+    expect(fragment.sources.every((source) => source.request.family === 'Tinos')).toBe(true);
+    expect(requested).toHaveLength(4);
+    expect(requested.every((url) => url.includes('/tinos/'))).toBe(true);
+    expect(fragment.substitutions).toHaveLength(4);
+    expect(
+      fragment.substitutions.every(
+        (entry) => entry.from.family === 'Lato' && entry.to.family === 'Tinos'
       )
     ).toBe(true);
   });
@@ -251,5 +436,96 @@ describe('googleFonts resolver', () => {
     const first = await resolve(['Tinos', 'Cousine'], fetcher);
     const second = await resolve(['Cousine', 'Tinos'], fetcher);
     expect(first.sources.map((source) => source.id)).toEqual(second.sources.map((s) => s.id));
+  });
+
+  const FOUR_FACES = [
+    { weight: 400, style: 'normal' as const },
+    { weight: 700, style: 'normal' as const },
+    { weight: 400, style: 'italic' as const },
+    { weight: 700, style: 'italic' as const },
+  ];
+  const allFacesOf = (family: string) => FOUR_FACES.map((face) => ({ family, ...face }));
+
+  test('never asks the CDN for a WORD name an earlier origin already substituted for', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    // Only the document's own name is reported, which is what `packagedFonts()` covering
+    // Calibri looks like from here. Carlito must not be fetched on its account.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Cousine'],
+      defaultFamily: 'Calibri',
+      resolvedFaces: allFacesOf('calibri'),
+    });
+
+    expect(requested.some((url) => url.includes('Carlito'))).toBe(false);
+    expect(requested).toHaveLength(4);
+    expect(new Set(fragment.sources.map((source) => source.request.family))).toEqual(
+      new Set(['Cousine'])
+    );
+  });
+
+  test('never asks the CDN for a catalog FACE an earlier origin already supplied', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    // Only the FACE is reported — an origin that handed over Carlito bytes without saying
+    // which Word name they stand in for. The substitution here maps Calibri onto exactly
+    // that face, so matching on the declared name alone would fetch it a second time.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Cousine'],
+      defaultFamily: 'Calibri',
+      resolvedFaces: allFacesOf('Carlito'),
+    });
+
+    expect(requested.every((url) => url.includes('Cousine'))).toBe(true);
+    expect(requested).toHaveLength(4);
+    expect(new Set(fragment.sources.map((source) => source.request.family))).toEqual(
+      new Set(['Cousine'])
+    );
+  });
+
+  test('a PARTLY covered family is fetched whole, so no face is left without bytes', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    // Regular Carlito only. Reading that as "Calibri is covered" left bold and the italics
+    // with neither bytes nor a substitution.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: [],
+      defaultFamily: 'Calibri',
+      resolvedFaces: [{ family: 'Carlito', weight: 400, style: 'normal' }],
+    });
+
+    expect(requested.every((url) => url.includes('Carlito'))).toBe(true);
+    expect(requested).toHaveLength(4);
+    expect(fragment.substitutions).toHaveLength(4);
+  });
+
+  test('never re-reads a BUNDLED family an earlier origin already supplied', async () => {
+    const { fetcher, requested } = fakeFetcher();
+    // The composition this package advertises: `[packagedFonts(), googleFonts()]` on a
+    // document naming Century Gothic. Both resolvers answer that family from the SAME
+    // bundled bytes, so without this the pair read TeX Gyre Adventor twice — 709,200
+    // duplicate bytes, in exactly the shape `resolvedFaces` exists to prevent.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Century Gothic'],
+      defaultFamily: 'Tinos',
+      resolvedFaces: allFacesOf('TeX Gyre Adventor'),
+    });
+
+    expect(requested.some((url) => url.includes('TeXGyreAdventor'))).toBe(false);
+    expect(fragment.sources.some((source) => source.request.family === 'TeX Gyre Adventor')).toBe(
+      false
+    );
+  });
+
+  test('a PARTLY covered bundled family is read whole, so no face is left without bytes', async () => {
+    const { fetcher } = fakeFetcher();
+    // Regular only. The same all-faces-or-none rule the catalog path uses: skipping here
+    // would leave bold and the italics with no bytes at all.
+    const fragment = await googleFonts({ fetcher, onFailure: () => {} })({
+      families: ['Century Gothic'],
+      defaultFamily: 'Tinos',
+      resolvedFaces: [{ family: 'TeX Gyre Adventor', weight: 400, style: 'normal' }],
+    });
+
+    expect(
+      fragment.sources.filter((source) => source.request.family === 'TeX Gyre Adventor')
+    ).toHaveLength(4);
   });
 });

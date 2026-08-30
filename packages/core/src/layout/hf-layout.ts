@@ -27,7 +27,7 @@ import {
   type FieldPageContext,
   type StoryPageFieldNeeds,
 } from './field-projection.ts';
-import type { ParagraphLayoutCache } from './layout-cache.ts';
+import { framedTokenJoin, type ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import { drawingResourceLayoutToken } from './inline-drawing-source.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
@@ -45,7 +45,7 @@ import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { forEachStoryDrawing, forEachStoryParagraphFragment } from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
-import { layoutTextboxStory } from './textbox-story-layout.ts';
+import { hostedListTokenDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
   BlockFragmentRecord,
   HeaderFooterStoryRecord,
@@ -235,6 +235,9 @@ export function layoutHeaderFooterStory(
   ).listItems;
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
+  // ONE provider for the whole story layout — every reflow pass and page-field projection
+  // reuses it, the body lane's own rule ("ONE provider for every fold of this flow").
+  const hostedListDeps = hostedListTokenDeps(inputs?.numberingIndex, styleCascade, displayMode);
   let baseline: HeaderFooterStoryLayout | undefined;
 
   const layoutOnce = (ctx: FieldPageContext | undefined): HeaderFooterStoryLayout => {
@@ -307,6 +310,9 @@ export function layoutHeaderFooterStory(
           nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
           styleCascade,
           ...(listItems ? { listItems } : {}),
+          // Only this branch lays hosted stories out (`layoutTextboxStoryFor` below), so
+          // only this branch folds their list state into the cell-lane break keys.
+          ...hostedListDeps,
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
@@ -520,10 +526,16 @@ export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
   forEachStoryParagraphFragment(story, (fragment) => {
     const marker = fragment.marker;
     if (marker) {
-      tokens.push(`${fragment.paragraphId}=${marker.text}@${marker.numFmt}:${marker.level}`);
+      // Length-framed at both levels: `marker.text` is expanded `w:lvlText` and `numFmt`
+      // is read verbatim from the file, so any separator the content can contain lets two
+      // different marker states concatenate to one token and reuse a header page showing
+      // the old numbers.
+      tokens.push(
+        framedTokenJoin([fragment.paragraphId, marker.text, marker.numFmt, String(marker.level)])
+      );
     }
   });
-  const token = tokens.length === 0 ? '' : `|list:${tokens.join(',')}`;
+  const token = tokens.length === 0 ? '' : `|list:${framedTokenJoin(tokens)}`;
   storyListMarkerTokens.set(story, token);
   return token;
 }
@@ -568,10 +580,29 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
     }
   });
   // Empty for the overwhelmingly common story with no pictures, so the context string for a
-  // plain header is byte-for-byte what it was.
-  const token = tokens.length === 0 ? '' : `!${tokens.join('!')}`;
+  // plain header is byte-for-byte what it was. Length-framed: resource keys embed
+  // relationship ids and part names read verbatim from the file, and the clip token is
+  // itself a framed list, so no separator — printable or NUL — stays unforgeable.
+  const token = tokens.length === 0 ? '' : `!${framedTokenJoin(tokens)}`;
   storyDrawingResourceTokens.set(story, token);
   return token;
+}
+
+/**
+ * One framed furniture story entry — shared by `furnitureLayoutContext` here and the
+ * multi-section `furnitureStoryEntries` fingerprint, so a rider token added to one reuse
+ * key can never be forgotten by the other. `contentKey` describes the AUTHORED part, so the
+ * drawing-resource and list-marker tokens ride along for everything a story resolves from
+ * ANOTHER part; without them a reused section keeps a stale header.
+ */
+export function framedStoryEntry(label: string, story: HeaderFooterStoryLayout): string {
+  return framedTokenJoin([
+    label,
+    String(story.flowHeight),
+    story.contentKey,
+    storyDrawingResourceToken(story),
+    storyListMarkerToken(story),
+  ]);
 }
 
 /**
@@ -592,19 +623,16 @@ export function furnitureLayoutContext(
   footerDistance: number
 ): string {
   if (!furniture) return '';
+  // Length-framed fields, entries, and sections: the marker token embeds expanded
+  // `w:lvlText` and the resource token embeds relationship-derived identity, so any
+  // separator boundary the content can reproduce would let one variant's file-controlled
+  // text forge another variant's entry and reuse pages showing the stale variant.
   const stories = (prefix: string, source: ReadonlyMap<string, HeaderFooterStoryLayout>) =>
-    [...source]
-      .map(
-        ([variant, story]) =>
-          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}` +
-          `${storyDrawingResourceToken(story)}${storyListMarkerToken(story)}`
-      )
-      .sort()
-      .join(',');
+    framedTokenJoin(
+      [...source].map(([variant, story]) => framedStoryEntry(`${prefix}${variant}`, story)).sort()
+    );
   return (
     `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
-    stories('h', furniture.headers) +
-    ';' +
-    stories('f', furniture.footers)
+    framedTokenJoin([stories('h', furniture.headers), stories('f', furniture.footers)])
   );
 }

@@ -19,6 +19,12 @@ import { parseButtonInstruction } from './field-button.ts';
 import { docPropertyValue, parseDocPropertyInstruction } from './field-doc-property.ts';
 import { parseHyperlinkInstruction } from './field-link.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
+import { parseAutonumInstruction } from './field-autonum.ts';
+import {
+  parseRefInstruction,
+  type PageRefFieldProjection,
+  type RefFieldContext,
+} from './field-ref.ts';
 import {
   modelTextOfRunChild,
   runPropertiesOf,
@@ -44,6 +50,7 @@ import {
 import { createNestedPageTracker } from './field-nested-page.ts';
 import {
   numericPictureApplies,
+  PAGE_FIELD_PLACEHOLDER,
   pageFieldPlaceholder,
   projectPageFieldValue,
   type BodyPageFieldContext,
@@ -263,6 +270,11 @@ export interface SimpleFieldProjection {
     /** The field's `\#` numeric picture, carried to the substitute pass. */
     readonly picture?: string;
   };
+  /**
+   * Present when this is a BODY `PAGEREF`: the cached display paints now and document
+   * finalize substitutes the number of the page the resolved target lands on.
+   */
+  readonly pageRef?: PageRefFieldProjection;
 }
 
 /**
@@ -301,6 +313,8 @@ export function projectSimpleFieldResult(args: {
   readonly documentProperties?: DocumentProperties;
   /** True in BODY flow: an empty-cache page field paints a placeholder for finalize to fill. */
   readonly bodyPageFields?: BodyPageFieldContext | false;
+  /** The story's resolved REF inputs; absent keeps a REF simple field on its cached result. */
+  readonly refFields?: RefFieldContext;
 }): SimpleFieldProjection | null {
   const { simple, pageContext, inheritedRunProperties, themeFonts } = args;
   const display = collectSimpleFieldDisplay(args);
@@ -350,6 +364,44 @@ export function projectSimpleFieldResult(args: {
     if (glyph) {
       if (glyph.style.hidden) return null;
       return { text: glyph.text, props: glyph.props, style: glyph.style };
+    }
+  }
+
+  // A simple REF resolves live exactly like the complex shape, gated per field (by the
+  // `w:fldSimple` node id) on the calibration verdict; an unresolvable or uncalibrated
+  // reference falls through to the cached display.
+  if (args.refFields) {
+    const refSpec = parseRefInstruction(instr);
+    if (refSpec) {
+      const value = args.refFields.liveValueOf(simple.id, refSpec);
+      if (value !== null) {
+        const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+        if (style.hidden) return null;
+        return { text: value, props, style };
+      }
+      // A BODY simple PAGEREF defers exactly like the complex shape: paint the cached display
+      // (or the placeholder digit when the file cached none and hid nothing), mark the span,
+      // and let document finalize substitute the target's page number.
+      if (args.bodyPageFields && args.refFields.pageRefProjectionOf) {
+        const pageRef = args.refFields.pageRefProjectionOf(simple.id, refSpec);
+        if (pageRef) {
+          const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+          if (style.hidden) return null;
+          if (display.text.length > 0) return { text: display.text, props, style, pageRef };
+          if (!display.sawResultContent) {
+            return { text: PAGE_FIELD_PLACEHOLDER, props, style, pageRef };
+          }
+        }
+      }
+    } else if (args.refFields.autonumValueOf && parseAutonumInstruction(instr)) {
+      // A simple AUTONUM-family field synthesizes exactly like the complex shape: the
+      // sequential value is the only display these fields have.
+      const value = args.refFields.autonumValueOf(simple.id);
+      if (value !== null) {
+        const style = display.resultStyle ?? resolveRunStyle(inheritedRunProperties, themeFonts);
+        if (style.hidden) return null;
+        return { text: value, props, style };
+      }
     }
   }
 

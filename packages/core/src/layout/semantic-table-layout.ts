@@ -36,7 +36,11 @@ import type {
   FieldPageContext,
   HyperlinkProjector,
 } from './field-projection.ts';
-import { paragraphLayoutKey, type ParagraphLayoutCache } from './layout-cache.ts';
+import {
+  paragraphLayoutKey,
+  withDrawingContext,
+  type ParagraphLayoutCache,
+} from './layout-cache.ts';
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
@@ -206,6 +210,13 @@ export interface TableFlowDeps {
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   /**
+   * The hosted text-box list state a cell paragraph's break key folds — the cell twin of
+   * the `hostedTextboxListToken` fold in `prepareBlock`, built with `hostedListTokenDeps`
+   * and provided only by lanes that lay hosted stories out
+   * ({@link layoutTextboxStoryFor}): where no story renders, the fold would be key churn.
+   */
+  readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string;
+  /**
    * `w:settings/w:defaultTabStop` in points; absent keeps the 0.5" schema default. A cell
    * paragraph tabs on the same document-wide grid as a body paragraph.
    */
@@ -225,6 +236,11 @@ export interface TableFlowDeps {
    * in a header/footer keeps this false and its own live page path.
    */
   readonly bodyPageFields?: import('./field-page-furniture.ts').BodyPageFieldContext | false;
+  /**
+   * The story's resolved REF inputs — a REF field in a table cell is an ordinary field.
+   * Present only in body flow, which folds the resolved values into every cell break key.
+   */
+  readonly refFields?: import('./field-ref.ts').RefFieldContext;
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
   readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
@@ -455,8 +471,9 @@ function placeCellParagraph(
   // offset. Contextual spacing is a body-flow question (it compares document neighbours),
   // so it is not applied per cell.
   // A NUMBERED/BULLETED paragraph's first-line slot belongs to the MARKER: `listMarkerBox`
-  // places it at `left - hanging`, and Word's `w:suff` puts the text back at `left` — or
-  // after the marker, or at the next tab stop past an overflowing one (§17.9.30).
+  // places it at `left - hanging` (or at `left + firstLine` for a positive-firstLine
+  // level), and Word's `w:suff` puts the text back at `left` — or after the marker, or at
+  // the next tab stop past an overflowing one (§17.9.30).
   const firstLineOffset = firstLineShift(listItem, indent, deps.measurer, tabStops, available);
   const rawZones = deps.pageExclusionZones?.() ?? Object.freeze([]);
   const paragraphOrder = deps.paragraphOrderIndex?.(paragraphId) ?? Number.MAX_SAFE_INTEGER;
@@ -476,6 +493,13 @@ function placeCellParagraph(
   // the wrapped break of the one that does not.
   const exclusionToken = exclusionLayoutToken(pageZones);
   const positionedExclusionToken = exclusionToken ? `${top.toFixed(3)}|${exclusionToken}` : '';
+  // The cell paragraph's resolved REF values, keyed exactly as the body flow keys them: a
+  // renumbering edit moves the painted reference while the cell's subtree stays identical.
+  const refToken = deps.refFields?.tokenForParagraph(paragraphId) ?? '';
+  // The list state of any hosted text-box story, keyed as the body flow keys it: its own
+  // `txbxList` property. A numbering edit moves only this property while the host's
+  // subtree stays byte-identical; box-free paragraphs keep their pre-existing key shape.
+  const hostedListToken = deps.hostedListTokenForParagraph?.(paragraph) ?? '';
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -484,14 +508,22 @@ function placeCellParagraph(
       ...markRunProperties,
       { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
       ...(listItem ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }] : []),
+      ...(hostedListToken
+        ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
+        : []),
+      ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
     ],
     width: available,
     producer: deps.producer,
-    ...(deps.drawingTokenForParagraph?.(paragraph)
-      ? { drawingToken: deps.drawingTokenForParagraph(paragraph) }
-      : deps.drawingLayoutToken
-        ? { drawingToken: deps.drawingLayoutToken }
-        : {}),
+    // The inline-drawing CONTEXT joins the token exactly as it does in the body flow: the
+    // context changes how a paragraph breaks (drawings become measured atoms), so a
+    // token-less pass with the context may not share cell entries with one without it.
+    // `||`, not `??`: a per-paragraph callback answering `''` falls through to the
+    // document-wide token, as it always has.
+    drawingToken: withDrawingContext(
+      deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '',
+      deps.inlineDrawingLayout !== undefined
+    ),
     ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
   });
   if (deps.cache) deps.onCellBreakKey?.(key);
@@ -519,6 +551,7 @@ function placeCellParagraph(
       ...(deps.projectFieldLink ? { projectFieldLink: deps.projectFieldLink } : {}),
       ...(deps.documentProperties ? { documentProperties: deps.documentProperties } : {}),
       ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
+      ...(deps.refFields ? { refFields: deps.refFields } : {}),
       displayMode: deps.displayMode,
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
       ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),

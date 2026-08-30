@@ -47,6 +47,14 @@ export interface TableFlowCursor {
   readonly columnLeft: () => number;
   /** Height available on the page being filled — note reserves already subtracted. */
   readonly contentHeight: () => number;
+  /**
+   * The same band with any footnote reserve IGNORED. Recovery seam for keep-together rows:
+   * a `w:cantSplit` / `hRule=exact` row that exceeds the reserved band on a fresh page takes
+   * the full band instead of aborting the layout. The reserve is advisory at this point —
+   * the notes pass sizes its area from the body actually placed — so the overlap only
+   * pushes that page's footnotes forward. Absent means the two bands are the same.
+   */
+  readonly unreservedContentHeight?: () => number;
   /** Move to the next column, or the next page when this was the last one. */
   readonly advanceColumn: () => void;
   /** Frames a `w:tblpPr` table positions against. */
@@ -352,6 +360,35 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
           // page it just moved to, which is the whole point of deciding where a row lands.
           admitSpans(bodyRowIndex);
           continue;
+        }
+        // A fresh page whose band is shrunk by a footnote reserve still owns the full
+        // column underneath it. A keep-together row that fits THAT takes it rather than
+        // aborting: the reserve is advisory here (the notes pass sizes its area from the
+        // body actually placed, so this only pushes the page's footnotes forward), while
+        // the throw below rejects the entire document for one row+reserve collision.
+        const fullBand = flow.unreservedContentHeight?.() ?? contentHeight();
+        if (
+          fullBand > contentHeight() + 0.001 &&
+          naturalHeight <= fullBand - flow.cursorY + 0.001
+        ) {
+          const placed = layoutRowFragment(
+            row,
+            structure.columnWidthsPt,
+            tableLeft,
+            flow.cursorY,
+            false,
+            0,
+            tableDeps,
+            structure.cellSpacingPt,
+            vMerge,
+            fullBand
+          );
+          if (placed.bottom <= fullBand + 0.001 && placed.remainder === null) {
+            rows.push(placed.record);
+            sourceRows.push(row);
+            flow.cursorY = placed.bottom;
+            break;
+          }
         }
         throw new TablePaginationError(
           'table-row-overheight',

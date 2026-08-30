@@ -147,6 +147,36 @@ function countedTokenFn(): { fn: (paragraph: OoxmlNode) => string; calls: () => 
   };
 }
 
+// The aggregate is a CACHE VALIDATOR: two different paragraph-to-token assignments over one
+// byte-identical subtree must never produce one string, or the prepared-block memo serves a
+// break with stale drawing layout. `tableWithDrawing` has exactly two cell paragraphs.
+test('two different paragraph-to-token assignments never alias', () => {
+  const table = tableWithDrawing();
+  const firstOnly = drawingTokenForTableBlock(table, (paragraph) =>
+    paragraphHasDrawing(paragraph) ? 'X' : ''
+  );
+  const secondOnly = drawingTokenForTableBlock(table, (paragraph) =>
+    paragraphHasDrawing(paragraph) ? '' : 'X'
+  );
+  expect(firstOnly).not.toBe(secondOnly);
+});
+
+test('a separator inside a token value cannot shift a slot boundary', () => {
+  const table = tableWithDrawing();
+  const boundaryInFirst = drawingTokenForTableBlock(table, (paragraph) =>
+    paragraphHasDrawing(paragraph) ? 'a;b' : 'c'
+  );
+  const boundaryInSecond = drawingTokenForTableBlock(table, (paragraph) =>
+    paragraphHasDrawing(paragraph) ? 'a' : 'b;c'
+  );
+  expect(boundaryInFirst).not.toBe(boundaryInSecond);
+});
+
+test('a table with no drawing tokens aggregates to the empty string', () => {
+  const table = tableWithDrawing();
+  expect(drawingTokenForTableBlock(table, () => '')).toBe('');
+});
+
 test('memoized table drawing token equals a direct recompute under a fixed epoch', () => {
   const table = tableWithDrawing();
   const memoSide = countedTokenFn();

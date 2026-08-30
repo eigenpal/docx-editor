@@ -32,15 +32,11 @@ export interface GoogleFontLoadFailure {
     // (undocumented)
     readonly diagnostic: string;
     readonly family: string;
-    // (undocumented)
     readonly url: string;
 }
 
 // @public
-export function googleFonts(options?: GoogleFontsOptions): (request: {
-    readonly defaultFamily: string;
-    readonly families: readonly string[];
-}) => Promise<GoogleFontsFragment>;
+export function googleFonts(options?: GoogleFontsOptions): GoogleFontsResolver;
 
 // @public
 export interface GoogleFontsFragment {
@@ -59,6 +55,9 @@ export interface GoogleFontsOptions {
     readonly onFailure?: (failure: GoogleFontLoadFailure) => void;
     readonly substitute?: Readonly<Record<string, string>>;
 }
+
+// @public
+export type GoogleFontsResolver = ((request: FontOriginRequest) => Promise<GoogleFontsFragment>) & FontResolverMark;
 
 // (No @packageDocumentation comment for this package)
 

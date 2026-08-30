@@ -42,6 +42,17 @@ export const AUTO_PARAGRAPH_SPACING_PT = 14;
 // @public
 export const AUTO_PREFERRED_WIDTH: PreferredWidth;
 
+// @public (undocumented)
+export type AutonumFieldKind = 'AUTONUM' | 'AUTONUMLGL' | 'AUTONUMOUT';
+
+// @public
+export interface AutonumFieldSpec {
+    // (undocumented)
+    readonly kind: AutonumFieldKind;
+    readonly numFmt: string | null;
+    readonly suppressPeriod: boolean;
+}
+
 // @public
 export function baselineShiftPtOf(style: ResolvedRunStyle): number;
 
@@ -351,7 +362,8 @@ export interface CommentThreadState {
 }
 
 // @public
-export function compositionAnchor(layout: SemanticLayout, position: SemanticPosition): CaretGeometry | null;
+export function compositionAnchor(layout: SemanticLayout, position: SemanticPosition,
+measurer?: TextMeasurer): CaretGeometry | null;
 
 // @public
 export const COMPOUND_BORDER_MIN_GAP_PT = 1;
@@ -375,7 +387,8 @@ export function computeDoubleBorderMetricsPt(widthPt: number): CompoundBorderMet
 
 // @public
 export function computeFootnoteReserves(layout: SemanticLayout, allRefs: readonly PageRefHit[], input: NotesLayoutInput, noteMarks: NoteMarkContext,
-passMemo?: unknown): {
+passMemo?: unknown,
+previousReserves?: ReadonlyMap<number, number>): {
     readonly reasons: readonly NotePaginationFallbackReason[];
     readonly reserves: ReadonlyMap<number, number>;
     readonly stable: boolean;
@@ -496,6 +509,11 @@ export const createShapingEnvironment: (input: ShapingEnvironmentInput) => Shapi
 export interface DeclaredFontSubstitution {
     // (undocumented)
     readonly from: FontRequest;
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
     // (undocumented)
     readonly to: FontRequest;
 }
@@ -706,6 +724,7 @@ export interface FieldAtomMarker {
         readonly kind: AllowlistedPageField;
         readonly picture?: string;
     };
+    readonly pageRef?: PageRefFieldProjection;
 }
 
 // @public
@@ -856,6 +875,11 @@ export type FontSlot = 'ascii' | 'hAnsi' | 'eastAsia' | 'cs';
 
 // @public
 export interface FontSubstitution {
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
     // (undocumented)
     readonly requested: FontRequest;
     // (undocumented)
@@ -1191,7 +1215,8 @@ export interface KeyedRange {
 
 // @public
 export function keyedRangeRects(layout: SemanticLayout, ranges: readonly KeyedRange[],
-pages?: ReadonlySet<number>): Map<string, SelectionRect[]>;
+pages?: ReadonlySet<number>,
+measurer?: TextMeasurer): Map<string, SelectionRect[]>;
 
 // @public
 export interface LayoutBox {
@@ -1455,7 +1480,7 @@ export const MAX_NOTE_FRAGMENTS = 512;
 export const MAX_NOTE_OVERFLOW_PAGES = 256;
 
 // @public
-export const MAX_NOTE_REFLOW_ATTEMPTS = 8;
+export const MAX_NOTE_REFLOW_ATTEMPTS = 64;
 
 // @public
 export const MAX_NOTES_LAID_OUT = 10000;
@@ -1620,6 +1645,7 @@ export interface NotesLayoutInput {
     readonly footnotePropsBySection: readonly ResolvedFootnoteProperties[];
     // (undocumented)
     readonly footnotesPart: OoxmlPart | null;
+    readonly linkRelsEpoch?: string;
     // (undocumented)
     readonly measurer: TextMeasurer;
     readonly numberingIndex?: NumberingIndex;
@@ -1628,6 +1654,8 @@ export interface NotesLayoutInput {
     // (undocumented)
     readonly projectFieldLink?: FieldLinkProjector;
     readonly projectLink?: HyperlinkProjector;
+    readonly projectLinkForPart?: (ownerPartName: string) => HyperlinkProjector | undefined;
+    readonly refFields?: RefFieldContext;
     // (undocumented)
     readonly styleCascade?: StyleCascadeTable;
 }
@@ -1798,7 +1826,21 @@ export interface PageRecord {
 }
 
 // @public
+export type PageRefCalibrationCell = Readonly<Record<never, never>>;
+
+// @public
+export interface PageRefFieldProjection {
+    readonly cached: string;
+    // (undocumented)
+    readonly calibration: PageRefCalibrationCell;
+    readonly targetParagraphId: string;
+}
+
+// @public
 export type PageRefIndex = ReadonlyMap<string, readonly PageRefHit[]>;
+
+// @public
+export function pageRefPageNumbersFromLayout(layout: SemanticLayout): (targetParagraphId: string) => string | null;
 
 // @public
 export function pagesToMaterialize(input: MaterializationInput): Set<number>;
@@ -2046,7 +2088,13 @@ export function paragraphTabStops(pPr: OoxmlNode | undefined): ResolvedTabStops;
 export function paragraphTextFromLayout(layout: SemanticLayout, paragraphId: string): string;
 
 // @public
+export function parseAutonumInstruction(raw: string): AutonumFieldSpec | null;
+
+// @public
 export function parsePageNumbering(sectPr: OoxmlNode): SectionPageNumbering | undefined;
+
+// @public
+export function parseRefInstruction(raw: string): RefFieldSpec | null;
 
 // @public
 export function parseSectionProperties(sectPr: OoxmlNode | null | undefined): SectionProperties;
@@ -2067,6 +2115,9 @@ export interface PlacedCell {
     // (undocumented)
     readonly tableId: string;
 }
+
+// @public
+export function planRefFieldResultRefresh(part: OoxmlPart, options: RefFieldRefreshOptions): RefreshFieldResultsOp | null;
 
 // @public
 export function positionPastDeletion(layout: SemanticLayout, position: SemanticPosition): SemanticPosition;
@@ -2108,6 +2159,42 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
 // @public
 export function readTableStructure(table: OoxmlNode, contentWidthPt: number, depth: number, styleCascade?: StyleCascadeTable,
 displayMode?: RevisionDisplayMode): SemanticTableStructure | null;
+
+// @public
+export interface RefFieldContext {
+    autonumValueOf?(anchorId: string): string | null;
+    liveValueOf(anchorId: string, spec: RefFieldSpec): string | null;
+    pageRefProjectionOf?(anchorId: string, spec: RefFieldSpec): PageRefFieldProjection | null;
+    tokenForParagraph(paragraphId: string): string;
+    readonly valuesToken: string;
+}
+
+// @public (undocumented)
+export interface RefFieldRefreshOptions {
+    readonly displayMode?: RevisionDisplayMode;
+    // (undocumented)
+    readonly numberingIndex?: NumberingIndex;
+    readonly package?: OoxmlPackage;
+    readonly pageRefPageNumberOf?: (targetParagraphId: string) => string | null;
+    // (undocumented)
+    readonly styleCascade?: StyleCascadeTable;
+}
+
+// @public
+export interface RefFieldSpec {
+    // (undocumented)
+    readonly bookmark: string;
+    readonly hyperlink: boolean;
+    readonly numberSwitch: 'r' | 'w' | 'n' | null;
+}
+
+// @public
+export interface RefNoteParts {
+    // (undocumented)
+    readonly endnotesPart: OoxmlPart | null;
+    // (undocumented)
+    readonly footnotesPart: OoxmlPart | null;
+}
 
 // @public
 export function resetGraphemeBoundary(): void;
@@ -2285,6 +2372,9 @@ export function resolveRunStyle(props: readonly OoxmlProperty[], themeFonts?: Th
 
 // @public
 export function resolveStoryListItems(blocks: readonly OoxmlElement[], index: NumberingIndex, styleCascade: StyleCascadeTable | undefined, isFontAvailable?: (family: string) => boolean): ReadonlyMap<string, ResolvedListItem>;
+
+// @public
+export function resolveStoryRefFields(blocks: readonly OoxmlElement[], listItems: ReadonlyMap<string, ResolvedListItem> | undefined, notes?: RefNoteParts): RefFieldContext | null;
 
 // @public
 export function resolveStrictHexFill(raw: string | undefined): string | undefined;
@@ -2625,7 +2715,8 @@ export interface SelectionRect {
 
 // @public
 export function selectionRects(layout: SemanticLayout, selection: SemanticSelection,
-order: readonly string[]): SelectionRect[];
+order: readonly string[],
+measurer?: TextMeasurer): SelectionRect[];
 
 // @public
 export interface SemanticHit {

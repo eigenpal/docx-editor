@@ -77,6 +77,18 @@ function levelFormats(
 }
 
 /**
+ * `w:isLgl` (§17.9.9): a legal-numbering level renders EVERY level its `w:lvlText` references
+ * in decimal, whatever format those levels declare — `Artikel I.01` is authored, `Artikel 1.1`
+ * is what Word paints. `bullet` and `none` are left alone: neither prints a counter, so
+ * "display it as decimal" would invent one. ONE helper for marker expansion and for
+ * cross-reference composition below, so the two renderings of the same number cannot drift.
+ */
+function legalEffectiveFormats(formats: readonly string[], isLgl: boolean): readonly string[] {
+  if (!isLgl) return formats;
+  return formats.map((format) => (format === 'bullet' || format === 'none' ? format : 'decimal'));
+}
+
+/**
  * Highest ilvl whose use restarts level `targetIlvl`, per `w:lvlRestart` on that level.
  *
  * Returns null when the level never restarts (`lvlRestart` = 0 or trigger above target).
@@ -160,13 +172,7 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
         return value;
       });
 
-      // `w:isLgl` (§17.9.9): a legal-numbering level renders EVERY level its `w:lvlText`
-      // references in decimal, whatever format those levels declare — `Artikel I.01` is
-      // authored, `Artikel 1.1` is what Word paints. `bullet` and `none` are left alone:
-      // neither prints a counter, so "display it as decimal" would invent one.
-      const effectiveFormats = level.isLgl
-        ? formats.map((format) => (format === 'bullet' || format === 'none' ? format : 'decimal'))
-        : formats;
+      const effectiveFormats = legalEffectiveFormats(formats, level.isLgl);
 
       const markerText = level.vanish
         ? ''
@@ -174,7 +180,7 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
           ? level.lvlText
           : expandLvlText(level.lvlText, expandCounters, effectiveFormats);
 
-      return {
+      const advance: ListCounterAdvance = {
         abstractNumId,
         numId,
         ilvl,
@@ -182,6 +188,129 @@ export function createListCounterState(index: NumberingIndex): ListCounterState 
         counters: snapshot,
         markerText,
       };
+      // Side channel rather than a member: `ListCounterAdvance` is public API, and the
+      // substitution-ready vector (uninitialized levels already at their starts) cannot be
+      // rebuilt from `counters` alone — a level whose authored start IS its current value
+      // looks exactly like one that never emitted.
+      expandCountersByAdvance.set(advance, expandCounters);
+      return advance;
     },
   };
+}
+
+/** Substitution-ready counter vectors, keyed on the advance results that produced them. */
+const expandCountersByAdvance = new WeakMap<ListCounterAdvance, readonly number[]>();
+
+/** The substitution-ready vector behind one advance, for cross-reference composition. */
+export function expandCountersOf(advance: ListCounterAdvance): readonly number[] {
+  return expandCountersByAdvance.get(advance) ?? advance.counters;
+}
+
+/** Matches what the `\t` filter drops from a `w:lvlText`: literal letters and whitespace. */
+const SUPPRESSED_LVL_TEXT_CHAR = /[\p{L}\s]/u;
+
+/**
+ * The `REF \t` filter over one level's `w:lvlText`: keep the counter placeholders and the
+ * delimiter characters, drop the literal words.
+ *
+ * DESIGN DECISION — what counts as a delimiter: every non-letter, non-whitespace character
+ * (`.`, `(`, `)`, `-`, `/`, `:`, literal digits) is KEPT wherever it sits, including the
+ * leading and trailing parentheses of `(%3)` — Word's cached `\t` values for such levels
+ * read `(c)`, not `c`. Literal LETTERS drop (they are the text the switch suppresses), and
+ * whitespace drops with them: it exists to set the dropped words off, and Word's cached
+ * values show compact joins (`Section 4.2` caches as `4.2`). The filter runs on the
+ * TEMPLATE, never the expanded string, because expanded a letter or roman COUNTER (`(c)`,
+ * `(ii)`) is indistinguishable from a literal word. One linear pass over a length-capped
+ * string; the per-field calibration gate in `field-ref.ts` keeps any document whose cached
+ * values disagree on its cache.
+ */
+function suppressNonDelimiterLvlText(lvlText: string): string {
+  let out = '';
+  for (let index = 0; index < lvlText.length; index += 1) {
+    const char = lvlText[index]!;
+    const next = lvlText[index + 1];
+    if (char === '%' && next !== undefined && next >= '1' && next <= '9') {
+      out += char + next;
+      index += 1;
+      continue;
+    }
+    if (SUPPRESSED_LVL_TEXT_CHAR.test(char)) continue;
+    out += char;
+  }
+  return out;
+}
+
+/**
+ * What composing a paragraph's FULL-CONTEXT number needs: the linked index its levels resolve
+ * through and the substitution-ready counters captured when the paragraph was counted.
+ */
+export interface FullContextNumberSource {
+  readonly index: NumberingIndex;
+  readonly numId: string;
+  readonly ilvl: number;
+  readonly expandCounters: readonly number[];
+}
+
+/**
+ * The paragraph's number in full context — what a `REF \w` paints for a multilevel target.
+ *
+ * A level like `(%3)` states only its OWN placeholder, so its marker (`(c)`) is not the number
+ * a reader cites; Word's cross-reference shows `1.2(c)`. Composed by walking levels 0..ilvl:
+ * each level's `w:lvlText` expands through the SAME substitution and `w:isLgl` mapping the
+ * marker uses, and a level whose own placeholder already appears in a DEEPER kept level's text
+ * is dropped (the standard `%1.` / `%1.%2` shape would otherwise paint `1.1.2`). Bullet /
+ * `none` / empty levels contribute nothing; a target that is one resolves to null (the caller
+ * falls back). Bounded: at most nine levels, each expansion under the marker-length caps.
+ *
+ * `ownLevelOnly` keeps just the target level's expansion — what a `REF \n` paints (`(c)`,
+ * `(ii)`), per Word's own cached values for that switch. `suppressNonDelimiterText` applies
+ * the `REF \t` template filter (see {@link suppressNonDelimiterLvlText}) to every kept level
+ * before it expands. The keep/drop decisions above it read the ORIGINAL texts — the filter
+ * preserves placeholders, so both views agree on which levels contribute.
+ */
+export function composeFullContextNumber(
+  source: FullContextNumberSource,
+  ownLevelOnly = false,
+  suppressNonDelimiterText = false
+): string | null {
+  const { index, numId, ilvl, expandCounters } = source;
+  if (ilvl < 0 || ilvl > 8) return null;
+  const levels: (NumberingLevel | null)[] = [];
+  const formats: string[] = [];
+  for (let lvl = 0; lvl <= 8; lvl += 1) {
+    const resolved = resolveNumberingLevel(index, numId, lvl);
+    levels.push(lvl <= ilvl ? (resolved?.level ?? null) : null);
+    formats.push(resolved?.level.numFmt ?? 'decimal');
+  }
+  const numbered = (level: NumberingLevel | null): level is NumberingLevel =>
+    level !== null &&
+    level.numFmt !== 'bullet' &&
+    level.numFmt !== 'none' &&
+    level.lvlText.length > 0;
+  if (!numbered(levels[ilvl] ?? null)) return null;
+
+  // Deepest-up: keep the target, then keep each shallower numbered level unless a KEPT deeper
+  // text already displays its placeholder — a dropped level's text paints nothing, so only
+  // kept texts can stand in for it.
+  const kept: number[] = [];
+  const keptTexts: string[] = [];
+  for (let lvl = ilvl; lvl >= 0; lvl -= 1) {
+    if (ownLevelOnly && lvl !== ilvl) break;
+    const level = levels[lvl];
+    if (!numbered(level)) continue;
+    if (lvl !== ilvl && keptTexts.some((text) => text.includes(`%${lvl + 1}`))) continue;
+    kept.push(lvl);
+    keptTexts.push(level.lvlText);
+  }
+  kept.reverse();
+
+  let out = '';
+  for (const lvl of kept) {
+    const level = levels[lvl]!;
+    const template = suppressNonDelimiterText
+      ? suppressNonDelimiterLvlText(level.lvlText)
+      : level.lvlText;
+    out += expandLvlText(template, expandCounters, legalEffectiveFormats(formats, level.isLgl));
+  }
+  return out.length > 0 ? out : null;
 }

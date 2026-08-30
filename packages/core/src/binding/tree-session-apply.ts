@@ -15,6 +15,59 @@ function refused(opCount: number, reason?: string): TreeApplyResult {
     : { committed: false, rejected: true, opCount, reason };
 }
 
+/** One story's ops for {@link commitSessionTreeOpsAtomic}. */
+export interface StoryOpsGroup {
+  readonly scope: StoryScope;
+  readonly ops: readonly TreeDocOp[];
+}
+
+/**
+ * Commit several stories' ops as ONE transaction and ONE undo unit.
+ *
+ * The transaction opens on the first group's scope; every other group applies through the
+ * context's cross-part channel (`ctx.applyTo`), the same shape a comment write uses for its
+ * story markers plus `comments.xml`. Any refusal — validation, protection, an unknown part —
+ * rolls the WHOLE working set back, so a caller can never observe some groups committed and
+ * others not, and a single undo restores every part. Lifecycle ops do not belong here: they
+ * run their own coordinator lane.
+ */
+export function commitSessionTreeOpsAtomic(
+  packageStore: TreePackageStore,
+  groups: readonly StoryOpsGroup[],
+  options: TreeApplyOptions = {}
+): TreeApplyResult {
+  const nonEmpty = groups.filter((group) => group.ops.length > 0);
+  const opCount = nonEmpty.reduce((sum, group) => sum + group.ops.length, 0);
+  if (opCount === 0) return EMPTY_APPLY;
+  if (nonEmpty.some((group) => group.ops.some(isHeaderFooterLifecycleOp))) {
+    return refused(opCount, 'invalidArgs');
+  }
+  if (nonEmpty.some((group) => group.ops.some(isNoteLifecycleOp))) {
+    return refused(opCount, 'invalidArgs');
+  }
+  const [primary, ...rest] = nonEmpty;
+  // Every part is resolved BEFORE the transaction opens: a missing part refuses the whole
+  // commit up front instead of half-applying and rolling back.
+  const restParts: { readonly partName: string; readonly ops: readonly TreeDocOp[] }[] = [];
+  for (const group of rest) {
+    const part = packageStore.partFor(group.scope);
+    if (!part) return refused(opCount, 'unknown-part');
+    restParts.push({ partName: part.name, ops: group.ops });
+  }
+  const result = packageStore.transact(
+    primary!.scope,
+    (ctx) => {
+      for (const op of primary!.ops) ctx.apply(op);
+      for (const group of restParts) {
+        for (const op of group.ops) ctx.applyTo(group.partName, op);
+      }
+    },
+    options
+  );
+  if (!result.ok) return refused(opCount, result.reason);
+  return { committed: true, rejected: false, opCount };
+}
+
 export function commitSessionTreeOps(
   packageStore: TreePackageStore,
   ops: readonly TreeDocOp[],

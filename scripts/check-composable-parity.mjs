@@ -372,6 +372,56 @@ export interface Editor {}
     process.exit(1);
   }
 
+  // A rest parameter of wrapped values. `MaybeRefOrGetter<T>[]` unwraps to `T[]` when `T`
+  // is a bare identifier; parenthesizing it unconditionally reported drift against an
+  // identical React signature.
+  const restOk = `
+export function useSample(...origins: readonly FontsInput[]): FontResolver;
+export type FontsInput = string;
+export interface FontResolver {}
+`;
+  const restVue = `
+export function useSample(...origins: readonly MaybeRefOrGetter<FontsInput>[]): FontResolver;
+export type FontsInput = string;
+export interface FontResolver {}
+`;
+  ({ issues } = runComposableParityCheck({ reactSnap: restOk, vueSnap: restVue }));
+  if (issues.length !== 0) {
+    console.error('Self-test FAIL: wrapped rest parameter should normalize');
+    for (const i of issues) console.error(`  - ${i}`);
+    process.exit(1);
+  }
+
+  // …and anything that is not a plain type reference still needs its parentheses, or
+  // `A | B[]` would compare equal to `(A | B)[]`. A union, a conditional and a `keyof`
+  // all bind looser than `[]`; a generic reference does not.
+  for (const [inner, parenthesized] of [
+    ['A | B', '(A | B)'],
+    ['A & B', '(A & B)'],
+    ['keyof A', '(keyof A)'],
+    ['A extends B ? C : D', '(A extends B ? C : D)'],
+    // A dotted qualified name: still a plain type reference, so still no parentheses.
+    // NOT a nested generic — `MaybeRefOrGetter<Set<A>>` is beyond the unwrapper's
+    // `[^>]+` capture, which stops at the first `>`, so such a case would pass here for
+    // a reason that has nothing to do with the branch under test.
+    ['A.B', 'A.B'],
+  ]) {
+    const reactSnap = `
+export function useSample(...origins: readonly ${parenthesized}[]): FontResolver;
+export interface FontResolver {}
+`;
+    const vueSnap = `
+export function useSample(...origins: readonly MaybeRefOrGetter<${inner}>[]): FontResolver;
+export interface FontResolver {}
+`;
+    ({ issues } = runComposableParityCheck({ reactSnap, vueSnap }));
+    if (issues.length !== 0) {
+      console.error(`Self-test FAIL: wrapped rest parameter '${inner}' should normalize`);
+      for (const i of issues) console.error(`  - ${i}`);
+      process.exit(1);
+    }
+  }
+
   const functionReturn = `
 export function useToolbarLabel(): (key: string) => string;
 `;

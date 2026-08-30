@@ -335,14 +335,19 @@ Fetch bytes and fonts from a URL string, a `URL`, a `Uint8Array`, or an
 
 ```ts
 const { document, fonts, error, isLoading } = useDocxSource('/sample.docx', {
-  fonts: defaultFonts,
+  fonts: packagedFonts(),
 });
 ```
 
+`fonts` takes one origin or a list of them in precedence order, such as
+`[packagedFonts(), googleFonts()]`. With an on-demand resolver, `document` is
+released as soon as the bytes arrive. With an eager loader such as
+`defaultFonts`, it waits for the fonts first.
+
 ## useFonts
 
-Builds a `FontResolver` from a source and configuration fragments. See the
-[font guide](/docs/2.x/guides/fonts).
+Builds one `FontResolver` from any number of font origins, first-wins in
+argument order. See the [font guide](/docs/2.x/guides/fonts).
 
 ## useHyperlinkPopup and useHyperlinkPopupInstance
 

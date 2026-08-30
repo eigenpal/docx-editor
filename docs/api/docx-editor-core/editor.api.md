@@ -710,6 +710,9 @@ export function commandForTableChromeSlotValue(slotId: TableChromeSlotId, value:
 export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
 
 // @public
+export function composeFontOrigins(origins: readonly FontOrigin[], request: FontResolutionRequest): Promise<FontConfigurationFragment | undefined>;
+
+// @public
 export function computeImageResizeResult(options: {
     readonly anchorFrameOrigin?: AnchorFrameOrigin | null;
     readonly deltaXPt: number;
@@ -793,6 +796,9 @@ export function defaultChromeGroups(): readonly ChromeGroup[];
 
 // @public
 export function defaultTableLabel(key: TableInteractionLabelKey): string;
+
+// @public
+export function defineFontResolver<T extends FontResolver>(resolve: T): MarkedFontResolver<T>;
 
 // @public
 export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
@@ -968,6 +974,12 @@ export function finalizeImageOverlayInteraction(options: {
 export const FIT_WIDTH_ZOOM_MODE: ZoomMode;
 
 // @public
+export const FONT_RESOLVER_BRAND: unique symbol;
+
+// @public
+export const FONT_RESOLVER_MARK_KEY = "docx-editor.dev/font-resolver";
+
+// @public
 export interface FontConfigurationBase extends FontConfigurationFragment {
     readonly defaultFont?: FontConfiguration['defaultFont'];
     readonly epoch?: number;
@@ -1015,13 +1027,22 @@ export interface FontMeasurementState {
 }
 
 // @public
+export type FontOrigin = FontConfiguration | FontConfigurationFragment | MarkedFontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+
+// @public
 export interface FontResolutionRequest {
     readonly defaultFamily: string;
     readonly families: readonly string[];
+    readonly resolvedFaces?: readonly FontFaceRequest[];
 }
 
 // @public
 export type FontResolver = (request: FontResolutionRequest) => FontConfiguration | FontConfigurationFragment | undefined | Promise<FontConfiguration | FontConfigurationFragment | undefined>;
+
+// @public
+export interface FontResolverMark {
+    readonly 'docx-editor.dev/font-resolver': true;
+}
 
 // @public
 export interface FontUrlSource {
@@ -1214,6 +1235,9 @@ export interface ImageResourceLimits {
 export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
 
 // @public
+export function isFontResolver(value: unknown): value is MarkedFontResolver;
+
+// @public
 export function isStaleImageInteractionCommit(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>, session: ImageInteractionSession): ExecResult | null;
 
 // @public
@@ -1250,6 +1274,9 @@ export function lowerColorValueForBorder(color: ColorValue, themeColors: readonl
 
 // @public
 export function lowerColorValueForFill(color: ColorValue, themeColors: readonly DocumentThemeColorEntry[]): ColorLowerResult;
+
+// @public
+export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & FontResolverMark;
 
 // @public
 export const MAX_RESOLVER_FAMILIES = 64;
@@ -1437,6 +1464,7 @@ export interface PaginatedSurface {
     publishedLayout(): SemanticLayout;
     // (undocumented)
     redo(): void;
+    refreshRefFieldResults(): boolean;
     refreshTableInteractionLabels(): void;
     refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
     releaseSelection(pin: SelectionPin): void;
@@ -2259,6 +2287,10 @@ export interface TreeDocxSessionView {
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;
+    applyTreeOpsAtomic(groups: readonly {
+        readonly ops: readonly TreeDocOp[];
+        readonly scope: StoryScope;
+    }[], options?: TreeApplyOptions): TreeApplyResult;
     // (undocumented)
     beginComposition(scope?: StoryScope): void;
     bodyText(): string;
@@ -2314,6 +2346,7 @@ export interface TreeDocxSessionView {
         readonly target: string;
     } | null;
     removeCustomNode(controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
+    renderedFontFamilies(): readonly string[];
     rendersText(): boolean;
     replaceImage(scope: StoryScope, drawingNodeId: string, bytes: Uint8Array, mime: SupportedImageMime, decodePort: ImageDecodePort, options: ReplaceImageOptions): Promise<ImageIntentResult>;
     replyToComment(parentCommentId: string | null, anchor: {

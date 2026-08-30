@@ -16,6 +16,7 @@
 
 import type {
   FontConfiguration,
+  FontFaceRequest,
   FontSource,
   FontSourceSubstitution,
 } from '@docx-editor.dev/core/contracts/editor';
@@ -65,6 +66,26 @@ export interface FontResolutionRequest {
   readonly families: readonly string[];
   /** The face a run naming no font resolves to, so a resolver can cover it too. */
   readonly defaultFamily: string;
+  /**
+   * Faces an EARLIER origin in the same composition can already PAINT — either because it
+   * supplied the bytes, or because it mapped that face onto one it did supply.
+   *
+   * Absent, not empty, when there is nothing to report: the engine calling a resolver
+   * directly, and the first origin of a composition.
+   *
+   * FACES, not families, and only faces backed by bytes. Both narrowings are load-bearing.
+   * A family-grained list would let an origin holding only regular Arial suppress the bold
+   * and italic a later origin would have supplied, and a list built from substitutions
+   * alone would let an origin whose fetches all failed suppress the failover behind it,
+   * because both shipped resolvers emit their substitution map before fetching. Together
+   * they are what makes honouring this an OPTIMIZATION rather than a correctness
+   * requirement: skipping a reported face cannot lose one, so a resolver that ignores this
+   * list only spends bytes on a face first-wins composition would drop anyway.
+   *
+   * Match it case-insensitively. Word matches font names that way and both shipped
+   * resolvers do.
+   */
+  readonly resolvedFaces?: readonly FontFaceRequest[];
 }
 
 /**

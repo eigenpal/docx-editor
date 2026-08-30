@@ -149,9 +149,25 @@ export interface LayoutNoteStoryOptions {
    * paint to anchor and navigation to activate.
    */
   readonly projectLink?: HyperlinkProjector;
+  /**
+   * Per-part projector, preferred over `projectLink` when `ownerPartName` names the part.
+   *
+   * A `w:hyperlink` in `/word/footnotes.xml` declares its `r:id` in `footnotes.xml.rels`,
+   * so it must resolve there — the body projector answers from the body part's
+   * relationships, and when the two parts assign one id to different targets the footnote
+   * link navigated to the body's target. Same per-part rule pictures follow through
+   * {@link drawingsForPart}.
+   */
+  readonly projectLinkForPart?: (ownerPartName: string) => HyperlinkProjector | undefined;
   readonly projectFieldLink?: FieldLinkProjector;
   /** Document properties for a document-property field inside a note story. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
+  /**
+   * The document's resolved REF inputs, so a footnote's cross-reference paints the live
+   * value the body paints. The flow folds each paragraph's resolved values into its break
+   * key, which is what repaints a note after a renumbering edit it cannot otherwise see.
+   */
+  readonly refFields?: import('./field-ref.ts').RefFieldContext;
   /** Derived display marks for noteRef projection inside the note body. */
   readonly noteMarks?: NoteMarkContext;
   /**
@@ -233,6 +249,12 @@ export function layoutNoteStory(
     ? options.drawingsForPart?.(options.ownerPartName)
     : undefined;
 
+  // The link projector scoped to the part this note lives in; the body projector is only
+  // the fallback for callers that supply no per-part resolution.
+  const projectLink =
+    (options.ownerPartName ? options.projectLinkForPart?.(options.ownerPartName) : undefined) ??
+    options.projectLink;
+
   const listItems = withResolvedListItems(
     { numberingIndex: options.numberingIndex, styleCascade: options.styleCascade },
     blocks
@@ -246,9 +268,10 @@ export function layoutNoteStory(
     styleCascade: options.styleCascade,
     ...(listItems ? { listItems } : {}),
     noteMarks,
-    ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+    ...(projectLink ? { projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+    ...(options.refFields ? { refFields: options.refFields } : {}),
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),
@@ -310,6 +333,33 @@ export function layoutNoteById(
   const note = findNoteById(part.root, noteId);
   if (!note) return null;
   return layoutNoteStory(note, contentWidth, { ...options, ownerPartName: part.name });
+}
+
+/**
+ * Note story layouts, keyed by part, note id and width, and OWNED by a mark context: the
+ * caller keys each cache off one `NoteMarkContext` whose lifetime a notes-pass memo pins.
+ * The key deliberately omits everything else riding `LayoutNoteStoryOptions` because the
+ * memo's input fingerprint and identity checks pin those inputs for as long as the marks
+ * (and so this cache) live. ADDING A FIELD to `LayoutNoteStoryOptions` therefore means
+ * joining it to `fingerprintNotesInput`/`notesInputIdentities` in note-pagination.ts, or
+ * a cached story silently outlives the input that shaped it.
+ */
+export type NoteStoryLayoutCache = Map<string, NoteStoryLayout | null>;
+
+export function layoutNoteCached(
+  part: OoxmlPart | null,
+  noteId: number,
+  contentWidth: number,
+  opts: LayoutNoteStoryOptions,
+  cache: NoteStoryLayoutCache | undefined
+): NoteStoryLayout | null {
+  if (!cache) return layoutNoteById(part, noteId, contentWidth, opts);
+  const key = `${part?.name ?? 'none'}\0${noteId}\0${contentWidth}`;
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  const laid = layoutNoteById(part, noteId, contentWidth, opts);
+  cache.set(key, laid);
+  return laid;
 }
 
 /**

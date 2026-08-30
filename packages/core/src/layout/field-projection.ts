@@ -74,6 +74,7 @@ import {
   type RunPropertyCascader,
 } from './field-run-text.ts';
 import { captureInstructionSpecs } from './field-form.ts';
+import type { RefFieldContext } from './field-ref.ts';
 import { synthesizeAtomicField } from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
@@ -181,7 +182,8 @@ export function piecesOfParagraph(
   themeFonts?: ThemeFonts,
   projectFieldLink?: FieldLinkProjector,
   documentProperties?: DocumentProperties,
-  bodyPageFields: BodyPageFieldContext | false = false
+  bodyPageFields: BodyPageFieldContext | false = false,
+  refFields?: RefFieldContext
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
@@ -345,16 +347,23 @@ export function piecesOfParagraph(
       themeFonts,
       documentProperties,
       bodyPageFields,
+      ...(refFields ? { refFields } : {}),
     });
     if (synthesis) {
       const extras = carried();
-      // A body page-field placeholder rides the same field-atom marker its finalize pass reads.
-      const withPageField = synthesis.pageField
-        ? {
-            ...extras,
-            fieldAtom: { formField: pending.formField, pageField: synthesis.pageField },
-          }
-        : extras;
+      // A body page-field / PAGEREF placeholder rides the same field-atom marker its finalize
+      // pass reads.
+      const withPageField =
+        synthesis.pageField || synthesis.pageRefField
+          ? {
+              ...extras,
+              fieldAtom: {
+                formField: pending.formField,
+                ...(synthesis.pageField ? { pageField: synthesis.pageField } : {}),
+                ...(synthesis.pageRefField ? { pageRef: synthesis.pageRefField } : {}),
+              },
+            }
+          : extras;
       push(synthesis.text, synthesis.props, synthesis.style, true, start, end, withPageField);
     }
     pending = null;
@@ -559,10 +568,13 @@ export function piecesOfParagraph(
             formSpec: null,
             buttonSpec: null,
             docPropertySpec: null,
+            refSpec: null,
+            autonumSpec: null,
             // Bounded ffData STATE read (checkbox checked/size, dropdown entries/selection —
             // macros never); `formField` below stays presence-based so an unreadable payload
             // still shades.
             formData: legacyFormFieldDataOf(grand),
+            beginId: grand.id,
             atomic,
             editableResult: editableResultBeginIds.has(grand.id),
             atomStart: offset,
@@ -891,6 +903,7 @@ export function piecesOfParagraph(
       projectFieldLink,
       documentProperties,
       bodyPageFields,
+      ...(refFields ? { refFields } : {}),
     });
     if (!projected) return;
     // `w:ffData` is a `w:fldChar` payload, so a simple field is never a legacy form field. A body
@@ -899,6 +912,7 @@ export function piecesOfParagraph(
       fieldAtom: {
         formField: false,
         ...(projected.pageField ? { pageField: projected.pageField } : {}),
+        ...(projected.pageRef ? { pageRef: projected.pageRef } : {}),
       },
       ...(projected.link ? { linkOverride: projected.link } : {}),
     });

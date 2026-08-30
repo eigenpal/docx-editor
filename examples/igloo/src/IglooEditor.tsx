@@ -19,7 +19,7 @@ import {
 } from '@docx-editor.dev/react';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { customNodesModule, reviewModule } from '@docx-editor.dev/pro';
-import { defaultFonts } from '@docx-editor.dev/fonts';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
 import { IceSea } from './art/IceSea';
 import { Iceberg } from './art/Iceberg';
@@ -53,10 +53,19 @@ export function IglooEditor({ fixtureUrl }: IglooEditorProps) {
   const iglooT = useChromeTranslate(ICE_LABELS);
 
   // The whole boot: fetch the bytes, load Word's default faces, register them for paint,
-  // compose the configuration, and cancel both if this unmounts. `defaultFonts` is passed
-  // rather than imported by the hook, so a host bringing its own faces — or none — does not
-  // ship the default font bytes.
-  const { document: bytes, fonts, error } = useDocxSource(fixtureUrl, { fonts: defaultFonts });
+  // compose the configuration, and cancel the fetch if this unmounts. `packagedFonts()` is
+  // passed rather than imported by the hook, so a host bringing its own faces — or none —
+  // does not ship the default font bytes. It resolves per document, so this igloo pays for
+  // the families its file names plus the default face it inherits, rather than every one,
+  // and there is no font work in flight to cancel: none starts until the engine has parsed
+  // the document.
+  const {
+    document: bytes,
+    fonts,
+    error,
+  } = useDocxSource(fixtureUrl, {
+    fonts: packagedFonts(),
+  });
 
   return (
     <div className="docx-editor igloo-shell">

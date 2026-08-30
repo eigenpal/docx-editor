@@ -30,10 +30,16 @@ export const SECTION_PREPASS_GUARDS = {
   contentWidth: 'validity-checked',
   styleCascade: 'validity-checked',
   listItems: 'validity-checked',
+  // What `hostedTextboxListToken` reads. A numbering edit that only renumbers a text-box
+  // hosted list leaves `listItems` (the story's own map) identity-equal; this clause sees it.
+  numberingIndex: 'validity-checked',
   // Stands in for the per-block drawing tokens; a caller that threads per-paragraph
   // tokens WITHOUT an epoch keeps the recompute path (`drawingEpoch !== null`).
   drawingEpoch: 'validity-checked',
   tocToken: 'validity-checked',
+  // The story-wide REF values token. A renumbering edit moves a REF value in a section whose
+  // blocks, list map and TOC shape are all identity-unchanged; this clause is what sees it.
+  refToken: 'validity-checked',
   prepared: 'derived-covered',
   keys: 'derived-covered',
   paragraphDocumentOrder: 'derived-covered',

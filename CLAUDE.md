@@ -26,16 +26,16 @@ the legal license files or `LicenseRef-EigenPal-Pro-Evaluation-1.0` metadata.
 
 One engine. Thin chrome on top.
 
-| Package       | What                                                                                                                                                                                           | Status                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| `core`        | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react` |
-| `react`       | The adapter: provider + hooks, holds no editing state                                                                                                                                          | published                      |
-| `i18n`        | Shared strings                                                                                                                                                                                 | published                      |
-| `editor-api`  | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license         |
-| `pro`         | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license         |
-| `fonts`       | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                      |
-| `vue`         | The Vue 3 adapter twin, parity-gated against `react`                                                                                                                                           | published                      |
-| `nuxt`        | Nuxt module over the Vue adapter                                                                                                                                                               | WIP, private                   |
+| Package      | What                                                                                                                                                                                           | Status                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `core`       | **The engine.** `store/` (canonical tree, ops, OPC read/write), `layout/` (DOM-free), `output/` (paint), `editor/` (facade, surface, chrome registry), `contracts/`, `binding/`, `automation/` | published, external to `react` |
+| `react`      | The adapter: provider + hooks, holds no editing state                                                                                                                                          | published                      |
+| `i18n`       | Shared strings                                                                                                                                                                                 | published                      |
+| `editor-api` | `DocxEditor` automation object model, headless/server                                                                                                                                          | published, Pro license         |
+| `pro`        | Review module (comments, tracked changes) + custom nodes, as `EditorModule`s                                                                                                                   | published, Pro license         |
+| `fonts`      | Metric-compatible substitutes for Word's defaults                                                                                                                                              | published                      |
+| `vue`        | The Vue 3 adapter twin, parity-gated against `react`                                                                                                                                           | published                      |
+| `nuxt`       | Nuxt module over the Vue adapter                                                                                                                                                               | WIP, private                   |
 
 React and Vue both ship; the parity gates below keep them from drifting.
 
@@ -175,6 +175,14 @@ openspec validate typed-ooxml-paragraph-editor --strict
   what CI runs. `bun test` still works and is the one to reach for when you want
   a single file, `-t`, or `--watch`; `bun run test:serial` is the whole suite the
   old way.
+- The pool is machine-aware, and must stay that way: the heavy OOXML-oracle files
+  peak at multiple GiB each and slowest-first starts them together, which once
+  froze a 48 GiB machine (fourteen workers, ~94 GiB footprint, WindowServer
+  watchdog death). The runner caps width by installed memory, splits width and
+  budget between concurrent runs on the machine (tmpdir registry), and gates
+  dispatch on each file's measured peak footprint plus live memory pressure.
+  `--jobs` pins the width but never lifts the gate. A single test file that needs
+  more than a few GiB is a bug to file, not a budget to raise.
 - A file that leaves state on `document` can only be caught by the serial run —
   per-file processes hide it. Scope DOM queries to the container you mounted.
 - `git commit --no-verify` is fine locally, but `bun run format` and `bun run lint` are not
@@ -373,7 +381,10 @@ fails until it gets an attribution path; `packages/fonts` carries OFL text in
 ## Conventions
 
 - **PRs** — short factual title (conventional-commit prefix); body is the minimum
-  the diff doesn't show, often one sentence. No `@`-mentions, unrelated issue
+  the diff doesn't show, often one sentence. A PR that resolves an issue MUST end
+  its BODY with `Fixes #N` — GitHub links and auto-closes only from closing
+  keywords in the body or in commits, never from the title, so a title-only
+  `(fixes #N)` leaves the issue open after merge. No `@`-mentions, unrelated issue
   numbers, file lists, tooling footers or emojis. Write the body in the
   [Google developer documentation style](https://developers.google.com/style),
   the same guide the docs site follows: second person, active voice, present
@@ -382,6 +393,18 @@ fails until it gets an attribution path; `packages/fonts` carries OFL text in
 - **Bugs** — `gh issue view <N> --repo eigenpal/docx-editor`. Dev server `bun run
 dev` → `http://localhost:5173/`. Live demo `http://docx-editor.dev/editor`.
   Commit `fix: ... (fixes #N)`. Screenshots → `screenshots/`.
+- **Issue labels** — every issue gets exactly ONE `area:*` and ONE `priority:*`
+  label; the taxonomy table lives in `README.md` under "Issue conventions".
+  Optional `component:*` names the package. The labels are the source of truth
+  for the public roadmap board (org project 2):
+  `.github/workflows/sync-labels-to-project.yml` mirrors them into the board's
+  Area/Priority single-select fields. An option name must keep matching its
+  label slug (lowercase, spaces→dashes) or the sync warns and skips; an issue
+  with no `area:*` label is removed from the board; two labels of one prefix
+  clear the field. ALWAYS file an issue with both labels AND a native issue
+  type: `gh issue create --type Bug|Feature|Task --label "area:...,priority:..."`
+  (`gh issue edit <N> --type ...` to fix one). Never leave an issue without a
+  type or an area.
 - **ESM only** — no `require()`.
 - **Tailwind** — scoped to `.docx-editor`; the scoping is baked into `dist/editor.css`
   at core build time (`scripts/build-core-styles.mjs` + `packages/core/tailwind.dist.config.cjs`),

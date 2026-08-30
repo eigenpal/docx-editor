@@ -1,8 +1,11 @@
 This Apache-2.0 license covers this package's own code only.
 
-The font binaries under `assets/` are NOT Apache-2.0. Carlito, Caladea and the
-Liberation family are licensed under the SIL Open Font License 1.1; their license
-texts ship alongside them in `licenses/`.
+The font binaries under `assets/` are NOT Apache-2.0, and they are not all under
+one license. Carlito, Caladea and the Liberation family are under the SIL Open
+Font License 1.1. TeX Gyre Adventor is under the GUST Font License, which has no
+SPDX identifier of its own; its operative terms are the LaTeX Project Public
+License 1.3c or, at your option, any later version. Every one of those texts
+ships alongside the binaries in `licenses/`.
 
 -------------------------------------------------------------------------------
 

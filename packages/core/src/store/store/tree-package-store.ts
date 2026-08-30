@@ -429,6 +429,15 @@ export class TreePackageStore {
           // `applyPackage` are how a transaction writes the comment or numbering part in the
           // same unit as the story, and rebuilding the object dropped them.
           ...ctx,
+          // A write to ANOTHER part lives only in the store's working package; the story
+          // sync after the commit carries the story part alone, so without shell promotion
+          // the foreign write would silently evaporate. Promotion adopts the whole working
+          // package and makes the undo pointer one package unit spanning every written part.
+          applyTo: (partName, op) => {
+            const appliedOk = ctx.applyTo(partName, op);
+            if (appliedOk && partName !== story.partName) packageShellTouched = true;
+            return appliedOk;
+          },
           applyPackage: (edit) =>
             ctx.applyPackage((current) => {
               const next = edit(current);

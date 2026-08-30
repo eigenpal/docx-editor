@@ -48,6 +48,19 @@ export function yjsItemKey(client: number, clock: number): string {
   return `yjs:${client}:${clock}`;
 }
 
+/**
+ * The replica that minted a logical id, or null for a baseline id.
+ *
+ * `lid:<32-hex replica>:<counter>` yields the replica; a baseline id
+ * (`/word/document.xml#…`) has no minting replica. Used to group concurrently-minted
+ * replacement runs so a deterministic winner can be chosen across peers.
+ */
+export function replicaOfLogicalId(id: string): string | null {
+  if (!id.startsWith('lid:')) return null;
+  const replica = id.slice(4, id.indexOf(':', 4));
+  return isReplicaIdentity(replica) ? replica : null;
+}
+
 export function wordFacingIdsOf(
   attributes: readonly { readonly localName: string; readonly value: string }[]
 ): string[] {

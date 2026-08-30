@@ -7,7 +7,7 @@
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
 import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
-import type { BlockFragmentRecord, SemanticLayout } from './semantic-records.ts';
+import type { BlockFragmentRecord, SemanticLayout, TextMeasurer } from './semantic-records.ts';
 import { documentOrderIndex } from './document-order.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
@@ -36,9 +36,15 @@ export function selectionRects(
    * it is wrong for every caret outside that story. A caller with no story in hand passes
    * {@link everyStoryOrder}.
    */
-  order: readonly string[]
+  order: readonly string[],
+  /**
+   * For EXACT edge x positions inside a span. Layout no longer publishes eager per-character
+   * caret edges, so without a measurer an intra-span boundary interpolates across the span's
+   * advance — visibly wrong in a proportional face. Pass the layout's measurer.
+   */
+  measurer?: TextMeasurer
 ): SelectionRect[] {
-  return rangeRects(layout, selection, order, true);
+  return rangeRects(layout, selection, order, true, measurer);
 }
 
 /**
@@ -51,9 +57,10 @@ export function selectionRects(
 export function selectionMarkRects(
   layout: SemanticLayout,
   selection: SemanticSelection,
-  order: readonly string[]
+  order: readonly string[],
+  measurer?: TextMeasurer
 ): SelectionRect[] {
-  return rangeRects(layout, selection, order, false);
+  return rangeRects(layout, selection, order, false, measurer);
 }
 
 interface ParagraphTerminal {
@@ -106,7 +113,8 @@ function rangeRects(
   layout: SemanticLayout,
   selection: SemanticSelection,
   order: readonly string[],
-  includeText: boolean
+  includeText: boolean,
+  measurer?: TextMeasurer
 ): SelectionRect[] {
   const ordered = orderPositions(selection, order);
   if (!ordered) return [];
@@ -136,11 +144,11 @@ function rangeRects(
             segmentIndex === segments.length - 1;
           if ((!includeText || !overlap) && !markSelected) continue;
           const textStartX =
-            includeText && overlap ? xWithinLine(line, overlap.start, undefined, segment) : null;
+            includeText && overlap ? xWithinLine(line, overlap.start, measurer, segment) : null;
           const textEndX =
-            includeText && overlap ? xWithinLine(line, overlap.end, undefined, segment) : null;
+            includeText && overlap ? xWithinLine(line, overlap.end, measurer, segment) : null;
           const markStartX = markSelected
-            ? xWithinLine(line, segment.end, undefined, segment)
+            ? xWithinLine(line, segment.end, measurer, segment)
             : null;
           const markEndX =
             markStartX !== null
@@ -194,7 +202,9 @@ export function keyedRangeRects(
    * materialized pages is what keeps typing in a heavily reviewed document as fast as
    * typing in a clean one.
    */
-  pages?: ReadonlySet<number>
+  pages?: ReadonlySet<number>,
+  /** For exact intra-span edge positions (see {@link selectionRects}). */
+  measurer?: TextMeasurer
 ): Map<string, SelectionRect[]> {
   const found = new Map<string, SelectionRect[]>();
   if (ranges.length === 0) return found;
@@ -206,8 +216,8 @@ export function keyedRangeRects(
           for (const range of ranges) {
             const overlap = segmentOverlap(layout, segment, range.from, range.to);
             if (!overlap) continue;
-            const startX = xWithinLine(line, overlap.start, undefined, segment);
-            const endX = xWithinLine(line, overlap.end, undefined, segment);
+            const startX = xWithinLine(line, overlap.start, measurer, segment);
+            const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
             rects.push({
               pageIndex: page.index,
@@ -310,14 +320,16 @@ export function presenceSelectionRects(
   layout: SemanticLayout,
   selection: SemanticSelection,
   order: readonly string[],
-  pages?: ReadonlySet<number>
+  pages?: ReadonlySet<number>,
+  measurer?: TextMeasurer
 ): SelectionRect[] {
   return (
     presenceRangeRects(
       layout,
       [{ key: 'selection', from: selection.anchor, to: selection.head }],
       order,
-      pages
+      pages,
+      measurer
     ).get('selection') ?? []
   );
 }
@@ -332,7 +344,8 @@ export function presenceRangeRects(
   layout: SemanticLayout,
   ranges: readonly KeyedRange[],
   order: readonly string[],
-  pages?: ReadonlySet<number>
+  pages?: ReadonlySet<number>,
+  measurer?: TextMeasurer
 ): Map<string, SelectionRect[]> {
   const found = new Map<string, SelectionRect[]>();
   const ordered: { key: string; from: SemanticPosition; to: SemanticPosition }[] = [];
@@ -354,8 +367,8 @@ export function presenceRangeRects(
           for (const range of ordered) {
             const overlap = segmentOverlap(layout, segment, range.from, range.to);
             if (!overlap) continue;
-            const startX = xWithinLine(line, overlap.start, undefined, segment);
-            const endX = xWithinLine(line, overlap.end, undefined, segment);
+            const startX = xWithinLine(line, overlap.start, measurer, segment);
+            const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
             rects.push({
               pageIndex,

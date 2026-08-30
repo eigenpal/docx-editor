@@ -1,5 +1,5 @@
 ---
-title: 'Loading & saving'
+title: 'Loading and saving'
 description: 'Load DOCX bytes into the editor root, swap documents through the shared ref, and serialize the current state back out to a .docx file on demand.'
 category: 'Guides'
 seoTitle: 'Loading and saving DOCX documents'
@@ -261,6 +261,17 @@ Use one of these save paths:
 </FrameworkTabs>
 
 `save()` on the ref resolves `null` when no editor is mounted, so guard the result. `Editor.save()` on the instance always resolves an `ArrayBuffer`.
+
+### Field result refresh
+
+Save updates stale, calibrated `REF` and `NOTEREF` results in the body,
+footnotes, and endnotes. The editor commits all updated parts as one undo step.
+
+Locked fields and unsafe result structures keep their saved values. View mode,
+read-only sessions, and collaborative sessions do not rewrite field results.
+
+See [Fields and cross-references](/docs/2.x/guides/fields) for supported switches
+and other limits.
 
 ## Download helper
 

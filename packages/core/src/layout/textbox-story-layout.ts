@@ -21,7 +21,7 @@ import { emuToPoints } from './drawing-layout.ts';
 import { drawingResourceLayoutToken } from './inline-drawing-source.ts';
 import { forEachStoryDrawing } from './semantic-record-queries.ts';
 import type { FieldPageContext } from './field-projection.ts';
-import type { ParagraphLayoutCache } from './layout-cache.ts';
+import { framedTokenJoin, type ParagraphLayoutCache } from './layout-cache.ts';
 import {
   resolveStoryListItems,
   withNumberingStyleLinks,
@@ -285,13 +285,13 @@ const hostedListTokensByBlock = new WeakMap<OoxmlNode, HostedListTokenMemo>();
  * Empty for the overwhelmingly common block with no text box, at the cost of one memoized
  * subtree scan per immutable block node.
  */
-export function hostedTextboxListToken(
+function hostedTextboxListToken(
   block: OoxmlNode,
-  numberingIndex: NumberingIndex | undefined,
+  numberingIndex: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode = 'all-markup'
 ): string {
-  if (!numberingIndex || numberingIndex.nums.size === 0) return '';
+  if (numberingIndex.nums.size === 0) return '';
   const scan = hostedTextboxContents(block);
   if (scan.contents.length === 0 && !scan.truncated) return '';
   const memo = hostedListTokensByBlock.get(block);
@@ -307,12 +307,17 @@ export function hostedTextboxListToken(
   for (const content of scan.contents) {
     const items = textboxStoryListItems(content, numberingIndex, styleCascade, displayMode);
     if (!items) continue;
-    for (const [paragraphId, item] of items) parts.push(`${paragraphId}=${item.cacheToken}`);
+    for (const [paragraphId, item] of items) {
+      parts.push(framedTokenJoin([paragraphId, item.cacheToken]));
+    }
   }
   // A truncated scan may have MISSED a box, so it cannot vouch for "no list state": key on
   // the index identity instead, which fails open — every numbering edit moves the key.
   if (scan.truncated) parts.push(`truncated:${numberingIndexTokenId(numberingIndex)}`);
-  const token = parts.length === 0 ? '' : `|txbxlist:${parts.join(',')}`;
+  // Length-framed: `cacheToken` embeds `w:lvlText`, which a file can fill with any
+  // separator, so a separator join would let two different hosted list states concatenate
+  // to one token and hold a break key still across a numbering edit.
+  const token = parts.length === 0 ? '' : `|txbxlist:${framedTokenJoin(parts)}`;
   hostedListTokensByBlock.set(block, {
     rawIndex: numberingIndex,
     styleCascade,
@@ -320,6 +325,25 @@ export function hostedTextboxListToken(
     token,
   });
   return token;
+}
+
+/**
+ * The `hostedListTokenForParagraph` slice of a `TableFlowDeps`, built in ONE place so the
+ * lanes that lay hosted stories out (body flow, header/footer stories) cannot drift apart
+ * on the (index, cascade, mode) call shape. Empty without numbering DEFINITIONS — not just
+ * without an index — so a document with no lists installs no provider and the cell lane
+ * pays no per-paragraph call at all; the same emptiness check guards the token function.
+ */
+export function hostedListTokenDeps(
+  numberingIndex: NumberingIndex | undefined,
+  styleCascade: StyleCascadeTable | undefined,
+  displayMode?: RevisionDisplayMode
+): { readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string } {
+  if (!numberingIndex || numberingIndex.nums.size === 0) return {};
+  return {
+    hostedListTokenForParagraph: (paragraph) =>
+      hostedTextboxListToken(paragraph, numberingIndex, styleCascade, displayMode),
+  };
 }
 
 /**
@@ -439,7 +463,9 @@ export function layoutTextboxStory(
     ...chrome,
     ...(fallbackReason ? { fallbackReason } : {}),
     ...(clippedResourceTokens.length > 0
-      ? { clippedResourceToken: clippedResourceTokens.join('!') }
+      ? // Length-framed — resource keys embed file-derived ids, so any separator boundary
+        // is forgeable, and this token is spliced into another framed list upstream.
+        { clippedResourceToken: framedTokenJoin(clippedResourceTokens) }
       : {}),
   };
 }

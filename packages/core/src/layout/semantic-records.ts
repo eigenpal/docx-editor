@@ -136,10 +136,12 @@ export interface StyleSpanRecord {
   /**
    * Cumulative advances from {@link box}.x to each UTF-16 caret boundary in {@link text}.
    *
-   * Length is `text.length + 1` (both endpoints). Layout publishes these so hit-testing and
-   * the caret read the same per-cluster edges the span was measured with, rather than
-   * re-measuring a prefix at interaction time or interpolating across {@link box}.width —
-   * OpenSpec task 13.5. Absent on older records; consumers fall back to the measurer.
+   * Length is `text.length + 1` (both endpoints). When PRESENT, these are the interaction
+   * authority: hit-testing and the caret read them instead of re-measuring. Layout does not
+   * publish them eagerly — measuring every character of every laid span dominated page
+   * repagination — so interactions measure prefixes on demand through the same measurer the
+   * span was laid with (memoized per span; see `prefixWidth` in semantic-hit-test.ts), and
+   * only interpolate across {@link box}.width when no measurer is supplied.
    */
   readonly caretEdges?: readonly number[];
   /**

@@ -13,18 +13,20 @@
 
 # @docx-editor.dev/pro
 
-Three capabilities for the [docx-editor.dev](https://docx-editor.dev) React editor:
+Four capabilities for the [docx-editor.dev](https://docx-editor.dev) React and
+Vue editors:
 
-- **Tracked changes** — suggesting mode, markup rendering, accept and reject
-- **Comments** — threads anchored to a range, with replies
-- **Custom nodes** — your own inline node types, stored as Word content controls
+- **Tracked changes**: Suggesting mode, markup rendering, accept, and reject.
+- **Comments**: Threads anchored to a range, with replies.
+- **Collaboration**: Provider-neutral sessions with WebRTC and Hocuspocus helpers.
+- **Custom nodes**: Inline node types stored as Word content controls.
 
 ```bash
 npm install @docx-editor.dev/react @docx-editor.dev/pro
 ```
 
-The framework-neutral entry is `@docx-editor.dev/pro`; React chrome lives at
-`@docx-editor.dev/pro/react`.
+The framework-neutral entry is `@docx-editor.dev/pro`. Framework chrome lives at
+`@docx-editor.dev/pro/react` and `@docx-editor.dev/pro/vue`.
 
 ## Register a module
 
@@ -57,6 +59,24 @@ reply with no author rather than writing an empty attribute.
 Without a review module the editor still opens a document containing revisions and comments and
 still saves them back untouched. It renders revisions in their final state and offers no review
 UI; the module is what makes them visible and actionable.
+
+## Collaboration
+
+Use `collaborationModule` with a Yjs 13 provider. The package includes WebRTC and
+Hocuspocus helpers for React and Vue.
+
+Install the peer package for your transport:
+
+```bash
+npm install @docx-editor.dev/pro yjs y-webrtc
+npm install @docx-editor.dev/pro yjs @hocuspocus/provider
+```
+
+Start with the
+[real-time collaboration quickstart](https://www.docx-editor.dev/docs/2.x/collaboration).
+Use the
+[collaboration reference](https://www.docx-editor.dev/docs/2.x/pro/collaboration)
+for room lifecycles, presence, recovery, and limits.
 
 ## Chrome or hooks
 
@@ -135,4 +155,5 @@ touches the network.
 - [Pro overview](https://www.docx-editor.dev/docs/2.x/pro)
 - [Tracked changes](https://www.docx-editor.dev/docs/2.x/pro/tracked-changes)
 - [Comments](https://www.docx-editor.dev/docs/2.x/pro/comments)
+- [Collaboration](https://www.docx-editor.dev/docs/2.x/pro/collaboration)
 - [Custom nodes](https://www.docx-editor.dev/docs/2.x/pro/custom-nodes)

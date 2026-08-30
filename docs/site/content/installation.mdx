@@ -10,6 +10,23 @@ Use one of these supported framework versions:
 - React `^18 || ^19`
 - Vue `^3.3`
 
+## Node version
+
+To run the engine outside a browser, use Node `^20.16.0 || >=22.3.0`.
+
+Anything that measures text needs the text shaper. The shaper reaches Node
+builtins through `process.getBuiltinModule`, which arrived in Node 20.16.0 and
+22.3.0. On an earlier version the shaper does not start. The engine then reports
+the Node version as the cause, rather than a missing binary.
+
+This applies to server-side rendering, headless automation with
+`@docx-editor.dev/editor-api`, and build-time rendering. A browser-only app is
+unaffected.
+
+The floor matters more than it looks. Measurement decides where lines wrap and
+pages break, so a shaper that cannot start is not a degraded mode. It changes
+your page count.
+
 ## Pick a package
 
 Each adapter declares the engine as a peer dependency. Install the engine and one adapter.
@@ -44,7 +61,7 @@ npm install @docx-editor.dev/pro
 # EigenPal Pro License: https://www.docx-editor.dev/pricing
 npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 
-# Metric-compatible substitutes for Word's default fonts (optional)
+# Open-licensed substitutes for common Word fonts (optional)
 npm install @docx-editor.dev/fonts
 ```
 
@@ -156,19 +173,29 @@ Use the guide for your framework:
 The editor uses font bytes to measure line wraps and page breaks.
 It loads embedded document fonts without configuration.
 Some documents reference Word default fonts without embedding them.
-For these documents, `@docx-editor.dev/fonts` supplies metric-compatible substitutes.
+For these documents, `@docx-editor.dev/fonts` supplies open-licensed substitutes.
+Five families match advance widths. The Century Gothic substitute stays within
+1% in the package fidelity check.
 
-Use this example to load the substitute fonts:
+`packagedFonts()` supplies them per document: the editor calls it after parsing
+with the families that file declares. It loads a family when the document names
+it, or when that family is the document's default face, so a document pays for
+what it declares instead of all 20 eager faces. No request leaves your origin.
+
+The default face counts because a run that names no font still has to be measured
+in one. That face is Calibri, so Carlito loads for every document.
 
 <FrameworkTabs>
 <Framework value="react">
 
 ```tsx
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { DocxEditor, useFonts } from '@docx-editor.dev/react';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
-const fonts = await loadDefaultFonts();
-
-<DocxEditor document={bytes} fonts={fonts} />;
+function Editor({ bytes }: { bytes: Uint8Array }) {
+  const fonts = useFonts(packagedFonts());
+  return <DocxEditor document={bytes} fonts={fonts} />;
+}
 ```
 
 </Framework>
@@ -176,16 +203,10 @@ const fonts = await loadDefaultFonts();
 
 ```vue
 <script setup lang="ts">
-import { shallowRef } from 'vue';
-import { DocxEditor, type FontConfigurationFragment } from '@docx-editor.dev/vue';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { DocxEditor, useFonts } from '@docx-editor.dev/vue';
+import { packagedFonts } from '@docx-editor.dev/fonts';
 
-// Resolve into a ref. A top-level `await` here would make this an async
-// component, which renders nothing without a <Suspense> ancestor.
-const fonts = shallowRef<FontConfigurationFragment>();
-void loadDefaultFonts().then((loaded) => {
-  fonts.value = loaded;
-});
+const fonts = useFonts(packagedFonts());
 </script>
 
 <template>
@@ -196,7 +217,11 @@ void loadDefaultFonts().then((loaded) => {
 </Framework>
 </FrameworkTabs>
 
-For information about font source order, see [Fonts and measurement](/docs/2.x/guides/fonts).
+`packagedFonts()` resolves after the document is parsed, so the first layout uses
+fixed measurement and the editor re-paginates when the faces arrive. Edits made in
+between survive that; the undo history behind them does not. For a document that
+must paginate correctly on the first pass, use `defaultFonts()` instead. For more
+information, see [Fonts and measurement](/docs/2.x/guides/fonts#choose-between-lazy-and-eager-loading).
 
 ## Edit documents without a browser
 
