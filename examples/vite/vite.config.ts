@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
 import path from 'path';
+import { stripUnexpandedTailwind } from '../shared/strip-unexpanded-tailwind';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
 
@@ -186,6 +187,7 @@ export default defineConfig(async (): Promise<UserConfig> => {
         plugins: [
           tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
           autoprefixer(),
+          stripUnexpandedTailwind,
         ] as UserConfig['css'] extends { postcss?: { plugins?: infer P } } ? P : never,
       },
     },

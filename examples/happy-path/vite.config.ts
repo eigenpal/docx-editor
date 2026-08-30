@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import react from '@vitejs/plugin-react';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
+import { stripUnexpandedTailwind } from '../shared/strip-unexpanded-tailwind';
 import path from 'path';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
@@ -102,6 +103,7 @@ export default defineConfig({
       plugins: [
         tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
         autoprefixer(),
+        stripUnexpandedTailwind,
       ],
     },
   },

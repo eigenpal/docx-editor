@@ -22,9 +22,18 @@ const corePreset = (() => {
 export default {
   presets: [corePreset],
   // Absolute paths so example builds (cd examples/vite && vite build) still scan the right files.
+  //
+  // Scan package sources and example sources by name — never `examples/**`. That
+  // glob swept every `examples/*/node_modules` (Tailwind warns about it on each
+  // build) and, through the workspace symlinks in there, was the only thing that
+  // reached `packages/pro/src`. Pro chrome carries Tailwind classes (the shipped
+  // stylesheet's tailwind.dist.config.cjs scans it for the same reason), so it
+  // gets its own entry now that node_modules is out of the walk.
   content: [
     path.join(__configDir, 'packages/react/src/**/*.{ts,tsx}'),
+    path.join(__configDir, 'packages/pro/src/**/*.{ts,tsx}'),
     path.join(__configDir, 'packages/vue/src/**/*.{ts,tsx}'),
-    path.join(__configDir, 'examples/**/*.{ts,tsx,vue}'),
+    path.join(__configDir, 'examples/*/src/**/*.{ts,tsx,vue}'),
+    path.join(__configDir, 'examples/shared/**/*.{ts,tsx,vue}'),
   ],
 };

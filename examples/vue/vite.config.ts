@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue';
 import vueJsx from '@vitejs/plugin-vue-jsx';
 import tailwindcss from 'tailwindcss';
 import autoprefixer from 'autoprefixer';
+import { stripUnexpandedTailwind } from '../shared/strip-unexpanded-tailwind';
 import path from 'path';
 
 const monorepoRoot = path.resolve(__dirname, '../..');
@@ -148,6 +149,7 @@ export default defineConfig({
       plugins: [
         tailwindcss({ config: path.join(monorepoRoot, 'tailwind.config.js') }),
         autoprefixer(),
+        stripUnexpandedTailwind,
       ],
     },
   },
