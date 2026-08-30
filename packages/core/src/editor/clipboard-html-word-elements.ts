@@ -160,7 +160,9 @@ export function wordNoteReferenceHtml(
   const rawId = attributeValueOf(node, 'id', WML_NAMESPACE_URI);
   const id =
     bodyKind === null
-      ? rawId !== undefined && /^[1-9]\d{0,9}$/.test(rawId)
+      ? // Leading zeros are legal ST_DecimalNumber lexical forms ('007'); parseInt
+        // normalizes them so the reference and its definition emit ONE id spelling.
+        rawId !== undefined && /^\d{1,10}$/.test(rawId)
         ? Number.parseInt(rawId, 10)
         : undefined
       : noteBody?.id;

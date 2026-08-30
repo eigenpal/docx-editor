@@ -141,3 +141,22 @@ export function appendPageBreak(out: string[]): void {
   }
   out.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
 }
+
+const FURNITURE_ONLY = /^(?:<w:bookmark(?:Start|End)\b[^>]*\/>)+$/;
+
+/** Amortized furniture-only check: a `runs` array only grows, so each entry tests
+ *  once — re-testing the whole array per whitespace node would be quadratic under
+ *  an anchor-flood paste. */
+const furnitureScan = new WeakMap<string[], { checked: number; furniture: boolean }>();
+export function isFurnitureOnly(runs: string[]): boolean {
+  let state = furnitureScan.get(runs);
+  if (!state) {
+    state = { checked: 0, furniture: true };
+    furnitureScan.set(runs, state);
+  }
+  while (state.furniture && state.checked < runs.length) {
+    state.furniture = FURNITURE_ONLY.test(runs[state.checked]!);
+    state.checked += 1;
+  }
+  return state.furniture;
+}

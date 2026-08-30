@@ -17,11 +17,12 @@ export type WordNoteKind = 'footnote' | 'endnote';
 /** One id parser for every site, so the cap cannot drift: a collected id the
  *  renderer would refuse would leave a dead anchor in the copied HTML. The store
  *  legitimately allocates ids up to int32 (striped collab ids), so the cap matches
- *  its NOTE_ID_MAX. */
+ *  its NOTE_ID_MAX. Leading zeros are legal ST_DecimalNumber lexical forms;
+ *  parseInt normalizes them so references and definitions agree on ONE spelling. */
 function wmlNoteIdOf(raw: string | undefined): number | null {
-  if (raw === undefined || !/^[1-9]\d{0,9}$/.test(raw)) return null;
+  if (raw === undefined || !/^\d{1,10}$/.test(raw)) return null;
   const id = Number.parseInt(raw, 10);
-  return id <= 0x7fffffff ? id : null;
+  return id >= 1 && id <= 0x7fffffff ? id : null;
 }
 
 /** The note ids a notes part actually defines. */
@@ -142,7 +143,7 @@ export function renderNoteList(
     // A shipped id always gets its definition div — its anchor is already in the
     // body, and a dead anchor would paste back as literal text. An empty body
     // renders as an empty paragraph.
-    notes += `<div style="mso-element:${kind}" id="${kind === 'footnote' ? 'ftn' : 'edn'}${id}">${
+    notes += `<div style="mso-element:${kind}" id="${kind === 'footnote' ? 'ftn' : 'edn'}${idValue}">${
       inner === '' ? '<p></p>' : inner
     }</div>`;
   }

@@ -57,6 +57,17 @@ export function isWordPageBreakSpacer(element: Element): boolean {
   return text.includes('\u00a0') && text.replace(/[\s\u00a0]/g, '').length === 0;
 }
 
+/** Bounded ancestor count, for inner-before-outer ordering of nested elements. */
+export function domDepthOf(element: Element): number {
+  let depth = 0;
+  let current = element.parentElement;
+  while (current !== null && depth < 256) {
+    depth += 1;
+    current = current.parentElement;
+  }
+  return depth;
+}
+
 export const IGNORED_TAGS: ReadonlySet<string> = new Set(
   (
     'script style head template iframe object embed noscript svg math ' +

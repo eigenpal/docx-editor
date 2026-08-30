@@ -784,8 +784,31 @@ export function extractFragmentPackage(
     fragmentPartBytes.set(name, partData);
   };
 
+  // A kept record RE-HOMES onto the fragment part that will own its rels part: the
+  // source part may live in another folder, and a relative target would then
+  // resolve against the wrong base. Internal targets become absolute (the media
+  // ships under its ORIGINAL canonical name), so both flavours resolve alike.
+  const rehomedRecords = (
+    records: readonly RelationshipRecord[],
+    ownerPart: string
+  ): RelationshipRecord[] =>
+    records.map((record) => {
+      if (record.targetMode === 'External') return { ...record, ownerPart };
+      const resolved = resolveInternalTarget(record.ownerPart, record.rawTarget);
+      return {
+        ...record,
+        ownerPart,
+        rawTarget: resolved.ok ? resolved.partName : record.rawTarget,
+      };
+    });
+
   // Fragment document rels: the used source subset plus the parts this fragment authors.
-  const fragmentDocRels: RelationshipRecord[] = [...keptDocRecords];
+  const fragmentDocRels: RelationshipRecord[] = rehomedRecords(
+    keptDocRecords,
+    '/word/document.xml'
+  );
+  const fragmentFootnoteRels = rehomedRecords(footnoteRels, '/word/footnotes.xml');
+  const fragmentEndnoteRels = rehomedRecords(endnoteRels, '/word/endnotes.xml');
   const usedIds = new Set(fragmentDocRels.map((record) => record.id));
   let relHint = 9001;
   const addFragmentRel = (type: string, target: string): void => {
@@ -834,8 +857,8 @@ export function extractFragmentPackage(
       withChildren(footnotesPart.root as OoxmlElement, literalFootnotes)
     );
     addFragmentRel(FOOTNOTES_REL, 'footnotes.xml');
-    if (footnoteRels.length > 0) {
-      entries.set('word/_rels/footnotes.xml.rels', strToU8(relationshipXml(footnoteRels)));
+    if (fragmentFootnoteRels.length > 0) {
+      entries.set('word/_rels/footnotes.xml.rels', strToU8(relationshipXml(fragmentFootnoteRels)));
     }
   }
   if (endnotesPart && literalEndnotes.length > 0) {
@@ -845,8 +868,8 @@ export function extractFragmentPackage(
       withChildren(endnotesPart.root as OoxmlElement, literalEndnotes)
     );
     addFragmentRel(ENDNOTES_REL, 'endnotes.xml');
-    if (endnoteRels.length > 0) {
-      entries.set('word/_rels/endnotes.xml.rels', strToU8(relationshipXml(endnoteRels)));
+    if (fragmentEndnoteRels.length > 0) {
+      entries.set('word/_rels/endnotes.xml.rels', strToU8(relationshipXml(fragmentEndnoteRels)));
     }
   }
 
@@ -898,8 +921,12 @@ export function extractFragmentPackage(
   const fragmentRelationships = new Map<string, readonly RelationshipRecord[]>();
   fragmentRelationships.set('/', [rootRelationship]);
   fragmentRelationships.set('/word/document.xml', fragmentDocRels);
-  if (footnoteRels.length > 0) fragmentRelationships.set('/word/footnotes.xml', footnoteRels);
-  if (endnoteRels.length > 0) fragmentRelationships.set('/word/endnotes.xml', endnoteRels);
+  if (fragmentFootnoteRels.length > 0) {
+    fragmentRelationships.set('/word/footnotes.xml', fragmentFootnoteRels);
+  }
+  if (fragmentEndnoteRels.length > 0) {
+    fragmentRelationships.set('/word/endnotes.xml', fragmentEndnoteRels);
+  }
   const externalTargets: OoxmlExternalTarget[] = [];
   for (const records of fragmentRelationships.values()) {
     for (const record of records) {

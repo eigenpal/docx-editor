@@ -53,11 +53,7 @@ import { clipboardBookmarkName, clipboardHyperlinkTarget } from './clipboard-htm
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
 import { noteIdsOf, renderNoteList, shippedNoteIds } from './clipboard-html-write-notes.ts';
-import {
-  conditionalCellFill,
-  tableConditionalFormats,
-  wordTableCellCss,
-} from './clipboard-html-write-table-styles.ts';
+import { renderHtmlTable } from './clipboard-html-write-table.ts';
 import {
   WORD_HIGHLIGHT_COLORS,
   WORD_JC_TO_TEXT_ALIGN,
@@ -67,7 +63,6 @@ import {
   wordNoteReferenceHtml,
   wordParagraphClassOf,
   wordPositionalTabHtml,
-  wordTableRowCss,
   wordUnderlineCss,
   type WordNoteBodyContext,
 } from './clipboard-html-word-elements.ts';
@@ -309,17 +304,21 @@ function noteOrdinalOf(ctx: RenderContext, kind: 'footnote' | 'endnote', id: num
  *  `inert` disarms the machinery when the sequence's fldChars are UNBALANCED (note
  *  bodies bypass extraction's balance pass): field results then render as plain
  *  content rather than an open `instr` blanking everything after it. */
-interface FieldState {
+export interface FieldState {
   readonly stack: Array<'instr' | 'result'>;
   readonly inert: boolean;
 }
 
 const LIST_FMT_TO_CSS: Readonly<Record<string, string>> = {
   decimal: 'decimal',
+  decimalZero: 'decimal-leading-zero',
   lowerLetter: 'lower-alpha',
   upperLetter: 'upper-alpha',
   lowerRoman: 'lower-roman',
   upperRoman: 'upper-roman',
+  // Marker-suppressed levels must NOT fall back to decimal: the receiver would
+  // show numbers the source never displays.
+  none: 'none',
 };
 
 interface ListPlacement {
@@ -678,140 +677,12 @@ function renderParagraph(
   return `<${tag}${headingAttr}${dirAttr}${styleAttr}>${inner}</${tag}>`;
 }
 
-interface CellPlacement {
-  readonly cell: OoxmlElement;
-  readonly startColumn: number;
-  readonly span: number;
-  readonly vMerge: 'restart' | 'continue' | null;
-}
-
-/** A typed cell, or a `w:tc` the canonical tree demoted to generic — both occupy a column. */
-function isRowCell(child: OoxmlElement): boolean {
-  if (child.kind === 'tableCell') return true;
-  return child.localName === 'tc' && child.namespaceUri === WML_NAMESPACE_URI;
-}
-
-function cellPlacementsOf(rows: readonly OoxmlElement[]): CellPlacement[][] {
-  return rows.map((row) => {
-    const placements: CellPlacement[] = [];
-    let column = 0;
-    for (const child of row.children) {
-      if (!isElement(child) || !isRowCell(child)) continue;
-      const tcPr = wmlChild(child, 'tcPr');
-      const span = Math.min(
-        Math.max(parseIntValue(wmlVal(wmlChild(tcPr, 'gridSpan'))) ?? 1, 1),
-        63
-      );
-      const vMergeNode = wmlChild(tcPr, 'vMerge');
-      const vMerge =
-        vMergeNode === null ? null : wmlVal(vMergeNode) === 'restart' ? 'restart' : 'continue';
-      placements.push({ cell: child, startColumn: column, span, vMerge });
-      column += span;
-    }
-    return placements;
-  });
-}
-
-function renderTable(ctx: RenderContext, table: OoxmlElement, fields: FieldState): string {
-  const tblPr = table.children.find((child) => child.kind === 'tableProperties');
-  const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
-  let tblBorders: OoxmlElement | null = null;
-  const tableStyleChain = styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')));
-  for (const style of tableStyleChain) {
-    const styleBorders = wmlChild(wmlChild(style, 'tblPr'), 'tblBorders');
-    if (styleBorders) tblBorders = styleBorders;
-  }
-  const ownBorders = wmlChild(ownTblPr, 'tblBorders');
-  if (ownBorders) tblBorders = ownBorders;
-  const conditionalFormats = tableConditionalFormats(
-    tableStyleChain,
-    wmlChild(ownTblPr, 'tblLook')
-  );
-
-  const rows: OoxmlElement[] = [];
-  for (const child of table.children) {
-    // A typed row, or a `w:tr` the canonical tree demoted to generic — the same
-    // tolerance the cell walk applies via isRowCell.
-    if (
-      isElement(child) &&
-      (child.kind === 'tableRow' ||
-        (child.localName === 'tr' && child.namespaceUri === WML_NAMESPACE_URI))
-    ) {
-      rows.push(child);
-    }
-  }
-  const placements = cellPlacementsOf(rows);
-
-  const tableRules = ['border-collapse:collapse'];
-  const tableWidth = wmlChild(ownTblPr, 'tblW');
-  const width = parseIntValue(attrOf(tableWidth, 'w', WML_NAMESPACE_URI));
-  if (width !== null && width > 0 && attrOf(tableWidth, 'type', WML_NAMESPACE_URI) === 'dxa') {
-    tableRules.push(`width:${ptFromTwips(width)}`);
-  }
-  const tableJc = wmlVal(wmlChild(ownTblPr, 'jc'));
-  if (tableJc === 'center') tableRules.push('margin-left:auto', 'margin-right:auto');
-  else if (tableJc === 'right') tableRules.push('margin-left:auto', 'margin-right:0');
-  for (const [xmlName, cssName] of [
-    ['insideH', 'insideh'],
-    ['insideV', 'insidev'],
-  ] as const) {
-    const border = wordBorderCss(wmlChild(tblBorders, xmlName));
-    if (border) tableRules.push(`mso-border-${cssName}-alt:${border}`);
-  }
-  // Outer-vs-inside edges classify by GRID COLUMN, not placement index: a ragged
-  // short row's last cell sits mid-grid and must take the inside border.
-  let gridColumns = 1;
-  for (const rowCells of placements) {
-    for (const placement of rowCells) {
-      gridColumns = Math.max(gridColumns, placement.startColumn + placement.span);
-    }
-  }
-  let out = `<table style="${tableRules.join(';')}">`;
-  placements.forEach((rowCells, rowIndex) => {
-    const height = wmlChild(wmlChild(rows[rowIndex] ?? null, 'trPr'), 'trHeight');
-    const heightValue = parseIntValue(attrOf(height, 'val', WML_NAMESPACE_URI));
-    const rowCss = wordTableRowCss(heightValue, attrOf(height, 'hRule', WML_NAMESPACE_URI));
-    const rowStyle = rowCss === '' ? '' : ` style="${rowCss}"`;
-    out += `<tr${rowStyle}>`;
-    for (const placement of rowCells) {
-      if (placement.vMerge === 'continue') {
-        // The continuation cell renders nothing, but its fldChars still drive the
-        // shared field state — the same rule as tracked deletions.
-        advanceFieldState(placement.cell, fields);
-        continue;
-      }
-      let rowSpan = 1;
-      if (placement.vMerge === 'restart') {
-        for (let below = rowIndex + 1; below < placements.length; below += 1) {
-          const continuation = placements[below]!.find(
-            (candidate) =>
-              candidate.startColumn === placement.startColumn && candidate.vMerge === 'continue'
-          );
-          if (!continuation) break;
-          rowSpan += 1;
-        }
-      }
-      const tcPr = wmlChild(placement.cell, 'tcPr');
-      const css = wordTableCellCss(
-        tcPr,
-        tblBorders,
-        rowIndex,
-        placements.length,
-        rowSpan,
-        placement.startColumn === 0,
-        placement.startColumn + placement.span >= gridColumns,
-        conditionalCellFill(conditionalFormats, rowIndex, placement.startColumn === 0)
-      );
-      const attrs =
-        (placement.span > 1 ? ` colspan="${placement.span}"` : '') +
-        (rowSpan > 1 ? ` rowspan="${rowSpan}"` : '') +
-        (css === '' ? '' : ` style="${escapeAttr(css)}"`);
-      out += `<td${attrs}>${renderBlocks(ctx, placement.cell.children, fields)}</td>`;
-    }
-    out += '</tr>';
-  });
-  return `${out}</table>`;
-}
+/** Injected into the extracted table renderer, so the runtime dependency stays one-way. */
+const tableRenderDeps = {
+  renderBlocks: (ctx: RenderContext, children: readonly OoxmlNode[], shared?: FieldState) =>
+    renderBlocks(ctx, children, shared),
+  advanceFieldState,
+};
 
 interface OpenList {
   readonly tag: 'ol' | 'ul';
@@ -911,7 +782,7 @@ function renderBlocks(
         }
         case 'table':
           closeAllLists();
-          out += renderTable(ctx, child, fields);
+          out += renderHtmlTable(ctx, child, fields, tableRenderDeps);
           break;
         case 'contentControl': {
           const content = child.children.find((inner) => inner.kind === 'contentControlContent');

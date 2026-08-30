@@ -99,6 +99,19 @@ export function isClipboardNoteList(style: ReadonlyMap<string, string>): boolean
   return value === 'footnote-list' || value === 'endnote-list';
 }
 
+const NOTE_MARK_RUN =
+  /<w:r>(?:<w:rPr>(?:(?!<\/w:r>)[\s\S])*?<\/w:rPr>)?<w:(footnote|endnote)Reference w:id="(\d{1,10})"\/><\/w:r>/g;
+
+/** Strip every projected note-reference run whose `kind:id` is in `keys`, in ONE
+ *  linear scan — an alternation of thousands of marks scans near-quadratically.
+ *  The pattern only matches XML the projection itself emitted (escapeXml escapes
+ *  quotes, so run TEXT can never form the attribute shape). */
+export function stripNoteMarks(block: string, keys: ReadonlySet<string>): string {
+  return block.replace(NOTE_MARK_RUN, (whole, kind: string, id: string) =>
+    keys.has(`${kind}:${id}`) ? '' : whole
+  );
+}
+
 export function clipboardNotesPartXml(
   kind: ClipboardNoteKind,
   notes: ReadonlyMap<number, readonly string[]>

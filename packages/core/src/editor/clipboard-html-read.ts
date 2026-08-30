@@ -26,11 +26,13 @@ import {
   clipboardNoteReference,
   collectReferencedNoteIds,
   isClipboardNoteList,
+  stripNoteMarks,
   type ClipboardNoteKind,
 } from './clipboard-html-notes.ts';
 import {
   HEADING_SZ,
   appendPageBreak,
+  isFurnitureOnly,
   paragraphXml,
   rPrXml,
   textRunXml,
@@ -58,6 +60,7 @@ import {
   CONTAINER_TAGS,
   IGNORED_TAGS,
   PARAGRAPH_TAGS,
+  domDepthOf,
   hasBlockChild,
   isWordPageBreakBlock,
   isWordPageBreakSpacer,
@@ -164,8 +167,6 @@ function allocateRel(
 
 // --- Walk
 
-const FURNITURE_ONLY = /^(?:<w:bookmark(?:Start|End)\b[^>]*\/>)+$/;
-
 function collectInline(
   node: Node,
   depth: number,
@@ -206,7 +207,7 @@ function collectInline(
     // Whitespace between blocks: bookmark furniture is not visible content, so a
     // standalone anchor must not turn the gap into a space paragraph — but a
     // bookmark WRAPPING real content stays visible and keeps the word gap.
-    if (collapsed === ' ' && runs.every((run) => FURNITURE_ONLY.test(run))) return;
+    if (collapsed === ' ' && isFurnitureOnly(runs)) return;
     runs.push(textRunXml(collapsed, ctx.run));
     return;
   }
@@ -214,7 +215,10 @@ function collectInline(
   const tag = tagOf(node);
   if (IGNORED_TAGS.has(tag)) return;
   const style = parseInlineStyle(node);
-  if (isMsoListIgnoreMarker(node)) return; // Word's literal list marker never becomes text.
+  // Word's literal list marker never becomes text — but ONLY when the paragraph
+  // actually projected `w:numPr` to replace it; a paragraph whose own `mso-list`
+  // declaration failed to parse keeps the visible marker instead of losing it.
+  if (isMsoListIgnoreMarker(node) && ctx.para.numPr !== undefined) return;
   const msoElement = style.get('mso-element')?.trim().toLowerCase();
   if (
     msoElement === 'comment-reference' ||
@@ -234,6 +238,14 @@ function collectInline(
   }
   const tabContent = htmlTabRunContents(style.get('mso-tab-count'));
   if (tabContent.length > 0) {
+    // Every synthesized tab past the first charges the walk budget: the repeat
+    // count is clipboard-supplied, and one charged span must not amplify into
+    // 64x output across a span flood.
+    p.nodesLeft -= tabContent.split('<w:tab/>').length - 2;
+    if (p.nodesLeft <= 0) {
+      p.truncated = true;
+      return;
+    }
     // The tab run carries the SPAN's own formatting (an underlined leader keeps its
     // underline), not just the parent context's.
     const tabRun = applyRunCss(applyInlineTag(ctx.run, tag), style);
@@ -651,6 +663,15 @@ function projectFlow(
     p.lastMarkCovered = ctx.paragraphMarkCovered;
   }
   flush();
+  // Furniture the fold could not place (previous block is a table, or nothing
+  // followed) keeps its own paragraph — internal links point at these bookmarks.
+  // It emits BEFORE a pending page break: the anchor preceded the break in the
+  // source, and moving it past the break would land the link one page late.
+  if (pending.length > 0) {
+    out.push(paragraphXml(flushPara, pending));
+    pending = [];
+    p.lastMarkCovered = false;
+  }
   if (ownsPageBreakState && pageBreak.pending) {
     appendPageBreak(out);
     pageBreak.pending = false;
@@ -662,13 +683,6 @@ function projectFlow(
     out.push(paragraphXml(flushPara, pending));
     pending = [];
     p.lastMarkCovered = ctx.paragraphMarkCovered;
-  }
-  // Furniture the fold could not place (previous block is a table, or nothing
-  // followed) keeps its own paragraph — internal links point at these bookmarks.
-  if (pending.length > 0) {
-    out.push(paragraphXml(flushPara, pending));
-    pending = [];
-    p.lastMarkCovered = false;
   }
 }
 
@@ -781,15 +795,6 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   // Project INNER definitions before their containers: if truncation un-claims the
   // tail, an un-claimed inner note then projects inside its outer's body (or the
   // document body) instead of being stranded by an already-projected outer.
-  const domDepthOf = (element: Element): number => {
-    let depth = 0;
-    let current = element.parentElement;
-    while (current !== null && depth < 256) {
-      depth += 1;
-      current = current.parentElement;
-    }
-    return depth;
-  };
   claimed.sort((a, b) => domDepthOf(b.element) - domDepthOf(a.element));
   // The BODY is the primary content: it walks first with the full budget, emitting
   // references for claimed ids. Notes spend what remains; a note the leftover
@@ -822,28 +827,24 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       // note. One alternation pattern then strips every dropped citation from the
       // BODY blocks and the kept note bodies in a single sweep.
       notesDropped = true;
-      const droppedMarks: string[] = [];
+      const droppedKeys = new Set<string>();
       for (let drop = index; drop < claimed.length; drop += 1) {
         const dropped = claimed[drop]!;
         definedNotes[dropped.kind].delete(dropped.id);
         definedNoteElements.delete(dropped.element);
         projection.notes[dropped.kind].delete(dropped.id);
         projection.bodyNoteRefs[dropped.kind].delete(dropped.id);
-        droppedMarks.push(`<w:${dropped.kind}Reference w:id="${dropped.id}"/>`);
+        droppedKeys.add(`${dropped.kind}:${dropped.id}`);
       }
-      if (droppedMarks.length > 0) {
-        const markPattern = new RegExp(
-          `<w:r>(?:<w:rPr>(?:(?!</w:r>)[\\s\\S])*?</w:rPr>)?(?:${droppedMarks.join('|')})</w:r>`,
-          'g'
-        );
+      if (droppedKeys.size > 0) {
         for (let at = 0; at < blocks.length; at += 1) {
-          blocks[at] = blocks[at]!.replace(markPattern, '');
+          blocks[at] = stripNoteMarks(blocks[at]!, droppedKeys);
         }
         for (const keptKind of ['footnote', 'endnote'] as const) {
           for (const [keptId, keptBlocks] of projection.notes[keptKind]) {
             projection.notes[keptKind].set(
               keptId,
-              keptBlocks.map((block) => block.replace(markPattern, ''))
+              keptBlocks.map((block) => stripNoteMarks(block, droppedKeys))
             );
           }
         }
@@ -910,23 +911,14 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   }
   // A moved note's definition no longer exists, so any citation of a moved id (in
   // a kept note of a mutual-citation island, or in another moved note's blocks)
-  // must strip with the same alternation sweep, or a reference dangles.
-  let movedMarkPattern: RegExp | null = null;
+  // must strip with the same linear sweep, or a reference dangles.
   if (movedNotes.size > 0) {
-    const movedMarks = [...movedNotes].map((key) => {
-      const [movedKind, movedId] = key.split(':') as [ClipboardNoteKind, string];
-      return `<w:${movedKind}Reference w:id="${movedId}"/>`;
-    });
-    movedMarkPattern = new RegExp(
-      `<w:r>(?:<w:rPr>(?:(?!</w:r>)[\\s\\S])*?</w:rPr>)?(?:${movedMarks.join('|')})</w:r>`,
-      'g'
-    );
     for (const keptKind of ['footnote', 'endnote'] as const) {
       for (const [keptId, keptBlocks] of projection.notes[keptKind]) {
         if (movedNotes.has(`${keptKind}:${keptId}`)) continue;
         projection.notes[keptKind].set(
           keptId,
-          keptBlocks.map((block) => block.replace(movedMarkPattern!, ''))
+          keptBlocks.map((block) => stripNoteMarks(block, movedNotes))
         );
       }
     }
@@ -940,23 +932,24 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       for (const block of noteBlocks) {
         // Drop the note's own number mark; it has no meaning in body flow. The
         // patterns only ever match XML this projection just emitted.
-        const moved = block
-          // Tempered so the optional rPr scan can never cross a run boundary.
-          .replace(
-            /<w:r>(?:<w:rPr>(?:(?!<\/w:r>)[\s\S])*?<\/w:rPr>)?<w:(?:footnote|endnote)Ref\/><\/w:r>/g,
-            ''
-          )
-          .replace(movedMarkPattern!, '')
-          .replace(/ r:(id|embed)="([^"]{1,32})"/g, (whole, attribute: string, oldId: string) => {
-            let mapped = relIdMap.get(oldId);
-            if (mapped === undefined) {
-              const source = projection.noteRels[kind].find((rel) => rel.id === oldId);
-              if (source === undefined) return whole;
-              mapped = allocateRel(projection, source.type, source.target, source.external);
-              relIdMap.set(oldId, mapped);
-            }
-            return ` r:${attribute}="${mapped}"`;
-          });
+        const moved = stripNoteMarks(
+          block
+            // Tempered so the optional rPr scan can never cross a run boundary.
+            .replace(
+              /<w:r>(?:<w:rPr>(?:(?!<\/w:r>)[\s\S])*?<\/w:rPr>)?<w:(?:footnote|endnote)Ref\/><\/w:r>/g,
+              ''
+            ),
+          movedNotes
+        ).replace(/ r:(id|embed)="([^"]{1,32})"/g, (whole, attribute: string, oldId: string) => {
+          let mapped = relIdMap.get(oldId);
+          if (mapped === undefined) {
+            const source = projection.noteRels[kind].find((rel) => rel.id === oldId);
+            if (source === undefined) return whole;
+            mapped = allocateRel(projection, source.type, source.target, source.external);
+            relIdMap.set(oldId, mapped);
+          }
+          return ` r:${attribute}="${mapped}"`;
+        });
         blocks.push(moved);
         // The final paragraph changed: the coverage flag must describe IT.
         projection.lastMarkCovered = false;
