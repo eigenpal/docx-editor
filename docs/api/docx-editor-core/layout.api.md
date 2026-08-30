@@ -1645,6 +1645,7 @@ export interface NotesLayoutInput {
     readonly footnotePropsBySection: readonly ResolvedFootnoteProperties[];
     // (undocumented)
     readonly footnotesPart: OoxmlPart | null;
+    readonly linkRelsEpoch?: string;
     // (undocumented)
     readonly measurer: TextMeasurer;
     readonly numberingIndex?: NumberingIndex;
