@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Harden layout-cache invalidation for numbered lists inside text boxes: cell and header paragraph break keys now track the hosted list state, and layout token joins can no longer alias across file-controlled separators. Fixes #622
+Numbered lists inside text boxes hosted in table cells and headers now stay correct when a numbering edit reuses previously laid-out pages, and headers can no longer keep stale list markers or images in rare aliasing cases. Fixes #622

@@ -605,16 +605,20 @@ describe('list markers inside textbox stories', () => {
 
   const NS = `xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}"`;
 
-  function bodyTextboxPart(): OoxmlPart {
-    const doc = readOoxmlPart(
-      `<w:document ${NS}><w:body>` +
-        `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
-        '<w:p><w:r><w:t>after the box</w:t></w:r></w:p>' +
-        '</w:body></w:document>',
-      { name: '/word/document.xml', contentType: 'app/xml' }
-    );
+  function documentPart(bodyXml: string): OoxmlPart {
+    const doc = readOoxmlPart(`<w:document ${NS}><w:body>${bodyXml}</w:body></w:document>`, {
+      name: '/word/document.xml',
+      contentType: 'app/xml',
+    });
     if (!doc.ok) throw new Error(doc.reason);
     return doc.part;
+  }
+
+  function bodyTextboxPart(): OoxmlPart {
+    return documentPart(
+      `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
+        '<w:p><w:r><w:t>after the box</w:t></w:r></w:p>'
+    );
   }
 
   test('a numbered paragraph inside a body text box paints a marker (fixes #466)', () => {
@@ -655,20 +659,32 @@ describe('list markers inside textbox stories', () => {
 
   /** A one-cell table whose paragraph hosts a text box with a two-item numbered list. */
   function cellTextboxPart(): OoxmlPart {
-    const doc = readOoxmlPart(
-      `<w:document ${NS}><w:body>` +
-        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
+    return documentPart(
+      '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
         '<w:tblGrid><w:gridCol w:w="9000"/></w:tblGrid>' +
         '<w:tr><w:tc><w:tcPr><w:tcW w:w="9000" w:type="dxa"/></w:tcPr>' +
         `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
         '</w:tc></w:tr></w:tbl>' +
-        '<w:p><w:r><w:t>after the table</w:t></w:r></w:p>' +
-        '</w:body></w:document>',
-      { name: '/word/document.xml', contentType: 'app/xml' }
+        '<w:p><w:r><w:t>after the table</w:t></w:r></w:p>'
     );
-    if (!doc.ok) throw new Error(doc.reason);
-    return doc.part;
   }
+
+  /**
+   * Keys move with the numbering state, and only with it: distinct states never share a
+   * key list, identical states re-key identically (no gratuitous invalidation).
+   */
+  function expectKeysTrackNumbering(keysFor: (lvlText: string) => string[]): void {
+    const decimal = keysFor('%1.');
+    expect(decimal.length).toBeGreaterThan(0);
+    expect(keysFor('(%1)')).not.toEqual(decimal);
+    expect(keysFor('%1.')).toEqual(decimal);
+  }
+
+  /**
+   * HOST keys only: the box's own story breaks under a `|txbx:`-namespaced producer and
+   * its keys move with the numbering regardless of the host fold under test.
+   */
+  const hostKeysOnly = (keys: string[]): string[] => keys.filter((key) => !key.includes('|txbx:'));
 
   test('a numbering change reaches a text box hosted in a table cell', () => {
     const part = cellTextboxPart();
@@ -711,11 +727,7 @@ describe('list markers inside textbox stories', () => {
       });
       return keys;
     };
-    const decimal = keysFor('%1.');
-    expect(decimal.length).toBeGreaterThan(0);
-    expect(keysFor('(%1)')).not.toEqual(decimal);
-    // An identical numbering state re-keys identically — no gratuitous invalidation.
-    expect(keysFor('%1.')).toEqual(decimal);
+    expectKeysTrackNumbering(keysFor);
   });
 
   /** A cache that records every key the flow asks for, so tests can watch keys move. */
@@ -743,14 +755,9 @@ describe('list markers inside textbox stories', () => {
         inlineDrawingLayout: drawingLayoutFor(part),
         numberingIndex: numberingIndexFor(lvlText),
       });
-      // HOST keys only. The box's own story breaks under a `|txbx:`-namespaced producer and
-      // its keys move with the numbering regardless of the host fold under test.
-      return keys.filter((key) => !key.includes('|txbx:'));
+      return hostKeysOnly(keys);
     };
-    const decimal = keysFor('%1.');
-    expect(decimal.length).toBeGreaterThan(0);
-    expect(keysFor('(%1)')).not.toEqual(decimal);
-    expect(keysFor('%1.')).toEqual(decimal);
+    expectKeysTrackNumbering(keysFor);
   });
 
   test('the header/footer drawing branch wires hosted list state into break keys', () => {
@@ -762,13 +769,9 @@ describe('list markers inside textbox stories', () => {
     const keysFor = (lvlText: string): string[] => {
       const keys: string[] = [];
       layoutFooterStory(footerPart, geometry, numberingIndexFor(lvlText), recordingCache(keys));
-      // HOST keys only — see the body wiring test above.
-      return keys.filter((key) => !key.includes('|txbx:'));
+      return hostKeysOnly(keys);
     };
-    const decimal = keysFor('%1.');
-    expect(decimal.length).toBeGreaterThan(0);
-    expect(keysFor('(%1)')).not.toEqual(decimal);
-    expect(keysFor('%1.')).toEqual(decimal);
+    expectKeysTrackNumbering(keysFor);
   });
 
   test('a text-box list restarts at w:start, independent of the host story', () => {

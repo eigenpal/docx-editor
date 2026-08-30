@@ -21,7 +21,7 @@ import { emuToPoints } from './drawing-layout.ts';
 import { drawingResourceLayoutToken } from './inline-drawing-source.ts';
 import { forEachStoryDrawing } from './semantic-record-queries.ts';
 import type { FieldPageContext } from './field-projection.ts';
-import type { ParagraphLayoutCache } from './layout-cache.ts';
+import { framedTokenJoin, type ParagraphLayoutCache } from './layout-cache.ts';
 import {
   resolveStoryListItems,
   withNumberingStyleLinks,
@@ -312,11 +312,10 @@ function hostedTextboxListToken(
   // A truncated scan may have MISSED a box, so it cannot vouch for "no list state": key on
   // the index identity instead, which fails open — every numbering edit moves the key.
   if (scan.truncated) parts.push(`truncated:${numberingIndexTokenId(numberingIndex)}`);
-  // NUL-framed: `cacheToken` embeds `w:lvlText`, which a file can fill with any printable
-  // separator, so a printable join would let two different hosted list states concatenate
-  // to one token and hold a break key still across a numbering edit. XML text cannot carry
-  // U+0000, so no file-derived token can forge a part boundary.
-  const token = parts.length === 0 ? '' : `|txbxlist:${parts.join('\0')}`;
+  // Length-framed: `cacheToken` embeds `w:lvlText`, which a file can fill with any
+  // separator, so a separator join would let two different hosted list states concatenate
+  // to one token and hold a break key still across a numbering edit.
+  const token = parts.length === 0 ? '' : `|txbxlist:${framedTokenJoin(parts)}`;
   hostedListTokensByBlock.set(block, {
     rawIndex: numberingIndex,
     styleCascade,
@@ -461,8 +460,9 @@ export function layoutTextboxStory(
     ...chrome,
     ...(fallbackReason ? { fallbackReason } : {}),
     ...(clippedResourceTokens.length > 0
-      ? // NUL join — resource keys embed file-derived ids, so '!' was a forgeable boundary.
-        { clippedResourceToken: clippedResourceTokens.join('\0') }
+      ? // Length-framed — resource keys embed file-derived ids, so any separator boundary
+        // is forgeable, and this token is spliced into another framed list upstream.
+        { clippedResourceToken: framedTokenJoin(clippedResourceTokens) }
       : {}),
   };
 }

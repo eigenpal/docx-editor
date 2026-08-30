@@ -3,6 +3,7 @@
 
 import { flattenContentControls } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import { framedTokenJoin } from './layout-cache.ts';
 import {
   createListCounterState,
   expandCountersOf,
@@ -517,27 +518,32 @@ export function resolveStoryListItems(
       markerStyle.fontFamily,
       isFontAvailable
     );
-    const cacheToken = [
-      advanced.numId,
-      advanced.ilvl,
-      advanced.level.numFmt,
-      advanced.level.lvlText,
-      indent.left,
-      indent.right,
-      indent.hanging,
-      indent.firstLine,
-      advanced.level.lvlJc,
-      advanced.level.suff,
-      advanced.level.vanish ? 1 : 0,
-      // The MARKER ITSELF, not its length. The first line starts where the marker ends
-      // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
-      // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
-      // served the previous marker's width to the new one, and the line wrapped a word late.
-      markerText,
-      // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
-      // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
-      markerMeasureToken(markerStyle),
-    ].join('|');
+    // Length-framed: `numFmt`, `lvlText`, and the marker are verbatim file text that can
+    // carry any printable separator, so a separator join lets two different level
+    // geometries serialize to one token and share a break-cache entry.
+    const cacheToken = framedTokenJoin(
+      [
+        advanced.numId,
+        advanced.ilvl,
+        advanced.level.numFmt,
+        advanced.level.lvlText,
+        indent.left,
+        indent.right,
+        indent.hanging,
+        indent.firstLine,
+        advanced.level.lvlJc,
+        advanced.level.suff,
+        advanced.level.vanish ? 1 : 0,
+        // The MARKER ITSELF, not its length. The first line starts where the marker ends
+        // whenever the marker overflows its hanging slot, so `9.` and `10.` break differently —
+        // and so do `ii.` and `vi.`, which the length cannot tell apart. A warm cache then
+        // served the previous marker's width to the new one, and the line wrapped a word late.
+        markerText,
+        // The FACE, not just the glyphs. `listFirstLineOffset` measures with `markerStyle`,
+        // so a level `w:sz` or font change moves the wrap while the text and indent stay put.
+        markerMeasureToken(markerStyle),
+      ].map(String)
+    );
 
     const item: ResolvedListItem = {
       numId: advanced.numId,

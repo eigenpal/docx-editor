@@ -27,7 +27,7 @@ import {
   type FieldPageContext,
   type StoryPageFieldNeeds,
 } from './field-projection.ts';
-import type { ParagraphLayoutCache } from './layout-cache.ts';
+import { framedTokenJoin, type ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import { drawingResourceLayoutToken } from './inline-drawing-source.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
@@ -523,15 +523,16 @@ export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
   forEachStoryParagraphFragment(story, (fragment) => {
     const marker = fragment.marker;
     if (marker) {
-      // NUL between EVERY field, not just between markers: `marker.text` is expanded
-      // `w:lvlText` and `numFmt` is read verbatim from the file, so any printable
-      // separator between them lets two different marker states concatenate to one token
-      // and reuse a header page showing the old numbers. Fixed arity keeps the flat
-      // NUL-joined sequence injective; XML text cannot carry U+0000.
-      tokens.push([fragment.paragraphId, marker.text, marker.numFmt, marker.level].join('\0'));
+      // Length-framed at both levels: `marker.text` is expanded `w:lvlText` and `numFmt`
+      // is read verbatim from the file, so any separator the content can contain lets two
+      // different marker states concatenate to one token and reuse a header page showing
+      // the old numbers.
+      tokens.push(
+        framedTokenJoin([fragment.paragraphId, marker.text, marker.numFmt, String(marker.level)])
+      );
     }
   });
-  const token = tokens.length === 0 ? '' : `|list:${tokens.join('\0')}`;
+  const token = tokens.length === 0 ? '' : `|list:${framedTokenJoin(tokens)}`;
   storyListMarkerTokens.set(story, token);
   return token;
 }
@@ -576,9 +577,10 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
     }
   });
   // Empty for the overwhelmingly common story with no pictures, so the context string for a
-  // plain header is byte-for-byte what it was. NUL join: resource keys embed relationship
-  // ids and part names read verbatim from the file, so a printable separator is forgeable.
-  const token = tokens.length === 0 ? '' : `!${tokens.join('\0')}`;
+  // plain header is byte-for-byte what it was. Length-framed: resource keys embed
+  // relationship ids and part names read verbatim from the file, and the clip token is
+  // itself a framed list, so no separator — printable or NUL — stays unforgeable.
+  const token = tokens.length === 0 ? '' : `!${framedTokenJoin(tokens)}`;
   storyDrawingResourceTokens.set(story, token);
   return token;
 }
@@ -601,24 +603,26 @@ export function furnitureLayoutContext(
   footerDistance: number
 ): string {
   if (!furniture) return '';
-  // NUL-framed segments, entries, and section boundary: the marker token embeds expanded
-  // `w:lvlText` and the resource token embeds relationship-derived identity, so a printable
-  // boundary would let one variant's file-controlled text forge another variant's entry —
-  // the same aliasing class the NUL join inside `storyListMarkerToken` closes one level
-  // down. XML text cannot carry U+0000.
+  // Length-framed fields, entries, and sections: the marker token embeds expanded
+  // `w:lvlText` and the resource token embeds relationship-derived identity, so any
+  // separator boundary the content can reproduce would let one variant's file-controlled
+  // text forge another variant's entry and reuse pages showing the stale variant.
   const stories = (prefix: string, source: ReadonlyMap<string, HeaderFooterStoryLayout>) =>
-    [...source]
-      .map(
-        ([variant, story]) =>
-          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}\0` +
-          `${storyDrawingResourceToken(story)}\0${storyListMarkerToken(story)}`
-      )
-      .sort()
-      .join('\0,');
+    framedTokenJoin(
+      [...source]
+        .map(([variant, story]) =>
+          framedTokenJoin([
+            `${prefix}${variant}`,
+            String(story.flowHeight),
+            story.contentKey,
+            storyDrawingResourceToken(story),
+            storyListMarkerToken(story),
+          ])
+        )
+        .sort()
+    );
   return (
     `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
-    stories('h', furniture.headers) +
-    '\0;' +
-    stories('f', furniture.footers)
+    framedTokenJoin([stories('h', furniture.headers), stories('f', furniture.footers)])
   );
 }

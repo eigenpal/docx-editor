@@ -11,6 +11,7 @@
 import type { OoxmlElement } from '@docx-editor.dev/core/store';
 import { finalizePageFieldProjection, withPageFieldSources } from './field-projection.ts';
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
+import { framedTokenJoin } from './layout-cache.ts';
 import { numericPictureApplies } from './field-page-furniture.ts';
 import {
   remapPage,
@@ -73,19 +74,28 @@ function furnitureStoryEntries(
   stories: ReadonlyMap<string, HeaderFooterStoryLayout>,
   includeContent: boolean
 ): string {
-  return [...stories]
-    .map(([variant, story]) =>
-      includeContent
-        ? // `contentKey` describes the AUTHORED part, so it misses everything a story resolves
-          // from ANOTHER part: the images it paints and the list markers it resolves from
-          // `numbering.xml`. Both tokens ride along for the same reason they do in
-          // `furnitureLayoutContext` — without them a reused section keeps a stale header.
-          `${variant}=${story.flowHeight}@${story.contentKey}` +
-          `${storyDrawingResourceToken(story)}${storyListMarkerToken(story)}`
-        : `${variant}=${story.flowHeight}`
-    )
-    .sort()
-    .join(',');
+  // Length-framed like `furnitureLayoutContext`: the marker and resource tokens embed
+  // file-controlled text, so a printable entry join is a forgeable boundary.
+  return framedTokenJoin(
+    [...stories]
+      .map(([variant, story]) =>
+        includeContent
+          ? // `contentKey` describes the AUTHORED part, so it misses everything a story
+            // resolves from ANOTHER part: the images it paints and the list markers it
+            // resolves from `numbering.xml`. Both tokens ride along for the same reason
+            // they do in `furnitureLayoutContext` — without them a reused section keeps a
+            // stale header.
+            framedTokenJoin([
+              variant,
+              String(story.flowHeight),
+              story.contentKey,
+              storyDrawingResourceToken(story),
+              storyListMarkerToken(story),
+            ])
+          : `${variant}=${story.flowHeight}`
+      )
+      .sort()
+  );
 }
 
 /**
