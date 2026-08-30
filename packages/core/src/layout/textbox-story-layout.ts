@@ -287,11 +287,11 @@ const hostedListTokensByBlock = new WeakMap<OoxmlNode, HostedListTokenMemo>();
  */
 function hostedTextboxListToken(
   block: OoxmlNode,
-  numberingIndex: NumberingIndex | undefined,
+  numberingIndex: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode = 'all-markup'
 ): string {
-  if (!numberingIndex || numberingIndex.nums.size === 0) return '';
+  if (numberingIndex.nums.size === 0) return '';
   const scan = hostedTextboxContents(block);
   if (scan.contents.length === 0 && !scan.truncated) return '';
   const memo = hostedListTokensByBlock.get(block);
@@ -307,7 +307,9 @@ function hostedTextboxListToken(
   for (const content of scan.contents) {
     const items = textboxStoryListItems(content, numberingIndex, styleCascade, displayMode);
     if (!items) continue;
-    for (const [paragraphId, item] of items) parts.push(`${paragraphId}=${item.cacheToken}`);
+    for (const [paragraphId, item] of items) {
+      parts.push(framedTokenJoin([paragraphId, item.cacheToken]));
+    }
   }
   // A truncated scan may have MISSED a box, so it cannot vouch for "no list state": key on
   // the index identity instead, which fails open — every numbering edit moves the key.
@@ -328,8 +330,8 @@ function hostedTextboxListToken(
 /**
  * The `hostedListTokenForParagraph` slice of a `TableFlowDeps`, built in ONE place so the
  * lanes that lay hosted stories out (body flow, header/footer stories) cannot drift apart
- * on the (index, cascade, mode) call shape. Empty without a numbering index — emptiness of
- * the index itself is the callee's own first check, not duplicated here.
+ * on the (index, cascade, mode) call shape. Empty without a numbering index; an index with
+ * no numbering definitions yields `''` from the token function itself.
  */
 export function hostedListTokenDeps(
   numberingIndex: NumberingIndex | undefined,

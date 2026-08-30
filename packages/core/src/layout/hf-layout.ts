@@ -566,6 +566,23 @@ const storyDrawingResourceTokens = new WeakMap<HeaderFooterStoryLayout, string>(
  * set, a superset of what any projection paints, so a settle always moves this token no
  * matter which projection shows the picture.
  */
+/**
+ * One framed furniture story entry — shared by `furnitureLayoutContext` here and the
+ * multi-section `furnitureStoryEntries` fingerprint, so a rider token added to one reuse
+ * key can never be forgotten by the other. `contentKey` describes the AUTHORED part, so the
+ * drawing-resource and list-marker tokens ride along for everything a story resolves from
+ * ANOTHER part; without them a reused section keeps a stale header.
+ */
+export function framedStoryEntry(label: string, story: HeaderFooterStoryLayout): string {
+  return framedTokenJoin([
+    label,
+    String(story.flowHeight),
+    story.contentKey,
+    storyDrawingResourceToken(story),
+    storyListMarkerToken(story),
+  ]);
+}
+
 export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): string {
   const cached = storyDrawingResourceTokens.get(story);
   if (cached !== undefined) return cached;
@@ -609,17 +626,7 @@ export function furnitureLayoutContext(
   // text forge another variant's entry and reuse pages showing the stale variant.
   const stories = (prefix: string, source: ReadonlyMap<string, HeaderFooterStoryLayout>) =>
     framedTokenJoin(
-      [...source]
-        .map(([variant, story]) =>
-          framedTokenJoin([
-            `${prefix}${variant}`,
-            String(story.flowHeight),
-            story.contentKey,
-            storyDrawingResourceToken(story),
-            storyListMarkerToken(story),
-          ])
-        )
-        .sort()
+      [...source].map(([variant, story]) => framedStoryEntry(`${prefix}${variant}`, story)).sort()
     );
   return (
     `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +

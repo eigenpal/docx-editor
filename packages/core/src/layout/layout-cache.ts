@@ -139,7 +139,9 @@ export function framedTokenJoin(parts: readonly string[]): string {
  * file-controlled marker text (`w:lvlText` may contain any printable separator), so a
  * printable join — or skipping the unlisted paragraphs — lets two different token
  * SEQUENCES over one byte-identical subtree concatenate to the same string, and the cache
- * serves the pre-renumber table.
+ * serves the pre-renumber table. The NUL join is sound HERE because every part is either
+ * `''` or a {@link framedTokenJoin} output over XML text, which cannot carry U+0000; a
+ * part that may itself contain NUL must switch this join to {@link framedTokenJoin}.
  */
 const tableListTokens = new WeakMap<object, WeakMap<object, string>>();
 export function listTokenForTableBlock(

@@ -35,7 +35,7 @@ import {
 import { createPackageShapeThemeResolvers } from '../store/package/theme-color-resolution.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
-import { aggregateParagraphTokensForTableBlock } from './layout-cache.ts';
+import { aggregateParagraphTokensForTableBlock, framedTokenJoin } from './layout-cache.ts';
 
 /** Layout-owned read surface for inline drawing package state (no binding/session lane). */
 export interface InlineDrawingPackageReader {
@@ -238,7 +238,11 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
   const picture = projection.picture;
   const wrap = projection.wrapGeometry;
   const vector = projection.vectorShape;
-  return [
+  // Length-framed (`framedTokenJoin`): relationship ids, part names, and preset geometry
+  // are verbatim file values, so a printable field separator would let two different
+  // picture references serialize to one token — and `isCompatibleWith` compares
+  // projections by this token alone when the resource substrate is unchanged.
+  return framedTokenJoin([
     projection.drawingNodeId,
     projection.ownerPartName,
     projection.kind,
@@ -254,7 +258,7 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
     anchor ? String(anchor.relativeHeight) : '',
     anchor ? (anchor.layoutInCell ? '1' : '0') : '',
     picture
-      ? [
+      ? framedTokenJoin([
           String(picture.crop.left),
           String(picture.crop.top),
           String(picture.crop.right),
@@ -269,11 +273,11 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           picture.embeddedRelationshipId ?? '',
           picture.linkedRelationshipId ?? '',
           picture.presetGeometry ?? '',
-        ].join(':')
+        ])
       : '',
     vector ? vectorShapeLayoutToken(vector) : '',
     wrap
-      ? [
+      ? framedTokenJoin([
           wrap.element,
           wrap.textSide,
           String(wrap.distancesEmu.top),
@@ -281,10 +285,10 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(wrap.distancesEmu.bottom),
           String(wrap.distancesEmu.left),
           String(wrap.polygon.length),
-        ].join(':')
+        ])
       : '',
     position
-      ? [
+      ? framedTokenJoin([
           position.horizontal.relativeFrom,
           position.horizontal.align ?? '',
           String(position.horizontal.offsetEmu ?? ''),
@@ -293,19 +297,26 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(position.vertical.offsetEmu ?? ''),
           String(position.simplePosition.xEmu),
           String(position.simplePosition.yEmu),
-        ].join(':')
+        ])
       : '',
-  ].join('|');
+  ]);
 }
 
+// Length-framed where a field embeds file text (resource keys carry relationship ids and
+// part names verbatim), so no crafted id can shift a field boundary.
 function drawingResourceLayoutToken(resource: ImageResourceState): string {
   switch (resource.kind) {
     case 'ready':
-      return `ready:${resource.resourceKey}:${resource.contentId}:${resource.pixelWidth}x${resource.pixelHeight}`;
+      return framedTokenJoin([
+        'ready',
+        resource.resourceKey,
+        resource.contentId,
+        `${resource.pixelWidth}x${resource.pixelHeight}`,
+      ]);
     case 'pending':
-      return `pending:${resource.resourceKey}`;
+      return framedTokenJoin(['pending', resource.resourceKey]);
     case 'external':
-      return `external:${resource.relationshipId}:${resource.sinkSafe ? '1' : '0'}`;
+      return framedTokenJoin(['external', resource.relationshipId, resource.sinkSafe ? '1' : '0']);
     case 'missing':
       return 'missing';
     case 'unrenderable':
@@ -505,15 +516,17 @@ function createPartDrawingContextSlot(options: {
         const projection = atomProjections.get(atomId);
         if (!projection) return `${atomId}:refused`;
         const resource = resourceOf(projection);
-        return [
+        // Length-framed like its parts: the projection and resource tokens embed file
+        // text, so a printable atom join would be a forgeable boundary.
+        return framedTokenJoin([
           atomId,
           drawingProjectionLayoutToken(projection),
           drawingResourceLayoutToken(resource),
           String(resourceEpochByKey.get(pendingResourceKey(projection)) ?? 0),
-        ].join('|');
+        ]);
       })
       .sort();
-    const token = tokens.join(';');
+    const token = framedTokenJoin(tokens);
     drawingTokensByParagraph.set(paragraph, { resourceEpoch, token });
     return token;
   };
@@ -741,19 +754,20 @@ export function paragraphDrawingLayoutTokenFromContext(
 ): string {
   const atoms = drawingAtomsInParagraph(paragraph);
   if (atoms.length === 0) return '';
-  return atoms
-    .map((atomId) => {
-      const projection = context.projectionForAtom?.(atomId);
-      if (!projection) return `${atomId}:refused`;
-      const resource = context.resourceOf(projection);
-      return [
-        atomId,
-        drawingProjectionLayoutToken(projection),
-        drawingResourceLayoutToken(resource),
-      ].join('|');
-    })
-    .sort()
-    .join(';');
+  return framedTokenJoin(
+    atoms
+      .map((atomId) => {
+        const projection = context.projectionForAtom?.(atomId);
+        if (!projection) return `${atomId}:refused`;
+        const resource = context.resourceOf(projection);
+        return framedTokenJoin([
+          atomId,
+          drawingProjectionLayoutToken(projection),
+          drawingResourceLayoutToken(resource),
+        ]);
+      })
+      .sort()
+  );
 }
 
 /**

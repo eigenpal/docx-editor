@@ -13,12 +13,7 @@ import { finalizePageFieldProjection, withPageFieldSources } from './field-proje
 import { pageRefAssignmentToken } from './field-page-furniture.ts';
 import { framedTokenJoin } from './layout-cache.ts';
 import { numericPictureApplies } from './field-page-furniture.ts';
-import {
-  remapPage,
-  storyDrawingResourceToken,
-  storyListMarkerToken,
-  type HeaderFooterStoryLayout,
-} from './hf-layout.ts';
+import { framedStoryEntry, remapPage, type HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   createLayoutSession,
   type LayoutSession,
@@ -79,20 +74,7 @@ function furnitureStoryEntries(
   return framedTokenJoin(
     [...stories]
       .map(([variant, story]) =>
-        includeContent
-          ? // `contentKey` describes the AUTHORED part, so it misses everything a story
-            // resolves from ANOTHER part: the images it paints and the list markers it
-            // resolves from `numbering.xml`. Both tokens ride along for the same reason
-            // they do in `furnitureLayoutContext` — without them a reused section keeps a
-            // stale header.
-            framedTokenJoin([
-              variant,
-              String(story.flowHeight),
-              story.contentKey,
-              storyDrawingResourceToken(story),
-              storyListMarkerToken(story),
-            ])
-          : `${variant}=${story.flowHeight}`
+        includeContent ? framedStoryEntry(variant, story) : `${variant}=${story.flowHeight}`
       )
       .sort()
   );
@@ -144,19 +126,21 @@ export function multiSectionStructureKey(
   sections: readonly DocumentSection[],
   options: SemanticLayoutOptions
 ): string {
-  return sections
-    .map((section, index) => {
-      const geometry = geometryOfSection(section.properties);
-      const furniture = furnitureForSection(options, index, sections.length);
-      const pn = section.properties.pageNumbering;
-      // Empty `{}` and absent both key as no authored numbering; attribute edits must bust
-      // incremental reuse so PAGE start/fmt / SECTIONPAGES stay correct.
-      const pnKey = pn
-        ? `pn:${pn.start ?? ''},${pn.fmt ?? ''},${pn.chapStyle ?? ''},${pn.chapSep ?? ''}`
-        : 'pn:';
-      const columns = section.properties.columns;
-      const columnsKey = `cols:${columns.count},${columns.gapTwips},${columns.equalWidth === false ? 0 : 1},${columns.separator ? 1 : 0};${(columns.definitions ?? []).map((column) => `${column.widthTwips}/${column.gapTwips}`).join(',')}`;
-      return [
+  const entries = sections.map((section, index) => {
+    const geometry = geometryOfSection(section.properties);
+    const furniture = furnitureForSection(options, index, sections.length);
+    const pn = section.properties.pageNumbering;
+    // Empty `{}` and absent both key as no authored numbering; attribute edits must bust
+    // incremental reuse so PAGE start/fmt / SECTIONPAGES stay correct. Length-framed:
+    // `w:fmt` and the chapter fields are free file text, so a printable separator would
+    // let two different section lists alias one structure key.
+    const pnKey = pn
+      ? `pn:${framedTokenJoin([pn.start ?? '', pn.fmt ?? '', pn.chapStyle ?? '', pn.chapSep ?? ''].map(String))}`
+      : 'pn:';
+    const columns = section.properties.columns;
+    const columnsKey = `cols:${columns.count},${columns.gapTwips},${columns.equalWidth === false ? 0 : 1},${columns.separator ? 1 : 0};${(columns.definitions ?? []).map((column) => `${column.widthTwips}/${column.gapTwips}`).join(',')}`;
+    return framedTokenJoin(
+      [
         section.properties.breakType,
         geometry.width,
         geometry.height,
@@ -169,9 +153,10 @@ export function multiSectionStructureKey(
         furnitureGeometryFingerprint(furniture),
         pnKey,
         columnsKey,
-      ].join(':');
-    })
-    .join('|');
+      ].map(String)
+    );
+  });
+  return framedTokenJoin(entries);
 }
 
 function ensureMultiState(

@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Numbered lists inside text boxes hosted in table cells and headers now stay correct when a numbering edit reuses previously laid-out pages, and headers can no longer keep stale list markers or images in rare aliasing cases. Fixes #622
+Numbered lists inside text boxes in table cells and headers stay correct after a numbering edit. Headers no longer keep stale list markers or images. Fixes #622

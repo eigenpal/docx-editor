@@ -25,6 +25,7 @@ import {
   type HyperlinkProjector,
 } from './field-projection.ts';
 import {
+  framedTokenJoin,
   listTokenForTableBlock,
   paragraphLayoutKey,
   registerTableCellBreakKeys,
@@ -1131,15 +1132,16 @@ function layoutBlocksPass(
     // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
     // numbering edit moves nothing else in this block's key.
     const hostedListToken = hostedListDeps.hostedListTokenForParagraph?.(block) ?? '';
-    // NUL between the block's own token and the hosted one: both embed file-influenced
-    // marker text, so a printable join would let two different (own, hosted) pairs
-    // concatenate to one string.
+    // Length-framed pair: both sides embed file-influenced marker text (and the table
+    // aggregate itself contains NULs), so no separator join stays injective.
     const ownListToken =
       block.kind === 'table'
         ? listTokenForTableBlock(block, listItems)
         : (listItems?.get(block.id)?.cacheToken ?? '');
     const listToken =
-      ownListToken === '' && hostedListToken === '' ? '' : `${ownListToken}\0${hostedListToken}`;
+      ownListToken === '' && hostedListToken === ''
+        ? ''
+        : framedTokenJoin([ownListToken, hostedListToken]);
     // The RESOLVED VALUES this block's REF fields paint. The block's own subtree is identical
     // after a renumbering edit elsewhere, so only this token can invalidate its memo and key.
     const refToken =
