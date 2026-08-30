@@ -525,8 +525,8 @@ describe('the caches key on everything their answer depends on', () => {
       measure: (text) => text.length * 2,
       lineMetrics: () => ({ height: 14, baseline: 11 }),
     };
-    // Layout always publishes caretEdges now; those win over a live measurer (covered
-    // below). Strip them so this case still exercises the measurer-keyed prefix cache.
+    // Layout publishes no eager caretEdges (issue #632); stripping stays as a guard so
+    // this case exercises the measurer-keyed prefix cache even if a producer adds them.
     const laid = lay(p('abcdefghij'), wide);
     const layout: SemanticLayout = {
       ...laid,

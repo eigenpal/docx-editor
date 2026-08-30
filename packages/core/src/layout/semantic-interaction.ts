@@ -903,9 +903,11 @@ export function moveCaret(
  */
 export function compositionAnchor(
   layout: SemanticLayout,
-  position: SemanticPosition
+  position: SemanticPosition,
+  /** For an exact mid-span x (layout publishes no eager caret edges; see caretAt). */
+  measurer?: TextMeasurer
 ): CaretGeometry | null {
-  return caretAt(layout, position);
+  return caretAt(layout, position, measurer);
 }
 
 /** The style spans a selection touches, for reporting active formatting. */

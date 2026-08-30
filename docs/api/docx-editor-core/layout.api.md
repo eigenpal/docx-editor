@@ -362,7 +362,8 @@ export interface CommentThreadState {
 }
 
 // @public
-export function compositionAnchor(layout: SemanticLayout, position: SemanticPosition): CaretGeometry | null;
+export function compositionAnchor(layout: SemanticLayout, position: SemanticPosition,
+measurer?: TextMeasurer): CaretGeometry | null;
 
 // @public
 export const COMPOUND_BORDER_MIN_GAP_PT = 1;
@@ -1213,7 +1214,8 @@ export interface KeyedRange {
 
 // @public
 export function keyedRangeRects(layout: SemanticLayout, ranges: readonly KeyedRange[],
-pages?: ReadonlySet<number>): Map<string, SelectionRect[]>;
+pages?: ReadonlySet<number>,
+measurer?: TextMeasurer): Map<string, SelectionRect[]>;
 
 // @public
 export interface LayoutBox {
@@ -2694,7 +2696,8 @@ export interface SelectionRect {
 
 // @public
 export function selectionRects(layout: SemanticLayout, selection: SemanticSelection,
-order: readonly string[]): SelectionRect[];
+order: readonly string[],
+measurer?: TextMeasurer): SelectionRect[];
 
 // @public
 export interface SemanticHit {

@@ -4,6 +4,7 @@
 // layout to cover every line between them, including a range that crosses a page or a cell.
 // A `kind: 'cells'` payload reconstructs the table rectangle those endpoints name.
 
+import type { TextMeasurer } from '../layout/semantic-records.ts';
 import {
   caretAt,
   cellSelectionBetween,
@@ -91,7 +92,7 @@ export interface RemoteSelectionPaintOptions {
    */
   readonly labelHost?: RemoteCaretLabelHost | null;
   /** For exact intra-span band edges (layout publishes no eager caret edges). */
-  readonly measurer?: import('../layout/semantic-records.ts').TextMeasurer;
+  readonly measurer?: TextMeasurer;
 }
 
 interface LastRemotePaint {
@@ -249,10 +250,11 @@ export function paintRemoteSelections(
       : null;
   for (const [index, remote] of selections.entries()) {
     const color = colors[index];
-    const labelGeometry = caretAt(layout, {
-      paragraphId: remote.head.nodeId,
-      offset: remote.head.offset,
-    });
+    const labelGeometry = caretAt(
+      layout,
+      { paragraphId: remote.head.nodeId, offset: remote.head.offset },
+      options.measurer
+    );
     if (labelGeometry) {
       const offset = storyContentOffset(layout, remote.head.nodeId, labelGeometry.pageIndex);
       labels.push({
@@ -274,10 +276,11 @@ export function paintRemoteSelections(
       }
     }
     if (isCollapsed(remote)) {
-      const geometry = caretAt(layout, {
-        paragraphId: remote.anchor.nodeId,
-        offset: remote.anchor.offset,
-      });
+      const geometry = caretAt(
+        layout,
+        { paragraphId: remote.anchor.nodeId, offset: remote.anchor.offset },
+        options.measurer
+      );
       if (!geometry) continue;
       const offset = storyContentOffset(layout, remote.anchor.nodeId, geometry.pageIndex);
       rects.push({

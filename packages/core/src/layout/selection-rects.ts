@@ -7,11 +7,10 @@
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
 import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
-import type { BlockFragmentRecord, SemanticLayout } from './semantic-records.ts';
+import type { BlockFragmentRecord, SemanticLayout, TextMeasurer } from './semantic-records.ts';
 import { documentOrderIndex } from './document-order.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
-import type { TextMeasurer } from './semantic-records.ts';
 
 /**
  * The rectangles covering a selection, one per line it spans.
