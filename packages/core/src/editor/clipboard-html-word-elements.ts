@@ -271,7 +271,8 @@ export function wordPositionalTabHtml(node: OoxmlElement): string {
     leader !== 'dot' &&
     leader !== 'hyphen' &&
     leader !== 'underscore' &&
-    leader !== 'middleDot'
+    leader !== 'middleDot' &&
+    leader !== 'heavy'
   ) {
     return '';
   }

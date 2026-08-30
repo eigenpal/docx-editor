@@ -11,6 +11,7 @@ import { relationshipsOf } from '../store/package/package-edit.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { isElement } from './clipboard-html-write-tree.ts';
 import { runPropertyLayers, runToggleOn } from './clipboard-html-write-cascade.ts';
+import { renderedTableCellContexts } from './clipboard-html-write-table.ts';
 import type { FieldState, RenderContext } from './clipboard-html-write.ts';
 
 export type WordNoteKind = 'footnote' | 'endnote';
@@ -59,7 +60,8 @@ function collectNoteReferences(
   out: Array<{ readonly kind: WordNoteKind; readonly id: number }>,
   field: FieldState,
   advance: AdvanceFieldState,
-  pPr: OoxmlElement | null
+  pPr: OoxmlElement | null,
+  tableCells?: ReadonlyMap<OoxmlElement, RenderContext>
 ): void {
   for (const child of node.children) {
     if (!isElement(child)) continue;
@@ -72,6 +74,30 @@ function collectNoteReferences(
       if (!field.inert) advance(child, field);
       continue;
     }
+    if (child.kind === 'table') {
+      collectNoteReferences(
+        ctx,
+        child,
+        out,
+        field,
+        advance,
+        pPr,
+        renderedTableCellContexts(ctx, child)
+      );
+      continue;
+    }
+    if (
+      child.kind === 'tableCell' ||
+      (child.namespaceUri === WML_NAMESPACE_URI && child.localName === 'tc')
+    ) {
+      const cellCtx = tableCells?.get(child);
+      if (cellCtx === undefined) {
+        if (!field.inert) advance(child, field);
+        continue;
+      }
+      collectNoteReferences(cellCtx, child, out, field, advance, pPr, tableCells);
+      continue;
+    }
     if (child.kind === 'paragraph') {
       const pPrNode = child.children.find((inner) => inner.kind === 'paragraphProperties');
       collectNoteReferences(
@@ -80,7 +106,8 @@ function collectNoteReferences(
         out,
         field,
         advance,
-        pPrNode && isElement(pPrNode) ? pPrNode : null
+        pPrNode && isElement(pPrNode) ? pPrNode : null,
+        tableCells
       );
       continue;
     }
@@ -92,9 +119,6 @@ function collectNoteReferences(
       if (child.children.some((inner) => inner.kind === 'instrText')) continue;
       if (!field.inert && field.stack.some((mode) => mode === 'instr')) continue;
       const rPr = child.children.find((inner) => inner.kind === 'runProperties');
-      // ctx.tableRPr matches what renderRun outside a table sees; a citation
-      // inside a note-body table cell resolves without that cell's conditional
-      // layer, the one residual divergence from the renderer.
       const layers = runPropertyLayers(
         ctx.styles,
         pPr,
@@ -116,7 +140,7 @@ function collectNoteReferences(
       }
       continue;
     }
-    collectNoteReferences(ctx, child, out, field, advance, pPr);
+    collectNoteReferences(ctx, child, out, field, advance, pPr, tableCells);
   }
 }
 

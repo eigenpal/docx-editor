@@ -59,6 +59,41 @@ function isCustomXmlWrapper(child: OoxmlElement): boolean {
  *  the node, not before or after the row's cells. */
 type RowItem = { readonly placement: CellPlacement } | { readonly skip: OoxmlElement };
 
+interface TableRows {
+  readonly rows: OoxmlElement[];
+  readonly tableItems: Array<{ readonly row: number } | { readonly skip: OoxmlElement }>;
+}
+
+function tableRowsOf(table: OoxmlElement): TableRows {
+  const rows: OoxmlElement[] = [];
+  const tableItems: Array<{ readonly row: number } | { readonly skip: OoxmlElement }> = [];
+  const collect = (children: readonly OoxmlNode[]): void => {
+    for (const child of children) {
+      if (!isElement(child)) continue;
+      if (
+        child.kind === 'tableRow' ||
+        (child.localName === 'tr' && child.namespaceUri === WML_NAMESPACE_URI)
+      ) {
+        tableItems.push({ row: rows.length });
+        rows.push(child);
+        continue;
+      }
+      if (child.kind === 'contentControl') {
+        const content = child.children.find((inner) => inner.kind === 'contentControlContent');
+        if (content && isElement(content)) collect(content.children);
+        continue;
+      }
+      if (isCustomXmlWrapper(child)) {
+        collect(child.children);
+        continue;
+      }
+      tableItems.push({ skip: child });
+    }
+  };
+  collect(table.children);
+  return { rows, tableItems };
+}
+
 /** Placements (for vMerge lookahead) plus the per-row document-order item list.
  *  SDT- and customXml-wrapped cells unwrap in place. */
 function cellPlacementsOf(rows: readonly OoxmlElement[]): {
@@ -108,6 +143,64 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): {
   return { placements, items };
 }
 
+function gridColumnCount(placements: readonly (readonly CellPlacement[])[]): number {
+  let count = 1;
+  for (const rowCells of placements) {
+    for (const placement of rowCells) {
+      count = Math.max(count, placement.startColumn + placement.span);
+    }
+  }
+  return count;
+}
+
+function cellContextsOf(
+  ctx: RenderContext,
+  conditionalFormats: ReturnType<typeof tableConditionalFormats>,
+  placements: readonly (readonly CellPlacement[])[],
+  gridColumns: number
+): ReadonlyMap<OoxmlElement, RenderContext> {
+  const contexts = new Map<OoxmlElement, RenderContext>();
+  const wholeTable = conditionalFormats.byType.get('wholeTable') ?? null;
+  for (let rowIndex = 0; rowIndex < placements.length; rowIndex += 1) {
+    for (const placement of placements[rowIndex] ?? []) {
+      if (placement.vMerge === 'continue') continue;
+      const conditional = conditionalCellFormat(
+        conditionalFormats,
+        rowIndex,
+        placements.length,
+        placement.startColumn === 0,
+        placement.startColumn + placement.span >= gridColumns,
+        placement.startColumn
+      );
+      const tableRPr: OoxmlElement[] = [];
+      const tablePPr: OoxmlElement[] = [];
+      if (wholeTable?.rPr) tableRPr.push(wholeTable.rPr);
+      if (wholeTable?.pPr) tablePPr.push(wholeTable.pPr);
+      if (conditional?.rPr) tableRPr.push(conditional.rPr);
+      if (conditional?.pPr) tablePPr.push(conditional.pPr);
+      contexts.set(
+        placement.cell,
+        tableRPr.length > 0 || tablePPr.length > 0 ? { ...ctx, tableRPr, tablePPr } : ctx
+      );
+    }
+  }
+  return contexts;
+}
+
+/** Per-cell contexts for the cells that the table renderer emits. */
+export function renderedTableCellContexts(
+  ctx: RenderContext,
+  table: OoxmlElement
+): ReadonlyMap<OoxmlElement, RenderContext> {
+  const tblPr = table.children.find((child) => child.kind === 'tableProperties');
+  const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
+  const chain = styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')), 'table');
+  const conditionalFormats = tableConditionalFormats(chain, wmlChild(ownTblPr, 'tblLook'));
+  const { rows } = tableRowsOf(table);
+  const { placements } = cellPlacementsOf(rows);
+  return cellContextsOf(ctx, conditionalFormats, placements, gridColumnCount(placements));
+}
+
 export function renderHtmlTable(
   ctx: RenderContext,
   table: OoxmlElement,
@@ -132,33 +225,10 @@ export function renderHtmlTable(
   // A typed row, or a `w:tr` demoted to generic, or a row inside a row-level SDT
   // or `w:customXml` wrapper. The item list keeps DOCUMENT ORDER so skipped
   // children advance the shared field state exactly where the probe saw them.
-  const rows: OoxmlElement[] = [];
-  const tableItems: Array<{ readonly row: number } | { readonly skip: OoxmlElement }> = [];
-  const collectRows = (children: readonly OoxmlNode[]): void => {
-    for (const child of children) {
-      if (!isElement(child)) continue;
-      if (
-        child.kind === 'tableRow' ||
-        (child.localName === 'tr' && child.namespaceUri === WML_NAMESPACE_URI)
-      ) {
-        tableItems.push({ row: rows.length });
-        rows.push(child);
-        continue;
-      }
-      if (child.kind === 'contentControl') {
-        const content = child.children.find((inner) => inner.kind === 'contentControlContent');
-        if (content && isElement(content)) collectRows(content.children);
-        continue;
-      }
-      if (isCustomXmlWrapper(child)) {
-        collectRows(child.children);
-        continue;
-      }
-      tableItems.push({ skip: child });
-    }
-  };
-  collectRows(table.children);
+  const { rows, tableItems } = tableRowsOf(table);
   const { placements, items: itemsByRow } = cellPlacementsOf(rows);
+  const gridColumns = gridColumnCount(placements);
+  const cellContexts = cellContextsOf(ctx, conditionalFormats, placements, gridColumns);
 
   const tableRules = ['border-collapse:collapse'];
   const tableWidth = wmlChild(ownTblPr, 'tblW');
@@ -178,12 +248,6 @@ export function renderHtmlTable(
   }
   // Outer-vs-inside edges classify by GRID COLUMN, not placement index: a ragged
   // short row's last cell sits mid-grid and must take the inside border.
-  let gridColumns = 1;
-  for (const rowCells of placements) {
-    for (const placement of rowCells) {
-      gridColumns = Math.max(gridColumns, placement.startColumn + placement.span);
-    }
-  }
   let out = `<table style="${tableRules.join(';')}">`;
   for (const item of tableItems) {
     if ('skip' in item) {
@@ -248,14 +312,7 @@ export function renderHtmlTable(
         (css === '' ? '' : ` style="${escapeAttr(css)}"`);
       // The condition's rPr/pPr layer under the cell's own styles, so a styled
       // header row keeps its bold and text color in the copied HTML.
-      const tableRPr: OoxmlElement[] = [];
-      const tablePPr: OoxmlElement[] = [];
-      if (wholeTable?.rPr) tableRPr.push(wholeTable.rPr);
-      if (wholeTable?.pPr) tablePPr.push(wholeTable.pPr);
-      if (conditional?.rPr) tableRPr.push(conditional.rPr);
-      if (conditional?.pPr) tablePPr.push(conditional.pPr);
-      const cellCtx =
-        tableRPr.length > 0 || tablePPr.length > 0 ? { ...ctx, tableRPr, tablePPr } : ctx;
+      const cellCtx = cellContexts.get(placement.cell) ?? ctx;
       out += `<td${attrs}>${deps.renderBlocks(cellCtx, placement.cell.children, fields)}</td>`;
     }
     out += '</tr>';

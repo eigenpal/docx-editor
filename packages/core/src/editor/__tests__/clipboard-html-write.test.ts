@@ -423,12 +423,16 @@ describe('interopHtmlFromFragment', () => {
         body:
           '<w:p><w:r><w:t>a</w:t><w:tab/><w:t>b</w:t>' +
           '<w:ptab w:alignment="right" w:relativeTo="margin" w:leader="dot"/>' +
+          '<w:ptab w:alignment="center" w:relativeTo="indent" w:leader="heavy"/>' +
           '<w:footnoteReference w:id="3"/><w:endnoteReference w:id="2"/>' +
           '<w:br w:type="page"/><w:t>c</w:t><w:br/><w:t>d</w:t></w:r></w:p>',
       })
     );
     expect(html).toContain('<span style="white-space:pre;mso-tab-count:1">\t</span>');
     expect(html).toContain('<w:PTab Alignment="RIGHT" RelativeTo="MARGIN" Leader="DOT"></w:PTab>');
+    expect(html).toContain(
+      '<w:PTab Alignment="CENTER" RelativeTo="INDENT" Leader="HEAVY"></w:PTab>'
+    );
     expect(html).toContain('<br style="page-break-before:always">');
     expect(html).toContain('<br>');
     expect(html).toContain('<span class="MsoFootnoteReference">');
@@ -444,6 +448,29 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('Foot body.');
     expect(html).toContain('End body.');
     expect(html).toContain('<a href="https://notes.example/source">source</a>');
+  });
+
+  test('hidden note citations in conditional table cells do not ship note bodies', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          '<w:style w:type="table" w:styleId="HiddenFirst">' +
+          '<w:tblStylePr w:type="firstRow"><w:rPr><w:vanish/></w:rPr></w:tblStylePr>' +
+          '</w:style>',
+        footnotes:
+          '<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/><w:t>Primary body.</w:t></w:r></w:p>' +
+          '<w:tbl><w:tblPr><w:tblStyle w:val="HiddenFirst"/>' +
+          '<w:tblLook w:firstRow="1"/></w:tblPr><w:tr><w:tc><w:p><w:r>' +
+          '<w:footnoteReference w:id="2"/></w:r></w:p></w:tc></w:tr></w:tbl>' +
+          '</w:footnote>' +
+          '<w:footnote w:id="2"><w:p><w:r><w:footnoteRef/>' +
+          '<w:t>Hidden target body.</w:t></w:r></w:p></w:footnote>',
+        body: '<w:p><w:r><w:t>Body</w:t><w:footnoteReference w:id="1"/></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('Primary body.');
+    expect(html).not.toContain('Hidden target body.');
+    expect(html).not.toContain('mso-footnote-id:ftn2');
   });
 
   test('every text value is escaped, never markup', () => {
