@@ -785,16 +785,28 @@ const tableDrawingTokenCache = new WeakMap<
   { readonly epoch: string; readonly token: string }
 >();
 
-/** Aggregate per-paragraph drawing tokens for a table subtree (cache + incremental keys). */
+/**
+ * Aggregate per-paragraph drawing tokens for a table subtree (cache + incremental keys).
+ *
+ * NUL-framed, with an empty slot for every drawing-less paragraph — the same rule as
+ * `listTokenForTableBlock`. A per-paragraph token embeds file-influenced values and its own
+ * printable separators, so a printable join lets a token value shift a boundary, and sorting
+ * or skipping empties lets two different paragraph-to-token ASSIGNMENTS over one
+ * byte-identical subtree concatenate to the same string — and the table's prepared-block
+ * memo then serves a break with stale drawing layout. XML text cannot carry U+0000, so no
+ * file-derived token can forge a slot boundary.
+ */
 export function drawingTokenForTableBlock(
   table: OoxmlNode,
   drawingTokenForParagraph: (paragraph: OoxmlNode) => string
 ): string {
   const tokens: string[] = [];
+  let any = false;
   const visit = (node: OoxmlNode): void => {
     if (node.kind === 'paragraph') {
       const token = drawingTokenForParagraph(node);
-      if (token) tokens.push(token);
+      if (token) any = true;
+      tokens.push(token);
       return;
     }
     if ('children' in node) {
@@ -802,7 +814,7 @@ export function drawingTokenForTableBlock(
     }
   };
   visit(table);
-  return tokens.sort().join(';');
+  return any ? tokens.join('\0') : '';
 }
 
 export { drawingProjectionLayoutToken, drawingResourceLayoutToken };
