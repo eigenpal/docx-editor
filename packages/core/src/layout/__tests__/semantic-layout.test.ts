@@ -368,13 +368,10 @@ describe('paragraph alignment moves the published span boxes (w:jc)', () => {
     const previous = line.spans[afterSpace - 1]!;
     const next = line.spans[afterSpace]!;
     expect(next.box.x).toBeGreaterThan(previous.box.x + previous.box.width + 0.25);
-    // Cluster edges are published on every span (task 13.5).
+    // No eager cluster edges: prefix widths are measured on demand at interaction time
+    // (issue #632), so aligned spans publish geometry only.
     for (const span of line.spans) {
-      expect(span.caretEdges?.length).toBe(
-        span.text === '\t' || span.text.length !== span.range.end - span.range.start
-          ? 2
-          : span.text.length + 1
-      );
+      expect(span.caretEdges).toBeUndefined();
     }
   });
 

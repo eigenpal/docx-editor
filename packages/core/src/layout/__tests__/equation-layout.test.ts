@@ -99,7 +99,8 @@ describe('atomic equation paragraph layout', () => {
     expect(equation.projected).toBe(true);
     expect(equation.style.fontFamily).toBe('Cambria Math');
     expect(equation.equation?.sourceNodeId).toBe('/word/document.xml#0.0.0.1');
-    expect(equation.caretEdges).toEqual([0, equation.box.width]);
+    // Caret edges are measured on demand (issue #632); the projected atom's advance is
+    // layout-owned, which spanOffsetX answers from the published box.
     expect(equation.equation?.geometry).toEqual(
       linesOf(second)[0]!.spans.find((span) => span.equation)!.equation!.geometry
     );
