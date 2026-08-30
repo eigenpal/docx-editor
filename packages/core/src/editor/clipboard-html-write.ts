@@ -28,6 +28,7 @@ import {
   paragraphPropertySources,
   relatedPart,
   runPropertyLayers,
+  runBooleanOn,
   runToggleOn,
   styleChain,
   styleIndexOf,
@@ -119,7 +120,8 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   const underline = lastProperty(sources, 'u');
   const underlineOn = underline !== null && wmlVal(underline) !== 'none';
   if (underlineOn) decorations.push('underline');
-  const doubleStrike = runToggleOn(layers, 'dstrike');
+  // `w:dstrike` is NOT a §17.7.3 toggle: two style levels both set must never XOR off.
+  const doubleStrike = runBooleanOn(layers, 'dstrike');
   if (runToggleOn(layers, 'strike') || doubleStrike) decorations.push('line-through');
   if (decorations.length > 0) rules.push(`text-decoration:${decorations.join(' ')}`);
   // A `w:u w:val="none"` must not emit decoration styling, and the double-strike
@@ -920,11 +922,16 @@ function renderBlocks(
           // Unknown wrappers may hide block content; raw markup itself never travels.
           visit(child.children);
           break;
+        case 'bookmarkStart': {
+          // Without its anchor, `w:anchor` hyperlinks in the same copy dangle.
+          const name = clipboardBookmarkName(attributeValueOf(child, 'name', WML_NAMESPACE_URI));
+          if (name !== null) out += `<a id="${escapeAttr(name)}"></a>`;
+          break;
+        }
         default:
-          // A block-level child the renderer skips (a bare run under a generic
-          // wrapper) still advances the field state: the balance probe counted its
-          // fldChars, and skipping them here would desync the two — an open
-          // 'instr' the probe saw closed would blank every later paragraph.
+          // A skipped block-level child (a bare run under a generic wrapper) still
+          // advances the field state the balance probe counted, or an open 'instr'
+          // the probe saw closed blanks every later paragraph.
           if (!fields.inert) advanceFieldState(child, fields);
           break;
       }
@@ -952,10 +959,8 @@ export function interopHtmlFromFragment(
   return interopHtmlFromFragmentPackage(read.package, options);
 }
 
-/**
- * The same writer over an ALREADY-READ fragment package, so a caller that just built or
- * read the package (the copy path) does not pay a second inflate + parse.
- */
+/** The same writer over an ALREADY-ASSEMBLED fragment package (the copy path),
+ *  so building the flavour never pays a second inflate + parse. */
 export function interopHtmlFromFragmentPackage(
   pkg: OoxmlPackage,
   options?: InteropHtmlOptions

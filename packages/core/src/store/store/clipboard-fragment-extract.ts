@@ -16,11 +16,12 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import type { OoxmlPackage } from '../package/ooxml-package.ts';
+import type { OoxmlExternalTarget, OoxmlPackage } from '../package/ooxml-package.ts';
+import type { ContentTypeIndex } from '../package/content-types.ts';
 import { resolveContentTypeOf, relationshipsOf } from '../package/package-edit.ts';
 import { resolveInternalTarget } from '../package/opc-names.ts';
 import type { RelationshipRecord } from '../package/relationships.ts';
-import { escapeXmlAttribute } from '../package/sinks.ts';
+import { escapeXmlAttribute, sanitizeHref } from '../package/sinks.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import { writeZip, strToU8 } from '../package/zip.ts';
 import { applyTreeOp } from './tree-op-apply.ts';
@@ -93,6 +94,9 @@ export type FragmentExtractResult =
       readonly ok: true;
       /** The fragment package zip, readable by `readOoxmlPackage`. */
       readonly bytes: Uint8Array;
+      /** The same fragment as an already-assembled in-memory package, so the copy
+       *  path renders interop HTML without re-inflating and re-parsing `bytes`. */
+      readonly package: OoxmlPackage;
       /** Travels beside the zip (HTML attribute): whether the last paragraph mark is covered. */
       readonly lastMarkCovered: boolean;
       readonly blockCount: number;
@@ -766,10 +770,18 @@ export function extractFragmentPackage(
   // ------------------------------------------------------------------
   const entries = new Map<string, Uint8Array>();
   const overrides: Array<readonly [string, string]> = [];
+  // The same parts, kept as trees and bytes: the ok result carries them as an
+  // assembled package so the copy path never re-parses its own zip.
+  const fragmentParts = new Map<string, OoxmlPart>();
+  const fragmentPartBytes = new Map<string, Uint8Array>();
 
   const addXmlPart = (name: string, contentType: string, root: OoxmlElement): void => {
-    entries.set(name.slice(1), strToU8(serializeOoxmlPart(syntheticPart(name, contentType, root))));
+    const partValue = syntheticPart(name, contentType, root);
+    const partData = strToU8(serializeOoxmlPart(partValue));
+    entries.set(name.slice(1), partData);
     overrides.push([name, contentType]);
+    fragmentParts.set(name, partValue);
+    fragmentPartBytes.set(name, partData);
   };
 
   // Fragment document rels: the used source subset plus the parts this fragment authors.
@@ -842,6 +854,7 @@ export function extractFragmentPackage(
   const mediaExtensions = new Map<string, string>();
   for (const [name, bytes] of mediaEntries) {
     entries.set(name.slice(1), bytes);
+    fragmentPartBytes.set(name, bytes);
     const ext = mediaExtensionOf(name);
     if (ext && !mediaExtensions.has(ext)) {
       mediaExtensions.set(ext, resolveContentTypeOf(pkg, name) ?? 'application/octet-stream');
@@ -849,22 +862,16 @@ export function extractFragmentPackage(
   }
 
   // rels
+  const rootRelationship: RelationshipRecord = {
+    ownerPart: '/',
+    id: 'rId1',
+    type: OFFICE_DOCUMENT_REL,
+    rawTarget: 'word/document.xml',
+    targetMode: 'Internal',
+    order: 0,
+  };
   entries.set('word/_rels/document.xml.rels', strToU8(relationshipXml(fragmentDocRels)));
-  entries.set(
-    '_rels/.rels',
-    strToU8(
-      relationshipXml([
-        {
-          ownerPart: '/',
-          id: 'rId1',
-          type: OFFICE_DOCUMENT_REL,
-          rawTarget: 'word/document.xml',
-          targetMode: 'Internal',
-          order: 0,
-        },
-      ])
-    )
-  );
+  entries.set('_rels/.rels', strToU8(relationshipXml([rootRelationship])));
 
   // [Content_Types].xml
   const defaults = [
@@ -886,9 +893,47 @@ export function extractFragmentPackage(
     strToU8(`<Types xmlns="${CT_XMLNS}">${defaults}${overrideRows}</Types>`)
   );
 
+  // The in-memory twin of the zip, from the SAME parts, rels and bytes — never a
+  // second parse. Consumers that resolve media look parts up by canonical name.
+  const fragmentRelationships = new Map<string, readonly RelationshipRecord[]>();
+  fragmentRelationships.set('/', [rootRelationship]);
+  fragmentRelationships.set('/word/document.xml', fragmentDocRels);
+  if (footnoteRels.length > 0) fragmentRelationships.set('/word/footnotes.xml', footnoteRels);
+  if (endnoteRels.length > 0) fragmentRelationships.set('/word/endnotes.xml', endnoteRels);
+  const externalTargets: OoxmlExternalTarget[] = [];
+  for (const records of fragmentRelationships.values()) {
+    for (const record of records) {
+      if (record.targetMode !== 'External') continue;
+      externalTargets.push({
+        ownerPart: record.ownerPart,
+        id: record.id,
+        type: record.type,
+        rawTarget: record.rawTarget,
+        sinkSafe: sanitizeHref(record.rawTarget).ok,
+      });
+    }
+  }
+  const contentTypeDefaults = new Map<string, string>();
+  contentTypeDefaults.set('rels', RELS_CT);
+  contentTypeDefaults.set('xml', 'application/xml');
+  for (const [ext, type] of mediaExtensions) contentTypeDefaults.set(ext, type);
+  const contentTypes: ContentTypeIndex = {
+    defaults: contentTypeDefaults,
+    // Fragment part names are lowercase ASCII constants, so they are their own
+    // case-folded keys.
+    overrides: new Map(overrides),
+  };
   return {
     ok: true,
     bytes: writeZip(entries),
+    package: {
+      parts: fragmentParts,
+      partBytes: fragmentPartBytes,
+      relationships: fragmentRelationships,
+      externalTargets,
+      contentTypes,
+      mainDocumentPart: '/word/document.xml',
+    },
     lastMarkCovered: coverage.lastMarkCovered,
     blockCount: blocks.length,
     mediaBytes,

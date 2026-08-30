@@ -69,13 +69,17 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
         if (ilvl === null) continue;
         const start = boundedStart(wmlVal(wmlChild(override, 'startOverride')));
         if (start !== null) startOverrides.set(`${numId}:${ilvl}`, start);
-        // A replacement `w:lvl` inside the override carries its own format/start.
+        // A replacement `w:lvl` inside the override carries its own format/start —
+        // but per ECMA-376 §17.9.11 an explicit `w:startOverride` outranks the
+        // replacement level's `w:start`, so it never overwrites one already stored.
         const replacement = wmlChild(override, 'lvl');
         if (replacement !== null) {
           const format = wmlVal(wmlChild(replacement, 'numFmt'));
           if (format !== undefined) formatOverrides.set(`${numId}:${ilvl}`, format);
-          const replacementStart = boundedStart(wmlVal(wmlChild(replacement, 'start')));
-          if (replacementStart !== null) startOverrides.set(`${numId}:${ilvl}`, replacementStart);
+          if (start === null) {
+            const replacementStart = boundedStart(wmlVal(wmlChild(replacement, 'start')));
+            if (replacementStart !== null) startOverrides.set(`${numId}:${ilvl}`, replacementStart);
+          }
         }
       }
       continue;

@@ -8,7 +8,6 @@
 
 import {
   extractFragmentPackage,
-  readOoxmlPackage,
   type FragmentCoverage,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
@@ -76,9 +75,9 @@ export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
     fragmentBytes = lean.ok && lean.bytes.byteLength <= budget ? lean.bytes : null;
   }
 
-  // One read for the HTML half; the fragment travels as the bytes themselves.
-  const read = readOoxmlPackage(full.bytes);
-  const inner = read.ok ? interopHtmlFromFragmentPackage(read.package) : '';
+  // The HTML half renders from the extraction's own in-memory package — copy is
+  // synchronous in the clipboard event, so it never re-inflates its own zip.
+  const inner = interopHtmlFromFragmentPackage(full.package);
   const html = wrapInteropHtml(
     inner,
     fragmentBytes ? { bytes: fragmentBytes, lastMarkCovered: full.lastMarkCovered } : null

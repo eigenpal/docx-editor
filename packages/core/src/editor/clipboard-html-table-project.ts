@@ -200,6 +200,9 @@ export function projectHtmlTable(
     rowXml.push(`<w:tr>${tableRowPropertiesXml(row)}${cells.join('')}</w:tr>`);
   }
 
+  // A `w:tbl` without a single `w:tr` is schema-invalid (Word repairs the file),
+  // so a budget break before the first complete row emits nothing at all.
+  if (rowXml.length === 0) return;
   out.push(
     `<w:tbl><w:tblPr>${position}<w:tblW w:w="${totalWidth}" w:type="dxa"/>${jc}${borders}</w:tblPr>` +
       `<w:tblGrid>${grid}</w:tblGrid>${rowXml.join('')}</w:tbl>`

@@ -10,9 +10,19 @@ export function clipboardBookmarkName(raw: string | null | undefined): string | 
   const trimmed = raw.trim();
   if (trimmed.length === 0 || trimmed.length > 256) return null;
   if (/^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(trimmed)) return trimmed;
-  const mangled = trimmed.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 40);
+  const mangled = trimmed.replace(/[^A-Za-z0-9_]/g, '_');
   if (mangled.replace(/_/g, '').length === 0) return null;
-  return /^[A-Za-z_]/.test(mangled) ? mangled : `_${mangled.slice(0, 39)}`;
+  // A deterministic hash of the RAW name joins the mangled stem: a link and its
+  // target — mangled from the same raw name — still pair, while distinct names
+  // that mangle or truncate to the same stem stay distinct bookmarks.
+  let hash = 5381;
+  for (let index = 0; index < trimmed.length; index += 1) {
+    hash = (Math.imul(hash, 33) ^ trimmed.charCodeAt(index)) >>> 0;
+  }
+  const suffix = `_${hash.toString(36)}`;
+  let stem = mangled.slice(0, 40 - suffix.length);
+  if (!/^[A-Za-z_]/.test(stem)) stem = `_${stem.slice(0, 39 - suffix.length)}`;
+  return `${stem}${suffix}`;
 }
 
 /** Tell whether an HTML target can remain an active hyperlink. Fragment names Word

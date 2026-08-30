@@ -228,3 +228,19 @@ export function runToggleOn(layers: RunPropertyLayers, localName: string): boole
   if (toggleLevelValue(layers.defaults, localName) === true) return true;
   return (paragraph === true) !== (character === true);
 }
+
+/** Plain-cascade boolean for run properties that are NOT §17.7.3 toggles
+ *  (`w:dstrike`, matching the exclusion in `layout/style-toggles.ts`): the
+ *  nearest level that states the property wins outright, with no XOR. */
+export function runBooleanOn(layers: RunPropertyLayers, localName: string): boolean {
+  const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
+  if (direct) {
+    const val = wmlVal(direct);
+    return !(val === '0' || val === 'false' || val === 'off' || val === 'none');
+  }
+  const character = toggleLevelValue(layers.characterLevel, localName);
+  if (character !== undefined) return character;
+  const paragraph = toggleLevelValue(layers.paragraphLevel, localName);
+  if (paragraph !== undefined) return paragraph;
+  return toggleLevelValue(layers.defaults, localName) === true;
+}

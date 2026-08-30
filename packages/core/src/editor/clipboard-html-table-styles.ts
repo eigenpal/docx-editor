@@ -124,7 +124,15 @@ export function tableColumnWidths(
       const cell = cells[sourceAt];
       if (cell === undefined) break;
       sourceAt += 1;
-      const span = Math.min(cellSpanOf(cell), columns - column);
+      // Clamp at the next carried column exactly like the cell placement walk, or
+      // a width would spread across grid columns the emitted cell never occupies.
+      let span = Math.min(cellSpanOf(cell), columns - column);
+      for (let ahead = column + 1; ahead < column + span; ahead += 1) {
+        if (carriedNow[ahead] !== null) {
+          span = ahead - column;
+          break;
+        }
+      }
       const rowSpan = htmlSpanOf(cell, 'rowspan', 1000);
       if (rowSpan > 1) carry[column] = { remaining: rowSpan - 1, span };
       const points = widthPointsOf(cell);

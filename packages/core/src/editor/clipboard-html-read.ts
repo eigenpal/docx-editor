@@ -164,6 +164,8 @@ function allocateRel(
 
 // --- Walk
 
+const FURNITURE_ONLY = /^(?:<w:bookmark(?:Start|End)\b[^>]*\/>)+$/;
+
 function collectInline(
   node: Node,
   depth: number,
@@ -181,17 +183,30 @@ function collectInline(
     const raw = node.nodeValue ?? '';
     if (ctx.pre) {
       const parts = raw.replace(/\r\n?/g, '\n').split('\n');
-      parts.forEach((part, index) => {
-        if (index > 0) runs.push(`<w:r>${rPrXml(ctx.run)}<w:br/></w:r>`);
+      for (let index = 0; index < parts.length; index += 1) {
+        // Every line past the first charges the walk budget: one text node full
+        // of newlines must not amplify one charged unit into unbounded output.
+        if (index > 0) {
+          p.nodesLeft -= 1;
+          if (p.nodesLeft <= 0) {
+            p.truncated = true;
+            return;
+          }
+          runs.push(`<w:r>${rPrXml(ctx.run)}<w:br/></w:r>`);
+        }
+        const part = parts[index]!;
         if (part.length > 0) runs.push(textRunXml(part, ctx.run));
-      });
+      }
       return;
     }
     // Collapse ASCII whitespace only: an NBSP is real content Word preserves, and
     // JS `\s` would fold it into a plain breakable space.
     const collapsed = raw.replace(/[ \t\r\n\f\v]+/g, ' ');
     if (collapsed.length === 0) return;
-    if (collapsed === ' ' && runs.length === 0) return; // Whitespace between blocks.
+    // Whitespace between blocks: bookmark furniture is not visible content, so a
+    // standalone anchor must not turn the gap into a space paragraph — but a
+    // bookmark WRAPPING real content stays visible and keeps the word gap.
+    if (collapsed === ' ' && runs.every((run) => FURNITURE_ONLY.test(run))) return;
     runs.push(textRunXml(collapsed, ctx.run));
     return;
   }
@@ -893,10 +908,9 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       if (!movedOne) break;
     }
   }
-  // A moved note's definition no longer exists, so any citation of a moved id —
-  // in a kept note (a mutual-citation island moved one member) or in another
-  // moved note's blocks — must strip with the same alternation sweep, or the
-  // fragment ships a dangling reference.
+  // A moved note's definition no longer exists, so any citation of a moved id (in
+  // a kept note of a mutual-citation island, or in another moved note's blocks)
+  // must strip with the same alternation sweep, or a reference dangles.
   let movedMarkPattern: RegExp | null = null;
   if (movedNotes.size > 0) {
     const movedMarks = [...movedNotes].map((key) => {

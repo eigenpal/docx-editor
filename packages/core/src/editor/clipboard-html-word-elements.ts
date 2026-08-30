@@ -1,4 +1,5 @@
 import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
+import { escapeCssString } from '../store/package/sinks.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { HIGHLIGHT_COLOR_HEX } from '../output/semantic-paint.ts';
 
@@ -53,22 +54,15 @@ export const WORD_JC_TO_TEXT_ALIGN: Readonly<Record<string, string>> = {
   distribute: 'justify',
 };
 
-/** Quote a file-supplied font name without removing Unicode letters. */
+/** Quote a file-supplied font name without removing Unicode letters. Character
+ *  escaping delegates to the engine's ONE designated CSS-string escaper, so a
+ *  future hardening there covers this sink too; only the trim/length guards and
+ *  the quoting stay local. */
 export function wordCssFontFamily(raw: string): string | null {
   const value = raw.trim();
   if (value.length === 0 || value.length > 255) return null;
-  let escaped = '';
-  for (const char of value) {
-    const code = char.codePointAt(0)!;
-    if (code === 0 || code === 0x0a || code === 0x0d || code === 0x0c) {
-      escaped += '\\a ';
-    } else if (char === '\\' || char === '"') {
-      escaped += `\\${char}`;
-    } else if (code >= 0x20 && code !== 0x7f) {
-      escaped += char;
-    }
-  }
-  return escaped.length === 0 ? null : `"${escaped}"`;
+  const escaped = escapeCssString(value);
+  return escaped.replace(/\\[0-9a-f]{1,6} ?/g, '').length === 0 ? null : `"${escaped}"`;
 }
 
 export function wordBorderCss(edge: OoxmlElement | null): string | null {
