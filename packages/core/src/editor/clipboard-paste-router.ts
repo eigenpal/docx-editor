@@ -44,6 +44,7 @@ export function routePaste(target: PasteRouteTarget, input: PasteRouteInput): Pa
   }
 
   const projected = projectExternalHtml(html);
+  if (projected.ok && projected.truncated && input.text.length > 0) return plain();
   if (projected.ok && target.pasteFragment(projected.fragmentBytes, projected.lastMarkCovered)) {
     return 'external-html';
   }

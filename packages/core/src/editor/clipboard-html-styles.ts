@@ -332,7 +332,12 @@ export interface HtmlRunProps {
   szHalfPoints?: number;
   font?: string;
   charSpacingTwentieths?: number;
+  /** Generic HTML language. The XML emitter selects its script slot. */
   lang?: string;
+  /** Explicit Word ANSI, East Asian, and bidirectional language slots. */
+  langVal?: string;
+  langEastAsia?: string;
+  langBidi?: string;
   rtl?: boolean;
 }
 
@@ -747,13 +752,23 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
   const vertical = style.get('vertical-align')?.trim().toLowerCase();
   if (vertical === 'sub') next.vertAlign = 'subscript';
   else if (vertical === 'super') next.vertAlign = 'superscript';
-  const language = clipboardLanguageTag(
-    style.get('mso-ansi-language') ??
-      style.get('mso-fareast-language') ??
-      style.get('mso-bidi-language')
-  );
-  if (language !== null) next.lang = language;
+  const ansiLanguage = clipboardLanguageTag(style.get('mso-ansi-language'));
+  const eastAsiaLanguage = clipboardLanguageTag(style.get('mso-fareast-language'));
+  const bidiLanguage = clipboardLanguageTag(style.get('mso-bidi-language'));
+  if (ansiLanguage !== null) next.langVal = ansiLanguage;
+  if (eastAsiaLanguage !== null) next.langEastAsia = eastAsiaLanguage;
+  if (bidiLanguage !== null) next.langBidi = bidiLanguage;
   if (style.get('direction')?.trim().toLowerCase() === 'rtl') next.rtl = true;
+  return next;
+}
+
+export function applyElementRunProps(base: HtmlRunProps, element: Element): HtmlRunProps {
+  let next = applyRunCss(base, parseInlineStyle(element));
+  const language = clipboardLanguageTag(element.getAttribute('lang'));
+  if (language !== null) next = { ...next, lang: language };
+  if (element.getAttribute('dir')?.trim().toLowerCase() === 'rtl') {
+    next = { ...next, rtl: true };
+  }
   return next;
 }
 

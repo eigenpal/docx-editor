@@ -17,7 +17,6 @@ import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-li
 import { createGestureMemo } from './clipboard-html-memo.ts';
 import { reconcileUnreachableNotes } from './clipboard-html-note-reconcile.ts';
 import { allocateList, msoListNumPr } from './clipboard-html-list-alloc.ts';
-import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import {
   writeProjectedHtmlPackage,
   type HtmlFragmentRel as RelEntry,
@@ -40,6 +39,7 @@ import {
 } from './clipboard-html-run-xml.ts';
 import {
   applyInlineTag,
+  applyElementRunProps,
   applyParaCss,
   applyRunCss,
   applyWordParagraphAlignment,
@@ -282,10 +282,7 @@ function collectInline(
     taggedRun = { ...taggedRun, rStyle: 'Hyperlink' };
   }
   // Never mutate the shared context run: helpers return `base` by identity when idle.
-  let nextRun = applyRunCss(taggedRun, style);
-  const language = clipboardLanguageTag(node.getAttribute('lang'));
-  if (language !== null) nextRun = { ...nextRun, lang: language };
-  if (node.getAttribute('dir')?.trim().toLowerCase() === 'rtl') nextRun = { ...nextRun, rtl: true };
+  const nextRun = applyElementRunProps(taggedRun, node);
   const nextCtx: FlowContext = {
     ...ctx,
     run: nextRun,
@@ -389,6 +386,7 @@ function paragraphContextOf(
   if (styleId !== undefined) para.styleId = styleId;
   if (ctx.para.numPr) para.numPr = ctx.para.numPr;
   if (ctx.para.jc) para.jc = ctx.para.jc;
+  if (ctx.para.bidi) para.bidi = true;
   let run = { ...ctx.run };
   const heading = HEADING_SZ[tag];
   // `docx-outline` marks a DIRECT w:outlineLvl on otherwise plain text: the
@@ -411,11 +409,8 @@ function paragraphContextOf(
   // The background lands on BOTH the paragraph (w:pPr/w:shd) and its runs: the
   // single-paragraph inline paste path keeps only run content, so a run-level fill
   // is what survives a mid-paragraph paste.
-  run = applyRunCss(run, style);
-  const language = clipboardLanguageTag(element.getAttribute('lang'));
-  if (language !== null) run.lang = language;
+  run = applyElementRunProps(run, element);
   if (element.getAttribute('dir')?.trim().toLowerCase() === 'rtl') {
-    run.rtl = true;
     para.bidi = true;
   }
   return {
@@ -855,9 +850,12 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     noteMarkFallbacks: new Map(),
     definedNoteElements,
   };
+  let rootRun: RunProps = {};
+  rootRun = applyElementRunProps(rootRun, parsed.documentElement);
+  rootRun = applyElementRunProps(rootRun, body);
   const rootCtx: FlowContext = {
-    run: {},
-    para: {},
+    run: rootRun,
+    para: rootRun.rtl ? { bidi: true } : {},
     paragraphMarkCovered: false,
     pre: false,
     list: null,

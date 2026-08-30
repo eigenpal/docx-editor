@@ -73,6 +73,16 @@ describe('paste routing', () => {
     expect(pasted.length).toBe(1);
   });
 
+  test('a truncated HTML projection yields to complete plain text', () => {
+    const prefix = 'x'.repeat(50_001);
+    const html = `<p>${'<span>x</span>'.repeat(50_001)}<strong>tail</strong></p>`;
+    const { routeTarget, pasted, plain } = target();
+    const lane = routePaste(routeTarget, { html, text: `${prefix}tail`, forcePlain: false });
+    expect(lane).toBe('plain');
+    expect(pasted).toEqual([]);
+    expect(plain).toEqual([`${prefix}tail`]);
+  });
+
   test('force-plain skips every rich lane, whatever the payload carries', () => {
     const html = wrapInteropHtml('<p>delta</p>', { bytes: FRAGMENT_BYTES, lastMarkCovered: true });
     const { routeTarget, pasted, plain } = target();

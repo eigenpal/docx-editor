@@ -51,12 +51,20 @@ export function rPrXml(props: HtmlRunProps): string {
   }
   if (props.vertAlign !== undefined) inner += `<w:vertAlign w:val="${props.vertAlign}"/>`;
   if (props.rtl) inner += '<w:rtl/>';
+  let langVal = props.langVal;
+  let langEastAsia = props.langEastAsia;
+  let langBidi = props.langBidi;
   if (props.lang !== undefined) {
-    // Route the single HTML lang tag into the SLOT it names: an RTL run's tag is
-    // the bidi language and a CJK tag is the east-Asian one — writing either
-    // into w:val would overwrite the Latin language with the wrong dictionary.
-    const slot = props.rtl ? 'bidi' : /^(?:zh|ja|ko)(?:-|$)/i.test(props.lang) ? 'eastAsia' : 'val';
-    inner += `<w:lang w:${slot}="${escapeXmlAttribute(props.lang)}"/>`;
+    if (props.rtl) langBidi ??= props.lang;
+    else if (/^(?:zh|ja|ko)(?:-|$)/i.test(props.lang)) langEastAsia ??= props.lang;
+    else langVal ??= props.lang;
+  }
+  const langAttributes =
+    `${langVal === undefined ? '' : ` w:val="${escapeXmlAttribute(langVal)}"`}` +
+    `${langEastAsia === undefined ? '' : ` w:eastAsia="${escapeXmlAttribute(langEastAsia)}"`}` +
+    `${langBidi === undefined ? '' : ` w:bidi="${escapeXmlAttribute(langBidi)}"`}`;
+  if (langAttributes.length > 0) {
+    inner += `<w:lang${langAttributes}/>`;
   }
   return inner.length > 0 ? `<w:rPr>${inner}</w:rPr>` : '';
 }
