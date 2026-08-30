@@ -517,6 +517,12 @@ export function createNotesLayoutInput(env: {
   ) => string;
   /** Part-level drawing epoch, so the notes-pass memo can trust the closures above. */
   readonly drawingLayoutEpochForPart?: (partName: string) => string;
+  /**
+   * Link projector scoped to one notes part, so a `w:hyperlink` inside `footnotes.xml` or
+   * `endnotes.xml` resolves its `r:id` against that part's own relationships — the same
+   * per-part rule pictures follow just below.
+   */
+  readonly projectLinkForPart?: NotesLayoutInput['projectLinkForPart'];
 }): NotesLayoutInput | undefined {
   const pkg = env.session.currentPackage();
   const footnotesPart = resolveNotesPart(pkg, 'footnote');
@@ -585,6 +591,7 @@ export function createNotesLayoutInput(env: {
     styleCascade: env.styleCascade?.(),
     numberingIndex: env.numberingIndex?.(),
     defaultTabStopPt: env.defaultTabStopPt,
+    ...(env.projectLinkForPart ? { projectLinkForPart: env.projectLinkForPart } : {}),
     ...(drawingsForPart ? { drawingsForPart } : {}),
     // One epoch over both notes parts: either part's drawing state moving must invalidate
     // the notes-pass memo.

@@ -149,6 +149,16 @@ export interface LayoutNoteStoryOptions {
    * paint to anchor and navigation to activate.
    */
   readonly projectLink?: HyperlinkProjector;
+  /**
+   * Per-part projector, preferred over `projectLink` when `ownerPartName` names the part.
+   *
+   * A `w:hyperlink` in `/word/footnotes.xml` declares its `r:id` in `footnotes.xml.rels`,
+   * so it must resolve there — the body projector answers from the body part's
+   * relationships, and when the two parts assign one id to different targets the footnote
+   * link navigated to the body's target. Same per-part rule pictures follow through
+   * {@link drawingsForPart}.
+   */
+  readonly projectLinkForPart?: (ownerPartName: string) => HyperlinkProjector | undefined;
   readonly projectFieldLink?: FieldLinkProjector;
   /** Document properties for a document-property field inside a note story. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
@@ -239,6 +249,12 @@ export function layoutNoteStory(
     ? options.drawingsForPart?.(options.ownerPartName)
     : undefined;
 
+  // The link projector scoped to the part this note lives in; the body projector is only
+  // the fallback for callers that supply no per-part resolution.
+  const projectLink =
+    (options.ownerPartName ? options.projectLinkForPart?.(options.ownerPartName) : undefined) ??
+    options.projectLink;
+
   const listItems = withResolvedListItems(
     { numberingIndex: options.numberingIndex, styleCascade: options.styleCascade },
     blocks
@@ -252,7 +268,7 @@ export function layoutNoteStory(
     styleCascade: options.styleCascade,
     ...(listItems ? { listItems } : {}),
     noteMarks,
-    ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+    ...(projectLink ? { projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.refFields ? { refFields: options.refFields } : {}),

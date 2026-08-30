@@ -20,6 +20,7 @@ import {
   parseTocInstruction,
   planTocEntries,
   readViewSettings,
+  relationshipTargetIn,
   resolveTocRowHeadings,
   validateTreeOp,
   type DetectedToc,
@@ -850,17 +851,26 @@ export function mountPaginatedSurface(
    * produces the sanitized projection; everything downstream — paint, click routing, the
    * popover, the clipboard — consumes only that.
    */
-  const projectLink = (link: Parameters<typeof hyperlinkTargetOf>[0]) => {
-    const target = hyperlinkTargetOf(link, (id) => session.relationshipTarget(id));
-    if (link.kind === 'textValue') return null;
-    return {
-      id: link.id,
-      kind: target.kind,
-      href: target.href,
-      ...(target.anchor !== undefined ? { anchor: target.anchor } : {}),
-      ...(target.tooltip !== undefined ? { tooltip: target.tooltip } : {}),
+  const projectLinkResolvedBy =
+    (resolveRel: Parameters<typeof hyperlinkTargetOf>[1]) =>
+    (link: Parameters<typeof hyperlinkTargetOf>[0]) => {
+      const target = hyperlinkTargetOf(link, resolveRel);
+      if (link.kind === 'textValue') return null;
+      return {
+        id: link.id,
+        kind: target.kind,
+        href: target.href,
+        ...(target.anchor !== undefined ? { anchor: target.anchor } : {}),
+        ...(target.tooltip !== undefined ? { tooltip: target.tooltip } : {}),
+      };
     };
-  };
+  const projectLink = projectLinkResolvedBy((id) => session.relationshipTarget(id));
+  // The SAME boundary scoped to one notes part: a `w:hyperlink` in `footnotes.xml` or
+  // `endnotes.xml` declares its `r:id` in that part's own `.rels`, so resolving through the
+  // body's relationships either found nothing or — when both parts assign one id — the
+  // body's target.
+  const projectLinkForPart = (partName: string) =>
+    projectLinkResolvedBy((id) => relationshipTargetIn(session.currentPackage(), partName, id));
 
   /**
    * The SAME boundary for HYPERLINK fields: the raw instruction target crosses
@@ -1200,6 +1210,7 @@ export function mountPaginatedSurface(
       drawingTokenForParagraphForPart: (partName, paragraph) =>
         drawingBundle.drawingTokenForParagraph(paragraph, partName),
       drawingLayoutEpochForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
+      projectLinkForPart,
     });
     return layoutSemanticDocument(session.part(), revision, {
       measurer,

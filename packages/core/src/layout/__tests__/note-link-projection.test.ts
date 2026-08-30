@@ -117,4 +117,58 @@ describe('note-story link projection', () => {
       href: 'https://example.com',
     });
   });
+
+  test('a per-part projector wins over the inherited body projector for note stories', () => {
+    const loaded = readOoxmlPackage(linkedNotesDoc());
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const part = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const settings = settingsPartOf(loaded.package);
+    const documentFootnoteProps = resolveFootnoteProperties(
+      undefined,
+      authoredDocumentFootnoteProperties(settings)
+    );
+    const documentEndnoteProps = resolveEndnoteProperties(
+      undefined,
+      authoredDocumentEndnoteProperties(settings)
+    );
+    const askedParts: string[] = [];
+    const notes: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: null,
+      footnotePropsBySection: [documentFootnoteProps],
+      endnotePropsBySection: [documentEndnoteProps],
+      documentFootnoteProps,
+      documentEndnoteProps,
+      measurer: createFixedMeasurer(),
+      producer: 'note-link-scoped',
+      // The r:id of a link in a note declares itself in THAT part's relationships, so the
+      // per-part projector must win over the body's inherited one.
+      projectLinkForPart: (ownerPartName) => {
+        askedParts.push(ownerPartName);
+        return (node) =>
+          node.kind === 'textValue'
+            ? null
+            : { id: `scoped:${node.id}`, kind: 'external', href: 'https://note.example/' };
+      },
+    };
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'note-link-scoped',
+      projectLink: (node) =>
+        node.kind === 'textValue'
+          ? null
+          : { id: `body:${node.id}`, kind: 'external', href: 'https://body.example/' },
+    });
+
+    const noteSpans = layout.pages
+      .flatMap((page) => page.footnotes?.notes ?? [])
+      .flatMap((note) => note.fragments)
+      .flatMap((fragment) => (fragment.kind === 'paragraph' ? fragment.lines : []))
+      .flatMap((line) => line.spans);
+    const typedLinked = noteSpans.find((span) => span.text === 'Jump');
+    expect(typedLinked?.link).toMatchObject({ kind: 'external', href: 'https://note.example/' });
+    expect(askedParts).toContain(notes.footnotesPart!.name);
+  });
 });
