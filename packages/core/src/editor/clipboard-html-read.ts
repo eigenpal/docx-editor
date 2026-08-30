@@ -123,6 +123,8 @@ export interface Projection {
   readonly rels: RelEntry[];
   readonly media: Map<string, Uint8Array>;
   readonly mediaExtensions: Map<string, string>;
+  /** Media part per `src`, so a repeated image decodes and ships exactly once. */
+  readonly mediaBySrc: Map<string, string>;
   readonly lists: Map<string, ListAllocation>;
   /** Secondary index over `lists`, so nested lists resolve without a linear scan. */
   readonly listsByNumId: Map<string, ListAllocation>;
@@ -521,17 +523,30 @@ function projectFlow(
   const before = out.length;
   const ownsPageBreakState = pageBreakState === undefined;
   let pending: string[] = [];
+  // The context's own page-break-before is consumed by the FIRST emission only.
+  let flushPara = ctx.para;
   const pageBreak = pageBreakState ?? { pending: false, skipSpacer: false };
   const flush = (): void => {
-    if (pending.length > 0) {
-      // Bare inline text consumes a pending Word page break like a block would,
-      // so the break lands BEFORE the text, not appended after it.
-      const para = pageBreak.pending ? { ...ctx.para, pageBreakBefore: true } : ctx.para;
-      out.push(paragraphXml(para, pending));
-      pageBreak.pending = false;
-      pageBreak.skipSpacer = false;
-      p.lastMarkCovered = ctx.paragraphMarkCovered;
+    if (pending.length === 0) return;
+    if (!pending.some((piece) => piece.includes('<w:r'))) {
+      // Furniture-only pending (a standalone bookmark anchor): fold it into the
+      // previous paragraph instead of materializing a spurious empty one; with no
+      // paragraph yet, it stays queued for the next real flush.
+      const last = out[out.length - 1];
+      if (last?.endsWith('</w:p>')) {
+        out[out.length - 1] = `${last.slice(0, -6)}${pending.join('')}</w:p>`;
+        pending = [];
+      }
+      return;
     }
+    // Bare inline text consumes a pending Word page break like a block would,
+    // so the break lands BEFORE the text, not appended after it.
+    const para = pageBreak.pending ? { ...flushPara, pageBreakBefore: true } : flushPara;
+    out.push(paragraphXml(para, pending));
+    if (flushPara.pageBreakBefore) flushPara = { ...flushPara, pageBreakBefore: undefined };
+    pageBreak.pending = false;
+    pageBreak.skipSpacer = false;
+    p.lastMarkCovered = ctx.paragraphMarkCovered;
     pending = [];
   };
   for (const node of nodes) {
@@ -666,7 +681,10 @@ function projectFlow(
   }
   // An explicit block emits its paragraph even when empty.
   if (forceEmit && out.length === before) {
-    out.push(paragraphXml(ctx.para, []));
+    // Leftover furniture-only pending (a bookmark in an explicit empty paragraph)
+    // belongs to this forced paragraph.
+    out.push(paragraphXml(flushPara, pending));
+    pending = [];
     p.lastMarkCovered = ctx.paragraphMarkCovered;
   }
 }
@@ -744,6 +762,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     rels: [],
     media: new Map(),
     mediaExtensions: new Map(),
+    mediaBySrc: new Map(),
     lists: new Map(),
     listsByNumId: new Map(),
     semanticListCount: 0,
@@ -861,6 +880,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
             return ` r:${attribute}="${mapped}"`;
           });
         blocks.push(moved);
+        // The final paragraph changed: the coverage flag must describe IT.
+        projection.lastMarkCovered = false;
       }
     }
   }

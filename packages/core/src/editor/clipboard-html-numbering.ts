@@ -133,8 +133,11 @@ export function wordListDefinitionsFromStyleText(
 export function htmlListStartFromMarker(marker: string, kind: HtmlListKind): number | null {
   const trimmed = marker.trim().replace(/^\(/, '');
   if (kind === 'decimal') {
-    const digits = /^(\d{1,5})/.exec(trimmed);
-    return digits ? Math.min(32_767, Number.parseInt(digits[1]!, 10)) : null;
+    // A multilevel marker like '2.1.' names THIS level with its LAST ordinal.
+    const dotted = /^(\d{1,5}(?:\.\d{1,5})*)/.exec(trimmed);
+    if (!dotted) return null;
+    const segments = dotted[1]!.split('.');
+    return Math.min(32_767, Number.parseInt(segments[segments.length - 1]!, 10));
   }
   if (kind === 'lowerRoman' || kind === 'upperRoman') {
     const run = /^([A-Za-z]{1,8})/.exec(trimmed);
@@ -172,11 +175,16 @@ export function htmlListKindAndStart(marker: string): {
   readonly start: number;
 } {
   // Word wraps some formats in parentheses — '(1)', '(a)' — so the matchers see the
-  // ordinal itself. The closing bracket then satisfies the `[.)]` terminator.
+  // ordinal itself. The closing bracket then satisfies the `[.)]` terminator. A
+  // multilevel marker like '2.1.' names THIS level with its LAST ordinal.
   const trimmed = marker.trim().replace(/^\(/, '');
-  const decimal = /^(\d{1,5})[.)]/.exec(trimmed);
+  const decimal = /^(\d{1,5}(?:\.\d{1,5})*)[.)]/.exec(trimmed);
   if (decimal) {
-    return { kind: 'decimal', start: Math.min(32_767, Number.parseInt(decimal[1]!, 10)) };
+    const segments = decimal[1]!.split('.');
+    return {
+      kind: 'decimal',
+      start: Math.min(32_767, Number.parseInt(segments[segments.length - 1]!, 10)),
+    };
   }
   // A single letter is roman only for 'i' — the marker a roman list's first item
   // carries; 'c.' or 'v.' is a letter list that starts mid-alphabet.

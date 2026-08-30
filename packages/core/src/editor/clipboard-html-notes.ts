@@ -57,31 +57,36 @@ export function clipboardNoteDefinitions(doc: Document): readonly ClipboardNoteD
 }
 
 /**
- * Ids the BODY references via `mso-<kind>-id` anchors, into `out`. A definition
- * body's own back-link anchor carries the same id style and must not count as a
- * body reference, or an orphan definition would be consumed into the notes part.
+ * Ids referenced via `mso-<kind>-id` anchors, into `out`. A definition body's own
+ * SELF back-link (target = the enclosing definition) must not count — an orphan
+ * definition would be consumed into the notes part — but a CROSS-note reference
+ * from inside another note's body does count, matching the write lane's closure.
  */
 export function collectReferencedNoteIds(
   doc: Document,
   definitions: readonly ClipboardNoteDefinition[],
   out: Record<ClipboardNoteKind, Set<number>>
 ): void {
-  const definitionElements = new Set(definitions.map((note) => note.element));
-  const insideDefinition = (element: Element): boolean => {
+  const definitionByElement = new Map(definitions.map((note) => [note.element, note]));
+  const enclosingDefinition = (element: Element): ClipboardNoteDefinition | null => {
     let current: Element | null = element.parentElement;
     for (let hops = 0; current !== null && hops < 128; hops += 1) {
-      if (definitionElements.has(current)) return true;
+      const definition = definitionByElement.get(current);
+      if (definition !== undefined) return definition;
       current = current.parentElement;
     }
-    return false;
+    return null;
   };
   const anchors = doc.getElementsByTagName('a');
   for (let index = 0; index < anchors.length && index < 20_000; index += 1) {
     const anchor = anchors[index]!;
     const reference = clipboardNoteReference(parseInlineStyle(anchor));
-    if (reference !== null && !insideDefinition(anchor)) {
-      out[reference.kind].add(reference.id);
+    if (reference === null) continue;
+    const enclosing = enclosingDefinition(anchor);
+    if (enclosing !== null && enclosing.kind === reference.kind && enclosing.id === reference.id) {
+      continue;
     }
+    out[reference.kind].add(reference.id);
   }
 }
 

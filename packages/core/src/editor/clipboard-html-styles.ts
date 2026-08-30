@@ -60,7 +60,6 @@ export type HtmlParagraphAlign = 'left' | 'center' | 'right' | 'both';
 
 /** Cap on concatenated `<style>` text scanned for Word class `text-align`. */
 export const WORD_STYLE_TEXT_MAX = 32_768;
-const WORD_STYLE_ELEMENT_MAX = 8;
 const WORD_STYLE_RULE_MAX = 256;
 const WORD_STYLE_SELECTOR_MAX = 256;
 const WORD_STYLE_BLOCK_MAX = 2_048;
@@ -213,21 +212,20 @@ export function wordClassAlignmentsFromStyleText(
   return scanWordClassAlignments(css).alignments;
 }
 
-/** `textContent` of inert `<style>` elements, capped, never `innerHTML`. */
+/** `textContent` of inert `<style>` elements, capped, never `innerHTML`.
+ *  Degrades per ELEMENT: an oversized or malformed style element contributes
+ *  nothing, but the rest still scan — a style-heavy corporate template must not
+ *  silently lose every class-based alignment while the list scan still works. */
 export function wordClassAlignmentsFromDocument(
   doc: Document
 ): ReadonlyMap<string, HtmlParagraphAlign> {
   const out = new Map<string, HtmlParagraphAlign>();
   const styles = doc.getElementsByTagName('style');
-  if (styles.length > WORD_STYLE_ELEMENT_MAX) return out;
-  let total = 0;
-  for (let index = 0; index < styles.length; index += 1) {
+  for (let index = 0; index < styles.length && index < 16; index += 1) {
     const raw = styles[index]?.textContent ?? '';
-    if (raw.length > WORD_STYLE_TEXT_MAX) return new Map();
-    if (total + raw.length > WORD_STYLE_TEXT_MAX) return new Map();
-    total += raw.length;
+    if (raw.length > WORD_STYLE_TEXT_MAX) continue;
     const scan = scanWordClassAlignments(raw);
-    if (!scan.ok) return new Map();
+    if (!scan.ok) continue;
     for (const [className, jc] of scan.alignments) {
       out.set(className, jc);
     }

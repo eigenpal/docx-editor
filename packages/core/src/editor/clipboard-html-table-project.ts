@@ -85,7 +85,10 @@ export function projectHtmlTable(
   columns = Math.min(columns, 63);
 
   const totalWidth = tableWidthTwips(table, TABLE_TOTAL_TWIPS);
-  const columnWidths = tableColumnWidths(rows, columns, totalWidth);
+  // Width inference walks at most as many rows as the remaining budget could emit,
+  // so a row flood cannot spin an uncharged O(rows x columns) pass.
+  const budgetedRows = rows.length > p.nodesLeft ? rows.slice(0, Math.max(1, p.nodesLeft)) : rows;
+  const columnWidths = tableColumnWidths(budgetedRows, columns, totalWidth);
   const borders = tableBordersXml(table);
   const position = tablePositionXml(table);
   const justification = tableJustification(table);

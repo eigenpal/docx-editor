@@ -16,9 +16,13 @@ const BASE64_LOOKUP: Int16Array = (() => {
   return table;
 })();
 
-/** Strict bounded base64 decode: the size cap applies BEFORE any allocation. */
-function decodeBase64(data: string, maxBytes: number): Uint8Array | null {
-  if (data.length === 0 || data.length % 4 !== 0) return null;
+/** Strict bounded base64 decode: the size cap applies BEFORE any allocation.
+ *  Unpadded input (browsers accept it) is normalized to padded form first. */
+function decodeBase64(raw: string, maxBytes: number): Uint8Array | null {
+  if (raw.length === 0) return null;
+  const remainder = raw.length % 4;
+  if (remainder === 1) return null;
+  const data = remainder === 0 ? raw : raw + '='.repeat(4 - remainder);
   const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
   const byteLength = (data.length / 4) * 3 - padding;
   if (byteLength <= 0 || byteLength > maxBytes) return null;
@@ -61,6 +65,8 @@ export interface HtmlImageProjectionState {
   docPrId: number;
   readonly media: Map<string, Uint8Array>;
   readonly mediaExtensions: Map<string, string>;
+  /** Media part per `src`, so a repeated image decodes and ships exactly once. */
+  readonly mediaBySrc: Map<string, string>;
 }
 
 /** Project a `data:` image into a media part + rel + inline `w:drawing` run. */
@@ -74,8 +80,11 @@ export function projectHtmlImage(
   if (src === null || src.length > p.maxImageBytes * 2) return;
   const match = DATA_IMAGE_RE.exec(src);
   if (!match) return; // External/blob/http sources drop with no fetch.
-  const bytes = decodeBase64(match[1]!, p.maxImageBytes);
-  if (bytes === null) return;
+  // A repeated src reuses its media part: one decode, one part, one rel per use.
+  const cachedPart = p.mediaBySrc.get(src);
+  const cachedBytes = cachedPart === undefined ? undefined : p.media.get(cachedPart);
+  const bytes = cachedBytes ?? decodeBase64(match[1]!, p.maxImageBytes);
+  if (bytes === null || bytes === undefined) return;
   const sniffed = sniffImageMime(bytes);
   if (sniffed !== 'image/png' && sniffed !== 'image/jpeg' && sniffed !== 'image/gif') return;
   const header = validateRasterHeader(bytes, sniffed);
@@ -104,10 +113,15 @@ export function projectHtmlImage(
   const cy = heightPx === null ? 2_540_000 : clamp(Math.round(heightPx * 9525), 9525, 30_000_000);
 
   const extension = sniffed === 'image/png' ? 'png' : sniffed === 'image/gif' ? 'gif' : 'jpeg';
-  p.imageCount += 1;
-  p.media.set(`word/media/image${p.imageCount}.${extension}`, bytes);
-  if (!p.mediaExtensions.has(extension)) p.mediaExtensions.set(extension, sniffed);
-  const relId = allocateImageRel(`media/image${p.imageCount}.${extension}`);
+  let partName = cachedBytes === undefined ? undefined : cachedPart;
+  if (partName === undefined) {
+    p.imageCount += 1;
+    partName = `word/media/image${p.imageCount}.${extension}`;
+    p.media.set(partName, bytes);
+    p.mediaBySrc.set(src, partName);
+    if (!p.mediaExtensions.has(extension)) p.mediaExtensions.set(extension, sniffed);
+  }
+  const relId = allocateImageRel(partName.replace('word/', ''));
   p.docPrId += 1;
   runs.push(
     '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +

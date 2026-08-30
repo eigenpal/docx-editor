@@ -128,8 +128,12 @@ export function renderNoteList(
       { ...ctx, noteBody: { kind, id: idValue }, docRels: noteRels },
       child.children
     );
-    if (inner !== '')
-      notes += `<div style="mso-element:${kind}" id="${kind === 'footnote' ? 'ftn' : 'edn'}${id}">${inner}</div>`;
+    // A shipped id always gets its definition div — its anchor is already in the
+    // body, and a dead anchor would paste back as literal text. An empty body
+    // renders as an empty paragraph.
+    notes += `<div style="mso-element:${kind}" id="${kind === 'footnote' ? 'ftn' : 'edn'}${id}">${
+      inner === '' ? '<p></p>' : inner
+    }</div>`;
   }
   return notes === '' ? '' : `<div style="mso-element:${kind}-list">${notes}</div>`;
 }
