@@ -542,9 +542,9 @@ function renderInline(
         const inner = renderInline(ctx, child.children, paragraphPPr, fields);
         if (inner === '') break;
         const relId = attributeValueOf(child, 'id', RELATIONSHIPS_NAMESPACE_URI);
-        const record = relId
-          ? ctx.docRels.find((r) => r.id === relId && r.type === `${R_NS}/hyperlink`)
-          : undefined;
+        // Match by id alone: producers vary the relationship Type string, and the
+        // external/fragment gate below is what actually protects the output.
+        const record = relId ? ctx.docRels.find((r) => r.id === relId) : undefined;
         // An internal-mode rel target is a part path, not a URL — only its fragment
         // form (a same-document anchor) survives into the interop flavour.
         const rawTarget =
@@ -597,20 +597,26 @@ function renderInline(
   return out;
 }
 
-function headingLevelOf(ctx: RenderContext, ownPPr: OoxmlElement | null): number | null {
+/** Heading level plus WHY: only a real Heading style earns the mappable class. */
+function headingLevelOf(
+  ctx: RenderContext,
+  ownPPr: OoxmlElement | null
+): { readonly level: number; readonly fromStyle: boolean } | null {
   const styleId = wmlVal(wmlChild(ownPPr, 'pStyle'));
   const chain = styleChain(ctx.styles, styleId);
   for (let index = chain.length - 1; index >= 0; index -= 1) {
     const id = attributeValueOf(chain[index]!, 'styleId', WML_NAMESPACE_URI);
     const match = id ? /^Heading([1-6])$/.exec(id) : null;
-    if (match) return Number(match[1]);
+    if (match) return { level: Number(match[1]), fromStyle: true };
   }
   // An outline level promotes to <h1>-<h6> only as DIRECT formatting on an unstyled
   // paragraph: a custom style, Normal, or docDefaults setting w:outlineLvl for the
   // TOC must not turn body text into HeadingN on a round trip.
   if (styleId === undefined) {
     const outline = parseIntValue(wmlVal(wmlChild(ownPPr, 'outlineLvl')));
-    if (outline !== null && outline >= 0 && outline <= 5) return outline + 1;
+    if (outline !== null && outline >= 0 && outline <= 5) {
+      return { level: outline + 1, fromStyle: false };
+    }
   }
   return null;
 }
@@ -646,10 +652,12 @@ function renderParagraph(
 
   if (options.asListItem) return `<li${classAttr}${dirAttr}${styleAttr}>${inner}</li>`;
   const heading = headingLevelOf(ctx, pPr);
-  const tag = heading === null ? 'p' : `h${heading}`;
-  // The `Heading<N>` class is the marker the read lane maps back to the style in
-  // every dialect, so a heading survives when only text/html crosses the trip.
-  const headingAttr = heading === null ? classAttr : ` class="Heading${heading}"`;
+  const tag = heading === null ? 'p' : `h${heading.level}`;
+  // The `Heading<N>` class is the marker the read lane maps back to the STYLE in
+  // every dialect — earned only by a real Heading style, so a direct outline level
+  // on plain body text does not acquire a style on the round trip.
+  const headingAttr =
+    heading === null ? classAttr : heading.fromStyle ? ` class="Heading${heading.level}"` : '';
   return `<${tag}${headingAttr}${dirAttr}${styleAttr}>${inner}</${tag}>`;
 }
 

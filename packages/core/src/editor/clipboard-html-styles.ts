@@ -300,6 +300,8 @@ export function tagOf(element: Element): string {
 }
 
 export interface HtmlRunProps {
+  /** Character style id (`w:rStyle`), e.g. `Hyperlink` on pasted links. */
+  rStyle?: string;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;

@@ -108,7 +108,6 @@ export function wordBlockSdtNodes(element: Element): readonly Node[] | null {
   let inspected = 0;
   for (let at = 0; at < queue.length && inspected < 64; at += 1) {
     const parent = queue[at]!;
-    if (parent.childNodes.length > 64) return null;
     for (let index = 0; index < parent.children.length && inspected < 64; index += 1) {
       const child = parent.children[index]!;
       inspected += 1;

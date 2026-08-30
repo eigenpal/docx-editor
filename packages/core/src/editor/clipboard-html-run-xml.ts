@@ -9,6 +9,9 @@ import type { HtmlParaProps, HtmlRunProps } from './clipboard-html-styles.ts';
 /** `w:rPr`, children in CT_RPr sequence order. */
 export function rPrXml(props: HtmlRunProps): string {
   let inner = '';
+  if (props.rStyle !== undefined) {
+    inner += `<w:rStyle w:val="${escapeXmlAttribute(props.rStyle)}"/>`;
+  }
   if (props.font !== undefined) {
     const face = escapeXmlAttribute(xmlSafeText(props.font));
     inner += `<w:rFonts w:ascii="${face}" w:hAnsi="${face}"/>`;

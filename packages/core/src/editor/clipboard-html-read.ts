@@ -261,7 +261,9 @@ function collectInline(
   const linkHref = tag === 'a' ? node.getAttribute('href') : null;
   const noteReference = tag === 'a' ? clipboardNoteReference(style) : null;
   if (noteReference === null && isClipboardHyperlink(linkHref)) {
-    taggedRun = { ...taggedRun, color: '0563C1', underline: true };
+    // The Hyperlink CHARACTER STYLE, not frozen direct formatting: the host's
+    // theme and style definitions then control the link's look.
+    taggedRun = { ...taggedRun, rStyle: 'Hyperlink' };
   }
   // Never mutate the shared context run: helpers return `base` by identity when idle.
   let nextRun = applyRunCss(taggedRun, style);
@@ -275,8 +277,8 @@ function collectInline(
   };
   if (noteReference !== null) {
     // Word renders note marks superscript via a character style the fragment does
-    // not carry; direct formatting keeps the number off the baseline.
-    const markRun: RunProps = { vertAlign: 'superscript', ...nextCtx.run };
+    // not carry; direct formatting keeps the number off the baseline — always.
+    const markRun: RunProps = { ...nextCtx.run, vertAlign: 'superscript' };
     if (
       ctx.noteBody !== undefined &&
       ctx.noteBody.kind === noteReference.kind &&
@@ -287,7 +289,9 @@ function collectInline(
       runs.push(`<w:r>${rPrXml(markRun)}<w:${localName}/></w:r>`);
       return;
     }
-    if (ctx.noteBody === undefined && p.definedNotes[noteReference.kind].has(noteReference.id)) {
+    // A live reference, in the body OR a cross-note citation inside another note's
+    // body — the merge remaps note ids in note stories too.
+    if (p.definedNotes[noteReference.kind].has(noteReference.id)) {
       const localName =
         noteReference.kind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
       runs.push(`<w:r>${rPrXml(markRun)}<w:${localName} w:id="${noteReference.id}"/></w:r>`);
@@ -349,7 +353,12 @@ function msoListNumPr(
   // The head's structured @list rule names the format; the visible marker then
   // names THIS slice's first ordinal under that format. Glyph sniffing alone is
   // only the fallback — it cannot tell 'i.' the roman 1 from 'i.' the 9th letter.
-  const definition = p.listDefinitions.get(`l${match[1]}:level${match[2]}`);
+  const lfoMatch = /\blfo(\d{1,4})\b/i.exec(declaration);
+  // The lfo-specific @list rule (Word's lvlOverride) outranks the base rule.
+  const definition =
+    (lfoMatch !== null
+      ? p.listDefinitions.get(`l${match[1]}:level${match[2]}:lfo${lfoMatch[1]}`)
+      : undefined) ?? p.listDefinitions.get(`l${match[1]}:level${match[2]}`);
   let kind: HtmlListKind;
   let start: number;
   if (definition !== undefined) {
@@ -358,11 +367,10 @@ function msoListNumPr(
   } else {
     ({ kind, start } = htmlListKindAndStart(marker));
   }
-  const lfo = /\blfo(\d{1,4})\b/i.exec(declaration);
   // A note body's list must not seed the body list's first-observation state — the
   // notes project first, and their markers would pin the body's start values.
   const scope = noteBody === undefined ? '' : `${noteBody.kind}${noteBody.id}:`;
-  const key = `mso:${scope}l${match[1]}${lfo ? `:lfo${lfo[1]}` : ''}`;
+  const key = `mso:${scope}l${match[1]}${lfoMatch ? `:lfo${lfoMatch[1]}` : ''}`;
   return { numId: allocateList(p, key, kind, start, ilvl), ilvl };
 }
 

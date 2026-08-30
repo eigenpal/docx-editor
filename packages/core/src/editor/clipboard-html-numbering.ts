@@ -88,7 +88,7 @@ export interface WordListLevelDefinition {
 
 // Bounded: the block is a character class capped at 2048 (no backtracking blowup).
 const WORD_LIST_LEVEL_RULE =
-  /@list\s+l(\d{1,4}):level([1-9])(?:\s+lfo\d{1,4})?\s*\{([^{}]{0,2048})\}/g;
+  /@list\s+l(\d{1,4}):level([1-9])(?:\s+lfo(\d{1,4}))?\s*\{([^{}]{0,2048})\}/g;
 
 /**
  * Bounded scan of Word's head `@list lN:levelM` rules: the STRUCTURED number format
@@ -108,7 +108,7 @@ export function wordListDefinitionsFromStyleText(
     rules += 1;
     let kind: HtmlListKind | null = 'decimal';
     let start: number | null = null;
-    for (const declaration of match[3]!.split(';')) {
+    for (const declaration of match[4]!.split(';')) {
       const colon = declaration.indexOf(':');
       if (colon <= 0) continue;
       const name = declaration.slice(0, colon).trim().toLowerCase();
@@ -123,7 +123,13 @@ export function wordListDefinitionsFromStyleText(
       }
     }
     if (kind === null) continue;
-    const key = `l${match[1]}:level${match[2]}`;
+    // Word's lvlOverride CSS carries an `lfo<N>` suffix; the override rule and the
+    // base rule are DIFFERENT definitions, keyed apart so the reader can prefer
+    // the list-format-override its paragraphs actually name.
+    const key =
+      match[3] === undefined
+        ? `l${match[1]}:level${match[2]}`
+        : `l${match[1]}:level${match[2]}:lfo${match[3]}`;
     if (!out.has(key)) out.set(key, { kind, start });
   }
   return out;
@@ -186,16 +192,21 @@ export function htmlListKindAndStart(marker: string): {
       start: Math.min(32_767, Number.parseInt(segments[segments.length - 1]!, 10)),
     };
   }
-  // A single letter is roman only for 'i' — the marker a roman list's first item
-  // carries; 'c.' or 'v.' is a letter list that starts mid-alphabet.
+  // Single letters are ambiguous. 'i', 'v', 'x' read as roman (values 1/5/10 are
+  // plausible slice starts, and roman lists routinely show them), while 'c.' or
+  // 'l.' read as letter lists mid-alphabet — a roman list rarely reaches 50+.
   const letter = /^([A-Za-z])[.)]/.exec(trimmed);
-  if (letter && !/^[iI]$/.test(letter[1]!)) {
+  if (letter) {
+    const lower = letter[1]!.toLowerCase();
+    if (lower === 'i' || lower === 'v' || lower === 'x') {
+      const start = lower === 'i' ? 1 : lower === 'v' ? 5 : 10;
+      return { kind: letter[1] === lower ? 'lowerRoman' : 'upperRoman', start };
+    }
     const code = letter[1]!.charCodeAt(0);
     return code >= 97
       ? { kind: 'lowerLetter', start: code - 96 }
       : { kind: 'upperLetter', start: code - 64 };
   }
-  if (letter) return { kind: letter[1] === 'i' ? 'lowerRoman' : 'upperRoman', start: 1 };
   const run = /^([A-Za-z]{2,8})[.)]/.exec(trimmed);
   if (run) {
     const token = run[1]!;

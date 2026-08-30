@@ -621,8 +621,9 @@ describe('hyperlinks', () => {
     expect(relsXml).toContain('relationships/hyperlink');
     expect(relsXml).toContain('Target="https://x.example/"');
     expect(relsXml).toContain('TargetMode="External"');
-    expect(docXml).toContain('<w:color w:val="0563C1"/>');
-    expect(docXml).toContain('<w:u w:val="single"/>');
+    // The Hyperlink CHARACTER STYLE, so the host theme controls the look.
+    expect(docXml).toContain('<w:rStyle w:val="Hyperlink"/>');
+    expect(docXml).not.toContain('<w:color w:val="0563C1"/>');
   });
 
   test('an explicit Word link span can override the default hyperlink appearance', () => {

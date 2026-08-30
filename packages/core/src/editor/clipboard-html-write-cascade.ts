@@ -20,6 +20,7 @@ export interface StyleIndex {
   readonly docDefaultsRPr: OoxmlElement | null;
   readonly docDefaultsPPr: OoxmlElement | null;
   readonly defaultParagraphStyleId: string | null;
+  readonly defaultCharacterStyleId: string | null;
 }
 
 export function relatedPart(
@@ -45,7 +46,16 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
   let docDefaultsRPr: OoxmlElement | null = null;
   let docDefaultsPPr: OoxmlElement | null = null;
   let defaultParagraphStyleId: string | null = null;
-  if (!root) return { byId, docDefaultsRPr, docDefaultsPPr, defaultParagraphStyleId };
+  let defaultCharacterStyleId: string | null = null;
+  if (!root) {
+    return {
+      byId,
+      docDefaultsRPr,
+      docDefaultsPPr,
+      defaultParagraphStyleId,
+      defaultCharacterStyleId,
+    };
+  }
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName === 'docDefaults') {
@@ -59,11 +69,12 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
     byId.set(id, child);
     const isDefault = attributeValueOf(child, 'default', WML_NAMESPACE_URI);
     const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
-    if ((isDefault === '1' || isDefault === 'true') && type === 'paragraph') {
-      defaultParagraphStyleId = id;
+    if (isDefault === '1' || isDefault === 'true') {
+      if (type === 'paragraph') defaultParagraphStyleId = id;
+      else if (type === 'character') defaultCharacterStyleId = id;
     }
   }
-  return { byId, docDefaultsRPr, docDefaultsPPr, defaultParagraphStyleId };
+  return { byId, docDefaultsRPr, docDefaultsPPr, defaultParagraphStyleId, defaultCharacterStyleId };
 }
 
 /** The `basedOn` chain, base style FIRST, cycle-capped. */
@@ -131,7 +142,10 @@ export function runPropertyLayers(
     if (rPr) paragraphLevel.push(rPr);
   }
   const characterLevel: OoxmlElement[] = [];
-  for (const style of styleChain(index, wmlVal(wmlChild(ownRPr, 'rStyle')))) {
+  // The default character style applies when the run names no rStyle, like layout.
+  const characterStyleId =
+    wmlVal(wmlChild(ownRPr, 'rStyle')) ?? index.defaultCharacterStyleId ?? undefined;
+  for (const style of styleChain(index, characterStyleId)) {
     const rPr = wmlChild(style, 'rPr');
     if (rPr) characterLevel.push(rPr);
   }
@@ -177,7 +191,7 @@ export function toggleOn(sources: readonly OoxmlElement[], localName: string): b
     const child = wmlChild(source, localName);
     if (!child) continue;
     const val = wmlVal(child);
-    state = !(val === '0' || val === 'false' || val === 'none');
+    state = !(val === '0' || val === 'false' || val === 'off' || val === 'none');
   }
   return state;
 }
@@ -192,7 +206,7 @@ function toggleLevelValue(
     const child = wmlChild(source, localName);
     if (!child) continue;
     const val = wmlVal(child);
-    value = !(val === '0' || val === 'false' || val === 'none');
+    value = !(val === '0' || val === 'false' || val === 'off' || val === 'none');
   }
   return value;
 }
@@ -204,7 +218,7 @@ export function runToggleOn(layers: RunPropertyLayers, localName: string): boole
   const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
   if (direct) {
     const val = wmlVal(direct);
-    return !(val === '0' || val === 'false' || val === 'none');
+    return !(val === '0' || val === 'false' || val === 'off' || val === 'none');
   }
   let on = toggleLevelValue(layers.defaults, localName) ?? false;
   if (toggleLevelValue(layers.paragraphLevel, localName) === true) on = !on;
