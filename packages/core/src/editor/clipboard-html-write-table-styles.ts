@@ -30,16 +30,31 @@ export interface TableConditionalFormat {
   readonly pPr: OoxmlElement | null;
 }
 
+const CONDITION_TYPES = [
+  'wholeTable',
+  'firstRow',
+  'lastRow',
+  'firstCol',
+  'lastCol',
+  'band1Horz',
+  'band2Horz',
+  'band1Vert',
+  'band2Vert',
+  'nwCell',
+  'neCell',
+  'swCell',
+  'seCell',
+] as const;
+type ConditionType = (typeof CONDITION_TYPES)[number];
+
 export interface TableConditionalFormats {
-  /** `type="wholeTable"`, applied to every cell under the specific conditions. */
-  readonly wholeTable: TableConditionalFormat | null;
-  readonly firstRow: TableConditionalFormat | null;
-  readonly firstColumn: TableConditionalFormat | null;
-  readonly band1: TableConditionalFormat | null;
-  readonly band2: TableConditionalFormat | null;
+  readonly byType: ReadonlyMap<ConditionType, TableConditionalFormat>;
   readonly firstRowEnabled: boolean;
+  readonly lastRowEnabled: boolean;
   readonly firstColumnEnabled: boolean;
-  readonly bandingEnabled: boolean;
+  readonly lastColumnEnabled: boolean;
+  readonly hBandingEnabled: boolean;
+  readonly vBandingEnabled: boolean;
 }
 
 /** `w:tblLook` flags: modern boolean attributes, or the legacy `w:val` bitmask. */
@@ -64,7 +79,8 @@ export function tableConditionalFormats(
   chain: readonly OoxmlElement[],
   tblLook: OoxmlElement | null
 ): TableConditionalFormats {
-  const formats: Record<string, TableConditionalFormat> = {};
+  const byType = new Map<ConditionType, TableConditionalFormat>();
+  const known = new Set<string>(CONDITION_TYPES);
   for (const style of chain) {
     for (const child of style.children) {
       if (
@@ -75,54 +91,68 @@ export function tableConditionalFormats(
         continue;
       }
       const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
-      if (
-        type !== 'wholeTable' &&
-        type !== 'firstRow' &&
-        type !== 'firstCol' &&
-        type !== 'band1Horz' &&
-        type !== 'band2Horz'
-      ) {
-        continue;
-      }
+      if (type === undefined || !known.has(type)) continue;
       // Later chain entries (the derived style) override the base's condition.
-      formats[type] = {
+      byType.set(type as ConditionType, {
         fill: colorAttribute(wmlChild(wmlChild(child, 'tcPr'), 'shd'), 'fill'),
         rPr: wmlChild(child, 'rPr'),
         pPr: wmlChild(child, 'pPr'),
-      };
+      });
     }
   }
   return {
-    wholeTable: formats['wholeTable'] ?? null,
-    firstRow: formats['firstRow'] ?? null,
-    firstColumn: formats['firstCol'] ?? null,
-    band1: formats['band1Horz'] ?? null,
-    band2: formats['band2Horz'] ?? null,
+    byType,
     firstRowEnabled: tblLookFlag(tblLook, 'firstRow', 0x0020) ?? false,
+    lastRowEnabled: tblLookFlag(tblLook, 'lastRow', 0x0040) ?? false,
     firstColumnEnabled: tblLookFlag(tblLook, 'firstColumn', 0x0080) ?? false,
-    bandingEnabled: !(tblLookFlag(tblLook, 'noHBand', 0x0200) ?? false),
+    lastColumnEnabled: tblLookFlag(tblLook, 'lastColumn', 0x0100) ?? false,
+    hBandingEnabled: !(tblLookFlag(tblLook, 'noHBand', 0x0200) ?? false),
+    vBandingEnabled: !(tblLookFlag(tblLook, 'noVBand', 0x0400) ?? false),
   };
 }
 
-/** The style-conditional format for one cell, or null when nothing applies.
- *  Word's precedence puts the first row over the first column over the row
- *  bands; `wholeTable` is NOT resolved here — it layers under the result. */
+/** The strongest applicable condition for one cell, or null. §17.7.6.6 order,
+ *  weakest to strongest: vertical bands, horizontal bands, firstCol, lastCol,
+ *  firstRow, lastRow, corners — resolved strongest-first below. `wholeTable` is
+ *  NOT resolved here; it layers under the result. */
 export function conditionalCellFormat(
   formats: TableConditionalFormats,
   rowIndex: number,
-  firstGridColumn: boolean
+  rowCount: number,
+  firstGridColumn: boolean,
+  lastGridColumn: boolean,
+  gridColumn: number
 ): TableConditionalFormat | null {
-  if (formats.firstRowEnabled && rowIndex === 0 && formats.firstRow !== null) {
-    return formats.firstRow;
+  const firstRow = formats.firstRowEnabled && rowIndex === 0;
+  const lastRow = formats.lastRowEnabled && rowIndex === rowCount - 1;
+  const firstCol = formats.firstColumnEnabled && firstGridColumn;
+  const lastCol = formats.lastColumnEnabled && lastGridColumn;
+  const pick = (type: ConditionType): TableConditionalFormat | null =>
+    formats.byType.get(type) ?? null;
+  if (lastRow && firstCol && pick('swCell')) return pick('swCell');
+  if (lastRow && lastCol && pick('seCell')) return pick('seCell');
+  if (firstRow && firstCol && pick('nwCell')) return pick('nwCell');
+  if (firstRow && lastCol && pick('neCell')) return pick('neCell');
+  if (lastRow && pick('lastRow')) return pick('lastRow');
+  if (firstRow && pick('firstRow')) return pick('firstRow');
+  if (lastCol && pick('lastCol')) return pick('lastCol');
+  if (firstCol && pick('firstCol')) return pick('firstCol');
+  if (formats.hBandingEnabled) {
+    // A header row without its own firstRow format is NOT part of the banding.
+    const bandIndex = rowIndex - (formats.firstRowEnabled ? 1 : 0);
+    if (bandIndex >= 0) {
+      const band = pick(bandIndex % 2 === 0 ? 'band1Horz' : 'band2Horz');
+      if (band) return band;
+    }
   }
-  if (formats.firstColumnEnabled && firstGridColumn && formats.firstColumn !== null) {
-    return formats.firstColumn;
+  if (formats.vBandingEnabled) {
+    const bandIndex = gridColumn - (formats.firstColumnEnabled ? 1 : 0);
+    if (bandIndex >= 0) {
+      const band = pick(bandIndex % 2 === 0 ? 'band1Vert' : 'band2Vert');
+      if (band) return band;
+    }
   }
-  if (!formats.bandingEnabled) return null;
-  const bandIndex = rowIndex - (formats.firstRowEnabled ? 1 : 0);
-  // A header row without its own firstRow format is NOT part of the banding.
-  if (bandIndex < 0) return null;
-  return bandIndex % 2 === 0 ? formats.band1 : formats.band2;
+  return null;
 }
 
 export function wordTableCellCss(

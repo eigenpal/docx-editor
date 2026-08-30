@@ -11,7 +11,7 @@ import {
   type FragmentCoverage,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
-import { interopHtmlFromFragment, interopHtmlFromFragmentPackage } from './clipboard-html-write.ts';
+import { interopHtmlFromFragmentPackage } from './clipboard-html-write.ts';
 import { wrapInteropHtml } from './clipboard-fragment-codec.ts';
 
 /** Fragment zips above this stay off the clipboard attribute (base64 grows them 4/3). */
@@ -76,23 +76,17 @@ export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
   }
 
   // The HTML half renders from the extraction's own in-memory package — copy is
-  // synchronous in the clipboard event, so it never re-inflates its own zip. The
-  // twin is single-sourced with the zip inside extractFragmentPackage (one
-  // addXmlPart call and one media loop feed both); if the renderer still trips
-  // over it, the slow lane re-reads the bytes through the bounded reader, which
-  // degrades to an empty HTML body rather than a corrupt flavour.
+  // synchronous in the clipboard event, so it never re-inflates its own zip (the
+  // twin is single-sourced with the zip inside extractFragmentPackage). A
+  // renderer throw degrades to an empty HTML body WITH a diagnostic: re-reading
+  // the bytes would just rethrow the same deterministic bug after paying a
+  // synchronous inflate + parse inside the copy handler.
   let inner: string;
   try {
     inner = interopHtmlFromFragmentPackage(full.package);
-  } catch {
-    // A deterministic renderer bug throws again on the reread package, and copy
-    // runs synchronously in the clipboard event — degrade to an empty HTML body
-    // rather than losing every flavour to an uncaught rethrow.
-    try {
-      inner = interopHtmlFromFragment(full.bytes);
-    } catch {
-      inner = '';
-    }
+  } catch (error) {
+    console.error('docx-editor: copy HTML flavour failed to render', error);
+    inner = '';
   }
   const html = wrapInteropHtml(
     inner,

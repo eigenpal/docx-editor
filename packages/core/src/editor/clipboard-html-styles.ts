@@ -1,5 +1,9 @@
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
-import { WORD_CLASS_PARAGRAPH_STYLES } from './clipboard-html-word-elements.ts';
+import {
+  WORD_CLASS_PARAGRAPH_STYLES,
+  WORD_UNDERLINE_VALUES,
+  type HtmlUnderlineVal,
+} from './clipboard-html-word-elements.ts';
 
 /** A bounded absolute CSS length in points. Word clipboard HTML commonly uses `in`.
  *  A bare `0` (the one unitless length CSS allows) parses as 0. */
@@ -310,7 +314,7 @@ export interface HtmlRunProps {
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
-  underlineVal?: 'single' | 'double' | 'thick' | 'dotted' | 'dash' | 'wave';
+  underlineVal?: HtmlUnderlineVal;
   underlineColor?: string;
   strike?: boolean;
   doubleStrike?: boolean;
@@ -411,7 +415,10 @@ const HIGHLIGHT_ALIASES: ReadonlyMap<string, string> = new Map([
 ]);
 
 const UNSAFE_BACKGROUND = /url\s*\(|image\s*\(|image-set\s*\(|element\s*\(|cross-fade\s*\(/i;
-const UNDERLINE_VALUES = new Set(['single', 'double', 'thick', 'dotted', 'dash', 'wave']);
+/** Lowercase `text-underline` token → canonical ST_Underline emission value. */
+const UNDERLINE_VALUES = new Map<string, HtmlUnderlineVal>(
+  WORD_UNDERLINE_VALUES.map((value) => [value.toLowerCase(), value])
+);
 
 // The paste walk parses many elements' styles several times (flow gate, paragraph
 // context, table properties); the per-element memo makes that one parse. Keyed
@@ -676,15 +683,24 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
     if (decoration.includes('line-through')) next.strike = true;
     if (decoration.includes('none')) next.underline = next.strike = false;
   }
-  if (style.get('font-variant')?.toLowerCase().includes('small-caps')) next.smallCaps = true;
-  if (style.get('text-transform')?.trim().toLowerCase() === 'uppercase') next.caps = true;
+  const fontVariant = style.get('font-variant')?.toLowerCase();
+  if (fontVariant !== undefined) {
+    if (fontVariant.includes('small-caps')) next.smallCaps = true;
+    else if (fontVariant.includes('normal') || fontVariant.includes('none')) {
+      next.smallCaps = false;
+    }
+  }
+  const transform = style.get('text-transform')?.trim().toLowerCase();
+  if (transform === 'uppercase') next.caps = true;
+  else if (transform === 'none') next.caps = false;
   const textUnderline = style.get('text-underline');
   if (textUnderline !== undefined && textUnderline.length <= 128) {
     for (const token of textUnderline.trim().split(/\s+/)) {
       const lower = token.toLowerCase();
-      if (UNDERLINE_VALUES.has(lower)) {
+      const canonical = UNDERLINE_VALUES.get(lower);
+      if (canonical !== undefined) {
         next.underline = true;
-        next.underlineVal = lower as HtmlRunProps['underlineVal'];
+        next.underlineVal = canonical;
       } else {
         const parsed = parseCssColor(token);
         if (parsed !== null) next.underlineColor = parsed;
@@ -773,14 +789,16 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
       shorthand.left = left ?? null;
     }
   }
-  // Zero side margins stay unset: a `margin-left:0` reset must not override a
-  // numbering level's indent with a direct `w:ind w:left="0"`.
+  // A zero LEFT margin stays unset only on numbered paragraphs: there,
+  // `margin-left:0` is Word's reset that must not override the numbering
+  // level's indent. Everywhere else an explicit zero is real — it cancels a
+  // style indent, and dropping it would let the style indent reappear on paste.
   const marginLeftPt = parseCssLengthPt(style.get('margin-left') ?? '') ?? shorthand.left;
-  if (marginLeftPt !== null && marginLeftPt > 0) {
+  if (marginLeftPt !== null && (marginLeftPt > 0 || (marginLeftPt === 0 && !para.numPr))) {
     para.indLeftTwips = clamp(Math.round(marginLeftPt * 20), 0, 31_680);
   }
   const marginRightPt = parseCssLengthPt(style.get('margin-right') ?? '') ?? shorthand.right;
-  if (marginRightPt !== null && marginRightPt > 0) {
+  if (marginRightPt !== null && marginRightPt >= 0) {
     para.indRightTwips = clamp(Math.round(marginRightPt * 20), 0, 31_680);
   }
   const indentPt = parseCssLengthPt(style.get('text-indent') ?? '');

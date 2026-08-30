@@ -89,8 +89,14 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
   return { byId, docDefaultsRPr, docDefaultsPPr, defaultParagraphStyleId, defaultCharacterStyleId };
 }
 
-/** The `basedOn` chain, base style FIRST, cycle-capped. */
-export function styleChain(index: StyleIndex, styleId: string | undefined): OoxmlElement[] {
+/** The `basedOn` chain, base style FIRST, cycle-capped. `expectedType` gates the
+ *  chain TIP like layout's resolver: a `w:rStyle` naming a paragraph style
+ *  contributes NOTHING on screen, so it must contribute nothing to the copy. */
+export function styleChain(
+  index: StyleIndex,
+  styleId: string | undefined,
+  expectedType?: 'paragraph' | 'character' | 'table'
+): OoxmlElement[] {
   const chain: OoxmlElement[] = [];
   const seen = new Set<string>();
   let current = styleId;
@@ -98,6 +104,10 @@ export function styleChain(index: StyleIndex, styleId: string | undefined): Ooxm
     seen.add(current);
     const style = index.byId.get(current);
     if (!style) break;
+    if (chain.length === 0 && expectedType !== undefined) {
+      const type = attributeValueOf(style, 'type', WML_NAMESPACE_URI);
+      if (type !== undefined && type !== expectedType) return [];
+    }
     chain.unshift(style);
     current = wmlVal(wmlChild(style, 'basedOn'));
   }
@@ -122,7 +132,11 @@ export function paragraphPropertySources(
   // the same rule layout/style-cascade.ts follows. A named style not basedOn
   // Normal must not inherit Normal's formatting.
   const ownStyleId = wmlVal(wmlChild(ownPPr, 'pStyle'));
-  for (const style of styleChain(index, ownStyleId ?? index.defaultParagraphStyleId ?? undefined)) {
+  for (const style of styleChain(
+    index,
+    ownStyleId ?? index.defaultParagraphStyleId ?? undefined,
+    'paragraph'
+  )) {
     const pPr = wmlChild(style, 'pPr');
     if (pPr) sources.push(pPr);
   }
@@ -161,7 +175,8 @@ export function runPropertyLayers(
   const paragraphStyleId = wmlVal(wmlChild(paragraphPPr, 'pStyle'));
   for (const style of styleChain(
     index,
-    paragraphStyleId ?? index.defaultParagraphStyleId ?? undefined
+    paragraphStyleId ?? index.defaultParagraphStyleId ?? undefined,
+    'paragraph'
   )) {
     const rPr = wmlChild(style, 'rPr');
     if (rPr) paragraphLevel.push(rPr);
@@ -170,7 +185,7 @@ export function runPropertyLayers(
   // The default character style applies when the run names no rStyle, like layout.
   const characterStyleId =
     wmlVal(wmlChild(ownRPr, 'rStyle')) ?? index.defaultCharacterStyleId ?? undefined;
-  for (const style of styleChain(index, characterStyleId)) {
+  for (const style of styleChain(index, characterStyleId, 'character')) {
     const rPr = wmlChild(style, 'rPr');
     if (rPr) characterLevel.push(rPr);
   }

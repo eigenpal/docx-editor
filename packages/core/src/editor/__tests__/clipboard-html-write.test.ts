@@ -243,7 +243,8 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('<tr style="height:18pt;mso-height-rule:exactly">');
     expect(html).toContain('colspan="63"');
     expect(html).toContain('rowspan="2"');
-    expect(html).toMatch(/rowspan="2" style="[^"]*border-bottom:1pt solid #112233/);
+    // A missing w:sz defaults to the painter's 0.5pt hairline, not 1pt.
+    expect(html).toMatch(/rowspan="2" style="[^"]*border-bottom:0\.5pt solid #112233/);
     expect(html).toContain('background-color:#ddeeff');
     expect(html).toContain('vertical-align:middle');
     expect(html).toContain('width:120pt');
@@ -265,9 +266,10 @@ describe('interopHtmlFromFragment', () => {
           '</w:tbl>',
       })
     );
-    expect(html).toContain('border-top:1pt solid #112233');
-    expect(html).toContain('border-left:1pt solid #000000');
-    expect(html).toContain('border-right:1pt solid #000000');
+    // Width-less borders take the painter's 0.5pt default.
+    expect(html).toContain('border-top:0.5pt solid #112233');
+    expect(html).toContain('border-left:0.5pt solid #000000');
+    expect(html).toContain('border-right:0.5pt solid #000000');
     expect(html).not.toContain('border-bottom');
   });
 

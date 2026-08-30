@@ -16,12 +16,19 @@ export function rPrXml(props: HtmlRunProps): string {
     const face = escapeXmlAttribute(xmlSafeText(props.font));
     inner += `<w:rFonts w:ascii="${face}" w:hAnsi="${face}"/>`;
   }
+  // `false` is an EXPLICIT off (`font-weight:normal`, `text-decoration:none`),
+  // which must out-vote a paragraph style on paste; `undefined` stays silent.
   if (props.bold) inner += '<w:b/>';
+  else if (props.bold === false) inner += '<w:b w:val="0"/>';
   if (props.italic) inner += '<w:i/>';
+  else if (props.italic === false) inner += '<w:i w:val="0"/>';
   if (props.caps) inner += '<w:caps/>';
+  else if (props.caps === false) inner += '<w:caps w:val="0"/>';
   if (props.smallCaps) inner += '<w:smallCaps/>';
+  else if (props.smallCaps === false) inner += '<w:smallCaps w:val="0"/>';
   if (props.doubleStrike) inner += '<w:dstrike/>';
   else if (props.strike) inner += '<w:strike/>';
+  else if (props.strike === false) inner += '<w:strike w:val="0"/>';
   if (props.color !== undefined) inner += `<w:color w:val="${props.color}"/>`;
   if (props.charSpacingTwentieths !== undefined) {
     inner += `<w:spacing w:val="${props.charSpacingTwentieths}"/>`;
@@ -34,13 +41,21 @@ export function rPrXml(props: HtmlRunProps): string {
     inner += `<w:u w:val="${props.underlineVal ?? 'single'}"${
       props.underlineColor === undefined ? '' : ` w:color="${props.underlineColor}"`
     }/>`;
+  } else if (props.underline === false) {
+    inner += '<w:u w:val="none"/>';
   }
   if (props.shdFill !== undefined) {
     inner += `<w:shd w:val="clear" w:color="auto" w:fill="${props.shdFill}"/>`;
   }
   if (props.vertAlign !== undefined) inner += `<w:vertAlign w:val="${props.vertAlign}"/>`;
   if (props.rtl) inner += '<w:rtl/>';
-  if (props.lang !== undefined) inner += `<w:lang w:val="${escapeXmlAttribute(props.lang)}"/>`;
+  if (props.lang !== undefined) {
+    // Route the single HTML lang tag into the SLOT it names: an RTL run's tag is
+    // the bidi language and a CJK tag is the east-Asian one — writing either
+    // into w:val would overwrite the Latin language with the wrong dictionary.
+    const slot = props.rtl ? 'bidi' : /^(?:zh|ja|ko)(?:-|$)/i.test(props.lang) ? 'eastAsia' : 'val';
+    inner += `<w:lang w:${slot}="${escapeXmlAttribute(props.lang)}"/>`;
+  }
   return inner.length > 0 ? `<w:rPr>${inner}</w:rPr>` : '';
 }
 

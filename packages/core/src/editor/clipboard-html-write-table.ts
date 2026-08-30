@@ -117,7 +117,7 @@ export function renderHtmlTable(
   const tblPr = table.children.find((child) => child.kind === 'tableProperties');
   const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
   let tblBorders: OoxmlElement | null = null;
-  const tableStyleChain = styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')));
+  const tableStyleChain = styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')), 'table');
   for (const style of tableStyleChain) {
     const styleBorders = wmlChild(wmlChild(style, 'tblPr'), 'tblBorders');
     if (styleBorders) tblBorders = styleBorders;
@@ -222,11 +222,16 @@ export function renderHtmlTable(
         }
       }
       const tcPr = wmlChild(placement.cell, 'tcPr');
+      const lastGridColumn = placement.startColumn + placement.span >= gridColumns;
       const conditional = conditionalCellFormat(
         conditionalFormats,
         rowIndex,
-        placement.startColumn === 0
+        placements.length,
+        placement.startColumn === 0,
+        lastGridColumn,
+        placement.startColumn
       );
+      const wholeTable = conditionalFormats.byType.get('wholeTable') ?? null;
       const css = wordTableCellCss(
         tcPr,
         tblBorders,
@@ -234,8 +239,8 @@ export function renderHtmlTable(
         placements.length,
         rowSpan,
         placement.startColumn === 0,
-        placement.startColumn + placement.span >= gridColumns,
-        conditional?.fill ?? conditionalFormats.wholeTable?.fill ?? null
+        lastGridColumn,
+        conditional?.fill ?? wholeTable?.fill ?? null
       );
       const attrs =
         (placement.span > 1 ? ` colspan="${placement.span}"` : '') +
@@ -245,7 +250,6 @@ export function renderHtmlTable(
       // header row keeps its bold and text color in the copied HTML.
       const tableRPr: OoxmlElement[] = [];
       const tablePPr: OoxmlElement[] = [];
-      const wholeTable = conditionalFormats.wholeTable;
       if (wholeTable?.rPr) tableRPr.push(wholeTable.rPr);
       if (wholeTable?.pPr) tablePPr.push(wholeTable.pPr);
       if (conditional?.rPr) tableRPr.push(conditional.rPr);

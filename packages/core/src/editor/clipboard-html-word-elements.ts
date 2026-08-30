@@ -3,6 +3,31 @@ import { escapeCssString } from '../store/package/sinks.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { HIGHLIGHT_COLOR_HEX } from '../output/semantic-paint.ts';
 
+/** The painter's full ST_Underline vocabulary (output/semantic-paint.ts
+ *  UNDERLINE_STYLE), as canonical emission values. The closed allowlist is what
+ *  makes interpolating a value into `w:u w:val` or a `text-underline` CSS hint
+ *  safe on both lanes. */
+export const WORD_UNDERLINE_VALUES = [
+  'single',
+  'words',
+  'double',
+  'thick',
+  'dotted',
+  'dottedHeavy',
+  'dash',
+  'dashedHeavy',
+  'dashLong',
+  'dashLongHeavy',
+  'dotDash',
+  'dashDotHeavy',
+  'dotDotDash',
+  'dashDotDotHeavy',
+  'wave',
+  'wavyHeavy',
+  'wavyDouble',
+] as const;
+export type HtmlUnderlineVal = (typeof WORD_UNDERLINE_VALUES)[number];
+
 const WORD_PARAGRAPH_CLASSES: Readonly<Record<string, string>> = {
   Normal: 'MsoNormal',
   ListParagraph: 'MsoListParagraph',
@@ -68,22 +93,36 @@ export function wordCssFontFamily(raw: string): string | null {
   return `"${escapeCssString(value)}"`;
 }
 
+/** The painter's ST_Border → CSS style mapping (layout/table-borders.ts
+ *  STYLE_FROM_VAL), collapsed to the CSS-representable set — the copy must show
+ *  the same dashes the editor paints, and a missing `w:sz` defaults to the
+ *  painter's 0.5pt hairline, never a fatter 1pt. */
+const WORD_BORDER_CSS_STYLES: ReadonlyMap<string, string> = new Map([
+  ['single', 'solid'],
+  ['thick', 'solid'],
+  ['double', 'double'],
+  ['triple', 'double'],
+  ['dotted', 'dotted'],
+  ['dashed', 'dashed'],
+  ['dashSmallGap', 'dashed'],
+  ['dotDash', 'dashed'],
+  ['dotDotDash', 'dashed'],
+  ['wave', 'solid'],
+  ['hairline', 'solid'],
+  ['inset', 'solid'],
+  ['outset', 'solid'],
+]);
+
 export function wordBorderCss(edge: OoxmlElement | null): string | null {
   if (edge === null) return null;
   const val = attributeValueOf(edge, 'val', WML_NAMESPACE_URI);
   if (val === undefined || val === 'nil' || val === 'none') return null;
-  const style =
-    val === 'double'
-      ? 'double'
-      : val === 'dotted'
-        ? 'dotted'
-        : val === 'dashed'
-          ? 'dashed'
-          : 'solid';
+  const style = WORD_BORDER_CSS_STYLES.get(val) ?? 'solid';
   const rawSize = attributeValueOf(edge, 'sz', WML_NAMESPACE_URI);
   const size =
     rawSize !== undefined && /^\d{1,4}$/.test(rawSize) ? Number.parseInt(rawSize, 10) : 0;
-  const width = size > 0 ? `${Math.round((size / 8) * 100) / 100}pt` : '1pt';
+  const widthPt = size > 0 ? size / 8 : 0.5;
+  const width = `${Math.round(widthPt * 100) / 100}pt`;
   const rawColor = attributeValueOf(edge, 'color', WML_NAMESPACE_URI);
   const color =
     rawColor !== undefined && /^[0-9A-Fa-f]{6}$/.test(rawColor) ? `#${rawColor}` : '#000000';
@@ -105,21 +144,39 @@ export function wordLineSpacingCss(
   return [`line-height:${Math.round((line / 240) * 100) / 100}`];
 }
 
+/** The painter's ST_Underline → CSS decoration-style mapping (semantic-paint.ts
+ *  UNDERLINE_STYLE), so the copy shows the same dashes the editor paints. */
+const UNDERLINE_DECORATION_STYLE: ReadonlyMap<string, string> = new Map([
+  ['double', 'double'],
+  ['wavyDouble', 'double'],
+  ['dotted', 'dotted'],
+  ['dottedHeavy', 'dotted'],
+  ['dash', 'dashed'],
+  ['dashedHeavy', 'dashed'],
+  ['dashLong', 'dashed'],
+  ['dashLongHeavy', 'dashed'],
+  ['dotDash', 'dashed'],
+  ['dashDotHeavy', 'dashed'],
+  ['dotDotDash', 'dashed'],
+  ['dashDotDotHeavy', 'dashed'],
+  ['wave', 'wavy'],
+  ['wavyHeavy', 'wavy'],
+]);
+const UNDERLINE_HINT_VALUES: ReadonlySet<string> = new Set<string>(WORD_UNDERLINE_VALUES);
+
 export function wordUnderlineCss(underline: OoxmlElement | null): readonly string[] {
   if (underline === null) return [];
   const value = attributeValueOf(underline, 'val', WML_NAMESPACE_URI);
-  const style =
-    value === 'double'
-      ? 'double'
-      : value === 'dotted'
-        ? 'dotted'
-        : value === 'dash'
-          ? 'dashed'
-          : value === 'wave'
-            ? 'wavy'
-            : 'solid';
+  const rules: string[] = [];
   // Solid is the CSS default; emitting it would shadow the double-strike marker.
-  const rules = style === 'solid' ? [] : [`text-decoration-style:${style}`];
+  const style = value === undefined ? undefined : UNDERLINE_DECORATION_STYLE.get(value);
+  if (style !== undefined) rules.push(`text-decoration-style:${style}`);
+  // The exact variant travels as Word's own `text-underline` hint, so the read
+  // lane restores `w:u w:val="dotDash"` instead of degrading it to single.
+  // Interpolation is safe: only closed-allowlist values pass.
+  if (value !== undefined && value !== 'single' && UNDERLINE_HINT_VALUES.has(value)) {
+    rules.push(`text-underline:${value}`);
+  }
   const color = attributeValueOf(underline, 'color', WML_NAMESPACE_URI);
   if (color !== undefined && /^[0-9A-Fa-f]{6}$/.test(color)) {
     rules.push(`text-decoration-color:#${color.toLowerCase()}`);
@@ -192,14 +249,23 @@ export function wordNoteReferenceHtml(
   );
 }
 
-/** Map a closed-enumeration OOXML positional tab to Word clipboard HTML. */
+/** Map a closed-enumeration OOXML positional tab to Word clipboard HTML.
+ *  Tolerant like `layout/field-pieces.ts`: `leftMargin` folds to margin and a
+ *  missing `w:leader` means no leader — dropping the tab would run a TOC entry's
+ *  title straight into its page number. */
 export function wordPositionalTabHtml(node: OoxmlElement): string {
   if (node.namespaceUri !== WML_NAMESPACE_URI || node.localName !== 'ptab') return '';
   const alignment = attributeValueOf(node, 'alignment', WML_NAMESPACE_URI);
-  const relativeTo = attributeValueOf(node, 'relativeTo', WML_NAMESPACE_URI);
-  const leader = attributeValueOf(node, 'leader', WML_NAMESPACE_URI);
+  const relativeToRaw = attributeValueOf(node, 'relativeTo', WML_NAMESPACE_URI);
+  const leader = attributeValueOf(node, 'leader', WML_NAMESPACE_URI) ?? 'none';
   if (alignment !== 'left' && alignment !== 'center' && alignment !== 'right') return '';
-  if (relativeTo !== 'margin' && relativeTo !== 'indent') return '';
+  const relativeTo =
+    relativeToRaw === 'margin' || relativeToRaw === 'leftMargin'
+      ? 'margin'
+      : relativeToRaw === 'indent'
+        ? 'indent'
+        : null;
+  if (relativeTo === null) return '';
   if (
     leader !== 'none' &&
     leader !== 'dot' &&

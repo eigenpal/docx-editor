@@ -108,8 +108,15 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   }
   const sz = parseIntValue(foldAttribute(sources, 'sz', 'val'));
   if (sz !== null && sz > 0) rules.push(`font-size:${Math.round((sz / 2) * 100) / 100}pt`);
+  // An OFF that overrides a style must be EXPLICIT in the CSS: the emitted
+  // paragraph class maps back to w:pStyle on paste, and a silent off would let
+  // the style re-bold what the author deliberately un-bolded.
+  const styleLayers: RunPropertyLayers = { ...layers, direct: null };
+  const styleSources = layers.direct ? sources.slice(0, -1) : sources;
   if (runToggleOn(layers, 'b')) rules.push('font-weight:bold');
+  else if (runToggleOn(styleLayers, 'b')) rules.push('font-weight:normal');
   if (runToggleOn(layers, 'i')) rules.push('font-style:italic');
+  else if (runToggleOn(styleLayers, 'i')) rules.push('font-style:normal');
 
   const decorations: string[] = [];
   const underline = lastProperty(sources, 'u');
@@ -118,7 +125,18 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   // `w:dstrike` is NOT a §17.7.3 toggle: two style levels both set must never XOR off.
   const doubleStrike = runBooleanOn(layers, 'dstrike');
   if (runToggleOn(layers, 'strike') || doubleStrike) decorations.push('line-through');
-  if (decorations.length > 0) rules.push(`text-decoration:${decorations.join(' ')}`);
+  if (decorations.length > 0) {
+    rules.push(`text-decoration:${decorations.join(' ')}`);
+  } else {
+    const styleU = lastProperty(styleSources, 'u');
+    if (
+      (styleU !== null && wmlVal(styleU) !== 'none') ||
+      runToggleOn(styleLayers, 'strike') ||
+      runBooleanOn(styleLayers, 'dstrike')
+    ) {
+      rules.push('text-decoration:none');
+    }
+  }
   // A `w:u w:val="none"` must not emit decoration styling, and the double-strike
   // marker only travels when no underline claims text-decoration-style.
   if (underlineOn) rules.push(...wordUnderlineCss(underline));
@@ -144,12 +162,16 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   }
 
   if (runToggleOn(layers, 'caps')) rules.push('text-transform:uppercase');
+  else if (runToggleOn(styleLayers, 'caps')) rules.push('text-transform:none');
   if (runToggleOn(layers, 'smallCaps')) rules.push('font-variant:small-caps');
+  else if (runToggleOn(styleLayers, 'smallCaps')) rules.push('font-variant:normal');
 
   const vertAlignVal = wmlVal(lastProperty(sources, 'vertAlign'));
   const vertAlign =
     vertAlignVal === 'superscript' || vertAlignVal === 'subscript' ? vertAlignVal : null;
-  // An RTL run's language is the BIDI one; `w:val` names the Latin language.
+  // An RTL run's language is the BIDI one; `w:val` names the Latin language. The
+  // read lane routes the tag back into the right w:lang SLOT (bidi for rtl runs,
+  // eastAsia for CJK tags), so the round trip never overwrites w:val with it.
   const rtl = toggleOn(sources, 'rtl');
   const lang = clipboardLanguageTag(
     (rtl ? foldAttribute(sources, 'lang', 'bidi') : undefined) ??
@@ -408,7 +430,11 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
   if (!record) return '';
   const resolved = resolveInternalTarget(record.ownerPart, record.rawTarget);
   if (!resolved.ok) return '';
-  const bytes = ctx.pkg.partBytes.get(resolved.partName);
+  // The reader keys partBytes by ZIP entry name (no leading slash); tolerate the
+  // canonical spelling too, like the extract lane's own media resolution.
+  const bytes =
+    ctx.pkg.partBytes.get(resolved.partName.replace(/^\//, '')) ??
+    ctx.pkg.partBytes.get(resolved.partName);
   if (!bytes) return '';
 
   const dot = resolved.partName.lastIndexOf('.');
@@ -628,7 +654,7 @@ function headingLevelOf(
   ownPPr: OoxmlElement | null
 ): { readonly level: number; readonly fromStyle: boolean } | null {
   const styleId = wmlVal(wmlChild(ownPPr, 'pStyle'));
-  const chain = styleChain(ctx.styles, styleId);
+  const chain = styleChain(ctx.styles, styleId, 'paragraph');
   for (let index = chain.length - 1; index >= 0; index -= 1) {
     const id = attributeValueOf(chain[index]!, 'styleId', WML_NAMESPACE_URI);
     const match = id ? /^Heading([1-6])$/.exec(id) : null;
@@ -647,7 +673,7 @@ function headingLevelOf(
 }
 
 function paragraphClassOf(ctx: RenderContext, ownPPr: OoxmlElement | null): string | null {
-  const chain = styleChain(ctx.styles, wmlVal(wmlChild(ownPPr, 'pStyle')));
+  const chain = styleChain(ctx.styles, wmlVal(wmlChild(ownPPr, 'pStyle')), 'paragraph');
   for (let index = chain.length - 1; index >= 0; index -= 1) {
     const found = wordParagraphClassOf(
       attributeValueOf(chain[index]!, 'styleId', WML_NAMESPACE_URI)

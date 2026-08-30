@@ -782,18 +782,15 @@ export function extractFragmentPackage(
   // ------------------------------------------------------------------
   const entries = new Map<string, Uint8Array>();
   const overrides: Array<readonly [string, string]> = [];
-  // The same parts, kept as trees and bytes: the ok result carries them as an
-  // assembled package so the copy path never re-parses its own zip.
+  // The same parts, kept as trees: the ok result carries them as an assembled
+  // package so the copy path never re-parses its own zip.
   const fragmentParts = new Map<string, OoxmlPart>();
-  const fragmentPartBytes = new Map<string, Uint8Array>();
 
   const addXmlPart = (name: string, contentType: string, root: OoxmlElement): void => {
     const partValue = syntheticPart(name, contentType, root);
-    const partData = strToU8(serializeOoxmlPart(partValue));
-    entries.set(name.slice(1), partData);
+    entries.set(name.slice(1), strToU8(serializeOoxmlPart(partValue)));
     overrides.push([name, contentType]);
     fragmentParts.set(name, partValue);
-    fragmentPartBytes.set(name, partData);
   };
 
   // A kept record RE-HOMES onto the fragment part that will own its rels part: the
@@ -889,7 +886,6 @@ export function extractFragmentPackage(
   const mediaExtensions = new Map<string, string>();
   for (const [name, bytes] of mediaEntries) {
     entries.set(name.slice(1), bytes);
-    fragmentPartBytes.set(name, bytes);
     const ext = mediaExtensionOf(name);
     if (ext && !mediaExtensions.has(ext)) {
       mediaExtensions.set(ext, resolveContentTypeOf(pkg, name) ?? 'application/octet-stream');
@@ -967,14 +963,17 @@ export function extractFragmentPackage(
   return {
     ok: true,
     bytes: writeZip(entries),
-    package: {
+    // partBytes mirrors the reader exactly (`partBytes: zip.entries` — EVERY zip
+    // entry keyed by entry name, [Content_Types].xml and .rels included), so
+    // `writeOoxmlPackage(result.package)` emits a zip the reader accepts.
+    package: Object.freeze({
       parts: fragmentParts,
-      partBytes: fragmentPartBytes,
+      partBytes: new Map(entries),
       relationships: fragmentRelationships,
       externalTargets,
       contentTypes,
       mainDocumentPart: '/word/document.xml',
-    },
+    }),
     lastMarkCovered: coverage.lastMarkCovered,
     blockCount: blocks.length,
     mediaBytes,
