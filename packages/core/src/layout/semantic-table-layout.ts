@@ -210,12 +210,10 @@ export interface TableFlowDeps {
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   /**
-   * The list state of the text-box stories a paragraph hosts, for the break key — the cell
-   * twin of the `hostedTextboxListToken` fold the body flow applies in `prepareBlock`. A
-   * numbering edit renumbers the markers inside a hosted story while the host's subtree,
-   * list item, and drawing token stay byte-identical, so only this token can move the key.
-   * Provided only by lanes that lay out hosted stories ({@link layoutTextboxStoryFor});
-   * where no story can render, no marker can go stale and the fold would be key churn.
+   * The hosted text-box list state a cell paragraph's break key folds — the cell twin of
+   * the `hostedTextboxListToken` fold in `prepareBlock`, built with
+   * `hostedListTokenProviderFor` and provided only by lanes that lay hosted stories out
+   * ({@link layoutTextboxStoryFor}): where no story renders, the fold would be key churn.
    */
   readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string;
   /**
@@ -498,10 +496,9 @@ function placeCellParagraph(
   // The cell paragraph's resolved REF values, keyed exactly as the body flow keys them: a
   // renumbering edit moves the painted reference while the cell's subtree stays identical.
   const refToken = deps.refFields?.tokenForParagraph(paragraphId) ?? '';
-  // The list state of any text-box story this paragraph hosts, keyed exactly as the body
-  // flow keys it: its own `txbxList` property, so a numbering edit renumbers the box's
-  // markers while the host paragraph's subtree stays byte-identical and only this property
-  // can move the key. Paragraphs hosting no box keep their pre-existing key shape.
+  // The list state of any hosted text-box story, keyed as the body flow keys it: its own
+  // `txbxList` property. A numbering edit moves only this property while the host's
+  // subtree stays byte-identical; box-free paragraphs keep their pre-existing key shape.
   const hostedListToken = deps.hostedListTokenForParagraph?.(paragraph) ?? '';
   const key = paragraphLayoutKey({
     paragraph,

@@ -189,7 +189,11 @@ import {
 } from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
-import { hostedTextboxListToken, layoutTextboxStory } from './textbox-story-layout.ts';
+import {
+  hostedListTokenDeps,
+  hostedTextboxListToken,
+  layoutTextboxStory,
+} from './textbox-story-layout.ts';
 
 /** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
 const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
@@ -1742,15 +1746,6 @@ function layoutBlocksPass(
     pageOccurrenceKey: () => String(pages.length),
     styleCascade,
     listItems,
-    // The same (index, cascade, mode) call `prepareBlock` folds for body blocks, handed to
-    // the cell lane as a provider — the `drawingTokenForParagraph` pattern — so both lanes
-    // key a hosted text-box story's list state identically.
-    ...(options.numberingIndex
-      ? {
-          hostedListTokenForParagraph: (paragraph: OoxmlNode) =>
-            hostedTextboxListToken(paragraph, options.numberingIndex, styleCascade, displayMode),
-        }
-      : {}),
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
@@ -1774,6 +1769,8 @@ function layoutBlocksPass(
           anchorFrameBase,
           pageContentClip,
           layoutTextboxStoryFor: layoutTextboxStoryForBody,
+          // Gated with the story layout above: only a story-rendering lane keys hosted list state.
+          ...hostedListTokenDeps(options.numberingIndex, styleCascade, displayMode),
           publishAnchoredDrawings: collectAnchoredDrawings,
           collectAnchoredDrawings,
           columnBoxForParagraph: anchorColumnBox,

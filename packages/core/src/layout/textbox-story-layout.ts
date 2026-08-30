@@ -327,6 +327,24 @@ export function hostedTextboxListToken(
 }
 
 /**
+ * The `hostedListTokenForParagraph` slice of a `TableFlowDeps`, built in ONE place so the
+ * lanes that lay hosted stories out (body tables, header/footer stories) cannot drift
+ * apart on the (index, cascade, mode) call shape. Empty when there is no numbering to key,
+ * which keeps those deps byte-identical to a lane that never folds hosted list state.
+ */
+export function hostedListTokenDeps(
+  numberingIndex: NumberingIndex | undefined,
+  styleCascade: StyleCascadeTable | undefined,
+  displayMode?: RevisionDisplayMode
+): { readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string } {
+  if (!numberingIndex || numberingIndex.nums.size === 0) return {};
+  return {
+    hostedListTokenForParagraph: (paragraph) =>
+      hostedTextboxListToken(paragraph, numberingIndex, styleCascade, displayMode),
+  };
+}
+
+/**
  * Lay a drawing's textbox story out inside its extent.
  *
  * Returns null when the projection carries no textbox story. Never throws: bound hits

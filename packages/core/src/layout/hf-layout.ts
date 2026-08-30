@@ -45,7 +45,7 @@ import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { forEachStoryDrawing, forEachStoryParagraphFragment } from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
-import { hostedTextboxListToken, layoutTextboxStory } from './textbox-story-layout.ts';
+import { hostedListTokenDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
   BlockFragmentRecord,
   HeaderFooterStoryRecord,
@@ -309,19 +309,7 @@ export function layoutHeaderFooterStory(
           ...(listItems ? { listItems } : {}),
           // Only this branch lays hosted stories out (`layoutTextboxStoryFor` below), so
           // only this branch folds their list state into the cell-lane break keys.
-          ...(inputs?.numberingIndex
-            ? {
-                hostedListTokenForParagraph: (
-                  paragraph: import('@docx-editor.dev/core/store').OoxmlNode
-                ) =>
-                  hostedTextboxListToken(
-                    paragraph,
-                    inputs?.numberingIndex,
-                    styleCascade,
-                    displayMode
-                  ),
-              }
-            : {}),
+          ...hostedListTokenDeps(inputs?.numberingIndex, styleCascade, displayMode),
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
@@ -538,7 +526,10 @@ export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
       tokens.push(`${fragment.paragraphId}=${marker.text}@${marker.numFmt}:${marker.level}`);
     }
   });
-  const token = tokens.length === 0 ? '' : `|list:${tokens.join(',')}`;
+  // NUL-framed: `marker.text` is expanded `w:lvlText`, which a file can fill with any
+  // printable separator, so a printable join would let two different marker states
+  // concatenate to one token and reuse a header page showing the old numbers.
+  const token = tokens.length === 0 ? '' : `|list:${tokens.join('\0')}`;
   storyListMarkerTokens.set(story, token);
   return token;
 }
