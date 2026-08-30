@@ -43,6 +43,12 @@ export function projectHtmlTable(
   }
   if (depth > p.maxDepth) return;
   p.nodesLeft -= 1;
+  // A `<caption>` is real text; it projects as a paragraph ahead of the table.
+  for (const child of Array.from(table.children)) {
+    if (tagOf(child) === 'caption') {
+      projectFlow(Array.from(child.childNodes), depth + 1, ctx, p, out, true);
+    }
+  }
   const rows = tableRowsOf(table);
   if (rows.length === 0) return;
 

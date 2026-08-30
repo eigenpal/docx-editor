@@ -21,6 +21,73 @@ function pointsFromTwips(value: number): string {
   return `${Math.round((value / 20) * 100) / 100}pt`;
 }
 
+export interface TableConditionalFormats {
+  readonly firstRowFill: string | null;
+  readonly band1Fill: string | null;
+  readonly band2Fill: string | null;
+  readonly firstRowEnabled: boolean;
+  readonly bandingEnabled: boolean;
+}
+
+/** `w:tblLook` flags: modern boolean attributes, or the legacy `w:val` bitmask. */
+function tblLookFlag(tblLook: OoxmlElement | null, name: string, bit: number): boolean | null {
+  if (tblLook === null) return null;
+  const attr = attributeValueOf(tblLook, name, WML_NAMESPACE_URI);
+  if (attr !== undefined) return attr === '1' || attr === 'true';
+  const raw = attributeValueOf(tblLook, 'val', WML_NAMESPACE_URI);
+  if (raw === undefined || !/^[0-9A-Fa-f]{1,8}$/.test(raw)) return null;
+  return (Number.parseInt(raw, 16) & bit) !== 0;
+}
+
+/**
+ * The `w:tblStylePr` shading a table style declares for the first row and the
+ * horizontal bands, gated by `w:tblLook` — the visible half of Word's conditional
+ * table formatting, so a banded built-in style does not copy as a plain grid.
+ */
+export function tableConditionalFormats(
+  chain: readonly OoxmlElement[],
+  tblLook: OoxmlElement | null
+): TableConditionalFormats {
+  let firstRowFill: string | null = null;
+  let band1Fill: string | null = null;
+  let band2Fill: string | null = null;
+  for (const style of chain) {
+    for (const child of style.children) {
+      if (
+        child.kind === 'textValue' ||
+        child.localName !== 'tblStylePr' ||
+        child.namespaceUri !== WML_NAMESPACE_URI
+      ) {
+        continue;
+      }
+      const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
+      const fill = colorAttribute(wmlChild(wmlChild(child, 'tcPr'), 'shd'), 'fill');
+      if (fill === null) continue;
+      if (type === 'firstRow') firstRowFill = fill;
+      else if (type === 'band1Horz') band1Fill = fill;
+      else if (type === 'band2Horz') band2Fill = fill;
+    }
+  }
+  return {
+    firstRowFill,
+    band1Fill,
+    band2Fill,
+    firstRowEnabled: tblLookFlag(tblLook, 'firstRow', 0x0020) ?? false,
+    bandingEnabled: !(tblLookFlag(tblLook, 'noHBand', 0x0200) ?? false),
+  };
+}
+
+/** The style-conditional fill for one row, or null when nothing applies. */
+export function conditionalRowFill(
+  formats: TableConditionalFormats,
+  rowIndex: number
+): string | null {
+  if (formats.firstRowEnabled && rowIndex === 0) return formats.firstRowFill;
+  if (!formats.bandingEnabled) return null;
+  const bandIndex = rowIndex - (formats.firstRowEnabled ? 1 : 0);
+  return bandIndex % 2 === 0 ? formats.band1Fill : formats.band2Fill;
+}
+
 export function wordTableCellCss(
   tcPr: OoxmlElement | null,
   tblBorders: OoxmlElement | null,
@@ -28,7 +95,8 @@ export function wordTableCellCss(
   rowCount: number,
   rowSpan: number,
   firstGridColumn: boolean,
-  lastGridColumn: boolean
+  lastGridColumn: boolean,
+  conditionalFill: string | null
 ): string {
   const rules: string[] = [];
   const tcBorders = wmlChild(tcPr, 'tcBorders');
@@ -48,7 +116,7 @@ export function wordTableCellCss(
         : wordBorderCss(wmlChild(tblBorders, tableEdges[edge]));
     if (border) rules.push(`border-${edge}:${border}`);
   }
-  const fill = colorAttribute(wmlChild(tcPr, 'shd'), 'fill');
+  const fill = colorAttribute(wmlChild(tcPr, 'shd'), 'fill') ?? conditionalFill;
   if (fill) rules.push(`background-color:${fill}`);
   const vAlignNode = wmlChild(tcPr, 'vAlign');
   const vAlign =

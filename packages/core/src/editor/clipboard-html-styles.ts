@@ -1,9 +1,12 @@
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { WORD_CLASS_PARAGRAPH_STYLES } from './clipboard-html-word-elements.ts';
 
-/** A bounded absolute CSS length in points. Word clipboard HTML commonly uses `in`. */
+/** A bounded absolute CSS length in points. Word clipboard HTML commonly uses `in`.
+ *  A bare `0` (the one unitless length CSS allows) parses as 0. */
 export function parseCssLengthPt(value: string): number | null {
-  const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(px|pt|in|cm|mm|pc)$/.exec(value.trim().toLowerCase());
+  const trimmed = value.trim().toLowerCase();
+  if (/^-?0+(\.0+)?$/.test(trimmed)) return 0;
+  const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))(px|pt|in|cm|mm|pc)$/.exec(trimmed);
   if (!match) return null;
   const magnitude = Number.parseFloat(match[1]!);
   if (!Number.isFinite(magnitude)) return null;
@@ -415,7 +418,8 @@ export function parseInlineStyle(element: Element): ReadonlyMap<string, string> 
     if (colon <= 0) continue;
     const name = declaration.slice(0, colon).trim().toLowerCase();
     const value = declaration.slice(colon + 1).trim();
-    if (name.length > 0 && value.length > 0 && !out.has(name)) out.set(name, value);
+    // CSS is last-declaration-wins; a later duplicate overrides the earlier one.
+    if (name.length > 0 && value.length > 0) out.set(name, value);
   }
   return out;
 }
@@ -650,11 +654,9 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
   if (msoHighlight) {
     next.highlight = msoHighlight;
     delete next.shdFill;
-  } else if (backgroundRaw !== undefined) {
-    const parsed = solidBackground(backgroundRaw);
-    if (parsed) next.shdFill = parsed;
-  } else if (backgroundColorRaw !== undefined) {
-    const parsed = solidBackground(backgroundColorRaw);
+  } else {
+    // An unparseable `background` shorthand must not suppress a valid longhand.
+    const parsed = solidBackground(backgroundRaw) ?? solidBackground(backgroundColorRaw);
     if (parsed) next.shdFill = parsed;
   }
   const pt = parseCssLengthPt(style.get('font-size') ?? '');

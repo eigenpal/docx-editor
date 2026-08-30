@@ -51,7 +51,12 @@ import {
 import { clipboardBookmarkName, clipboardHyperlinkTarget } from './clipboard-html-links.ts';
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
-import { wordTableCellCss } from './clipboard-html-write-table-styles.ts';
+import { noteIdsOf, renderNoteList, shippedNoteIds } from './clipboard-html-write-notes.ts';
+import {
+  conditionalRowFill,
+  tableConditionalFormats,
+  wordTableCellCss,
+} from './clipboard-html-write-table-styles.ts';
 import {
   WORD_HIGHLIGHT_COLORS,
   WORD_JC_TO_TEXT_ALIGN,
@@ -263,7 +268,7 @@ function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolea
   return rules.join(';');
 }
 
-interface RenderContext {
+export interface RenderContext {
   readonly pkg: OoxmlPackage;
   readonly styles: StyleIndex;
   readonly numbering: HtmlNumberingIndex;
@@ -686,12 +691,17 @@ function renderTable(ctx: RenderContext, table: OoxmlElement, fields: FieldState
   const tblPr = table.children.find((child) => child.kind === 'tableProperties');
   const ownTblPr = tblPr && isElement(tblPr) ? tblPr : null;
   let tblBorders: OoxmlElement | null = null;
-  for (const style of styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')))) {
+  const tableStyleChain = styleChain(ctx.styles, wmlVal(wmlChild(ownTblPr, 'tblStyle')));
+  for (const style of tableStyleChain) {
     const styleBorders = wmlChild(wmlChild(style, 'tblPr'), 'tblBorders');
     if (styleBorders) tblBorders = styleBorders;
   }
   const ownBorders = wmlChild(ownTblPr, 'tblBorders');
   if (ownBorders) tblBorders = ownBorders;
+  const conditionalFormats = tableConditionalFormats(
+    tableStyleChain,
+    wmlChild(ownTblPr, 'tblLook')
+  );
 
   const rows: OoxmlElement[] = [];
   for (const child of table.children) {
@@ -759,7 +769,8 @@ function renderTable(ctx: RenderContext, table: OoxmlElement, fields: FieldState
         placements.length,
         rowSpan,
         placement.startColumn === 0,
-        placement.startColumn + placement.span >= gridColumns
+        placement.startColumn + placement.span >= gridColumns,
+        conditionalRowFill(conditionalFormats, rowIndex)
       );
       const attrs =
         (placement.span > 1 ? ` colspan="${placement.span}"` : '') +
@@ -891,40 +902,6 @@ function renderBlocks(
   return out;
 }
 
-function renderNoteList(
-  ctx: RenderContext,
-  kind: 'footnote' | 'endnote',
-  root: OoxmlElement | null
-): string {
-  if (root === null) return '';
-  let ownerPart = `/word/${kind}s.xml`;
-  for (const [name, part] of ctx.pkg.parts) {
-    if (part.root === root) ownerPart = name;
-  }
-  const noteRels = relationshipsOf(ctx.pkg, ownerPart);
-  let notes = '';
-  for (const child of root.children) {
-    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName !== kind) continue;
-    const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
-    if (id === undefined || !/^[1-9]\d{0,4}$/.test(id)) continue;
-    // Same cap as wordNoteReferenceHtml, so no note body ships without its reference.
-    const idValue = Number.parseInt(id, 10);
-    if (idValue > 32_767) continue;
-    // Only notes whose reference the body actually emitted (an ordinal exists) —
-    // a note referenced solely inside a tracked deletion must not ship a body
-    // that the read lane would then materialize as visible text.
-    if (!ctx.noteOrdinals[kind].has(idValue)) continue;
-    const inner = renderBlocks(
-      { ...ctx, noteBody: { kind, id: idValue }, docRels: noteRels },
-      child.children
-    );
-    if (inner !== '')
-      notes += `<div style="mso-element:${kind}" id="${kind === 'footnote' ? 'ftn' : 'edn'}${id}">${inner}</div>`;
-  }
-  return notes === '' ? '' : `<div style="mso-element:${kind}-list">${notes}</div>`;
-}
-
 /**
  * Interop HTML for the fragment package's document body. Returns '' when the package
  * cannot be read.
@@ -973,22 +950,13 @@ export function interopHtmlFromFragmentPackage(
     },
     noteBody: null,
   };
+  // The body renders FIRST (assigning reference ordinals), then the shipped set
+  // closes over cross-note references before the note lists render.
+  const bodyHtml = renderBlocks(ctx, body.children);
+  const shipped = shippedNoteIds(ctx, { footnote: footnotesRoot, endnote: endnotesRoot });
   return (
-    renderBlocks(ctx, body.children) +
-    renderNoteList(ctx, 'footnote', footnotesRoot) +
-    renderNoteList(ctx, 'endnote', endnotesRoot)
+    bodyHtml +
+    renderNoteList(ctx, 'footnote', footnotesRoot, shipped.footnote, renderBlocks) +
+    renderNoteList(ctx, 'endnote', endnotesRoot, shipped.endnote, renderBlocks)
   );
-}
-
-/** The note ids a notes part actually defines. */
-function noteIdsOf(root: OoxmlElement | null, kind: 'footnote' | 'endnote'): ReadonlySet<number> {
-  const ids = new Set<number>();
-  if (root === null) return ids;
-  for (const child of root.children) {
-    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName !== kind) continue;
-    const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
-    if (id !== undefined && /^[1-9]\d{0,4}$/.test(id)) ids.add(Number.parseInt(id, 10));
-  }
-  return ids;
 }

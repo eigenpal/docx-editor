@@ -38,12 +38,15 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
     };
   }
 
-  let definitionsLeft = MAX_NUMBERING_DEFINITIONS;
+  // Separate budgets, like layout/numbering-index.ts: unrelated children are free,
+  // and a template heavy in abstractNum cannot starve the w:num mapping.
+  let abstractLeft = MAX_NUMBERING_DEFINITIONS;
+  let numLeft = MAX_NUMBERING_DEFINITIONS;
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (definitionsLeft <= 0) break;
-    definitionsLeft -= 1;
     if (child.localName === 'num') {
+      if (numLeft <= 0) continue;
+      numLeft -= 1;
       const numId = attributeValueOf(child, 'numId', WML_NAMESPACE_URI);
       const abstractId = wmlVal(wmlChild(child, 'abstractNumId'));
       if (numId && abstractId) numToAbstract.set(numId, abstractId);
@@ -72,6 +75,8 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
       continue;
     }
     if (child.localName !== 'abstractNum') continue;
+    if (abstractLeft <= 0) continue;
+    abstractLeft -= 1;
     const abstractId = attributeValueOf(child, 'abstractNumId', WML_NAMESPACE_URI);
     if (!abstractId) continue;
     const styleLink = wmlVal(wmlChild(child, 'numStyleLink'));

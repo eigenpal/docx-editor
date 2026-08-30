@@ -441,6 +441,9 @@ function projectParagraph(
     return;
   }
   if (depth > p.maxDepth) return;
+  // The paragraph element itself charges the walk budget: a flood of EMPTY
+  // paragraphs (auto-closed `<li>`s) must not emit blocks at zero cost.
+  p.nodesLeft -= 1;
   const next = paragraphContextOf(element, ctx, p, pageBreakBefore);
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true, undefined, false);
 }
@@ -482,6 +485,10 @@ function projectList(
   };
   let pendingPageBreak = pageBreakBefore;
   for (const child of Array.from(element.childNodes)) {
+    if (p.nodesLeft <= 0) {
+      p.truncated = true;
+      break;
+    }
     if (!isElement(child)) continue;
     const childTag = tagOf(child);
     if (childTag === 'li') {
@@ -800,22 +807,31 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
   // Reconcile: a claimed note whose reference the body walk never emitted (anchor
   // past the budget, inside dropped chrome, or too deep) would be silently dropped
-  // by the merge as unreferenced. Move its text back into the body — unless its
-  // blocks reference note-scoped rels, which cannot travel to the document part.
+  // by the merge as unreferenced. Move its text back into the body, re-homing any
+  // note-scoped rel references onto document rels. The attribute-shaped pattern
+  // cannot match run TEXT: escapeXml turns a literal quote into `&quot;`.
   for (const kind of ['footnote', 'endnote'] as const) {
     for (const [id, noteBlocks] of [...projection.notes[kind]]) {
       if (projection.emittedNoteRefs[kind].has(id)) continue;
       projection.notes[kind].delete(id);
       definedNotes[kind].delete(id);
-      if (noteBlocks.some((block) => block.includes(' r:embed=') || block.includes(' r:id='))) {
-        continue;
-      }
+      const relIdMap = new Map<string, string>();
       for (const block of noteBlocks) {
         // Drop the note's own number mark; it has no meaning in body flow. The
-        // pattern only ever matches XML this projection just emitted.
-        blocks.push(
-          block.replace(/<w:r>(?:<w:rPr>.*?<\/w:rPr>)?<w:(?:footnote|endnote)Ref\/><\/w:r>/g, '')
-        );
+        // patterns only ever match XML this projection just emitted.
+        const moved = block
+          .replace(/<w:r>(?:<w:rPr>.*?<\/w:rPr>)?<w:(?:footnote|endnote)Ref\/><\/w:r>/g, '')
+          .replace(/ r:(id|embed)="([^"]{1,32})"/g, (whole, attribute: string, oldId: string) => {
+            let mapped = relIdMap.get(oldId);
+            if (mapped === undefined) {
+              const source = projection.noteRels[kind].find((rel) => rel.id === oldId);
+              if (source === undefined) return whole;
+              mapped = allocateRel(projection, source.type, source.target, source.external);
+              relIdMap.set(oldId, mapped);
+            }
+            return ` r:${attribute}="${mapped}"`;
+          });
+        blocks.push(moved);
       }
     }
   }

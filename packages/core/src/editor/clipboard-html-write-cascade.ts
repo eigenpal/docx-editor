@@ -91,11 +91,11 @@ export function paragraphPropertySources(
 ): OoxmlElement[] {
   const sources: OoxmlElement[] = [];
   if (index.docDefaultsPPr) sources.push(index.docDefaultsPPr);
-  for (const style of styleChain(index, index.defaultParagraphStyleId ?? undefined)) {
-    const pPr = wmlChild(style, 'pPr');
-    if (pPr) sources.push(pPr);
-  }
-  for (const style of styleChain(index, wmlVal(wmlChild(ownPPr, 'pStyle')))) {
+  // The default (Normal) style applies ONLY when the paragraph names no pStyle —
+  // the same rule layout/style-cascade.ts follows. A named style not basedOn
+  // Normal must not inherit Normal's formatting.
+  const ownStyleId = wmlVal(wmlChild(ownPPr, 'pStyle'));
+  for (const style of styleChain(index, ownStyleId ?? index.defaultParagraphStyleId ?? undefined)) {
     const pPr = wmlChild(style, 'pPr');
     if (pPr) sources.push(pPr);
   }
@@ -121,11 +121,12 @@ export function runPropertyLayers(
   const defaults: OoxmlElement[] = [];
   if (index.docDefaultsRPr) defaults.push(index.docDefaultsRPr);
   const paragraphLevel: OoxmlElement[] = [];
-  for (const style of styleChain(index, index.defaultParagraphStyleId ?? undefined)) {
-    const rPr = wmlChild(style, 'rPr');
-    if (rPr) paragraphLevel.push(rPr);
-  }
-  for (const style of styleChain(index, wmlVal(wmlChild(paragraphPPr, 'pStyle')))) {
+  // Same rule as paragraphPropertySources: Normal applies only without a pStyle.
+  const paragraphStyleId = wmlVal(wmlChild(paragraphPPr, 'pStyle'));
+  for (const style of styleChain(
+    index,
+    paragraphStyleId ?? index.defaultParagraphStyleId ?? undefined
+  )) {
     const rPr = wmlChild(style, 'rPr');
     if (rPr) paragraphLevel.push(rPr);
   }
