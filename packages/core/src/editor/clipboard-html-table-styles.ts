@@ -1,8 +1,8 @@
 import {
+  cssBackgroundFill,
   parseCssColor,
   parseCssLengthPt,
   parseInlineStyle,
-  solidBackground,
   splitBorderTokens,
   tagOf,
 } from './clipboard-html-styles.ts';
@@ -348,14 +348,14 @@ export function cellCssPropertiesXml(cell: Element): string {
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
     const border =
       borderValueOf(style.get(`mso-border-${edge}-alt`)) ??
+      borderValueOf(style.get(`mso-border-${edge}`)) ??
       borderValueOf(style.get(`border-${edge}`)) ??
       longhandBorderOf(style, `border-${edge}`) ??
       common;
     if (border !== undefined) borders += borderElementXml(edge, border);
   }
   let xml = borders.length > 0 ? `<w:tcBorders>${borders}</w:tcBorders>` : '';
-  const fill =
-    solidBackground(style.get('background')) ?? solidBackground(style.get('background-color'));
+  const fill = cssBackgroundFill(style);
   if (fill) xml += `<w:shd w:val="clear" w:color="auto" w:fill="${fill}"/>`;
   xml += cellMarginsXml(style);
   const vertical =

@@ -749,7 +749,12 @@ function renderTable(ctx: RenderContext, table: OoxmlElement, fields: FieldState
     const rowStyle = rowCss === '' ? '' : ` style="${rowCss}"`;
     out += `<tr${rowStyle}>`;
     for (const placement of rowCells) {
-      if (placement.vMerge === 'continue') continue;
+      if (placement.vMerge === 'continue') {
+        // The continuation cell renders nothing, but its fldChars still drive the
+        // shared field state — the same rule as tracked deletions.
+        advanceFieldState(placement.cell, fields);
+        continue;
+      }
       let rowSpan = 1;
       if (placement.vMerge === 'restart') {
         for (let below = rowIndex + 1; below < placements.length; below += 1) {

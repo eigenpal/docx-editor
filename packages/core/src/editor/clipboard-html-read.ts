@@ -272,6 +272,9 @@ function collectInline(
     pre: ctx.pre || tag === 'pre',
   };
   if (noteReference !== null) {
+    // Word renders note marks superscript via a character style the fragment does
+    // not carry; direct formatting keeps the number off the baseline.
+    const markRun: RunProps = { vertAlign: 'superscript', ...nextCtx.run };
     if (
       ctx.noteBody !== undefined &&
       ctx.noteBody.kind === noteReference.kind &&
@@ -279,13 +282,13 @@ function collectInline(
     ) {
       // The note's own number mark, inside its own body.
       const localName = noteReference.kind === 'footnote' ? 'footnoteRef' : 'endnoteRef';
-      runs.push(`<w:r>${rPrXml(nextCtx.run)}<w:${localName}/></w:r>`);
+      runs.push(`<w:r>${rPrXml(markRun)}<w:${localName}/></w:r>`);
       return;
     }
     if (ctx.noteBody === undefined && p.definedNotes[noteReference.kind].has(noteReference.id)) {
       const localName =
         noteReference.kind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
-      runs.push(`<w:r>${rPrXml(nextCtx.run)}<w:${localName} w:id="${noteReference.id}"/></w:r>`);
+      runs.push(`<w:r>${rPrXml(markRun)}<w:${localName} w:id="${noteReference.id}"/></w:r>`);
       p.emittedNoteRefs[noteReference.kind].add(noteReference.id);
       return;
     }
@@ -441,9 +444,6 @@ function projectParagraph(
     return;
   }
   if (depth > p.maxDepth) return;
-  // The paragraph element itself charges the walk budget: a flood of EMPTY
-  // paragraphs (auto-closed `<li>`s) must not emit blocks at zero cost.
-  p.nodesLeft -= 1;
   const next = paragraphContextOf(element, ctx, p, pageBreakBefore);
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true, undefined, false);
 }
@@ -492,6 +492,9 @@ function projectList(
     if (!isElement(child)) continue;
     const childTag = tagOf(child);
     if (childTag === 'li') {
+      // Each item charges the walk budget HERE (the flow loop is not involved), so
+      // a flood of empty auto-closed `<li>`s cannot emit blocks at zero cost.
+      p.nodesLeft -= 1;
       projectParagraph(child, depth + 1, itemCtx, p, out, pendingPageBreak);
       pendingPageBreak = false;
     } else if (childTag === 'ol' || childTag === 'ul') {
@@ -542,6 +545,9 @@ function projectFlow(
       if (extractPageBreakBlocks && isWordPageBreakBlock(node)) {
         flush();
         p.nodesLeft -= 1;
+        // Consecutive break blocks: materialize the earlier one so an intentionally
+        // blank page survives instead of the two breaks collapsing into one.
+        if (pageBreak.pending) appendPageBreak(out);
         pageBreak.pending = true;
         pageBreak.skipSpacer = true;
         continue;
@@ -627,7 +633,13 @@ function projectFlow(
         pageBreak.skipSpacer = false;
         continue;
       }
-      if (CONTAINER_TAGS.has(tag) || blockSdtNodes !== null) {
+      // A span wrapping block children behaves as a block container (browsers do the
+      // same for block-in-inline); flattened SDT wrappers rely on this transparency.
+      if (
+        CONTAINER_TAGS.has(tag) ||
+        blockSdtNodes !== null ||
+        (tag === 'span' && hasBlockChild(node))
+      ) {
         flush();
         p.nodesLeft -= 1;
         projectFlow(
@@ -770,6 +782,19 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     definedNoteElements.add(note.element);
     claimed.push(note);
   }
+  // Project INNER definitions before their containers: if truncation un-claims the
+  // tail, an un-claimed inner note then projects inside its outer's body (or the
+  // document body) instead of being stranded by an already-projected outer.
+  const domDepthOf = (element: Element): number => {
+    let depth = 0;
+    let current = element.parentElement;
+    while (current !== null && depth < 256) {
+      depth += 1;
+      current = current.parentElement;
+    }
+    return depth;
+  };
+  claimed.sort((a, b) => domDepthOf(b.element) - domDepthOf(a.element));
   for (let index = 0; index < claimed.length; index += 1) {
     const note = claimed[index]!;
     projection.truncated = false;
@@ -820,7 +845,11 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
         // Drop the note's own number mark; it has no meaning in body flow. The
         // patterns only ever match XML this projection just emitted.
         const moved = block
-          .replace(/<w:r>(?:<w:rPr>.*?<\/w:rPr>)?<w:(?:footnote|endnote)Ref\/><\/w:r>/g, '')
+          // Tempered so the optional rPr scan can never cross a run boundary.
+          .replace(
+            /<w:r>(?:<w:rPr>(?:(?!<\/w:r>)[\s\S])*?<\/w:rPr>)?<w:(?:footnote|endnote)Ref\/><\/w:r>/g,
+            ''
+          )
           .replace(/ r:(id|embed)="([^"]{1,32})"/g, (whole, attribute: string, oldId: string) => {
             let mapped = relIdMap.get(oldId);
             if (mapped === undefined) {

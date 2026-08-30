@@ -418,8 +418,13 @@ export function parseInlineStyle(element: Element): ReadonlyMap<string, string> 
     if (colon <= 0) continue;
     const name = declaration.slice(0, colon).trim().toLowerCase();
     const value = declaration.slice(colon + 1).trim();
-    // CSS is last-declaration-wins; a later duplicate overrides the earlier one.
-    if (name.length > 0 && value.length > 0) out.set(name, value);
+    // CSS is last-declaration-wins; delete-then-set keeps the MAP's iteration
+    // order equal to final declaration order, which cross-property resolution
+    // (`background` vs `background-color`) relies on.
+    if (name.length > 0 && value.length > 0) {
+      out.delete(name);
+      out.set(name, value);
+    }
   }
   return out;
 }
@@ -470,6 +475,24 @@ export function solidBackground(value: string | undefined): string | null {
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));
+}
+
+/**
+ * The winning solid fill of `background`/`background-color` in DECLARATION order:
+ * a later `background` shorthand resets the color (even when it is not a solid
+ * fill, per CSS), while a later `background-color` overrides an earlier shorthand.
+ */
+export function cssBackgroundFill(style: ReadonlyMap<string, string>): string | null {
+  let fill: string | null = null;
+  for (const [name, value] of style) {
+    if (name === 'background') {
+      fill = solidBackground(value);
+    } else if (name === 'background-color') {
+      const parsed = solidBackground(value);
+      if (parsed !== null) fill = parsed;
+    }
+  }
+  return fill;
 }
 
 const TAB_ALIGNMENTS: ReadonlySet<HtmlTabAlignment> = new Set([
@@ -548,13 +571,23 @@ const BORDER_WIDTH_KEYWORD_PT: ReadonlyMap<string, number> = new Map([
   ['thick', 3.75],
 ]);
 
-function paragraphBorderOf(value: string | undefined): HtmlParagraphBorder | undefined {
+/** Parsed border, `'suppressed'` for an explicit none/hidden (stops fallback), or
+ *  undefined when absent or unparseable. */
+function paragraphBorderOf(
+  value: string | undefined
+): HtmlParagraphBorder | 'suppressed' | undefined {
   if (value === undefined || value.length === 0 || value.length > 128) return undefined;
   let val: HtmlParagraphBorder['val'] | undefined;
+  let suppressed = false;
   let points: number | undefined;
   let color: string | undefined;
   for (const token of splitBorderTokens(value)) {
-    const borderStyle = BORDER_STYLES.get(token.toLowerCase());
+    const lower = token.toLowerCase();
+    if (lower === 'none' || lower === 'hidden') {
+      suppressed = true;
+      continue;
+    }
+    const borderStyle = BORDER_STYLES.get(lower);
     if (borderStyle !== undefined) {
       val = borderStyle;
       continue;
@@ -571,10 +604,11 @@ function paragraphBorderOf(value: string | undefined): HtmlParagraphBorder | und
     }
     return undefined;
   }
+  if (suppressed) return 'suppressed';
   if (val === undefined) return undefined;
   // A visible style with no width takes Word's default hairline.
   if (points === undefined) return { val, szEighthPoints: 4, color: color ?? '000000' };
-  if (points <= 0) return undefined;
+  if (points <= 0) return 'suppressed';
   return {
     val,
     szEighthPoints: clamp(Math.round(points * 8), 2, 96),
@@ -649,14 +683,11 @@ export function applyRunCss(base: HtmlRunProps, style: ReadonlyMap<string, strin
   const color = parseCssColor(style.get('color') ?? '');
   if (color) next.color = color;
   const msoHighlight = highlightNameOf(style.get('mso-highlight'));
-  const backgroundRaw = style.get('background');
-  const backgroundColorRaw = style.get('background-color');
   if (msoHighlight) {
     next.highlight = msoHighlight;
     delete next.shdFill;
   } else {
-    // An unparseable `background` shorthand must not suppress a valid longhand.
-    const parsed = solidBackground(backgroundRaw) ?? solidBackground(backgroundColorRaw);
+    const parsed = cssBackgroundFill(style);
     if (parsed) next.shdFill = parsed;
   }
   const pt = parseCssLengthPt(style.get('font-size') ?? '');
@@ -774,12 +805,12 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   ) {
     para.widowControl = true;
   }
-  const shading =
-    solidBackground(style.get('background')) ?? solidBackground(style.get('background-color'));
+  const shading = cssBackgroundFill(style);
   if (shading) para.shdFill = shading;
   const tabs = tabStopsOf(style.get('tab-stops'));
   if (tabs !== undefined) para.tabs = tabs;
-  // Word writes only the shorthand when all four edges match.
+  // Word writes only the shorthand when all four edges match. An explicit
+  // `border-<edge>:none` SUPPRESSES the edge instead of falling back to it.
   const commonBorder = paragraphBorderOf(style.get('mso-border-alt') ?? style.get('border'));
   const borders: Partial<Record<HtmlParagraphBorderEdge, HtmlParagraphBorder>> = {};
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
@@ -787,7 +818,7 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
       paragraphBorderOf(style.get(`mso-border-${edge}-alt`)) ??
       paragraphBorderOf(style.get(`border-${edge}`)) ??
       commonBorder;
-    if (border !== undefined) borders[edge] = border;
+    if (border !== undefined && border !== 'suppressed') borders[edge] = border;
   }
   if (Object.keys(borders).length > 0) para.borders = borders;
 }

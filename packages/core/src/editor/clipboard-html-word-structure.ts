@@ -96,7 +96,12 @@ const SDT_BLOCK_TAGS = new Set([
   'h6',
 ]);
 
-/** Find bounded block flow inside an SDT while leaving inline checkbox SDTs inline. */
+/**
+ * Bounded probe: does this SDT hold block flow (a TOC wrapper) rather than an
+ * inline control? When it does, the SDT's OWN children are returned, so sibling
+ * branches beside the block-bearing one stay lossless — inline wrappers on the way
+ * down become transparent through the flow walk's block-child container branch.
+ */
 export function wordBlockSdtNodes(element: Element): readonly Node[] | null {
   if (tagOf(element) !== 'w:sdt') return null;
   const queue: Element[] = [element];
@@ -104,18 +109,11 @@ export function wordBlockSdtNodes(element: Element): readonly Node[] | null {
   for (let at = 0; at < queue.length && inspected < 64; at += 1) {
     const parent = queue[at]!;
     if (parent.childNodes.length > 64) return null;
-    const nodes: Node[] = [];
-    let hasBlock = false;
-    for (let index = 0; index < parent.childNodes.length; index += 1) {
-      const child = parent.childNodes[index]!;
-      nodes.push(child);
-      if (child.nodeType === 1 && SDT_BLOCK_TAGS.has(tagOf(child as Element))) hasBlock = true;
-    }
-    if (hasBlock) return nodes;
     for (let index = 0; index < parent.children.length && inspected < 64; index += 1) {
       const child = parent.children[index]!;
       inspected += 1;
       const tag = tagOf(child);
+      if (SDT_BLOCK_TAGS.has(tag)) return Array.from(element.childNodes);
       if (tag !== 'w:sdtpr') queue.push(child);
     }
   }
