@@ -138,19 +138,10 @@ export function listTokenForTableBlock(
   let byListItems = tableListTokens.get(table);
   const cached = byListItems?.get(listItems);
   if (cached !== undefined) return cached;
-  const tokens: string[] = [];
-  let any = false;
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'paragraph') {
-      const token = listItems.get(node.id)?.cacheToken ?? '';
-      if (token) any = true;
-      tokens.push(token);
-      return;
-    }
-    if ('children' in node) for (const child of node.children) visit(child);
-  };
-  visit(table);
-  const token = any ? tokens.join('\0') : '';
+  const token = aggregateParagraphTokensForTableBlock(
+    table,
+    (paragraph) => listItems.get(paragraph.id)?.cacheToken ?? ''
+  );
   if (token.length <= MAX_MEMOIZED_TOKEN_LENGTH) {
     if (!byListItems) {
       byListItems = new WeakMap();
@@ -159,6 +150,34 @@ export function listTokenForTableBlock(
     byListItems.set(listItems, token);
   }
   return token;
+}
+
+/**
+ * ONE walk for every per-paragraph token aggregate over a table subtree (list state,
+ * drawing state), so the framing rule cannot drift between copies. NUL-framed, with an
+ * empty slot for every token-less paragraph: the tokens embed file-controlled text, so a
+ * printable join — or skipping the empty slots — lets two different token SEQUENCES over
+ * one byte-identical subtree concatenate to the same string, and a cache then serves the
+ * stale table. Empty when no paragraph carries a token, so token-free tables keep keying
+ * as before. Callers own their memoization.
+ */
+export function aggregateParagraphTokensForTableBlock(
+  table: OoxmlNode,
+  tokenForParagraph: (paragraph: OoxmlNode) => string
+): string {
+  const tokens: string[] = [];
+  let any = false;
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'paragraph') {
+      const token = tokenForParagraph(node);
+      if (token) any = true;
+      tokens.push(token);
+      return;
+    }
+    if ('children' in node) for (const child of node.children) visit(child);
+  };
+  visit(table);
+  return any ? tokens.join('\0') : '';
 }
 
 function nodeToken(node: OoxmlNode): string {
