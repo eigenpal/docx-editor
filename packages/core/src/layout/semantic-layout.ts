@@ -1104,11 +1104,7 @@ function layoutBlocksPass(
   const hasInlineDrawingContext = options.inlineDrawingLayout !== undefined;
   // ONE provider for every fold of this flow — the prepass block fold and the cell-lane
   // deps below hand `hostedTextboxListToken` the same (index, cascade, mode) tuple.
-  const { hostedListTokenForParagraph: hostedListTokenOf } = hostedListTokenDeps(
-    options.numberingIndex,
-    styleCascade,
-    displayMode
-  );
+  const hostedListDeps = hostedListTokenDeps(options.numberingIndex, styleCascade, displayMode);
   const prepareBlock = (block: OoxmlElement, availableWidth: number): PreparedBlock => {
     // The RAW token, compared by the memo below so a table's kilobyte aggregate keeps its
     // identity fast path; the context joins only when a key is actually built. `||`, not
@@ -1134,7 +1130,7 @@ function layoutBlocksPass(
     // The list state of any text-box story this block hosts, for the same reason the drawing
     // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
     // numbering edit moves nothing else in this block's key.
-    const hostedListToken = hostedListTokenOf?.(block) ?? '';
+    const hostedListToken = hostedListDeps.hostedListTokenForParagraph?.(block) ?? '';
     // NUL between the block's own token and the hosted one: both embed file-influenced
     // marker text, so a printable join would let two different (own, hosted) pairs
     // concatenate to one string.
@@ -1767,8 +1763,9 @@ function layoutBlocksPass(
           anchorFrameBase,
           pageContentClip,
           layoutTextboxStoryFor: layoutTextboxStoryForBody,
-          // Gated with the story layout above: only a story-rendering lane keys hosted list state.
-          ...(hostedListTokenOf ? { hostedListTokenForParagraph: hostedListTokenOf } : {}),
+          // Spread inside this block on purpose: only a pass that lays hosted stories out
+          // (`layoutTextboxStoryFor` above) folds their list state into cell keys.
+          ...hostedListDeps,
           publishAnchoredDrawings: collectAnchoredDrawings,
           collectAnchoredDrawings,
           columnBoxForParagraph: anchorColumnBox,

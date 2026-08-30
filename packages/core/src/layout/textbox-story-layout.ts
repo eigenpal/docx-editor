@@ -285,7 +285,7 @@ const hostedListTokensByBlock = new WeakMap<OoxmlNode, HostedListTokenMemo>();
  * Empty for the overwhelmingly common block with no text box, at the cost of one memoized
  * subtree scan per immutable block node.
  */
-export function hostedTextboxListToken(
+function hostedTextboxListToken(
   block: OoxmlNode,
   numberingIndex: NumberingIndex | undefined,
   styleCascade: StyleCascadeTable | undefined,
@@ -461,7 +461,8 @@ export function layoutTextboxStory(
     ...chrome,
     ...(fallbackReason ? { fallbackReason } : {}),
     ...(clippedResourceTokens.length > 0
-      ? { clippedResourceToken: clippedResourceTokens.join('!') }
+      ? // NUL join — resource keys embed file-derived ids, so '!' was a forgeable boundary.
+        { clippedResourceToken: clippedResourceTokens.join('\0') }
       : {}),
   };
 }

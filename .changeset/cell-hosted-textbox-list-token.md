@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-List numbers inside a text box hosted by a table cell or header paragraph now update reliably after a numbering edit. Fixes #622
+Harden layout-cache invalidation for numbered lists inside text boxes: cell and header paragraph break keys now track the hosted list state, and layout token joins can no longer alias across file-controlled separators. Fixes #622

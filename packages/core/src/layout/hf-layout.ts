@@ -523,12 +523,14 @@ export function storyListMarkerToken(story: HeaderFooterStoryLayout): string {
   forEachStoryParagraphFragment(story, (fragment) => {
     const marker = fragment.marker;
     if (marker) {
-      tokens.push(`${fragment.paragraphId}=${marker.text}@${marker.numFmt}:${marker.level}`);
+      // NUL between EVERY field, not just between markers: `marker.text` is expanded
+      // `w:lvlText` and `numFmt` is read verbatim from the file, so any printable
+      // separator between them lets two different marker states concatenate to one token
+      // and reuse a header page showing the old numbers. Fixed arity keeps the flat
+      // NUL-joined sequence injective; XML text cannot carry U+0000.
+      tokens.push([fragment.paragraphId, marker.text, marker.numFmt, marker.level].join('\0'));
     }
   });
-  // NUL-framed: `marker.text` is expanded `w:lvlText`, which a file can fill with any
-  // printable separator, so a printable join would let two different marker states
-  // concatenate to one token and reuse a header page showing the old numbers.
   const token = tokens.length === 0 ? '' : `|list:${tokens.join('\0')}`;
   storyListMarkerTokens.set(story, token);
   return token;
@@ -574,8 +576,9 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
     }
   });
   // Empty for the overwhelmingly common story with no pictures, so the context string for a
-  // plain header is byte-for-byte what it was.
-  const token = tokens.length === 0 ? '' : `!${tokens.join('!')}`;
+  // plain header is byte-for-byte what it was. NUL join: resource keys embed relationship
+  // ids and part names read verbatim from the file, so a printable separator is forgeable.
+  const token = tokens.length === 0 ? '' : `!${tokens.join('\0')}`;
   storyDrawingResourceTokens.set(story, token);
   return token;
 }

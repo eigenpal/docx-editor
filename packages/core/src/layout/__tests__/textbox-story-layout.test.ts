@@ -157,7 +157,8 @@ function drawingLayoutFor(part: OoxmlPart): InlineDrawingLayoutContext {
 function layoutFooterStory(
   part: OoxmlPart,
   geometry: ReturnType<typeof geometryOfSection>,
-  numberingIndex?: ReturnType<typeof buildNumberingIndex>
+  numberingIndex?: ReturnType<typeof buildNumberingIndex>,
+  cache?: ParagraphLayoutCache<readonly PendingLine[]>
 ) {
   const width = geometry.width - geometry.margin.left - geometry.margin.right;
   return layoutHeaderFooterStory(
@@ -165,7 +166,7 @@ function layoutFooterStory(
     width,
     measurer,
     'test',
-    undefined,
+    cache,
     undefined,
     undefined,
     undefined,
@@ -652,7 +653,8 @@ describe('list markers inside textbox stories', () => {
     expect(boxMarkers(lay(2, '(%1)'))).toEqual(['(1)', '(2)']);
   });
 
-  test('a numbering change reaches a text box hosted in a table cell', () => {
+  /** A one-cell table whose paragraph hosts a text box with a two-item numbered list. */
+  function cellTextboxPart(): OoxmlPart {
     const doc = readOoxmlPart(
       `<w:document ${NS}><w:body>` +
         '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
@@ -665,10 +667,15 @@ describe('list markers inside textbox stories', () => {
       { name: '/word/document.xml', contentType: 'app/xml' }
     );
     if (!doc.ok) throw new Error(doc.reason);
+    return doc.part;
+  }
+
+  test('a numbering change reaches a text box hosted in a table cell', () => {
+    const part = cellTextboxPart();
     const session = createLayoutSession();
-    const drawingLayout = drawingLayoutFor(doc.part);
+    const drawingLayout = drawingLayoutFor(part);
     const boxMarkers = (revision: number, lvlText: string): string[] => {
-      const layout = layoutSemanticDocument(doc.part, revision, {
+      const layout = layoutSemanticDocument(part, revision, {
         measurer,
         producer: 'test',
         inlineDrawingLayout: drawingLayout,
@@ -726,24 +733,14 @@ describe('list markers inside textbox stories', () => {
   test('the body flow wires hosted list state into cell break keys', () => {
     // The production wiring, not a hand-built provider: dropping the `hostedListTokenDeps`
     // spread from the body flow's table deps must fail this test.
-    const doc = readOoxmlPart(
-      `<w:document ${NS}><w:body>` +
-        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
-        '<w:tblGrid><w:gridCol w:w="9000"/></w:tblGrid>' +
-        '<w:tr><w:tc><w:tcPr><w:tcW w:w="9000" w:type="dxa"/></w:tcPr>' +
-        `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha'))}</w:r></w:p>` +
-        '</w:tc></w:tr></w:tbl>' +
-        '</w:body></w:document>',
-      { name: '/word/document.xml', contentType: 'app/xml' }
-    );
-    if (!doc.ok) throw new Error(doc.reason);
+    const part = cellTextboxPart();
     const keysFor = (lvlText: string): string[] => {
       const keys: string[] = [];
-      layoutSemanticDocument(doc.part, 1, {
+      layoutSemanticDocument(part, 1, {
         measurer,
         producer: 'test',
         cache: recordingCache(keys),
-        inlineDrawingLayout: drawingLayoutFor(doc.part),
+        inlineDrawingLayout: drawingLayoutFor(part),
         numberingIndex: numberingIndexFor(lvlText),
       });
       // HOST keys only. The box's own story breaks under a `|txbx:`-namespaced producer and
@@ -764,24 +761,7 @@ describe('list markers inside textbox stories', () => {
     const footerPart = [...resolveHeaderFooterPartsBySection(pkg)[0]!.footers.values()][0]!;
     const keysFor = (lvlText: string): string[] => {
       const keys: string[] = [];
-      layoutHeaderFooterStory(
-        footerPart,
-        geometry.width - geometry.margin.left - geometry.margin.right,
-        measurer,
-        'test',
-        recordingCache(keys),
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        drawingLayoutFor(footerPart),
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        { numberingIndex: numberingIndexFor(lvlText) }
-      );
+      layoutFooterStory(footerPart, geometry, numberingIndexFor(lvlText), recordingCache(keys));
       // HOST keys only — see the body wiring test above.
       return keys.filter((key) => !key.includes('|txbx:'));
     };
