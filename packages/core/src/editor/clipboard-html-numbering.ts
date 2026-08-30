@@ -10,6 +10,7 @@ const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 
 export type HtmlListKind =
   | 'bullet'
+  | 'none'
   | 'decimal'
   | 'upperRoman'
   | 'lowerRoman'
@@ -238,6 +239,7 @@ export function htmlListKindAndStart(marker: string): {
 }
 
 const LIST_STYLE_TYPE_KINDS: ReadonlyMap<string, HtmlListKind> = new Map([
+  ['none', 'none'],
   ['decimal', 'decimal'],
   ['upper-alpha', 'upperLetter'],
   ['upper-latin', 'upperLetter'],

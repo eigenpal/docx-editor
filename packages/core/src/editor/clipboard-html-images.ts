@@ -8,7 +8,7 @@ import { imageDimensionPx, parseInlineStyle } from './clipboard-html-styles.ts';
 
 const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
-const DATA_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|gif|emf);base64,([A-Za-z0-9+/=]+)$/i;
+const DATA_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|gif|bmp|webp|emf);base64,([A-Za-z0-9+/=]+)$/i;
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(high, Math.max(low, value));
@@ -43,7 +43,15 @@ export function projectHtmlImage(
   const bytes = cachedBytes ?? clipboardDecodeBase64(match[1]!, p.maxImageBytes);
   if (bytes === null || bytes === undefined) return;
   const sniffed = sniffImageMime(bytes);
-  if (sniffed !== 'image/png' && sniffed !== 'image/jpeg' && sniffed !== 'image/gif') return;
+  if (
+    sniffed !== 'image/png' &&
+    sniffed !== 'image/jpeg' &&
+    sniffed !== 'image/gif' &&
+    sniffed !== 'image/bmp' &&
+    sniffed !== 'image/webp'
+  ) {
+    return;
+  }
   const header = validateRasterHeader(bytes, sniffed);
 
   const style = parseInlineStyle(element);
@@ -69,7 +77,16 @@ export function projectHtmlImage(
   const cx = widthPx === null ? 3_810_000 : clamp(Math.round(widthPx * 9525), 9525, 30_000_000);
   const cy = heightPx === null ? 2_540_000 : clamp(Math.round(heightPx * 9525), 9525, 30_000_000);
 
-  const extension = sniffed === 'image/png' ? 'png' : sniffed === 'image/gif' ? 'gif' : 'jpeg';
+  const extension =
+    sniffed === 'image/png'
+      ? 'png'
+      : sniffed === 'image/gif'
+        ? 'gif'
+        : sniffed === 'image/bmp'
+          ? 'bmp'
+          : sniffed === 'image/webp'
+            ? 'webp'
+            : 'jpeg';
   let partName = cachedBytes === undefined ? undefined : cachedPart;
   if (partName === undefined) {
     p.imageCount += 1;

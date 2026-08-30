@@ -9,7 +9,11 @@
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
-import { readOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
+import {
+  readOoxmlPackage,
+  writeOoxmlPackage,
+  type OoxmlPackage,
+} from '../package/ooxml-package.ts';
 import {
   serializeOoxmlPart,
   type OoxmlElement,
@@ -227,6 +231,15 @@ describe('clipboard fragment extract', () => {
       expect(sha256FontBytes(bytes)).toBe(sha256FontBytes(source!));
     }
     expect(mediaCount).toBeGreaterThan(0);
+  });
+
+  test('the in-memory fragment package writes without duplicate OPC names', () => {
+    const pkg = samplePackage();
+    const result = extractFragmentPackage(pkg, fullBodyCoverage(pkg));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const reopened = loadPackage(writeOoxmlPackage(result.package));
+    expect(reopened.parts.has('/word/document.xml')).toBe(true);
   });
 
   test('partial edge paragraphs trim to the range and the mark bit stays honest', () => {

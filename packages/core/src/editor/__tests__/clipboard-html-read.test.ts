@@ -456,6 +456,12 @@ describe('lists', () => {
     expect(numberingXml).toContain('w:numFmt w:val="bullet"');
   });
 
+  test('list-style-type none remains a marker-suppressed numbering level', () => {
+    const { pkg } = openFragment('<ol style="list-style-type:none"><li>marker-free item</li></ol>');
+    const numberingXml = strFromU8(pkg.partBytes.get('/word/numbering.xml')!);
+    expect(numberingXml).toContain('w:numFmt w:val="none"');
+  });
+
   test('Word desktop mso-list markup maps to numbering; marker span never becomes text', () => {
     const html =
       '<p class="MsoListParagraph" style="text-indent:-18.0pt;mso-list:l3 level2 lfo5">' +
@@ -717,6 +723,25 @@ describe('images', () => {
     expect(media).toBeDefined();
     expect(media!.length).toBeGreaterThan(8);
     expect(relsXml).toContain('Target="media/image1.png"');
+  });
+
+  test('data: WebP and BMP images become matching media parts', () => {
+    const cases = [
+      {
+        mime: 'image/webp',
+        extension: 'webp',
+        bytes: [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50],
+      },
+      { mime: 'image/bmp', extension: 'bmp', bytes: [0x42, 0x4d] },
+    ] as const;
+    for (const image of cases) {
+      const base64 = btoa(Array.from(image.bytes, (byte) => String.fromCharCode(byte)).join(''));
+      const { docXml, pkg } = openFragment(
+        `<p><img src="data:${image.mime};base64,${base64}" width="10" height="20"></p>`
+      );
+      expect(docXml).toContain('w:drawing');
+      expect(pkg.partBytes.get(`/word/media/image1.${image.extension}`)).toBeDefined();
+    }
   });
 
   test('Word bare image dimensions use points', () => {

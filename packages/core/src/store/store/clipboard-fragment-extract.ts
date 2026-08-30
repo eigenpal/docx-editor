@@ -960,15 +960,19 @@ export function extractFragmentPackage(
     // case-folded keys.
     overrides: new Map(overrides),
   };
+  const fragmentPartBytes = new Map<string, Uint8Array>();
+  for (const [name, bytes] of entries) {
+    fragmentPartBytes.set(name.startsWith('/') ? name : `/${name}`, bytes);
+  }
   return {
     ok: true,
     bytes: writeZip(entries),
-    // partBytes mirrors the reader exactly (`partBytes: zip.entries` — EVERY zip
-    // entry keyed by entry name, [Content_Types].xml and .rels included), so
+    // partBytes mirrors the reader exactly: EVERY entry uses its canonical
+    // leading-slash name, including [Content_Types].xml and relationship parts.
     // `writeOoxmlPackage(result.package)` emits a zip the reader accepts.
     package: Object.freeze({
       parts: fragmentParts,
-      partBytes: new Map(entries),
+      partBytes: fragmentPartBytes,
       relationships: fragmentRelationships,
       externalTargets,
       contentTypes,
