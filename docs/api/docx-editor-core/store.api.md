@@ -1453,6 +1453,7 @@ export type FragmentExtractResult = {
     readonly lastMarkCovered: boolean;
     readonly mediaBytes: number;
     readonly ok: true;
+    readonly package: OoxmlPackage;
 } | {
     readonly ok: false;
     readonly reason: FragmentExtractRejection;

@@ -105,11 +105,19 @@ const NOTE_MARK_RUN =
 /** Strip every projected note-reference run whose `kind:id` is in `keys`, in ONE
  *  linear scan — an alternation of thousands of marks scans near-quadratically.
  *  The pattern only matches XML the projection itself emitted (escapeXml escapes
- *  quotes, so run TEXT can never form the attribute shape). */
-export function stripNoteMarks(block: string, keys: ReadonlySet<string>): string {
-  return block.replace(NOTE_MARK_RUN, (whole, kind: string, id: string) =>
-    keys.has(`${kind}:${id}`) ? '' : whole
-  );
+ *  quotes, so run TEXT can never form the attribute shape). A stripped mark
+ *  degrades to its `fallbacks` run (the anchor's visible '[1]') when one exists,
+ *  so a dropped note loses its body, never its visible citation text. */
+export function stripNoteMarks(
+  block: string,
+  keys: ReadonlySet<string>,
+  fallbacks?: ReadonlyMap<string, string>
+): string {
+  return block.replace(NOTE_MARK_RUN, (whole, kind: string, id: string) => {
+    const key = `${kind}:${id}`;
+    if (!keys.has(key)) return whole;
+    return fallbacks?.get(key) ?? '';
+  });
 }
 
 export function clipboardNotesPartXml(

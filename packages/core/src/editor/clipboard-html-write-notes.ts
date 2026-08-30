@@ -10,7 +10,7 @@ import {
 import { relationshipsOf } from '../store/package/package-edit.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { isElement } from './clipboard-html-write-tree.ts';
-import type { RenderContext } from './clipboard-html-write.ts';
+import type { FieldState, RenderContext } from './clipboard-html-write.ts';
 
 export type WordNoteKind = 'footnote' | 'endnote';
 
@@ -38,15 +38,47 @@ export function noteIdsOf(root: OoxmlElement | null, kind: WordNoteKind): Readon
   return ids;
 }
 
+type AdvanceFieldState = (node: OoxmlElement, fields: FieldState) => void;
+
+/** Collect the citations the renderer would actually EMIT: content it suppresses
+ *  (tracked deletions, complex-field instruction regions, directly vanished runs)
+ *  must not ship a note body, or an anchor-less definition div pastes back as
+ *  visible body text. Mirrors `renderRun`'s suppression order; style-cascaded
+ *  vanish is not resolved here — a directly hidden citation is the real case. */
 function collectNoteReferences(
   node: OoxmlElement,
-  out: Array<{ readonly kind: WordNoteKind; readonly id: number }>
+  out: Array<{ readonly kind: WordNoteKind; readonly id: number }>,
+  field: FieldState,
+  advance: AdvanceFieldState
 ): void {
   for (const child of node.children) {
     if (!isElement(child)) continue;
-    // Deleted content never renders, so its citations must not ship note bodies —
-    // a tracked-deleted (possibly redacted) note would resurface on paste.
-    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') continue;
+    // Deleted content never renders, but its fldChars still drive the state.
+    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') {
+      if (!field.inert) advance(child, field);
+      continue;
+    }
+    if (child.kind === 'run') {
+      if (child.children.some((inner) => inner.kind === 'fldChar')) {
+        if (!field.inert) advance(child, field);
+        continue;
+      }
+      if (child.children.some((inner) => inner.kind === 'instrText')) continue;
+      if (!field.inert && field.stack.some((mode) => mode === 'instr')) continue;
+      const rPr = child.children.find((inner) => inner.kind === 'runProperties');
+      if (rPr && isElement(rPr)) {
+        const vanish = rPr.children.find(
+          (inner) =>
+            isElement(inner) &&
+            inner.namespaceUri === WML_NAMESPACE_URI &&
+            inner.localName === 'vanish'
+        );
+        if (vanish && isElement(vanish)) {
+          const val = attributeValueOf(vanish, 'val', WML_NAMESPACE_URI);
+          if (!(val === '0' || val === 'false' || val === 'off')) continue;
+        }
+      }
+    }
     if (
       child.namespaceUri === WML_NAMESPACE_URI &&
       (child.localName === 'footnoteReference' || child.localName === 'endnoteReference')
@@ -60,7 +92,7 @@ function collectNoteReferences(
       }
       continue;
     }
-    collectNoteReferences(child, out);
+    collectNoteReferences(child, out, field, advance);
   }
 }
 
@@ -86,7 +118,8 @@ function noteElementOf(
  */
 export function shippedNoteIds(
   ctx: RenderContext,
-  roots: Record<WordNoteKind, OoxmlElement | null>
+  roots: Record<WordNoteKind, OoxmlElement | null>,
+  advance: AdvanceFieldState
 ): Record<WordNoteKind, Set<number>> {
   const shipped: Record<WordNoteKind, Set<number>> = {
     footnote: new Set(ctx.noteOrdinals.footnote.keys()),
@@ -100,8 +133,13 @@ export function shippedNoteIds(
     const current = queue.pop()!;
     const element = noteElementOf(roots[current.kind], current.kind, current.id);
     if (element === null) continue;
+    // The same balance probe renderNoteList's block render runs: an unbalanced
+    // note body disarms the field machinery, so its citations DO render there.
+    const probe: FieldState = { stack: [], inert: false };
+    advance(element, probe);
+    const field: FieldState = { stack: [], inert: probe.stack.length > 0 };
     const references: Array<{ readonly kind: WordNoteKind; readonly id: number }> = [];
-    collectNoteReferences(element, references);
+    collectNoteReferences(element, references, field, advance);
     for (const reference of references) {
       if (!ctx.availableNotes[reference.kind].has(reference.id)) continue;
       if (shipped[reference.kind].has(reference.id)) continue;

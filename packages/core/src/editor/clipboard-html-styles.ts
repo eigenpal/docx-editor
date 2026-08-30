@@ -51,7 +51,9 @@ export function wordParagraphStyleId(element: Element, wordHtml: boolean): strin
   // document defines the Heading styles. A plain web <h1> keeps the direct
   // bold+size fallback instead of referencing a style the host may not carry;
   // the engine's own writer marks headings with a `Heading<N>` CLASS, which the
-  // loop above maps in every dialect.
+  // loop above maps in every dialect — and marks a DIRECT `w:outlineLvl` heading
+  // `docx-outline`, which must NOT gain a Heading style on the round trip.
+  if (element.classList.contains('docx-outline')) return undefined;
   const headingTag = wordHtml ? /^h([1-6])$/.exec(tagOf(element)) : null;
   return headingTag ? `Heading${headingTag[1]}` : undefined;
 }

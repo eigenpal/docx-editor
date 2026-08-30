@@ -670,10 +670,16 @@ function renderParagraph(
   const heading = headingLevelOf(ctx, pPr);
   const tag = heading === null ? 'p' : `h${heading.level}`;
   // The `Heading<N>` class is the marker the read lane maps back to the STYLE in
-  // every dialect — earned only by a real Heading style, so a direct outline level
-  // on plain body text does not acquire a style on the round trip.
+  // every dialect — earned only by a real Heading style. A direct outline level
+  // gets the explicit `docx-outline` class instead, which the read lane's
+  // heading-TAG fallback recognizes and skips, so plain body text does not
+  // acquire a Heading style on the round trip.
   const headingAttr =
-    heading === null ? classAttr : heading.fromStyle ? ` class="Heading${heading.level}"` : '';
+    heading === null
+      ? classAttr
+      : heading.fromStyle
+        ? ` class="Heading${heading.level}"`
+        : ' class="docx-outline"';
   return `<${tag}${headingAttr}${dirAttr}${styleAttr}>${inner}</${tag}>`;
 }
 
@@ -725,7 +731,10 @@ function renderBlocks(
   const emitListItem = (paragraph: OoxmlElement, placement: ListPlacement): void => {
     const depth = placement.level + 1;
     while (openLists.length > depth) closeTopList();
-    if (openLists.length === depth && openLists[depth - 1]!.numId !== placement.numId) {
+    // A DIFFERENT list closes every open level, not just the top: a new numId
+    // starting at ilvl >= 1 must not nest inside the previous list's outer
+    // wrapper, or the read lane hands its items the old list's identity.
+    while (openLists.length > 0 && openLists[openLists.length - 1]!.numId !== placement.numId) {
       closeTopList();
     }
     while (openLists.length < depth) {
@@ -862,7 +871,11 @@ export function interopHtmlFromFragmentPackage(
   // The body renders FIRST (assigning reference ordinals), then the shipped set
   // closes over cross-note references before the note lists render.
   const bodyHtml = renderBlocks(ctx, body.children);
-  const shipped = shippedNoteIds(ctx, { footnote: footnotesRoot, endnote: endnotesRoot });
+  const shipped = shippedNoteIds(
+    ctx,
+    { footnote: footnotesRoot, endnote: endnotesRoot },
+    advanceFieldState
+  );
   return (
     bodyHtml +
     renderNoteList(ctx, 'footnote', footnotesRoot, shipped.footnote, renderBlocks) +

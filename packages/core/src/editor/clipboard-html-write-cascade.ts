@@ -7,7 +7,7 @@ import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import { relationshipsOf } from '../store/package/package-edit.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
-import { MAX_STYLE_BASED_ON_DEPTH } from '../layout/style-cascade.ts';
+import { MAX_STYLE_BASED_ON_DEPTH, MAX_STYLE_DEFINITIONS } from '../layout/style-cascade.ts';
 import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
 
 const STYLES_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles';
@@ -56,6 +56,10 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
       defaultCharacterStyleId,
     };
   }
+  // The same MAX_STYLE_DEFINITIONS cap and last-duplicate-wins default rule as
+  // layout's buildStyleCascadeTable: styles.xml is attacker-controlled, and the
+  // copy lane must not scan more (or resolve a default the painter revoked).
+  let counted = 0;
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName === 'docDefaults') {
@@ -64,16 +68,22 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
       continue;
     }
     if (child.localName !== 'style') continue;
+    if (counted >= MAX_STYLE_DEFINITIONS) break;
+    counted += 1;
     const id = attributeValueOf(child, 'styleId', WML_NAMESPACE_URI);
     if (!id) continue;
     byId.set(id, child);
     const isDefault = attributeValueOf(child, 'default', WML_NAMESPACE_URI);
     const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
     // Every legal ST_OnOff spelling — layout/style-cascade.ts's isDefaultFlag
-    // documents the same 'on' trap.
+    // documents the same 'on' trap. A later duplicate styleId WITHOUT the flag
+    // revokes the default, so the last definition wins like the cascade table.
     if (isDefault === '1' || isDefault === 'true' || isDefault === 'on') {
       if (type === 'paragraph') defaultParagraphStyleId = id;
       else if (type === 'character') defaultCharacterStyleId = id;
+    } else {
+      if (defaultParagraphStyleId === id) defaultParagraphStyleId = null;
+      if (defaultCharacterStyleId === id) defaultCharacterStyleId = null;
     }
   }
   return { byId, docDefaultsRPr, docDefaultsPPr, defaultParagraphStyleId, defaultCharacterStyleId };
@@ -185,6 +195,13 @@ export function foldAttribute(
   return value;
 }
 
+/** ONE ST_OnOff read, matching `layout/style-toggles.ts`: only '0', 'false' and
+ *  'off' are falsy — 'none' is NOT a legal off spelling, and treating it as one
+ *  made copy drop formatting the painter shows. */
+function onOffValue(val: string | undefined): boolean {
+  return !(val === '0' || val === 'false' || val === 'off');
+}
+
 /** Plain boolean semantics: the last source carrying the property wins.
  *  For paragraph booleans and non-toggle run booleans (`w:rtl`). */
 export function toggleOn(sources: readonly OoxmlElement[], localName: string): boolean {
@@ -192,8 +209,7 @@ export function toggleOn(sources: readonly OoxmlElement[], localName: string): b
   for (const source of sources) {
     const child = wmlChild(source, localName);
     if (!child) continue;
-    const val = wmlVal(child);
-    state = !(val === '0' || val === 'false' || val === 'off' || val === 'none');
+    state = onOffValue(wmlVal(child));
   }
   return state;
 }
@@ -207,8 +223,7 @@ function toggleLevelValue(
   for (const source of sources) {
     const child = wmlChild(source, localName);
     if (!child) continue;
-    const val = wmlVal(child);
-    value = !(val === '0' || val === 'false' || val === 'off' || val === 'none');
+    value = onOffValue(wmlVal(child));
   }
   return value;
 }
@@ -219,10 +234,7 @@ function toggleLevelValue(
  *  otherwise short-circuits ON; otherwise the style levels XOR. */
 export function runToggleOn(layers: RunPropertyLayers, localName: string): boolean {
   const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
-  if (direct) {
-    const val = wmlVal(direct);
-    return !(val === '0' || val === 'false' || val === 'off' || val === 'none');
-  }
+  if (direct) return onOffValue(wmlVal(direct));
   const paragraph = toggleLevelValue(layers.paragraphLevel, localName);
   const character = toggleLevelValue(layers.characterLevel, localName);
   if (character === false) return false;
@@ -236,10 +248,7 @@ export function runToggleOn(layers: RunPropertyLayers, localName: string): boole
  *  nearest level that states the property wins outright, with no XOR. */
 export function runBooleanOn(layers: RunPropertyLayers, localName: string): boolean {
   const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
-  if (direct) {
-    const val = wmlVal(direct);
-    return !(val === '0' || val === 'false' || val === 'off' || val === 'none');
-  }
+  if (direct) return onOffValue(wmlVal(direct));
   const character = toggleLevelValue(layers.characterLevel, localName);
   if (character !== undefined) return character;
   const paragraph = toggleLevelValue(layers.paragraphLevel, localName);

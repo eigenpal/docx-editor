@@ -54,15 +54,18 @@ export const WORD_JC_TO_TEXT_ALIGN: Readonly<Record<string, string>> = {
   distribute: 'justify',
 };
 
-/** Quote a file-supplied font name without removing Unicode letters. Character
- *  escaping delegates to the engine's ONE designated CSS-string escaper, so a
- *  future hardening there covers this sink too; only the trim/length guards and
- *  the quoting stay local. */
+/** Quote a file-supplied font name without removing Unicode letters. The
+ *  allowlist strip comes FIRST: the read lane's inline-style parser splits on
+ *  ';' and ':' without quote awareness, so a `;`/`:` surviving inside the quoted
+ *  family would smuggle whole declarations out of an attacker-chosen font name.
+ *  `escapeCssString` (the engine's ONE designated CSS escaper) then covers what
+ *  the allowlist keeps. */
 export function wordCssFontFamily(raw: string): string | null {
-  const value = raw.trim();
-  if (value.length === 0 || value.length > 255) return null;
-  const escaped = escapeCssString(value);
-  return escaped.replace(/\\[0-9a-f]{1,6} ?/g, '').length === 0 ? null : `"${escaped}"`;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > 255) return null;
+  const value = trimmed.replace(/[^\p{L}\p{N} _.,-]/gu, '');
+  if (value.length === 0) return null;
+  return `"${escapeCssString(value)}"`;
 }
 
 export function wordBorderCss(edge: OoxmlElement | null): string | null {

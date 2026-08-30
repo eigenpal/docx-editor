@@ -19,9 +19,9 @@ import {
 import type { OoxmlExternalTarget, OoxmlPackage } from '../package/ooxml-package.ts';
 import type { ContentTypeIndex } from '../package/content-types.ts';
 import { resolveContentTypeOf, relationshipsOf } from '../package/package-edit.ts';
-import { resolveInternalTarget } from '../package/opc-names.ts';
+import { resolveInternalTarget, validateExternalTarget } from '../package/opc-names.ts';
 import type { RelationshipRecord } from '../package/relationships.ts';
-import { escapeXmlAttribute, sanitizeHref } from '../package/sinks.ts';
+import { escapeXmlAttribute } from '../package/sinks.ts';
 import { resolveNotesPart } from '../package/note-references.ts';
 import { writeZip, strToU8 } from '../package/zip.ts';
 import { applyTreeOp } from './tree-op-apply.ts';
@@ -939,7 +939,9 @@ export function extractFragmentPackage(
         id: record.id,
         type: record.type,
         rawTarget: record.rawTarget,
-        sinkSafe: sanitizeHref(record.rawTarget).ok,
+        // The SAME verdict readOoxmlPackage(bytes) would compute — the twin must
+        // never disagree with a reread of its own zip.
+        sinkSafe: validateExternalTarget(record.rawTarget).ok,
       });
     }
   }

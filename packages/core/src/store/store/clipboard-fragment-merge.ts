@@ -724,6 +724,10 @@ export function mergeFragmentIntoPackage(
       const type = attributeValueOf(child, 'type');
       if (type === 'separator' || type === 'continuationSeparator') continue;
       if (id === undefined || !referenced.has(canonicalNoteId(id))) continue;
+      // FIRST definition wins per canonical id, matching the closure's index: a
+      // crafted '07'/'7' pair must not transplant two bodies with one id-map slot
+      // (references would alias the second while the first orphans unseen).
+      if (idMap.has(canonicalNoteId(id))) continue;
       const fresh = String(nextNoteId++);
       idMap.set(canonicalNoteId(id), fresh);
       bodies.push(withRewrittenAttribute(child, WML_NAMESPACE_URI, 'id', fresh));

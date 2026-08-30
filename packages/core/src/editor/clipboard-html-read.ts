@@ -15,6 +15,7 @@ import {
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-links.ts';
 import { createGestureMemo } from './clipboard-html-memo.ts';
+import { reconcileUnreachableNotes } from './clipboard-html-note-reconcile.ts';
 import { allocateList, msoListNumPr } from './clipboard-html-list-alloc.ts';
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import {
@@ -149,6 +150,9 @@ export interface Projection {
    *  note unreachable from the body through these edges is reconciled back into
    *  visible body text after the walk. */
   readonly noteNoteRefs: Map<string, Array<{ kind: ClipboardNoteKind; id: number }>>;
+  /** Emitted mark's visible text (as a run), keyed `kind:id` — the strip fallback
+   *  when a claimed note is later dropped or moved, so '[1]' stays visible. */
+  readonly noteMarkFallbacks: Map<string, string>;
   /** The exact definition elements the notes pass consumed; only these skip the body
    *  walk, so a duplicate-id or unreferenced definition stays lossless in the body. */
   readonly definedNoteElements: ReadonlySet<Element>;
@@ -307,6 +311,14 @@ function collectInline(
       const localName =
         noteReference.kind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
       runs.push(`<w:r>${rPrXml(markRun)}<w:${localName} w:id="${noteReference.id}"/></w:r>`);
+      // The anchor's visible number, kept as the strip fallback: if the note is
+      // later dropped (budget) or moved, the mark degrades to this text instead
+      // of vanishing — main pasted the literal '[1]' and so must we.
+      const visible = (node.textContent ?? '').replace(/[ \t\r\n\f\v]+/g, ' ').trim();
+      const markKey = `${noteReference.kind}:${noteReference.id}`;
+      if (visible.length > 0 && !p.noteMarkFallbacks.has(markKey)) {
+        p.noteMarkFallbacks.set(markKey, textRunXml(visible, markRun));
+      }
       if (ctx.noteBody === undefined) {
         p.bodyNoteRefs[noteReference.kind].add(noteReference.id);
       } else {
@@ -780,6 +792,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     definedNotes,
     bodyNoteRefs: { footnote: new Set(), endnote: new Set() },
     noteNoteRefs: new Map(),
+    noteMarkFallbacks: new Map(),
     definedNoteElements,
   };
   const rootCtx: FlowContext = {
@@ -843,13 +856,15 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       }
       if (droppedKeys.size > 0) {
         for (let at = 0; at < blocks.length; at += 1) {
-          blocks[at] = stripNoteMarks(blocks[at]!, droppedKeys);
+          blocks[at] = stripNoteMarks(blocks[at]!, droppedKeys, projection.noteMarkFallbacks);
         }
         for (const keptKind of ['footnote', 'endnote'] as const) {
           for (const [keptId, keptBlocks] of projection.notes[keptKind]) {
             projection.notes[keptKind].set(
               keptId,
-              keptBlocks.map((block) => stripNoteMarks(block, droppedKeys))
+              keptBlocks.map((block) =>
+                stripNoteMarks(block, droppedKeys, projection.noteMarkFallbacks)
+              )
             );
           }
         }
@@ -861,103 +876,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   // A dropped note is real loss, so it keeps the truncation flag raised.
   projection.truncated = bodyTruncated || notesDropped;
   projection.lastMarkCovered = bodyLastMarkCovered;
-  // Reconcile: a claimed note is kept only when REACHABLE from the body through
-  // kept notes' cross-references (a mutual-citation island must not hide from
-  // the lossless fallback). Moved blocks re-home note rels onto document rels.
-  const movedNotes = new Set<string>();
-  const reachableNotes: Record<ClipboardNoteKind, Set<number>> = {
-    footnote: new Set(),
-    endnote: new Set(),
-  };
-  {
-    const computeReachable = (): void => {
-      reachableNotes.footnote.clear();
-      reachableNotes.endnote.clear();
-      const queue: Array<{ kind: ClipboardNoteKind; id: number }> = [];
-      const reach = (kind: ClipboardNoteKind, id: number): void => {
-        if (movedNotes.has(`${kind}:${id}`)) return;
-        if (!projection.notes[kind].has(id) || reachableNotes[kind].has(id)) return;
-        reachableNotes[kind].add(id);
-        queue.push({ kind, id });
-      };
-      for (const kind of ['footnote', 'endnote'] as const) {
-        for (const id of projection.bodyNoteRefs[kind]) reach(kind, id);
-      }
-      // A moved note's blocks live in the body, so its citations seed too.
-      for (const key of movedNotes) {
-        for (const edge of projection.noteNoteRefs.get(key) ?? []) reach(edge.kind, edge.id);
-      }
-      while (queue.length > 0) {
-        const current = queue.pop()!;
-        for (const edge of projection.noteNoteRefs.get(`${current.kind}:${current.id}`) ?? []) {
-          reach(edge.kind, edge.id);
-        }
-      }
-    };
-    // Move ONE unreachable note at a time and recompute: moving it turns its own
-    // citations into body references that keep their targets as real notes.
-    for (;;) {
-      computeReachable();
-      let movedOne = false;
-      for (const kind of ['footnote', 'endnote'] as const) {
-        for (const id of projection.notes[kind].keys()) {
-          const key = `${kind}:${id}`;
-          if (reachableNotes[kind].has(id) || movedNotes.has(key)) continue;
-          movedNotes.add(key);
-          movedOne = true;
-          break;
-        }
-        if (movedOne) break;
-      }
-      if (!movedOne) break;
-    }
-  }
-  // A moved note's definition no longer exists, so any citation of a moved id
-  // (in kept notes or other moved blocks) strips too, or a reference dangles.
-  if (movedNotes.size > 0) {
-    for (const keptKind of ['footnote', 'endnote'] as const) {
-      for (const [keptId, keptBlocks] of projection.notes[keptKind]) {
-        if (movedNotes.has(`${keptKind}:${keptId}`)) continue;
-        projection.notes[keptKind].set(
-          keptId,
-          keptBlocks.map((block) => stripNoteMarks(block, movedNotes))
-        );
-      }
-    }
-  }
-  for (const kind of ['footnote', 'endnote'] as const) {
-    for (const [id, noteBlocks] of [...projection.notes[kind]]) {
-      if (!movedNotes.has(`${kind}:${id}`)) continue;
-      projection.notes[kind].delete(id);
-      definedNotes[kind].delete(id);
-      const relIdMap = new Map<string, string>();
-      for (const block of noteBlocks) {
-        // Drop the note's own number mark; it has no meaning in body flow. The
-        // patterns only ever match XML this projection just emitted.
-        const moved = stripNoteMarks(
-          block
-            // Tempered so the optional rPr scan can never cross a run boundary.
-            .replace(
-              /<w:r>(?:<w:rPr>(?:(?!<\/w:r>)[\s\S])*?<\/w:rPr>)?<w:(?:footnote|endnote)Ref\/><\/w:r>/g,
-              ''
-            ),
-          movedNotes
-        ).replace(/ r:(id|embed)="([^"]{1,32})"/g, (whole, attribute: string, oldId: string) => {
-          let mapped = relIdMap.get(oldId);
-          if (mapped === undefined) {
-            const source = projection.noteRels[kind].find((rel) => rel.id === oldId);
-            if (source === undefined) return whole;
-            mapped = allocateRel(projection, source.type, source.target, source.external);
-            relIdMap.set(oldId, mapped);
-          }
-          return ` r:${attribute}="${mapped}"`;
-        });
-        blocks.push(moved);
-        // The final paragraph changed: the coverage flag must describe IT.
-        projection.lastMarkCovered = false;
-      }
-    }
-  }
+  reconcileUnreachableNotes(projection, definedNotes, blocks, allocateRel);
   if (blocks.length === 0) return { ok: false, reason: 'no-content' };
   return { ok: true, projection, blocks };
 }
