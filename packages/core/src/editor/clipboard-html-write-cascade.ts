@@ -135,6 +135,8 @@ export interface RunPropertyLayers {
   /** Every source lowest-precedence first, for the non-toggle folds. */
   readonly all: readonly OoxmlElement[];
   readonly defaults: readonly OoxmlElement[];
+  /** Conditional table-style rPr — its OWN §17.7.3 XOR level, like the painter. */
+  readonly tableLevel: readonly OoxmlElement[];
   readonly paragraphLevel: readonly OoxmlElement[];
   readonly characterLevel: readonly OoxmlElement[];
   readonly direct: OoxmlElement | null;
@@ -144,14 +146,17 @@ export function runPropertyLayers(
   index: StyleIndex,
   paragraphPPr: OoxmlElement | null,
   ownRPr: OoxmlElement | null,
-  // Conditional table-style rPr, layered at the BOTTOM of the paragraph level:
-  // below the paragraph style, above docDefaults, per §17.7.2's ordering.
+  // Conditional table-style rPr: its own level below the paragraph style, above
+  // docDefaults, per §17.7.2's ordering — and its OWN toggle XOR level, matching
+  // layout/style-toggles.ts (a table <w:b/> plus a paragraph-style <w:b/> paints
+  // NOT-bold, and the copy must agree).
   tableRPr?: readonly OoxmlElement[]
 ): RunPropertyLayers {
   const defaults: OoxmlElement[] = [];
   if (index.docDefaultsRPr) defaults.push(index.docDefaultsRPr);
+  const tableLevel: OoxmlElement[] = [];
+  if (tableRPr) for (const source of tableRPr) tableLevel.push(source);
   const paragraphLevel: OoxmlElement[] = [];
-  if (tableRPr) for (const source of tableRPr) paragraphLevel.push(source);
   // Same rule as paragraphPropertySources: Normal applies only without a pStyle.
   const paragraphStyleId = wmlVal(wmlChild(paragraphPPr, 'pStyle'));
   for (const style of styleChain(
@@ -169,9 +174,9 @@ export function runPropertyLayers(
     const rPr = wmlChild(style, 'rPr');
     if (rPr) characterLevel.push(rPr);
   }
-  const all = [...defaults, ...paragraphLevel, ...characterLevel];
+  const all = [...defaults, ...tableLevel, ...paragraphLevel, ...characterLevel];
   if (ownRPr) all.push(ownRPr);
-  return { all, defaults, paragraphLevel, characterLevel, direct: ownRPr };
+  return { all, defaults, tableLevel, paragraphLevel, characterLevel, direct: ownRPr };
 }
 
 /** The last source carrying the named property child wins. */
@@ -243,12 +248,15 @@ function toggleLevelValue(
 export function runToggleOn(layers: RunPropertyLayers, localName: string): boolean {
   const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
   if (direct) return onOffValue(wmlVal(direct));
+  const table = toggleLevelValue(layers.tableLevel, localName);
   const paragraph = toggleLevelValue(layers.paragraphLevel, localName);
   const character = toggleLevelValue(layers.characterLevel, localName);
   if (character === false) return false;
   if (character === undefined && paragraph === false) return false;
+  if (character === undefined && paragraph === undefined && table === false) return false;
   if (toggleLevelValue(layers.defaults, localName) === true) return true;
-  return (paragraph === true) !== (character === true);
+  // Each style level XORs, table included — the painter keeps them separate too.
+  return ((table === true) !== (paragraph === true)) !== (character === true);
 }
 
 /** Plain-cascade boolean for run properties that are NOT §17.7.3 toggles
@@ -261,5 +269,7 @@ export function runBooleanOn(layers: RunPropertyLayers, localName: string): bool
   if (character !== undefined) return character;
   const paragraph = toggleLevelValue(layers.paragraphLevel, localName);
   if (paragraph !== undefined) return paragraph;
+  const table = toggleLevelValue(layers.tableLevel, localName);
+  if (table !== undefined) return table;
   return toggleLevelValue(layers.defaults, localName) === true;
 }

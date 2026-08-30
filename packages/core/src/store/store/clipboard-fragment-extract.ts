@@ -583,13 +583,18 @@ export function extractFragmentPackage(
   // the ship set and the scrub set cannot drift.
   let footnotesPart = resolveNotesPart(pkg, 'footnote');
   let endnotesPart = resolveNotesPart(pkg, 'endnote');
-  // Ids match through `canonicalNoteId`: the closure hands out canonical keys, so
-  // a `w:id="07"` definition still satisfies a `w:id="7"` reference.
+  // A definition matches by SHAPE (w:footnote/w:endnote by name), not typed kind:
+  // an out-of-allowlist `w:type` demotes the element to generic while its typed
+  // reference stays, and skipping it here would ship the reference with no body —
+  // the paste-side fail-closed scrub then deletes the citation. Ids match through
+  // `canonicalNoteId`, so a `w:id="07"` definition satisfies a `w:id="7"` reference.
+  const isNoteShaped = (node: OoxmlNode, kind: 'footnote' | 'endnote'): node is OoxmlElement =>
+    isElementNode(node) && node.namespaceUri === WML_NAMESPACE_URI && node.localName === kind;
   const noteBodyOf = (kind: 'footnote' | 'endnote', id: string): OoxmlNode | null => {
     const part = kind === 'footnote' ? footnotesPart : endnotesPart;
     if (!part || !isElementNode(part.root)) return null;
     for (const child of part.root.children) {
-      if (!isElementNode(child) || child.kind !== 'note') continue;
+      if (!isNoteShaped(child, kind)) continue;
       const childId = attributeValueOf(child, 'id');
       if (childId !== undefined && canonicalNoteId(childId) === id) return child;
     }
@@ -602,11 +607,15 @@ export function extractFragmentPackage(
   if (footnoteIds.size === 0) footnotesPart = null;
   if (endnoteIds.size === 0) endnotesPart = null;
 
-  const includedNotes = (notesPart: OoxmlPart | null, ids: ReadonlySet<string>): OoxmlElement[] => {
+  const includedNotes = (
+    notesPart: OoxmlPart | null,
+    kind: 'footnote' | 'endnote',
+    ids: ReadonlySet<string>
+  ): OoxmlElement[] => {
     if (!notesPart || !isElementNode(notesPart.root)) return [];
     const notes: OoxmlElement[] = [];
     for (const child of notesPart.root.children) {
-      if (!isElementNode(child) || child.kind !== 'note') continue;
+      if (!isNoteShaped(child, kind)) continue;
       const id = attributeValueOf(child, 'id');
       const type = attributeValueOf(child, 'type');
       if (type === 'separator' || type === 'continuationSeparator') {
@@ -620,8 +629,8 @@ export function extractFragmentPackage(
     }
     return notes;
   };
-  const footnotes = includedNotes(footnotesPart, footnoteIds);
-  const endnotes = includedNotes(endnotesPart, endnoteIds);
+  const footnotes = includedNotes(footnotesPart, 'footnote', footnoteIds);
+  const endnotes = includedNotes(endnotesPart, 'endnote', endnoteIds);
   const noteBodies: OoxmlNode[] = [...footnotes, ...endnotes];
 
   // Closure inputs: blocks plus note bodies.

@@ -329,7 +329,13 @@ function collectInline(
       }
       return;
     }
-    // A dangling or cross-note reference keeps its visible text instead of a live mark.
+    // A dangling reference (definition absent from the payload) keeps its visible
+    // text ONLY: falling into the anchor branch would emit a hyperlink to a
+    // bookmark that will never exist plus a stray `_ftnref` bookmark.
+    for (const child of Array.from(node.childNodes)) {
+      collectInline(child, depth + 1, nextCtx, runs, p);
+    }
+    return;
   }
   if (tag === 'a') {
     const href = node.getAttribute('href');
@@ -385,7 +391,14 @@ function paragraphContextOf(
   if (ctx.para.jc) para.jc = ctx.para.jc;
   let run = { ...ctx.run };
   const heading = HEADING_SZ[tag];
-  if (heading !== undefined && styleId === undefined) {
+  // `docx-outline` marks a DIRECT w:outlineLvl on otherwise plain text: the
+  // writer's inline CSS already carries its real formatting, and the bold+size
+  // heading fallback would mint bold the source never had.
+  if (
+    heading !== undefined &&
+    styleId === undefined &&
+    !element.classList.contains('docx-outline')
+  ) {
     run.bold = true;
     run.szHalfPoints = heading;
   }
@@ -683,24 +696,18 @@ function projectFlow(
         continue;
       }
     }
-    collectInline(node, depth, ctx, pending, p);
-  }
-  // Leading furniture splices into this flow's FIRST paragraph right after its
-  // pPr, so a bookmark that preceded the content targets the position BEFORE
-  // it; a non-paragraph first block gets a furniture paragraph ahead of it.
-  if (leadingFurniture.length > 0) {
-    const first = out[before];
-    if (first !== undefined && first.startsWith('<w:p>')) {
-      out[before] = first.replace(
-        /^(<w:p>(?:<w:pPr>(?:(?!<\/w:pPr>)[\s\S])*?<\/w:pPr>)?)/,
-        `$1${leadingFurniture.join('')}`
-      );
-    } else if (first !== undefined) {
-      out.splice(before, 0, paragraphXml(furniturePara(), leadingFurniture));
-    } else {
-      pending = leadingFurniture.concat(pending);
+    // An inter-block text node of pure whitespace — NBSP included — is layout
+    // chrome, never a paragraph of its own. NBSP INSIDE a paragraph's flow (real
+    // pending runs exist) stays real content Word preserves.
+    if (
+      node.nodeType === 3 &&
+      /^[\s\u00a0]+$/.test(node.nodeValue ?? '') &&
+      isFurnitureOnly(pending)
+    ) {
+      p.nodesLeft -= 1;
+      continue;
     }
-    leadingFurniture = [];
+    collectInline(node, depth, ctx, pending, p);
   }
   // An explicit paragraph holding only furniture (a bookmark in an empty <p>)
   // keeps its furniture: the fold-into-previous in flush() would land the anchor
@@ -716,6 +723,25 @@ function projectFlow(
     p.lastMarkCovered = ctx.paragraphMarkCovered;
   }
   flush();
+  // Leading furniture splices into this flow's FIRST paragraph right after its
+  // pPr, so a bookmark that preceded the content targets the position BEFORE
+  // it; a non-paragraph first block gets a furniture paragraph ahead of it. This
+  // runs AFTER the final flush — a bookmark-only flow moves its furniture here
+  // during that flush, and resolving earlier would discard it.
+  if (leadingFurniture.length > 0) {
+    const first = out[before];
+    if (first !== undefined && first.startsWith('<w:p>')) {
+      out[before] = first.replace(
+        /^(<w:p>(?:<w:pPr>(?:(?!<\/w:pPr>)[\s\S])*?<\/w:pPr>)?)/,
+        `$1${leadingFurniture.join('')}`
+      );
+    } else if (first !== undefined) {
+      out.splice(before, 0, paragraphXml(furniturePara(), leadingFurniture));
+    } else {
+      pending = leadingFurniture.concat(pending);
+    }
+    leadingFurniture = [];
+  }
   // Furniture the fold could not place (previous block is a table, or nothing
   // followed) keeps its own paragraph — internal links point at these bookmarks.
   // It emits BEFORE a pending page break: the anchor preceded the break in the
@@ -861,6 +887,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   for (let index = 0; index < claimed.length; index += 1) {
     const note = claimed[index]!;
     projection.truncated = false;
+    const budgetBeforeNote = projection.nodesLeft;
     const noteBlocks: string[] = [];
     projectFlow(
       Array.from(note.element.childNodes),
@@ -902,6 +929,14 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
             );
           }
         }
+      }
+      // The body walk skipped the claimed divs, so their text lives NOWHERE yet.
+      // Refund exactly what the failed walk consumed and re-project the dropped
+      // definitions as body flow — partial text beats none, and the refund keeps
+      // the total bounded by what was already charged.
+      projection.nodesLeft = budgetBeforeNote;
+      for (let drop = index; drop < claimed.length && projection.nodesLeft > 0; drop += 1) {
+        projectFlow(Array.from(claimed[drop]!.element.childNodes), 0, rootCtx, projection, blocks);
       }
       break;
     }

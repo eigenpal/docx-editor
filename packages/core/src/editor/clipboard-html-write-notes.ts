@@ -63,6 +63,10 @@ function collectNoteReferences(
 ): void {
   for (const child of node.children) {
     if (!isElement(child)) continue;
+    // The renderer hands drawings to renderDrawing (an <img> only): a citation
+    // inside a textbox never emits an anchor, so it must not ship a body either —
+    // the same skip advanceFieldState applies.
+    if (child.kind === 'drawing') continue;
     // Deleted content never renders, but its fldChars still drive the state.
     if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') {
       if (!field.inert) advance(child, field);
@@ -88,7 +92,15 @@ function collectNoteReferences(
       if (child.children.some((inner) => inner.kind === 'instrText')) continue;
       if (!field.inert && field.stack.some((mode) => mode === 'instr')) continue;
       const rPr = child.children.find((inner) => inner.kind === 'runProperties');
-      const layers = runPropertyLayers(ctx.styles, pPr, rPr && isElement(rPr) ? rPr : null);
+      // ctx.tableRPr matches what renderRun outside a table sees; a citation
+      // inside a note-body table cell resolves without that cell's conditional
+      // layer, the one residual divergence from the renderer.
+      const layers = runPropertyLayers(
+        ctx.styles,
+        pPr,
+        rPr && isElement(rPr) ? rPr : null,
+        ctx.tableRPr
+      );
       if (runToggleOn(layers, 'vanish')) continue;
     }
     if (

@@ -762,7 +762,8 @@ function renderBlocks(
       // from the running counter so an interrupting paragraph does not renumber it.
       const levelIndex = openLists.length;
       const info = listLevelInfo(ctx, placement.numId, placement.abstractId, levelIndex);
-      const consumed = listProgress.get(`${placement.numId}:${levelIndex}`) ?? 0;
+      const consumed =
+        listProgress.get(`${placement.abstractId}:${placement.numId}:${levelIndex}`) ?? 0;
       const startValue = info.start + consumed;
       const tag: 'ol' | 'ul' = info.fmt === 'bullet' ? 'ul' : 'ol';
       const listType =
@@ -777,15 +778,17 @@ function renderBlocks(
         : `<${tag}>`;
       openLists.push({ tag, numId: placement.numId, abstractId: placement.abstractId });
     }
-    const progressKey = `${placement.numId}:${placement.level}`;
+    const progressKey = `${placement.abstractId}:${placement.numId}:${placement.level}`;
     listProgress.set(progressKey, (listProgress.get(progressKey) ?? 0) + 1);
-    // Word restarts sub-levels after each parent item. The level is the digits
-    // after the LAST separator, so a file-supplied numId containing ':' cannot
-    // confuse the prefix match.
-    const prefix = `${placement.numId}:`;
+    // Word restarts sub-levels after each parent item — across the whole ABSTRACT,
+    // so the per-level-numId pattern (List Number / List Number 2) restarts its
+    // sublists too, not only keys under the current item's numId. The level is
+    // the digits after the LAST separator, so a file-supplied id containing ':'
+    // cannot confuse the match.
+    const prefix = `${placement.abstractId}:`;
     for (const key of listProgress.keys()) {
       if (!key.startsWith(prefix)) continue;
-      const levelPart = key.slice(prefix.length);
+      const levelPart = key.slice(key.lastIndexOf(':') + 1);
       if (/^\d+$/.test(levelPart) && Number(levelPart) > placement.level) {
         listProgress.delete(key);
       }
