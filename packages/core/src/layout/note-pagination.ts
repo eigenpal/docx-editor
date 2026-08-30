@@ -360,6 +360,11 @@ function fingerprintNotesInput(input: NotesLayoutInput): string | null {
     // By CONTENT, not identity: a keystroke rebuilds the context object while every
     // resolved value stands still, and only a value move should invalidate the memo.
     input.refFields?.valuesToken ?? '',
+    // By CONTENT for the same reason as the REF values above: the properties object is
+    // re-read per package revision, and only a value move should repaint a DOCPROPERTY
+    // field inside a note. The link projectors are deliberately absent: they are rebuilt
+    // per pass but are pure over parts this memo already pins.
+    input.documentProperties ? JSON.stringify(input.documentProperties) : '',
     fingerprintNoteProps(input.documentFootnoteProps),
     fingerprintNoteProps(input.documentEndnoteProps),
     input.footnotePropsBySection.map(fingerprintNoteProps).join(';'),
@@ -409,7 +414,8 @@ function notesMemoFor(
     if (inputUnchanged && existing.hitsFingerprint === hitsFingerprint) {
       return { memo: existing, allHits: existing.allHits, reused: true };
     }
-    if (inputUnchanged && existing.identityFingerprint === fingerprintHitsIdentity(allHits)) {
+    const identityFingerprint = inputUnchanged ? fingerprintHitsIdentity(allHits) : null;
+    if (identityFingerprint !== null && existing.identityFingerprint === identityFingerprint) {
       // Only offsets moved (typing in a referencing paragraph): the reference set, marks
       // and note stories are unchanged, so the memo — and every cache hanging off its
       // mark contexts — survives. The fresh hit array replaces the stale one; per-page
@@ -423,6 +429,8 @@ function notesMemoFor(
   const fresh: NotesPassMemo = {
     hitsFingerprint,
     identityFingerprint: fingerprintHitsIdentity(allHits),
+    // (Recomputed here only when the memo above did not match; the common keystroke path
+    // computes it once.)
     inputFingerprint,
     allHits,
     provisionalMarks: provisionalNoteMarks(allHits, input),
@@ -639,6 +647,15 @@ function collectsAtEnd(pos: FootnotePosition): boolean {
  * marks and the old cache is released with them.
  */
 const noteStoryCachesByMarks = new WeakMap<NoteMarkContext, NoteStoryLayoutCache>();
+
+function noteStoryCacheFor(marks: NoteMarkContext): NoteStoryLayoutCache {
+  let cache = noteStoryCachesByMarks.get(marks);
+  if (!cache) {
+    cache = new Map();
+    noteStoryCachesByMarks.set(marks, cache);
+  }
+  return cache;
+}
 
 /** ONE cache-or-layout separator fetch, so the fallback-reason handling has one shape. */
 function separatorLayoutOf(
@@ -2108,14 +2125,10 @@ export function computeFootnoteReserves(
   let carry: NoteCarryMap = new Map();
   const refIndex = buildPageRefIndex(allRefs);
   const separatorCache = createNoteSeparatorCache();
-  // Keyed on the mark-context object: the reflow loop's rounds all share one marks
-  // object, so every round of a search lays each note once; a new pass mints new marks
-  // and with them a fresh cache (see {@link NoteStoryLayoutCache} for what the key omits).
-  let noteLayoutCache = noteStoryCachesByMarks.get(noteMarks);
-  if (!noteLayoutCache) {
-    noteLayoutCache = new Map();
-    noteStoryCachesByMarks.set(noteMarks, noteLayoutCache);
-  }
+  // Keyed on the mark-context object, which the memo keeps across keystrokes: unchanged
+  // notes reuse their story layouts until the memo (which pins the parts and inputs the
+  // key omits) is replaced. See {@link NoteStoryLayoutCache}.
+  const noteLayoutCache = noteStoryCacheFor(noteMarks);
   const holdOutOpts = layoutOpts(input, noteMarks);
   const isPageBottomFootnoteRef = (ref: PageRefHit): boolean =>
     ref.noteKind === 'footnote' && !collectsAtEnd(footnotePropsFor(input, ref.sectionIndex).pos);
@@ -2321,11 +2334,7 @@ export function attachNotesToLayout(
   }
   // Keyed on the FINAL mark context, whose identity the memo keeps while the sites
   // fingerprint stands, so unchanged notes reuse their story layouts across passes.
-  let noteLayoutCache = noteStoryCachesByMarks.get(noteMarks);
-  if (!noteLayoutCache) {
-    noteLayoutCache = new Map();
-    noteStoryCachesByMarks.set(noteMarks, noteLayoutCache);
-  }
+  const noteLayoutCache = noteStoryCacheFor(noteMarks);
 
   let carry: NoteCarryMap = new Map();
   const endnotesBySection = new Map<number, PageRefHit[]>();
@@ -2412,8 +2421,13 @@ export function attachNotesToLayout(
       // page by identity (it is what the session published), so an entry keyed only on
       // this pass's input is one generation behind and never hits — every pass then
       // republished a fresh page object for every footnote-bearing page, and the painter
-      // rebuilt their DOM on every keystroke.
-      if (attached !== page) memo.pageAttach.set(attached, entry);
+      // rebuilt their DOM on every keystroke. The reserve entry forwards for the same
+      // reason: the next reserve pass reads the published page.
+      if (attached !== page) {
+        memo.pageAttach.set(attached, entry);
+        const reserveEntry = memo.pageReserve.get(page);
+        if (reserveEntry) memo.pageReserve.set(attached, reserveEntry);
+      }
     }
     return attached;
   });
@@ -2705,9 +2719,11 @@ export function layoutSemanticDocumentWithNotes<
     optionsWithLists.session
   );
   const builtHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
-  // The session memo hands back the PREVIOUS pass's hit array and provisional marks by
-  // identity when their content is unchanged, which is what lets every per-page result
-  // below validate with two identity compares.
+  // The session memo hands back the previous pass's hit array by identity when nothing
+  // moved, and KEEPS its mark contexts when only offsets moved (a keystroke in a
+  // referencing paragraph). Per-page results below validate on the marks identity plus a
+  // content compare of the page's own refs — never on the hit array's identity, which is
+  // fresh whenever any offset moved.
   const notesMemoState = notesMemoFor(optionsWithLists.session, builtHits, notesInput);
   const notesMemo = notesMemoState.memo;
   const allHits = notesMemoState.allHits;
