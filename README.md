@@ -196,3 +196,7 @@ This repository is licensed under [Apache 2.0](LICENSE), except `packages/editor
 
 > [!TIP]
 > Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+
+## Roadmap
+
+See the [public roadmap](https://github.com/orgs/eigenpal/projects/2) for planned work and priorities.
