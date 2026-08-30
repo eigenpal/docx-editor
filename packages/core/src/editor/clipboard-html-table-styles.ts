@@ -41,10 +41,31 @@ export function htmlSpanOf(cell: Element, attribute: 'colspan' | 'rowspan', max:
   return clamp(Number.parseInt(raw, 10), 1, max);
 }
 
-/** Read a bounded Word HTML table width, with the document content width as fallback. */
-export function tableWidthTwips(table: Element, fallback: number): number {
+/** Preferred table width for `w:tblW`. Percentage widths stay RELATIVE (type
+ *  `pct`, fiftieths of a percent) and unsized tables stay `auto`, so the HOST
+ *  document's content width decides — freezing them to a 6.5in dxa value would
+ *  overflow narrower pages and never reflow on margin changes. Absolute widths
+ *  emit dxa. `twips` is only the GRID basis for column ratios. */
+export function tablePreferredWidth(
+  table: Element,
+  fallbackTwips: number
+): { readonly xml: string; readonly twips: number } {
+  const rawWidth = (
+    parseInlineStyle(table).get('width') ??
+    table.getAttribute('width') ??
+    ''
+  ).trim();
+  const percent = /^(\d{1,3}(?:\.\d+)?)%$/.exec(rawWidth);
+  if (percent) {
+    const pct = clamp(Math.round(Number.parseFloat(percent[1]!) * 50), 50, 5000);
+    return { xml: `<w:tblW w:w="${pct}" w:type="pct"/>`, twips: fallbackTwips };
+  }
   const points = widthPointsOf(table);
-  return points === null ? fallback : clamp(Math.round(points * 20), 1, MAX_TABLE_TWIPS);
+  if (points === null) {
+    return { xml: '<w:tblW w:w="0" w:type="auto"/>', twips: fallbackTwips };
+  }
+  const twips = clamp(Math.round(points * 20), 1, MAX_TABLE_TWIPS);
+  return { xml: `<w:tblW w:w="${twips}" w:type="dxa"/>`, twips };
 }
 
 /** Map HTML table alignment to OOXML table justification. `text-align` is NOT a

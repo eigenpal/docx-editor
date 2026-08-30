@@ -677,6 +677,12 @@ export function mergeFragmentIntoPackage(
   // over the fragment's own note bodies — a shipped note's citations must
   // transplant too, or their ids would pass through the rewrite unmapped.
   // One id→element index per kind, so the closure stays linear in refs + notes.
+  // A definition matches by SHAPE (w:footnote/w:endnote by name), not typed kind:
+  // an out-of-allowlist `w:type` demotes the element to generic while its typed
+  // reference stays, and missing it here would make the fail-closed scrub delete
+  // the citation — a silent drop where main pasted the reference through.
+  const isNoteShaped = (node: OoxmlNode, kind: 'footnote' | 'endnote'): node is OoxmlElement =>
+    isElementNode(node) && node.namespaceUri === WML_NAMESPACE_URI && node.localName === kind;
   const noteIndexByKind: Partial<Record<'footnote' | 'endnote', Map<string, OoxmlNode>>> = {};
   const referencedByKind = noteReferenceClosure(blocks, (kind, id) => {
     let index = noteIndexByKind[kind];
@@ -686,7 +692,7 @@ export function mergeFragmentIntoPackage(
       const part = resolveNotesPart(fragment, kind);
       if (part && isElementNode(part.root)) {
         for (const child of part.root.children) {
-          if (!isElementNode(child) || child.kind !== 'note') continue;
+          if (!isNoteShaped(child, kind)) continue;
           const noteId = attributeValueOf(child, 'id');
           // Canonical keys: a `w:id="07"` definition must satisfy a `w:id="7"`
           // reference (and vice versa), matching the HTML lane's numeric parse.
@@ -714,12 +720,12 @@ export function mergeFragmentIntoPackage(
 
     let nextNoteId =
       maxNumericAttribute(targetNotes.root, (node) =>
-        node.kind !== 'textValue' && node.kind === 'note' ? attributeValueOf(node, 'id') : undefined
+        isNoteShaped(node, noteKind) ? attributeValueOf(node, 'id') : undefined
       ) + 1;
 
     const bodies: OoxmlNode[] = [];
     for (const child of fragmentNotes.root.children) {
-      if (!isElementNode(child) || child.kind !== 'note') continue;
+      if (!isNoteShaped(child, noteKind)) continue;
       const id = attributeValueOf(child, 'id');
       const type = attributeValueOf(child, 'type');
       if (type === 'separator' || type === 'continuationSeparator') continue;

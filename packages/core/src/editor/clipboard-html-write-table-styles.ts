@@ -21,11 +21,22 @@ function pointsFromTwips(value: number): string {
   return `${Math.round((value / 20) * 100) / 100}pt`;
 }
 
+/** One `w:tblStylePr` condition's formatting: the cell fill plus the run and
+ *  paragraph properties, so a styled header row keeps its bold/white text in the
+ *  copied HTML, not just its fill. */
+export interface TableConditionalFormat {
+  readonly fill: string | null;
+  readonly rPr: OoxmlElement | null;
+  readonly pPr: OoxmlElement | null;
+}
+
 export interface TableConditionalFormats {
-  readonly firstRowFill: string | null;
-  readonly firstColumnFill: string | null;
-  readonly band1Fill: string | null;
-  readonly band2Fill: string | null;
+  /** `type="wholeTable"`, applied to every cell under the specific conditions. */
+  readonly wholeTable: TableConditionalFormat | null;
+  readonly firstRow: TableConditionalFormat | null;
+  readonly firstColumn: TableConditionalFormat | null;
+  readonly band1: TableConditionalFormat | null;
+  readonly band2: TableConditionalFormat | null;
   readonly firstRowEnabled: boolean;
   readonly firstColumnEnabled: boolean;
   readonly bandingEnabled: boolean;
@@ -44,18 +55,16 @@ function tblLookFlag(tblLook: OoxmlElement | null, name: string, bit: number): b
 }
 
 /**
- * The `w:tblStylePr` shading a table style declares for the first row and the
- * horizontal bands, gated by `w:tblLook` — the visible half of Word's conditional
- * table formatting, so a banded built-in style does not copy as a plain grid.
+ * The `w:tblStylePr` formatting a table style declares for the whole table, the
+ * first row/column and the horizontal bands, gated by `w:tblLook` — Word's
+ * conditional table formatting, so a styled built-in table does not copy as a
+ * plain grid that loses its header's fill, bold and text color.
  */
 export function tableConditionalFormats(
   chain: readonly OoxmlElement[],
   tblLook: OoxmlElement | null
 ): TableConditionalFormats {
-  let firstRowFill: string | null = null;
-  let firstColumnFill: string | null = null;
-  let band1Fill: string | null = null;
-  let band2Fill: string | null = null;
+  const formats: Record<string, TableConditionalFormat> = {};
   for (const style of chain) {
     for (const child of style.children) {
       if (
@@ -66,43 +75,54 @@ export function tableConditionalFormats(
         continue;
       }
       const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
-      const fill = colorAttribute(wmlChild(wmlChild(child, 'tcPr'), 'shd'), 'fill');
-      if (fill === null) continue;
-      if (type === 'firstRow') firstRowFill = fill;
-      else if (type === 'firstCol') firstColumnFill = fill;
-      else if (type === 'band1Horz') band1Fill = fill;
-      else if (type === 'band2Horz') band2Fill = fill;
+      if (
+        type !== 'wholeTable' &&
+        type !== 'firstRow' &&
+        type !== 'firstCol' &&
+        type !== 'band1Horz' &&
+        type !== 'band2Horz'
+      ) {
+        continue;
+      }
+      // Later chain entries (the derived style) override the base's condition.
+      formats[type] = {
+        fill: colorAttribute(wmlChild(wmlChild(child, 'tcPr'), 'shd'), 'fill'),
+        rPr: wmlChild(child, 'rPr'),
+        pPr: wmlChild(child, 'pPr'),
+      };
     }
   }
   return {
-    firstRowFill,
-    firstColumnFill,
-    band1Fill,
-    band2Fill,
+    wholeTable: formats['wholeTable'] ?? null,
+    firstRow: formats['firstRow'] ?? null,
+    firstColumn: formats['firstCol'] ?? null,
+    band1: formats['band1Horz'] ?? null,
+    band2: formats['band2Horz'] ?? null,
     firstRowEnabled: tblLookFlag(tblLook, 'firstRow', 0x0020) ?? false,
     firstColumnEnabled: tblLookFlag(tblLook, 'firstColumn', 0x0080) ?? false,
     bandingEnabled: !(tblLookFlag(tblLook, 'noHBand', 0x0200) ?? false),
   };
 }
 
-/** The style-conditional fill for one cell, or null when nothing applies. Word's
- *  precedence puts the first row over the first column over the row bands. */
-export function conditionalCellFill(
+/** The style-conditional format for one cell, or null when nothing applies.
+ *  Word's precedence puts the first row over the first column over the row
+ *  bands; `wholeTable` is NOT resolved here — it layers under the result. */
+export function conditionalCellFormat(
   formats: TableConditionalFormats,
   rowIndex: number,
   firstGridColumn: boolean
-): string | null {
-  if (formats.firstRowEnabled && rowIndex === 0 && formats.firstRowFill !== null) {
-    return formats.firstRowFill;
+): TableConditionalFormat | null {
+  if (formats.firstRowEnabled && rowIndex === 0 && formats.firstRow !== null) {
+    return formats.firstRow;
   }
-  if (formats.firstColumnEnabled && firstGridColumn && formats.firstColumnFill !== null) {
-    return formats.firstColumnFill;
+  if (formats.firstColumnEnabled && firstGridColumn && formats.firstColumn !== null) {
+    return formats.firstColumn;
   }
   if (!formats.bandingEnabled) return null;
   const bandIndex = rowIndex - (formats.firstRowEnabled ? 1 : 0);
-  // A header row without its own firstRow fill is NOT part of the banding.
+  // A header row without its own firstRow format is NOT part of the banding.
   if (bandIndex < 0) return null;
-  return bandIndex % 2 === 0 ? formats.band1Fill : formats.band2Fill;
+  return bandIndex % 2 === 0 ? formats.band1 : formats.band2;
 }
 
 export function wordTableCellCss(

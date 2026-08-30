@@ -85,7 +85,14 @@ export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
   try {
     inner = interopHtmlFromFragmentPackage(full.package);
   } catch {
-    inner = interopHtmlFromFragment(full.bytes);
+    // A deterministic renderer bug throws again on the reread package, and copy
+    // runs synchronously in the clipboard event — degrade to an empty HTML body
+    // rather than losing every flavour to an uncaught rethrow.
+    try {
+      inner = interopHtmlFromFragment(full.bytes);
+    } catch {
+      inner = '';
+    }
   }
   const html = wrapInteropHtml(
     inner,

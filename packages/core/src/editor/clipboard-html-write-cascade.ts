@@ -110,10 +110,14 @@ export function styleChain(index: StyleIndex, styleId: string | undefined): Ooxm
  */
 export function paragraphPropertySources(
   index: StyleIndex,
-  ownPPr: OoxmlElement | null
+  ownPPr: OoxmlElement | null,
+  // Conditional table-style pPr (wholeTable then the cell's condition), layered
+  // between docDefaults and the paragraph style, per §17.7.2's ordering.
+  tablePPr?: readonly OoxmlElement[]
 ): OoxmlElement[] {
   const sources: OoxmlElement[] = [];
   if (index.docDefaultsPPr) sources.push(index.docDefaultsPPr);
+  if (tablePPr) for (const source of tablePPr) sources.push(source);
   // The default (Normal) style applies ONLY when the paragraph names no pStyle —
   // the same rule layout/style-cascade.ts follows. A named style not basedOn
   // Normal must not inherit Normal's formatting.
@@ -139,11 +143,15 @@ export interface RunPropertyLayers {
 export function runPropertyLayers(
   index: StyleIndex,
   paragraphPPr: OoxmlElement | null,
-  ownRPr: OoxmlElement | null
+  ownRPr: OoxmlElement | null,
+  // Conditional table-style rPr, layered at the BOTTOM of the paragraph level:
+  // below the paragraph style, above docDefaults, per §17.7.2's ordering.
+  tableRPr?: readonly OoxmlElement[]
 ): RunPropertyLayers {
   const defaults: OoxmlElement[] = [];
   if (index.docDefaultsRPr) defaults.push(index.docDefaultsRPr);
   const paragraphLevel: OoxmlElement[] = [];
+  if (tableRPr) for (const source of tableRPr) paragraphLevel.push(source);
   // Same rule as paragraphPropertySources: Normal applies only without a pStyle.
   const paragraphStyleId = wmlVal(wmlChild(paragraphPPr, 'pStyle'));
   for (const style of styleChain(

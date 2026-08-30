@@ -11,7 +11,7 @@ import {
   tableRowsOf,
   tableRowPropertiesXml,
   tableSpanWidth,
-  tableWidthTwips,
+  tablePreferredWidth,
 } from './clipboard-html-table-styles.ts';
 import { tagOf } from './clipboard-html-styles.ts';
 import type { FlowContext, Projection } from './clipboard-html-read.ts';
@@ -108,7 +108,8 @@ export function projectHtmlTable(
   }
   columns = Math.min(Math.max(columns, 1), 63);
 
-  const totalWidth = tableWidthTwips(table, TABLE_TOTAL_TWIPS);
+  const preferredWidth = tablePreferredWidth(table, TABLE_TOTAL_TWIPS);
+  const totalWidth = preferredWidth.twips;
   // Width inference walks at most as many rows as the remaining budget could emit,
   // so a row flood cannot spin an uncharged O(rows x columns) pass.
   const budgetedRows = rows.length > p.nodesLeft ? rows.slice(0, Math.max(1, p.nodesLeft)) : rows;
@@ -204,7 +205,7 @@ export function projectHtmlTable(
   // so a budget break before the first complete row emits nothing at all.
   if (rowXml.length === 0) return;
   out.push(
-    `<w:tbl><w:tblPr>${position}<w:tblW w:w="${totalWidth}" w:type="dxa"/>${jc}${borders}</w:tblPr>` +
+    `<w:tbl><w:tblPr>${position}${preferredWidth.xml}${jc}${borders}</w:tblPr>` +
       `<w:tblGrid>${grid}</w:tblGrid>${rowXml.join('')}</w:tbl>`
   );
   p.lastMarkCovered = false;

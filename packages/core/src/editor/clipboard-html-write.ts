@@ -287,6 +287,10 @@ export interface RenderContext {
    *  id is dangling and renders nothing instead of a dead anchor. */
   readonly availableNotes: Record<'footnote' | 'endnote', ReadonlySet<number>>;
   readonly noteBody: WordNoteBodyContext | null;
+  /** Conditional table-style layers for the CURRENT cell (wholeTable first, then
+   *  the cell's condition) — set by the table renderer's per-cell context fork. */
+  readonly tableRPr?: readonly OoxmlElement[];
+  readonly tablePPr?: readonly OoxmlElement[];
 }
 
 function noteOrdinalOf(ctx: RenderContext, kind: 'footnote' | 'endnote', id: number): number {
@@ -484,7 +488,12 @@ function renderRun(
   if (!fields.inert && fields.stack.some((mode) => mode === 'instr')) return '';
 
   const rPr = run.children.find((child) => child.kind === 'runProperties');
-  const layers = runPropertyLayers(ctx.styles, paragraphPPr, rPr && isElement(rPr) ? rPr : null);
+  const layers = runPropertyLayers(
+    ctx.styles,
+    paragraphPPr,
+    rPr && isElement(rPr) ? rPr : null,
+    ctx.tableRPr
+  );
   const style = runCssOf(layers);
   if (style.vanish) return '';
 
@@ -658,7 +667,7 @@ function renderParagraph(
 ): string {
   const pPrNode = paragraph.children.find((child) => child.kind === 'paragraphProperties');
   const pPr = pPrNode && isElement(pPrNode) ? pPrNode : null;
-  const sources = paragraphPropertySources(ctx.styles, pPr);
+  const sources = paragraphPropertySources(ctx.styles, pPr, ctx.tablePPr);
   const css = paragraphCssOf(sources, options.asListItem);
   const inner = renderInline(ctx, paragraph.children, pPr, fields);
   const styleAttr = css === '' ? '' : ` style="${escapeAttr(css)}"`;
@@ -693,6 +702,7 @@ const tableRenderDeps = {
 interface OpenList {
   readonly tag: 'ol' | 'ul';
   readonly numId: string;
+  readonly abstractId: string;
 }
 
 function renderBlocks(
@@ -731,10 +741,20 @@ function renderBlocks(
   const emitListItem = (paragraph: OoxmlElement, placement: ListPlacement): void => {
     const depth = placement.level + 1;
     while (openLists.length > depth) closeTopList();
-    // A DIFFERENT list closes every open level, not just the top: a new numId
+    // A DIFFERENT list closes every open level, not just the top: a new list
     // starting at ilvl >= 1 must not nest inside the previous list's outer
-    // wrapper, or the read lane hands its items the old list's identity.
-    while (openLists.length > 0 && openLists[openLists.length - 1]!.numId !== placement.numId) {
+    // wrapper, or the read lane hands its items the old list's identity. "Same
+    // list" compares the ABSTRACT id — Word's per-level style pattern (List
+    // Number / List Number 2) uses one numId per level over one shared abstract,
+    // and those levels must stay nested. A same-abstract numId switch at equal
+    // depth is a restarted sibling list and closes only its own level.
+    while (
+      openLists.length > 0 &&
+      openLists[openLists.length - 1]!.abstractId !== placement.abstractId
+    ) {
+      closeTopList();
+    }
+    if (openLists.length === depth && openLists[depth - 1]!.numId !== placement.numId) {
       closeTopList();
     }
     while (openLists.length < depth) {
@@ -755,7 +775,7 @@ function renderBlocks(
       out += listType
         ? `<${tag}${start} style="list-style-type:${escapeAttr(listType)}">`
         : `<${tag}>`;
-      openLists.push({ tag, numId: placement.numId });
+      openLists.push({ tag, numId: placement.numId, abstractId: placement.abstractId });
     }
     const progressKey = `${placement.numId}:${placement.level}`;
     listProgress.set(progressKey, (listProgress.get(progressKey) ?? 0) + 1);

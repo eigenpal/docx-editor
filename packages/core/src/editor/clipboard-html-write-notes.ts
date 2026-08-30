@@ -10,6 +10,7 @@ import {
 import { relationshipsOf } from '../store/package/package-edit.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
 import { isElement } from './clipboard-html-write-tree.ts';
+import { runPropertyLayers, runToggleOn } from './clipboard-html-write-cascade.ts';
 import type { FieldState, RenderContext } from './clipboard-html-write.ts';
 
 export type WordNoteKind = 'footnote' | 'endnote';
@@ -25,13 +26,20 @@ function wmlNoteIdOf(raw: string | undefined): number | null {
   return id >= 1 && id <= 0x7fffffff ? id : null;
 }
 
+/** Separator bodies are furniture, never citable content — the fragment lane
+ *  skips them too, whatever id they carry. */
+function isSeparatorNote(child: OoxmlElement): boolean {
+  const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
+  return type === 'separator' || type === 'continuationSeparator';
+}
+
 /** The note ids a notes part actually defines. */
 export function noteIdsOf(root: OoxmlElement | null, kind: WordNoteKind): ReadonlySet<number> {
   const ids = new Set<number>();
   if (root === null) return ids;
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName !== kind) continue;
+    if (child.localName !== kind || isSeparatorNote(child)) continue;
     const id = wmlNoteIdOf(attributeValueOf(child, 'id', WML_NAMESPACE_URI));
     if (id !== null) ids.add(id);
   }
@@ -41,21 +49,35 @@ export function noteIdsOf(root: OoxmlElement | null, kind: WordNoteKind): Readon
 type AdvanceFieldState = (node: OoxmlElement, fields: FieldState) => void;
 
 /** Collect the citations the renderer would actually EMIT: content it suppresses
- *  (tracked deletions, complex-field instruction regions, directly vanished runs)
- *  must not ship a note body, or an anchor-less definition div pastes back as
- *  visible body text. Mirrors `renderRun`'s suppression order; style-cascaded
- *  vanish is not resolved here — a directly hidden citation is the real case. */
+ *  (tracked deletions, complex-field instruction regions, vanished runs) must not
+ *  ship a note body, or an anchor-less definition div pastes back as visible body
+ *  text. Vanish resolves through the SAME cascade `renderRun` uses, so a
+ *  style-hidden citation is suppressed too. */
 function collectNoteReferences(
+  ctx: RenderContext,
   node: OoxmlElement,
   out: Array<{ readonly kind: WordNoteKind; readonly id: number }>,
   field: FieldState,
-  advance: AdvanceFieldState
+  advance: AdvanceFieldState,
+  pPr: OoxmlElement | null
 ): void {
   for (const child of node.children) {
     if (!isElement(child)) continue;
     // Deleted content never renders, but its fldChars still drive the state.
     if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') {
       if (!field.inert) advance(child, field);
+      continue;
+    }
+    if (child.kind === 'paragraph') {
+      const pPrNode = child.children.find((inner) => inner.kind === 'paragraphProperties');
+      collectNoteReferences(
+        ctx,
+        child,
+        out,
+        field,
+        advance,
+        pPrNode && isElement(pPrNode) ? pPrNode : null
+      );
       continue;
     }
     if (child.kind === 'run') {
@@ -66,18 +88,8 @@ function collectNoteReferences(
       if (child.children.some((inner) => inner.kind === 'instrText')) continue;
       if (!field.inert && field.stack.some((mode) => mode === 'instr')) continue;
       const rPr = child.children.find((inner) => inner.kind === 'runProperties');
-      if (rPr && isElement(rPr)) {
-        const vanish = rPr.children.find(
-          (inner) =>
-            isElement(inner) &&
-            inner.namespaceUri === WML_NAMESPACE_URI &&
-            inner.localName === 'vanish'
-        );
-        if (vanish && isElement(vanish)) {
-          const val = attributeValueOf(vanish, 'val', WML_NAMESPACE_URI);
-          if (!(val === '0' || val === 'false' || val === 'off')) continue;
-        }
-      }
+      const layers = runPropertyLayers(ctx.styles, pPr, rPr && isElement(rPr) ? rPr : null);
+      if (runToggleOn(layers, 'vanish')) continue;
     }
     if (
       child.namespaceUri === WML_NAMESPACE_URI &&
@@ -92,7 +104,7 @@ function collectNoteReferences(
       }
       continue;
     }
-    collectNoteReferences(child, out, field, advance);
+    collectNoteReferences(ctx, child, out, field, advance, pPr);
   }
 }
 
@@ -102,11 +114,11 @@ function noteElementOf(
   id: number
 ): OoxmlElement | null {
   if (root === null) return null;
-  const wanted = String(id);
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName !== kind) continue;
-    if (attributeValueOf(child, 'id', WML_NAMESPACE_URI) === wanted) return child;
+    if (child.localName !== kind || isSeparatorNote(child)) continue;
+    // Numeric compare, like every other id read here: 'w:id="07"' defines note 7.
+    if (wmlNoteIdOf(attributeValueOf(child, 'id', WML_NAMESPACE_URI)) === id) return child;
   }
   return null;
 }
@@ -139,7 +151,7 @@ export function shippedNoteIds(
     advance(element, probe);
     const field: FieldState = { stack: [], inert: probe.stack.length > 0 };
     const references: Array<{ readonly kind: WordNoteKind; readonly id: number }> = [];
-    collectNoteReferences(element, references, field, advance);
+    collectNoteReferences(ctx, element, references, field, advance, null);
     for (const reference of references) {
       if (!ctx.availableNotes[reference.kind].has(reference.id)) continue;
       if (shipped[reference.kind].has(reference.id)) continue;
@@ -166,7 +178,7 @@ export function renderNoteList(
   let notes = '';
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName !== kind) continue;
+    if (child.localName !== kind || isSeparatorNote(child)) continue;
     const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
     const idValue = wmlNoteIdOf(id);
     if (id === undefined || idValue === null) continue;

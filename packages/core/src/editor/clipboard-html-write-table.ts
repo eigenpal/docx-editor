@@ -18,7 +18,7 @@ import {
 } from './clipboard-html-write-tree.ts';
 import { styleChain } from './clipboard-html-write-cascade.ts';
 import {
-  conditionalCellFill,
+  conditionalCellFormat,
   tableConditionalFormats,
   wordTableCellCss,
 } from './clipboard-html-write-table-styles.ts';
@@ -222,6 +222,11 @@ export function renderHtmlTable(
         }
       }
       const tcPr = wmlChild(placement.cell, 'tcPr');
+      const conditional = conditionalCellFormat(
+        conditionalFormats,
+        rowIndex,
+        placement.startColumn === 0
+      );
       const css = wordTableCellCss(
         tcPr,
         tblBorders,
@@ -230,13 +235,24 @@ export function renderHtmlTable(
         rowSpan,
         placement.startColumn === 0,
         placement.startColumn + placement.span >= gridColumns,
-        conditionalCellFill(conditionalFormats, rowIndex, placement.startColumn === 0)
+        conditional?.fill ?? conditionalFormats.wholeTable?.fill ?? null
       );
       const attrs =
         (placement.span > 1 ? ` colspan="${placement.span}"` : '') +
         (rowSpan > 1 ? ` rowspan="${rowSpan}"` : '') +
         (css === '' ? '' : ` style="${escapeAttr(css)}"`);
-      out += `<td${attrs}>${deps.renderBlocks(ctx, placement.cell.children, fields)}</td>`;
+      // The condition's rPr/pPr layer under the cell's own styles, so a styled
+      // header row keeps its bold and text color in the copied HTML.
+      const tableRPr: OoxmlElement[] = [];
+      const tablePPr: OoxmlElement[] = [];
+      const wholeTable = conditionalFormats.wholeTable;
+      if (wholeTable?.rPr) tableRPr.push(wholeTable.rPr);
+      if (wholeTable?.pPr) tablePPr.push(wholeTable.pPr);
+      if (conditional?.rPr) tableRPr.push(conditional.rPr);
+      if (conditional?.pPr) tablePPr.push(conditional.pPr);
+      const cellCtx =
+        tableRPr.length > 0 || tablePPr.length > 0 ? { ...ctx, tableRPr, tablePPr } : ctx;
+      out += `<td${attrs}>${deps.renderBlocks(cellCtx, placement.cell.children, fields)}</td>`;
     }
     out += '</tr>';
   }

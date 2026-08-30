@@ -509,22 +509,39 @@ function projectFlow(
   const before = out.length;
   const ownsPageBreakState = pageBreakState === undefined;
   let pending: string[] = [];
+  // Furniture that preceded THIS flow's first block; it splices into the first
+  // emitted paragraph's START after the walk, so a leading anchor targets the
+  // position BEFORE the text it precedes.
+  let leadingFurniture: string[] = [];
   // The context's own page-break-before is consumed by the FIRST emission only.
   let flushPara = ctx.para;
   const pageBreak = pageBreakState ?? { pending: false, skipSpacer: false };
+  // A furniture-only paragraph never inherits the context's page break or list
+  // item: it would double the break and mint a stray numbered ordinal.
+  const furniturePara = (): ParaProps => ({
+    ...flushPara,
+    pageBreakBefore: undefined,
+    numPr: undefined,
+  });
   const flush = (): void => {
     if (pending.length === 0) return;
     if (!pending.some((piece) => piece.includes('<w:r'))) {
       // Furniture-only pending (a standalone bookmark anchor): fold it into the
-      // previous paragraph. With no block yet it stays queued; after a
-      // non-paragraph block (a table) it takes its own paragraph NOW — queued, it
-      // would splice into the END of the next paragraph, past the content.
+      // previous paragraph. Before this flow's first block it queues as LEADING
+      // furniture; after a non-paragraph block (a table) it takes its own
+      // paragraph NOW — queued, it would splice into the END of the next
+      // paragraph, past the content.
+      if (out.length === before) {
+        leadingFurniture = leadingFurniture.concat(pending);
+        pending = [];
+        return;
+      }
       const last = out[out.length - 1];
       if (last?.endsWith('</w:p>')) {
         out[out.length - 1] = `${last.slice(0, -6)}${pending.join('')}</w:p>`;
         pending = [];
       } else if (last !== undefined && pending.length > 0) {
-        out.push(paragraphXml(flushPara, pending));
+        out.push(paragraphXml(furniturePara(), pending));
         pending = [];
         p.lastMarkCovered = false;
       }
@@ -668,6 +685,23 @@ function projectFlow(
     }
     collectInline(node, depth, ctx, pending, p);
   }
+  // Leading furniture splices into this flow's FIRST paragraph right after its
+  // pPr, so a bookmark that preceded the content targets the position BEFORE
+  // it; a non-paragraph first block gets a furniture paragraph ahead of it.
+  if (leadingFurniture.length > 0) {
+    const first = out[before];
+    if (first !== undefined && first.startsWith('<w:p>')) {
+      out[before] = first.replace(
+        /^(<w:p>(?:<w:pPr>(?:(?!<\/w:pPr>)[\s\S])*?<\/w:pPr>)?)/,
+        `$1${leadingFurniture.join('')}`
+      );
+    } else if (first !== undefined) {
+      out.splice(before, 0, paragraphXml(furniturePara(), leadingFurniture));
+    } else {
+      pending = leadingFurniture.concat(pending);
+    }
+    leadingFurniture = [];
+  }
   // An explicit paragraph holding only furniture (a bookmark in an empty <p>)
   // keeps its furniture: the fold-into-previous in flush() would land the anchor
   // one paragraph early and the forced paragraph would emit empty.
@@ -687,7 +721,7 @@ function projectFlow(
   // It emits BEFORE a pending page break: the anchor preceded the break in the
   // source, and moving it past the break would land the link one page late.
   if (pending.length > 0) {
-    out.push(paragraphXml(flushPara, pending));
+    out.push(paragraphXml(furniturePara(), pending));
     pending = [];
     p.lastMarkCovered = false;
   }
