@@ -476,7 +476,7 @@ function endsWithExpandableSpace(text: string): boolean {
  * Shift a line's spans to satisfy the paragraph alignment.
  *
  * Layout is the only geometry authority: hit testing and the caret read published span boxes
- * (and {@link StyleSpanRecord.caretEdges}). Paint starts the line at `LineRecord.contentX` —
+ * and measure intra-span prefixes on demand. Paint starts the line at `LineRecord.contentX` —
  * the first span's x whenever there is one — and flows inline, so justification slack must
  * land on the same inter-word spaces `word-spacing` expands, not on every style-span boundary.
  *
