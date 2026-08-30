@@ -6,6 +6,8 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import { resolveNotesPart } from '../../store/package/note-references.ts';
+import { TreePackageStore } from '../../store/store/tree-package-store.ts';
+import { normalizeParagraphIdentity } from '../../store/package/para-id.ts';
 import {
   resolveEndnoteProperties,
   resolveFootnoteProperties,
@@ -649,6 +651,70 @@ describe('incremental notes layout (reserve persistence)', () => {
     expect(session.stats.reusedPages).toBeGreaterThan(0);
     // Seeded reserves: the edit resumes — no extra full pass for reserve rediscovery.
     expect(session.stats.fullPasses).toBe(fullPassesAfterCold);
+  });
+
+  test('typing in a referencing paragraph keeps distant note areas by identity', () => {
+    // A keystroke in a paragraph that carries a footnote reference only SHIFTS the
+    // reference's atom offset. The notes memo must survive that (marks, per-page reserve
+    // and attach caches), so every page far from the edit hands the painter the SAME
+    // attached page object — re-laying all note stories per keystroke is the regression
+    // this pins (issue #631).
+    const bytes = multiPageFootnoteDoc(120, 20);
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const normalized = normalizeParagraphIdentity(main);
+    const store = new TreePackageStore(loaded.package, normalized);
+    const bodyStore = store.bodyStore();
+    const documentFootnoteProps = resolveFootnoteProperties(undefined, undefined);
+    const documentEndnoteProps = resolveEndnoteProperties(undefined, undefined);
+    const notes: NotesLayoutInput = {
+      footnotesPart: resolveNotesPart(loaded.package, 'footnote'),
+      endnotesPart: null,
+      footnotePropsBySection: [documentFootnoteProps],
+      endnotePropsBySection: [documentEndnoteProps],
+      documentFootnoteProps,
+      documentEndnoteProps,
+      measurer: createFixedMeasurer(),
+      producer: 'notes-keystroke-reuse',
+    };
+    const session = createLayoutSession();
+    const layoutNow = (revision: number) =>
+      layoutSemanticDocument(bodyStore.part, revision, {
+        measurer: notes.measurer,
+        notes,
+        session,
+        producer: 'notes-keystroke-reuse',
+      });
+    const before = layoutNow(1);
+    layoutNow(2);
+
+    // Paragraph 60 carries footnote 3 in this fixture (every 20th paragraph cites).
+    const body = bodyStore.part.root.children?.[0];
+    const refParagraph = (body?.children ?? []).filter((n) => n.kind === 'paragraph')[60]!;
+    const applied = bodyStore.transact((ctx) =>
+      ctx.apply({ op: 'insertText', paragraphId: refParagraph.id, offset: 1, text: 'x' })
+    );
+    expect(applied.ok).toBe(true);
+
+    const after = layoutNow(3);
+    const clean = layoutSemanticDocument(bodyStore.part, 3, {
+      measurer: notes.measurer,
+      notes,
+      producer: 'notes-keystroke-reuse',
+    });
+    expect(layoutShape(after)).toBe(layoutShape(clean));
+
+    // Every page except the edited one keeps its attached record — footnote area included —
+    // by IDENTITY, which is what proves no note story on those pages was re-laid.
+    let reusedWithNotes = 0;
+    for (let i = 0; i < after.pages.length; i += 1) {
+      const now = after.pages[i]!;
+      const was = before.pages[i]!;
+      if (now === was && now.footnotes !== undefined) reusedWithNotes += 1;
+    }
+    expect(reusedWithNotes).toBeGreaterThanOrEqual(after.pages.length - 3);
   });
 
   test('900-paragraph footnote document: warm pass is one resumed body layout', () => {
