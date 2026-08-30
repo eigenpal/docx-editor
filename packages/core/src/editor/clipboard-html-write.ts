@@ -118,7 +118,8 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
     (rtl ? foldAttribute(sources, 'rFonts', 'cs') : undefined) ??
     foldAttribute(sources, 'rFonts', 'ascii') ??
     foldAttribute(sources, 'rFonts', 'hAnsi') ??
-    foldAttribute(sources, 'rFonts', 'eastAsia');
+    foldAttribute(sources, 'rFonts', 'eastAsia') ??
+    (!rtl ? foldAttribute(sources, 'rFonts', 'cs') : undefined);
   if (font !== undefined) {
     const family = wordCssFontFamily(font);
     if (family) rules.push(`font-family:${family}`);

@@ -219,6 +219,7 @@ describe('run and paragraph mapping', () => {
     expect(docXml).toContain('<w:bidi/>');
     expect(docXml).toContain('<w:rtl/>');
     expect(docXml).toContain('w:cs="Amiri"');
+    expect(docXml).not.toContain('w:ascii="Amiri"');
     // An RTL run's language tag is the BIDI language: writing it to w:val would
     // overwrite the Latin slot with the wrong dictionary.
     expect(docXml).toContain('<w:lang w:bidi="ar-SA"/>');

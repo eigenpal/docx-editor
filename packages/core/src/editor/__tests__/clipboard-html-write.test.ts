@@ -158,6 +158,15 @@ describe('interopHtmlFromFragment', () => {
     expect(html).not.toContain('font-family:Arial');
   });
 
+  test('a complex-script font remains the last fallback for an LTR run', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body: '<w:p><w:r><w:rPr><w:rFonts w:cs="Amiri"/></w:rPr><w:t>text</w:t></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('font-family:&quot;Amiri&quot;');
+  });
+
   test('a style chain reaching Heading2 emits an h2 with the cascaded CSS', () => {
     const html = interopHtmlFromFragment(
       fragment({
