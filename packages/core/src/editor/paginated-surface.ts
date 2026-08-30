@@ -3741,7 +3741,7 @@ export function mountPaginatedSurface(
         });
       }
     }
-    const byKey = keyedRangeRects(currentLayout, ranges, pages);
+    const byKey = keyedRangeRects(currentLayout, ranges, pages, measurer);
     const rects: (OverlayRect & { key: string })[] = [];
     for (const [key, found] of byKey) for (const rect of found) rects.push({ ...rect, key });
     commentRectCache = { layout: currentLayout, revision, pages, rects };
@@ -4125,8 +4125,8 @@ export function mountPaginatedSurface(
     const rects = cellSelection
       ? cellSelectionRects(currentLayout, cellSelection.cellIds)
       : retainedSelection
-        ? selectionRects(currentLayout, retainedSelection, paragraphOrder())
-        : selectionMarkRects(currentLayout, selection, paragraphOrder());
+        ? selectionRects(currentLayout, retainedSelection, paragraphOrder(), measurer)
+        : selectionMarkRects(currentLayout, selection, paragraphOrder(), measurer);
     paintSelectionOverlay(
       overlayLayer,
       currentLayout,
@@ -4169,6 +4169,7 @@ export function mountPaginatedSurface(
       colorForAuthor: remotePresenceColor,
       declaredColorFor: declaredPresenceColor,
       labelHost: remoteCaretLabelHost,
+      measurer,
     });
   }
 

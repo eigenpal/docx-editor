@@ -90,6 +90,8 @@ export interface RemoteSelectionPaintOptions {
    * registering and unregistering rebuild the labels rather than skipping.
    */
   readonly labelHost?: RemoteCaretLabelHost | null;
+  /** For exact intra-span band edges (layout publishes no eager caret edges). */
+  readonly measurer?: import('../layout/semantic-records.ts').TextMeasurer;
 }
 
 interface LastRemotePaint {
@@ -243,7 +245,7 @@ export function paintRemoteSelections(
   }
   const textRects =
     textRanges.length > 0
-      ? presenceRangeRects(layout, textRanges, everyStoryOrder(layout), pages)
+      ? presenceRangeRects(layout, textRanges, everyStoryOrder(layout), pages, options.measurer)
       : null;
   for (const [index, remote] of selections.entries()) {
     const color = colors[index];
