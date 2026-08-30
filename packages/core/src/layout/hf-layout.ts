@@ -235,6 +235,9 @@ export function layoutHeaderFooterStory(
   ).listItems;
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
+  // ONE provider for the whole story layout — every reflow pass and page-field projection
+  // reuses it, the body lane's own rule ("ONE provider for every fold of this flow").
+  const hostedListDeps = hostedListTokenDeps(inputs?.numberingIndex, styleCascade, displayMode);
   let baseline: HeaderFooterStoryLayout | undefined;
 
   const layoutOnce = (ctx: FieldPageContext | undefined): HeaderFooterStoryLayout => {
@@ -309,7 +312,7 @@ export function layoutHeaderFooterStory(
           ...(listItems ? { listItems } : {}),
           // Only this branch lays hosted stories out (`layoutTextboxStoryFor` below), so
           // only this branch folds their list state into the cell-lane break keys.
-          ...hostedListTokenDeps(inputs?.numberingIndex, styleCascade, displayMode),
+          ...hostedListDeps,
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
@@ -566,23 +569,6 @@ const storyDrawingResourceTokens = new WeakMap<HeaderFooterStoryLayout, string>(
  * set, a superset of what any projection paints, so a settle always moves this token no
  * matter which projection shows the picture.
  */
-/**
- * One framed furniture story entry — shared by `furnitureLayoutContext` here and the
- * multi-section `furnitureStoryEntries` fingerprint, so a rider token added to one reuse
- * key can never be forgotten by the other. `contentKey` describes the AUTHORED part, so the
- * drawing-resource and list-marker tokens ride along for everything a story resolves from
- * ANOTHER part; without them a reused section keeps a stale header.
- */
-export function framedStoryEntry(label: string, story: HeaderFooterStoryLayout): string {
-  return framedTokenJoin([
-    label,
-    String(story.flowHeight),
-    story.contentKey,
-    storyDrawingResourceToken(story),
-    storyListMarkerToken(story),
-  ]);
-}
-
 export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): string {
   const cached = storyDrawingResourceTokens.get(story);
   if (cached !== undefined) return cached;
@@ -600,6 +586,23 @@ export function storyDrawingResourceToken(story: HeaderFooterStoryLayout): strin
   const token = tokens.length === 0 ? '' : `!${framedTokenJoin(tokens)}`;
   storyDrawingResourceTokens.set(story, token);
   return token;
+}
+
+/**
+ * One framed furniture story entry — shared by `furnitureLayoutContext` here and the
+ * multi-section `furnitureStoryEntries` fingerprint, so a rider token added to one reuse
+ * key can never be forgotten by the other. `contentKey` describes the AUTHORED part, so the
+ * drawing-resource and list-marker tokens ride along for everything a story resolves from
+ * ANOTHER part; without them a reused section keeps a stale header.
+ */
+export function framedStoryEntry(label: string, story: HeaderFooterStoryLayout): string {
+  return framedTokenJoin([
+    label,
+    String(story.flowHeight),
+    story.contentKey,
+    storyDrawingResourceToken(story),
+    storyListMarkerToken(story),
+  ]);
 }
 
 /**

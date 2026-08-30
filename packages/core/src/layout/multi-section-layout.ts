@@ -67,14 +67,18 @@ export type LayoutSectionFn = (
 
 function furnitureStoryEntries(
   stories: ReadonlyMap<string, HeaderFooterStoryLayout>,
-  includeContent: boolean
+  includeContent: boolean,
+  prefix: string
 ): string {
-  // Length-framed like `furnitureLayoutContext`: the marker and resource tokens embed
-  // file-controlled text, so a printable entry join is a forgeable boundary.
+  // Length-framed like `furnitureLayoutContext`, with the header/footer role INSIDE the
+  // framed label: the marker and resource tokens embed file-controlled text, so a
+  // printable entry join or a printable section marker is a forgeable boundary.
   return framedTokenJoin(
     [...stories]
       .map(([variant, story]) =>
-        includeContent ? framedStoryEntry(variant, story) : `${variant}=${story.flowHeight}`
+        includeContent
+          ? framedStoryEntry(`${prefix}${variant}`, story)
+          : `${prefix}${variant}=${story.flowHeight}`
       )
       .sort()
   );
@@ -89,7 +93,7 @@ function furnitureStoryEntries(
  */
 function furnitureGeometryFingerprint(furniture: PageFurniture | undefined): string {
   if (!furniture) return '';
-  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, false)};f:${furnitureStoryEntries(furniture.footers, false)}`;
+  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, false, 'h')};f:${furnitureStoryEntries(furniture.footers, false, 'f')}`;
 }
 
 /**
@@ -99,7 +103,7 @@ function furnitureGeometryFingerprint(furniture: PageFurniture | undefined): str
  */
 export function furnitureFingerprint(furniture: PageFurniture | undefined): string {
   if (!furniture) return '';
-  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, true)};f:${furnitureStoryEntries(furniture.footers, true)}`;
+  return `hf:${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};h:${furnitureStoryEntries(furniture.headers, true, 'h')};f:${furnitureStoryEntries(furniture.footers, true, 'f')}`;
 }
 
 export function furnitureForSection(
@@ -130,10 +134,11 @@ export function multiSectionStructureKey(
     const geometry = geometryOfSection(section.properties);
     const furniture = furnitureForSection(options, index, sections.length);
     const pn = section.properties.pageNumbering;
-    // Empty `{}` and absent both key as no authored numbering; attribute edits must bust
-    // incremental reuse so PAGE start/fmt / SECTIONPAGES stay correct. Length-framed:
-    // `w:fmt` and the chapter fields are free file text, so a printable separator would
-    // let two different section lists alias one structure key.
+    // A bare `<w:pgNumType/>` keys its empty attributes while an ABSENT element keys
+    // `pn:` — a conservative split (extra rebuild, never a stale reuse); attribute edits
+    // must bust incremental reuse so PAGE start/fmt / SECTIONPAGES stay correct.
+    // Length-framed: `w:fmt` and the chapter fields are free file text, so a printable
+    // separator would let two different section lists alias one structure key.
     const pnKey = pn
       ? `pn:${framedTokenJoin([pn.start ?? '', pn.fmt ?? '', pn.chapStyle ?? '', pn.chapSep ?? ''].map(String))}`
       : 'pn:';

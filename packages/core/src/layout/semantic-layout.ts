@@ -1765,8 +1765,9 @@ function layoutBlocksPass(
           anchorFrameBase,
           pageContentClip,
           layoutTextboxStoryFor: layoutTextboxStoryForBody,
-          // Spread inside this block on purpose: only a pass that lays hosted stories out
-          // (`layoutTextboxStoryFor` above) folds their list state into cell keys.
+          // The CELL lane folds only where stories can render (`layoutTextboxStoryFor`
+          // above). The body block fold in `prepareBlock` stays ungated on purpose: it
+          // predates this gate and fails open — extra invalidation, never a stale reuse.
           ...hostedListDeps,
           publishAnchoredDrawings: collectAnchoredDrawings,
           collectAnchoredDrawings,

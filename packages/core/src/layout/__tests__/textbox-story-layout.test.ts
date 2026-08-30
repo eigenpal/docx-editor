@@ -739,6 +739,10 @@ describe('list markers inside textbox stories', () => {
         keys.push(key);
         return inner.get(key);
       },
+      // The spread SNAPSHOTS accessor results; stats must keep reading the live counters.
+      get stats() {
+        return inner.stats;
+      },
     };
   }
 

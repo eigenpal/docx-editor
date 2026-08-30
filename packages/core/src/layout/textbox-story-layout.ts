@@ -330,15 +330,16 @@ function hostedTextboxListToken(
 /**
  * The `hostedListTokenForParagraph` slice of a `TableFlowDeps`, built in ONE place so the
  * lanes that lay hosted stories out (body flow, header/footer stories) cannot drift apart
- * on the (index, cascade, mode) call shape. Empty without a numbering index; an index with
- * no numbering definitions yields `''` from the token function itself.
+ * on the (index, cascade, mode) call shape. Empty without numbering DEFINITIONS — not just
+ * without an index — so a document with no lists installs no provider and the cell lane
+ * pays no per-paragraph call at all; the same emptiness check guards the token function.
  */
 export function hostedListTokenDeps(
   numberingIndex: NumberingIndex | undefined,
   styleCascade: StyleCascadeTable | undefined,
   displayMode?: RevisionDisplayMode
 ): { readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string } {
-  if (!numberingIndex) return {};
+  if (!numberingIndex || numberingIndex.nums.size === 0) return {};
   return {
     hostedListTokenForParagraph: (paragraph) =>
       hostedTextboxListToken(paragraph, numberingIndex, styleCascade, displayMode),

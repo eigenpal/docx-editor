@@ -512,19 +512,14 @@ function createPartDrawingContextSlot(options: {
       return '';
     }
     const tokens = atoms
-      .map((atomId) => {
-        const projection = atomProjections.get(atomId);
-        if (!projection) return `${atomId}:refused`;
-        const resource = resourceOf(projection);
-        // Length-framed like its parts: the projection and resource tokens embed file
-        // text, so a printable atom join would be a forgeable boundary.
-        return framedTokenJoin([
+      .map((atomId) =>
+        framedAtomToken(
+          atomProjections.get(atomId) ?? null,
           atomId,
-          drawingProjectionLayoutToken(projection),
-          drawingResourceLayoutToken(resource),
-          String(resourceEpochByKey.get(pendingResourceKey(projection)) ?? 0),
-        ]);
-      })
+          resourceOf,
+          (projection) => resourceEpochByKey.get(pendingResourceKey(projection)) ?? 0
+        )
+      )
       .sort();
     const token = framedTokenJoin(tokens);
     drawingTokensByParagraph.set(paragraph, { resourceEpoch, token });
@@ -756,18 +751,32 @@ export function paragraphDrawingLayoutTokenFromContext(
   if (atoms.length === 0) return '';
   return framedTokenJoin(
     atoms
-      .map((atomId) => {
-        const projection = context.projectionForAtom?.(atomId);
-        if (!projection) return `${atomId}:refused`;
-        const resource = context.resourceOf(projection);
-        return framedTokenJoin([
-          atomId,
-          drawingProjectionLayoutToken(projection),
-          drawingResourceLayoutToken(resource),
-        ]);
-      })
+      .map((atomId) =>
+        framedAtomToken(context.projectionForAtom?.(atomId) ?? null, atomId, context.resourceOf)
+      )
       .sort()
   );
+}
+
+/**
+ * One framed atom entry of a paragraph drawing token — shared by the package slot builder
+ * and the context builder so the two lanes cannot key different token shapes. The refused
+ * arm is framed too; every part embeds file text, so no printable boundary survives.
+ */
+function framedAtomToken(
+  projection: DrawingProjection | null,
+  atomId: string,
+  resourceOf: (projection: DrawingProjection) => ImageResourceState,
+  epochOf?: (projection: DrawingProjection) => number
+): string {
+  if (!projection) return framedTokenJoin([atomId, 'refused']);
+  const parts = [
+    atomId,
+    drawingProjectionLayoutToken(projection),
+    drawingResourceLayoutToken(resourceOf(projection)),
+  ];
+  if (epochOf) parts.push(String(epochOf(projection)));
+  return framedTokenJoin(parts);
 }
 
 /**
