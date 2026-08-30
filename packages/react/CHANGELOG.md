@@ -1,5 +1,33 @@
 # @eigenpal/docx-js-editor
 
+## 2.13.0
+
+### Patch Changes
+
+- Updated dependencies [b360c3c]
+- Updated dependencies [845e38f]
+- Updated dependencies [fe26cd4]
+- Updated dependencies [3c66a7c]
+- Updated dependencies [16966b2]
+- Updated dependencies [2d7dc10]
+- Updated dependencies [346f7e6]
+- Updated dependencies [5cf6f08]
+- Updated dependencies [7ea84c3]
+- Updated dependencies [2ea6a9d]
+- Updated dependencies [e268614]
+- Updated dependencies [8107826]
+- Updated dependencies [0860dd2]
+- Updated dependencies [b1fa0d6]
+- Updated dependencies [f1d3940]
+- Updated dependencies [0a6e44c]
+- Updated dependencies [72ff41f]
+- Updated dependencies [8506a62]
+- Updated dependencies [0d782e3]
+- Updated dependencies [7e85377]
+- Updated dependencies [96cdbe2]
+  - @docx-editor.dev/core@2.13.0
+  - @docx-editor.dev/i18n@2.13.0
+
 ## 2.12.0
 
 ### Patch Changes
