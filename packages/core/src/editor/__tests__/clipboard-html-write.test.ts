@@ -167,6 +167,19 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('font-family:&quot;Amiri&quot;');
   });
 
+  test('an RTL run prefers complex-script size, bold, and italic properties', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:rPr><w:rtl/><w:sz w:val="20"/><w:szCs w:val="30"/>' +
+          '<w:bCs/><w:iCs/></w:rPr><w:t>مرحبا</w:t></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('font-size:15pt');
+    expect(html).toContain('font-weight:bold');
+    expect(html).toContain('font-style:italic');
+  });
+
   test('a style chain reaching Heading2 emits an h2 with the cascaded CSS', () => {
     const html = interopHtmlFromFragment(
       fragment({
@@ -263,6 +276,25 @@ describe('interopHtmlFromFragment', () => {
       })
     );
     expect(html).toBe('<ul><li>sub one</li><li>sub two</li></ul>');
+  });
+
+  test('a numbered heading keeps its semantic heading class', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        styles:
+          '<w:style w:type="paragraph" w:styleId="Heading2">' +
+          '<w:name w:val="heading 2"/></w:style>',
+        numbering:
+          '<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0">' +
+          '<w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>' +
+          '<w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>',
+        body:
+          '<w:p><w:pPr><w:pStyle w:val="Heading2"/><w:numPr>' +
+          '<w:ilvl w:val="0"/><w:numId w:val="5"/></w:numPr></w:pPr>' +
+          '<w:r><w:t>Numbered heading</w:t></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('<li class="Heading2"');
   });
 
   test('a table emits colspan, rowspan, shading, and swallows vMerge continuations', () => {
@@ -464,8 +496,7 @@ describe('interopHtmlFromFragment', () => {
           '<w:fldSimple w:instr=" PAGE "><w:r><w:t>7</w:t></w:r></w:fldSimple>' +
           '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
           '<w:r><w:instrText> DATE </w:instrText></w:r>' +
-          '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-          '<w:r><w:t>2026</w:t></w:r>' +
+          '<w:r><w:fldChar w:fldCharType="separate"/><w:t>2026</w:t></w:r>' +
           '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
           '</w:p>',
       })

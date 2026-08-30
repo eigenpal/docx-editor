@@ -209,7 +209,8 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     const { from, to } = deps.orderedRange();
     const text = selectedTextIn(deps.layout(), from, to, deps.paragraphOrder());
     const scope = deps.storyScope();
-    if (text.length === 0 || scope.kind !== 'body') return { text, html: null };
+    const collapsed = from.paragraphId === to.paragraphId && from.offset === to.offset;
+    if (collapsed || scope.kind !== 'body') return { text, html: null };
     // A copy is a pure READ: `session.part()` is the body part, and the body-only guard
     // above is what keeps this off `partFor`, which would retain a story-store slot.
     const part = session.part();

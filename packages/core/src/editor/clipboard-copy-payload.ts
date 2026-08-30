@@ -60,7 +60,6 @@ function gridHtmlOf(text: string): string {
 
 /** Assemble the clipboard flavours for the current selection. */
 export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
-  if (input.text.length === 0) return { text: '', html: null };
   if (input.cellRectangle) return { text: input.text, html: gridHtmlOf(input.text) };
   if (!input.coverage || !input.pkg) return { text: input.text, html: null };
 

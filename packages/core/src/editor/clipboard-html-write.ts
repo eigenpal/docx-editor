@@ -106,6 +106,22 @@ interface RunCss {
   readonly rtl: boolean;
 }
 
+function scriptToggleOn(
+  layers: RunPropertyLayers,
+  rtl: boolean,
+  latinName: string,
+  complexName: string
+): boolean {
+  const hasComplex =
+    (layers.direct !== null && wmlChild(layers.direct, complexName) !== null) ||
+    lastProperty(layers.defaults, complexName) !== null ||
+    lastProperty(layers.tableLevel, complexName) !== null ||
+    lastProperty(layers.paragraphLevel, complexName) !== null ||
+    lastProperty(layers.characterLevel, complexName) !== null;
+  const name = rtl && hasComplex ? complexName : latinName;
+  return runToggleOn(layers, name);
+}
+
 function runCssOf(layers: RunPropertyLayers): RunCss {
   const sources = layers.all;
   if (runToggleOn(layers, 'vanish')) {
@@ -124,17 +140,21 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
     const family = wordCssFontFamily(font);
     if (family) rules.push(`font-family:${family}`);
   }
-  const sz = parseIntValue(foldAttribute(sources, 'sz', 'val'));
+  const sz = parseIntValue(
+    (rtl ? foldAttribute(sources, 'szCs', 'val') : undefined) ??
+      foldAttribute(sources, 'sz', 'val') ??
+      (!rtl ? foldAttribute(sources, 'szCs', 'val') : undefined)
+  );
   if (sz !== null && sz > 0) rules.push(`font-size:${Math.round((sz / 2) * 100) / 100}pt`);
   // An OFF that overrides a style must be EXPLICIT in the CSS: the emitted
   // paragraph class maps back to w:pStyle on paste, and a silent off would let
   // the style re-bold what the author deliberately un-bolded.
   const styleLayers: RunPropertyLayers = { ...layers, direct: null };
   const styleSources = layers.direct ? sources.slice(0, -1) : sources;
-  if (runToggleOn(layers, 'b')) rules.push('font-weight:bold');
-  else if (runToggleOn(styleLayers, 'b')) rules.push('font-weight:normal');
-  if (runToggleOn(layers, 'i')) rules.push('font-style:italic');
-  else if (runToggleOn(styleLayers, 'i')) rules.push('font-style:normal');
+  if (scriptToggleOn(layers, rtl, 'b', 'bCs')) rules.push('font-weight:bold');
+  else if (scriptToggleOn(styleLayers, rtl, 'b', 'bCs')) rules.push('font-weight:normal');
+  if (scriptToggleOn(layers, rtl, 'i', 'iCs')) rules.push('font-style:italic');
+  else if (scriptToggleOn(styleLayers, rtl, 'i', 'iCs')) rules.push('font-style:normal');
 
   const decorations: string[] = [];
   const underline = lastProperty(sources, 'u');
@@ -427,10 +447,6 @@ function listPlacementOf(
   return { numId, abstractId, level, fmt: info.fmt, start: info.start };
 }
 
-function hasChildOfKind(run: OoxmlElement, kind: string): boolean {
-  return run.children.some((child) => child.kind === kind);
-}
-
 function clipboardImageMime(ctx: RenderContext, partName: string): string | null {
   const claimed = resolveContentType(ctx.pkg.contentTypes, partName);
   if (claimed.ok) {
@@ -516,15 +532,19 @@ function advanceFieldState(node: OoxmlElement, fields: FieldState): void {
       continue;
     }
     if (child.kind === 'fldChar') {
-      const type = attributeValueOf(child, 'fldCharType', WML_NAMESPACE_URI);
-      if (type === 'begin') fields.stack.push('instr');
-      else if (type === 'separate' && fields.stack.length > 0) {
-        fields.stack[fields.stack.length - 1] = 'result';
-      } else if (type === 'end') fields.stack.pop();
+      advanceFieldCharacter(child, fields);
       continue;
     }
     advanceFieldState(child, fields);
   }
+}
+
+function advanceFieldCharacter(node: OoxmlElement, fields: FieldState): void {
+  const type = attributeValueOf(node, 'fldCharType', WML_NAMESPACE_URI);
+  if (type === 'begin') fields.stack.push('instr');
+  else if (type === 'separate' && fields.stack.length > 0) {
+    fields.stack[fields.stack.length - 1] = 'result';
+  } else if (type === 'end') fields.stack.pop();
 }
 
 function renderRun(
@@ -533,14 +553,6 @@ function renderRun(
   paragraphPPr: OoxmlElement | null,
   fields: FieldState
 ): string {
-  // Field machinery first: fldChar runs drive the state and never render themselves.
-  if (hasChildOfKind(run, 'fldChar')) {
-    if (!fields.inert) advanceFieldState(run, fields);
-    return '';
-  }
-  if (hasChildOfKind(run, 'instrText')) return '';
-  if (!fields.inert && fields.stack.some((mode) => mode === 'instr')) return '';
-
   const rPr = run.children.find((child) => child.kind === 'runProperties');
   const layers = runPropertyLayers(
     ctx.styles,
@@ -549,11 +561,16 @@ function renderRun(
     ctx.tableRPr
   );
   const style = runCssOf(layers);
-  if (style.vanish) return '';
 
   let inner = '';
   for (const child of run.children) {
     if (!isElement(child)) continue;
+    if (child.kind === 'fldChar') {
+      if (!fields.inert) advanceFieldCharacter(child, fields);
+      continue;
+    }
+    if (child.kind === 'instrText') continue;
+    if ((!fields.inert && fields.stack.some((mode) => mode === 'instr')) || style.vanish) continue;
     const positionalTab = wordPositionalTabHtml(child);
     if (positionalTab !== '') {
       inner += positionalTab;
@@ -728,9 +745,12 @@ function renderParagraph(
   const dirAttr = toggleOn(sources, 'bidi') ? ' dir="rtl"' : '';
   const wordClass = paragraphClassOf(ctx, pPr);
   const classAttr = wordClass === null ? '' : ` class="${wordClass}"`;
-
-  if (options.asListItem) return `<li${classAttr}${dirAttr}${styleAttr}>${inner}</li>`;
   const heading = headingLevelOf(ctx, pPr);
+
+  if (options.asListItem) {
+    const listClass = heading?.fromStyle === true ? ` class="Heading${heading.level}"` : classAttr;
+    return `<li${listClass}${dirAttr}${styleAttr}>${inner}</li>`;
+  }
   const tag = heading === null ? 'p' : `h${heading.level}`;
   // The `Heading<N>` class is the marker the read lane maps back to the STYLE in
   // every dialect — earned only by a real Heading style. A direct outline level

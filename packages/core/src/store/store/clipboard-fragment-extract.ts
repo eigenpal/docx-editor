@@ -11,7 +11,6 @@
 import {
   WML_NAMESPACE_URI,
   serializeOoxmlPart,
-  type OoxmlAttribute,
   type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
@@ -56,6 +55,7 @@ import {
   themeFontsOf,
   walkNodes,
 } from './clipboard-fragment-closure.ts';
+import { partialTableBlocks } from './clipboard-fragment-tables.ts';
 
 const CT_XMLNS = 'http://schemas.openxmlformats.org/package/2006/content-types';
 
@@ -164,78 +164,6 @@ function touchesRange(node: OoxmlNode, inRange: ReadonlySet<string>): boolean {
   return paragraphIdsUnder(node).some((id) => inRange.has(id));
 }
 
-/**
- * A `w:vMerge` continuation in the FIRST extracted row becomes a restart, so a row-aligned
- * partial copy that starts inside a vertical merge stays a valid table (review finding 11).
- */
-function withVMergeRestarts(row: OoxmlElement): OoxmlElement {
-  const restarted = (node: OoxmlNode): OoxmlNode => {
-    if (node.kind === 'textValue') return node;
-    if (isWmlElement(node, 'vMerge')) {
-      if (attributeValueOf(node, 'val') === 'restart') return node;
-      const attributes: OoxmlAttribute[] = [
-        ...node.attributes.filter(
-          (attribute) =>
-            !(attribute.localName === 'val' && attribute.namespaceUri === WML_NAMESPACE_URI)
-        ),
-        {
-          kind: 'wmlVal',
-          namespaceUri: WML_NAMESPACE_URI,
-          localName: 'val',
-          prefix: 'w',
-          value: 'restart',
-        },
-      ];
-      return { ...node, attributes } as OoxmlNode;
-    }
-    if (isWmlElement(node, 'tc') || isWmlElement(node, 'tcPr')) {
-      const children: OoxmlNode[] = node.children.map(restarted);
-      return withChildren(node, children);
-    }
-    return node;
-  };
-  const cells: OoxmlNode[] = row.children.map(restarted);
-  return withChildren(row, cells);
-}
-
-function partialTableBlocks(table: OoxmlElement, ctx: CollectContext, out: OoxmlNode[]): void {
-  const rows = table.children.filter(
-    (child): child is OoxmlElement => child.kind !== 'textValue' && isWmlElement(child, 'tr')
-  );
-  const touched = new Set(paragraphIdsUnder(table).filter((id) => ctx.inRange.has(id)));
-  if (touched.size === 0) return;
-  const coveredRows = rows.filter((row) => {
-    const ids = paragraphIdsUnder(row);
-    return ids.length > 0 && ids.every((id) => ctx.covered.has(id));
-  });
-  const coveredRowParagraphs = new Set(coveredRows.flatMap((row) => paragraphIdsUnder(row)));
-  const rowAligned =
-    coveredRows.length > 0 &&
-    touched.size === coveredRowParagraphs.size &&
-    [...touched].every((id) => coveredRowParagraphs.has(id));
-  if (rowAligned) {
-    let first = true;
-    const kept: OoxmlNode[] = [];
-    for (const child of table.children) {
-      if (!isWmlElement(child, 'tr')) {
-        kept.push(child);
-        continue;
-      }
-      if (!coveredRows.includes(child)) continue;
-      kept.push(first ? withVMergeRestarts(child as OoxmlElement) : child);
-      first = false;
-    }
-    out.push(withChildren(table, kept));
-    return;
-  }
-  // Not a whole run of rows: the covered cell paragraphs flatten to plain paragraphs.
-  for (const id of paragraphIdsUnder(table)) {
-    if (!ctx.inRange.has(id)) continue;
-    const paragraph = findParagraph(table, id);
-    if (paragraph) out.push(paragraph);
-  }
-}
-
 function collectBlocks(
   children: readonly OoxmlNode[],
   ctx: CollectContext,
@@ -301,22 +229,6 @@ function stripExcluded(node: OoxmlNode): OoxmlNode | null {
   return changed ? withChildren(node, children) : node;
 }
 
-function fldCharTypeOf(run: OoxmlNode): 'begin' | 'separate' | 'end' | null {
-  if (run.kind !== 'run') return null;
-  for (const child of run.children) {
-    if (child.kind === 'fldChar') {
-      const type = attributeValueOf(child, 'fldCharType');
-      if (type === 'begin' || type === 'separate' || type === 'end') return type;
-      return 'begin';
-    }
-  }
-  return null;
-}
-
-function isInstrTextRun(node: OoxmlNode): boolean {
-  return node.kind === 'run' && node.children.some((child) => child.kind === 'instrText');
-}
-
 /**
  * Keep complex fields balanced ACROSS the whole fragment (review finding 4). A field's
  * `begin` and `end` legally live in different paragraphs — a TOC field spans dozens — so
@@ -333,9 +245,17 @@ function balanceFieldsAcrossBlocks(blocks: readonly OoxmlNode[]): readonly Ooxml
   const scan = (node: OoxmlNode): void => {
     if (node.kind === 'textValue') return;
     if (node.kind === 'run') {
-      const type = fldCharTypeOf(node);
-      if (type) sequence.push({ nodeId: node.id, type });
-      else if (isInstrTextRun(node)) sequence.push({ nodeId: node.id, type: 'instr' });
+      for (const child of node.children) {
+        if (child.kind === 'fldChar') {
+          const type = attributeValueOf(child, 'fldCharType');
+          sequence.push({
+            nodeId: child.id,
+            type: type === 'separate' || type === 'end' ? type : 'begin',
+          });
+        } else if (child.kind === 'instrText') {
+          sequence.push({ nodeId: child.id, type: 'instr' });
+        }
+      }
       return;
     }
     for (const child of node.children) scan(child);
@@ -638,35 +558,38 @@ export function extractFragmentPackage(
   const styleIds = new Set<string>();
   collectStyleIds(closureNodes, styleIds);
   const stylesIndex = stylesIndexOf(pkg, pkg.mainDocumentPart);
-  const styles = styleClosure(stylesIndex, styleIds);
-
   const numIds = new Set<string>();
   collectNumIds(closureNodes, numIds);
-  collectNumIds(styles, numIds);
-  const numbering = numberingClosure(pkg, pkg.mainDocumentPart, numIds);
-  // Numbering styles referenced from the numbering closure travel too.
-  const numberingStyleIds = new Set<string>();
-  collectStyleIds([...numbering.nums, ...numbering.abstracts], numberingStyleIds);
-  for (const node of [...numbering.nums, ...numbering.abstracts]) {
-    walkNodes(node, (current) => {
-      if (current.kind === 'textValue') return;
-      if (
-        (current.localName === 'styleLink' || current.localName === 'numStyleLink') &&
-        current.namespaceUri === WML_NAMESPACE_URI
-      ) {
-        const value = attributeValueOf(current, 'val');
-        if (value) numberingStyleIds.add(value);
-      }
-    });
+  let styles: OoxmlElement[] = [];
+  let numbering = numberingClosure(pkg, pkg.mainDocumentPart, numIds);
+  // Styles can reference numbering, while numbering can link back to styles. Close both
+  // sets to a fixed point so a numStyleLink chain never ships a dangling w:numId.
+  for (;;) {
+    const previousStyleCount = styleIds.size;
+    const previousNumCount = numIds.size;
+    styles = styleClosure(stylesIndex, styleIds);
+    collectNumIds(styles, numIds);
+    numbering = numberingClosure(pkg, pkg.mainDocumentPart, numIds);
+    const numberingNodes = [...numbering.nums, ...numbering.abstracts];
+    collectStyleIds(numberingNodes, styleIds);
+    for (const node of numberingNodes) {
+      walkNodes(node, (current) => {
+        if (current.kind === 'textValue') return;
+        if (
+          (current.localName === 'styleLink' || current.localName === 'numStyleLink') &&
+          current.namespaceUri === WML_NAMESPACE_URI
+        ) {
+          const value = attributeValueOf(current, 'val');
+          if (value) styleIds.add(value);
+        }
+      });
+    }
+    if (styleIds.size === previousStyleCount && numIds.size === previousNumCount) break;
   }
-  const extraStyles = styleClosure(stylesIndex, numberingStyleIds).filter(
-    (style) => !styles.includes(style)
-  );
-  const allStyles = [...styles, ...extraStyles];
 
   // Theme literalization for everything the fragment ships.
   const fonts = themeFontsOf(pkg, pkg.mainDocumentPart);
-  const literalStyles = allStyles.map(
+  const literalStyles = styles.map(
     (style) => literalizeThemeReferences(style, fonts) as OoxmlElement
   );
   const literalDocDefaults = stylesIndex.docDefaults

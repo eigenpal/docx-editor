@@ -275,8 +275,7 @@ describe('clipboard fragment extract', () => {
         '<w:r><w:t>A</w:t></w:r>' +
         '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
         '<w:r><w:instrText>PAGE</w:instrText></w:r>' +
-        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
-        '<w:r><w:t>7</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/><w:t>7</w:t></w:r>' +
         '</w:p>' +
         '<w:p><w:r><w:fldChar w:fldCharType="end"/></w:r><w:r><w:t>B</w:t></w:r></w:p>'
     );

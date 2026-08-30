@@ -114,4 +114,21 @@ describe('copy degrade tiers', () => {
     expect(flavours.html).toContain('<td>a</td><td>b</td>');
     expect(fragmentFromHtml(flavours.html!)).toBeNull();
   });
+
+  test('an empty cell rectangle still writes its HTML table flavour', () => {
+    const flavours = buildCopyFlavours({
+      text: '',
+      cellRectangle: true,
+      coverage: null,
+      pkg: null,
+    });
+    expect(flavours.html).toBe('<div><table><tr><td></td></tr></table></div>');
+  });
+
+  test('non-text body coverage still writes rich clipboard flavours', () => {
+    const flavours = buildCopyFlavours({ ...input, text: '' });
+    expect(flavours.text).toBe('');
+    expect(flavours.html).not.toBeNull();
+    expect(fragmentFromHtml(flavours.html!)).not.toBeNull();
+  });
 });
