@@ -27,7 +27,8 @@
       "@docx-editor.dev/core/layout": ["./src/layout/index.ts"],
       "@docx-editor.dev/core/output": ["./src/output/index.ts"],
       "@docx-editor.dev/core/store": ["./src/store/index.ts"],
-      "@docx-editor.dev/core/editor": ["./src/editor/index.ts"]
+      "@docx-editor.dev/core/editor": ["./src/editor/index.ts"],
+      "@docx-editor.dev/core/export": ["./src/export/index.ts"]
     }
   },
   "include": ["src"],

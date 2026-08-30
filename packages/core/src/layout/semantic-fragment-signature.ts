@@ -43,6 +43,9 @@ const PARAGRAPH_FIELDS = {
   // the freshly built fragment converged against the old one and was discarded, leaving a
   // painter or style consumer reading the pre-edit value.
   props: 'hashed',
+  styleId: 'hashed',
+  outlineLevel: 'hashed',
+  alignment: 'hashed',
   spacing: 'hashed',
   // The EFFECTIVE indent, for the same reason `props` is here. A list paragraph's indent
   // comes from `numbering.xml`, so a renumber that moves the text but no other hashed field

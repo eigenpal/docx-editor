@@ -95,6 +95,49 @@ const style = (overrides: Partial<ResolvedRunStyle> = {}): ResolvedRunStyle => (
 });
 
 describe('line metrics come from the font, not from a multiplier (task 7.7)', () => {
+  test('bounds the document-scoped shaped-width working set', () => {
+    let calls = 0;
+    const bounded = createShapedMeasurer({
+      shaper: {
+        shape(input) {
+          calls += 1;
+          return {
+            text: input.text,
+            direction: 'ltr',
+            bidiLevel: 0,
+            glyphs: [
+              {
+                id: 1,
+                cluster: 0,
+                originX: 0,
+                originY: 0,
+                advanceX: 1_000,
+                advanceY: 0,
+                offsetX: 0,
+                offsetY: 0,
+                outline: { path: '', unitsPerEm: 1_000 },
+              },
+            ],
+            clusters: [],
+            fontSpans: [],
+            metrics: { ascent: 9_000, descent: 2_000, lineGap: 0 },
+          };
+        },
+      },
+      resolveFont: () => font,
+      fallback,
+      shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+      unicodeDataVersion: '15.1',
+      fixedPointScale: 1_000,
+    });
+    bounded.measure('oldest', style());
+    for (let index = 0; index < 4_096; index += 1) bounded.measure(`unique-${index}`, style());
+    bounded.measure('unique-4095', style());
+    expect(calls).toBe(4_097);
+    bounded.measure('oldest', style());
+    expect(calls).toBe(4_098);
+  });
+
   test('the line height is the face ascent plus descent', () => {
     const metrics = measurer().lineMetrics(style());
     expect(metrics.height).toBeGreaterThan(0);

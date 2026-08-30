@@ -5,68 +5,37 @@ import {
   type FontFaceRequest,
 } from '@docx-editor.dev/core/contracts/editor';
 import {
-  HARFBUZZ_SHAPING_LIBRARY,
-  HARD_MAX_AGGREGATE_FONT_BYTES,
-  HARD_MAX_FONT_BYTES,
-  HARD_MAX_FONT_SOURCES,
   FontResolutionError,
   HarfBuzzShapingError,
-  createFontResourceSnapshot,
-  createHarfBuzzTextShaper,
-  harfBuzzFontValidator,
-  initializeHarfBuzz,
+  LayoutShapingConfigurationError,
+  createLayoutShaping as createNeutralLayoutShaping,
+  disposeLayoutShaping,
+  type LayoutShapingInstrumentation,
   type LayoutShapingOptions,
 } from '@docx-editor.dev/core/layout';
 
-const FEATURES = Object.freeze({ kern: 1, liga: 1 });
-
-export interface LayoutShapingInstrumentation {
-  readonly onFontByteCopy?: () => void;
-  readonly onFontHash?: () => void;
-  readonly onFontAdmission?: () => void;
-}
+export type { LayoutShapingInstrumentation };
 
 function publicRequest(request: FontFaceRequest): FontFaceRequest {
-  return Object.freeze({
-    family: request.family,
-    weight: request.weight,
-    style: request.style,
-  });
+  return Object.freeze({ family: request.family, weight: request.weight, style: request.style });
 }
 
 let warnedFontFailure = false;
 
-/**
- * Say a shaper-level failure out loud once, for hosts that registered no reporting at all.
- *
- * Every other font failure degrades quietly on purpose: one refused embedded face is
- * document data, and the document still renders well enough to read. This one is not that.
- * The shaper is gone, so every line break, page break and caret position comes from
- * fallback metrics. Called only from `reportFontError`, which knows whether anyone is
- * listening — a host reporting it in its own UI must not also get library console noise.
- */
 export function warnFontFailureOnce(error: { readonly diagnostic?: string }): void {
   if (warnedFontFailure) return;
   warnedFontFailure = true;
   const detail = error.diagnostic ? `: ${error.diagnostic}` : '.';
   console.error(
     `[@docx-editor.dev/core] text shaping is disabled${detail}\n` +
-      'Text is being measured with fallback metrics, so line and page breaks will not ' +
-      'match Word.'
+      'Text is being measured with fallback metrics, so line and page breaks will not match Word.'
   );
 }
 
-/** Test seam: the warning is once-per-process, so a test asserting it must clear the latch. */
 export function resetFontFailureWarningForTests(): void {
   warnedFontFailure = false;
 }
 
-/**
- * Normalize anything thrown during font work into an {@link EditorFontError}.
- *
- * One error type reaches consumers whether the failure came from resolution, admission or
- * shaping, so a host branches on `code` rather than on which layer happened to throw.
- */
 export function toEditorFontError(error: unknown): EditorFontError {
   if (error instanceof EditorFontError) return error;
   if (error instanceof FontResolutionError) {
@@ -75,13 +44,10 @@ export function toEditorFontError(error: unknown): EditorFontError {
       diagnostic: error.diagnostic,
     });
   }
+  if (error instanceof LayoutShapingConfigurationError) {
+    return new EditorFontError('overLimit', error.message, { diagnostic: error.message });
+  }
   if (error instanceof HarfBuzzShapingError) {
-    // Both ways the shaper can fail to come up keep their own code out to the host: the
-    // binary was unreachable, or the one that loaded is the wrong version — which is the
-    // same fault after a package upgrade left a self-hosted copy behind. Every other
-    // shaping code stays `initializationFailed`, because those are document faults. A host
-    // must be able to branch on this one, and matching the prose of `diagnostic` would be
-    // an API made of an English sentence.
     const code: EditorFontErrorCode =
       error.code === 'wasmUnavailable' || error.code === 'shapingLibraryMismatch'
         ? 'wasmUnavailable'
@@ -98,136 +64,15 @@ export function toEditorFontError(error: unknown): EditorFontError {
   );
 }
 
-/** Adapt the published byte-source contract to the private deterministic layout snapshot. */
 export async function createLayoutShaping(
   configuration: FontConfiguration,
   instrumentation?: LayoutShapingInstrumentation
 ): Promise<LayoutShapingOptions> {
   try {
-    if (
-      !Number.isSafeInteger(configuration.maxFontBytes) ||
-      configuration.maxFontBytes <= 0 ||
-      configuration.maxFontBytes > HARD_MAX_FONT_BYTES
-    ) {
-      throw new EditorFontError(
-        'overLimit',
-        `Font byte ceiling must not exceed the engine hard maximum of ${HARD_MAX_FONT_BYTES}`
-      );
-    }
-    if (
-      !Number.isSafeInteger(configuration.sources.length) ||
-      configuration.sources.length === 0 ||
-      configuration.sources.length > HARD_MAX_FONT_SOURCES
-    ) {
-      throw new EditorFontError(
-        'overLimit',
-        `Font source count must be between 1 and ${HARD_MAX_FONT_SOURCES}`
-      );
-    }
-    let aggregateBytes = 0;
-    for (const source of configuration.sources) {
-      if (
-        !Number.isSafeInteger(source.bytes.byteLength) ||
-        source.bytes.byteLength > configuration.maxFontBytes ||
-        source.bytes.byteLength > HARD_MAX_FONT_BYTES
-      ) {
-        throw new EditorFontError(
-          'overLimit',
-          `Font source ${source.id} exceeds the per-font byte ceiling`
-        );
-      }
-      if (source.bytes.byteLength > HARD_MAX_AGGREGATE_FONT_BYTES - aggregateBytes) {
-        throw new EditorFontError(
-          'overLimit',
-          `Font sources exceed the aggregate byte ceiling of ${HARD_MAX_AGGREGATE_FONT_BYTES}`
-        );
-      }
-      aggregateBytes += source.bytes.byteLength;
-    }
-    const sampled = {
-      epoch: configuration.epoch,
-      maxFontBytes: configuration.maxFontBytes,
-      sources: configuration.sources.map((source) => ({
-        request: publicRequest(source.request),
-        id: source.id,
-        bytes: source.bytes,
-        hash: source.hash,
-        faceIndex: source.faceIndex,
-        availability: source.availability,
-      })),
-      substitutions: configuration.substitutions?.map((substitution) => ({
-        from: publicRequest(substitution.from),
-        to: publicRequest(substitution.to),
-        ...(substitution.lineMetrics ? { lineMetrics: { ...substitution.lineMetrics } } : {}),
-      })),
-      defaultFont: Object.freeze({
-        family: configuration.defaultFont.family,
-        sizeHalfPoints: configuration.defaultFont.sizeHalfPoints,
-      }),
-      language: configuration.language,
-    };
-    const fonts = createFontResourceSnapshot({
-      epoch: sampled.epoch,
-      maxFontBytes: sampled.maxFontBytes,
-      resources: sampled.sources,
-      substitutions: sampled.substitutions,
-      validateFont: harfBuzzFontValidator,
-      instrumentation: {
-        onOwnedByteCopy: instrumentation?.onFontByteCopy,
-        onHash: instrumentation?.onFontHash,
-        onAdmission: instrumentation?.onFontAdmission,
-      },
-    });
-    await initializeHarfBuzz();
-    return Object.freeze({
-      fonts,
-      shaper: createHarfBuzzTextShaper(),
-      defaultFont: Object.freeze({
-        family: sampled.defaultFont.family,
-        sizeHalfPoints: sampled.defaultFont.sizeHalfPoints,
-      }),
-      environment: Object.freeze({
-        variationAxes: Object.freeze({}),
-        shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
-        unicodeDataVersion: '16.0.0',
-        normalization: 'none',
-        language: sampled.language ?? 'en',
-        features: FEATURES,
-        fixedPointScale: 20,
-        roundingMode: 'halfAwayFromZero',
-      }),
-      ligatureCaretPolicy: 'cluster-edges-only',
-      operation: Object.freeze({
-        resourceEpoch: fonts.epoch,
-        configEpoch: sampled.epoch,
-        extensionFingerprint: `fonts:${JSON.stringify(
-          sampled.sources.map((source) => [
-            source.request.family,
-            source.request.weight,
-            source.request.style,
-            source.hash,
-            source.faceIndex,
-          ])
-        )};substitutions:${JSON.stringify(sampled.substitutions ?? [])}`,
-        shapingHash: `hb:${HARFBUZZ_SHAPING_LIBRARY.version}:kern+liga`,
-        producerVersion: 1,
-      }),
-    });
+    return await createNeutralLayoutShaping(configuration, instrumentation);
   } catch (error) {
     throw toEditorFontError(error);
   }
 }
 
-/**
- * Release a shaping environment's native resources.
- *
- * The shaper holds WASM memory that garbage collection cannot reclaim on its own, so a host that
- * builds shaping options must dispose them when the editor goes away. Safe on a shaper that has
- * no `dispose`.
- */
-export function disposeLayoutShaping(shaping: LayoutShapingOptions): void {
-  const shaper = shaping.shaper as LayoutShapingOptions['shaper'] & {
-    dispose?: () => void;
-  };
-  shaper.dispose?.();
-}
+export { disposeLayoutShaping };

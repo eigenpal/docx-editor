@@ -121,6 +121,8 @@ export interface ResolvedListItem {
   /** `w:numFmt` of the resolved level — `bullet` or a numbering format. */
   readonly numFmt: string;
   readonly markerText: string;
+  /** Counter value at this item's own level; absent for bullets. */
+  readonly ordinal?: number;
   readonly markerAlign: ListMarkerAlign;
   readonly suffix: ListSuffix;
   /** Effective indent after merging level + paragraph indents, in points. */
@@ -551,6 +553,9 @@ export function resolveStoryListItems(
       abstractNumId: advanced.abstractNumId,
       numFmt: advanced.level.numFmt,
       markerText,
+      ...(advanced.level.numFmt === 'bullet'
+        ? {}
+        : { ordinal: advanced.counters[advanced.ilvl] ?? 1 }),
       markerAlign: advanced.level.lvlJc,
       suffix: advanced.level.suff,
       indent,

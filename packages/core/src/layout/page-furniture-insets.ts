@@ -178,6 +178,11 @@ export type OverflowPageShellResolver = (
  */
 const layoutOverflowShells = new WeakMap<SemanticLayout, OverflowPageShellResolver>();
 
+/** Release overflow-shell resolver state attached to an exported layout. */
+export function releaseOverflowPageShellState(layout: SemanticLayout): void {
+  layoutOverflowShells.delete(layout);
+}
+
 /** Publish `resolve` for `layout`; see {@link overflowPageShellAt}. */
 export function registerOverflowPageShell(
   layout: SemanticLayout,

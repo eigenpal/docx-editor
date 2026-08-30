@@ -27,5 +27,6 @@ export function publishListMarker(
     level: item.ilvl,
     numId: item.numId,
     numFmt: item.numFmt,
+    ...(item.ordinal === undefined ? {} : { ordinal: item.ordinal }),
   };
 }

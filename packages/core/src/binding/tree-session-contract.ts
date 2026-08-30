@@ -9,6 +9,7 @@ import type {
   EmbeddedFont,
   HeaderFooterParts,
   HeaderFooterSectionResolution,
+  HeadlessDocumentView,
   ListKind,
   OoxmlElement,
   OoxmlPackage,
@@ -67,7 +68,7 @@ export type TreeApplyOptions = Pick<
  * Holds the whole package, not just the body — headers, footers, notes, comments and styles are
  * all reachable through it, and parts the engine does not model are preserved verbatim.
  */
-export interface TreeDocxSessionView {
+export interface TreeDocxSessionView extends HeadlessDocumentView {
   /** Whether the body holds at least one editable paragraph. */
   readonly editable: boolean;
   /** Canonical node ids of the body paragraphs, in order. */

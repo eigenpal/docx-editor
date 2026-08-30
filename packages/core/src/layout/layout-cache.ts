@@ -23,6 +23,7 @@
 // document around it did.
 
 import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import { sha256FontBytes } from '../store/package/sha256.ts';
 
 /** A fingerprint over one paragraph's layout inputs. */
 export type ParagraphLayoutKey = string;
@@ -43,8 +44,17 @@ export interface LayoutCacheStats {
  * touched are never measured again.
  */
 export interface ParagraphLayoutCache<T> {
+  /**
+   * Whether values released after placement remain available to later layout passes.
+   *
+   * One-shot exporters set this false so producers may avoid defensive snapshots whose
+   * only purpose is protecting a value reused by a future pass.
+   */
+  readonly retainAcrossPasses?: boolean;
   get(key: ParagraphLayoutKey): T | undefined;
   set(key: ParagraphLayoutKey, value: T): void;
+  /** Release a break after final placement when this cache was created for a one-shot pass. */
+  release?(key: ParagraphLayoutKey): void;
   /** Drop entries for paragraphs a commit removed, so the cache cannot grow without bound. */
   retain(keys: ReadonlySet<ParagraphLayoutKey>): void;
   /**
@@ -81,28 +91,54 @@ function propertiesToken(properties: readonly OoxmlProperty[]): string {
 }
 
 /**
- * Everything about a paragraph NODE that can change how it breaks.
- *
- * Walks the tree rather than reading text alone: a run property changes advances without
- * changing a character, and an unknown child changes the ordering of what surrounds it.
- */
-/**
- * Canonical-tree nodes are immutable (deep-frozen at construction; edits replace nodes), so a
- * node's token can never change — memoizing per object turns the per-pass key computation for
- * an unchanged paragraph into a single WeakMap hit instead of a full subtree walk.
- *
- * Only paragraph and table nodes are stored (the granularity `paragraphLayoutKey` is called
- * at): caching every descendant would hold one string per nesting level of the same content.
- */
-const nodeTokens = new WeakMap<object, string>();
-
-/**
  * Tokens longer than this are computed transiently instead of retained. A table token embeds
  * its whole subtree, so a hostile document nesting a large payload inside ~50 table levels
  * would otherwise retain depth × payload of strings for the document's lifetime; the ceiling
  * bounds retention while leaving every realistic paragraph and table memoized.
  */
 const MAX_MEMOIZED_TOKEN_LENGTH = 1 << 18;
+
+const layoutTokenEncoder = new TextEncoder();
+
+/** Collision-resistant, platform-neutral cache fingerprint over a framed string. */
+function layoutTokenDigest(token: string): string {
+  return sha256FontBytes(layoutTokenEncoder.encode(token));
+}
+
+interface CachedLayoutDigest {
+  readonly digest: string;
+  readonly bytes: number;
+}
+
+const MAX_CACHED_LAYOUT_DIGESTS = 2_048;
+const MAX_CACHED_LAYOUT_DIGEST_BYTES = 2 * 1024 * 1024;
+const cachedLayoutDigests = new Map<string, CachedLayoutDigest>();
+let cachedLayoutDigestBytes = 0;
+
+function reusableLayoutTokenDigest(token: string): string {
+  const cached = cachedLayoutDigests.get(token);
+  if (cached) {
+    cachedLayoutDigests.delete(token);
+    cachedLayoutDigests.set(token, cached);
+    return cached.digest;
+  }
+  const digest = layoutTokenDigest(token);
+  const bytes = token.length * 2;
+  if (bytes <= MAX_CACHED_LAYOUT_DIGEST_BYTES) {
+    cachedLayoutDigests.set(token, { digest, bytes });
+    cachedLayoutDigestBytes += bytes;
+    while (
+      cachedLayoutDigests.size > MAX_CACHED_LAYOUT_DIGESTS ||
+      cachedLayoutDigestBytes > MAX_CACHED_LAYOUT_DIGEST_BYTES
+    ) {
+      const oldest = cachedLayoutDigests.entries().next();
+      if (oldest.done) break;
+      cachedLayoutDigests.delete(oldest.value[0]);
+      cachedLayoutDigestBytes -= oldest.value[1].bytes;
+    }
+  }
+  return digest;
+}
 
 /**
  * Namespaces a break-cache token by the inline-drawing CONTEXT that minted it.
@@ -196,40 +232,41 @@ export function aggregateParagraphTokensForTableBlock(
   return any ? tokens.join('\0') : '';
 }
 
-function nodeToken(node: OoxmlNode): string {
-  if (node.kind === 'textValue') return `t:${node.value}`;
-  const cacheable = node.kind === 'paragraph' || node.kind === 'table';
-  if (cacheable) {
-    const cached = nodeTokens.get(node);
-    if (cached !== undefined) return cached;
-  }
-  const token = computeNodeToken(node);
-  if (cacheable && token.length <= MAX_MEMOIZED_TOKEN_LENGTH) nodeTokens.set(node, token);
-  return token;
+const nodeLayoutIdentities = new WeakMap<object, string>();
+
+function nodeLayoutIdentity(node: OoxmlNode): string {
+  const cached = nodeLayoutIdentities.get(node);
+  if (cached !== undefined) return cached;
+  // Only paragraph/table roots reach this function. Hash their exact recursive token once and
+  // retain the digest, rather than allocating a digest and WeakMap entry for every OOXML leaf.
+  const identity = layoutTokenDigest(computeNodeToken(node));
+  nodeLayoutIdentities.set(node, identity);
+  return identity;
 }
 
 function computeNodeToken(node: OoxmlNode): string {
-  if (node.kind === 'textValue') return `t:${node.value}`;
-  // The node's OWN identity, not just its shape. Ids are structural paths, so inserting a
-  // table above a paragraph renumbers every paragraph below it while nothing about their
-  // content changes — and the reused records would then name paragraphs that no longer
-  // exist at those ids, leaving hit testing and the caret resolving against dead anchors.
-  const parts: string[] = [
-    `${node.kind}:${'localName' in node ? node.localName : ''}#${'id' in node ? node.id : ''}`,
-  ];
-  // `attributes` is an ARRAY of records, not a record. `Object.entries` over it yielded
-  // `0=[object Object]` — every attribute VALUE was dropped and only the count survived, so
-  // changing a run from 11pt to 22pt produced an identical key and served the 11pt breaks.
-  if ('attributes' in node && Array.isArray(node.attributes)) {
-    const attributes = [...node.attributes]
-      .map(
-        (attribute) => `${attribute.namespaceUri ?? ''}:${attribute.localName}=${attribute.value}`
-      )
-      .sort();
-    for (const attribute of attributes) parts.push(attribute);
+  if (node.kind === 'textValue') return framedTokenJoin(['text', node.value]);
+  const attributes: string[] = [];
+  // Attribute order is not semantic, but every tuple and sequence boundary must be. File
+  // values may contain any printable delimiter, so length-prefix each component. Append in
+  // a loop as OOXML is untrusted: spreading an attacker-sized attribute list can exceed the
+  // engine's argument-count limit before the document reaches configured byte limits.
+  for (const attribute of node.attributes) {
+    attributes.push(
+      framedTokenJoin([attribute.namespaceUri ?? '', attribute.localName, attribute.value])
+    );
   }
-  for (const child of node.children ?? []) parts.push(nodeToken(child));
-  return `(${parts.join('|')})`;
+  attributes.sort();
+  const children: string[] = [];
+  for (const child of node.children) children.push(computeNodeToken(child));
+  return framedTokenJoin([
+    'element',
+    node.kind,
+    node.localName,
+    node.id,
+    framedTokenJoin(attributes),
+    framedTokenJoin(children),
+  ]);
 }
 
 /**
@@ -269,7 +306,7 @@ export interface ParagraphKeyInputs {
  * folded into the joined key but missing from the memo comparison is SILENTLY INERT,
  * because the memo returns the previous key before the join ever runs.
  *
- * - `'memo-identity'`: the WeakMap key itself; its content reaches the key via `nodeToken`.
+ * - `'memo-identity'`: the WeakMap key itself; its content reaches the key via a SHA-256 digest.
  * - `'memo-compared'`: compared verbatim (after normalization) in the memo hit test AND
  *   folded into the key.
  * - `'memo-derived'`: compared through a derived token (`propertiesToken`).
@@ -286,24 +323,29 @@ export const PARAGRAPH_KEY_INPUT_ROLES = {
   'memo-identity' | 'memo-compared' | 'memo-derived'
 >;
 
-interface ParagraphKeyMemo {
-  readonly producer: string;
+interface ParagraphKeyMemoEntry {
+  readonly producerIdentity: string;
   readonly width: number;
-  readonly drawingToken: string;
-  readonly exclusionToken: string;
+  readonly drawingIdentity: string;
+  readonly exclusionIdentity: string;
   readonly propertiesToken: string;
   readonly key: ParagraphLayoutKey;
 }
 
+interface ParagraphKeyMemo {
+  readonly entries: ParagraphKeyMemoEntry[];
+}
+
 /**
- * Single-entry memo of the assembled key per (immutable) paragraph node.
+ * Small digest-match memo of compact keys per immutable paragraph/table node.
  *
- * The key embeds the whole content token, so it is a LONG string — and a freshly joined
- * string has no cached hash, which made every cache `get` re-hash kilobytes per paragraph
- * per pass. Handing back the SAME string object keeps the engine on V8's cached string
- * hash, which is what makes the paragraph cache cheap to consult on every keystroke.
+ * The canonical tree is immutable: an edit replaces the affected node, while unchanged nodes
+ * preserve identity. SHA-256 fingerprints every layout-affecting input without serializing an
+ * entire OOXML subtree into every cache key. A few slots preserve the common prepass/placement
+ * widths; eviction only causes a safe miss.
  */
 const paragraphKeyMemos = new WeakMap<object, ParagraphKeyMemo>();
+const MAX_PARAGRAPH_KEY_SLOTS = 8;
 
 /**
  * The cache key for one paragraph's measured break.
@@ -318,36 +360,42 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
   const width = Math.round(inputs.width * 1000);
   const drawingToken = inputs.drawingToken ?? '';
   const exclusionToken = inputs.exclusionToken ?? '';
-  const properties = propertiesToken(inputs.properties);
-  const memo = paragraphKeyMemos.get(inputs.paragraph);
-  if (
-    memo &&
-    memo.producer === inputs.producer &&
-    memo.width === width &&
-    memo.drawingToken === drawingToken &&
-    memo.exclusionToken === exclusionToken &&
-    memo.propertiesToken === properties
-  ) {
-    return memo.key;
+  const properties = reusableLayoutTokenDigest(propertiesToken(inputs.properties));
+  const nodeIdentity = nodeLayoutIdentity(inputs.paragraph);
+  const producerIdentity = reusableLayoutTokenDigest(inputs.producer);
+  const drawingIdentity = reusableLayoutTokenDigest(drawingToken);
+  const exclusionIdentity = reusableLayoutTokenDigest(exclusionToken);
+  let memo = paragraphKeyMemos.get(inputs.paragraph);
+  const entryIndex = memo?.entries.findIndex(
+    (entry) =>
+      entry.producerIdentity === producerIdentity &&
+      entry.width === width &&
+      entry.drawingIdentity === drawingIdentity &&
+      entry.exclusionIdentity === exclusionIdentity &&
+      entry.propertiesToken === properties
+  );
+  if (memo && entryIndex !== undefined && entryIndex >= 0) {
+    const [entry] = memo.entries.splice(entryIndex, 1);
+    memo.entries.push(entry);
+    return entry.key;
   }
-  const key = [
-    inputs.producer,
+  const key = `plk:${nodeIdentity}:${producerIdentity}:${width}:${drawingIdentity}:${exclusionIdentity}:${properties}`;
+  if (!memo) {
+    memo = { entries: [] };
+    paragraphKeyMemos.set(inputs.paragraph, memo);
+  }
+  const sharedProperties =
+    memo.entries.find((entry) => entry.propertiesToken === properties)?.propertiesToken ??
+    properties;
+  memo.entries.push({
+    producerIdentity,
     width,
-    drawingToken,
-    exclusionToken,
-    properties,
-    nodeToken(inputs.paragraph),
-  ].join('\0');
-  if (key.length <= MAX_MEMOIZED_TOKEN_LENGTH) {
-    paragraphKeyMemos.set(inputs.paragraph, {
-      producer: inputs.producer,
-      width,
-      drawingToken,
-      exclusionToken,
-      propertiesToken: properties,
-      key,
-    });
-  }
+    drawingIdentity,
+    exclusionIdentity,
+    propertiesToken: sharedProperties,
+    key,
+  });
+  if (memo.entries.length > MAX_PARAGRAPH_KEY_SLOTS) memo.entries.shift();
   return key;
 }
 
@@ -360,6 +408,8 @@ export interface ParagraphLayoutCacheOptions {
    * next one needs and the cache costs more than it saves.
    */
   readonly maxEntries?: number;
+  /** Keep placed breaks for later revisions. Default true; false bounds one-shot exporters. */
+  readonly retainAcrossPasses?: boolean;
 }
 
 /**
@@ -447,6 +497,7 @@ export function createParagraphLayoutCache<T>(
   options: ParagraphLayoutCacheOptions = {}
 ): ParagraphLayoutCache<T> {
   const maxEntries = Math.max(1, options.maxEntries ?? 4096);
+  const retainAcrossPasses = options.retainAcrossPasses ?? true;
   // The absolute ceiling the working-set exemption below cannot exceed: a cache whose
   // owner never (or rarely) retains still may not grow without bound.
   const hardMaxEntries = maxEntries * 8;
@@ -460,6 +511,7 @@ export function createParagraphLayoutCache<T>(
   let evictions = 0;
 
   return {
+    retainAcrossPasses,
     get(key) {
       const entry = entries.get(key);
       if (entry === undefined) {
@@ -486,6 +538,10 @@ export function createParagraphLayoutCache<T>(
         entries.delete(oldest.value[0]);
         evictions += 1;
       }
+    },
+
+    release(key) {
+      if (!retainAcrossPasses) entries.delete(key);
     },
 
     retentionPassDue() {

@@ -13,6 +13,7 @@ import {
   layoutSemanticDocument,
   linesOf,
   paragraphLayoutKey,
+  type ParagraphLayoutCache,
   type PageGeometry,
 } from '../index.ts';
 import { PARAGRAPH_KEY_INPUT_ROLES } from '../layout-cache.ts';
@@ -169,6 +170,34 @@ describe('the cache key covers every input that can change a break (task 9.2)', 
 });
 
 describe('the cache is bounded and self-pruning (task 9.2)', () => {
+  test('one-shot caches release placed values while reusable caches retain them', () => {
+    const oneShot = createParagraphLayoutCache<string>({ retainAcrossPasses: false });
+    const reusable = createParagraphLayoutCache<string>();
+    oneShot.set('paragraph', 'break');
+    reusable.set('paragraph', 'break');
+
+    expect(oneShot.retainAcrossPasses).toBe(false);
+    expect(reusable.retainAcrossPasses).toBe(true);
+    oneShot.release('paragraph');
+    reusable.release('paragraph');
+    expect(oneShot.get('paragraph')).toBeUndefined();
+    expect(reusable.get('paragraph')).toBe('break');
+  });
+
+  test('legacy structural caches without the optional release hook still lay out', () => {
+    const inner = createParagraphLayoutCache<never>();
+    const legacy: ParagraphLayoutCache<never> = {
+      get: (key) => inner.get(key),
+      set: (key, value) => inner.set(key, value),
+      retain: (keys) => inner.retain(keys),
+      clear: () => inner.clear(),
+      get stats() {
+        return inner.stats;
+      },
+    };
+    expect(() => geometryOf(load(MANY), 1, legacy as Cache)).not.toThrow();
+  });
+
   test('it evicts least-recently-used entries from PAST generations over its limit', () => {
     const cache = createParagraphLayoutCache<string>({ maxEntries: 2 });
     cache.set('a', '1');
@@ -299,7 +328,7 @@ describe('key memoization over immutable nodes', () => {
     expect(paragraphLayoutKey(inputs)).toBe(paragraphLayoutKey(inputs));
   });
 
-  test('a changed width recomputes, and recomputation is value-stable', () => {
+  test('a changed width recomputes, and the bounded memo reuses an earlier width', () => {
     const part = load(paragraph('memoized paragraph content'));
     const node = firstParagraphOf(part);
     const at100 = paragraphLayoutKey({
@@ -315,7 +344,8 @@ describe('key memoization over immutable nodes', () => {
       producer: 'p',
     });
     expect(at200).not.toBe(at100);
-    // The memo holds one entry per node; alternating widths must still produce the same VALUE.
+    // Prepass and placement commonly alternate widths; both stay warm without serializing the
+    // immutable OOXML subtree into either key.
     const at100again = paragraphLayoutKey({
       paragraph: node,
       properties: [],
@@ -378,10 +408,8 @@ describe('key memoization over immutable nodes', () => {
     }
   });
 
-  test('a REPLACED paragraph node with identical content keys to the same value', () => {
-    // Two parses of the same XML are different node objects with the same structural ids;
-    // the memo must never let one node object's cached key answer for another object, and
-    // equal content at the same structural id must still produce an equal key value.
+  test('a replaced content-equal paragraph reuses its exact interned identity', () => {
+    // A canonical digest preserves incremental reuse even when a store rebuilds immutable nodes.
     const a = paragraphLayoutKey({
       paragraph: firstParagraphOf(load(paragraph('same content'))),
       properties: [],
@@ -395,5 +423,26 @@ describe('key memoization over immutable nodes', () => {
       producer: 'p',
     });
     expect(a).toEqual(b);
+  });
+
+  test('file-controlled attribute delimiters cannot forge the recursive node token', () => {
+    // The old printable serialization made these attribute lists identical:
+    // `a=x|:b=y`. Hashing an ambiguous serialization cannot repair that collision.
+    const keyOf = (attributes: string) =>
+      paragraphLayoutKey({
+        paragraph: firstParagraphOf(load(`<w:p><w:r ${attributes}><w:t>same</w:t></w:r></w:p>`)),
+        properties: [],
+        width: 100,
+        producer: 'p',
+      });
+    expect(keyOf('a="x|:b=y"')).not.toBe(keyOf('a="x" b="y"'));
+  });
+
+  test('attacker-sized attribute cardinality cannot overflow an argument list', () => {
+    const attributes = Array.from({ length: 100_000 }, (_, index) => `a${index}="x"`).join(' ');
+    const node = firstParagraphOf(load(`<w:p ${attributes}><w:r><w:t>x</w:t></w:r></w:p>`));
+    expect(() =>
+      paragraphLayoutKey({ paragraph: node, properties: [], width: 100, producer: 'p' })
+    ).not.toThrow();
   });
 });

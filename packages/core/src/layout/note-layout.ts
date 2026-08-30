@@ -35,6 +35,7 @@ import { withResolvedListItems } from './list-resolve.ts';
 import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { noteStoryBlocks } from './story-roots.ts';
+import type { RevisionDisplayMode } from './revision-projection.ts';
 
 /** Hard ceiling on notes laid out in one pass (fail closed beyond). */
 export const MAX_NOTES_LAID_OUT = MAX_NOTES_PER_PART;
@@ -182,6 +183,8 @@ export interface LayoutNoteStoryOptions {
    * {@link layoutNoteSeparator}, which are the callers that hold the part.
    */
   readonly ownerPartName?: string;
+  /** Revision projection applied consistently to body, note, and separator stories. */
+  readonly displayMode?: RevisionDisplayMode;
 }
 
 /**
@@ -232,7 +235,7 @@ export function layoutNoteStory(
   if (!noteKind || noteId === null) return null;
 
   const scopeId = formatNoteScopeId(noteKind, noteId);
-  const blocks = noteStoryBlocks(note);
+  const blocks = noteStoryBlocks(note, options.displayMode);
   const prefix = noteLineIdPrefix(noteKind, noteId);
   let lineCounter = 0;
   const width = Math.max(1, contentWidth);
@@ -272,6 +275,7 @@ export function layoutNoteStory(
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.refFields ? { refFields: options.refFields } : {}),
+    ...(options.displayMode ? { displayMode: options.displayMode } : {}),
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),
@@ -382,8 +386,11 @@ export function defaultNoteSeparatorRuleStyle(
  * True when a separator note contains only OOXML separator markers (and empty noteRef
  * atoms Word often authors beside them) — no measurable text or paragraph borders.
  */
-export function isMarkerOnlySeparatorNote(note: OoxmlNode): boolean {
-  const blocks = noteStoryBlocks(note);
+export function isMarkerOnlySeparatorNote(
+  note: OoxmlNode,
+  displayMode?: RevisionDisplayMode
+): boolean {
+  const blocks = noteStoryBlocks(note, displayMode);
   if (blocks.length === 0) return true;
   for (const block of blocks) {
     if (block.kind !== 'paragraph') return false;
@@ -447,7 +454,7 @@ export function layoutNoteSeparator(
   const ruleStyle = defaultNoteSeparatorRuleStyle(noteKind, kind);
   const authored = findSeparatorNote(part, kind);
   if (authored) {
-    if (isMarkerOnlySeparatorNote(authored)) {
+    if (isMarkerOnlySeparatorNote(authored, options.displayMode)) {
       return {
         kind,
         fragments: [],

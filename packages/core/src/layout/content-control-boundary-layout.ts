@@ -795,7 +795,7 @@ export function attachContentControlBoundaries(
         )
       : layout.pages;
     return {
-      revision: layout.revision,
+      ...layout,
       pages,
       contentControls: [],
       controlContextToken: token,
@@ -855,7 +855,7 @@ export function attachContentControlBoundaries(
   }
 
   return {
-    revision: layout.revision,
+    ...layout,
     pages,
     contentControls,
     controlContextToken: token,

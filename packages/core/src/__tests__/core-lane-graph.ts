@@ -18,6 +18,7 @@ export type LaneName =
   | 'binding'
   | 'layout'
   | 'output'
+  | 'export'
   | 'automation'
   | 'editor';
 
@@ -122,6 +123,14 @@ export const CORE_LANES: Readonly<Record<LaneName, Lane>> = Object.freeze({
     mayImport: ['store', 'layout'],
     environment: 'browser',
     subpath: './output',
+  },
+  export: {
+    directory: 'src/export',
+    package: null,
+    nativeToCore: true,
+    mayImport: ['store', 'layout'],
+    environment: 'neutral',
+    subpath: './export',
   },
   automation: {
     directory: 'src/automation',

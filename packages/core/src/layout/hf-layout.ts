@@ -177,6 +177,9 @@ export interface HeaderFooterStoryInputs {
    * merged into the paragraph's own.
    */
   readonly numberingIndex?: NumberingIndex;
+  /** Sanitized hyperlink seams scoped to this header/footer part. */
+  readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
+  readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
 }
 
 /**
@@ -317,6 +320,8 @@ export function layoutHeaderFooterStory(
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
           ...(documentProperties ? { documentProperties } : {}),
+          ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
+          ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
           inlineDrawingLayout,
           anchorFrameBase,
           pageContentClip: () => pageClipRegion(anchorFrameBase()),
@@ -336,6 +341,8 @@ export function layoutHeaderFooterStory(
               ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
               displayMode,
               ...(documentProperties ? { documentProperties } : {}),
+              ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
+              ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
               inlineDrawingLayout,
               ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
               ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
@@ -395,6 +402,8 @@ export function layoutHeaderFooterStory(
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
         displayMode,
         ...(documentProperties ? { documentProperties } : {}),
+        ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
+        ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
       });
     }
 

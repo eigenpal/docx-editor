@@ -764,7 +764,7 @@ export function createImageOverlayScrollPort(scroller: HTMLElement, paintScale: 
     scrollBy(deltaYPoints: number): number;
 };
 
-// @public
+// @public (undocumented)
 export function createLayoutShaping(configuration: FontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<LayoutShapingOptions>;
 
 // @public
@@ -1139,12 +1139,14 @@ export interface ImageCropPermille {
 
 // @public
 export interface ImageDecodePort {
-    convertPreserved?(bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
+    convertPreserved?(bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,
+    signal?: AbortSignal): Promise<Readonly<{
         bytes: Uint8Array;
         mime: SupportedImageMime;
     }> | null>;
     // (undocumented)
-    decode(bytes: Uint8Array, mime: SupportedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
+    decode(bytes: Uint8Array, mime: SupportedImageMime, limits: ImageResourceLimits,
+    signal?: AbortSignal): Promise<Readonly<{
         dpiX: number;
         dpiY: number;
         pixelHeight: number;
@@ -2033,14 +2035,17 @@ export interface SurfaceEquation {
     readonly supported: boolean;
 }
 
-// @public
+// @public (undocumented)
 export interface SurfaceExtent {
+    // (undocumented)
     readonly height: number;
+    // (undocumented)
     readonly pageOffsetX: ReadonlyMap<number, number>;
+    // (undocumented)
     readonly width: number;
 }
 
-// @public
+// @public (undocumented)
 export function surfaceExtent(layout: SemanticLayout, materialize: ReadonlySet<number> | undefined): SurfaceExtent;
 
 // @public
@@ -2251,7 +2256,7 @@ export interface TextMeasurer {
     measure(text: string, style: ResolvedRunStyle): number;
 }
 
-// @public
+// @public (undocumented)
 export function toEditorFontError(error: unknown): EditorFontError;
 
 // @public
@@ -2283,7 +2288,7 @@ export interface TreeApplyResult {
 }
 
 // @public
-export interface TreeDocxSessionView {
+export interface TreeDocxSessionView extends HeadlessDocumentView {
     applyFragmentPaste(scope: StoryScope, input: FragmentPasteInput): FragmentPasteResult;
     applyImageProperties(scope: StoryScope, input: ApplyImagePropertiesInput): ImageIntentResult;
     applyTreeOps(ops: readonly TreeDocOp[], selectionBefore?: SelectionMark | null, selectionAfter?: SelectionMark | null, scope?: StoryScope, options?: TreeApplyOptions): TreeApplyResult;

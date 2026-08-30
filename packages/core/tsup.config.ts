@@ -123,6 +123,7 @@ const shared = {
     output: 'src/output/index.ts',
     store: 'src/store/index.ts',
     editor: 'src/editor/index.ts',
+    export: 'src/export/index.ts',
   },
   // Same reason the adapter sets it: tsup defaults to `node`, which resolves
   // bundled deps through their `node` export condition, and fflate's node build
@@ -169,6 +170,7 @@ const shared = {
       '@docx-editor.dev/core/output': resolve(here, 'src/output/index.ts'),
       '@docx-editor.dev/core/store': resolve(here, 'src/store/index.ts'),
       '@docx-editor.dev/core/editor': resolve(here, 'src/editor/index.ts'),
+      '@docx-editor.dev/core/export': resolve(here, 'src/export/index.ts'),
     };
   },
 } satisfies Options;

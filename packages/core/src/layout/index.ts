@@ -82,6 +82,15 @@ export {
 } from './harfbuzz-shaper.ts';
 export { setHarfBuzzWasmUrl } from './harfbuzz-wasm-binary.ts';
 export {
+  LayoutShapingConfigurationError,
+  createLayoutShaping,
+  disposeLayoutShaping,
+  type LayoutFontConfiguration,
+  type LayoutFontSource,
+  type LayoutFontSubstitution,
+  type LayoutShapingInstrumentation,
+} from './layout-shaping.ts';
+export {
   UnsupportedScriptError,
   itemizeScriptFontSlots,
   type FontSlot,
@@ -174,6 +183,32 @@ export {
   type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
+export {
+  exportSourceRangeOf,
+  forEachSemanticSpan,
+  type SemanticSpanVisit,
+  type SemanticStoryKind,
+} from './export-traversal.ts';
+export {
+  createDocumentStyleDependencies,
+  type DocumentStyleDependencies,
+} from './document-style-deps.ts';
+export {
+  createDocumentFurnitureSource,
+  type CreateDocumentFurnitureSourceOptions,
+  type DocumentFurnitureSource,
+} from './document-furniture-source.ts';
+export {
+  createDocumentNotesInput,
+  documentRelationshipTargetIn,
+  type CreateDocumentNotesInputOptions,
+} from './document-notes-input.ts';
+export { createDocumentLinkProjectors } from './document-link-projector.ts';
+export {
+  createFieldLinkRegistry,
+  type FieldLinkRegistry,
+  type RegisteredFieldLink,
+} from './field-link-registry.ts';
 // Named on `StyleSpanRecord`, so a consumer reading spans needs to be able to name it too.
 export type { FieldAtomMarker } from './field-pieces.ts';
 export {

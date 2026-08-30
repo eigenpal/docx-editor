@@ -22,6 +22,7 @@
 
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { styleOutlineLevel } from '../store/package/style-outline.ts';
 import { bodyParagraphs } from './tree-binding.ts';
 
 /** One heading of the outline, in document order. `level` is 0-based (Heading 1 = 0). */
@@ -40,9 +41,6 @@ const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
 /** Flatten controls (tabs, stray C0/C1) to spaces INSIDE heading text, then trim. */
 const CONTROL_CHARS_ALL = /[\u0000-\u001F\u007F-\u009F]/g;
 const OUTLINE_TEXT_MAX = 200;
-
-/** Word's built-in heading style names: heading 1 .. heading 9, any case. */
-const HEADING_NAME = /^heading ([1-9])$/i;
 
 function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
@@ -85,21 +83,8 @@ export function headingLevelsByStyleId(
       continue;
     }
 
-    // Built-in name first: `w:name/@w:val` matching `heading N`.
-    const name = childElement(child, 'name');
-    const nameValue = name ? attributeValue(name, 'val') : undefined;
-    const nameMatch = nameValue !== undefined ? HEADING_NAME.exec(nameValue) : null;
-    if (nameMatch) {
-      levels.set(styleId, Number(nameMatch[1]) - 1);
-      continue;
-    }
-
-    // Otherwise the style's own `w:pPr/w:outlineLvl/@w:val`, 0..8 only. The value is
-    // file-derived: anything non-integer or out of range is ignored, never clamped.
-    const pPr = childElement(child, 'pPr');
-    const outlineLvl = pPr ? childElement(pPr, 'outlineLvl') : undefined;
-    const raw = outlineLvl ? attributeValue(outlineLvl, 'val') : undefined;
-    if (raw !== undefined && /^[0-8]$/.test(raw)) levels.set(styleId, Number(raw));
+    const level = styleOutlineLevel(child);
+    if (level !== null) levels.set(styleId, level);
   }
   return levels;
 }

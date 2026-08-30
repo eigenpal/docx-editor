@@ -25,9 +25,9 @@
     "api:extract": "node scripts/api-extractor.mjs --local",
     "build": "bun run build:packages:demo && bun run build:react && bun run build:vue && bun run build:assemble",
     "build:assemble": "rm -rf examples/parity/dist && mkdir -p examples/parity/dist && cp -R examples/vite/dist examples/parity/dist/react && cp -R examples/vue/dist examples/parity/dist/vue && cp examples/parity/index.html examples/parity/dist/index.html",
-    "build:packages": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/editor-api' build && bun run --filter '@docx-editor.dev/pro' build",
+    "build:packages": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/docx-to-markdown' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/editor-api' build && bun run --filter '@docx-editor.dev/pro' build",
     "build:packages:vue": "bun run build:packages && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/nuxt' build",
-    "build:packages:demo": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/pro' build",
+    "build:packages:demo": "bun run --filter '@docx-editor.dev/i18n' build && bun run --filter '@docx-editor.dev/core' build && bun run --filter '@docx-editor.dev/fonts' build && bun run --filter '@docx-editor.dev/docx-to-markdown' build && bun run --filter '@docx-editor.dev/react' build && bun run --filter '@docx-editor.dev/vue' build && bun run --filter '@docx-editor.dev/pro' build",
     "build:react": "cd examples/vite && USE_PUBLISHED_PACKAGES=true ENABLE_FRAMEWORK_SWITCHER=true VITE_ENABLE_FRAMEWORK_SWITCHER=true VITE_BASE_PATH=/react/ vite build",
     "check:app-build": "bun run check:app-build:react && bun run check:app-build:vue",
     "check:app-build:react": "cd examples/vite && vite build --logLevel warn --outDir dist-check --emptyOutDir",
@@ -170,7 +170,7 @@
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/eigenpal/docx-editor.git"
+    "url": "git+https://github.com/eigenpal/docx-editor.git"
   },
   "publishConfig": {
     "access": "public"
@@ -197,5 +197,14 @@
     "prosemirror-commands": "^1.7.1",
     "prosemirror-history": "^1.5.0",
     "prosemirror-keymap": "^1.2.3"
+  },
+  "description": "<p align=\"center\">   <a href=\"https://www.docx-editor.dev/\">     <img src=\"./.github/assets/header.png\" alt=\"DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side.\" width=\"500\" />   </a> </p>",
+  "main": "eslint.config.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples"
+  },
+  "bugs": {
+    "url": "https://github.com/eigenpal/docx-editor/issues"
   }
 }

@@ -179,6 +179,41 @@ test('samples and owns font bytes before asynchronous initialization yields', as
   shaping.shaper.dispose();
 });
 
+test('deep-samples font metadata and substitutions before asynchronous initialization yields', async () => {
+  const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
+  const request = { family: 'DejaVu Sans', weight: 400, style: 'normal' as const };
+  const substitution = {
+    from: { family: 'Original', weight: 400, style: 'normal' as const },
+    to: { ...request },
+    lineMetrics: { heightEm: 1.2, baselineEm: 0.9 },
+  };
+  const pending = createLayoutShaping({
+    epoch: 12,
+    maxFontBytes: 2_000_000,
+    sources: [
+      {
+        request,
+        id: 'deep-sample',
+        bytes,
+        hash: sha256FontBytes(bytes),
+        faceIndex: 0,
+      },
+    ],
+    substitutions: [substitution],
+    defaultFont: { family: 'Original', sizeHalfPoints: 22 },
+  });
+  request.family = 'Mutated';
+  substitution.from.family = 'Mutated Original';
+  substitution.lineMetrics.heightEm = 9;
+
+  const shaping = await pending;
+  expect(shaping.operation.extensionFingerprint).toContain('DejaVu Sans');
+  expect(shaping.operation.extensionFingerprint).toContain('Original');
+  expect(shaping.operation.extensionFingerprint).toContain('1.2');
+  expect(shaping.operation.extensionFingerprint).not.toContain('Mutated');
+  shaping.shaper.dispose();
+});
+
 test('rejects disabling the per-font hard ceiling before allocation or admission', async () => {
   const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
   for (const maxFontBytes of [Number.MAX_SAFE_INTEGER, bytes.byteLength - 1]) {
@@ -241,6 +276,52 @@ test('rejects source count and aggregate bytes before touching any source', asyn
     ).rejects.toMatchObject<EditorFontError>({ code: 'overLimit' });
     expect(counters).toEqual({ copies: 0, hashes: 0, admissions: 0 });
   }
+});
+
+test('rejects over-limit source and substitution arrays without traversing entries', async () => {
+  let sourceReads = 0;
+  let substitutionReads = 0;
+  const sources = new Array(257);
+  const substitutions = new Array(257);
+  Object.defineProperty(sources, 0, {
+    get() {
+      sourceReads += 1;
+      throw new Error('source entry must not be visited');
+    },
+  });
+  Object.defineProperty(substitutions, 0, {
+    get() {
+      substitutionReads += 1;
+      throw new Error('substitution entry must not be visited');
+    },
+  });
+
+  await expect(
+    createLayoutShaping({
+      epoch: 7,
+      maxFontBytes: 2_000_000,
+      sources,
+      defaultFont: { family: 'DejaVu Sans', sizeHalfPoints: 24 },
+    })
+  ).rejects.toThrow('Font source count');
+  await expect(
+    createLayoutShaping({
+      epoch: 7,
+      maxFontBytes: 2_000_000,
+      sources: [
+        {
+          request: { family: 'DejaVu Sans', weight: 400, style: 'normal' },
+          id: 'bounded',
+          bytes: new Uint8Array(),
+          hash: sha256FontBytes(new Uint8Array()),
+          faceIndex: 0,
+        },
+      ],
+      substitutions,
+      defaultFont: { family: 'DejaVu Sans', sizeHalfPoints: 24 },
+    })
+  ).rejects.toThrow('Font substitution count');
+  expect({ sourceReads, substitutionReads }).toEqual({ sourceReads: 0, substitutionReads: 0 });
 });
 
 test('copies each valid source exactly once into snapshot ownership', async () => {

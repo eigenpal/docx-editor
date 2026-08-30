@@ -1619,6 +1619,41 @@ export interface HeaderFooterSlotMeta {
 export type HeaderFooterVariant = 'default' | 'first' | 'even';
 
 // @public
+export type HeadlessDocumentRejection = OoxmlPackageRejection | 'no-main-document-tree';
+
+// @public
+export interface HeadlessDocumentView {
+    // (undocumented)
+    currentPackage(): OoxmlPackage;
+    // (undocumented)
+    documentProperties(): DocumentProperties;
+    // (undocumented)
+    documentThemeFonts(): HeadlessThemeFonts;
+    // (undocumented)
+    headerFooterPartsBySection(): readonly HeaderFooterParts[];
+    // (undocumented)
+    numberingRoot(): OoxmlElement | null;
+    // (undocumented)
+    packageRevision(): number;
+    // (undocumented)
+    part(): OoxmlPart;
+    // (undocumented)
+    relationshipTarget(relationshipId: string): ReturnType<typeof relationshipTargetIn>;
+    // (undocumented)
+    settingsRoot(): OoxmlElement | null;
+    // (undocumented)
+    stylesRoot(): OoxmlElement | null;
+}
+
+// @public
+export interface HeadlessThemeFonts {
+    // (undocumented)
+    readonly major: string | null;
+    // (undocumented)
+    readonly minor: string | null;
+}
+
+// @public
 export type HrefProjection = {
     readonly href: string;
     readonly ok: true;
@@ -1687,12 +1722,14 @@ export const IMAGE_WRAP_TARGETS: readonly ImageWrapTarget[];
 
 // @public
 export interface ImageDecodePort {
-    convertPreserved?(bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
+    convertPreserved?(bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,
+    signal?: AbortSignal): Promise<Readonly<{
         bytes: Uint8Array;
         mime: SupportedImageMime;
     }> | null>;
     // (undocumented)
-    decode(bytes: Uint8Array, mime: SupportedImageMime, limits: ImageResourceLimits): Promise<Readonly<{
+    decode(bytes: Uint8Array, mime: SupportedImageMime, limits: ImageResourceLimits,
+    signal?: AbortSignal): Promise<Readonly<{
         dpiX: number;
         dpiY: number;
         pixelHeight: number;
@@ -2999,6 +3036,19 @@ export interface OoxmlXmlSpaceAttribute extends OoxmlAttributeBase {
     // (undocumented)
     readonly value: 'default' | 'preserve';
 }
+
+// @public
+export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentResult;
+
+// @public
+export type OpenHeadlessDocumentResult = {
+    readonly ok: true;
+    readonly view: HeadlessDocumentView;
+} | {
+    readonly detail?: string;
+    readonly ok: false;
+    readonly reason: HeadlessDocumentRejection;
+};
 
 // @public
 export interface OperationContext {

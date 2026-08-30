@@ -105,11 +105,13 @@ describe('documentOutline', () => {
         body:
           styledParagraph('Chapter', 'Chapter heading') +
           styledParagraph('BodyLvl', 'Not a heading (outlineLvl 9)') +
+          styledParagraph('Demoted', 'Heading name explicitly demoted') +
           styledParagraph('Junk', 'Not a heading (outlineLvl junk)'),
         styles: stylesXml(
           style({ styleId: 'Chapter', name: 'Chapter Title', outlineLvl: '2' }) +
             // 9 is Word's "body text" sentinel, not an outline level.
             style({ styleId: 'BodyLvl', name: 'Body Level', outlineLvl: '9' }) +
+            style({ styleId: 'Demoted', name: 'Heading 1', outlineLvl: '9' }) +
             style({ styleId: 'Junk', name: 'Junky', outlineLvl: 'not-a-number' })
         ),
       })

@@ -138,7 +138,6 @@ export const MAX_NOTE_OVERFLOW_PAGES = 256;
 interface NoteOverflowBudget {
   remaining: number;
 }
-
 /**
  * Cap on synthetic eachPage mark candidates measured per section (plus actual marks).
  *
@@ -186,6 +185,7 @@ export interface NotesLayoutInput {
   readonly documentEndnoteProps: ResolvedEndnoteProperties;
   readonly measurer: TextMeasurer;
   readonly producer: string;
+  readonly displayMode?: RevisionDisplayMode;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
   /** `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker. */
@@ -363,6 +363,7 @@ function fingerprintNotesInput(input: NotesLayoutInput): string | null {
   if (input.projectLinkForPart !== undefined && input.linkRelsEpoch === undefined) return null;
   return [
     input.producer,
+    input.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
     input.defaultTabStopPt ?? '',
     input.drawingLayoutEpoch ?? '',
     input.linkRelsEpoch ?? '',
@@ -726,11 +727,11 @@ function endnotePropsFor(input: NotesLayoutInput, sectionIndex: number): Resolve
     input.documentEndnoteProps
   );
 }
-
 function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): LayoutNoteStoryOptions {
   return {
     measurer: input.measurer,
     producer: input.producer,
+    displayMode: input.displayMode,
     cache: input.cache,
     styleCascade: input.styleCascade,
     numberingIndex: input.numberingIndex,
@@ -744,7 +745,6 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
     drawingsForPart: input.drawingsForPart,
   };
 }
-
 function effectiveNoteMarkStyle(
   noteKind: NoteKind,
   styleCascade: StyleCascadeTable | undefined

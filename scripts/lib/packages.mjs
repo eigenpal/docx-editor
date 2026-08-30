@@ -233,6 +233,12 @@ export const PACKAGES = [
     pkgSlug: 'docx-editor-fonts',
     tsconfigPath: 'packages/fonts/tsconfig.api.json',
   },
+  {
+    name: '@docx-editor.dev/docx-to-markdown',
+    root: 'packages/docx-to-markdown',
+    pkgSlug: 'docx-editor-docx-to-markdown',
+    tsconfigPath: 'packages/docx-to-markdown/tsconfig.api.json',
+  },
 ];
 
 // Derived: build invocation hint shown in `api:check` drift error

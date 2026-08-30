@@ -1194,7 +1194,6 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('pointermove', onTocPointerMove);
   pagesLayer.addEventListener('pointerleave', onTocPointerLeave);
   let desiredX: number | null = null;
-
   function layoutDocument(revision: number, scope?: LayoutScope): SemanticLayout {
     if (scope) attachListResolveChangeEvidence(layoutSession, scope);
     drawingBundle.sync(session);
@@ -1211,6 +1210,7 @@ export function mountPaginatedSurface(
         drawingBundle.drawingTokenForParagraph(paragraph, partName),
       drawingLayoutEpochForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
       projectLinkForPart,
+      displayMode: options.revisionDisplayMode,
     });
     return layoutSemanticDocument(session.part(), revision, {
       measurer,

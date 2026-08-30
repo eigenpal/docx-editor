@@ -121,6 +121,12 @@ const MAX_FACE_BOX_EM = 4;
  */
 const SMALL_CAPS_PROBE_ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
 
+// One measurer belongs to one editor/export session, but a large document can still ask it to
+// measure hundreds of thousands of distinct line-break prefixes. Keeping every prefix made the
+// measurement cache larger than the published layout it accelerated. A fixed-size clock keeps
+// the hot working set while giving every session a hard retention bound.
+const MAX_CACHED_SHAPED_WIDTHS = 4_096;
+
 /** Super and subscript draw at three quarters, so they measure at three quarters. */
 const sizeFactorOf = (style: ResolvedRunStyle): number =>
   style.verticalAlign === 'baseline' ? 1 : 0.75;
@@ -177,6 +183,22 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
   // amortizes the family/weight lookup across every probe of the runs that share it.
   const fontsByStyle = new WeakMap<ResolvedRunStyle, ResolvedFont | null>();
   const smallCapsSupportByFont = new WeakMap<ResolvedFont, boolean>();
+  const widthClock = new Array<
+    | {
+        readonly cache: Map<string, number>;
+        readonly text: string;
+      }
+    | undefined
+  >(MAX_CACHED_SHAPED_WIDTHS);
+  let widthClockCursor = 0;
+
+  const cacheWidth = (cache: Map<string, number>, text: string, advance: number): void => {
+    const evicted = widthClock[widthClockCursor];
+    if (evicted) evicted.cache.delete(evicted.text);
+    cache.set(text, advance);
+    widthClock[widthClockCursor] = { cache, text };
+    widthClockCursor = (widthClockCursor + 1) % MAX_CACHED_SHAPED_WIDTHS;
+  };
 
   const resolveFontCached = (style: ResolvedRunStyle): ResolvedFont | null => {
     // A stored `null` ("no font resolves") comes back as null, not undefined, so the
@@ -298,7 +320,7 @@ export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasur
           return fallback.measure(text, style);
         }
         advance = total / fixedPointScale;
-        byText.set(text, advance);
+        cacheWidth(byText, text, advance);
       }
       // Base-size advance scaled to the drawn size; the cache stays keyed on the base size,
       // so baseline and super/subscript runs of one face share entries.

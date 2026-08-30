@@ -188,7 +188,7 @@ import {
   sameDeferCounts,
   sameFragments,
 } from './semantic-fragment-signature.ts';
-import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
+import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
 import { hostedListTokenDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 
@@ -384,6 +384,7 @@ type PreparedBlock =
       readonly lineSpacing: ParagraphLineSpacing;
       readonly contextualSpacing: boolean;
       readonly styleId: string | null;
+      readonly outlineLevel: number | null;
       readonly borders: ParagraphBorders;
       /**
        * Border identity + indent, for the `w:between` group rule.
@@ -557,9 +558,8 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
-  // ONE display mode for both. `blockStart` / `blockEndExclusive` index into this exact block
-  // list, so enumerating sections over a differently-filtered one slices with indices that
-  // do not belong to it and lands body text under the wrong section's page geometry.
+  // ONE display mode for both. Section block ranges index this exact list; enumerating over a
+  // differently-filtered one lands body text under the wrong section's page geometry.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const blocks = storyBlocks(part, displayMode);
   const sections = enumerateDocumentSectionsFromBlocks(part, blocks).sections;
@@ -568,6 +568,7 @@ export function layoutSemanticDocument(
   const controlToken = contentControlContextToken(part);
   const optionsWithControlContext: SemanticLayoutOptions = {
     ...options,
+    displayMode,
     producer: producerWithControlContext(options.producer, controlToken),
     tocFieldChromeParagraphIds:
       options.tocFieldChromeParagraphIds ?? tocFieldChromeParagraphIds(part),
@@ -675,7 +676,8 @@ export function layoutSemanticDocument(
   };
 
   const finish = (layout: SemanticLayout): SemanticLayout => {
-    const withBoundaries = attachContentControlBoundaries(layout, part, controlToken);
+    const projected = layout.displayMode === displayMode ? layout : { ...layout, displayMode };
+    const withBoundaries = attachContentControlBoundaries(projected, part, controlToken);
     if (options.session) {
       options.session.previous = withBoundaries;
     }
@@ -852,10 +854,22 @@ function layoutBlocksPass(
       zonesByPage = new Map(nextZones);
       seenZoneTokens.add(exclusionMapsToken(nextZones));
     }
+    // The common document has an image-layout port but no exclusion-producing anchors. Build
+    // pass zero with a disposable session so that, when its collected zone map is empty, that
+    // very pass is publishable and can seed the caller's incremental state. Previously the
+    // engine retained this complete probe while constructing an identical final layout.
+    const publishCandidate = (
+      candidate: BlockLayoutResult,
+      candidateSession: LayoutSession | undefined
+    ): BlockLayoutResult => {
+      if (options.session && candidateSession) Object.assign(options.session, candidateSession);
+      return candidate;
+    };
     for (let pass = 0; pass < MAX_DRAWING_EXCLUSION_REFLOW_PASSES; pass += 1) {
+      const candidateSession = options.session ? createLayoutSession() : undefined;
       result = layoutBlocksWithGeometry(bodies, revision, {
         ...options,
-        session: undefined,
+        session: candidateSession,
         drawingExclusionPass: pass,
         drawingExclusionZonesByPage: zonesByPage,
       });
@@ -867,6 +881,9 @@ function layoutBlocksPass(
         exclusionColumnLayout
       );
       if (nextZones.size === 0) {
+        if (pass === 0) {
+          return publishCandidate(result, candidateSession);
+        }
         converged = true;
         zonesByPage = nextZones;
         break;
@@ -879,9 +896,10 @@ function layoutBlocksPass(
       }
       seenZoneTokens.add(nextToken);
       if (pass > 0 && exclusionMapsEqual(zonesByPage, nextZones)) {
-        converged = true;
-        zonesByPage = nextZones;
-        break;
+        // This candidate was already laid under the exact stable zone map. Publish its
+        // captured session directly instead of retaining it while constructing an identical
+        // third full-document layout — a large one-shot export otherwise peaks with both.
+        return publishCandidate(result, candidateSession);
       }
       zonesByPage = new Map(nextZones);
     }
@@ -891,9 +909,10 @@ function layoutBlocksPass(
         stab < MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES && !converged;
         stab += 1
       ) {
+        const candidateSession = options.session ? createLayoutSession() : undefined;
         result = layoutBlocksWithGeometry(bodies, revision, {
           ...options,
-          session: undefined,
+          session: candidateSession,
           drawingExclusionPass: MAX_DRAWING_EXCLUSION_REFLOW_PASSES + stab,
           drawingExclusionZonesByPage: zonesByPage,
         });
@@ -905,7 +924,10 @@ function layoutBlocksPass(
           exclusionColumnLayout
         );
         const nextToken = exclusionMapsToken(nextZones);
-        if (exclusionMapsEqual(zonesByPage, nextZones) || seenZoneTokens.has(nextToken)) {
+        if (exclusionMapsEqual(zonesByPage, nextZones)) {
+          return publishCandidate(result, candidateSession);
+        }
+        if (seenZoneTokens.has(nextToken)) {
           converged = true;
           zonesByPage = nextZones;
           break;
@@ -1200,6 +1222,7 @@ function layoutBlocksPass(
         lineSpacing,
         contextualSpacing,
         styleId,
+        outlineLevel,
         shading,
         inheritedRunProperties,
         markRunProperties,
@@ -1225,6 +1248,7 @@ function layoutBlocksPass(
         lineSpacing,
         contextualSpacing,
         styleId,
+        outlineLevel,
         borders,
         // The box's own INSETS, not its resolved edges. `available` is
         // `contentWidth - indent.left - indent.right`, so keying on `indent.left + available`
@@ -1804,6 +1828,25 @@ function layoutBlocksPass(
       entry.available
     );
 
+  // A one-shot cache releases a paragraph only after its final placement. This preserves
+  // keep-with-next lookahead hits without retaining a second document-sized line tree beside
+  // the published layout. Live caches implement `release` as a no-op.
+  const breakKeysByParagraph = new Map<string, Set<string>>();
+  const rememberBreakKey = (paragraphId: string, key: string): void => {
+    let keys = breakKeysByParagraph.get(paragraphId);
+    if (!keys) {
+      keys = new Set();
+      breakKeysByParagraph.set(paragraphId, keys);
+    }
+    keys.add(key);
+  };
+  const releasePlacedBreaks = (paragraphId: string): void => {
+    const keys = breakKeysByParagraph.get(paragraphId);
+    if (!keys || !cache) return;
+    for (const key of keys) cache.release?.(key);
+    breakKeysByParagraph.delete(paragraphId);
+  };
+
   // Shared by placement and by the `w:keepNext` lookahead, which needs the height of the
   // blocks it keeps WITH. Both read the same cache entry, so the lookahead re-measures nothing.
   const breakBlock = (entry: PreparedParagraph, entryIndex: number, startOffset = 0) => {
@@ -1856,6 +1899,7 @@ function layoutBlocksPass(
         cacheKey += `\0excl:${flowColumnIndex}|${cursorY.toFixed(3)}|${exclusionToken}`;
       }
       if (startOffset > 0) cacheKey += `\0from:${startOffset}`;
+      rememberBreakKey(paragraphId, cacheKey);
     }
     const usePageColumnCoords = columnCount > 1;
     return breakParagraph(
@@ -2184,6 +2228,7 @@ function layoutBlocksPass(
     let lines = breakBlock(entry, index);
     if (lines.length === 0) {
       // Cross-paragraph TOC field chrome: tree preserved, no painted row or flow height.
+      releasePlacedBreaks(paragraphId);
       continue;
     }
     // A SECTION BREAK IS NOT CONTENT. The paragraph mark that carries a paragraph-level
@@ -2461,6 +2506,9 @@ function layoutBlocksPass(
               end: pending[pending.length - 1]!.range.end,
             },
         props,
+        styleId: entry.styleId,
+        outlineLevel: entry.outlineLevel,
+        alignment: entry.alignment,
         spacing: { before: fragmentBefore, after: appliedAfter },
         indent,
         ...(bottomBorderRecord ? { bottomBorder: bottomBorderRecord } : {}),
@@ -2794,6 +2842,7 @@ function layoutBlocksPass(
       }
     }
     flushFragment(true);
+    releasePlacedBreaks(paragraphId);
     previousSpaceAfter = endedWithPageBreak ? 0 : spacing.after;
   }
 
@@ -2842,7 +2891,11 @@ function layoutBlocksPass(
   // re-placed: a resumed pass never visits the prefix, and evicting its entries would make
   // the next full pass measure the whole document again.
   publishRetainedKeys();
-  const layout: SemanticLayout = { revision, pages };
+  const layout: SemanticLayout = {
+    revision,
+    pages,
+    ...(options.displayMode ? { displayMode: options.displayMode } : {}),
+  };
   if (session) {
     session.previous = layout;
     // A converged pass stops early, so the tail's checkpoints were never recomputed. The

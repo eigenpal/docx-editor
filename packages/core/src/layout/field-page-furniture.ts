@@ -594,6 +594,14 @@ interface RetainedStoryProjection {
  */
 const strippedStoryProjections = new WeakMap<HeaderFooterStoryRecord, RetainedStoryProjection>();
 
+/** Release incremental page-field projectors attached to an exported layout. */
+export function releasePageFieldProjectionState(layout: SemanticLayout): void {
+  for (const page of Array.isArray(layout.pages) ? layout.pages : []) {
+    if (page.header) strippedStoryProjections.delete(page.header);
+    if (page.footer) strippedStoryProjections.delete(page.footer);
+  }
+}
+
 /**
  * True when two projection contexts substitute identical values for every page field.
  *

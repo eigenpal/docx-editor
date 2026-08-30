@@ -67,6 +67,11 @@
       "import": "./dist/output.js",
       "require": "./dist/output.cjs"
     },
+    "./export": {
+      "types": "./dist/export.d.ts",
+      "import": "./dist/export.js",
+      "require": "./dist/export.cjs"
+    },
     "./store": {
       "types": "./dist/store.d.ts",
       "import": "./dist/store.js",

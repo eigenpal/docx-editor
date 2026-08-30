@@ -38,6 +38,9 @@ export * from './package/index.ts';
 // Semantic document store: TreeDocumentStore + TreeDocOps over the canonical tree.
 export * from './store/index.ts';
 
+// Narrow read capability shared by browser layout and server exporters.
+export * from './headless-document-view.ts';
+
 export { TABLE_BORDER_STYLES, type TableBorderStyle } from './table-border-style.ts';
 
 // Branded length units and the one twips/points conversion pair.

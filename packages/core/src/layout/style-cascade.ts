@@ -20,7 +20,6 @@ import {
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
-import { isDangerousKey } from '../store/package/safe-record.ts';
 import {
   indentTwips,
   paragraphAlignment,
@@ -48,45 +47,25 @@ import {
 } from './paragraph-tabs.ts';
 import type { ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
+import {
+  findParagraphProperties,
+  findRunProperties,
+  isElement,
+  isValidStyleId,
+  readDocDefaults,
+  readStyleDefinition,
+  withoutChangeRecords,
+  type StyleDefinition,
+} from './style-definition-reader.ts';
+
+export { isValidStyleId } from './style-definition-reader.ts';
+export type { StyleDefinition } from './style-definition-reader.ts';
 
 /** Soft ceiling on `basedOn` chain length — enough for real templates, refuses hostile graphs. */
 export const MAX_STYLE_BASED_ON_DEPTH = 32;
 
 /** Soft ceiling on style definitions read from one styles part. */
 export const MAX_STYLE_DEFINITIONS = 4096;
-
-/** Identifier-ish strings from a file (style ids): bounded, no control characters. */
-const STYLE_ID_MAX = 128;
-const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
-
-/** One `w:style` as the cascade reads it: its properties, and the style it is based on. */
-export interface StyleDefinition {
-  readonly styleId: string;
-  readonly type: string;
-  readonly basedOn: string | null;
-  /**
-   * `w:next` — the style Word gives the paragraph that FOLLOWS one in this style.
-   *
-   * Nothing in layout reads it: it is a rule about authoring, not about painting. It is
-   * read here because this is the one place `styles.xml` is parsed, and a second reader
-   * would be a second answer to what a style id means.
-   */
-  readonly next: string | null;
-  readonly paragraphProperties: readonly OoxmlProperty[];
-  readonly runProperties: readonly OoxmlProperty[];
-  /** The style's `w:pPr` node, when present — needed for nested `w:pBdr`. */
-  readonly paragraphPropertiesNode: OoxmlElement | undefined;
-  /** The style's `w:tblPr`, for a `w:type="table"` style. */
-  readonly tablePropertiesNode: OoxmlElement | undefined;
-  /**
-   * `w:tblStylePr` conditional formats by `w:type` (`firstRow`, `band1Horz`, …).
-   *
-   * Word puts a table's real appearance here: `Table Grid` carries its grid in the style's
-   * `w:tblBorders`, and the banded/​header looks live in these. A document states only
-   * `<w:tblStyle w:val="TableGrid"/>`.
-   */
-  readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
-}
 
 /**
  * The whole styles part, indexed and ready to resolve against.
@@ -166,40 +145,6 @@ export interface CascadedParagraphFormatting {
   readonly styleId: string | null;
 }
 
-function isElement(node: OoxmlNode): node is OoxmlElement {
-  return node.kind !== 'textValue';
-}
-
-function attributeValue(node: OoxmlElement, localName: string): string | undefined {
-  return node.attributes.find((attribute) => attribute.localName === localName)?.value;
-}
-
-function childNamed(parent: OoxmlElement, localName: string): OoxmlElement | undefined {
-  for (const child of parent.children) {
-    if (isElement(child) && child.localName === localName) return child;
-  }
-  return undefined;
-}
-
-/** Accepted style ids only — over-long, control-bearing, or dangerous keys are dropped. */
-export function isValidStyleId(raw: string | undefined): raw is string {
-  if (raw === undefined || raw.length === 0 || raw.length > STYLE_ID_MAX) return false;
-  if (CONTROL_CHARS.test(raw) || isDangerousKey(raw)) return false;
-  return true;
-}
-
-/**
- * `w:style/@w:default` — `ST_OnOff`, so `on` is a legal spelling alongside `1` and `true`.
- *
- * Absent means off here, unlike a toggle ELEMENT: the attribute's presence is the statement.
- * Reading only two of the three on-spellings meant a document whose Normal said
- * `w:default="on"` had no default paragraph style at all — every unstyled paragraph fell to
- * the format's own defaults and the style box went blank.
- */
-function isDefaultFlag(raw: string | undefined): boolean {
-  return raw === '1' || raw === 'true' || raw === 'on';
-}
-
 function propertiesFingerprint(props: readonly OoxmlProperty[]): unknown {
   return props.map((property) =>
     property.attributes
@@ -207,127 +152,6 @@ function propertiesFingerprint(props: readonly OoxmlProperty[]): unknown {
       : { n: property.localName }
   );
 }
-
-function findRunProperties(container: OoxmlElement | undefined): OoxmlElement | undefined {
-  if (!container) return undefined;
-  for (const child of container.children) {
-    if (isElement(child) && (child.kind === 'runProperties' || child.localName === 'rPr')) {
-      return child;
-    }
-  }
-  return undefined;
-}
-
-/**
- * A container's `w:pPr`, whether or not the canonical read TYPED it.
- *
- * The typed kind is not guaranteed: a `w:pPr` demotes to generic whenever the reader's
- * known-node invariant refuses it, and one shape that trips it is ordinary Word output —
- * the paragraph mark (`w:rPr`) followed by `w:sectPr` or `w:pPrChange`, which is exactly
- * the CT_PPr order (17.3.1.26). A demoted container matched by kind alone reads as no
- * properties at all, so the paragraph renders with none of its authored alignment,
- * indent, numbering or style.
- */
-function findParagraphProperties(container: OoxmlElement | undefined): OoxmlElement | undefined {
-  if (!container) return undefined;
-  for (const child of container.children) {
-    if (isElement(child) && (child.kind === 'paragraphProperties' || child.localName === 'pPr')) {
-      return child;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Tracked-change RECORDS a style definition's property lists can carry: editing a style
- * with tracking on writes `w:rPrChange`/`w:pPrChange` (and `w:ins`/`w:del` for the
- * definition itself) INSIDE the style's `rPr`/`pPr`. They are decisions about the STYLE,
- * not formatting, and none of the property resolvers read them — but cascaded into span
- * property lists they made `formatRevisionOf` mark EVERY span of every paragraph using
- * the style as one tracked format change, painting a whole document grey over a single
- * restyled style definition.
- */
-const STYLE_CHANGE_RECORDS: ReadonlySet<string> = new Set([
-  'rPrChange',
-  'pPrChange',
-  'ins',
-  'del',
-  'moveFrom',
-  'moveTo',
-]);
-
-function withoutChangeRecords(props: OoxmlProperty[]): OoxmlProperty[] {
-  // The common style carries none; keep the allocated array in that case.
-  return props.some((property) => STYLE_CHANGE_RECORDS.has(property.localName))
-    ? props.filter((property) => !STYLE_CHANGE_RECORDS.has(property.localName))
-    : props;
-}
-
-function readDocDefaults(stylesRoot: OoxmlElement): {
-  run: readonly OoxmlProperty[];
-  paragraph: readonly OoxmlProperty[];
-  paragraphNode: OoxmlElement | undefined;
-} {
-  const docDefaults = childNamed(stylesRoot, 'docDefaults');
-  if (!docDefaults) return { run: [], paragraph: [], paragraphNode: undefined };
-  const rPrDefault = childNamed(docDefaults, 'rPrDefault');
-  const pPrDefault = childNamed(docDefaults, 'pPrDefault');
-  const runNode = findRunProperties(rPrDefault);
-  const paragraphNode = findParagraphProperties(pPrDefault);
-  return {
-    run: withoutChangeRecords(propertiesOf(runNode)),
-    paragraph: withoutChangeRecords(propertiesOf(paragraphNode)),
-    paragraphNode,
-  };
-}
-
-function readStyleDefinition(
-  node: OoxmlElement
-): (StyleDefinition & { isDefault: boolean }) | null {
-  const styleId = attributeValue(node, 'styleId');
-  if (!isValidStyleId(styleId)) return null;
-  const type = attributeValue(node, 'type') ?? '';
-  const basedOnRaw = (() => {
-    const basedOn = childNamed(node, 'basedOn');
-    return basedOn ? attributeValue(basedOn, 'val') : undefined;
-  })();
-  const basedOn = isValidStyleId(basedOnRaw) ? basedOnRaw : null;
-  const nextRaw = (() => {
-    const next = childNamed(node, 'next');
-    return next ? attributeValue(next, 'val') : undefined;
-  })();
-  const next = isValidStyleId(nextRaw) ? nextRaw : null;
-  const paragraphPropertiesNode = findParagraphProperties(node);
-  const runPropertiesNode = findRunProperties(node);
-  const conditionalTableFormats = new Map<string, OoxmlElement>();
-  let seenConditional = 0;
-  for (const child of node.children) {
-    if (child.kind === 'textValue' || child.localName !== 'tblStylePr') continue;
-    // Bounded: `w:type` is an enumeration of nine values, but the element count is
-    // attacker-controlled and each one is retained.
-    if (seenConditional >= MAX_CONDITIONAL_TABLE_FORMATS) break;
-    seenConditional += 1;
-    const conditionType = attributeValue(child, 'type');
-    if (conditionType && !conditionalTableFormats.has(conditionType)) {
-      conditionalTableFormats.set(conditionType, child);
-    }
-  }
-  return {
-    styleId,
-    type,
-    basedOn,
-    next,
-    isDefault: isDefaultFlag(attributeValue(node, 'default')),
-    paragraphProperties: withoutChangeRecords(propertiesOf(paragraphPropertiesNode)),
-    runProperties: withoutChangeRecords(propertiesOf(runPropertiesNode)),
-    paragraphPropertiesNode,
-    tablePropertiesNode: childNamed(node, 'tblPr'),
-    conditionalTableFormats,
-  };
-}
-
-/** Nine `ST_TblStyleOverrideType` values exist; the ceiling only bounds a hostile part. */
-const MAX_CONDITIONAL_TABLE_FORMATS = 32;
 
 /**
  * A table style resolved through its `w:basedOn` chain.
@@ -341,6 +165,7 @@ const MAX_CONDITIONAL_TABLE_FORMATS = 32;
  */
 export interface CascadedTableFormatting {
   readonly tablePropertyNodes: readonly OoxmlElement[];
+  readonly tableRowPropertyNodes: readonly OoxmlElement[];
   readonly paragraphPropertyNodes: readonly OoxmlElement[];
   readonly paragraphProperties: readonly OoxmlProperty[];
   readonly runProperties: readonly OoxmlProperty[];
@@ -349,6 +174,7 @@ export interface CascadedTableFormatting {
 
 export const EMPTY_TABLE_FORMATTING: CascadedTableFormatting = Object.freeze({
   tablePropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
+  tableRowPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
   paragraphPropertyNodes: Object.freeze([]) as readonly OoxmlElement[],
   paragraphProperties: Object.freeze([]) as readonly OoxmlProperty[],
   runProperties: Object.freeze([]) as readonly OoxmlProperty[],
@@ -415,12 +241,14 @@ function flattenTableStyleChain(
   const chain = styleChain(table, styleId, 'table');
   if (chain.length === 0) return null;
   const tablePropertyNodes: OoxmlElement[] = [];
+  const tableRowPropertyNodes: OoxmlElement[] = [];
   const paragraphPropertyNodes: OoxmlElement[] = [];
   const paragraphProperties: OoxmlProperty[] = [];
   const runProperties: OoxmlProperty[] = [];
   const conditional = new Map<string, OoxmlElement>();
   for (const style of chain) {
     if (style.tablePropertiesNode) tablePropertyNodes.push(style.tablePropertiesNode);
+    if (style.tableRowPropertiesNode) tableRowPropertyNodes.push(style.tableRowPropertiesNode);
     if (style.paragraphPropertiesNode) paragraphPropertyNodes.push(style.paragraphPropertiesNode);
     paragraphProperties.push(...style.paragraphProperties);
     runProperties.push(...style.runProperties);
@@ -438,6 +266,7 @@ function flattenTableStyleChain(
   // out through a view that has no mutators to reach for.
   return Object.freeze({
     tablePropertyNodes: Object.freeze(tablePropertyNodes) as readonly OoxmlElement[],
+    tableRowPropertyNodes: Object.freeze(tableRowPropertyNodes) as readonly OoxmlElement[],
     paragraphPropertyNodes: Object.freeze(paragraphPropertyNodes) as readonly OoxmlElement[],
     paragraphProperties: Object.freeze(paragraphProperties) as readonly OoxmlProperty[],
     runProperties: Object.freeze(runProperties) as readonly OoxmlProperty[],
@@ -607,6 +436,7 @@ export function buildStyleCascadeTable(
       id: style.styleId,
       type: style.type,
       basedOn: style.basedOn,
+      outlineLevel: style.outlineLevel,
       p: propertiesFingerprint(style.paragraphProperties),
       r: propertiesFingerprint(style.runProperties),
     })),
@@ -866,6 +696,8 @@ export interface ParagraphLayoutInputs {
   readonly contextualSpacing: boolean;
   /** Resolved paragraph style id, for the `w:contextualSpacing` neighbour comparison. */
   readonly styleId: string | null;
+  /** Resolved outline level, with 9/invalid values treated as body text. */
+  readonly outlineLevel: number | null;
   readonly bottomBorder: ParagraphBorderEdge | undefined;
   /**
    * Every `CT_PBdr` edge after cascade, not just the bottom one.
@@ -974,6 +806,32 @@ export function resolveParagraphLayoutInputs(
   const tabStops = cascaded
     ? cascadedTabStops(cascaded.paragraphPropertyNodes)
     : paragraphTabStops(pPr);
+  const styleId = cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null);
+  let outlineLevel: number | null = null;
+  let sawOutlineProperty = false;
+  for (const property of props) {
+    if (property.localName !== 'outlineLvl') continue;
+    sawOutlineProperty = true;
+    const value = property.attributes?.val;
+    outlineLevel = value !== undefined && /^[0-8]$/.test(value) ? Number(value) : null;
+  }
+  if (!sawOutlineProperty && styleCascade && styleId) {
+    const chain = styleChain(styleCascade, styleId, 'paragraph');
+    for (let index = chain.length - 1; index >= 0; index -= 1) {
+      const inherited = chain[index]!.outlineLevel;
+      if (inherited !== null) {
+        outlineLevel = inherited;
+        break;
+      }
+    }
+  }
+  // Built-in Heading styles remain semantic even when a producer omits styles.xml (or names
+  // one without defining it). Keep this in the core record substrate so Markdown, PDF and
+  // future exporters agree. An explicit outlineLvl=9/invalid above deliberately blocks it.
+  if (!sawOutlineProperty && outlineLevel === null && styleId) {
+    const builtIn = /^heading\s*([1-9])$/i.exec(styleId.trim());
+    if (builtIn) outlineLevel = Number(builtIn[1]) - 1;
+  }
   return {
     props,
     indent,
@@ -982,7 +840,8 @@ export function resolveParagraphLayoutInputs(
     spacing: paragraphSpacing(props, { inList: listItem !== undefined, inTableCell }),
     lineSpacing: paragraphLineSpacing(props),
     contextualSpacing: paragraphContextualSpacing(props),
-    styleId: cascaded ? cascaded.styleId : (styleIdFromProps(props, 'pStyle') ?? null),
+    styleId,
+    outlineLevel,
     bottomBorder: cascaded
       ? cascadedBottomBorder(cascaded.paragraphPropertyNodes)
       : paragraphBorders(pPr).bottom,

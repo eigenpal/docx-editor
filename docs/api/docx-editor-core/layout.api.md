@@ -473,6 +473,84 @@ export function createBoundedFallbackWordBoundary(): WordBoundary;
 export function createDefaultWordBoundary(deps?: WordBoundaryResolverDeps): WordBoundary;
 
 // @public
+export function createDocumentFurnitureSource(options: CreateDocumentFurnitureSourceOptions): DocumentFurnitureSource;
+
+// @public
+export interface CreateDocumentFurnitureSourceOptions {
+    // (undocumented)
+    readonly cache: ParagraphLayoutCache<readonly PendingLine[]>;
+    // (undocumented)
+    readonly defaultTabStopPt?: number;
+    // (undocumented)
+    readonly displayMode?: RevisionDisplayMode;
+    // (undocumented)
+    readonly drawingLayoutTokenForPart?: (partName: string) => string;
+    // (undocumented)
+    readonly drawingTokenForParagraphForPart?: (partName: string, paragraph: OoxmlNode) => string;
+    // (undocumented)
+    readonly inlineDrawingLayoutForPart?: (partName: string) => InlineDrawingLayoutContext | undefined;
+    // (undocumented)
+    readonly measurer: TextMeasurer;
+    // (undocumented)
+    readonly numberingIndex?: () => NumberingIndex;
+    // (undocumented)
+    readonly producer: string;
+    // (undocumented)
+    readonly projectFieldLink?: FieldLinkProjector;
+    // (undocumented)
+    readonly projectLinkForPart?: (partName: string) => HyperlinkProjector | undefined;
+    // (undocumented)
+    readonly styleCascade?: () => StyleCascadeTable | undefined;
+    // (undocumented)
+    readonly view: HeadlessDocumentView;
+}
+
+// @public
+export function createDocumentLinkProjectors(view: HeadlessDocumentView): {
+    readonly projectLink: HyperlinkProjector;
+    readonly projectLinkForPart: (partName: string) => HyperlinkProjector;
+};
+
+// @public
+export function createDocumentNotesInput(options: CreateDocumentNotesInputOptions): NotesLayoutInput | undefined;
+
+// @public
+export interface CreateDocumentNotesInputOptions {
+    // (undocumented)
+    readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
+    // (undocumented)
+    readonly defaultTabStopPt?: number;
+    // (undocumented)
+    readonly displayMode?: RevisionDisplayMode;
+    // (undocumented)
+    readonly drawingLayoutEpochForPart?: (partName: string) => string;
+    // (undocumented)
+    readonly drawingTokenForParagraphForPart?: (partName: string, paragraph: OoxmlNode) => string;
+    // (undocumented)
+    readonly inlineDrawingLayoutForPart?: (partName: string) => InlineDrawingLayoutContext | undefined;
+    // (undocumented)
+    readonly measurer: TextMeasurer;
+    // (undocumented)
+    readonly numberingIndex?: () => NumberingIndex;
+    // (undocumented)
+    readonly producer: string;
+    // (undocumented)
+    readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
+    // (undocumented)
+    readonly projectLinkForPart?: NotesLayoutInput['projectLinkForPart'];
+    // (undocumented)
+    readonly styleCascade?: () => StyleCascadeTable | undefined;
+    // (undocumented)
+    readonly view: HeadlessDocumentView;
+}
+
+// @public
+export function createDocumentStyleDependencies(view: HeadlessDocumentView): DocumentStyleDependencies;
+
+// @public
+export function createFieldLinkRegistry(): FieldLinkRegistry;
+
+// @public
 export function createFixedMeasurer(charWidth?: number, lineHeight?: number): TextMeasurer;
 
 // @public
@@ -489,6 +567,9 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
 
 // @public
 export function createLayoutSession(): LayoutSession;
+
+// @public
+export function createLayoutShaping(configuration: LayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<LayoutShapingOptions>;
 
 // @public
 export function createListCounterState(index: NumberingIndex): ListCounterState;
@@ -564,7 +645,21 @@ export function deriveNoteDisplayMarksResolved(_noteKind: NoteKind, references: 
 export function displayText(text: string, style: ResolvedRunStyle): string;
 
 // @public
+export function disposeLayoutShaping(shaping: LayoutShapingOptions): void;
+
+// @public
+export interface DocumentFurnitureSource {
+    // (undocumented)
+    furniture(): PageFurniture | undefined;
+    // (undocumented)
+    sectionFurniture(): readonly (PageFurniture | undefined)[];
+}
+
+// @public
 export function documentOrder(layout: SemanticLayout): string[];
+
+// @public
+export function documentRelationshipTargetIn(view: HeadlessDocumentView, partName: string, relationshipId: string): ReturnType<typeof relationshipTargetIn>;
 
 // @public
 export interface DocumentSection {
@@ -583,6 +678,16 @@ export interface DocumentSectionsEnumeration {
     // (undocumented)
     readonly sections: DocumentSection[];
     readonly truncated: boolean;
+}
+
+// @public
+export interface DocumentStyleDependencies {
+    // (undocumented)
+    readonly defaultTabStopPt: number;
+    // (undocumented)
+    readonly numberingIndex: () => NumberingIndex;
+    // (undocumented)
+    readonly styleCascade: () => StyleCascadeTable | undefined;
 }
 
 // @public
@@ -718,6 +823,9 @@ export function everyStoryOrder(layout: SemanticLayout): string[];
 export function expandLvlText(lvlText: string, counters: readonly number[], formats: readonly string[]): string;
 
 // @public
+export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null;
+
+// @public
 export interface FieldAtomMarker {
     readonly formField: boolean;
     readonly pageField?: {
@@ -729,6 +837,16 @@ export interface FieldAtomMarker {
 
 // @public
 export type FieldLinkProjector = (spec: HyperlinkFieldSpec) => SpanLinkRecord | null;
+
+// @public
+export interface FieldLinkRegistry {
+    // (undocumented)
+    clear(): void;
+    // (undocumented)
+    linkById(linkId: string): RegisteredFieldLink | null;
+    // (undocumented)
+    project(spec: HyperlinkFieldSpec): SpanLinkRecord | null;
+}
 
 // @public
 export function filterRefsOnPage(page: PageRecord, allRefs: readonly PageRefHit[], refIndex?: PageRefIndex): readonly PageRefHit[];
@@ -893,6 +1011,9 @@ export type FontValidationResult = {
     readonly diagnostic: string;
     readonly valid: false;
 };
+
+// @public
+export function forEachSemanticSpan(layout: SemanticLayout, visitor: (visit: SemanticSpanVisit) => void): void;
 
 // @public
 export function formatDecimal(value: number): string;
@@ -1192,9 +1313,9 @@ export function isIntlSegmenterAvailable(): boolean;
 export function isIntlWordSegmenterAvailable(): boolean;
 
 // @public
-export function isMarkerOnlySeparatorNote(note: OoxmlNode): boolean;
+export function isMarkerOnlySeparatorNote(note: OoxmlNode, displayMode?: RevisionDisplayMode): boolean;
 
-// @public
+// @public (undocumented)
 export function isValidStyleId(raw: string | undefined): raw is string;
 
 // @public
@@ -1244,6 +1365,54 @@ export interface LayoutCacheStats {
 
 // @public
 export function layoutEquation(projection: OmmlEquationProjection, measurer: TextMeasurer, style: ResolvedRunStyle): EquationSpanRecord;
+
+// @public
+export interface LayoutFontConfiguration {
+    // (undocumented)
+    readonly defaultFont: {
+        readonly family: string;
+        readonly sizeHalfPoints: number;
+    };
+    // (undocumented)
+    readonly epoch: number;
+    // (undocumented)
+    readonly language?: string;
+    // (undocumented)
+    readonly maxFontBytes: number;
+    // (undocumented)
+    readonly sources: readonly LayoutFontSource[];
+    // (undocumented)
+    readonly substitutions?: readonly LayoutFontSubstitution[];
+}
+
+// @public
+export interface LayoutFontSource {
+    // (undocumented)
+    readonly availability?: 'available' | 'forbidden';
+    // (undocumented)
+    readonly bytes: Uint8Array;
+    // (undocumented)
+    readonly faceIndex: number;
+    // (undocumented)
+    readonly hash: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly request: FontRequest;
+}
+
+// @public
+export interface LayoutFontSubstitution {
+    // (undocumented)
+    readonly from: FontRequest;
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
+    readonly to: FontRequest;
+}
 
 // @public
 export function layoutHeaderFooterStory(part: OoxmlPart, contentWidth: number, measurer: TextMeasurer, producer: string, cache?: ParagraphLayoutCache<readonly PendingLine[]>, styleCascade?: StyleCascadeTable, pageContext?: FieldPageContext, maxPageContextEntries?: number, defaultTabStopPt?: number, displayMode?: RevisionDisplayMode, inlineDrawingLayout?: InlineDrawingLayoutContext, drawingTokenForParagraph?: (paragraph: OoxmlNode) => string, drawingLayoutToken?: string, hfPageContext?: HeaderFooterPageContext, documentProperties?: DocumentProperties, inputs?: HeaderFooterStoryInputs): HeaderFooterStoryLayout;
@@ -1326,6 +1495,23 @@ export interface LayoutSessionStats {
     readonly reusedPages: number;
     // (undocumented)
     readonly total: number;
+}
+
+// @public
+export class LayoutShapingConfigurationError extends Error {
+    constructor(message: string);
+    // (undocumented)
+    readonly code: "overLimit";
+}
+
+// @public
+export interface LayoutShapingInstrumentation {
+    // (undocumented)
+    readonly onFontAdmission?: () => void;
+    // (undocumented)
+    readonly onFontByteCopy?: () => void;
+    // (undocumented)
+    readonly onFontHash?: () => void;
 }
 
 // @public
@@ -1431,6 +1617,7 @@ export interface ListMarkerRecord {
     readonly level: number;
     readonly numFmt: string;
     readonly numId: string;
+    readonly ordinal?: number;
     // (undocumented)
     readonly style: ResolvedRunStyle;
     // (undocumented)
@@ -1633,6 +1820,8 @@ export interface NotesLayoutInput {
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
     // (undocumented)
     readonly defaultTabStopPt?: number;
+    // (undocumented)
+    readonly displayMode?: RevisionDisplayMode;
     // (undocumented)
     readonly documentEndnoteProps: ResolvedEndnoteProperties;
     readonly documentFootnoteProps: ResolvedFootnoteProperties;
@@ -1920,6 +2109,7 @@ export function paragraphContextualSpacing(props: readonly OoxmlProperty[]): boo
 
 // @public
 export interface ParagraphFragmentRecord {
+    readonly alignment: 'left' | 'center' | 'right' | 'both';
     readonly borders?: readonly ParagraphBorderStrokeRecord[];
     readonly bottomBorder?: ParagraphBottomBorderRecord;
     // (undocumented)
@@ -1937,6 +2127,7 @@ export interface ParagraphFragmentRecord {
     // @deprecated
     readonly markRevision?: RevisionAttribution;
     readonly markRevisions?: readonly RevisionAttribution[];
+    readonly outlineLevel: number | null;
     // (undocumented)
     readonly paragraphId: string;
     // (undocumented)
@@ -1946,6 +2137,7 @@ export interface ParagraphFragmentRecord {
     readonly shading?: string;
     readonly shadingBox?: LayoutBox;
     readonly spacing: ParagraphSpacing;
+    readonly styleId: string | null;
     readonly tabStops: ResolvedTabStops;
 }
 
@@ -1985,7 +2177,9 @@ export interface ParagraphLayoutCache<T> {
     clear(): void;
     // (undocumented)
     get(key: ParagraphLayoutKey): T | undefined;
+    release?(key: ParagraphLayoutKey): void;
     retain(keys: ReadonlySet<ParagraphLayoutKey>): void;
+    readonly retainAcrossPasses?: boolean;
     retentionPassDue?(): boolean;
     // (undocumented)
     set(key: ParagraphLayoutKey, value: T): void;
@@ -1996,6 +2190,7 @@ export interface ParagraphLayoutCache<T> {
 // @public
 export interface ParagraphLayoutCacheOptions {
     readonly maxEntries?: number;
+    readonly retainAcrossPasses?: boolean;
 }
 
 // @public
@@ -2020,6 +2215,7 @@ export interface ParagraphLayoutInputs {
     readonly lineSpacing: ParagraphLineSpacing;
     readonly listItem?: ResolvedListItem;
     readonly markRunProperties: readonly OoxmlProperty[];
+    readonly outlineLevel: number | null;
     // (undocumented)
     readonly props: OoxmlProperty[];
     readonly shading: string | undefined;
@@ -2197,6 +2393,30 @@ export interface RefNoteParts {
 }
 
 // @public
+export interface RegisteredFieldLink {
+    // (undocumented)
+    readonly anchor?: string;
+    // (undocumented)
+    readonly authored: string;
+    // (undocumented)
+    readonly end: 0;
+    // (undocumented)
+    readonly href: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'external' | 'internal' | 'unresolved';
+    // (undocumented)
+    readonly paragraphId: '';
+    // (undocumented)
+    readonly start: 0;
+    // (undocumented)
+    readonly text: '';
+    // (undocumented)
+    readonly tooltip?: string;
+}
+
+// @public
 export function resetGraphemeBoundary(): void;
 
 // @public
@@ -2274,6 +2494,7 @@ export interface ResolvedListItem {
     readonly numFmt: string;
     // (undocumented)
     readonly numId: string;
+    readonly ordinal?: number;
     // (undocumented)
     readonly suffix: ListSuffix;
 }
@@ -2751,6 +2972,7 @@ export function semanticHorizontalBoundaries(run: ShapedRun): readonly number[];
 export interface SemanticLayout {
     readonly contentControls?: readonly ContentControlBoundaryRecord[];
     readonly controlContextToken?: string;
+    readonly displayMode?: RevisionDisplayMode;
     // (undocumented)
     readonly pages: readonly PageRecord[];
     readonly revision: number;
@@ -2809,6 +3031,24 @@ export interface SemanticSelection {
     // (undocumented)
     readonly head: SemanticPosition;
 }
+
+// @public
+export interface SemanticSpanVisit {
+    // (undocumented)
+    readonly line: LineRecord;
+    // (undocumented)
+    readonly page: PageRecord;
+    readonly paragraph: ParagraphFragmentRecord;
+    readonly paragraphId: string;
+    readonly sourceRange: SourceRange | null;
+    // (undocumented)
+    readonly span: StyleSpanRecord;
+    // (undocumented)
+    readonly story: SemanticStoryKind;
+}
+
+// @public
+export type SemanticStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
 
 // @public
 export interface SemanticTableCell {
@@ -3127,20 +3367,27 @@ export interface StyleCascadeTable {
     readonly themeFonts: ThemeFonts;
 }
 
-// @public
+// @public (undocumented)
 export interface StyleDefinition {
     // (undocumented)
     readonly basedOn: string | null;
+    // (undocumented)
     readonly conditionalTableFormats: ReadonlyMap<string, OoxmlElement>;
     readonly next: string | null;
     // (undocumented)
+    readonly outlineLevel: number | null;
+    // (undocumented)
     readonly paragraphProperties: readonly OoxmlProperty[];
+    // (undocumented)
     readonly paragraphPropertiesNode: OoxmlElement | undefined;
     // (undocumented)
     readonly runProperties: readonly OoxmlProperty[];
     // (undocumented)
     readonly styleId: string;
+    // (undocumented)
     readonly tablePropertiesNode: OoxmlElement | undefined;
+    // (undocumented)
+    readonly tableRowPropertiesNode: OoxmlElement | undefined;
     // (undocumented)
     readonly type: string;
 }
@@ -3341,6 +3588,7 @@ export interface TableRowFragmentRecord {
     readonly id: string;
     readonly isContinuation?: boolean;
     readonly isHeaderRepeat: boolean;
+    readonly isHeaderRow: boolean;
     // (undocumented)
     readonly revisionAuthor?: string;
     // (undocumented)

@@ -261,7 +261,13 @@ describe('the per-lane environment boundary is structurally enforced (task 10.1)
   //
   // `contracts` is excluded on purpose: it is declaration-only and its public API names
   // HTMLElement for host-element accessors, which is a type reference, not a runtime need.
-  const NEUTRAL_WITH_PROJECT = ['store', 'layout', 'automation', 'collaboration'] as const;
+  const NEUTRAL_WITH_PROJECT = [
+    'store',
+    'layout',
+    'export',
+    'automation',
+    'collaboration',
+  ] as const;
 
   test('every runtime-neutral lane in core has its own DOM-free project', () => {
     for (const lane of NEUTRAL_WITH_PROJECT) {

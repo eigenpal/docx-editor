@@ -373,6 +373,17 @@ function readFlag(container: OoxmlElement | undefined, localName: string): boole
   return value === undefined || (value !== '0' && value !== 'false' && value !== 'off');
 }
 
+/** Read a tri-state toggle so a later style/direct layer can explicitly turn it off. */
+function readOptionalFlag(
+  container: OoxmlElement | undefined,
+  localName: string
+): boolean | undefined {
+  const flag = container && childNamed(container, localName);
+  if (!flag) return undefined;
+  const value = attributeValue(flag, 'val');
+  return value === undefined || (value !== '0' && value !== 'false' && value !== 'off');
+}
+
 const AUTO_ROW_HEIGHT: TableRowHeight = Object.freeze({ rule: 'auto' });
 
 /**
@@ -887,6 +898,26 @@ function readTableStructureUncached(
     const plan = plans[rowIndex]!;
     const rowNode = plan.node;
     const rowProperties = plan.properties;
+    const rowConditions = conditionalTypesFor({
+      look,
+      rowIndex,
+      rowCount: bodyRows,
+      gridColumn: 0,
+      gridSpan: Math.max(1, columnCount),
+      columnCount: Math.max(1, columnCount),
+      rowProperties,
+      cellProperties: undefined,
+    });
+    let isHeader = false;
+    for (const styleRowProperties of tableStyle.tableRowPropertyNodes) {
+      isHeader = readOptionalFlag(styleRowProperties, 'tblHeader') ?? isHeader;
+    }
+    for (const conditionType of rowConditions) {
+      const conditional = tableStyle.conditional.get(conditionType);
+      isHeader =
+        readOptionalFlag(conditional && childNamed(conditional, 'trPr'), 'tblHeader') ?? isHeader;
+    }
+    isHeader = readOptionalFlag(rowProperties, 'tblHeader') ?? isHeader;
     let cellIndex = 0;
     const cells: SemanticTableCell[] = [];
     for (const cellNode of plan.cells) {
@@ -964,7 +995,7 @@ function readTableStructureUncached(
       ...(rowRevisionId !== undefined ? { revisionId: rowRevisionId } : {}),
       ...(rowRevisionAuthor !== undefined ? { revisionAuthor: rowRevisionAuthor } : {}),
       ...(rowRevisionDate !== undefined ? { revisionDate: rowRevisionDate } : {}),
-      isHeader: readFlag(rowProperties, 'tblHeader'),
+      isHeader,
       cantSplit: readFlag(rowProperties, 'cantSplit'),
       height: readRowHeight(rowProperties),
       cells,

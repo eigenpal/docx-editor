@@ -104,6 +104,9 @@ export interface TextboxStoryLayoutOptions {
   readonly displayMode?: RevisionDisplayMode;
   /** Document properties, for a document-property field inside the text-box story. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
+  /** Sanitized hyperlink seams inherited from the story containing this text box. */
+  readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
+  readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
   /** Story nesting depth; a textbox laid out from inside another textbox passes depth + 1. */
   readonly depth?: number;
   /**
@@ -410,6 +413,8 @@ export function layoutTextboxStory(
     ...(listItems ? { listItems } : {}),
     ...(options.pageContext ? { pageContext: options.pageContext } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+    ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+    ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),

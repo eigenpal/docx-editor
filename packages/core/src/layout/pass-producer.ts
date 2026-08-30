@@ -12,22 +12,38 @@ import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revis
 import type { StyleCascadeTable } from './style-cascade.ts';
 
 /**
- * One retained slot. Strings only — the slot pins a few kilobytes of the last document's
- * token, never its tree — so a module slot is a bounded trade; two live editors merely
- * alternate one concat per pass instead of sharing the hit.
+ * A small retained LRU. Strings only — it pins a bounded set of control tokens, never their
+ * trees, and keeps concurrently exported documents warm without an unbounded module cache.
  */
-let controlProducerSlot: {
+interface ControlProducerSlot {
   readonly base: string | undefined;
   readonly token: string;
   readonly producer: string;
-} | null = null;
+}
+
+const MAX_CONTROL_PRODUCER_SLOTS = 8;
+const controlProducerSlots: ControlProducerSlot[] = [];
+let nextControlProducerId = 0n;
 
 /** The document producer with the control token folded in, identity-stable across passes. */
 export function producerWithControlContext(base: string | undefined, token: string): string {
-  const slot = controlProducerSlot;
-  if (slot && slot.base === base && slot.token === token) return slot.producer;
-  const producer = `${base ?? 'unversioned-measurer'}|cc:${token}`;
-  controlProducerSlot = { base, token, producer };
+  const slotIndex = controlProducerSlots.findIndex(
+    (candidate) => candidate.base === base && candidate.token === token
+  );
+  if (slotIndex >= 0) {
+    const [slot] = controlProducerSlots.splice(slotIndex, 1);
+    controlProducerSlots.push(slot);
+    return slot.producer;
+  }
+  // Control-heavy documents can have a multi-megabyte token. The producer reaches every
+  // paragraph cache key (often more than once at different widths), so embedding the token
+  // there multiplies it by the paragraph count and makes the published SemanticLayout retain
+  // gigabytes. A small exact-match LRU gives each live context an opaque identity: unlike a
+  // file-derived hash it cannot collide, and eviction only causes a safe cache miss.
+  nextControlProducerId += 1n;
+  const producer = `control-producer:${nextControlProducerId}`;
+  controlProducerSlots.push({ base, token, producer });
+  if (controlProducerSlots.length > MAX_CONTROL_PRODUCER_SLOTS) controlProducerSlots.shift();
   return producer;
 }
 

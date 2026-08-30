@@ -11,7 +11,8 @@
       "@docx-editor.dev/nuxt",
       "@docx-editor.dev/i18n",
       "@docx-editor.dev/pro",
-      "@docx-editor.dev/fonts"
+      "@docx-editor.dev/fonts",
+      "@docx-editor.dev/docx-to-markdown"
     ]
   ],
   "linked": [],

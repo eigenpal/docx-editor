@@ -20,7 +20,7 @@ import {
   type DrawingProjection,
 } from '../store/package/drawing-projection.ts';
 import {
-  imageResourceLookupFor,
+  createOwnedImageResourceLookup,
   type ImageDecodePort,
   type ImageResourceLookup,
   type ImageResourceState,
@@ -50,6 +50,8 @@ export interface InlineDrawingLayoutBundle {
   /** Per-part resource epoch — only drawings owned by that part. */
   cacheTokenForPart(ownerPartName: string): string;
   drawingTokenForParagraph(paragraph: OoxmlNode, ownerPartName: string): string;
+  /** Number of discovered image decodes that have not settled yet. */
+  pendingResourceCount(): number;
   /** Mint validated bytes for a ready handle when contentId matches; null on stale/mismatch. */
   mintValidatedBytes(
     handle: ValidatedImageBytesHandle,
@@ -63,7 +65,7 @@ export interface CreateInlineDrawingLayoutBundleOptions {
   readonly session: InlineDrawingPackageReader;
   readonly decodePort: ImageDecodePort;
   readonly onResourcesChanged: () => void;
-  /** Test-only override; production always uses {@link imageResourceLookupFor}. */
+  /** Test-only override; production creates one independently disposable lookup per bundle. */
   readonly resourceLookup?: ImageResourceLookup;
 }
 
@@ -83,6 +85,7 @@ interface PartDrawingContextSlot {
   readonly cacheTokenForPart: () => string;
   readonly drawingTokenForParagraph: (paragraph: OoxmlNode) => string;
   readonly isCompatibleWith: (part: OoxmlPart, pkg: OoxmlPackage) => boolean;
+  readonly pendingResourceCount: () => number;
   readonly dispose: () => void;
 }
 
@@ -407,6 +410,7 @@ function createPartDrawingContextSlot(options: {
         }
         resourceEpoch += 1;
         resourceEpochByKey.set(key, resourceEpoch);
+        inFlight.delete(key);
         onResourceSettled(ownerPartName);
       })
       .catch(() => {
@@ -422,10 +426,8 @@ function createPartDrawingContextSlot(options: {
         );
         resourceEpoch += 1;
         resourceEpochByKey.set(key, resourceEpoch);
-        onResourceSettled(ownerPartName);
-      })
-      .finally(() => {
         inFlight.delete(key);
+        onResourceSettled(ownerPartName);
       });
   };
 
@@ -531,6 +533,7 @@ function createPartDrawingContextSlot(options: {
     cacheTokenForPart: () =>
       `${ownerPartName}|${resourceEpoch}|${generation}|${atomProjections.size}`,
     drawingTokenForParagraph,
+    pendingResourceCount: () => inFlight.size,
     isCompatibleWith: (nextPart, nextPkg) => {
       const nextTheme = createPackageShapeThemeResolvers(nextPkg);
       if (nextTheme.cacheToken !== theme.cacheToken) return false;
@@ -596,7 +599,7 @@ export function createInlineDrawingLayoutBundle(
   let pkgSnapshot = options.session.currentPackage();
   let lookup =
     options.resourceLookup ??
-    imageResourceLookupFor(pkgSnapshot, {
+    createOwnedImageResourceLookup(pkgSnapshot, {
       decodePort: options.decodePort,
     });
   const slots = new Map<string, PartDrawingContextSlot>();
@@ -687,7 +690,7 @@ export function createInlineDrawingLayoutBundle(
     pkgSnapshot = nextPkg;
     lookup =
       options.resourceLookup ??
-      imageResourceLookupFor(nextPkg, {
+      createOwnedImageResourceLookup(nextPkg, {
         decodePort: options.decodePort,
       });
   };
@@ -710,7 +713,16 @@ export function createInlineDrawingLayoutBundle(
       // reuse cached line records whose ready handles the new registry cannot mint.
       return `${slotMintBySlot.get(slot) ?? 0}|${slot.drawingTokenForParagraph(paragraph)}`;
     },
+    pendingResourceCount() {
+      let count = 0;
+      for (const slot of slots.values()) count += slot.pendingResourceCount();
+      return count;
+    },
     mintValidatedBytes(handle: ValidatedImageBytesHandle, expectedContentId: string) {
+      // A validated handle is a capability owned by the bundle that discovered and retained
+      // it. The process registry can still mint a live handle belonging to another export
+      // session, so check exact ownership before crossing the byte boundary.
+      if (handlesByKey.get(handle.resourceKey) !== handle) return null;
       return mintValidatedImageBytes(handle, expectedContentId);
     },
     sync(reader: InlineDrawingPackageReader) {

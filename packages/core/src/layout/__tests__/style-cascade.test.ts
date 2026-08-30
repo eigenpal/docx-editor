@@ -120,6 +120,21 @@ describe('a restyled STYLE definition is not a format change on every span', () 
 });
 
 describe('buildStyleCascadeTable last-wins and docDefaults', () => {
+  test('explicit outline levels win over English names while localized names remain neutral', () => {
+    const table = buildStyleCascadeTable(
+      loadStyles(
+        '<w:style w:type="paragraph" w:styleId="Conflict"><w:name w:val="Heading 1"/>' +
+          '<w:pPr><w:outlineLvl w:val="4"/></w:pPr></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Demoted"><w:name w:val="Heading 2"/>' +
+          '<w:pPr><w:outlineLvl w:val="9"/></w:pPr></w:style>' +
+          '<w:style w:type="paragraph" w:styleId="Localized"><w:name w:val="Titre 2"/></w:style>'
+      )
+    );
+    expect(table.styles.get('Conflict')?.outlineLevel).toBe(4);
+    expect(table.styles.get('Demoted')?.outlineLevel).toBeNull();
+    expect(table.styles.get('Localized')?.outlineLevel).toBeNull();
+  });
+
   test('duplicate Heading1 keeps the last definition', () => {
     const table = buildStyleCascadeTable(loadStyles(HEADING1_FIRST + HEADING1_LAST));
     const style = table.styles.get('Heading1')!;
