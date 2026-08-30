@@ -58,6 +58,10 @@ import {
   rewriteIdentifiers,
   withRewrittenAttribute,
 } from './clipboard-fragment-identifiers.ts';
+import {
+  noteReferenceClosure,
+  withoutDanglingNoteReferences,
+} from './clipboard-fragment-closure.ts';
 import { mintFragmentUniqueIds } from './clipboard-fragment-unique-ids.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -668,23 +672,10 @@ export function mergeFragmentIntoPackage(
   }
   const transplants: NoteTransplant[] = [];
 
-  // Referenced note ids per kind, from the BODY blocks first, then closed over the
-  // fragment's own note bodies: a shipped note's citations of OTHER notes must
-  // transplant too, or their ids would pass through the rewrite unmapped and alias
-  // the host's unrelated notes. Bounded: each (kind, id) enqueues at most once.
-  const referencedByKind = { footnote: new Set<string>(), endnote: new Set<string>() };
-  const noteQueue: Array<{ kind: 'footnote' | 'endnote'; id: string }> = [];
-  const collectNoteRefs = (nodes: readonly OoxmlNode[]): void => {
-    walkAll(nodes, (node) => {
-      if (node.kind !== 'noteReference') return;
-      const kind = node.localName === 'footnoteReference' ? 'footnote' : 'endnote';
-      const id = attributeValueOf(node, 'id');
-      if (id === undefined || referencedByKind[kind].has(id)) return;
-      referencedByKind[kind].add(id);
-      noteQueue.push({ kind, id });
-    });
-  };
-  const noteBodyOf = (kind: 'footnote' | 'endnote', id: string): OoxmlNode | null => {
+  // Referenced note ids per kind: body blocks first, then the transitive closure
+  // over the fragment's own note bodies — a shipped note's citations must
+  // transplant too, or their ids would pass through the rewrite unmapped.
+  const referencedByKind = noteReferenceClosure(blocks, (kind, id) => {
     const part = resolveNotesPart(fragment, kind);
     if (!part || !isElementNode(part.root)) return null;
     for (const child of part.root.children) {
@@ -693,13 +684,7 @@ export function mergeFragmentIntoPackage(
       }
     }
     return null;
-  };
-  collectNoteRefs(blocks);
-  while (noteQueue.length > 0) {
-    const current = noteQueue.pop()!;
-    const body = noteBodyOf(current.kind, current.id);
-    if (body !== null) collectNoteRefs([body]);
-  }
+  });
 
   for (const noteKind of ['footnote', 'endnote'] as const) {
     const idMap = noteKind === 'footnote' ? footnoteIdMap : endnoteIdMap;
@@ -856,7 +841,12 @@ export function mergeFragmentIntoPackage(
   // Transplant note bodies: per-owner rels, full identifier rewrite, drop dangling
   // drawings, and the same default materialization the blocks get.
   // ------------------------------------------------------------------
+  // Fail CLOSED on dangling note references (see clipboard-fragment-closure.ts).
+  const scrubDanglingNoteRefs = (node: OoxmlNode): OoxmlNode =>
+    withoutDanglingNoteReferences(node, footnoteIdMap, endnoteIdMap);
+
   for (const transplant of transplants) {
+    transplant.bodies = transplant.bodies.map(scrubDanglingNoteRefs);
     const targetNotes = resolveNotesPart(pkg, transplant.kind);
     if (!targetNotes) return { ok: false, reason: 'merge-refused' };
     const noteRels = mergeRels(
@@ -966,7 +956,9 @@ export function mergeFragmentIntoPackage(
   // Materialize BEFORE the identifier rewrite: `chainDefines` resolves style chains in
   // the FRAGMENT's styles part, which is keyed by original ids — a collision-remapped
   // `pStyle` would never resolve and the default value would stamp over the style's own.
-  const materialized = [...materializeDefaults(blocks, fragmentStyles, targetStyles)];
+  const materialized = [...materializeDefaults(blocks, fragmentStyles, targetStyles)].map(
+    scrubDanglingNoteRefs
+  );
   const rewritten = materialized.map((block) =>
     rewriteIdentifiers(block, {
       styleIds: styleIdMap,

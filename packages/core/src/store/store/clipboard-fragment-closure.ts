@@ -117,6 +117,68 @@ export function collectNoteIds(
   return ids;
 }
 
+/**
+ * Referenced note ids per kind, from `blocks` first, then closed TRANSITIVELY over
+ * the note bodies `noteBodyOf` resolves: a shipped note's citations of other notes
+ * must ship too, or their ids would pass through the id rewrite unmapped.
+ * Bounded: each (kind, id) enqueues at most once.
+ */
+export function noteReferenceClosure(
+  blocks: readonly OoxmlNode[],
+  noteBodyOf: (kind: 'footnote' | 'endnote', id: string) => OoxmlNode | null
+): Record<'footnote' | 'endnote', Set<string>> {
+  const referenced = { footnote: new Set<string>(), endnote: new Set<string>() };
+  const queue: Array<{ kind: 'footnote' | 'endnote'; id: string }> = [];
+  const collect = (nodes: readonly OoxmlNode[]): void => {
+    for (const node of nodes) {
+      walkNodes(node, (current) => {
+        if (current.kind !== 'noteReference') return;
+        const kind = current.localName === 'footnoteReference' ? 'footnote' : 'endnote';
+        const id = attributeValueOf(current, 'id');
+        if (id === undefined || referenced[kind].has(id)) return;
+        referenced[kind].add(id);
+        queue.push({ kind, id });
+      });
+    }
+  };
+  collect(blocks);
+  while (queue.length > 0) {
+    const current = queue.pop()!;
+    const body = noteBodyOf(current.kind, current.id);
+    if (body !== null) collect([body]);
+  }
+  return referenced;
+}
+
+/**
+ * Fail CLOSED on dangling note references: an id with no mapping would pass through
+ * the rewrite unmapped and alias the HOST's unrelated note. Stripping the reference
+ * keeps the surrounding content and drops only the dead mark.
+ */
+export function withoutDanglingNoteReferences(
+  node: OoxmlNode,
+  footnoteIdMap: ReadonlyMap<string, string>,
+  endnoteIdMap: ReadonlyMap<string, string>
+): OoxmlNode {
+  if (node.kind === 'textValue') return node;
+  const children: OoxmlNode[] = [];
+  let changed = false;
+  for (const child of node.children) {
+    if (child.kind === 'noteReference') {
+      const map = child.localName === 'footnoteReference' ? footnoteIdMap : endnoteIdMap;
+      const id = attributeValueOf(child, 'id');
+      if (id === undefined || !map.has(id)) {
+        changed = true;
+        continue;
+      }
+    }
+    const next = withoutDanglingNoteReferences(child, footnoteIdMap, endnoteIdMap);
+    if (next !== child) changed = true;
+    children.push(next);
+  }
+  return changed ? ({ ...node, children } as OoxmlNode) : node;
+}
+
 export interface StylesIndex {
   readonly part: OoxmlPart | null;
   readonly byId: ReadonlyMap<string, OoxmlElement>;

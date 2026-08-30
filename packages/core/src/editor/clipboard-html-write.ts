@@ -53,7 +53,7 @@ import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import { htmlNumberingIndexOf, type HtmlNumberingIndex } from './clipboard-html-write-numbering.ts';
 import { noteIdsOf, renderNoteList, shippedNoteIds } from './clipboard-html-write-notes.ts';
 import {
-  conditionalRowFill,
+  conditionalCellFill,
   tableConditionalFormats,
   wordTableCellCss,
 } from './clipboard-html-write-table-styles.ts';
@@ -152,13 +152,16 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   const vertAlignVal = wmlVal(lastProperty(sources, 'vertAlign'));
   const vertAlign =
     vertAlignVal === 'superscript' || vertAlignVal === 'subscript' ? vertAlignVal : null;
+  // An RTL run's language is the BIDI one; `w:val` names the Latin language.
+  const rtl = toggleOn(sources, 'rtl');
   const lang = clipboardLanguageTag(
-    foldAttribute(sources, 'lang', 'val') ??
+    (rtl ? foldAttribute(sources, 'lang', 'bidi') : undefined) ??
+      foldAttribute(sources, 'lang', 'val') ??
       foldAttribute(sources, 'lang', 'bidi') ??
       foldAttribute(sources, 'lang', 'eastAsia')
   );
 
-  return { css: rules.join(';'), vanish: false, vertAlign, lang, rtl: toggleOn(sources, 'rtl') };
+  return { css: rules.join(';'), vanish: false, vertAlign, lang, rtl };
 }
 
 function paragraphCssOf(sources: readonly OoxmlElement[], omitLeftMargin: boolean): string {
@@ -786,7 +789,7 @@ function renderTable(ctx: RenderContext, table: OoxmlElement, fields: FieldState
         rowSpan,
         placement.startColumn === 0,
         placement.startColumn + placement.span >= gridColumns,
-        conditionalRowFill(conditionalFormats, rowIndex)
+        conditionalCellFill(conditionalFormats, rowIndex, placement.startColumn === 0)
       );
       const attrs =
         (placement.span > 1 ? ` colspan="${placement.span}"` : '') +

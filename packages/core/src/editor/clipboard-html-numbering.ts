@@ -87,8 +87,10 @@ export interface WordListLevelDefinition {
 }
 
 // Bounded: the block is a character class capped at 2048 (no backtracking blowup).
+// Word writes the override selector colon-joined (`@list l0:level1:lfo2`); the
+// space-separated form is tolerated too.
 const WORD_LIST_LEVEL_RULE =
-  /@list\s+l(\d{1,4}):level([1-9])(?:\s+lfo(\d{1,4}))?\s*\{([^{}]{0,2048})\}/g;
+  /@list\s+l(\d{1,4}):level([1-9])(?:[\s:]+lfo(\d{1,4}))?\s*\{([^{}]{0,2048})\}/g;
 
 /**
  * Bounded scan of Word's head `@list lN:levelM` rules: the STRUCTURED number format

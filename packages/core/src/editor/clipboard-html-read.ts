@@ -139,9 +139,12 @@ export interface Projection {
   readonly noteRels: Record<ClipboardNoteKind, RelEntry[]>;
   /** Ids with a PROJECTED definition — the only ids a live note reference may carry. */
   readonly definedNotes: Record<ClipboardNoteKind, ReadonlySet<number>>;
-  /** Ids whose reference the body walk actually EMITTED; a claimed note without one
-   *  is reconciled back into visible body text after the walk. */
-  readonly emittedNoteRefs: Record<ClipboardNoteKind, Set<number>>;
+  /** Ids the BODY emitted a live reference for — the reachability seeds. */
+  readonly bodyNoteRefs: Record<ClipboardNoteKind, Set<number>>;
+  /** Cross-note reference edges, keyed by the CITING note (`kind:id`). A claimed
+   *  note unreachable from the body through these edges is reconciled back into
+   *  visible body text after the walk. */
+  readonly noteNoteRefs: Map<string, Array<{ kind: ClipboardNoteKind; id: number }>>;
   /** The exact definition elements the notes pass consumed; only these skip the body
    *  walk, so a duplicate-id or unreferenced definition stays lossless in the body. */
   readonly definedNoteElements: ReadonlySet<Element>;
@@ -216,7 +219,7 @@ function collectInline(
   const tag = tagOf(node);
   if (IGNORED_TAGS.has(tag)) return;
   const style = parseInlineStyle(node);
-  if (isMsoListIgnoreMarker(style)) return; // Word's literal list marker never becomes text.
+  if (isMsoListIgnoreMarker(node)) return; // Word's literal list marker never becomes text.
   const msoElement = style.get('mso-element')?.trim().toLowerCase();
   if (
     msoElement === 'comment-reference' ||
@@ -295,7 +298,14 @@ function collectInline(
       const localName =
         noteReference.kind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
       runs.push(`<w:r>${rPrXml(markRun)}<w:${localName} w:id="${noteReference.id}"/></w:r>`);
-      p.emittedNoteRefs[noteReference.kind].add(noteReference.id);
+      if (ctx.noteBody === undefined) {
+        p.bodyNoteRefs[noteReference.kind].add(noteReference.id);
+      } else {
+        const from = `${ctx.noteBody.kind}:${ctx.noteBody.id}`;
+        const edges = p.noteNoteRefs.get(from) ?? [];
+        edges.push({ kind: noteReference.kind, id: noteReference.id });
+        p.noteNoteRefs.set(from, edges);
+      }
       return;
     }
     // A dangling or cross-note reference keeps its visible text instead of a live mark.
@@ -380,7 +390,7 @@ function msoMarkerText(element: Element, p: Projection): string {
   const walk = (node: Node, depth: number): void => {
     if (found.length > 0 || depth > 8 || p.nodesLeft <= 0) return;
     if (!isElement(node)) return;
-    if (isMsoListIgnoreMarker(parseInlineStyle(node))) {
+    if (isMsoListIgnoreMarker(node)) {
       found = (node.textContent ?? '').slice(0, 16);
       return;
     }
@@ -794,7 +804,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     notes: { footnote: new Map(), endnote: new Map() },
     noteRels: { footnote: [], endnote: [] },
     definedNotes,
-    emittedNoteRefs: { footnote: new Set(), endnote: new Set() },
+    bodyNoteRefs: { footnote: new Set(), endnote: new Set() },
+    noteNoteRefs: new Map(),
     definedNoteElements,
   };
   const rootCtx: FlowContext = {
@@ -869,14 +880,61 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   projection.lastMarkCovered = false;
   const blocks: string[] = [];
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
-  // Reconcile: a claimed note whose reference the body walk never emitted (anchor
-  // past the budget, inside dropped chrome, or too deep) would be silently dropped
-  // by the merge as unreferenced. Move its text back into the body, re-homing any
-  // note-scoped rel references onto document rels. The attribute-shaped pattern
-  // cannot match run TEXT: escapeXml turns a literal quote into `&quot;`.
+  // Reconcile: a claimed note is kept only when REACHABLE from the body through
+  // kept notes' cross-references (a mutual-citation island must not hide from the
+  // lossless fallback). Moved blocks re-home note-scoped rels onto document rels;
+  // the attribute-shaped pattern cannot match run TEXT (escapeXml escapes quotes).
+  const movedNotes = new Set<string>();
+  const reachableNotes: Record<ClipboardNoteKind, Set<number>> = {
+    footnote: new Set(),
+    endnote: new Set(),
+  };
+  {
+    const computeReachable = (): void => {
+      reachableNotes.footnote.clear();
+      reachableNotes.endnote.clear();
+      const queue: Array<{ kind: ClipboardNoteKind; id: number }> = [];
+      const reach = (kind: ClipboardNoteKind, id: number): void => {
+        if (movedNotes.has(`${kind}:${id}`)) return;
+        if (!projection.notes[kind].has(id) || reachableNotes[kind].has(id)) return;
+        reachableNotes[kind].add(id);
+        queue.push({ kind, id });
+      };
+      for (const kind of ['footnote', 'endnote'] as const) {
+        for (const id of projection.bodyNoteRefs[kind]) reach(kind, id);
+      }
+      // A moved note's blocks live in the body, so its citations seed too.
+      for (const key of movedNotes) {
+        for (const edge of projection.noteNoteRefs.get(key) ?? []) reach(edge.kind, edge.id);
+      }
+      while (queue.length > 0) {
+        const current = queue.pop()!;
+        for (const edge of projection.noteNoteRefs.get(`${current.kind}:${current.id}`) ?? []) {
+          reach(edge.kind, edge.id);
+        }
+      }
+    };
+    // Move ONE unreachable note at a time and recompute: moving it turns its own
+    // citations into body references that keep their targets as real notes.
+    for (;;) {
+      computeReachable();
+      let movedOne = false;
+      for (const kind of ['footnote', 'endnote'] as const) {
+        for (const id of projection.notes[kind].keys()) {
+          const key = `${kind}:${id}`;
+          if (reachableNotes[kind].has(id) || movedNotes.has(key)) continue;
+          movedNotes.add(key);
+          movedOne = true;
+          break;
+        }
+        if (movedOne) break;
+      }
+      if (!movedOne) break;
+    }
+  }
   for (const kind of ['footnote', 'endnote'] as const) {
     for (const [id, noteBlocks] of [...projection.notes[kind]]) {
-      if (projection.emittedNoteRefs[kind].has(id)) continue;
+      if (!movedNotes.has(`${kind}:${id}`)) continue;
       projection.notes[kind].delete(id);
       definedNotes[kind].delete(id);
       const relIdMap = new Map<string, string>();

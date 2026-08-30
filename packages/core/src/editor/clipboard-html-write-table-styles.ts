@@ -23,9 +23,11 @@ function pointsFromTwips(value: number): string {
 
 export interface TableConditionalFormats {
   readonly firstRowFill: string | null;
+  readonly firstColumnFill: string | null;
   readonly band1Fill: string | null;
   readonly band2Fill: string | null;
   readonly firstRowEnabled: boolean;
+  readonly firstColumnEnabled: boolean;
   readonly bandingEnabled: boolean;
 }
 
@@ -35,8 +37,9 @@ function tblLookFlag(tblLook: OoxmlElement | null, name: string, bit: number): b
   const attr = attributeValueOf(tblLook, name, WML_NAMESPACE_URI);
   // ST_OnOff: anything except an explicit off value is on, like the painter reads it.
   if (attr !== undefined) return !(attr === '0' || attr === 'false' || attr === 'off');
+  // The legacy bitmask is ST_ShortHexNumber: at most 4 hex digits, like the painter.
   const raw = attributeValueOf(tblLook, 'val', WML_NAMESPACE_URI);
-  if (raw === undefined || !/^[0-9A-Fa-f]{1,8}$/.test(raw)) return null;
+  if (raw === undefined || !/^[0-9A-Fa-f]{1,4}$/.test(raw)) return null;
   return (Number.parseInt(raw, 16) & bit) !== 0;
 }
 
@@ -50,6 +53,7 @@ export function tableConditionalFormats(
   tblLook: OoxmlElement | null
 ): TableConditionalFormats {
   let firstRowFill: string | null = null;
+  let firstColumnFill: string | null = null;
   let band1Fill: string | null = null;
   let band2Fill: string | null = null;
   for (const style of chain) {
@@ -65,25 +69,35 @@ export function tableConditionalFormats(
       const fill = colorAttribute(wmlChild(wmlChild(child, 'tcPr'), 'shd'), 'fill');
       if (fill === null) continue;
       if (type === 'firstRow') firstRowFill = fill;
+      else if (type === 'firstCol') firstColumnFill = fill;
       else if (type === 'band1Horz') band1Fill = fill;
       else if (type === 'band2Horz') band2Fill = fill;
     }
   }
   return {
     firstRowFill,
+    firstColumnFill,
     band1Fill,
     band2Fill,
     firstRowEnabled: tblLookFlag(tblLook, 'firstRow', 0x0020) ?? false,
+    firstColumnEnabled: tblLookFlag(tblLook, 'firstColumn', 0x0080) ?? false,
     bandingEnabled: !(tblLookFlag(tblLook, 'noHBand', 0x0200) ?? false),
   };
 }
 
-/** The style-conditional fill for one row, or null when nothing applies. */
-export function conditionalRowFill(
+/** The style-conditional fill for one cell, or null when nothing applies. Word's
+ *  precedence puts the first row over the first column over the row bands. */
+export function conditionalCellFill(
   formats: TableConditionalFormats,
-  rowIndex: number
+  rowIndex: number,
+  firstGridColumn: boolean
 ): string | null {
-  if (formats.firstRowEnabled && rowIndex === 0) return formats.firstRowFill;
+  if (formats.firstRowEnabled && rowIndex === 0 && formats.firstRowFill !== null) {
+    return formats.firstRowFill;
+  }
+  if (formats.firstColumnEnabled && firstGridColumn && formats.firstColumnFill !== null) {
+    return formats.firstColumnFill;
+  }
   if (!formats.bandingEnabled) return null;
   const bandIndex = rowIndex - (formats.firstRowEnabled ? 1 : 0);
   return bandIndex % 2 === 0 ? formats.band1Fill : formats.band2Fill;

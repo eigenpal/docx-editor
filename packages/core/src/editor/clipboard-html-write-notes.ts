@@ -14,6 +14,14 @@ import type { RenderContext } from './clipboard-html-write.ts';
 
 export type WordNoteKind = 'footnote' | 'endnote';
 
+/** One id parser for every site, so the 32767 cap cannot drift: a collected id the
+ *  renderer would refuse would leave a dead anchor in the copied HTML. */
+function wmlNoteIdOf(raw: string | undefined): number | null {
+  if (raw === undefined || !/^[1-9]\d{0,4}$/.test(raw)) return null;
+  const id = Number.parseInt(raw, 10);
+  return id <= 32_767 ? id : null;
+}
+
 /** The note ids a notes part actually defines. */
 export function noteIdsOf(root: OoxmlElement | null, kind: WordNoteKind): ReadonlySet<number> {
   const ids = new Set<number>();
@@ -21,8 +29,8 @@ export function noteIdsOf(root: OoxmlElement | null, kind: WordNoteKind): Readon
   for (const child of root.children) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName !== kind) continue;
-    const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
-    if (id !== undefined && /^[1-9]\d{0,4}$/.test(id)) ids.add(Number.parseInt(id, 10));
+    const id = wmlNoteIdOf(attributeValueOf(child, 'id', WML_NAMESPACE_URI));
+    if (id !== null) ids.add(id);
   }
   return ids;
 }
@@ -37,11 +45,11 @@ function collectNoteReferences(
       child.namespaceUri === WML_NAMESPACE_URI &&
       (child.localName === 'footnoteReference' || child.localName === 'endnoteReference')
     ) {
-      const raw = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
-      if (raw !== undefined && /^[1-9]\d{0,4}$/.test(raw)) {
+      const id = wmlNoteIdOf(attributeValueOf(child, 'id', WML_NAMESPACE_URI));
+      if (id !== null) {
         out.push({
           kind: child.localName === 'footnoteReference' ? 'footnote' : 'endnote',
-          id: Number.parseInt(raw, 10),
+          id,
         });
       }
       continue;
@@ -116,10 +124,8 @@ export function renderNoteList(
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (child.localName !== kind) continue;
     const id = attributeValueOf(child, 'id', WML_NAMESPACE_URI);
-    if (id === undefined || !/^[1-9]\d{0,4}$/.test(id)) continue;
-    // Same cap as wordNoteReferenceHtml, so no note body ships without its reference.
-    const idValue = Number.parseInt(id, 10);
-    if (idValue > 32_767) continue;
+    const idValue = wmlNoteIdOf(id);
+    if (id === undefined || idValue === null) continue;
     // Only notes an emitted reference reaches (directly from the body, or through
     // the cross-note closure) — a note referenced solely inside a tracked deletion
     // must not ship a body the read lane would materialize as visible text.

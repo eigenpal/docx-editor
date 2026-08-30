@@ -488,6 +488,12 @@ export function cssBackgroundFill(style: ReadonlyMap<string, string>): string | 
     if (name === 'background') {
       fill = solidBackground(value);
     } else if (name === 'background-color') {
+      const lower = value.trim().toLowerCase();
+      // An explicit transparent/none RESETS an earlier shorthand fill.
+      if (lower === 'transparent' || lower === 'none' || lower === 'initial') {
+        fill = null;
+        continue;
+      }
       const parsed = solidBackground(value);
       if (parsed !== null) fill = parsed;
     }
@@ -616,10 +622,13 @@ function paragraphBorderOf(
   };
 }
 
-/** True for the literal marker span Word emits beside `mso-list` paragraphs. */
-export function isMsoListIgnoreMarker(style: ReadonlyMap<string, string>): boolean {
-  const value = style.get('mso-list');
-  return value !== undefined && value.toLowerCase().includes('ignore');
+/** True for the literal marker span Word emits beside `mso-list` paragraphs.
+ *  Scans the RAW attribute: a crafted duplicate `mso-list` declaration must not
+ *  hide the Ignore token behind last-declaration-wins parsing. */
+export function isMsoListIgnoreMarker(element: Element): boolean {
+  const raw = element.getAttribute('style');
+  if (!raw) return false;
+  return /mso-list\s*:[^;]{0,128}ignore/i.test(raw.slice(0, 8192));
 }
 
 export function applyInlineTag(base: HtmlRunProps, tag: string): HtmlRunProps {
