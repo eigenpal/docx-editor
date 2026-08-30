@@ -320,10 +320,13 @@ export function layoutNoteById(
 }
 
 /**
- * Pass-local note story layouts, keyed by part, note id and width. Valid for exactly one
- * layout pass: every other input rides `opts`, which the caller builds once per pass from
- * a fixed mark context — the key deliberately omits it, so a cache must never outlive the
- * pass (or the marks) it was created for.
+ * Note story layouts, keyed by part, note id and width, and OWNED by a mark context: the
+ * caller keys each cache off one `NoteMarkContext` whose lifetime a notes-pass memo pins.
+ * The key deliberately omits everything else riding `LayoutNoteStoryOptions` because the
+ * memo's input fingerprint and identity checks pin those inputs for as long as the marks
+ * (and so this cache) live. ADDING A FIELD to `LayoutNoteStoryOptions` therefore means
+ * joining it to `fingerprintNotesInput`/`notesInputIdentities` in note-pagination.ts, or
+ * a cached story silently outlives the input that shaped it.
  */
 export type NoteStoryLayoutCache = Map<string, NoteStoryLayout | null>;
 

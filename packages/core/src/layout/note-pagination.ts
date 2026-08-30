@@ -290,12 +290,16 @@ interface NotesPassMemo {
   >;
 }
 
+/** ONE per-hit key: every fingerprint and equality below derives from it, so a new
+ * {@link PageRefHit} field joins the caches' validity in exactly one place. */
+function hitIdentityKey(hit: PageRefHit): string {
+  return `${hit.noteKind}|${hit.noteId}|${hit.paragraphId}|${hit.customMarkFollows ? 1 : 0}|${hit.sectionIndex}`;
+}
+
 function fingerprintHits(hits: readonly PageRefHit[]): string {
   const parts: string[] = [];
   for (const hit of hits) {
-    parts.push(
-      `${hit.noteKind}|${hit.noteId}|${hit.paragraphId}|${hit.atomOffset}|${hit.customMarkFollows ? 1 : 0}|${hit.sectionIndex}`
-    );
+    parts.push(`${hitIdentityKey(hit)}|${hit.atomOffset}`);
   }
   return parts.join(';');
 }
@@ -307,13 +311,7 @@ function fingerprintHits(hits: readonly PageRefHit[]): string {
  * the citation sits. A keystroke that only shifts offsets keeps the memo.
  */
 function fingerprintHitsIdentity(hits: readonly PageRefHit[]): string {
-  const parts: string[] = [];
-  for (const hit of hits) {
-    parts.push(
-      `${hit.noteKind}|${hit.noteId}|${hit.paragraphId}|${hit.customMarkFollows ? 1 : 0}|${hit.sectionIndex}`
-    );
-  }
-  return parts.join(';');
+  return hits.map(hitIdentityKey).join(';');
 }
 
 /** Content equality of two per-page ref lists (order, ids, owners, offsets, flags). */
@@ -323,16 +321,7 @@ function pageRefsEqual(a: readonly PageRefHit[], b: readonly PageRefHit[]): bool
   for (let i = 0; i < a.length; i += 1) {
     const x = a[i]!;
     const y = b[i]!;
-    if (
-      x.noteId !== y.noteId ||
-      x.noteKind !== y.noteKind ||
-      x.paragraphId !== y.paragraphId ||
-      x.atomOffset !== y.atomOffset ||
-      x.customMarkFollows !== y.customMarkFollows ||
-      x.sectionIndex !== y.sectionIndex
-    ) {
-      return false;
-    }
+    if (x.atomOffset !== y.atomOffset || hitIdentityKey(x) !== hitIdentityKey(y)) return false;
   }
   return true;
 }
@@ -397,6 +386,7 @@ function notesMemoFor(
     return { memo: null, allHits, reused: false };
   }
   const hitsFingerprint = fingerprintHits(allHits);
+  let identityFingerprint: string | null = null;
   const existing = session.notes as NotesPassMemo | null;
   if (existing) {
     const identity = notesInputIdentities.get(existing);
@@ -414,7 +404,7 @@ function notesMemoFor(
     if (inputUnchanged && existing.hitsFingerprint === hitsFingerprint) {
       return { memo: existing, allHits: existing.allHits, reused: true };
     }
-    const identityFingerprint = inputUnchanged ? fingerprintHitsIdentity(allHits) : null;
+    identityFingerprint = inputUnchanged ? fingerprintHitsIdentity(allHits) : null;
     if (identityFingerprint !== null && existing.identityFingerprint === identityFingerprint) {
       // Only offsets moved (typing in a referencing paragraph): the reference set, marks
       // and note stories are unchanged, so the memo — and every cache hanging off its
@@ -428,9 +418,7 @@ function notesMemoFor(
   }
   const fresh: NotesPassMemo = {
     hitsFingerprint,
-    identityFingerprint: fingerprintHitsIdentity(allHits),
-    // (Recomputed here only when the memo above did not match; the common keystroke path
-    // computes it once.)
+    identityFingerprint: identityFingerprint ?? fingerprintHitsIdentity(allHits),
     inputFingerprint,
     allHits,
     provisionalMarks: provisionalNoteMarks(allHits, input),
@@ -2416,15 +2404,14 @@ export function attachNotesToLayout(
         reserve: 0,
         reasons: reasons.slice(reasonsBefore),
       };
-      memo.pageAttach.set(page, entry);
-      // ALSO under the OUTPUT page: the next pass's body layout hands back the ATTACHED
-      // page by identity (it is what the session published), so an entry keyed only on
-      // this pass's input is one generation behind and never hits — every pass then
+      // Keyed under the OUTPUT page: the next pass's body layout hands back the ATTACHED
+      // page by identity (it is what the session publishes), so an entry keyed on this
+      // pass's input would be one generation behind and never hit — every pass then
       // republished a fresh page object for every footnote-bearing page, and the painter
       // rebuilt their DOM on every keystroke. The reserve entry forwards for the same
-      // reason: the next reserve pass reads the published page.
+      // reason: the next reserve pass reads the published page too.
+      memo.pageAttach.set(attached, entry);
       if (attached !== page) {
-        memo.pageAttach.set(attached, entry);
         const reserveEntry = memo.pageReserve.get(page);
         if (reserveEntry) memo.pageReserve.set(attached, reserveEntry);
       }
