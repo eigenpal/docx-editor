@@ -41,6 +41,9 @@ function collectNoteReferences(
 ): void {
   for (const child of node.children) {
     if (!isElement(child)) continue;
+    // Deleted content never renders, so its citations must not ship note bodies —
+    // a tracked-deleted (possibly redacted) note would resurface on paste.
+    if (child.kind === 'revisionDelete' || child.kind === 'revisionMoveFrom') continue;
     if (
       child.namespaceUri === WML_NAMESPACE_URI &&
       (child.localName === 'footnoteReference' || child.localName === 'endnoteReference')

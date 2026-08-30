@@ -3,53 +3,10 @@
 // size-capped BEFORE any allocation and the bytes are magic-byte sniffed.
 
 import { sniffImageMime, validateRasterHeader } from '../store/package/image-resources.ts';
+import { clipboardDecodeBase64 } from './clipboard-html-base64.ts';
 import { imageDimensionPx, parseInlineStyle } from './clipboard-html-styles.ts';
 
 const PIC_NS = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-
-const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-const BASE64_LOOKUP: Int16Array = (() => {
-  const table = new Int16Array(128).fill(-1);
-  for (let i = 0; i < BASE64_ALPHABET.length; i += 1) {
-    table[BASE64_ALPHABET.charCodeAt(i)] = i;
-  }
-  return table;
-})();
-
-/** Strict bounded base64 decode: the size cap applies BEFORE any allocation.
- *  Unpadded input (browsers accept it) is normalized to padded form first. */
-function decodeBase64(raw: string, maxBytes: number): Uint8Array | null {
-  if (raw.length === 0) return null;
-  const remainder = raw.length % 4;
-  if (remainder === 1) return null;
-  const data = remainder === 0 ? raw : raw + '='.repeat(4 - remainder);
-  const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
-  const byteLength = (data.length / 4) * 3 - padding;
-  if (byteLength <= 0 || byteLength > maxBytes) return null;
-  const out = new Uint8Array(byteLength);
-  let at = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    let chunk = 0;
-    let bits = 0;
-    for (let j = 0; j < 4; j += 1) {
-      const code = data.charCodeAt(i + j);
-      if (code === 0x3d) {
-        // `=` only in the final positions.
-        if (i + j < data.length - padding) return null;
-        continue;
-      }
-      const value = code < 128 ? BASE64_LOOKUP[code]! : -1;
-      if (value < 0) return null;
-      chunk = (chunk << 6) | value;
-      bits += 6;
-    }
-    chunk <<= 24 - bits;
-    if (bits >= 12) out[at++] = (chunk >>> 16) & 0xff;
-    if (bits >= 18) out[at++] = (chunk >>> 8) & 0xff;
-    if (bits >= 24) out[at++] = chunk & 0xff;
-  }
-  return at === byteLength ? out : null;
-}
 
 const DATA_IMAGE_RE = /^data:image\/(?:png|jpeg|jpg|gif|emf);base64,([A-Za-z0-9+/=]+)$/i;
 
@@ -83,7 +40,7 @@ export function projectHtmlImage(
   // A repeated src reuses its media part: one decode, one part, one rel per use.
   const cachedPart = p.mediaBySrc.get(src);
   const cachedBytes = cachedPart === undefined ? undefined : p.media.get(cachedPart);
-  const bytes = cachedBytes ?? decodeBase64(match[1]!, p.maxImageBytes);
+  const bytes = cachedBytes ?? clipboardDecodeBase64(match[1]!, p.maxImageBytes);
   if (bytes === null || bytes === undefined) return;
   const sniffed = sniffImageMime(bytes);
   if (sniffed !== 'image/png' && sniffed !== 'image/jpeg' && sniffed !== 'image/gif') return;

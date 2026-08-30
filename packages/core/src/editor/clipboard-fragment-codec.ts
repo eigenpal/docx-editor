@@ -6,7 +6,7 @@
 // scan — no DOM, no regex over attacker-sized input — and the decoded bytes then face
 // `readOoxmlPackage`'s own zip/XML caps.
 
-import { clipboardBase64Of } from './clipboard-html-base64.ts';
+import { clipboardBase64Of, clipboardDecodeBase64 } from './clipboard-html-base64.ts';
 
 /** Decoded fragment payloads above this cap never reach the package reader. */
 export const MAX_FRAGMENT_ATTRIBUTE_DECODED_BYTES = 16 * 1024 * 1024;
@@ -16,35 +16,9 @@ const MAX_ATTRIBUTE_SCAN_CHARS = 64 * 1024 * 1024;
 const FRAGMENT_ATTRIBUTE = 'data-docx-fragment';
 const END_ATTRIBUTE = 'data-docx-fragment-end';
 
-const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-const BASE64_INDEX: ReadonlyMap<string, number> = new Map(
-  [...BASE64_ALPHABET].map((char, index) => [char, index])
-);
-
 // One encoder for the whole clipboard lane — the chunked implementation in
 // clipboard-html-base64.ts.
 const encodeBase64 = clipboardBase64Of;
-
-/** Strict bounded base64 decode; null on any malformed character or an oversized result. */
-function decodeBase64(value: string, maxBytes: number): Uint8Array | null {
-  const trimmed = value.replace(/=+$/, '');
-  if ((trimmed.length * 3) / 4 > maxBytes) return null;
-  const out = new Uint8Array(Math.floor((trimmed.length * 3) / 4));
-  let buffer = 0;
-  let bits = 0;
-  let written = 0;
-  for (const char of trimmed) {
-    const index = BASE64_INDEX.get(char);
-    if (index === undefined) return null;
-    buffer = (buffer << 6) | index;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      out[written++] = (buffer >> bits) & 0xff;
-    }
-  }
-  return out.subarray(0, written);
-}
 
 /** The clipboard-facing wrapper: interop HTML plus the embedded fragment. */
 export function wrapInteropHtml(
@@ -86,7 +60,7 @@ export function fragmentFromHtml(
   if (html.length > MAX_ATTRIBUTE_SCAN_CHARS) return null;
   const encoded = attributeValueIn(html, FRAGMENT_ATTRIBUTE);
   if (encoded === null || encoded.length === 0) return null;
-  const bytes = decodeBase64(encoded, maxDecodedBytes);
+  const bytes = clipboardDecodeBase64(encoded, maxDecodedBytes);
   if (bytes === null || bytes.byteLength === 0) return null;
   const end = attributeValueIn(html, END_ATTRIBUTE);
   return { bytes, lastMarkCovered: end === 'covered' };

@@ -38,7 +38,6 @@ import {
   RELS_CT,
   STYLES_CT,
   STYLES_REL,
-  collectNoteIds,
   collectNumIds,
   collectRelationshipIds,
   collectStyleIds,
@@ -46,6 +45,7 @@ import {
   freshRelationshipId,
   literalizeThemeReferences,
   mediaExtensionOf,
+  noteReferenceClosure,
   numberingClosure,
   relationshipXml,
   styleClosure,
@@ -574,53 +574,26 @@ export function extractFragmentPackage(
   blocks = [...balanceBookmarks(blocks)];
 
   // Referenced note bodies travel; their styles and rels join the closure. The set
-  // is TRANSITIVE over note bodies: a shipped footnote's own citation of another
-  // note must ship that note too, or the paste-side rewrite would meet a dangling
-  // id and strip the citation.
-  const footnoteIds = collectNoteIds(blocks, 'footnoteReference');
-  const endnoteIds = collectNoteIds(blocks, 'endnoteReference');
-  let footnotesPart =
-    footnoteIds.size > 0 || endnoteIds.size > 0 ? resolveNotesPart(pkg, 'footnote') : null;
-  let endnotesPart =
-    footnoteIds.size > 0 || endnoteIds.size > 0 ? resolveNotesPart(pkg, 'endnote') : null;
-  {
-    const noteBodyOf = (part: OoxmlPart | null, id: string): OoxmlNode | null => {
-      if (!part || !isElementNode(part.root)) return null;
-      for (const child of part.root.children) {
-        if (isElementNode(child) && child.kind === 'note' && attributeValueOf(child, 'id') === id) {
-          return child;
-        }
-      }
-      return null;
-    };
-    const queue: Array<{ readonly kind: 'footnote' | 'endnote'; readonly id: string }> = [];
-    for (const id of footnoteIds) queue.push({ kind: 'footnote', id });
-    for (const id of endnoteIds) queue.push({ kind: 'endnote', id });
-    // Bounded: each (kind, id) enqueues at most once.
-    while (queue.length > 0) {
-      const current = queue.pop()!;
-      const body = noteBodyOf(
-        current.kind === 'footnote' ? footnotesPart : endnotesPart,
-        current.id
-      );
-      if (body === null) continue;
-      for (const id of collectNoteIds([body], 'footnoteReference')) {
-        if (!footnoteIds.has(id)) {
-          footnoteIds.add(id);
-          queue.push({ kind: 'footnote', id });
-        }
-      }
-      for (const id of collectNoteIds([body], 'endnoteReference')) {
-        if (!endnoteIds.has(id)) {
-          endnoteIds.add(id);
-          queue.push({ kind: 'endnote', id });
-        }
+  // is TRANSITIVE over note bodies — the SAME closure the merge scrubs against, so
+  // the ship set and the scrub set cannot drift.
+  let footnotesPart = resolveNotesPart(pkg, 'footnote');
+  let endnotesPart = resolveNotesPart(pkg, 'endnote');
+  const noteBodyOf = (kind: 'footnote' | 'endnote', id: string): OoxmlNode | null => {
+    const part = kind === 'footnote' ? footnotesPart : endnotesPart;
+    if (!part || !isElementNode(part.root)) return null;
+    for (const child of part.root.children) {
+      if (isElementNode(child) && child.kind === 'note' && attributeValueOf(child, 'id') === id) {
+        return child;
       }
     }
-    // A kind with no ids after the closure ships no part (separators included).
-    if (footnoteIds.size === 0) footnotesPart = null;
-    if (endnoteIds.size === 0) endnotesPart = null;
-  }
+    return null;
+  };
+  const referencedNotes = noteReferenceClosure(blocks, noteBodyOf);
+  const footnoteIds = referencedNotes.footnote;
+  const endnoteIds = referencedNotes.endnote;
+  // A kind with no ids ships no part (separators included).
+  if (footnoteIds.size === 0) footnotesPart = null;
+  if (endnoteIds.size === 0) endnotesPart = null;
 
   const includedNotes = (notesPart: OoxmlPart | null, ids: ReadonlySet<string>): OoxmlElement[] => {
     if (!notesPart || !isElementNode(notesPart.root)) return [];

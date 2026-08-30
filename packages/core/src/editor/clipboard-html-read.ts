@@ -7,17 +7,15 @@
 import { sanitizeHref, escapeXmlAttribute } from '../store/package/sinks.ts';
 import { projectHtmlImage } from './clipboard-html-images.ts';
 import {
-  htmlListKindAndStart,
-  htmlListStartFromMarker,
   semanticHtmlListKind,
   semanticHtmlListStart,
   wordListDefinitionsFromStyleText,
   type HtmlListAllocation as ListAllocation,
-  type HtmlListKind,
   type WordListLevelDefinition,
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-links.ts';
 import { createGestureMemo } from './clipboard-html-memo.ts';
+import { allocateList, msoListNumPr } from './clipboard-html-list-alloc.ts';
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import {
   writeProjectedHtmlPackage,
@@ -164,26 +162,6 @@ function allocateRel(
   return id;
 }
 
-function allocateList(
-  p: Projection,
-  key: string,
-  kind: HtmlListKind,
-  start = 1,
-  level = 0
-): string {
-  const existing = p.lists.get(key);
-  if (existing) {
-    // First observation per level wins; other levels stay open for later markers.
-    if (!existing.levels.has(level)) existing.levels.set(level, { kind, start });
-    return existing.numId;
-  }
-  const numId = String(1001 + p.lists.size);
-  const allocation: ListAllocation = { numId, levels: new Map([[level, { kind, start }]]) };
-  p.lists.set(key, allocation);
-  p.listsByNumId.set(numId, allocation);
-  return numId;
-}
-
 // --- Walk
 
 function collectInline(
@@ -323,12 +301,12 @@ function collectInline(
     let content = inner.join('');
     if (anchor !== null) {
       content = `<w:hyperlink w:anchor="${escapeXmlAttribute(anchor)}">${content}</w:hyperlink>`;
-    } else if (href !== null) {
-      // A fragment name Word cannot store (hyphens, length) stays an external-rel
-      // hyperlink rather than dropping the link; a bare '#' is a JS anchor and
-      // never becomes a relationship.
+    } else if (href !== null && !href.startsWith('#')) {
+      // A fragment-only href never becomes an EXTERNAL relationship: Word treats
+      // that target as a URI and the click errors. Unstorable fragment names are
+      // mangled into bookmark names upstream, so this branch is URL-only.
       const sanitized = sanitizeHref(href);
-      if (sanitized.ok && sanitized.href.length > 0 && sanitized.href !== '#') {
+      if (sanitized.ok && sanitized.href.length > 0) {
         const relId = allocateRel(p, `${R_NS}/hyperlink`, sanitized.href, true, ctx.rels ?? p.rels);
         content = `<w:hyperlink r:id="${relId}">${content}</w:hyperlink>`;
       }
@@ -345,59 +323,6 @@ function collectInline(
   for (const child of Array.from(node.childNodes)) {
     collectInline(child, depth + 1, nextCtx, runs, p);
   }
-}
-
-/** Word desktop's `mso-list:l<N> level<M> lfo<K>` convention on `MsoListParagraph`. */
-function msoListNumPr(
-  element: Element,
-  style: ReadonlyMap<string, string>,
-  p: Projection,
-  noteBody: FlowContext['noteBody']
-): ParaProps['numPr'] {
-  const declaration = style.get('mso-list');
-  if (declaration === undefined) return undefined;
-  const match = /\bl(\d{1,4})\s+level(\d{1,2})\b/i.exec(declaration);
-  if (!match) return undefined;
-  const ilvl = Math.min(Math.max(Number.parseInt(match[2]!, 10) - 1, 0), 8);
-  const marker = msoMarkerText(element, p);
-  // The head's structured @list rule names the format; the visible marker then
-  // names THIS slice's first ordinal under that format. Glyph sniffing alone is
-  // only the fallback — it cannot tell 'i.' the roman 1 from 'i.' the 9th letter.
-  const lfoMatch = /\blfo(\d{1,4})\b/i.exec(declaration);
-  // The lfo-specific @list rule (Word's lvlOverride) outranks the base rule.
-  const definition =
-    (lfoMatch !== null
-      ? p.listDefinitions.get(`l${match[1]}:level${match[2]}:lfo${lfoMatch[1]}`)
-      : undefined) ?? p.listDefinitions.get(`l${match[1]}:level${match[2]}`);
-  let kind: HtmlListKind;
-  let start: number;
-  if (definition !== undefined) {
-    kind = definition.kind;
-    start = htmlListStartFromMarker(marker, kind) ?? definition.start ?? 1;
-  } else {
-    ({ kind, start } = htmlListKindAndStart(marker));
-  }
-  // A note body's list must not seed the body list's first-observation state — the
-  // notes project first, and their markers would pin the body's start values.
-  const scope = noteBody === undefined ? '' : `${noteBody.kind}${noteBody.id}:`;
-  const key = `mso:${scope}l${match[1]}${lfoMatch ? `:lfo${lfoMatch[1]}` : ''}`;
-  return { numId: allocateList(p, key, kind, start, ilvl), ilvl };
-}
-
-/** The text of the `mso-list:Ignore` marker span, for number-vs-bullet detection. */
-function msoMarkerText(element: Element, p: Projection): string {
-  let found = '';
-  const walk = (node: Node, depth: number): void => {
-    if (found.length > 0 || depth > 8 || p.nodesLeft <= 0) return;
-    if (!isElement(node)) return;
-    if (isMsoListIgnoreMarker(node)) {
-      found = (node.textContent ?? '').slice(0, 16);
-      return;
-    }
-    for (const child of Array.from(node.childNodes)) walk(child, depth + 1);
-  };
-  for (const child of Array.from(element.childNodes)) walk(child, 0);
-  return found;
 }
 
 /** The styled flow context a paragraph-shaped element hands its children. */
@@ -864,12 +789,26 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     if (projection.truncated || noteBlocks.length === 0) {
       // The budget starved this walk mid-note: un-claim this and every remaining
       // definition so the body walk keeps their text and no live reference points
-      // at a blank or truncated note.
+      // at a blank or truncated note. References already emitted into EARLIER
+      // projected note bodies are stripped, so no note ships a dangling citation.
       for (let drop = index; drop < claimed.length; drop += 1) {
         const dropped = claimed[drop]!;
         definedNotes[dropped.kind].delete(dropped.id);
         definedNoteElements.delete(dropped.element);
         projection.notes[dropped.kind].delete(dropped.id);
+        const markPattern = new RegExp(
+          `<w:r>(?:<w:rPr>(?:(?!</w:r>)[\\s\\S])*?</w:rPr>)?` +
+            `<w:${dropped.kind}Reference w:id="${dropped.id}"/></w:r>`,
+          'g'
+        );
+        for (const keptKind of ['footnote', 'endnote'] as const) {
+          for (const [keptId, keptBlocks] of projection.notes[keptKind]) {
+            projection.notes[keptKind].set(
+              keptId,
+              keptBlocks.map((block) => block.replace(markPattern, ''))
+            );
+          }
+        }
       }
       break;
     }

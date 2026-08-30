@@ -6,7 +6,14 @@
 export function createGestureMemo<T>(): (html: string, key: string, compute: () => T) => T {
   let memo: { readonly html: string; readonly key: string; readonly value: T } | null = null;
   return (html, key, compute) => {
-    if (memo !== null && memo.html === html && memo.key === key) return memo.value;
+    if (memo !== null && memo.html === html && memo.key === key) {
+      // A gesture reads the memo exactly once (probe + project). Releasing on the
+      // hit drops the payload synchronously — a throttled tab's clamped timer must
+      // not keep attacker-sized bytes resident.
+      const value = memo.value;
+      memo = null;
+      return value;
+    }
     const value = compute();
     const entry = { html, key, value };
     memo = entry;

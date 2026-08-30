@@ -100,6 +100,8 @@ export function conditionalCellFill(
   }
   if (!formats.bandingEnabled) return null;
   const bandIndex = rowIndex - (formats.firstRowEnabled ? 1 : 0);
+  // A header row without its own firstRow fill is NOT part of the banding.
+  if (bandIndex < 0) return null;
   return bandIndex % 2 === 0 ? formats.band1Fill : formats.band2Fill;
 }
 

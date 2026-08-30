@@ -1,10 +1,18 @@
 import { sanitizeHref } from '../store/package/sinks.ts';
 
-/** Admit only names Word can store in `w:bookmarkStart` and `w:anchor`. */
+/**
+ * A name Word can store in `w:bookmarkStart` and `w:anchor`. Web anchor names
+ * ('section-2', 'user.content') MANGLE deterministically instead of dropping, so
+ * an internal link and its target — mangled the same way in one paste — still pair.
+ */
 export function clipboardBookmarkName(raw: string | null | undefined): string | null {
-  return raw !== null && raw !== undefined && /^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(raw)
-    ? raw
-    : null;
+  if (raw === null || raw === undefined) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > 256) return null;
+  if (/^[A-Za-z_][A-Za-z0-9_]{0,39}$/.test(trimmed)) return trimmed;
+  const mangled = trimmed.replace(/[^A-Za-z0-9_]/g, '_').slice(0, 40);
+  if (mangled.replace(/_/g, '').length === 0) return null;
+  return /^[A-Za-z_]/.test(mangled) ? mangled : `_${mangled.slice(0, 39)}`;
 }
 
 /** Tell whether an HTML target can remain an active hyperlink. Fragment names Word

@@ -408,9 +408,17 @@ const HIGHLIGHT_ALIASES: ReadonlyMap<string, string> = new Map([
 const UNSAFE_BACKGROUND = /url\s*\(|image\s*\(|image-set\s*\(|element\s*\(|cross-fade\s*\(/i;
 const UNDERLINE_VALUES = new Set(['single', 'double', 'thick', 'dotted', 'dash', 'wave']);
 
+// The paste walk parses many elements' styles several times (flow gate, paragraph
+// context, table properties); the per-element memo makes that one parse. Keyed
+// weakly on the detached parse's elements, so nothing outlives the document.
+const inlineStyleCache = new WeakMap<Element, ReadonlyMap<string, string>>();
+
 /** Inline style declarations as a Map, so hostile property names never become object keys. */
 export function parseInlineStyle(element: Element): ReadonlyMap<string, string> {
+  const cached = inlineStyleCache.get(element);
+  if (cached !== undefined) return cached;
   const out = new Map<string, string>();
+  inlineStyleCache.set(element, out);
   const raw = element.getAttribute('style');
   if (!raw || raw.length > 8192) return out;
   for (const declaration of raw.split(';')) {
