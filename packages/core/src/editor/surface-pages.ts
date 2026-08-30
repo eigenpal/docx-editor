@@ -591,7 +591,17 @@ export function createNotesLayoutInput(env: {
     styleCascade: env.styleCascade?.(),
     numberingIndex: env.numberingIndex?.(),
     defaultTabStopPt: env.defaultTabStopPt,
-    ...(env.projectLinkForPart ? { projectLinkForPart: env.projectLinkForPart } : {}),
+    ...(env.projectLinkForPart
+      ? {
+          projectLinkForPart: env.projectLinkForPart,
+          // Content token over both notes parts' relationship records: what the per-part
+          // projector reads can move without splicing the part (a replicated rels-only
+          // change), so the notes-pass memo pins it by content, like drawingLayoutEpoch.
+          linkRelsEpoch: [footnotesPart, endnotesPart]
+            .map((notesPart) => (notesPart ? linkRelsTokenFor(pkg, notesPart.name) : ''))
+            .join('\0'),
+        }
+      : {}),
     ...(drawingsForPart ? { drawingsForPart } : {}),
     // One epoch over both notes parts: either part's drawing state moving must invalidate
     // the notes-pass memo.
@@ -603,6 +613,26 @@ export function createNotesLayoutInput(env: {
         }
       : {}),
   };
+}
+
+/**
+ * One part's relationship records as a content string, for the notes-pass memo.
+ *
+ * Covers both maps `relationshipTargetIn` reads — internal records and external targets —
+ * plus `sinkSafe`, because the sanitized projection depends on it too.
+ */
+function linkRelsTokenFor(
+  pkg: ReturnType<TreeDocxSessionView['currentPackage']>,
+  partName: string
+): string {
+  const internal = (pkg.relationships.get(partName) ?? [])
+    .map((record) => `${record.id}>${record.rawTarget}`)
+    .join(',');
+  const external = pkg.externalTargets
+    .filter((record) => record.ownerPart === partName)
+    .map((record) => `${record.id}>${record.rawTarget}|${record.sinkSafe ? 1 : 0}`)
+    .join(',');
+  return `${internal};${external}`;
 }
 
 /** SectPr nodes index-aligned with {@link enumerateDocumentSections}. */

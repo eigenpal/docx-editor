@@ -854,8 +854,8 @@ export function mountPaginatedSurface(
   const projectLinkResolvedBy =
     (resolveRel: Parameters<typeof hyperlinkTargetOf>[1]) =>
     (link: Parameters<typeof hyperlinkTargetOf>[0]) => {
-      const target = hyperlinkTargetOf(link, resolveRel);
       if (link.kind === 'textValue') return null;
+      const target = hyperlinkTargetOf(link, resolveRel);
       return {
         id: link.id,
         kind: target.kind,

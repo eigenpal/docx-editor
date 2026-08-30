@@ -64,16 +64,19 @@ describe('note hyperlink relationship scope', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const editor = createDocxEditor({ container, document: conflictingRelsDoc() });
-    expect(editor.surface).not.toBeNull();
+    try {
+      expect(editor.surface).not.toBeNull();
 
-    const anchors = [...container.querySelectorAll('a.docx-hyperlink')] as HTMLElement[];
-    const hrefFor = (text: string) =>
-      anchors.find((anchor) => anchor.textContent === text)?.getAttribute('href');
+      const anchors = [...container.querySelectorAll('a.docx-hyperlink')] as HTMLElement[];
+      const hrefFor = (text: string) =>
+        anchors.find((anchor) => anchor.textContent === text)?.getAttribute('href');
 
-    expect(hrefFor('BodyLink')).toBe('https://body.example/');
-    expect(hrefFor('NoteLink')).toBe('https://note.example/');
-
-    editor.destroy();
-    container.remove();
+      expect(hrefFor('BodyLink')).toBe('https://body.example/');
+      expect(hrefFor('NoteLink')).toBe('https://note.example/');
+    } finally {
+      // A failed expect must not leave the mounted editor on the shared document.
+      editor.destroy();
+      container.remove();
+    }
   });
 });
