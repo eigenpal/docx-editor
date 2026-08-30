@@ -100,6 +100,14 @@ export function collectRelationshipIds(nodes: readonly OoxmlNode[], out: Set<str
   }
 }
 
+/** Canonical note-id key: numeric ids drop leading zeros — `w:id="07"` and
+ *  `w:id="7"` are ONE note per ST_DecimalNumber's lexical space, and a raw-string
+ *  compare would strand the reference while the HTML lane (which parses the
+ *  number) keeps it. Non-numeric spellings compare verbatim. */
+export function canonicalNoteId(raw: string): string {
+  return /^\d+$/.test(raw) ? raw.replace(/^0+(?=\d)/, '') : raw;
+}
+
 export function collectNoteIds(
   nodes: readonly OoxmlNode[],
   localName: 'footnoteReference' | 'endnoteReference'
@@ -110,7 +118,7 @@ export function collectNoteIds(
       if (current.kind === 'textValue') return;
       if (current.kind === 'noteReference' && current.localName === localName) {
         const id = attributeValueOf(current, 'id');
-        if (id !== undefined) ids.add(id);
+        if (id !== undefined) ids.add(canonicalNoteId(id));
       }
     });
   }
@@ -134,8 +142,10 @@ export function noteReferenceClosure(
       walkNodes(node, (current) => {
         if (current.kind !== 'noteReference') return;
         const kind = current.localName === 'footnoteReference' ? 'footnote' : 'endnote';
-        const id = attributeValueOf(current, 'id');
-        if (id === undefined || referenced[kind].has(id)) return;
+        const raw = attributeValueOf(current, 'id');
+        if (raw === undefined) return;
+        const id = canonicalNoteId(raw);
+        if (referenced[kind].has(id)) return;
         referenced[kind].add(id);
         queue.push({ kind, id });
       });
@@ -174,7 +184,7 @@ export function withoutDanglingNoteReferences(
     if (isNoteReferenceShaped) {
       const map = child.localName === 'footnoteReference' ? footnoteIdMap : endnoteIdMap;
       const id = attributeValueOf(child, 'id');
-      if (child.kind !== 'noteReference' || id === undefined || !map.has(id)) {
+      if (child.kind !== 'noteReference' || id === undefined || !map.has(canonicalNoteId(id))) {
         changed = true;
         continue;
       }

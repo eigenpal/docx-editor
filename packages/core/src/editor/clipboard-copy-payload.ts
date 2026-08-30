@@ -11,7 +11,7 @@ import {
   type FragmentCoverage,
   type OoxmlPackage,
 } from '@docx-editor.dev/core/store';
-import { interopHtmlFromFragmentPackage } from './clipboard-html-write.ts';
+import { interopHtmlFromFragment, interopHtmlFromFragmentPackage } from './clipboard-html-write.ts';
 import { wrapInteropHtml } from './clipboard-fragment-codec.ts';
 
 /** Fragment zips above this stay off the clipboard attribute (base64 grows them 4/3). */
@@ -76,8 +76,17 @@ export function buildCopyFlavours(input: CopyFlavourInput): CopyFlavours {
   }
 
   // The HTML half renders from the extraction's own in-memory package — copy is
-  // synchronous in the clipboard event, so it never re-inflates its own zip.
-  const inner = interopHtmlFromFragmentPackage(full.package);
+  // synchronous in the clipboard event, so it never re-inflates its own zip. The
+  // twin is single-sourced with the zip inside extractFragmentPackage (one
+  // addXmlPart call and one media loop feed both); if the renderer still trips
+  // over it, the slow lane re-reads the bytes through the bounded reader, which
+  // degrades to an empty HTML body rather than a corrupt flavour.
+  let inner: string;
+  try {
+    inner = interopHtmlFromFragmentPackage(full.package);
+  } catch {
+    inner = interopHtmlFromFragment(full.bytes);
+  }
   const html = wrapInteropHtml(
     inner,
     fragmentBytes ? { bytes: fragmentBytes, lastMarkCovered: full.lastMarkCovered } : null

@@ -15,6 +15,7 @@ import {
 import { attributeValueOf } from './tree-op-nodes.ts';
 import { carriesRevisionId } from './tree-op-revision-ids.ts';
 import { isWml } from './clipboard-fragment-defaults.ts';
+import { canonicalNoteId } from './clipboard-fragment-closure.ts';
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
@@ -100,10 +101,11 @@ export function rewriteIdentifiers(node: OoxmlNode, maps: RewriteMaps): OoxmlNod
     }
     if (current.kind === 'noteReference') {
       // Footnote and endnote ids are SEPARATE namespaces; each reference kind resolves
-      // through its own map, never a shared one.
+      // through its own map, never a shared one. The map keys are canonical
+      // (leading zeros dropped), so every id spelling of one note resolves alike.
       const kindMap = current.localName === 'footnoteReference' ? footnoteIds : endnoteIds;
       const value = attributeValueOf(current, 'id');
-      const mapped = value !== undefined ? kindMap.get(value) : undefined;
+      const mapped = value !== undefined ? kindMap.get(canonicalNoteId(value)) : undefined;
       if (mapped !== undefined)
         next = withRewrittenAttribute(next, WML_NAMESPACE_URI, 'id', mapped);
     }

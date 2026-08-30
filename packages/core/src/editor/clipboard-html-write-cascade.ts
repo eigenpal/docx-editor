@@ -69,7 +69,9 @@ export function styleIndexOf(pkg: OoxmlPackage): StyleIndex {
     byId.set(id, child);
     const isDefault = attributeValueOf(child, 'default', WML_NAMESPACE_URI);
     const type = attributeValueOf(child, 'type', WML_NAMESPACE_URI);
-    if (isDefault === '1' || isDefault === 'true') {
+    // Every legal ST_OnOff spelling — layout/style-cascade.ts's isDefaultFlag
+    // documents the same 'on' trap.
+    if (isDefault === '1' || isDefault === 'true' || isDefault === 'on') {
       if (type === 'paragraph') defaultParagraphStyleId = id;
       else if (type === 'character') defaultCharacterStyleId = id;
     }

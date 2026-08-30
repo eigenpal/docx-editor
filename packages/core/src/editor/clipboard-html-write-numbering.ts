@@ -1,7 +1,5 @@
-import { WML_NAMESPACE_URI, type OoxmlElement } from '../store/package/ooxml-tree.ts';
-import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
-import { MAX_NUMBERING_DEFINITIONS } from '../layout/numbering-index.ts';
-import { isElement, wmlChild, wmlVal } from './clipboard-html-write-tree.ts';
+import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
+import { buildNumberingIndex, type NumberingLevel } from '../layout/numbering-index.ts';
 
 export interface HtmlNumberingIndex {
   readonly numToAbstract: ReadonlyMap<string, string>;
@@ -14,103 +12,48 @@ export interface HtmlNumberingIndex {
   readonly styleLinks: ReadonlyMap<string, string>;
 }
 
-/** Same 0..9999 clamp the layout lane's numbering index applies to `w:start`. */
-function boundedStart(raw: string | undefined): number | null {
-  if (raw === undefined || !/^\d{1,5}$/.test(raw)) return null;
-  return Math.min(Math.max(Number.parseInt(raw, 10), 0), 9_999);
+/** The HTML-facing format of one level. `w:isLgl` (§17.9.9) renders decimal
+ *  whatever the level declares — the same rule the painter applies, so the
+ *  copied HTML never shows roman where the editor shows decimal. */
+function levelFormat(level: NumberingLevel): string {
+  return level.isLgl ? 'decimal' : level.numFmt;
 }
 
-/** Canonical decimal key for a file-supplied `w:ilvl` ('03' and '3' are one level). */
-function canonicalIlvl(raw: string | undefined): string | null {
-  if (raw === undefined || !/^\d{1,2}$/.test(raw)) return null;
-  return String(Number.parseInt(raw, 10));
-}
-
+/**
+ * The copy lane's flat view over `layout/numbering-index.ts`'s
+ * `buildNumberingIndex` — ONE parser of `numbering.xml`, so its caps
+ * (MAX_NUMBERING_DEFINITIONS, MAX_LVL_OVERRIDES), duplicate rules and
+ * hardenings apply to paint and copy alike instead of drifting apart.
+ * Per ECMA-376 §17.9.11 an explicit `w:startOverride` outranks a replacement
+ * level's own `w:start`.
+ */
 export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIndex {
+  const index = buildNumberingIndex(root);
   const numToAbstract = new Map<string, string>();
   const levelFormats = new Map<string, Map<string, string>>();
   const levelStarts = new Map<string, Map<string, number>>();
   const startOverrides = new Map<string, number>();
   const formatOverrides = new Map<string, string>();
   const styleLinks = new Map<string, string>();
-  if (!root) {
-    return {
-      numToAbstract,
-      levelFormats,
-      levelStarts,
-      startOverrides,
-      formatOverrides,
-      styleLinks,
-    };
-  }
-
-  // Separate budgets, like layout/numbering-index.ts: unrelated children are free,
-  // and a template heavy in abstractNum cannot starve the w:num mapping.
-  let abstractLeft = MAX_NUMBERING_DEFINITIONS;
-  let numLeft = MAX_NUMBERING_DEFINITIONS;
-  for (const child of root.children) {
-    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName === 'num') {
-      if (numLeft <= 0) continue;
-      numLeft -= 1;
-      const numId = attributeValueOf(child, 'numId', WML_NAMESPACE_URI);
-      const abstractId = wmlVal(wmlChild(child, 'abstractNumId'));
-      if (numId && abstractId) numToAbstract.set(numId, abstractId);
-      if (!numId) continue;
-      for (const override of child.children) {
-        if (
-          !isElement(override) ||
-          override.localName !== 'lvlOverride' ||
-          override.namespaceUri !== WML_NAMESPACE_URI
-        ) {
-          continue;
-        }
-        const ilvl = canonicalIlvl(attributeValueOf(override, 'ilvl', WML_NAMESPACE_URI));
-        if (ilvl === null) continue;
-        const start = boundedStart(wmlVal(wmlChild(override, 'startOverride')));
-        if (start !== null) startOverrides.set(`${numId}:${ilvl}`, start);
-        // A replacement `w:lvl` inside the override carries its own format/start —
-        // but per ECMA-376 §17.9.11 an explicit `w:startOverride` outranks the
-        // replacement level's `w:start`, so it never overwrites one already stored.
-        const replacement = wmlChild(override, 'lvl');
-        if (replacement !== null) {
-          const format = wmlVal(wmlChild(replacement, 'numFmt'));
-          if (format !== undefined) formatOverrides.set(`${numId}:${ilvl}`, format);
-          if (start === null) {
-            const replacementStart = boundedStart(wmlVal(wmlChild(replacement, 'start')));
-            if (replacementStart !== null) startOverrides.set(`${numId}:${ilvl}`, replacementStart);
-          }
-        }
-      }
-      continue;
-    }
-    if (child.localName !== 'abstractNum') continue;
-    if (abstractLeft <= 0) continue;
-    abstractLeft -= 1;
-    const abstractId = attributeValueOf(child, 'abstractNumId', WML_NAMESPACE_URI);
-    if (!abstractId) continue;
-    const styleLink = wmlVal(wmlChild(child, 'numStyleLink'));
-    if (styleLink !== undefined) styleLinks.set(abstractId, styleLink);
+  for (const [abstractId, abstract] of index.abstractNums) {
+    if (abstract.numStyleLink !== undefined) styleLinks.set(abstractId, abstract.numStyleLink);
     const formats = new Map<string, string>();
     const starts = new Map<string, number>();
-    for (const level of child.children) {
-      if (
-        !isElement(level) ||
-        level.localName !== 'lvl' ||
-        level.namespaceUri !== WML_NAMESPACE_URI
-      ) {
-        continue;
-      }
-      const ilvl = canonicalIlvl(attributeValueOf(level, 'ilvl', WML_NAMESPACE_URI));
-      if (ilvl === null) continue;
-      const format = wmlVal(wmlChild(level, 'numFmt'));
-      const start = boundedStart(wmlVal(wmlChild(level, 'start')));
-      // First definition of a duplicated level wins, like the layout index.
-      if (format !== undefined && !formats.has(ilvl)) formats.set(ilvl, format);
-      if (start !== null && !starts.has(ilvl)) starts.set(ilvl, start);
+    for (const [ilvl, level] of abstract.levels) {
+      formats.set(String(ilvl), levelFormat(level));
+      starts.set(String(ilvl), level.start);
     }
     levelFormats.set(abstractId, formats);
     levelStarts.set(abstractId, starts);
+  }
+  for (const [numId, num] of index.nums) {
+    numToAbstract.set(numId, num.abstractNumId);
+    for (const [ilvl, override] of num.overrides) {
+      const key = `${numId}:${ilvl}`;
+      const start = override.startOverride ?? override.level?.start;
+      if (start !== undefined) startOverrides.set(key, start);
+      if (override.level !== undefined) formatOverrides.set(key, levelFormat(override.level));
+    }
   }
   return { numToAbstract, levelFormats, levelStarts, startOverrides, formatOverrides, styleLinks };
 }

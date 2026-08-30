@@ -87,6 +87,9 @@ export type HtmlProjectionResult =
       readonly lastMarkCovered: boolean;
       /** How many `data:` images the projection accepted into the fragment. */
       readonly imageCount: number;
+      /** True when the node budget dropped content (body tail or starved note
+       *  bodies), so callers can prefer a lossier lane over silent loss. */
+      readonly truncated: boolean;
     }
   | { readonly ok: false; readonly reason: 'too-large' | 'no-content' | 'parse-unavailable' };
 
@@ -216,8 +219,7 @@ function collectInline(
   if (IGNORED_TAGS.has(tag)) return;
   const style = parseInlineStyle(node);
   // Word's literal list marker never becomes text — but ONLY when the paragraph
-  // actually projected `w:numPr` to replace it; a paragraph whose own `mso-list`
-  // declaration failed to parse keeps the visible marker instead of losing it.
+  // projected `w:numPr` to replace it; otherwise the visible marker stays.
   if (isMsoListIgnoreMarker(node) && ctx.para.numPr !== undefined) return;
   const msoElement = style.get('mso-element')?.trim().toLowerCase();
   if (
@@ -502,12 +504,17 @@ function projectFlow(
     if (pending.length === 0) return;
     if (!pending.some((piece) => piece.includes('<w:r'))) {
       // Furniture-only pending (a standalone bookmark anchor): fold it into the
-      // previous paragraph instead of materializing a spurious empty one; with no
-      // paragraph yet, it stays queued for the next real flush.
+      // previous paragraph. With no block yet it stays queued; after a
+      // non-paragraph block (a table) it takes its own paragraph NOW — queued, it
+      // would splice into the END of the next paragraph, past the content.
       const last = out[out.length - 1];
       if (last?.endsWith('</w:p>')) {
         out[out.length - 1] = `${last.slice(0, -6)}${pending.join('')}</w:p>`;
         pending = [];
+      } else if (last !== undefined && pending.length > 0) {
+        out.push(paragraphXml(flushPara, pending));
+        pending = [];
+        p.lastMarkCovered = false;
       }
       return;
     }
@@ -796,9 +803,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   // tail, an un-claimed inner note then projects inside its outer's body (or the
   // document body) instead of being stranded by an already-projected outer.
   claimed.sort((a, b) => domDepthOf(b.element) - domDepthOf(a.element));
-  // The BODY is the primary content: it walks first with the full budget, emitting
-  // references for claimed ids. Notes spend what remains; a note the leftover
-  // budget starves is un-claimed and its already-emitted citations are stripped.
+  // The BODY is the primary content: it walks first with the full budget. Notes
+  // spend what remains; a starved note un-claims and its citations strip.
   projection.lastMarkCovered = false;
   const blocks: string[] = [];
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
@@ -823,9 +829,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     );
     if (projection.truncated || noteBlocks.length === 0) {
       // The leftover budget starved this walk mid-note: un-claim this and every
-      // remaining definition so no live reference points at a blank or truncated
-      // note. One alternation pattern then strips every dropped citation from the
-      // BODY blocks and the kept note bodies in a single sweep.
+      // remaining definition so no live reference points at a blank note, then
+      // strip every dropped citation from body and kept-note blocks.
       notesDropped = true;
       const droppedKeys = new Set<string>();
       for (let drop = index; drop < claimed.length; drop += 1) {
@@ -853,14 +858,12 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     }
     projection.notes[note.kind].set(note.id, noteBlocks);
   }
-  // A dropped note is real loss now that the body already projected past its
-  // anchors, so it keeps the truncation flag raised alongside the body's own.
+  // A dropped note is real loss, so it keeps the truncation flag raised.
   projection.truncated = bodyTruncated || notesDropped;
   projection.lastMarkCovered = bodyLastMarkCovered;
   // Reconcile: a claimed note is kept only when REACHABLE from the body through
-  // kept notes' cross-references (a mutual-citation island must not hide from the
-  // lossless fallback). Moved blocks re-home note-scoped rels onto document rels;
-  // the attribute-shaped pattern cannot match run TEXT (escapeXml escapes quotes).
+  // kept notes' cross-references (a mutual-citation island must not hide from
+  // the lossless fallback). Moved blocks re-home note rels onto document rels.
   const movedNotes = new Set<string>();
   const reachableNotes: Record<ClipboardNoteKind, Set<number>> = {
     footnote: new Set(),
@@ -909,9 +912,8 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       if (!movedOne) break;
     }
   }
-  // A moved note's definition no longer exists, so any citation of a moved id (in
-  // a kept note of a mutual-citation island, or in another moved note's blocks)
-  // must strip with the same linear sweep, or a reference dangles.
+  // A moved note's definition no longer exists, so any citation of a moved id
+  // (in kept notes or other moved blocks) strips too, or a reference dangles.
   if (movedNotes.size > 0) {
     for (const keptKind of ['footnote', 'endnote'] as const) {
       for (const [keptId, keptBlocks] of projection.notes[keptKind]) {
@@ -979,6 +981,7 @@ export function projectExternalHtml(
     fragmentBytes: assembleFragment(projected.projection, projected.blocks),
     lastMarkCovered: projected.projection.lastMarkCovered,
     imageCount: projected.projection.imageCount,
+    truncated: projected.projection.truncated,
   };
 }
 
@@ -986,8 +989,12 @@ export function projectExternalHtml(
 export function probeExternalHtml(
   html: string,
   limits: HtmlProjectionLimits = {}
-): { readonly lands: boolean; readonly imageCount: number } {
+): { readonly lands: boolean; readonly imageCount: number; readonly truncated: boolean } {
   const projected = projectBlocksMemoized(html, limits);
-  if (!projected.ok) return { lands: false, imageCount: 0 };
-  return { lands: true, imageCount: projected.projection.imageCount };
+  if (!projected.ok) return { lands: false, imageCount: 0, truncated: false };
+  return {
+    lands: true,
+    imageCount: projected.projection.imageCount,
+    truncated: projected.projection.truncated,
+  };
 }

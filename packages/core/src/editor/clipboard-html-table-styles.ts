@@ -261,8 +261,11 @@ function borderElementXml(name: string, border: BorderValue): string {
 /** Preserve Word's table border styles instead of replacing them with generic black lines. */
 export function tableBordersXml(table: Element): string {
   const style = parseInlineStyle(table);
+  // Per-PARSE fallback: an mso-border-alt token outside the parser must not
+  // shadow the parseable CSS shorthand beside it.
   const common =
-    borderValueOf(style.get('mso-border-alt') ?? style.get('border')) ??
+    borderValueOf(style.get('mso-border-alt')) ??
+    borderValueOf(style.get('border')) ??
     longhandBorderOf(style, 'border');
   const fallback =
     common ??
@@ -349,8 +352,10 @@ function cellMarginsXml(style: ReadonlyMap<string, string>): string {
 /** Emit cell borders, shading, margins, and vertical alignment in CT_TcPr order. */
 export function cellCssPropertiesXml(cell: Element): string {
   const style = parseInlineStyle(cell);
+  // Per-PARSE fallback, same rule as tableBordersXml.
   const common =
-    borderValueOf(style.get('mso-border-alt') ?? style.get('border')) ??
+    borderValueOf(style.get('mso-border-alt')) ??
+    borderValueOf(style.get('border')) ??
     longhandBorderOf(style, 'border');
   let borders = '';
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {

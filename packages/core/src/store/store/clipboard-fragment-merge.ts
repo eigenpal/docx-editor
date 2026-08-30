@@ -59,6 +59,7 @@ import {
   withRewrittenAttribute,
 } from './clipboard-fragment-identifiers.ts';
 import {
+  canonicalNoteId,
   noteReferenceClosure,
   withoutDanglingNoteReferences,
 } from './clipboard-fragment-closure.ts';
@@ -687,7 +688,11 @@ export function mergeFragmentIntoPackage(
         for (const child of part.root.children) {
           if (!isElementNode(child) || child.kind !== 'note') continue;
           const noteId = attributeValueOf(child, 'id');
-          if (noteId !== undefined && !index.has(noteId)) index.set(noteId, child);
+          // Canonical keys: a `w:id="07"` definition must satisfy a `w:id="7"`
+          // reference (and vice versa), matching the HTML lane's numeric parse.
+          if (noteId === undefined) continue;
+          const key = canonicalNoteId(noteId);
+          if (!index.has(key)) index.set(key, child);
         }
       }
     }
@@ -718,9 +723,9 @@ export function mergeFragmentIntoPackage(
       const id = attributeValueOf(child, 'id');
       const type = attributeValueOf(child, 'type');
       if (type === 'separator' || type === 'continuationSeparator') continue;
-      if (id === undefined || !referenced.has(id)) continue;
+      if (id === undefined || !referenced.has(canonicalNoteId(id))) continue;
       const fresh = String(nextNoteId++);
-      idMap.set(id, fresh);
+      idMap.set(canonicalNoteId(id), fresh);
       bodies.push(withRewrittenAttribute(child, WML_NAMESPACE_URI, 'id', fresh));
     }
     if (bodies.length > 0) {

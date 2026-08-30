@@ -831,7 +831,11 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   if (tabs !== undefined) para.tabs = tabs;
   // Word writes only the shorthand when all four edges match. An explicit
   // `border-<edge>:none` SUPPRESSES the edge instead of falling back to it.
-  const commonBorder = paragraphBorderOf(style.get('mso-border-alt') ?? style.get('border'));
+  // The fallback collapses per PARSE, not per string: Word's mso-border-alt
+  // vocabulary (thick-thin-*, wave, triple) is mostly outside the parser, and an
+  // unparseable alt must not shadow the parseable CSS shorthand beside it.
+  const commonBorder =
+    paragraphBorderOf(style.get('mso-border-alt')) ?? paragraphBorderOf(style.get('border'));
   const borders: Partial<Record<HtmlParagraphBorderEdge, HtmlParagraphBorder>> = {};
   for (const edge of ['top', 'left', 'bottom', 'right'] as const) {
     const border =

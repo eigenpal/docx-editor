@@ -39,6 +39,7 @@ import {
   RELS_CT,
   STYLES_CT,
   STYLES_REL,
+  canonicalNoteId,
   collectNumIds,
   collectRelationshipIds,
   collectStyleIds,
@@ -582,13 +583,15 @@ export function extractFragmentPackage(
   // the ship set and the scrub set cannot drift.
   let footnotesPart = resolveNotesPart(pkg, 'footnote');
   let endnotesPart = resolveNotesPart(pkg, 'endnote');
+  // Ids match through `canonicalNoteId`: the closure hands out canonical keys, so
+  // a `w:id="07"` definition still satisfies a `w:id="7"` reference.
   const noteBodyOf = (kind: 'footnote' | 'endnote', id: string): OoxmlNode | null => {
     const part = kind === 'footnote' ? footnotesPart : endnotesPart;
     if (!part || !isElementNode(part.root)) return null;
     for (const child of part.root.children) {
-      if (isElementNode(child) && child.kind === 'note' && attributeValueOf(child, 'id') === id) {
-        return child;
-      }
+      if (!isElementNode(child) || child.kind !== 'note') continue;
+      const childId = attributeValueOf(child, 'id');
+      if (childId !== undefined && canonicalNoteId(childId) === id) return child;
     }
     return null;
   };
@@ -610,7 +613,7 @@ export function extractFragmentPackage(
         notes.push(child);
         continue;
       }
-      if (id !== undefined && ids.has(id)) {
+      if (id !== undefined && ids.has(canonicalNoteId(id))) {
         const stripped = stripExcluded(child);
         if (stripped && isElementNode(stripped)) notes.push(stripped);
       }

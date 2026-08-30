@@ -47,21 +47,29 @@ function isRowCell(child: OoxmlElement): boolean {
   return child.localName === 'tc' && child.namespaceUri === WML_NAMESPACE_URI;
 }
 
-/**
- * Placements plus, per row, the children the cell walk SKIPPED. An SDT-wrapped
- * cell unwraps in place (`w:tc` is a legal `w:sdtContent` child); everything else
- * that never renders still reports back so the caller can advance the shared
- * field state over it — the balance probe counted its fldChars.
- */
+/** A `w:customXml` wrapper — legal around rows and cells per EG_ContentRowContent
+ *  and EG_ContentCellContent; the canonical tree types it generic. */
+function isCustomXmlWrapper(child: OoxmlElement): boolean {
+  return child.localName === 'customXml' && child.namespaceUri === WML_NAMESPACE_URI;
+}
+
+/** One row entry in DOCUMENT ORDER: a placed cell, or a child the render skips.
+ *  Skips still advance the shared field state — fldChar transitions are not
+ *  commutative, so the advance must happen exactly where the balance probe saw
+ *  the node, not before or after the row's cells. */
+type RowItem = { readonly placement: CellPlacement } | { readonly skip: OoxmlElement };
+
+/** Placements (for vMerge lookahead) plus the per-row document-order item list.
+ *  SDT- and customXml-wrapped cells unwrap in place. */
 function cellPlacementsOf(rows: readonly OoxmlElement[]): {
   placements: CellPlacement[][];
-  skipped: OoxmlElement[][];
+  items: RowItem[][];
 } {
   const placements: CellPlacement[][] = [];
-  const skipped: OoxmlElement[][] = [];
+  const items: RowItem[][] = [];
   for (const row of rows) {
     const rowPlacements: CellPlacement[] = [];
-    const rowSkipped: OoxmlElement[] = [];
+    const rowItems: RowItem[] = [];
     let column = 0;
     const collect = (children: readonly OoxmlNode[]): void => {
       for (const child of children) {
@@ -75,7 +83,9 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): {
           const vMergeNode = wmlChild(tcPr, 'vMerge');
           const vMerge =
             vMergeNode === null ? null : wmlVal(vMergeNode) === 'restart' ? 'restart' : 'continue';
-          rowPlacements.push({ cell: child, startColumn: column, span, vMerge });
+          const placement: CellPlacement = { cell: child, startColumn: column, span, vMerge };
+          rowPlacements.push(placement);
+          rowItems.push({ placement });
           column += span;
           continue;
         }
@@ -84,14 +94,18 @@ function cellPlacementsOf(rows: readonly OoxmlElement[]): {
           if (content && isElement(content)) collect(content.children);
           continue;
         }
-        rowSkipped.push(child);
+        if (isCustomXmlWrapper(child)) {
+          collect(child.children);
+          continue;
+        }
+        rowItems.push({ skip: child });
       }
     };
     collect(row.children);
     placements.push(rowPlacements);
-    skipped.push(rowSkipped);
+    items.push(rowItems);
   }
-  return { placements, skipped };
+  return { placements, items };
 }
 
 export function renderHtmlTable(
@@ -116,9 +130,10 @@ export function renderHtmlTable(
   );
 
   // A typed row, or a `w:tr` demoted to generic, or a row inside a row-level SDT
-  // (the canonical tree types those `contentControl`). Any other child the render
-  // skips still advances the shared field state the balance probe counted.
+  // or `w:customXml` wrapper. The item list keeps DOCUMENT ORDER so skipped
+  // children advance the shared field state exactly where the probe saw them.
   const rows: OoxmlElement[] = [];
+  const tableItems: Array<{ readonly row: number } | { readonly skip: OoxmlElement }> = [];
   const collectRows = (children: readonly OoxmlNode[]): void => {
     for (const child of children) {
       if (!isElement(child)) continue;
@@ -126,6 +141,7 @@ export function renderHtmlTable(
         child.kind === 'tableRow' ||
         (child.localName === 'tr' && child.namespaceUri === WML_NAMESPACE_URI)
       ) {
+        tableItems.push({ row: rows.length });
         rows.push(child);
         continue;
       }
@@ -134,11 +150,15 @@ export function renderHtmlTable(
         if (content && isElement(content)) collectRows(content.children);
         continue;
       }
-      deps.advanceFieldState(child, fields);
+      if (isCustomXmlWrapper(child)) {
+        collectRows(child.children);
+        continue;
+      }
+      tableItems.push({ skip: child });
     }
   };
   collectRows(table.children);
-  const { placements, skipped: skippedByRow } = cellPlacementsOf(rows);
+  const { placements, items: itemsByRow } = cellPlacementsOf(rows);
 
   const tableRules = ['border-collapse:collapse'];
   const tableWidth = wmlChild(ownTblPr, 'tblW');
@@ -165,15 +185,25 @@ export function renderHtmlTable(
     }
   }
   let out = `<table style="${tableRules.join(';')}">`;
-  placements.forEach((rowCells, rowIndex) => {
-    // Skipped row children never render, but their fldChars still drive the state.
-    for (const node of skippedByRow[rowIndex] ?? []) deps.advanceFieldState(node, fields);
+  for (const item of tableItems) {
+    if ('skip' in item) {
+      // Skipped table children never render, but their fldChars still drive the
+      // state, in document order — the same order the balance probe walked.
+      deps.advanceFieldState(item.skip, fields);
+      continue;
+    }
+    const rowIndex = item.row;
     const height = wmlChild(wmlChild(rows[rowIndex] ?? null, 'trPr'), 'trHeight');
     const heightValue = parseIntValue(attrOf(height, 'val', WML_NAMESPACE_URI));
     const rowCss = wordTableRowCss(heightValue, attrOf(height, 'hRule', WML_NAMESPACE_URI));
     const rowStyle = rowCss === '' ? '' : ` style="${rowCss}"`;
     out += `<tr${rowStyle}>`;
-    for (const placement of rowCells) {
+    for (const rowItem of itemsByRow[rowIndex] ?? []) {
+      if ('skip' in rowItem) {
+        deps.advanceFieldState(rowItem.skip, fields);
+        continue;
+      }
+      const placement = rowItem.placement;
       if (placement.vMerge === 'continue') {
         // The continuation cell renders nothing, but its fldChars still drive the
         // shared field state — the same rule as tracked deletions.
@@ -209,6 +239,6 @@ export function renderHtmlTable(
       out += `<td${attrs}>${deps.renderBlocks(ctx, placement.cell.children, fields)}</td>`;
     }
     out += '</tr>';
-  });
+  }
   return `${out}</table>`;
 }
