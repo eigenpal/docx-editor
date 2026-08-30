@@ -9,6 +9,7 @@
 // Every file-derived value is escaped or allowlist-validated before it reaches the output.
 
 import { readOoxmlPackage, type OoxmlPackage } from '../store/package/ooxml-package.ts';
+import { resolveContentType } from '../store/package/content-types.ts';
 import {
   WML_NAMESPACE_URI,
   WP_NAMESPACE_URI,
@@ -75,6 +76,16 @@ const ENDNOTES_REL = `${R_NS}/endnotes`;
 const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_IMAGE_BYTES = 8 * 1024 * 1024;
 const EMU_PER_PX = 9525;
+const CLIPBOARD_IMAGE_MIMES: ReadonlyMap<string, string> = new Map([
+  ['image/png', 'image/png'],
+  ['image/jpeg', 'image/jpeg'],
+  ['image/jpg', 'image/jpeg'],
+  ['image/gif', 'image/gif'],
+  ['image/bmp', 'image/bmp'],
+  ['image/x-ms-bmp', 'image/bmp'],
+  ['image/x-bmp', 'image/bmp'],
+  ['image/webp', 'image/webp'],
+]);
 
 export interface InteropHtmlOptions {
   /** Per-image data: URI budget, bytes of source media. Default 2 MiB. */
@@ -414,6 +425,22 @@ function hasChildOfKind(run: OoxmlElement, kind: string): boolean {
   return run.children.some((child) => child.kind === kind);
 }
 
+function clipboardImageMime(ctx: RenderContext, partName: string): string | null {
+  const claimed = resolveContentType(ctx.pkg.contentTypes, partName);
+  if (claimed.ok) {
+    const mime = CLIPBOARD_IMAGE_MIMES.get(claimed.contentType.toLowerCase());
+    if (mime !== undefined) return mime;
+  }
+  const dot = partName.lastIndexOf('.');
+  const extension = dot === -1 ? '' : partName.slice(dot + 1).toLowerCase();
+  if (extension === 'png') return 'image/png';
+  if (extension === 'jpg' || extension === 'jpeg') return 'image/jpeg';
+  if (extension === 'gif') return 'image/gif';
+  if (extension === 'bmp') return 'image/bmp';
+  if (extension === 'webp') return 'image/webp';
+  return null;
+}
+
 function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
   // Kind-independent walk: a demoted-to-generic drawing still names its parts. Anchored
   // pictures render like inline ones — HTML has no float-anchor model worth emulating,
@@ -437,16 +464,7 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
     ctx.pkg.partBytes.get(resolved.partName);
   if (!bytes) return '';
 
-  const dot = resolved.partName.lastIndexOf('.');
-  const extension = dot === -1 ? '' : resolved.partName.slice(dot + 1).toLowerCase();
-  const mime =
-    extension === 'png'
-      ? 'image/png'
-      : extension === 'jpg' || extension === 'jpeg'
-        ? 'image/jpeg'
-        : extension === 'gif'
-          ? 'image/gif'
-          : null;
+  const mime = clipboardImageMime(ctx, resolved.partName);
   if (!mime) return '';
   // The budget charges PER EMITTED REFERENCE — every `<img>` duplicates the data URI
   // in the output, so a hostile file cannot amplify one part into unbounded output.
@@ -740,6 +758,7 @@ function renderBlocks(
 ): string {
   let out = '';
   const openLists: OpenList[] = [];
+  let listBaseLevel: number | null = null;
   /** Items already emitted per `numId:level`, so a reopened list resumes numbering. */
   const listProgress = new Map<string, number>();
   let fields = sharedFields;
@@ -760,13 +779,13 @@ function renderBlocks(
   };
   const closeAllLists = (): void => {
     while (openLists.length > 0) closeTopList();
+    listBaseLevel = null;
   };
 
   // A deeper level opens its nested list as a direct child of the enclosing list — the
   // shape every word-processor receiver accepts — and each `<li>` closes immediately.
   const emitListItem = (paragraph: OoxmlElement, placement: ListPlacement): void => {
-    const depth = placement.level + 1;
-    while (openLists.length > depth) closeTopList();
+    if (listBaseLevel !== null && placement.level < listBaseLevel) closeAllLists();
     // A DIFFERENT list closes every open level, not just the top: a new list
     // starting at ilvl >= 1 must not nest inside the previous list's outer
     // wrapper, or the read lane hands its items the old list's identity. "Same
@@ -780,13 +799,17 @@ function renderBlocks(
     ) {
       closeTopList();
     }
+    if (openLists.length === 0) listBaseLevel = placement.level;
+    const baseLevel = listBaseLevel ?? placement.level;
+    const depth = placement.level - baseLevel + 1;
+    while (openLists.length > depth) closeTopList();
     if (openLists.length === depth && openLists[depth - 1]!.numId !== placement.numId) {
       closeTopList();
     }
     while (openLists.length < depth) {
       // Each opened level uses ITS OWN declared format, and a reopened list resumes
       // from the running counter so an interrupting paragraph does not renumber it.
-      const levelIndex = openLists.length;
+      const levelIndex = baseLevel + openLists.length;
       const info = listLevelInfo(ctx, placement.numId, placement.abstractId, levelIndex);
       const consumed =
         listProgress.get(`${placement.abstractId}:${placement.numId}:${levelIndex}`) ?? 0;

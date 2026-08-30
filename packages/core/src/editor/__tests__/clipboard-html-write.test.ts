@@ -81,6 +81,8 @@ function fragment(input: FragmentInput): Uint8Array {
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
         '<Default Extension="png" ContentType="image/png"/>' +
+        '<Default Extension="bmp" ContentType="image/bmp"/>' +
+        '<Default Extension="webp" ContentType="image/webp"/>' +
         overrides.join('') +
         '</Types>'
     )
@@ -221,6 +223,23 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('<p>after</p>');
   });
 
+  test('a list fragment starting below level zero opens one valid root list', () => {
+    const item = (text: string): string =>
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="5"/>' +
+      `</w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const html = interopHtmlFromFragment(
+      fragment({
+        numbering:
+          '<w:abstractNum w:abstractNumId="0">' +
+          '<w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl>' +
+          '<w:lvl w:ilvl="1"><w:numFmt w:val="bullet"/></w:lvl>' +
+          '</w:abstractNum><w:num w:numId="5"><w:abstractNumId w:val="0"/></w:num>',
+        body: item('sub one') + item('sub two'),
+      })
+    );
+    expect(html).toBe('<ul><li>sub one</li><li>sub two</li></ul>');
+  });
+
   test('a table emits colspan, rowspan, shading, and swallows vMerge continuations', () => {
     const cell = (props: string, text: string): string =>
       `<w:tc><w:tcPr>${props}</w:tcPr><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
@@ -336,6 +355,28 @@ describe('interopHtmlFromFragment', () => {
     );
     expect(html).toContain('<img src="data:image/png;base64,aGVsbG8gd29ybGQh"');
     expect(html).toContain('width="100" height="50"');
+  });
+
+  test('WebP and BMP images inline with their declared MIME types', () => {
+    for (const [extension, mime] of [
+      ['webp', 'image/webp'],
+      ['bmp', 'image/bmp'],
+    ] as const) {
+      const mediaName = `word/media/image1.${extension}`;
+      const html = interopHtmlFromFragment(
+        fragment({
+          docRels: `<Relationship Id="rId7" Type="${R}/image" Target="media/image1.${extension}"/>`,
+          media: { [mediaName]: strToU8('hello world!') },
+          body:
+            '<w:p><w:r><w:drawing><wp:inline>' +
+            '<wp:extent cx="952500" cy="476250"/>' +
+            `<a:graphic><a:graphicData uri="${PIC}">` +
+            '<pic:pic><pic:blipFill><a:blip r:embed="rId7"/></pic:blipFill></pic:pic>' +
+            '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>',
+        })
+      );
+      expect(html).toContain(`<img src="data:${mime};base64,aGVsbG8gd29ybGQh"`);
+    }
   });
 
   test('an image over either budget is omitted', () => {
