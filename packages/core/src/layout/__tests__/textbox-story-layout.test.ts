@@ -14,6 +14,7 @@ import {
   enumerateDocumentSections,
   geometryOfSection,
   layoutSemanticDocument,
+  storyBlocks,
   type PageFurniture,
   type SemanticLayout,
 } from '../index.ts';
@@ -26,6 +27,7 @@ import { buildNumberingIndex } from '../numbering-index.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { flowBlocksInBox } from '../semantic-table-layout.ts';
 import {
+  hostedTextboxListToken,
   layoutTextboxStory,
   MAX_TEXTBOX_STORY_NESTING,
   type TextboxStoryLayout,
@@ -35,8 +37,6 @@ import {
   readOoxmlPackage,
   readOoxmlPart,
   resolveHeaderFooterPartsBySection,
-  type OoxmlElement,
-  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
@@ -685,38 +685,21 @@ describe('list markers inside textbox stories', () => {
   });
 
   test('the cell paragraph break key folds the hosted text-box list state (fixes #622)', () => {
-    // `flowBlocksInBox` is the cell/header/footnote lane: the host paragraph's subtree,
-    // list item, and drawing token are byte-identical across a numbering edit, so only the
+    // `flowBlocksInBox` is the cell/header lane: the host paragraph's subtree, list item,
+    // and drawing token are byte-identical across a numbering edit, so only the
     // hosted-story token can move its break key. Without it the unchanged key serves the
     // cached break of the pre-renumber box.
-    const doc = readOoxmlPart(
-      `<w:document ${NS}><w:body>` +
-        `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha') + numberedParagraph('beta'))}</w:r></w:p>` +
-        '</w:body></w:document>',
-      { name: '/word/document.xml', contentType: 'app/xml' }
-    );
-    if (!doc.ok) throw new Error(doc.reason);
-    const hosts = (node: OoxmlNode): boolean =>
-      node.kind !== 'textValue' && (node.localName === 'txbxContent' || node.children.some(hosts));
-    const findHost = (node: OoxmlNode): OoxmlElement | undefined => {
-      if (node.kind === 'textValue') return undefined;
-      if (node.kind === 'paragraph' && hosts(node)) return node;
-      for (const child of node.children) {
-        const found = findHost(child);
-        if (found) return found;
-      }
-      return undefined;
-    };
-    const host = findHost(doc.part.root);
-    if (!host) throw new Error('no hosting paragraph');
+    const host = storyBlocks(bodyTextboxPart())[0]!;
     const keysFor = (lvlText: string): string[] => {
+      const numberingIndex = numberingIndexFor(lvlText);
       const keys: string[] = [];
       flowBlocksInBox([host], 0, 400, 0, 0, {
         measurer,
         cache: createParagraphLayoutCache(),
         producer: 'test',
         nextLineId: (paragraphId, start, lineIndex) => `${paragraphId}-${start}-${lineIndex}`,
-        numberingIndex: numberingIndexFor(lvlText),
+        hostedListTokenForParagraph: (paragraph) =>
+          hostedTextboxListToken(paragraph, numberingIndex, undefined, 'all-markup'),
         onCellBreakKey: (key) => keys.push(key),
       });
       return keys;

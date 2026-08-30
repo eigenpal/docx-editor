@@ -267,7 +267,6 @@ export function layoutNoteStory(
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
     ...(listItems ? { listItems } : {}),
-    ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
     noteMarks,
     ...(projectLink ? { projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),

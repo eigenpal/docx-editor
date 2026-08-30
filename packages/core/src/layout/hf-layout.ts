@@ -45,7 +45,7 @@ import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { forEachStoryDrawing, forEachStoryParagraphFragment } from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
-import { layoutTextboxStory } from './textbox-story-layout.ts';
+import { hostedTextboxListToken, layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
   BlockFragmentRecord,
   HeaderFooterStoryRecord,
@@ -307,7 +307,21 @@ export function layoutHeaderFooterStory(
           nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
           styleCascade,
           ...(listItems ? { listItems } : {}),
-          ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
+          // Only this branch lays hosted stories out (`layoutTextboxStoryFor` below), so
+          // only this branch folds their list state into the cell-lane break keys.
+          ...(inputs?.numberingIndex
+            ? {
+                hostedListTokenForParagraph: (
+                  paragraph: import('@docx-editor.dev/core/store').OoxmlNode
+                ) =>
+                  hostedTextboxListToken(
+                    paragraph,
+                    inputs?.numberingIndex,
+                    styleCascade,
+                    displayMode
+                  ),
+              }
+            : {}),
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
@@ -386,7 +400,6 @@ export function layoutHeaderFooterStory(
         nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
         styleCascade,
         ...(listItems ? { listItems } : {}),
-        ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
         pageContext: effectiveCtx,
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
         displayMode,

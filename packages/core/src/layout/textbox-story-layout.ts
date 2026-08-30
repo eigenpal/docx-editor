@@ -312,7 +312,11 @@ export function hostedTextboxListToken(
   // A truncated scan may have MISSED a box, so it cannot vouch for "no list state": key on
   // the index identity instead, which fails open — every numbering edit moves the key.
   if (scan.truncated) parts.push(`truncated:${numberingIndexTokenId(numberingIndex)}`);
-  const token = parts.length === 0 ? '' : `|txbxlist:${parts.join(',')}`;
+  // NUL-framed: `cacheToken` embeds `w:lvlText`, which a file can fill with any printable
+  // separator, so a printable join would let two different hosted list states concatenate
+  // to one token and hold a break key still across a numbering edit. XML text cannot carry
+  // U+0000, so no file-derived token can forge a part boundary.
+  const token = parts.length === 0 ? '' : `|txbxlist:${parts.join('\0')}`;
   hostedListTokensByBlock.set(block, {
     rawIndex: numberingIndex,
     styleCascade,
@@ -384,7 +388,6 @@ export function layoutTextboxStory(
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
     ...(listItems ? { listItems } : {}),
-    ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
     ...(options.pageContext ? { pageContext: options.pageContext } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.defaultTabStopPt !== undefined

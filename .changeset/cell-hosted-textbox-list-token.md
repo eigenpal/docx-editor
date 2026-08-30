@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Fold the hosted text-box list token into cell, header, and footnote paragraph break keys, so a numbering edit inside a hosted text-box story invalidates the host paragraph's cached break. Fixes #622
+List numbers inside a text box hosted by a table cell or header paragraph now update reliably after a numbering edit. Fixes #622

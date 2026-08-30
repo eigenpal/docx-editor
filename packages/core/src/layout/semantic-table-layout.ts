@@ -97,9 +97,6 @@ import type {
 } from './semantic-records.ts';
 import { firstLineShift, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
-// Call-time only, so the module cycle with `flowBlocksInBox` (which that module imports
-// from here) never runs during evaluation.
-import { hostedTextboxListToken } from './textbox-story-layout.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { borderExtentPt, type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
@@ -213,12 +210,14 @@ export interface TableFlowDeps {
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   /**
-   * `numbering.xml`, for the hosted-textbox list token every cell break key folds. A
-   * numbering edit renumbers the markers inside a text-box story hosted by a cell paragraph
-   * while the host's subtree, list item, and drawing token stay byte-identical, so only
-   * this token can move the key — the same fold the body flow applies in `prepareBlock`.
+   * The list state of the text-box stories a paragraph hosts, for the break key — the cell
+   * twin of the `hostedTextboxListToken` fold the body flow applies in `prepareBlock`. A
+   * numbering edit renumbers the markers inside a hosted story while the host's subtree,
+   * list item, and drawing token stay byte-identical, so only this token can move the key.
+   * Provided only by lanes that lay out hosted stories ({@link layoutTextboxStoryFor});
+   * where no story can render, no marker can go stale and the fold would be key churn.
    */
-  readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
+  readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string;
   /**
    * `w:settings/w:defaultTabStop` in points; absent keeps the 0.5" schema default. A cell
    * paragraph tabs on the same document-wide grid as a body paragraph.
@@ -500,20 +499,10 @@ function placeCellParagraph(
   // renumbering edit moves the painted reference while the cell's subtree stays identical.
   const refToken = deps.refFields?.tokenForParagraph(paragraphId) ?? '';
   // The list state of any text-box story this paragraph hosts, keyed exactly as the body
-  // flow keys it: a numbering edit renumbers the box's markers while the host paragraph's
-  // subtree stays byte-identical. NUL between the paragraph's own token and the hosted one,
-  // for the same reason the body flow frames the pair — both embed file-influenced marker
-  // text, so a printable join would let two different (own, hosted) pairs concatenate to
-  // one string.
-  const hostedListToken = hostedTextboxListToken(
-    paragraph,
-    deps.numberingIndex,
-    deps.styleCascade,
-    deps.displayMode
-  );
-  const ownListToken = listItem?.cacheToken ?? '';
-  const listToken =
-    ownListToken === '' && hostedListToken === '' ? '' : `${ownListToken}\0${hostedListToken}`;
+  // flow keys it: its own `txbxList` property, so a numbering edit renumbers the box's
+  // markers while the host paragraph's subtree stays byte-identical and only this property
+  // can move the key. Paragraphs hosting no box keep their pre-existing key shape.
+  const hostedListToken = deps.hostedListTokenForParagraph?.(paragraph) ?? '';
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -521,7 +510,10 @@ function placeCellParagraph(
       ...inheritedRunProperties,
       ...markRunProperties,
       { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
-      ...(listToken ? [{ localName: 'list', attributes: { token: listToken } }] : []),
+      ...(listItem ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }] : []),
+      ...(hostedListToken
+        ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
+        : []),
       ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
     ],
     width: available,

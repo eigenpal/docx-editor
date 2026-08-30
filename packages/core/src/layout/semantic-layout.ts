@@ -1742,7 +1742,15 @@ function layoutBlocksPass(
     pageOccurrenceKey: () => String(pages.length),
     styleCascade,
     listItems,
-    ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
+    // The same (index, cascade, mode) call `prepareBlock` folds for body blocks, handed to
+    // the cell lane as a provider — the `drawingTokenForParagraph` pattern — so both lanes
+    // key a hosted text-box story's list state identically.
+    ...(options.numberingIndex
+      ? {
+          hostedListTokenForParagraph: (paragraph: OoxmlNode) =>
+            hostedTextboxListToken(paragraph, options.numberingIndex, styleCascade, displayMode),
+        }
+      : {}),
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
