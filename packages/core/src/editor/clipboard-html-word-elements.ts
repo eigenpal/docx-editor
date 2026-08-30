@@ -10,18 +10,25 @@ const WORD_PARAGRAPH_CLASSES: Readonly<Record<string, string>> = {
   Caption: 'MsoCaption',
   Quote: 'MsoQuote',
   IntenseQuote: 'MsoIntenseQuote',
+  BodyText: 'MsoBodyText',
+  FootnoteText: 'MsoFootnoteText',
 };
 
 /**
  * Class → style id, the read lane's inverse of the table above. `MsoNormal` is
  * omitted ON PURPOSE: stamping `pStyle Normal` on every plain Word paragraph would
- * cover each paragraph mark and force the structural paste path.
+ * cover each paragraph mark and force the structural paste path. Word also emits
+ * `CxSp` (contextual-spacing) variants of `MsoListParagraph`, which the read lane
+ * accepts as plain `ListParagraph`.
  */
-export const WORD_CLASS_PARAGRAPH_STYLES: ReadonlyMap<string, string> = new Map(
-  Object.entries(WORD_PARAGRAPH_CLASSES)
+export const WORD_CLASS_PARAGRAPH_STYLES: ReadonlyMap<string, string> = new Map([
+  ...Object.entries(WORD_PARAGRAPH_CLASSES)
     .filter(([styleId]) => styleId !== 'Normal')
-    .map(([styleId, className]) => [className, styleId])
-);
+    .map(([styleId, className]): [string, string] => [className, styleId]),
+  ['MsoListParagraphCxSpFirst', 'ListParagraph'],
+  ['MsoListParagraphCxSpMiddle', 'ListParagraph'],
+  ['MsoListParagraphCxSpLast', 'ListParagraph'],
+]);
 
 export function wordParagraphClassOf(styleId: string | undefined): string | null {
   if (styleId === undefined) return null;

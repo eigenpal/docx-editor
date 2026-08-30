@@ -921,6 +921,11 @@ function renderBlocks(
           visit(child.children);
           break;
         default:
+          // A block-level child the renderer skips (a bare run under a generic
+          // wrapper) still advances the field state: the balance probe counted its
+          // fldChars, and skipping them here would desync the two — an open
+          // 'instr' the probe saw closed would blank every later paragraph.
+          if (!fields.inert) advanceFieldState(child, fields);
           break;
       }
     }

@@ -212,19 +212,19 @@ function toggleLevelValue(
 }
 
 /** ECMA-376 §17.7.3 toggle semantics, matching `layout/style-toggles.ts`: direct
- *  formatting is absolute; a docDefaults-on toggle short-circuits ON regardless of
- *  the style XOR; an explicit off at the nearest style level that states the
- *  property wins; otherwise the style levels XOR. */
+ *  formatting is absolute; an explicit off at the nearest style level that states
+ *  the property outranks even a true document default; a docDefaults-on toggle
+ *  otherwise short-circuits ON; otherwise the style levels XOR. */
 export function runToggleOn(layers: RunPropertyLayers, localName: string): boolean {
   const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
   if (direct) {
     const val = wmlVal(direct);
     return !(val === '0' || val === 'false' || val === 'off' || val === 'none');
   }
-  if (toggleLevelValue(layers.defaults, localName) === true) return true;
   const paragraph = toggleLevelValue(layers.paragraphLevel, localName);
   const character = toggleLevelValue(layers.characterLevel, localName);
   if (character === false) return false;
   if (character === undefined && paragraph === false) return false;
+  if (toggleLevelValue(layers.defaults, localName) === true) return true;
   return (paragraph === true) !== (character === true);
 }

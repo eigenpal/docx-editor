@@ -29,6 +29,14 @@ export function clipboardHyperlinkTarget(
   rawTarget: string | undefined,
   rawAnchor: string | undefined
 ): string | null {
+  // A fragment-only target names a same-document bookmark, so it mangles through
+  // `clipboardBookmarkName` exactly like the emitted `w:bookmarkStart` names —
+  // otherwise a link/bookmark pair that round-trips through a paste stops pairing.
+  if (rawTarget !== undefined && rawTarget.startsWith('#')) {
+    const fragment = clipboardBookmarkName(rawTarget.slice(1));
+    const anchorOnly = clipboardBookmarkName(rawAnchor) ?? fragment;
+    return anchorOnly === null ? null : `#${anchorOnly}`;
+  }
   const href = rawTarget === undefined ? null : sanitizeHref(rawTarget);
   const anchor = clipboardBookmarkName(rawAnchor);
   if (href?.ok === true && href.href.length > 0) {

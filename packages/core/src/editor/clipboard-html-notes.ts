@@ -49,7 +49,10 @@ export function clipboardNoteDefinitionRef(
 export function clipboardNoteDefinitions(doc: Document): readonly ClipboardNoteDefinition[] {
   const definitions: ClipboardNoteDefinition[] = [];
   const divs = doc.getElementsByTagName('div');
-  for (let index = 0; index < divs.length && definitions.length < 128; index += 1) {
+  // The cap only bounds the claim SCAN; the shared walk budget bounds projection
+  // cost. It must comfortably exceed what the write lane ships, or a large
+  // self round-trip degrades real notes into body text.
+  for (let index = 0; index < divs.length && definitions.length < 2048; index += 1) {
     const element = divs[index]!;
     const ref = clipboardNoteDefinitionRef(element, parseInlineStyle(element));
     if (ref !== null) definitions.push({ ...ref, element });

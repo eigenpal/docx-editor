@@ -26,7 +26,20 @@ export function isWordPageBreakBlock(element: Element): boolean {
 
 /** Match Word's redundant empty paragraph directly after an exported page break. */
 export function isWordPageBreakSpacer(element: Element): boolean {
-  if (tagOf(element) !== 'p' || element.children.length !== 1) return false;
+  if (tagOf(element) !== 'p') return false;
+  // Inspect ALL child nodes, not only elements: a bare text sibling of the `o:p`
+  // is real content, and dropping the paragraph as chrome would lose it.
+  let officeParagraph: Element | null = null;
+  for (let index = 0; index < element.childNodes.length; index += 1) {
+    const child = element.childNodes[index]!;
+    if (child.nodeType === 3) {
+      if ((child.nodeValue ?? '').replace(/[\s\u00a0]/g, '').length === 0) continue;
+      return false;
+    }
+    if (child.nodeType !== 1 || officeParagraph !== null) return false;
+    officeParagraph = child as Element;
+  }
+  if (officeParagraph === null) return false;
   // A blank paragraph the author STYLED (shading, borders) is content, not chrome.
   const style = parseInlineStyle(element);
   for (const name of style.keys()) {
@@ -34,7 +47,6 @@ export function isWordPageBreakSpacer(element: Element): boolean {
       return false;
     }
   }
-  const officeParagraph = element.children[0]!;
   if (tagOf(officeParagraph) !== 'o:p' || officeParagraph.childNodes.length > 3) return false;
   let text = '';
   for (let index = 0; index < officeParagraph.childNodes.length; index += 1) {

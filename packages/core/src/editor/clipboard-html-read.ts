@@ -753,13 +753,6 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     pre: false,
     list: null,
   };
-  // Notes project FIRST, so the body pass emits a live reference only for a note
-  // whose body actually landed. A note the walk budget starved out stays out of
-  // `definedNotes`, and its reference keeps the anchor's visible text instead of
-  // pointing at a blank note. The notes may spend at most HALF the walk budget:
-  // the body is the primary content and must never be starved into a refusal.
-  const bodyReserve = Math.ceil(projection.nodesLeft / 2);
-  projection.nodesLeft -= bodyReserve;
   // Claim (dedupe + reference-gate) and PRE-register the claimed elements, so an
   // outer definition's body walk skips a nested definition it does not own.
   const claimed: (typeof noteDefinitions)[number][] = [];
@@ -783,6 +776,15 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     return depth;
   };
   claimed.sort((a, b) => domDepthOf(b.element) - domDepthOf(a.element));
+  // The BODY is the primary content: it walks first with the full budget, emitting
+  // references for claimed ids. Notes spend what remains; a note the leftover
+  // budget starves is un-claimed and its already-emitted citations are stripped.
+  projection.lastMarkCovered = false;
+  const blocks: string[] = [];
+  projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
+  const bodyLastMarkCovered = projection.lastMarkCovered;
+  const bodyTruncated = projection.truncated;
+  let notesDropped = false;
   for (let index = 0; index < claimed.length; index += 1) {
     const note = claimed[index]!;
     projection.truncated = false;
@@ -800,16 +802,18 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       true
     );
     if (projection.truncated || noteBlocks.length === 0) {
-      // The budget starved this walk mid-note: un-claim this and every remaining
-      // definition so the body walk keeps their text and no live reference points
-      // at a blank or truncated note. One alternation pattern then strips every
-      // dropped citation from kept note bodies in a single sweep.
+      // The leftover budget starved this walk mid-note: un-claim this and every
+      // remaining definition so no live reference points at a blank or truncated
+      // note. One alternation pattern then strips every dropped citation from the
+      // BODY blocks and the kept note bodies in a single sweep.
+      notesDropped = true;
       const droppedMarks: string[] = [];
       for (let drop = index; drop < claimed.length; drop += 1) {
         const dropped = claimed[drop]!;
         definedNotes[dropped.kind].delete(dropped.id);
         definedNoteElements.delete(dropped.element);
         projection.notes[dropped.kind].delete(dropped.id);
+        projection.bodyNoteRefs[dropped.kind].delete(dropped.id);
         droppedMarks.push(`<w:${dropped.kind}Reference w:id="${dropped.id}"/>`);
       }
       if (droppedMarks.length > 0) {
@@ -817,6 +821,9 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
           `<w:r>(?:<w:rPr>(?:(?!</w:r>)[\\s\\S])*?</w:rPr>)?(?:${droppedMarks.join('|')})</w:r>`,
           'g'
         );
+        for (let at = 0; at < blocks.length; at += 1) {
+          blocks[at] = blocks[at]!.replace(markPattern, '');
+        }
         for (const keptKind of ['footnote', 'endnote'] as const) {
           for (const [keptId, keptBlocks] of projection.notes[keptKind]) {
             projection.notes[keptKind].set(
@@ -830,11 +837,10 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     }
     projection.notes[note.kind].set(note.id, noteBlocks);
   }
-  projection.nodesLeft = Math.max(projection.nodesLeft, 0) + bodyReserve;
-  projection.truncated = false;
-  projection.lastMarkCovered = false;
-  const blocks: string[] = [];
-  projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
+  // A dropped note is real loss now that the body already projected past its
+  // anchors, so it keeps the truncation flag raised alongside the body's own.
+  projection.truncated = bodyTruncated || notesDropped;
+  projection.lastMarkCovered = bodyLastMarkCovered;
   // Reconcile: a claimed note is kept only when REACHABLE from the body through
   // kept notes' cross-references (a mutual-citation island must not hide from the
   // lossless fallback). Moved blocks re-home note-scoped rels onto document rels;
@@ -887,6 +893,30 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       if (!movedOne) break;
     }
   }
+  // A moved note's definition no longer exists, so any citation of a moved id —
+  // in a kept note (a mutual-citation island moved one member) or in another
+  // moved note's blocks — must strip with the same alternation sweep, or the
+  // fragment ships a dangling reference.
+  let movedMarkPattern: RegExp | null = null;
+  if (movedNotes.size > 0) {
+    const movedMarks = [...movedNotes].map((key) => {
+      const [movedKind, movedId] = key.split(':') as [ClipboardNoteKind, string];
+      return `<w:${movedKind}Reference w:id="${movedId}"/>`;
+    });
+    movedMarkPattern = new RegExp(
+      `<w:r>(?:<w:rPr>(?:(?!</w:r>)[\\s\\S])*?</w:rPr>)?(?:${movedMarks.join('|')})</w:r>`,
+      'g'
+    );
+    for (const keptKind of ['footnote', 'endnote'] as const) {
+      for (const [keptId, keptBlocks] of projection.notes[keptKind]) {
+        if (movedNotes.has(`${keptKind}:${keptId}`)) continue;
+        projection.notes[keptKind].set(
+          keptId,
+          keptBlocks.map((block) => block.replace(movedMarkPattern!, ''))
+        );
+      }
+    }
+  }
   for (const kind of ['footnote', 'endnote'] as const) {
     for (const [id, noteBlocks] of [...projection.notes[kind]]) {
       if (!movedNotes.has(`${kind}:${id}`)) continue;
@@ -902,6 +932,7 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
             /<w:r>(?:<w:rPr>(?:(?!<\/w:r>)[\s\S])*?<\/w:rPr>)?<w:(?:footnote|endnote)Ref\/><\/w:r>/g,
             ''
           )
+          .replace(movedMarkPattern!, '')
           .replace(/ r:(id|embed)="([^"]{1,32})"/g, (whole, attribute: string, oldId: string) => {
             let mapped = relIdMap.get(oldId);
             if (mapped === undefined) {

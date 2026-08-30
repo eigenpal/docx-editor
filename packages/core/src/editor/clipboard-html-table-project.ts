@@ -53,36 +53,60 @@ export function projectHtmlTable(
   if (rows.length === 0) return;
 
   // Count columns INCLUDING rowspan carry-over: a row that receives carried columns
-  // still owns its trailing cells, which would otherwise be dropped. The pre-count
-  // is bounded by its OWN copy of the remaining budget (so a crafted rowspan lattice
-  // cannot spin) without consuming the shared budget the emission walk charges.
+  // still owns its trailing cells, which would otherwise be dropped. The walk is
+  // POSITIONAL and clamps a colspan at the next carried column exactly like the
+  // emission walk below, so the two never disagree on the grid width. It is bounded
+  // by its OWN copy of the remaining budget (so a crafted rowspan lattice cannot
+  // spin) without consuming the shared budget the emission walk charges.
   let columns = 1;
   let precountLeft = p.nodesLeft;
-  const carrySpans: Array<{ remaining: number; span: number }> = [];
+  const carryAt: Array<{ remaining: number; span: number } | null> = [];
   for (const row of rows) {
     if (precountLeft <= 0 || columns >= 63) break;
-    let count = 0;
-    let keep = 0;
-    for (const carried of carrySpans) {
-      count += carried.span;
-      carried.remaining -= 1;
-      if (carried.remaining > 0) carrySpans[keep++] = carried;
-    }
-    carrySpans.length = keep;
-    for (const cell of Array.from(row.children)) {
-      precountLeft -= 1;
-      if (precountLeft <= 0) break;
-      if (!/^t[dh]$/.test(tagOf(cell))) continue;
-      const span = htmlSpanOf(cell, 'colspan', 63);
-      count += span;
-      const rowSpan = htmlSpanOf(cell, 'rowspan', 1000);
-      if (rowSpan > 1 && carrySpans.length < 63) {
-        carrySpans.push({ remaining: rowSpan - 1, span });
+    const carriedNow: Array<number | null> = carryAt.map((entry) => (entry ? entry.span : null));
+    for (let index = 0; index < carryAt.length; index += 1) {
+      const entry = carryAt[index];
+      if (entry) {
+        entry.remaining -= 1;
+        if (entry.remaining <= 0) carryAt[index] = null;
       }
     }
-    columns = Math.max(columns, count);
+    const sourceCells = Array.from(row.children).filter((cell) => /^t[dh]$/.test(tagOf(cell)));
+    let sourceAt = 0;
+    let column = 0;
+    while (column < 63) {
+      precountLeft -= 1;
+      if (precountLeft <= 0) break;
+      const carriedSpan = column < carriedNow.length ? carriedNow[column] : null;
+      if (carriedSpan !== null && carriedSpan !== undefined) {
+        column += carriedSpan;
+        continue;
+      }
+      const cell = sourceCells[sourceAt];
+      if (cell === undefined) break;
+      sourceAt += 1;
+      let span = Math.min(htmlSpanOf(cell, 'colspan', 63), 63 - column);
+      for (let ahead = column + 1; ahead < column + span; ahead += 1) {
+        if (ahead < carriedNow.length && carriedNow[ahead] != null) {
+          span = ahead - column;
+          break;
+        }
+      }
+      const rowSpan = htmlSpanOf(cell, 'rowspan', 1000);
+      if (rowSpan > 1) {
+        while (carryAt.length <= column) carryAt.push(null);
+        carryAt[column] = { remaining: rowSpan - 1, span };
+      }
+      column += span;
+    }
+    // Carried columns past the row's own cells still occupy the grid.
+    for (let at = column; at < carriedNow.length && at < 63; at += 1) {
+      const carriedSpan = carriedNow[at];
+      if (carriedSpan != null) column = Math.max(column, at + carriedSpan);
+    }
+    columns = Math.max(columns, column);
   }
-  columns = Math.min(columns, 63);
+  columns = Math.min(Math.max(columns, 1), 63);
 
   const totalWidth = tableWidthTwips(table, TABLE_TOTAL_TWIPS);
   // Width inference walks at most as many rows as the remaining budget could emit,
@@ -117,10 +141,12 @@ export function projectHtmlTable(
     let sourceAt = 0;
     const cells: string[] = [];
     let column = 0;
+    let rowComplete = true;
     while (column < columns) {
       p.nodesLeft -= 1;
       if (p.nodesLeft <= 0) {
         p.truncated = true;
+        rowComplete = false;
         break;
       }
       const carriedSpan = carriedNow[column];
@@ -168,6 +194,9 @@ export function projectHtmlTable(
       );
       column += span;
     }
+    // A budget break mid-row must not emit the partial row: a `<w:tr>` missing its
+    // trailing cells drops `w:vMerge` continuations and dangles the merge above.
+    if (!rowComplete) break;
     rowXml.push(`<w:tr>${tableRowPropertiesXml(row)}${cells.join('')}</w:tr>`);
   }
 
