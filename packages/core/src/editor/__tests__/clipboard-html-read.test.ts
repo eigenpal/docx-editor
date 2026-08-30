@@ -81,10 +81,10 @@ describe('run and paragraph mapping', () => {
     expect(docXml).not.toContain('<w:b/>');
   });
 
-  test('Word heading tags use target styles and include their paragraph mark', () => {
+  test('a fragment-only Word heading uses its target style and paragraph mark', () => {
     const html =
-      '<html xmlns:o="urn:schemas-microsoft-com:office:office"><body>' +
-      '<h2>Target heading</h2></body></html>';
+      '<!--StartFragment--><h2><span style="mso-ansi-language:PL">' +
+      'Target heading<o:p></o:p></span></h2><!--EndFragment-->';
     const { docXml, lastMarkCovered } = openFragment(html);
     expect(docXml).toContain('<w:pStyle w:val="Heading2"/>');
     expect(docXml).not.toContain('w:sz w:val="52"');

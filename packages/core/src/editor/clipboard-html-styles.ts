@@ -34,6 +34,8 @@ export function parseCssLengthPt(value: string): number | null {
 export function isWordClipboardHtml(html: string): boolean {
   return (
     html.includes('urn:schemas-microsoft-com:office') ||
+    html.includes('mso-') ||
+    html.includes('<o:p') ||
     html.includes('class=Mso') ||
     html.includes('class="Mso') ||
     html.includes("class='Mso")
