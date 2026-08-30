@@ -2239,9 +2239,14 @@ function layoutBlocksPass(
       // ONCE per chain, at its head — a member whose predecessor keeps too already moved with
       // the group. A chain that cannot fit a page of its own is abandoned.
       if (keeps.keepNext && !keepsNext[index - 1]) {
+        // Members are measured at THIS column's width, not the `prepared` entries': the
+        // prepass builds at column 0's width, and a section with unequal explicit column
+        // widths would otherwise price a group placed into a narrower or wider column with
+        // the wrong line breaks, landing the keep break on the wrong block. Equal-width
+        // sections re-prepare into a memo hit, so the lookahead still re-measures nothing.
         const group = keepNextGroupHeight(prepared, index, previousSpaceAfter, (at) => {
-          const member = prepared[at];
-          return member?.kind === 'paragraph' ? breakBlock(member, at).map((l) => l.height) : [];
+          const member = prepareBlock(bodies[at]!, columnWidth());
+          return member.kind === 'paragraph' ? breakBlock(member, at).map((l) => l.height) : [];
         });
         if (group !== null && group + topExtent <= contentHeight()) {
           needed = Math.max(needed, group + topExtent);

@@ -431,4 +431,43 @@ describe('multi-column section layout', () => {
       )?.columnSeparators
     ).toHaveLength(1);
   });
+
+  test('keepNext lookahead prices the group at the placed column width', () => {
+    // Column 0 is 300pt (one line holds 50 chars); column 1 is 36pt (6 chars). The body
+    // paragraph is 1 line at column 0's width but 2 at column 1's, so a lookahead that
+    // measures at the prepass width (column 0) under-prices the group by one line.
+    //
+    // Content height is 145pt; the default 10pt run makes each line 12.73pt. Eleven filler
+    // lines fill column 0; nine more leave column 1 at y=114.5 with 30.4pt free when the
+    // heading arrives. The true group — the heading line plus the body's two
+    // widow-controlled lines, 38.2pt — must move the heading; the under-priced 25.5pt
+    // group left it stranded at the column bottom while the body opened the next page.
+    const filler = Array.from({ length: 20 }, (_, index) => paragraph(`f${index}`)).join('');
+    const part = packageWithBody(
+      filler +
+        '<w:p><w:pPr><w:keepNext/></w:pPr><w:r><w:t>hh</w:t></w:r></w:p>' +
+        paragraph('aaaa bbbb') +
+        '<w:sectPr>' +
+        '<w:pgSz w:w="8400" w:h="4340"/>' +
+        '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+        '<w:cols w:num="2" w:equalWidth="0">' +
+        '<w:col w:w="6000" w:space="240"/><w:col w:w="720"/>' +
+        '</w:cols>' +
+        '</w:sectPr>'
+    );
+
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: createFixedMeasurer(6, 14),
+    });
+
+    const pageOf = (text: string): number =>
+      layout.pages.findIndex((page) =>
+        page.fragments.some((fragment) => fragmentText(fragment).includes(text))
+      );
+    // The filler ends on page one; the keep moves the heading WITH its paragraph.
+    expect(layout.pages).toHaveLength(2);
+    expect(pageOf('f19')).toBe(0);
+    expect(pageOf('hh')).toBe(1);
+    expect(pageOf('hh')).toBe(pageOf('aaaa'));
+  });
 });
