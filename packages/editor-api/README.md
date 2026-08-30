@@ -26,6 +26,8 @@ already has open in a page.
 npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 ```
 
+Server use requires Node.js `^20.16.0 || >=22.3.0`.
+
 ## On a server
 
 The default entry needs no browser and nothing to mount. It opens DOCX bytes, edits them, and

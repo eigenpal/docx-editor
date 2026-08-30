@@ -1,4 +1,4 @@
-# Props & Ref Methods
+# Props and ref methods
 
 The documented root API shape is shared by the React and Vue packages.
 
@@ -28,9 +28,15 @@ so they stay explicit instead of accidental.
 | `document`    | `DocumentSource`                                 | React, Vue | DOCX bytes or an existing `DocumentHandle`.      |
 | `fonts`       | `FontConfiguration \| FontConfigurationFragment` | React, Vue | Font bytes used for shaping and pagination.      |
 | `author`      | `string`                                         | React, Vue | Ambient author for authored commands.            |
-| `mode`        | `'edit' \| 'view'`                               | React, Vue | Mount-time editing mode.                         |
+| `mode`        | `'edit' \| 'view' \| 'suggesting'`               | React, Vue | Mount-time editing mode.                         |
 | `zoom`        | `number`                                         | React, Vue | Mount-time zoom value.                           |
+| `zoomMode`    | `ZoomMode \| 'auto'`                             | React, Vue | Automatic or fixed zoom behavior.                |
 | `locale`      | `string`                                         | React, Vue | Locale passed to the underlying editor instance. |
+| `i18n`        | `Translations`                                   | React, Vue | Translation overrides for editor chrome.         |
+| `t`           | `(key, params?) => string`                       | React, Vue | Host translation function for editor chrome.     |
+| `colorMode`   | `'light' \| 'dark' \| 'system'`                  | React, Vue | Color mode for editor chrome.                    |
+| `rulers`      | `boolean`                                        | React, Vue | Toggles the packaged rulers.                     |
+| `modules`     | `readonly EditorModule[]`                        | React, Vue | Feature modules applied at mount.                |
 | `onFontError` | `(error: EditorFontError) => void`               | React, Vue | Reports typed font-resolution failures.          |
 
 ### React root chrome props
@@ -45,15 +51,18 @@ so they stay explicit instead of accidental.
 | `navigation`                                 | `boolean`                               | Toggle the packaged navigation pane.                   |
 | `hyperlinkPopup`                             | `boolean`                               | Toggle the packaged link popover.                      |
 | `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Toggle or customize the packaged context menu.         |
+| `children`                                   | `ReactNode`                             | Render host chrome inside the viewport.                |
 | `onReady`                                    | `(editor: Editor) => void`              | Fired after the editor instance is created.            |
 | `onChange`                                   | `(change: DocumentChange) => void`      | Fired after document mutations.                        |
 | `onSave` / `onOpen`                          | `() => void`                            | Override the packaged File → Save / Open actions.      |
 
 Source: [`packages/react/src/types.ts`](../packages/react/src/types.ts) and [`packages/vue/src/types.ts`](../packages/vue/src/types.ts).
 
-For the full React root surface, see the current site docs under `/docs/1.x/react`.
+For full details, see the
+[React props](https://www.docx-editor.dev/docs/2.x/react/props) and
+[Vue props](https://www.docx-editor.dev/docs/2.x/vue/props).
 
-## Ref Methods
+## Ref methods
 
 ```tsx
 const ref = useRef<DocxEditorRef>(null);

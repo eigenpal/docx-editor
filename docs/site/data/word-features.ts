@@ -118,7 +118,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Register custom fonts with the fonts prop. The editor fetches your URLs and checks each hash. Theme fonts come from the OOXML theme. Word-accurate wrap and pagination need real font bytes, so the optional @docx-editor.dev/fonts package supplies substitutes for common Word fonts. Word\'s five document defaults match advance widths exactly. Century Gothic loads on demand and runs within 1%, so a wrap point can still move. A family with no metric-compatible substitute keeps your own measurement rather than being given an arbitrary face. packagedFonts() serves all six on demand and reaches no third party. It loads a family when a document names it, or when that family is the default face. googleFonts() adds a pinned open-licensed catalog once an app opts into the network. Both are resolvers with the same call shape, so useFonts and useDocxSource compose them as a list in precedence order. A later origin is told which faces an earlier one can already paint, so composing them never downloads the same face twice.',
+      "Register custom fonts with the fonts prop. The editor fetches your URLs and checks each hash. Theme fonts come from the OOXML theme. Word-accurate wrap and pagination need real font bytes, so the optional @docx-editor.dev/fonts package supplies substitutes for common Word fonts. Word's five document defaults match advance widths exactly. Century Gothic loads on demand and runs within 1%, so a wrap point can still move. A family with no metric-compatible substitute keeps your own measurement rather than being given an arbitrary face. packagedFonts() serves all six on demand and reaches no third party. It loads a family when a document names it, or when that family is the default face. googleFonts() adds a pinned open-licensed catalog once an app opts into the network. Both are resolvers with the same call shape, so useFonts and useDocxSource compose them as a list in precedence order. A later origin is told which faces an earlier one can already paint, so composing them never downloads the same face twice.",
   },
   {
     id: 'text.embedded-fonts',
@@ -280,7 +280,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      "Existing tab stops render, with right and decimal tabs and dot, hyphen, and underscore leaders. Positional tabs (w:ptab) render too, so a contents line reads as one: entry left, leader dots between, page number right. The document's own w:defaultTabStop is honoured, in the body and in headers and footers. The Paragraph dialog sets, clears, and replaces tab stops, including clearing one that a style supplies. Bar tabs are preserved on save but aren't drawn or editable.",
+      "Existing tab stops render, with right and decimal tabs and dot, hyphen, and underscore leaders. Positional tabs (w:ptab) render too, so a contents line reads as one: entry left, leader dots between, page number right. The document's own w:defaultTabStop is honored, in the body and in headers and footers. The Paragraph dialog sets, clears, and replaces tab stops, including clearing one that a style supplies. Bar tabs are preserved on save but aren't drawn or editable.",
   },
   {
     id: 'paragraphs.frames',
@@ -432,7 +432,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Table styles resolve through their basedOn chain, and a table that names no style resolves the document default. Borders, cell margins, shading, and conditional paragraph and run formatting come from styles.xml, so a header row comes out bold and centred. w:tblLook gates which conditional formats apply, and an explicit w:cnfStyle wins. Conditional cell margins and a table-style picker are not built yet.',
+      'Table styles resolve through their basedOn chain, and a table that names no style resolves the document default. Borders, cell margins, shading, and conditional paragraph and run formatting come from styles.xml, so a header row comes out bold and centered. w:tblLook gates which conditional formats apply, and an explicit w:cnfStyle wins. Conditional cell margins and a table-style picker are not built yet.',
   },
   {
     id: 'tables.floating',
@@ -532,14 +532,14 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'images.tracked',
-    name: 'Tracked image insert/delete',
+    name: 'Tracked image changes',
     category: 'images',
-    editing: 'none',
-    rendering: 'preserved',
-    roundTrip: 'preserved',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
     tier: 'community',
     notes:
-      'Revision wrappers are preserved inertly. Accept, reject, and suggesting-mode delete are not built for images yet.',
+      'Suggesting mode records image insertion and deletion. Review actions can accept or reject both changes. Image property edits are unavailable in suggesting mode.',
   },
   {
     id: 'images.textboxes',
@@ -658,7 +658,7 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'layout.headers-footers',
-    name: 'Headers & footers (edit in place)',
+    name: 'Headers and footers (edit in place)',
     category: 'layout',
     editing: 'partial',
     rendering: 'full',
@@ -682,14 +682,15 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'layout.footnotes',
-    name: 'Footnotes & endnotes',
+    name: 'Footnotes and endnotes',
     category: 'layout',
     editing: 'partial',
     rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. A footnote stays whole with its reference: when it cannot fit below the referencing line, the line moves to the next page instead of the note splitting. Only a note taller than the page note column splits across pages. Overflow sheets retain separate page rectangles for painting and hit testing. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Tracked note inserts and notes in headers and footers are out of scope.',
+      'Both adapters have a typed note model, note layout (pageBottom, beneathText, sectEnd, docEnd), scoped note editing, insert, delete, convert, and chrome slots. A footnote stays whole with its reference: when it cannot fit below the referencing line, the line moves to the next page instead of the note splitting. Only a note taller than the page note column splits across pages. Overflow sheets retain separate page rectangles for painting and hit testing. Editing inside a note matches the body: lists, tables, content controls, pictures, fonts, comments, bookmarks, and page setup. Suggesting mode tracks an inserted reference and requires reference deletion to propose note removal. Notes in headers and footers are out of scope.',
+    docsLink: '/docs/2.x/guides/footnotes-and-endnotes',
   },
   {
     id: 'layout.columns',
@@ -764,7 +765,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Section numbering start, format, chapter style, and chapter separator parse and serialize. PAGE fields in headers and footers honour the authored start and format, for example lowerRoman. A non-decimal format wins over a numeric picture switch, because a roman or alphabetic page number has no digits to place. NUMPAGES and SECTIONPAGES are decimal unless the field states a picture. There is no authoring UI for pgNumType yet.',
+      'Section numbering start, format, chapter style, and chapter separator parse and serialize. PAGE fields in headers and footers honor the authored start and format, for example lowerRoman. A non-decimal format wins over a numeric picture switch, because a roman or alphabetic page number has no digits to place. NUMPAGES and SECTIONPAGES are decimal unless the field states a picture. There is no authoring UI for pgNumType yet.',
   },
 
   // --- Review ---------------------------------------------------------------
@@ -855,7 +856,7 @@ export const wordFeatures: WordFeature[] = [
     name: 'PAGE / NUMPAGES / SECTIONPAGES fields',
     category: 'fields',
     editing: 'partial',
-    rendering: 'full',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
@@ -873,15 +874,40 @@ export const wordFeatures: WordFeature[] = [
       'Insert a body TOC from the shared Insert menu, then refresh it from the document headings. A refresh can update the page numbers only. Tab leaders, section-formatted page numbers, and bookmark links all work. The generated rows are read-only navigation links.',
   },
   {
+    id: 'fields.cross-references',
+    name: 'REF and NOTEREF cross-references',
+    category: 'fields',
+    editing: 'partial',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'REF resolves bookmark text and numbered paragraph references in the body, footnotes, and endnotes. The editor supports the \\r, \\w, \\n, \\t, \\h, and \\* MERGEFORMAT switches. The \\r switch uses the same full-context number as \\w, and \\t needs a numbering switch. Bookmark text stops at the target paragraph boundary. NOTEREF resolves bookmarked note numbers with section formats and eachSect restarts. Unsupported switches, missing targets, bullet targets, eachPage note restarts, and custom note marks keep the saved result. Save refreshes calibrated, writable body and note results as one undo step. Header, footer, and text-box results keep their saved values.',
+    docsLink: '/docs/2.x/guides/fields',
+  },
+  {
+    id: 'fields.autonum',
+    name: 'AUTONUM field numbers',
+    category: 'fields',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'AUTONUM, AUTONUMLGL, and AUTONUMOUT generate separate document-order sequences. They do not restart by heading context. The \\* switch supports Arabic, alphabetic, Roman, ordinal, cardinal text, ordinal text, and hexadecimal formats. The \\e switch removes the trailing period. Unsupported switches produce no generated value. Save does not add result runs.',
+    docsLink: '/docs/2.x/guides/fields',
+  },
+  {
     id: 'fields.other-codes',
-    name: 'Other field codes (DATE, REF, MERGEFIELD...)',
+    name: 'Other field codes (DATE, SEQ, MERGEFIELD...)',
     category: 'fields',
     editing: 'none',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The last computed result displays for a complex field and for w:fldSimple, and the field codes round-trip untouched. SYMBOL renders its character from the instruction, with the \\f font and \\s size honored. MACROBUTTON and GOTOBUTTON render their display text; the macro never runs and the jump never fires. A field code under a tracked edit still renders: w:delInstrText is read when no live instruction remains. Painted results carry Word-like grey field shading. A legacy form field always shades unless w:doNotShadeFormData is set; other fields follow the fieldShading option (never, when-selected, always). The editor never executes a field instruction. TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and DOCPROPERTY for those names render from the document metadata in docProps, capped and sanitized. DATE-valued properties stay inert. DATE, TIME, and FILENAME are not evaluated. REF and SEQ display only their cached result; AUTONUM, LISTNUM, and EQ are not evaluated.',
+      'The saved result displays for a complex field and for w:fldSimple. Field codes round-trip unchanged. SYMBOL renders its character with the requested font and size. MACROBUTTON and GOTOBUTTON render display text without running the macro or jump. TITLE, AUTHOR, SUBJECT, KEYWORDS, LASTSAVEDBY, COMMENTS, and matching DOCPROPERTY fields render sanitized document metadata. DATE-valued properties stay inert. DATE, TIME, FILENAME, SEQ, LISTNUM, and EQ do not calculate a new value. The editor never runs macros, DDE instructions, or external include instructions.',
+    docsLink: '/docs/2.x/guides/fields',
   },
   {
     id: 'fields.citations',
@@ -999,7 +1025,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'premium',
     docsLink: '/docs/2.x/pro/collaboration',
     notes:
-      'Yjs replicates text, formatting, document structure, review content, tables of contents, and custom nodes. Presence includes participants, carets, and cross-paragraph selections. Each participant can undo only their edits. Use WebRTC, Hocuspocus, or another Yjs 13 provider. Optional offline editing merges buffered changes after reconnection. Applying an edited ProseMirror document is unavailable while a replica is attached.',
+      'Yjs replicates text, formatting, document structure, review content, tables of contents, notes, headers, footers, drawings, and custom nodes. Presence includes participants, carets, and cross-paragraph selections. Each participant can undo only their edits. One simultaneous run-formatting split converges without duplicate text. A later split after one concurrent run-formatting round can duplicate text. Replicas still converge. Use WebRTC, Hocuspocus, or another Yjs 13 provider. Optional offline editing merges buffered changes after reconnection. Applying an edited ProseMirror document is unavailable while a replica is attached.',
   },
   {
     id: 'collab.find-replace',
@@ -1015,12 +1041,12 @@ export const wordFeatures: WordFeature[] = [
     id: 'collab.clipboard',
     name: 'Rich copy/paste (HTML clipboard)',
     category: 'collaboration',
-    editing: 'full',
+    editing: 'partial',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Copy writes plain text and HTML with an embedded document fragment; paste restores styles, lists, tables, links, images, and footnotes. Sections, headers, footers, and comments do not travel on the clipboard.',
+      'Copy writes plain text and HTML with an embedded document fragment. Pasting that fragment restores styles, lists, tables, links, images, footnotes, and endnotes. External HTML does not restore notes. Sections, headers, footers, and comments do not travel on the clipboard. Suggesting mode and non-body scopes use plain-text paste.',
   },
   {
     id: 'collab.undo-redo',
@@ -1033,13 +1059,13 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'collab.i18n',
-    name: 'Editor UI in 9 languages',
+    name: 'Editor UI in 10 languages',
     category: 'collaboration',
     editing: 'full',
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'en, de, fr, he, hi, pl, pt-BR, tr, zh-CN via @docx-editor.dev/i18n.',
+    notes: 'de, en, fr, he, hi, id, pl, pt-BR, tr, and zh-CN via @docx-editor.dev/i18n.',
     docsLink: '/docs/2.x/i18n',
   },
   {

@@ -1,11 +1,12 @@
 ---
-title: 'Headers & footers'
+title: 'Headers and footers'
 description: 'Edit DOCX headers and footers in place, insert page fields, and use per-section first-page and even-page variants.'
 category: 'Guides'
 seoTitle: 'Headers, footers, and watermarks'
 ---
 
-Headers and footers render on every page exactly where Word puts them, and they are edited in place. There is no separate header dialog: double-click the header or footer area and type.
+Headers and footers render in their Word page positions. Double-click the
+header or footer area to edit it in place.
 
 ## Editing
 
@@ -15,17 +16,31 @@ While editing, a separator bar labels the region (Header or Footer) and shows an
 
 - **Insert current page number** inserts a PAGE field.
 - **Insert total page count** inserts a NUMPAGES field.
+- **Insert section page count** inserts a SECTIONPAGES field.
 - **Remove header/footer** clears the region.
 
 Press Escape or click the close action to save and leave header/footer editing.
 
-## PAGE and NUMPAGES fields
+## Page-number fields
 
-Page-number fields are stored as real Word fields, not static text. The page view renders the resolved value on each page (page 3 of a 10-page document shows "3" and "10"), values update as the document reflows, and the fields round-trip to OOXML so Word continues to evaluate them as fields.
+`PAGE`, `NUMPAGES`, and `SECTIONPAGES` stay as Word fields. The page view updates
+their values when the document reflows.
+
+`PAGE` shows the displayed page number. It honors the section start and format
+in `w:pgNumType`. `NUMPAGES` shows the document page count. `SECTIONPAGES` shows
+the page count for the current section.
 
 A "Page X of Y" footer is the two inserts with literal text between them: type the text "Page ", insert the page number, type " of " with the surrounding spaces, insert the total page count.
 
-A field can also carry a numeric picture switch, such as `PAGE \# 0#`, which pads page 2 to `02`. In a header or footer, the editor evaluates the picture against the computed value, so a stale result saved into the file never reaches the page. In the body, a field that has a cached result keeps painting it until you update the field. Pictures support digit placeholders, a grouping comma, and literal text.
+A page-number field can carry a numeric picture switch. For example,
+`PAGE \# 0#` pads page 2 to `02`.
+
+The editor applies the picture to the computed header or footer value. A saved
+result does not replace that computed value. Pictures support digit placeholders,
+a grouping comma, and literal text.
+
+Other fields use separate evaluation rules. See
+[Fields and cross-references](/docs/2.x/guides/fields).
 
 ## Per-section headers and footers
 

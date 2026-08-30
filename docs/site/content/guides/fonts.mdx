@@ -1,15 +1,16 @@
 ---
 title: 'Fonts and measurement'
-description: 'Resolve fonts for Word-accurate line wrapping and pagination with embedded fonts, metric-compatible substitutes, or app-supplied files.'
+description: 'Resolve fonts for Word-accurate line wrapping and pagination with embedded fonts, open-licensed substitutes, or app-supplied files.'
 category: 'Guides'
 seoTitle: 'Fonts and text measurement'
 ---
 
-The editor uses HarfBuzz when it has usable font bytes. Without them, it uses a
-fixed-width estimate.
+The editor uses HarfBuzz when it has usable font bytes. Without them, a browser
+uses canvas measurement when available. Other environments use fixed
+measurement.
 
-The document still opens with fixed measurement. Line wraps and page breaks can
-differ from Word.
+The document still opens with fallback measurement. Neither fallback guarantees
+Word-compatible line wraps or page breaks.
 
 ## Start here
 
@@ -47,11 +48,19 @@ touches the network, and no origin is on by default.
 | `defaultFonts()`           | No                           | All 20 faces of the five defaults, every time       | Uses metric-compatible substitutes |
 | `googleFonts()`            | Yes, for catalogued families | The catalog families in use, plus the default face  | Uses the fetched faces             |
 | `loadFonts` with your URLs | Only when your code calls it | The URLs you list                                   | Uses admitted files                |
-| No usable source           | No                           | Nothing                                             | Fixed-width estimate               |
+| No usable source           | No                           | Nothing                                             | Canvas or fixed fallback           |
 
 Embedded fonts load automatically. The editor registers them under internal
 aliases. A document cannot replace a page-wide font family used by your
 application.
+
+### Understand the font notice
+
+The packaged font notice lists rendered document families without an available
+compatible face. It excludes metric-compatible substitutions.
+
+The notice also excludes font declarations that rendered text does not use. The
+font picker can still list those declared families.
 
 ## Load Word-compatible defaults
 
@@ -129,6 +138,16 @@ With `defaultFonts`, `useDocxSource` holds `document` back until the fonts
 settle, so the reader never sees the text reflow. An on-demand resolver has
 nothing to hold for: the families it answers about come from the parse, so the
 bytes have to go through first.
+
+If you load default bytes separately, pass them to the paint-side installer.
+This avoids a second request for the same font files:
+
+```ts
+import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
+
+const loaded = await loadDefaultFonts();
+await installDefaultFontFaces({ loaded: loaded.sources });
+```
 
 ## Load your own fonts
 

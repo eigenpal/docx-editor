@@ -64,6 +64,15 @@ const fragment = await defaultFonts(); // or { families: ['Calibri'] }
 await installDefaultFontFaces();
 ```
 
+If you call `loadDefaultFonts()`, reuse its bytes for paint registration:
+
+```ts
+import { installDefaultFontFaces, loadDefaultFonts } from '@docx-editor.dev/fonts';
+
+const loaded = await loadDefaultFonts();
+await installDefaultFontFaces({ loaded: loaded.sources });
+```
+
 Nothing loads until you call one of these: importing the package fetches no bytes, and
 the editor engine never calls in here on its own.
 

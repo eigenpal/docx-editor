@@ -10,17 +10,30 @@ Releases follow the canonical [`changesets/action@v1`](https://github.com/change
 
 ## Packages
 
-| Package                       | Path                  | Published?               |
-| ----------------------------- | --------------------- | ------------------------ |
-| `@docx-editor.dev/react`      | `packages/react`      | ✅                       |
-| `@docx-editor.dev/editor-api` | `packages/editor-api` | ✅                       |
-| `@docx-editor.dev/vue`        | `packages/vue`        | ✅                       |
-| `@docx-editor.dev/i18n`       | `packages/i18n`       | ✅ (shared locale JSONs) |
-| `@docx-editor.dev/nuxt`       | `packages/nuxt`       | ✅                       |
+| Package                       | Path                  | Published |
+| ----------------------------- | --------------------- | --------- |
+| `@docx-editor.dev/core`       | `packages/core`       | Yes       |
+| `@docx-editor.dev/react`      | `packages/react`      | Yes       |
+| `@docx-editor.dev/editor-api` | `packages/editor-api` | Yes       |
+| `@docx-editor.dev/vue`        | `packages/vue`        | Yes       |
+| `@docx-editor.dev/nuxt`       | `packages/nuxt`       | No        |
+| `@docx-editor.dev/i18n`       | `packages/i18n`       | Yes       |
+| `@docx-editor.dev/pro`        | `packages/pro`        | Yes       |
+| `@docx-editor.dev/fonts`      | `packages/fonts`      | Yes       |
 
-Four packages use Apache 2.0, while `@docx-editor.dev/editor-api` uses the [EigenPal Pro License](../packages/editor-api/LICENSE.md) with `LicenseRef-EigenPal-Pro-Evaluation-1.0` in its manifest.
+`@docx-editor.dev/editor-api` and `@docx-editor.dev/pro` use the EigenPal Pro
+License. See the [editor-api terms](../packages/editor-api/LICENSE.md) and
+[Pro terms](../packages/pro/LICENSE.md). Their manifests use
+`LicenseRef-EigenPal-Pro-Evaluation-1.0`.
 
-All five packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@docx-editor.dev/i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@docx-editor.dev/i18n` (the consumers pick it up at build time).
+Core, React, Vue, Nuxt, and i18n use Apache 2.0. The fonts package uses
+`Apache-2.0 AND OFL-1.1 AND LicenseRef-GUST-Font-License`.
+
+All eight packages are in a fixed group in `.changeset/config.json`. They always
+use the same version, including the private Nuxt package.
+
+A changeset only declares one package bump. The other packages follow that
+bump. `@docx-editor.dev/i18n` changes use an i18n changeset.
 
 ## Author flow (every contributor, every code PR)
 
@@ -30,13 +43,13 @@ git add .changeset/*.md
 # ... commit with the rest of your PR
 ```
 
-Skip only for **test-only / docs-only / CI-only** PRs (no published-package code changed). When in doubt, add one — an extra patch entry is harmless; a missing entry ships invisibly.
+Skip a changeset for test-only, documentation-only, and CI-only pull requests.
 
 ### Bump levels (semver)
 
-- **patch** — bug fix, internal refactor, no public API change. **Default — use this unless you have a clear reason not to.**
-- **minor** — new public API (additive, backward compatible).
-- **major** — breaking change to existing public API.
+- **patch**: Bug fix or internal change without a public API change. Use this by default.
+- **minor**: Additive public API change.
+- **major**: Breaking public API change.
 
 `changeset version` resolves to the **highest bump** across all pending changesets, so a single `minor` from another PR will correctly bump everything. You don't need to coordinate bumps with other authors.
 

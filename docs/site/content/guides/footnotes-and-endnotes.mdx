@@ -1,0 +1,71 @@
+---
+title: 'Footnotes and endnotes'
+description: 'Insert, edit, convert, and delete DOCX notes while preserving Word numbering and page placement.'
+category: 'Guides'
+seoTitle: 'DOCX footnotes and endnotes'
+---
+
+The editor renders Word footnotes and endnotes in their document locations. You
+can edit note text through the same document surface.
+
+## Insert a note
+
+Open the **Insert** menu. Select **Footnote** or **Endnote**.
+
+The editor adds a reference at the caret and creates the matching note body. It
+then opens that note body for editing.
+
+React and Vue use the same `insert.footnote` and `insert.endnote` chrome slots.
+Custom chrome can run these shared commands.
+
+## Edit a note
+
+Select a note reference to enter its note scope. Text, lists, tables, content
+controls, pictures, fonts, comments, and bookmarks work inside that scope.
+
+Comments need the review module and an EigenPal Pro License.
+
+Use `useNoteScopeState()` in React or Vue to read the active note scope.
+
+`DocxEditor.NotesChrome` and `DocxEditorNotesChrome` provide packaged note
+controls for React and Vue.
+
+## Convert or delete a note
+
+The note controls can convert a footnote to an endnote. They can also convert an
+endnote to a footnote.
+
+In edit mode, deleting a note removes its reference and note body together. The
+editor updates later note numbers after the operation.
+
+Suggesting mode refuses direct note deletion. Delete the reference to propose
+the deletion.
+
+The Editing API can enumerate, read, navigate, and delete notes. Use
+`document.footnotes` and `document.endnotes`.
+
+## Placement and pagination
+
+The editor supports Word note positions such as page bottom, beneath text,
+section end, and document end.
+
+A footnote stays with its reference line when both fit on one page. The editor
+moves that line when the note cannot fit below it.
+
+A note splits only when it is taller than the available note column. Split note
+pages keep separate rectangles for painting and pointer input.
+
+## Limits
+
+Note editing has these limits:
+
+- Notes inside headers and footers are not supported.
+- Suggesting mode tracks the inserted note reference.
+- Suggesting mode requires reference deletion to propose note removal.
+- Imported note revisions remain part of the round-trip document.
+
+## Next steps
+
+- [Fields and cross-references](/docs/2.x/guides/fields): Review `NOTEREF` behavior.
+- [Tracked changes](/docs/2.x/pro/tracked-changes): Review revision support in other stories.
+- [Editing API compatibility](/docs/2.x/editor-api/office-js-api): Use note collections in code.

@@ -61,7 +61,7 @@ npm install @docx-editor.dev/pro
 # EigenPal Pro License: https://www.docx-editor.dev/pricing
 npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 
-# Metric-compatible substitutes for Word's default fonts (optional)
+# Open-licensed substitutes for common Word fonts (optional)
 npm install @docx-editor.dev/fonts
 ```
 
@@ -173,7 +173,9 @@ Use the guide for your framework:
 The editor uses font bytes to measure line wraps and page breaks.
 It loads embedded document fonts without configuration.
 Some documents reference Word default fonts without embedding them.
-For these documents, `@docx-editor.dev/fonts` supplies metric-compatible substitutes.
+For these documents, `@docx-editor.dev/fonts` supplies open-licensed substitutes.
+Five families match advance widths. The Century Gothic substitute stays within
+1% in the package fidelity check.
 
 `packagedFonts()` supplies them per document: the editor calls it after parsing
 with the families that file declares. It loads a family when the document names

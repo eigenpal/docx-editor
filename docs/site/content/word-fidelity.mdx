@@ -85,7 +85,7 @@ often affect document evaluation.
 | Feature             | Rendering                                                                                                              | Editing | Round-trip |
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------- | ---------- |
 | Anchored text boxes | Shows read-only content inside the authored extent. Linked chains, autofit, and rotation can clip or use placeholders. | No      | Preserved  |
-| Drawing shapes      | Reserves unsupported geometry with a placeholder.                                                                      | No      | Preserved  |
+| Drawing shapes      | Renders solid rectangles, ellipses, bounded polygons, and groups. Other shapes use a placeholder.                      | No      | Preserved  |
 | WMF and EMF         | Rasterizes supported files. Other files keep their extent with a placeholder.                                          | No      | Full       |
 
 ## Rendering and pagination
@@ -129,14 +129,16 @@ with the source document.
 
 ## Security and data flow
 
-| Concern                          | Behavior                                                                   |
-| -------------------------------- | -------------------------------------------------------------------------- |
-| Browser uploads                  | The editor package does not upload documents or call a conversion service. |
-| Macros                           | The editor preserves VBA payloads but never executes them.                 |
-| OLE and field instructions       | The editor keeps them inert.                                               |
-| Server editing                   | Your host controls where DOCX data runs.                                   |
-| Browser automation               | Controls an editor already in the page.                                    |
-| External artificial intelligence | `@docx-editor.dev/editor-api` includes no model integration or transport.  |
+| Concern                          | Behavior                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Browser uploads                  | The editor package does not upload documents or call a conversion service.                             |
+| Macros                           | The editor preserves VBA payloads but never executes them.                                             |
+| OLE                              | The editor preserves OLE payloads but never executes or renders them.                                  |
+| Calculated fields                | Supported calculated fields update display text only. Macros, DDE, and external includes remain inert. |
+| Hyperlinks                       | Allowlisted targets open only after a user gesture.                                                    |
+| Server editing                   | Your host controls where DOCX data runs.                                                               |
+| Browser automation               | Controls an editor already in the page.                                                                |
+| External artificial intelligence | `@docx-editor.dev/editor-api` includes no model integration or transport.                              |
 
 Your application controls any data sent to another service or model.
 
@@ -168,4 +170,5 @@ The Pro packages are licensed under the EigenPal Pro License, and you can compar
 
 - [Quickstart](/docs/2.x/quickstart): Load, edit, and save a DOCX file.
 - [Architecture](/docs/2.x/core/architecture): Review the engine pipeline.
+- [Fields and cross-references](/docs/2.x/guides/fields): Review field evaluation limits.
 - [Tracked changes](/docs/2.x/pro/tracked-changes): Review revision behavior.
