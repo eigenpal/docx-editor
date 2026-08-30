@@ -72,6 +72,7 @@ describe('run and paragraph mapping', () => {
     expect(docXml).toContain('<w:b/>');
     expect(docXml).toContain('Alpha');
     expect(docXml).toContain('Beta');
+    expect(docXml).not.toContain('<w:pStyle');
     expect(lastMarkCovered).toBe(false);
   });
 
@@ -81,15 +82,16 @@ describe('run and paragraph mapping', () => {
     expect(docXml).not.toContain('<w:b/>');
   });
 
-  test('a fragment-only Word heading uses its target style and paragraph mark', () => {
-    const html =
-      '<!--StartFragment--><h2><span style="mso-ansi-language:PL">' +
-      'Target heading<o:p></o:p></span></h2><!--EndFragment-->';
-    const { docXml, lastMarkCovered } = openFragment(html);
-    expect(docXml).toContain('<w:pStyle w:val="Heading2"/>');
-    expect(docXml).not.toContain('w:sz w:val="52"');
-    expect(docXml).not.toContain('<w:b/>');
-    expect(lastMarkCovered).toBe(true);
+  test('fragment-only Word Heading 1 through 4 use their target styles', () => {
+    for (const level of [1, 2, 3, 4]) {
+      const html =
+        `<!--StartFragment--><h${level}><span style="mso-ansi-language:PL">` +
+        `Heading ${level}<o:p></o:p></span></h${level}><!--EndFragment-->`;
+      const { docXml, lastMarkCovered } = openFragment(html);
+      expect(docXml).toContain(`<w:pStyle w:val="Heading${level}"/>`);
+      expect(docXml).not.toContain('<w:b/>');
+      expect(lastMarkCovered).toBe(true);
+    }
   });
 
   test('Word desktop and online heading classes map to target styles', () => {
