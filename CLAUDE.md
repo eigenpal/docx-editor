@@ -381,7 +381,10 @@ fails until it gets an attribution path; `packages/fonts` carries OFL text in
 ## Conventions
 
 - **PRs** — short factual title (conventional-commit prefix); body is the minimum
-  the diff doesn't show, often one sentence. No `@`-mentions, unrelated issue
+  the diff doesn't show, often one sentence. A PR that resolves an issue MUST end
+  its BODY with `Fixes #N` — GitHub links and auto-closes only from closing
+  keywords in the body or in commits, never from the title, so a title-only
+  `(fixes #N)` leaves the issue open after merge. No `@`-mentions, unrelated issue
   numbers, file lists, tooling footers or emojis. Write the body in the
   [Google developer documentation style](https://developers.google.com/style),
   the same guide the docs site follows: second person, active voice, present
