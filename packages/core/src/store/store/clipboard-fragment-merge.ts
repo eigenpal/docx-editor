@@ -675,15 +675,23 @@ export function mergeFragmentIntoPackage(
   // Referenced note ids per kind: body blocks first, then the transitive closure
   // over the fragment's own note bodies — a shipped note's citations must
   // transplant too, or their ids would pass through the rewrite unmapped.
+  // One id→element index per kind, so the closure stays linear in refs + notes.
+  const noteIndexByKind: Partial<Record<'footnote' | 'endnote', Map<string, OoxmlNode>>> = {};
   const referencedByKind = noteReferenceClosure(blocks, (kind, id) => {
-    const part = resolveNotesPart(fragment, kind);
-    if (!part || !isElementNode(part.root)) return null;
-    for (const child of part.root.children) {
-      if (isElementNode(child) && child.kind === 'note' && attributeValueOf(child, 'id') === id) {
-        return child;
+    let index = noteIndexByKind[kind];
+    if (index === undefined) {
+      index = new Map<string, OoxmlNode>();
+      noteIndexByKind[kind] = index;
+      const part = resolveNotesPart(fragment, kind);
+      if (part && isElementNode(part.root)) {
+        for (const child of part.root.children) {
+          if (!isElementNode(child) || child.kind !== 'note') continue;
+          const noteId = attributeValueOf(child, 'id');
+          if (noteId !== undefined && !index.has(noteId)) index.set(noteId, child);
+        }
       }
     }
-    return null;
+    return index.get(id) ?? null;
   });
 
   for (const noteKind of ['footnote', 'endnote'] as const) {

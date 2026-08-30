@@ -58,9 +58,11 @@ export function wordParagraphStyleId(element: Element, wordHtml: boolean): strin
 
 export type HtmlParagraphAlign = 'left' | 'center' | 'right' | 'both';
 
-/** Cap on concatenated `<style>` text scanned for Word class `text-align`. */
-export const WORD_STYLE_TEXT_MAX = 32_768;
-const WORD_STYLE_RULE_MAX = 256;
+/** Cap on `<style>` text scanned for Word class `text-align`. Generous — a
+ *  corporate template routinely passes 32 KiB, and skipping only part of a
+ *  stylesheet could apply a stale alignment a skipped block overrides. */
+export const WORD_STYLE_TEXT_MAX = 262_144;
+const WORD_STYLE_RULE_MAX = 4_096;
 const WORD_STYLE_SELECTOR_MAX = 256;
 const WORD_STYLE_BLOCK_MAX = 2_048;
 const WORD_STYLE_SELECTOR_LIST_MAX = 8;
@@ -213,19 +215,20 @@ export function wordClassAlignmentsFromStyleText(
 }
 
 /** `textContent` of inert `<style>` elements, capped, never `innerHTML`.
- *  Degrades per ELEMENT: an oversized or malformed style element contributes
- *  nothing, but the rest still scan — a style-heavy corporate template must not
- *  silently lose every class-based alignment while the list scan still works. */
+ *  FAIL-CLOSED: if any style element is oversized or malformed, the whole scan
+ *  yields nothing — applying half a stylesheet could keep a stale alignment a
+ *  skipped later block overrides. The generous cap keeps that case rare. */
 export function wordClassAlignmentsFromDocument(
   doc: Document
 ): ReadonlyMap<string, HtmlParagraphAlign> {
   const out = new Map<string, HtmlParagraphAlign>();
   const styles = doc.getElementsByTagName('style');
-  for (let index = 0; index < styles.length && index < 16; index += 1) {
+  if (styles.length > 16) return new Map();
+  for (let index = 0; index < styles.length; index += 1) {
     const raw = styles[index]?.textContent ?? '';
-    if (raw.length > WORD_STYLE_TEXT_MAX) continue;
+    if (raw.length > WORD_STYLE_TEXT_MAX) return new Map();
     const scan = scanWordClassAlignments(raw);
-    if (!scan.ok) continue;
+    if (!scan.ok) return new Map();
     for (const [className, jc] of scan.alignments) {
       out.set(className, jc);
     }

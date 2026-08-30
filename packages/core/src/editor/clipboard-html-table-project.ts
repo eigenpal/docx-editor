@@ -143,7 +143,15 @@ export function projectHtmlTable(
         continue;
       }
       sourceAt += 1;
-      const span = Math.min(htmlSpanOf(cell, 'colspan', 63), columns - column);
+      // The span clamps at the table edge AND at the next carried column: jumping a
+      // carried column would suppress its w:vMerge continuation and dangle the merge.
+      let span = Math.min(htmlSpanOf(cell, 'colspan', 63), columns - column);
+      for (let ahead = column + 1; ahead < column + span; ahead += 1) {
+        if (carriedNow[ahead] !== null) {
+          span = ahead - column;
+          break;
+        }
+      }
       const rowSpan = htmlSpanOf(cell, 'rowspan', 1000);
       if (rowSpan > 1) carry[column] = { remaining: rowSpan - 1, span };
       cells.push(

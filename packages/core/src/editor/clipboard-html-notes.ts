@@ -8,19 +8,20 @@ export interface ClipboardNoteDefinition {
   readonly element: Element;
 }
 
-const NOTE_ID = /^(ftn|edn)([1-9]\d{0,4})$/i;
+const NOTE_ID = /^(ftn|edn)([1-9]\d{0,9})$/i;
 const NOTE_PREFIX: Readonly<Record<ClipboardNoteKind, string>> = {
   footnote: 'ftn',
   endnote: 'edn',
 };
 
 /** An id token counts only when its prefix matches the note kind: `ftn` ids never
- *  alias endnotes and vice versa. */
+ *  alias endnotes and vice versa. The cap matches the store's NOTE_ID_MAX (int32),
+ *  which striped collab ids can reach. */
 function noteIdOf(raw: string | null, kind: ClipboardNoteKind): number | null {
   const match = raw === null ? null : NOTE_ID.exec(raw);
   if (!match || match[1]!.toLowerCase() !== NOTE_PREFIX[kind]) return null;
   const id = Number.parseInt(match[2]!, 10);
-  return id <= 32_767 ? id : null;
+  return id <= 0x7fffffff ? id : null;
 }
 
 export function clipboardNoteReference(

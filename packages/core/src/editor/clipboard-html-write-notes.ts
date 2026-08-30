@@ -14,12 +14,14 @@ import type { RenderContext } from './clipboard-html-write.ts';
 
 export type WordNoteKind = 'footnote' | 'endnote';
 
-/** One id parser for every site, so the 32767 cap cannot drift: a collected id the
- *  renderer would refuse would leave a dead anchor in the copied HTML. */
+/** One id parser for every site, so the cap cannot drift: a collected id the
+ *  renderer would refuse would leave a dead anchor in the copied HTML. The store
+ *  legitimately allocates ids up to int32 (striped collab ids), so the cap matches
+ *  its NOTE_ID_MAX. */
 function wmlNoteIdOf(raw: string | undefined): number | null {
-  if (raw === undefined || !/^[1-9]\d{0,4}$/.test(raw)) return null;
+  if (raw === undefined || !/^[1-9]\d{0,9}$/.test(raw)) return null;
   const id = Number.parseInt(raw, 10);
-  return id <= 32_767 ? id : null;
+  return id <= 0x7fffffff ? id : null;
 }
 
 /** The note ids a notes part actually defines. */

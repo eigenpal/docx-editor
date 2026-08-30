@@ -187,7 +187,9 @@ function collectInline(
       });
       return;
     }
-    const collapsed = raw.replace(/\s+/g, ' ');
+    // Collapse ASCII whitespace only: an NBSP is real content Word preserves, and
+    // JS `\s` would fold it into a plain breakable space.
+    const collapsed = raw.replace(/[ \t\r\n\f\v]+/g, ' ');
     if (collapsed.length === 0) return;
     if (collapsed === ' ' && runs.length === 0) return; // Whitespace between blocks.
     runs.push(textRunXml(collapsed, ctx.run));
@@ -620,6 +622,19 @@ function projectFlow(
     }
     collectInline(node, depth, ctx, pending, p);
   }
+  // An explicit paragraph holding only furniture (a bookmark in an empty <p>)
+  // keeps its furniture: the fold-into-previous in flush() would land the anchor
+  // one paragraph early and the forced paragraph would emit empty.
+  if (
+    forceEmit &&
+    out.length === before &&
+    pending.length > 0 &&
+    !pending.some((piece) => piece.includes('<w:r'))
+  ) {
+    out.push(paragraphXml(flushPara, pending));
+    pending = [];
+    p.lastMarkCovered = ctx.paragraphMarkCovered;
+  }
   flush();
   if (ownsPageBreakState && pageBreak.pending) {
     appendPageBreak(out);
@@ -629,8 +644,6 @@ function projectFlow(
   }
   // An explicit block emits its paragraph even when empty.
   if (forceEmit && out.length === before) {
-    // Leftover furniture-only pending (a bookmark in an explicit empty paragraph)
-    // belongs to this forced paragraph.
     out.push(paragraphXml(flushPara, pending));
     pending = [];
     p.lastMarkCovered = ctx.paragraphMarkCovered;
@@ -789,16 +802,19 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     if (projection.truncated || noteBlocks.length === 0) {
       // The budget starved this walk mid-note: un-claim this and every remaining
       // definition so the body walk keeps their text and no live reference points
-      // at a blank or truncated note. References already emitted into EARLIER
-      // projected note bodies are stripped, so no note ships a dangling citation.
+      // at a blank or truncated note. One alternation pattern then strips every
+      // dropped citation from kept note bodies in a single sweep.
+      const droppedMarks: string[] = [];
       for (let drop = index; drop < claimed.length; drop += 1) {
         const dropped = claimed[drop]!;
         definedNotes[dropped.kind].delete(dropped.id);
         definedNoteElements.delete(dropped.element);
         projection.notes[dropped.kind].delete(dropped.id);
+        droppedMarks.push(`<w:${dropped.kind}Reference w:id="${dropped.id}"/>`);
+      }
+      if (droppedMarks.length > 0) {
         const markPattern = new RegExp(
-          `<w:r>(?:<w:rPr>(?:(?!</w:r>)[\\s\\S])*?</w:rPr>)?` +
-            `<w:${dropped.kind}Reference w:id="${dropped.id}"/></w:r>`,
+          `<w:r>(?:<w:rPr>(?:(?!</w:r>)[\\s\\S])*?</w:rPr>)?(?:${droppedMarks.join('|')})</w:r>`,
           'g'
         );
         for (const keptKind of ['footnote', 'endnote'] as const) {

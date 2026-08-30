@@ -211,17 +211,20 @@ function toggleLevelValue(
   return value;
 }
 
-/** ECMA-376 §17.7.3 toggle semantics, matching `layout/style-cascade.ts`: direct
- *  formatting is absolute; otherwise the docDefaults base XORs with each style
- *  LEVEL (paragraph, character) that resolves the toggle to true. */
+/** ECMA-376 §17.7.3 toggle semantics, matching `layout/style-toggles.ts`: direct
+ *  formatting is absolute; a docDefaults-on toggle short-circuits ON regardless of
+ *  the style XOR; an explicit off at the nearest style level that states the
+ *  property wins; otherwise the style levels XOR. */
 export function runToggleOn(layers: RunPropertyLayers, localName: string): boolean {
   const direct = layers.direct ? wmlChild(layers.direct, localName) : null;
   if (direct) {
     const val = wmlVal(direct);
     return !(val === '0' || val === 'false' || val === 'off' || val === 'none');
   }
-  let on = toggleLevelValue(layers.defaults, localName) ?? false;
-  if (toggleLevelValue(layers.paragraphLevel, localName) === true) on = !on;
-  if (toggleLevelValue(layers.characterLevel, localName) === true) on = !on;
-  return on;
+  if (toggleLevelValue(layers.defaults, localName) === true) return true;
+  const paragraph = toggleLevelValue(layers.paragraphLevel, localName);
+  const character = toggleLevelValue(layers.characterLevel, localName);
+  if (character === false) return false;
+  if (character === undefined && paragraph === false) return false;
+  return (paragraph === true) !== (character === true);
 }

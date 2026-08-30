@@ -443,10 +443,19 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
   return `<img src="${dataUri}"${size}>`;
 }
 
-/** Advance the field stack over content that renders nothing (deleted regions). */
+/** Advance the field stack over content that renders nothing (deleted regions).
+ *  Walks EXACTLY what the renderer walks: a fldChar inside a drawing's textbox or
+ *  an SDT's properties never reaches renderRun, so counting it would desync the
+ *  balance probe from the render pass and blank everything after it. */
 function advanceFieldState(node: OoxmlElement, fields: FieldState): void {
   for (const child of node.children) {
     if (!isElement(child)) continue;
+    if (child.kind === 'drawing') continue;
+    if (child.kind === 'contentControl') {
+      const content = child.children.find((inner) => inner.kind === 'contentControlContent');
+      if (content && isElement(content)) advanceFieldState(content, fields);
+      continue;
+    }
     if (child.kind === 'fldChar') {
       const type = attributeValueOf(child, 'fldCharType', WML_NAMESPACE_URI);
       if (type === 'begin') fields.stack.push('instr');

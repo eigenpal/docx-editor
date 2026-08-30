@@ -164,10 +164,17 @@ export function withoutDanglingNoteReferences(
   const children: OoxmlNode[] = [];
   let changed = false;
   for (const child of node.children) {
-    if (child.kind === 'noteReference') {
+    // Match by NAME, not just typed kind: a demoted-to-generic w:footnoteReference
+    // would bypass the id rewrite entirely, so only a TYPED reference with a mapped
+    // id may stay — everything else in this shape is stripped.
+    const isNoteReferenceShaped =
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      (child.localName === 'footnoteReference' || child.localName === 'endnoteReference');
+    if (isNoteReferenceShaped) {
       const map = child.localName === 'footnoteReference' ? footnoteIdMap : endnoteIdMap;
       const id = attributeValueOf(child, 'id');
-      if (id === undefined || !map.has(id)) {
+      if (child.kind !== 'noteReference' || id === undefined || !map.has(id)) {
         changed = true;
         continue;
       }

@@ -159,13 +159,14 @@ export function wordNoteReferenceHtml(
   const rawId = attributeValueOf(node, 'id', WML_NAMESPACE_URI);
   const id =
     bodyKind === null
-      ? rawId !== undefined && /^[1-9]\d{0,4}$/.test(rawId)
+      ? rawId !== undefined && /^[1-9]\d{0,9}$/.test(rawId)
         ? Number.parseInt(rawId, 10)
         : undefined
       : noteBody?.id;
   if (id === undefined || !Number.isInteger(id) || id < 1) return '';
   if (bodyKind !== null && noteBody?.kind !== bodyKind) return '';
-  if (id > 32_767) return '';
+  // The store allocates ids up to int32 (striped collab ids); match its cap.
+  if (id > 0x7fffffff) return '';
   // A reference whose definition the package does not carry (a note referenced only
   // from another note's body, or a dangling id) renders nothing: a dead anchor
   // would skew visible ordinals and point at a nonexistent note on paste.
