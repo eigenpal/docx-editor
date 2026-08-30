@@ -633,9 +633,14 @@ function projectFlow(
           );
           continue;
         }
+        const beforeParagraph = out.length;
         projectParagraph(node, depth, ctx, p, out, pageBreak.pending);
-        pageBreak.pending = false;
-        pageBreak.skipSpacer = false;
+        // The pending break is consumed only when the paragraph actually emitted;
+        // a cap-truncated paragraph leaves it for the end-of-flow synthesis.
+        if (out.length > beforeParagraph) {
+          pageBreak.pending = false;
+          pageBreak.skipSpacer = false;
+        }
         continue;
       }
       if (tag === 'ol' || tag === 'ul') {
@@ -694,6 +699,13 @@ function projectFlow(
     out.push(paragraphXml(flushPara, pending));
     pending = [];
     p.lastMarkCovered = ctx.paragraphMarkCovered;
+  }
+  // Furniture the fold could not place (previous block is a table, or nothing
+  // followed) keeps its own paragraph — internal links point at these bookmarks.
+  if (pending.length > 0) {
+    out.push(paragraphXml(flushPara, pending));
+    pending = [];
+    p.lastMarkCovered = false;
   }
 }
 

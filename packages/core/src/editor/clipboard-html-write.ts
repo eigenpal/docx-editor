@@ -361,8 +361,10 @@ function listPlacementOf(
   let abstractId = ctx.numbering.numToAbstract.get(numId);
   if (abstractId === undefined) return null;
   // A level-less abstractNum can delegate through w:numStyleLink: the linked
-  // numbering STYLE names the numId whose abstract holds the real levels.
-  if ((ctx.numbering.levelFormats.get(abstractId)?.size ?? 0) === 0) {
+  // numbering STYLE names the numId whose abstract holds the real levels. Links
+  // can chain; the hop cap matches the layout resolver's.
+  for (let hop = 0; hop < 8; hop += 1) {
+    if ((ctx.numbering.levelFormats.get(abstractId)?.size ?? 0) > 0) break;
     const linkedStyle = ctx.numbering.styleLinks.get(abstractId);
     const style = linkedStyle === undefined ? undefined : ctx.styles.byId.get(linkedStyle);
     const linkedNumId = wmlVal(
@@ -370,7 +372,8 @@ function listPlacementOf(
     );
     const resolved =
       linkedNumId === undefined ? undefined : ctx.numbering.numToAbstract.get(linkedNumId);
-    if (resolved !== undefined) abstractId = resolved;
+    if (resolved === undefined || resolved === abstractId) break;
+    abstractId = resolved;
   }
   const level = Math.min(Math.max(parseIntValue(ilvl) ?? 0, 0), 8);
   const info = listLevelInfo(ctx, numId, abstractId, level);

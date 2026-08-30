@@ -33,7 +33,8 @@ export interface TableConditionalFormats {
 function tblLookFlag(tblLook: OoxmlElement | null, name: string, bit: number): boolean | null {
   if (tblLook === null) return null;
   const attr = attributeValueOf(tblLook, name, WML_NAMESPACE_URI);
-  if (attr !== undefined) return attr === '1' || attr === 'true';
+  // ST_OnOff: anything except an explicit off value is on, like the painter reads it.
+  if (attr !== undefined) return !(attr === '0' || attr === 'false' || attr === 'off');
   const raw = attributeValueOf(tblLook, 'val', WML_NAMESPACE_URI);
   if (raw === undefined || !/^[0-9A-Fa-f]{1,8}$/.test(raw)) return null;
   return (Number.parseInt(raw, 16) & bit) !== 0;

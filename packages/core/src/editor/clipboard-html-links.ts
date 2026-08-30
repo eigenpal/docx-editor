@@ -24,7 +24,10 @@ export function clipboardHyperlinkTarget(
   const href = rawTarget === undefined ? null : sanitizeHref(rawTarget);
   const anchor = clipboardBookmarkName(rawAnchor);
   if (href?.ok === true && href.href.length > 0) {
-    return `${href.href}${anchor !== null && !href.href.includes('#') ? `#${anchor}` : ''}`;
+    if (anchor === null) return href.href;
+    // Per ECMA-376 §17.16.22 the anchor names the location WITHIN the target, so
+    // it replaces any fragment the target itself carries.
+    return `${href.href.split('#')[0]}#${anchor}`;
   }
   return anchor === null ? null : `#${anchor}`;
 }

@@ -6,6 +6,8 @@
 // scan — no DOM, no regex over attacker-sized input — and the decoded bytes then face
 // `readOoxmlPackage`'s own zip/XML caps.
 
+import { clipboardBase64Of } from './clipboard-html-base64.ts';
+
 /** Decoded fragment payloads above this cap never reach the package reader. */
 export const MAX_FRAGMENT_ATTRIBUTE_DECODED_BYTES = 16 * 1024 * 1024;
 /** The attribute scan gives up beyond this many characters of HTML. */
@@ -19,19 +21,9 @@ const BASE64_INDEX: ReadonlyMap<string, number> = new Map(
   [...BASE64_ALPHABET].map((char, index) => [char, index])
 );
 
-function encodeBase64(bytes: Uint8Array): string {
-  let out = '';
-  for (let index = 0; index < bytes.length; index += 3) {
-    const a = bytes[index]!;
-    const b = index + 1 < bytes.length ? bytes[index + 1]! : 0;
-    const c = index + 2 < bytes.length ? bytes[index + 2]! : 0;
-    out += BASE64_ALPHABET[a >> 2]!;
-    out += BASE64_ALPHABET[((a & 0x03) << 4) | (b >> 4)]!;
-    out += index + 1 < bytes.length ? BASE64_ALPHABET[((b & 0x0f) << 2) | (c >> 6)]! : '=';
-    out += index + 2 < bytes.length ? BASE64_ALPHABET[c & 0x3f]! : '=';
-  }
-  return out;
-}
+// One encoder for the whole clipboard lane — the chunked implementation in
+// clipboard-html-base64.ts.
+const encodeBase64 = clipboardBase64Of;
 
 /** Strict bounded base64 decode; null on any malformed character or an oversized result. */
 function decodeBase64(value: string, maxBytes: number): Uint8Array | null {

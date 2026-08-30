@@ -65,11 +65,11 @@ const WORD_STYLE_SELECTOR_MAX = 256;
 const WORD_STYLE_BLOCK_MAX = 2_048;
 const WORD_STYLE_SELECTOR_LIST_MAX = 8;
 
+// Derived from the shared pair table so the alignment scan covers exactly the
+// classes the style mapping understands (plus MsoNormal, alignment-only).
 const WORD_PARAGRAPH_CLASSES: ReadonlySet<string> = new Set([
-  'MsoTitle',
-  'MsoSubtitle',
-  'MsoCaption',
-  'MsoQuote',
+  'MsoNormal',
+  ...WORD_CLASS_PARAGRAPH_STYLES.keys(),
   ...Array.from({ length: 9 }, (_, index) => `MsoHeading${index + 1}`),
   ...Array.from({ length: 9 }, (_, index) => `Heading${index + 1}`),
 ]);

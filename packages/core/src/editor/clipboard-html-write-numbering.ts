@@ -14,10 +14,16 @@ export interface HtmlNumberingIndex {
   readonly styleLinks: ReadonlyMap<string, string>;
 }
 
-/** Same 9999 clamp the layout lane's numbering index applies to `w:start`. */
+/** Same 0..9999 clamp the layout lane's numbering index applies to `w:start`. */
 function boundedStart(raw: string | undefined): number | null {
   if (raw === undefined || !/^\d{1,5}$/.test(raw)) return null;
-  return Math.min(Math.max(Number.parseInt(raw, 10), 1), 9_999);
+  return Math.min(Math.max(Number.parseInt(raw, 10), 0), 9_999);
+}
+
+/** Canonical decimal key for a file-supplied `w:ilvl` ('03' and '3' are one level). */
+function canonicalIlvl(raw: string | undefined): string | null {
+  if (raw === undefined || !/^\d{1,2}$/.test(raw)) return null;
+  return String(Number.parseInt(raw, 10));
 }
 
 export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIndex {
@@ -59,8 +65,8 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
         ) {
           continue;
         }
-        const ilvl = attributeValueOf(override, 'ilvl', WML_NAMESPACE_URI);
-        if (ilvl === undefined) continue;
+        const ilvl = canonicalIlvl(attributeValueOf(override, 'ilvl', WML_NAMESPACE_URI));
+        if (ilvl === null) continue;
         const start = boundedStart(wmlVal(wmlChild(override, 'startOverride')));
         if (start !== null) startOverrides.set(`${numId}:${ilvl}`, start);
         // A replacement `w:lvl` inside the override carries its own format/start.
@@ -91,12 +97,13 @@ export function htmlNumberingIndexOf(root: OoxmlElement | null): HtmlNumberingIn
       ) {
         continue;
       }
-      const ilvl = attributeValueOf(level, 'ilvl', WML_NAMESPACE_URI);
-      if (ilvl === undefined) continue;
+      const ilvl = canonicalIlvl(attributeValueOf(level, 'ilvl', WML_NAMESPACE_URI));
+      if (ilvl === null) continue;
       const format = wmlVal(wmlChild(level, 'numFmt'));
       const start = boundedStart(wmlVal(wmlChild(level, 'start')));
-      if (format !== undefined) formats.set(ilvl, format);
-      if (start !== null) starts.set(ilvl, start);
+      // First definition of a duplicated level wins, like the layout index.
+      if (format !== undefined && !formats.has(ilvl)) formats.set(ilvl, format);
+      if (start !== null && !starts.has(ilvl)) starts.set(ilvl, start);
     }
     levelFormats.set(abstractId, formats);
     levelStarts.set(abstractId, starts);

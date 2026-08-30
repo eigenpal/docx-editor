@@ -668,17 +668,42 @@ export function mergeFragmentIntoPackage(
   }
   const transplants: NoteTransplant[] = [];
 
-  for (const noteKind of ['footnote', 'endnote'] as const) {
-    const localName = noteKind === 'footnote' ? 'footnoteReference' : 'endnoteReference';
-    const idMap = noteKind === 'footnote' ? footnoteIdMap : endnoteIdMap;
-    const referenced = new Set<string>();
-    walkAll(blocks, (node) => {
-      if (node.kind === 'textValue') return;
-      if (node.kind === 'noteReference' && node.localName === localName) {
-        const id = attributeValueOf(node, 'id');
-        if (id !== undefined) referenced.add(id);
-      }
+  // Referenced note ids per kind, from the BODY blocks first, then closed over the
+  // fragment's own note bodies: a shipped note's citations of OTHER notes must
+  // transplant too, or their ids would pass through the rewrite unmapped and alias
+  // the host's unrelated notes. Bounded: each (kind, id) enqueues at most once.
+  const referencedByKind = { footnote: new Set<string>(), endnote: new Set<string>() };
+  const noteQueue: Array<{ kind: 'footnote' | 'endnote'; id: string }> = [];
+  const collectNoteRefs = (nodes: readonly OoxmlNode[]): void => {
+    walkAll(nodes, (node) => {
+      if (node.kind !== 'noteReference') return;
+      const kind = node.localName === 'footnoteReference' ? 'footnote' : 'endnote';
+      const id = attributeValueOf(node, 'id');
+      if (id === undefined || referencedByKind[kind].has(id)) return;
+      referencedByKind[kind].add(id);
+      noteQueue.push({ kind, id });
     });
+  };
+  const noteBodyOf = (kind: 'footnote' | 'endnote', id: string): OoxmlNode | null => {
+    const part = resolveNotesPart(fragment, kind);
+    if (!part || !isElementNode(part.root)) return null;
+    for (const child of part.root.children) {
+      if (isElementNode(child) && child.kind === 'note' && attributeValueOf(child, 'id') === id) {
+        return child;
+      }
+    }
+    return null;
+  };
+  collectNoteRefs(blocks);
+  while (noteQueue.length > 0) {
+    const current = noteQueue.pop()!;
+    const body = noteBodyOf(current.kind, current.id);
+    if (body !== null) collectNoteRefs([body]);
+  }
+
+  for (const noteKind of ['footnote', 'endnote'] as const) {
+    const idMap = noteKind === 'footnote' ? footnoteIdMap : endnoteIdMap;
+    const referenced = referencedByKind[noteKind];
     if (referenced.size === 0) continue;
     const fragmentNotes = resolveNotesPart(fragment, noteKind);
     if (!fragmentNotes || !isElementNode(fragmentNotes.root)) continue;
