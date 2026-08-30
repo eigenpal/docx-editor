@@ -83,6 +83,10 @@ function fragment(input: FragmentInput): Uint8Array {
         '<Default Extension="png" ContentType="image/png"/>' +
         '<Default Extension="bmp" ContentType="image/bmp"/>' +
         '<Default Extension="webp" ContentType="image/webp"/>' +
+        '<Default Extension="svg" ContentType="image/svg+xml"/>' +
+        '<Default Extension="tiff" ContentType="image/tiff"/>' +
+        '<Default Extension="emf" ContentType="image/x-emf"/>' +
+        '<Default Extension="wmf" ContentType="image/x-wmf"/>' +
         overrides.join('') +
         '</Types>'
     )
@@ -140,6 +144,18 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('<p dir="rtl"');
     expect(html).toContain('lang="ar-SA" dir="rtl"');
     expect(html).toContain('>styled<');
+  });
+
+  test('an RTL run exports its complex-script font', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial" w:cs="Amiri"/>' +
+          '<w:rtl/></w:rPr><w:t>مرحبا</w:t></w:r></w:p>',
+      })
+    );
+    expect(html).toContain('font-family:&quot;Amiri&quot;');
+    expect(html).not.toContain('font-family:Arial');
   });
 
   test('a style chain reaching Heading2 emits an h2 with the cascaded CSS', () => {
@@ -376,6 +392,37 @@ describe('interopHtmlFromFragment', () => {
         })
       );
       expect(html).toContain(`<img src="data:${mime};base64,aGVsbG8gd29ybGQh"`);
+    }
+  });
+
+  test('SVG and preserved images remain byte-faithful data URIs', () => {
+    const images = [
+      {
+        extension: 'svg',
+        mime: 'image/svg+xml',
+        bytes: strToU8('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>'),
+      },
+      {
+        extension: 'emf',
+        mime: 'image/x-emf',
+        bytes: Uint8Array.from({ length: 44 }, (_, index) => (index === 0 ? 1 : 0)),
+      },
+    ] as const;
+    for (const image of images) {
+      const mediaName = `word/media/image1.${image.extension}`;
+      const html = interopHtmlFromFragment(
+        fragment({
+          docRels: `<Relationship Id="rId7" Type="${R}/image" Target="media/image1.${image.extension}"/>`,
+          media: { [mediaName]: image.bytes },
+          body:
+            '<w:p><w:r><w:drawing><wp:inline>' +
+            '<wp:extent cx="952500" cy="476250"/>' +
+            `<a:graphic><a:graphicData uri="${PIC}">` +
+            '<pic:pic><pic:blipFill><a:blip r:embed="rId7"/></pic:blipFill></pic:pic>' +
+            '</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>',
+        })
+      );
+      expect(html).toContain(`<img src="data:${image.mime};base64,`);
     }
   });
 

@@ -214,10 +214,11 @@ describe('run and paragraph mapping', () => {
 
   test('HTML language and right-to-left direction remain semantic', () => {
     const { docXml } = openFragment(
-      '<p dir="rtl"><span lang="ar-SA" style="direction:rtl">مرحبا</span></p>'
+      '<p dir="rtl"><span lang="ar-SA" style="direction:rtl;font-family:Amiri">مرحبا</span></p>'
     );
     expect(docXml).toContain('<w:bidi/>');
     expect(docXml).toContain('<w:rtl/>');
+    expect(docXml).toContain('w:cs="Amiri"');
     // An RTL run's language tag is the BIDI language: writing it to w:val would
     // overwrite the Latin slot with the wrong dictionary.
     expect(docXml).toContain('<w:lang w:bidi="ar-SA"/>');
@@ -725,7 +726,7 @@ describe('images', () => {
     expect(relsXml).toContain('Target="media/image1.png"');
   });
 
-  test('data: WebP and BMP images become matching media parts', () => {
+  test('data: raster, SVG, and preserved images become matching media parts', () => {
     const cases = [
       {
         mime: 'image/webp',
@@ -733,6 +734,12 @@ describe('images', () => {
         bytes: [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50],
       },
       { mime: 'image/bmp', extension: 'bmp', bytes: [0x42, 0x4d] },
+      { mime: 'image/svg+xml', extension: 'svg', bytes: [60, 115, 118, 103, 62] },
+      {
+        mime: 'image/x-emf',
+        extension: 'emf',
+        bytes: Array.from({ length: 44 }, (_, index) => (index === 0 ? 1 : 0)),
+      },
     ] as const;
     for (const image of cases) {
       const base64 = btoa(Array.from(image.bytes, (byte) => String.fromCharCode(byte)).join(''));

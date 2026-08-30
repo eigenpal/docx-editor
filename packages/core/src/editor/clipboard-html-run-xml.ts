@@ -14,7 +14,8 @@ export function rPrXml(props: HtmlRunProps): string {
   }
   if (props.font !== undefined) {
     const face = escapeXmlAttribute(xmlSafeText(props.font));
-    inner += `<w:rFonts w:ascii="${face}" w:hAnsi="${face}"/>`;
+    inner +=
+      `<w:rFonts w:ascii="${face}" w:hAnsi="${face}"` + (props.rtl ? ` w:cs="${face}"/>` : '/>');
   }
   // `false` is an EXPLICIT off (`font-weight:normal`, `text-decoration:none`),
   // which must out-vote a paragraph style on paste; `undefined` stays silent.

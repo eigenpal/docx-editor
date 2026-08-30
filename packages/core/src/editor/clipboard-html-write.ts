@@ -85,6 +85,10 @@ const CLIPBOARD_IMAGE_MIMES: ReadonlyMap<string, string> = new Map([
   ['image/x-ms-bmp', 'image/bmp'],
   ['image/x-bmp', 'image/bmp'],
   ['image/webp', 'image/webp'],
+  ['image/svg+xml', 'image/svg+xml'],
+  ['image/tiff', 'image/tiff'],
+  ['image/x-emf', 'image/x-emf'],
+  ['image/x-wmf', 'image/x-wmf'],
 ]);
 
 export interface InteropHtmlOptions {
@@ -109,7 +113,9 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   }
   const rules: string[] = [];
 
+  const rtl = toggleOn(sources, 'rtl');
   const font =
+    (rtl ? foldAttribute(sources, 'rFonts', 'cs') : undefined) ??
     foldAttribute(sources, 'rFonts', 'ascii') ??
     foldAttribute(sources, 'rFonts', 'hAnsi') ??
     foldAttribute(sources, 'rFonts', 'eastAsia');
@@ -183,7 +189,6 @@ function runCssOf(layers: RunPropertyLayers): RunCss {
   // An RTL run's language is the BIDI one; `w:val` names the Latin language. The
   // read lane routes the tag back into the right w:lang SLOT (bidi for rtl runs,
   // eastAsia for CJK tags), so the round trip never overwrites w:val with it.
-  const rtl = toggleOn(sources, 'rtl');
   const lang = clipboardLanguageTag(
     (rtl ? foldAttribute(sources, 'lang', 'bidi') : undefined) ??
       foldAttribute(sources, 'lang', 'val') ??
@@ -438,6 +443,10 @@ function clipboardImageMime(ctx: RenderContext, partName: string): string | null
   if (extension === 'gif') return 'image/gif';
   if (extension === 'bmp') return 'image/bmp';
   if (extension === 'webp') return 'image/webp';
+  if (extension === 'svg') return 'image/svg+xml';
+  if (extension === 'tif' || extension === 'tiff') return 'image/tiff';
+  if (extension === 'emf') return 'image/x-emf';
+  if (extension === 'wmf') return 'image/x-wmf';
   return null;
 }
 
