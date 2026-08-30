@@ -232,16 +232,23 @@ export function wordClassAlignmentsFromDocument(
   return out;
 }
 
-/** Concatenated `textContent` of inert `<style>` elements, bounded; '' over the caps. */
-export function wordStyleTextFromDocument(doc: Document): string {
+/** Word head CSS budget for the structured `@list` scan. Style-heavy corporate
+ *  templates routinely pass 32 KiB, and losing the scan there silently degrades
+ *  list fidelity — so this cap is generous and oversized ELEMENTS are skipped,
+ *  never the whole scan. */
+export const WORD_LIST_STYLE_TEXT_MAX = 262_144;
+
+/** Concatenated `textContent` of inert `<style>` elements. An element past the
+ *  budget is SKIPPED (the rest still contribute); the total stays under the cap. */
+export function wordStyleTextFromDocument(
+  doc: Document,
+  maxTotal = WORD_LIST_STYLE_TEXT_MAX
+): string {
   const styles = doc.getElementsByTagName('style');
-  if (styles.length > WORD_STYLE_ELEMENT_MAX) return '';
   let total = '';
-  for (let index = 0; index < styles.length; index += 1) {
+  for (let index = 0; index < styles.length && index < 16; index += 1) {
     const raw = styles[index]?.textContent ?? '';
-    if (raw.length > WORD_STYLE_TEXT_MAX || total.length + raw.length > WORD_STYLE_TEXT_MAX) {
-      return '';
-    }
+    if (raw.length > maxTotal || total.length + raw.length > maxTotal) continue;
     total += `\n${raw}`;
   }
   return total;
@@ -684,13 +691,40 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
   else if (align === 'right' || align === 'end') para.jc = 'right';
   else if (align === 'justify') para.jc = 'both';
   if (style.get('direction')?.trim().toLowerCase() === 'rtl') para.bidi = true;
-  // Zero margins stay unset: a `margin-left:0` reset must not override a numbering
-  // level's indent with a direct `w:ind w:left="0"`.
-  const marginLeftPt = parseCssLengthPt(style.get('margin-left') ?? '');
+  // Classic Word paragraphs carry the `margin` SHORTHAND ('margin:0in;
+  // margin-bottom:.0001pt'); expand it, then let the longhands override.
+  const shorthand: Record<'top' | 'right' | 'bottom' | 'left', number | null> = {
+    top: null,
+    right: null,
+    bottom: null,
+    left: null,
+  };
+  const marginValue = style.get('margin');
+  if (marginValue !== undefined && marginValue.length <= 128) {
+    const parsed = marginValue
+      .trim()
+      .split(/\s+/)
+      .map((token) => parseCssLengthPt(token));
+    if (parsed.length >= 1 && parsed.length <= 4 && !parsed.some((item) => item === null)) {
+      const [top, right = top, bottom = top, left = right] =
+        parsed.length === 2
+          ? [parsed[0], parsed[1], parsed[0], parsed[1]]
+          : parsed.length === 3
+            ? [parsed[0], parsed[1], parsed[2], parsed[1]]
+            : parsed;
+      shorthand.top = top ?? null;
+      shorthand.right = right ?? null;
+      shorthand.bottom = bottom ?? null;
+      shorthand.left = left ?? null;
+    }
+  }
+  // Zero side margins stay unset: a `margin-left:0` reset must not override a
+  // numbering level's indent with a direct `w:ind w:left="0"`.
+  const marginLeftPt = parseCssLengthPt(style.get('margin-left') ?? '') ?? shorthand.left;
   if (marginLeftPt !== null && marginLeftPt > 0) {
     para.indLeftTwips = clamp(Math.round(marginLeftPt * 20), 0, 31_680);
   }
-  const marginRightPt = parseCssLengthPt(style.get('margin-right') ?? '');
+  const marginRightPt = parseCssLengthPt(style.get('margin-right') ?? '') ?? shorthand.right;
   if (marginRightPt !== null && marginRightPt > 0) {
     para.indRightTwips = clamp(Math.round(marginRightPt * 20), 0, 31_680);
   }
@@ -699,11 +733,11 @@ export function applyParaCss(para: HtmlParaProps, style: ReadonlyMap<string, str
     const twips = clamp(Math.round(indentPt * 20), -31_680, 31_680);
     if (twips !== 0) para.firstLineTwips = twips;
   }
-  const beforePt = parseCssLengthPt(style.get('margin-top') ?? '');
+  const beforePt = parseCssLengthPt(style.get('margin-top') ?? '') ?? shorthand.top;
   if (beforePt !== null && beforePt >= 0) {
     para.spacingBeforeTwips = clamp(Math.round(beforePt * 20), 0, 31_680);
   }
-  const afterPt = parseCssLengthPt(style.get('margin-bottom') ?? '');
+  const afterPt = parseCssLengthPt(style.get('margin-bottom') ?? '') ?? shorthand.bottom;
   if (afterPt !== null && afterPt >= 0) {
     para.spacingAfterTwips = clamp(Math.round(afterPt * 20), 0, 31_680);
   }

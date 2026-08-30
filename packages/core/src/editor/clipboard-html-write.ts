@@ -419,6 +419,22 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
   return `<img src="${dataUri}"${size}>`;
 }
 
+/** Advance the field stack over content that renders nothing (deleted regions). */
+function advanceFieldState(node: OoxmlElement, fields: FieldState): void {
+  for (const child of node.children) {
+    if (!isElement(child)) continue;
+    if (child.kind === 'fldChar') {
+      const type = attributeValueOf(child, 'fldCharType', WML_NAMESPACE_URI);
+      if (type === 'begin') fields.stack.push('instr');
+      else if (type === 'separate' && fields.stack.length > 0) {
+        fields.stack[fields.stack.length - 1] = 'result';
+      } else if (type === 'end') fields.stack.pop();
+      continue;
+    }
+    advanceFieldState(child, fields);
+  }
+}
+
 function renderRun(
   ctx: RenderContext,
   run: OoxmlElement,
@@ -427,14 +443,7 @@ function renderRun(
 ): string {
   // Field machinery first: fldChar runs drive the state and never render themselves.
   if (hasChildOfKind(run, 'fldChar')) {
-    for (const child of run.children) {
-      if (child.kind !== 'fldChar') continue;
-      const type = attributeValueOf(child, 'fldCharType', WML_NAMESPACE_URI);
-      if (type === 'begin') fields.stack.push('instr');
-      else if (type === 'separate' && fields.stack.length > 0) {
-        fields.stack[fields.stack.length - 1] = 'result';
-      } else if (type === 'end') fields.stack.pop();
-    }
+    advanceFieldState(run, fields);
     return '';
   }
   if (hasChildOfKind(run, 'instrText')) return '';
@@ -550,9 +559,12 @@ function renderInline(
       case 'revisionMoveTo':
         out += renderInline(ctx, child.children, paragraphPPr, fields);
         break;
-      // Deleted and moved-away content never travels to external apps.
+      // Deleted and moved-away content never travels to external apps — but its
+      // fldChars still terminate fields, or an unbalanced 'instr' state would blank
+      // every later paragraph.
       case 'revisionDelete':
       case 'revisionMoveFrom':
+        advanceFieldState(child, fields);
         break;
       case 'generic':
         out += renderInline(ctx, child.children, paragraphPPr, fields);
@@ -862,6 +874,10 @@ function renderNoteList(
     // Same cap as wordNoteReferenceHtml, so no note body ships without its reference.
     const idValue = Number.parseInt(id, 10);
     if (idValue > 32_767) continue;
+    // Only notes whose reference the body actually emitted (an ordinal exists) —
+    // a note referenced solely inside a tracked deletion must not ship a body
+    // that the read lane would then materialize as visible text.
+    if (!ctx.noteOrdinals[kind].has(idValue)) continue;
     const inner = renderBlocks(
       { ...ctx, noteBody: { kind, id: idValue }, docRels: noteRels },
       child.children

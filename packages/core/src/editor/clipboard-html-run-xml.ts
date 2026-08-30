@@ -118,3 +118,23 @@ export function pPrXml(para: HtmlParaProps): string {
 export function paragraphXml(para: HtmlParaProps, runs: readonly string[]): string {
   return `<w:p>${pPrXml(para)}${runs.join('')}</w:p>`;
 }
+
+/** Heading direct formatting: bold plus these sizes in half-points (h1=32pt … h6=14pt). */
+export const HEADING_SZ: Record<string, number> = {
+  h1: 64,
+  h2: 52,
+  h3: 44,
+  h4: 36,
+  h5: 32,
+  h6: 28,
+};
+
+/** Append a page break: fold it into the previous paragraph when one exists. */
+export function appendPageBreak(out: string[]): void {
+  const last = out[out.length - 1];
+  if (last?.endsWith('</w:p>')) {
+    out[out.length - 1] = `${last.slice(0, -6)}<w:r><w:br w:type="page"/></w:r></w:p>`;
+    return;
+  }
+  out.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
+}

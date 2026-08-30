@@ -17,6 +17,7 @@ import {
   type WordListLevelDefinition,
 } from './clipboard-html-numbering.ts';
 import { clipboardBookmarkName, isClipboardHyperlink } from './clipboard-html-links.ts';
+import { createGestureMemo } from './clipboard-html-memo.ts';
 import { clipboardLanguageTag } from './clipboard-html-language.ts';
 import {
   writeProjectedHtmlPackage,
@@ -25,10 +26,17 @@ import {
 import {
   clipboardNoteDefinitions,
   clipboardNoteReference,
+  collectReferencedNoteIds,
   isClipboardNoteList,
   type ClipboardNoteKind,
 } from './clipboard-html-notes.ts';
-import { paragraphXml, rPrXml, textRunXml } from './clipboard-html-run-xml.ts';
+import {
+  HEADING_SZ,
+  appendPageBreak,
+  paragraphXml,
+  rPrXml,
+  textRunXml,
+} from './clipboard-html-run-xml.ts';
 import {
   applyInlineTag,
   applyParaCss,
@@ -99,9 +107,6 @@ const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 const R_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
-/** Heading direct formatting: bold plus these sizes in half-points (h1=32pt … h6=14pt). */
-const HEADING_SZ: Record<string, number> = { h1: 64, h2: 52, h3: 44, h4: 36, h5: 32, h6: 28 };
-
 type RunProps = HtmlRunProps;
 type ParaProps = HtmlParaProps;
 
@@ -120,6 +125,8 @@ interface FlowContext {
 
 interface Projection {
   nodesLeft: number;
+  /** Set when a walk stopped with work remaining because the budget ran out. */
+  truncated: boolean;
   readonly maxDepth: number;
   readonly maxImageBytes: number;
   readonly wordHtml: boolean;
@@ -128,6 +135,8 @@ interface Projection {
   readonly media: Map<string, Uint8Array>;
   readonly mediaExtensions: Map<string, string>;
   readonly lists: Map<string, ListAllocation>;
+  /** Secondary index over `lists`, so nested lists resolve without a linear scan. */
+  readonly listsByNumId: Map<string, ListAllocation>;
   semanticListCount: number;
   imageCount: number;
   docPrId: number;
@@ -142,10 +151,6 @@ interface Projection {
   /** The exact definition elements the notes pass consumed; only these skip the body
    *  walk, so a duplicate-id or unreferenced definition stays lossless in the body. */
   readonly definedNoteElements: ReadonlySet<Element>;
-}
-
-function clamp(value: number, low: number, high: number): number {
-  return Math.min(high, Math.max(low, value));
 }
 
 // --- Allocation
@@ -176,7 +181,9 @@ function allocateList(
     return existing.numId;
   }
   const numId = String(1001 + p.lists.size);
-  p.lists.set(key, { numId, levels: new Map([[level, { kind, start }]]) });
+  const allocation: ListAllocation = { numId, levels: new Map([[level, { kind, start }]]) };
+  p.lists.set(key, allocation);
+  p.listsByNumId.set(numId, allocation);
   return numId;
 }
 
@@ -189,7 +196,11 @@ function collectInline(
   runs: string[],
   p: Projection
 ): void {
-  if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
+  if (p.nodesLeft <= 0) {
+    p.truncated = true;
+    return;
+  }
+  if (depth > p.maxDepth) return;
   p.nodesLeft -= 1;
   if (node.nodeType === 3 /* TEXT_NODE */) {
     const raw = node.nodeValue ?? '';
@@ -231,7 +242,10 @@ function collectInline(
   }
   const tabContent = htmlTabRunContents(style.get('mso-tab-count'));
   if (tabContent.length > 0) {
-    runs.push(`<w:r>${rPrXml(ctx.run)}${tabContent}</w:r>`);
+    // The tab run carries the SPAN's own formatting (an underlined leader keeps its
+    // underline), not just the parent context's.
+    const tabRun = applyRunCss(applyInlineTag(ctx.run, tag), style);
+    runs.push(`<w:r>${rPrXml(tabRun)}${tabContent}</w:r>`);
     // Word's tab spans hold only spacer whitespace; an element with real content —
     // text OR element children like an image — keeps it after the tabs.
     if ((node.textContent ?? '').trim().length === 0 && node.children.length === 0) return;
@@ -325,13 +339,14 @@ function collectInline(
 function msoListNumPr(
   element: Element,
   style: ReadonlyMap<string, string>,
-  p: Projection
+  p: Projection,
+  noteBody: FlowContext['noteBody']
 ): ParaProps['numPr'] {
   const declaration = style.get('mso-list');
   if (declaration === undefined) return undefined;
   const match = /\bl(\d{1,4})\s+level(\d{1,2})\b/i.exec(declaration);
   if (!match) return undefined;
-  const ilvl = clamp(Number.parseInt(match[2]!, 10) - 1, 0, 8);
+  const ilvl = Math.min(Math.max(Number.parseInt(match[2]!, 10) - 1, 0), 8);
   const marker = msoMarkerText(element, p);
   // The head's structured @list rule names the format; the visible marker then
   // names THIS slice's first ordinal under that format. Glyph sniffing alone is
@@ -346,7 +361,10 @@ function msoListNumPr(
     ({ kind, start } = htmlListKindAndStart(marker));
   }
   const lfo = /\blfo(\d{1,4})\b/i.exec(declaration);
-  const key = `mso:l${match[1]}${lfo ? `:lfo${lfo[1]}` : ''}`;
+  // A note body's list must not seed the body list's first-observation state — the
+  // notes project first, and their markers would pin the body's start values.
+  const scope = noteBody === undefined ? '' : `${noteBody.kind}${noteBody.id}:`;
+  const key = `mso:${scope}l${match[1]}${lfo ? `:lfo${lfo[1]}` : ''}`;
   return { numId: allocateList(p, key, kind, start, ilvl), ilvl };
 }
 
@@ -389,7 +407,7 @@ function paragraphContextOf(
   }
   const pre = ctx.pre || tag === 'pre';
   if (tag === 'pre') run.font = 'Courier New';
-  const mso = msoListNumPr(element, style, p);
+  const mso = msoListNumPr(element, style, p, ctx.noteBody);
   if (mso) para.numPr = mso;
   applyWordParagraphAlignment(para, element, p.classAlignments);
   applyParaCss(para, style);
@@ -425,7 +443,11 @@ function projectParagraph(
   out: string[],
   pageBreakBefore = false
 ): void {
-  if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
+  if (p.nodesLeft <= 0) {
+    p.truncated = true;
+    return;
+  }
+  if (depth > p.maxDepth) return;
   const next = paragraphContextOf(element, ctx, p, pageBreakBefore);
   projectFlow(Array.from(element.childNodes), depth + 1, next, p, out, true, undefined, false);
 }
@@ -438,7 +460,11 @@ function projectList(
   out: string[],
   pageBreakBefore = false
 ): void {
-  if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
+  if (p.nodesLeft <= 0) {
+    p.truncated = true;
+    return;
+  }
+  if (depth > p.maxDepth) return;
   p.nodesLeft -= 1;
   const kind = semanticHtmlListKind(element);
   // One numId per distinct top-level list; nested lists share their root's definition
@@ -451,10 +477,9 @@ function projectList(
         level: 0,
       };
   if (ctx.list) {
-    for (const allocation of p.lists.values()) {
-      if (allocation.numId === state.numId && !allocation.levels.has(state.level)) {
-        allocation.levels.set(state.level, { kind, start: semanticHtmlListStart(element) });
-      }
+    const allocation = p.listsByNumId.get(state.numId);
+    if (allocation !== undefined && !allocation.levels.has(state.level)) {
+      allocation.levels.set(state.level, { kind, start: semanticHtmlListStart(element) });
     }
   }
   const itemCtx: FlowContext = {
@@ -478,15 +503,6 @@ function projectList(
 }
 
 type PageBreakState = { pending: boolean; skipSpacer: boolean };
-
-function appendPageBreak(out: string[]): void {
-  const last = out[out.length - 1];
-  if (last?.endsWith('</w:p>')) {
-    out[out.length - 1] = `${last.slice(0, -6)}<w:r><w:br w:type="page"/></w:r></w:p>`;
-    return;
-  }
-  out.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
-}
 
 function projectFlow(
   nodes: readonly Node[],
@@ -516,7 +532,10 @@ function projectFlow(
     pending = [];
   };
   for (const node of nodes) {
-    if (p.nodesLeft <= 0) break;
+    if (p.nodesLeft <= 0) {
+      p.truncated = true;
+      break;
+    }
     if (isElement(node)) {
       const tag = tagOf(node);
       const blockSdtNodes = tag === 'w:sdt' ? wordBlockSdtNodes(node) : null;
@@ -653,7 +672,11 @@ function projectTable(
   p: Projection,
   out: string[]
 ): void {
-  if (p.nodesLeft <= 0 || depth > p.maxDepth) return;
+  if (p.nodesLeft <= 0) {
+    p.truncated = true;
+    return;
+  }
+  if (depth > p.maxDepth) return;
   p.nodesLeft -= 1;
   const rows = tableRowsOf(table);
   if (rows.length === 0) return;
@@ -701,7 +724,10 @@ function projectTable(
   const carry: Array<RowSpanCarry | null> = new Array<RowSpanCarry | null>(columns).fill(null);
   const rowXml: string[] = [];
   for (const row of rows) {
-    if (p.nodesLeft <= 0) break;
+    if (p.nodesLeft <= 0) {
+      p.truncated = true;
+      break;
+    }
     p.nodesLeft -= 1;
     // Snapshot the carries entering THIS row, then age every entry exactly once —
     // a colspan cell that jumps a carried column must not leave it un-aged.
@@ -719,7 +745,10 @@ function projectTable(
     let column = 0;
     while (column < columns) {
       p.nodesLeft -= 1;
-      if (p.nodesLeft <= 0) break;
+      if (p.nodesLeft <= 0) {
+        p.truncated = true;
+        break;
+      }
       const carriedSpan = carriedNow[column];
       if (carriedSpan !== null) {
         const gridSpan = carriedSpan > 1 ? `<w:gridSpan w:val="${carriedSpan}"/>` : '';
@@ -849,35 +878,19 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
     footnote: new Set(),
     endnote: new Set(),
   };
-  // A definition body carries its own back-link anchor with the same id style; it
-  // must not count as a body reference, or an orphan definition would be consumed.
-  const definitionElements = new Set(noteDefinitions.map((note) => note.element));
-  const insideDefinition = (element: Element): boolean => {
-    let current: Element | null = element.parentElement;
-    for (let hops = 0; current !== null && hops < 128; hops += 1) {
-      if (definitionElements.has(current)) return true;
-      current = current.parentElement;
-    }
-    return false;
-  };
-  const anchors = parsed.getElementsByTagName('a');
-  for (let index = 0; index < anchors.length && index < 20_000; index += 1) {
-    const anchor = anchors[index]!;
-    const reference = clipboardNoteReference(parseInlineStyle(anchor));
-    if (reference !== null && !insideDefinition(anchor)) {
-      referencedNotes[reference.kind].add(reference.id);
-    }
-  }
+  collectReferencedNoteIds(parsed, noteDefinitions, referencedNotes);
   const projection: Projection = {
     nodesLeft: limits.maxNodes ?? DEFAULT_MAX_NODES,
     maxDepth: limits.maxDepth ?? DEFAULT_MAX_DEPTH,
     maxImageBytes: limits.maxImageBytes ?? DEFAULT_MAX_IMAGE_BYTES,
     wordHtml: isWordClipboardHtml(html),
+    truncated: false,
     lastMarkCovered: false,
     rels: [],
     media: new Map(),
     mediaExtensions: new Map(),
     lists: new Map(),
+    listsByNumId: new Map(),
     semanticListCount: 0,
     imageCount: 0,
     docPrId: 0,
@@ -903,11 +916,19 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   // the body is the primary content and must never be starved into a refusal.
   const bodyReserve = Math.ceil(projection.nodesLeft / 2);
   projection.nodesLeft -= bodyReserve;
+  // Claim (dedupe + reference-gate) and PRE-register the claimed elements, so an
+  // outer definition's body walk skips a nested definition it does not own.
+  const claimed: (typeof noteDefinitions)[number][] = [];
   for (const note of noteDefinitions) {
-    if (projection.nodesLeft <= 0) break;
-    // Unreferenced or duplicate-id definitions are left for the body walk.
     if (!referencedNotes[note.kind].has(note.id)) continue;
-    if (projection.notes[note.kind].has(note.id)) continue;
+    if (definedNotes[note.kind].has(note.id)) continue;
+    definedNotes[note.kind].add(note.id);
+    definedNoteElements.add(note.element);
+    claimed.push(note);
+  }
+  for (let index = 0; index < claimed.length; index += 1) {
+    const note = claimed[index]!;
+    projection.truncated = false;
     const noteBlocks: string[] = [];
     projectFlow(
       Array.from(note.element.childNodes),
@@ -921,17 +942,22 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
       noteBlocks,
       true
     );
-    // A walk the budget starved mid-note stays unregistered (forceEmit would have
-    // pushed an empty paragraph regardless), so the body walk keeps the text and
-    // no live reference points at a blank note.
-    if (projection.nodesLeft <= 0) break;
-    if (noteBlocks.length > 0) {
-      projection.notes[note.kind].set(note.id, noteBlocks);
-      definedNotes[note.kind].add(note.id);
-      definedNoteElements.add(note.element);
+    if (projection.truncated || noteBlocks.length === 0) {
+      // The budget starved this walk mid-note: un-claim this and every remaining
+      // definition so the body walk keeps their text and no live reference points
+      // at a blank or truncated note.
+      for (let drop = index; drop < claimed.length; drop += 1) {
+        const dropped = claimed[drop]!;
+        definedNotes[dropped.kind].delete(dropped.id);
+        definedNoteElements.delete(dropped.element);
+        projection.notes[dropped.kind].delete(dropped.id);
+      }
+      break;
     }
+    projection.notes[note.kind].set(note.id, noteBlocks);
   }
   projection.nodesLeft = Math.max(projection.nodesLeft, 0) + bodyReserve;
+  projection.truncated = false;
   projection.lastMarkCovered = false;
   const blocks: string[] = [];
   projectFlow(Array.from(body.childNodes), 0, rootCtx, projection, blocks);
@@ -939,36 +965,11 @@ function projectBlocks(html: string, limits: HtmlProjectionLimits): ProjectedBlo
   return { ok: true, projection, blocks };
 }
 
-// One paste gesture probes and projects the SAME string (in either order); the
-// single-entry memo keeps the second call from re-running the full parse + walk on
-// a multi-MiB payload. A scheduled clear drops the retained payload as soon as the
-// gesture's synchronous handlers finish, so attacker-sized bytes never idle here.
-let memoizedProjection: {
-  readonly html: string;
-  readonly limitsKey: string;
-  readonly projected: ProjectedBlocks;
-} | null = null;
-
-function limitsKeyOf(limits: HtmlProjectionLimits): string {
-  return `${limits.maxHtmlBytes ?? ''}:${limits.maxNodes ?? ''}:${limits.maxDepth ?? ''}:${limits.maxImageBytes ?? ''}`;
-}
+const projectionMemo = createGestureMemo<ProjectedBlocks>();
 
 function projectBlocksMemoized(html: string, limits: HtmlProjectionLimits): ProjectedBlocks {
-  const limitsKey = limitsKeyOf(limits);
-  if (
-    memoizedProjection !== null &&
-    memoizedProjection.html === html &&
-    memoizedProjection.limitsKey === limitsKey
-  ) {
-    return memoizedProjection.projected;
-  }
-  const projected = projectBlocks(html, limits);
-  const entry = { html, limitsKey, projected };
-  memoizedProjection = entry;
-  setTimeout(() => {
-    if (memoizedProjection === entry) memoizedProjection = null;
-  }, 0);
-  return projected;
+  const limitsKey = `${limits.maxHtmlBytes ?? ''}:${limits.maxNodes ?? ''}:${limits.maxDepth ?? ''}:${limits.maxImageBytes ?? ''}`;
+  return projectionMemo(html, limitsKey, () => projectBlocks(html, limits));
 }
 
 /** Project external `text/html` into a bounded WordprocessingML fragment package. */

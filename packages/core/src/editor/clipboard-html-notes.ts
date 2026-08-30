@@ -56,6 +56,35 @@ export function clipboardNoteDefinitions(doc: Document): readonly ClipboardNoteD
   return definitions;
 }
 
+/**
+ * Ids the BODY references via `mso-<kind>-id` anchors, into `out`. A definition
+ * body's own back-link anchor carries the same id style and must not count as a
+ * body reference, or an orphan definition would be consumed into the notes part.
+ */
+export function collectReferencedNoteIds(
+  doc: Document,
+  definitions: readonly ClipboardNoteDefinition[],
+  out: Record<ClipboardNoteKind, Set<number>>
+): void {
+  const definitionElements = new Set(definitions.map((note) => note.element));
+  const insideDefinition = (element: Element): boolean => {
+    let current: Element | null = element.parentElement;
+    for (let hops = 0; current !== null && hops < 128; hops += 1) {
+      if (definitionElements.has(current)) return true;
+      current = current.parentElement;
+    }
+    return false;
+  };
+  const anchors = doc.getElementsByTagName('a');
+  for (let index = 0; index < anchors.length && index < 20_000; index += 1) {
+    const anchor = anchors[index]!;
+    const reference = clipboardNoteReference(parseInlineStyle(anchor));
+    if (reference !== null && !insideDefinition(anchor)) {
+      out[reference.kind].add(reference.id);
+    }
+  }
+}
+
 export function isClipboardNoteList(style: ReadonlyMap<string, string>): boolean {
   const value = style.get('mso-element')?.trim().toLowerCase();
   return value === 'footnote-list' || value === 'endnote-list';

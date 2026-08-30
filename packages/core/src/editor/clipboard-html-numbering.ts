@@ -100,7 +100,7 @@ export function wordListDefinitionsFromStyleText(
   css: string
 ): ReadonlyMap<string, WordListLevelDefinition> {
   const out = new Map<string, WordListLevelDefinition>();
-  if (css.length === 0 || css.length > 40_000) return out;
+  if (css.length === 0 || css.length > 262_200) return out;
   WORD_LIST_LEVEL_RULE.lastIndex = 0;
   let match: RegExpExecArray | null;
   let rules = 0;

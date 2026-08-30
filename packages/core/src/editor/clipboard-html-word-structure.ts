@@ -27,6 +27,13 @@ export function isWordPageBreakBlock(element: Element): boolean {
 /** Match Word's redundant empty paragraph directly after an exported page break. */
 export function isWordPageBreakSpacer(element: Element): boolean {
   if (tagOf(element) !== 'p' || element.children.length !== 1) return false;
+  // A blank paragraph the author STYLED (shading, borders) is content, not chrome.
+  const style = parseInlineStyle(element);
+  for (const name of style.keys()) {
+    if (name === 'background' || name === 'background-color' || name.startsWith('border')) {
+      return false;
+    }
+  }
   const officeParagraph = element.children[0]!;
   if (tagOf(officeParagraph) !== 'o:p' || officeParagraph.childNodes.length > 3) return false;
   let text = '';
