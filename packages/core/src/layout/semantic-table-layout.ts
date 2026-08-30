@@ -211,8 +211,8 @@ export interface TableFlowDeps {
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
   /**
    * The hosted text-box list state a cell paragraph's break key folds — the cell twin of
-   * the `hostedTextboxListToken` fold in `prepareBlock`, built with
-   * `hostedListTokenProviderFor` and provided only by lanes that lay hosted stories out
+   * the `hostedTextboxListToken` fold in `prepareBlock`, built with `hostedListTokenDeps`
+   * and provided only by lanes that lay hosted stories out
    * ({@link layoutTextboxStoryFor}): where no story renders, the fold would be key churn.
    */
   readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string;

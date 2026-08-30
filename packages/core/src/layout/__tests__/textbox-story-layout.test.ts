@@ -24,10 +24,11 @@ import {
   type HeaderFooterStoryLayout,
 } from '../hf-layout.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
-import { createParagraphLayoutCache } from '../layout-cache.ts';
+import { createParagraphLayoutCache, type ParagraphLayoutCache } from '../layout-cache.ts';
 import { flowBlocksInBox } from '../semantic-table-layout.ts';
+import type { PendingLine } from '../paragraph-flow.ts';
 import {
-  hostedTextboxListToken,
+  hostedListTokenDeps,
   layoutTextboxStory,
   MAX_TEXTBOX_STORY_NESTING,
   type TextboxStoryLayout,
@@ -685,10 +686,10 @@ describe('list markers inside textbox stories', () => {
   });
 
   test('the cell paragraph break key folds the hosted text-box list state (fixes #622)', () => {
-    // `flowBlocksInBox` is the cell/header lane: the host paragraph's subtree, list item,
-    // and drawing token are byte-identical across a numbering edit, so only the
-    // hosted-story token can move its break key. Without it the unchanged key serves the
-    // cached break of the pre-renumber box.
+    // `flowBlocksInBox` is the cell/header lane. The host paragraph's subtree, list item,
+    // and drawing token are byte-identical across a numbering edit, so this token is the
+    // only key input that can move: the cell lane's break cache and retention must key the
+    // same inputs the body lane keys, or the lanes drift.
     const host = storyBlocks(bodyTextboxPart())[0]!;
     const keysFor = (lvlText: string): string[] => {
       const numberingIndex = numberingIndexFor(lvlText);
@@ -698,8 +699,7 @@ describe('list markers inside textbox stories', () => {
         cache: createParagraphLayoutCache(),
         producer: 'test',
         nextLineId: (paragraphId, start, lineIndex) => `${paragraphId}-${start}-${lineIndex}`,
-        hostedListTokenForParagraph: (paragraph) =>
-          hostedTextboxListToken(paragraph, numberingIndex, undefined, 'all-markup'),
+        ...hostedListTokenDeps(numberingIndex, undefined, 'all-markup'),
         onCellBreakKey: (key) => keys.push(key),
       });
       return keys;
@@ -708,6 +708,86 @@ describe('list markers inside textbox stories', () => {
     expect(decimal.length).toBeGreaterThan(0);
     expect(keysFor('(%1)')).not.toEqual(decimal);
     // An identical numbering state re-keys identically — no gratuitous invalidation.
+    expect(keysFor('%1.')).toEqual(decimal);
+  });
+
+  /** A cache that records every key the flow asks for, so tests can watch keys move. */
+  function recordingCache(keys: string[]): ParagraphLayoutCache<readonly PendingLine[]> {
+    const inner = createParagraphLayoutCache<readonly PendingLine[]>();
+    return {
+      ...inner,
+      get(key) {
+        keys.push(key);
+        return inner.get(key);
+      },
+    };
+  }
+
+  test('the body flow wires hosted list state into cell break keys', () => {
+    // The production wiring, not a hand-built provider: dropping the `hostedListTokenDeps`
+    // spread from the body flow's table deps must fail this test.
+    const doc = readOoxmlPart(
+      `<w:document ${NS}><w:body>` +
+        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
+        '<w:tblGrid><w:gridCol w:w="9000"/></w:tblGrid>' +
+        '<w:tr><w:tc><w:tcPr><w:tcW w:w="9000" w:type="dxa"/></w:tcPr>' +
+        `<w:p><w:r>${textboxDrawing(numberedParagraph('alpha'))}</w:r></w:p>` +
+        '</w:tc></w:tr></w:tbl>' +
+        '</w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!doc.ok) throw new Error(doc.reason);
+    const keysFor = (lvlText: string): string[] => {
+      const keys: string[] = [];
+      layoutSemanticDocument(doc.part, 1, {
+        measurer,
+        producer: 'test',
+        cache: recordingCache(keys),
+        inlineDrawingLayout: drawingLayoutFor(doc.part),
+        numberingIndex: numberingIndexFor(lvlText),
+      });
+      // HOST keys only. The box's own story breaks under a `|txbx:`-namespaced producer and
+      // its keys move with the numbering regardless of the host fold under test.
+      return keys.filter((key) => !key.includes('|txbx:'));
+    };
+    const decimal = keysFor('%1.');
+    expect(decimal.length).toBeGreaterThan(0);
+    expect(keysFor('(%1)')).not.toEqual(decimal);
+    expect(keysFor('%1.')).toEqual(decimal);
+  });
+
+  test('the header/footer drawing branch wires hosted list state into break keys', () => {
+    const bytes = footerTextboxDoc(textboxDrawing(numberedParagraph('alpha')), 5);
+    const pkg = openPackage(bytes);
+    const main = pkg.parts.get(pkg.mainDocumentPart)!;
+    const geometry = geometryOfSection(enumerateDocumentSections(main)[0]!.properties);
+    const footerPart = [...resolveHeaderFooterPartsBySection(pkg)[0]!.footers.values()][0]!;
+    const keysFor = (lvlText: string): string[] => {
+      const keys: string[] = [];
+      layoutHeaderFooterStory(
+        footerPart,
+        geometry.width - geometry.margin.left - geometry.margin.right,
+        measurer,
+        'test',
+        recordingCache(keys),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        drawingLayoutFor(footerPart),
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { numberingIndex: numberingIndexFor(lvlText) }
+      );
+      // HOST keys only — see the body wiring test above.
+      return keys.filter((key) => !key.includes('|txbx:'));
+    };
+    const decimal = keysFor('%1.');
+    expect(decimal.length).toBeGreaterThan(0);
+    expect(keysFor('(%1)')).not.toEqual(decimal);
     expect(keysFor('%1.')).toEqual(decimal);
   });
 

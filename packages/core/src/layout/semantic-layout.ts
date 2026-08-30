@@ -189,11 +189,7 @@ import {
 } from './semantic-fragment-signature.ts';
 import { type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
-import {
-  hostedListTokenDeps,
-  hostedTextboxListToken,
-  layoutTextboxStory,
-} from './textbox-story-layout.ts';
+import { hostedListTokenDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 
 /** Extra full-document layouts after the reflow pass budget to detect a stable 2-cycle. */
 const MAX_DRAWING_EXCLUSION_STABILIZATION_PASSES = 2;
@@ -1106,6 +1102,13 @@ function layoutBlocksPass(
   // disagree about which context minted a key — including a caller that supplies tokens
   // while toggling the context, which a fallback-only namespace could not separate.
   const hasInlineDrawingContext = options.inlineDrawingLayout !== undefined;
+  // ONE provider for every fold of this flow — the prepass block fold and the cell-lane
+  // deps below hand `hostedTextboxListToken` the same (index, cascade, mode) tuple.
+  const { hostedListTokenForParagraph: hostedListTokenOf } = hostedListTokenDeps(
+    options.numberingIndex,
+    styleCascade,
+    displayMode
+  );
   const prepareBlock = (block: OoxmlElement, availableWidth: number): PreparedBlock => {
     // The RAW token, compared by the memo below so a table's kilobyte aggregate keeps its
     // identity fast path; the context joins only when a key is actually built. `||`, not
@@ -1131,12 +1134,7 @@ function layoutBlocksPass(
     // The list state of any text-box story this block hosts, for the same reason the drawing
     // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
     // numbering edit moves nothing else in this block's key.
-    const hostedListToken = hostedTextboxListToken(
-      block,
-      options.numberingIndex,
-      styleCascade,
-      displayMode
-    );
+    const hostedListToken = hostedListTokenOf?.(block) ?? '';
     // NUL between the block's own token and the hosted one: both embed file-influenced
     // marker text, so a printable join would let two different (own, hosted) pairs
     // concatenate to one string.
@@ -1770,7 +1768,7 @@ function layoutBlocksPass(
           pageContentClip,
           layoutTextboxStoryFor: layoutTextboxStoryForBody,
           // Gated with the story layout above: only a story-rendering lane keys hosted list state.
-          ...hostedListTokenDeps(options.numberingIndex, styleCascade, displayMode),
+          ...(hostedListTokenOf ? { hostedListTokenForParagraph: hostedListTokenOf } : {}),
           publishAnchoredDrawings: collectAnchoredDrawings,
           collectAnchoredDrawings,
           columnBoxForParagraph: anchorColumnBox,

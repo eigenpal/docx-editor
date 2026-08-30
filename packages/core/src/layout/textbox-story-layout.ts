@@ -328,16 +328,16 @@ export function hostedTextboxListToken(
 
 /**
  * The `hostedListTokenForParagraph` slice of a `TableFlowDeps`, built in ONE place so the
- * lanes that lay hosted stories out (body tables, header/footer stories) cannot drift
- * apart on the (index, cascade, mode) call shape. Empty when there is no numbering to key,
- * which keeps those deps byte-identical to a lane that never folds hosted list state.
+ * lanes that lay hosted stories out (body flow, header/footer stories) cannot drift apart
+ * on the (index, cascade, mode) call shape. Empty without a numbering index — emptiness of
+ * the index itself is the callee's own first check, not duplicated here.
  */
 export function hostedListTokenDeps(
   numberingIndex: NumberingIndex | undefined,
   styleCascade: StyleCascadeTable | undefined,
   displayMode?: RevisionDisplayMode
 ): { readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string } {
-  if (!numberingIndex || numberingIndex.nums.size === 0) return {};
+  if (!numberingIndex) return {};
   return {
     hostedListTokenForParagraph: (paragraph) =>
       hostedTextboxListToken(paragraph, numberingIndex, styleCascade, displayMode),

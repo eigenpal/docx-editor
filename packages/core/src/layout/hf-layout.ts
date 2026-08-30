@@ -598,19 +598,24 @@ export function furnitureLayoutContext(
   footerDistance: number
 ): string {
   if (!furniture) return '';
+  // NUL-framed segments, entries, and section boundary: the marker token embeds expanded
+  // `w:lvlText` and the resource token embeds relationship-derived identity, so a printable
+  // boundary would let one variant's file-controlled text forge another variant's entry —
+  // the same aliasing class the NUL join inside `storyListMarkerToken` closes one level
+  // down. XML text cannot carry U+0000.
   const stories = (prefix: string, source: ReadonlyMap<string, HeaderFooterStoryLayout>) =>
     [...source]
       .map(
         ([variant, story]) =>
-          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}` +
-          `${storyDrawingResourceToken(story)}${storyListMarkerToken(story)}`
+          `${prefix}${variant}=${story.flowHeight}@${story.contentKey}\0` +
+          `${storyDrawingResourceToken(story)}\0${storyListMarkerToken(story)}`
       )
       .sort()
-      .join(',');
+      .join('\0,');
   return (
     `|hf:${headerDistance},${footerDistance},${furniture.titlePage ? 1 : 0}${furniture.evenAndOddHeaders ? 1 : 0};` +
     stories('h', furniture.headers) +
-    ';' +
+    '\0;' +
     stories('f', furniture.footers)
   );
 }
