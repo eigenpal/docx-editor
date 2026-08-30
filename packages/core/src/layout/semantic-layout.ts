@@ -1742,6 +1742,7 @@ function layoutBlocksPass(
     pageOccurrenceKey: () => String(pages.length),
     styleCascade,
     listItems,
+    ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),

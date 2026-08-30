@@ -384,6 +384,7 @@ export function layoutTextboxStory(
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
     ...(listItems ? { listItems } : {}),
+    ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
     ...(options.pageContext ? { pageContext: options.pageContext } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.defaultTabStopPt !== undefined

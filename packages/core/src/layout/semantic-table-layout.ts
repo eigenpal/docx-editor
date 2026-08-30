@@ -97,6 +97,9 @@ import type {
 } from './semantic-records.ts';
 import { firstLineShift, type ResolvedListItem } from './list-resolve.ts';
 import { publishListMarker } from './list-marker.ts';
+// Call-time only, so the module cycle with `flowBlocksInBox` (which that module imports
+// from here) never runs during evaluation.
+import { hostedTextboxListToken } from './textbox-story-layout.ts';
 import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { borderExtentPt, type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
@@ -209,6 +212,13 @@ export interface TableFlowDeps {
    * stories that do not share the body counter stream.
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
+  /**
+   * `numbering.xml`, for the hosted-textbox list token every cell break key folds. A
+   * numbering edit renumbers the markers inside a text-box story hosted by a cell paragraph
+   * while the host's subtree, list item, and drawing token stay byte-identical, so only
+   * this token can move the key — the same fold the body flow applies in `prepareBlock`.
+   */
+  readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   /**
    * `w:settings/w:defaultTabStop` in points; absent keeps the 0.5" schema default. A cell
    * paragraph tabs on the same document-wide grid as a body paragraph.
@@ -489,6 +499,21 @@ function placeCellParagraph(
   // The cell paragraph's resolved REF values, keyed exactly as the body flow keys them: a
   // renumbering edit moves the painted reference while the cell's subtree stays identical.
   const refToken = deps.refFields?.tokenForParagraph(paragraphId) ?? '';
+  // The list state of any text-box story this paragraph hosts, keyed exactly as the body
+  // flow keys it: a numbering edit renumbers the box's markers while the host paragraph's
+  // subtree stays byte-identical. NUL between the paragraph's own token and the hosted one,
+  // for the same reason the body flow frames the pair — both embed file-influenced marker
+  // text, so a printable join would let two different (own, hosted) pairs concatenate to
+  // one string.
+  const hostedListToken = hostedTextboxListToken(
+    paragraph,
+    deps.numberingIndex,
+    deps.styleCascade,
+    deps.displayMode
+  );
+  const ownListToken = listItem?.cacheToken ?? '';
+  const listToken =
+    ownListToken === '' && hostedListToken === '' ? '' : `${ownListToken}\0${hostedListToken}`;
   const key = paragraphLayoutKey({
     paragraph,
     properties: [
@@ -496,7 +521,7 @@ function placeCellParagraph(
       ...inheritedRunProperties,
       ...markRunProperties,
       { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
-      ...(listItem ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }] : []),
+      ...(listToken ? [{ localName: 'list', attributes: { token: listToken } }] : []),
       ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
     ],
     width: available,
