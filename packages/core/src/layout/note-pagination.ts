@@ -33,7 +33,6 @@ import {
   type NoteReferenceSite,
 } from './note-numbering.ts';
 import {
-  layoutNoteById,
   layoutNoteCached,
   layoutNoteSeparator,
   noteSeparatorAreaBox,
