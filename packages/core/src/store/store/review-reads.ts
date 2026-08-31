@@ -31,7 +31,9 @@ import { createRecentRootCache } from './recent-root-cache.ts';
 // The vocabulary this derivation speaks — the item shapes and their pure helpers — lives in
 // `review-items.ts`, where the binding and layout lanes can reach it too.
 import {
+  registerRevisionSiteNodeIds,
   reviewItemPositionRank,
+  revisionSiteNodeIdsOf,
   type ReviewCommentItem,
   type ReviewItem,
   type ReviewModelInput,
@@ -170,6 +172,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       /** Kept apart from `text`: a replacement needs both halves to word its card. */
       deletedText: string;
       ranges: ReviewRange[];
+      siteNodeIds: string[];
       readOnly: boolean;
       /** The DEEPEST site in the group: the reading a caret in this text gets. */
       nesting: number;
@@ -216,6 +219,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
         : `${site.node.localName}\u0000${addressKey(address)}`;
     const existing = byAddress.get(key);
     if (existing) {
+      existing.siteNodeIds.push(site.node.id);
       if (
         range &&
         !existing.ranges.some(
@@ -264,6 +268,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
           : textUnder(site.node),
       deletedText: kind === 'delete' || kind === 'moveFrom' ? textUnder(site.node) : '',
       ranges: range ? [range] : [],
+      siteNodeIds: [site.node.id],
       nesting: site.nesting,
       // A format or paragraph-mark change is resolvable; the structural kinds are not, and
       // nor is one with no author to address it by.
@@ -272,30 +277,34 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
   }
 
   const items = [...byAddress.values()].map(
-    (entry): ReviewRevisionItem => ({
-      kind: 'revision' as const,
-      // The PART is in the id, because `@w:id` is unique only within one. A body `w:ins`
-      // and a header `w:ins` numbered 1 by the same author on the same date produced one
-      // id for two decisions: the rail's `byId` map kept whichever came last, so one card
-      // was unreachable, its replies were attached to the other, and React saw two
-      // children under one key.
-      id: `${entry.revisionKind}-${part.name}\u0000${addressKey(entry.address)}`,
-      address: entry.address,
-      addresses: [entry.address],
-      revisionKind: entry.revisionKind,
-      ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
-      author: entry.author,
-      ...(entry.date === undefined ? {} : { date: entry.date }),
-      // A pure deletion shows the words it removes as its text; a replacement shows what
-      // takes their place, with the removed half beside it.
-      text: entry.revisionKind === 'replace' ? entry.text : entry.text || entry.deletedText,
-      replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
-      ranges: entry.ranges,
-      nesting: entry.nesting,
-      readOnly: entry.readOnly,
-      // Filled by `collectReviewItems`, which is the only place that sees the comments too.
-      replyIds: [],
-    })
+    (entry): ReviewRevisionItem =>
+      registerRevisionSiteNodeIds(
+        {
+          kind: 'revision' as const,
+          // The PART is in the id, because `@w:id` is unique only within one. A body `w:ins`
+          // and a header `w:ins` numbered 1 by the same author on the same date produced one
+          // id for two decisions: the rail's `byId` map kept whichever came last, so one card
+          // was unreachable, its replies were attached to the other, and React saw two
+          // children under one key.
+          id: `${entry.revisionKind}-${part.name}\u0000${addressKey(entry.address)}`,
+          address: entry.address,
+          addresses: [entry.address],
+          revisionKind: entry.revisionKind,
+          ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
+          author: entry.author,
+          ...(entry.date === undefined ? {} : { date: entry.date }),
+          // A pure deletion shows the words it removes as its text; a replacement shows what
+          // takes their place, with the removed half beside it.
+          text: entry.revisionKind === 'replace' ? entry.text : entry.text || entry.deletedText,
+          replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
+          ranges: entry.ranges,
+          nesting: entry.nesting,
+          readOnly: entry.readOnly,
+          // Filled by `collectReviewItems`, which is the only place that sees the comments too.
+          replyIds: [],
+        },
+        entry.siteNodeIds
+      )
   );
   return pairReplacements(items, paragraphOrderOfPart(part));
 }
@@ -383,22 +392,28 @@ function pairReplacements(
       const first = before(deletion.ranges[0]!, insertion.ranges[0]!, order) ? deletion : insertion;
       // The card is dated when the replacement was COMPLETED: the later half's stamp.
       const date = replacementDate(deletion.date, insertion.date);
-      replacements.set(deletion.id, {
-        ...first,
-        id: `replace-${deletion.id}-${insertion.id}`,
-        revisionKind: 'replace',
-        ...(date === undefined ? {} : { date }),
-        // DEDUPED: when this engine wrote the replacement both halves share one identity,
-        // and applying the same `acceptRevision` twice in one transaction refuses the second
-        // — which refused the whole thing and left the replacement unresolved.
-        addresses: dedupeAddresses([...deletion.addresses, ...insertion.addresses]),
-        text: insertion.text,
-        replacedText: deletion.text,
-        ranges: [...deletion.ranges, ...insertion.ranges],
-        // Struck half first, so the split point is simply how many the deletion contributed.
-        replacedRangeCount: deletion.ranges.length,
-        readOnly: deletion.readOnly || insertion.readOnly,
-      });
+      replacements.set(
+        deletion.id,
+        registerRevisionSiteNodeIds(
+          {
+            ...first,
+            id: `replace-${deletion.id}-${insertion.id}`,
+            revisionKind: 'replace',
+            ...(date === undefined ? {} : { date }),
+            // DEDUPED: when this engine wrote the replacement both halves share one identity,
+            // and applying the same `acceptRevision` twice in one transaction refuses the second
+            // — which refused the whole thing and left the replacement unresolved.
+            addresses: dedupeAddresses([...deletion.addresses, ...insertion.addresses]),
+            text: insertion.text,
+            replacedText: deletion.text,
+            ranges: [...deletion.ranges, ...insertion.ranges],
+            // Struck half first, so the split point is simply how many the deletion contributed.
+            replacedRangeCount: deletion.ranges.length,
+            readOnly: deletion.readOnly || insertion.readOnly,
+          },
+          [...revisionSiteNodeIdsOf(deletion), ...revisionSiteNodeIdsOf(insertion)]
+        )
+      );
       break;
     }
   }
@@ -477,6 +492,7 @@ function foldChain(chain: readonly ReviewRevisionItem[]): ReviewRevisionItem {
   const first = chain[0]!;
   const addresses = [...first.addresses];
   const ranges = [...first.ranges];
+  const siteNodeIds = [...revisionSiteNodeIdsOf(first)];
   let text = first.text;
   let date = first.date;
   for (const next of chain.slice(1)) {
@@ -484,17 +500,21 @@ function foldChain(chain: readonly ReviewRevisionItem[]): ReviewRevisionItem {
       if (!addresses.some((known) => sameAddress(known, address))) addresses.push(address);
     }
     for (const range of next.ranges) ranges.push(range);
+    for (const nodeId of revisionSiteNodeIdsOf(next)) siteNodeIds.push(nodeId);
     text += next.text;
     date = laterStamp(date, next.date);
   }
-  return {
-    ...first,
-    id: chain.map((item) => item.id).join('+'),
-    addresses,
-    ranges,
-    text,
-    ...(date === undefined ? {} : { date }),
-  };
+  return registerRevisionSiteNodeIds(
+    {
+      ...first,
+      id: chain.map((item) => item.id).join('+'),
+      addresses,
+      ranges,
+      text,
+      ...(date === undefined ? {} : { date }),
+    },
+    siteNodeIds
+  );
 }
 
 /** The later of two stamps; the first one when they cannot be compared. */
@@ -733,6 +753,25 @@ export interface LinkableReviewItem {
   readonly nesting?: number;
 }
 
+function normalizeRetainedCommentLinks<T extends LinkableReviewItem>(
+  item: T,
+  retainedCommentIds: ReadonlySet<string>
+): T {
+  if (item.kind !== 'comment') return item;
+  const replyIds = item.replyIds ?? [];
+  const retainedReplyIds = replyIds.filter((id) => retainedCommentIds.has(id));
+  const parentWasRemoved = item.parentId !== undefined && !retainedCommentIds.has(item.parentId);
+  if (!parentWasRemoved && retainedReplyIds.length === replyIds.length) return item;
+  if (parentWasRemoved) {
+    // Promote an answer whose thread head was filtered; rebuild its revision link below.
+    const { parentId: _parentId, parentRevisionId: _parentRevisionId, ...rest } = item;
+    return (
+      retainedReplyIds.length === replyIds.length ? rest : { ...rest, replyIds: retainedReplyIds }
+    ) as T;
+  }
+  return { ...item, replyIds: retainedReplyIds } as T;
+}
+
 /** A range as a comparable key, so "exactly these characters" is one lookup. */
 function rangeKey(range: ReviewRange): string {
   return (
@@ -744,32 +783,26 @@ function rangeKey(range: ReviewRange): string {
 /**
  * Attach each comment that answers a tracked change to the change it answers.
  *
- * The evidence is the RANGE, exactly as it is for a coincident comment thread: replying to a
- * revision writes a comment over that revision's own characters, because OOXML gives `w:ins`
- * and `w:del` nowhere else to put the text. Without this the reply came back as an independent
- * card in the rail, sitting beside the change rather than inside it, and the reader had no way
- * to see which change their answer belonged to.
- *
- * Three things keep it from over-claiming. A ZERO-WIDTH range is evidence of nothing — the same
- * rule the comment threading uses, and a format or paragraph-mark revision decorates no
- * characters at all. A comment already stated to be a REPLY to another comment is not claimed
- * directly, because a stated link always beats an inferred one. And the FIRST revision on a span
- * wins, so a card cannot claim a reply another card already holds.
+ * A matching non-empty RANGE is the evidence. A stated comment reply beats an inferred revision
+ * link, and the deepest revision on a shared span wins to match click targeting.
  *
  * The WHOLE conversation moves, not its head. A change's card renders `replyIds` as a flat list,
  * so linking only the top comment of a thread left every answer to that answer rendered by
- * nobody: reply twice to one change and the second reply existed in `comments.xml` and appeared
- * nowhere on screen. Descendants ride along, in the order they were authored.
+ * nobody. Descendants ride along in authoring order.
  *
- * IDEMPOTENT, and that is load-bearing. The session re-runs this over a list whose comments are
- * ALREADY linked, so a pass that only ever added links left a stale `parentRevisionId` behind
- * when a keystroke shifted the revision's offsets out from under it — the rail filters such a
- * comment out of its roots, and with no revision claiming it any more the card vanished until
- * the next full re-derivation. Every link is rebuilt from the ranges on every pass.
+ * The pass is idempotent: every link is rebuilt from ranges, so locally patched queues cannot
+ * retain stale `parentRevisionId` values after edits move a revision.
  */
 export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonly T[]): T[] {
-  const revisionBySpan = new Map<string, { readonly id: string; readonly nesting: number }>();
+  const retainedCommentIds = new Set<string>();
   for (const item of items) {
+    if (item.kind === 'comment') retainedCommentIds.add(item.id);
+  }
+  const retainedItems = items.map((item) =>
+    normalizeRetainedCommentLinks(item, retainedCommentIds)
+  );
+  const revisionBySpan = new Map<string, { readonly id: string; readonly nesting: number }>();
+  for (const item of retainedItems) {
     if (item.kind !== 'revision') continue;
     for (const range of item.ranges ?? []) {
       if (
@@ -793,7 +826,7 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
 
   // Comment threads as the derivation stated them, so a claimed head brings its answers.
   const commentRepliesOf = new Map<string, readonly string[]>();
-  for (const item of items) {
+  for (const item of retainedItems) {
     if (item.kind === 'comment' && item.replyIds && item.replyIds.length > 0) {
       commentRepliesOf.set(item.id, item.replyIds);
     }
@@ -814,7 +847,7 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
 
   const repliesOf = new Map<string, string[]>();
   const parentOf = new Map<string, string>();
-  for (const item of items) {
+  for (const item of retainedItems) {
     if (item.kind !== 'comment' || item.parentId !== undefined) continue;
     if (item.orphaned || !item.range) continue;
     const revisionId = revisionBySpan.get(rangeKey(item.range))?.id;
@@ -826,11 +859,14 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
     else repliesOf.set(revisionId, thread);
   }
 
-  return items.map((item) => {
+  return retainedItems.map((item) => {
     if (item.kind === 'revision') {
       const replies = repliesOf.get(item.id) ?? [];
       if (replies.length === 0 && (item.replyIds ?? []).length === 0) return item;
-      return { ...item, replyIds: replies };
+      return registerRevisionSiteNodeIds(
+        { ...item, replyIds: replies },
+        revisionSiteNodeIdsOf(item)
+      );
     }
     if (item.kind === 'comment') {
       const parent = parentOf.get(item.id);

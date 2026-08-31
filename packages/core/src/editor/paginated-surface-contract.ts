@@ -11,7 +11,7 @@ import type {
 } from './paragraph-format-contract.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
-import type { SelectionPin, ViewScope } from '../contracts/editor.ts';
+import type { SelectionPin, TrackedChangePredicate, ViewScope } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
 import type { FieldShadingMode } from '../output/semantic-paint.ts';
@@ -773,6 +773,8 @@ export interface PaginatedSurface {
   setAllRevisionAuthorsVisible(visible: boolean): void;
   /** Clear the reviewer filter in one layout pass. */
   showAllRevisionAuthors(): void;
+  /** Apply a view-time predicate over complete tracked-change items. */
+  setTrackedChangesFilter(predicate: TrackedChangePredicate | null): void;
   /** The presence colour the caret paints for `name`, sanitized as the paint sink is. */
   remotePresenceColor(name: string): string | undefined;
   /**

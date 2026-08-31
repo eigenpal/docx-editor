@@ -315,6 +315,91 @@ Use `editor.getReviewAuthors()` to build custom chrome. Read visibility with
 `editor.setReviewAuthorVisible(author, visible)`, or call
 `editor.setAllReviewAuthorsVisible(visible)` and `editor.showAllReviewAuthors()`.
 
+## Filter tracked changes with a predicate
+
+Use `editor.setTrackedChangesFilter(predicate)` for filters that combine revision data.
+The predicate receives a complete `ReviewRevisionItem`. Return `true` to keep its tracked
+markup. Return `false` to render its accepted result.
+
+The item includes `author`, `date`, `revisionKind`, `text`, `replacedText`, `ranges`,
+`addresses`, `nesting`, `readOnly`, and pairing metadata. Dates can be absent or invalid.
+Treat them as document data and validate them before comparison.
+
+This filter shows insertions from Jess after February 1, 2026:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useEffect } from 'react';
+import { useDocxEditor } from '@docx-editor.dev/react';
+
+const CUTOFF = Date.parse('2026-02-01T00:00:00Z');
+
+export function RecentJessInsertions() {
+  const editor = useDocxEditor();
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setTrackedChangesFilter((revision) => {
+      const timestamp = Date.parse(revision.date ?? '');
+      return (
+        revision.author === 'Jess' &&
+        revision.revisionKind === 'insert' &&
+        Number.isFinite(timestamp) &&
+        timestamp >= CUTOFF
+      );
+    });
+    return () => editor.setTrackedChangesFilter(null);
+  }, [editor]);
+
+  return null;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { watch } from 'vue';
+import { useDocxEditor } from '@docx-editor.dev/vue';
+
+const CUTOFF = Date.parse('2026-02-01T00:00:00Z');
+const editor = useDocxEditor();
+
+watch(
+  editor,
+  (current, _previous, onCleanup) => {
+    if (!current) return;
+    current.setTrackedChangesFilter((revision) => {
+      const timestamp = Date.parse(revision.date ?? '');
+      return (
+        revision.author === 'Jess' &&
+        revision.revisionKind === 'insert' &&
+        Number.isFinite(timestamp) &&
+        timestamp >= CUTOFF
+      );
+    });
+    onCleanup(() => current.setTrackedChangesFilter(null));
+  },
+  { immediate: true }
+);
+</script>
+```
+
+</Framework>
+</FrameworkTabs>
+
+The editor evaluates the predicate once per revision item when the filter or document changes.
+It then caches the result for pagination. Keep the predicate synchronous and free of side effects.
+Call `setTrackedChangesFilter` again after captured filter state changes, even with the same
+function reference. Pass `null` to clear the predicate.
+
+The filtered view changes layout, painted markup, review cards, and bulk actions over the review
+list. It does not apply review operations or change saved OOXML. Comments are unchanged unless
+the separate reviewer filter hides their author. Both filters compose when they are active.
+
 If `preset={false}`, use
 `useStackedReviewPositions(items, heights, { gap, scale })`. Pass
 `editor.getRenderScale()` as `scale`. Card heights use CSS pixels. Anchors use

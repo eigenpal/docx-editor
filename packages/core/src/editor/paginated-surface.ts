@@ -832,7 +832,8 @@ export function mountPaginatedSurface(
   const revisionAuthorVisibility =
     runtimeOptions.revisionAuthorVisibility ??
     createRevisionAuthorVisibility(options.hiddenRevisionAuthors);
-  const revisionFilter = (): RevisionAuthorFilter | undefined => revisionAuthorVisibility.filter;
+  const revisionFilter = (): RevisionAuthorFilter | undefined =>
+    revisionAuthorVisibility.filterForSession(session);
   const paragraphMarkVisible = (paragraphId: string): boolean => {
     const part = partOfNodeId(session, paragraphId) ?? session.part();
     const paragraph = findNode(part, paragraphId);
@@ -4028,12 +4029,7 @@ export function mountPaginatedSurface(
   }
 
   function visibleReviewItems(): readonly ReviewItem[] {
-    const items = session.reviewItems();
-    if (revisionAuthorVisibility.hiddenAuthors.size === 0) return items;
-    return items.filter((item) => {
-      const author = reviewItemAuthor(item);
-      return author === null || revisionAuthorVisibility.isVisible(author);
-    });
+    return revisionAuthorVisibility.filterItems(session.reviewItems());
   }
 
   // Both presence-colour answers, and why they rank differently: see the module.
@@ -4586,9 +4582,10 @@ export function mountPaginatedSurface(
 
   function applyRevisionAuthorVisibility(moved: boolean): void {
     if (!moved) return;
+    notePropertiesCache = null;
     flushPendingInputAndLayout();
     furnitureSource = furnitureSourceFor(revisionFilter());
-    scheduler.invalidateAll(session.packageRevision(), 'revision-author-filter');
+    scheduler.invalidateAll(session.packageRevision(), 'tracked-change-filter');
     scheduler.flush();
     options.onChange?.(currentState());
   }
@@ -5425,6 +5422,9 @@ export function mountPaginatedSurface(
     showAllRevisionAuthors() {
       applyRevisionAuthorVisibility(revisionAuthorVisibility.showAll());
     },
+    setTrackedChangesFilter(predicate) {
+      applyRevisionAuthorVisibility(revisionAuthorVisibility.setTrackedChangePredicate(predicate));
+    },
     collaborationSession: () => collaborationSession ?? null,
     remotePresenceColor,
     setRevisionStyles: (colors) => {
@@ -5627,7 +5627,7 @@ export function mountPaginatedSurface(
       ) {
         return cached.result;
       }
-      const result = notePropertiesStateOf(surface);
+      const result = notePropertiesStateOf(surface, revisionFilter());
       notePropertiesCache = {
         packageRevision,
         paragraphId,

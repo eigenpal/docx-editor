@@ -57,7 +57,6 @@ import {
   createReviewRevisionTicker,
   createRevisionAuthorVisibility,
   filterReviewItemsByAuthor,
-  reviewItemAuthorOrNull,
 } from './revision-author-visibility.ts';
 import type {
   DocumentEditingMode,
@@ -493,7 +492,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return;
     }
     teardownSurface();
-    let publishedHiddenReviewAuthors = reviewAuthorVisibility.hiddenAuthorList;
+    let publishedReviewFilterState = reviewAuthorVisibility.stateKey;
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
       // What a run with no authored font is REPORTED as, matching what it is measured
@@ -579,8 +578,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // one comparison, never a spurious re-render.
         bump();
         const reviewVisibilityMoved =
-          publishedHiddenReviewAuthors !== reviewAuthorVisibility.hiddenAuthorList;
-        publishedHiddenReviewAuthors = reviewAuthorVisibility.hiddenAuthorList;
+          publishedReviewFilterState !== reviewAuthorVisibility.stateKey;
+        publishedReviewFilterState = reviewAuthorVisibility.stateKey;
         // The caret is not the only observable thing that moves: an armed typing format, an
         // open furniture story, how a drawing came to be selected and the format painter's
         // arming all move without it, and each has no other channel to a host.
@@ -1201,7 +1200,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     activeKey: activeReviewKeyNow,
     paneOpen: () => reviewPaneOpen,
     selectionAnchor: () => selectionPlacement()?.anchorY ?? null,
-    authorFilterKey: () => reviewAuthorVisibility.filter?.cacheKey ?? '',
+    authorFilterKey: () => reviewAuthorVisibility.stateKey,
   });
 
   /*
@@ -1501,8 +1500,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (!reviewEnabled) return [];
     let items = filterReviewItemsByAuthor(
       surface?.session.reviewItems() ?? [],
-      reviewAuthorVisibility,
-      reviewItemAuthorOrNull
+      reviewAuthorVisibility
     );
     const excluded = query?.excludeRevisionKinds;
     if (excluded && excluded.length > 0) {
@@ -2229,6 +2227,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
       },
     }),
+    setTrackedChangesFilter(predicate) {
+      if (surface) return surface.setTrackedChangesFilter(predicate);
+      if (!reviewAuthorVisibility.setTrackedChangePredicate(predicate)) return;
+      bump();
+      emitSelectionChange();
+    },
     getConfiguredAuthor: () => config.author?.trim() || null,
     presenceColorFor: (name) => surface?.remotePresenceColor(name) ?? 'var(--doc-accent)',
     collaborationSession: () => surface?.collaborationSession() ?? null,

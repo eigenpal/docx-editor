@@ -1559,6 +1559,7 @@ export interface PaginatedSurface {
     }): boolean;
     setSelection(next: SemanticSelection): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
+    setTrackedChangesFilter(predicate: TrackedChangePredicate | null): void;
     showAllRevisionAuthors(): void;
     // (undocumented)
     splitParagraph(): void;
@@ -2289,6 +2290,9 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 
 // @public
 export function toolbarCommandStates(editor: Editor | null, ids: readonly ChromeSlotId[]): readonly ToolbarCommandState[];
+
+// @public
+export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
 
 // @public
 export interface TreeApplyResult {

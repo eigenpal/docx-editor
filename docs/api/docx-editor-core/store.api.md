@@ -1436,6 +1436,8 @@ export type FormattingDisplayMode = 'all-markup' | 'proposed' | 'original';
 export interface FormattingRevisionAuthorFilter {
     // (undocumented)
     readonly hiddenAuthors: ReadonlySet<string>;
+    // (undocumented)
+    readonly includesNode?: (nodeId: string, author: string) => boolean;
 }
 
 // @public

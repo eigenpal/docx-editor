@@ -28,6 +28,7 @@ import {
   isRevisionWrapper,
   paragraphMarkRevisionsOf,
   revisionAttributionOf,
+  revisionMarkupVisible,
   revisionsVisible,
   withRevision,
   type RevisionAttribution,
@@ -167,9 +168,10 @@ export function markRemovedInMode(
 ): boolean {
   if (displayMode === 'all-markup' && !authorFilter) return false;
   for (const revision of paragraphMarkRevisionsOf(paragraph)) {
-    const effectiveMode = authorFilter?.hiddenAuthors.has(revision.author)
-      ? 'proposed'
-      : displayMode;
+    const effectiveMode =
+      authorFilter && !revisionMarkupVisible(revision, 'all-markup', authorFilter)
+        ? 'proposed'
+        : displayMode;
     if (effectiveMode === 'all-markup') continue;
     const removes = revision.kind === 'delete' || revision.kind === 'moveFrom';
     if ((effectiveMode === 'proposed' && removes) || (effectiveMode === 'original' && !removes))

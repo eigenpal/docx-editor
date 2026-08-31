@@ -2597,12 +2597,8 @@ export interface RevisionAttribution {
     readonly nodeId: string;
 }
 
-// @public
-export interface RevisionAuthorFilter {
-    // (undocumented)
-    readonly cacheKey: string;
-    // (undocumented)
-    readonly hiddenAuthors: ReadonlySet<string>;
+// @public @deprecated (undocumented)
+export interface RevisionAuthorFilter extends RevisionFilter {
 }
 
 // @public
@@ -2610,6 +2606,18 @@ export function revisionAuthorFilter(hiddenAuthors: Iterable<string>): RevisionA
 
 // @public
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public
+export interface RevisionFilter {
+    // (undocumented)
+    readonly cacheKey: string;
+    // (undocumented)
+    readonly hiddenAuthors: ReadonlySet<string>;
+    // (undocumented)
+    readonly includes?: (revision: RevisionAttribution) => boolean;
+    // (undocumented)
+    readonly includesNode?: (nodeId: string, author: string) => boolean;
+}
 
 // @public
 export type RevisionKind = 'insert' | 'delete' | 'moveFrom' | 'moveTo' | 'format';

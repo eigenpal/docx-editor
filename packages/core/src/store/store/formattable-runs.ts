@@ -44,9 +44,10 @@ import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
  */
 export type FormattingDisplayMode = 'all-markup' | 'proposed' | 'original';
 
-/** View-time author visibility used by mounted formatting lanes. */
+/** View-time revision visibility used by mounted formatting lanes. */
 export interface FormattingRevisionAuthorFilter {
   readonly hiddenAuthors: ReadonlySet<string>;
+  readonly includesNode?: (nodeId: string, author: string) => boolean;
 }
 
 /**
@@ -180,7 +181,9 @@ function collectFormattableRuns(
     }
     if (isContentRevisionKind(child.kind)) {
       const author = attributeValueOf(child, 'author') ?? '';
-      const effectiveMode = authorFilter?.hiddenAuthors.has(author) ? 'proposed' : displayMode;
+      const included =
+        authorFilter?.includesNode?.(child.id, author) ?? !authorFilter?.hiddenAuthors.has(author);
+      const effectiveMode = authorFilter && !included ? 'proposed' : displayMode;
       if (!revisionReachedInMode(child.kind, effectiveMode)) continue;
       collectFormattableRuns(child.children, displayMode, authorFilter, depth + 1, out);
       continue;

@@ -22,7 +22,11 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
-import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
+import {
+  revisionNodeIncluded,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import { mergedFlowBlocks } from './story-roots.ts';
 import {
   EMPTY_TABLE_CELL_STYLE_FORMATTING,
@@ -872,7 +876,10 @@ function readTableStructureUncached(
       ? (wmlRevisionAttribute(authoredRevision, 'author') ?? '')
       : undefined;
     const projectedMode =
-      revisionAuthor !== undefined && authorFilter?.hiddenAuthors.has(revisionAuthor)
+      authoredRevision &&
+      revisionAuthor !== undefined &&
+      authorFilter &&
+      !revisionNodeIncluded(authorFilter, authoredRevision.id, revisionAuthor)
         ? 'proposed'
         : displayMode;
     if (

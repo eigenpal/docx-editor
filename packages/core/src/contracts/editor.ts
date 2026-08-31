@@ -551,6 +551,15 @@ export interface Editor {
   getReviewItems(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
 
   /**
+   * Set the view-time tracked-change filter, or clear it with `null`.
+   *
+   * The predicate receives each full revision item. A false result renders that revision as
+   * accepted. This changes no OOXML and does not change saved bytes. Calling this method again
+   * re-evaluates every revision, even when the function reference is unchanged.
+   */
+  setTrackedChangesFilter(predicate: TrackedChangePredicate | null): void;
+
+  /**
    * Custom-node definitions registered through `createDocxEditor({ modules })`, in
    * registration order.
    *
@@ -813,6 +822,15 @@ export type EditorCommandShape<T> = {
  * written twice, once per framework. {@link item} stays for a host that wants more.
  */
 export type { ReviewItem, ReviewRevisionKind };
+
+/**
+ * Decides whether one tracked change renders as markup.
+ *
+ * Return `true` to keep the revision visible as tracked markup. Return `false` to render its
+ * accepted result without changing the document. The callback receives the complete revision
+ * item, including its author, date, kind, text, ranges, nesting, and resolution metadata.
+ */
+export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
 
 /**
  * Narrows what `getReviewItems` returns.

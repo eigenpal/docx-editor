@@ -65,6 +65,62 @@ const TRACKED = docx(
 afterEach(cleanup);
 
 describe('reviewer visibility chrome', () => {
+  test('applies a host predicate over full revision data without changing OOXML', async () => {
+    let editor: DocxEditorInstance | null = null;
+    const view = render(
+      <DocxEditorRoot
+        document={TRACKED}
+        modules={[reviewModule()]}
+        onReady={(instance) => {
+          editor = instance as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+          <DocxEditorReview />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const before = new Uint8Array(await editor!.save());
+    const seen: Array<{ author: string; revisionKind: string; rangeCount: number }> = [];
+
+    await act(async () => {
+      editor!.setTrackedChangesFilter((revision) => {
+        seen.push({
+          author: revision.author,
+          revisionKind: revision.revisionKind,
+          rangeCount: revision.ranges.length,
+        });
+        return revision.author === 'Grace' && revision.revisionKind === 'insert';
+      });
+    });
+
+    expect(seen).toHaveLength(4);
+    expect(seen.every((revision) => revision.rangeCount === 1)).toBe(true);
+    expect(editor!.getReviewItems({ placement: false })).toHaveLength(1);
+    expect(editor!.getReviewItems({ placement: false })[0]).toMatchObject({
+      author: 'Grace',
+      revisionKind: 'insert',
+    });
+    await waitFor(() => {
+      expect(view.container.querySelectorAll('.docx-revision-insert')).toHaveLength(1);
+      expect(view.container.querySelectorAll('.docx-revision-delete')).toHaveLength(0);
+    });
+    expect(view.container.textContent).toContain('ADA_INSERT');
+    expect(view.container.textContent).toContain('GRACE_INSERT');
+    expect(view.container.textContent).not.toContain('ADA_DELETE');
+    expect(view.container.textContent).not.toContain('GRACE_DELETE');
+    expect(new Uint8Array(await editor!.save())).toEqual(before);
+
+    await act(async () => {
+      editor!.setTrackedChangesFilter(null);
+    });
+    await waitFor(() => {
+      expect(view.container.querySelectorAll('.docx-revision-insert')).toHaveLength(2);
+      expect(view.container.querySelectorAll('.docx-revision-delete')).toHaveLength(2);
+    });
+  });
+
   test('filters document markup and cards without changing saved OOXML', async () => {
     let editor: DocxEditorInstance | null = null;
     const view = render(
