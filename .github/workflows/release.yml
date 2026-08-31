@@ -222,7 +222,7 @@ jobs:
       #   runs `publish` and creates per-package git tags.
       - name: Release PR or Publish
         id: changesets
-        uses: changesets/action@v2.1.0
+        uses: changesets/action@v2.1.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           version-script: bun run version-packages
