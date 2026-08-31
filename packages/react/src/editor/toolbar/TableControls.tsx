@@ -862,8 +862,10 @@ export const ToolbarTableCellFill: TableCellFillNamespace = Object.assign(TableC
 /** The five contextual table chrome controls in registry order. @internal */
 export function TableChromeGroup({
   overrides = new Map(),
+  separator = true,
 }: {
   overrides?: ReadonlyMap<string, React.ReactElement>;
+  separator?: boolean;
 }): ReactNode {
   const visible = useTableChromeProviderVisible();
   if (!visible) return null;
@@ -878,7 +880,7 @@ export function TableChromeGroup({
 
   return (
     <>
-      <ToolbarSeparator />
+      {separator ? <ToolbarSeparator /> : null}
       {entries.map((Part) => {
         const override = overrides.get(Part.docxSlot);
         if (override) {

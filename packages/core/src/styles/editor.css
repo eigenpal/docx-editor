@@ -3276,6 +3276,20 @@ a.docx-hyperlink:focus-visible {
   gap: 2px;
 }
 
+/* Contextual controls collapse as one group before ordinary formatting controls. Keep the
+ * wrapper mounted for ResizeObserver, but remove its flex item (and therefore its surrounding
+ * gaps) while no contextual controls exist. */
+.docx-toolbar__contextual {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+}
+
+.docx-toolbar__contextual:empty {
+  display: none;
+}
+
 /* The trigger sits at the row's end, whatever is in front of it. */
 .docx-toolbar__more {
   position: relative;
@@ -3316,7 +3330,8 @@ a.docx-hyperlink:focus-visible {
 /* Same hatch for the font and style pickers: their 300px lists are popovers too,
  * and the panel's scrollport would clip them when the group collapses into More. */
 .docx-toolbar__more-panel:has(.docx-toolbar__font-family-content),
-.docx-toolbar__more-panel:has(.docx-toolbar__style-content) {
+.docx-toolbar__more-panel:has(.docx-toolbar__style-content),
+.docx-toolbar__more-panel:has(.docx-table-chrome__panel) {
   overflow-y: visible;
 }
 
@@ -3340,6 +3355,13 @@ a.docx-hyperlink:focus-visible {
   top: auto;
   right: 0;
   bottom: 100%;
+  left: auto;
+}
+
+/* Table pickers can be the first row beneath a top-edge toolbar, so they keep their normal
+ * downward placement and only align toward the panel's safe inline edge. */
+.docx-toolbar__more-panel .docx-table-chrome__panel {
+  right: 0;
   left: auto;
 }
 

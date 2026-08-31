@@ -812,6 +812,7 @@ export const TableChromeGroup = defineComponent({
       type: Object as PropType<Map<string, VNode>>,
       default: () => new Map(),
     },
+    separator: { type: Boolean, default: true },
   },
   setup(props) {
     const visible = useTableChromeProviderVisible();
@@ -826,7 +827,7 @@ export const TableChromeGroup = defineComponent({
       ];
       return (
         <>
-          <ToolbarSeparator />
+          {props.separator ? <ToolbarSeparator /> : null}
           {entries.map((Part) => {
             const override = props.overrides.get(Part.docxSlot);
             if (override) return <Fragment key={Part.docxSlot}>{override}</Fragment>;
