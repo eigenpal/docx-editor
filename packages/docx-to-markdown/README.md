@@ -1,5 +1,7 @@
 # `@docx-editor.dev/docx-to-markdown`
 
+> Private workspace package. Publishing is intentionally deferred to the final release step.
+
 Server-first DOCX to Markdown conversion using the same semantic layout records as the editor
 and future exporters. It needs no DOM, browser, editor instance, or CLI.
 

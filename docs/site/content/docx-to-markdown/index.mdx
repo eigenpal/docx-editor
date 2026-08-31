@@ -8,10 +8,13 @@ lays them out without a browser or editor instance, and translates the resulting
 The Node defaults use the packaged metric-compatible fonts and HarfBuzz, so page projections use
 the same shaping path as the browser editor.
 
-## Install
+The package is currently private to this repository workspace. Publishing and public installation
+are intentionally deferred to the final release step.
+
+## Repository workspace
 
 ```bash
-npm install @docx-editor.dev/docx-to-markdown @docx-editor.dev/core
+bun run --filter '@docx-editor.dev/docx-to-markdown' build
 ```
 
 Core is a required peer dependency so the process owns exactly one engine instance.
