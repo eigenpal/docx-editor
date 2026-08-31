@@ -35,6 +35,7 @@ import {
   type TableChromeSlotId,
 } from './table-chrome.ts';
 import { IMAGE_WRAP_TARGETS, type ImageWrapTarget } from '../store/package/drawing-projection.ts';
+import type { ReviewAuthorInfo } from '../output/revision-presentation.ts';
 
 /** Instance-only surface on the concrete facade — not part of the public `Editor` contract. */
 function surfaceOf(editor: Editor): PaginatedSurface | null {
@@ -389,6 +390,28 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
           id,
           enabled: false,
           disabledReason: 'no content control at the selection',
+          active: false,
+        };
+  }
+  if (id === 'review.authors') {
+    const capability = editor.can({ type: 'toggleReviewPane' });
+    if (!capability.ok) {
+      return {
+        id,
+        enabled: false,
+        disabledReason: capability.reason,
+        active: false,
+      };
+    }
+    const reviewerEditor = editor as Editor & {
+      readonly getReviewAuthors?: () => readonly ReviewAuthorInfo[];
+    };
+    return (reviewerEditor.getReviewAuthors?.().length ?? 0) > 0
+      ? { id, enabled: true, disabledReason: null, active: false }
+      : {
+          id,
+          enabled: false,
+          disabledReason: 'the document has no review authors',
           active: false,
         };
   }

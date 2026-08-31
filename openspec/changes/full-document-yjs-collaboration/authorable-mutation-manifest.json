@@ -12,7 +12,7 @@
     "headerFooterLifecycle": 5,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
-    "chromeSlots": 56,
+    "chromeSlots": 57,
     "chromeCommandWired": 29,
     "chromeProbe": 6,
     "acceptedRunProperties": 19,
@@ -1159,6 +1159,7 @@
       "format.painter",
       "format.clear",
       "review.comments",
+      "review.authors",
       "review.editingMode",
       "contentControl.showAll",
       "contentControl.formFill",
@@ -1230,12 +1231,20 @@
     ],
     "unwiredCommandShaped": [
       "zoom.level",
+      "review.authors",
       "contentControl.showAll",
       "contentControl.formFill",
       "contentControl.inspector",
       "insert.sectionBreakContinuous"
     ],
-    "nonMutating": ["history.undo", "history.redo", "review.comments", "file.open", "file.save"]
+    "nonMutating": [
+      "history.undo",
+      "history.redo",
+      "review.comments",
+      "review.authors",
+      "file.open",
+      "file.save"
+    ]
   },
   "unsupportedRows": [
     {

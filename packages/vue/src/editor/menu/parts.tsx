@@ -638,7 +638,7 @@ function mergePanel(
 // One menu: trigger + panel
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Props for `DocxEditor.Menu.Menu` and the four pinned menu parts. @public */
+/** Props for `DocxEditor.Menu.Menu` and the five pinned menu parts. @public */
 export interface MenuProps {
   /** Which menu this is. Only one panel in the bar is open at a time, keyed on this. */
   id: MenuId;

@@ -10,7 +10,11 @@
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { StoryScope } from '@docx-editor.dev/core/store';
 import { bodyParagraphSectionIndexForSession } from './body-paragraph-section-index.ts';
-import { enumerateDocumentSections } from '../layout/section-properties.ts';
+import {
+  enumerateDocumentSections,
+  projectedSectionSourceIndexes,
+} from '../layout/section-properties.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { storyBlocks } from '../layout/story-roots.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 import { noteIdOf, notesOf } from '../store/package/note-nodes.ts';
@@ -34,17 +38,26 @@ export function sectionIndexForCaret(
   session: TreeDocxSessionView,
   paragraphId: string,
   scope: StoryScope,
-  openHeaderFooterSection?: number
+  openHeaderFooterSection?: number,
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): number {
   const part = session.part();
-  const sections = enumerateDocumentSections(part);
+  const sections = enumerateDocumentSections(part, displayMode, authorFilter);
   if (sections.length <= 1) return 0;
+  const sourceIndexes = projectedSectionSourceIndexes(part, displayMode, authorFilter);
+  const projectedIndexOf = (sourceIndex: number): number => {
+    const exact = sourceIndexes.indexOf(sourceIndex);
+    if (exact !== -1) return exact;
+    const following = sourceIndexes.findIndex((candidate) => candidate > sourceIndex);
+    return following === -1 ? Math.max(0, sourceIndexes.length - 1) : following;
+  };
 
   // BODY content answers for itself, whatever story happens to be open. Consulting the open
   // scope first made `sectionPropertiesAt(id)` ignore its own argument for the whole time a
   // header was open, so every body paragraph reported the header's section.
   const bodyIndex = bodySectionIndexOf(session, paragraphId);
-  if (bodyIndex !== null) return bodyIndex;
+  if (bodyIndex !== null) return projectedIndexOf(bodyIndex);
 
   if (scope.kind === 'headerFooter') {
     if (openHeaderFooterSection !== undefined && sections[openHeaderFooterSection] !== undefined) {
@@ -57,13 +70,13 @@ export function sectionIndexForCaret(
           [...slots.values()].some((slot) => slot.rId === scope.rId)
         )
       );
-    return owning === -1 ? 0 : owning;
+    return owning === -1 ? 0 : projectedIndexOf(owning);
   }
 
   const referencing = referencingBodyParagraph(session, paragraphId);
   if (referencing !== null) {
     const viaReference = bodySectionIndexOf(session, referencing);
-    if (viaReference !== null) return viaReference;
+    if (viaReference !== null) return projectedIndexOf(viaReference);
   }
   return 0;
 }
@@ -98,16 +111,27 @@ export function sectionAnchorParagraphFor(
   session: TreeDocxSessionView,
   paragraphId: string,
   scope: StoryScope,
-  openHeaderFooterSection?: number
+  openHeaderFooterSection?: number,
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): SectionAnchor {
   const part = session.part();
   const sections = enumerateDocumentSections(part);
   if (sections.length <= 1) return { kind: 'whole-document' };
+  const sourceIndexes = projectedSectionSourceIndexes(part, displayMode, authorFilter);
   const own = bodySectionIndexOf(session, paragraphId);
-  if (own !== null) return { kind: 'anchor', paragraphId };
+  const projectedIndex = sectionIndexForCaret(
+    session,
+    paragraphId,
+    scope,
+    openHeaderFooterSection,
+    displayMode,
+    authorFilter
+  );
+  const sourceIndex = sourceIndexes[projectedIndex] ?? projectedIndex;
+  if (own !== null && own === sourceIndex) return { kind: 'anchor', paragraphId };
 
-  const index = sectionIndexForCaret(session, paragraphId, scope, openHeaderFooterSection);
-  const section = sections[index];
+  const section = sections[sourceIndex];
   if (!section) return { kind: 'unaddressable' };
   const blocks = storyBlocks(part);
   for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {

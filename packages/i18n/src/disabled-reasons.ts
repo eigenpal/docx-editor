@@ -16,6 +16,7 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'this document permits editing only as tracked changes': 'disabledReason.trackedOnly',
   'no document is loaded': 'disabledReason.noDocument',
   'no document is open': 'disabledReason.noDocument',
+  'the document has no review authors': 'disabledReason.noReviewAuthors',
   'no content control at the selection': 'disabledReason.noContentControl',
   // Keyed on `NO_COPIED_FORMATTING` in the engine's format-painter lane; the two must stay
   // the same sentence or the refusal reaches every locale in English.

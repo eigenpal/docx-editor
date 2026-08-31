@@ -13,10 +13,25 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
+      // Keep every published core subpath on source. A missing entry falls through to dist,
+      // mixing stale declarations with the source graph and making clean typechecks build-order
+      // dependent.
       "@docx-editor.dev/core": ["../core/src/index.ts"],
+      "@docx-editor.dev/core/automation": ["../core/src/automation/index.ts"],
+      "@docx-editor.dev/core/binding": ["../core/src/binding/index.ts"],
+      "@docx-editor.dev/core/collaboration": ["../core/src/collaboration/index.ts"],
+      "@docx-editor.dev/core/collaboration/replication": [
+        "../core/src/collaboration/replication.ts"
+      ],
+      "@docx-editor.dev/core/contracts/document": ["../core/src/contracts/document.ts"],
+      "@docx-editor.dev/core/contracts/editor": ["../core/src/contracts/editor.ts"],
+      "@docx-editor.dev/core/contracts/interaction": ["../core/src/contracts/interaction.ts"],
+      "@docx-editor.dev/core/contracts/modules": ["../core/src/contracts/modules.ts"],
+      "@docx-editor.dev/core/contracts/types": ["../core/src/contracts/types-barrel.ts"],
       "@docx-editor.dev/core/export": ["../core/src/export/index.ts"],
       "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"],
       "@docx-editor.dev/core/layout": ["../core/src/layout/index.ts"],
+      "@docx-editor.dev/core/output": ["../core/src/output/index.ts"],
       "@docx-editor.dev/core/store": ["../core/src/store/index.ts"],
       "@docx-editor.dev/fonts": ["../fonts/src/index.ts"]
     }

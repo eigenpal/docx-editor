@@ -29,7 +29,7 @@ import {
 } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import type { PendingLine } from './paragraph-flow.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { flowBlocksInBox } from './semantic-table-layout.ts';
 import type { BlockFragmentRecord, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
@@ -102,6 +102,7 @@ export interface TextboxStoryLayoutOptions {
   /** Host story's page-field context; PAGE-family fields inside the story project against it. */
   readonly pageContext?: FieldPageContext;
   readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /** Document properties, for a document-property field inside the text-box story. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /** Sanitized hyperlink seams inherited from the story containing this text box. */
@@ -146,6 +147,7 @@ interface TextboxStoryListResolve {
   readonly rawIndex: NumberingIndex;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly listItems: ReadonlyMap<string, ResolvedListItem> | undefined;
 }
 
@@ -168,7 +170,8 @@ export function textboxStoryListItems(
   content: OoxmlNode,
   numberingIndex: NumberingIndex | undefined,
   styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode = 'all-markup'
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): ReadonlyMap<string, ResolvedListItem> | undefined {
   if (!numberingIndex || numberingIndex.nums.size === 0) return undefined;
   const memo = textboxStoryListResolves.get(content);
@@ -176,18 +179,20 @@ export function textboxStoryListItems(
     memo &&
     memo.rawIndex === numberingIndex &&
     memo.styleCascade === styleCascade &&
-    memo.displayMode === displayMode
+    memo.displayMode === displayMode &&
+    memo.authorFilter === authorFilter
   ) {
     return memo.listItems;
   }
   const linked = withNumberingStyleLinks(numberingIndex, styleCascade);
-  const blocks = textboxStoryBlocks(content, displayMode);
+  const blocks = textboxStoryBlocks(content, displayMode, authorFilter);
   const resolved = resolveStoryListItems(blocks, linked, styleCascade);
   const listItems = resolved.size > 0 ? resolved : undefined;
   textboxStoryListResolves.set(content, {
     rawIndex: numberingIndex,
     styleCascade,
     displayMode,
+    authorFilter,
     listItems,
   });
   return listItems;
@@ -277,6 +282,7 @@ interface HostedListTokenMemo {
   readonly rawIndex: NumberingIndex;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly token: string;
 }
 
@@ -296,7 +302,8 @@ function hostedTextboxListToken(
   block: OoxmlNode,
   numberingIndex: NumberingIndex,
   styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode = 'all-markup'
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): string {
   if (numberingIndex.nums.size === 0) return '';
   const scan = hostedTextboxContents(block);
@@ -306,13 +313,20 @@ function hostedTextboxListToken(
     memo &&
     memo.rawIndex === numberingIndex &&
     memo.styleCascade === styleCascade &&
-    memo.displayMode === displayMode
+    memo.displayMode === displayMode &&
+    memo.authorFilter === authorFilter
   ) {
     return memo.token;
   }
   const parts: string[] = [];
   for (const content of scan.contents) {
-    const items = textboxStoryListItems(content, numberingIndex, styleCascade, displayMode);
+    const items = textboxStoryListItems(
+      content,
+      numberingIndex,
+      styleCascade,
+      displayMode,
+      authorFilter
+    );
     if (!items) continue;
     for (const [paragraphId, item] of items) {
       parts.push(framedTokenJoin([paragraphId, item.cacheToken]));
@@ -329,6 +343,7 @@ function hostedTextboxListToken(
     rawIndex: numberingIndex,
     styleCascade,
     displayMode,
+    authorFilter,
     token,
   });
   return token;
@@ -344,12 +359,13 @@ function hostedTextboxListToken(
 export function hostedListTokenDeps(
   numberingIndex: NumberingIndex | undefined,
   styleCascade: StyleCascadeTable | undefined,
-  displayMode?: RevisionDisplayMode
+  displayMode?: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): { readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string } {
   if (!numberingIndex || numberingIndex.nums.size === 0) return {};
   return {
     hostedListTokenForParagraph: (paragraph) =>
-      hostedTextboxListToken(paragraph, numberingIndex, styleCascade, displayMode),
+      hostedTextboxListToken(paragraph, numberingIndex, styleCascade, displayMode, authorFilter),
   };
 }
 
@@ -398,12 +414,17 @@ export function layoutTextboxStory(
     };
   }
 
-  const blocks: readonly OoxmlElement[] = textboxStoryBlocks(story.content, options.displayMode);
+  const blocks: readonly OoxmlElement[] = textboxStoryBlocks(
+    story.content,
+    options.displayMode,
+    options.revisionAuthorFilter
+  );
   const listItems = textboxStoryListItems(
     story.content,
     options.numberingIndex,
     options.styleCascade,
-    options.displayMode
+    options.displayMode,
+    options.revisionAuthorFilter
   );
   const prefix = textboxLineIdPrefix(projection.drawingNodeId);
   let lineCounter = 0;
@@ -423,6 +444,7 @@ export function layoutTextboxStory(
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),
     ...(options.displayMode ? { displayMode: options.displayMode } : {}),
+    ...(options.revisionAuthorFilter ? { revisionAuthorFilter: options.revisionAuthorFilter } : {}),
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
     ...(options.drawingTokenForParagraph
       ? { drawingTokenForParagraph: options.drawingTokenForParagraph }

@@ -33,7 +33,8 @@
     "sectionBreakNextPage": "Podział sekcji (następna strona)",
     "insertFootnote": "Wstaw przypis dolny",
     "insertEndnote": "Wstaw przypis końcowy",
-    "insertTable": null
+    "insertTable": null,
+    "review": null
   },
   "formattingBar": {
     "groups": {
@@ -560,6 +561,11 @@
     "refresh": "Aktualizuj cały spis",
     "refreshPageNumbers": "Aktualizuj tylko numery stron"
   },
+  "reviewers": {
+    "label": "Recenzenci",
+    "all": "Wszyscy",
+    "markupOptions": null
+  },
   "editingMode": {
     "editing": "Edytowanie",
     "label": "Tryb edycji",
@@ -740,7 +746,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

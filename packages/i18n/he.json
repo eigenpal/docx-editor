@@ -33,7 +33,8 @@
     "sectionBreakNextPage": "מעבר מקטע (עמוד הבא)",
     "insertFootnote": "הוסף הערת שוליים",
     "insertEndnote": "הוסף הערת סוף",
-    "insertTable": null
+    "insertTable": null,
+    "review": null
   },
   "formattingBar": {
     "groups": {
@@ -560,6 +561,11 @@
     "refresh": "עדכון הטבלה כולה",
     "refreshPageNumbers": "עדכון מספרי עמודים בלבד"
   },
+  "reviewers": {
+    "label": "סוקרים",
+    "all": "הכול",
+    "markupOptions": null
+  },
   "editingMode": {
     "editing": "עריכה",
     "label": "מצב עריכה",
@@ -740,7 +746,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

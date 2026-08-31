@@ -21,9 +21,8 @@ const NOOP_UNSUBSCRIBE = () => {};
  * change appears, then authors who only commented. One person is one colour across the two.
  * Once assigned, a slot stays with that author for the attached document session.
  *
- * A read of the rendered projection, not of the package: a resolved view hides the
- * revisions it has resolved away, so an author whose only change is hidden there is listed
- * only if they also commented.
+ * The complete attached-document roster. An author remains here while the current review
+ * view hides their revisions and comments, so reviewer chrome can turn them on again.
  *
  * The array is reference-stable between changes (the facade caches per layout and colour
  * state), so it is safe as a dependency and under `useSyncExternalStore`.

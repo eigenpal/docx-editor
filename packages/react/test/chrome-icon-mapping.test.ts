@@ -62,6 +62,7 @@ const ICON_FOR_SLOT: Record<string, string> = {
   'insert.sectionPages': 'format_list_numbered',
   'insert.pageXofY': 'format_list_numbered',
   'review.comments': 'comment',
+  'review.authors': 'visibility',
   // The "✎ Editing ▾" mode pill's leading pencil glyph.
   'review.editingMode': 'edit_note',
   'contentControl.showAll': 'visibility',

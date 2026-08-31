@@ -45,8 +45,8 @@ import {
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   markRevisionFields,
-  paragraphMarkFormatRevisionOf,
-  paragraphMarkRevisionsOf,
+  visibleParagraphMarkRevisionsOf,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import {
@@ -282,6 +282,8 @@ export interface SemanticLayoutOptions {
    * accepted every proposal in it.
    */
   readonly displayMode?: RevisionDisplayMode;
+  /** Reviewers whose revisions render as their accepted projection. */
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /**
    * Per-section furniture, index-aligned with `enumerateDocumentSections`.
    *
@@ -575,10 +577,11 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
-  // ONE display mode for both. Section block ranges index this exact list; enumerating over a
-  // differently-filtered one lands body text under the wrong section's page geometry.
+  // ONE revision projection for both. Section block ranges index this exact list; using a
+  // different display mode or author predicate maps filtered blocks to the wrong geometry.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
-  const blocks = storyBlocks(part, displayMode);
+  const authorFilter = options.revisionAuthorFilter;
+  const blocks = storyBlocks(part, displayMode, authorFilter);
   const sections = enumerateDocumentSectionsFromBlocks(part, blocks).sections;
   // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
   // fingerprint into the producer so incremental identity reuse cannot keep stale boundaries.
@@ -634,7 +637,8 @@ export function layoutSemanticDocument(
       ? { footnotesPart: options.notes.footnotesPart, endnotesPart: options.notes.endnotesPart }
       : undefined,
     options.notes ? noteRefNumberingFromNotes(options.notes, sections) : undefined,
-    displayMode
+    displayMode,
+    authorFilter
   );
   const optionsForBody = refFields === null ? optionsWithLists : { ...optionsWithLists, refFields };
 
@@ -908,10 +912,8 @@ function layoutBlocksPass(
   // The default-tab interval moves every default-interval tab, and the prepared-block memo
   // is keyed by producer — so it belongs here rather than only in the per-paragraph token.
   const defaultTabStopPt = options.defaultTabStopPt;
-  // The display mode changes what every paragraph contains, so it changes every break. Folding
-  // it into `producer` is what makes a mode switch invalidate the break cache AND the session
-  // checkpoints without a `ModelChange`: the document did not change, the projection of it did.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const authorFilter = options.revisionAuthorFilter;
   const showsMarkup = displayMode === 'all-markup';
   const tocChromeParagraphIds = options.tocFieldChromeParagraphIds;
   const emptyTocPlaceholderIds = options.emptyTocPlaceholderParagraphIds;
@@ -939,6 +941,7 @@ function layoutBlocksPass(
     options.noteMarks,
     defaultTabStopPt,
     displayMode,
+    authorFilter,
     options.bodyPageNumberFormat
   );
 
@@ -1075,7 +1078,12 @@ function layoutBlocksPass(
   const hasInlineDrawingContext = options.inlineDrawingLayout !== undefined;
   // ONE provider for every fold of this flow — the prepass block fold and the cell-lane
   // deps below hand `hostedTextboxListToken` the same (index, cascade, mode) tuple.
-  const hostedListDeps = hostedListTokenDeps(options.numberingIndex, styleCascade, displayMode);
+  const hostedListDeps = hostedListTokenDeps(
+    options.numberingIndex,
+    styleCascade,
+    displayMode,
+    authorFilter
+  );
   const prepareBlock = (block: OoxmlElement, availableWidth: number): PreparedBlock => {
     // The RAW token, compared by the memo below so a table's kilobyte aggregate keeps its
     // identity fast path; the context joins only when a key is actually built. `||`, not
@@ -1347,7 +1355,8 @@ function layoutBlocksPass(
         prepared,
         contentWidth,
         styleCascade,
-        displayMode
+        displayMode,
+        authorFilter
       ),
       keepsNext,
       markerTexts,
@@ -1712,6 +1721,7 @@ function layoutBlocksPass(
       styleCascade,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
       ...(displayMode ? { displayMode } : {}),
+      ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
       ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
       ...(options.projectLink ? { projectLink: options.projectLink } : {}),
       ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
@@ -1793,6 +1803,7 @@ function layoutBlocksPass(
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
     displayMode,
+    ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
   };
 
   type PreparedParagraph = Extract<PreparedBlock, { kind: 'paragraph' }>;
@@ -1909,6 +1920,7 @@ function layoutBlocksPass(
         bodyPageFields: bodyPageFieldContext,
         ...(refFields ? { refFields } : {}),
         displayMode,
+        ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
         ...(options.noteMarks ? { noteMarks: options.noteMarks } : {}),
         ...(options.inlineDrawingLayout
           ? { inlineDrawingLayout: options.inlineDrawingLayout }
@@ -1992,6 +2004,7 @@ function layoutBlocksPass(
       anchorLineTopByModelStart,
       columnIndex: flowColumnIndex,
       displayMode,
+      ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
     });
     return Object.freeze([...pageZones, ...synthesized]);
   };
@@ -2052,6 +2065,7 @@ function layoutBlocksPass(
       anchorFrames,
       styleCascade,
       displayMode,
+      ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
       deps: tableDeps,
       shiftAnchor: (paragraphId, dy) =>
         shiftAnchoredDrawingRecords(pendingAnchoredDrawings, paragraphId, dy),
@@ -2325,7 +2339,8 @@ function layoutBlocksPass(
       startY: number;
     }> | null = null;
 
-    const markRevisions = paragraphMarkRevisionsOf(entry.paragraph);
+    const { revisions: markRevisions, formatRevision: markFormatRevision } =
+      visibleParagraphMarkRevisionsOf(entry.paragraph, displayMode, authorFilter);
     const mergeGroup = paragraphMergeGroupOf(entry.paragraph);
     const mergeBoundaries = mergeGroup ? mergeBoundariesOf(mergeGroup) : null;
 
@@ -2519,9 +2534,7 @@ function layoutBlocksPass(
         // Final fragment only — a paragraph split across pages must not draw two pilcrows —
         // and `all-markup` only, as Word draws attribution in All Markup alone. The record's
         // own declaration carries the rest of the reasoning.
-        ...(isLast && showsMarkup
-          ? markRevisionFields(markRevisions, paragraphMarkFormatRevisionOf(entry.paragraph))
-          : {}),
+        ...(isLast && showsMarkup ? markRevisionFields(markRevisions, markFormatRevision) : {}),
         lines: mergedLines ?? pending,
         box: { x: columnX + indent.left, y: top, width: available, height },
       });
@@ -2615,6 +2628,7 @@ function layoutBlocksPass(
             sourceOrderOf,
             layoutTextboxStory: layoutTextboxStoryForBody,
             displayMode,
+            ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
           })
         );
       }

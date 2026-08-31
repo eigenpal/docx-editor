@@ -5,13 +5,18 @@
 
 import type { TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type {
+  RevisionAuthorFilter,
+  RevisionDisplayMode,
   SemanticLayout,
   SemanticPosition,
   SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import type { ViewScope } from '../contracts/editor.ts';
-import { enumerateDocumentSections } from '../layout/section-properties.ts';
+import {
+  enumerateDocumentSections,
+  projectedSectionSourceIndexes,
+} from '../layout/section-properties.ts';
 import {
   type ActiveHeaderFooterScope,
   clampSelectionToScope,
@@ -72,6 +77,8 @@ export function createHeaderFooterScopeController(deps: {
    * which already forwards it.
    */
   sectionAtPage(pageIndex: number): { sectionIndex: number; sectionStart: number };
+  revisionDisplayMode(): RevisionDisplayMode;
+  revisionAuthorFilter(): RevisionAuthorFilter | undefined;
   selection(): SemanticSelection;
   setScopeSelection(next: SemanticSelection): void;
   noteModelMoved(): void;
@@ -103,6 +110,24 @@ export function createHeaderFooterScopeController(deps: {
   let activeHf: ActiveHeaderFooterScope | null = null;
   let cachedState: HeaderFooterStateSnapshot | null = null;
   let cachedStateKey = '';
+
+  const sectionProjection = () => {
+    const part = deps.session.part();
+    const displayMode = deps.revisionDisplayMode();
+    const authorFilter = deps.revisionAuthorFilter();
+    return {
+      sections: enumerateDocumentSections(part, displayMode, authorFilter),
+      sourceIndexes: projectedSectionSourceIndexes(part, displayMode, authorFilter),
+    };
+  };
+
+  const projectedIndexForSource = (sourceIndex: number): number => {
+    const { sourceIndexes } = sectionProjection();
+    const exact = sourceIndexes.indexOf(sourceIndex);
+    if (exact !== -1) return exact;
+    const following = sourceIndexes.findIndex((candidate) => candidate > sourceIndex);
+    return following === -1 ? Math.max(0, sourceIndexes.length - 1) : following;
+  };
 
   const reconcileOccurrence = (): void => {
     if (!activeHf) return;
@@ -200,7 +225,9 @@ export function createHeaderFooterScopeController(deps: {
         ? prior.sectionIndex
         : found
           ? deps.sectionAtPage(pageIndex).sectionIndex
-          : fromPackage?.sectionIndex);
+          : fromPackage
+            ? projectedIndexForSource(fromPackage.sectionIndex)
+            : undefined);
 
     activeHf = {
       scope: { kind: 'headerFooter', rId: args.rId },
@@ -267,17 +294,19 @@ export function createHeaderFooterScopeController(deps: {
       if (!activeHf) return null;
       const bySection = deps.session.headerFooterResolutionBySection();
       let sectionIndex = activeHf.sectionIndex ?? 0;
+      const projection = sectionProjection();
       let inherited: boolean | undefined;
       let titlePage: boolean | undefined;
       let evenAndOddHeaders: boolean | undefined;
 
-      const applySection = (index: number): boolean => {
-        const section = bySection[index];
+      const applySection = (projectedIndex: number): boolean => {
+        const sourceIndex = projection.sourceIndexes[projectedIndex] ?? projectedIndex;
+        const section = bySection[sourceIndex];
         if (!section) return false;
         const slots = activeHf!.kind === 'header' ? section.headers : section.footers;
         const slot = slots.get(activeHf!.variant);
         if (!slot || slot.rId !== activeHf!.scope.rId) return false;
-        sectionIndex = index;
+        sectionIndex = projectedIndex;
         inherited = slot.inherited;
         titlePage = section.titlePage;
         evenAndOddHeaders = section.evenAndOddHeaders;
@@ -288,24 +317,25 @@ export function createHeaderFooterScopeController(deps: {
         // Shared rIds appear in multiple sections — prefer declared over inherited, then
         // the lowest section index, so chrome "Same as Previous" matches the authored ref.
         let bestInherited: boolean | undefined;
-        bySection.forEach((section, index) => {
+        bySection.forEach((section, sourceIndex) => {
           const slots = activeHf!.kind === 'header' ? section.headers : section.footers;
           const slot = slots.get(activeHf!.variant);
           if (!slot || slot.rId !== activeHf!.scope.rId) return;
           const better =
             bestInherited === undefined ||
             (bestInherited && !slot.inherited) ||
-            (bestInherited === slot.inherited && index < sectionIndex);
+            (bestInherited === slot.inherited &&
+              projectedIndexForSource(sourceIndex) < sectionIndex);
           if (!better) return;
-          sectionIndex = index;
+          sectionIndex = projectedIndexForSource(sourceIndex);
           inherited = slot.inherited;
           titlePage = section.titlePage;
           evenAndOddHeaders = section.evenAndOddHeaders;
           bestInherited = slot.inherited;
         });
       }
-      const sections = enumerateDocumentSections(deps.session.part());
-      const sectionProps = sections[sectionIndex]?.properties ?? sections.at(-1)?.properties;
+      const sectionProps =
+        projection.sections[sectionIndex]?.properties ?? projection.sections.at(-1)?.properties;
       const headerDistanceTwips = sectionProps?.margins.headerTwips;
       const footerDistanceTwips = sectionProps?.margins.footerTwips;
       return {

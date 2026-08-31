@@ -51,8 +51,9 @@ import {
 } from './table-anchor-republish.ts';
 import {
   markRevisionFields,
-  paragraphMarkFormatRevisionOf,
-  paragraphMarkRevisionsOf,
+  paragraphMarkMarkupVisible,
+  visibleParagraphMarkRevisionsOf,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import {
@@ -121,12 +122,20 @@ export function paragraphDocumentOrderOf(
   }[],
   contentWidth: number,
   styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): ReadonlyMap<string, number> {
   const order = new Map<string, number>();
   let index = 0;
   const walkTable = (table: OoxmlElement): void => {
-    const structure = readTableStructure(table, contentWidth, 0, styleCascade, displayMode);
+    const structure = readTableStructure(
+      table,
+      contentWidth,
+      0,
+      styleCascade,
+      displayMode,
+      authorFilter
+    );
     if (!structure) return;
     for (const row of structure.rows) {
       for (const cell of row.cells) {
@@ -278,6 +287,7 @@ export interface TableFlowDeps {
    * around it showed the original.
    */
   readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   readonly anchorFrameBase?: () => Omit<
     DrawingAnchorFrameContext,
     'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
@@ -558,6 +568,7 @@ function placeCellParagraph(
       ...(deps.bodyPageFields ? { bodyPageFields: deps.bodyPageFields } : {}),
       ...(deps.refFields ? { refFields: deps.refFields } : {}),
       displayMode: deps.displayMode,
+      ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
       ...(deps.noteMarks ? { noteMarks: deps.noteMarks } : {}),
       ...(deps.inlineDrawingLayout ? { inlineDrawingLayout: deps.inlineDrawingLayout } : {}),
       contentLeft: 0,
@@ -598,17 +609,14 @@ function placeCellParagraph(
   // tracked-INSERTED publishes neither, so blocking there would keep a line Word's accept-all
   // output does not have. (A tracked DELETE is a different case and never reaches here: the
   // resolved view merges that paragraph away upstream.)
-  //
-  // Called behind the position gate, not before it. This runs for every paragraph of every
-  // cell on every placement pass — trial rows and continuations included — and each call is
-  // two `find` scans over `w:pPr` and `w:rPr`, which `||` would not short-circuit because
+  // Called behind the position gate: every paragraph is scanned on every placement pass,
+  // including trial rows and continuations; `||` cannot skip the `w:pPr`/`w:rPr` scan because
   // `listItem` is undefined for the non-list paragraphs that are the overwhelming majority.
   // The same pair of calls further down is gated on `showsMarkup` for exactly this reason.
   const publishesPlacedGlyphs = (): boolean =>
     listItem !== undefined ||
     (deps.displayMode === 'all-markup' &&
-      (paragraphMarkRevisionsOf(paragraph).length > 0 ||
-        paragraphMarkFormatRevisionOf(paragraph) !== null));
+      paragraphMarkMarkupVisible(paragraph, 'all-markup', deps.revisionAuthorFilter));
   const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
 
   const appliedBefore =
@@ -871,8 +879,11 @@ function placeCellParagraph(
   // `all-markup` here lit up markup inside footnotes in the very view that must show none.
   // The lanes that do mean All Markup say so — the body always has, and furniture does now.
   const showsMarkup = complete && deps.displayMode === 'all-markup';
-  const markRevisions = showsMarkup ? paragraphMarkRevisionsOf(paragraph) : [];
-  const markFormatRevision = showsMarkup ? paragraphMarkFormatRevisionOf(paragraph) : null;
+  const markProjection = showsMarkup
+    ? visibleParagraphMarkRevisionsOf(paragraph, 'all-markup', deps.revisionAuthorFilter)
+    : null;
+  const markRevisions = markProjection?.revisions ?? [];
+  const markFormatRevision = markProjection?.formatRevision ?? null;
   const marker =
     lineStart === 0
       ? publishListMarker(
@@ -956,6 +967,7 @@ function placeCellParagraph(
           measurer: deps.measurer,
           ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
           ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
+          ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
         })
       );
     }
@@ -1654,7 +1666,8 @@ function emitNestedTable(
     containerWidth,
     depth,
     deps.styleCascade,
-    deps.displayMode
+    deps.displayMode,
+    deps.revisionAuthorFilter
   );
   if (!structure || structure.rows.length === 0) return null;
   const nestedDeferred: DeferredRowAnchor[] = [];

@@ -19,6 +19,7 @@ import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { createLayoutSession } from '../layout-session.ts';
 import type { PendingLine } from '../pending-line.ts';
+import { revisionAuthorFilter } from '../revision-projection.ts';
 import type { BlockFragmentRecord, SemanticLayout, StyleSpanRecord } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -153,6 +154,88 @@ function firstParagraphOf(part: OoxmlElement): OoxmlElement {
 }
 
 describe('shared document-layout coordinator invalidation', () => {
+  test('projected sections retain their canonical header and footer source index', () => {
+    const section = (rId: string, text: string, markRevision = '') =>
+      `<w:p><w:pPr><w:sectPr><w:headerReference w:type="default" r:id="${rId}"/>` +
+      `<w:pgSz w:w="${rId === 'rHeaderOne' ? 10000 : 12000}" w:h="15840"/>` +
+      `</w:sectPr>${markRevision}</w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+    const body =
+      section('rHeaderOne', 'absorbed', '<w:rPr><w:del w:id="9" w:author="Ada"/></w:rPr>') +
+      section('rHeaderTwo', 'survivor') +
+      '<w:p><w:r><w:t>final</w:t></w:r></w:p>' +
+      '<w:sectPr><w:headerReference w:type="default" r:id="rHeaderThree"/></w:sectPr>';
+    const loaded = readOoxmlPackage(
+      zipSync({
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}">` +
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            [1, 2, 3]
+              .map(
+                (index) =>
+                  `<Override PartName="/word/header${index}.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>`
+              )
+              .join('') +
+            '</Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rDoc" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/_rels/document.xml.rels': strToU8(
+          `<Relationships xmlns="${REL}">` +
+            [1, 2, 3]
+              .map(
+                (index) =>
+                  `<Relationship Id="rHeader${['One', 'Two', 'Three'][index - 1]}" Type="${R}/header" Target="header${index}.xml"/>`
+              )
+              .join('') +
+            '</Relationships>'
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`
+        ),
+        ...Object.fromEntries(
+          [1, 2, 3].map((index) => [
+            `word/header${index}.xml`,
+            strToU8(
+              `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>header ${index}</w:t></w:r></w:p></w:hdr>`
+            ),
+          ])
+        ),
+      })
+    );
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const pkg = loaded.package;
+    const view: HeadlessDocumentView = {
+      part: () => pkg.parts.get(pkg.mainDocumentPart)!,
+      currentPackage: () => pkg,
+      packageRevision: () => 0,
+      stylesRoot: () => null,
+      numberingRoot: () => null,
+      settingsRoot: () => null,
+      documentThemeFonts: () => ({ major: null, minor: null }),
+      documentProperties: () => ({}),
+      headerFooterPartsBySection: () => resolveHeaderFooterPartsBySection(pkg),
+      headerFooterResolutionBySection: () => resolveHeaderFooterResolutionBySection(pkg),
+      relationshipTarget: (relationshipId) =>
+        relationshipTargetIn(pkg, pkg.mainDocumentPart, relationshipId),
+    };
+    const furniture = createDocumentFurnitureSource({
+      view,
+      measurer: createFixedMeasurer(6, 14),
+      producer: 'projected-section-furniture-source',
+      cache: createParagraphLayoutCache<readonly PendingLine[]>(),
+      revisionAuthorFilter: revisionAuthorFilter(['Ada']),
+      linkProjectors: createDocumentLinkProjectors(view),
+    }).sectionFurniture();
+
+    expect(furniture).toHaveLength(2);
+    expect(furniture.map((entry) => entry?.headers.get('default')?.rId)).toEqual([
+      'rHeaderTwo',
+      'rHeaderThree',
+    ]);
+  });
+
   test('keeps occurrence rIds when distinct header and footer relationships share parts', () => {
     const body =
       '<w:p><w:pPr><w:sectPr>' +

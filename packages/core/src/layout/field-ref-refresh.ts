@@ -241,7 +241,10 @@ export function planNoteRefFieldResultRefreshes(
   for (const { noteKind, notesPart } of noteParts) {
     if (!notesPart) continue;
     const updates: { paragraphId: string; fieldNodeId: string; text: string }[] = [];
-    for (const story of noteStoriesOfPart(notesPart)) {
+    for (const story of noteStoriesOfPart(
+      notesPart,
+      options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE
+    )) {
       if (updates.length >= MAX_FIELD_RESULT_UPDATES) break;
       collectStaleResultUpdates(notesPart, walkStoryParagraphs(story), context, updates);
     }

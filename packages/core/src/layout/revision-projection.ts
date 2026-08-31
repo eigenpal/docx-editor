@@ -15,6 +15,7 @@ import {
   isContentRevisionKind,
   type OoxmlElement,
   type OoxmlNode,
+  type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 
 /**
@@ -64,6 +65,167 @@ export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
  * sees them, rather than a clean-looking document hiding edits nobody has accepted.
  */
 export const DEFAULT_REVISION_DISPLAY_MODE: RevisionDisplayMode = 'all-markup';
+
+/**
+ * A view-time reviewer filter. Authors in `hiddenAuthors` render as if their revisions were
+ * accepted, while every other author keeps the display mode's normal projection.
+ *
+ * `cacheKey` is a canonical, content-based identity for layout caches. The set itself is kept
+ * because author names are attacker-controlled strings and must never be parsed back from a
+ * delimiter-based key.
+ */
+export interface RevisionAuthorFilter {
+  readonly hiddenAuthors: ReadonlySet<string>;
+  readonly cacheKey: string;
+}
+
+/** A read-only Set facade whose backing collection is unreachable to consumers. */
+class ImmutableStringSet implements ReadonlySet<string> {
+  readonly #values: Set<string>;
+
+  constructor(values: Iterable<string>) {
+    this.#values = new Set(values);
+    Object.freeze(this);
+  }
+
+  get size(): number {
+    return this.#values.size;
+  }
+
+  has(value: string): boolean {
+    return this.#values.has(value);
+  }
+
+  forEach(
+    callbackfn: (value: string, value2: string, set: ReadonlySet<string>) => void,
+    thisArg?: unknown
+  ): void {
+    this.#values.forEach((value) => callbackfn.call(thisArg, value, value, this));
+  }
+
+  entries() {
+    return this.#values.entries();
+  }
+
+  keys() {
+    return this.#values.keys();
+  }
+
+  values() {
+    return this.#values.values();
+  }
+
+  union<U>(other: {
+    readonly size: number;
+    has(value: U): boolean;
+    keys(): Iterator<U>;
+  }): Set<string | U> {
+    const result = new Set<string | U>(this.#values);
+    const keys = other.keys();
+    let next = keys.next();
+    while (!next.done) {
+      result.add(next.value);
+      next = keys.next();
+    }
+    return result;
+  }
+
+  intersection<U>(other: {
+    readonly size: number;
+    has(value: U): boolean;
+    keys(): Iterator<U>;
+  }): Set<string & U> {
+    const result = new Set<string & U>();
+    for (const value of this.#values) {
+      if (other.has(value as unknown as U)) result.add(value as string & U);
+    }
+    return result;
+  }
+
+  difference<U>(other: {
+    readonly size: number;
+    has(value: U): boolean;
+    keys(): Iterator<U>;
+  }): Set<string> {
+    const result = new Set<string>();
+    for (const value of this.#values) {
+      if (!other.has(value as unknown as U)) result.add(value);
+    }
+    return result;
+  }
+
+  symmetricDifference<U>(other: {
+    readonly size: number;
+    has(value: U): boolean;
+    keys(): Iterator<U>;
+  }): Set<string | U> {
+    const result = new Set<string | U>(this.#values);
+    const keys = other.keys();
+    let next = keys.next();
+    while (!next.done) {
+      const value = next.value;
+      if (this.#values.has(value as unknown as string)) result.delete(value);
+      else result.add(value);
+      next = keys.next();
+    }
+    return result;
+  }
+
+  isSubsetOf(other: {
+    readonly size: number;
+    has(value: unknown): boolean;
+    keys(): Iterator<unknown>;
+  }): boolean {
+    if (this.size > other.size) return false;
+    for (const value of this.#values) if (!other.has(value)) return false;
+    return true;
+  }
+
+  isSupersetOf(other: {
+    readonly size: number;
+    has(value: unknown): boolean;
+    keys(): Iterator<unknown>;
+  }): boolean {
+    if (this.size < other.size) return false;
+    const keys = other.keys();
+    let next = keys.next();
+    while (!next.done) {
+      if (!this.#values.has(next.value as string)) return false;
+      next = keys.next();
+    }
+    return true;
+  }
+
+  isDisjointFrom(other: {
+    readonly size: number;
+    has(value: unknown): boolean;
+    keys(): Iterator<unknown>;
+  }): boolean {
+    for (const value of this.#values) if (other.has(value)) return false;
+    return true;
+  }
+
+  [Symbol.iterator]() {
+    return this.#values[Symbol.iterator]();
+  }
+}
+
+/** Shared immutable empty author set for editor-facing visibility snapshots. @internal */
+export const EMPTY_REVISION_AUTHOR_SET: ReadonlySet<string> = new ImmutableStringSet([]);
+
+/** Build a canonical reviewer filter. An empty input returns `undefined` for the fast path. */
+export function revisionAuthorFilter(
+  hiddenAuthors: Iterable<string>
+): RevisionAuthorFilter | undefined {
+  const hidden = new Set<string>();
+  for (const author of hiddenAuthors) hidden.add(author);
+  if (hidden.size === 0) return undefined;
+  const ordered = [...hidden].sort();
+  return Object.freeze({
+    hiddenAuthors: new ImmutableStringSet(ordered),
+    cacheKey: JSON.stringify(ordered),
+  });
+}
 
 /** No enclosing revision. Shared so the common untracked case allocates nothing. */
 export const NO_REVISIONS: readonly RevisionAttribution[] = Object.freeze([]);
@@ -141,17 +303,106 @@ export const MAX_REVISION_DEPTH = MAX_REVISION_NESTING;
  */
 export function revisionsVisible(
   revisions: readonly RevisionAttribution[],
-  mode: RevisionDisplayMode
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): boolean {
-  if (mode === 'all-markup' || revisions.length === 0) return true;
+  if (revisions.length === 0 || (mode === 'all-markup' && !authorFilter)) return true;
   for (const revision of revisions) {
+    const revisionMode = authorFilter?.hiddenAuthors.has(revision.author) ? 'proposed' : mode;
+    if (revisionMode === 'all-markup') continue;
     const removed =
-      mode === 'proposed'
+      revisionMode === 'proposed'
         ? revision.kind === 'delete' || revision.kind === 'moveFrom'
         : revision.kind === 'insert' || revision.kind === 'moveTo';
     if (removed) return false;
   }
   return true;
+}
+
+/**
+ * The attribution that remains visible after the author filter is applied.
+ *
+ * `null` means the accepted projection removes the content. The shared empty array means the
+ * content remains as ordinary text, without reviewer colour, decoration, or a change bar.
+ */
+export function projectedRevisions(
+  revisions: readonly RevisionAttribution[],
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): readonly RevisionAttribution[] | null {
+  if (!authorFilter && mode === 'all-markup') return revisions;
+  if (!revisionsVisible(revisions, mode, authorFilter)) return null;
+  if (!authorFilter) return revisions;
+  const visible = revisions.filter((revision) => !authorFilter.hiddenAuthors.has(revision.author));
+  return visible.length === 0 ? NO_REVISIONS : visible;
+}
+
+/** Whether one attributed mark remains markup in the current reviewer view. */
+export function revisionMarkupVisible(
+  revision: RevisionAttribution,
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): boolean {
+  return mode === 'all-markup' && !authorFilter?.hiddenAuthors.has(revision.author);
+}
+
+/** Remove hidden revision provenance while preserving the accepted formatting itself. */
+export function projectedRevisionProperties(
+  properties: readonly OoxmlProperty[],
+  authorFilter?: RevisionAuthorFilter
+): readonly OoxmlProperty[] {
+  if (!authorFilter) return properties;
+  return properties.filter(
+    (property) =>
+      (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') ||
+      !authorFilter.hiddenAuthors.has(property.attributes?.author ?? '')
+  );
+}
+
+/** Paragraph-mark revisions that remain attributed in the current reviewer view. */
+export function visibleParagraphMarkRevisionsOf(
+  paragraph: OoxmlNode,
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): {
+  readonly revisions: readonly RevisionAttribution[];
+  readonly formatRevision: RevisionAttribution | null;
+} {
+  if (mode !== 'all-markup') {
+    return { revisions: NO_REVISIONS, formatRevision: null };
+  }
+  if (!authorFilter) {
+    return {
+      revisions: paragraphMarkRevisionsOf(paragraph),
+      formatRevision: paragraphMarkFormatRevisionOf(paragraph),
+    };
+  }
+  const revisions = paragraphMarkRevisionsOf(paragraph).filter((revision) =>
+    revisionMarkupVisible(revision, mode, authorFilter)
+  );
+  const formatRevision = paragraphMarkFormatRevisionOf(paragraph);
+  return {
+    revisions,
+    formatRevision:
+      formatRevision && revisionMarkupVisible(formatRevision, mode, authorFilter)
+        ? formatRevision
+        : null,
+  };
+}
+
+export function paragraphMarkMarkupVisible(
+  paragraph: OoxmlNode,
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): boolean {
+  if (mode !== 'all-markup') return false;
+  const revisions = paragraphMarkRevisionsOf(paragraph);
+  if (!authorFilter) {
+    return revisions.length > 0 || paragraphMarkFormatRevisionOf(paragraph) !== null;
+  }
+  if (revisions.some((revision) => !authorFilter.hiddenAuthors.has(revision.author))) return true;
+  const formatRevision = paragraphMarkFormatRevisionOf(paragraph);
+  return formatRevision !== null && !authorFilter.hiddenAuthors.has(formatRevision.author);
 }
 
 /**

@@ -28,7 +28,8 @@ import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { piecesOfParagraph } from './field-projection.ts';
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
+import { cacheProjection } from './bounded-projection-cache.ts';
 import { markRemovedInMode, revisionRemovesParagraph } from './revision-visibility.ts';
 
 export { MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING } from '../store/package/content-control-walk.ts';
@@ -49,11 +50,16 @@ function storyRootOf(part: OoxmlPart): OoxmlElement | undefined {
   return findBody(root);
 }
 
-function acceptStoryBlock(block: OoxmlElement, displayMode: RevisionDisplayMode): boolean {
+function acceptStoryBlock(
+  block: OoxmlElement,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): boolean {
   // A paragraph whose mark AND content a tracked revision deleted is not part of the
   // rendered document; without this it reaches pagination with no spans and still
   // claims a full line box.
-  if (block.kind === 'paragraph' && revisionRemovesParagraph(block, displayMode)) return false;
+  if (block.kind === 'paragraph' && revisionRemovesParagraph(block, displayMode, authorFilter))
+    return false;
   return true;
 }
 
@@ -106,9 +112,10 @@ function isParagraphProperties(node: OoxmlNode): boolean {
  */
 function withMergedParagraphs(
   parented: readonly ParentedBlock[],
-  displayMode: RevisionDisplayMode
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): OoxmlElement[] {
-  if (displayMode === 'all-markup') return parented.map((entry) => entry.block);
+  if (displayMode === 'all-markup' && !authorFilter) return parented.map((entry) => entry.block);
   const out: OoxmlElement[] = [];
   let pendingMembers: OoxmlElement[] = [];
   let pendingParent: string | null = null;
@@ -128,12 +135,15 @@ function withMergedParagraphs(
       out.push(block);
       continue;
     }
-    const removed = markRemovedInMode(block, displayMode);
+    const removed = markRemovedInMode(block, displayMode, authorFilter);
     // Measuring costs a walk of the paragraph, so it is asked ONLY where a merge could happen:
     // of a paragraph whose mark is removed, and of the survivor a pending run would merge into.
     // A document with no tracked marks answers `false` to the cheap question and stops, which
     // is every keystroke in the view the free engine renders by default.
-    if ((removed || pendingMembers.length > 0) && !memberIsAddressable(block, displayMode)) {
+    if (
+      (removed || pendingMembers.length > 0) &&
+      !memberIsAddressable(block, displayMode, authorFilter)
+    ) {
       // Cannot be measured, so cannot be merged INTO either: a survivor whose own offsets do
       // not line up would take the previous members' characters at the wrong index.
       endRun();
@@ -182,10 +192,11 @@ function mergedTrailingRun(members: readonly OoxmlElement[]): readonly OoxmlElem
  */
 export function mergedFlowBlocks(
   children: readonly OoxmlNode[],
-  displayMode: RevisionDisplayMode
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): OoxmlElement[] {
-  const merged = withMergedParagraphs(flowBlocksWithParent(children), displayMode);
-  return merged.filter((block) => acceptStoryBlock(block, displayMode));
+  const merged = withMergedParagraphs(flowBlocksWithParent(children), displayMode, authorFilter);
+  return merged.filter((block) => acceptStoryBlock(block, displayMode, authorFilter));
 }
 
 /**
@@ -277,19 +288,28 @@ function flowBlocksWithParent(children: readonly OoxmlNode[]): readonly Parented
  * until that paragraph itself changes. Without this the walk ran for every candidate on every
  * flush, and a document with hundreds of tracked marks paid it on each keystroke.
  */
-const addressableByNode = new WeakMap<OoxmlElement, Map<RevisionDisplayMode, boolean>>();
+const addressableByNode = new WeakMap<OoxmlElement, Map<string, boolean>>();
 
-function memberIsAddressable(member: OoxmlElement, displayMode: RevisionDisplayMode): boolean {
+function memberIsAddressable(
+  member: OoxmlElement,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): boolean {
+  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}`;
   const perMode = addressableByNode.get(member);
-  const cached = perMode?.get(displayMode);
+  const cached = perMode?.get(key);
   if (cached !== undefined) return cached;
-  const answer = measureMember(member, displayMode);
-  if (perMode) perMode.set(displayMode, answer);
-  else addressableByNode.set(member, new Map([[displayMode, answer]]));
+  const answer = measureMember(member, displayMode, authorFilter);
+  if (perMode) cacheProjection(perMode, key, answer);
+  else addressableByNode.set(member, new Map([[key, answer]]));
   return answer;
 }
 
-function measureMember(member: OoxmlElement, displayMode: RevisionDisplayMode): boolean {
+function measureMember(
+  member: OoxmlElement,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): boolean {
   if (!fieldCharsBalanced(member)) return false;
   const pieces = piecesOfParagraph(
     member,
@@ -298,7 +318,15 @@ function measureMember(member: OoxmlElement, displayMode: RevisionDisplayMode): 
     undefined,
     undefined,
     undefined,
-    displayMode
+    displayMode,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    authorFilter
   );
   let published = 0;
   for (const piece of pieces) published = Math.max(published, piece.end);
@@ -351,8 +379,7 @@ function fieldCharsBalanced(paragraph: OoxmlElement): boolean {
  * reference; 16 slots cover one flush's parts (body + header/footer variants + notes).
  * Callers treat the result as read-only, so a shared array is safe to hand out.
  */
-const storyBlocksCache =
-  createRecentRootCache<Partial<Record<RevisionDisplayMode, OoxmlElement[]>>>(16);
+const storyBlocksCache = createRecentRootCache<Map<string, OoxmlElement[]>>(16);
 
 /**
  * The story's blocks — paragraphs and tables — in document order, flattening through
@@ -363,15 +390,17 @@ const storyBlocksCache =
  */
 export function storyBlocks(
   part: OoxmlPart,
-  displayMode: RevisionDisplayMode = 'all-markup'
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): OoxmlElement[] {
+  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}`;
   const perMode = storyBlocksCache.get(part);
-  const cached = perMode?.[displayMode];
+  const cached = perMode?.get(key);
   if (cached) return cached;
   const root = storyRootOf(part);
-  const blocks = root ? mergedFlowBlocks(root.children, displayMode) : [];
-  if (perMode) perMode[displayMode] = blocks;
-  else storyBlocksCache.set(part, { [displayMode]: blocks });
+  const blocks = root ? mergedFlowBlocks(root.children, displayMode, authorFilter) : [];
+  if (perMode) cacheProjection(perMode, key, blocks);
+  else storyBlocksCache.set(part, new Map([[key, blocks]]));
   return blocks;
 }
 
@@ -383,10 +412,11 @@ export function storyBlocks(
  */
 export function noteStoryBlocks(
   note: OoxmlNode,
-  displayMode: RevisionDisplayMode = 'all-markup'
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): OoxmlElement[] {
   if (note.kind !== 'note') return [];
-  return mergedFlowBlocks(note.children, displayMode);
+  return mergedFlowBlocks(note.children, displayMode, authorFilter);
 }
 
 /**
@@ -398,8 +428,9 @@ export function noteStoryBlocks(
  */
 export function textboxStoryBlocks(
   content: OoxmlNode,
-  displayMode: RevisionDisplayMode = 'all-markup'
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): OoxmlElement[] {
   if (content.kind === 'textValue') return [];
-  return mergedFlowBlocks(content.children, displayMode);
+  return mergedFlowBlocks(content.children, displayMode, authorFilter);
 }

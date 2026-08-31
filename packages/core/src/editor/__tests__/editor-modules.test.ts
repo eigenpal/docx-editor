@@ -113,6 +113,12 @@ describe('free tier: no modules registered', () => {
     const pill = toolbarCommandState(editor, 'review.editingMode');
     expect(pill.enabled).toBe(false);
     expect(pill.disabledReason).toContain('pro');
+    const authors = toolbarCommandState(editor, 'review.authors');
+    expect(authors.enabled).toBe(false);
+    expect(authors.disabledReason).toContain('pro');
+    editor.setReviewAuthorVisible('Ada', false);
+    expect(editor.isReviewAuthorVisible('Ada')).toBe(true);
+    expect(editor.snapshot().hiddenReviewAuthors).toEqual([]);
   });
 
   test('a document declaring w:trackRevisions still opens editable, untracked', () => {

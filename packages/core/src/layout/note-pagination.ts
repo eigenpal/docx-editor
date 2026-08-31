@@ -7,11 +7,14 @@
 // layout-owned note records. Endnotes reserve nothing on reference pages — they collect at
 // sectEnd / docEnd. Hostile counts and oscillation fail closed with named reasons.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlPart } from '@docx-editor.dev/core/store';
 import { fragmentOwnsPosition, fragmentParagraphs } from './line-segments.ts';
-import { collectNoteReferences } from '../store/package/note-references.ts';
+import {
+  collectNoteReferences,
+  collectProjectedNoteReferences,
+} from '../store/package/note-references.ts';
 import type { DocumentSection } from './section-properties.ts';
-import { storyBlocks } from './story-roots.ts';
+import { paragraphSectionIndexOf } from './note-paragraph-section-index.ts';
 import {
   customMarkFollows,
   formatNoteScopeId,
@@ -87,7 +90,22 @@ import { cascadeRunProperties, type StyleCascadeTable } from './style-cascade.ts
 import { DEFAULT_RUN_STYLE, resolveRunStyle, type ResolvedRunStyle } from './run-style.ts';
 import { finalizePageFieldProjection } from './field-projection.ts';
 import { overflowPageShellAt, type OverflowPageShell } from './page-furniture-insets.ts';
-import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
+import {
+  noteReferenceRevisionContextKey,
+  noteReferenceVisible,
+} from './note-reference-visibility.ts';
+import {
+  fingerprintHits,
+  fingerprintHitsIdentity,
+  pageRefsEqual,
+  type PageRefHit,
+} from './note-ref-hit.ts';
+export type { PageRefHit } from './note-ref-hit.ts';
 
 /**
  * Bound on reflow attempts for an UNSEEDED document layout pass (cold open).
@@ -186,12 +204,13 @@ export interface NotesLayoutInput {
   readonly documentEndnoteProps: ResolvedEndnoteProperties;
   readonly measurer: TextMeasurer;
   readonly producer: string;
-  readonly displayMode?: RevisionDisplayMode;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
   /** `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker. */
   readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /**
    * Link projector seams, same as the body walk's. Normally injected by `semantic-layout`
    * from its own options, so a note's `w:hyperlink` / HYPERLINK field carries the same
@@ -321,42 +340,6 @@ interface NotesPassMemo {
   >;
 }
 
-/** ONE per-hit key: every fingerprint and equality below derives from it, so a new
- * {@link PageRefHit} field joins the caches' validity in exactly one place. */
-function hitIdentityKey(hit: PageRefHit): string {
-  return `${hit.noteKind}|${hit.noteId}|${hit.paragraphId}|${hit.customMarkFollows ? 1 : 0}|${hit.sectionIndex}`;
-}
-
-function fingerprintHits(hits: readonly PageRefHit[]): string {
-  const parts: string[] = [];
-  for (const hit of hits) {
-    parts.push(`${hitIdentityKey(hit)}|${hit.atomOffset}`);
-  }
-  return parts.join(';');
-}
-
-/**
- * {@link fingerprintHits} without the character offsets. This is the fingerprint that
- * decides the MEMO's lifetime: marks, numbering and note stories depend on which notes
- * exist, their order, sections and custom-mark flags — never on where in the paragraph
- * the citation sits. A keystroke that only shifts offsets keeps the memo.
- */
-function fingerprintHitsIdentity(hits: readonly PageRefHit[]): string {
-  return hits.map(hitIdentityKey).join(';');
-}
-
-/** Content equality of two per-page ref lists (order, ids, owners, offsets, flags). */
-function pageRefsEqual(a: readonly PageRefHit[], b: readonly PageRefHit[]): boolean {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    const x = a[i]!;
-    const y = b[i]!;
-    if (x.atomOffset !== y.atomOffset || hitIdentityKey(x) !== hitIdentityKey(y)) return false;
-  }
-  return true;
-}
-
 /** Identity fields the fingerprint cannot express; compared against the previous input. */
 const notesInputIdentities = new WeakMap<
   NotesPassMemo,
@@ -448,18 +431,6 @@ export interface NotesAttachResult {
   /** Mark context used for the final body projection (for incremental cache tokens). */
   readonly noteMarks: NoteMarkContext;
 }
-
-interface PageRefHit {
-  readonly noteKind: NoteKind;
-  readonly noteId: number;
-  readonly paragraphId: string;
-  /** Canonical UTF-16 atom offset within the paragraph. */
-  readonly atomOffset: number;
-  readonly customMarkFollows: boolean;
-  readonly sectionIndex: number;
-}
-
-export type { PageRefHit };
 
 type NoteCarryMap = Map<
   string,
@@ -707,6 +678,7 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
     styleCascade: input.styleCascade,
     numberingIndex: input.numberingIndex,
     defaultTabStopPt: input.defaultTabStopPt,
+    revisionAuthorFilter: input.revisionAuthorFilter,
     projectLink: input.projectLink,
     projectLinkForPart: input.projectLinkForPart,
     projectFieldLink: input.projectFieldLink,
@@ -2515,137 +2487,33 @@ export function attachNotesToLayout(
   };
 }
 
-/** Body-story note references only (HF / nested notes are round-tripped, not laid out). */
-function collectBodyNoteReferences(part: OoxmlPart): readonly {
+function collectBodyNoteReferences(
+  part: OoxmlPart,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): readonly {
   readonly noteKind: NoteKind;
   readonly noteId: number;
   readonly paragraphId: string;
   readonly atomOffset: number;
   readonly customMarkFollows: boolean;
 }[] {
-  return collectNoteReferences(part).map((hit) => ({
+  const unfiltered = displayMode === 'all-markup' && authorFilter === undefined;
+  const hits = unfiltered
+    ? collectNoteReferences(part)
+    : collectProjectedNoteReferences(part, {
+        includeReference: (_node, ancestors) =>
+          noteReferenceVisible(ancestors, displayMode, authorFilter),
+        projectionKey: `${displayMode};${authorFilter?.cacheKey ?? ''}`,
+        ancestryKey: noteReferenceRevisionContextKey,
+      });
+  return hits.map((hit) => ({
     noteKind: hit.noteKind,
     noteId: hit.noteId,
     paragraphId: hit.paragraphId,
     atomOffset: hit.atomOffset,
     customMarkFollows: hit.customMarkFollows,
   }));
-}
-
-/**
- * The retained previous answer per SESSION, content-validated. The map is a pure function of
- * the section bounds plus each block's paragraph-id list, and a keystroke changes NEITHER —
- * it replaces one block with a twin carrying the same ids. Rebuilding 10k+ map entries per
- * keystroke cost more than the lookups the map serves, so the previous answer is kept and
- * revalidated by identity-diffing the block lists: blocks that changed identity must still
- * contribute the same ids, or the map rebuilds.
- *
- * Keyed weakly on the caller's session object — NOT a module slot — so a disposed editor's
- * block list and id map die with its session instead of staying pinned until some other
- * document lays out, and two live editors do not thrash one slot. A call without a session
- * has no incremental pass to serve and builds fresh.
- */
-interface ParagraphSectionIndexMemo {
-  blocks: readonly OoxmlElement[];
-  boundsFingerprint: string;
-  map: ReadonlyMap<string, number>;
-}
-
-const paragraphSectionIndexMemos = new WeakMap<object, ParagraphSectionIndexMemo>();
-
-function sectionBoundsFingerprint(
-  sections: readonly DocumentSection[],
-  displayMode: RevisionDisplayMode
-): string {
-  return `${displayMode};${sections.map((section) => `${section.blockStart}-${section.blockEndExclusive}`).join(',')}`;
-}
-
-function blockParagraphIdsEqual(next: OoxmlElement, previous: OoxmlElement): boolean {
-  if (next.kind !== previous.kind) return false;
-  if (next.kind === 'paragraph') return next.id === previous.id;
-  const nextIds = tableParagraphIdsOf(next);
-  const previousIds = tableParagraphIdsOf(previous);
-  if (nextIds.length !== previousIds.length) return false;
-  for (let index = 0; index < nextIds.length; index += 1) {
-    if (nextIds[index] !== previousIds[index]) return false;
-  }
-  return true;
-}
-
-/** Map paragraph id → section index for note numbering / position resolution. */
-function paragraphSectionIndexOf(
-  part: OoxmlPart,
-  sections: readonly DocumentSection[],
-  displayMode: RevisionDisplayMode,
-  /** The caller's layout session, as the memo's weak key; absent means no reuse. */
-  memoHost?: object
-): ReadonlyMap<string, number> {
-  // IN THE SAME MODE the section bounds were counted in. `blockStart`/`blockEndExclusive`
-  // index a mode-filtered block list, and a resolved view has fewer blocks — a paragraph a
-  // tracked mark merged away is gone from it. Indexing an All Markup list with those bounds
-  // put paragraphs in the wrong section, which renumbers a footnote in a section nobody
-  // edited.
-  const blocks = storyBlocks(part, displayMode);
-  const boundsFingerprint = sectionBoundsFingerprint(sections, displayMode);
-  const memo = memoHost ? paragraphSectionIndexMemos.get(memoHost) : undefined;
-  if (
-    memo &&
-    memo.boundsFingerprint === boundsFingerprint &&
-    memo.blocks.length === blocks.length
-  ) {
-    let reusable = true;
-    for (let index = 0; index < blocks.length; index += 1) {
-      const block = blocks[index]!;
-      const previous = memo.blocks[index]!;
-      if (block === previous) continue;
-      if (!blockParagraphIdsEqual(block, previous)) {
-        reusable = false;
-        break;
-      }
-    }
-    if (reusable) {
-      // Re-anchor on the fresh list so the next keystroke diffs against it, not a stale one.
-      memo.blocks = blocks;
-      return memo.map;
-    }
-  }
-  const map = new Map<string, number>();
-  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
-    const section = sections[sectionIndex]!;
-    for (let i = section.blockStart; i < section.blockEndExclusive; i += 1) {
-      const block = blocks[i];
-      if (!block) continue;
-      if (block.kind === 'paragraph') {
-        map.set(block.id, sectionIndex);
-        continue;
-      }
-      // Tables: nested paragraph ids memoized per immutable table node, so this per-pass
-      // index re-walks only tables an edit replaced.
-      for (const id of tableParagraphIdsOf(block)) map.set(id, sectionIndex);
-    }
-  }
-  if (memoHost) paragraphSectionIndexMemos.set(memoHost, { blocks, boundsFingerprint, map });
-  return map;
-}
-
-const tableParagraphIdMemos = new WeakMap<OoxmlNode, readonly string[]>();
-
-function tableParagraphIdsOf(table: OoxmlNode): readonly string[] {
-  const cached = tableParagraphIdMemos.get(table);
-  if (cached) return cached;
-  const ids: string[] = [];
-  const walk = (node: OoxmlNode, depth: number): void => {
-    if (depth > 32) return;
-    if (node.kind === 'textValue') return;
-    if (node.kind === 'paragraph') {
-      ids.push(node.id);
-      return;
-    }
-    for (const child of node.children) walk(child, depth + 1);
-  };
-  walk(table, 0);
-  tableParagraphIdMemos.set(table, ids);
-  return ids;
 }
 
 // Reserve-map algebra (context key, compact/equal/grow/fingerprint) lives in
@@ -2687,7 +2555,12 @@ export function layoutSemanticDocumentWithNotes<
   notesInput: NotesLayoutInput,
   runBody: (opts: Opts) => SemanticLayout
 ): SemanticLayout {
-  const packageRefs = collectBodyNoteReferences(part);
+  const displayMode =
+    (optionsWithLists as { displayMode?: RevisionDisplayMode }).displayMode ??
+    DEFAULT_REVISION_DISPLAY_MODE;
+  const authorFilter = (optionsWithLists as { revisionAuthorFilter?: RevisionAuthorFilter })
+    .revisionAuthorFilter;
+  const packageRefs = collectBodyNoteReferences(part, displayMode, authorFilter);
   if (packageRefs.length === 0) {
     if (optionsWithLists.session) {
       optionsWithLists.session.notes = null;
@@ -2702,8 +2575,8 @@ export function layoutSemanticDocumentWithNotes<
   const paragraphSectionIndex = paragraphSectionIndexOf(
     part,
     sections,
-    (optionsWithLists as { displayMode?: RevisionDisplayMode }).displayMode ??
-      DEFAULT_REVISION_DISPLAY_MODE,
+    displayMode,
+    authorFilter,
     optionsWithLists.session
   );
   const builtHits = buildPageRefHits(packageRefs, paragraphSectionIndex);
@@ -2901,18 +2774,24 @@ export function inheritNotesLayoutInput(
     readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
     readonly documentProperties?: NotesLayoutInput['documentProperties'];
     readonly refFields?: NotesLayoutInput['refFields'];
+    readonly displayMode?: NotesLayoutInput['displayMode'];
+    readonly revisionAuthorFilter?: NotesLayoutInput['revisionAuthorFilter'];
   }
 ): NotesLayoutInput {
   const projectLink = notes.projectLink ?? body.projectLink;
   const projectFieldLink = notes.projectFieldLink ?? body.projectFieldLink;
   const documentProperties = notes.documentProperties ?? body.documentProperties;
   const refFields = notes.refFields ?? body.refFields;
+  const displayMode = notes.displayMode ?? body.displayMode;
+  const revisionAuthorFilter = notes.revisionAuthorFilter ?? body.revisionAuthorFilter;
   return {
     ...notes,
     ...(projectLink ? { projectLink } : {}),
     ...(projectFieldLink ? { projectFieldLink } : {}),
     ...(documentProperties ? { documentProperties } : {}),
     ...(refFields ? { refFields } : {}),
+    ...(displayMode ? { displayMode } : {}),
+    ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
   };
 }
 

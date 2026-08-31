@@ -64,7 +64,9 @@ function liveView(store: TreePackageStore): HeadlessDocumentView {
     settingsRoot: () => null,
     documentThemeFonts: () => ({ major: null, minor: null }),
     documentProperties: () => ({}),
-    headerFooterPartsBySection: () => [],
+    headerFooterPartsBySection: () => resolveHeaderFooterPartsBySection(store.currentPackage()),
+    headerFooterResolutionBySection: () =>
+      resolveHeaderFooterResolutionBySection(store.currentPackage()),
     relationshipTarget: (relationshipId) =>
       relationshipTargetIn(
         store.currentPackage(),
@@ -90,6 +92,54 @@ test('export default keeps all tracked markup visible', async () => {
     forEachSemanticSpan(layout, ({ span }) => text.push(span.text));
     expect(layout.displayMode).toBe('all-markup');
     expect(text.join('')).toBe('OldNew');
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+test('export reviewer filtering reaches body, furniture, and notes through shared core', async () => {
+  const deleted = (author: string, text: string, id: number) =>
+    `<w:del w:id="${id}" w:author="${author}"><w:r><w:delText>${text}</w:delText></w:r></w:del>`;
+  const body =
+    `<w:p><w:r><w:t>body </w:t></w:r>${deleted('Ada', 'ada-body ', 1)}` +
+    `${deleted('Grace', 'grace-body', 2)}<w:r><w:footnoteReference w:id="1"/></w:r></w:p>` +
+    '<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/></w:sectPr>';
+  const source = pkg(body, undefined, {
+    relationships:
+      `<Relationship Id="rHeader" Type="${R}/header" Target="header1.xml"/>` +
+      `<Relationship Id="rNotes" Type="${R}/footnotes" Target="footnotes.xml"/>`,
+    contentTypes:
+      '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>' +
+      '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>',
+    entries: {
+      'word/header1.xml': strToU8(
+        `<w:hdr xmlns:w="${W}"><w:p><w:r><w:t>header </w:t></w:r>` +
+          `${deleted('Ada', 'ada-header ', 3)}${deleted('Grace', 'grace-header', 4)}</w:p></w:hdr>`
+      ),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}"><w:footnote w:id="1"><w:p>` +
+          `<w:r><w:t>note </w:t></w:r>${deleted('Ada', 'ada-note ', 5)}` +
+          `${deleted('Grace', 'grace-note', 6)}</w:p></w:footnote></w:footnotes>`
+      ),
+    },
+  });
+  const main = source.parts.get(source.mainDocumentPart)!;
+  const store = new TreePackageStore(source, normalizeParagraphIdentity(main));
+  const opened = openDocumentForExport(liveView(store), {
+    hiddenRevisionAuthors: ['Ada'],
+  });
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const text: string[] = [];
+    forEachSemanticSpan(await opened.session.layout(), ({ span }) => text.push(span.text));
+    const all = text.join('').replaceAll(/\s+/g, '');
+    expect(all).not.toContain('ada-body');
+    expect(all).not.toContain('ada-header');
+    expect(all).not.toContain('ada-note');
+    expect(all).toContain('grace-body');
+    expect(all).toContain('grace-header');
+    expect(all).toContain('grace-note');
   } finally {
     opened.session.dispose();
   }

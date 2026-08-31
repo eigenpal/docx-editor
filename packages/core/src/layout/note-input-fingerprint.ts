@@ -30,6 +30,7 @@ const NOTES_LAYOUT_INPUT_MEMO_ROLES = Object.freeze({
   measurer: 'identity-check',
   producer: 'content-fingerprint',
   displayMode: 'content-fingerprint',
+  revisionAuthorFilter: 'content-fingerprint',
   cache: 'identity-check',
   styleCascade: 'identity-check',
   numberingIndex: 'identity-check',
@@ -76,6 +77,7 @@ const NOTE_STORY_OPTION_MEMO_ROLES = Object.freeze({
   drawingsForPart: 'drawing-epoch-guarded',
   ownerPartName: 'derived-owner',
   displayMode: 'content-fingerprint',
+  revisionAuthorFilter: 'content-fingerprint',
 } satisfies Readonly<Record<keyof LayoutNoteStoryOptions, NoteStoryOptionRole>>);
 
 void NOTE_STORY_OPTION_MEMO_ROLES;
@@ -123,6 +125,7 @@ export function fingerprintNotesInput(input: NotesLayoutInput): string | null {
   return [
     input.producer,
     input.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
+    input.revisionAuthorFilter?.cacheKey ?? '',
     input.defaultTabStopPt ?? '',
     input.drawingLayoutEpoch ?? '',
     input.linkRelsEpoch ?? '',

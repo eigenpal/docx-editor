@@ -266,37 +266,207 @@ jobs:
           owner: ${{ github.repository_owner }}
           repositories: docx-editor,docx-editor.dev
 
-      # Comment "🚀 Released in vX.Y.Z" on every PR that shipped in this release.
-      # The squash-merge subject GitHub writes ends in "(#N)" = the PR number;
-      # the previous umbrella tag bounds "what shipped", and chore: release
-      # commits are skipped so the release PR doesn't comment on itself.
-      - name: Comment release link on shipped PRs
+      # Fan the release out to the work it shipped, all computed ONCE here at
+      # publish time — nothing later rescans or resyncs:
+      #   1. Comment "🚀 Released in vX.Y.Z" on every PR in the release.
+      #   2. Comment the same on every issue those PRs closed.
+      #   3. Stamp the roadmap board's "Shipped in" text field on each issue.
+      # "What shipped in a tag" = squash-merge subjects ending in "(#N)"
+      # between the previous umbrella tag and that tag, chore: release
+      # commits skipped so the release PR doesn't comment on itself. Issues =
+      # each PR's closing references (GitHub's own linkage) plus closing
+      # keywords in commit messages. The first run creates the "Shipped in"
+      # field and backfills it across every past v* tag — field only, no
+      # comments on historical issues; after that each run touches only its
+      # own release. To force a re-backfill, delete the field on the board.
+      # PR/issue comments use the pal App token; board reads and writes use
+      # the org-project PAT the label sync uses, and degrade to warnings so a
+      # board problem never blocks the comments.
+      - name: Comment on shipped PRs and closed issues, stamp the board
         if: ${{ steps.changesets.outputs.published == 'true' && github.ref == 'refs/heads/main' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ steps.pal-token.outputs.token }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
           PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.published-packages }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
+          ORG: eigenpal
+          PROJECT_NUMBER: 2
+          FIELD_NAME: Shipped in
         run: |
+          # `|| true` throughout: the shell runs with -e, so a grep no-match
+          # (first-ever release, a tag with no closed issues) or a failed
+          # best-effort API call would otherwise abort this step — which, via
+          # the implicit success() gate, would skip the landing-notify
+          # dispatch below.
           version=$(jq -r '.[0].version' <<<"$PUBLISHED_PACKAGES")
-          # `|| true`: the default shell is `bash -eo pipefail`, so a grep
-          # no-match (first-ever release) or a SIGPIPE from head closing the
-          # pipe early would otherwise abort this step — which, via the implicit
-          # success() gate, would skip the landing-notify dispatch below.
-          prev=$(git tag --list 'v*' --sort=-v:refname | grep -vx "v$version" | head -n1 || true)
-          if [ -z "$prev" ]; then
-            echo "No previous v* tag found; skipping PR comments."
-            exit 0
+          OWNER="${REPO%%/*}"
+          NAME="${REPO#*/}"
+          # Includes v$version: the umbrella tag was created locally above.
+          ALL_TAGS=$(git tag --list 'v*' --sort=v:refname)
+
+          # Resolve the board and the "Shipped in" field once; create the
+          # TEXT field on the first run. A missing field makes gh exit
+          # non-zero (NOT_FOUND alongside the data), so tolerate the failure
+          # and read what did resolve.
+          BACKFILL=0
+          PROJECT_JSON=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
+            query($org: String!, $number: Int!, $field: String!) {
+              organization(login: $org) {
+                projectV2(number: $number) {
+                  id
+                  field(name: $field) {
+                    ... on ProjectV2Field { id dataType }
+                  }
+                }
+              }
+            }' -f org="$ORG" -F number="$PROJECT_NUMBER" -f field="$FIELD_NAME" 2>/dev/null || true)
+          PROJECT_ID=$(jq -r '.data.organization.projectV2.id // ""' <<<"$PROJECT_JSON")
+          FIELD_ID=$(jq -r '.data.organization.projectV2.field.id // ""' <<<"$PROJECT_JSON")
+          if [ -z "$PROJECT_ID" ]; then
+            echo "::warning::Roadmap project did not resolve (PROJECT_TOKEN?); issues get comments only."
+          elif [ -z "$FIELD_ID" ]; then
+            FIELD_ID=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
+              mutation($project: ID!, $name: String!) {
+                createProjectV2Field(input: {projectId: $project, dataType: TEXT, name: $name}) {
+                  projectV2Field { ... on ProjectV2Field { id } }
+                }
+              }' -f project="$PROJECT_ID" -f name="$FIELD_NAME" 2>/dev/null \
+              | jq -r '.data.createProjectV2Field.projectV2Field.id // ""' || true)
+            if [ -n "$FIELD_ID" ]; then
+              echo "Created text field '$FIELD_NAME' — backfilling every past release."
+              BACKFILL=1
+            else
+              echo "::warning::Could not create the '$FIELD_NAME' field; issues get comments only."
+            fi
           fi
-          release_url="${{ github.server_url }}/${{ github.repository }}/releases/tag/v$version"
-          prs=$(git log --format='%s' "$prev..HEAD" \
-            | grep -vE '^chore: release' \
-            | grep -oE '\(#[0-9]+\)$' | tr -dc '0-9\n' | sort -u)
-          echo "Shipped PRs: ${prs:-none}"
-          for pr in $prs; do
-            gh pr comment "$pr" --repo "${{ github.repository }}" \
-              --body "🚀 Released in [v$version]($release_url)" \
-              || echo "Could not comment on #$pr (closed / cross-fork?); continuing."
-          done
+
+          # Comment on one issue and stamp its board item. The one read per
+          # issue proves the number is an issue (a commit keyword can point
+          # at a PR) and finds its board item; an off-board issue (no area
+          # label) gets the comment but no field — board membership stays
+          # owned by the label sync.
+          sync_issue() {
+            local n="$1" tag="$2" release_url="$3" do_comment="$4"
+            local item_id=""
+            if [ -n "$FIELD_ID" ]; then
+              local issue_json
+              if ! issue_json=$(GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
+                query($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    issue(number: $number) {
+                      projectItems(first: 50) { nodes { id project { id } } }
+                    }
+                  }
+                }' -f owner="$OWNER" -f name="$NAME" -F number="$n" 2>/dev/null); then
+                echo "#$n is not an issue; skipping."
+                return 0
+              fi
+              item_id=$(jq -r --arg pid "$PROJECT_ID" '
+                first(.data.repository.issue.projectItems.nodes[] | select(.project.id == $pid) | .id) // ""' \
+                <<<"$issue_json")
+            else
+              # Board unavailable: still verify the number is an issue
+              # before commenting on it.
+              if ! gh api graphql -f query='
+                query($owner: String!, $name: String!, $number: Int!) {
+                  repository(owner: $owner, name: $name) { issue(number: $number) { id } }
+                }' -f owner="$OWNER" -f name="$NAME" -F number="$n" > /dev/null 2>&1; then
+                echo "#$n is not an issue; skipping."
+                return 0
+              fi
+            fi
+            if [ "$do_comment" -eq 1 ]; then
+              gh issue comment "$n" --repo "$REPO" \
+                --body "🚀 Released in [$tag]($release_url)" \
+                || echo "Could not comment on issue #$n; continuing."
+            fi
+            if [ -n "$item_id" ]; then
+              GH_TOKEN="$PROJECT_TOKEN" gh api graphql -f query='
+                mutation($project: ID!, $item: ID!, $field: ID!, $text: String!) {
+                  updateProjectV2ItemFieldValue(input: {
+                    projectId: $project, itemId: $item, fieldId: $field, value: { text: $text }
+                  }) { projectV2Item { id } }
+                }' -f project="$PROJECT_ID" -f item="$item_id" \
+                   -f field="$FIELD_ID" -f text="$tag" > /dev/null \
+                && echo "Issue #$n: $FIELD_NAME = $tag." \
+                || echo "::warning::Could not stamp issue #$n."
+            elif [ -n "$FIELD_ID" ]; then
+              echo "Issue #$n is off the board (no area label); field skipped."
+            fi
+          }
+
+          # Comment every shipped PR and sync every issue those PRs closed,
+          # for one umbrella tag. do_comment=0 on backfilled tags: historical
+          # PRs and issues already got their comments when they shipped.
+          sync_version() {
+            local tag="$1" do_comment="$2"
+            local prev
+            prev=$(awk -v t="$tag" '$0 == t { print prev; exit } { prev = $0 }' <<<"$ALL_TAGS")
+            if [ -z "$prev" ]; then
+              echo "$tag is the first release tag (no lower bound); skipping."
+              return 0
+            fi
+            local release_url="$SERVER_URL/$REPO/releases/tag/$tag"
+
+            local prs
+            prs=$(git log --format='%s' "$prev..$tag" \
+              | grep -vE '^chore: release' \
+              | grep -oE '\(#[0-9]+\)$' | tr -dc '0-9\n' | sort -u || true)
+            echo "$tag shipped PRs: $(tr '\n' ' ' <<<"${prs:-none}")"
+
+            local issues="" pr refs
+            for pr in $prs; do
+              if [ "$do_comment" -eq 1 ]; then
+                gh pr comment "$pr" --repo "$REPO" \
+                  --body "🚀 Released in [$tag]($release_url)" \
+                  || echo "Could not comment on #$pr (closed / cross-fork?); continuing."
+              fi
+              refs=$(gh api graphql -f query='
+                query($owner: String!, $name: String!, $pr: Int!) {
+                  repository(owner: $owner, name: $name) {
+                    pullRequest(number: $pr) {
+                      closingIssuesReferences(first: 20) {
+                        nodes { number repository { nameWithOwner } }
+                      }
+                    }
+                  }
+                }' -f owner="$OWNER" -f name="$NAME" -F pr="$pr" 2>/dev/null \
+                | jq -r --arg repo "$REPO" \
+                    '.data.repository.pullRequest.closingIssuesReferences.nodes[]
+                     | select(.repository.nameWithOwner == $repo) | .number' || true)
+              issues="$issues"$'\n'"$refs"
+            done
+
+            local commit_refs
+            commit_refs=$(git log --format='%s %b' "$prev..$tag" \
+              | grep -vE '^chore: release' \
+              | grep -oiE '(fix(e[sd])?|close[sd]?|resolve[sd]?) #[0-9]+' \
+              | grep -oE '[0-9]+' || true)
+            issues=$(printf '%s\n%s\n' "$issues" "$commit_refs" \
+              | grep -E '^[0-9]+$' | sort -un || true)
+            if [ -z "$issues" ]; then
+              echo "$tag: no closed issues."
+              return 0
+            fi
+            echo "$tag closed issues: $(tr '\n' ' ' <<<"$issues")"
+
+            local n
+            for n in $issues; do
+              sync_issue "$n" "$tag" "$release_url" "$do_comment"
+            done
+          }
+
+          if [ "$BACKFILL" -eq 1 ]; then
+            # Oldest first, so when an issue was re-fixed in a later release
+            # the latest ship wins the field.
+            for tag in $ALL_TAGS; do
+              [ "$tag" = "v$version" ] && continue
+              sync_version "$tag" 0
+            done
+          fi
+          sync_version "v$version" 1
 
       # Tell the landing site a new version shipped. Its sync workflow opens an
       # auto-merging PR that bumps the pinned editor deps to this version.

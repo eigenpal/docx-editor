@@ -33,7 +33,8 @@
     "reportIssue": "Laporkan Masalah",
     "insertFootnote": "Sisipkan catatan kaki",
     "insertEndnote": "Sisipkan catatan akhir",
-    "insertTable": null
+    "insertTable": null,
+    "review": null
   },
   "formattingBar": {
     "groups": {
@@ -560,6 +561,11 @@
     "refresh": "Perbarui seluruh tabel",
     "refreshPageNumbers": "Perbarui nomor halaman saja"
   },
+  "reviewers": {
+    "label": "Peninjau",
+    "all": "Semua",
+    "markupOptions": null
+  },
   "editingMode": {
     "editing": "Pengeditan",
     "label": "Mode pengeditan",
@@ -740,7 +746,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

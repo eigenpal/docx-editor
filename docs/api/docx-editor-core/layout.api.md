@@ -529,6 +529,8 @@ export interface CreateDocumentFurnitureSourceOptions {
     // (undocumented)
     readonly projectFieldLink?: FieldLinkProjector;
     // (undocumented)
+    readonly revisionAuthorFilter?: RevisionAuthorFilter;
+    // (undocumented)
     readonly styleCascade?: () => StyleCascadeTable | undefined;
     // (undocumented)
     readonly view: HeadlessDocumentView;
@@ -563,6 +565,8 @@ export interface CreateDocumentNotesInputOptions {
     readonly producer: string;
     // (undocumented)
     readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
+    // (undocumented)
+    readonly revisionAuthorFilter?: RevisionAuthorFilter;
     // (undocumented)
     readonly styleCascade?: () => StyleCascadeTable | undefined;
     // (undocumented)
@@ -765,10 +769,10 @@ export function emptyTocPlaceholderParagraphIds(part: OoxmlPart): ReadonlySet<st
 export function emptyTocSuppressedResultParagraphIds(part: OoxmlPart): ReadonlySet<string>;
 
 // @public
-export function enumerateDocumentSections(part: OoxmlPart, displayMode?: RevisionDisplayMode): DocumentSection[];
+export function enumerateDocumentSections(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): DocumentSection[];
 
 // @public
-export function enumerateDocumentSectionsBounded(part: OoxmlPart, displayMode?: RevisionDisplayMode): DocumentSectionsEnumeration;
+export function enumerateDocumentSectionsBounded(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): DocumentSectionsEnumeration;
 
 // @public (undocumented)
 export interface EquationFractionGeometry extends EquationGeometryBase {
@@ -1415,7 +1419,7 @@ export function isIntlSegmenterAvailable(): boolean;
 export function isIntlWordSegmenterAvailable(): boolean;
 
 // @public
-export function isMarkerOnlySeparatorNote(note: OoxmlNode, displayMode?: RevisionDisplayMode): boolean;
+export function isMarkerOnlySeparatorNote(note: OoxmlNode, displayMode?: RevisionDisplayMode, revisionAuthorFilter?: RevisionAuthorFilter): boolean;
 
 // @public (undocumented)
 export function isValidStyleId(raw: string | undefined): raw is string;
@@ -1994,11 +1998,13 @@ export interface NotesLayoutInput {
     readonly projectLinkForPart?: (ownerPartName: string) => HyperlinkProjector | undefined;
     readonly refFields?: RefFieldContext;
     // (undocumented)
+    readonly revisionAuthorFilter?: RevisionAuthorFilter;
+    // (undocumented)
     readonly styleCascade?: StyleCascadeTable;
 }
 
 // @public
-export function noteStoryBlocks(note: OoxmlNode, displayMode?: RevisionDisplayMode): OoxmlElement[];
+export function noteStoryBlocks(note: OoxmlNode, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): OoxmlElement[];
 
 // @public
 export interface NoteStoryDrawings {
@@ -2506,6 +2512,9 @@ export function prepareLayoutFontConfiguration(configuration: LayoutFontConfigur
 export function projectedNoteMarkText(node: OoxmlNode, context: NoteMarkContext | undefined): ProjectedNoteMark | null;
 
 // @public
+export function projectedSectionSourceIndexes(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): readonly number[];
+
+// @public
 export function provisionalNoteMarks(refs: readonly PageRefHit[], input: NotesLayoutInput): NoteMarkContext;
 
 // @public
@@ -2528,7 +2537,7 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
 
 // @public
 export function readTableStructure(table: OoxmlNode, contentWidthPt: number, depth: number, styleCascade?: StyleCascadeTable,
-displayMode?: RevisionDisplayMode): SemanticTableStructure | null;
+displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): SemanticTableStructure | null;
 
 // @public
 export interface RefFieldContext {
@@ -2985,19 +2994,30 @@ export interface RevisionAttribution {
 }
 
 // @public
+export interface RevisionAuthorFilter {
+    // (undocumented)
+    readonly cacheKey: string;
+    // (undocumented)
+    readonly hiddenAuthors: ReadonlySet<string>;
+}
+
+// @public
+export function revisionAuthorFilter(hiddenAuthors: Iterable<string>): RevisionAuthorFilter | undefined;
+
+// @public
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 
 // @public
 export type RevisionKind = 'insert' | 'delete' | 'moveFrom' | 'moveTo' | 'format';
 
 // @public
-export function revisionRemovesParagraph(paragraph: OoxmlNode, displayMode?: 'all-markup' | 'proposed' | 'original'): boolean;
+export function revisionRemovesParagraph(paragraph: OoxmlNode, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): boolean;
 
 // @public
 export function revisionsAreDeletion(revisions: readonly RevisionAttribution[]): boolean;
 
 // @public
-export function revisionsVisible(revisions: readonly RevisionAttribution[], mode: RevisionDisplayMode): boolean;
+export function revisionsVisible(revisions: readonly RevisionAttribution[], mode: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): boolean;
 
 // @public
 export const roundFontUnitToFixedPoint: (fontUnits: number, denominator: number, numerator: number, mode: FixedPointRoundingMode) => FixedPoint;
@@ -3207,6 +3227,7 @@ export interface SemanticLayoutOptions {
     readonly projectionTokenForTable?: (table: OoxmlNode) => string;
     readonly projectLink?: HyperlinkProjector;
     readonly retainKeys?: Set<string> | false;
+    readonly revisionAuthorFilter?: RevisionAuthorFilter;
     readonly sectionColumns?: SectionColumns;
     readonly sectionFurniture?: readonly (PageFurniture | undefined)[];
     readonly session?: LayoutSession;
@@ -3614,7 +3635,7 @@ export function spansInSelection(layout: SemanticLayout, selection: SemanticSele
 order: readonly string[]): StyleSpanRecord[];
 
 // @public
-export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode): OoxmlElement[];
+export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): OoxmlElement[];
 
 // @public
 export interface StoryDrawingContext extends StoryParagraphFragmentContext {

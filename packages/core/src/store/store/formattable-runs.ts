@@ -24,7 +24,11 @@
 // The revision wrappers are gated by what the reader can SEE (see
 // {@link FormattingDisplayMode}). Everything else is unconditional.
 
-import { contentControlContentOf, isContentControlNode } from './tree-op-nodes.ts';
+import {
+  attributeValueOf,
+  contentControlContentOf,
+  isContentControlNode,
+} from './tree-op-nodes.ts';
 import { isFldSimple } from '../package/field-nodes.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
@@ -39,6 +43,11 @@ import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
  * that the automation lane — which has no layout at all — reaches them.
  */
 export type FormattingDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+/** View-time author visibility used by mounted formatting lanes. */
+export interface FormattingRevisionAuthorFilter {
+  readonly hiddenAuthors: ReadonlySet<string>;
+}
 
 /**
  * What the formatting lanes assume when nobody names a view.
@@ -99,10 +108,11 @@ const MAX_FORMATTABLE_RUN_DEPTH = 32;
  */
 export function formattableRunsOfParagraph(
   paragraph: OoxmlParagraphNode,
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
 ): readonly OoxmlNode[] {
   const runs: OoxmlNode[] = [];
-  collectFormattableRuns(paragraph.children, displayMode, 0, runs);
+  collectFormattableRuns(paragraph.children, displayMode, authorFilter, 0, runs);
   return runs;
 }
 
@@ -129,10 +139,11 @@ export function clippedFormattableRuns(
   runRanges: ReadonlyMap<string, { start: number; end: number }>,
   start: number,
   end: number,
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
 ): readonly ClippedFormattableRun[] {
   const clipped: ClippedFormattableRun[] = [];
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode, authorFilter)) {
     const range = runRanges.get(run.id);
     if (!range || range.end <= range.start) continue;
     const from = Math.max(range.start, start);
@@ -146,6 +157,7 @@ export function clippedFormattableRuns(
 function collectFormattableRuns(
   children: readonly OoxmlNode[],
   displayMode: FormattingDisplayMode,
+  authorFilter: FormattingRevisionAuthorFilter | undefined,
   depth: number,
   out: OoxmlNode[]
 ): void {
@@ -163,12 +175,14 @@ function collectFormattableRuns(
     // a link inside a tracked insertion is ordinary. Stopping at the wrapper made every
     // property write over tracked text plan zero edits (#493).
     if (child.kind === 'hyperlink') {
-      collectFormattableRuns(child.children, displayMode, depth + 1, out);
+      collectFormattableRuns(child.children, displayMode, authorFilter, depth + 1, out);
       continue;
     }
     if (isContentRevisionKind(child.kind)) {
-      if (!revisionReachedInMode(child.kind, displayMode)) continue;
-      collectFormattableRuns(child.children, displayMode, depth + 1, out);
+      const author = attributeValueOf(child, 'author') ?? '';
+      const effectiveMode = authorFilter?.hiddenAuthors.has(author) ? 'proposed' : displayMode;
+      if (!revisionReachedInMode(child.kind, effectiveMode)) continue;
+      collectFormattableRuns(child.children, displayMode, authorFilter, depth + 1, out);
       continue;
     }
     // `w:fldSimple` is ONE atom in the offset space and SEVERAL runs in the formatting one:
@@ -176,14 +190,16 @@ function collectFormattableRuns(
     // them the atom's range and a write over the field reaches each of them with its own
     // merged bag.
     if (isFldSimple(child)) {
-      collectFormattableRuns(child.children, displayMode, depth + 1, out);
+      collectFormattableRuns(child.children, displayMode, authorFilter, depth + 1, out);
       continue;
     }
     // An inline content control flattens into the paragraph's run stream exactly as it does
     // for `segmentsOf`, so text inside a form field is ordinary formattable text.
     if (isContentControlNode(child)) {
       const content = contentControlContentOf(child);
-      if (content) collectFormattableRuns(content.children, displayMode, depth + 1, out);
+      if (content) {
+        collectFormattableRuns(content.children, displayMode, authorFilter, depth + 1, out);
+      }
       continue;
     }
   }

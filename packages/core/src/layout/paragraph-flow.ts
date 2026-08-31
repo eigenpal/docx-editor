@@ -29,6 +29,7 @@ import {
   DEFAULT_REVISION_DISPLAY_MODE,
   revisionsVisible,
   type RevisionAttribution,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
@@ -156,6 +157,8 @@ export interface ParagraphFlowOptions {
    * wrap elsewhere — so it belongs in the caller's cache key alongside line spacing.
    */
   readonly displayMode?: RevisionDisplayMode;
+  /** Reviewers whose revisions project as accepted for this layout pass. */
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /** Derived footnote/endnote marks for noteReference / noteRef projection. */
   readonly noteMarks?: import('./note-projection.ts').NoteMarkContext;
   /** Inline drawing projection + resource lookup for typed `w:drawing` nodes. */
@@ -592,7 +595,8 @@ export function breakParagraph(
     flow?.projectFieldLink,
     flow?.documentProperties,
     flow?.bodyPageFields ?? false,
-    flow?.refFields
+    flow?.refFields,
+    flow?.revisionAuthorFilter
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
   const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
@@ -658,7 +662,8 @@ export function breakParagraph(
     if (!flow?.inlineDrawingLayout) return starts;
     const offsets = drawingModelOffsetsInParagraph(paragraph);
     for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
-      if (!revisionsVisible(atom.revisions, anchorDisplayMode)) continue;
+      if (!revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter))
+        continue;
       if (atom.projection.wrap !== 'topAndBottom') continue;
       const modelStart = offsets.get(atom.atomId);
       if (modelStart !== undefined) starts.add(modelStart);
@@ -671,7 +676,8 @@ export function breakParagraph(
     if (!flow?.inlineDrawingLayout) return starts;
     const offsets = drawingModelOffsetsInParagraph(paragraph);
     for (const atom of anchoredDrawingAtomsInParagraph(paragraph, flow.inlineDrawingLayout)) {
-      if (!revisionsVisible(atom.revisions, anchorDisplayMode)) continue;
+      if (!revisionsVisible(atom.revisions, anchorDisplayMode, flow?.revisionAuthorFilter))
+        continue;
       if (atom.projection.anchor?.behindDocument) continue;
       if (
         atom.projection.wrap === 'topAndBottom' ||
@@ -784,6 +790,9 @@ export function breakParagraph(
             anchorLineTopByModelStart,
             anchorCellBox: flow.anchorCellBox,
             displayMode: anchorDisplayMode,
+            ...(flow.revisionAuthorFilter
+              ? { revisionAuthorFilter: flow.revisionAuthorFilter }
+              : {}),
           })
         : Object.freeze([]);
     const synthesized =
@@ -797,6 +806,9 @@ export function breakParagraph(
             paragraphStartY: flow?.paragraphStartY ?? 0,
             anchorLineTopByModelStart,
             displayMode: anchorDisplayMode,
+            ...(flow.revisionAuthorFilter
+              ? { revisionAuthorFilter: flow.revisionAuthorFilter }
+              : {}),
           })
         : Object.freeze([]);
     return Object.freeze([...pageZones, ...synthesizedWrap, ...synthesized]);
@@ -1260,7 +1272,7 @@ export function breakParagraph(
       if (
         piece.anchoredAtom &&
         piece.revisions !== undefined &&
-        revisionsVisible(piece.revisions, anchorDisplayMode)
+        revisionsVisible(piece.revisions, anchorDisplayMode, flow?.revisionAuthorFilter)
       ) {
         line.anchorRevisions = [...(line.anchorRevisions ?? []), ...piece.revisions];
       }

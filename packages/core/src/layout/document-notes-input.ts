@@ -27,7 +27,7 @@ import { storyBlocks } from './story-roots.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { TextMeasurer } from './semantic-records.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 
 /** Inputs for projecting notes through the same semantic layout pass. @public */
 export interface CreateDocumentNotesInputOptions {
@@ -47,15 +47,17 @@ export interface CreateDocumentNotesInputOptions {
   readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
   readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
 }
 
 function sectionPropertyNodes(
   part: OoxmlPart,
   sections: ReturnType<typeof enumerateDocumentSectionsBounded>['sections'],
   truncated: boolean,
-  displayMode?: RevisionDisplayMode
+  displayMode?: RevisionDisplayMode,
+  revisionAuthorFilter?: RevisionAuthorFilter
 ): readonly (OoxmlElement | undefined)[] {
-  const blocks = storyBlocks(part, displayMode);
+  const blocks = storyBlocks(part, displayMode, revisionAuthorFilter);
   if (!truncated) {
     return sections.map((section) => {
       if (section.blockStart === section.blockEndExclusive) return undefined;
@@ -89,12 +91,17 @@ export function createDocumentNotesInput(
   const endnoteAuthored = authoredDocumentEndnoteProperties(settings);
   const documentFootnoteProps = resolveFootnoteProperties(undefined, footnoteAuthored);
   const documentEndnoteProps = resolveEndnoteProperties(undefined, endnoteAuthored);
-  const enumeration = enumerateDocumentSectionsBounded(body, options.displayMode);
+  const enumeration = enumerateDocumentSectionsBounded(
+    body,
+    options.displayMode,
+    options.revisionAuthorFilter
+  );
   const sectionNodes = sectionPropertyNodes(
     body,
     enumeration.sections,
     enumeration.truncated,
-    options.displayMode
+    options.displayMode,
+    options.revisionAuthorFilter
   );
   const footnotePropsBySection = enumeration.sections.map((_, index) =>
     resolveFootnoteProperties(
@@ -142,6 +149,7 @@ export function createDocumentNotesInput(
     numberingIndex: options.numberingIndex?.(),
     defaultTabStopPt: options.defaultTabStopPt,
     displayMode: options.displayMode,
+    revisionAuthorFilter: options.revisionAuthorFilter,
     projectLinkForPart: options.linkProjectors.projectLinkForPart,
     linkRelsEpoch: noteParts
       .map((part) => (part ? options.linkProjectors.epochForPart(part.name) : ''))

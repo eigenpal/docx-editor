@@ -31,6 +31,7 @@ import type { ReactNode } from 'react';
 // section heading. `overflow={false}` restores wrapping.
 
 import { ToolbarEditingMode } from './EditingMode';
+import { ToolbarReviewers } from './Reviewers';
 import { Children, Fragment, isValidElement, useMemo } from 'react';
 import type { ReactElement } from 'react';
 import { unwrapFragment } from '../merge-arrangement';
@@ -165,6 +166,7 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'text.link': ToolbarLink,
   'list.lineSpacing': ToolbarLineSpacing,
   'review.editingMode': ToolbarEditingMode,
+  'review.authors': ToolbarReviewers,
   'file.save': ToolbarSave,
   // Content-control chrome: mode toggles and inspector/remove. Keys only apply once
   // `CHROME_GROUPS` registers the `contentControl` group; until then the default bar
@@ -514,6 +516,7 @@ export interface DocxEditorToolbarNamespace {
   readonly Zoom: ToolbarSlotPartComponent;
   readonly StylePicker: typeof ParagraphStyle;
   readonly EditingMode: ToolbarSlotPartComponent;
+  readonly Reviewers: typeof ToolbarReviewers;
   readonly Save: ToolbarSlotPartComponent;
   readonly ContentControlShowAll: ToolbarPartComponent;
   readonly ContentControlFormFill: ToolbarPartComponent;
@@ -569,6 +572,7 @@ export const DocxEditorToolbar: DocxEditorToolbarNamespace = Object.assign(DocxE
   Zoom: ToolbarZoom,
   StylePicker: ParagraphStyle,
   EditingMode: ToolbarEditingMode,
+  Reviewers: ToolbarReviewers,
   Save: ToolbarSave,
   ContentControlShowAll: ToolbarContentControlShowAll,
   ContentControlFormFill: ToolbarContentControlFormFill,

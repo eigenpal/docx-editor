@@ -282,6 +282,15 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }, {
+        readonly defaultToolbar: false;
+        readonly id: "authors";
+        readonly labelKey: "reviewers.label";
+        readonly paths: readonly string[];
+        readonly shape: "dropdown";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
         readonly id: "editingMode";
         readonly labelKey: "editingMode.label";
         readonly paths: readonly string[];
@@ -540,6 +549,7 @@ export const CHROME_UNAVAILABLE_KEY = "formattingBar.unavailableInPreview";
 
 // @public
 export interface ChromeControl<Id extends string = string> {
+    readonly defaultToolbar?: false;
     readonly id: Id;
     readonly labelKey: string;
     readonly paths: readonly string[] | null;
@@ -627,7 +637,7 @@ export interface ChromeMenu {
 export type ChromeMenuEntry = ChromeMenuItemEntry | ChromeMenuSubmenuEntry | ChromeMenuSeparatorEntry;
 
 // @public
-export type ChromeMenuId = 'file' | 'format' | 'insert' | 'help';
+export type ChromeMenuId = 'file' | 'format' | 'insert' | 'review' | 'help';
 
 // @public
 export interface ChromeMenuItemEntry {
@@ -665,7 +675,7 @@ export interface ChromeMenuSubmenuEntry {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -835,12 +845,16 @@ export interface DocxEditorInstance extends Editor {
     getReviewAuthors(): readonly ReviewAuthorInfo[];
     // @internal
     getReviewAuthorStyle(author: string): RevisionAuthorStyle | undefined;
+    isReviewAuthorVisible(author: string): boolean;
     readonly mountGeneration: number;
     presenceColorFor(name: string): string;
+    setAllReviewAuthorsVisible(visible: boolean): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
+    setReviewAuthorVisible(author: string, visible: boolean): void;
     setRevisionStyles(styles: RevisionStyles): void;
+    showAllReviewAuthors(): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;
 }
@@ -1429,6 +1443,7 @@ export interface PaginatedSurface {
         readonly titlePage?: boolean;
         readonly variant?: 'default' | 'first' | 'even';
     } | null;
+    hiddenRevisionAuthors(): ReadonlySet<string>;
     readonly hyperlinks: HyperlinkOps;
     // (undocumented)
     imageDecodePort(): ImageDecodePort;
@@ -1497,6 +1512,7 @@ export interface PaginatedSurface {
     // (undocumented)
     readonly session: TreeDocxSessionView;
     setActiveScope(scope: ViewScope): boolean;
+    setAllRevisionAuthorsVisible(visible: boolean): void;
     setCellSelection(next: CellSelection | null): void;
     setEditable(editable: boolean): void;
     // (undocumented)
@@ -1530,6 +1546,7 @@ export interface PaginatedSurface {
     }): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
+    setRevisionAuthorVisible(author: string, visible: boolean): void;
     setRevisionStyles(colors: RevisionStyles | undefined): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
     setSectionProperties(update: {
@@ -1544,6 +1561,7 @@ export interface PaginatedSurface {
     }): boolean;
     setSelection(next: SemanticSelection): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
+    showAllRevisionAuthors(): void;
     // (undocumented)
     splitParagraph(): void;
     // (undocumented)
@@ -1566,6 +1584,7 @@ export interface PaginatedSurfaceOptions {
     readonly editingMode?: SurfaceEditingMode;
     readonly fieldShading?: FieldShadingMode;
     readonly fontAlias?: (family: string) => string | undefined;
+    readonly hiddenRevisionAuthors?: readonly string[];
     readonly imageDecodePort?: ImageDecodePort;
     // (undocumented)
     readonly measurer?: TextMeasurer;

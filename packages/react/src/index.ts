@@ -298,6 +298,7 @@ export {
   type ToolbarButtonProps,
   type ToolbarPartComponent,
   type ToolbarPartProps,
+  type ToolbarReviewersProps,
   type ToolbarSeparatorProps,
   type ToolbarSlotPartComponent,
   type ToolbarSlotPartProps,
@@ -315,7 +316,7 @@ export {
 } from './editor/toolbar';
 
 // The compound menu bar (also reachable as `DocxEditor.Menu`): File · Format · Insert ·
-// Help, derived FROM `CHROME_MENUS` so a row and its toolbar twin cannot describe the same
+// Review · Help, derived FROM `CHROME_MENUS` so a row and its toolbar twin cannot describe the same
 // capability differently. The parts live on the namespace statics; the index exports the
 // namespace and the part prop types.
 export {
@@ -329,6 +330,7 @@ export {
   type MenuPartComponent,
   type MenuProps,
   type MenuReportIssueProps,
+  type MenuReviewersProps,
   type MenuRowProps,
   type MenuSeparatorProps,
   type MenuSubmenuProps,

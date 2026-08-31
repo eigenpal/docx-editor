@@ -12,6 +12,12 @@ export interface EditorRenderRevision {
   readonly value: unknown;
 }
 
+function renderRevisionKey(editor: DocxEditorInstance): string {
+  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${JSON.stringify(
+    editor.snapshot().hiddenReviewAuthors ?? []
+  )}`;
+}
+
 const editorRenderRevisionKey: InjectionKey<EditorRenderRevision> =
   Symbol('proEditorRenderRevision');
 
@@ -35,7 +41,7 @@ export function useEditorRenderRevision(): EditorRenderRevision {
         return;
       }
       const current = editor as DocxEditorInstance;
-      let key = `${current.getReviewRevision()}:${current.getEditingMode()}`;
+      let key = renderRevisionKey(current);
       revision.value = key;
       let disposed = false;
       let scheduled: ReturnType<typeof setTimeout> | null = null;
@@ -44,7 +50,7 @@ export function useEditorRenderRevision(): EditorRenderRevision {
         scheduled = setTimeout(() => {
           scheduled = null;
           if (disposed) return;
-          const next = `${current.getReviewRevision()}:${current.getEditingMode()}`;
+          const next = renderRevisionKey(current);
           if (next === key) return;
           key = next;
           revision.value = next;

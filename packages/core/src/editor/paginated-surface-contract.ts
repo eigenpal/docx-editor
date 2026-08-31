@@ -104,6 +104,8 @@ export interface PaginatedSurfaceOptions {
    * option is shared either way.
    */
   readonly revisionDisplayMode?: RevisionDisplayMode;
+  /** Authors whose changes open in their accepted view-time projection. */
+  readonly hiddenRevisionAuthors?: readonly string[];
   /**
    * When a field's result wears Word's grey shading. Omitted keeps Word's own default,
    * `when-selected`.
@@ -763,6 +765,14 @@ export interface PaginatedSurface {
    * its identity.
    */
   revisionAuthors(): ReadonlyMap<string, number>;
+  /** Reviewers currently projected as accepted, without changing the document. */
+  hiddenRevisionAuthors(): ReadonlySet<string>;
+  /** Show one reviewer's markup, or render that reviewer's changes as accepted. */
+  setRevisionAuthorVisible(author: string, visible: boolean): void;
+  /** Show or hide every reviewer in one layout pass. */
+  setAllRevisionAuthorsVisible(visible: boolean): void;
+  /** Clear the reviewer filter in one layout pass. */
+  showAllRevisionAuthors(): void;
   /** The presence colour the caret paints for `name`, sanitized as the paint sink is. */
   remotePresenceColor(name: string): string | undefined;
   /**

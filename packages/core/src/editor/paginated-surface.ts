@@ -53,8 +53,6 @@ import {
   contentControlRecordsInPart,
   contentControlsInLayout,
   createDocumentLinkProjectors,
-  pageRefPageNumbersFromLayout,
-  planRefFieldResultRefresh,
   resolveNumberingLevel,
   positionPastDeletion,
   withNumberingStyleLinks,
@@ -72,13 +70,20 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 import { attachListResolveChangeEvidence } from '../layout/list-resolve.ts';
-import { planNoteRefFieldResultRefreshes } from '../layout/field-ref-refresh.ts';
+import { refreshSurfaceRefFieldResults } from './surface-ref-field-refresh.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from '../layout/revision-projection.ts';
+import { markRemovedInMode } from '../layout/revision-visibility.ts';
+import {
+  createRevisionAuthorVisibility,
+  type RevisionAuthorVisibility,
+} from './revision-author-visibility.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from '../store/store/tree-op-tracked-properties.ts';
 import { mergedPredecessorsOf } from '../layout/line-segments.ts';
+import { mergedFlowBlocks } from '../layout/story-roots.ts';
 import { selectionMarkRects } from '../layout/selection-rects.ts';
 import { paintSelectionOverlay, type OverlayRect } from '@docx-editor.dev/core/output';
 // By module path, like the roster walk below: dropping a retained paint is an engine
@@ -90,12 +95,11 @@ import {
 // By module path: the roster walk is an engine internal, not part of the output barrel's
 // public surface. See the note there.
 import {
-  authorSlotsOf,
   createStableReviewAuthorSlots,
-  reviewAuthorsOf,
   type ReviewAuthorInfo,
   type StableReviewAuthorSlots,
 } from '../output/revision-presentation.ts';
+import { createSurfaceReviewAuthors, reviewItemAuthor } from './surface-review-authors.ts';
 import { createPresenceColors } from './surface-presence-color.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
@@ -289,6 +293,7 @@ export function mountPaginatedSurface(
   const runtimeOptions = options as PaginatedSurfaceOptions & {
     readonly onTrackedChange?: () => void;
     readonly reviewAuthorSlots?: StableReviewAuthorSlots;
+    readonly revisionAuthorVisibility?: RevisionAuthorVisibility;
     /**
      * Start with this drawing-selection intent. The facade's font-load remount carries the
      * old surface's intent through here, because its caret restore is a same-position
@@ -825,6 +830,23 @@ export function mountPaginatedSurface(
    */
   const revisionDisplayMode = (): RevisionDisplayMode =>
     options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const revisionAuthorVisibility =
+    runtimeOptions.revisionAuthorVisibility ??
+    createRevisionAuthorVisibility(options.hiddenRevisionAuthors);
+  const revisionFilter = (): RevisionAuthorFilter | undefined => revisionAuthorVisibility.filter;
+  const paragraphMarkVisible = (paragraphId: string): boolean => {
+    const part = partOfNodeId(session, paragraphId) ?? session.part();
+    const paragraph = findNode(part, paragraphId);
+    if (paragraph?.kind !== 'paragraph') return false;
+    const displayMode = revisionDisplayMode();
+    const authorFilter = revisionFilter();
+    if (!markRemovedInMode(paragraph, displayMode, authorFilter)) return true;
+    const parent = parentNodeOf(part, paragraphId);
+    if (!parent) return false;
+    return mergedFlowBlocks(parent.children, displayMode, authorFilter).some(
+      (block) => block.kind === 'paragraph' && block.id === paragraphId
+    );
+  };
 
   let furnitureSource: ReturnType<typeof createFurnitureSource>;
 
@@ -845,7 +867,9 @@ export function mountPaginatedSurface(
    */
   const fieldLinks = createFieldLinkRegistry();
   type SurfaceFurnitureOptions = Parameters<typeof createFurnitureSource>[0];
-  const createCurrentFurnitureSource = (): ReturnType<typeof createFurnitureSource> =>
+  const createCurrentFurnitureSource = (
+    authorFilter?: RevisionAuthorFilter
+  ): ReturnType<typeof createFurnitureSource> =>
     createFurnitureSource({
       session,
       measurer,
@@ -858,6 +882,7 @@ export function mountPaginatedSurface(
       // even when it is the default, because a lane that says nothing is treated as saying
       // "not All Markup", which is what keeps markup out of the resolved views.
       displayMode: revisionDisplayMode(),
+      revisionAuthorFilter: authorFilter,
       inlineDrawingLayoutForPart: (partName) => drawingBundle.contextForPart(partName),
       drawingLayoutTokenForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
       drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -865,7 +890,13 @@ export function mountPaginatedSurface(
       linkProjectors,
       projectFieldLink: (spec) => fieldLinks.project(spec),
     } satisfies SurfaceFurnitureOptions & Record<keyof SurfaceFurnitureOptions, unknown>);
-  furnitureSource = createCurrentFurnitureSource();
+  furnitureSource = createCurrentFurnitureSource(revisionFilter());
+
+  interface LayoutDocumentContext {
+    readonly authorFilter?: RevisionAuthorFilter;
+    readonly layoutSession: ReturnType<typeof createLayoutSession>;
+    readonly furnitureSource: ReturnType<typeof createCurrentFurnitureSource>;
+  }
 
   /**
    * The session as every lane sees it: the mode rules applied to `applyTreeOps`.
@@ -919,24 +950,17 @@ export function mountPaginatedSurface(
   };
 
   let currentLayout = layoutOnce();
-  // Presentation state, not document state: replaceable live through `setRevisionStyles`,
-  // because a colour change must never cost the reader their undo history to a remount.
   // Declared before the first paint can run — `render` reads it.
   let revisionStyles = options.revisionStyles;
   // The facade owns this across internal remounts of the SAME attached document. A direct
   // surface mount has no facade session, so it correctly starts a fresh assignment here.
   const stableAuthorSlots = runtimeOptions.reviewAuthorSlots ?? createStableReviewAuthorSlots();
-  // One roster per layout instance, so `revisionAuthors()` is cheap to poll and callers can
-  // key their own caches on the returned map's identity. Keyed on the review queue too: a
-  // COMMENT-ONLY author is in the roster and in no layout record, so a queue that moved
-  // without the layout moving still has to be re-read.
-  let authorRoster: {
-    layout: typeof currentLayout | null;
-    items: readonly ReviewItem[] | null;
-    styles: typeof revisionStyles;
-    value: ReadonlyMap<string, number>;
-    resolved: ReadonlyMap<string, ReviewAuthorInfo>;
-  } | null = null;
+  const reviewAuthors = createSurfaceReviewAuthors({
+    layout: () => currentLayout,
+    items: () => session.reviewItems(),
+    styles: () => revisionStyles,
+    slots: stableAuthorSlots,
+  });
   // Structural edits — breaks, lists, indent, sections — are their own lane over the same
   // session and commit path.
   /**
@@ -963,7 +987,8 @@ export function mountPaginatedSurface(
           session.partFor(storyScope()) ?? session.part(),
           head.paragraphId,
           head.offset,
-          revisionDisplayMode()
+          revisionDisplayMode(),
+          revisionFilter()
         );
       pendingFormats = { position: head, properties: next, base };
     }
@@ -979,6 +1004,8 @@ export function mountPaginatedSurface(
     layout: () => currentLayout,
     selection: () => selection,
     displayMode: () => revisionDisplayMode(),
+    authorFilter: revisionFilter,
+    paragraphMarkVisible,
     commit: (run, nextSelection, options) => commit(run, nextSelection, options),
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
@@ -995,6 +1022,8 @@ export function mountPaginatedSurface(
     layout: () => currentLayout,
     selection: () => selection,
     displayMode: () => revisionDisplayMode(),
+    authorFilter: revisionFilter,
+    paragraphMarkVisible,
     commit: (run, nextSelection, commitOptions) => commit(run, nextSelection, commitOptions),
     orderedRange: () => orderedRange(),
     selectionMark: () => selectionMark(),
@@ -1019,6 +1048,8 @@ export function mountPaginatedSurface(
     session: gatedSession,
     storyScope,
     headerFooterSectionIndex: () => hfScope?.getActive()?.sectionIndex,
+    revisionDisplayMode,
+    revisionAuthorFilter: revisionFilter,
     paragraphOrder,
     // A rectangle is not the range it stands in for — the same question `createSurfaceFormat`
     // asks. Without it, bulleting or indenting one selected column also hit the cells between
@@ -1182,20 +1213,27 @@ export function mountPaginatedSurface(
   pagesLayer.addEventListener('pointermove', onTocPointerMove);
   pagesLayer.addEventListener('pointerleave', onTocPointerLeave);
   let desiredX: number | null = null;
-  function layoutDocument(revision: number, scope?: LayoutScope): SemanticLayout {
-    if (scope) attachListResolveChangeEvidence(layoutSession, scope);
+  function layoutDocument(
+    revision: number,
+    scope?: LayoutScope,
+    context?: LayoutDocumentContext
+  ): SemanticLayout {
+    const activeAuthorFilter = context ? context.authorFilter : revisionFilter();
+    const activeLayoutSession = context?.layoutSession ?? layoutSession;
+    const activeFurnitureSource = context?.furnitureSource ?? furnitureSource;
+    if (scope) attachListResolveChangeEvidence(activeLayoutSession, scope);
     drawingBundle.sync(session);
     return layoutDocumentView({
       view: session,
       revision,
       measurer,
       cache: layoutCache,
-      session: layoutSession,
+      session: activeLayoutSession,
       producer,
       styleCascade,
       defaultTabStopPt,
       numberingIndex,
-      furniture: furnitureSource,
+      furniture: activeFurnitureSource,
       linkProjectors,
       projectFieldLink: (spec) => fieldLinks.project(spec),
       inlineDrawingLayout: drawingBundle.bodyContext,
@@ -1210,8 +1248,17 @@ export function mountPaginatedSurface(
       drawingLayoutEpochForPart: (partName) => drawingBundle.cacheTokenForPart(partName),
       // The layout context key already folds the mode in (`|rev:<mode>`), so a surface
       // constructed `proposed` never shares cached pages with an `all-markup` one.
-      displayMode: options.revisionDisplayMode,
+      displayMode: revisionDisplayMode(),
+      revisionAuthorFilter: activeAuthorFilter,
     } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
+  }
+
+  /** Build save-time PAGEREF numbers without mutating the active filtered layout. */
+  function canonicalUnfilteredLayoutForSave(): SemanticLayout {
+    return layoutDocument(session.packageRevision(), undefined, {
+      layoutSession: createLayoutSession(),
+      furnitureSource: createCurrentFurnitureSource(undefined),
+    });
   }
 
   function layoutOnce(): SemanticLayout {
@@ -1462,7 +1509,7 @@ export function mountPaginatedSurface(
       // while keeping the map itself, which that read compares against to decide whether
       // the author set actually moved.
       // The review queue is released with it, for the same reason and by the same rule.
-      if (authorRoster !== null) authorRoster = { ...authorRoster, layout: null, items: null };
+      reviewAuthors.releaseLayout();
       currentLayout = layout;
       // Repaint from HERE, so a commit that never went through this surface — undo, or
       // another editor sharing the store — still reaches the screen. Otherwise the painted
@@ -2739,7 +2786,7 @@ export function mountPaginatedSurface(
           : {}),
         ...(contentControlChrome ? { contentControlChrome } : {}),
       },
-      reviewAuthorState().value
+      reviewAuthors.get().value
     );
     // Paint just rebuilt every span, so the caret's field lost its mark with the old DOM.
     syncActiveFieldShading(pagesLayer, collapsedCaretPosition(), { domReplaced: true });
@@ -3526,6 +3573,8 @@ export function mountPaginatedSurface(
     session,
     layout: () => currentLayout,
     sectionAtPage,
+    revisionDisplayMode,
+    revisionAuthorFilter: revisionFilter,
     selection: () => selection,
     setScopeSelection: (next) => {
       // Entering or leaving a header/footer moves the caret ACROSS STORIES;
@@ -3702,7 +3751,7 @@ export function mountPaginatedSurface(
       return false;
     };
     const ranges: KeyedRange[] = [];
-    for (const item of session.reviewItems()) {
+    for (const item of visibleReviewItems()) {
       if (item.kind === 'comment') {
         if (item.range === null) continue;
         if (!onScreen(item.range.start.paragraphId, item.range.end.paragraphId)) continue;
@@ -3886,7 +3935,7 @@ export function mountPaginatedSurface(
     const same = (a: SemanticPosition, b: SemanticPosition): boolean =>
       a.paragraphId === b.paragraphId && a.offset === b.offset;
     if (!same(selection.anchor, pin.anchor) || !same(selection.head, pin.head)) return null;
-    const found = session.reviewItems().find((item) => reviewItemKey(item) === pin.key);
+    const found = visibleReviewItems().find((item) => reviewItemKey(item) === pin.key);
     if (!found) return null;
     // Explicit activation can inspect a resolved comment. The caret path below still ignores
     // resolved comments, so they never reopen from ordinary document navigation.
@@ -3915,7 +3964,7 @@ export function mountPaginatedSurface(
     // The covering items, innermost first, minus the one the reader dismissed. Returning
     // null for a dismissed innermost item hid every item under it too: dismissing a comment
     // that wraps a revision meant the revision could never become active either.
-    const covering = reviewItemsAt(session.reviewItems(), at, reviewOrderIndex()).filter(
+    const covering = reviewItemsAt(visibleReviewItems(), at, reviewOrderIndex()).filter(
       (item) =>
         !(item.kind === 'comment' && item.resolved) &&
         !dismissedReviewKeys.has(reviewItemKey(item)) &&
@@ -3946,7 +3995,7 @@ export function mountPaginatedSurface(
    */
   function resolveReviewThread(found: ReviewItem): ReviewItem | null {
     if (found.kind !== 'comment') return found;
-    const root = reviewThreadRootOf(session.reviewItems(), found);
+    const root = reviewThreadRootOf(visibleReviewItems(), found);
     // A root the reader DISMISSED takes its whole thread with it. Falling back to the reply
     // here painted the band active over a card that is not drawn — a reply renders inside its
     // root, so dismissing the root leaves nothing on screen to be active — and the reader who
@@ -3954,62 +4003,18 @@ export function mountPaginatedSurface(
     return dismissedReviewKeys.has(reviewItemKey(root)) ? null : root;
   }
 
-  /** Whose review item this is. A custom node's card belongs to no person. */
-  function reviewItemAuthor(item: ReviewItem): string {
-    if (item.kind === 'comment') return item.comment.author;
-    if (item.kind === 'revision') return item.author;
-    return '';
-  }
-
-  /**
-   * The review roster: author → slot, and author → resolved colour.
-   *
-   * ONE derivation for the whole review surface. The card in the rail and the band over the
-   * text both read it, so the two cannot disagree about who draws in what — which is the
-   * entire point of colouring by author, and the first thing a reader notices when it breaks.
-   *
-   * Recomputed only when the layout, the review queue, or the host's declarations move.
-   */
-  function reviewAuthorState(): {
-    value: ReadonlyMap<string, number>;
-    resolved: ReadonlyMap<string, ReviewAuthorInfo>;
-  } {
+  function visibleReviewItems(): readonly ReviewItem[] {
     const items = session.reviewItems();
-    const prior = authorRoster;
-    if (prior !== null && prior.layout === currentLayout && prior.items === items) {
-      if (prior.styles === revisionStyles) return prior;
-    }
-    const next = stableAuthorSlots.resolve(
-      authorSlotsOf(currentLayout),
-      (function* authors() {
-        for (const item of items) yield reviewItemAuthor(item);
-      })()
-    );
-    // IDENTITY IS THE CONTRACT. A layout is replaced on every commit, but the author
-    // set almost never changes with it — typing inside a tracked change introduces
-    // nobody. Handing back the previous map when the content matches is what lets a
-    // `useSyncExternalStore` consumer bail out instead of re-rendering the review rail
-    // on every keystroke.
-    const previous = prior?.value;
-    const unchanged =
-      previous !== undefined &&
-      previous.size === next.size &&
-      [...next].every(([author, slot]) => previous.get(author) === slot);
-    const value = unchanged ? previous : next;
-    // The resolution moves when the roster does OR when the host redeclares, and the band
-    // layer keys its reuse on this map's identity — so hand back the same one when neither
-    // moved.
-    const resolved =
-      prior !== null && unchanged && prior.styles === revisionStyles
-        ? prior.resolved
-        : new Map(reviewAuthorsOf(value, revisionStyles).map((it) => [it.author, it]));
-    authorRoster = { layout: currentLayout, items, styles: revisionStyles, value, resolved };
-    return authorRoster;
+    if (revisionAuthorVisibility.hiddenAuthors.size === 0) return items;
+    return items.filter((item) => {
+      const author = reviewItemAuthor(item);
+      return author === null || revisionAuthorVisibility.isVisible(author);
+    });
   }
 
   // Both presence-colour answers, and why they rank differently: see the module.
   const presenceColors = createPresenceColors({
-    roster: reviewAuthorState,
+    roster: reviewAuthors.get,
     styles: () => revisionStyles,
     slots: stableAuthorSlots,
   });
@@ -4075,7 +4080,7 @@ export function mountPaginatedSurface(
     // left alone. A full `render` forces this layer anyway, which is how a live colour change
     // reaches it today — but the unforced callers below (activation, exclusions) would happily
     // reuse bands resolved against a roster that had moved underneath them.
-    const roster = reviewAuthorState();
+    const roster = reviewAuthors.get();
     if (
       !force &&
       commentHighlightLayout === currentLayout &&
@@ -4087,7 +4092,7 @@ export function mountPaginatedSurface(
     // Once per paint, not once per rect: a decision spanning many lines asked the same
     // question for every one of them.
     const byKey = new Map<string, ReviewItem>();
-    for (const item of session.reviewItems()) byKey.set(reviewItemKey(item), item);
+    for (const item of visibleReviewItems()) byKey.set(reviewItemKey(item), item);
     const bands: OverlayRect[] = [];
     for (const rect of commentRects()) {
       const className = bandClassFor(rect.key, active, byKey);
@@ -4095,8 +4100,8 @@ export function mountPaginatedSurface(
       // WHOSE band, for CSS to key on. The rect's key is suffixed per range for a revision
       // covering several sites, so the author comes from the decision, as the class does.
       const item = byKey.get(rect.key.split(RANGE_SUFFIX)[0]!);
-      const name = item ? reviewItemAuthor(item) : '';
-      const reviewAuthor = name === '' ? undefined : roster.resolved.get(name);
+      const name = item ? reviewItemAuthor(item) : null;
+      const reviewAuthor = name === null || name === '' ? undefined : roster.resolved.get(name);
       bands.push({ ...rect, className, ...(reviewAuthor ? { reviewAuthor } : {}) });
     }
     paintSelectionOverlay(commentLayer, currentLayout, bands, {
@@ -4490,30 +4495,17 @@ export function mountPaginatedSurface(
    * `false` return says so rather than claiming freshness.
    */
   function refreshRefFieldResults(): boolean {
-    if (editingMode === 'view' || !session.editable) return true;
-    if (collaborationSession) return false;
-    const refreshOptions = {
-      package: session.currentPackage(),
+    return refreshSurfaceRefFieldResults({
+      session,
+      editingMode,
+      collaborationActive: collaborationSession !== undefined,
+      reviewerFilterActive: revisionFilter() !== undefined,
+      layout: surface.layout(),
+      canonicalUnfilteredLayout: canonicalUnfilteredLayoutForSave,
       styleCascade: styleCascade(),
       numberingIndex: numberingIndex(),
       displayMode: revisionDisplayMode(),
-      // PAGEREF results refresh from the CURRENT finalized pages, through the same index
-      // finalize substitution reads, so the saved numbers are the painted ones. Body plan
-      // only — the note planner ignores it, since note-story PAGEREF fields paint their
-      // cache.
-      pageRefPageNumberOf: pageRefPageNumbersFromLayout(surface.layout()),
-    };
-    // Both plans read before the write lands, and they share one memoized resolution
-    // context — the note values are the ones the pages painted, per calibration verdict.
-    const bodyOp = planRefFieldResultRefresh(session.part(), refreshOptions);
-    const notePlans = planNoteRefFieldResultRefreshes(session.part(), refreshOptions);
-    if (!bodyOp && notePlans.length === 0) return true;
-    const groups: { scope: StoryScope; ops: readonly TreeDocOp[] }[] = [];
-    if (bodyOp) groups.push({ scope: BODY_STORY, ops: [bodyOp] });
-    for (const plan of notePlans) {
-      groups.push({ scope: { kind: 'notesPart', noteKind: plan.noteKind }, ops: [plan.op] });
-    }
-    return session.applyTreeOpsAtomic(groups).committed;
+    });
   }
 
   // Which range a destructive or replacing gesture acts on, and where content replacing it
@@ -4567,6 +4559,15 @@ export function mountPaginatedSurface(
       caretMark,
       commit,
     });
+
+  function applyRevisionAuthorVisibility(moved: boolean): void {
+    if (!moved) return;
+    flushPendingInputAndLayout();
+    furnitureSource = createCurrentFurnitureSource(revisionFilter());
+    scheduler.invalidateAll(session.packageRevision(), 'revision-author-filter');
+    scheduler.flush();
+    options.onChange?.(currentState());
+  }
 
   const surface: ScaleMutableSurface = {
     session,
@@ -4632,7 +4633,7 @@ export function mountPaginatedSurface(
         // EVERY input the mount-time source is given, not a subset. Rebuilt without the three
         // drawing hooks, a header's inline pictures lost their layout context for the rest of
         // the session the first time the user zoomed.
-        furnitureSource = createCurrentFurnitureSource();
+        furnitureSource = createCurrentFurnitureSource(revisionFilter());
         // Dropped rather than trusted: both describe a paint made at the OLD scale, and a
         // flush that publishes nothing (a revision already superseded) would otherwise leave
         // the overlay painting against them.
@@ -5387,7 +5388,19 @@ export function mountPaginatedSurface(
       options.onChange?.(currentState());
     },
 
-    revisionAuthors: () => reviewAuthorState().value,
+    revisionAuthors: () => reviewAuthors.get().value,
+    hiddenRevisionAuthors: () => revisionAuthorVisibility.hiddenAuthors,
+    setRevisionAuthorVisible(author, visible) {
+      applyRevisionAuthorVisibility(revisionAuthorVisibility.setVisible(author, visible));
+    },
+    setAllRevisionAuthorsVisible(visible) {
+      applyRevisionAuthorVisibility(
+        revisionAuthorVisibility.setAllVisible(reviewAuthors.get().value.keys(), visible)
+      );
+    },
+    showAllRevisionAuthors() {
+      applyRevisionAuthorVisibility(revisionAuthorVisibility.showAll());
+    },
     collaborationSession: () => collaborationSession ?? null,
     remotePresenceColor,
     setRevisionStyles: (colors) => {

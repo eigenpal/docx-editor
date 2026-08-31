@@ -9,7 +9,11 @@
 
 import { sha256FontBytes } from '../store/package/sha256.ts';
 import { noteMarksCacheToken, type NoteMarkContext } from './note-projection.ts';
-import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 
 /**
@@ -62,6 +66,7 @@ interface PassProducerEntry {
   readonly noteMarks: NoteMarkContext | undefined;
   readonly defaultTabStopPt: number | undefined;
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly pageNumberFormat: string | undefined;
   readonly producer: string;
 }
@@ -82,6 +87,7 @@ function passProducerEntryMatches(
   noteMarks: NoteMarkContext | undefined,
   defaultTabStopPt: number | undefined,
   displayMode: RevisionDisplayMode,
+  authorFilter: RevisionAuthorFilter | undefined,
   pageNumberFormat: string | undefined
 ): entry is PassProducerEntry {
   return (
@@ -90,6 +96,7 @@ function passProducerEntryMatches(
     entry.noteMarks === noteMarks &&
     entry.defaultTabStopPt === defaultTabStopPt &&
     entry.displayMode === displayMode &&
+    entry.authorFilter === authorFilter &&
     entry.pageNumberFormat === pageNumberFormat
   );
 }
@@ -115,6 +122,7 @@ export function passProducerOf(
   noteMarks: NoteMarkContext | undefined,
   defaultTabStopPt: number | undefined,
   displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter,
   pageNumberFormat?: string
 ): string {
   const entry = styleCascade ? passProducersByCascade.get(styleCascade) : cascadeFreeProducerSlot;
@@ -125,6 +133,7 @@ export function passProducerOf(
       noteMarks,
       defaultTabStopPt,
       displayMode,
+      authorFilter,
       pageNumberFormat
     )
   ) {
@@ -136,12 +145,14 @@ export function passProducerOf(
     (noteMarks ? `|nm:${noteMarksCacheToken(noteMarks)}` : '') +
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+    (authorFilter ? `|reviewers:${authorFilter.cacheKey}` : '') +
     (pageNumberFormat !== undefined ? `|pnf:${pageNumberFormat}` : '');
   const fresh: PassProducerEntry = {
     base,
     noteMarks,
     defaultTabStopPt,
     displayMode,
+    authorFilter,
     pageNumberFormat,
     producer,
   };

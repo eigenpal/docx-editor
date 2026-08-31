@@ -1596,6 +1596,8 @@ export interface EditorSnapshot {
    * vocabulary and memoized per revision.
    */
   readonly hasReviewContent?: boolean;
+  /** Authors whose revisions currently render as accepted and whose comments stay hidden. */
+  readonly hiddenReviewAuthors?: readonly string[];
   /**
    * Lifecycle of the attached collaboration replica, or `'inactive'` when no
    * collaboration module is registered.

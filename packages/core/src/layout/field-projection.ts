@@ -107,10 +107,13 @@ import {
   NO_REVISIONS,
   isRevisionWrapper,
   revisionAttributionOf,
+  projectedRevisions,
+  projectedRevisionProperties,
   revisionsAreDeletion,
   revisionsVisible,
   withRevision,
   type RevisionAttribution,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
@@ -183,7 +186,8 @@ export function piecesOfParagraph(
   projectFieldLink?: FieldLinkProjector,
   documentProperties?: DocumentProperties,
   bodyPageFields: BodyPageFieldContext | false = false,
-  refFields?: RefFieldContext
+  refFields?: RefFieldContext,
+  authorFilter?: RevisionAuthorFilter
 ): FieldAwarePiece[] {
   if (paragraph.kind === 'textValue') return [];
   if (paragraph.kind !== 'paragraph') return [];
@@ -255,13 +259,18 @@ export function piecesOfParagraph(
   ): void => {
     if (text.length === 0 && !projected && !extras?.inlineDrawing) return;
     const effectiveLink = extras?.linkOverride ?? currentLink;
-    const effectiveRevisions = extras?.revisionsOverride ?? revisions;
+    const authoredRevisions = extras?.revisionsOverride ?? revisions;
+    const effectiveRevisions = authorFilter
+      ? projectedRevisions(authoredRevisions, displayMode, authorFilter)
+      : authoredRevisions;
+    if (effectiveRevisions === null) return;
+    const publishedProps = authorFilter ? projectedRevisionProperties(props, authorFilter) : props;
     const link = effectiveLink ? { link: effectiveLink } : {};
     const attribution = effectiveRevisions.length === 0 ? {} : { revisions: effectiveRevisions };
     if (projected) {
       pieces.push({
         text,
-        props,
+        props: publishedProps,
         style,
         start,
         end,
@@ -280,7 +289,7 @@ export function piecesOfParagraph(
     if (text.length === 0) return;
     pieces.push({
       text,
-      props,
+      props: publishedProps,
       style,
       start,
       end,
@@ -313,7 +322,7 @@ export function piecesOfParagraph(
     // all, so this path could not meet one — until `atomicFieldSpansOf` learned to descend into
     // revision wrappers. Without this, an inserted page number painted its digits in the
     // ORIGINAL view, which is the one view that must show the document before that insertion.
-    if (!revisionsVisible(pending.resultRevisions, displayMode)) {
+    if (!revisionsVisible(pending.resultRevisions, displayMode, authorFilter)) {
       if (deletedRanges && revisionsAreDeletion(pending.resultRevisions)) {
         appendModelRange(deletedRanges, start, end);
       }
@@ -430,6 +439,7 @@ export function piecesOfParagraph(
         hiddenRun: style.hidden,
         revisions,
         displayMode,
+        authorFilter,
       });
       if (plan.recordDeleted && deletedRanges) appendModelRange(deletedRanges, start, end);
       if (plan.emit) push('\uFFFC', props, style, true, start, end, plan.extras);
@@ -476,7 +486,7 @@ export function piecesOfParagraph(
     // furniture (no `data-start`) and every surrounding offset stays where the store put it.
     if (isSymbolRunChild(grand)) {
       const glyph = symbolGlyphOf(grand);
-      if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode)) return;
+      if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode, authorFilter)) return;
       const sym = symbolRunStyle(props, glyph, themeFonts);
       push(glyph.text, sym.props, sym.style, true, offset, offset);
       return;
@@ -491,7 +501,7 @@ export function piecesOfParagraph(
     const deleted = revisionsAreDeletion(revisions);
     const suppressed =
       style.hidden ||
-      !revisionsVisible(revisions, displayMode) ||
+      !revisionsVisible(revisions, displayMode, authorFilter) ||
       (grand.kind === 'deletedText' && !deleted);
     if (!suppressed) {
       push(text, props, style, false, offset, offset + text.length, {
@@ -692,14 +702,17 @@ export function piecesOfParagraph(
             // over it would paint nothing where Word (after accepting) shows the display
             // text. Vanish-hidden content still sets it — that is the case the flag exists
             // for.
-            if (revisionsVisible(revisions, displayMode)) pending.sawResultContent = true;
+            if (revisionsVisible(revisions, displayMode, authorFilter))
+              pending.sawResultContent = true;
             if (nestedPage.active) {
               // A symbol inside the skipped inner cache is result content too: a visible one
               // keeps the live replacement alive, a suppressed-only cache appends nothing.
-              nestedPage.noteResult(!style.hidden && revisionsVisible(revisions, displayMode));
+              nestedPage.noteResult(
+                !style.hidden && revisionsVisible(revisions, displayMode, authorFilter)
+              );
               continue;
             }
-            if (!style.hidden && revisionsVisible(revisions, displayMode)) {
+            if (!style.hidden && revisionsVisible(revisions, displayMode, authorFilter)) {
               const glyph = symbolGlyphOf(grand);
               if (glyph?.unicode) {
                 donateResultCapture();
@@ -712,7 +725,8 @@ export function piecesOfParagraph(
           // run — a projected zero-width glyph piece — instead of vanishing with the atomic
           // skips. Buffered like the surrounding result text, so it flushes with it.
           const glyph = symbolGlyphOf(grand);
-          if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode)) continue;
+          if (!glyph || style.hidden || !revisionsVisible(revisions, displayMode, authorFilter))
+            continue;
           const sym = symbolRunStyle(props, glyph, themeFonts);
           pending.buffered.push({
             text: glyph.text,
@@ -737,7 +751,7 @@ export function piecesOfParagraph(
         // deleted field's result survives the proposed result the deletion was accepted into.
         const fieldDeleted = revisionsAreDeletion(revisions);
         const fieldSuppressed =
-          !revisionsVisible(revisions, displayMode) ||
+          !revisionsVisible(revisions, displayMode, authorFilter) ||
           (grand.kind === 'deletedText' && !fieldDeleted);
 
         // The result EXISTS in this display mode, whatever hides it below (vanish included) —
@@ -887,7 +901,7 @@ export function piecesOfParagraph(
     if (revisionsAreDeletion(revisions) && deletedRanges) {
       appendModelRange(deletedRanges, start, start + 1);
     }
-    if (!revisionsVisible(revisions, displayMode)) return;
+    if (!revisionsVisible(revisions, displayMode, authorFilter)) return;
 
     const projected = projectSimpleFieldResult({
       simple,
@@ -896,6 +910,7 @@ export function piecesOfParagraph(
       budget,
       revisions,
       displayMode,
+      authorFilter,
       inheritedRunProperties,
       cascadeRuns,
       themeFonts,
@@ -930,7 +945,7 @@ export function piecesOfParagraph(
       if (revisionsAreDeletion(revisions) && deletedRanges)
         appendModelRange(deletedRanges, start, offset);
       const style = equationRunStyle(resolveRunStyle(inheritedRunProperties, themeFonts));
-      if (style.hidden || !revisionsVisible(revisions, displayMode)) return;
+      if (style.hidden || !revisionsVisible(revisions, displayMode, authorFilter)) return;
       return push('\uFFFC', inheritedRunProperties, style, true, start, offset, { equation });
     }
     if (isFldSimple(child)) {

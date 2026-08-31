@@ -50,3 +50,8 @@ describe('every refusal the section-break lane publishes is translatable', () =>
     expect(localized?.length ?? 0).toBeGreaterThan(0);
   });
 });
+
+test('the empty reviewer roster refusal is translatable', () => {
+  const reason = 'the document has no review authors';
+  expect(localizeDisabledReason(reason, createT(en))).not.toBe(reason);
+});

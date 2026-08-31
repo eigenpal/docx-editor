@@ -12,11 +12,15 @@ import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
 import { type HeaderFooterVariantName, type PageFurniture } from './page-furniture-insets.ts';
-import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
+import {
+  enumerateDocumentSections,
+  geometryOfSection,
+  projectedSectionSourceIndexes,
+} from './section-properties.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 
@@ -36,6 +40,7 @@ export interface CreateDocumentFurnitureSourceOptions {
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: () => number;
   readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
   ) => InlineDrawingLayoutContext | undefined;
@@ -86,6 +91,7 @@ export function createDocumentFurnitureSource(
     numberingIndex,
     defaultTabStopPt,
     displayMode,
+    revisionAuthorFilter,
     inlineDrawingLayoutForPart,
     drawingLayoutTokenForPart,
     drawingTokenForParagraphForPart,
@@ -104,6 +110,7 @@ export function createDocumentFurnitureSource(
       marginRight: number;
       producer: string;
       projectionEpoch: string;
+      revisionAuthorFilterKey: string;
       defaultTabStopPt: number | undefined;
       drawingLayoutToken: string;
       numberingIndex: NumberingIndex | undefined;
@@ -165,6 +172,7 @@ export function createDocumentFurnitureSource(
     geometry: ReturnType<typeof geometryOfSection>
   ): ReturnType<typeof layoutHeaderFooterStory> => {
     const projectionEpoch = linkProjectors.epochForPart(part.name);
+    const revisionAuthorFilterKey = revisionAuthorFilter?.cacheKey ?? '';
     const currentDefaultTabStopPt = defaultTabStopPt?.();
     const drawingLayoutToken = drawingLayoutTokenForPart?.(part.name) ?? '';
     const numbering = numberingIndex?.();
@@ -181,6 +189,7 @@ export function createDocumentFurnitureSource(
       cached.marginRight === geometry.margin.right &&
       cached.producer === producer &&
       cached.projectionEpoch === projectionEpoch &&
+      cached.revisionAuthorFilterKey === revisionAuthorFilterKey &&
       cached.defaultTabStopPt === currentDefaultTabStopPt &&
       cached.drawingLayoutToken === drawingLayoutToken &&
       cached.numberingIndex === numbering &&
@@ -223,6 +232,7 @@ export function createDocumentFurnitureSource(
           linkProjectors.tokenForParagraphForPart(part.name, paragraph),
         projectionTokenForTable: (table: OoxmlNode) =>
           linkProjectors.tokenForTableForPart(part.name, table),
+        ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
       }
     );
     memo.set(part, {
@@ -234,6 +244,7 @@ export function createDocumentFurnitureSource(
       marginRight: geometry.margin.right,
       producer,
       projectionEpoch,
+      revisionAuthorFilterKey,
       defaultTabStopPt: currentDefaultTabStopPt,
       drawingLayoutToken,
       numberingIndex: numbering,
@@ -283,20 +294,26 @@ export function createDocumentFurnitureSource(
   const sectionFurniture = (): readonly (PageFurniture | undefined)[] => {
     const packageOwner = view.currentPackage();
     const occurrenceOwner = headerFooterOccurrenceOwner(packageOwner);
-    const sections = enumerateDocumentSections(view.part(), displayMode);
+    const sections = enumerateDocumentSections(view.part(), displayMode, revisionAuthorFilter);
+    const sourceIndexes = projectedSectionSourceIndexes(
+      view.part(),
+      displayMode,
+      revisionAuthorFilter
+    );
     const bySection = view.headerFooterPartsBySection();
     const resolutionBySection =
       view.headerFooterResolutionBySection?.() ??
       resolveHeaderFooterResolutionBySection(packageOwner);
-    return sections.map((section, index) =>
-      furnitureFromParts(
+    return sections.map((section, index) => {
+      const sourceIndex = sourceIndexes[index] ?? index;
+      return furnitureFromParts(
         packageOwner,
         occurrenceOwner,
-        bySection[index],
-        resolutionBySection[index],
+        bySection[sourceIndex],
+        resolutionBySection[sourceIndex],
         geometryOfSection(section.properties)
-      )
-    );
+      );
+    });
   };
 
   return {

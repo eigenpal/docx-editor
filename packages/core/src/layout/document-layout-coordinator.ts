@@ -13,7 +13,7 @@ import type { LayoutSession } from './layout-session.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { layoutSemanticDocument, type SemanticLayoutOptions } from './semantic-layout.ts';
 import type { SemanticLayout, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
@@ -40,6 +40,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   session: 'document-coordinator',
   furniture: 'document-coordinator',
   displayMode: 'document-coordinator',
+  revisionAuthorFilter: 'document-coordinator',
   sectionFurniture: 'document-coordinator',
   sectionColumns: 'layout-internal',
   styleCascade: 'document-coordinator',
@@ -98,6 +99,7 @@ export interface LayoutDocumentViewOptions {
   readonly drawingLayoutEpoch?: string;
   readonly drawingLayoutEpochForPart?: (partName: string) => string;
   readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
 }
 
 type LayoutDocumentViewSink = 'notes' | 'semantic-layout' | 'both';
@@ -123,6 +125,7 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   drawingLayoutEpoch: 'semantic-layout',
   drawingLayoutEpochForPart: 'notes',
   displayMode: 'both',
+  revisionAuthorFilter: 'both',
 } as const satisfies Readonly<Record<keyof LayoutDocumentViewOptions, LayoutDocumentViewSink>>;
 
 type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> = {
@@ -156,6 +159,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     linkProjectors: options.linkProjectors,
     projectFieldLink: options.projectFieldLink,
     displayMode: options.displayMode,
+    revisionAuthorFilter: options.revisionAuthorFilter,
   } satisfies CreateDocumentNotesInputOptions &
     Record<keyof CreateDocumentNotesInputOptions, unknown> &
     Record<CoordinatorInputsFor<'notes'>, unknown>;
@@ -177,6 +181,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     drawingTokenForParagraph: options.drawingTokenForParagraph,
     drawingLayoutEpoch: options.drawingLayoutEpoch,
     displayMode: options.displayMode,
+    revisionAuthorFilter: options.revisionAuthorFilter,
   } satisfies Record<CoordinatorInputsFor<'semantic-layout'>, unknown>;
   const semanticOptions = {
     measurer: semanticInputs.measurer,
@@ -201,6 +206,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     projectionEpoch: semanticInputs.linkProjectors.epochForPart(bodyPartName),
     notes,
     displayMode: semanticInputs.displayMode,
+    revisionAuthorFilter: semanticInputs.revisionAuthorFilter,
   } satisfies SemanticLayoutOptions & Record<DocumentCoordinatedSemanticOption, unknown>;
   return layoutSemanticDocument(
     semanticInputs.view.part(),

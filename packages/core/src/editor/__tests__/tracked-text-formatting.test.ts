@@ -12,21 +12,29 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { mountPaginatedSurface, type PaginatedSurface } from '../paginated-surface.ts';
-import { runPropertyEdits, runsCovering, type OoxmlNode } from '@docx-editor.dev/core/store';
+import {
+  directParagraphProperties,
+  runPropertyEdits,
+  runsCovering,
+  type OoxmlNode,
+} from '@docx-editor.dev/core/store';
 import type { RevisionDisplayMode } from '@docx-editor.dev/core/layout';
 import { docx } from './paginated-surface-fixtures.ts';
 
 function withSurface(
   body: string,
   run: (surface: PaginatedSurface) => void,
-  displayMode?: RevisionDisplayMode
+  displayMode?: RevisionDisplayMode,
+  hiddenRevisionAuthors?: readonly string[]
 ): void {
   const container = document.createElement('div');
   document.body.append(container);
   const opened = mountPaginatedSurface(
     container,
     docx(body),
-    displayMode ? { revisionDisplayMode: displayMode } : undefined
+    displayMode || hiddenRevisionAuthors
+      ? { ...(displayMode ? { revisionDisplayMode: displayMode } : {}), hiddenRevisionAuthors }
+      : undefined
   );
   if (!opened.ok) throw new Error(opened.reason);
   try {
@@ -255,6 +263,42 @@ describe('run formatting over tracked-change text', () => {
       expect(runPropertyEdits(part, id, 0, 3, { localName: 'b' }, 'all-markup')).toHaveLength(1);
       expect(runsCovering(part, id, 0, 3, 'all-markup')).toHaveLength(1);
     });
+  });
+
+  test('All Markup formatting skips a hidden author deletion but reaches visible text', () => {
+    withSurface(
+      `<w:p>${textRun('abc')}${del('XYZ')}${textRun('def')}</w:p>`,
+      (surface) => {
+        select(surface, 0, 'abcXYZdef'.length);
+        surface.toggleRunProperty('b');
+        expect(runShapes(firstParagraphNode(surface))).toEqual([
+          { props: ['b'], text: 'abc', tracked: false },
+          { props: [], text: 'XYZ', tracked: false },
+          { props: ['b'], text: 'def', tracked: false },
+        ]);
+      },
+      'all-markup',
+      ['A']
+    );
+  });
+
+  test('a trailing hidden mark that cannot merge still accepts paragraph formatting', () => {
+    const hiddenMark = '<w:rPr><w:del w:id="8" w:author="A"/></w:rPr>';
+    withSurface(
+      `<w:p><w:pPr>${hiddenMark}</w:pPr>${textRun('visible')}</w:p>`,
+      (surface) => {
+        select(surface, 0, 'visible'.length);
+        surface.setParagraphProperty('jc', { val: 'center' });
+        const paragraph = firstParagraphNode(surface);
+        expect(
+          directParagraphProperties(surface.session.part(), paragraph.id).find(
+            (property) => property.localName === 'jc'
+          )?.attributes?.val
+        ).toBe('center');
+      },
+      'all-markup',
+      ['A']
+    );
   });
 
   test('the store lane plans edits and covers runs inside w:ins', () => {

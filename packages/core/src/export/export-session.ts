@@ -28,7 +28,10 @@ import { releaseOverflowPageShellState } from '../layout/page-furniture-insets.t
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  revisionAuthorFilter,
+} from '../layout/revision-projection.ts';
 import {
   createNodeImageDecodePort,
   type PreservedImageConverter,
@@ -47,6 +50,8 @@ export interface OpenDocumentForExportOptions {
    * `proposed` or `original` explicitly only when a resolved view is intended.
    */
   readonly displayMode?: RevisionDisplayMode;
+  /** Reviewers whose revisions project as accepted across body, furniture, and notes. */
+  readonly hiddenRevisionAuthors?: readonly string[];
   /** Host-owned measurement override; omit to use the core fixed fallback. */
   readonly measurer?: TextMeasurer;
   /** Stable measurement implementation identity used by layout caches and diagnostics. */
@@ -145,6 +150,7 @@ export function openDocumentForExport(
   const reuseAcrossRevisions = options.reuseAcrossRevisions ?? sourceIsView;
   const timeoutMs = normalizedResourceTimeout(options.resourceTimeoutMs);
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const authorFilter = revisionAuthorFilter(options.hiddenRevisionAuthors ?? []);
   const initialMeasurer = options.measurer ?? createFixedMeasurer();
   const producer =
     options.producer ?? (options.measurer ? 'host-export-measurer' : 'export-fixed-measurer');
@@ -330,6 +336,7 @@ export function openDocumentForExport(
         numberingIndex: state.styles.numberingIndex,
         defaultTabStopPt: state.styles.defaultTabStopPt,
         displayMode: mode,
+        revisionAuthorFilter: authorFilter,
         inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),
         drawingLayoutTokenForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -375,6 +382,7 @@ export function openDocumentForExport(
         drawingLayoutEpoch: state.drawingBundle.cacheTokenForPart(state.view.part().name),
         drawingLayoutEpochForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         displayMode: mode,
+        revisionAuthorFilter: authorFilter,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {

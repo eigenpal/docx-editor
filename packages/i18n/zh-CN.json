@@ -33,7 +33,8 @@
     "sectionBreakNextPage": "分节符（下一页）",
     "insertFootnote": "插入脚注",
     "insertEndnote": "插入尾注",
-    "insertTable": null
+    "insertTable": null,
+    "review": null
   },
   "formattingBar": {
     "groups": {
@@ -560,6 +561,11 @@
     "refresh": "更新整个目录",
     "refreshPageNumbers": "仅更新页码"
   },
+  "reviewers": {
+    "label": "审阅者",
+    "all": "全部",
+    "markupOptions": null
+  },
   "editingMode": {
     "editing": "编辑",
     "label": "编辑模式",
@@ -740,7 +746,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

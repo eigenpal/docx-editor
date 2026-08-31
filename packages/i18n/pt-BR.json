@@ -33,7 +33,8 @@
     "sectionBreakNextPage": "Quebra de seção (próxima página)",
     "insertFootnote": "Inserir nota de rodapé",
     "insertEndnote": "Inserir nota de fim",
-    "insertTable": null
+    "insertTable": null,
+    "review": null
   },
   "formattingBar": {
     "groups": {
@@ -560,6 +561,11 @@
     "refresh": "Atualizar tabela inteira",
     "refreshPageNumbers": "Atualizar apenas números de página"
   },
+  "reviewers": {
+    "label": "Revisores",
+    "all": "Todos",
+    "markupOptions": null
+  },
   "editingMode": {
     "editing": "Edição",
     "label": "Modo de edição",
@@ -740,7 +746,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

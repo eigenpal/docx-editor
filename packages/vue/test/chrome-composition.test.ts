@@ -103,6 +103,21 @@ describe('DocxEditorToolbar composition', () => {
     view.unmount();
   });
 
+  test('a host can compose the reviewer shortcut with its own icon', async () => {
+    const view = mountEditorTree(() =>
+      h(DocxEditorToolbar, null, {
+        default: () =>
+          h(DocxEditorToolbar.Reviewers, {
+            icon: h('span', { 'data-testid': 'custom-reviewers-icon' }),
+          }),
+      })
+    );
+    await flush();
+    expect(view.container.querySelector('[data-slot="review.authors"]')).not.toBeNull();
+    expect(view.container.querySelector('[data-testid="custom-reviewers-icon"]')).not.toBeNull();
+    view.unmount();
+  });
+
   test('Bold reflects live engine state after click', async () => {
     const view = mountEditorTree(() => h(DocxEditorToolbar));
     await flush();
@@ -143,7 +158,7 @@ describe('DocxEditorMenu composition', () => {
     );
     await flush();
     const bar = view.container.querySelector('[data-testid="docx-menubar"]')!;
-    expect(menuIds(bar)).toEqual(['file', 'format', 'insert']);
+    expect(menuIds(bar)).toEqual(['file', 'format', 'insert', 'review']);
     view.unmount();
   });
 

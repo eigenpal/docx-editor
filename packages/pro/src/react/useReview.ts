@@ -70,6 +70,15 @@ export type ReviewItemView = ReviewItemPlacement;
  */
 export type { ReviewActivationOptions };
 
+function reviewAuthorFilterKey(editor: Editor): string {
+  const snapshot = (
+    editor as Editor & {
+      snapshot?: () => { readonly hiddenReviewAuthors?: readonly string[] };
+    }
+  ).snapshot?.();
+  return JSON.stringify(snapshot?.hiddenReviewAuthors ?? []);
+}
+
 /**
  * What {@link useReview} returns: the review rail's data and the things a card can do.
  *
@@ -190,7 +199,10 @@ export function useReviewOf(editor: Editor | null, query?: ReviewItemQuery): Use
     subscribe,
     // Editing mode is part of the public action state even when the queue itself is unchanged:
     // switching to viewing must disable Resolve/Reopen in a host-composed card immediately.
-    () => (editor ? `${editor.getReviewRevision()}:${editor.getEditingMode()}` : 'none'),
+    () =>
+      editor
+        ? `${editor.getReviewRevision()}:${editor.getEditingMode()}:${reviewAuthorFilterKey(editor)}`
+        : 'none',
     () => 'none'
   );
 

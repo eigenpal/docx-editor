@@ -40,6 +40,7 @@ export function openDocumentForExport(source: ExportDocumentSource, options?: Op
 export interface OpenDocumentForExportOptions {
     readonly convertPreservedImage?: PreservedImageConverter;
     readonly displayMode?: RevisionDisplayMode;
+    readonly hiddenRevisionAuthors?: readonly string[];
     readonly imageDecodePort?: ImageDecodePort;
     readonly measurer?: TextMeasurer;
     readonly producer?: string;

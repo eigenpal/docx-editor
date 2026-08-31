@@ -93,6 +93,7 @@ import {
 import { ParagraphDialogHost } from '../paragraph-dialog-host';
 import { TableChromeProvider } from './useTableChrome';
 import { ToolbarEditingMode } from './EditingMode';
+import { ToolbarReviewers } from './Reviewers';
 
 const TABLE_CHROME_SLOTS: readonly ArrangementKey[] = [
   'table.borderTarget',
@@ -127,6 +128,7 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'text.link': ToolbarLink,
   'list.lineSpacing': ToolbarLineSpacing,
   'review.editingMode': ToolbarEditingMode,
+  'review.authors': ToolbarReviewers,
   'file.save': ToolbarSave,
   ...CONTENT_CONTROL_SHAPED_PARTS,
   'table.borderTarget': ToolbarTableBorderTarget,
@@ -267,6 +269,7 @@ export interface DocxEditorToolbarNamespace {
   readonly Zoom: ToolbarSlotPartComponent;
   readonly StylePicker: typeof ParagraphStyle;
   readonly EditingMode: ToolbarSlotPartComponent;
+  readonly Reviewers: typeof ToolbarReviewers;
   readonly Save: ToolbarSlotPartComponent;
   readonly ContentControlShowAll: ToolbarPartComponent;
   readonly ContentControlFormFill: ToolbarPartComponent;
@@ -460,6 +463,7 @@ export const DocxEditorToolbar = Object.assign(DocxEditorToolbarRoot, {
   Zoom: ToolbarZoom,
   StylePicker: ParagraphStyle,
   EditingMode: ToolbarEditingMode,
+  Reviewers: ToolbarReviewers,
   Save: ToolbarSave,
   ContentControlShowAll: ToolbarContentControlShowAll,
   ContentControlFormFill: ToolbarContentControlFormFill,

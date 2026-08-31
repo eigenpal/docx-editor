@@ -33,7 +33,8 @@
     "sectionBreakNextPage": "Bölüm sonu (sonraki sayfa)",
     "insertFootnote": "Dipnot ekle",
     "insertEndnote": "Sonnot ekle",
-    "insertTable": null
+    "insertTable": null,
+    "review": null
   },
   "formattingBar": {
     "groups": {
@@ -560,6 +561,11 @@
     "refresh": "Tüm tabloyu güncelle",
     "refreshPageNumbers": "Yalnızca sayfa numaralarını güncelle"
   },
+  "reviewers": {
+    "label": "Gözden geçirenler",
+    "all": "Tümü",
+    "markupOptions": null
+  },
   "editingMode": {
     "editing": "Düzenleme",
     "label": "Düzenleme modu",
@@ -740,7 +746,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

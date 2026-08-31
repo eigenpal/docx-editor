@@ -5890,6 +5890,64 @@ a.docx-hyperlink:focus-visible {
   color: var(--doc-accent, #1a73e8);
 }
 
+/* Word for Mac's reviewer submenu: All, then one checked row per document author. */
+.docx-toolbar__reviewers {
+  position: relative;
+  display: inline-flex;
+}
+
+.docx-toolbar__reviewers-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: var(--doc-z-overlay);
+  display: flex;
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: min(420px, calc(100vh - 24px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid var(--doc-border);
+  border-radius: 10px;
+  background: var(--doc-surface);
+  box-shadow: var(--doc-shadow-lg);
+}
+
+.docx-toolbar__reviewer-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--doc-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.docx-toolbar__reviewer-item:hover,
+.docx-toolbar__reviewer-item:focus-visible {
+  background: var(--doc-bg-hover);
+}
+
+.docx-toolbar__reviewer-swatch {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.docx-toolbar__reviewer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* A replacement's two halves, in the colours the document draws them in: what goes, and
    what takes its place. */
 .docx-review__removed {
@@ -5993,7 +6051,7 @@ a.docx-hyperlink:focus-visible {
   }
 }
 
-/* ── The menu bar: File · Format · Insert · Help ───────────────────────────────────────
+/* ── The menu bar: File · Format · Insert · Review · Help ──────────────────────────────
  *
  * Sits under the document title, above the toolbar pill. Triggers are plain text — no
  * chrome at rest, a soft gray plate on hover and while open — and the panels reuse the
@@ -6118,6 +6176,30 @@ a.docx-hyperlink:focus-visible {
    * separation comes from the card's own border and shadow. */
   margin-left: 0;
   min-width: 240px;
+}
+
+/* The third-level reviewer list can be long. Keep the hierarchy anchored to its source,
+ * but let only the roster scroll instead of pushing the whole Review menu off-screen. */
+.docx-editor .docx-menubar__reviewers-submenu > .docx-menubar__submenu-panel {
+  max-height: min(420px, calc(100vh - 24px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.docx-editor .docx-menubar__reviewer-check {
+  display: inline-flex;
+  width: 18px;
+  justify-content: center;
+}
+
+/* Checked rows use the familiar Mac checkmark; the selection does not become a heavy slab. */
+.docx-editor .docx-menubar__reviewer-item[data-active] {
+  background: transparent;
+}
+
+.docx-editor .docx-menubar__reviewer-item:hover,
+.docx-editor .docx-menubar__reviewer-item:focus-visible {
+  background: var(--doc-bg-hover);
 }
 
 /* A named section of rows. The heading is decoration (the group carries the accessible name),

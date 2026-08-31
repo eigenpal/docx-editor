@@ -89,6 +89,7 @@ const EXPECTED_SLOTS: readonly ChromeSlotId[] = [
   'format.painter',
   'format.clear',
   'review.comments',
+  'review.authors',
   'review.editingMode',
   'contentControl.showAll',
   'contentControl.formFill',
@@ -301,7 +302,7 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the count is stable, so a dropped control fails rather than passing quietly', () => {
-    expect(chromeControlCount()).toBe(56);
+    expect(chromeControlCount()).toBe(57);
   });
 
   test('the table group is contextual and carries border/fill chrome slots', () => {
@@ -362,7 +363,15 @@ describe('legacy chrome descriptor', () => {
   });
 
   test('the menu region carries the chrome menus, in bar order', () => {
-    expect(CHROME_MENUS.map((m) => m.id)).toEqual(['file', 'format', 'insert', 'help']);
+    expect(CHROME_MENUS.map((m) => m.id)).toEqual(['file', 'format', 'insert', 'review', 'help']);
+  });
+
+  test('review authors stays composable without crowding the default toolbar', () => {
+    const defaults = defaultChromeGroups().flatMap((group) =>
+      group.controls.map((control) => chromeSlotId(group, control))
+    );
+    expect(defaults).not.toContain('review.authors');
+    expect(allSlots()).toContain('review.authors');
   });
 
   test('every menu row names a real slot, so a menu cannot describe a control twice', () => {

@@ -1,6 +1,6 @@
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
-// The compound menu bar: File · Format · Insert · Help, derived FROM the chrome registry.
+// The compound menu bar: File · Format · Insert · Review · Help, derived FROM the chrome registry.
 //
 // DEFAULT-SET + IN-PLACE OVERRIDE, the same contract the toolbar has. With no children
 // the bar renders every menu of `CHROME_MENUS` in registry order; a child that is a menu
@@ -63,12 +63,14 @@ import {
   type MenuPartComponent,
 } from './parts';
 import { useScopeClassName } from '../scope-context';
+import { MenuReview, MenuReviewers } from './Reviewers';
 
 /** The pinned part for each registry menu, so the default bar is derived, not hand-listed. */
 const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
   file: MenuFile,
   format: MenuFormat,
   insert: MenuInsert,
+  review: MenuReview,
   help: MenuHelp,
 };
 
@@ -413,6 +415,7 @@ export interface DocxEditorMenuNamespace {
   readonly File: MenuPartComponent;
   readonly Format: MenuPartComponent;
   readonly Insert: MenuPartComponent;
+  readonly Review: typeof MenuReview;
   readonly Help: MenuPartComponent;
   /** One chrome slot as a live row. */
   readonly Item: typeof MenuItem;
@@ -431,12 +434,14 @@ export interface DocxEditorMenuNamespace {
   readonly PageSetup: typeof MenuPageSetup;
   /** Insert › Image, so a host can hide it or place it elsewhere by name. */
   readonly ImageInsert: typeof MenuImageInsert;
+  /** Review > Markup Options > Reviewers. */
+  readonly Reviewers: typeof MenuReviewers;
   /** Help › Report issue, so a host can drop it or point it elsewhere by name. */
   readonly ReportIssue: typeof MenuReportIssue;
 }
 
 /**
- * The compound menu bar: `<DocxEditor.Menu/>` for File · Format · Insert · Help, parts as
+ * The compound menu bar: `<DocxEditor.Menu/>` for File · Format · Insert · Review · Help, parts as
  * statics for composition.
  *
  * Every actionable row is a chrome slot, so a row and its toolbar twin share one label,
@@ -450,6 +455,7 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   File: MenuFile,
   Format: MenuFormat,
   Insert: MenuInsert,
+  Review: MenuReview,
   Help: MenuHelp,
   Item: MenuItem,
   Row: MenuRow,
@@ -462,5 +468,6 @@ export const DocxEditorMenu: DocxEditorMenuNamespace = Object.assign(DocxEditorM
   Save: MenuSave,
   PageSetup: MenuPageSetup,
   ImageInsert: MenuImageInsert,
+  Reviewers: MenuReviewers,
   ReportIssue: MenuReportIssue,
 });
