@@ -82,7 +82,27 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  * nothing.
  */
 export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
-  return walkParagraph(paragraph, null);
+  return walkParagraph(paragraph, null, null);
+}
+
+export interface NoteSegmentProjection {
+  readonly segments: readonly Segment[];
+  readonly ancestorsByNodeId: ReadonlyMap<string, readonly OoxmlNode[]>;
+}
+
+const noteSegmentProjectionCache = new WeakMap<OoxmlParagraphNode, NoteSegmentProjection>();
+
+/** Segment offsets plus note ancestry, derived by the same single paragraph walk. */
+export function noteSegmentsWithAncestorsOf(paragraph: OoxmlParagraphNode): NoteSegmentProjection {
+  const cached = noteSegmentProjectionCache.get(paragraph);
+  if (cached) return cached;
+  const ancestorsByNodeId = new Map<string, readonly OoxmlNode[]>();
+  const result = {
+    segments: walkParagraph(paragraph, null, ancestorsByNodeId),
+    ancestorsByNodeId,
+  };
+  noteSegmentProjectionCache.set(paragraph, result);
+  return result;
 }
 
 /** Half-open `[start, end)` of one node in its paragraph's model offset space. */
@@ -146,7 +166,7 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
 
 function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
   const spans = new Map<string, OffsetSpan>();
-  const segments = walkParagraph(paragraph, spans);
+  const segments = walkParagraph(paragraph, spans, null);
   const length = segments.length === 0 ? 0 : segments[segments.length - 1]!.end;
   const lookup = (node: OoxmlNode | string): OffsetSpan | null =>
     spans.get(typeof node === 'string' ? node : node.id) ?? null;
@@ -163,7 +183,8 @@ function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffs
 
 function walkParagraph(
   paragraph: OoxmlParagraphNode,
-  spans: Map<string, OffsetSpan> | null
+  spans: Map<string, OffsetSpan> | null,
+  noteAncestors: Map<string, readonly OoxmlNode[]> | null
 ): Segment[] {
   const segments: Segment[] = [];
   let offset = 0;
@@ -177,6 +198,12 @@ function walkParagraph(
   const noteAtomById = new Map(noteAtoms.map((span) => [span.node.id, span]));
   /** Node ids swallowed by a well-formed atomic field (chrome + cached result). */
   const covered = new Set<string>();
+  const ancestorPath: OoxmlNode[] = [paragraph];
+  const captureNoteAncestors = (node: OoxmlNode): void => {
+    if (noteAncestors !== null && node.kind === 'noteReference') {
+      noteAncestors.set(node.id, ancestorPath.slice());
+    }
+  };
   for (const span of atoms) {
     for (const id of span.removeNodeIds) covered.add(id);
   }
@@ -187,6 +214,7 @@ function walkParagraph(
     readonly removeNodeIds: readonly string[];
     readonly formatRunIds?: readonly string[];
   }): void => {
+    captureNoteAncestors(span.node);
     segments.push({
       runId: span.runId,
       node: span.node,
@@ -279,11 +307,15 @@ function walkParagraph(
       return;
     }
     if (node.kind === 'text' || node.kind === 'deletedText') {
+      ancestorPath.push(node);
       for (const child of node.children) visitRunChild(child, runId, scope);
+      ancestorPath.pop();
       record(node, start);
       return;
     }
+    ancestorPath.push(node);
     for (const child of node.children) visitRunChild(child, runId, scope);
+    ancestorPath.pop();
     record(node, start);
   };
   const visitInline = (child: OoxmlNode, depth: number): void => {
@@ -305,7 +337,9 @@ function walkParagraph(
     }
     if (child.kind === 'run') {
       const runScope = namespaceScopeForNode(emptyNamespaceScope(), child);
+      ancestorPath.push(child);
       for (const grand of child.children) visitRunChild(grand, child.id, runScope);
+      ancestorPath.pop();
       record(child, start);
       return;
     }
@@ -314,7 +348,9 @@ function walkParagraph(
     // tracked insertion is ordinary. Not descending is what made tracked text invisible to the
     // op offset space, so every op past it was refused as out of range.
     if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+      ancestorPath.push(child);
       for (const inner of child.children) visitInline(inner, depth + 1);
+      ancestorPath.pop();
       // The container owns the full span its descendants contributed. Tracked typing uses
       // this span to descend back into the author's existing `w:ins`; without it, the first
       // character was addressable but the second saw the wrapper as length zero and was
@@ -327,7 +363,10 @@ function walkParagraph(
       const content = contentControlContentOf(child);
       if (content) {
         const contentStart = offset;
+        ancestorPath.push(child, content);
         for (const inner of content.children) visitInline(inner, depth + 1);
+        ancestorPath.pop();
+        ancestorPath.pop();
         // The CONTENT node owns the span its children contributed, not only the wrapper.
         // Without this a caller that descends into `w:sdtContent` — placing a comment
         // marker inside a control, which the schema allows — asks for its span, gets null,

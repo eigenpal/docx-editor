@@ -108,8 +108,10 @@ import {
   revisionsVisible,
   withRevision,
   type RevisionAttribution,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
+import { cacheProjection } from './bounded-projection-cache.ts';
 import {
   listItemNumberSource,
   walkStoryParagraphs,
@@ -509,25 +511,32 @@ export interface RefNoteParts {
 }
 
 /** Normal-note story block arrays of one notes part, memoized on the immutable part. */
-const notePartStories = new WeakMap<OoxmlPart, readonly (readonly OoxmlElement[])[]>();
+const notePartStories = new WeakMap<OoxmlPart, Map<string, readonly (readonly OoxmlElement[])[]>>();
 
 /**
  * Normal-note stories of one notes part, in part order. Exported for the save-time refresh
  * planner: walking the SAME story arrays this context scanned keeps its anchor ids and the
  * planner's located fields aligned by construction.
  */
-export function noteStoriesOfPart(part: OoxmlPart | null): readonly (readonly OoxmlElement[])[] {
+export function noteStoriesOfPart(
+  part: OoxmlPart | null,
+  displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
+  authorFilter?: RevisionAuthorFilter
+): readonly (readonly OoxmlElement[])[] {
   if (!part) return [];
-  const cached = notePartStories.get(part);
+  const key = `${displayMode}|${authorFilter?.cacheKey ?? ''}`;
+  const perProjection = notePartStories.get(part);
+  const cached = perProjection?.get(key);
   if (cached) return cached;
   const stories: (readonly OoxmlElement[])[] = [];
   for (const note of notesOf(part.root)) {
     if (stories.length >= MAX_NOTES_PER_PART) break;
     if (!isNormalNote(note)) continue;
-    const blocks = noteStoryBlocks(note);
+    const blocks = noteStoryBlocks(note, displayMode, authorFilter);
     if (blocks.length > 0) stories.push(blocks);
   }
-  notePartStories.set(part, stories);
+  if (perProjection) cacheProjection(perProjection, key, stories);
+  else notePartStories.set(part, new Map([[key, stories]]));
   return stories;
 }
 
@@ -537,6 +546,7 @@ interface RefContextMemoEntry {
   readonly endnotesPart: OoxmlPart | null;
   readonly noteNumbering: NoteRefNumberingInput | undefined;
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilterKey: string;
   readonly context: RefFieldContext | null;
 }
 /**
@@ -552,7 +562,8 @@ function buildRefFieldContext(
   listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
   notes: RefNoteParts | undefined,
   noteNumbering: NoteRefNumberingInput | undefined,
-  displayMode: RevisionDisplayMode
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): RefFieldContext | null {
   const fieldsByParagraph = new Map<string, readonly ScannedRefField[]>();
   const blockScans: BlockRefScan[] = [];
@@ -573,8 +584,12 @@ function buildRefFieldContext(
   // Note stories join AFTER the body, so the shared cap and the first-declaration rule
   // both prefer body content — the story a reference overwhelmingly lives in and targets.
   if (notes) {
-    for (const story of noteStoriesOfPart(notes.footnotesPart)) scanStory(story);
-    for (const story of noteStoriesOfPart(notes.endnotesPart)) scanStory(story);
+    for (const story of noteStoriesOfPart(notes.footnotesPart, displayMode, authorFilter)) {
+      scanStory(story);
+    }
+    for (const story of noteStoriesOfPart(notes.endnotesPart, displayMode, authorFilter)) {
+      scanStory(story);
+    }
   }
   if (fieldsByParagraph.size === 0) return null;
 
@@ -606,7 +621,7 @@ function buildRefFieldContext(
       if (!field.autonum) continue;
       // A field the display mode resolves away does not exist in that view, so it must not
       // advance the counter: Word after accepting a deletion renumbers the survivors.
-      if (!revisionsVisible(field.revisions, displayMode)) continue;
+      if (!revisionsVisible(field.revisions, displayMode, authorFilter)) continue;
       const next = (autonumCounters.get(field.autonum.kind) ?? 0) + 1;
       autonumCounters.set(field.autonum.kind, next);
       const value = autonumDisplayText(field.autonum, next);
@@ -825,7 +840,8 @@ export function resolveStoryRefFieldsWithNoteNumbers(
   listItems: ReadonlyMap<string, ResolvedListItem> | undefined,
   notes: RefNoteParts | undefined,
   noteNumbering: NoteRefNumberingInput | undefined,
-  displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE
+  displayMode: RevisionDisplayMode = DEFAULT_REVISION_DISPLAY_MODE,
+  authorFilter?: RevisionAuthorFilter
 ): RefFieldContext | null {
   const footnotesPart = notes?.footnotesPart ?? null;
   const endnotesPart = notes?.endnotesPart ?? null;
@@ -836,17 +852,26 @@ export function resolveStoryRefFieldsWithNoteNumbers(
     memo.footnotesPart === footnotesPart &&
     memo.endnotesPart === endnotesPart &&
     memo.noteNumbering === noteNumbering &&
-    memo.displayMode === displayMode
+    memo.displayMode === displayMode &&
+    memo.authorFilterKey === (authorFilter?.cacheKey ?? '')
   ) {
     return memo.context;
   }
-  const context = buildRefFieldContext(blocks, listItems, notes, noteNumbering, displayMode);
+  const context = buildRefFieldContext(
+    blocks,
+    listItems,
+    notes,
+    noteNumbering,
+    displayMode,
+    authorFilter
+  );
   refContextMemos.set(blocks, {
     listItems,
     footnotesPart,
     endnotesPart,
     noteNumbering,
     displayMode,
+    authorFilterKey: authorFilter?.cacheKey ?? '',
     context,
   });
   return context;

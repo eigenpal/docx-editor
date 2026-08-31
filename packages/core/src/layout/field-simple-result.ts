@@ -65,6 +65,7 @@ import {
   revisionsVisible,
   withRevision,
   type RevisionAttribution,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 
@@ -99,6 +100,7 @@ export function collectSimpleFieldDisplay(args: {
   readonly budget: FieldScanBudget;
   readonly revisions: readonly RevisionAttribution[];
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter?: RevisionAuthorFilter;
   readonly inheritedRunProperties: readonly OoxmlProperty[];
   readonly cascadeRuns?: SimpleFieldRunCascader;
   readonly themeFonts?: ThemeFonts;
@@ -184,14 +186,16 @@ export function collectSimpleFieldDisplay(args: {
             // Only content this display mode keeps counts (vanish-hidden still does) —
             // synthesis must fill the view a `w:del`-wrapped result is resolved out of,
             // matching the complex-field walk.
-            if (revisionsVisible(local, displayMode)) sawResultContent = true;
+            if (revisionsVisible(local, displayMode, args.authorFilter)) sawResultContent = true;
             if (tracker.active) {
-              tracker.noteResult(!style.hidden && revisionsVisible(local, displayMode));
+              tracker.noteResult(
+                !style.hidden && revisionsVisible(local, displayMode, args.authorFilter)
+              );
               continue;
             }
             const glyph = symbolGlyphOf(grand);
             if (!glyph?.unicode) continue;
-            if (style.hidden || !revisionsVisible(local, displayMode)) continue;
+            if (style.hidden || !revisionsVisible(local, displayMode, args.authorFilter)) continue;
             captureStyle(props, style);
             text += glyph.text;
             continue;
@@ -201,7 +205,8 @@ export function collectSimpleFieldDisplay(args: {
           if (value.length === 0) continue;
           const deleted = revisionsAreDeletion(local);
           const revisionSuppressed =
-            !revisionsVisible(local, displayMode) || (grand.kind === 'deletedText' && !deleted);
+            !revisionsVisible(local, displayMode, args.authorFilter) ||
+            (grand.kind === 'deletedText' && !deleted);
           // Revision-suppressed content does not count as a cached result: the mode resolved
           // it away, and synthesis must be free to fill that view. Vanish-hidden still counts.
           if (!revisionSuppressed) sawResultContent = true;
@@ -226,7 +231,7 @@ export function collectSimpleFieldDisplay(args: {
           ? null
           : matchAllowlistedPageField(fldSimpleInstr(child) ?? '');
         if (simplePageField && pageContext) {
-          if (!revisionsVisible(local, displayMode)) continue;
+          if (!revisionsVisible(local, displayMode, args.authorFilter)) continue;
           const beforeLen = text.length;
           collect(child, nodeDepth + 1, local);
           text = text.slice(0, beforeLen);
@@ -303,6 +308,7 @@ export function projectSimpleFieldResult(args: {
   readonly budget: FieldScanBudget;
   readonly revisions: readonly RevisionAttribution[];
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter?: RevisionAuthorFilter;
   readonly inheritedRunProperties: readonly OoxmlProperty[];
   readonly cascadeRuns?: SimpleFieldRunCascader;
   readonly themeFonts?: ThemeFonts;

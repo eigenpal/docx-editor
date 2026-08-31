@@ -23,10 +23,11 @@ import {
   DEFAULT_REVISION_DISPLAY_MODE,
   NO_REVISIONS,
   isRevisionWrapper,
+  projectedRevisions,
   revisionAttributionOf,
-  revisionsVisible,
   withRevision,
   type RevisionAttribution,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { measureDisplayText } from './run-style.ts';
@@ -1242,6 +1243,7 @@ export function publishAnchoredDrawingsForParagraph(options: {
    * disappears from the original. Defaults to `all-markup`, which shows everything.
    */
   readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /**
    * Lays out a textbox drawing's story (host-supplied closure over flow deps and the page
    * context). Absent hosts degrade textbox drawings to the placeholder path.
@@ -1258,7 +1260,8 @@ export function publishAnchoredDrawingsForParagraph(options: {
   for (const atom of atoms) {
     const projection = atom.projection;
     if (projection.hidden) continue;
-    if (!revisionsVisible(atom.revisions, displayMode)) continue;
+    const revisions = projectedRevisions(atom.revisions, displayMode, options.revisionAuthorFilter);
+    if (revisions === null) continue;
     const start = offsets.get(atom.atomId);
     if (start === undefined) continue;
     if (
@@ -1304,7 +1307,7 @@ export function publishAnchoredDrawingsForParagraph(options: {
       start: characterFrameOffset,
       resolved,
       clipRegion,
-      revisions: atom.revisions,
+      revisions,
       ...(options.sourceOrderOf ? { sourceOrder: options.sourceOrderOf(atom.atomId) } : {}),
       ...(projection.textboxStory && options.layoutTextboxStory
         ? { textboxStory: options.layoutTextboxStory(projection) }

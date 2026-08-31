@@ -3150,6 +3150,8 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Redo: ToolbarPartComponent;
     // (undocumented)
+    readonly Reviewers: ToolbarSlotPartComponent;
+    // (undocumented)
     readonly Save: ToolbarSlotPartComponent;
     // (undocumented)
     readonly Separator: typeof ToolbarSeparator;

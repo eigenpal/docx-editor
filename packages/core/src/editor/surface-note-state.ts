@@ -33,6 +33,8 @@ import { resolveNotesPart } from '../store/package/note-references.ts';
 import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
+import { revisionAuthorFilter } from '../layout/revision-projection.ts';
 
 export type NotePropertiesSlice = {
   readonly resolved: ResolvedFootnoteProperties | ResolvedEndnoteProperties;
@@ -51,28 +53,25 @@ export const MAX_NOTE_PREVIEW_CHARS = 500;
 
 function sectionSectPrNodes(
   session: TreeDocxSessionView,
-  sections: ReturnType<typeof enumerateDocumentSections>
+  sections: ReturnType<typeof enumerateDocumentSections>,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): readonly (import('../store/package/ooxml-tree.ts').OoxmlElement | undefined)[] {
   const part = session.part();
-  const blocks = storyBlocks(part);
-  const nodes: (import('../store/package/ooxml-tree.ts').OoxmlElement | undefined)[] = [];
-  for (let index = 0; index < blocks.length; index += 1) {
-    const block = blocks[index]!;
-    if (block.kind !== 'paragraph') continue;
-    const sectPr = paragraphSectionNode(block);
-    if (!sectPr) continue;
-    nodes.push(sectPr);
-  }
-  // The FINAL section is closed by the body-level `w:sectPr`, not by a paragraph mark, so it
-  // has no entry in the walk above. Padding it with `undefined` made the dialog report document
-  // defaults for the last section of every document — and in a single-section file that is the
-  // only section there is, so its `w:footnotePr` was never read at all.
-  if (nodes.length < sections.length) {
-    const body = bodySectionNode(session.part());
-    nodes.push(body && body.kind !== 'textValue' ? (body as OoxmlElement) : undefined);
-  }
-  while (nodes.length < sections.length) nodes.push(undefined);
-  return nodes;
+  const blocks = storyBlocks(part, displayMode, authorFilter);
+  const body = bodySectionNode(part);
+  return sections.map((section, index) => {
+    const closing =
+      section.blockStart < section.blockEndExclusive
+        ? blocks[section.blockEndExclusive - 1]
+        : undefined;
+    const paragraphSectPr =
+      closing?.kind === 'paragraph' ? paragraphSectionNode(closing) : undefined;
+    if (paragraphSectPr) return paragraphSectPr;
+    return index === sections.length - 1 && body?.kind !== 'textValue'
+      ? (body as OoxmlElement)
+      : undefined;
+  });
 }
 
 export function notePropertiesStateOf(
@@ -80,6 +79,9 @@ export function notePropertiesStateOf(
 ): NotePropertiesStateSnapshot | null {
   if (!surface) return null;
   const session = surface.session;
+  const displayMode = surface.revisionDisplayMode();
+  const hiddenAuthors = surface.hiddenRevisionAuthors();
+  const authorFilter: RevisionAuthorFilter | undefined = revisionAuthorFilter(hiddenAuthors);
   const paragraphId = surface.state().selection.head.paragraphId;
   const sectionIndex = sectionIndexForCaret(
     session,
@@ -87,14 +89,16 @@ export function notePropertiesStateOf(
     surface.activeScope().kind === 'headerFooter'
       ? { kind: 'headerFooter', rId: surface.headerFooterState()?.rId ?? '' }
       : storyScopeOfNodeId(session, paragraphId, { kind: 'body' }),
-    surface.headerFooterState()?.sectionIndex
+    surface.headerFooterState()?.sectionIndex,
+    displayMode,
+    authorFilter
   );
   const pkg = session.currentPackage();
   const settings = settingsPartOf(pkg);
   const docFnAuthored = authoredDocumentFootnoteProperties(settings);
   const docEnAuthored = authoredDocumentEndnoteProperties(settings);
-  const sections = enumerateDocumentSections(session.part());
-  const sectPrBySection = sectionSectPrNodes(session, sections);
+  const sections = enumerateDocumentSections(session.part(), displayMode, authorFilter);
+  const sectPrBySection = sectionSectPrNodes(session, sections, displayMode, authorFilter);
   const sectionFnAuthored = authoredFootnotePropertiesFromSectPr(sectPrBySection[sectionIndex]);
   const sectionEnAuthored = authoredEndnotePropertiesFromSectPr(sectPrBySection[sectionIndex]);
 

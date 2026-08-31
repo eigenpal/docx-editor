@@ -560,6 +560,10 @@
     "refresh": "Perbarui seluruh tabel",
     "refreshPageNumbers": "Perbarui nomor halaman saja"
   },
+  "reviewers": {
+    "label": "Peninjau",
+    "all": "Semua"
+  },
   "editingMode": {
     "editing": "Pengeditan",
     "label": "Mode pengeditan",
@@ -740,7 +744,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

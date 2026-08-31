@@ -12,6 +12,8 @@ import {
   enumerateDocumentSections,
   paragraphsInCells,
   readSectionProperties,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
@@ -66,6 +68,8 @@ export interface SurfaceStructureDeps {
   storyScope(): StoryScope;
   /** Section index of the header or footer the reader has open, when one is. */
   headerFooterSectionIndex?(): number | undefined;
+  revisionDisplayMode(): RevisionDisplayMode;
+  revisionAuthorFilter(): RevisionAuthorFilter | undefined;
   /** The CURRENT layout — read per call, never captured. */
   layout(): SemanticLayout;
   commit(
@@ -813,12 +817,18 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
     sectionProperties: () => readSectionProperties(session.part()),
 
     sectionPropertiesAt(paragraphId) {
-      const sections = enumerateDocumentSections(session.part());
+      const sections = enumerateDocumentSections(
+        session.part(),
+        deps.revisionDisplayMode(),
+        deps.revisionAuthorFilter()
+      );
       const index = sectionIndexForCaret(
         session,
         paragraphId,
         deps.storyScope(),
-        deps.headerFooterSectionIndex?.()
+        deps.headerFooterSectionIndex?.(),
+        deps.revisionDisplayMode(),
+        deps.revisionAuthorFilter()
       );
       return (sections[index] ?? sections[sections.length - 1]!).properties;
     },
@@ -828,7 +838,9 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
         session,
         paragraphId,
         deps.storyScope(),
-        deps.headerFooterSectionIndex?.()
+        deps.headerFooterSectionIndex?.(),
+        deps.revisionDisplayMode(),
+        deps.revisionAuthorFilter()
       );
     },
 

@@ -118,7 +118,11 @@ export {
   runsCovering,
   type RunPropertyEdit,
 } from './direct-properties.ts';
-export { DEFAULT_FORMATTING_DISPLAY_MODE, type FormattingDisplayMode } from './formattable-runs.ts';
+export {
+  DEFAULT_FORMATTING_DISPLAY_MODE,
+  type FormattingDisplayMode,
+  type FormattingRevisionAuthorFilter,
+} from './formattable-runs.ts';
 export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
 export {
   commentAnchorsOfStory,

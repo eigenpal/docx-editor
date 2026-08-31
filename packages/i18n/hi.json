@@ -560,6 +560,10 @@
     "refresh": "पूरी तालिका अपडेट करें",
     "refreshPageNumbers": "केवल पृष्ठ संख्याएँ अपडेट करें"
   },
+  "reviewers": {
+    "label": "समीक्षक",
+    "all": "सभी"
+  },
   "editingMode": {
     "editing": "संपादन",
     "label": "संपादन मोड",
@@ -740,7 +744,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

@@ -25,6 +25,7 @@ import {
   DEFAULT_FORMATTING_DISPLAY_MODE,
   formattableRunsOfParagraph,
   type FormattingDisplayMode,
+  type FormattingRevisionAuthorFilter,
 } from './formattable-runs.ts';
 import { segmentsOf } from './tree-op-segments.ts';
 import {
@@ -320,7 +321,8 @@ export function runPropertyEdits(
   start: number,
   end: number,
   incoming: OoxmlProperty | readonly OoxmlProperty[],
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
 ): readonly RunPropertyEdit[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
@@ -336,7 +338,8 @@ export function runPropertyEdits(
     runAddressRanges(paragraph),
     start,
     end,
-    displayMode
+    displayMode,
+    authorFilter
   )) {
     const authored = authoredProperties(
       propertyContainer(covered.run, 'runProperties', 'rPr'),
@@ -371,7 +374,8 @@ export function formattableRanges(
   paragraphId: string,
   start: number,
   end: number,
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
 ): readonly { readonly start: number; readonly end: number }[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph' || end <= start) return [];
@@ -381,7 +385,8 @@ export function formattableRanges(
     runAddressRanges(paragraph),
     start,
     end,
-    displayMode
+    displayMode,
+    authorFilter
   )) {
     // Field result runs share ONE atom offset, so slices overlap as often as they abut.
     const last = slices[slices.length - 1];
@@ -402,7 +407,8 @@ export function runsCovering(
   paragraphId: string,
   start: number,
   end: number,
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
 ): readonly OoxmlNode[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
@@ -410,7 +416,7 @@ export function runsCovering(
   const runs: OoxmlNode[] = [];
   // The read must cover exactly the runs the write splits, so it walks through the same
   // shared container walk `runPropertyEdits` does.
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode, authorFilter)) {
     const range = runRanges.get(run.id);
     if (!range || range.end <= range.start) continue;
     const overlaps =

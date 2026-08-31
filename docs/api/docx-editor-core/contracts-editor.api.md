@@ -1068,6 +1068,7 @@ export interface EditorSnapshot {
     // (undocumented)
     readonly formatting: RunFormatting | null;
     readonly hasReviewContent?: boolean;
+    readonly hiddenReviewAuthors?: readonly string[];
     // (undocumented)
     readonly image: ImageContext | null;
     readonly isLoading: boolean;

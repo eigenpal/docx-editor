@@ -297,6 +297,22 @@ Use `useReviewOf(editor, query)` with an existing editor. React accepts
 
 A query filters returned data. It does not limit caret-driven activation.
 
+## Filter by reviewer
+
+Add `DocxEditor.Toolbar.Reviewers` to show the reviewer menu used by the packaged toolbar.
+Each checked author keeps their tracked markup and review cards visible. Clearing an author
+shows that author’s revisions as accepted: insertions remain as ordinary text, deletions leave
+the layout, and formatting stays applied without markup. Comments by that author are hidden.
+
+Reviewer visibility is view-only. It does not accept changes or alter saved DOCX content, and
+showing the author again restores their markup. Bulk actions over `useReview().items` affect
+only the items currently returned by the filtered review list.
+
+Use `editor.getReviewAuthors()` to build custom chrome. Read visibility with
+`editor.isReviewAuthorVisible(author)`, change one author with
+`editor.setReviewAuthorVisible(author, visible)`, or call
+`editor.setAllReviewAuthorsVisible(visible)` and `editor.showAllReviewAuthors()`.
+
 If `preset={false}`, use
 `useStackedReviewPositions(items, heights, { gap, scale })`. Pass
 `editor.getRenderScale()` as `scale`. Card heights use CSS pixels. Anchors use

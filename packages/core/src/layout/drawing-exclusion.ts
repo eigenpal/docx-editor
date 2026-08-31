@@ -17,6 +17,7 @@ import { drawingGeometryFromProjection } from './drawing-geometry.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   revisionsVisible,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
@@ -512,6 +513,7 @@ export function synthesizeParagraphWrapExclusionZones(options: {
   readonly anchorCellBox?: LayoutBox | null;
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
 }): readonly ExclusionZone[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return Object.freeze([]);
@@ -522,7 +524,7 @@ export function synthesizeParagraphWrapExclusionZones(options: {
   for (const atom of atoms) {
     // A drawing the display mode resolves away publishes no record, so it must carve no
     // hole either: the original view must not wrap text around an insertion it hides.
-    if (!revisionsVisible(atom.revisions, displayMode)) continue;
+    if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
     if (!wrapProducesExclusion(atom.projection.wrap) || atom.projection.wrap === 'topAndBottom')
       continue;
@@ -611,6 +613,7 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   readonly columnIndex?: number;
   /** Which revisions this pass resolves away — see {@link publishAnchoredDrawingsForParagraph}. */
   readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
 }): readonly ExclusionZone[] {
   const atoms = anchoredDrawingAtomsInParagraph(options.paragraph, options.drawingLayout);
   if (atoms.length === 0) return Object.freeze([]);
@@ -619,7 +622,7 @@ export function synthesizeParagraphTopAndBottomZones(options: {
   const zones: ExclusionZone[] = [];
   for (const atom of atoms) {
     // Same rule as the wrap zones above: no record, no hole.
-    if (!revisionsVisible(atom.revisions, displayMode)) continue;
+    if (!revisionsVisible(atom.revisions, displayMode, options.revisionAuthorFilter)) continue;
     if (atom.projection.anchor?.behindDocument) continue;
     if (atom.projection.wrap !== 'topAndBottom') continue;
     const modelStart = offsets.get(atom.atomId);

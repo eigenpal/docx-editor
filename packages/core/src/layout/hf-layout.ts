@@ -177,6 +177,8 @@ export interface HeaderFooterStoryInputs {
    * merged into the paragraph's own.
    */
   readonly numberingIndex?: NumberingIndex;
+  /** Reviewers whose changes project as accepted in this story. */
+  readonly revisionAuthorFilter?: import('./revision-projection.ts').RevisionAuthorFilter;
 }
 
 /**
@@ -216,13 +218,14 @@ export function layoutHeaderFooterStory(
   documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties,
   inputs?: HeaderFooterStoryInputs
 ): HeaderFooterStoryLayout {
+  const revisionAuthorFilter = inputs?.revisionAuthorFilter;
   const needs = detectStoryPageFields(part.root);
   const contextCache = createBoundedContextCache(maxPageContextEntries);
   // WITH the display mode, like every other consumer of this list. The inline flow already
   // received it — a deleted run vanished from a header in `proposed` — while the block list
   // did not, so the paragraph a tracked mark merges away kept its own line, and a paragraph a
   // revision removed entirely kept a blank one. The cache is namespaced by mode below.
-  const blocks = storyBlocks(part, displayMode);
+  const blocks = storyBlocks(part, displayMode, revisionAuthorFilter);
   // The story's own list-item map, resolved once per layout of this part.
   //
   // Per STORY, not continuing the body's counters: `createListCounterState` is created fresh
@@ -237,7 +240,12 @@ export function layoutHeaderFooterStory(
   const contentKey = headerFooterContentKey(part);
   // ONE provider for the whole story layout — every reflow pass and page-field projection
   // reuses it, the body lane's own rule ("ONE provider for every fold of this flow").
-  const hostedListDeps = hostedListTokenDeps(inputs?.numberingIndex, styleCascade, displayMode);
+  const hostedListDeps = hostedListTokenDeps(
+    inputs?.numberingIndex,
+    styleCascade,
+    displayMode,
+    revisionAuthorFilter
+  );
   let baseline: HeaderFooterStoryLayout | undefined;
 
   const layoutOnce = (ctx: FieldPageContext | undefined): HeaderFooterStoryLayout => {
@@ -306,7 +314,8 @@ export function layoutHeaderFooterStory(
           producer:
             producer +
             token +
-            (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
+            (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+            (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
           nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
           styleCascade,
           ...(listItems ? { listItems } : {}),
@@ -316,6 +325,7 @@ export function layoutHeaderFooterStory(
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
+          ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
           ...(documentProperties ? { documentProperties } : {}),
           inlineDrawingLayout,
           anchorFrameBase,
@@ -329,12 +339,14 @@ export function layoutHeaderFooterStory(
               producer:
                 producer +
                 token +
-                (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
+                (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+                (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
               cache,
               styleCascade,
               ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
               ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
               displayMode,
+              ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
               ...(documentProperties ? { documentProperties } : {}),
               inlineDrawingLayout,
               ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
@@ -387,13 +399,15 @@ export function layoutHeaderFooterStory(
         producer:
           producer +
           token +
-          (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
+          (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+          (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
         nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
         styleCascade,
         ...(listItems ? { listItems } : {}),
         pageContext: effectiveCtx,
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
         displayMode,
+        ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
         ...(documentProperties ? { documentProperties } : {}),
       });
     }

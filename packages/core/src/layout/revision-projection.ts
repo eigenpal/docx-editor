@@ -15,6 +15,7 @@ import {
   isContentRevisionKind,
   type OoxmlElement,
   type OoxmlNode,
+  type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 
 /**
@@ -64,6 +65,33 @@ export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
  * sees them, rather than a clean-looking document hiding edits nobody has accepted.
  */
 export const DEFAULT_REVISION_DISPLAY_MODE: RevisionDisplayMode = 'all-markup';
+
+/**
+ * A view-time reviewer filter. Authors in `hiddenAuthors` render as if their revisions were
+ * accepted, while every other author keeps the display mode's normal projection.
+ *
+ * `cacheKey` is a canonical, content-based identity for layout caches. The set itself is kept
+ * because author names are attacker-controlled strings and must never be parsed back from a
+ * delimiter-based key.
+ */
+export interface RevisionAuthorFilter {
+  readonly hiddenAuthors: ReadonlySet<string>;
+  readonly cacheKey: string;
+}
+
+/** Build a canonical reviewer filter. An empty input returns `undefined` for the fast path. */
+export function revisionAuthorFilter(
+  hiddenAuthors: Iterable<string>
+): RevisionAuthorFilter | undefined {
+  const hidden = new Set<string>();
+  for (const author of hiddenAuthors) hidden.add(author);
+  if (hidden.size === 0) return undefined;
+  const ordered = [...hidden].sort();
+  return Object.freeze({
+    hiddenAuthors: hidden,
+    cacheKey: JSON.stringify(ordered),
+  });
+}
 
 /** No enclosing revision. Shared so the common untracked case allocates nothing. */
 export const NO_REVISIONS: readonly RevisionAttribution[] = Object.freeze([]);
@@ -141,17 +169,90 @@ export const MAX_REVISION_DEPTH = MAX_REVISION_NESTING;
  */
 export function revisionsVisible(
   revisions: readonly RevisionAttribution[],
-  mode: RevisionDisplayMode
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): boolean {
-  if (mode === 'all-markup' || revisions.length === 0) return true;
+  if (revisions.length === 0) return true;
   for (const revision of revisions) {
+    const revisionMode = authorFilter?.hiddenAuthors.has(revision.author) ? 'proposed' : mode;
+    if (revisionMode === 'all-markup') continue;
     const removed =
-      mode === 'proposed'
+      revisionMode === 'proposed'
         ? revision.kind === 'delete' || revision.kind === 'moveFrom'
         : revision.kind === 'insert' || revision.kind === 'moveTo';
     if (removed) return false;
   }
   return true;
+}
+
+/**
+ * The attribution that remains visible after the author filter is applied.
+ *
+ * `null` means the accepted projection removes the content. The shared empty array means the
+ * content remains as ordinary text, without reviewer colour, decoration, or a change bar.
+ */
+export function projectedRevisions(
+  revisions: readonly RevisionAttribution[],
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): readonly RevisionAttribution[] | null {
+  if (!revisionsVisible(revisions, mode, authorFilter)) return null;
+  if (!authorFilter) return revisions;
+  const visible = revisions.filter((revision) => !authorFilter.hiddenAuthors.has(revision.author));
+  return visible.length === 0 ? NO_REVISIONS : visible;
+}
+
+/** Whether one attributed mark remains markup in the current reviewer view. */
+export function revisionMarkupVisible(
+  revision: RevisionAttribution,
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): boolean {
+  return mode === 'all-markup' && !authorFilter?.hiddenAuthors.has(revision.author);
+}
+
+/** Remove hidden revision provenance while preserving the accepted formatting itself. */
+export function projectedRevisionProperties(
+  properties: readonly OoxmlProperty[],
+  authorFilter?: RevisionAuthorFilter
+): readonly OoxmlProperty[] {
+  if (!authorFilter) return properties;
+  return properties.filter(
+    (property) =>
+      (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') ||
+      !authorFilter.hiddenAuthors.has(property.attributes?.author ?? '')
+  );
+}
+
+/** Paragraph-mark revisions that remain attributed in the current reviewer view. */
+export function visibleParagraphMarkRevisionsOf(
+  paragraph: OoxmlNode,
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): {
+  readonly revisions: readonly RevisionAttribution[];
+  readonly formatRevision: RevisionAttribution | null;
+} {
+  const revisions = paragraphMarkRevisionsOf(paragraph).filter((revision) =>
+    revisionMarkupVisible(revision, mode, authorFilter)
+  );
+  const formatRevision = paragraphMarkFormatRevisionOf(paragraph);
+  return {
+    revisions,
+    formatRevision:
+      formatRevision && revisionMarkupVisible(formatRevision, mode, authorFilter)
+        ? formatRevision
+        : null,
+  };
+}
+
+export function paragraphMarkMarkupVisible(
+  paragraph: OoxmlNode,
+  mode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
+): boolean {
+  const projection = visibleParagraphMarkRevisionsOf(paragraph, mode, authorFilter);
+  return projection.revisions.length > 0 || projection.formatRevision !== null;
 }
 
 /**

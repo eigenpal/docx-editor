@@ -15,6 +15,7 @@ import {
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import { readTableStructure, tableOriginX } from '../semantic-table.ts';
 import { revisionRemovesParagraph } from '../revision-visibility.ts';
+import { revisionAuthorFilter } from '../revision-projection.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import type { ParagraphFragmentRecord, TableFragmentRecord } from '../semantic-records.ts';
 
@@ -178,6 +179,76 @@ describe('w:tblCellSpacing separates adjacent cells', () => {
     const [first, second] = fragment.rows[0]!.cells;
     expect(first!.box.x).toBe(0);
     expect(second!.box.x).toBeCloseTo(first!.box.x + first!.box.width, 6);
+  });
+});
+
+describe('tracked table rows respect reviewer visibility', () => {
+  const trackedRow = (kind: 'ins' | 'del', author: string, text: string) =>
+    `<w:tr><w:trPr><w:${kind} w:id="1" w:author="${author}"/></w:trPr>` +
+    `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc></w:tr>`;
+
+  test('a hidden deletion is removed and a hidden insertion becomes an ordinary row', () => {
+    const table = tableNode(
+      `<w:tbl><w:tblPr/>${grid(1440)}` +
+        trackedRow('del', 'Ada', 'gone') +
+        trackedRow('ins', 'Ada', 'accepted') +
+        trackedRow('del', 'Grace', 'shown') +
+        '</w:tbl>'
+    );
+    const structure = readTableStructure(
+      table,
+      CONTENT_WIDTH_PT,
+      0,
+      undefined,
+      'all-markup',
+      revisionAuthorFilter(['Ada'])
+    )!;
+    expect(structure.rows).toHaveLength(2);
+    expect(structure.rows[0]!.revisionKind).toBeUndefined();
+    expect(structure.rows[1]!.revisionKind).toBe('delete');
+    expect(structure.rows[1]!.revisionAuthor).toBe('Grace');
+  });
+
+  test('the empty reviewer hides revisions whose row author is absent', () => {
+    const row = (kind: 'ins' | 'del', text: string) =>
+      `<w:tr><w:trPr><w:${kind} w:id="1"/></w:trPr>` +
+      `<w:tc><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc></w:tr>`;
+    const table = tableNode(
+      `<w:tbl><w:tblPr/>${grid(1440)}` + row('del', 'gone') + row('ins', 'accepted') + '</w:tbl>'
+    );
+    const structure = readTableStructure(
+      table,
+      CONTENT_WIDTH_PT,
+      0,
+      undefined,
+      'all-markup',
+      revisionAuthorFilter([''])
+    )!;
+    expect(structure.rows).toHaveLength(1);
+    expect(structure.rows[0]!.revisionKind).toBeUndefined();
+    expect(structure.rows[0]!.revisionAuthor).toBeUndefined();
+  });
+
+  test('foreign revision names and attributes do not control row visibility', () => {
+    const table = tableNode(
+      `<w:tbl><w:tblPr/>${grid(1440)}` +
+        '<w:tr><w:trPr><x:del xmlns:x="urn:foreign" x:author="Ada"/></w:trPr>' +
+        '<w:tc><w:p><w:r><w:t>ordinary</w:t></w:r></w:p></w:tc></w:tr>' +
+        '<w:tr><w:trPr><w:del xmlns:x="urn:foreign" x:author="Ada" w:id="2" w:author="Grace"/></w:trPr>' +
+        '<w:tc><w:p><w:r><w:t>Grace deletion</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+    );
+    const structure = readTableStructure(
+      table,
+      CONTENT_WIDTH_PT,
+      0,
+      undefined,
+      'all-markup',
+      revisionAuthorFilter(['Ada'])
+    )!;
+
+    expect(structure.rows).toHaveLength(2);
+    expect(structure.rows[0]!.revisionKind).toBeUndefined();
+    expect(structure.rows[1]!.revisionAuthor).toBe('Grace');
   });
 });
 

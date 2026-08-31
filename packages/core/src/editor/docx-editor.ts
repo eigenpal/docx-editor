@@ -52,6 +52,13 @@ import {
   createStableReviewAuthorSlots,
   type StableReviewAuthorSlots,
 } from '../output/revision-presentation.ts';
+import {
+  createReviewAuthorCommands,
+  createReviewRevisionTicker,
+  createRevisionAuthorVisibility,
+  filterReviewItemsByAuthor,
+  reviewItemAuthorOrNull,
+} from './revision-author-visibility.ts';
 import type {
   DocumentEditingMode,
   ReviewActivationOptions,
@@ -289,6 +296,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * the first mount, which reads it.
    */
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
+  const reviewAuthorVisibility = createRevisionAuthorVisibility();
   // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
   const revisionStyleState = createRevisionStyleState(config.revisionStyles);
   /**
@@ -485,6 +493,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return;
     }
     teardownSurface();
+    let publishedHiddenReviewAuthors = reviewAuthorVisibility.hiddenAuthorList;
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
       // What a run with no authored font is REPORTED as, matching what it is measured
@@ -503,6 +512,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         ? { revisionStyles: revisionStyleState.current() }
         : {}),
       reviewAuthorSlots,
+      revisionAuthorVisibility: reviewAuthorVisibility,
       initialDrawingSelectionIntent: remountDrawingIntent,
       editingMode:
         editingMode === 'suggesting' ? 'suggest' : editingMode === 'viewing' ? 'view' : 'edit',
@@ -568,10 +578,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // re-derivation returns the previous snapshot reference, so a no-op publish costs
         // one comparison, never a spurious re-render.
         bump();
+        const reviewVisibilityMoved =
+          publishedHiddenReviewAuthors !== reviewAuthorVisibility.hiddenAuthorList;
+        publishedHiddenReviewAuthors = reviewAuthorVisibility.hiddenAuthorList;
         // The caret is not the only observable thing that moves: an armed typing format, an
         // open furniture story, how a drawing came to be selected and the format painter's
         // arming all move without it, and each has no other channel to a host.
-        if (!publishSignal.moved(state, surface)) return;
+        if (!reviewVisibilityMoved && !publishSignal.moved(state, surface)) return;
         emitSelectionChange();
       },
     } as PaginatedSurfaceOptions & { readonly onTrackedChange?: () => void });
@@ -659,6 +672,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     reviewPaneOpen = false;
     loadSeq += 1;
     reviewAuthorSlots = createStableReviewAuthorSlots();
+    reviewAuthorVisibility.showAll();
     shapedMeasurer = undefined;
     shapedProducer = undefined;
     // An on-demand answer describes the document that asked for it. Carrying it into the
@@ -1090,6 +1104,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       pageSetup: pageSetupOf(surface),
       reviewPaneOpen,
       hasReviewContent: surface?.session.hasReviewContent() ?? false,
+      hiddenReviewAuthors: reviewAuthorVisibility.hiddenAuthorList,
       collaborationStatus: state?.collaborationStatus ?? 'inactive',
       editingMode,
       // The facade's own refusal wins while it stands: the surface never saw the request.
@@ -1177,49 +1192,17 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /**
    * A counter that moves when the queue could differ, and not otherwise.
    *
-   * Three inputs, because any one alone misses a case. The store REVISION covers edits, but a
-   * freshly loaded document starts back at revision 0 — a sidebar keyed on that alone stays
-   * empty forever after the first load, which is exactly how this was found. The SURFACE
-   * IDENTITY covers the load. The ACTIVE KEY covers a caret move, which changes no document
-   * state at all but does change which card is open.
-   *
-   * A monotonic tick rather than a hash of the three, so a subscriber can compare with `!==`
-   * and never sees a value repeat after an edit is undone.
+   * The extracted ticker watches both store revisions, surface identity, active item, pane,
+   * selection placement and reviewer filter. A monotonic tick lets subscribers compare with
+   * `!==` without seeing a value repeat after undo or a new document load.
    */
-  let reviewTick = 0;
-  let reviewSurface: unknown = null;
-  let reviewSeenRevision = '';
-  let reviewSeenActive: string | null = null;
-  let reviewSeenPaneOpen = true;
-  let reviewSeenSelectionAnchor: number | null = null;
-
-  function reviewRevision(): number {
-    // BOTH revisions, like the session's own queue cache: an accept inside a header moves
-    // only the package revision, and a tick watching the body alone left the rail frozen —
-    // undoing that accept put the tracked change back with no card beside it.
-    const revision = `${surface?.session.packageRevision() ?? -1}:${
-      surface?.session.revision() ?? -1
-    }`;
-    const active = activeReviewKeyNow();
-    // The selection is an input too: the "comment on this" affordance appears and moves with
-    // it, and a counter blind to it left the button absent no matter what was selected.
-    const selectionAnchor = selectionPlacement()?.anchorY ?? null;
-    if (
-      surface !== reviewSurface ||
-      revision !== reviewSeenRevision ||
-      active !== reviewSeenActive ||
-      reviewPaneOpen !== reviewSeenPaneOpen ||
-      selectionAnchor !== reviewSeenSelectionAnchor
-    ) {
-      reviewSurface = surface;
-      reviewSeenRevision = revision;
-      reviewSeenActive = active;
-      reviewSeenPaneOpen = reviewPaneOpen;
-      reviewSeenSelectionAnchor = selectionAnchor;
-      reviewTick += 1;
-    }
-    return reviewTick;
-  }
+  const reviewRevision = createReviewRevisionTicker({
+    surface: () => surface,
+    activeKey: activeReviewKeyNow,
+    paneOpen: () => reviewPaneOpen,
+    selectionAnchor: () => selectionPlacement()?.anchorY ?? null,
+    authorFilterKey: () => reviewAuthorVisibility.filter?.cacheKey ?? '',
+  });
 
   /*
    * The ACTIVE card is the one the caret is in — not something a click stores. Clicking a
@@ -1514,10 +1497,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * The queue plus geometry, re-derived per call and cheap because the session memoizes the
    * queue itself per revision.
    */
-
   function reviewPlacements(query?: ReviewItemQuery): readonly ReviewItemPlacement[] {
     if (!reviewEnabled) return [];
-    let items = surface?.session.reviewItems() ?? [];
+    let items = filterReviewItemsByAuthor(
+      surface?.session.reviewItems() ?? [],
+      reviewAuthorVisibility,
+      reviewItemAuthorOrNull
+    );
     const excluded = query?.excludeRevisionKinds;
     if (excluded && excluded.length > 0) {
       const excludedKinds = new Set(excluded);
@@ -2235,6 +2221,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getEditingMode: () => editingMode,
     getReviewAuthors: () =>
       revisionStyleState.authorsFor(surface?.revisionAuthors() ?? EMPTY_AUTHOR_SLOTS),
+    ...createReviewAuthorCommands(reviewAuthorVisibility, {
+      enabled: reviewEnabled,
+      surface: () => surface,
+      notify: () => {
+        bump();
+        emitSelectionChange();
+      },
+    }),
     getConfiguredAuthor: () => config.author?.trim() || null,
     presenceColorFor: (name) => surface?.remotePresenceColor(name) ?? 'var(--doc-accent)',
     collaborationSession: () => surface?.collaborationSession() ?? null,

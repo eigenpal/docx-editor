@@ -17,11 +17,12 @@
 
 import {
   flattenContentControls,
+  WML_NAMESPACE_URI,
   type OoxmlElement,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import { mergedFlowBlocks } from './story-roots.ts';
 import {
   EMPTY_TABLE_CELL_STYLE_FORMATTING,
@@ -321,6 +322,28 @@ function childNamed(node: OoxmlElement, localName: string): OoxmlElement | undef
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
   return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+}
+
+function wmlRevisionChild(
+  node: OoxmlElement,
+  localName: 'trPr' | 'ins' | 'del'
+): OoxmlElement | undefined {
+  for (const child of node.children) {
+    if (
+      child.kind !== 'textValue' &&
+      child.namespaceUri === WML_NAMESPACE_URI &&
+      child.localName === localName
+    ) {
+      return child;
+    }
+  }
+  return undefined;
+}
+
+function wmlRevisionAttribute(node: OoxmlElement, localName: string): string | undefined {
+  return node.attributes.find(
+    (attribute) => attribute.namespaceUri === WML_NAMESPACE_URI && attribute.localName === localName
+  )?.value;
 }
 
 function readGridSpan(cellProperties: OoxmlElement | undefined): number {
@@ -693,15 +716,15 @@ interface TableStructureMemo {
   readonly depth: number;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly structure: SemanticTableStructure | null;
 }
 
 /**
- * Single-entry memo per (immutable) table node. One layout pass reads the same table under
- * the same inputs more than once — document-order indexing, flow layout, row measurement —
- * and the structure is deeply readonly, so the last read can be handed back by identity.
+ * Two-entry memo per immutable table node. One layout pass reads the same table repeatedly,
+ * and filtered saves also need a canonical projection without evicting the painted one.
  */
-const tableStructureMemos = new WeakMap<object, TableStructureMemo>();
+const tableStructureMemos = new WeakMap<object, readonly TableStructureMemo[]>();
 
 /**
  * Read one typed table node into a bounded structure, or null when the node is not a
@@ -713,28 +736,40 @@ export function readTableStructure(
   depth: number,
   styleCascade?: StyleCascadeTable,
   /** Which revisions the view resolves away; only the proposed result performs the join. */
-  displayMode: RevisionDisplayMode = 'all-markup'
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): SemanticTableStructure | null {
-  const memo = tableStructureMemos.get(table);
-  if (
-    memo &&
-    memo.contentWidthPt === contentWidthPt &&
-    memo.depth === depth &&
-    // Identity compare is sound because a cascade table is built once per styles part and
-    // never mutated; a fresh-but-equal cascade only misses the memo, never lies to it.
-    memo.styleCascade === styleCascade &&
-    memo.displayMode === displayMode
-  ) {
-    return memo.structure;
-  }
+  const memos = tableStructureMemos.get(table) ?? [];
+  const memo = memos.find(
+    (candidate) =>
+      candidate.contentWidthPt === contentWidthPt &&
+      candidate.depth === depth &&
+      // Identity compare is sound because a cascade table is built once per styles part and
+      // never mutated; a fresh-but-equal cascade only misses the memo, never lies to it.
+      candidate.styleCascade === styleCascade &&
+      candidate.displayMode === displayMode &&
+      candidate.authorFilter === authorFilter
+  );
+  if (memo) return memo.structure;
   const structure = readTableStructureUncached(
     table,
     contentWidthPt,
     depth,
     styleCascade,
-    displayMode
+    displayMode,
+    authorFilter
   );
-  tableStructureMemos.set(table, { contentWidthPt, depth, styleCascade, displayMode, structure });
+  const entry: TableStructureMemo = {
+    contentWidthPt,
+    depth,
+    styleCascade,
+    displayMode,
+    authorFilter,
+    structure,
+  };
+  // Keep both the painted and canonical-save projections warm. A filtered save otherwise
+  // evicts the active table structure and makes the next render rebuild every cell.
+  tableStructureMemos.set(table, [entry, ...memos].slice(0, 2));
   return structure;
 }
 
@@ -743,7 +778,8 @@ function readTableStructureUncached(
   contentWidthPt: number,
   depth: number,
   styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
@@ -806,6 +842,7 @@ function readTableStructureUncached(
   // pile onto the last column instead of extending the grid.
   interface RowPlan {
     readonly node: OoxmlElement;
+    readonly revision: OoxmlElement | undefined;
     /** The row's cells with any `CT_SdtCell` wrapper unwrapped, so both passes see one list. */
     readonly cells: readonly OoxmlNode[];
     readonly properties: OoxmlElement | undefined;
@@ -823,7 +860,25 @@ function readTableStructureUncached(
   // see the same row and cell lists they would see in a table that carried no controls at all.
   for (const rowNode of flattenContentControls(table.children)) {
     if (rowNode.kind !== 'tableRow') continue;
-    const properties = childNamed(rowNode, 'trPr');
+    const properties = wmlRevisionChild(rowNode, 'trPr');
+    const authoredRevision = properties
+      ? (wmlRevisionChild(properties, 'ins') ?? wmlRevisionChild(properties, 'del'))
+      : undefined;
+    const revisionKind = authoredRevision?.localName;
+    const revisionAuthor = authoredRevision
+      ? (wmlRevisionAttribute(authoredRevision, 'author') ?? '')
+      : undefined;
+    const projectedMode =
+      revisionAuthor !== undefined && authorFilter?.hiddenAuthors.has(revisionAuthor)
+        ? 'proposed'
+        : displayMode;
+    if (
+      (projectedMode === 'proposed' && revisionKind === 'del') ||
+      (projectedMode === 'original' && revisionKind === 'ins')
+    ) {
+      continue;
+    }
+    const revision = projectedMode === 'all-markup' ? authoredRevision : undefined;
     const starts: number[] = [];
     const spans: number[] = [];
     const preferred: PreferredWidth[] = [];
@@ -869,6 +924,7 @@ function readTableStructureUncached(
     if (gridColumns > derivedColumns) derivedColumns = gridColumns;
     plans.push({
       node: rowNode,
+      revision,
       cells: rowCells,
       properties,
       starts,
@@ -928,7 +984,7 @@ function readTableStructureUncached(
       // cell empty in layout while the tree still holds the text.
       // Through the shared collector: a cell is a story like any other, so a tracked mark
       // merges inside it and a paragraph a revision removed leaves no blank line behind.
-      const blocks = mergedFlowBlocks(cellNode.children, displayMode);
+      const blocks = mergedFlowBlocks(cellNode.children, displayMode, authorFilter);
       cells.push({
         id: cellNode.id,
         gridSpan,
@@ -947,17 +1003,15 @@ function readTableStructureUncached(
         blocks,
       });
     }
-    const rowRevision = rowProperties
-      ? (childNamed(rowProperties, 'ins') ?? childNamed(rowProperties, 'del'))
-      : undefined;
+    const rowRevision = plan.revision;
     const rowRevisionKind = rowRevision
       ? rowRevision.localName === 'ins'
         ? ('insert' as const)
         : ('delete' as const)
       : undefined;
-    const rowRevisionId = rowRevision && attributeValue(rowRevision, 'id');
-    const rowRevisionAuthor = rowRevision && attributeValue(rowRevision, 'author');
-    const rowRevisionDate = rowRevision && attributeValue(rowRevision, 'date');
+    const rowRevisionId = rowRevision && wmlRevisionAttribute(rowRevision, 'id');
+    const rowRevisionAuthor = rowRevision && wmlRevisionAttribute(rowRevision, 'author');
+    const rowRevisionDate = rowRevision && wmlRevisionAttribute(rowRevision, 'date');
     rows.push({
       id: rowNode.id,
       ...(rowRevisionKind ? { revisionKind: rowRevisionKind } : {}),

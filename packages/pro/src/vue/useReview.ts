@@ -24,7 +24,14 @@ function unwrapMaybeRefOrGetter<T>(source: MaybeRefOrGetter<T> | undefined): T |
 }
 
 function reviewRevisionKey(editor: Editor): string {
-  return `${editor.getReviewRevision()}:${editor.getEditingMode()}`;
+  const snapshot = (
+    editor as Editor & {
+      snapshot?: () => { readonly hiddenReviewAuthors?: readonly string[] };
+    }
+  ).snapshot?.();
+  return `${editor.getReviewRevision()}:${editor.getEditingMode()}:${JSON.stringify(
+    snapshot?.hiddenReviewAuthors ?? []
+  )}`;
 }
 
 /** @public */

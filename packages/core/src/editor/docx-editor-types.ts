@@ -234,12 +234,23 @@ export interface DocxEditorInstance extends Editor {
    * moment they learn the pairing on either. The order puts commenters last so that adding
    * a comment can never renumber a tracked change the painter has already drawn.
    *
-   * Read of the rendered projection, not of the package: a resolved view hides the
-   * revisions it has resolved away, so an author whose only change is hidden there is
-   * listed only if they also commented. Empty while detached. Reference-stable between
-   * changes, so it is safe as a dependency; changes bump `stateVersion()`.
+   * The complete attached-document roster. A reviewer remains listed while this view hides
+   * their changes, so the reviewer menu can turn them on again. Empty while detached.
+   * Reference-stable between changes, so it is safe as a dependency; changes bump
+   * `stateVersion()`.
    */
   getReviewAuthors(): readonly ReviewAuthorInfo[];
+  /** Whether this author's revisions and comments are shown in the current review view. */
+  isReviewAuthorVisible(author: string): boolean;
+  /**
+   * Show one author's markup, or render their revisions as accepted and hide their comments.
+   * This changes view state only. It does not apply tree operations or change saved bytes.
+   */
+  setReviewAuthorVisible(author: string, visible: boolean): void;
+  /** Show or hide every reviewer in one layout pass. */
+  setAllReviewAuthorsVisible(visible: boolean): void;
+  /** Restore every reviewer to the shown state. */
+  showAllReviewAuthors(): void;
   /**
    * The presence colour the engine paints for one display name — the answer the remote
    * caret label takes, so chrome built on this cannot disagree with the painted caret.

@@ -35,6 +35,11 @@ import { withResolvedListItems } from './list-resolve.ts';
 import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { noteStoryBlocks } from './story-roots.ts';
+import {
+  DEFAULT_REVISION_DISPLAY_MODE,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 
 /** Hard ceiling on notes laid out in one pass (fail closed beyond). */
 export const MAX_NOTES_LAID_OUT = MAX_NOTES_PER_PART;
@@ -143,6 +148,8 @@ export interface LayoutNoteStoryOptions {
    */
   readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly displayMode?: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /**
    * Same projector seams the BODY walk uses. Without them a `w:hyperlink` or a HYPERLINK
    * field inside a note painted as plain text — measured, but carrying no link record for
@@ -232,7 +239,8 @@ export function layoutNoteStory(
   if (!noteKind || noteId === null) return null;
 
   const scopeId = formatNoteScopeId(noteKind, noteId);
-  const blocks = noteStoryBlocks(note);
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const blocks = noteStoryBlocks(note, displayMode, options.revisionAuthorFilter);
   const prefix = noteLineIdPrefix(noteKind, noteId);
   let lineCounter = 0;
   const width = Math.max(1, contentWidth);
@@ -263,7 +271,11 @@ export function layoutNoteStory(
   const flow = flowBlocksInBox(blocks, 0, width, 0, 0, {
     measurer: options.measurer,
     cache: options.cache,
-    producer: `${options.producer}|${scopeId}`,
+    producer:
+      options.producer +
+      (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+      (options.revisionAuthorFilter ? `|reviewers:${options.revisionAuthorFilter.cacheKey}` : '') +
+      `|${scopeId}`,
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
     ...(listItems ? { listItems } : {}),
@@ -283,6 +295,8 @@ export function layoutNoteStory(
             : {}),
         }
       : {}),
+    displayMode,
+    ...(options.revisionAuthorFilter ? { revisionAuthorFilter: options.revisionAuthorFilter } : {}),
   });
 
   let fragments = flow.blocks;

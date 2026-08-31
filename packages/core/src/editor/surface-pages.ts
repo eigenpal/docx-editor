@@ -20,6 +20,7 @@ import {
   layoutHeaderFooterStory,
   pagesToMaterialize,
   paragraphSectionNode,
+  projectedSectionSourceIndexes,
   storyBlocks,
   type HeaderFooterVariantName,
   type NotesLayoutInput,
@@ -87,6 +88,7 @@ export function createFurnitureSource(env: {
    * way a producer change already does.
    */
   readonly displayMode?: import('../layout/revision-projection.ts').RevisionDisplayMode;
+  readonly revisionAuthorFilter?: import('../layout/revision-projection.ts').RevisionAuthorFilter;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
   ) => import('../layout/drawing-layout.ts').InlineDrawingLayoutContext | undefined;
@@ -106,6 +108,7 @@ export function createFurnitureSource(env: {
     numberingIndex,
     defaultTabStopPt,
     displayMode,
+    revisionAuthorFilter,
     inlineDrawingLayoutForPart,
     drawingLayoutTokenForPart,
     drawingTokenForParagraphForPart,
@@ -207,7 +210,12 @@ export function createFurnitureSource(env: {
           }
         : undefined,
       session.documentProperties(),
-      numbering ? { numberingIndex: numbering } : undefined
+      numbering || revisionAuthorFilter
+        ? {
+            ...(numbering ? { numberingIndex: numbering } : {}),
+            ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
+          }
+        : undefined
     );
     const rId = rIdOfPart(part.name);
     const story = rId ? stampStoryRId(baseline, rId) : baseline;
@@ -258,10 +266,18 @@ export function createFurnitureSource(env: {
     // a mode-filtered block list, so enumerating in another mode pairs a section's pages with
     // another section's header — a break whose mark a tracked change deleted is a section in
     // All Markup and none in a resolved view.
-    const sections = enumerateDocumentSections(session.part(), displayMode);
+    const sections = enumerateDocumentSections(session.part(), displayMode, revisionAuthorFilter);
+    const sourceIndexes = projectedSectionSourceIndexes(
+      session.part(),
+      displayMode,
+      revisionAuthorFilter
+    );
     const bySection = session.headerFooterPartsBySection();
     return sections.map((section, index) =>
-      furnitureFromParts(bySection[index], geometryOfSection(section.properties))
+      furnitureFromParts(
+        bySection[sourceIndexes[index] ?? index],
+        geometryOfSection(section.properties)
+      )
     );
   }
 
@@ -508,6 +524,8 @@ export function createNotesLayoutInput(env: {
   /** `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker. */
   readonly numberingIndex?: () => import('../layout/numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly displayMode?: import('../layout/revision-projection.ts').RevisionDisplayMode;
+  readonly revisionAuthorFilter?: import('../layout/revision-projection.ts').RevisionAuthorFilter;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
   ) => import('../layout/drawing-layout.ts').InlineDrawingLayoutContext | undefined;
@@ -540,9 +558,19 @@ export function createNotesLayoutInput(env: {
   const documentFootnoteProps = resolveFootnoteProperties(undefined, docFnAuthored);
   const documentEndnoteProps = resolveEndnoteProperties(undefined, docEnAuthored);
 
-  const sectionEnumeration = enumerateDocumentSectionsBounded(part);
+  const sectionEnumeration = enumerateDocumentSectionsBounded(
+    part,
+    env.displayMode,
+    env.revisionAuthorFilter
+  );
   const sections = sectionEnumeration.sections;
-  const sectPrBySection = sectionSectPrNodes(part, sections, sectionEnumeration.truncated);
+  const sectPrBySection = sectionSectPrNodes(
+    part,
+    sections,
+    sectionEnumeration.truncated,
+    env.displayMode,
+    env.revisionAuthorFilter
+  );
   const footnotePropsBySection = sections.map((_, index) =>
     resolveFootnoteProperties(
       authoredFootnotePropertiesFromSectPr(sectPrBySection[index]),
@@ -591,6 +619,8 @@ export function createNotesLayoutInput(env: {
     styleCascade: env.styleCascade?.(),
     numberingIndex: env.numberingIndex?.(),
     defaultTabStopPt: env.defaultTabStopPt,
+    displayMode: env.displayMode,
+    revisionAuthorFilter: env.revisionAuthorFilter,
     ...(env.projectLinkForPart
       ? {
           projectLinkForPart: env.projectLinkForPart,
@@ -639,9 +669,11 @@ function linkRelsTokenFor(
 function sectionSectPrNodes(
   part: OoxmlPart,
   sections: ReturnType<typeof enumerateDocumentSections>,
-  truncated: boolean
+  truncated: boolean,
+  displayMode: import('../layout/revision-projection.ts').RevisionDisplayMode = 'all-markup',
+  authorFilter?: import('../layout/revision-projection.ts').RevisionAuthorFilter
 ): readonly (OoxmlElement | undefined)[] {
-  const blocks = storyBlocks(part);
+  const blocks = storyBlocks(part, displayMode, authorFilter);
   if (!truncated) {
     return sections.map((section) => {
       if (section.blockStart === section.blockEndExclusive) return undefined;

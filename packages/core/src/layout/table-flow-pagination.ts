@@ -34,7 +34,7 @@ import {
   type TableAnchorFrames,
 } from './semantic-table.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { BlockFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
 
 /** The body flow a table is placed into: the cursor it moves, and what it publishes to. */
@@ -61,6 +61,7 @@ export interface TableFlowCursor {
   readonly anchorFrames: () => TableAnchorFrames;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
+  readonly revisionAuthorFilter?: RevisionAuthorFilter;
   readonly deps: TableFlowDeps;
   /**
    * Moves an anchored drawing already published by a placed row, when finalize shifts the
@@ -98,12 +99,20 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
     anchorFrames,
     styleCascade,
     displayMode,
+    revisionAuthorFilter,
     deps: tableDeps,
     shiftAnchor,
     publishFragment,
   } = flow;
   const regionWidth = columnWidth();
-  const structure = readTableStructure(table, regionWidth, 0, styleCascade, displayMode);
+  const structure = readTableStructure(
+    table,
+    regionWidth,
+    0,
+    styleCascade,
+    displayMode,
+    revisionAuthorFilter
+  );
   if (!structure || structure.rows.length === 0) return;
   // `w:tblInd` / `w:jc` place the table inside the text column, `w:tblpPr` against a wider
   // anchor box; every row and the fragment box share the one origin so cell geometry and

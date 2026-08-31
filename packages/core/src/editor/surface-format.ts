@@ -28,7 +28,11 @@ import {
   type SurfaceProperty,
 } from './surface-formatting.ts';
 import { formattableRanges } from '@docx-editor.dev/core/store';
-import type { FormattingDisplayMode, TreeDocOp } from '@docx-editor.dev/core/store';
+import type {
+  FormattingDisplayMode,
+  FormattingRevisionAuthorFilter,
+  TreeDocOp,
+} from '@docx-editor.dev/core/store';
 import { paragraphsInCells } from '@docx-editor.dev/core/layout';
 import { mergedParagraphMarkProperties } from '@docx-editor.dev/core/store';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
@@ -50,6 +54,10 @@ export interface SurfaceFormatDeps {
    * and a future `setRevisionDisplayMode` must move this with it.
    */
   displayMode(): FormattingDisplayMode;
+  /** Reviewer visibility projected into the formatting walk. */
+  authorFilter(): FormattingRevisionAuthorFilter | undefined;
+  /** False when this paragraph's pilcrow is absorbed by the active revision projection. */
+  paragraphMarkVisible(paragraphId: string): boolean;
   commit(
     run: () => TreeApplyResult | boolean,
     nextSelection?: () => SemanticSelection | null,
@@ -100,6 +108,7 @@ type FormatMethods = Pick<
 export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
   const { session, commit, orderedRange, selectionMark, textOf } = deps;
   const displayMode = (): FormattingDisplayMode => deps.displayMode();
+  const authorFilter = (): FormattingRevisionAuthorFilter | undefined => deps.authorFilter();
   const storyPart = () => session.partFor(deps.storyScope()) ?? session.part();
   const applyOps = (
     ops: Parameters<TreeDocxSessionView['applyTreeOps']>[0],
@@ -147,7 +156,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         from.offset,
         to.offset,
         incoming,
-        displayMode()
+        displayMode(),
+        authorFilter()
       );
       // No run in range means nothing was formatted, so the mark must not move either.
       if (edits.length === 0) return;
@@ -163,7 +173,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
               properties: edit.properties,
               ...(edit.targetRunIds ? { targetRunIds: edit.targetRunIds } : {}),
             })),
-            ...paragraphMarkOps(textOf(from.paragraphId), from, to, markProperties),
+            ...(deps.paragraphMarkVisible(from.paragraphId)
+              ? paragraphMarkOps(textOf(from.paragraphId), from, to, markProperties)
+              : []),
           ],
           selectionMark()
         )
@@ -183,7 +195,9 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       const start = index === firstIndex ? from.offset : 0;
       const end = index === lastIndex ? to.offset : text.length;
       const edits =
-        start < end ? runPropertyEdits(part, paragraphId, start, end, incoming, displayMode()) : [];
+        start < end
+          ? runPropertyEdits(part, paragraphId, start, end, incoming, displayMode(), authorFilter())
+          : [];
       for (const edit of edits) {
         ops.push({
           op: 'setRunProperties',
@@ -215,7 +229,7 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
       // reported `changed: false`, and the document did not move. Same reasoning for an
       // empty paragraph inside the range, which has no run to carry the change at all.
       const covered = index < lastIndex || (start === 0 && end === text.length && text.length > 0);
-      if (covered) {
+      if (covered && deps.paragraphMarkVisible(paragraphId)) {
         ops.push({
           op: 'setParagraphMarkProperties',
           paragraphId,
@@ -253,7 +267,8 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         0,
         text.length,
         incoming,
-        displayMode()
+        displayMode(),
+        authorFilter()
       )) {
         ops.push({
           op: 'setRunProperties' as const,
@@ -264,11 +279,13 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
           ...(edit.targetRunIds ? { targetRunIds: edit.targetRunIds } : {}),
         });
       }
-      ops.push({
-        op: 'setParagraphMarkProperties' as const,
-        paragraphId,
-        properties: mergedParagraphMarkProperties(part, paragraphId, incoming),
-      });
+      if (deps.paragraphMarkVisible(paragraphId)) {
+        ops.push({
+          op: 'setParagraphMarkProperties' as const,
+          paragraphId,
+          properties: mergedParagraphMarkProperties(part, paragraphId, incoming),
+        });
+      }
     }
     if (ops.length === 0) return false;
     // Word leaves the cells selected after formatting them, so the rectangle survives.
@@ -322,34 +339,37 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
     // publishes: the op replaces the properties it names and drops the ones it does not,
     // so its base has to be the paragraph's own `w:pPr` — see `directParagraphProperties`.
     const part = storyPart();
-    const ops = order.slice(firstIndex, lastIndex + 1).map((paragraphId) => {
-      // Folded in order over the paragraph's OWN properties, so a batch that names the
-      // same element twice ends with the last word and every entry sees the ones before it.
-      let properties = directParagraphProperties(part, paragraphId);
-      for (const entry of entries) {
-        // `mergeAttributes` is for the properties that carry SEVERAL independent settings
-        // in one element. `w:spacing` holds the line rule, the space before and the space
-        // after; replacing it wholesale meant picking a line spacing deleted the
-        // paragraph's space-before, and adding space after deleted the line spacing. A
-        // null-valued attribute REMOVES that one, which is how Word's "Remove space before
-        // paragraph" differs from setting it to zero.
-        const merged = entry.mergeAttributes
-          ? {
-              ...(properties.find((property) => property.localName === entry.localName)
-                ?.attributes ?? {}),
-              ...entry.attributes,
-            }
-          : (entry.attributes ?? {});
-        const kept = Object.fromEntries(
-          Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)
-        ) as Record<string, string>;
-        properties = mergedProperties(properties, {
-          localName: entry.localName,
-          ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
-        });
-      }
-      return { op: 'setParagraphProperties' as const, paragraphId, properties };
-    });
+    const ops = order
+      .slice(firstIndex, lastIndex + 1)
+      .filter((paragraphId) => deps.paragraphMarkVisible(paragraphId))
+      .map((paragraphId) => {
+        // Folded in order over the paragraph's OWN properties, so a batch that names the
+        // same element twice ends with the last word and every entry sees the ones before it.
+        let properties = directParagraphProperties(part, paragraphId);
+        for (const entry of entries) {
+          // `mergeAttributes` is for the properties that carry SEVERAL independent settings
+          // in one element. `w:spacing` holds the line rule, the space before and the space
+          // after; replacing it wholesale meant picking a line spacing deleted the
+          // paragraph's space-before, and adding space after deleted the line spacing. A
+          // null-valued attribute REMOVES that one, which is how Word's "Remove space before
+          // paragraph" differs from setting it to zero.
+          const merged = entry.mergeAttributes
+            ? {
+                ...(properties.find((property) => property.localName === entry.localName)
+                  ?.attributes ?? {}),
+                ...entry.attributes,
+              }
+            : (entry.attributes ?? {});
+          const kept = Object.fromEntries(
+            Object.entries(merged).filter(([, value]) => value !== null && value !== undefined)
+          ) as Record<string, string>;
+          properties = mergedProperties(properties, {
+            localName: entry.localName,
+            ...(Object.keys(kept).length > 0 ? { attributes: kept } : {}),
+          });
+        }
+        return { op: 'setParagraphProperties' as const, paragraphId, properties };
+      });
     if (ops.length === 0) return;
     // Word leaves the cells selected after a paragraph command, exactly as it does after
     // Bold — the run-property writes above already say so.
@@ -514,8 +534,24 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         // for it even though the tree comes back identical — so an unconditional three ops
         // per paragraph made the eraser report `changed: true` over clean text and cost an
         // undo press that undid nothing.
-        for (const slice of formattableRanges(part, paragraphId, start, end, displayMode())) {
-          if (!hasAuthoredRunProperties(part, paragraphId, slice.start, slice.end, displayMode())) {
+        for (const slice of formattableRanges(
+          part,
+          paragraphId,
+          start,
+          end,
+          displayMode(),
+          authorFilter()
+        )) {
+          if (
+            !hasAuthoredRunProperties(
+              part,
+              paragraphId,
+              slice.start,
+              slice.end,
+              displayMode(),
+              authorFilter()
+            )
+          ) {
             continue;
           }
           ops.push({
@@ -531,10 +567,16 @@ export function createSurfaceFormat(deps: SurfaceFormatDeps): FormatMethods {
         // it has no children left. Clearing the paragraph first therefore left an empty
         // `<w:pPr/>` behind, which is not what a paragraph that never had properties
         // serialises as.
-        if (directParagraphMarkProperties(part, paragraphId).length > 0) {
+        if (
+          deps.paragraphMarkVisible(paragraphId) &&
+          directParagraphMarkProperties(part, paragraphId).length > 0
+        ) {
           ops.push({ op: 'setParagraphMarkProperties', paragraphId, properties: [] });
         }
-        if (directParagraphProperties(part, paragraphId).length > 0) {
+        if (
+          deps.paragraphMarkVisible(paragraphId) &&
+          directParagraphProperties(part, paragraphId).length > 0
+        ) {
           ops.push({ op: 'setParagraphProperties', paragraphId, properties: [] });
         }
       }

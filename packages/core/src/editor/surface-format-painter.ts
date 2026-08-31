@@ -9,7 +9,12 @@
 // look like that", and what the reader sees is the cascade.
 
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-import type { FormattingDisplayMode, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
+import type {
+  FormattingDisplayMode,
+  FormattingRevisionAuthorFilter,
+  StoryScope,
+  TreeDocOp,
+} from '@docx-editor.dev/core/store';
 import {
   directParagraphProperties,
   mergedParagraphMarkProperties,
@@ -72,6 +77,10 @@ export interface SurfaceFormatPainterDeps {
   selection(): SemanticSelection;
   /** Which revision halves the reader is looking at; a write must not restyle hidden text. */
   displayMode(): FormattingDisplayMode;
+  /** Reviewer visibility projected into the formatting walk. */
+  authorFilter(): FormattingRevisionAuthorFilter | undefined;
+  /** False when this paragraph's pilcrow is absorbed by the active revision projection. */
+  paragraphMarkVisible(paragraphId: string): boolean;
   commit(
     run: () => TreeApplyResult | boolean,
     nextSelection?: () => SemanticSelection | null,
@@ -313,7 +322,8 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
           start,
           end,
           held.runProperties,
-          displayMode
+          displayMode,
+          deps.authorFilter()
         )) {
           ops.push({
             op: 'setRunProperties',
@@ -346,14 +356,15 @@ export function createSurfaceFormatPainter(deps: SurfaceFormatPainterDeps): Surf
       // write above is: an op that names nothing still counts as APPLIED — the store
       // publishes a revision and pushes an undo entry for it — so an empty-source paint
       // would cost an undo press that undoes nothing.
-      if (coversMark && held.runProperties.length > 0) {
+      const paragraphMarkVisible = deps.paragraphMarkVisible(paragraphId);
+      if (coversMark && paragraphMarkVisible && held.runProperties.length > 0) {
         ops.push({
           op: 'setParagraphMarkProperties',
           paragraphId,
           properties: mergedParagraphMarkProperties(part, paragraphId, held.runProperties),
         });
       }
-      if (held.paragraphProperties) {
+      if (held.paragraphProperties && paragraphMarkVisible) {
         // REPLACING, not merged: painting a paragraph means it ends up formatted like the
         // source, so what the source does not state the target must not keep. The applier
         // drops only what an op can NAME, so `w:sectPr`, `w:pBdr` and the rest survive.

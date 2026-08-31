@@ -431,6 +431,16 @@ export const CHROME_GROUPS = [
         state: { kind: 'command' },
       },
       {
+        // Word for Mac: Review > Markup Options > Reviewers. The menu lists All and one
+        // checkbox per author; the adapter owns that dynamic list, while this stable slot
+        // owns its position, label, icon, and enabled-state identity.
+        id: 'authors',
+        shape: 'dropdown',
+        labelKey: 'reviewers.label',
+        paths: GENERATED_ICON_PATHS['visibility'],
+        state: { kind: 'command' },
+      },
+      {
         // The "✎ Editing ▾" mode pill: icon + current-mode label + caret.
         id: 'editingMode',
         shape: 'dropdown',
@@ -774,6 +784,7 @@ export type ChromeSlotId =
   | 'format.painter'
   | 'format.clear'
   | 'review.comments'
+  | 'review.authors'
   | 'review.editingMode'
   | 'contentControl.showAll'
   | 'contentControl.formFill'

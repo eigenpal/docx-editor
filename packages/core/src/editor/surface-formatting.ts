@@ -32,6 +32,7 @@ import {
   propertyContainer,
   runAddressRanges,
   type FormattingDisplayMode,
+  type FormattingRevisionAuthorFilter,
   type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
@@ -318,7 +319,8 @@ export function hasAuthoredRunProperties(
   paragraphId: string,
   start: number,
   end: number,
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
 ): boolean {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return false;
@@ -327,7 +329,8 @@ export function hasAuthoredRunProperties(
     runAddressRanges(paragraph),
     start,
     end,
-    displayMode
+    displayMode,
+    authorFilter
   )) {
     const authored = authoredProperties(
       propertyContainer(covered.run, 'runProperties', 'rPr'),
@@ -351,7 +354,8 @@ export function authoredRunPropertiesAt(
   part: OoxmlPart,
   paragraphId: string,
   offset: number,
-  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE
+  displayMode: FormattingDisplayMode = DEFAULT_FORMATTING_DISPLAY_MODE,
+  authorFilter?: FormattingRevisionAuthorFilter
 ): readonly SurfaceProperty[] {
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return [];
@@ -362,7 +366,7 @@ export function authoredRunPropertiesAt(
   // the caret used to win as `left`, so the toolbar face and the next typed character took
   // their formatting from text nobody could look at. In All Markup that same run is on the
   // page, struck through, and taking its face is what a reader would expect.
-  for (const run of formattableRunsOfParagraph(paragraph, displayMode)) {
+  for (const run of formattableRunsOfParagraph(paragraph, displayMode, authorFilter)) {
     const range = runRanges.get(run.id);
     if (!range || range.end <= range.start) continue;
     if (range.start < offset && offset <= range.end) left = run;

@@ -560,6 +560,10 @@
     "refresh": "Aktualizuj cały spis",
     "refreshPageNumbers": "Aktualizuj tylko numery stron"
   },
+  "reviewers": {
+    "label": "Recenzenci",
+    "all": "Wszyscy"
+  },
   "editingMode": {
     "editing": "Edytowanie",
     "label": "Tryb edycji",
@@ -740,7 +744,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

@@ -27,7 +27,7 @@ import {
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
 import { DEFAULT_PAGE_GEOMETRY, type PageGeometry } from './semantic-records.ts';
 import { storyBlocks } from './story-roots.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 
 /**
  * Hard ceiling on sections enumerated from a document (matches write-path
@@ -458,9 +458,48 @@ export function readSectionProperties(part: OoxmlPart): SectionProperties {
  */
 export function enumerateDocumentSections(
   part: OoxmlPart,
-  displayMode: RevisionDisplayMode = 'all-markup'
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): DocumentSection[] {
-  return enumerateDocumentSectionsBounded(part, displayMode).sections;
+  return enumerateDocumentSectionsBounded(part, displayMode, authorFilter).sections;
+}
+
+/**
+ * Canonical section index behind each section in a revision-projected body.
+ *
+ * A removed paragraph mark can collapse an entire section. The projected section keeps the
+ * surviving paragraph's geometry, while package APIs such as header/footer resolution remain
+ * indexed over the canonical tree. This bridge prevents those two index spaces from being
+ * paired positionally.
+ */
+export function projectedSectionSourceIndexes(
+  part: OoxmlPart,
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
+): readonly number[] {
+  const projectedBlocks = storyBlocks(part, displayMode, authorFilter);
+  const projected = enumerateDocumentSectionsFromBlocks(part, projectedBlocks).sections;
+  const canonicalBlocks = storyBlocks(part, 'all-markup');
+  const canonical = enumerateDocumentSectionsFromBlocks(part, canonicalBlocks).sections;
+  const finalCanonicalIndex = Math.max(0, canonical.length - 1);
+  const canonicalIndexByClosingParagraph = new Map<string, number>();
+
+  for (const section of canonical) {
+    if (section.blockStart === section.blockEndExclusive) continue;
+    const closing = canonicalBlocks[section.blockEndExclusive - 1];
+    if (closing?.kind === 'paragraph' && paragraphSectionNode(closing)) {
+      canonicalIndexByClosingParagraph.set(closing.id, section.index);
+    }
+  }
+
+  return projected.map((section) => {
+    if (section.blockStart === section.blockEndExclusive) return finalCanonicalIndex;
+    const closing = projectedBlocks[section.blockEndExclusive - 1];
+    if (closing?.kind !== 'paragraph' || !paragraphSectionNode(closing)) {
+      return finalCanonicalIndex;
+    }
+    return canonicalIndexByClosingParagraph.get(closing.id) ?? finalCanonicalIndex;
+  });
 }
 
 /**
@@ -483,9 +522,10 @@ export interface DocumentSectionsEnumeration {
  */
 export function enumerateDocumentSectionsBounded(
   part: OoxmlPart,
-  displayMode: RevisionDisplayMode = 'all-markup'
+  displayMode: RevisionDisplayMode = 'all-markup',
+  authorFilter?: RevisionAuthorFilter
 ): DocumentSectionsEnumeration {
-  return enumerateDocumentSectionsFromBlocks(part, storyBlocks(part, displayMode));
+  return enumerateDocumentSectionsFromBlocks(part, storyBlocks(part, displayMode, authorFilter));
 }
 
 /**

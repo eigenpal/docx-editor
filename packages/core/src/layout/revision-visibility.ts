@@ -24,6 +24,16 @@ import {
 } from '../store/package/content-control-walk.ts';
 import { MAX_REVISION_DEPTH } from './revision-projection.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-tree.ts';
+import {
+  isRevisionWrapper,
+  paragraphMarkRevisionsOf,
+  revisionAttributionOf,
+  revisionsVisible,
+  withRevision,
+  type RevisionAttribution,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 
 /**
  * Matches the layout walk's own container recursion; see `piecesOfParagraph`.
@@ -89,7 +99,13 @@ export function paragraphMarkDeleted(paragraph: OoxmlNode): boolean {
  * content is an insertion is Word's shape for "this line was added, then merged upward", and
  * treating its content as unrendered dropped the added words from every mode.
  */
-function rendersNoText(node: OoxmlNode, depth: number): boolean {
+function rendersNoText(
+  node: OoxmlNode,
+  depth: number,
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter,
+  revisions: readonly RevisionAttribution[] = []
+): boolean {
   if (node.kind === 'textValue') return true;
   if (depth > MAX_INLINE_DEPTH) return true;
   const walkChildren = (children: readonly OoxmlNode[], childDepth: number): boolean => {
@@ -116,11 +132,17 @@ function rendersNoText(node: OoxmlNode, depth: number): boolean {
         if (content && !walkChildren(content, childDepth + 1)) return false;
         continue;
       }
-      const descends =
-        child.kind === 'hyperlink' ||
-        child.kind === 'revisionInsert' ||
-        child.kind === 'revisionMoveTo';
-      if (descends && !rendersNoText(child, childDepth + 1)) return false;
+      if (child.kind === 'hyperlink') {
+        if (!rendersNoText(child, childDepth + 1, displayMode, authorFilter, revisions))
+          return false;
+        continue;
+      }
+      if (!isRevisionWrapper(child)) continue;
+      const attribution = revisionAttributionOf(child);
+      if (!attribution) continue;
+      const local = withRevision(revisions, attribution);
+      if (!revisionsVisible(local, displayMode, authorFilter)) continue;
+      if (!rendersNoText(child, childDepth + 1, displayMode, authorFilter, local)) return false;
     }
     return true;
   };
@@ -140,22 +162,19 @@ function rendersNoText(node: OoxmlNode, depth: number): boolean {
  */
 export function markRemovedInMode(
   paragraph: OoxmlNode,
-  displayMode: 'all-markup' | 'proposed' | 'original'
+  displayMode: RevisionDisplayMode,
+  authorFilter?: RevisionAuthorFilter
 ): boolean {
-  if (displayMode === 'all-markup') return false;
-  if (paragraph.kind === 'textValue') return false;
-  // The namespace at EVERY step. Checking only the innermost element left the containers
-  // spoofable: `<x:rPr><w:del/></x:rPr>` in a `w:pPr` merged two paragraphs from markup any
-  // sender can author, and no Accept could undo the join it produced.
-  const properties =
-    wmlChildNamed(paragraph, 'paragraphProperties') ?? wmlChildNamed(paragraph, 'pPr');
-  if (!properties) return false;
-  const markRunProperties =
-    wmlChildNamed(properties, 'runProperties') ?? wmlChildNamed(properties, 'rPr');
-  if (markRunProperties === undefined) return false;
-  const removedNames =
-    displayMode === 'proposed' ? (['del', 'moveFrom'] as const) : (['ins', 'moveTo'] as const);
-  return removedNames.some((name) => wmlChildNamed(markRunProperties, name) !== undefined);
+  for (const revision of paragraphMarkRevisionsOf(paragraph)) {
+    const effectiveMode = authorFilter?.hiddenAuthors.has(revision.author)
+      ? 'proposed'
+      : displayMode;
+    if (effectiveMode === 'all-markup') continue;
+    const removes = revision.kind === 'delete' || revision.kind === 'moveFrom';
+    if ((effectiveMode === 'proposed' && removes) || (effectiveMode === 'original' && !removes))
+      return true;
+  }
+  return false;
 }
 
 /**
@@ -164,14 +183,14 @@ export function markRemovedInMode(
  */
 export function revisionRemovesParagraph(
   paragraph: OoxmlNode,
-  displayMode: 'all-markup' | 'proposed' | 'original' = 'proposed'
+  displayMode: RevisionDisplayMode = 'proposed',
+  authorFilter?: RevisionAuthorFilter
 ): boolean {
   if (paragraph.kind !== 'paragraph') return false;
   // ORIGINAL rejects every revision, so the mark deletion is rejected too and the paragraph
   // stays — with the words its `w:del` was hiding. ALL-MARKUP shows the deletion struck
   // through, which is also a line. Only the PROPOSED result actually performs the join, and
   // it is the only view this suppression describes.
-  if (displayMode !== 'proposed') return false;
-  if (!paragraphMarkDeleted(paragraph)) return false;
-  return rendersNoText(paragraph, 0);
+  if (!markRemovedInMode(paragraph, displayMode, authorFilter)) return false;
+  return rendersNoText(paragraph, 0, displayMode, authorFilter);
 }

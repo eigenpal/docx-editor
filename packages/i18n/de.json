@@ -560,6 +560,10 @@
     "refresh": "Gesamtes Verzeichnis aktualisieren",
     "refreshPageNumbers": "Nur Seitenzahlen aktualisieren"
   },
+  "reviewers": {
+    "label": "Prüfer",
+    "all": "Alle"
+  },
   "editingMode": {
     "editing": "Bearbeiten",
     "label": "Bearbeitungsmodus",
@@ -740,7 +744,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

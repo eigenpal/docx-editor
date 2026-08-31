@@ -13,6 +13,7 @@
     "viewing": "This document is open for viewing",
     "trackedOnly": "This document permits edits only as tracked changes",
     "noDocument": "No document is loaded",
+    "noReviewAuthors": "This document has no review authors",
     "noContentControl": "No content control is selected",
     "noCopiedFormatting": "Copy formatting from somewhere first",
     "noDrawing": "No image is selected",
@@ -719,6 +720,10 @@
     "convertAllFootnotes": "Convert all footnotes to endnotes",
     "convertAllEndnotes": "Convert all endnotes to footnotes",
     "inheritedValue": "(inherited)"
+  },
+  "reviewers": {
+    "label": "Reviewers",
+    "all": "All"
   },
   "editingMode": {
     "label": "Editing mode",

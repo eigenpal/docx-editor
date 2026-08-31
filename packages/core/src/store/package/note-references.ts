@@ -20,7 +20,7 @@ import {
   type NoteKind,
   MAX_NOTES_PER_PART,
 } from './note-nodes.ts';
-import { segmentsOf } from '../store/tree-op-segments.ts';
+import { noteSegmentsWithAncestorsOf, segmentsOf } from '../store/tree-op-segments.ts';
 
 const FOOTNOTES_REL =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footnotes';
@@ -205,14 +205,27 @@ function collectParagraphNoteReferences(
   hits: NoteReferenceHit[],
   budget: NoteReferenceScanBudget,
   maxHits: number,
-  partName: string
+  partName: string,
+  ancestors: readonly OoxmlNode[],
+  includeReference?: (node: OoxmlNode, ancestors: readonly OoxmlNode[]) => boolean
 ): void {
+  const projection = includeReference ? noteSegmentsWithAncestorsOf(paragraph) : null;
+  const segments = projection?.segments ?? segmentsOf(paragraph);
   // The caller (walk) already returned on a truncated budget; only charge() can truncate
   // here, and it reports that by returning false.
-  for (const segment of segmentsOf(paragraph)) {
+  for (const segment of segments) {
     if (hits.length >= maxHits) return;
     if (!charge(budget)) return;
     if (segment.node.kind !== 'noteReference') continue;
+    if (
+      includeReference &&
+      !includeReference(segment.node, [
+        ...ancestors,
+        ...(projection?.ancestorsByNodeId.get(segment.node.id) ?? []),
+      ])
+    ) {
+      continue;
+    }
     pushReferenceHit(hits, segment.node, paragraph.id, segment.start, partName, maxHits);
   }
 }
@@ -257,6 +270,21 @@ interface BudgetedNoteScanEntry {
 }
 
 const budgetedNoteScanMemos = new WeakMap<OoxmlNode, BudgetedNoteScanEntry>();
+const projectedNoteScanMemos = new WeakMap<OoxmlNode, Map<string, BudgetedNoteScanEntry>>();
+const MAX_PROJECTED_NOTE_SCANS_PER_NODE = 8;
+
+function cacheProjectedNoteScan(node: OoxmlNode, key: string, entry: BudgetedNoteScanEntry): void {
+  let cache = projectedNoteScanMemos.get(node);
+  if (!cache) {
+    cache = new Map();
+    projectedNoteScanMemos.set(node, cache);
+  }
+  if (!cache.has(key) && cache.size >= MAX_PROJECTED_NOTE_SCANS_PER_NODE) {
+    const oldest = cache.keys().next();
+    if (!oldest.done) cache.delete(oldest.value);
+  }
+  cache.set(key, entry);
+}
 
 /**
  * Non-paragraph subtrees below this plain-walk cost carry no memo entry unless they hold
@@ -290,11 +318,18 @@ export const budgetedNoteScanMemoStats = {
  * When `budget` is supplied it is shared and mutated in place. Hits are segment-aligned
  * (`segmentsOf`); demoted wrappers never invent atomOffsets.
  */
-export function collectNoteReferences(
+function collectNoteReferencesWithProjection(
   part: OoxmlPart,
   options?: {
     readonly maxHits?: number;
     readonly budget?: NoteReferenceScanBudget;
+    /** Optional layout projection gate, given the reference's outermost-first ancestry. */
+    readonly includeReference?: (node: OoxmlNode, ancestors: readonly OoxmlNode[]) => boolean;
+    /** Enables immutable-subtree reuse for a deterministic projection callback. */
+    readonly includeReferenceCache?: {
+      readonly projectionKey: string;
+      ancestryKey(ancestors: readonly OoxmlNode[]): string;
+    };
   }
 ): readonly NoteReferenceHit[] {
   // Hit count is a soft collector bound for diagnostics only. Mutation paths pass an
@@ -306,12 +341,21 @@ export function collectNoteReferences(
   const maxHits = Number.isNaN(rawMaxHits) ? 0 : Math.floor(rawMaxHits);
   if (maxHits <= 0) return NO_NOTE_HITS;
   const external = options?.budget;
+  const includeReference = options?.includeReference;
+  const includeReferenceCache = options?.includeReferenceCache;
+  const projectedKey = (ancestors: readonly OoxmlNode[]): string | null =>
+    includeReferenceCache
+      ? `${includeReferenceCache.projectionKey};${includeReferenceCache.ancestryKey(ancestors)}`
+      : null;
 
   // Budget-free warm path: a root entry is a complete document-order answer, so a part
   // whose last walk completed returns the same frozen array by identity, publish after
   // publish (sliced only when `maxHits` binds below the cached hit count).
-  if (external === undefined) {
-    const cached = budgetedNoteScanMemos.get(part.root);
+  if (external === undefined && (includeReference === undefined || includeReferenceCache)) {
+    const rootProjectedKey = projectedKey([]);
+    const cached = rootProjectedKey
+      ? projectedNoteScanMemos.get(part.root)?.get(rootProjectedKey)
+      : budgetedNoteScanMemos.get(part.root);
     if (cached !== undefined && cached.depth === 0 && cached.partName === part.name) {
       budgetedNoteScanMemoStats.budgetFreeRootReuses += 1;
       return cached.hits.length > maxHits ? cached.hits.slice(0, maxHits) : cached.hits;
@@ -329,6 +373,7 @@ export function collectNoteReferences(
   // prune happened under is incomplete and must not be memoized: a budgeted walk
   // reusing it would report hits and accounting the plain fail-closed walk never would.
   let prunes = 0;
+  const ancestors: OoxmlNode[] = [];
 
   const walk = (node: OoxmlNode, depth: number): void => {
     if (hits.length >= maxHits || budget.truncated) return;
@@ -348,7 +393,12 @@ export function collectNoteReferences(
     // at exactly the node the unmemoized walk stops at. Paragraph answers never depend
     // on depth (segmentsOf only, and depth ≤ 64 held to get here), so a paragraph
     // re-parented deeper by a structural edit still reuses its entry.
-    const cached = budgetedNoteScanMemos.get(node);
+    const nodeProjectedKey = projectedKey(ancestors);
+    const cached = nodeProjectedKey
+      ? projectedNoteScanMemos.get(node)?.get(nodeProjectedKey)
+      : includeReference === undefined
+        ? budgetedNoteScanMemos.get(node)
+        : undefined;
     if (
       cached !== undefined &&
       (cached.depth === depth || node.kind === 'paragraph') &&
@@ -370,9 +420,19 @@ export function collectNoteReferences(
     if (node.kind === 'textValue') return;
 
     if (node.kind === 'paragraph') {
-      collectParagraphNoteReferences(node, hits, budget, maxHits, part.name);
+      collectParagraphNoteReferences(
+        node,
+        hits,
+        budget,
+        maxHits,
+        part.name,
+        ancestors,
+        includeReference
+      );
     } else {
+      ancestors.push(node);
       for (const child of node.children) walk(child, depth + 1);
+      ancestors.pop();
     }
 
     // Memoize only subtrees the walk covered completely: a budget truncation, a maxHits
@@ -386,16 +446,50 @@ export function collectNoteReferences(
     if (depth > 0 && node.kind !== 'paragraph' && !gotHits && visited < MEMO_MIN_SUBTREE_VISITED) {
       return;
     }
-    budgetedNoteScanMemos.set(node, {
+    const entry = {
       hits: gotHits ? Object.freeze(hits.slice(startHits)) : NO_NOTE_HITS,
       visited,
       depth,
       partName: part.name,
-    });
+    };
+    if (nodeProjectedKey) cacheProjectedNoteScan(node, nodeProjectedKey, entry);
+    else if (includeReference === undefined) budgetedNoteScanMemos.set(node, entry);
   };
 
   walk(part.root, 0);
   return hits;
+}
+
+/** Walk a part without applying a layout projection. */
+export function collectNoteReferences(
+  part: OoxmlPart,
+  options?: {
+    readonly maxHits?: number;
+    readonly budget?: NoteReferenceScanBudget;
+  }
+): readonly NoteReferenceHit[] {
+  return collectNoteReferencesWithProjection(part, options);
+}
+
+/**
+ * Layout-internal projected collector. Kept out of the store barrel so projection
+ * callbacks and their cache identity never become part of the public store contract.
+ */
+export function collectProjectedNoteReferences(
+  part: OoxmlPart,
+  projection: {
+    readonly projectionKey: string;
+    readonly ancestryKey: (ancestors: readonly OoxmlNode[]) => string;
+    readonly includeReference: (node: OoxmlNode, ancestors: readonly OoxmlNode[]) => boolean;
+  }
+): readonly NoteReferenceHit[] {
+  return collectNoteReferencesWithProjection(part, {
+    includeReference: projection.includeReference,
+    includeReferenceCache: {
+      projectionKey: projection.projectionKey,
+      ancestryKey: projection.ancestryKey,
+    },
+  });
 }
 
 /** Collect references across every XML part under one shared part + visited-node budget. */

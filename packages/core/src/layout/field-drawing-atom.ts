@@ -11,6 +11,7 @@ import {
   revisionsAreDeletion,
   revisionsVisible,
   type RevisionAttribution,
+  type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 
@@ -37,6 +38,7 @@ export function runDrawingAtomPlan(options: {
   readonly hiddenRun: boolean;
   readonly revisions: readonly RevisionAttribution[];
   readonly displayMode: RevisionDisplayMode;
+  readonly authorFilter?: RevisionAuthorFilter;
 }): RunDrawingAtomPlan {
   const { node, layout, revisions, displayMode } = options;
   // Only the projection lookup differs between the two atom kinds: an MC wrapper has no
@@ -56,7 +58,8 @@ export function runDrawingAtomPlan(options: {
   // under a mode that promises the markup (#479). Its model range is still recorded as
   // deleted in every mode, because the offset exists in every mode.
   const recordDeleted = revisionsAreDeletion(revisions);
-  const suppressed = options.hiddenRun || !revisionsVisible(revisions, displayMode);
+  const suppressed =
+    options.hiddenRun || !revisionsVisible(revisions, displayMode, options.authorFilter);
   if (projection.hidden || suppressed) {
     // A hidden drawing keeps a bare placeholder so surrounding offsets stay aligned; a
     // mode- or vanish-suppressed one emits nothing at all.

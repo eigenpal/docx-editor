@@ -560,6 +560,10 @@
     "refresh": "Mettre à jour toute la table",
     "refreshPageNumbers": "Mettre à jour uniquement les numéros de page"
   },
+  "reviewers": {
+    "label": "Réviseurs",
+    "all": "Tous"
+  },
   "editingMode": {
     "editing": "Édition",
     "label": "Mode d'édition",
@@ -740,7 +744,8 @@
     "lockedContentBreak": null,
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
-    "nothingToPaint": null
+    "nothingToPaint": null,
+    "noReviewAuthors": null
   },
   "equationPopup": {
     "apply": null,

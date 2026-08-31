@@ -1424,13 +1424,19 @@ export function formatOwnedRunIds(paragraph: Extract<OoxmlNode, {
 }>): ReadonlySet<string>;
 
 // @public
-export function formattableRanges(part: OoxmlPart, paragraphId: string, start: number, end: number, displayMode?: FormattingDisplayMode): readonly {
+export function formattableRanges(part: OoxmlPart, paragraphId: string, start: number, end: number, displayMode?: FormattingDisplayMode, authorFilter?: FormattingRevisionAuthorFilter): readonly {
     readonly end: number;
     readonly start: number;
 }[];
 
 // @public
 export type FormattingDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public
+export interface FormattingRevisionAuthorFilter {
+    // (undocumented)
+    readonly hiddenAuthors: ReadonlySet<string>;
+}
 
 // @public
 export interface FragmentCoverage {
@@ -3705,10 +3711,10 @@ export interface RunPropertyEdit {
 }
 
 // @public
-export function runPropertyEdits(part: OoxmlPart, paragraphId: string, start: number, end: number, incoming: OoxmlProperty | readonly OoxmlProperty[], displayMode?: FormattingDisplayMode): readonly RunPropertyEdit[];
+export function runPropertyEdits(part: OoxmlPart, paragraphId: string, start: number, end: number, incoming: OoxmlProperty | readonly OoxmlProperty[], displayMode?: FormattingDisplayMode, authorFilter?: FormattingRevisionAuthorFilter): readonly RunPropertyEdit[];
 
 // @public
-export function runsCovering(part: OoxmlPart, paragraphId: string, start: number, end: number, displayMode?: FormattingDisplayMode): readonly OoxmlNode[];
+export function runsCovering(part: OoxmlPart, paragraphId: string, start: number, end: number, displayMode?: FormattingDisplayMode, authorFilter?: FormattingRevisionAuthorFilter): readonly OoxmlNode[];
 
 // @public
 export const RUNTIME_PORT_IDS: {
