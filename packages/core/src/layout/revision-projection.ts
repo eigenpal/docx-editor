@@ -172,7 +172,7 @@ export function revisionsVisible(
   mode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): boolean {
-  if (revisions.length === 0) return true;
+  if (revisions.length === 0 || (mode === 'all-markup' && !authorFilter)) return true;
   for (const revision of revisions) {
     const revisionMode = authorFilter?.hiddenAuthors.has(revision.author) ? 'proposed' : mode;
     if (revisionMode === 'all-markup') continue;
@@ -196,6 +196,7 @@ export function projectedRevisions(
   mode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): readonly RevisionAttribution[] | null {
+  if (!authorFilter && mode === 'all-markup') return revisions;
   if (!revisionsVisible(revisions, mode, authorFilter)) return null;
   if (!authorFilter) return revisions;
   const visible = revisions.filter((revision) => !authorFilter.hiddenAuthors.has(revision.author));
@@ -233,6 +234,15 @@ export function visibleParagraphMarkRevisionsOf(
   readonly revisions: readonly RevisionAttribution[];
   readonly formatRevision: RevisionAttribution | null;
 } {
+  if (mode !== 'all-markup') {
+    return { revisions: NO_REVISIONS, formatRevision: null };
+  }
+  if (!authorFilter) {
+    return {
+      revisions: paragraphMarkRevisionsOf(paragraph),
+      formatRevision: paragraphMarkFormatRevisionOf(paragraph),
+    };
+  }
   const revisions = paragraphMarkRevisionsOf(paragraph).filter((revision) =>
     revisionMarkupVisible(revision, mode, authorFilter)
   );
@@ -251,8 +261,14 @@ export function paragraphMarkMarkupVisible(
   mode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): boolean {
-  const projection = visibleParagraphMarkRevisionsOf(paragraph, mode, authorFilter);
-  return projection.revisions.length > 0 || projection.formatRevision !== null;
+  if (mode !== 'all-markup') return false;
+  const revisions = paragraphMarkRevisionsOf(paragraph);
+  if (!authorFilter) {
+    return revisions.length > 0 || paragraphMarkFormatRevisionOf(paragraph) !== null;
+  }
+  if (revisions.some((revision) => !authorFilter.hiddenAuthors.has(revision.author))) return true;
+  const formatRevision = paragraphMarkFormatRevisionOf(paragraph);
+  return formatRevision !== null && !authorFilter.hiddenAuthors.has(formatRevision.author);
 }
 
 /**

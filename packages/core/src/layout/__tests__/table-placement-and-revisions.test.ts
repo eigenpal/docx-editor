@@ -209,6 +209,30 @@ describe('tracked table rows respect reviewer visibility', () => {
     expect(structure.rows[1]!.revisionAuthor).toBe('Grace');
   });
 
+  test('filtered and canonical table projections keep separate cache entries', () => {
+    const table = tableNode(
+      `<w:tbl><w:tblPr/>${grid(1440)}` +
+        trackedRow('del', 'Ada', 'gone') +
+        trackedRow('ins', 'Ada', 'accepted') +
+        '</w:tbl>'
+    );
+    const canonical = readTableStructure(table, CONTENT_WIDTH_PT, 0);
+    const filter = revisionAuthorFilter(['Ada']);
+    const filtered = readTableStructure(
+      table,
+      CONTENT_WIDTH_PT,
+      0,
+      undefined,
+      'all-markup',
+      filter
+    );
+
+    expect(readTableStructure(table, CONTENT_WIDTH_PT, 0)).toBe(canonical);
+    expect(readTableStructure(table, CONTENT_WIDTH_PT, 0, undefined, 'all-markup', filter)).toBe(
+      filtered
+    );
+  });
+
   test('the empty reviewer hides revisions whose row author is absent', () => {
     const row = (kind: 'ins' | 'del', text: string) =>
       `<w:tr><w:trPr><w:${kind} w:id="1"/></w:trPr>` +

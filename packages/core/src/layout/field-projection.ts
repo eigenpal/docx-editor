@@ -259,13 +259,12 @@ export function piecesOfParagraph(
   ): void => {
     if (text.length === 0 && !projected && !extras?.inlineDrawing) return;
     const effectiveLink = extras?.linkOverride ?? currentLink;
-    const effectiveRevisions = projectedRevisions(
-      extras?.revisionsOverride ?? revisions,
-      displayMode,
-      authorFilter
-    );
+    const authoredRevisions = extras?.revisionsOverride ?? revisions;
+    const effectiveRevisions = authorFilter
+      ? projectedRevisions(authoredRevisions, displayMode, authorFilter)
+      : authoredRevisions;
     if (effectiveRevisions === null) return;
-    const publishedProps = projectedRevisionProperties(props, authorFilter);
+    const publishedProps = authorFilter ? projectedRevisionProperties(props, authorFilter) : props;
     const link = effectiveLink ? { link: effectiveLink } : {};
     const attribution = effectiveRevisions.length === 0 ? {} : { revisions: effectiveRevisions };
     if (projected) {

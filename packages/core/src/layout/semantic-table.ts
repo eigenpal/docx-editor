@@ -720,11 +720,14 @@ interface TableStructureMemo {
   readonly structure: SemanticTableStructure | null;
 }
 
+/** The last unfiltered structure for each immutable table node. */
+const tableStructureMemos = new WeakMap<object, TableStructureMemo>();
+
 /**
- * Two-entry memo per immutable table node. One layout pass reads the same table repeatedly,
- * and filtered saves also need a canonical projection without evicting the painted one.
+ * The last filtered structure for each immutable table node. A separate cache lets save-time
+ * canonical layout keep both projections warm without slowing the common unfiltered lookup.
  */
-const tableStructureMemos = new WeakMap<object, readonly TableStructureMemo[]>();
+const filteredTableStructureMemos = new WeakMap<object, TableStructureMemo>();
 
 /**
  * Read one typed table node into a bounded structure, or null when the node is not a
@@ -739,18 +742,20 @@ export function readTableStructure(
   displayMode: RevisionDisplayMode = 'all-markup',
   authorFilter?: RevisionAuthorFilter
 ): SemanticTableStructure | null {
-  const memos = tableStructureMemos.get(table) ?? [];
-  const memo = memos.find(
-    (candidate) =>
-      candidate.contentWidthPt === contentWidthPt &&
-      candidate.depth === depth &&
-      // Identity compare is sound because a cascade table is built once per styles part and
-      // never mutated; a fresh-but-equal cascade only misses the memo, never lies to it.
-      candidate.styleCascade === styleCascade &&
-      candidate.displayMode === displayMode &&
-      candidate.authorFilter === authorFilter
-  );
-  if (memo) return memo.structure;
+  const memoStore = authorFilter ? filteredTableStructureMemos : tableStructureMemos;
+  const memo = memoStore.get(table);
+  if (
+    memo &&
+    memo.contentWidthPt === contentWidthPt &&
+    memo.depth === depth &&
+    // Identity compare is sound because a cascade table is built once per styles part and
+    // never mutated; a fresh-but-equal cascade only misses the memo, never lies to it.
+    memo.styleCascade === styleCascade &&
+    memo.displayMode === displayMode &&
+    memo.authorFilter === authorFilter
+  ) {
+    return memo.structure;
+  }
   const structure = readTableStructureUncached(
     table,
     contentWidthPt,
@@ -767,9 +772,7 @@ export function readTableStructure(
     authorFilter,
     structure,
   };
-  // Keep both the painted and canonical-save projections warm. A filtered save otherwise
-  // evicts the active table structure and makes the next render rebuild every cell.
-  tableStructureMemos.set(table, [entry, ...memos].slice(0, 2));
+  memoStore.set(table, entry);
   return structure;
 }
 

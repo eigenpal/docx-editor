@@ -165,6 +165,7 @@ export function markRemovedInMode(
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): boolean {
+  if (displayMode === 'all-markup' && !authorFilter) return false;
   for (const revision of paragraphMarkRevisionsOf(paragraph)) {
     const effectiveMode = authorFilter?.hiddenAuthors.has(revision.author)
       ? 'proposed'
