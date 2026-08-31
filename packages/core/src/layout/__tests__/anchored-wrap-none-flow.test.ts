@@ -140,14 +140,14 @@ function anchorPair(wrap: string, squareOffsetEmu = SQUARE_OFFSET_EMU): string {
 /** 60 four-letter words — four full lines at 6pt per character in a 468pt column. */
 const ANCHOR_TEXT = 'word '.repeat(60).trim();
 
-function documentXml(drawings: string): string {
+function documentXml(drawings: string, anchorText: string | null = ANCHOR_TEXT): string {
   return (
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
     `xmlns:wps="${WPS}"><w:body>` +
     '<w:p><w:r><w:t>lead</w:t></w:r></w:p>' +
     '<w:p><w:r><w:br w:type="page"/></w:r></w:p>' +
     `<w:p><w:pPr><w:spacing w:after="0"/></w:pPr><w:r>${drawings}</w:r>` +
-    `<w:r><w:t>${ANCHOR_TEXT}</w:t></w:r></w:p>` +
+    (anchorText === null ? '</w:p>' : `<w:r><w:t>${anchorText}</w:t></w:r></w:p>`) +
     '<w:tbl><w:tblPr/><w:tblGrid><w:gridCol w:w="4000"/></w:tblGrid>' +
     '<w:tr><w:tc><w:tcPr><w:tcW w:w="4000" w:type="dxa"/></w:tcPr>' +
     '<w:p><w:r><w:t>table</w:t></w:r></w:p></w:tc></w:tr></w:tbl>' +
@@ -155,8 +155,8 @@ function documentXml(drawings: string): string {
   );
 }
 
-function layoutOf(drawings: string) {
-  const part = load(documentXml(drawings));
+function layoutOf(drawings: string, anchorText: string | null = ANCHOR_TEXT) {
+  const part = load(documentXml(drawings, anchorText));
   return layoutSemanticDocument(part, 1, {
     measurer: createFixedMeasurer(6, 14),
     inlineDrawingLayout: drawingContext(part),
@@ -212,6 +212,37 @@ function pageHasVisibleContent(page: PageRecord): boolean {
 const ANCHOR_PARAGRAPH_ID = '/word/document.xml#0.0.2';
 
 describe('anchored wrapNone flow', () => {
+  test('a drawing-only anchor paragraph stays with the following table', () => {
+    const drawing = shapeDrawing({
+      id: 1,
+      widthEmu: SQUARE_EXTENT_EMU,
+      heightEmu: SQUARE_EXTENT_EMU,
+      verticalOffsetEmu: PAGE_SIZED_OFFSET_EMU,
+      wrap: WRAP_NONE,
+    });
+    const wrapNone = layoutOf(drawing, null);
+    const noDrawing = layoutOf('', null);
+
+    expect(wrapNone.pages).toHaveLength(2);
+    expect(noDrawing.pages).toHaveLength(2);
+    expect(wrapNone.pages.every(pageHasVisibleContent)).toBe(true);
+
+    const page = wrapNone.pages[1]!;
+    const bare = noDrawing.pages[1]!;
+    expect(anchoredOf(page)).toHaveLength(1);
+    expect(round(anchoredOf(page)[0]!.y)).toBe(660.95);
+
+    // The anchor has only its paragraph mark's normal line height. Its 660.95pt offset
+    // and 43.2pt extent do not advance the table or create an intervening blank page.
+    expect(round(anchorParagraphOf(page, ANCHOR_PARAGRAPH_ID).box.height)).toBe(12.727);
+    expect(roundBox(anchorParagraphOf(page, ANCHOR_PARAGRAPH_ID).box)).toEqual(
+      roundBox(anchorParagraphOf(bare, ANCHOR_PARAGRAPH_ID).box)
+    );
+    expect(page.fragments.find((fragment) => fragment.kind === 'table')?.box).toEqual(
+      bare.fragments.find((fragment) => fragment.kind === 'table')?.box
+    );
+  });
+
   test('wrapNone anchors inside the content box carve no hole and add no flow height', () => {
     const wrapNone = layoutOf(anchorPair(WRAP_NONE));
     const wrapSquare = layoutOf(anchorPair(WRAP_SQUARE));
