@@ -726,12 +726,9 @@ export function withContentControlMetadata(
   source: SemanticLayout
 ): SemanticLayout {
   return {
+    ...source,
     revision: layout.revision,
     pages: layout.pages,
-    ...(source.contentControls !== undefined ? { contentControls: source.contentControls } : {}),
-    ...(source.controlContextToken !== undefined
-      ? { controlContextToken: source.controlContextToken }
-      : {}),
   };
 }
 

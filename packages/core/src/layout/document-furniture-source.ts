@@ -2,11 +2,14 @@
 
 import {
   resolveRelationship,
+  resolveHeaderFooterResolutionBySection,
   type HeadlessDocumentView,
+  type HeaderFooterSectionResolution,
   type OoxmlNode,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
+import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
 import { type HeaderFooterVariantName, type PageFurniture } from './page-furniture-insets.ts';
 import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
@@ -31,24 +34,24 @@ export interface CreateDocumentFurnitureSourceOptions {
   readonly cache: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
-  readonly defaultTabStopPt?: number;
+  readonly defaultTabStopPt?: () => number;
   readonly displayMode?: RevisionDisplayMode;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
   ) => InlineDrawingLayoutContext | undefined;
   readonly drawingLayoutTokenForPart?: (partName: string) => string;
   readonly drawingTokenForParagraphForPart?: (partName: string, paragraph: OoxmlNode) => string;
-  readonly projectLinkForPart?: (
-    partName: string
-  ) => import('./field-pieces.ts').HyperlinkProjector | undefined;
+  /** Link/property projection and its inseparable cache identities. */
+  readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
 }
 
 const HEADER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
 const FOOTER_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
 
-function headerFooterRIdIndex(view: HeadlessDocumentView): Map<string, string> {
-  const pkg = view.currentPackage();
+function headerFooterRIdIndex(
+  pkg: ReturnType<HeadlessDocumentView['currentPackage']>
+): Map<string, string> {
   const index = new Map<string, string>();
   for (const record of pkg.relationships.get(pkg.mainDocumentPart) ?? []) {
     if (record.type !== HEADER_REL && record.type !== FOOTER_REL) continue;
@@ -59,16 +62,15 @@ function headerFooterRIdIndex(view: HeadlessDocumentView): Map<string, string> {
   return index;
 }
 
-function stampStoryRId(
-  story: ReturnType<typeof layoutHeaderFooterStory>,
-  rId: string
-): ReturnType<typeof layoutHeaderFooterStory> {
-  if (story.rId === rId) return story;
-  return {
-    ...story,
-    rId,
-    withPageContext: (context) => stampStoryRId(story.withPageContext(context), rId),
-  };
+/** Immutable owner of every header/footer occurrence id in the main document. */
+function headerFooterOccurrenceOwner(
+  pkg: ReturnType<HeadlessDocumentView['currentPackage']>
+): object {
+  // Body-only package snapshots retain the relationship collection identity, so this owner keeps
+  // occurrence wrappers hot across keystrokes. A main-owner relationship edit replaces the array
+  // and therefore invalidates exactly the wrappers whose rIds may have changed. Packages without
+  // main relationships fall back to the still-immutable relationship map.
+  return pkg.relationships.get(pkg.mainDocumentPart) ?? pkg.relationships;
 }
 
 /** Build section-aware header/footer layout from a neutral document view. @public */
@@ -87,7 +89,7 @@ export function createDocumentFurnitureSource(
     inlineDrawingLayoutForPart,
     drawingLayoutTokenForPart,
     drawingTokenForParagraphForPart,
-    projectLinkForPart,
+    linkProjectors,
     projectFieldLink,
   } = options;
 
@@ -101,20 +103,58 @@ export function createDocumentFurnitureSource(
       marginLeft: number;
       marginRight: number;
       producer: string;
+      projectionEpoch: string;
+      defaultTabStopPt: number | undefined;
       drawingLayoutToken: string;
-      linkRelsEpoch: string;
       numberingIndex: NumberingIndex | undefined;
       styleCascade: StyleCascadeTable | undefined;
       story: ReturnType<typeof layoutHeaderFooterStory>;
     }
   >();
+  // Occurrence identity belongs on a cheap wrapper, but that wrapper must itself stay stable:
+  // header/footer list and drawing-resource tokens are memoized by story object identity on the
+  // editor keystroke path. Partition by the immutable main-relationship snapshot: body-only
+  // package shells reuse it, while a relationship edit gets a new weak owner. A long-lived source
+  // therefore retains neither every body snapshot nor every historical rId.
+  type Story = ReturnType<typeof layoutHeaderFooterStory>;
+  const stampedStoriesByOwner = new WeakMap<object, WeakMap<Story, Map<string, Story>>>();
+  const stampStoryRId = (occurrenceOwner: object, story: Story, rId: string): Story => {
+    if (story.rId === rId) return story;
+    let byStory = stampedStoriesByOwner.get(occurrenceOwner);
+    if (!byStory) {
+      byStory = new WeakMap();
+      stampedStoriesByOwner.set(occurrenceOwner, byStory);
+    }
+    let byRId = byStory.get(story);
+    const cached = byRId?.get(rId);
+    if (cached) return cached;
+    const stamped: Story = {
+      ...story,
+      rId,
+      // Capture the relationship snapshot whose exact occurrence identity this wrapper represents.
+      // A live view may move before final page-field projection; filing that projection under a
+      // newer owner would both lie about identity and reintroduce historical retention.
+      withPageContext: (context) =>
+        stampStoryRId(occurrenceOwner, story.withPageContext(context), rId),
+    };
+    if (!byRId) {
+      byRId = new Map();
+      byStory.set(story, byRId);
+    }
+    byRId.set(rId, stamped);
+    return stamped;
+  };
   let rIds = new Map<string, string>();
-  let rIdRevision = -1;
+  let rIdOwner: object | null = null;
 
-  const rIdOf = (partName: string): string | undefined => {
-    if (rIdRevision !== view.packageRevision()) {
-      rIdRevision = view.packageRevision();
-      rIds = headerFooterRIdIndex(view);
+  const rIdOf = (
+    pkg: ReturnType<HeadlessDocumentView['currentPackage']>,
+    occurrenceOwner: object,
+    partName: string
+  ): string | undefined => {
+    if (rIdOwner !== occurrenceOwner) {
+      rIdOwner = occurrenceOwner;
+      rIds = headerFooterRIdIndex(pkg);
     }
     return rIds.get(partName);
   };
@@ -124,19 +164,12 @@ export function createDocumentFurnitureSource(
     width: number,
     geometry: ReturnType<typeof geometryOfSection>
   ): ReturnType<typeof layoutHeaderFooterStory> => {
+    const projectionEpoch = linkProjectors.epochForPart(part.name);
+    const currentDefaultTabStopPt = defaultTabStopPt?.();
     const drawingLayoutToken = drawingLayoutTokenForPart?.(part.name) ?? '';
-    const pkg = view.currentPackage();
-    const linkRelsEpoch = [
-      ...(pkg.relationships.get(part.name) ?? []).map(
-        (record) => `${record.id}>${record.rawTarget}|${record.targetMode}`
-      ),
-      ...pkg.externalTargets
-        .filter((record) => record.ownerPart === part.name)
-        .map((record) => `${record.id}>${record.rawTarget}|${record.sinkSafe ? 1 : 0}`),
-    ].join(';');
     const numbering = numberingIndex?.();
     const styles = styleCascade?.();
-    const projectLink = projectLinkForPart?.(part.name);
+    const projectLink = linkProjectors.projectLinkForPart(part.name);
     const cached = memo.get(part);
     if (
       cached &&
@@ -147,8 +180,9 @@ export function createDocumentFurnitureSource(
       cached.marginLeft === geometry.margin.left &&
       cached.marginRight === geometry.margin.right &&
       cached.producer === producer &&
+      cached.projectionEpoch === projectionEpoch &&
+      cached.defaultTabStopPt === currentDefaultTabStopPt &&
       cached.drawingLayoutToken === drawingLayoutToken &&
-      cached.linkRelsEpoch === linkRelsEpoch &&
       cached.numberingIndex === numbering &&
       cached.styleCascade === styles
     ) {
@@ -164,7 +198,7 @@ export function createDocumentFurnitureSource(
       styles,
       undefined,
       undefined,
-      defaultTabStopPt,
+      currentDefaultTabStopPt,
       displayMode,
       inlineDrawingLayoutForPart?.(part.name),
       drawingTokenForParagraphForPart
@@ -183,12 +217,14 @@ export function createDocumentFurnitureSource(
       view.documentProperties(),
       {
         ...(numbering ? { numberingIndex: numbering } : {}),
-        ...(projectLink ? { projectLink } : {}),
+        projectLink,
         ...(projectFieldLink ? { projectFieldLink } : {}),
+        projectionTokenForParagraph: (paragraph: OoxmlNode) =>
+          linkProjectors.tokenForParagraphForPart(part.name, paragraph),
+        projectionTokenForTable: (table: OoxmlNode) =>
+          linkProjectors.tokenForTableForPart(part.name, table),
       }
     );
-    const rId = rIdOf(part.name);
-    const story = rId ? stampStoryRId(baseline, rId) : baseline;
     memo.set(part, {
       width,
       pageHeight: geometry.height,
@@ -197,42 +233,69 @@ export function createDocumentFurnitureSource(
       marginLeft: geometry.margin.left,
       marginRight: geometry.margin.right,
       producer,
+      projectionEpoch,
+      defaultTabStopPt: currentDefaultTabStopPt,
       drawingLayoutToken,
-      linkRelsEpoch,
       numberingIndex: numbering,
       styleCascade: styles,
-      story,
+      story: baseline,
     });
-    return story;
+    return baseline;
   };
 
   const furnitureFromParts = (
+    packageOwner: ReturnType<HeadlessDocumentView['currentPackage']>,
+    occurrenceOwner: object,
     parts: ReturnType<HeadlessDocumentView['headerFooterPartsBySection']>[number] | undefined,
+    resolution: HeaderFooterSectionResolution | undefined,
     geometry: ReturnType<typeof geometryOfSection>
   ): PageFurniture | undefined => {
     if (!parts || (parts.headers.size === 0 && parts.footers.size === 0)) return undefined;
     const width = geometry.width - geometry.margin.left - geometry.margin.right;
-    const map = (source: ReadonlyMap<HeaderFooterVariantName, OoxmlPart>) => {
+    const map = (
+      source: ReadonlyMap<HeaderFooterVariantName, OoxmlPart>,
+      slots: HeaderFooterSectionResolution['headers'] | undefined
+    ) => {
       const stories = new Map<
         HeaderFooterVariantName,
         ReturnType<typeof layoutHeaderFooterStory>
       >();
-      for (const [variant, part] of source) stories.set(variant, storyOf(part, width, geometry));
+      for (const [variant, part] of source) {
+        const slot = slots?.get(variant);
+        // Relationship ids identify an occurrence, not a part. Several section/variant slots may
+        // legally target one shared part through distinct rIds, so keep the expensive baseline
+        // part-memoized and stamp only this cheap occurrence wrapper with its exact slot identity.
+        const rId =
+          slot?.partName === part.name ? slot.rId : rIdOf(packageOwner, occurrenceOwner, part.name);
+        const baseline = storyOf(part, width, geometry);
+        stories.set(variant, rId ? stampStoryRId(occurrenceOwner, baseline, rId) : baseline);
+      }
       return stories;
     };
     return {
       titlePage: parts.titlePage,
       evenAndOddHeaders: parts.evenAndOddHeaders,
-      headers: map(parts.headers),
-      footers: map(parts.footers),
+      headers: map(parts.headers, resolution?.headers),
+      footers: map(parts.footers, resolution?.footers),
     };
   };
 
   const sectionFurniture = (): readonly (PageFurniture | undefined)[] => {
+    const packageOwner = view.currentPackage();
+    const occurrenceOwner = headerFooterOccurrenceOwner(packageOwner);
     const sections = enumerateDocumentSections(view.part(), displayMode);
     const bySection = view.headerFooterPartsBySection();
+    const resolutionBySection =
+      view.headerFooterResolutionBySection?.() ??
+      resolveHeaderFooterResolutionBySection(packageOwner);
     return sections.map((section, index) =>
-      furnitureFromParts(bySection[index], geometryOfSection(section.properties))
+      furnitureFromParts(
+        packageOwner,
+        occurrenceOwner,
+        bySection[index],
+        resolutionBySection[index],
+        geometryOfSection(section.properties)
+      )
     );
   };
 

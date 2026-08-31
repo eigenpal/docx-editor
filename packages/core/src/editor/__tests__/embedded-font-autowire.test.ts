@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
 import type { EditorFontError } from '../../contracts/editor.ts';
-import { sha256FontBytes } from '../../layout/index.ts';
+import { sha256FontBytes, type LayoutFontConfiguration } from '../../layout/index.ts';
 import { deobfuscateFont } from '../../store/package/embedded-fonts.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { embeddedFontSources } from '../embedded-font-sources.ts';
@@ -158,15 +158,30 @@ const EMBED_BOTH: readonly EmbedEntry[] = [
   { family: 'DejaVu Sans', slot: 'embedBold', bytes: boldBytes },
 ];
 
-/**
- * The composed substitution list, read off the shaping fingerprint.
- *
- * Composition's keep-or-drop decision has no other observable: the compatibility notice
- * reports what is UNAVAILABLE, and a family is available whether it resolves to its own
- * embedded bytes or to a configured stand-in.
- */
-const substitutionFingerprint = (editor: { fontMeasurement(): { producer?: string } }): string =>
-  editor.fontMeasurement().producer?.split(';substitutions:')[1]?.split('+fallback:')[0] ?? '';
+const pendingCaptureRestores = new Set<() => void>();
+
+afterEach(() => {
+  for (const restore of [...pendingCaptureRestores]) restore();
+});
+
+function captureLayoutConfigurations(): {
+  readonly configurations: LayoutFontConfiguration[];
+  restore(): void;
+} {
+  const configurations: LayoutFontConfiguration[] = [];
+  const spy = spyOn(fontConfiguration, 'createLayoutShaping').mockImplementation(
+    async (configuration, instrumentation) => {
+      configurations.push(configuration);
+      return createLayoutShapingReal(configuration, instrumentation);
+    }
+  );
+  const restore = (): void => {
+    spy.mockRestore();
+    pendingCaptureRestores.delete(restore);
+  };
+  pendingCaptureRestores.add(restore);
+  return { configurations, restore };
+}
 
 describe('embedded fonts auto-wire into shaped measurement', () => {
   test('zero config + embedded fonts engages the shaped measurer', async () => {
@@ -399,6 +414,7 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
   });
 
   test('explicit config sources beat embedded faces on the same request', async () => {
+    const captured = captureLayoutConfigurations();
     const container = document.createElement('div');
     const editor = createDocxEditor({
       container,
@@ -425,16 +441,16 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     await fontsSettled(editor);
     const measurement = editor.fontMeasurement();
     expect(measurement.measurer).toBe('shaped');
-    // The composed configuration kept the EXPLICIT source: the producer fingerprint
-    // carries the admitted face hashes, so the regular file's hash must be there and
-    // the mislabeled embedded (bold) bytes must not occupy the regular slot alone.
-    expect(measurement.producer).toContain(sha256FontBytes(regularBytes));
-    expect(measurement.producer).not.toContain(sha256FontBytes(boldBytes));
+    const hashes = captured.configurations.at(-1)?.sources.map((source) => source.hash) ?? [];
+    expect(hashes).toContain(sha256FontBytes(regularBytes));
+    expect(hashes).not.toContain(sha256FontBytes(boldBytes));
     expect(editor.exec({ type: 'insertText', text: 'ok' })).toEqual({ ok: true, changed: true });
     editor.destroy();
+    captured.restore();
   });
 
   test('a rejected explicit face reveals a valid embedded face on the same request', async () => {
+    const captured = captureLayoutConfigurations();
     const malformed = new Uint8Array(4096).fill(0x42);
     const editor = createDocxEditor({
       container: document.createElement('div'),
@@ -455,11 +471,15 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     });
     await fontsSettled(editor);
     expect(editor.fontMeasurement().measurer).toBe('shaped');
-    expect(editor.fontMeasurement().producer).toContain(sha256FontBytes(regularBytes));
+    expect(captured.configurations.at(-1)?.sources.map((source) => source.hash)).toContain(
+      sha256FontBytes(regularBytes)
+    );
     editor.destroy();
+    captured.restore();
   });
 
   test('over-limit explicit faces do not consume the embedded-font budget', async () => {
+    const captured = captureLayoutConfigurations();
     const oversized = new Uint8Array(8 * 1024 * 1024);
     const oversizedHash = sha256FontBytes(oversized);
     const explicitSources = Array.from({ length: 16 }, (_, index) => ({
@@ -478,11 +498,15 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     });
     await fontsSettled(editor);
     expect(editor.fontMeasurement().measurer).toBe('shaped');
-    expect(editor.fontMeasurement().producer).toContain(sha256FontBytes(regularBytes));
+    expect(captured.configurations.at(-1)?.sources.map((source) => source.hash)).toContain(
+      sha256FontBytes(regularBytes)
+    );
     editor.destroy();
+    captured.restore();
   });
 
   test('an admitted embedded face wins over its configured substitution', async () => {
+    const captured = captureLayoutConfigurations();
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: docxWithEmbeds(p('original', 'Original Face'), [
@@ -507,16 +531,15 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       },
     });
     await fontsSettled(editor);
-    // The file's OWN face is what the document should be measured in, so composition drops
-    // the redirect. Asserted on the shaping fingerprint, which carries the composed
-    // substitution list; the notice cannot see this, because the family is covered either
-    // way and is right to stay quiet either way.
-    expect(substitutionFingerprint(editor)).toBe('[]');
+    // The file's OWN face wins, so the composed configuration drops the redirect.
+    expect(captured.configurations.at(-1)?.substitutions ?? []).toEqual([]);
     expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Original Face');
     editor.destroy();
+    captured.restore();
   });
 
   test('a refused embedded face restores its configured substitution', async () => {
+    const captured = captureLayoutConfigurations();
     const corrupt = new Uint8Array(4096).fill(0x42);
     const editor = createDocxEditor({
       container: document.createElement('div'),
@@ -542,15 +565,18 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
       },
     });
     await fontsSettled(editor);
-    // A refused embedded face is worse than no embedded face: without the recompose the
-    // dropped redirect never comes back and the run measures on the fixed grid. The
-    // fingerprint is where that is visible.
-    expect(substitutionFingerprint(editor)).toContain('Original Face');
-    expect(substitutionFingerprint(editor)).toContain('DejaVu Sans');
+    // A refused embedded face restores the configured redirect on recomposition.
+    expect(captured.configurations.at(-1)?.substitutions).toEqual([
+      expect.objectContaining({
+        from: expect.objectContaining({ family: 'Original Face' }),
+        to: expect.objectContaining({ family: 'DejaVu Sans' }),
+      }),
+    ]);
     // Covered THROUGH the redirect, so the fidelity notice stays quiet: the run paginates
     // on the metrics the app chose for it.
     expect(editor.snapshot().fontSubstitutions ?? []).not.toContain('Original Face');
     editor.destroy();
+    captured.restore();
   });
 
   test('a superseded shaping is released, not leaked', async () => {

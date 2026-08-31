@@ -10,7 +10,7 @@ const mode = process.env.DOCX_EDITOR_WORKER_MODE;
 const fixture = await readFile(fixturePath);
 const opened = await openDocumentForExport(
   fixture,
-  mode === 'parity' ? { displayMode: 'proposed' } : undefined
+  mode === 'parity' ? { displayMode: 'all-markup' } : undefined
 );
 if (!opened.ok) throw new Error(`open refused: ${opened.reason}`);
 try {

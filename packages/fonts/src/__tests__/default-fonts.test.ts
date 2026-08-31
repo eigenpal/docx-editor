@@ -16,7 +16,7 @@ import {
   DEFAULT_RUN_STYLE,
   FontResolutionError,
   createFixedMeasurer,
-  createShapedMeasurer,
+  createLayoutShapedMeasurer,
 } from '@docx-editor.dev/core/layout';
 import {
   ALL_WORD_DEFAULT_FAMILIES,
@@ -119,8 +119,7 @@ describe('loadDefaultFonts', () => {
     const fragment = await loadDefaultFonts({ families: ['Century Gothic'], fetcher });
     const shaping = await createLayoutShaping(composeFontConfiguration(fragment));
     try {
-      const measurer = createShapedMeasurer({
-        shaper: shaping.shaper,
+      const measurer = createLayoutShapedMeasurer(shaping, {
         resolveFont: (style) => {
           const resolved = shaping.fonts.resolve({
             family: style.fontFamily ?? 'Century Gothic',
@@ -130,15 +129,14 @@ describe('loadDefaultFonts', () => {
           return resolved instanceof FontResolutionError ? null : resolved;
         },
         fallback: createFixedMeasurer(),
-        shapingLibrary: shaping.environment.shapingLibrary,
-        unicodeDataVersion: shaping.environment.unicodeDataVersion,
-        fixedPointScale: shaping.environment.fixedPointScale,
       });
       const style = { ...DEFAULT_RUN_STYLE, fontFamily: 'Century Gothic', fontSizePt: 10 };
+      // Pin the released browser geometry now shared by every layout host: 1000-unit,
+      // half-to-even quantization with HarfBuzz's default feature set.
       const cases = [
-        ['Document layout', 84.7],
-        ['Precise font metrics', 92.85],
-        ['Reliable page breaks', 102.85],
+        ['Document layout', 84.64],
+        ['Precise font metrics', 92.88],
+        ['Reliable page breaks', 102.9],
       ] as const;
       for (const [text, expectedWidth] of cases) {
         expect(measurer.measure(text, style)).toBeCloseTo(expectedWidth, 6);

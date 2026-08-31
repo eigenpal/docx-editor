@@ -169,15 +169,8 @@ export function framedTokenJoin(parts: readonly string[]): string {
 /**
  * Aggregate the list tokens of every paragraph a table contains, memoized per (table,
  * listItems) pair — both immutable, so the walk runs once per numbering state instead of
- * once per pass.
- *
- * NUL-framed, with an empty slot for every unlisted paragraph: a `cacheToken` embeds
- * file-controlled marker text (`w:lvlText` may contain any printable separator), so a
- * printable join — or skipping the unlisted paragraphs — lets two different token
- * SEQUENCES over one byte-identical subtree concatenate to the same string, and the cache
- * serves the pre-renumber table. The NUL join is sound HERE because every part is either
- * `''` or a {@link framedTokenJoin} output over XML text, which cannot carry U+0000; a
- * part that may itself contain NUL must switch this join to {@link framedTokenJoin}.
+ * once per pass. An empty slot is retained for every unlisted paragraph, so token position
+ * remains significant even when neighboring paragraphs have equal authored content.
  */
 const tableListTokens = new WeakMap<object, WeakMap<object, string>>();
 export function listTokenForTableBlock(
@@ -205,13 +198,11 @@ export function listTokenForTableBlock(
 }
 
 /**
- * ONE walk for every per-paragraph token aggregate over a table subtree (list state,
- * drawing state), so the framing rule cannot drift between copies. NUL-framed, with an
- * empty slot for every token-less paragraph: the tokens embed file-controlled text, so a
- * printable join — or skipping the empty slots — lets two different token SEQUENCES over
- * one byte-identical subtree concatenate to the same string, and a cache then serves the
- * stale table. Empty when no paragraph carries a token, so token-free tables keep keying
- * as before. Callers own their memoization.
+ * ONE walk for every per-paragraph token aggregate over a table subtree (list, drawing,
+ * semantic projection), so framing and traversal cannot drift between copies. Empty slots
+ * preserve paragraph position; netstring framing stays injective even if a future token
+ * contains NUL or another file-controlled delimiter. Empty when no paragraph carries a token,
+ * so token-free tables keep keying as before. Callers own their memoization.
  */
 export function aggregateParagraphTokensForTableBlock(
   table: OoxmlNode,
@@ -219,32 +210,87 @@ export function aggregateParagraphTokensForTableBlock(
 ): string {
   const tokens: string[] = [];
   let any = false;
-  const visit = (node: OoxmlNode): void => {
+  const stack: OoxmlNode[] = [table];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
     if (node.kind === 'paragraph') {
       const token = tokenForParagraph(node);
       if (token) any = true;
       tokens.push(token);
-      return;
+      // Hosted text-box paragraphs are represented by their host paragraph's aggregate token.
+      continue;
     }
-    if ('children' in node) for (const child of node.children) visit(child);
-  };
-  visit(table);
-  return any ? tokens.join('\0') : '';
+    if ('children' in node) {
+      for (let index = node.children.length - 1; index >= 0; index -= 1) {
+        stack.push(node.children[index]!);
+      }
+    }
+  }
+  return any ? framedTokenJoin(tokens) : '';
 }
 
-const nodeLayoutIdentities = new WeakMap<object, string>();
+/**
+ * One fixed-width digest per immutable element subtree.
+ *
+ * Tree edits are copy-on-write: every changed ancestor gets a new identity, while untouched
+ * siblings keep theirs. Caching at each element therefore makes rehashing proportional to the
+ * changed path instead of the size of an enclosing table. Text values stay inline in their
+ * parent's token, avoiding a WeakMap entry for every leaf. No inherited/contextual state enters
+ * this digest; every field below belongs to the node itself, so identity reuse is always sound.
+ */
+const nodeLayoutDigests = new WeakMap<object, string>();
+
+interface NodeTokenTestObserver {
+  nodeVisits: number;
+  active: boolean;
+  readonly previous: NodeTokenTestObserver | null;
+}
+
+let nodeTokenTestObserver: NodeTokenTestObserver | null = null;
+
+/** @internal Deterministic work recorder for recursive layout-key digest tests. */
+export function layoutNodeTokenVisitTestRecorder(): {
+  readonly nodeVisits: number;
+  reset(): void;
+  dispose(): void;
+} {
+  const observer: NodeTokenTestObserver = {
+    nodeVisits: 0,
+    active: true,
+    previous: nodeTokenTestObserver,
+  };
+  nodeTokenTestObserver = observer;
+  return {
+    get nodeVisits() {
+      return observer.nodeVisits;
+    },
+    reset() {
+      observer.nodeVisits = 0;
+    },
+    dispose() {
+      if (!observer.active) return;
+      observer.active = false;
+      // Restore a surrounding observer when recorders are nested. An out-of-order dispose
+      // must not detach the newer observer that still owns the instrumentation slot.
+      if (nodeTokenTestObserver !== observer) return;
+      let restore = observer.previous;
+      while (restore && !restore.active) restore = restore.previous;
+      nodeTokenTestObserver = restore;
+    },
+  };
+}
 
 function nodeLayoutIdentity(node: OoxmlNode): string {
-  const cached = nodeLayoutIdentities.get(node);
+  if (node.kind === 'textValue') return layoutTokenDigest(computeNodeToken(node));
+  const cached = nodeLayoutDigests.get(node);
   if (cached !== undefined) return cached;
-  // Only paragraph/table roots reach this function. Hash their exact recursive token once and
-  // retain the digest, rather than allocating a digest and WeakMap entry for every OOXML leaf.
-  const identity = layoutTokenDigest(computeNodeToken(node));
-  nodeLayoutIdentities.set(node, identity);
-  return identity;
+  const digest = layoutTokenDigest(computeNodeToken(node));
+  nodeLayoutDigests.set(node, digest);
+  return digest;
 }
 
 function computeNodeToken(node: OoxmlNode): string {
+  if (nodeTokenTestObserver) nodeTokenTestObserver.nodeVisits += 1;
   if (node.kind === 'textValue') return framedTokenJoin(['text', node.value]);
   const attributes: string[] = [];
   // Attribute order is not semantic, but every tuple and sequence boundary must be. File
@@ -258,7 +304,16 @@ function computeNodeToken(node: OoxmlNode): string {
   }
   attributes.sort();
   const children: string[] = [];
-  for (const child of node.children) children.push(computeNodeToken(child));
+  for (const child of node.children) {
+    // A digest is fixed-width and collision-resistant, so retaining one per immutable child
+    // avoids both the old whole-table rewalk and quadratic retained recursive token strings.
+    // Frame its role as well as its value: a text token cannot masquerade as a child digest.
+    children.push(
+      child.kind === 'textValue'
+        ? computeNodeToken(child)
+        : framedTokenJoin(['child-digest', nodeLayoutIdentity(child)])
+    );
+  }
   return framedTokenJoin([
     'element',
     node.kind,
@@ -295,6 +350,8 @@ export interface ParagraphKeyInputs {
    * when paragraph text is unchanged.
    */
   readonly drawingToken?: string;
+  /** Paragraph-local semantic projection identity (links and live metadata fields). */
+  readonly projectionToken?: string;
   /** Active page exclusion zones affecting this paragraph's break. */
   readonly exclusionToken?: string;
 }
@@ -317,6 +374,7 @@ export const PARAGRAPH_KEY_INPUT_ROLES = {
   width: 'memo-compared',
   producer: 'memo-compared',
   drawingToken: 'memo-compared',
+  projectionToken: 'memo-compared',
   exclusionToken: 'memo-compared',
 } as const satisfies Record<
   keyof ParagraphKeyInputs,
@@ -327,6 +385,7 @@ interface ParagraphKeyMemoEntry {
   readonly producerIdentity: string;
   readonly width: number;
   readonly drawingIdentity: string;
+  readonly projectionIdentity: string;
   readonly exclusionIdentity: string;
   readonly propertiesToken: string;
   readonly key: ParagraphLayoutKey;
@@ -359,11 +418,13 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
   // recomputes it.
   const width = Math.round(inputs.width * 1000);
   const drawingToken = inputs.drawingToken ?? '';
+  const projectionToken = inputs.projectionToken ?? '';
   const exclusionToken = inputs.exclusionToken ?? '';
   const properties = reusableLayoutTokenDigest(propertiesToken(inputs.properties));
   const nodeIdentity = nodeLayoutIdentity(inputs.paragraph);
   const producerIdentity = reusableLayoutTokenDigest(inputs.producer);
   const drawingIdentity = reusableLayoutTokenDigest(drawingToken);
+  const projectionIdentity = reusableLayoutTokenDigest(projectionToken);
   const exclusionIdentity = reusableLayoutTokenDigest(exclusionToken);
   let memo = paragraphKeyMemos.get(inputs.paragraph);
   const entryIndex = memo?.entries.findIndex(
@@ -371,6 +432,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
       entry.producerIdentity === producerIdentity &&
       entry.width === width &&
       entry.drawingIdentity === drawingIdentity &&
+      entry.projectionIdentity === projectionIdentity &&
       entry.exclusionIdentity === exclusionIdentity &&
       entry.propertiesToken === properties
   );
@@ -379,7 +441,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
     memo.entries.push(entry);
     return entry.key;
   }
-  const key = `plk:${nodeIdentity}:${producerIdentity}:${width}:${drawingIdentity}:${exclusionIdentity}:${properties}`;
+  const key = `plk:${nodeIdentity}:${producerIdentity}:${width}:${drawingIdentity}:${projectionIdentity}:${exclusionIdentity}:${properties}`;
   if (!memo) {
     memo = { entries: [] };
     paragraphKeyMemos.set(inputs.paragraph, memo);
@@ -391,6 +453,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
     producerIdentity,
     width,
     drawingIdentity,
+    projectionIdentity,
     exclusionIdentity,
     propertiesToken: sharedProperties,
     key,

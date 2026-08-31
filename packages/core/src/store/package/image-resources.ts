@@ -23,6 +23,7 @@ import {
   resolveImageResourceLimits,
   type ImageResourceLimits,
 } from '../runtime/limits.ts';
+import { createHostAbortController } from '../runtime/host-abort-controller.ts';
 
 /**
  * Raster media the decode port measures and any authoring path may write.
@@ -982,17 +983,7 @@ function createImageResourceCacheInternal(
   const pkg = initialPkg;
   let generation = 0;
   let disposed = false;
-  // AbortSignal is a host port type; obtain its controller structurally so the neutral store
-  // lane still compiles without the DOM library (supported browser and Node hosts both provide it).
-  const AbortControllerHost = (
-    globalThis as unknown as {
-      readonly AbortController: new () => {
-        readonly signal: AbortSignal;
-        abort(reason?: unknown): void;
-      };
-    }
-  ).AbortController;
-  const lifetimeAbort = new AbortControllerHost();
+  const lifetimeAbort = createHostAbortController();
   const validatedBytesRegistry = createValidatedImageBytesRegistry();
   const byRelationship = new Map<string, CachedLookupEntry>();
   const inFlightByContent = new Map<string, Promise<ImageResourceState>>();

@@ -17,6 +17,7 @@ import {
   indexInlineDrawingProjectionsInPart,
   isRunLevelMcAlternateContent,
   MAX_PART_SCAN_ELEMENTS,
+  projectDrawingsInPart,
   type DrawingProjection,
 } from '../store/package/drawing-projection.ts';
 import {
@@ -172,6 +173,55 @@ export function drawingAtomIdentities(part: OoxmlPart): ReadonlyMap<string, Ooxm
   if (facts.visited > MAX_PART_SCAN_ELEMENTS) return null;
   if (facts.deepest > DEFAULT_DRAWING_PROJECTION_LIMITS.maxDrawingDepth) return null;
   return facts.atoms;
+}
+
+const drawingSourceOrdersByRoot = new WeakMap<
+  OoxmlNode,
+  WeakMap<InlineDrawingLayoutContext, ReadonlyMap<string, number>>
+>();
+
+/**
+ * Canonical drawing traversal order for one immutable story root.
+ *
+ * The drawing layout context can remain compatible across a copy-on-write paragraph reorder:
+ * projections and atom objects are unchanged, but collision, exclusion, and paint order are not.
+ * Keying this fact by the current root makes that reorder observable; keying it again by context
+ * keeps MC branch selection honest. An MC wrapper owns the paragraph atom id while its selected
+ * projection publishes the inner drawing id, so ordered atoms are mapped through the context
+ * before becoming lookup keys. The ordered identity walk composes from immutable subtree memos,
+ * so an ordinary edit reuses every untouched block instead of rescanning the complete part. The
+ * bounded projection walk is only a defensive fallback when the identity walk refuses an
+ * over-limit tree.
+ * @internal
+ */
+export function drawingSourceOrderInPart(
+  part: OoxmlPart,
+  context: InlineDrawingLayoutContext
+): ReadonlyMap<string, number> {
+  let byContext = drawingSourceOrdersByRoot.get(part.root);
+  const cached = byContext?.get(context);
+  if (cached) return cached;
+  const identities = drawingAtomIdentities(part);
+  const order = new Map<string, number>();
+  let index = 0;
+  if (identities) {
+    for (const atomId of identities.keys()) {
+      const drawingId = context.projectionForAtom?.(atomId)?.drawingNodeId ?? atomId;
+      order.set(drawingId, index);
+      index += 1;
+    }
+  } else {
+    for (const projection of projectDrawingsInPart(part)) {
+      order.set(projection.drawingNodeId, index);
+      index += 1;
+    }
+  }
+  if (!byContext) {
+    byContext = new WeakMap();
+    drawingSourceOrdersByRoot.set(part.root, byContext);
+  }
+  byContext.set(context, order);
+  return order;
 }
 
 // Scratch view used to fold a coordinate in by its exact IEEE-754 bits. Coordinates are not
@@ -726,7 +776,8 @@ export function createInlineDrawingLayoutBundle(
       return mintValidatedImageBytes(handle, expectedContentId);
     },
     sync(reader: InlineDrawingPackageReader) {
-      if (reader.packageRevision() === pkgRevision) return;
+      if (reader.packageRevision() === pkgRevision && reader.currentPackage() === pkgSnapshot)
+        return;
       resetPackage(reader);
     },
     dispose() {

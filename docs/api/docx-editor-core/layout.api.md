@@ -17,6 +17,36 @@ export interface AbstractNumDefinition {
 // @public
 export function activeReviewItem(items: readonly ReviewItem[], position: ReviewPosition, order: ReadonlyMap<string, number>): ReviewItem | null;
 
+// @public (undocumented)
+export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' | 'baselineOffset' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'> {
+    // (undocumented)
+    readonly allowOverlap: boolean;
+    // (undocumented)
+    readonly anchorParagraphId: string;
+    // (undocumented)
+    readonly behindDocument: boolean;
+    // (undocumented)
+    readonly horizontalFrame: DrawingHorizontalReferenceFrame;
+    // (undocumented)
+    readonly horizontalFrameOrigin: number;
+    // (undocumented)
+    readonly kind: 'anchoredDrawing';
+    // (undocumented)
+    readonly layoutFallback?: AnchoredDrawingLayoutFallback;
+    // (undocumented)
+    readonly layoutInCell: boolean;
+    // (undocumented)
+    readonly relativeHeight: number;
+    readonly sourceOrder?: number;
+    readonly textboxStory?: TextboxStoryLayout;
+    // (undocumented)
+    readonly verticalFrame: DrawingVerticalReferenceFrame;
+    // (undocumented)
+    readonly verticalFrameOrigin: number;
+    // (undocumented)
+    readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
+}
+
 // @public
 export function anchorLineY(anchor: ReviewParagraphAnchor, paragraphId: string, offset: number): number;
 
@@ -480,7 +510,7 @@ export interface CreateDocumentFurnitureSourceOptions {
     // (undocumented)
     readonly cache: ParagraphLayoutCache<readonly PendingLine[]>;
     // (undocumented)
-    readonly defaultTabStopPt?: number;
+    readonly defaultTabStopPt?: () => number;
     // (undocumented)
     readonly displayMode?: RevisionDisplayMode;
     // (undocumented)
@@ -489,6 +519,7 @@ export interface CreateDocumentFurnitureSourceOptions {
     readonly drawingTokenForParagraphForPart?: (partName: string, paragraph: OoxmlNode) => string;
     // (undocumented)
     readonly inlineDrawingLayoutForPart?: (partName: string) => InlineDrawingLayoutContext | undefined;
+    readonly linkProjectors: DocumentLinkProjectors;
     // (undocumented)
     readonly measurer: TextMeasurer;
     // (undocumented)
@@ -498,18 +529,13 @@ export interface CreateDocumentFurnitureSourceOptions {
     // (undocumented)
     readonly projectFieldLink?: FieldLinkProjector;
     // (undocumented)
-    readonly projectLinkForPart?: (partName: string) => HyperlinkProjector | undefined;
-    // (undocumented)
     readonly styleCascade?: () => StyleCascadeTable | undefined;
     // (undocumented)
     readonly view: HeadlessDocumentView;
 }
 
 // @public
-export function createDocumentLinkProjectors(view: HeadlessDocumentView): {
-    readonly projectLink: HyperlinkProjector;
-    readonly projectLinkForPart: (partName: string) => HyperlinkProjector;
-};
+export function createDocumentLinkProjectors(view: HeadlessDocumentView): DocumentLinkProjectors;
 
 // @public
 export function createDocumentNotesInput(options: CreateDocumentNotesInputOptions): NotesLayoutInput | undefined;
@@ -528,6 +554,7 @@ export interface CreateDocumentNotesInputOptions {
     readonly drawingTokenForParagraphForPart?: (partName: string, paragraph: OoxmlNode) => string;
     // (undocumented)
     readonly inlineDrawingLayoutForPart?: (partName: string) => InlineDrawingLayoutContext | undefined;
+    readonly linkProjectors: DocumentLinkProjectors;
     // (undocumented)
     readonly measurer: TextMeasurer;
     // (undocumented)
@@ -536,8 +563,6 @@ export interface CreateDocumentNotesInputOptions {
     readonly producer: string;
     // (undocumented)
     readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
-    // (undocumented)
-    readonly projectLinkForPart?: NotesLayoutInput['projectLinkForPart'];
     // (undocumented)
     readonly styleCascade?: () => StyleCascadeTable | undefined;
     // (undocumented)
@@ -569,7 +594,10 @@ export function createLayoutScheduler(options: LayoutSchedulerOptions): LayoutSc
 export function createLayoutSession(): LayoutSession;
 
 // @public
-export function createLayoutShaping(configuration: LayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<LayoutShapingOptions>;
+export function createLayoutShapedMeasurer(shaping: LayoutShapingOptions, options: Pick<ShapedMeasurerOptions, 'resolveFont' | 'fallback'>): TextMeasurer;
+
+// @public
+export function createLayoutShaping(configuration: LayoutFontConfiguration | PreparedLayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<LayoutShapingOptions>;
 
 // @public
 export function createListCounterState(index: NumberingIndex): ListCounterState;
@@ -579,6 +607,9 @@ export function createParagraphLayoutCache<T>(options?: ParagraphLayoutCacheOpti
 
 // @public
 export function createShapedMeasurer(options: ShapedMeasurerOptions): TextMeasurer;
+
+// @public (undocumented)
+export function createShapedMeasurer(options: LayoutEnvironmentShapedMeasurerOptions): TextMeasurer;
 
 // @public
 export const createShapedRun: (input: ShapedRun, environmentInput: ShapingEnvironmentInput) => ShapedRun;
@@ -656,6 +687,14 @@ export interface DocumentFurnitureSource {
 }
 
 // @public
+export interface DocumentLinkProjectors extends StoryProjectionDependencies {
+    // (undocumented)
+    readonly projectLink: HyperlinkProjector;
+    // (undocumented)
+    readonly projectLinkForPart: (partName: string) => HyperlinkProjector;
+}
+
+// @public
 export function documentOrder(layout: SemanticLayout): string[];
 
 // @public
@@ -683,7 +722,7 @@ export interface DocumentSectionsEnumeration {
 // @public
 export interface DocumentStyleDependencies {
     // (undocumented)
-    readonly defaultTabStopPt: number;
+    readonly defaultTabStopPt: () => number;
     // (undocumented)
     readonly numberingIndex: () => NumberingIndex;
     // (undocumented)
@@ -1013,7 +1052,13 @@ export type FontValidationResult = {
 };
 
 // @public
+export function forEachSemanticDrawing(layout: SemanticLayout, visit: (drawing: SemanticDrawingVisit) => void): void;
+
+// @public
 export function forEachSemanticSpan(layout: SemanticLayout, visitor: (visit: SemanticSpanVisit) => void): void;
+
+// @public
+export function forEachSemanticStory(layout: SemanticLayout, visit: (story: SemanticStoryVisit) => void): void;
 
 // @public
 export function formatDecimal(value: number): string;
@@ -1282,6 +1327,63 @@ export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
 // @public
 export function initializeHarfBuzz(): Promise<void>;
 
+// @public (undocumented)
+export interface InlineDrawingRecord {
+    // (undocumented)
+    readonly accessibility: DrawingAccessibility;
+    readonly advanceEnd: number;
+    readonly advanceStart: number;
+    // (undocumented)
+    readonly baselineOffset: number;
+    // (undocumented)
+    readonly crop: SourceCrop;
+    // (undocumented)
+    readonly distB: number;
+    // (undocumented)
+    readonly distL: number;
+    // (undocumented)
+    readonly distR: number;
+    // (undocumented)
+    readonly distT: number;
+    // (undocumented)
+    readonly drawingNodeId: string;
+    // (undocumented)
+    readonly effects: Readonly<{
+        readonly brightness: number;
+        readonly contrast: number;
+        readonly grayscale: boolean;
+    }>;
+    // (undocumented)
+    readonly geometry: DrawingGeometry;
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly hitBounds: LayoutBox;
+    readonly hyperlinkHref: string | null;
+    // (undocumented)
+    readonly kind: 'inlineDrawing';
+    // (undocumented)
+    readonly ownerPartName: string;
+    // (undocumented)
+    readonly paintBounds: LayoutBox;
+    // (undocumented)
+    readonly paragraphId: string;
+    readonly placeholderGraphicKind: string | null;
+    // (undocumented)
+    readonly resource: ImageResourceState;
+    readonly revisions?: readonly RevisionAttribution[];
+    // (undocumented)
+    readonly start: number;
+    // (undocumented)
+    readonly transform: DrawingTransform;
+    readonly vectorShape: VectorShapeProjection | null;
+    // (undocumented)
+    readonly width: number;
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
 // @public
 export const intlGraphemeBoundary: GraphemeBoundary;
 
@@ -1364,6 +1466,14 @@ export interface LayoutCacheStats {
 }
 
 // @public
+export interface LayoutEnvironmentShapedMeasurerOptions {
+    readonly environment: LayoutShapingOptions['environment'];
+    readonly fallback: TextMeasurer;
+    readonly resolveFont: (style: ResolvedRunStyle) => ResolvedFont | null;
+    readonly shaper: TextShaper;
+}
+
+// @public
 export function layoutEquation(projection: OmmlEquationProjection, measurer: TextMeasurer, style: ResolvedRunStyle): EquationSpanRecord;
 
 // @public
@@ -1384,6 +1494,9 @@ export interface LayoutFontConfiguration {
     // (undocumented)
     readonly substitutions?: readonly LayoutFontSubstitution[];
 }
+
+// @public
+export function layoutFontConfigurationFingerprint(configuration: LayoutFontConfiguration): string;
 
 // @public
 export interface LayoutFontSource {
@@ -1505,6 +1618,9 @@ export class LayoutShapingConfigurationError extends Error {
 }
 
 // @public
+export type LayoutShapingEnvironment = Omit<ShapingEnvironmentInput, 'font' | 'direction' | 'fallbackOrder'>;
+
+// @public
 export interface LayoutShapingInstrumentation {
     // (undocumented)
     readonly onFontAdmission?: () => void;
@@ -1522,16 +1638,7 @@ export interface LayoutShapingOptions {
         readonly sizeHalfPoints: number;
     };
     // (undocumented)
-    readonly environment: {
-        readonly features: Readonly<Record<string, number>>;
-        readonly fixedPointScale: number;
-        readonly language: string;
-        readonly normalization: NormalizationPolicy;
-        readonly roundingMode: FixedPointRoundingMode;
-        readonly shapingLibrary: VersionedShapingLibrary;
-        readonly unicodeDataVersion: string;
-        readonly variationAxes: Readonly<Record<string, number>>;
-    };
+    readonly environment: LayoutShapingEnvironment;
     // (undocumented)
     readonly fonts: FontResourceSnapshot;
     // (undocumented)
@@ -1574,6 +1681,23 @@ export interface LineRecord {
     readonly spans: readonly StyleSpanRecord[];
     readonly trailingSpacing?: number;
 }
+
+// @public
+export interface LineSegment {
+    // (undocumented)
+    readonly drawings: readonly InlineDrawingRecord[];
+    // (undocumented)
+    readonly end: number;
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly spans: readonly StyleSpanRecord[];
+    // (undocumented)
+    readonly start: number;
+}
+
+// @public
+export function lineSegments(line: LineRecord): readonly LineSegment[];
 
 // @public
 export function linesOf(layout: SemanticLayout): LineRecord[];
@@ -1740,6 +1864,27 @@ export type NormalizationPolicy = 'none' | 'NFC' | 'NFD' | 'NFKC' | 'NFKD';
 export function normalNotesOf(part: OoxmlPart | null | undefined): readonly OoxmlElement[];
 
 // @public
+export interface NoteAreaRecord {
+    // (undocumented)
+    readonly box: LayoutBox;
+    // (undocumented)
+    readonly fallbackReason?: string;
+    // (undocumented)
+    readonly kind: 'footnotes' | 'endnotes';
+    // (undocumented)
+    readonly notes: readonly NoteStoryRecord[];
+    // (undocumented)
+    readonly placement: 'pageBottom' | 'beneathText' | 'sectEnd' | 'docEnd';
+    readonly separator?: {
+        readonly box: LayoutBox;
+        readonly fragments: readonly BlockFragmentRecord[];
+        readonly kind: 'separator' | 'continuationSeparator';
+        readonly ruleStyle?: 'single' | 'double';
+        readonly synthetic: boolean;
+    };
+}
+
+// @public
 export interface NoteDisplayMark {
     readonly displayNumber?: number;
     readonly mark: string | null;
@@ -1842,6 +1987,9 @@ export interface NotesLayoutInput {
     readonly producer: string;
     // (undocumented)
     readonly projectFieldLink?: FieldLinkProjector;
+    readonly projectionEpoch?: string;
+    readonly projectionTokenForParagraphForPart?: (ownerPartName: string, paragraph: OoxmlNode) => string;
+    readonly projectionTokenForTableForPart?: (ownerPartName: string, table: OoxmlNode) => string;
     readonly projectLink?: HyperlinkProjector;
     readonly projectLinkForPart?: (ownerPartName: string) => HyperlinkProjector | undefined;
     readonly refFields?: RefFieldContext;
@@ -1870,6 +2018,21 @@ export interface NoteStoryLayout {
     readonly noteKind: NoteKind;
     // (undocumented)
     readonly noteType: ReturnType<typeof noteTypeOf>;
+    readonly scopeId: string;
+}
+
+// @public
+export interface NoteStoryRecord {
+    // (undocumented)
+    readonly box: LayoutBox;
+    readonly continuation?: boolean;
+    // (undocumented)
+    readonly fragments: readonly BlockFragmentRecord[];
+    readonly mark: string | null;
+    // (undocumented)
+    readonly noteId: number;
+    // (undocumented)
+    readonly noteKind: 'footnote' | 'endnote';
     readonly scopeId: string;
 }
 
@@ -2166,6 +2329,7 @@ export interface ParagraphKeyInputs {
     // (undocumented)
     readonly paragraph: OoxmlNode;
     readonly producer: string;
+    readonly projectionToken?: string;
     // (undocumented)
     readonly properties: readonly OoxmlProperty[];
     readonly width: number;
@@ -2327,6 +2491,16 @@ export interface PreferredWidth {
 
 // @public
 export type PreferredWidthType = 'dxa' | 'pct' | 'auto' | 'nil';
+
+// @public
+export interface PreparedLayoutFontConfiguration {
+    // (undocumented)
+    readonly [PREPARED_LAYOUT_FONT_CONFIGURATION_BRAND]: true;
+    readonly fingerprint: string;
+}
+
+// @public
+export function prepareLayoutFontConfiguration(configuration: LayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): PreparedLayoutFontConfiguration;
 
 // @public
 export function projectedNoteMarkText(node: OoxmlNode, context: NoteMarkContext | undefined): ProjectedNoteMark | null;
@@ -2940,6 +3114,27 @@ order: readonly string[],
 measurer?: TextMeasurer): SelectionRect[];
 
 // @public
+export type SemanticDrawingLayer = 'behind-text' | 'inline' | 'in-front-of-text';
+
+// @public
+export interface SemanticDrawingVisit extends StoryDrawingContext {
+    readonly absoluteHitBounds: LayoutBox;
+    readonly absolutePaintBounds: LayoutBox;
+    readonly drawing: InlineDrawingRecord | AnchoredDrawingRecord;
+    readonly drawingOrigin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly noteAreaKind: NoteAreaRecord['kind'] | null;
+    readonly noteScopeId: string | null;
+    readonly page: PageRecord;
+    readonly paintLayer: SemanticDrawingLayer;
+    readonly root: SemanticStoryVisit;
+    readonly rootStory: SemanticRootStoryKind;
+    readonly story: SemanticStoryKind;
+}
+
+// @public
 export interface SemanticHit {
     // (undocumented)
     readonly caret: CaretGeometry;
@@ -3007,6 +3202,9 @@ export interface SemanticLayoutOptions {
     readonly pageBottomReserves?: ReadonlyMap<number, number>;
     readonly producer?: string;
     readonly projectFieldLink?: FieldLinkProjector;
+    readonly projectionEpoch?: string;
+    readonly projectionTokenForParagraph?: (paragraph: OoxmlNode) => string;
+    readonly projectionTokenForTable?: (table: OoxmlNode) => string;
     readonly projectLink?: HyperlinkProjector;
     readonly retainKeys?: Set<string> | false;
     readonly sectionColumns?: SectionColumns;
@@ -3025,6 +3223,9 @@ export interface SemanticPosition {
 }
 
 // @public
+export type SemanticRootStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
+
+// @public
 export interface SemanticSelection {
     // (undocumented)
     readonly anchor: SemanticPosition;
@@ -3034,21 +3235,81 @@ export interface SemanticSelection {
 
 // @public
 export interface SemanticSpanVisit {
+    readonly absoluteBox: LayoutBox;
     // (undocumented)
     readonly line: LineRecord;
+    // (undocumented)
+    readonly noteAreaKind: SemanticStoryVisit['noteAreaKind'];
+    readonly noteScopeId: string | null;
     // (undocumented)
     readonly page: PageRecord;
     readonly paragraph: ParagraphFragmentRecord;
     readonly paragraphId: string;
+    readonly root: SemanticStoryVisit;
+    readonly rootStory: SemanticRootStoryKind;
     readonly sourceRange: SourceRange | null;
     // (undocumented)
     readonly span: StyleSpanRecord;
     // (undocumented)
     readonly story: SemanticStoryKind;
+    readonly storyOrigin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly textboxDepth: number;
+    readonly textboxOwner: AnchoredDrawingRecord | null;
+    readonly textboxPath: readonly AnchoredDrawingRecord[];
 }
 
 // @public
-export type SemanticStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
+export type SemanticStoryKind = SemanticRootStoryKind | 'textbox';
+
+// @public
+export type SemanticStoryVisit = {
+    readonly box: LayoutBox;
+    readonly host: PageRecord;
+    readonly noteAreaKind: null;
+    readonly noteScopeId: null;
+    readonly origin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly page: PageRecord;
+    readonly story: 'body';
+} | {
+    readonly box: LayoutBox;
+    readonly host: HeaderFooterStoryRecord;
+    readonly noteAreaKind: null;
+    readonly noteScopeId: null;
+    readonly origin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly page: PageRecord;
+    readonly story: 'header' | 'footer';
+} | {
+    readonly box: LayoutBox;
+    readonly host: NoteStoryRecord;
+    readonly noteAreaKind: NoteAreaRecord['kind'];
+    readonly noteScopeId: string;
+    readonly origin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly page: PageRecord;
+    readonly story: 'footnote' | 'endnote';
+} | {
+    readonly box: LayoutBox;
+    readonly host: NonNullable<NoteAreaRecord['separator']>;
+    readonly noteAreaKind: NoteAreaRecord['kind'];
+    readonly noteScopeId: null;
+    readonly origin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly page: PageRecord;
+    readonly story: 'note-separator';
+};
 
 // @public
 export interface SemanticTableCell {
@@ -3162,10 +3423,15 @@ export function shapedHorizontalBoundaries(run: ShapedRun): readonly number[];
 // @public
 export interface ShapedMeasurerOptions {
     readonly fallback: TextMeasurer;
+    // (undocumented)
+    readonly features?: Readonly<Record<string, number>>;
     readonly fixedPointScale?: number;
     // (undocumented)
     readonly language?: string;
+    readonly normalization?: NormalizationPolicy;
     readonly resolveFont: (style: ResolvedRunStyle) => ResolvedFont | null;
+    // (undocumented)
+    readonly roundingMode?: FixedPointRoundingMode;
     readonly script?: string;
     // (undocumented)
     readonly shaper: TextShaper;
@@ -3349,6 +3615,38 @@ order: readonly string[]): StyleSpanRecord[];
 
 // @public
 export function storyBlocks(part: OoxmlPart, displayMode?: RevisionDisplayMode): OoxmlElement[];
+
+// @public
+export interface StoryDrawingContext extends StoryParagraphFragmentContext {
+    readonly line: LineRecord | null;
+    readonly paragraph: ParagraphFragmentRecord | null;
+}
+
+// @public
+export interface StoryDrawingHost {
+    readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
+    readonly fragments: readonly BlockFragmentRecord[];
+}
+
+// @public
+export interface StoryParagraphFragmentContext {
+    readonly storyOrigin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly textboxDepth: number;
+    readonly textboxOwner: AnchoredDrawingRecord | null;
+    readonly textboxPath: readonly AnchoredDrawingRecord[];
+}
+
+// @public
+export interface StoryProjectionDependencies {
+    // (undocumented)
+    readonly epochForPart: (partName: string) => string;
+    // (undocumented)
+    readonly tokenForParagraphForPart: (partName: string, paragraph: OoxmlNode) => string;
+    readonly tokenForTableForPart: (partName: string, table: OoxmlNode) => string;
+}
 
 // @public
 export interface StyleCascadeTable {
@@ -3619,6 +3917,23 @@ export interface TabStop {
 
 // @public
 export function tabStopsFingerprint(tabs: ResolvedTabStops): string;
+
+// @public
+export interface TextboxStoryLayout {
+    readonly clippedResourceToken?: string;
+    readonly contentHeight: number;
+    readonly contentOffset: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly contentWidth: number;
+    readonly fallbackReason?: TextboxStoryFallbackReason;
+    readonly fillHex: string | null;
+    readonly flowHeight: number;
+    readonly fragments: readonly BlockFragmentRecord[];
+    readonly strokeHex: string | null;
+    readonly strokeWidthPt: number;
+}
 
 // @public
 export type TextDirection = 'ltr' | 'rtl';

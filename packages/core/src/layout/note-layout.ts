@@ -35,7 +35,7 @@ import { withResolvedListItems } from './list-resolve.ts';
 import type { BlockFragmentRecord, LayoutBox, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { noteStoryBlocks } from './story-roots.ts';
-import type { RevisionDisplayMode } from './revision-projection.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
 
 /** Hard ceiling on notes laid out in one pass (fail closed beyond). */
 export const MAX_NOTES_LAID_OUT = MAX_NOTES_PER_PART;
@@ -161,6 +161,11 @@ export interface LayoutNoteStoryOptions {
    */
   readonly projectLinkForPart?: (ownerPartName: string) => HyperlinkProjector | undefined;
   readonly projectFieldLink?: FieldLinkProjector;
+  readonly projectionTokenForParagraphForPart?: (
+    ownerPartName: string,
+    paragraph: OoxmlNode
+  ) => string;
+  readonly projectionTokenForTableForPart?: (ownerPartName: string, table: OoxmlNode) => string;
   /** Document properties for a document-property field inside a note story. */
   readonly documentProperties?: import('@docx-editor.dev/core/store').DocumentProperties;
   /**
@@ -235,7 +240,8 @@ export function layoutNoteStory(
   if (!noteKind || noteId === null) return null;
 
   const scopeId = formatNoteScopeId(noteKind, noteId);
-  const blocks = noteStoryBlocks(note, options.displayMode);
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const blocks = noteStoryBlocks(note, displayMode);
   const prefix = noteLineIdPrefix(noteKind, noteId);
   let lineCounter = 0;
   const width = Math.max(1, contentWidth);
@@ -266,7 +272,12 @@ export function layoutNoteStory(
   const flow = flowBlocksInBox(blocks, 0, width, 0, 0, {
     measurer: options.measurer,
     cache: options.cache,
-    producer: `${options.producer}|${scopeId}`,
+    // The projected pieces are cached, not merely the authored paragraph text. A shared
+    // exporter/browser cache can therefore only reuse them within the display mode that
+    // produced them. Keep the default key stable, matching the header/footer lane.
+    producer:
+      `${options.producer}|${scopeId}` +
+      (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`),
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
     ...(listItems ? { listItems } : {}),
@@ -274,8 +285,20 @@ export function layoutNoteStory(
     ...(projectLink ? { projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+    ...(options.ownerPartName && options.projectionTokenForParagraphForPart
+      ? {
+          projectionTokenForParagraph: (paragraph: OoxmlNode) =>
+            options.projectionTokenForParagraphForPart!(options.ownerPartName!, paragraph),
+        }
+      : {}),
+    ...(options.ownerPartName && options.projectionTokenForTableForPart
+      ? {
+          projectionTokenForTable: (table: OoxmlNode) =>
+            options.projectionTokenForTableForPart!(options.ownerPartName!, table),
+        }
+      : {}),
     ...(options.refFields ? { refFields: options.refFields } : {}),
-    ...(options.displayMode ? { displayMode: options.displayMode } : {}),
+    displayMode,
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),

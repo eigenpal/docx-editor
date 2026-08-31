@@ -131,6 +131,10 @@ export interface TextboxStoryLayoutOptions {
   readonly drawingTokenForParagraph?: (
     paragraph: import('@docx-editor.dev/core/store').OoxmlNode
   ) => string;
+  /** Host-part semantic projection token for each paragraph in this text-box story. */
+  readonly projectionTokenForParagraph?: (paragraph: OoxmlNode) => string;
+  /** Memoized aggregate projection token for a table in this text-box story. */
+  readonly projectionTokenForTable?: (table: OoxmlNode) => string;
 }
 
 /** Stable line-id namespace for one textbox story. */
@@ -422,6 +426,12 @@ export function layoutTextboxStory(
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),
     ...(options.drawingTokenForParagraph
       ? { drawingTokenForParagraph: options.drawingTokenForParagraph }
+      : {}),
+    ...(options.projectionTokenForParagraph
+      ? { projectionTokenForParagraph: options.projectionTokenForParagraph }
+      : {}),
+    ...(options.projectionTokenForTable
+      ? { projectionTokenForTable: options.projectionTokenForTable }
       : {}),
   });
 

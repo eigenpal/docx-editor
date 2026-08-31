@@ -54,7 +54,8 @@ import {
 } from './semantic-paint-hf-chrome.ts';
 import { anchoredDrawingsOf } from '../layout/semantic-records.ts';
 import { lineSegments } from '../layout/line-segments.ts';
-import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
+import { type AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
+import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
 import {
   collectUsedDrawingElementKeys,
   collectUsedDrawingResourceKeys,
@@ -420,16 +421,9 @@ function hfAnchorOnPageSheet(
   // the page edge in that space (−margin), so the sheet position needs the page box, not the
   // story box — a footer story's own Y would double-count most of the page height. Axes on
   // story-relative frames keep the story box base.
-  const absX =
-    drawing.horizontalFrame === 'page'
-      ? pageBox.x + (pb.x - drawing.horizontalFrameOrigin)
-      : story.box.x + pb.x;
-  const absY =
-    drawing.verticalFrame === 'page'
-      ? pageBox.y + (pb.y - drawing.verticalFrameOrigin)
-      : story.box.y + pb.y;
-  const dx = absX - pb.x;
-  const dy = absY - pb.y;
+  const absoluteOrigin = headerFooterAnchoredDrawingOrigin(drawing, story.box, pageBox);
+  const dx = absoluteOrigin.x - drawing.x;
+  const dy = absoluteOrigin.y - drawing.y;
   const shift = (box: LayoutBox): LayoutBox =>
     Object.freeze({ x: box.x + dx, y: box.y + dy, width: box.width, height: box.height });
   return Object.freeze({

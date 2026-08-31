@@ -3,6 +3,15 @@
 import { type ResolvedRunStyle } from './run-style.ts';
 import type { TextMeasurer } from './semantic-records.ts';
 
+/** Default advance used by the deterministic fallback, in points at 11pt. @public */
+export const FIXED_MEASURER_CHAR_WIDTH = 6;
+
+/** Default line height used by the deterministic fallback, in points at 11pt. @public */
+export const FIXED_MEASURER_LINE_HEIGHT = 14;
+
+/** Cache/diagnostic identity derived from the actual fallback defaults. @public */
+export const FIXED_MEASURER_FINGERPRINT = `fixed:char-width=${FIXED_MEASURER_CHAR_WIDTH}:line-height=${FIXED_MEASURER_LINE_HEIGHT}`;
+
 /**
  * A deterministic measurer for tests and headless use.
  *
@@ -10,7 +19,10 @@ import type { TextMeasurer } from './semantic-records.ts';
  * height, scaled by `w:sz` when present. Real shaping is the HarfBuzz path; this exists so
  * layout behaviour can be asserted without a font stack deciding the answer.
  */
-export function createFixedMeasurer(charWidth = 6, lineHeight = 14): TextMeasurer {
+export function createFixedMeasurer(
+  charWidth = FIXED_MEASURER_CHAR_WIDTH,
+  lineHeight = FIXED_MEASURER_LINE_HEIGHT
+): TextMeasurer {
   // 11pt is the size the base width and height describe; everything else scales from it.
   const scale = (style: ResolvedRunStyle): number => style.fontSizePt / 11;
   return {

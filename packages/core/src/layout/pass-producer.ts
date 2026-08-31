@@ -7,6 +7,7 @@
 // per pass. The inputs are identity-stable when unchanged, so a hit is a handful of
 // pointer compares.
 
+import { sha256FontBytes } from '../store/package/sha256.ts';
 import { noteMarksCacheToken, type NoteMarkContext } from './note-projection.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE, type RevisionDisplayMode } from './revision-projection.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
@@ -23,7 +24,18 @@ interface ControlProducerSlot {
 
 const MAX_CONTROL_PRODUCER_SLOTS = 8;
 const controlProducerSlots: ControlProducerSlot[] = [];
-let nextControlProducerId = 0n;
+const controlProducerEncoder = new TextEncoder();
+
+function controlProducerDigest(base: string | undefined, token: string): string {
+  // Hash the two fields independently, which is an unambiguous framing without constructing a
+  // second multi-megabyte concatenation. SHA-256 keeps paragraph keys compact while preserving
+  // deterministic identity after the exact-match LRU no longer retains the original token.
+  const baseDigest = sha256FontBytes(
+    controlProducerEncoder.encode(base === undefined ? 'undefined' : `string:${base}`)
+  );
+  const tokenDigest = sha256FontBytes(controlProducerEncoder.encode(token));
+  return `control-producer:v1:${baseDigest}:${tokenDigest}`;
+}
 
 /** The document producer with the control token folded in, identity-stable across passes. */
 export function producerWithControlContext(base: string | undefined, token: string): string {
@@ -36,12 +48,10 @@ export function producerWithControlContext(base: string | undefined, token: stri
     return slot.producer;
   }
   // Control-heavy documents can have a multi-megabyte token. The producer reaches every
-  // paragraph cache key (often more than once at different widths), so embedding the token
-  // there multiplies it by the paragraph count and makes the published SemanticLayout retain
-  // gigabytes. A small exact-match LRU gives each live context an opaque identity: unlike a
-  // file-derived hash it cannot collide, and eviction only causes a safe cache miss.
-  nextControlProducerId += 1n;
-  const producer = `control-producer:${nextControlProducerId}`;
+  // paragraph cache key (often more than once at different widths), so retain only its compact
+  // collision-resistant digest there. The LRU avoids rehashing hot contexts; eviction affects
+  // CPU only, never identity or incremental reuse.
+  const producer = controlProducerDigest(base, token);
   controlProducerSlots.push({ base, token, producer });
   if (controlProducerSlots.length > MAX_CONTROL_PRODUCER_SLOTS) controlProducerSlots.shift();
   return producer;

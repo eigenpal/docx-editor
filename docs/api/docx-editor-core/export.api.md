@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export function acquireSharedExportShaping(provider: SharedExportShapingProvider, instrumentation?: LayoutShapingInstrumentation): Promise<SharedExportShaping>;
+export function acquireSharedExportShaping(prepared: PreparedLayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<SharedExportShaping>;
 
 // @public
 export function createNodeImageDecodePort(options?: {
@@ -14,12 +14,6 @@ export function createNodeImageDecodePort(options?: {
 
 // @public
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
-
-// @public
-export function exportMarkdown(source: ExportDocumentSource, options?: MarkdownExportOptions): Promise<MarkdownExportResult>;
-
-// @public
-export function exportMarkdownFrom(session: ExportSession, options?: MarkdownTranslationOptions): Promise<MarkdownExportResult>;
 
 // @public
 export class ExportResourceError extends Error {
@@ -34,36 +28,6 @@ export interface ExportSession {
     layout(): Promise<SemanticLayout>;
     layoutFor(displayMode: RevisionDisplayMode): Promise<SemanticLayout>;
     validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
-}
-
-// @public
-export interface MarkdownExportOptions extends OpenDocumentForExportOptions, MarkdownTranslationOptions {
-}
-
-// @public
-export interface MarkdownExportResult {
-    readonly markdown: string;
-    readonly pages: readonly MarkdownPage[];
-}
-
-// @public
-export type MarkdownImageResult = {
-    readonly url: string;
-} | {
-    readonly skip: true;
-};
-
-// @public
-export interface MarkdownPage {
-    readonly footerMarkdown: string;
-    readonly headerMarkdown: string;
-    readonly markdown: string;
-    readonly number: number;
-}
-
-// @public
-export interface MarkdownTranslationOptions {
-    readonly image?: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => MarkdownImageResult;
 }
 
 // @public
@@ -106,12 +70,6 @@ export interface SharedExportShaping {
     createMeasurer(): TextMeasurer;
     readonly extensionFingerprint: string;
     readonly producer: string;
-}
-
-// @public
-export interface SharedExportShapingProvider {
-    readonly cacheKey: string;
-    loadConfiguration(): Promise<LayoutFontConfiguration>;
 }
 
 // (No @packageDocumentation comment for this package)

@@ -8,7 +8,7 @@ import { buildStyleCascadeTable, type StyleCascadeTable } from './style-cascade.
 /** Memoized style inputs shared by every story in one document view. @public */
 export interface DocumentStyleDependencies {
   readonly styleCascade: () => StyleCascadeTable | undefined;
-  readonly defaultTabStopPt: number;
+  readonly defaultTabStopPt: () => number;
   readonly numberingIndex: () => NumberingIndex;
 }
 
@@ -19,17 +19,36 @@ export function createDocumentStyleDependencies(
   let numberingRoot: OoxmlElement | null | undefined;
   let numbering: NumberingIndex | undefined;
   let stylesRoot: OoxmlElement | null | undefined;
+  let styleThemeMajor: string | null | undefined;
+  let styleThemeMinor: string | null | undefined;
   let styles: StyleCascadeTable | undefined;
+  let settingsRoot: OoxmlElement | null | undefined;
+  let defaultTabStopPt: number | undefined;
   return {
     styleCascade() {
       const current = view.stylesRoot();
-      if (styles === undefined || current !== stylesRoot) {
+      const theme = view.documentThemeFonts();
+      if (
+        styles === undefined ||
+        current !== stylesRoot ||
+        theme.major !== styleThemeMajor ||
+        theme.minor !== styleThemeMinor
+      ) {
         stylesRoot = current;
-        styles = buildStyleCascadeTable(current, view.documentThemeFonts());
+        styleThemeMajor = theme.major;
+        styleThemeMinor = theme.minor;
+        styles = buildStyleCascadeTable(current, theme);
       }
       return styles;
     },
-    defaultTabStopPt: defaultTabIntervalFromSettings(view.settingsRoot()),
+    defaultTabStopPt() {
+      const current = view.settingsRoot();
+      if (defaultTabStopPt === undefined || current !== settingsRoot) {
+        settingsRoot = current;
+        defaultTabStopPt = defaultTabIntervalFromSettings(current);
+      }
+      return defaultTabStopPt;
+    },
     numberingIndex() {
       const current = view.numberingRoot();
       if (numbering === undefined || current !== numberingRoot) {

@@ -16,7 +16,7 @@
 //
 // Scope stays furniture-only; body field projection remains deferred.
 
-import type { OoxmlPart } from '@docx-editor.dev/core/store';
+import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
 import {
@@ -180,6 +180,10 @@ export interface HeaderFooterStoryInputs {
   /** Sanitized hyperlink seams scoped to this header/footer part. */
   readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
+  /** Per-paragraph identity for links and live document-property projection. */
+  readonly projectionTokenForParagraph?: (paragraph: OoxmlNode) => string;
+  /** Memoized aggregate projection identity for table subtrees. */
+  readonly projectionTokenForTable?: (table: OoxmlNode) => string;
 }
 
 /**
@@ -322,6 +326,12 @@ export function layoutHeaderFooterStory(
           ...(documentProperties ? { documentProperties } : {}),
           ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
           ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+          ...(inputs?.projectionTokenForParagraph
+            ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
+            : {}),
+          ...(inputs?.projectionTokenForTable
+            ? { projectionTokenForTable: inputs.projectionTokenForTable }
+            : {}),
           inlineDrawingLayout,
           anchorFrameBase,
           pageContentClip: () => pageClipRegion(anchorFrameBase()),
@@ -345,6 +355,12 @@ export function layoutHeaderFooterStory(
               ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
               inlineDrawingLayout,
               ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
+              ...(inputs?.projectionTokenForParagraph
+                ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
+                : {}),
+              ...(inputs?.projectionTokenForTable
+                ? { projectionTokenForTable: inputs.projectionTokenForTable }
+                : {}),
               ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
             }),
           collectAnchoredDrawings: (drawings) => {
@@ -363,6 +379,12 @@ export function layoutHeaderFooterStory(
             : drawingLayoutToken
               ? { drawingLayoutToken }
               : {}),
+          ...(inputs?.projectionTokenForParagraph
+            ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
+            : {}),
+          ...(inputs?.projectionTokenForTable
+            ? { projectionTokenForTable: inputs.projectionTokenForTable }
+            : {}),
         });
         const nextZones = collectExclusionZonesFromDrawings(
           pendingAnchoredDrawings,
@@ -404,6 +426,12 @@ export function layoutHeaderFooterStory(
         ...(documentProperties ? { documentProperties } : {}),
         ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
         ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+        ...(inputs?.projectionTokenForParagraph
+          ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
+          : {}),
+        ...(inputs?.projectionTokenForTable
+          ? { projectionTokenForTable: inputs.projectionTokenForTable }
+          : {}),
       });
     }
 

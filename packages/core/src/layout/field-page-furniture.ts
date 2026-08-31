@@ -757,5 +757,5 @@ export function finalizePageFieldProjection(layout: SemanticLayout): SemanticLay
     return result;
   });
 
-  return changed ? { revision: layout.revision, pages } : layout;
+  return changed ? { ...layout, pages } : layout;
 }

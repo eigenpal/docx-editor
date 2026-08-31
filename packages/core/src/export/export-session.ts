@@ -5,39 +5,47 @@ import {
   type HeadlessDocumentRejection,
   type HeadlessDocumentView,
   type ImageDecodePort,
+  type ImageResourceState,
 } from '@docx-editor.dev/core/store';
 import {
   createDocumentFurnitureSource,
   createDocumentLinkProjectors,
-  createDocumentNotesInput,
   createDocumentStyleDependencies,
   createFieldLinkRegistry,
+  forEachSemanticDrawing,
+  type CreateDocumentFurnitureSourceOptions,
 } from '../layout/index.ts';
+import {
+  layoutDocumentView,
+  type LayoutDocumentViewOptions,
+} from '../layout/document-layout-coordinator.ts';
 import { createFixedMeasurer } from '../layout/fixed-measurer.ts';
 import { createInlineDrawingLayoutBundle } from '../layout/inline-drawing-source.ts';
 import { releasePageFieldProjectionState } from '../layout/field-page-furniture.ts';
 import { createParagraphLayoutCache } from '../layout/layout-cache.ts';
 import { createLayoutSession } from '../layout/layout-session.ts';
 import { releaseOverflowPageShellState } from '../layout/page-furniture-insets.ts';
-import { layoutSemanticDocument } from '../layout/semantic-layout.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
-import type {
-  BlockFragmentRecord,
-  SemanticLayout,
-  TextMeasurer,
-} from '../layout/semantic-records.ts';
+import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import {
   createNodeImageDecodePort,
   type PreservedImageConverter,
 } from './node-image-decode-port.ts';
+import { publishImmutableSemanticLayout } from './semantic-layout-publication.ts';
 
 /** Source accepted by every exporter: untrusted bytes or an already-open live view. @public */
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
 
 /** Shared session options; translators add their own format-specific options. @public */
 export interface OpenDocumentForExportOptions {
-  /** Revision projection applied before records reach an exporter. Default: `original`. */
+  /**
+   * Revision projection applied before records reach an exporter. Default: `all-markup`.
+   *
+   * The safe reader default keeps every pending insertion and deletion visible. Choose
+   * `proposed` or `original` explicitly only when a resolved view is intended.
+   */
   readonly displayMode?: RevisionDisplayMode;
   /** Host-owned measurement override; omit to use the core fixed fallback. */
   readonly measurer?: TextMeasurer;
@@ -94,73 +102,32 @@ function normalizedResourceTimeout(value: number | undefined): number {
   return Math.max(1, value);
 }
 
-function blocksHavePendingImages(blocks: readonly BlockFragmentRecord[]): boolean {
-  for (const block of blocks) {
-    if (block.kind === 'table') {
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          if (blocksHavePendingImages(cell.blocks)) return true;
-        }
-      }
-      continue;
-    }
-    for (const line of block.lines) {
-      for (const drawing of line.drawings ?? []) {
-        if (drawing.resource.kind === 'pending') return true;
-      }
-    }
-  }
-  return false;
-}
+const REVISION_POLL_INTERVAL_MS = 50;
 
-function drawingHasPendingImage(drawing: AnchoredDrawingRecord): boolean {
-  return (
-    drawing.resource.kind === 'pending' ||
-    (drawing.textboxStory !== undefined && blocksHavePendingImages(drawing.textboxStory.fragments))
-  );
+function resourceIsPending(resource: ImageResourceState): boolean {
+  switch (resource.kind) {
+    case 'pending':
+      return true;
+    case 'ready':
+    case 'unrenderable':
+    case 'external':
+    case 'missing':
+      return false;
+    default:
+      return resource satisfies never;
+  }
 }
 
 function layoutHasPendingImages(layout: SemanticLayout): boolean {
-  for (const page of layout.pages) {
-    if (blocksHavePendingImages(page.fragments)) return true;
-    if ((page.anchoredDrawings ?? []).some(drawingHasPendingImage)) return true;
-    for (const story of [page.header, page.footer]) {
-      if (!story) continue;
-      if (blocksHavePendingImages(story.fragments)) return true;
-      if ((story.anchoredDrawings ?? []).some(drawingHasPendingImage)) return true;
-    }
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      if (area.separator && blocksHavePendingImages(area.separator.fragments)) return true;
-      for (const note of area.notes) {
-        if (blocksHavePendingImages(note.fragments)) return true;
-      }
-    }
-  }
-  return false;
+  let pending = false;
+  forEachSemanticDrawing(layout, ({ drawing }) => {
+    if (resourceIsPending(drawing.resource)) pending = true;
+  });
+  return pending;
 }
 
 function isDocumentView(source: ExportDocumentSource): source is HeadlessDocumentView {
   return !ArrayBuffer.isView(source);
-}
-
-/** Exact dynamic inputs that can change projected text while story nodes stay identical. */
-function textProjectionToken(view: HeadlessDocumentView): string {
-  const pkg = view.currentPackage();
-  return JSON.stringify({
-    properties: view.documentProperties(),
-    relationships: [...pkg.relationships.entries()].map(([owner, records]) => [
-      owner,
-      records.map((record) => [record.id, record.type, record.rawTarget, record.targetMode]),
-    ]),
-    externalTargets: pkg.externalTargets.map((record) => [
-      record.ownerPart,
-      record.id,
-      record.type,
-      record.rawTarget,
-      record.sinkSafe,
-    ]),
-  });
 }
 
 /** Open bytes or a live neutral view into one reusable layout session. @public */
@@ -177,7 +144,7 @@ export function openDocumentForExport(
   const initialView = opened.view;
   const reuseAcrossRevisions = options.reuseAcrossRevisions ?? sourceIsView;
   const timeoutMs = normalizedResourceTimeout(options.resourceTimeoutMs);
-  const displayMode = options.displayMode ?? 'original';
+  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const initialMeasurer = options.measurer ?? createFixedMeasurer();
   const producer =
     options.producer ?? (options.measurer ? 'host-export-measurer' : 'export-fixed-measurer');
@@ -211,7 +178,12 @@ export function openDocumentForExport(
     readonly sessions: Map<RevisionDisplayMode, ReturnType<typeof createLayoutSession>>;
     readonly completed: Map<
       RevisionDisplayMode,
-      { readonly revision: number; readonly layout: SemanticLayout }
+      {
+        readonly revision: number;
+        readonly pkg: ReturnType<HeadlessDocumentView['currentPackage']>;
+        readonly internal: SemanticLayout;
+        readonly published: SemanticLayout;
+      }
     >;
     readonly inFlight: Map<RevisionDisplayMode, Promise<SemanticLayout>>;
     readonly styles: ReturnType<typeof createDocumentStyleDependencies>;
@@ -219,13 +191,13 @@ export function openDocumentForExport(
       RevisionDisplayMode,
       {
         readonly revision: number;
+        readonly pkg: ReturnType<HeadlessDocumentView['currentPackage']>;
         readonly registry: ReturnType<typeof createFieldLinkRegistry>;
       }
     >;
     readonly links: ReturnType<typeof createDocumentLinkProjectors>;
     readonly drawingBundle: ReturnType<typeof createInlineDrawingLayoutBundle>;
     readonly furniture: Map<RevisionDisplayMode, ReturnType<typeof createDocumentFurnitureSource>>;
-    projection: { revision: number; token: string };
   } | null = {
     view: initialView,
     measurer: initialMeasurer,
@@ -238,7 +210,6 @@ export function openDocumentForExport(
     links: createDocumentLinkProjectors(initialView),
     drawingBundle: initialDrawingBundle,
     furniture: new Map(),
-    projection: { revision: -1, token: '' },
   };
   const resourceAbort = new AbortController();
   const callerSignal = options.signal;
@@ -252,15 +223,27 @@ export function openDocumentForExport(
     }
   };
 
-  const waitForResourceChange = (observedEpoch: number, deadline: number): Promise<void> => {
-    if (resourceEpoch !== observedEpoch) return Promise.resolve();
+  const waitForResourceChange = (
+    observedEpoch: number,
+    observedRevision: number,
+    observedPackage: ReturnType<HeadlessDocumentView['currentPackage']>,
+    deadline: number
+  ): Promise<void> => {
+    if (
+      resourceEpoch !== observedEpoch ||
+      activeState?.view.packageRevision() !== observedRevision ||
+      activeState?.view.currentPackage() !== observedPackage
+    ) {
+      return Promise.resolve();
+    }
     assertActive();
     return new Promise((resolve, reject) => {
       let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const finish = (error?: ExportResourceError): void => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        if (timer !== undefined) clearTimeout(timer);
         waiters.delete(changed);
         resourceAbort.signal.removeEventListener('abort', aborted);
         if (error) reject(error);
@@ -269,19 +252,39 @@ export function openDocumentForExport(
       const changed = (): void => finish();
       const aborted = (): void =>
         finish(new ExportResourceError('aborted', 'Export resource settlement was aborted'));
-      const remaining = deadline - Date.now();
-      const timer = setTimeout(
-        () =>
+      const pollRevision = (): void => {
+        if (
+          activeState?.view.packageRevision() !== observedRevision ||
+          activeState?.view.currentPackage() !== observedPackage
+        ) {
+          finish();
+          return;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
           finish(
             new ExportResourceError(
               'timedOut',
               `Image resources did not settle within ${timeoutMs}ms`
             )
-          ),
-        Math.max(0, remaining)
-      );
+          );
+          return;
+        }
+        timer = setTimeout(pollRevision, Math.min(REVISION_POLL_INTERVAL_MS, remaining));
+      };
       waiters.add(changed);
       resourceAbort.signal.addEventListener('abort', aborted, { once: true });
+      // Close the registration window. A custom live view or host resource callback can advance
+      // either source between the outer precheck and waiter installation.
+      if (
+        resourceEpoch !== observedEpoch ||
+        activeState?.view.packageRevision() !== observedRevision ||
+        activeState?.view.currentPackage() !== observedPackage
+      ) {
+        finish();
+        return;
+      }
+      pollRevision();
     });
   };
 
@@ -300,26 +303,14 @@ export function openDocumentForExport(
     const state = activeState!;
     const deadline = absoluteDeadline;
     const revision = state.view.packageRevision();
+    const pkg = state.view.currentPackage();
     const cached = state.completed.get(mode);
-    if (cached && cached.revision === revision) return cached.layout;
-
-    if (state.projection.revision !== revision) {
-      const token = textProjectionToken(state.view);
-      if (state.projection.revision >= 0 && state.projection.token !== token) {
-        // Link targets and document-property fields are projected before line breaking but do
-        // not live in the paragraph tree. Drop only projection-dependent derived state; ordinary
-        // text edits retain the incremental cache.
-        state.paragraphCache.clear();
-        state.furniture.clear();
-        state.sessions.clear();
-      }
-      state.projection = { revision, token };
-    }
+    if (cached && cached.revision === revision && cached.pkg === pkg) return cached.published;
 
     let fieldLinkState = state.fieldLinks.get(mode);
-    if (!fieldLinkState || fieldLinkState.revision !== revision) {
+    if (!fieldLinkState || fieldLinkState.revision !== revision || fieldLinkState.pkg !== pkg) {
       fieldLinkState?.registry.clear();
-      fieldLinkState = { revision, registry: createFieldLinkRegistry() };
+      fieldLinkState = { revision, pkg, registry: createFieldLinkRegistry() };
       state.fieldLinks.set(mode, fieldLinkState);
       // Furniture captures its mode/revision registry. A live-view edit must not reuse it.
       state.furniture.delete(mode);
@@ -343,16 +334,17 @@ export function openDocumentForExport(
         drawingLayoutTokenForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         drawingTokenForParagraphForPart: (partName, paragraph) =>
           state.drawingBundle.drawingTokenForParagraph(paragraph, partName),
-        projectLinkForPart: state.links.projectLinkForPart,
+        linkProjectors: state.links,
         projectFieldLink: (spec) => fieldLinks.project(spec),
-      });
+      } satisfies CreateDocumentFurnitureSourceOptions &
+        Record<keyof CreateDocumentFurnitureSourceOptions, unknown>);
       state.furniture.set(mode, source);
     }
 
     for (let pass = 0; pass < 64; pass += 1) {
       const observedEpoch = resourceEpoch;
       state.drawingBundle.sync(state.view);
-      if (state.view.packageRevision() !== revision) {
+      if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
         if (revisionRestarts >= 63) {
           throw new ExportResourceError(
             'nonConvergent',
@@ -361,44 +353,31 @@ export function openDocumentForExport(
         }
         return runLayout(mode, revisionRestarts + 1, deadline);
       }
-      const notes = createDocumentNotesInput({
+      const layout = layoutDocumentView({
         view: state.view,
-        measurer: state.measurer,
-        producer,
-        cache: state.paragraphCache,
-        styleCascade: state.styles.styleCascade,
-        numberingIndex: state.styles.numberingIndex,
-        defaultTabStopPt: state.styles.defaultTabStopPt,
-        inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),
-        drawingTokenForParagraphForPart: (partName, paragraph) =>
-          state.drawingBundle.drawingTokenForParagraph(paragraph, partName),
-        drawingLayoutEpochForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
-        projectLinkForPart: state.links.projectLinkForPart,
-        projectFieldLink: (spec) => fieldLinks.project(spec),
-        displayMode: mode,
-      });
-      const layout = layoutSemanticDocument(state.view.part(), state.view.packageRevision(), {
+        revision: state.view.packageRevision(),
         measurer: state.measurer,
         cache: state.paragraphCache,
         session,
         producer,
-        styleCascade: state.styles.styleCascade(),
+        styleCascade: state.styles.styleCascade,
         defaultTabStopPt: state.styles.defaultTabStopPt,
-        numberingIndex: state.styles.numberingIndex(),
-        sectionFurniture: source.sectionFurniture(),
-        furniture: source.furniture(),
-        projectLink: state.links.projectLink,
+        numberingIndex: state.styles.numberingIndex,
+        furniture: source,
+        linkProjectors: state.links,
         projectFieldLink: (spec) => fieldLinks.project(spec),
-        documentProperties: state.view.documentProperties(),
         inlineDrawingLayout: state.drawingBundle.bodyContext,
+        inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),
         drawingTokenForParagraph: (paragraph) =>
           state.drawingBundle.drawingTokenForParagraph(paragraph, state.view.part().name),
+        drawingTokenForParagraphForPart: (partName, paragraph) =>
+          state.drawingBundle.drawingTokenForParagraph(paragraph, partName),
         drawingLayoutEpoch: state.drawingBundle.cacheTokenForPart(state.view.part().name),
-        ...(notes ? { notes } : {}),
+        drawingLayoutEpochForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         displayMode: mode,
-      });
+      } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
-        if (state.view.packageRevision() !== revision) {
+        if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
           if (revisionRestarts >= 63) {
             throw new ExportResourceError(
               'nonConvergent',
@@ -407,26 +386,36 @@ export function openDocumentForExport(
           }
           return runLayout(mode, revisionRestarts + 1, deadline);
         }
-        state.completed.set(mode, { revision, layout });
+        const published = publishImmutableSemanticLayout(layout);
+        state.completed.set(mode, { revision, pkg, internal: layout, published });
         if (!reuseAcrossRevisions) {
           releasePageFieldProjectionState(layout);
           releaseOverflowPageShellState(layout);
           state.paragraphCache.clear();
           state.sessions.delete(mode);
         }
-        return layout;
+        return published;
       }
       // One pass discovers every image referenced by the laid-out stories. Await the whole
       // discovered batch before laying the document out again; relayout on each individual
       // decode made 65 valid staggered images hit the 64-pass convergence guard.
       let settlementEpoch = observedEpoch;
       while (state.drawingBundle.pendingResourceCount() > 0) {
-        await waitForResourceChange(settlementEpoch, deadline);
+        await waitForResourceChange(settlementEpoch, revision, pkg, deadline);
         settlementEpoch = resourceEpoch;
         assertActive();
+        if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
+          if (revisionRestarts >= 63) {
+            throw new ExportResourceError(
+              'nonConvergent',
+              'Document revision did not stabilize during export layout'
+            );
+          }
+          return runLayout(mode, revisionRestarts + 1, deadline);
+        }
       }
       assertActive();
-      if (state.view.packageRevision() !== revision) {
+      if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
         if (revisionRestarts >= 63) {
           throw new ExportResourceError(
             'nonConvergent',
@@ -477,8 +466,8 @@ export function openDocumentForExport(
       state.drawingBundle.dispose();
       state.paragraphCache.clear();
       for (const completed of state.completed.values()) {
-        releasePageFieldProjectionState(completed.layout);
-        releaseOverflowPageShellState(completed.layout);
+        releasePageFieldProjectionState(completed.internal);
+        releaseOverflowPageShellState(completed.internal);
       }
       for (const fieldLinks of state.fieldLinks.values()) fieldLinks.registry.clear();
       state.fieldLinks.clear();

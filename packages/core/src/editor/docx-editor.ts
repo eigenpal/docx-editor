@@ -88,10 +88,9 @@ import { EditorFontError } from '@docx-editor.dev/core/contracts/editor';
 import {
   FontResolutionError,
   HARD_MAX_FONT_BYTES,
-  HARFBUZZ_SHAPING_LIBRARY,
   HarfBuzzShapingError,
   fontRequestKey,
-  createShapedMeasurer,
+  createLayoutShapedMeasurer,
   resolveDefaultSurfaceMeasurer,
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
@@ -948,8 +947,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         string,
         Exclude<ReturnType<typeof shaping.fonts.resolve>, FontResolutionError> | null
       >();
-      shapedMeasurer = createShapedMeasurer({
-        shaper: shaping.shaper,
+      shapedMeasurer = createLayoutShapedMeasurer(shaping, {
         resolveFont: (style) => {
           // The run family is FILE-DERIVED and reaches `resolve` on every measured run.
           // `resolve` ASSERTS its request (a whitespace-only family throws), and the
@@ -977,13 +975,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           return usable;
         },
         fallback: fallbackResolution.measurer,
-        shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
-        unicodeDataVersion: '16.0.0',
-        ...(fonts.language ? { language: fonts.language } : {}),
       });
       // The fallback is part of the geometry producer: the same HarfBuzz faces over a
       // different unresolved-family measurer must never share paragraph-cache entries.
-      shapedProducer = `shaped:${shaping.operation.extensionFingerprint}+fallback:${fallbackResolution.producer}@scale:${scaleOf()}`;
+      shapedProducer =
+        `shaped:${shaping.operation.extensionFingerprint}` +
+        `+algorithm:${shaping.operation.shapingHash}` +
+        `+producer:${shaping.operation.producerVersion}` +
+        `+fallback:${fallbackResolution.producer}@scale:${scaleOf()}`;
       fontsResolving = false;
       if (surface) {
         // The remount tears the surface down BEFORE building the replacement, so the

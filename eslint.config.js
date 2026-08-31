@@ -394,7 +394,7 @@ export default [
       'packages/core/src/store/package/image-resources.ts',
     ],
     rules: {
-      'max-lines': ['error', { max: 1480, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1450, skipBlankLines: false, skipComments: false }],
     },
   },
 
@@ -515,7 +515,7 @@ export default [
   {
     files: ['packages/core/src/layout/semantic-layout.ts'],
     rules: {
-      'max-lines': ['error', { max: 3100, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 3050, skipBlankLines: false, skipComments: false }],
     },
   },
 

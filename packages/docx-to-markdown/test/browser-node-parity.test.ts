@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { createDocxEditor, type DocxEditorInstance } from '@docx-editor.dev/core/editor';
+import {
+  createDocxEditor,
+  type DocxEditorInstance,
+  type EditorModule,
+} from '@docx-editor.dev/core/editor';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { loadDefaultFonts } from '@docx-editor.dev/fonts';
 import { spawnSync } from 'node:child_process';
@@ -14,6 +18,18 @@ import { buildLiteralNodeWorker, type LiteralNodeWorker } from './literal-node-w
 
 let nodeWorker: LiteralNodeWorker;
 let registeredDomHere = false;
+
+// Markup projection is a review capability in the interactive host. This minimal module keeps
+// the parity test in core/private-package territory while enabling the same explicit projection
+// the headless worker requests; review-card derivation itself is outside this test's scope.
+const parityReviewModule: EditorModule = {
+  id: 'review',
+  review: {
+    displayModes: ['all-markup', 'proposed', 'original'],
+    collectReviewItems: () => [],
+    revisionItemsOfParagraph: () => [],
+  },
+};
 
 beforeAll(async () => {
   if (!GlobalRegistrator.isRegistered) {
@@ -85,7 +101,12 @@ async function browserLayout(bytes: Uint8Array): Promise<{
   expect(fonts.failures).toHaveLength(0);
   const container = document.createElement('div');
   document.body.append(container);
-  const editor = createDocxEditor({ container, document: bytes, fonts });
+  const editor = createDocxEditor({
+    container,
+    document: bytes,
+    fonts,
+    modules: [parityReviewModule],
+  });
   await fontsSettled(editor);
   let layout = editor.surface?.publishedLayout();
   for (let attempt = 0; layout && hasPendingResource(layout) && attempt < 200; attempt += 1) {
@@ -113,6 +134,14 @@ describe('browser/server semantic layout parity', () => {
       ),
     ],
     [
+      'tracked insertion and deletion',
+      docx(
+        '<w:p><w:r><w:t>Kept </w:t></w:r>' +
+          '<w:del w:id="1" w:author="Ada" w:date="2026-08-31T00:00:00Z"><w:r><w:delText>removed</w:delText></w:r></w:del>' +
+          '<w:ins w:id="2" w:author="Ada" w:date="2026-08-31T00:00:00Z"><w:r><w:t>added</w:t></w:r></w:ins></w:p>'
+      ),
+    ],
+    [
       'shared comprehensive fixture',
       new URL('../../../e2e/fixtures/comprehensive-word-element-test.docx', import.meta.url),
     ],
@@ -122,8 +151,8 @@ describe('browser/server semantic layout parity', () => {
       const bytes =
         source instanceof URL ? new Uint8Array(await readFile(source)) : (source as Uint8Array);
       const browser = await browserLayout(bytes);
-      // The interactive editor's final-state projection is `proposed`; the headless API
-      // defaults to `original`, so parity explicitly compares the same projection.
+      // The browser uses its all-markup default; the worker pins that mode explicitly so a future
+      // default change cannot silently make the two hosts compare different projections.
       const fixturePath = join(nodeWorker.temporary, 'parity-fixture.docx');
       writeFileSync(fixturePath, bytes);
       const server = spawnSync('node', [nodeWorker.path], {

@@ -262,6 +262,22 @@ describe('eachPage body note mark projection', () => {
     // Source ranges (model atom) must not drift.
     expect(secondCitations.map((c) => c.range)).toEqual(firstCitations.map((c) => c.range));
 
+    const tagged: SemanticLayout = {
+      ...second,
+      displayMode: 'proposed',
+      controlContextToken: 'metadata-sentinel',
+    };
+    const changedMarks = {
+      marks: new Map([
+        [noteMarkKey('footnote', 1), '9'],
+        [noteMarkKey('footnote', 2), '9'],
+      ]),
+    };
+    const reprojected = reprojectBodyNoteMarks(tagged, changedMarks);
+    expect(reprojected).not.toBe(tagged);
+    expect(reprojected.displayMode).toBe('proposed');
+    expect(reprojected.controlContextToken).toBe('metadata-sentinel');
+
     // Pure reproject is a no-op when marks already match (identity).
     const alreadyFinal = {
       marks: new Map([

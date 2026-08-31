@@ -35,6 +35,20 @@ import {
 } from './page-furniture-insets.ts';
 import { SHEET_GUTTER_PT } from './section-page-furniture.ts';
 
+type MultiSectionLayoutFieldRole = 'constructed' | 'post-processed';
+
+// A multi-section pass is a true layout constructor. Every new top-level field must be assigned
+// here or explicitly delegated to the common post-processors run by semantic-layout.ts.
+const MULTI_SECTION_LAYOUT_FIELD_ROLES = {
+  revision: 'constructed',
+  pages: 'constructed',
+  displayMode: 'post-processed',
+  contentControls: 'post-processed',
+  controlContextToken: 'post-processed',
+} as const satisfies Record<keyof SemanticLayout, MultiSectionLayoutFieldRole>;
+
+void MULTI_SECTION_LAYOUT_FIELD_ROLES;
+
 export interface SectionLayoutResult {
   readonly layout: SemanticLayout;
   readonly pages: readonly PageRecord[];
@@ -668,7 +682,7 @@ export function layoutMultiSectionDocument(
       }
       return page;
     });
-    finalized = { revision, pages: merged };
+    finalized = { ...freshlyFinalized, pages: merged };
   }
 
   if (multi) {

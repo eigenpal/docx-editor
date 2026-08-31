@@ -244,6 +244,8 @@ export interface TableFlowDeps {
   readonly inlineDrawingLayout?: import('./drawing-layout.ts').InlineDrawingLayoutContext;
   /** Per-paragraph drawing projection/resource token for break cache keys. */
   readonly drawingTokenForParagraph?: (paragraph: OoxmlNode) => string;
+  /** Per-paragraph semantic projection identity for cached cell lines. */
+  readonly projectionTokenForParagraph?: (paragraph: OoxmlNode) => string;
   /** @deprecated Prefer {@link drawingTokenForParagraph}. */
   readonly drawingLayoutToken?: string;
   /**
@@ -526,6 +528,7 @@ function placeCellParagraph(
       deps.drawingTokenForParagraph?.(paragraph) || deps.drawingLayoutToken || '',
       deps.inlineDrawingLayout !== undefined
     ),
+    projectionToken: deps.projectionTokenForParagraph?.(paragraph) ?? '',
     ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
   });
   if (deps.cache) deps.onCellBreakKey?.(key);
@@ -1498,8 +1501,9 @@ export function layoutRowFragmentBounded(
 /**
  * Measure the natural height of a full (unsplit) row without allocating line ids.
  * Used for whole-row preflight before committing placement.
+ * @internal
  */
-function stripAnchorSinksForProbe(deps: TableFlowDeps): TableFlowDeps {
+export function stripAnchorSinksForProbe(deps: TableFlowDeps): TableFlowDeps {
   return {
     ...deps,
     measuringOnly: true,

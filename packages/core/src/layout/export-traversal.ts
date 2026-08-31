@@ -1,7 +1,6 @@
 // Stable, record-only traversal for exporters and other non-DOM consumers.
 
 import type {
-  BlockFragmentRecord,
   LineRecord,
   PageRecord,
   ParagraphFragmentRecord,
@@ -9,22 +8,52 @@ import type {
   SourceRange,
   StyleSpanRecord,
 } from './semantic-records.ts';
+import type { AnchoredDrawingRecord } from './drawing-layout.ts';
+import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 import { everyStoryOrder } from './document-order.ts';
 import { lineSegments } from './line-segments.ts';
+import {
+  forEachSemanticStory,
+  forEachStoryParagraphFragment,
+  type SemanticRootStoryKind,
+  type SemanticStoryKind,
+  type SemanticStoryVisit,
+} from './semantic-record-queries.ts';
 
-/** Story containing a visited semantic span. @public */
-export type SemanticStoryKind =
-  | 'body'
-  | 'header'
-  | 'footer'
-  | 'footnote'
-  | 'endnote'
-  | 'note-separator';
+export {
+  forEachSemanticDrawing,
+  forEachSemanticStory,
+  type SemanticDrawingVisit,
+  type SemanticDrawingLayer,
+  type SemanticRootStoryKind,
+  type SemanticStoryKind,
+  type SemanticStoryVisit,
+  type StoryDrawingContext,
+  type StoryDrawingHost,
+  type StoryParagraphFragmentContext,
+} from './semantic-record-queries.ts';
 
 /** One span in the engine's published story order. @public */
 export interface SemanticSpanVisit {
   readonly page: PageRecord;
   readonly story: SemanticStoryKind;
+  /** Root story from which textbox descent began; equal to `story` outside textboxes. */
+  readonly rootStory: SemanticRootStoryKind;
+  /** Precise root host and absolute origin for story-relative geometry. */
+  readonly root: SemanticStoryVisit;
+  /** Absolute origin of the immediate root or textbox story containing this span. */
+  readonly storyOrigin: Readonly<{ x: number; y: number }>;
+  /** Absolute laid-out span bounds in page-stack coordinates. */
+  readonly absoluteBox: import('./semantic-records.ts').LayoutBox;
+  /** Owning note scope/area where applicable; null for body and page furniture. */
+  readonly noteScopeId: string | null;
+  readonly noteAreaKind: SemanticStoryVisit['noteAreaKind'];
+  /** Zero outside a textbox, otherwise its bounded nesting depth. */
+  readonly textboxDepth: number;
+  /** Immediate textbox-owning anchor, or null in the root story. */
+  readonly textboxOwner: AnchoredDrawingRecord | null;
+  /** Root-to-leaf textbox owners, preserving anchor identity for future exporters. */
+  readonly textboxPath: readonly AnchoredDrawingRecord[];
   /** Enclosing published fragment; use paragraphId for the authored span owner. */
   readonly paragraph: ParagraphFragmentRecord;
   /** Authored paragraph owning this span, including spans merged into another fragment. */
@@ -43,43 +72,63 @@ export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null {
   return span.projected === true ? null : span.range;
 }
 
-function visitBlocks(
-  page: PageRecord,
-  story: SemanticStoryKind,
-  blocks: readonly BlockFragmentRecord[],
+function visitStory(
+  root: SemanticStoryVisit,
   paragraphOrder: ReadonlyMap<string, number>,
   visitor: (visit: SemanticSpanVisit) => void
 ): void {
-  for (const block of blocks) {
-    if (block.kind === 'table') {
-      for (const row of block.rows) {
-        for (const cell of row.cells) {
-          visitBlocks(page, story, cell.blocks, paragraphOrder, visitor);
+  const { page, story, host, noteScopeId, noteAreaKind } = root;
+  const rootDrawingOrigin =
+    story === 'header' || story === 'footer'
+      ? (drawing: AnchoredDrawingRecord) =>
+          headerFooterAnchoredDrawingOrigin(drawing, root.origin, {
+            x: page.box.x,
+            y: page.box.y,
+          })
+      : undefined;
+  forEachStoryParagraphFragment(
+    host,
+    (block, textboxContext) => {
+      const { textboxDepth, textboxOwner, textboxPath, storyOrigin } = textboxContext;
+      const visitStoryKind = textboxDepth === 0 ? story : 'textbox';
+      for (const line of block.lines) {
+        const segments = [...lineSegments(line)].sort(
+          (left, right) =>
+            (paragraphOrder.get(left.paragraphId) ?? Number.MAX_SAFE_INTEGER) -
+            (paragraphOrder.get(right.paragraphId) ?? Number.MAX_SAFE_INTEGER)
+        );
+        for (const segment of segments) {
+          for (const span of segment.spans) {
+            visitor({
+              page,
+              story: visitStoryKind,
+              rootStory: story,
+              root,
+              storyOrigin,
+              absoluteBox: Object.freeze({
+                x: storyOrigin.x + span.box.x,
+                y: storyOrigin.y + span.box.y,
+                width: span.box.width,
+                height: span.box.height,
+              }),
+              noteScopeId,
+              noteAreaKind,
+              textboxDepth,
+              textboxOwner,
+              textboxPath,
+              paragraph: block,
+              paragraphId: segment.paragraphId,
+              line,
+              span,
+              sourceRange: exportSourceRangeOf(span),
+            });
+          }
         }
       }
-      continue;
-    }
-    for (const line of block.lines) {
-      const segments = [...lineSegments(line)].sort(
-        (left, right) =>
-          (paragraphOrder.get(left.paragraphId) ?? Number.MAX_SAFE_INTEGER) -
-          (paragraphOrder.get(right.paragraphId) ?? Number.MAX_SAFE_INTEGER)
-      );
-      for (const segment of segments) {
-        for (const span of segment.spans) {
-          visitor({
-            page,
-            story,
-            paragraph: block,
-            paragraphId: segment.paragraphId,
-            line,
-            span,
-            sourceRange: exportSourceRangeOf(span),
-          });
-        }
-      }
-    }
-  }
+    },
+    root.origin,
+    rootDrawingOrigin
+  );
 }
 
 /**
@@ -93,22 +142,5 @@ export function forEachSemanticSpan(
   const paragraphOrder = new Map(
     everyStoryOrder(layout).map((paragraphId, index) => [paragraphId, index])
   );
-  for (const page of layout.pages) {
-    visitBlocks(page, 'body', page.fragments, paragraphOrder, visitor);
-    if (page.header) {
-      visitBlocks(page, 'header', page.header.fragments, paragraphOrder, visitor);
-    }
-    if (page.footer) {
-      visitBlocks(page, 'footer', page.footer.fragments, paragraphOrder, visitor);
-    }
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      if (area.separator) {
-        visitBlocks(page, 'note-separator', area.separator.fragments, paragraphOrder, visitor);
-      }
-      for (const note of area.notes) {
-        visitBlocks(page, note.noteKind, note.fragments, paragraphOrder, visitor);
-      }
-    }
-  }
+  forEachSemanticStory(layout, (story) => visitStory(story, paragraphOrder, visitor));
 }

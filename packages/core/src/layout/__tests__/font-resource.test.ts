@@ -294,6 +294,95 @@ describe('font resource contracts', () => {
     expect(Object.isFrozen(result.request)).toBe(true);
   });
 
+  test('does not trust a proxy that spoofs internal preparation symbols', () => {
+    const supplied = sfntBytes();
+    const expected = supplied.slice();
+    const definition = source(regular, supplied);
+    const hostile = new Proxy(definition, {
+      has: (target, key) => typeof key === 'symbol' || Reflect.has(target, key),
+      get: (target, key, receiver) =>
+        key === 'actualHash' ? definition.hash : Reflect.get(target, key, receiver),
+    });
+    const counters = { copies: 0, hashes: 0 };
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 64,
+      resources: [hostile],
+      validateFont: boundedStructuralFontValidator,
+      instrumentation: {
+        onOwnedByteCopy: () => (counters.copies += 1),
+        onHash: () => (counters.hashes += 1),
+      },
+    });
+
+    supplied[0] = 99;
+    const result = snapshot.resolve(regular);
+    if (result instanceof FontResolutionError) throw result;
+    expect(counters).toEqual({ copies: 1, hashes: 1 });
+    expect(result.bytes).toEqual(expected);
+  });
+
+  test('authenticates byte views and never invokes caller-owned copy methods', () => {
+    const supplied = sfntBytes();
+    const definition = source(regular, supplied);
+    Object.defineProperty(supplied, 'slice', {
+      value() {
+        throw new Error('caller-owned slice must not execute');
+      },
+    });
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 64,
+      resources: [definition],
+      validateFont: boundedStructuralFontValidator,
+    });
+    const result = snapshot.resolve(regular);
+    if (result instanceof FontResolutionError) throw result;
+    expect(result.bytes).toEqual(sfntBytes());
+
+    const fake = new Proxy(sfntBytes(), {
+      get(target, key, receiver) {
+        if (key === 'byteLength') return 1;
+        if (key === 'slice') return () => new Uint8Array(1024 * 1024);
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    expect(() =>
+      createFontResourceSnapshot({
+        epoch: 1,
+        maxFontBytes: 64,
+        resources: [{ ...source(regular, sfntBytes()), bytes: fake }],
+        validateFont: boundedStructuralFontValidator,
+      })
+    ).toThrow('genuine byte array');
+  });
+
+  test('samples resource and substitution arrays by bounded index, never caller iteration', () => {
+    const definition = source();
+    const resources = [definition];
+    const substitutions = [{ from: italic, to: regular }];
+    let iteratorCalls = 0;
+    for (const input of [resources, substitutions]) {
+      Object.defineProperty(input, Symbol.iterator, {
+        value() {
+          iteratorCalls += 1;
+          throw new Error('caller-owned iterator must not execute');
+        },
+      });
+    }
+
+    const snapshot = createFontResourceSnapshot({
+      epoch: 1,
+      maxFontBytes: 64,
+      resources,
+      substitutions,
+      validateFont: boundedStructuralFontValidator,
+    });
+    expect(snapshot.resolve(regular)).not.toBeInstanceOf(FontResolutionError);
+    expect(snapshot.resolve(italic)).not.toBeInstanceOf(FontResolutionError);
+    expect(iteratorCalls).toBe(0);
+  });
+
   test('copies and validates each admitted face once regardless of repeated resolution', () => {
     const events: string[] = [];
     const snapshot = createFontResourceSnapshot({

@@ -1631,6 +1631,7 @@ export interface HeadlessDocumentView {
     documentThemeFonts(): HeadlessThemeFonts;
     // (undocumented)
     headerFooterPartsBySection(): readonly HeaderFooterParts[];
+    headerFooterResolutionBySection?(): readonly HeaderFooterSectionResolution[];
     // (undocumented)
     numberingRoot(): OoxmlElement | null;
     // (undocumented)

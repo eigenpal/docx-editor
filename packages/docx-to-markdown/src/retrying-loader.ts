@@ -2,11 +2,12 @@
 export function createRetryingLoader<T>(load: () => Promise<T>): () => Promise<T> {
   let pending: Promise<T> | undefined;
   return async (): Promise<T> => {
-    pending ??= load();
+    const attempt = (pending ??= load());
     try {
-      return await pending;
+      return await attempt;
     } catch (error) {
-      pending = undefined;
+      // A late observer of an older rejection must not clear a newer retry already in flight.
+      if (pending === attempt) pending = undefined;
       throw error;
     }
   };

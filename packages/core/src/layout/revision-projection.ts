@@ -336,5 +336,17 @@ export function formatRevisionOf(
 
 /** True when this stack of revisions marks its content as deleted from the live document. */
 export function revisionsAreDeletion(revisions: readonly RevisionAttribution[]): boolean {
-  return revisions.some((revision) => revision.kind === 'delete' || revision.kind === 'moveFrom');
+  return revisions.some((revision) => {
+    switch (revision.kind) {
+      case 'delete':
+      case 'moveFrom':
+        return true;
+      case 'insert':
+      case 'moveTo':
+      case 'format':
+        return false;
+      default:
+        return revision.kind satisfies never;
+    }
+  });
 }

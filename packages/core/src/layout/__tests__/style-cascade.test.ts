@@ -521,6 +521,26 @@ describe('bounded cacheToken fingerprint', () => {
     expect(c.cacheToken).not.toBe(a.cacheToken);
   });
 
+  test('table, row, and conditional style properties each invalidate the token', () => {
+    const tableStyle = (tblWidth: string, header: string, conditionalHeader: string) =>
+      `<w:style w:type="table" w:styleId="Grid">` +
+      `<w:tblPr><w:tblW w:type="dxa" w:w="${tblWidth}"/></w:tblPr>` +
+      `<w:trPr><w:tblHeader w:val="${header}"/></w:trPr>` +
+      `<w:tblStylePr w:type="firstRow"><w:trPr>` +
+      `<w:tblHeader w:val="${conditionalHeader}"/></w:trPr></w:tblStylePr>` +
+      '</w:style>';
+    const base = buildStyleCascadeTable(loadStyles(tableStyle('2400', 'off', 'off')));
+    const same = buildStyleCascadeTable(loadStyles(tableStyle('2400', 'off', 'off')));
+    const changedTable = buildStyleCascadeTable(loadStyles(tableStyle('4800', 'off', 'off')));
+    const styledHeader = buildStyleCascadeTable(loadStyles(tableStyle('2400', 'on', 'off')));
+    const conditionalHeader = buildStyleCascadeTable(loadStyles(tableStyle('2400', 'off', 'on')));
+
+    expect(same.cacheToken).toBe(base.cacheToken);
+    expect(changedTable.cacheToken).not.toBe(base.cacheToken);
+    expect(styledHeader.cacheToken).not.toBe(base.cacheToken);
+    expect(conditionalHeader.cacheToken).not.toBe(base.cacheToken);
+  });
+
   test('layout cache misses after styles change via producer token', () => {
     const measurer = createFixedMeasurer(6, 14);
     const cache = createParagraphLayoutCache<never>();

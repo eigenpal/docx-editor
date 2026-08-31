@@ -581,7 +581,8 @@ export function synthesizeParagraphWrapExclusionZones(options: {
         drawingNodeId: atom.atomId,
         anchorParagraphId: options.paragraphId,
         anchorModelStart: modelStart,
-        sourceOrder: options.sourceOrderOf?.(atom.atomId) ?? Number.MAX_SAFE_INTEGER,
+        sourceOrder:
+          options.sourceOrderOf?.(atom.projection.drawingNodeId) ?? Number.MAX_SAFE_INTEGER,
         paintLayer: atom.projection.anchor?.behindDocument
           ? ('behind' as const)
           : ('inFront' as const),
@@ -649,7 +650,8 @@ export function synthesizeParagraphTopAndBottomZones(options: {
         drawingNodeId: atom.atomId,
         anchorParagraphId: options.paragraphId,
         anchorModelStart: modelStart,
-        sourceOrder: options.sourceOrderOf?.(atom.atomId) ?? Number.MAX_SAFE_INTEGER,
+        sourceOrder:
+          options.sourceOrderOf?.(atom.projection.drawingNodeId) ?? Number.MAX_SAFE_INTEGER,
         paintLayer: atom.projection.anchor?.behindDocument
           ? ('behind' as const)
           : ('inFront' as const),
@@ -826,6 +828,7 @@ export function collectExclusionZonesByPage(
   sourceOrderOf?: (drawingNodeId: string) => number | undefined,
   columnLayout?: ExclusionColumnLayout
 ): ReadonlyMap<number, readonly ExclusionZone[]> {
+  exclusionZoneCollectionObserver?.(drawingLayout);
   const layout: ExclusionColumnLayout =
     columnLayout ?? Object.freeze({ columnCount: 1, columnGapPt: 0, contentWidth });
   const out = new Map<number, readonly ExclusionZone[]>();
@@ -842,6 +845,27 @@ export function collectExclusionZonesByPage(
     if (zones.length > 0) out.set(page.index, zones);
   }
   return out;
+}
+
+type ExclusionZoneCollectionObserver = (
+  drawingLayout: import('./drawing-layout.ts').InlineDrawingLayoutContext
+) => void;
+
+let exclusionZoneCollectionObserver: ExclusionZoneCollectionObserver | null = null;
+
+/**
+ * Install a scoped observer called once before each zone-map collection.
+ * Test-only: inactive by default, and disposal restores the prior observer for safe nesting.
+ * @internal
+ */
+export function observeExclusionZoneCollectionsForTest(
+  observer: ExclusionZoneCollectionObserver
+): () => void {
+  const previous = exclusionZoneCollectionObserver;
+  exclusionZoneCollectionObserver = observer;
+  return () => {
+    if (exclusionZoneCollectionObserver === observer) exclusionZoneCollectionObserver = previous;
+  };
 }
 
 /**
@@ -900,7 +924,11 @@ export function collectExclusionZonesByPageMemoized(
     drawingLayout,
     contentWidth,
     drawingSourceOrder
-      ? (drawingNodeId: string) => drawingSourceOrder.get(drawingNodeId)
+      ? (drawingNodeId: string) => {
+          const projectedId =
+            drawingLayout.projectionForAtom?.(drawingNodeId)?.drawingNodeId ?? drawingNodeId;
+          return drawingSourceOrder.get(projectedId);
+        }
       : undefined,
     columnLayout
   );

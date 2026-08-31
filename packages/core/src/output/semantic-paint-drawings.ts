@@ -17,7 +17,7 @@ import type {
   ParagraphFragmentRecord,
   TableFragmentRecord,
 } from '../layout/semantic-records.ts';
-import { forEachStoryDrawing } from '../layout/semantic-record-queries.ts';
+import { forEachPageStory, forEachStoryDrawing } from '../layout/semantic-record-queries.ts';
 import type { SemanticLayout } from '@docx-editor.dev/core/layout';
 import { paintLayerOf } from '../layout/drawing-exclusion.ts';
 import {
@@ -836,22 +836,7 @@ function forEachPageDrawing(
   page: PageRecord,
   visitDrawing: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
 ): void {
-  forEachStoryDrawing(
-    {
-      fragments: page.fragments,
-      ...(page.anchoredDrawings ? { anchoredDrawings: page.anchoredDrawings } : {}),
-    },
-    visitDrawing
-  );
-  for (const story of [page.header, page.footer]) {
-    if (story) forEachStoryDrawing(story, visitDrawing);
-  }
-  for (const area of [page.footnotes, page.endnotes]) {
-    if (!area) continue;
-    // The separator is an authored story too, and `paintPageNoteAreas` paints it.
-    if (area.separator) forEachStoryDrawing(area.separator, visitDrawing);
-    for (const note of area.notes) forEachStoryDrawing(note, visitDrawing);
-  }
+  forEachPageStory(page, ({ host }) => forEachStoryDrawing(host, visitDrawing));
 }
 
 interface PageDrawingKeys {

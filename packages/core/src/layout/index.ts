@@ -85,9 +85,12 @@ export {
   LayoutShapingConfigurationError,
   createLayoutShaping,
   disposeLayoutShaping,
+  layoutFontConfigurationFingerprint,
+  prepareLayoutFontConfiguration,
   type LayoutFontConfiguration,
   type LayoutFontSource,
   type LayoutFontSubstitution,
+  type PreparedLayoutFontConfiguration,
   type LayoutShapingInstrumentation,
 } from './layout-shaping.ts';
 export {
@@ -167,6 +170,8 @@ export {
   type PageGeometry,
   type PageRecord,
   type ListMarkerRecord,
+  type NoteAreaRecord,
+  type NoteStoryRecord,
   type ParagraphBottomBorderRecord,
   type ParagraphBorderEdge,
   type ParagraphBorderSide,
@@ -185,10 +190,22 @@ export {
 } from './semantic-records.ts';
 export {
   exportSourceRangeOf,
+  forEachSemanticDrawing,
+  forEachSemanticStory,
   forEachSemanticSpan,
+  type SemanticDrawingVisit,
+  type SemanticDrawingLayer,
   type SemanticSpanVisit,
+  type SemanticRootStoryKind,
   type SemanticStoryKind,
+  type SemanticStoryVisit,
+  type StoryDrawingContext,
+  type StoryDrawingHost,
+  type StoryParagraphFragmentContext,
 } from './export-traversal.ts';
+export { lineSegments, type LineSegment } from './line-segments.ts';
+export type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
+export type { TextboxStoryLayout } from './textbox-story-layout.ts';
 export {
   createDocumentStyleDependencies,
   type DocumentStyleDependencies,
@@ -203,7 +220,11 @@ export {
   documentRelationshipTargetIn,
   type CreateDocumentNotesInputOptions,
 } from './document-notes-input.ts';
-export { createDocumentLinkProjectors } from './document-link-projector.ts';
+export {
+  createDocumentLinkProjectors,
+  type DocumentLinkProjectors,
+} from './document-link-projector.ts';
+export type { StoryProjectionDependencies } from './text-projection-epoch.ts';
 export {
   createFieldLinkRegistry,
   type FieldLinkRegistry,
@@ -479,7 +500,10 @@ export {
   type RevisionKind,
 } from './revision-projection.ts';
 export {
+  createLayoutShapedMeasurer,
   createShapedMeasurer,
+  type LayoutEnvironmentShapedMeasurerOptions,
+  type LayoutShapingEnvironment,
   type LayoutShapingOptions,
   type ShapedMeasurerOptions,
 } from './shaped-measurer.ts';

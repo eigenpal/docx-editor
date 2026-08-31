@@ -395,6 +395,34 @@ describe('TreeDocxSession — package-aware HF mutation', () => {
     expect(session.headerFooterResolutionBySection()).toBe(beforeResolution);
   });
 
+  test('a shell-only write after a body edit cannot promote stale header/footer resolution', () => {
+    const opened = openTreeSession(sharedHeaderDoc());
+    if (!opened.ok) throw new Error(opened.reason);
+    const session = opened.session;
+    const beforeParts = session.headerFooterPartsBySection();
+    const beforeResolution = session.headerFooterResolutionBySection();
+    const bodyId = session.paragraphIds()[0]!;
+
+    const result = session.applyTreeOps([
+      { op: 'insertText', paragraphId: bodyId, offset: 0, text: 'Z-' },
+    ]);
+    expect(result.committed).toBe(true);
+    const revision = session.packageRevision();
+
+    // Relationship admission replaces the package shell without publishing another revision.
+    // Do not read furniture between the text edit and this write: that is the interleaving which
+    // previously relabelled the pre-edit resolution as belonging to the post-shell package.
+    expect(session.ensureHyperlinkRelationship('https://after-edit.example')).not.toBeNull();
+    expect(session.packageRevision()).toBe(revision);
+
+    const afterParts = session.headerFooterPartsBySection();
+    const afterResolution = session.headerFooterResolutionBySection();
+    expect(afterParts).not.toBe(beforeParts);
+    expect(afterResolution).not.toBe(beforeResolution);
+    expect(afterParts[0]!.headers.get('default')?.name).toBe('/word/header1.xml');
+    expect(afterResolution[0]!.headers.get('default')?.rId).toBe('rId7');
+  });
+
   test('invalid HF rId is rejected without mutating the body', () => {
     const opened = openTreeSession(bodyAndHeaderDoc());
     if (!opened.ok) throw new Error(opened.reason);

@@ -98,8 +98,8 @@
     "i18n:status": "node scripts/validate-i18n.mjs status",
     "i18n:validate": "node scripts/validate-i18n.mjs validate && node scripts/check-i18n-unused.mjs",
     "i18n:unused": "node scripts/check-i18n-unused.mjs --list",
-    "lint": "node scripts/check-eslint-max-lines-globs.mjs && eslint packages/*/src/ examples/*/src/ examples/*/app/ examples/shared/",
-    "lint:fix": "node scripts/check-eslint-max-lines-globs.mjs && eslint packages/*/src/ examples/*/src/ examples/*/app/ examples/shared/ --fix",
+    "lint": "node scripts/check-eslint-max-lines-globs.mjs && eslint packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/",
+    "lint:fix": "node scripts/check-eslint-max-lines-globs.mjs && eslint packages/*/src/ packages/docx-to-markdown/test/ examples/*/src/ examples/*/app/ examples/shared/ --fix",
     "notices:check": "bun scripts/generate-third-party-notices.mjs --check",
     "notices:generate": "bun scripts/generate-third-party-notices.mjs",
     "parity:prepublish": "node scripts/parity-prepublish.mjs",
@@ -170,7 +170,7 @@
   "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/eigenpal/docx-editor.git"
+    "url": "https://github.com/eigenpal/docx-editor.git"
   },
   "publishConfig": {
     "access": "public"
@@ -197,14 +197,5 @@
     "prosemirror-commands": "^1.7.1",
     "prosemirror-history": "^1.5.0",
     "prosemirror-keymap": "^1.2.3"
-  },
-  "description": "<p align=\"center\">   <a href=\"https://www.docx-editor.dev/\">     <img src=\"./.github/assets/header.png\" alt=\"DOCX Editor — .docx in, .docx out. Open source, agent ready, client-side.\" width=\"500\" />   </a> </p>",
-  "main": "eslint.config.js",
-  "directories": {
-    "doc": "docs",
-    "example": "examples"
-  },
-  "bugs": {
-    "url": "https://github.com/eigenpal/docx-editor/issues"
   }
 }

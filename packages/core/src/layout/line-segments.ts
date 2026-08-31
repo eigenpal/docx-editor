@@ -61,39 +61,56 @@ export function lineSegments(line: LineRecord): readonly LineSegment[] {
     spans: line.spans,
     drawings: line.drawings ?? [],
   };
-  const mixed = line.spans.some((span) => span.range.paragraphId !== line.range.paragraphId);
+  const mixed =
+    line.spans.some((span) => span.range.paragraphId !== line.range.paragraphId) ||
+    (line.drawings ?? []).some((drawing) => drawing.paragraphId !== line.range.paragraphId);
   const segments = mixed ? splitLineByParagraph(line) : [whole];
   lineSegmentsCache.set(line, segments);
   return segments;
 }
 
 function splitLineByParagraph(line: LineRecord): readonly LineSegment[] {
-  const segments: LineSegment[] = [];
-  for (const span of line.spans) {
-    const previous = segments[segments.length - 1];
-    if (previous && previous.paragraphId === span.range.paragraphId) {
-      segments[segments.length - 1] = {
-        ...previous,
-        start: Math.min(previous.start, span.range.start),
-        end: Math.max(previous.end, span.range.end),
-        spans: [...previous.spans, span],
-      };
-      continue;
-    }
-    segments.push({
+  const visualOwners = [
+    ...line.spans.map((span, index) => ({
       paragraphId: span.range.paragraphId,
-      start: span.range.start,
-      end: span.range.end,
-      spans: [span],
-      drawings: [],
-    });
+      x: span.box?.x ?? index,
+      order: index * 2 + 1,
+    })),
+    ...(line.drawings ?? []).map((drawing, index) => ({
+      paragraphId: drawing.paragraphId,
+      x: drawing.advanceStart ?? drawing.x ?? line.spans.length + index,
+      order: index * 2,
+    })),
+  ].sort((left, right) => left.x - right.x || left.order - right.order);
+  const paragraphIds: string[] = [];
+  for (const atom of visualOwners) {
+    if (!paragraphIds.includes(atom.paragraphId)) paragraphIds.push(atom.paragraphId);
   }
-  return segments.map((segment) => ({
-    ...segment,
-    drawings: (line.drawings ?? []).filter(
-      (drawing) => drawing.paragraphId === segment.paragraphId
-    ),
-  }));
+  return paragraphIds.map((paragraphId) => {
+    const spans = line.spans.filter((span) => span.range.paragraphId === paragraphId);
+    const drawings = (line.drawings ?? []).filter((drawing) => drawing.paragraphId === paragraphId);
+    const starts = [
+      ...spans.map((span) => span.range.start),
+      ...drawings.map((drawing) => drawing.start),
+    ];
+    const ends = [
+      ...spans.map((span) => span.range.end),
+      ...drawings.map((drawing) => drawing.start + 1),
+    ];
+    let start = starts[0]!;
+    let end = ends[0]!;
+    for (let index = 1; index < starts.length; index += 1) {
+      if (starts[index]! < start) start = starts[index]!;
+      if (ends[index]! > end) end = ends[index]!;
+    }
+    return {
+      paragraphId,
+      start,
+      end,
+      spans,
+      drawings,
+    };
+  });
 }
 
 /** The segment a paragraph owns on this line, or null when it owns none of it. */

@@ -13,7 +13,9 @@
     "allowImportingTsExtensions": true,
     "baseUrl": ".",
     "paths": {
+      "@docx-editor.dev/core": ["../core/src/index.ts"],
       "@docx-editor.dev/core/export": ["../core/src/export/index.ts"],
+      "@docx-editor.dev/core/editor": ["../core/src/editor/index.ts"],
       "@docx-editor.dev/core/layout": ["../core/src/layout/index.ts"],
       "@docx-editor.dev/core/store": ["../core/src/store/index.ts"],
       "@docx-editor.dev/fonts": ["../fonts/src/index.ts"]

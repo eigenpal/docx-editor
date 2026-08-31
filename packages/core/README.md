@@ -50,6 +50,7 @@ layout pass, and the paint step directly.
 | `./store`                     | The canonical tree and its transactional store.                                              |
 | `./layout`                    | The DOM-free layout pass.                                                                    |
 | `./output`                    | Serialization.                                                                               |
+| `./export`                    | Reusable, DOM-free semantic layout sessions for Markdown, PDF, and future exporters.         |
 | `./automation`                | The object model behind `@docx-editor.dev/editor-api`.                                       |
 | `./collaboration`             | Provider-neutral collaboration session contracts.                                            |
 | `./collaboration/replication` | Replication helpers for collaboration providers.                                             |
@@ -68,6 +69,10 @@ as tree operations, so the browser never invents markup inside your document.
 Nodes are typed where layout needs them and generic everywhere else, preserving the element
 verbatim. Content the engine does not model is carried rather than dropped, so a document full
 of unknown extensions still opens, edits, and saves.
+
+Export sessions use the editor's reader-safe revision view by default: `all-markup` keeps both
+halves of pending tracked changes visible. Pass `displayMode: 'proposed'` or
+`displayMode: 'original'` explicitly when the exporter should present a resolved view instead.
 
 ## Fidelity
 

@@ -8,19 +8,26 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import {
   acquireSharedExportShaping,
-  exportMarkdownFrom as translateMarkdown,
   openDocumentForExport as openCoreDocumentForExport,
   type ExportDocumentSource,
   type ExportSession,
-  type MarkdownExportOptions,
-  type MarkdownExportResult,
-  type MarkdownTranslationOptions,
   type OpenDocumentForExportOptions,
   type OpenDocumentForExportResult,
 } from '@docx-editor.dev/core/export';
-import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
+import {
+  HARD_MAX_FONT_BYTES,
+  prepareLayoutFontConfiguration,
+  type LayoutFontConfiguration,
+  type PreparedLayoutFontConfiguration,
+} from '@docx-editor.dev/core/layout';
 import { openHeadlessDocument } from '@docx-editor.dev/core/store';
-import { loadDefaultFonts, type DefaultFontsFragment } from '@docx-editor.dev/fonts';
+import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import {
+  exportMarkdownFrom as translateMarkdown,
+  type MarkdownExportOptions,
+  type MarkdownExportResult,
+  type MarkdownTranslationOptions,
+} from './markdown.ts';
 import { createRetryingLoader } from './retrying-loader.ts';
 
 export { ExportResourceError } from '@docx-editor.dev/core/export';
@@ -28,14 +35,16 @@ export { ExportResourceError } from '@docx-editor.dev/core/export';
 export type {
   ExportDocumentSource,
   ExportSession,
+  OpenDocumentForExportOptions,
+  OpenDocumentForExportResult,
+} from '@docx-editor.dev/core/export';
+export type {
   MarkdownExportOptions,
   MarkdownExportResult,
   MarkdownImageResult,
   MarkdownPage,
   MarkdownTranslationOptions,
-  OpenDocumentForExportOptions,
-  OpenDocumentForExportResult,
-} from '@docx-editor.dev/core/export';
+} from './markdown.ts';
 
 const packagedFileFetch = (async (input: RequestInfo | URL): Promise<Response> => {
   const value =
@@ -50,7 +59,11 @@ const packagedFileFetch = (async (input: RequestInfo | URL): Promise<Response> =
   }
 }) as typeof fetch;
 
-const defaultFonts = createRetryingLoader(async (): Promise<DefaultFontsFragment> => {
+interface DefaultExportFonts {
+  readonly configuration: PreparedLayoutFontConfiguration;
+}
+
+const defaultFonts = createRetryingLoader(async (): Promise<DefaultExportFonts> => {
   const fragment = await loadDefaultFonts({ fetcher: packagedFileFetch });
   if (fragment.failures.length > 0 || fragment.sources.length === 0) {
     const detail = fragment.failures
@@ -60,7 +73,17 @@ const defaultFonts = createRetryingLoader(async (): Promise<DefaultFontsFragment
       `Unable to provision packaged fonts for headless export${detail ? `: ${detail}` : ''}`
     );
   }
-  return fragment;
+  const configuration = Object.freeze({
+    epoch: 1,
+    maxFontBytes: HARD_MAX_FONT_BYTES,
+    sources: fragment.sources,
+    substitutions: fragment.substitutions,
+    defaultFont: Object.freeze({ family: 'Calibri', sizeHalfPoints: 22 }),
+  }) satisfies LayoutFontConfiguration;
+  const prepared = prepareLayoutFontConfiguration(configuration);
+  return Object.freeze({
+    configuration: prepared,
+  });
 });
 
 function isByteSource(source: ExportDocumentSource): source is Uint8Array {
@@ -78,31 +101,13 @@ export async function openDocumentForExport(
     ? openHeadlessDocument(source)
     : { ok: true as const, view: source };
   if (!prepared.ok) return prepared;
-  const fragment = await defaultFonts();
-  const configuration = {
-    epoch: 1,
-    maxFontBytes: HARD_MAX_FONT_BYTES,
-    sources: fragment.sources,
-    substitutions: fragment.substitutions,
-    defaultFont: { family: 'Calibri', sizeHalfPoints: 22 },
-  } as const;
-  // The core cache is process-wide and multiple wrapper/fonts versions can share it. Include
-  // every immutable configuration input, not only bytes, so request metadata and metric
-  // substitutions can never alias across package versions.
-  const configurationKey = JSON.stringify({
-    epoch: configuration.epoch,
-    maxFontBytes: configuration.maxFontBytes,
-    sources: fragment.sources.map(({ bytes: _bytes, ...source }) => source),
-    substitutions: fragment.substitutions,
-    defaultFont: configuration.defaultFont,
-  });
-  const shared = await acquireSharedExportShaping({
-    cacheKey: `@docx-editor.dev/fonts:${configurationKey}`,
-    loadConfiguration: async () => configuration,
-  });
+  const defaults = await defaultFonts();
+  const shared = await acquireSharedExportShaping(defaults.configuration);
   return openCoreDocumentForExport(prepared.view, {
     ...options,
-    reuseAcrossRevisions: isByteSource(source) ? false : options.reuseAcrossRevisions,
+    reuseAcrossRevisions: isByteSource(source)
+      ? (options.reuseAcrossRevisions ?? false)
+      : options.reuseAcrossRevisions,
     measurer: shared.createMeasurer(),
     producer: options.producer ?? shared.producer,
   });
@@ -128,7 +133,7 @@ export async function exportMarkdown(
     );
   }
   try {
-    return await translateMarkdown(opened.session, options.image ? { image: options.image } : {});
+    return await translateMarkdown(opened.session, options);
   } finally {
     opened.session.dispose();
   }

@@ -10,13 +10,17 @@ import type {
   BlockFragmentRecord,
   ContentControlBoundaryRecord,
   ContentControlLock,
+  HeaderFooterStoryRecord,
   InlineDrawingRecord,
   LayoutBox,
   LineRecord,
+  NoteAreaRecord,
+  NoteStoryRecord,
   PageRecord,
   ParagraphFragmentRecord,
   SemanticLayout,
 } from './semantic-records.ts';
+import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
 
 /**
  * Depth-first paragraph fragments of one page, in reading order.
@@ -93,8 +97,292 @@ export function anchoredDrawingsOf(page: PageRecord): readonly AnchoredDrawingRe
 
 /** The fragment-plus-anchored-drawings shape every laid-out story shares. */
 export interface StoryDrawingHost {
+  /** Root story fragments in their published reading order. */
   readonly fragments: readonly BlockFragmentRecord[];
+  /** Story-level positioned drawings, when that story supports anchors. */
   readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
+}
+
+/** Root story kinds published directly from one page record. @public */
+export type SemanticRootStoryKind =
+  | 'body'
+  | 'header'
+  | 'footer'
+  | 'footnote'
+  | 'endnote'
+  | 'note-separator';
+
+/** Story containing a visited semantic record. @public */
+export type SemanticStoryKind = SemanticRootStoryKind | 'textbox';
+
+/**
+ * One root story in the engine's complete published page/story order.
+ *
+ * The story discriminant preserves the precise published host type so exporters can consume
+ * furniture and note metadata without casting or searching the page graph a second time.
+ * @public
+ */
+export type SemanticStoryVisit =
+  | {
+      readonly page: PageRecord;
+      readonly story: 'body';
+      readonly host: PageRecord;
+      /** Absolute story bounds; body records are relative to the page content box. */
+      readonly box: LayoutBox;
+      /** Absolute origin to add to story-relative fragment and drawing coordinates. */
+      readonly origin: Readonly<{ x: number; y: number }>;
+      readonly noteScopeId: null;
+      readonly noteAreaKind: null;
+    }
+  | {
+      readonly page: PageRecord;
+      readonly story: 'header' | 'footer';
+      readonly host: HeaderFooterStoryRecord;
+      readonly box: LayoutBox;
+      readonly origin: Readonly<{ x: number; y: number }>;
+      readonly noteScopeId: null;
+      readonly noteAreaKind: null;
+    }
+  | {
+      readonly page: PageRecord;
+      readonly story: 'footnote' | 'endnote';
+      readonly host: NoteStoryRecord;
+      readonly box: LayoutBox;
+      readonly origin: Readonly<{ x: number; y: number }>;
+      readonly noteScopeId: string;
+      readonly noteAreaKind: NoteAreaRecord['kind'];
+    }
+  | {
+      readonly page: PageRecord;
+      readonly story: 'note-separator';
+      readonly host: NonNullable<NoteAreaRecord['separator']>;
+      readonly box: LayoutBox;
+      readonly origin: Readonly<{ x: number; y: number }>;
+      readonly noteScopeId: null;
+      readonly noteAreaKind: NoteAreaRecord['kind'];
+    };
+
+const EMPTY_STORY_BOX = Object.freeze({ x: 0, y: 0, width: 0, height: 0 });
+
+function storyGeometry(box: LayoutBox | undefined): {
+  readonly box: LayoutBox;
+  readonly origin: Readonly<{ x: number; y: number }>;
+} {
+  // Published records always carry geometry. The fallback keeps record-only tooling defensive
+  // when handed a deliberately partial synthetic layout (common in focused consumer tests).
+  const resolved = box ?? EMPTY_STORY_BOX;
+  return { box: resolved, origin: Object.freeze({ x: resolved.x, y: resolved.y }) };
+}
+
+type StoryFieldRole = 'story' | 'metadata';
+
+// Adding a page field cannot silently bypass the canonical story walk: it must first be
+// classified here, and every field classified as a story must also enter the traversed set.
+const PAGE_RECORD_FIELD_ROLES = {
+  id: 'metadata',
+  index: 'metadata',
+  box: 'metadata',
+  contentBox: 'metadata',
+  fragments: 'story',
+  columnSeparators: 'metadata',
+  anchoredDrawings: 'story',
+  header: 'story',
+  footer: 'story',
+  footnotes: 'story',
+  endnotes: 'story',
+  noteStream: 'metadata',
+  pageFieldSource: 'metadata',
+  hasBodyPageFields: 'metadata',
+  contentControls: 'metadata',
+} as const satisfies Record<keyof PageRecord, StoryFieldRole>;
+
+type PageStoryField = {
+  [Key in keyof typeof PAGE_RECORD_FIELD_ROLES]: (typeof PAGE_RECORD_FIELD_ROLES)[Key] extends 'story'
+    ? Key
+    : never;
+}[keyof typeof PAGE_RECORD_FIELD_ROLES];
+
+const TRAVERSED_PAGE_STORY_FIELDS = {
+  fragments: true,
+  anchoredDrawings: true,
+  header: true,
+  footer: true,
+  footnotes: true,
+  endnotes: true,
+} as const satisfies Record<PageStoryField, true>;
+const PAGE_STORY_FIELDS = Object.freeze(
+  Object.keys(TRAVERSED_PAGE_STORY_FIELDS) as PageStoryField[]
+);
+
+const NOTE_AREA_FIELD_ROLES = {
+  kind: 'metadata',
+  placement: 'metadata',
+  box: 'metadata',
+  separator: 'story',
+  notes: 'story',
+  fallbackReason: 'metadata',
+} as const satisfies Record<keyof NoteAreaRecord, StoryFieldRole>;
+
+type NoteAreaStoryField = {
+  [Key in keyof typeof NOTE_AREA_FIELD_ROLES]: (typeof NOTE_AREA_FIELD_ROLES)[Key] extends 'story'
+    ? Key
+    : never;
+}[keyof typeof NOTE_AREA_FIELD_ROLES];
+
+const TRAVERSED_NOTE_AREA_STORY_FIELDS = {
+  separator: true,
+  notes: true,
+} as const satisfies Record<NoteAreaStoryField, true>;
+const NOTE_AREA_STORY_FIELDS = Object.freeze(
+  Object.keys(TRAVERSED_NOTE_AREA_STORY_FIELDS) as NoteAreaStoryField[]
+);
+
+void PAGE_RECORD_FIELD_ROLES;
+void TRAVERSED_PAGE_STORY_FIELDS;
+void NOTE_AREA_FIELD_ROLES;
+void TRAVERSED_NOTE_AREA_STORY_FIELDS;
+
+function forEachNoteAreaStory(
+  page: PageRecord,
+  area: NoteAreaRecord,
+  storyKind: 'footnote' | 'endnote',
+  visit: (story: SemanticStoryVisit) => void
+): void {
+  const noteAreaKind =
+    area.kind ?? (storyKind === 'footnote' ? ('footnotes' as const) : ('endnotes' as const));
+  for (const field of NOTE_AREA_STORY_FIELDS) {
+    switch (field) {
+      case 'separator':
+        if (area.separator) {
+          visit({
+            page,
+            story: 'note-separator',
+            host: area.separator,
+            ...storyGeometry(area.separator.box),
+            noteScopeId: null,
+            noteAreaKind,
+          });
+        }
+        break;
+      case 'notes':
+        for (const note of area.notes) {
+          // The PageRecord field is the page-level authority for the published story kind. This
+          // keeps traversal deterministic even for defensive records whose redundant metadata
+          // is absent or inconsistent.
+          switch (storyKind) {
+            case 'footnote':
+              visit({
+                page,
+                story: 'footnote',
+                host: note,
+                ...storyGeometry(note.box),
+                noteScopeId: note.scopeId,
+                noteAreaKind,
+              });
+              break;
+            case 'endnote':
+              visit({
+                page,
+                story: 'endnote',
+                host: note,
+                ...storyGeometry(note.box),
+                noteScopeId: note.scopeId,
+                noteAreaKind,
+              });
+              break;
+            default:
+              storyKind satisfies never;
+          }
+        }
+        break;
+      default:
+        field satisfies never;
+    }
+  }
+}
+
+/** Visit all root stories on one page through the single exhaustive story authority. @internal */
+export function forEachPageStory(
+  page: PageRecord,
+  visit: (story: SemanticStoryVisit) => void
+): void {
+  for (const field of PAGE_STORY_FIELDS) {
+    switch (field) {
+      case 'fragments':
+        visit({
+          page,
+          story: 'body',
+          host: page,
+          ...storyGeometry(page.contentBox),
+          noteScopeId: null,
+          noteAreaKind: null,
+        });
+        break;
+      case 'anchoredDrawings':
+        // Anchors are body-story content already reached through the page host above.
+        break;
+      case 'header':
+        if (page.header) {
+          visit({
+            page,
+            story: 'header',
+            host: page.header,
+            ...storyGeometry(page.header.box),
+            noteScopeId: null,
+            noteAreaKind: null,
+          });
+        }
+        break;
+      case 'footer':
+        if (page.footer) {
+          visit({
+            page,
+            story: 'footer',
+            host: page.footer,
+            ...storyGeometry(page.footer.box),
+            noteScopeId: null,
+            noteAreaKind: null,
+          });
+        }
+        break;
+      case 'footnotes':
+        if (page.footnotes) forEachNoteAreaStory(page, page.footnotes, 'footnote', visit);
+        break;
+      case 'endnotes':
+        if (page.endnotes) forEachNoteAreaStory(page, page.endnotes, 'endnote', visit);
+        break;
+      default:
+        field satisfies never;
+    }
+  }
+}
+
+/** Visit every root story in a semantic layout, preserving page/story order. @public */
+export function forEachSemanticStory(
+  layout: SemanticLayout,
+  visit: (story: SemanticStoryVisit) => void
+): void {
+  for (const page of layout.pages) forEachPageStory(page, visit);
+}
+
+/** Location of one paragraph fragment within a recursively painted story graph. @public */
+export interface StoryParagraphFragmentContext {
+  /** Absolute origin of the immediate story containing this record. */
+  readonly storyOrigin: Readonly<{ x: number; y: number }>;
+  /** Zero for the supplied story; increments for every anchored textbox boundary. */
+  readonly textboxDepth: number;
+  /** Drawing whose textbox directly owns this fragment, or null for the root story. */
+  readonly textboxOwner: AnchoredDrawingRecord | null;
+  /** Root-to-leaf owning drawings, empty for the supplied story. */
+  readonly textboxPath: readonly AnchoredDrawingRecord[];
+}
+
+/** Location of one drawing within a recursively painted story graph. @public */
+export interface StoryDrawingContext extends StoryParagraphFragmentContext {
+  /** Enclosing paragraph for an inline drawing; null for a story-level anchor. */
+  readonly paragraph: ParagraphFragmentRecord | null;
+  /** Enclosing line for an inline drawing; null for a story-level anchor. */
+  readonly line: LineRecord | null;
 }
 
 /**
@@ -106,41 +394,181 @@ export interface StoryDrawingHost {
  * bound the walk rather than to trust it, since the cost of the bound is nothing.
  */
 const MAX_STORY_DRAWING_WALK_DEPTH = 16;
+const ZERO_STORY_ORIGIN = Object.freeze({ x: 0, y: 0 });
+
+function textboxStoryOrigin(
+  origin: Readonly<{ x: number; y: number }>,
+  drawing: AnchoredDrawingRecord,
+  placedDrawingOrigin?: Readonly<{ x: number; y: number }>
+): Readonly<{ x: number; y: number }> {
+  const offset = drawing.textboxStory?.contentOffset ?? ZERO_STORY_ORIGIN;
+  const placed = placedDrawingOrigin ?? { x: origin.x + drawing.x, y: origin.y + drawing.y };
+  return Object.freeze({
+    x: placed.x + offset.x,
+    y: placed.y + offset.y,
+  });
+}
+
+type RootDrawingOrigin = (drawing: AnchoredDrawingRecord) => Readonly<{ x: number; y: number }>;
 
 /**
  * Visit every drawing record one story paints — line drawings, anchored drawings, and the
  * drawings inside each anchored drawing's text-box story, recursively.
  *
- * The ONE walk shared by the two consumers that must agree by construction: the furniture
- * invalidation token (a drawing this walk misses leaves a settled picture a permanent
- * placeholder) and paint's page reconcile (a drawing it misses gets a live resource
- * revoked). Table interiors flatten through rows and cells.
+ * The ONE recursive walk shared by furniture invalidation, export resource settlement,
+ * exporter provenance, and paint reconciliation. A drawing missed here can otherwise leave a
+ * permanent placeholder or have a live resource revoked. Table interiors flatten through rows
+ * and cells.
  */
 export function forEachStoryDrawing(
   story: StoryDrawingHost,
-  visit: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => void
+  visit: (
+    drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+    context: StoryDrawingContext
+  ) => void,
+  rootOrigin: Readonly<{ x: number; y: number }> = ZERO_STORY_ORIGIN,
+  rootDrawingOrigin?: RootDrawingOrigin
 ): void {
-  const visitBlock = (block: BlockFragmentRecord): void => {
+  const visitBlock = (block: BlockFragmentRecord, context: StoryParagraphFragmentContext): void => {
     if (block.kind === 'table') {
       for (const row of block.rows) {
-        for (const cell of row.cells) for (const inner of cell.blocks) visitBlock(inner);
+        for (const cell of row.cells) {
+          for (const inner of cell.blocks) visitBlock(inner, context);
+        }
       }
       return;
     }
     for (const line of block.lines) {
-      for (const drawing of line.drawings ?? []) visit(drawing);
+      for (const drawing of line.drawings ?? []) {
+        visit(drawing, { ...context, paragraph: block, line });
+      }
     }
   };
-  const visitStory = (inner: StoryDrawingHost, depth: number): void => {
+  const visitStory = (
+    inner: StoryDrawingHost,
+    depth: number,
+    textboxPath: readonly AnchoredDrawingRecord[],
+    storyOrigin: Readonly<{ x: number; y: number }>
+  ): void => {
     if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
+    const context: StoryParagraphFragmentContext = {
+      storyOrigin,
+      textboxDepth: depth,
+      textboxOwner: textboxPath[textboxPath.length - 1] ?? null,
+      textboxPath,
+    };
     for (const drawing of inner.anchoredDrawings ?? []) {
-      visit(drawing);
+      visit(drawing, { ...context, paragraph: null, line: null });
       // A text box is a story of its own, nested in the drawing that anchors it.
-      if (drawing.textboxStory) visitStory(drawing.textboxStory, depth + 1);
+      if (drawing.textboxStory) {
+        visitStory(
+          drawing.textboxStory,
+          depth + 1,
+          Object.freeze([...textboxPath, drawing]),
+          textboxStoryOrigin(
+            storyOrigin,
+            drawing,
+            depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
+          )
+        );
+      }
     }
-    for (const fragment of inner.fragments) visitBlock(fragment);
+    for (const fragment of inner.fragments) visitBlock(fragment, context);
   };
-  visitStory(story, 0);
+  visitStory(story, 0, Object.freeze([]), rootOrigin);
+}
+
+/** Drawing layer relative to its owning story's text. @public */
+export type SemanticDrawingLayer = 'behind-text' | 'inline' | 'in-front-of-text';
+
+/**
+ * One drawing in bounded graph-enumeration order with exporter-grade provenance.
+ *
+ * Enumeration is deliberately not paint order: story anchors (and nested textboxes) are visited
+ * before inline line drawings. Renderers use `paintLayer` plus record geometry to compose layers.
+ * @public
+ */
+export interface SemanticDrawingVisit extends StoryDrawingContext {
+  /** Physical page carrying this drawing occurrence. */
+  readonly page: PageRecord;
+  /** Immediate story classification; `textbox` after textbox descent. */
+  readonly story: SemanticStoryKind;
+  /** Root story from which textbox descent began. */
+  readonly rootStory: SemanticRootStoryKind;
+  /** Note scope for drawings in note stories; null elsewhere. */
+  readonly noteScopeId: string | null;
+  /** Owning note-area kind for note/separator drawings; null elsewhere. */
+  readonly noteAreaKind: NoteAreaRecord['kind'] | null;
+  /** Precise root host and absolute origin for story-relative geometry. */
+  readonly root: SemanticStoryVisit;
+  /** Absolute origin of this drawing's extent in page-stack coordinates. */
+  readonly drawingOrigin: Readonly<{ x: number; y: number }>;
+  /** Absolute painted bounds, including effects and clipping. */
+  readonly absolutePaintBounds: LayoutBox;
+  /** Absolute pointer/hit bounds. */
+  readonly absoluteHitBounds: LayoutBox;
+  /** Layer relative to text in the immediate owning story. */
+  readonly paintLayer: SemanticDrawingLayer;
+  /** Published drawing record; inline visits also carry paragraph and line. */
+  readonly drawing: InlineDrawingRecord | AnchoredDrawingRecord;
+}
+
+/** Visit every drawing through the canonical root-story and recursive textbox walks. @public */
+export function forEachSemanticDrawing(
+  layout: SemanticLayout,
+  visit: (drawing: SemanticDrawingVisit) => void
+): void {
+  forEachSemanticStory(layout, (root) => {
+    const { page, story: rootStory, host, noteScopeId, noteAreaKind } = root;
+    const rootDrawingOrigin: RootDrawingOrigin | undefined =
+      rootStory === 'header' || rootStory === 'footer'
+        ? (drawing) =>
+            headerFooterAnchoredDrawingOrigin(drawing, root.origin, {
+              x: page.box.x,
+              y: page.box.y,
+            })
+        : undefined;
+    forEachStoryDrawing(
+      host,
+      (drawing, context) => {
+        const drawingOrigin =
+          drawing.kind === 'anchoredDrawing' && context.textboxDepth === 0 && rootDrawingOrigin
+            ? rootDrawingOrigin(drawing)
+            : Object.freeze({
+                x: context.storyOrigin.x + drawing.x,
+                y: context.storyOrigin.y + drawing.y,
+              });
+        const absoluteBox = (box: LayoutBox): LayoutBox =>
+          Object.freeze({
+            x: drawingOrigin.x + box.x - drawing.x,
+            y: drawingOrigin.y + box.y - drawing.y,
+            width: box.width,
+            height: box.height,
+          });
+        visit({
+          page,
+          story: context.textboxDepth === 0 ? rootStory : 'textbox',
+          rootStory,
+          noteScopeId,
+          noteAreaKind,
+          root,
+          drawingOrigin,
+          absolutePaintBounds: absoluteBox(drawing.paintBounds),
+          absoluteHitBounds: absoluteBox(drawing.hitBounds),
+          paintLayer:
+            drawing.kind === 'inlineDrawing'
+              ? 'inline'
+              : drawing.behindDocument
+                ? 'behind-text'
+                : 'in-front-of-text',
+          drawing,
+          ...context,
+        });
+      },
+      root.origin,
+      rootDrawingOrigin
+    );
+  });
 }
 
 /**
@@ -155,17 +583,42 @@ export function forEachStoryDrawing(
  */
 export function forEachStoryParagraphFragment(
   story: StoryDrawingHost,
-  visit: (fragment: ParagraphFragmentRecord) => void
+  visit: (fragment: ParagraphFragmentRecord, context: StoryParagraphFragmentContext) => void,
+  rootOrigin: Readonly<{ x: number; y: number }> = ZERO_STORY_ORIGIN,
+  rootDrawingOrigin?: RootDrawingOrigin
 ): void {
-  const visitStory = (inner: StoryDrawingHost, depth: number): void => {
+  const visitStory = (
+    inner: StoryDrawingHost,
+    depth: number,
+    textboxPath: readonly AnchoredDrawingRecord[],
+    storyOrigin: Readonly<{ x: number; y: number }>
+  ): void => {
     if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
+    for (const fragment of paragraphFragmentsOfBlocks(inner.fragments, true)) {
+      visit(fragment, {
+        storyOrigin,
+        textboxDepth: depth,
+        textboxOwner: textboxPath[textboxPath.length - 1] ?? null,
+        textboxPath,
+      });
+    }
     for (const drawing of inner.anchoredDrawings ?? []) {
       // A text box is a story of its own, nested in the drawing that anchors it.
-      if (drawing.textboxStory) visitStory(drawing.textboxStory, depth + 1);
+      if (drawing.textboxStory) {
+        visitStory(
+          drawing.textboxStory,
+          depth + 1,
+          Object.freeze([...textboxPath, drawing]),
+          textboxStoryOrigin(
+            storyOrigin,
+            drawing,
+            depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
+          )
+        );
+      }
     }
-    for (const fragment of paragraphFragmentsOfBlocks(inner.fragments, true)) visit(fragment);
   };
-  visitStory(story, 0);
+  visitStory(story, 0, Object.freeze([]), rootOrigin);
 }
 
 /** Every fragment belonging to one paragraph, in order, across page boundaries. */

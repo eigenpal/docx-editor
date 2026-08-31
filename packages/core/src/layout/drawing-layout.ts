@@ -1305,7 +1305,9 @@ export function publishAnchoredDrawingsForParagraph(options: {
       resolved,
       clipRegion,
       revisions: atom.revisions,
-      ...(options.sourceOrderOf ? { sourceOrder: options.sourceOrderOf(atom.atomId) } : {}),
+      ...(options.sourceOrderOf
+        ? { sourceOrder: options.sourceOrderOf(projection.drawingNodeId) }
+        : {}),
       ...(projection.textboxStory && options.layoutTextboxStory
         ? { textboxStory: options.layoutTextboxStory(projection) }
         : {}),

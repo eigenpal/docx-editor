@@ -115,30 +115,39 @@ function packPackage(packagePath) {
   const source = path.join(ROOT, packagePath);
   const manifest = JSON.parse(readFileSync(path.join(source, 'package.json'), 'utf8'));
   const pendingVersion = pendingVersions.get(manifest.name);
-  // Mirror what `changeset version` will publish: the bumped version AND, for a bump that
-  // leaves a peer floor behind (a minor over a `~x.y.z` floor), the rewritten floor.
-  // Staging only the version made every adapter tarball peer-refuse the core tarball on
-  // any pending minor, while the real release rewrites the floor in the same commit.
-  const stagedPeers = {};
-  let peersChanged = false;
-  for (const [peerName, range] of Object.entries(manifest.peerDependencies ?? {})) {
-    const peerPending = pendingVersions.get(peerName);
-    if (peerPending && !tildeRangeSatisfies(range, peerPending)) {
-      stagedPeers[peerName] = `~${peerPending}`;
-      peersChanged = true;
-    } else {
-      stagedPeers[peerName] = range;
+  // Mirror what `changeset version` will publish: the bumped version AND every internal peer or
+  // runtime dependency floor left behind by a fixed-group bump. Otherwise npm may satisfy a
+  // staged package from the registry and the consumer smoke test never exercises its tarball.
+  const stageInternalRanges = (ranges = {}) => {
+    const staged = {};
+    let changed = false;
+    for (const [dependencyName, range] of Object.entries(ranges)) {
+      const dependencyPending = pendingVersions.get(dependencyName);
+      if (dependencyPending && !tildeRangeSatisfies(range, dependencyPending)) {
+        staged[dependencyName] = `~${dependencyPending}`;
+        changed = true;
+      } else {
+        staged[dependencyName] = range;
+      }
     }
-  }
+    return { staged, changed };
+  };
+  const peers = stageInternalRanges(manifest.peerDependencies);
+  const dependencies = stageInternalRanges(manifest.dependencies);
   let packSource = source;
-  if ((pendingVersion && pendingVersion !== manifest.version) || peersChanged) {
+  if (
+    (pendingVersion && pendingVersion !== manifest.version) ||
+    peers.changed ||
+    dependencies.changed
+  ) {
     mkdirSync(stagedPackagesDir, { recursive: true });
     packSource = path.join(stagedPackagesDir, path.basename(packagePath));
     cpSync(source, packSource, { recursive: true });
     const staged = {
       ...manifest,
       ...(pendingVersion ? { version: pendingVersion } : {}),
-      ...(manifest.peerDependencies ? { peerDependencies: stagedPeers } : {}),
+      ...(manifest.peerDependencies ? { peerDependencies: peers.staged } : {}),
+      ...(manifest.dependencies ? { dependencies: dependencies.staged } : {}),
     };
     writeFileSync(path.join(packSource, 'package.json'), `${JSON.stringify(staged, null, 2)}\n`);
   }
@@ -297,7 +306,7 @@ export default defineConfig({ plugins: [react()] });
     [
       '--input-type=commonjs',
       '--eval',
-      `const pkg = require('@docx-editor.dev/docx-to-markdown'); pkg.exportMarkdown(Uint8Array.from(Buffer.from('${MINIMAL_DOCX_BASE64}', 'base64'))).then((result) => { if (result.markdown !== 'Installed conversion') throw new Error(result.markdown); });`,
+      `const pkg = require('@docx-editor.dev/docx-to-markdown'); void (async () => { const result = await pkg.exportMarkdown(Uint8Array.from(Buffer.from('${MINIMAL_DOCX_BASE64}', 'base64'))); if (result.markdown !== 'Installed conversion') throw new Error(result.markdown); })().catch((error) => { console.error(error); process.exitCode = 1; });`,
     ],
     { cwd: reactAppDir }
   );

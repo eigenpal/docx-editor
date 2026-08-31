@@ -6,17 +6,21 @@
 // correct until someone types.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
+import {
+  applyTreeOp,
+  readOoxmlPart,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
 import {
   createFixedMeasurer,
   createParagraphLayoutCache,
   layoutSemanticDocument,
-  linesOf,
   paragraphLayoutKey,
   type ParagraphLayoutCache,
   type PageGeometry,
 } from '../index.ts';
-import { PARAGRAPH_KEY_INPUT_ROLES } from '../layout-cache.ts';
+import { layoutNodeTokenVisitTestRecorder, PARAGRAPH_KEY_INPUT_ROLES } from '../layout-cache.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -389,6 +393,7 @@ describe('key memoization over immutable nodes', () => {
       width: 100,
       producer: 'p',
       drawingToken: 'd0',
+      projectionToken: 'p0',
       exclusionToken: 'x0',
     };
     const changed: Record<
@@ -399,6 +404,7 @@ describe('key memoization over immutable nodes', () => {
       width: { width: 200 },
       producer: { producer: 'q' },
       drawingToken: { drawingToken: 'd1' },
+      projectionToken: { projectionToken: 'p1' },
       exclusionToken: { exclusionToken: 'x1' },
     };
     for (const [field, override] of Object.entries(changed)) {
@@ -423,6 +429,86 @@ describe('key memoization over immutable nodes', () => {
       producer: 'p',
     });
     expect(a).toEqual(b);
+  });
+
+  test('a cell edit rehashes only its copy-on-write path, not the whole table', () => {
+    const rows = Array.from(
+      { length: 200 },
+      (_, index) =>
+        `<w:tr><w:tc>${paragraph(`left ${index} ${'word '.repeat(8)}`)}</w:tc>` +
+        `<w:tc>${paragraph(`right ${index} ${'word '.repeat(8)}`)}</w:tc></w:tr>`
+    ).join('');
+    const part = load(`<w:tbl><w:tblPr/>${rows}</w:tbl>`);
+    const findFirst = (node: OoxmlNode, kind: string): OoxmlNode | null => {
+      if (node.kind === kind) return node;
+      if (node.kind === 'textValue') return null;
+      for (const child of node.children) {
+        const found = findFirst(child, kind);
+        if (found) return found;
+      }
+      return null;
+    };
+    const paragraphs: OoxmlNode[] = [];
+    const collectParagraphs = (node: OoxmlNode): void => {
+      if (node.kind === 'paragraph') {
+        paragraphs.push(node);
+        return;
+      }
+      if (node.kind !== 'textValue') for (const child of node.children) collectParagraphs(child);
+    };
+    const table = findFirst(part.root, 'table');
+    expect(table).not.toBeNull();
+    collectParagraphs(table!);
+    expect(paragraphs).toHaveLength(400);
+
+    const recorder = layoutNodeTokenVisitTestRecorder();
+    try {
+      recorder.reset();
+      const before = paragraphLayoutKey({
+        paragraph: table!,
+        properties: [],
+        width: 500,
+        producer: 'table-digest',
+      });
+      const coldVisits = recorder.nodeVisits;
+      const reparsedTable = findFirst(load(`<w:tbl><w:tblPr/>${rows}</w:tbl>`).root, 'table');
+      expect(reparsedTable).not.toBeNull();
+      expect(
+        paragraphLayoutKey({
+          paragraph: reparsedTable!,
+          properties: [],
+          width: 500,
+          producer: 'table-digest',
+        })
+      ).toBe(before);
+
+      const target = paragraphs[201]!;
+      const edited = applyTreeOp(part, {
+        op: 'insertText',
+        paragraphId: target.id,
+        offset: 0,
+        text: 'changed ',
+      });
+      expect(edited.ok).toBe(true);
+      if (!edited.ok) throw new Error(edited.reason);
+      const editedTable = findFirst(edited.part.root, 'table');
+      expect(editedTable).not.toBeNull();
+      recorder.reset();
+      const after = paragraphLayoutKey({
+        paragraph: editedTable!,
+        properties: [],
+        width: 500,
+        producer: 'table-digest',
+      });
+      const editedVisits = recorder.nodeVisits;
+
+      expect(after).not.toBe(before);
+      expect(coldVisits).toBeGreaterThan(2_000);
+      // Deterministic structural bound, not timing: table → row → cell → paragraph → run/text.
+      expect(editedVisits).toBeLessThanOrEqual(16);
+    } finally {
+      recorder.dispose();
+    }
   });
 
   test('file-controlled attribute delimiters cannot forge the recursive node token', () => {

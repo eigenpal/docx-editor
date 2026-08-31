@@ -7,7 +7,9 @@ import {
 } from './package/document-properties.ts';
 import {
   resolveHeaderFooterPartsBySection,
+  resolveHeaderFooterResolutionBySection,
   type HeaderFooterParts,
+  type HeaderFooterSectionResolution,
 } from './package/hf-references.ts';
 import {
   readOoxmlPackage,
@@ -43,6 +45,13 @@ export interface HeadlessDocumentView {
   documentThemeFonts(): HeadlessThemeFonts;
   documentProperties(): DocumentProperties;
   headerFooterPartsBySection(): readonly HeaderFooterParts[];
+  /**
+   * Occurrence-specific relationship metadata for header/footer stories.
+   *
+   * Optional for backwards-compatible host views; core derives it from `currentPackage()` when
+   * absent. Hosts with a working-tree overlay should expose their canonical resolution directly.
+   */
+  headerFooterResolutionBySection?(): readonly HeaderFooterSectionResolution[];
   relationshipTarget(relationshipId: string): ReturnType<typeof relationshipTargetIn>;
 }
 
@@ -155,9 +164,10 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     relatedPart(currentPackage(), currentPackage().mainDocumentPart, relationshipType, fallbackName)
       ?.root ?? null;
 
-  let themeFonts: HeadlessThemeFonts | null = null;
+  let themeFonts: HeadlessThemeFonts = themeFontsOf(null);
+  let themeFontsPackage: OoxmlPackage | null = null;
   let properties: DocumentProperties = EMPTY_DOCUMENT_PROPERTIES;
-  let propertiesReady = false;
+  let propertiesPackage: OoxmlPackage | null = null;
 
   const view: HeadlessDocumentView = Object.freeze({
     part: mainPart,
@@ -167,20 +177,25 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     numberingRoot: () => rootOf(REL.numbering, '/word/numbering.xml'),
     settingsRoot: () => rootOf(REL.settings, '/word/settings.xml'),
     documentThemeFonts() {
-      themeFonts ??= themeFontsOf(rootOf(REL.theme, '/word/theme/theme1.xml'));
+      const pkg = currentPackage();
+      if (themeFontsPackage !== pkg) {
+        themeFonts = themeFontsOf(rootOf(REL.theme, '/word/theme/theme1.xml'));
+        themeFontsPackage = pkg;
+      }
       return themeFonts;
     },
     documentProperties() {
-      if (!propertiesReady) {
-        propertiesReady = true;
-        const pkg = currentPackage();
+      const pkg = currentPackage();
+      if (propertiesPackage !== pkg) {
         const core = relatedPart(pkg, '/', REL.coreProperties, '/docProps/core.xml');
         const app = relatedPart(pkg, '/', REL.extendedProperties, '/docProps/app.xml');
         properties = readDocumentProperties(core?.root ?? null, app?.root ?? null);
+        propertiesPackage = pkg;
       }
       return properties;
     },
     headerFooterPartsBySection: () => resolveHeaderFooterPartsBySection(currentPackage()),
+    headerFooterResolutionBySection: () => resolveHeaderFooterResolutionBySection(currentPackage()),
     relationshipTarget: (relationshipId: string) =>
       relationshipTargetIn(currentPackage(), mainPart().name, relationshipId),
   });

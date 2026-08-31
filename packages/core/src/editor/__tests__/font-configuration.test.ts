@@ -1,6 +1,11 @@
 import { expect, spyOn, test } from 'bun:test';
 import { EditorFontError, type FontConfiguration } from '@docx-editor.dev/core/contracts/editor';
-import { HarfBuzzShapingError, sha256FontBytes } from '@docx-editor.dev/core/layout';
+import {
+  FontResolutionError,
+  HarfBuzzShapingError,
+  layoutFontConfigurationFingerprint,
+  sha256FontBytes,
+} from '@docx-editor.dev/core/layout';
 import {
   createLayoutShaping,
   resetFontFailureWarningForTests,
@@ -35,6 +40,9 @@ test('adapts the public byte-backed font configuration after async HarfBuzz init
 
   expect(shaping.fonts.epoch).toBe(3);
   expect(shaping.defaultFont).toEqual(configuration.defaultFont);
+  expect(shaping.environment.fixedPointScale).toBe(1000);
+  expect(shaping.environment.roundingMode).toBe('halfToEven');
+  expect(shaping.environment.features).toEqual({});
   expect(shaping.fonts.resolve(configuration.sources[0]!.request)).not.toBeInstanceOf(Error);
   shaping.shaper.dispose();
 });
@@ -67,6 +75,144 @@ test('substitution line metrics enter the operation fingerprint', async () => {
   expect(first.operation.extensionFingerprint).not.toBe(second.operation.extensionFingerprint);
   first.shaper.dispose();
   second.shaper.dispose();
+});
+
+test('every shaping configuration dimension enters the canonical fingerprint', async () => {
+  const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
+  const source = {
+    request: { family: 'DejaVu Sans', weight: 400, style: 'normal' as const },
+    id: 'complete-fingerprint',
+    bytes,
+    hash: sha256FontBytes(bytes),
+    faceIndex: 0,
+  };
+  const base = {
+    epoch: 1,
+    maxFontBytes: 2_000_000,
+    sources: [source],
+    defaultFont: { family: 'DejaVu Sans', sizeHalfPoints: 22 },
+    language: 'en',
+  } as const;
+  const fingerprint = layoutFontConfigurationFingerprint(base);
+  expect(fingerprint).toMatch(/^font-config:sha256:[0-9a-f]{64}$/);
+  const variants = [
+    { ...base, epoch: 2 },
+    { ...base, defaultFont: { ...base.defaultFont, family: 'Fallback Face' } },
+    { ...base, defaultFont: { ...base.defaultFont, sizeHalfPoints: 24 } },
+    { ...base, language: 'pl' },
+    { ...base, sources: [{ ...source, availability: 'forbidden' as const }] },
+  ];
+  for (const variant of variants) {
+    expect(layoutFontConfigurationFingerprint(variant)).not.toBe(fingerprint);
+  }
+  expect(
+    layoutFontConfigurationFingerprint({
+      ...base,
+      sources: [
+        {
+          ...source,
+          request: { style: 'normal', weight: 400, family: 'DejaVu Sans' },
+        },
+      ],
+      defaultFont: { sizeHalfPoints: 22, family: 'DejaVu Sans' },
+    })
+  ).toBe(fingerprint);
+  expect(layoutFontConfigurationFingerprint({ ...base, language: '' })).toBe(fingerprint);
+
+  const emptyLanguage = await createLayoutShaping({ ...base, language: '' });
+  expect(emptyLanguage.environment.language).toBe('en');
+  emptyLanguage.shaper.dispose();
+});
+
+test('the canonical fingerprint identifies actual bytes while admission isolates hash refusal', async () => {
+  const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
+  const forged = bytes.slice();
+  forged[forged.length - 1] ^= 1;
+  const base = {
+    epoch: 1,
+    maxFontBytes: 2_000_000,
+    sources: [
+      {
+        request: { family: 'DejaVu Sans', weight: 400, style: 'normal' as const },
+        id: 'verified-fingerprint',
+        bytes,
+        hash: sha256FontBytes(bytes),
+        faceIndex: 0,
+      },
+    ],
+    defaultFont: { family: 'DejaVu Sans', sizeHalfPoints: 22 },
+  } as const;
+
+  const mismatched = {
+    ...base,
+    sources: [
+      { ...base.sources[0], bytes: forged },
+      {
+        ...base.sources[0],
+        request: { ...base.sources[0].request, weight: 700 },
+        id: 'still-valid',
+      },
+    ],
+  } as const;
+  expect(layoutFontConfigurationFingerprint(base)).toMatch(/^font-config:sha256:[0-9a-f]{64}$/);
+  expect(layoutFontConfigurationFingerprint(mismatched)).not.toBe(
+    layoutFontConfigurationFingerprint(base)
+  );
+
+  const shaping = await createLayoutShaping(mismatched);
+  expect(shaping.fonts.resolve(base.sources[0].request)).toMatchObject({ code: 'hashMismatch' });
+  expect(shaping.fonts.resolve({ ...base.sources[0].request, weight: 700 })).not.toBeInstanceOf(
+    FontResolutionError
+  );
+  shaping.shaper.dispose();
+});
+
+test('forbidden faces are neither copied nor hashed and do not block valid siblings', async () => {
+  const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
+  const counters = { copies: 0, hashes: 0, admissions: 0 };
+  const forbiddenSource = {
+    request: { family: 'Forbidden', weight: 400, style: 'normal' as const },
+    id: 'forbidden',
+    hash: 'placeholder',
+    faceIndex: 0,
+    availability: 'forbidden' as const,
+  } as unknown as FontConfiguration['sources'][number];
+  Object.defineProperty(forbiddenSource, 'bytes', {
+    get() {
+      throw new Error('forbidden bytes must not be read');
+    },
+  });
+  const shaping = await createLayoutShaping(
+    {
+      epoch: 1,
+      maxFontBytes: 2_000_000,
+      sources: [
+        forbiddenSource,
+        {
+          request: { family: 'Valid', weight: 400, style: 'normal' },
+          id: 'valid',
+          bytes,
+          hash: sha256FontBytes(bytes),
+          faceIndex: 0,
+        },
+      ],
+      defaultFont: { family: 'Valid', sizeHalfPoints: 22 },
+    },
+    {
+      onFontByteCopy: () => (counters.copies += 1),
+      onFontHash: () => (counters.hashes += 1),
+      onFontAdmission: () => (counters.admissions += 1),
+    }
+  );
+
+  expect(
+    shaping.fonts.resolve({ family: 'Forbidden', weight: 400, style: 'normal' })
+  ).toMatchObject({ code: 'forbidden' });
+  expect(
+    shaping.fonts.resolve({ family: 'Valid', weight: 400, style: 'normal' })
+  ).not.toBeInstanceOf(FontResolutionError);
+  expect(counters).toEqual({ copies: 1, hashes: 1, admissions: 1 });
+  shaping.shaper.dispose();
 });
 
 test('two faces sharing a hash still fingerprint apart by request', async () => {
@@ -187,7 +333,7 @@ test('deep-samples font metadata and substitutions before asynchronous initializ
     to: { ...request },
     lineMetrics: { heightEm: 1.2, baselineEm: 0.9 },
   };
-  const pending = createLayoutShaping({
+  const configuration = {
     epoch: 12,
     maxFontBytes: 2_000_000,
     sources: [
@@ -201,16 +347,15 @@ test('deep-samples font metadata and substitutions before asynchronous initializ
     ],
     substitutions: [substitution],
     defaultFont: { family: 'Original', sizeHalfPoints: 22 },
-  });
+  };
+  const expectedFingerprint = layoutFontConfigurationFingerprint(configuration);
+  const pending = createLayoutShaping(configuration);
   request.family = 'Mutated';
   substitution.from.family = 'Mutated Original';
   substitution.lineMetrics.heightEm = 9;
 
   const shaping = await pending;
-  expect(shaping.operation.extensionFingerprint).toContain('DejaVu Sans');
-  expect(shaping.operation.extensionFingerprint).toContain('Original');
-  expect(shaping.operation.extensionFingerprint).toContain('1.2');
-  expect(shaping.operation.extensionFingerprint).not.toContain('Mutated');
+  expect(shaping.operation.extensionFingerprint).toBe(expectedFingerprint);
   shaping.shaper.dispose();
 });
 
@@ -322,6 +467,47 @@ test('rejects over-limit source and substitution arrays without traversing entri
     })
   ).rejects.toThrow('Font substitution count');
   expect({ sourceReads, substitutionReads }).toEqual({ sourceReads: 0, substitutionReads: 0 });
+});
+
+test('samples bounded arrays by index instead of trusting caller-owned map methods', async () => {
+  const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
+  const sources = [
+    {
+      request: { family: 'DejaVu Sans', weight: 400, style: 'normal' as const },
+      id: 'indexed-source',
+      bytes,
+      hash: sha256FontBytes(bytes),
+      faceIndex: 0,
+    },
+  ];
+  const substitutions = [
+    {
+      from: { family: 'Document Sans', weight: 400, style: 'normal' as const },
+      to: { family: 'DejaVu Sans', weight: 400, style: 'normal' as const },
+    },
+  ];
+  let hostileMapCalls = 0;
+  for (const input of [sources, substitutions]) {
+    Object.defineProperty(input, 'map', {
+      value() {
+        hostileMapCalls += 1;
+        throw new Error('caller-owned map must not execute');
+      },
+    });
+  }
+
+  const shaping = await createLayoutShaping({
+    epoch: 8,
+    maxFontBytes: 2_000_000,
+    sources,
+    substitutions,
+    defaultFont: { family: 'DejaVu Sans', sizeHalfPoints: 24 },
+  });
+  expect(hostileMapCalls).toBe(0);
+  expect(
+    shaping.fonts.resolve({ family: 'Document Sans', weight: 400, style: 'normal' })
+  ).not.toBeInstanceOf(FontResolutionError);
+  shaping.shaper.dispose();
 });
 
 test('copies each valid source exactly once into snapshot ownership', async () => {

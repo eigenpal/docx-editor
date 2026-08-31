@@ -14,6 +14,7 @@
 // would be quadratic in memory.
 
 import {
+  canonicalOoxmlFingerprint,
   twipsToPoints,
   type OoxmlElement,
   type OoxmlNode,
@@ -150,6 +151,20 @@ function propertiesFingerprint(props: readonly OoxmlProperty[]): unknown {
     property.attributes
       ? { n: property.localName, a: property.attributes }
       : { n: property.localName }
+  );
+}
+
+/** Fixed-width semantic digest for nested style property material. */
+function styleNodeFingerprint(node: OoxmlElement | undefined): string {
+  return node ? stableHash(canonicalOoxmlFingerprint(node)) : '';
+}
+
+/** Conditional table formats are ordered as authored and bounded by the style reader. */
+function conditionalTableFingerprint(
+  style: StyleDefinition
+): readonly (readonly [string, string])[] {
+  return [...style.conditionalTableFormats].map(
+    ([condition, node]) => [condition, styleNodeFingerprint(node)] as const
   );
 }
 
@@ -439,6 +454,12 @@ export function buildStyleCascadeTable(
       outlineLevel: style.outlineLevel,
       p: propertiesFingerprint(style.paragraphProperties),
       r: propertiesFingerprint(style.runProperties),
+      // Table layout reads nested property nodes that the flat p/r lists above do not
+      // describe. In particular, a styled tblHeader changes pagination without touching
+      // the document table node, so all three table-style layers belong in the producer.
+      tPr: styleNodeFingerprint(style.tablePropertiesNode),
+      trPr: styleNodeFingerprint(style.tableRowPropertiesNode),
+      tblStylePr: conditionalTableFingerprint(style),
     })),
   });
 

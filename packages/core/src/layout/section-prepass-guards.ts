@@ -36,6 +36,8 @@ export const SECTION_PREPASS_GUARDS = {
   // Stands in for the per-block drawing tokens; a caller that threads per-paragraph
   // tokens WITHOUT an epoch keeps the recompute path (`drawingEpoch !== null`).
   drawingEpoch: 'validity-checked',
+  // Outer freshness signal only; the paragraph key carries the precise projection token.
+  projectionEpoch: 'validity-checked',
   tocToken: 'validity-checked',
   // The story-wide REF values token. A renumbering edit moves a REF value in a section whose
   // blocks, list map and TOC shape are all identity-unchanged; this clause is what sees it.

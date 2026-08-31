@@ -206,3 +206,28 @@ export function createLayoutSession(): LayoutSession {
     notes: null,
   };
 }
+
+/** Replace retained incremental state while making new fields an exhaustive compile-time gate. */
+export function replaceLayoutSession(target: LayoutSession, source: LayoutSession): void {
+  const replacement = {
+    previous: source.previous,
+    checkpoints: source.checkpoints,
+    keys: source.keys,
+    context: source.context,
+    producer: source.producer,
+    parityDependent: source.parityDependent,
+    startPageParity: source.startPageParity,
+    prepass: source.prepass,
+    notes: source.notes,
+    startLineCounter: source.startLineCounter,
+    endLineCounter: source.endLineCounter,
+    endCursorY: source.endCursorY,
+    endSpaceAfter: source.endSpaceAfter,
+    endsOpenPage: source.endsOpenPage,
+    stats: source.stats,
+    balanceLimit: source.balanceLimit,
+    multi: source.multi,
+    notePageBottomReserves: source.notePageBottomReserves,
+  } satisfies LayoutSession & Record<keyof LayoutSession, unknown>;
+  Object.assign(target, replacement);
+}

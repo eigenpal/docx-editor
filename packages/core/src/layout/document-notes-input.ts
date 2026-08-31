@@ -18,6 +18,7 @@ import {
 } from '../store/package/note-properties.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
+import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import { layoutHeaderFooterStory } from './hf-layout.ts';
 import { enumerateDocumentSectionsBounded } from './section-properties.ts';
 import type { NotesLayoutInput } from './note-pagination.ts';
@@ -42,7 +43,8 @@ export interface CreateDocumentNotesInputOptions {
   ) => InlineDrawingLayoutContext | undefined;
   readonly drawingTokenForParagraphForPart?: (partName: string, paragraph: OoxmlNode) => string;
   readonly drawingLayoutEpochForPart?: (partName: string) => string;
-  readonly projectLinkForPart?: NotesLayoutInput['projectLinkForPart'];
+  /** Link/property projection and its inseparable cache identities. */
+  readonly linkProjectors: DocumentLinkProjectors;
   readonly projectFieldLink?: NotesLayoutInput['projectFieldLink'];
   readonly displayMode?: RevisionDisplayMode;
 }
@@ -69,18 +71,6 @@ function sectionPropertyNodes(
   }
   while (nodes.length < sections.length) nodes.push(undefined);
   return nodes;
-}
-
-function relationshipEpoch(view: HeadlessDocumentView, partName: string): string {
-  const pkg = view.currentPackage();
-  const internal = (pkg.relationships.get(partName) ?? [])
-    .map((record) => `${record.id}>${record.rawTarget}`)
-    .join(',');
-  const external = pkg.externalTargets
-    .filter((record) => record.ownerPart === partName)
-    .map((record) => `${record.id}>${record.rawTarget}|${record.sinkSafe ? 1 : 0}`)
-    .join(',');
-  return `${internal};${external}`;
 }
 
 /** Build note layout input from the neutral package view, or undefined when unused. @public */
@@ -152,15 +142,16 @@ export function createDocumentNotesInput(
     numberingIndex: options.numberingIndex?.(),
     defaultTabStopPt: options.defaultTabStopPt,
     displayMode: options.displayMode,
-    ...(options.projectLinkForPart
-      ? {
-          projectLinkForPart: options.projectLinkForPart,
-          linkRelsEpoch: noteParts
-            .map((part) => (part ? relationshipEpoch(options.view, part.name) : ''))
-            .join('\0'),
-        }
-      : {}),
+    projectLinkForPart: options.linkProjectors.projectLinkForPart,
+    linkRelsEpoch: noteParts
+      .map((part) => (part ? options.linkProjectors.epochForPart(part.name) : ''))
+      .join('\0'),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+    projectionTokenForParagraphForPart: options.linkProjectors.tokenForParagraphForPart,
+    projectionTokenForTableForPart: options.linkProjectors.tokenForTableForPart,
+    projectionEpoch: noteParts
+      .map((part) => (part ? options.linkProjectors.epochForPart(part.name) : ''))
+      .join('\0'),
     ...(drawingsForPart ? { drawingsForPart } : {}),
     ...(drawingsForPart && options.drawingLayoutEpochForPart
       ? {

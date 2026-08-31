@@ -38,6 +38,8 @@
     "@happy-dom/global-registrator": "^20.8.3",
     "@docx-editor.dev/core": "workspace:*",
     "fflate": "^0.8.2",
+    "micromark": "^4.0.2",
+    "micromark-extension-gfm": "^3.0.0",
     "typescript": "^5.3.3"
   },
   "keywords": [

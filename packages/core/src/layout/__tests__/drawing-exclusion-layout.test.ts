@@ -4,7 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   WML_NAMESPACE_URI,
   readOoxmlPart,
-  type OoxmlDrawingNode,
+  type OoxmlNode,
   type OoxmlPart,
 } from '../../store/package/ooxml-tree.ts';
 import {
@@ -15,14 +15,21 @@ import {
 import type { ImageResourceState } from '../../store/package/image-resources.ts';
 import { emuToPoints } from '../drawing-layout.ts';
 import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
+import {
+  collectExclusionZonesByPage,
+  observeExclusionZoneCollectionsForTest,
+} from '../drawing-exclusion.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
+import { drawingAtomIdentities, drawingSourceOrderInPart } from '../inline-drawing-source.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { createLayoutSession } from '../layout-session.ts';
-import { breakParagraph } from '../paragraph-flow.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
-import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import {
-  linesOf,
+  createFixedMeasurer,
+  layoutSemanticDocument,
+  observeExclusionLayoutPassesForTest,
+} from '../semantic-layout.ts';
+import {
   paragraphFragmentsOf,
   paragraphFragmentsOfBlocks,
   type LayoutBox,
@@ -35,6 +42,8 @@ const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const PIC_URI = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 
 const measurer = createFixedMeasurer(6, 14);
 const OWNER = '/word/document.xml';
@@ -76,16 +85,27 @@ function layoutContext(part: OoxmlPart, owner = OWNER): InlineDrawingLayoutConte
   };
 }
 
-function drawingOf(part: OoxmlPart): OoxmlDrawingNode {
-  const stack = [part.root];
-  while (stack.length > 0) {
-    const node = stack.shift()!;
-    if (node.kind === 'drawing') return node;
-    for (const child of node.children) {
-      if (child.kind !== 'textValue') stack.push(child);
-    }
+/** Transaction-shaped insertion: keeps the anchor paragraph/node ids used by exclusion order. */
+function withLeadingParagraph(part: OoxmlPart, paragraph: OoxmlNode): OoxmlPart {
+  const visit = (node: OoxmlNode): OoxmlNode => {
+    if (node.kind === 'textValue') return node;
+    if (node.localName === 'body') return { ...node, children: [paragraph, ...node.children] };
+    return {
+      ...node,
+      children: node.children.map(visit),
+    };
+  };
+  return { ...part, root: visit(part.root) as OoxmlPart['root'] };
+}
+
+function firstParagraph(part: OoxmlPart): OoxmlNode {
+  const queue: OoxmlNode[] = [part.root];
+  while (queue.length > 0) {
+    const node = queue.shift()!;
+    if (node.kind === 'paragraph') return node;
+    if (node.kind !== 'textValue') queue.push(...node.children);
   }
-  throw new Error('missing drawing');
+  throw new Error('missing paragraph');
 }
 
 function squareAnchorAtLeft(options: {
@@ -110,6 +130,62 @@ function squareAnchorAtLeft(options: {
     `<w:r><w:t>${words}</w:t></w:r></w:p>` +
     '</w:body></w:document>'
   );
+}
+
+function fixedCollisionAnchorParagraph(name: string, docPrId: number, mcWrapped = false): string {
+  const drawing =
+    '<w:drawing>' +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" behindDoc="0" locked="0" allowOverlap="0" layoutInCell="1" relativeHeight="1">' +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>1000000</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="page"><wp:posOffset>2000000</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="914400" cy="914400"/>' +
+    '<wp:wrapSquare wrapText="bothSides" distT="0" distB="0" distL="0" distR="0"/>' +
+    `<wp:docPr id="${docPrId}" name="${name}"/>` +
+    `<a:graphic><a:graphicData uri="${PIC_URI}"><pic:pic><pic:nvPicPr><pic:cNvPr id="${docPrId}" name="${name}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rId1"/><a:srcRect/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    '<pic:spPr><a:xfrm><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></pic:spPr></pic:pic></a:graphicData></a:graphic>' +
+    '</wp:anchor></w:drawing>';
+  const atom = mcWrapped
+    ? `<mc:AlternateContent><mc:Choice Requires="wps">${drawing}</mc:Choice><mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent>`
+    : drawing;
+  return `<w:p><w:r>${atom}</w:r><w:r><w:t>x</w:t></w:r></w:p>`;
+}
+
+function withDrawingNodeIds(part: OoxmlPart, ids: readonly string[]): OoxmlPart {
+  let drawingIndex = 0;
+  const visit = (node: OoxmlNode): OoxmlNode => {
+    if (node.kind === 'textValue') return node;
+    let changed = false;
+    const children = node.children.map((child) => {
+      const next = visit(child);
+      if (next !== child) changed = true;
+      return next;
+    });
+    if (node.localName === 'drawing' && node.namespaceUri === WML_NAMESPACE_URI) {
+      const id = ids[drawingIndex++] ?? node.id;
+      return { ...node, id, ...(changed ? { children } : {}) };
+    }
+    return changed ? { ...node, children } : node;
+  };
+  return { ...part, root: visit(part.root) as OoxmlPart['root'] };
+}
+
+/** Copy-on-write reorder: only the document/body spine changes; both paragraph atoms survive. */
+function reverseBodyChildren(part: OoxmlPart): OoxmlPart {
+  const visit = (node: OoxmlNode): OoxmlNode => {
+    if (node.kind === 'textValue') return node;
+    if (node.localName === 'body') {
+      return { ...node, children: [...node.children].reverse() };
+    }
+    let changed = false;
+    const children = node.children.map((child) => {
+      const next = visit(child);
+      if (next !== child) changed = true;
+      return next;
+    });
+    return changed ? { ...node, children } : node;
+  };
+  return { ...part, root: visit(part.root) as OoxmlPart['root'] };
 }
 
 function fillerParagraphs(count: number): string {
@@ -313,6 +389,23 @@ describe('header page-relative anchor does not size HF box (OpenSpec 4.7)', () =
 });
 
 describe('full-vs-incremental differential over wrap reflow (OpenSpec 9.4)', () => {
+  test('publishes the first stable non-empty exclusion candidate without a cold twin pass', () => {
+    const part = load(squareAnchorAtLeft({ text: 'tail '.repeat(30) }));
+    let passes = 0;
+    const stop = observeExclusionLayoutPassesForTest(() => {
+      passes += 1;
+    });
+    try {
+      layoutSemanticDocument(part, 1, {
+        measurer,
+        inlineDrawingLayout: layoutContext(part),
+      });
+    } finally {
+      stop();
+    }
+    expect(passes).toBe(2);
+  });
+
   test('reuses seeded exclusion zones without changing layout', () => {
     const session = createLayoutSession();
     const part = load(squareAnchorAtLeft({ text: 'tail '.repeat(30) }));
@@ -333,6 +426,65 @@ describe('full-vs-incremental differential over wrap reflow (OpenSpec 9.4)', () 
     });
 
     expect(incremental.pages).toEqual(clean.pages);
+  });
+
+  test('drops seeded zones before publishing when the edited pass collects none', () => {
+    const session = createLayoutSession();
+    const text = 'tail '.repeat(80);
+    const anchored = load(squareAnchorAtLeft({ text }));
+    const baseContext = layoutContext(anchored);
+    layoutSemanticDocument(anchored, 1, {
+      measurer,
+      inlineDrawingLayout: baseContext,
+      drawingLayoutEpoch: 'with-anchor',
+      session,
+    });
+
+    // The leading paragraph moves the live anchor, so the previous-page seed A first relays to
+    // a distinct non-empty map B. The context then models the anchor becoming non-excluding
+    // between relays: the pass laid under B collects zero zones and must be run once more empty.
+    const lead = firstParagraph(
+      load(
+        `<w:document xmlns:w="${WML_NAMESPACE_URI}"><w:body><w:p><w:r><w:t>lead</w:t></w:r></w:p></w:body></w:document>`
+      )
+    );
+    const movedAnchor = withLeadingParagraph(anchored, lead);
+    let collectedMaps = 0;
+    const relayContext: InlineDrawingLayoutContext = {
+      ...baseContext,
+      projectionForAtom: (atomId) => {
+        const projection = baseContext.projectionForAtom?.(atomId) ?? null;
+        return collectedMaps <= 2 ? projection : null;
+      },
+    };
+    const incremental = (() => {
+      const stopObserving = observeExclusionZoneCollectionsForTest((context) => {
+        if (context === relayContext) collectedMaps += 1;
+      });
+      try {
+        return layoutSemanticDocument(movedAnchor, 2, {
+          measurer,
+          inlineDrawingLayout: relayContext,
+          drawingLayoutEpoch: 'moved-anchor',
+          session,
+        });
+      } finally {
+        stopObserving();
+      }
+    })();
+    const cleanContext = layoutContext(movedAnchor);
+    const clean = layoutSemanticDocument(movedAnchor, 2, {
+      measurer,
+      inlineDrawingLayout: {
+        ...cleanContext,
+        projectionForAtom: () => null,
+        project: cleanContext.project,
+      },
+      drawingLayoutEpoch: 'non-excluding-anchor',
+    });
+
+    expect(incremental.pages).toEqual(clean.pages);
+    expect(collectedMaps).toBe(3);
   });
 
   test('wrap-mode change reflows tail pages and invalidates break cache', () => {
@@ -401,6 +553,82 @@ describe('paint order on page record (OpenSpec 4.5)', () => {
     expect(anchors).toHaveLength(2);
     expect(anchors[0]!.behindDocument).toBe(true);
     expect(anchors[1]!.behindDocument).toBe(false);
+  });
+
+  test('copy-on-write MC anchor reorder invalidates collision, exclusion, and paint source order', () => {
+    const part = withDrawingNodeIds(
+      load(
+        `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}" xmlns:mc="${MC}" xmlns:wps="${WPS}"><w:body>` +
+          fixedCollisionAnchorParagraph('first', 1, true) +
+          fixedCollisionAnchorParagraph('second', 2, true) +
+          '</w:body></w:document>'
+      ),
+      ['z-inner-drawing', 'a-inner-drawing']
+    );
+    const reorderedPart = reverseBodyChildren(part);
+    const initialAtoms = drawingAtomIdentities(part)!;
+    const reorderedAtoms = drawingAtomIdentities(reorderedPart)!;
+    const initialIds = [...initialAtoms.keys()];
+    expect(initialIds).toHaveLength(2);
+    expect([...reorderedAtoms.keys()]).toEqual([...initialIds].reverse());
+    for (const drawingId of initialIds) {
+      expect(reorderedAtoms.get(drawingId)).toBe(initialAtoms.get(drawingId));
+    }
+
+    const context = layoutContext(part);
+    const projectionIds = initialIds.map(
+      (atomId) => context.projectionForAtom?.(atomId)?.drawingNodeId
+    );
+    expect(projectionIds).toEqual(['z-inner-drawing', 'a-inner-drawing']);
+    const initialSourceOrder = drawingSourceOrderInPart(part, context);
+    expect(projectionIds.map((drawingId) => initialSourceOrder.get(drawingId!))).toEqual([0, 1]);
+    const alternateContext: InlineDrawingLayoutContext = {
+      ...context,
+      projectionForAtom(atomId) {
+        const projection = context.projectionForAtom?.(atomId) ?? null;
+        return projection
+          ? { ...projection, drawingNodeId: `alternate:${projection.drawingNodeId}` }
+          : null;
+      },
+    };
+    const alternateSourceOrder = drawingSourceOrderInPart(part, alternateContext);
+    expect(alternateSourceOrder).not.toBe(initialSourceOrder);
+    expect(
+      projectionIds.map((drawingId) => alternateSourceOrder.get(`alternate:${drawingId}`))
+    ).toEqual([0, 1]);
+    expect(drawingSourceOrderInPart(part, context)).toBe(initialSourceOrder);
+    const reorderedSourceOrder = drawingSourceOrderInPart(reorderedPart, context);
+    expect(projectionIds.map((drawingId) => reorderedSourceOrder.get(drawingId!))).toEqual([1, 0]);
+    const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+    const session = createLayoutSession();
+    const stableOptions = {
+      measurer,
+      inlineDrawingLayout: context,
+      drawingLayoutEpoch: 'stable-drawing-epoch',
+      drawingLayoutToken: 'stable-drawing-token',
+      cache,
+      session,
+      producer: 'cow-drawing-order',
+    } as const;
+    const initial = layoutSemanticDocument(part, 1, stableOptions);
+    const initialAnchors = initial.pages[0]!.anchoredDrawings ?? [];
+    expect(initialAnchors.map((drawing) => drawing.drawingNodeId)).toEqual(initialIds);
+    expect(initialAnchors.map((drawing) => drawing.sourceOrder)).toEqual([0, 1]);
+    expect(initialAnchors[1]!.y).toBeGreaterThan(initialAnchors[0]!.y);
+
+    const reordered = layoutSemanticDocument(reorderedPart, 2, stableOptions);
+    const reorderedAnchors = reordered.pages[0]!.anchoredDrawings ?? [];
+    expect(reorderedAnchors.map((drawing) => drawing.drawingNodeId)).toEqual([
+      initialIds[1],
+      initialIds[0],
+    ]);
+    expect(reorderedAnchors.map((drawing) => drawing.sourceOrder)).toEqual([0, 1]);
+    expect(reorderedAnchors[1]!.y).toBeGreaterThan(reorderedAnchors[0]!.y);
+
+    const zones = collectExclusionZonesByPage(reordered.pages, context, CONTENT_WIDTH_PT).get(0);
+    expect(zones?.map((zone) => zone.drawingNodeId)).toEqual([initialIds[1], initialIds[0]]);
+    expect(zones?.map((zone) => zone.sourceOrder)).toEqual([0, 1]);
+    expect(zones?.[1]!.y).toBeGreaterThan(zones?.[0]!.y ?? Number.POSITIVE_INFINITY);
   });
 });
 

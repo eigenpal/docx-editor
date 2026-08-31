@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const repositoryRoot = join(import.meta.dir, '..', '..', '..');
@@ -13,7 +13,29 @@ const manifest = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.js
 };
 const changesetConfig = JSON.parse(
   readFileSync(join(repositoryRoot, '.changeset', 'config.json'), 'utf8')
-) as { fixed?: string[][]; ignore?: string[] };
+) as { fixed?: string[][]; ignore?: string[]; updateInternalDependencies?: string };
+const coreManifest = JSON.parse(
+  readFileSync(join(repositoryRoot, 'packages', 'core', 'package.json'), 'utf8')
+) as { version: string };
+const fontsManifest = JSON.parse(
+  readFileSync(join(repositoryRoot, 'packages', 'fonts', 'package.json'), 'utf8')
+) as { version: string };
+
+const changesetHeaderFor = (packageName: string): RegExp =>
+  new RegExp(`['"]${packageName.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}['"]\\s*:`);
+
+// Patch releases within the engine minor are compatible. The declared floor may lag behind the
+// workspace version because publishing an in-range patch does not need to rewrite every peer.
+const requiresSameMinor = (range: string | undefined, version: string): boolean => {
+  const rangeMatch = /^~(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(range ?? '');
+  const versionMatch = /^(\d+)\.(\d+)\.(\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(version);
+  if (!rangeMatch || !versionMatch) return false;
+  return (
+    Number(rangeMatch[1]) === Number(versionMatch[1]) &&
+    Number(rangeMatch[2]) === Number(versionMatch[2]) &&
+    Number(rangeMatch[3]) <= Number(versionMatch[3])
+  );
+};
 
 describe('engine dependency integrity', () => {
   test('requires one consumer-owned core instance', () => {
@@ -29,14 +51,57 @@ describe('engine dependency integrity', () => {
     expect(manifest.publishConfig).toBeUndefined();
     expect(changesetConfig.fixed?.flat()).not.toContain(packageName);
     expect(changesetConfig.ignore).toContain(packageName);
+    expect(changesetConfig.updateInternalDependencies).toBe('patch');
+    expect(
+      requiresSameMinor(manifest.peerDependencies?.['@docx-editor.dev/core'], coreManifest.version)
+    ).toBe(true);
+    expect(manifest.dependencies?.['@docx-editor.dev/fonts']).toBe(`~${fontsManifest.version}`);
 
     const pendingChangesets = readdirSync(join(repositoryRoot, '.changeset')).filter((entry) =>
       entry.endsWith('.md')
     );
+    const packageHeader = changesetHeaderFor(packageName);
+    expect(`'${packageName}': minor`).toMatch(packageHeader);
+    expect(`"${packageName}": minor`).toMatch(packageHeader);
     for (const changeset of pendingChangesets) {
-      expect(readFileSync(join(repositoryRoot, '.changeset', changeset), 'utf8')).not.toContain(
-        `'${packageName}':`
+      expect(readFileSync(join(repositoryRoot, '.changeset', changeset), 'utf8')).not.toMatch(
+        packageHeader
       );
     }
+  });
+
+  test('accepts only compatible tilde floors from the current engine minor', () => {
+    expect(requiresSameMinor('~2.13.0', '2.13.0')).toBe(true);
+    expect(requiresSameMinor('~2.13.0', '2.13.7')).toBe(true);
+    expect(requiresSameMinor('~2.13.0-beta.1', '2.13.2')).toBe(true);
+
+    expect(requiresSameMinor('~2.13.8', '2.13.7')).toBe(false);
+    expect(requiresSameMinor('~2.12.9', '2.13.0')).toBe(false);
+    expect(requiresSameMinor('~3.13.0', '2.13.0')).toBe(false);
+    expect(requiresSameMinor('^2.13.0', '2.13.0')).toBe(false);
+    expect(requiresSameMinor('2.13.0', '2.13.0')).toBe(false);
+    expect(requiresSameMinor(undefined, '2.13.0')).toBe(false);
+  });
+
+  test('owns the Markdown API without exposing it from core or the public docs site', () => {
+    const coreExportSource = readFileSync(
+      join(repositoryRoot, 'packages', 'core', 'src', 'export', 'index.ts'),
+      'utf8'
+    );
+    expect(coreExportSource).not.toMatch(/Markdown|\.\/markdown/);
+    expect(existsSync(join(repositoryRoot, 'packages/core/src/export/markdown.ts'))).toBe(false);
+    expect(existsSync(join(repositoryRoot, 'docs/site/content/docx-to-markdown/index.mdx'))).toBe(
+      false
+    );
+    expect(
+      readFileSync(join(repositoryRoot, 'docs', 'site', 'content', 'meta.json'), 'utf8')
+    ).not.toContain('docx-to-markdown');
+  });
+
+  test('documents the current embedded-font parity boundary before private release', () => {
+    const readme = readFileSync(join(import.meta.dir, '..', 'README.md'), 'utf8');
+    expect(readme).toContain('Document-embedded fonts are not automatically admitted');
+    expect(readme).toContain('paginate differently from the browser editor');
+    expect(readme).toContain('host-owned');
   });
 });

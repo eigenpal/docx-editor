@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
-import { createFixedMeasurer, createParagraphLayoutCache } from '../../layout/index.ts';
-import { readOoxmlPackage, type OoxmlPackage } from '../../store/package/index.ts';
+import {
+  createDocumentLinkProjectors,
+  createFixedMeasurer,
+  createParagraphLayoutCache,
+} from '../../layout/index.ts';
+import {
+  readOoxmlPackage,
+  relationshipTargetIn,
+  type OoxmlPackage,
+} from '../../store/package/index.ts';
 import { createNotesLayoutInput } from '../surface-pages.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -42,14 +50,20 @@ function load(body: string): OoxmlPackage {
 
 function notesInput(pkg: OoxmlPackage) {
   const part = pkg.parts.get(pkg.mainDocumentPart)!;
+  const session = {
+    currentPackage: () => pkg,
+    part: () => part,
+    packageRevision: () => 0,
+    documentProperties: () => ({}),
+    relationshipTarget: (relationshipId: string) =>
+      relationshipTargetIn(pkg, pkg.mainDocumentPart, relationshipId),
+  } as never;
   return createNotesLayoutInput({
-    session: {
-      currentPackage: () => pkg,
-      part: () => part,
-    } as never,
+    session,
     measurer: createFixedMeasurer(),
     producer: 'test',
     cache: createParagraphLayoutCache(),
+    linkProjectors: createDocumentLinkProjectors(session),
   });
 }
 

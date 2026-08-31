@@ -117,6 +117,20 @@ function unfinalizedLayoutOf(
 }
 
 describe('finalizePageFieldProjection memo', () => {
+  test('preserves evolving layout metadata while replacing finalized pages', () => {
+    const base = lay(partOf(filler(20) + tightSectPr), 1);
+    const tagged: SemanticLayout = {
+      ...unfinalizedLayoutOf(base, fieldFooterRecord(footerPart())),
+      displayMode: 'proposed',
+      controlContextToken: 'metadata-sentinel',
+    };
+
+    const finalized = finalizePageFieldProjection(tagged);
+    expect(finalized).not.toBe(tagged);
+    expect(finalized.displayMode).toBe('proposed');
+    expect(finalized.controlContextToken).toBe('metadata-sentinel');
+  });
+
   test('a second finalize over the same page records returns the identical pages', () => {
     const base = lay(partOf(filler(20) + tightSectPr), 1);
     const total = base.pages.length;

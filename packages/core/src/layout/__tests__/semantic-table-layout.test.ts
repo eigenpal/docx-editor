@@ -10,6 +10,7 @@ import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import { caretStops, documentOrder, paragraphTextFromLayout } from '../semantic-interaction.ts';
+import { buildStyleCascadeTable, type StyleCascadeTable } from '../style-cascade.ts';
 import {
   createFixedMeasurer,
   createLayoutSession,
@@ -39,6 +40,13 @@ function loadPart(bodyXml: string): OoxmlPart {
   const result = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
   if (!result.ok) throw new Error(`part read failed: ${result.reason}`);
   return result.part;
+}
+
+function loadStyles(stylesXml: string): StyleCascadeTable {
+  const xml = `<w:styles xmlns:w="${W}">${stylesXml}</w:styles>`;
+  const result = readOoxmlPart(xml, { name: '/word/styles.xml', contentType: 'app/xml' });
+  if (!result.ok) throw new Error(`styles read failed: ${result.reason}`);
+  return buildStyleCascadeTable(result.part.root);
 }
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
@@ -557,10 +565,11 @@ const TINY: PageGeometry = {
   margin: { top: 10, right: 10, bottom: 10, left: 10 },
 };
 
-function layoutTiny(part: OoxmlPart) {
+function layoutTiny(part: OoxmlPart, styleCascade?: StyleCascadeTable) {
   return layoutSemanticDocument(part, 0, {
     measurer: createFixedMeasurer(),
     geometry: TINY,
+    styleCascade,
   });
 }
 
@@ -760,19 +769,105 @@ describe('table row pagination (tiny page)', () => {
     expect(order.filter((text) => text === 'H2')).toHaveLength(1);
   });
 
-  test('overheight header group fails closed', () => {
+  test('overheight header group degrades to ordinary rows instead of refusing the document', () => {
     // Seven one-line header rows = 89.1pt > 80pt content box.
     const headers = Array.from({ length: 7 }, (_, i) =>
       tr(tc(p(`H${i}`)), '<w:trPr><w:tblHeader/></w:trPr>')
     ).join('');
     const part = loadPart(`<w:tbl>${headers}${tr(tc(p('body')))}</w:tbl>`);
-    expect(() => layoutTiny(part)).toThrow(TablePaginationError);
-    try {
-      layoutTiny(part);
-    } catch (error) {
-      expect(error).toBeInstanceOf(TablePaginationError);
-      expect((error as TablePaginationError).code).toBe('table-row-overheight');
-    }
+    const result = layoutTiny(part);
+    expect(result.pages.length).toBeGreaterThan(1);
+    const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
+    expect(rows.some((row) => row.isHeaderRepeat)).toBe(false);
+    expect(rows.map(rowCellText)).toEqual(['H0', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'body']);
+  });
+
+  test('near-full header suppresses its repeat when the next row cannot make progress', () => {
+    // TINY content = 80pt. The 67.5pt exact header leaves 12.5pt, just less than the
+    // fixed measurer's 12.73pt one-line row. Repeating it would reproduce the same unusable
+    // page forever; the authored header stays on page 1 and the body advances on page 2.
+    const header = tr(
+      tc(p('HEAD')),
+      '<w:trPr><w:tblHeader/><w:trHeight w:val="1350" w:hRule="exact"/></w:trPr>'
+    );
+    const part = loadPart(`<w:tbl>${header}${tr(tc(p('body')))}</w:tbl>`);
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    expect(result.pages).toHaveLength(2);
+    const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
+    expect(rows.map(rowCellText)).toEqual(['HEAD', 'body']);
+    expect(rows.some((row) => row.isHeaderRepeat)).toBe(false);
+  });
+
+  test('full-page header remains authored once and does not block the body', () => {
+    const header = tr(
+      tc(p('HEAD')),
+      '<w:trPr><w:tblHeader/><w:trHeight w:val="1600" w:hRule="exact"/></w:trPr>'
+    );
+    const part = loadPart(`<w:tbl>${header}${tr(tc(p('body')))}</w:tbl>`);
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    expect(result.pages).toHaveLength(2);
+    const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
+    expect(rows.map(rowCellText)).toEqual(['HEAD', 'body']);
+    expect(rows.some((row) => row.isHeaderRepeat)).toBe(false);
+  });
+
+  test('a later atomic row suppresses a repeat that would leave it no usable page', () => {
+    const header = tr(
+      tc(p('HEAD')),
+      '<w:trPr><w:tblHeader/><w:trHeight w:val="400" w:hRule="exact"/></w:trPr>'
+    );
+    const atomic = tr(
+      tc(p('atomic')),
+      '<w:trPr><w:trHeight w:val="1300" w:hRule="exact"/></w:trPr>'
+    );
+    const part = loadPart(`<w:tbl>${header}${tr(tc(p('first')))}${atomic}</w:tbl>`);
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    expect(result.pages).toHaveLength(2);
+    const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
+    expect(rows.map(rowCellText)).toEqual(['HEAD', 'first', 'atomic']);
+    expect(rows.some((row) => row.isHeaderRepeat)).toBe(false);
+  });
+
+  test('a nested block can suppress one repeat without disabling later useful repeats', () => {
+    const header = tr(
+      tc(p('HEAD')),
+      '<w:trPr><w:tblHeader/><w:trHeight w:val="1300" w:hRule="exact"/></w:trPr>'
+    );
+    const nested = `<w:tbl>${tr(tc(p('nested-0')))}${tr(tc(p('nested-1')))}</w:tbl>`;
+    const tail = Array.from({ length: 8 }, (_, index) => p(`tail-${index}`)).join('');
+    const part = loadPart(`<w:tbl>${header}${tr(tc(nested + tail))}</w:tbl>`);
+    const result = layoutTiny(part);
+    assertNoContentOverflow(result);
+    expect(result.pages.length).toBeGreaterThan(2);
+    const rows = allTableFragments(result).flatMap((fragment) => fragment.rows);
+    // Page 2 omits the header because its 15pt remainder cannot hold the nested table. Once
+    // the nested block is consumed, later paragraph continuations can use that remainder.
+    expect(tableFragments(result.pages[1]!)[0]!.rows[0]!.isHeaderRepeat).not.toBe(true);
+    expect(rows.some((row) => row.isHeaderRepeat)).toBe(true);
+    expect(documentOrder(result).map((id) => paragraphTextFromLayout(result, id))).toEqual([
+      'HEAD',
+      'nested-0',
+      'nested-1',
+      ...Array.from({ length: 8 }, (_, index) => `tail-${index}`),
+    ]);
+  });
+
+  test('base table-style tblHeader cannot turn a multi-page table into a fatal repeat group', () => {
+    const styleCascade = loadStyles(
+      '<w:style w:type="table" w:styleId="AllHeader"><w:trPr><w:tblHeader/></w:trPr></w:style>'
+    );
+    const rows = Array.from({ length: 8 }, (_, index) => tr(tc(p(`S${index}`)))).join('');
+    const part = loadPart(
+      `<w:tbl><w:tblPr><w:tblStyle w:val="AllHeader"/></w:tblPr>${rows}</w:tbl>`
+    );
+    const result = layoutTiny(part, styleCascade);
+    expect(result.pages.length).toBeGreaterThan(1);
+    const placed = allTableFragments(result).flatMap((fragment) => fragment.rows);
+    expect(placed.some((row) => row.isHeaderRepeat)).toBe(false);
+    expect(placed.map(rowCellText)).toEqual(Array.from({ length: 8 }, (_, index) => `S${index}`));
   });
 
   test('multi-row header group repeats ahead of tall body / vMerge continuation', () => {

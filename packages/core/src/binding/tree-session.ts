@@ -63,6 +63,7 @@ import {
   type OoxmlPackage,
   type OoxmlPackageRejection,
   type OoxmlPart,
+  type RelationshipRecord,
   type StoryScope,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
@@ -211,6 +212,9 @@ export function openTreeSession(
 
   let headerFooterBySection: {
     readonly packageRevision: number;
+    readonly pkg: OoxmlPackage;
+    readonly mainRelationships: readonly RelationshipRecord[] | undefined;
+    readonly settingsPart: OoxmlPart | undefined;
     readonly parts: readonly HeaderFooterParts[];
     readonly resolution: readonly HeaderFooterSectionResolution[];
   } | null = null;
@@ -228,21 +232,63 @@ export function openTreeSession(
   /** Memoized per body revision, like `reviewCache` — see `hasReviewContent`. */
   let reviewContentCache: { revision: number; present: boolean } | null = null;
   let lastChange: TreeModelChange | null = null;
+  let lastChangePackage: OoxmlPackage | null = null;
   packageStore.subscribe((change) => {
     lastChange = change;
+    // Capture the exact package snapshot produced by this published change. Shell-only writes do
+    // not publish, so a later identity mismatch proves more package state changed after the edit
+    // and the text-local header/footer promotion is no longer sound.
+    lastChangePackage = packageStore.currentPackage();
   });
 
   const bodyStore = () => packageStore.bodyStore();
   const currentPackage = (): OoxmlPackage => packageStore.currentPackage();
   const BODY_SCOPE: StoryScope = Object.freeze({ kind: 'body' as const });
 
+  const headerFooterSettingsPart = (
+    pkg: OoxmlPackage,
+    relationships: readonly RelationshipRecord[] | undefined
+  ): OoxmlPart | undefined => {
+    const record = relationships?.find(
+      (relationship) =>
+        relationship.type ===
+        'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings'
+    );
+    if (!record) return undefined;
+    const resolved = resolveRelationship(record);
+    return resolved.mode === 'Internal' && resolved.target.ok
+      ? pkg.parts.get(resolved.target.partName)
+      : undefined;
+  };
+
+  const headerFooterReadSetMatches = (
+    cached: NonNullable<typeof headerFooterBySection>,
+    pkg: OoxmlPackage,
+    mainRelationships: readonly RelationshipRecord[] | undefined
+  ): boolean => {
+    if (cached.mainRelationships !== mainRelationships) return false;
+    if (cached.settingsPart !== headerFooterSettingsPart(pkg, mainRelationships)) return false;
+    for (const section of cached.resolution) {
+      for (const slots of [section.headers, section.footers]) {
+        for (const slot of slots.values()) {
+          if (pkg.parts.get(slot.partName) !== slot.part) return false;
+        }
+      }
+    }
+    return true;
+  };
+
   const resolvedHeaderFooterBySection = (): {
     readonly parts: readonly HeaderFooterParts[];
     readonly resolution: readonly HeaderFooterSectionResolution[];
   } => {
+    const pkg = currentPackage();
+    const mainRelationships = pkg.relationships.get(pkg.mainDocumentPart);
     if (
       headerFooterBySection &&
       lastChange &&
+      lastChangePackage === pkg &&
+      headerFooterReadSetMatches(headerFooterBySection, pkg, mainRelationships) &&
       headerFooterBySection.packageRevision === lastChange.fromRevision &&
       packageStore.packageRevision === lastChange.toRevision &&
       lastChange.story?.kind === 'body' &&
@@ -254,15 +300,22 @@ export function openTreeSession(
       headerFooterBySection = {
         ...headerFooterBySection,
         packageRevision: packageStore.packageRevision,
+        pkg,
+        mainRelationships,
+        settingsPart: headerFooterSettingsPart(pkg, mainRelationships),
       };
     }
     if (
       !headerFooterBySection ||
-      headerFooterBySection.packageRevision !== packageStore.packageRevision
+      headerFooterBySection.packageRevision !== packageStore.packageRevision ||
+      headerFooterBySection.pkg !== pkg
     ) {
-      const resolution = resolveHeaderFooterResolutionBySection(currentPackage());
+      const resolution = resolveHeaderFooterResolutionBySection(pkg);
       headerFooterBySection = {
         packageRevision: packageStore.packageRevision,
+        pkg,
+        mainRelationships,
+        settingsPart: headerFooterSettingsPart(pkg, mainRelationships),
         resolution,
         parts: headerFooterPartsFromResolution(resolution),
       };
@@ -299,12 +352,12 @@ export function openTreeSession(
     return stylesRoot;
   };
 
-  let numberingRootRevision = -1;
+  let numberingRootPackage: OoxmlPackage | null = null;
   let numberingRoot: OoxmlElement | null = null;
   const resolveNumberingRoot = (): OoxmlElement | null => {
-    if (numberingRootRevision === packageStore.packageRevision) return numberingRoot;
-    numberingRootRevision = packageStore.packageRevision;
     const live = currentPackage();
+    if (numberingRootPackage === live) return numberingRoot;
+    numberingRootPackage = live;
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === NUMBERING_REL_TYPE
     );
@@ -325,12 +378,12 @@ export function openTreeSession(
   // see, so layout has to be handed them separately.
   const SETTINGS_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings';
-  let settingsRootRevision = -1;
+  let settingsRootPackage: OoxmlPackage | null = null;
   let settingsRoot: OoxmlElement | null = null;
   const resolveSettingsRoot = (): OoxmlElement | null => {
-    if (settingsRootRevision === packageStore.packageRevision) return settingsRoot;
-    settingsRootRevision = packageStore.packageRevision;
     const live = currentPackage();
+    if (settingsRootPackage === live) return settingsRoot;
+    settingsRootPackage = live;
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === SETTINGS_REL_TYPE
     );
@@ -365,11 +418,12 @@ export function openTreeSession(
     }
     return part ?? live.parts.get(fallbackName);
   };
-  let documentPropertiesRevision = -1;
+  let documentPropertiesPackage: OoxmlPackage | null = null;
   let documentPropertiesValue: DocumentProperties = EMPTY_DOCUMENT_PROPERTIES;
   const resolveDocumentProperties = (): DocumentProperties => {
-    if (documentPropertiesRevision === packageStore.packageRevision) return documentPropertiesValue;
-    documentPropertiesRevision = packageStore.packageRevision;
+    const live = currentPackage();
+    if (documentPropertiesPackage === live) return documentPropertiesValue;
+    documentPropertiesPackage = live;
     const core = resolvePropertiesPart(CORE_PROPERTIES_REL_TYPE, '/docProps/core.xml');
     const app = resolvePropertiesPart(EXTENDED_PROPERTIES_REL_TYPE, '/docProps/app.xml');
     documentPropertiesValue = readDocumentProperties(core?.root ?? null, app?.root ?? null);
@@ -377,15 +431,15 @@ export function openTreeSession(
   };
 
   // The theme part, resolved like the styles part: through the main part's `theme`
-  // relationship, with the conventional name as a fallback. Immutable in-session.
+  // relationship, with the conventional name as a fallback.
   const THEME_REL_TYPE =
     'http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme';
-  let themeRootResolved = false;
+  let themeRootPackage: OoxmlPackage | null = null;
   let themeRoot: OoxmlElement | null = null;
   const resolveThemeRoot = (): OoxmlElement | null => {
-    if (themeRootResolved) return themeRoot;
-    themeRootResolved = true;
     const live = currentPackage();
+    if (themeRootPackage === live) return themeRoot;
+    themeRootPackage = live;
     const record = (live.relationships.get(live.mainDocumentPart) ?? []).find(
       (rel) => rel.type === THEME_REL_TYPE
     );
@@ -397,7 +451,14 @@ export function openTreeSession(
       }
     }
     part ??= live.parts.get('/word/theme/theme1.xml');
-    themeRoot = part?.root ?? null;
+    const next = part?.root ?? null;
+    if (next !== themeRoot) {
+      themeRoot = next;
+      themeFontsCache = null;
+      themeColorsCache = null;
+      stylesCache = null;
+      runDefaultsResolver = null;
+    }
     return themeRoot;
   };
 
@@ -817,7 +878,8 @@ export function openTreeSession(
       stylesRoot: () => resolveStylesRoot(),
 
       documentThemeFonts() {
-        themeFontsCache ??= collectDocumentThemeFonts(resolveThemeRoot());
+        const root = resolveThemeRoot();
+        themeFontsCache ??= collectDocumentThemeFonts(root);
         return themeFontsCache;
       },
 
@@ -828,7 +890,8 @@ export function openTreeSession(
       trackingSettings: () => readTrackingSettings(resolveSettingsRoot()),
 
       documentThemeColors() {
-        themeColorsCache ??= collectDocumentThemeColors(resolveThemeRoot());
+        const root = resolveThemeRoot();
+        themeColorsCache ??= collectDocumentThemeColors(root);
         return themeColorsCache;
       },
 
@@ -1137,7 +1200,7 @@ export function openTreeSession(
             const ensured = ensureListDefinition(currentPackage(), kind);
             if (!ensured) return null;
             packageStore.replacePackageShell(ensured.pkg);
-            numberingRootRevision = -1;
+            numberingRootPackage = null;
             numberingRoot = null;
             return ensured.numId;
           },
@@ -1158,7 +1221,7 @@ export function openTreeSession(
             if (!ensured) return { ok: false, changed: false };
             if (ensured !== before) {
               packageStore.replacePackageShell(ensured);
-              numberingRootRevision = -1;
+              numberingRootPackage = null;
               numberingRoot = null;
               return { ok: true, changed: true };
             }

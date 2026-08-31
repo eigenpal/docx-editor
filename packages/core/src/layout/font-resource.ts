@@ -232,6 +232,87 @@ const freezeRequest = (request: FontRequest): FontRequest => {
   return Object.freeze({ family: request.family, weight: request.weight, style: request.style });
 };
 
+const sampleRequest = (request: FontRequest): FontRequest => {
+  const sampled = { family: request.family, weight: request.weight, style: request.style };
+  return freezeRequest(sampled);
+};
+
+const PREPARED_FONT_RESOURCE_BRAND: unique symbol = Symbol('prepared-font-resource');
+const preparedFontResourceHashes = new WeakMap<object, string | null>();
+const EMPTY_FORBIDDEN_RESOURCE_BYTES = new Uint8Array(0);
+const TYPED_ARRAY_PROTOTYPE = Object.getPrototypeOf(Uint8Array.prototype) as object;
+const typedArrayLength = Object.getOwnPropertyDescriptor(TYPED_ARRAY_PROTOTYPE, 'length')!.get!;
+const typedArrayByteLength = Object.getOwnPropertyDescriptor(
+  TYPED_ARRAY_PROTOTYPE,
+  'byteLength'
+)!.get!;
+
+/** Authenticate a byte-sized typed array without invoking caller-owned accessors. @internal */
+export function fontByteLength(bytes: Uint8Array): number {
+  if (!ArrayBuffer.isView(bytes)) throw new TypeError('Font bytes must be a genuine byte array');
+  let length: number;
+  let byteLength: number;
+  try {
+    length = typedArrayLength.call(bytes) as number;
+    byteLength = typedArrayByteLength.call(bytes) as number;
+  } catch {
+    throw new TypeError('Font bytes must be a genuine byte array');
+  }
+  if (length !== byteLength) throw new TypeError('Font bytes must use one-byte elements');
+  return byteLength;
+}
+
+function copyFontBytes(bytes: Uint8Array): Uint8Array {
+  const copy = new Uint8Array(fontByteLength(bytes));
+  Uint8Array.prototype.set.call(copy, bytes);
+  return copy;
+}
+
+/** One source whose caller-owned bytes were copied and hashed exactly once. @internal */
+export interface PreparedFontResourceDefinition extends FontResourceDefinition {
+  readonly [PREPARED_FONT_RESOURCE_BRAND]: true;
+  /** Null for forbidden sources, whose bytes admission deliberately never touches. */
+  readonly actualHash: string | null;
+}
+
+/** Own and fingerprint one source before cache identity and admission share it. @internal */
+export function prepareFontResourceDefinition(
+  definition: FontResourceDefinition,
+  instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>
+): PreparedFontResourceDefinition {
+  const request = freezeRequest(definition.request);
+  if (definition.availability === 'forbidden') {
+    const prepared = Object.freeze({
+      ...definition,
+      request,
+      actualHash: null,
+      [PREPARED_FONT_RESOURCE_BRAND]: true as const,
+    });
+    preparedFontResourceHashes.set(prepared, null);
+    return prepared;
+  }
+  const bytes = copyFontBytes(definition.bytes);
+  instrumentation?.onOwnedByteCopy?.();
+  instrumentation?.onHash?.();
+  const actualHash = sha256FontBytes(bytes);
+  const prepared = Object.freeze({
+    ...definition,
+    request,
+    bytes,
+    actualHash,
+    [PREPARED_FONT_RESOURCE_BRAND]: true as const,
+  });
+  preparedFontResourceHashes.set(prepared, actualHash);
+  return prepared;
+}
+
+/** Prepared digest, or undefined when the source has not crossed preparation. @internal */
+export function preparedFontResourceActualHash(
+  definition: FontResourceDefinition
+): string | null | undefined {
+  return preparedFontResourceHashes.get(definition);
+}
+
 const freezeLineMetrics = (
   metrics: NonNullable<DeclaredFontSubstitution['lineMetrics']>
 ): NonNullable<FontSubstitution['lineMetrics']> => {
@@ -441,13 +522,16 @@ const storeResource = (
   instrumentation?: FontResourceInstrumentation
 ): StoredResource => {
   if (definition.availability === 'forbidden') return { kind: 'forbidden' };
-  if (definition.bytes.byteLength > maxFontBytes) {
-    return { kind: 'overLimit', actual: definition.bytes.byteLength };
+  const byteLength = fontByteLength(definition.bytes);
+  if (byteLength > maxFontBytes) {
+    return { kind: 'overLimit', actual: byteLength };
   }
-  const ownedBytes = definition.bytes.slice();
-  instrumentation?.onOwnedByteCopy?.();
-  instrumentation?.onHash?.();
-  const actualHash = sha256FontBytes(ownedBytes);
+  const preparedHash = preparedFontResourceActualHash(definition);
+  const ownedBytes =
+    preparedHash === undefined ? copyFontBytes(definition.bytes) : definition.bytes;
+  if (preparedHash === undefined) instrumentation?.onOwnedByteCopy?.();
+  if (preparedHash === undefined) instrumentation?.onHash?.();
+  const actualHash = preparedHash ?? sha256FontBytes(ownedBytes);
   if (definition.hash !== actualHash) {
     return { kind: 'hashMismatch', expectedHash: definition.hash, actualHash };
   }
@@ -487,43 +571,105 @@ const storeResource = (
 export const createFontResourceSnapshot = (
   options: FontResourceSnapshotOptions
 ): FontResourceSnapshot => {
-  if (!Number.isSafeInteger(options.epoch) || options.epoch < 0) {
+  const epoch = options.epoch;
+  const maxFontBytes = options.maxFontBytes;
+  const validateFont = options.validateFont;
+  const instrumentation = options.instrumentation;
+  const resourceInput = options.resources;
+  const substitutionInput = options.substitutions;
+  if (!Number.isSafeInteger(epoch) || epoch < 0) {
     throw new RangeError('Font resource epoch must be a non-negative safe integer');
   }
   if (
-    !Number.isSafeInteger(options.maxFontBytes) ||
-    options.maxFontBytes <= 0 ||
-    options.maxFontBytes > HARD_MAX_FONT_BYTES
+    !Number.isSafeInteger(maxFontBytes) ||
+    maxFontBytes <= 0 ||
+    maxFontBytes > HARD_MAX_FONT_BYTES
   ) {
     throw new RangeError(
       `Font byte ceiling must be a positive safe integer no greater than ${HARD_MAX_FONT_BYTES}`
     );
   }
-  if (typeof options.validateFont !== 'function') {
+  if (typeof validateFont !== 'function') {
     throw new TypeError('Font snapshot requires a validator');
   }
-  if (options.resources.length > HARD_MAX_FONT_SOURCES) {
+  const resourceCount = resourceInput.length;
+  const substitutionCount = substitutionInput?.length ?? 0;
+  if (resourceCount > HARD_MAX_FONT_SOURCES) {
     throw new RangeError(`Font source count must not exceed ${HARD_MAX_FONT_SOURCES}`);
   }
+  if (substitutionCount > HARD_MAX_FONT_SOURCES) {
+    throw new RangeError(`Font substitution count must not exceed ${HARD_MAX_FONT_SOURCES}`);
+  }
+
   let aggregateFontBytes = 0;
-  for (const definition of options.resources) {
-    if (definition.bytes.byteLength > HARD_MAX_AGGREGATE_FONT_BYTES - aggregateFontBytes) {
+  const sampledResources: FontResourceDefinition[] = [];
+  for (let index = 0; index < resourceCount; index += 1) {
+    const definition = resourceInput[index]!;
+    if (preparedFontResourceActualHash(definition) !== undefined) {
+      const byteLength =
+        definition.availability === 'forbidden' ? 0 : fontByteLength(definition.bytes);
+      if (byteLength > HARD_MAX_AGGREGATE_FONT_BYTES - aggregateFontBytes) {
+        throw new RangeError(
+          `Aggregate font bytes must not exceed ${HARD_MAX_AGGREGATE_FONT_BYTES}`
+        );
+      }
+      aggregateFontBytes += byteLength;
+      sampledResources.push(definition);
+      continue;
+    }
+
+    const request = sampleRequest(definition.request);
+    const id = definition.id;
+    const hash = definition.hash;
+    const faceIndex = definition.faceIndex;
+    const availability = definition.availability;
+    const bytes = availability === 'forbidden' ? EMPTY_FORBIDDEN_RESOURCE_BYTES : definition.bytes;
+    const byteLength = availability === 'forbidden' ? 0 : fontByteLength(bytes);
+    if (byteLength > HARD_MAX_AGGREGATE_FONT_BYTES - aggregateFontBytes) {
       throw new RangeError(`Aggregate font bytes must not exceed ${HARD_MAX_AGGREGATE_FONT_BYTES}`);
     }
-    aggregateFontBytes += definition.bytes.byteLength;
+    aggregateFontBytes += byteLength;
+    sampledResources.push(
+      Object.freeze({
+        request,
+        id,
+        bytes,
+        hash,
+        faceIndex,
+        ...(availability ? { availability } : {}),
+      })
+    );
   }
-  const epoch = options.epoch;
-  const maxFontBytes = options.maxFontBytes;
-  const validateFont = options.validateFont;
+
+  const sampledSubstitutions: DeclaredFontSubstitution[] = [];
+  if (substitutionInput) {
+    for (let index = 0; index < substitutionCount; index += 1) {
+      const substitution = substitutionInput[index]!;
+      const from = sampleRequest(substitution.from);
+      const to = sampleRequest(substitution.to);
+      const lineMetrics = substitution.lineMetrics;
+      sampledSubstitutions.push(
+        Object.freeze({
+          from,
+          to,
+          ...(lineMetrics
+            ? {
+                lineMetrics: Object.freeze({
+                  heightEm: lineMetrics.heightEm,
+                  baselineEm: lineMetrics.baselineEm,
+                }),
+              }
+            : {}),
+        })
+      );
+    }
+  }
 
   const resources = new Map<string, StoredResource>();
-  for (const definition of options.resources) {
+  for (const definition of sampledResources) {
     const key = fontRequestKey(definition.request);
     if (resources.has(key)) throw new TypeError(`Duplicate font resource request: ${key}`);
-    resources.set(
-      key,
-      storeResource(definition, maxFontBytes, validateFont, options.instrumentation)
-    );
+    resources.set(key, storeResource(definition, maxFontBytes, validateFont, instrumentation));
   }
 
   const substitutions = new Map<
@@ -533,7 +679,7 @@ export const createFontResourceSnapshot = (
       readonly lineMetrics?: NonNullable<FontSubstitution['lineMetrics']>;
     }
   >();
-  for (const substitution of options.substitutions ?? []) {
+  for (const substitution of sampledSubstitutions) {
     const key = fontRequestKey(substitution.from);
     if (substitutions.has(key)) throw new TypeError(`Duplicate font substitution request: ${key}`);
     substitutions.set(

@@ -9,11 +9,13 @@ import {
   createFixedMeasurer,
   createFontResourceSnapshot,
   createHarfBuzzTextShaper,
+  createLayoutShapedMeasurer,
   createShapedMeasurer,
   harfBuzzFontValidator,
   initializeHarfBuzz,
   sha256FontBytes,
   type FontRequest,
+  type LayoutShapingOptions,
   type ResolvedFont,
   type ResolvedRunStyle,
 } from '../index.ts';
@@ -92,6 +94,54 @@ const style = (overrides: Partial<ResolvedRunStyle> = {}): ResolvedRunStyle => (
   ...DEFAULT_RUN_STYLE,
   fontSizePt: 11,
   ...overrides,
+});
+
+test('layout adapter executes the exact environment carried by its operation identity', () => {
+  const actualShaper = createHarfBuzzTextShaper();
+  const observed: LayoutShapingOptions['environment'][] = [];
+  const environment: LayoutShapingOptions['environment'] = {
+    script: 'Arab',
+    variationAxes: {},
+    shapingLibrary: HARFBUZZ_SHAPING_LIBRARY,
+    unicodeDataVersion: '16.0.0',
+    normalization: 'none',
+    language: 'pl',
+    features: { kern: 0, liga: 0 },
+    fixedPointScale: 777,
+    roundingMode: 'towardZero',
+  };
+  const shaping = {
+    fonts: {} as LayoutShapingOptions['fonts'],
+    shaper: {
+      shape(input) {
+        observed.push(input.environment);
+        return actualShaper.shape(input);
+      },
+    },
+    defaultFont: { family: 'DejaVu Sans', sizeHalfPoints: 22 },
+    environment,
+    ligatureCaretPolicy: 'cluster-edges-only',
+    operation: {
+      resourceEpoch: 1,
+      configEpoch: 1,
+      extensionFingerprint: 'font-config:test',
+      shapingHash: 'shaping:test',
+      producerVersion: 1,
+    },
+  } satisfies LayoutShapingOptions;
+  const adapted = createLayoutShapedMeasurer(shaping, {
+    resolveFont: () => font,
+    fallback,
+  });
+
+  adapted.measure('Adapter', style());
+
+  expect(observed[0]).toMatchObject(environment);
+  expect(observed[0]?.script).toBe('Arab');
+  expect(observed[0]?.fixedPointScale).toBe(777);
+  expect(observed[0]?.roundingMode).toBe('towardZero');
+  expect(observed[0]?.features).toEqual({ kern: 0, liga: 0 });
+  actualShaper.dispose();
 });
 
 describe('line metrics come from the font, not from a multiplier (task 7.7)', () => {
