@@ -169,12 +169,23 @@ describe('the default arrangement', () => {
     // Wired controls are live buttons; the labels come from the registry keys.
     expect(view.container.querySelector(byLabel('formattingBar.boldShortcut'))).not.toBeNull();
     expect(view.container.querySelector(byLabel('formattingBar.undoShortcut'))).not.toBeNull();
+    expect(view.container.querySelector('[data-slot="review.authors"]')).toBeNull();
     // No raw key ever reaches the screen — the guard the resolved-label helpers cannot
     // provide, since they resolve through the same catalogue as the code under test.
     expect(toolbar.textContent).not.toContain('toolbar.');
     expect(toolbar.textContent).not.toContain('formattingBar.');
     // The bar self-emits the docx-editor styling scope, like Loading and Viewport.
     expect(toolbar.classList.contains('docx-editor')).toBe(true);
+  });
+
+  test('a host can compose the reviewer shortcut with its own icon', () => {
+    const { view } = mountToolbar(
+      <DocxEditorToolbar>
+        <DocxEditorToolbar.Reviewers icon={<span data-testid="custom-reviewers-icon" />} />
+      </DocxEditorToolbar>
+    );
+    expect(view.container.querySelector('[data-slot="review.authors"]')).not.toBeNull();
+    expect(view.getByTestId('custom-reviewers-icon')).not.toBeNull();
   });
 
   test('LocaleProvider localizes a bare composed toolbar', () => {

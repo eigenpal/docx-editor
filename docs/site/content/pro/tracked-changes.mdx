@@ -299,7 +299,9 @@ A query filters returned data. It does not limit caret-driven activation.
 
 ## Filter by reviewer
 
-Add `DocxEditor.Toolbar.Reviewers` to show the reviewer menu used by the packaged toolbar.
+The packaged menu exposes **Review → Markup Options → Reviewers**. The default toolbar omits
+the shortcut to keep the chrome compact. A host that wants one can compose
+`DocxEditor.Toolbar.Reviewers` and provide a custom `icon` (or the Vue default slot).
 Each checked author keeps their tracked markup and review cards visible. Clearing an author
 shows that author’s revisions as accepted: insertions remain as ordinary text, deletions leave
 the layout, and formatting stays applied without markup. Comments by that author are hidden.

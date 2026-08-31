@@ -6051,7 +6051,7 @@ a.docx-hyperlink:focus-visible {
   }
 }
 
-/* ── The menu bar: File · Format · Insert · Help ───────────────────────────────────────
+/* ── The menu bar: File · Format · Insert · Review · Help ──────────────────────────────
  *
  * Sits under the document title, above the toolbar pill. Triggers are plain text — no
  * chrome at rest, a soft gray plate on hover and while open — and the panels reuse the
@@ -6176,6 +6176,30 @@ a.docx-hyperlink:focus-visible {
    * separation comes from the card's own border and shadow. */
   margin-left: 0;
   min-width: 240px;
+}
+
+/* The third-level reviewer list can be long. Keep the hierarchy anchored to its source,
+ * but let only the roster scroll instead of pushing the whole Review menu off-screen. */
+.docx-editor .docx-menubar__reviewers-submenu > .docx-menubar__submenu-panel {
+  max-height: min(420px, calc(100vh - 24px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.docx-editor .docx-menubar__reviewer-check {
+  display: inline-flex;
+  width: 18px;
+  justify-content: center;
+}
+
+/* Checked rows use the familiar Mac checkmark; the selection does not become a heavy slab. */
+.docx-editor .docx-menubar__reviewer-item[data-active] {
+  background: transparent;
+}
+
+.docx-editor .docx-menubar__reviewer-item:hover,
+.docx-editor .docx-menubar__reviewer-item:focus-visible {
+  background: var(--doc-bg-hover);
 }
 
 /* A named section of rows. The heading is decoration (the group carries the accessible name),

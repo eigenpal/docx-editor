@@ -1,4 +1,5 @@
 import { computed, defineComponent, nextTick, ref, watch, type PropType } from 'vue';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
@@ -13,10 +14,11 @@ const selectHiddenAuthors = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.hiddenReviewAuthors ?? [];
 
 /** @public */
-export interface ToolbarReviewersProps {
+export type ToolbarReviewersProps = {
   className?: string;
   hidden?: boolean;
-}
+  icon?: DocxEditorChildren;
+};
 
 /** Word for Mac's reviewer visibility menu. It changes view state only. @public */
 export const ToolbarReviewers = Object.assign(
@@ -25,8 +27,9 @@ export const ToolbarReviewers = Object.assign(
     props: {
       className: { type: String, default: undefined },
       hidden: { type: Boolean, default: undefined },
+      icon: { type: Object as PropType<DocxEditorChildren>, default: undefined },
     },
-    setup(props) {
+    setup(props, { slots }) {
       const editorRef = useDocxEditor();
       const authors = useReviewAuthors();
       const hiddenAuthors = useEditorState(selectHiddenAuthors);
@@ -108,7 +111,7 @@ export const ToolbarReviewers = Object.assign(
                 open.value = !open.value;
               }}
             >
-              {chromeIcon(control?.paths)}
+              {props.icon ?? slots.default?.() ?? chromeIcon(control?.paths)}
               <span class="docx-toolbar__picker-value">{text}</span>
               <span class="docx-toolbar__picker-caret" aria-hidden="true">
                 ▾

@@ -18,7 +18,7 @@ import type { ChromeMenuId } from '@docx-editor.dev/core/editor';
 import type { ToolbarTranslate } from '../toolbar/toolbar-context';
 
 /**
- * A menu's identity: one of the registry's four, or a HOST'S OWN.
+ * A menu's identity: one of the registry's five, or a HOST'S OWN.
  *
  * The `(string & {})` arm keeps the registry ids as editor autocomplete while accepting
  * any other string, so a product can add "Review" or "Clauses" without the library having

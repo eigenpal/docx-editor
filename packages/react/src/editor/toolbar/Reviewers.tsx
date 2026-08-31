@@ -1,6 +1,7 @@
 // Word for Mac's Review > Markup Options > Reviewers menu.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { DocxEditorChildren } from '../../docx-editor-children';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { toolbarCommandState } from '@docx-editor.dev/core/editor';
 import type { EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
@@ -15,13 +16,15 @@ const selectHiddenAuthors = (snapshot: EditorSnapshot): readonly string[] =>
   snapshot.hiddenReviewAuthors ?? [];
 
 /** Props for `DocxEditor.Toolbar.Reviewers`. @public */
-export interface ToolbarReviewersProps {
+export type ToolbarReviewersProps = {
   className?: string;
   hidden?: boolean;
-}
+  /** Custom trigger icon. */
+  icon?: DocxEditorChildren;
+};
 
 /** The reviewer visibility menu. It changes view state only. @public */
-export function ToolbarReviewers({ className, hidden }: ToolbarReviewersProps) {
+export function ToolbarReviewers({ className, hidden, icon }: ToolbarReviewersProps) {
   const editor = useDocxEditor();
   const authors = useReviewAuthors();
   const hiddenAuthors = useEditorState(selectHiddenAuthors);
@@ -95,7 +98,7 @@ export function ToolbarReviewers({ className, hidden }: ToolbarReviewersProps) {
         onMouseDown={guardToolbarMousedown}
         onClick={() => setOpen((value) => !value)}
       >
-        {chromeIcon(control?.paths)}
+        {icon ?? chromeIcon(control?.paths)}
         <span className="docx-toolbar__picker-value">{text}</span>
         <span className="docx-toolbar__picker-caret" aria-hidden="true">
           ▾

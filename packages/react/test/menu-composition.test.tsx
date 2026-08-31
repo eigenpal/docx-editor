@@ -189,7 +189,7 @@ describe('the default bar', () => {
       </DocxEditorMenu>
     );
     // Same order, File still in first position, Help gone.
-    expect(menuIds(bar(view))).toEqual(['file', 'format', 'insert']);
+    expect(menuIds(bar(view))).toEqual(['file', 'format', 'insert', 'review']);
     expect(view.container.querySelector('.custom-file')).not.toBeNull();
   });
 
@@ -761,19 +761,21 @@ describe('chrome contracts', () => {
   test('a host can add a menu of its own, with its own id and label', () => {
     const { view } = mountMenu(
       <DocxEditorMenu>
-        <DocxEditorMenu.Menu id="review" label="Review">
+        <DocxEditorMenu.Menu id="clauses" label="Clauses">
           <DocxEditorMenu.Row onSelect={() => {}}>Send for approval</DocxEditorMenu.Row>
         </DocxEditorMenu.Menu>
       </DocxEditorMenu>
     );
     // Appended after the default bar, and it is a real menu: it opens, and opening it
     // closes whichever was open.
-    expect(menuIds(bar(view))).toEqual([...EXPECTED_MENUS, 'review']);
+    expect(menuIds(bar(view))).toEqual([...EXPECTED_MENUS, 'clauses']);
     openMenu(view, 'toolbar.file');
-    const review = [...view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger')] //
-      .find((button) => button.textContent === 'Review')!;
+    const clauses = [
+      ...view.container.querySelectorAll<HTMLButtonElement>('.docx-menubar__trigger'),
+    ] //
+      .find((button) => button.textContent === 'Clauses')!;
     act(() => {
-      fireEvent.click(review);
+      fireEvent.click(clauses);
     });
     expect(view.container.querySelectorAll('[role="menu"]').length).toBe(1);
     expect(view.container.textContent).toContain('Send for approval');

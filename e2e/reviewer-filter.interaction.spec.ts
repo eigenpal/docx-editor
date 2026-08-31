@@ -13,6 +13,14 @@ async function waitForEditor(page: Page, url: string): Promise<void> {
   await page.waitForSelector(PAINTED_PAGE, { timeout: 30_000 });
 }
 
+async function openReviewerMenu(page: Page) {
+  const review = page.getByRole('menuitem', { name: 'Review', exact: true });
+  if ((await review.getAttribute('aria-expanded')) !== 'true') await review.click();
+  await page.getByRole('menuitem', { name: 'Markup Options', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Reviewers', exact: true }).click();
+  return page.getByRole('menu', { name: 'Reviewers', exact: true });
+}
+
 for (const adapter of ADAPTERS) {
   test(`${adapter.name} filters markup, document flow, and review cards by author`, async ({
     page,
@@ -30,20 +38,13 @@ for (const adapter of ADAPTERS) {
     await expect(bobMarkup).toHaveCount(2);
     await expect(pages).toContainText('ALICE_DELETE');
 
-    const trigger = page.getByTestId('reviewers-trigger');
-    await trigger.click();
-    const menu = page.getByTestId('reviewers-menu');
+    const menu = await openReviewerMenu(page);
     await expect(menu).toHaveCSS('overflow-y', 'auto');
-    await page.keyboard.press('Escape');
-    await expect(menu).toHaveCount(0);
-    await expect(trigger).toBeFocused();
-
-    await trigger.click();
-    await page.keyboard.press('Tab');
+    await pages.click({ position: { x: 2, y: 2 } });
     await expect(menu).toHaveCount(0);
 
-    await trigger.click();
-    const all = page.getByTestId('reviewer-all');
+    await openReviewerMenu(page);
+    const all = page.locator('[data-slot="reviewer-all"]');
     await expect(all).toHaveAttribute('aria-checked', 'true');
     await all.click();
     await expect(aliceMarkup).toHaveCount(0);

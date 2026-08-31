@@ -49,6 +49,7 @@ export {
 } from './TableControls';
 export { TableChromeProvider } from './useTableChrome';
 export type { ToolbarTranslate } from './toolbar-context';
+export type { ToolbarReviewersProps } from './Reviewers';
 export {
   ToolbarContentControlShowAll,
   ToolbarContentControlFormFill,

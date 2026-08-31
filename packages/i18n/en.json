@@ -40,6 +40,7 @@
     "file": "File",
     "format": "Format",
     "insert": "Insert",
+    "review": "Review",
     "open": "Open",
     "openShortcut": "Ctrl+O",
     "save": "Save",
@@ -723,6 +724,7 @@
   },
   "reviewers": {
     "label": "Reviewers",
+    "markupOptions": "Markup Options",
     "all": "All"
   },
   "editingMode": {

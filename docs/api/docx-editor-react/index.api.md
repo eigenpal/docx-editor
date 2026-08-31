@@ -583,6 +583,9 @@ export interface DocxEditorMenuNamespace {
     // (undocumented)
     readonly PageSetup: typeof MenuPageSetup;
     readonly ReportIssue: typeof MenuReportIssue;
+    // (undocumented)
+    readonly Review: typeof MenuReview;
+    readonly Reviewers: typeof MenuReviewers;
     readonly Row: typeof MenuRow;
     // (undocumented)
     readonly Save: typeof MenuSave;
@@ -920,7 +923,7 @@ export interface DocxEditorToolbarNamespace {
     // (undocumented)
     readonly Redo: ToolbarPartComponent;
     // (undocumented)
-    readonly Reviewers: ToolbarSlotPartComponent;
+    readonly Reviewers: typeof ToolbarReviewers;
     // (undocumented)
     readonly Save: ToolbarSlotPartComponent;
     // (undocumented)
@@ -1348,6 +1351,12 @@ export interface MenuReportIssueProps {
     hidden?: boolean;
     onSelect?: () => void;
 }
+
+// @public (undocumented)
+export type MenuReviewersProps = {
+    className?: string;
+    hidden?: boolean;
+};
 
 // @public
 export interface MenuRowProps {
@@ -2075,6 +2084,13 @@ export interface ToolbarProps {
     theme?: Theme | null;
     zoom?: number;
 }
+
+// @public
+export type ToolbarReviewersProps = {
+    className?: string;
+    hidden?: boolean;
+    icon?: DocxEditorChildren;
+};
 
 // @public
 export interface ToolbarSeparatorProps {

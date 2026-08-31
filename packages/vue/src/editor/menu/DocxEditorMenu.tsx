@@ -6,6 +6,7 @@ import {
   provide,
   ref,
   watch,
+  type Component,
   type PropType,
   type VNode,
 } from 'vue';
@@ -43,11 +44,13 @@ import {
   type MenuPartComponent,
 } from './parts';
 import { useScopeClassName } from '../scope-context';
+import { MenuReview, MenuReviewers } from './Reviewers';
 
-const MENU_PARTS: Record<ChromeMenuId, MenuPartComponent> = {
+const MENU_PARTS: Record<ChromeMenuId, Component> = {
   file: MenuFile,
   format: MenuFormat,
   insert: MenuInsert,
+  review: MenuReview,
   help: MenuHelp,
 };
 
@@ -330,6 +333,7 @@ export interface DocxEditorMenuNamespace {
   readonly File: MenuPartComponent;
   readonly Format: MenuPartComponent;
   readonly Insert: MenuPartComponent;
+  readonly Review: typeof MenuReview;
   readonly Help: MenuPartComponent;
   readonly Item: typeof MenuItem;
   readonly Row: typeof MenuRow;
@@ -342,6 +346,7 @@ export interface DocxEditorMenuNamespace {
   readonly Save: typeof MenuSave;
   readonly PageSetup: typeof MenuPageSetup;
   readonly ImageInsert: typeof MenuImageInsert;
+  readonly Reviewers: typeof MenuReviewers;
   readonly ReportIssue: typeof MenuReportIssue;
 }
 
@@ -351,6 +356,7 @@ export const DocxEditorMenu = Object.assign(DocxEditorMenuRoot, {
   File: MenuFile,
   Format: MenuFormat,
   Insert: MenuInsert,
+  Review: MenuReview,
   Help: MenuHelp,
   Item: MenuItem,
   Row: MenuRow,
@@ -363,5 +369,6 @@ export const DocxEditorMenu = Object.assign(DocxEditorMenuRoot, {
   Save: MenuSave,
   PageSetup: MenuPageSetup,
   ImageInsert: MenuImageInsert,
+  Reviewers: MenuReviewers,
   ReportIssue: MenuReportIssue,
 }) as unknown as DocxEditorMenuNamespace;

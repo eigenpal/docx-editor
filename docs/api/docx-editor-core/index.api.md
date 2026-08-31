@@ -282,6 +282,7 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }, {
+        readonly defaultToolbar: false;
         readonly id: "authors";
         readonly labelKey: "reviewers.label";
         readonly paths: readonly string[];
@@ -557,7 +558,7 @@ export interface ChromeMenu {
 export type ChromeMenuEntry = ChromeMenuItemEntry | ChromeMenuSubmenuEntry | ChromeMenuSeparatorEntry;
 
 // @public
-export type ChromeMenuId = 'file' | 'format' | 'insert' | 'help';
+export type ChromeMenuId = 'file' | 'format' | 'insert' | 'review' | 'help';
 
 // @public
 export interface ChromeMenuItemEntry {

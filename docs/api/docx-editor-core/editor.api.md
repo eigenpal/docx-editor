@@ -282,6 +282,7 @@ export const CHROME_GROUPS: readonly [{
             readonly kind: "command";
         };
     }, {
+        readonly defaultToolbar: false;
         readonly id: "authors";
         readonly labelKey: "reviewers.label";
         readonly paths: readonly string[];
@@ -548,6 +549,7 @@ export const CHROME_UNAVAILABLE_KEY = "formattingBar.unavailableInPreview";
 
 // @public
 export interface ChromeControl<Id extends string = string> {
+    readonly defaultToolbar?: false;
     readonly id: Id;
     readonly labelKey: string;
     readonly paths: readonly string[] | null;
@@ -635,7 +637,7 @@ export interface ChromeMenu {
 export type ChromeMenuEntry = ChromeMenuItemEntry | ChromeMenuSubmenuEntry | ChromeMenuSeparatorEntry;
 
 // @public
-export type ChromeMenuId = 'file' | 'format' | 'insert' | 'help';
+export type ChromeMenuId = 'file' | 'format' | 'insert' | 'review' | 'help';
 
 // @public
 export interface ChromeMenuItemEntry {

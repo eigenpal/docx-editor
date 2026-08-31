@@ -269,7 +269,7 @@ export interface DocxEditorToolbarNamespace {
   readonly Zoom: ToolbarSlotPartComponent;
   readonly StylePicker: typeof ParagraphStyle;
   readonly EditingMode: ToolbarSlotPartComponent;
-  readonly Reviewers: ToolbarSlotPartComponent;
+  readonly Reviewers: typeof ToolbarReviewers;
   readonly Save: ToolbarSlotPartComponent;
   readonly ContentControlShowAll: ToolbarPartComponent;
   readonly ContentControlFormFill: ToolbarPartComponent;

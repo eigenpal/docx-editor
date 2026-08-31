@@ -382,12 +382,6 @@
       "emitsAddedInReact": ["click", "mouse-down"],
       "emitsAddedInVue": []
     },
-    "editor/toolbar/Reviewers": {
-      "propsAddedInReact": [],
-      "propsAddedInVue": ["name", "props"],
-      "emitsAddedInReact": [],
-      "emitsAddedInVue": []
-    },
     "editor/toolbar/Slot": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["class", "inheritAttrs", "name"],

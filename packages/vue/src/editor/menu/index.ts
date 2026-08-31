@@ -4,6 +4,7 @@ export {
   type DocxEditorMenuProps,
 } from './DocxEditorMenu';
 export type { MenuId } from './menu-context';
+export { MenuReview, MenuReviewers, type MenuReviewersProps } from './Reviewers';
 export {
   Menu,
   MenuEntry,

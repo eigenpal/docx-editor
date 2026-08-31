@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': minor
 ---
 
-Add a reviewer menu that filters tracked changes and comments by author without changing saved document data. Fixes #666.
+Add Review > Markup Options > Reviewers to filter tracked changes and comments by author without changing saved document data. Keep an optional composable toolbar shortcut with a host-provided icon. Fixes #666.

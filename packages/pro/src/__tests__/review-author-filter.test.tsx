@@ -15,6 +15,7 @@ import { strToU8, zipSync } from 'fflate';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import {
   DocxEditorContent,
+  DocxEditorMenu,
   DocxEditorRoot,
   DocxEditorToolbar,
   DocxEditorViewport,
@@ -26,6 +27,14 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+
+function translateReviewMenu(key: string): string {
+  if (key === 'toolbar.review') return 'Review';
+  if (key === 'reviewers.markupOptions') return 'Markup Options';
+  if (key === 'reviewers.label') return 'Reviewers';
+  if (key === 'reviewers.all') return 'All';
+  return key;
+}
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -66,6 +75,7 @@ describe('reviewer visibility chrome', () => {
           editor = instance as DocxEditorInstance;
         }}
       >
+        <DocxEditorMenu t={translateReviewMenu} />
         <DocxEditorToolbar />
         <DocxEditorViewport>
           <DocxEditorContent />
@@ -88,7 +98,13 @@ describe('reviewer visibility chrome', () => {
     expect(editor!.isReviewAuthorVisible('Grace')).toBe(true);
 
     await act(async () => {
-      fireEvent.click(view.getByTestId('reviewers-trigger'));
+      fireEvent.click(view.getByRole('menuitem', { name: 'Review' }));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByRole('menuitem', { name: 'Markup Options' }));
+    });
+    await act(async () => {
+      fireEvent.click(view.getByRole('menuitem', { name: 'Reviewers' }));
     });
     await act(async () => {
       fireEvent.click(view.getByRole('menuitemcheckbox', { name: 'Ada' }));
@@ -117,7 +133,7 @@ describe('reviewer visibility chrome', () => {
       for (const item of editor!.getReviewItems()) {
         if (item.kind === 'revision') expect(editor!.acceptReviewItem(item.key).ok).toBe(true);
       }
-      fireEvent.click(view.getByTestId('reviewer-all'));
+      fireEvent.click(view.getByRole('menuitemcheckbox', { name: 'All' }));
     });
     expect(editor!.isReviewAuthorVisible('Ada')).toBe(true);
     expect(editor!.getReviewItems().every((item) => item.author === 'Ada')).toBe(true);

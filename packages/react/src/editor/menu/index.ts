@@ -25,3 +25,4 @@ export {
   type MenuTableGridProps,
 } from './parts';
 export type { MenuId } from './menu-context';
+export { MenuReview, MenuReviewers, type MenuReviewersProps } from './Reviewers';

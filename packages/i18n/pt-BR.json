@@ -33,7 +33,8 @@
     "sectionBreakNextPage": "Quebra de seção (próxima página)",
     "insertFootnote": "Inserir nota de rodapé",
     "insertEndnote": "Inserir nota de fim",
-    "insertTable": null
+    "insertTable": null,
+    "review": null
   },
   "formattingBar": {
     "groups": {
@@ -562,7 +563,8 @@
   },
   "reviewers": {
     "label": "Revisores",
-    "all": "Todos"
+    "all": "Todos",
+    "markupOptions": null
   },
   "editingMode": {
     "editing": "Edição",

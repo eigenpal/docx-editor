@@ -124,6 +124,8 @@ export interface ChromeControl<Id extends string = string> {
   readonly paths: readonly string[] | null;
   /** For pickers: the i18n key of the placeholder value shown. */
   readonly valueKey?: string;
+  /** `false` keeps this public slot composable but omits it from the default toolbar. */
+  readonly defaultToolbar?: false;
   readonly state: ChromeControlState;
 }
 
@@ -431,13 +433,12 @@ export const CHROME_GROUPS = [
         state: { kind: 'command' },
       },
       {
-        // Word for Mac: Review > Markup Options > Reviewers. The menu lists All and one
-        // checkbox per author; the adapter owns that dynamic list, while this stable slot
-        // owns its position, label, icon, and enabled-state identity.
+        // Packaged under Review > Markup Options > Reviewers; hosts may compose a shortcut.
         id: 'authors',
         shape: 'dropdown',
         labelKey: 'reviewers.label',
         paths: GENERATED_ICON_PATHS['visibility'],
+        defaultToolbar: false,
         state: { kind: 'command' },
       },
       {
@@ -862,7 +863,10 @@ export function chromeSlotId(
 export function defaultChromeGroups(): readonly ChromeGroup[] {
   // Filtered through the ChromeGroup-typed view: the literal union's members omit
   // the optional `contextual` key entirely, which TS treats as an unknown property.
-  return CHROME_GROUPS_CONFORMANCE.filter((group) => !group.contextual);
+  return CHROME_GROUPS_CONFORMANCE.filter((group) => !group.contextual).map((group) => ({
+    ...group,
+    controls: group.controls.filter((control) => control.defaultToolbar !== false),
+  }));
 }
 
 /**
@@ -954,7 +958,7 @@ export type ChromeMenuEntry =
  *
  * @public
  */
-export type ChromeMenuId = 'file' | 'format' | 'insert' | 'help';
+export type ChromeMenuId = 'file' | 'format' | 'insert' | 'review' | 'help';
 
 /** One menu of the menu bar. @public */
 export interface ChromeMenu {
@@ -964,7 +968,7 @@ export interface ChromeMenu {
 }
 
 /**
- * The menu bar the chrome shows above the toolbar, in bar order: File, Format, Insert,
+ * The menu bar the chrome shows above the toolbar, in bar order: File, Format, Insert, Review,
  * Help.
  *
  * @public
@@ -1043,6 +1047,12 @@ export const CHROME_MENUS: readonly ChromeMenu[] = [
       },
       { kind: 'item', slot: 'insert.toc' },
     ],
+  },
+  {
+    // The adapters supply the document-dependent reviewer rows beneath Markup Options.
+    id: 'review',
+    labelKey: 'toolbar.review',
+    entries: [],
   },
   {
     // Help is host territory — a product's own docs, its own support channel. The one row
