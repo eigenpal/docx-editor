@@ -2007,9 +2007,6 @@ export function isNoteRefNode(node: OoxmlNode): node is OoxmlNoteRefNode;
 // @public
 export function isPageBreakNode(node: OoxmlNode): node is OoxmlHardBreakNode;
 
-// @internal
-export function isPotentialRevisionElement(node: OoxmlNode): boolean;
-
 // @public
 export function isRangeMarkerKind(kind: OoxmlNode['kind']): kind is 'moveFromRangeStart' | 'moveFromRangeEnd' | 'moveToRangeStart' | 'moveToRangeEnd' | 'commentRangeStart' | 'commentRangeEnd';
 

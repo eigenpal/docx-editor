@@ -3232,40 +3232,6 @@ order: readonly string[],
 measurer?: TextMeasurer): SelectionRect[];
 
 // @public
-export type SemanticArtifactRootStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
-
-// @public
-export type SemanticArtifactStoryKind = SemanticArtifactRootStoryKind | 'textbox';
-
-// @public
-export interface SemanticCommentArtifactRecord {
-    // (undocumented)
-    readonly author: string;
-    // (undocumented)
-    readonly date?: string;
-    // (undocumented)
-    readonly id: string;
-    // (undocumented)
-    readonly initials: string;
-    // (undocumented)
-    readonly kind: 'comment';
-    // (undocumented)
-    readonly occurrences: readonly SemanticReviewArtifactOccurrence[];
-    // (undocumented)
-    readonly orphaned: boolean;
-    // (undocumented)
-    readonly parentId?: string;
-    // (undocumented)
-    readonly parentRevisionId?: string;
-    // (undocumented)
-    readonly replyIds: readonly string[];
-    // (undocumented)
-    readonly resolved: boolean;
-    // (undocumented)
-    readonly text: string;
-}
-
-// @public
 export type SemanticDrawingLayer = 'behind-text' | 'inline' | 'in-front-of-text';
 
 // @public
@@ -3322,7 +3288,6 @@ export interface SemanticLayout {
     readonly displayMode?: RevisionDisplayMode;
     // (undocumented)
     readonly pages: readonly PageRecord[];
-    readonly reviewArtifacts?: readonly SemanticReviewArtifactRecord[];
     readonly revision: number;
 }
 
@@ -3374,47 +3339,6 @@ export interface SemanticPosition {
     readonly offset: number;
     // (undocumented)
     readonly paragraphId: string;
-}
-
-// @public
-export interface SemanticReviewArtifactOccurrence {
-    // (undocumented)
-    readonly noteAreaKind: 'footnotes' | 'endnotes' | null;
-    // (undocumented)
-    readonly noteScopeId: string | null;
-    // (undocumented)
-    readonly pageIndex: number;
-    // (undocumented)
-    readonly physicalPageNumber: number;
-    readonly revisionRole?: 'replaced' | 'replacement' | 'neutral';
-    // (undocumented)
-    readonly rootStory: SemanticArtifactRootStoryKind;
-    // (undocumented)
-    readonly source: SemanticReviewArtifactSource;
-    // (undocumented)
-    readonly story: SemanticArtifactStoryKind;
-    readonly textboxPath: readonly string[];
-}
-
-// @public
-export interface SemanticReviewArtifactPosition {
-    // (undocumented)
-    readonly offset: number;
-    // (undocumented)
-    readonly paragraphId: string;
-}
-
-// @public
-export type SemanticReviewArtifactRecord = SemanticTrackedChangeArtifactRecord | SemanticCommentArtifactRecord;
-
-// @public
-export interface SemanticReviewArtifactSource {
-    // (undocumented)
-    readonly end: SemanticReviewArtifactPosition;
-    // (undocumented)
-    readonly partName: string;
-    // (undocumented)
-    readonly start: SemanticReviewArtifactPosition;
 }
 
 // @public
@@ -3554,36 +3478,6 @@ export interface SemanticTableStructure {
     readonly rows: readonly SemanticTableRow[];
     readonly tableBorders: TableBorderBox;
     readonly tableWidth: PreferredWidth;
-}
-
-// @public
-export interface SemanticTrackedChangeArtifactRecord {
-    // (undocumented)
-    readonly author: string;
-    // (undocumented)
-    readonly change: 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
-    // (undocumented)
-    readonly date?: string;
-    // (undocumented)
-    readonly id: string;
-    // (undocumented)
-    readonly kind: 'tracked-change';
-    // (undocumented)
-    readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
-    readonly nesting: number;
-    // (undocumented)
-    readonly occurrences: readonly SemanticReviewArtifactOccurrence[];
-    // (undocumented)
-    readonly pairedWith?: string;
-    // (undocumented)
-    readonly readOnly: boolean;
-    readonly replacedRangeCount?: number;
-    // (undocumented)
-    readonly replacedText: string;
-    // (undocumented)
-    readonly replyIds: readonly string[];
-    // (undocumented)
-    readonly text: string;
 }
 
 // @public

@@ -57,10 +57,7 @@ export class ExportResourceError extends Error {
 }
 
 // @public
-export interface ExportSemanticLayout extends SemanticLayout {
-    // (undocumented)
-    readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
-}
+export type ExportSemanticLayout = SemanticLayout;
 
 // @public
 export interface ExportSession {
@@ -106,7 +103,7 @@ export type OpenDocumentForExportResult = {
 } | {
     readonly detail?: string;
     readonly ok: false;
-    readonly reason: HeadlessDocumentRejection;
+    readonly reason: HeadlessDocumentRejection | 'aborted';
 };
 
 // @public
