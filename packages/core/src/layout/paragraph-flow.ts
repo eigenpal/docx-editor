@@ -1690,17 +1690,11 @@ export function breakParagraph(
   // there was and left nothing after it — the caret fell back to the end of the line the
   // break had just terminated, sitting a break's width to the right of the last glyph,
   // and the new line only appeared once something was typed into it.
-  //
   // Only this final close includes the paragraph mark: intermediate wraps must not inherit
   // a tall mark size onto every line of a multi-line paragraph.
   if (line.spans.length > 0 || line.drawings.length > 0 || lines.length === 0 || trailingLineBreak)
     closeLine({ includeParagraphMark: true });
-  if (cacheKey !== null && cache) {
-    // A reusable editor cache must own an immutable snapshot: its value can be read by a
-    // later pass after placement has finished. A one-shot exporter releases the value as
-    // soon as this paragraph is placed, so copying every span/drawing here only doubles the
-    // transient working set of a large document without adding any isolation.
+  if (cacheKey !== null && cache)
     cache.set(cacheKey, cache.retainAcrossPasses === false ? lines : lines.map(frozenLine));
-  }
   return lines;
 }
