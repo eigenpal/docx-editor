@@ -398,6 +398,33 @@ describe('embedded fonts auto-wire into shaped measurement', () => {
     editor.destroy();
   });
 
+  test('undefined and empty resolver answers stay equivalent when embedded faces are dropped', async () => {
+    const errorCodes: string[][] = [];
+    const resolvers = [
+      () => undefined,
+      () => ({ sources: [], substitutions: [], failures: [] }),
+    ] as const;
+
+    for (const fonts of resolvers) {
+      const errors: EditorFontError[] = [];
+      const editor = createDocxEditor({
+        container: document.createElement('div'),
+        document: docxWithEmbeds(p('still resilient'), [
+          { family: '   ', slot: 'embedRegular', bytes: boldBytes },
+        ]),
+        fonts,
+        onFontError: (error) => errors.push(error),
+      });
+      await fontsSettled(editor);
+      errorCodes.push(errors.map((error) => error.code));
+      editor.destroy();
+    }
+
+    expect(errorCodes[0]).toEqual(errorCodes[1]);
+    expect(errorCodes[0]).not.toContain('missing');
+    expect(errorCodes[0]!.length).toBeGreaterThan(0);
+  });
+
   test('explicit config sources beat embedded faces on the same request', async () => {
     const container = document.createElement('div');
     const editor = createDocxEditor({

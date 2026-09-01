@@ -261,6 +261,7 @@ export async function composeFontOrigins(
   const present: (FontConfiguration | FontConfigurationFragment)[] = [];
   const sourceFaces = new Map<string, FontFaceRequest>();
   const substitutions: FontSourceSubstitution[] = [];
+  const failures: unknown[] = [];
   const inherited = request.resolvedFaces ?? [];
 
   for (const origin of origins) {
@@ -295,9 +296,15 @@ export async function composeFontOrigins(
         (source) => [faceKey(source.request), source.request] as const
       );
       const answerSubstitutions = [...(answer.substitutions ?? [])];
+      const answerFailures = 'failures' in answer ? answer.failures : undefined;
       present.push(answer);
       for (const [key, face] of faces) sourceFaces.set(key, face);
       for (const substitution of answerSubstitutions) substitutions.push(substitution);
+      if (Array.isArray(answerFailures)) {
+        for (const failure of answerFailures) failures.push(failure);
+      } else if (answerFailures !== undefined) {
+        failures.push(answerFailures);
+      }
     } catch (cause) {
       // Reported, never swallowed: a font origin that throws is a host bug (an unmarked
       // resolver called as a loader is the common one) and it degrades the document
@@ -309,5 +316,7 @@ export async function composeFontOrigins(
 
   if (present.length === 0) return undefined;
   const { epoch: _perLoad, ...merged } = composeFontConfiguration(present[0]!, ...present.slice(1));
-  return merged;
+  return failures.length === 0
+    ? merged
+    : ({ ...merged, failures: Object.freeze(failures) } as FontConfigurationFragment);
 }

@@ -109,6 +109,19 @@ export type FontResolver = (
   | undefined
   | Promise<FontConfiguration | FontConfigurationFragment | undefined>;
 
+/** Normalize an on-demand resolver answer that covers none of the requested families. */
+export function normalizeFontResolverResult(
+  result: FontConfigurationBase | null | undefined
+): FontConfigurationBase | undefined {
+  const failures = result && 'failures' in result ? result.failures : undefined;
+  const empty =
+    result == null ||
+    ((result.sources?.length ?? 0) === 0 &&
+      (result.substitutions?.length ?? 0) === 0 &&
+      (failures === undefined || (Array.isArray(failures) && failures.length === 0)));
+  return empty ? undefined : result;
+}
+
 /**
  * Ceiling on the families one document can put in front of a resolver.
  *

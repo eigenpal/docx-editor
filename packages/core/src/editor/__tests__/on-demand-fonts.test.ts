@@ -22,6 +22,7 @@ import type { EditorFontError } from '../../contracts/editor.ts';
 import { sha256FontBytes } from '../../layout/index.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { MAX_RESOLVER_FAMILIES, type FontResolutionRequest } from '../font-composition.ts';
+import { composeFontOrigins, defineFontResolver } from '../font-resolver.ts';
 import { docx } from './paginated-surface-fixtures.ts';
 
 const regularBytes = new Uint8Array(
@@ -85,6 +86,69 @@ describe('on-demand font resolution', () => {
     expect(editor.fontMeasurement()).toEqual({ measurer: 'fixed', resolving: false });
     expect(errors).toHaveLength(0);
     expect(editor.exec({ type: 'insertText', text: 'X' })).toEqual({ ok: true, changed: true });
+    editor.destroy();
+  });
+
+  test('a completely empty fragment is the same normal answer as undefined', async () => {
+    const errors: EditorFontError[] = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(runIn('Garamond', 'nothing covered')),
+      fonts: () => ({ sources: [], substitutions: [], failures: [] }),
+      onFontError: (error) => errors.push(error),
+    });
+    await fontsSettled(editor);
+    expect(editor.fontMeasurement()).toEqual({ measurer: 'fixed', resolving: false });
+    expect(errors).toHaveLength(0);
+    editor.destroy();
+  });
+
+  test('a fragment with failures still reports that no usable source survived', async () => {
+    const errors: EditorFontError[] = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(runIn('Garamond', 'failed source')),
+      fonts: (request) =>
+        composeFontOrigins(
+          [
+            defineFontResolver(async () => ({
+              sources: [],
+              substitutions: [],
+              failures: [{ family: 'Garamond', diagnostic: 'offline' }],
+            })),
+          ],
+          request
+        ),
+      onFontError: (error) => errors.push(error),
+    });
+    await fontsSettled(editor);
+    expect(editor.fontMeasurement()).toEqual({ measurer: 'fixed', resolving: false });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.code).toBe('missing');
+    editor.destroy();
+  });
+
+  test('substitutions without usable sources still report missing', async () => {
+    const errors: EditorFontError[] = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(runIn('Garamond', 'unusable substitution')),
+      fonts: () => ({
+        sources: [],
+        substitutions: [
+          {
+            from: { family: 'Garamond', weight: 400, style: 'normal' },
+            to: { family: 'Unavailable Substitute', weight: 400, style: 'normal' },
+          },
+        ],
+        failures: [],
+      }),
+      onFontError: (error) => errors.push(error),
+    });
+    await fontsSettled(editor);
+    expect(editor.fontMeasurement()).toEqual({ measurer: 'fixed', resolving: false });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.code).toBe('missing');
     editor.destroy();
   });
 
