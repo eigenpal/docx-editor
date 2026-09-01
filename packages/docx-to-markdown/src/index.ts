@@ -237,11 +237,6 @@ export async function openDocumentForExport(
   }
   const callerFonts = fontOrigins(options.fonts);
   const missingFonts = fontOrigins(options.fallbackFonts);
-  const hasCustomFontPolicy =
-    callerFonts.length > 0 ||
-    missingFonts.length > 0 ||
-    options.fontPolicy !== undefined ||
-    options.onFontResolution !== undefined;
   if (isByteSource(source)) {
     if (options.reuseAcrossRevisions === true) {
       throw new TypeError(
@@ -257,10 +252,16 @@ export async function openDocumentForExport(
     });
     return markdownFontBackedOpenResult(opened);
   }
-  if (hasCustomFontPolicy) {
+  if (callerFonts.length > 0 || missingFonts.length > 0) {
     throw new TypeError(
       'fonts and fallbackFonts require immutable DOCX bytes; pass a revision-stable measurer ' +
         'when exporting a live HeadlessDocumentView'
+    );
+  }
+  if (options.fontPolicy !== undefined || options.onFontResolution !== undefined) {
+    throw new TypeError(
+      'fontPolicy and onFontResolution require document-aware font resolution from immutable ' +
+        'DOCX bytes; pass a revision-stable measurer when exporting a live HeadlessDocumentView'
     );
   }
   // A live view cannot be safely reopened around asynchronous document-aware font origins.

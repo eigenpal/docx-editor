@@ -53,6 +53,13 @@ test('custom origins reject live views before resolution, while a host measurer 
   }
   expect(calls).toBe(0);
 
+  await expect(openDocumentForExport(parsed.view, { fontPolicy: 'strict' })).rejects.toThrow(
+    'fontPolicy and onFontResolution require document-aware font resolution'
+  );
+  await expect(openDocumentForExport(parsed.view, { onFontResolution: () => {} })).rejects.toThrow(
+    'fontPolicy and onFontResolution require document-aware font resolution'
+  );
+
   const opened = await openDocumentForExport(parsed.view, {
     fonts,
     measurer: createFixedMeasurer(),

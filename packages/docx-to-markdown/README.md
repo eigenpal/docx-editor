@@ -38,9 +38,11 @@ for (const page of pages) {
 The package is private in this change and cannot be installed from the public registry yet.
 Inside this monorepo, depend on it with `workspace:*`.
 
-The final release step must remove the package from Changesets `ignore`, choose the public version,
-align the `@docx-editor.dev/core` and `@docx-editor.dev/fonts` version floors with that release, and
-only then remove `private: true`. Repository tests intentionally reject a partial release state.
+The final release step must replace this private banner and workspace demo quick start with public
+installation and usage instructions, remove the package from Changesets `ignore`, choose the public
+version, align the `@docx-editor.dev/core` and `@docx-editor.dev/fonts` version floors with that
+release, and only then remove `private: true`. Repository tests intentionally reject a partial
+release state.
 
 ## Public interface
 
@@ -56,7 +58,7 @@ openDocumentForExport(
 ): Promise<OpenMarkdownDocumentForExportResult>;
 
 exportMarkdownFrom(
-  session: MarkdownExportSession | ExportSession
+  session: ExportSession
 ): Promise<MarkdownExportResult>;
 
 exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult;
@@ -187,8 +189,10 @@ document-wide artifact, not a page-trimmed copy, so its `occurrences` can includ
 avoid double counting and select page-local provenance, always filter the occurrences:
 
 ```ts
-const localOccurrences = page.comments.flatMap((artifact) =>
-  artifact.occurrences.filter(({ pageIndex }) => pageIndex === page.number - 1)
+const localComments = page.comments.flatMap((artifact) =>
+  artifact.occurrences
+    .filter(({ physicalPageNumber }) => physicalPageNumber === page.number)
+    .map((occurrence) => ({ artifact, occurrence }))
 );
 ```
 

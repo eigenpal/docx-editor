@@ -47,6 +47,7 @@ describe('engine dependency integrity', () => {
 
   test('stays private and outside release automation until the explicit release step', () => {
     const packageName = '@docx-editor.dev/docx-to-markdown';
+    const readme = readFileSync(join(import.meta.dir, '..', 'README.md'), 'utf8');
     expect(manifest.private).toBe(true);
     expect(manifest.publishConfig).toBeUndefined();
     expect(changesetConfig.fixed?.flat()).not.toContain(packageName);
@@ -68,6 +69,9 @@ describe('engine dependency integrity', () => {
         packageHeader
       );
     }
+    expect(readme).toMatch(
+      /replace this private banner and workspace demo quick start with public\s+installation and usage instructions/
+    );
   });
 
   test('accepts only compatible tilde floors from the current engine minor', () => {
