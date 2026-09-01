@@ -3519,6 +3519,7 @@ export interface SemanticTableCell {
     readonly preferredWidth: PreferredWidth;
     readonly shading?: string;
     readonly styleFormatting: TableCellStyleFormatting;
+    readonly textDirection: 'horizontal' | 'btLr';
     readonly vAlign: CellVerticalAlign;
     readonly vMergeContinue: boolean;
 }
@@ -4076,6 +4077,7 @@ export interface TableCellFragmentRecord {
     readonly paintInert?: boolean;
     readonly rowSpan?: number;
     readonly shading?: string;
+    readonly textDirection?: 'btLr';
     readonly vMergeContinue: boolean;
 }
 

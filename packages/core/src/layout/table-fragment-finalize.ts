@@ -205,11 +205,16 @@ export function finalizeTableRows(
           contentBottom = Math.max(contentBottom, block.box.y + block.box.height);
         }
         if (Number.isFinite(contentTop) && Number.isFinite(contentBottom)) {
-          const available = height - insets.top - insets.bottom - (contentBottom - contentTop);
+          const vertical = authored.textDirection === 'btLr';
+          const available =
+            (vertical
+              ? cell.box.width - insets.left - insets.right
+              : height - insets.top - insets.bottom) -
+            (contentBottom - contentTop);
           // Reset any per-row shift by measuring from cell top + inset.
           const desiredTop =
             cell.box.y +
-            insets.top +
+            (vertical ? insets.left : insets.top) +
             (available > 0 ? (authored.vAlign === 'center' ? available / 2 : available) : 0);
           const dy = desiredTop - contentTop;
           if (Math.abs(dy) > 0.001) {

@@ -300,6 +300,57 @@ describe('multi-column section layout', () => {
     expect(at('TAIL').box.y).toBeLessThan(at('GAMMA').box.y + at('GAMMA').box.height + 15);
   });
 
+  test('a page-positioned table does not stretch its balanced two-column section', () => {
+    const floatingTable =
+      '<w:tbl><w:tblPr>' +
+      '<w:tblW w:w="1200" w:type="dxa"/>' +
+      '<w:tblpPr w:horzAnchor="page" w:vertAnchor="page" w:tblpX="3600" w:tblpY="5000"/>' +
+      '</w:tblPr><w:tblGrid><w:gridCol w:w="1200"/></w:tblGrid>' +
+      `<w:tr><w:tc>${paragraph('FLOAT')}</w:tc></w:tr></w:tbl>`;
+    const body = (floating: string): string =>
+      paragraph('INTRO') +
+      '<w:p><w:pPr><w:sectPr>' +
+      '<w:type w:val="continuous"/>' +
+      '<w:pgSz w:w="7200" w:h="7200"/>' +
+      '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+      '<w:cols w:space="240"/>' +
+      '</w:sectPr></w:pPr></w:p>' +
+      floating +
+      paragraph('ALPHA') +
+      paragraph('BETA') +
+      paragraph('GAMMA') +
+      paragraph('DELTA') +
+      '<w:p><w:pPr><w:sectPr>' +
+      '<w:type w:val="continuous"/>' +
+      '<w:pgSz w:w="7200" w:h="7200"/>' +
+      '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+      '<w:cols w:num="2" w:space="240"/>' +
+      '</w:sectPr></w:pPr></w:p>' +
+      paragraph('TAIL') +
+      '<w:sectPr><w:type w:val="continuous"/>' +
+      '<w:pgSz w:w="7200" w:h="7200"/>' +
+      '<w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/>' +
+      '<w:cols w:space="240"/></w:sectPr>';
+    const coordinates = (floating: string) => {
+      const layout = layoutSemanticDocument(packageWithBody(body(floating)), 1, {
+        measurer: createFixedMeasurer(6, 14),
+      });
+      const textBoxes = ['ALPHA', 'BETA', 'GAMMA', 'DELTA', 'TAIL'].map((text) => {
+        const fragment = layout.pages[0]!.fragments.find((item) => fragmentText(item) === text)!;
+        return { text, x: fragment.box.x, y: fragment.box.y };
+      });
+      return { layout, textBoxes };
+    };
+
+    const baseline = coordinates('');
+    const floated = coordinates(floatingTable);
+    const table = floated.layout.pages[0]!.fragments.find((fragment) => fragment.kind === 'table');
+
+    expect(table).toMatchObject({ kind: 'table', outOfFlow: true });
+    expect(table!.box.y).toBeGreaterThan(floated.textBoxes.at(-1)!.y);
+    expect(floated.textBoxes).toEqual(baseline.textBoxes);
+  });
+
   test('the last section of the document does not balance', () => {
     const part = packageWithBody(
       paragraph('ALPHA') +

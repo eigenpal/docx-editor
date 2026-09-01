@@ -23,6 +23,7 @@ import type {
   SemanticLayout,
   StyleSpanRecord,
 } from './semantic-records.ts';
+import { isOutOfFlowTableFragment } from './table-float-position.ts';
 
 /**
  * Placeholder a body PAGE/NUMPAGES/SECTIONPAGES atom paints during measurement.
@@ -289,7 +290,9 @@ export function summarizeFlushedPage(
   let usedBottom = regionTop;
   let hasBodyPageFields = false;
   for (const fragment of fragments) {
-    usedBottom = Math.max(usedBottom, fragment.box.y + fragment.box.height);
+    if (!isOutOfFlowTableFragment(fragment)) {
+      usedBottom = Math.max(usedBottom, fragment.box.y + fragment.box.height);
+    }
     if (!hasBodyPageFields && blockHasBodyPageField(fragment)) hasBodyPageFields = true;
   }
   return { usedBottom, hasBodyPageFields };

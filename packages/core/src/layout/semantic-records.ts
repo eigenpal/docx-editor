@@ -582,6 +582,8 @@ export interface TableCellFragmentRecord {
   readonly rowSpan?: number;
   /** Validated 6-hex cell shading fill, absent for none/auto. */
   readonly shading?: string;
+  /** Bottom-to-top cell content uses a rotated local inline axis. */
+  readonly textDirection?: 'btLr';
   /**
    * Layout-owned resolved borders after collapsed conflict resolution.
    *

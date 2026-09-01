@@ -2062,6 +2062,7 @@ function applyParagraphBorderStyle(
 }
 
 import { applyCellBorders } from './semantic-paint-table-borders.ts';
+import { tableCellContentHost } from './table-cell-text-direction-paint.ts';
 
 function paintTableCell(
   document: Document,
@@ -2096,10 +2097,10 @@ function paintTableCell(
   cellElement.style.border = 'none';
   applyCellBorders(document, cellElement, cell.borders, scale);
 
-  // Re-validated at the sink, like every other file-derived style value here.
   if (cell.shading && HEX.test(cell.shading)) {
     cellElement.style.backgroundColor = `#${cell.shading}`;
   }
+  const contentElement = tableCellContentHost(document, cell, scale, cellElement);
   for (const block of cell.blocks) {
     const painted =
       block.kind === 'table'
@@ -2107,7 +2108,7 @@ function paintTableCell(
         : paintFragment(document, block, ctx);
     painted.style.left = `${(block.box.x - cell.box.x) * scale}px`;
     painted.style.top = `${(block.box.y - cell.box.y) * scale}px`;
-    cellElement.append(painted);
+    contentElement.append(painted);
   }
   return cellElement;
 }

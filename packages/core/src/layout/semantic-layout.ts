@@ -82,6 +82,8 @@ import {
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
+import * as tableFloat from './table-float-position.ts';
+import { bodyAnchorFrameBase, paragraphPaintsNothing } from './body-flow-helpers.ts';
 import {
   createTableBorderOwnershipBudget,
   createTableVMergeResolveBudget,
@@ -98,8 +100,8 @@ import {
   anchoredDrawingAtomsInParagraph,
   pageClipRegion,
   shiftAnchoredDrawingRecords,
+  shiftInlineDrawingRecord,
   type AnchoredDrawingRecord,
-  type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
 import {
   collectExclusionZonesByPage,
@@ -1461,24 +1463,32 @@ function layoutBlocksPass(
     };
   }
 
+  const positionedTables = tableFloat.positionedTableAnchors(
+    prepared,
+    contentWidth,
+    styleCascade,
+    displayMode,
+    authorFilter
+  );
+  const positionedTableIds = new Set(positionedTables.map(({ table }) => table.id));
+  const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
   let pageFragments: BlockFragmentRecord[] = [];
   let columnIndex = 0;
   let regionFragmentStart = 0;
   const columnLeft = (): number => columns.lefts[columnIndex]!;
   const columnWidth = (): number => columns.widths[columnIndex]!;
-  /**
-   * The boxes `w:horzAnchor` can name, in the content-box coordinates every fragment box is
-   * reported in: x=0 is the left margin, so the sheet starts one left margin before it.
-   */
   const anchorFrames = (): TableAnchorFrames => ({
     text: { left: columnLeft(), width: columnWidth() },
     margin: { left: 0, width: contentWidthForReflow },
     page: { left: -geometry.margin.left, width: geometry.width },
   });
-  const regionHasFragments = (): boolean => pageFragments.length > regionFragmentStart;
+  const regionHasFragments = (): boolean =>
+    tableFloat.hasFlowFragments(pageFragments, regionFragmentStart);
   let pendingAnchoredDrawings: AnchoredDrawingRecord[] = [];
   let deferredAnchoredDrawings: AnchoredDrawingRecord[] = [];
   const anchorPageDeferCounts = new Map<string, number>();
+  const pendingFloatIds = new Set<string>();
+  const floatSignals: tableFloat.PositionedTableAnchorSignal[] = [];
   // A continuous section resumes the previous section's column rather than opening a
   // sheet, so its first block starts at that column's used height and its first paragraph
   // is NOT at a page top — page-top space-before suppression must not apply to it, and the
@@ -1500,6 +1510,7 @@ function layoutBlocksPass(
       deferredAnchoredDrawings.length > 0 ? [...deferredAnchoredDrawings] : NO_DEFERRED_DRAWINGS,
     anchorPageDeferCounts:
       anchorPageDeferCounts.size > 0 ? new Map(anchorPageDeferCounts) : NO_DEFER_COUNTS,
+    ...positionedFlow.checkpoint(pendingFloatIds, floatSignals),
     cursorY,
     lineCounter,
     previousSpaceAfter,
@@ -1527,6 +1538,7 @@ function layoutBlocksPass(
     columnIndex = checkpoint.flowColumnIndex;
     lineCounter = checkpoint.lineCounter;
     previousSpaceAfter = checkpoint.previousSpaceAfter;
+    positionedFlow.restore(checkpoint, pendingFloatIds, floatSignals);
     startIndex = firstChanged;
     firstParagraphOfSection = false;
     reusedPages = pages.length;
@@ -1544,33 +1556,16 @@ function layoutBlocksPass(
       height: _paragraphBox.height,
     });
 
-  const anchorFrameBase = (): Omit<
-    DrawingAnchorFrameContext,
-    'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
-  > => {
-    const insets = insetsFor(pages.length);
-    return Object.freeze({
+  const anchorFrameBase = () =>
+    bodyAnchorFrameBase({
       pageNumber: pageIndexStart + pages.length + 1,
       onPageParityRead: markPageParityRead,
-      pageWidth: geometry.width,
-      pageHeight: geometry.height,
-      marginLeft: geometry.margin.left,
-      marginRight: geometry.margin.right,
-      marginBottom: geometry.margin.bottom,
-      // THE INSETS, NOT `w:pgMar`. The page content box starts at this page's own top inset,
-      // which a header taller than the top margin pushes past `w:pgMar`, and paint places every
-      // anchored drawing relative to that box. Handing the authored margin here made a
-      // `relativeFrom="page"` anchor land `inset − margin.top` too low — the whole header
-      // height for a `w:posOffset` of 0 (#274).
-      contentInsetTop: insets.top,
-      contentInsetBottom: insets.bottom,
+      geometry,
+      insets: insetsFor(pages.length),
       contentWidth,
       contentHeight: contentHeight(),
-      contentBandHeight: insets.height,
       ownerPartName: options.inlineDrawingLayout?.ownerPartName ?? WML_MAIN_DOCUMENT_PART,
-      storyKind: 'body',
     });
-  };
 
   const pageContentClip = (): LayoutBox => pageClipRegion(anchorFrameBase());
 
@@ -1624,7 +1619,9 @@ function layoutBlocksPass(
     collectAnchoredDrawings(carried);
   };
 
+  let publishPositionedTablesForPage = (): void => undefined;
   const flushPage = (): void => {
+    publishPositionedTablesForPage();
     const index = pages.length;
     const box = pageBox(index);
     const header = furnitureFor('header', index, box);
@@ -1668,33 +1665,8 @@ function layoutBlocksPass(
     regionFragmentStart = 0;
   };
 
-  /**
-   * Whether a laid-out paragraph would put nothing on the sheet.
-   *
-   * Asked of a section break mark before letting it skip pagination, so the exemption covers
-   * only a mark with nothing to show: any glyph, marker, drawing, rule or shading makes the
-   * paragraph content, and content paginates.
-   */
-  const paintsNothing = (entry: PreparedBlock, lines: readonly PendingLine[]): boolean => {
-    if (entry.kind !== 'paragraph') return false;
-    if (entry.listItem !== undefined || entry.shading !== undefined) return false;
-    const { top, bottom, left, right, between } = entry.borders;
-    if (top ?? bottom ?? left ?? right ?? between) return false;
-    const drawingContext = options.inlineDrawingLayout;
-    if (
-      drawingContext &&
-      anchoredDrawingAtomsInParagraph(entry.paragraph, drawingContext).length > 0
-    ) {
-      return false;
-    }
-    return lines.every(
-      (line) =>
-        line.drawings.length === 0 &&
-        !line.pageBreakAfter &&
-        !line.columnBreakAfter &&
-        line.spans.every((span) => span.text.length === 0)
-    );
-  };
+  const paintsNothing = (entry: PreparedBlock, lines: readonly PendingLine[]): boolean =>
+    entry.kind === 'paragraph' && paragraphPaintsNothing(entry, lines, options.inlineDrawingLayout);
 
   const advanceColumn = (): void => {
     if (columnIndex + 1 < columns.count) {
@@ -2048,10 +2020,8 @@ function layoutBlocksPass(
     return live > 0.001 ? live : breakSkip;
   };
 
-  const layoutTableInFlow = (table: OoxmlElement): void => {
-    // The paginator owns the cursor while it runs. `advanceColumn` is the one call that
-    // hands it back — it belongs to the story flow and moves the cursor itself — so the
-    // adapter syncs across it in both directions rather than letting the two drift.
+  const layoutTableInFlow = (table: OoxmlElement): boolean => {
+    // The paginator owns the cursor. The adapter syncs it around each story-flow advance.
     const flow: TableFlowCursor = {
       cursorY,
       columnWidth,
@@ -2064,6 +2034,8 @@ function layoutBlocksPass(
         flow.cursorY = cursorY;
       },
       anchorFrames,
+      verticalAnchorFrames: () =>
+        tableFloat.bodyTableVerticalAnchorFrames(anchorFrameBase(), cursorY, geometry.margin.top),
       styleCascade,
       displayMode,
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
@@ -2074,10 +2046,33 @@ function layoutBlocksPass(
       // taken when the table started would collect its later fragments into a dead array.
       publishFragment: (fragment) => pageFragments.push(fragment),
     };
-    paginateTableInFlow(table, flow);
+    const result = paginateTableInFlow(table, flow);
     cursorY = flow.cursorY;
+    return result.outOfFlow;
   };
 
+  publishPositionedTablesForPage = (): void =>
+    tableFloat.publishPositionedTablesOnPage(
+      positionedTables,
+      pendingFloatIds,
+      pageFragments,
+      floatSignals,
+      (table, anchorColumn) => {
+        const savedColumn = columnIndex;
+        const savedFlowColumn = flowColumnIndex;
+        columnIndex = anchorColumn;
+        flowColumnIndex = anchorColumn;
+        collectingCellBreakKeys = [];
+        try {
+          layoutTableInFlow(table);
+          registerTableCellBreakKeys(table, collectingCellBreakKeys);
+        } finally {
+          collectingCellBreakKeys = null;
+          columnIndex = savedColumn;
+          flowColumnIndex = savedFlowColumn;
+        }
+      }
+    );
   let converged = false;
   let convergedAt = prepared.length;
   /** Whole pages the convergence tail moved by; reused checkpoints shift with it. */
@@ -2108,7 +2103,13 @@ function layoutBlocksPass(
         sameAnchoredDrawings(mark.pendingAnchoredDrawings, pendingAnchoredDrawings) &&
         // A flow that still owes the next page a drawing is not one that owes it nothing.
         sameAnchoredDrawings(mark.deferredAnchoredDrawings, deferredAnchoredDrawings) &&
-        sameDeferCounts(mark.anchorPageDeferCounts, anchorPageDeferCounts)
+        sameDeferCounts(mark.anchorPageDeferCounts, anchorPageDeferCounts) &&
+        positionedFlow.same(
+          mark.pendingPositionedTableTokens,
+          mark.positionedTableAnchorSignals,
+          pendingFloatIds,
+          floatSignals
+        )
       ) {
         // The in-page flow matches. At delta 0 the previous pages are appended by identity;
         // at a nonzero delta the tail is identical content `delta` sheets away and is reused
@@ -2151,10 +2152,14 @@ function layoutBlocksPass(
     placed += 1;
 
     if (entry.kind === 'table') {
-      previousSpaceAfter = 0;
+      if (positionedTableIds.has(entry.table.id)) {
+        pendingFloatIds.add(entry.table.id);
+        continue;
+      }
       collectingCellBreakKeys = [];
       try {
-        layoutTableInFlow(entry.table);
+        const outOfFlow = layoutTableInFlow(entry.table);
+        if (!outOfFlow) previousSpaceAfter = 0;
         registerTableCellBreakKeys(entry.table, collectingCellBreakKeys);
       } finally {
         collectingCellBreakKeys = null;
@@ -2223,20 +2228,11 @@ function layoutBlocksPass(
     if (lines.length === 0) {
       // Cross-paragraph TOC field chrome: tree preserved, no painted row or flow height.
       releasePlacedBreaks(paragraphId);
+      positionedFlow.note(floatSignals, paragraph.id, flowColumnIndex, pageFragments.length);
       continue;
     }
-    // A SECTION BREAK IS NOT CONTENT. The paragraph mark that carries a paragraph-level
-    // `w:sectPr` (ECMA-376 §17.6.18) IS the section break; `w:type` (§17.6.22) says where the
-    // NEXT section starts, never that the mark itself claims a sheet. So a mark that paints
-    // nothing may not OPEN A SHEET: it rides out the bottom of the page its section already
-    // ended on. Without this a mark missing the bottom margin by a point flushed a sheet, the
-    // following `nextPage` section started after it, and the document rendered a wholly blank
-    // page between two sections Word sets adjacent.
-    //
-    // Only the sheet. Moving into the next COLUMN of the same sheet manufactures nothing, and
-    // the mark is part of what a balanced multi-column section distributes (§17.6.4) — so a
-    // balance trial, which asks how short the region can be while still holding one sheet,
-    // has to see the mark's own demand for room or it converges on a band too tight for it.
+    // A blank paragraph-level `w:sectPr` is the section break, not content. It cannot open a
+    // sheet merely because its line misses the bottom; the next section's break owns that.
     const marksSectionBreak =
       paragraphSectionNode(paragraph) !== undefined && paintsNothing(entry, lines);
     const holdsSheet = (): boolean =>
@@ -2482,6 +2478,9 @@ function layoutBlocksPass(
       const marker = rawMarker
         ? { ...rawMarker, box: { ...rawMarker.box, x: rawMarker.box.x + regionX } }
         : undefined;
+      if (fragmentIndex === 0) {
+        positionedFlow.note(floatSignals, paragraphId, flowColumnIndex, pageFragments.length);
+      }
       pageFragments.push({
         kind: 'paragraph',
         id: `${paragraphId}#f${fragmentIndex}`,
@@ -2763,27 +2762,15 @@ function layoutBlocksPass(
       const pageClip = Object.freeze({
         x: 0,
         y: 0,
-        width: contentWidth,
+        // Inline records are already placed in page-content coordinates. In a multi-column
+        // section `contentWidth` is only column zero; clipping to it erases later columns.
+        width: contentWidthForReflow,
         height: contentHeight(),
       });
       const placedDrawings = pendingLine.drawings.map((drawing) => {
         const placed = Object.freeze({
-          ...drawing,
+          ...shiftInlineDrawingRecord(drawing, columnX, cursorY),
           paragraphId,
-          x: columnX + drawing.x,
-          y: cursorY + drawing.y,
-          advanceStart: drawing.advanceStart + columnX,
-          advanceEnd: drawing.advanceEnd + columnX,
-          paintBounds: Object.freeze({
-            ...drawing.paintBounds,
-            x: columnX + drawing.paintBounds.x,
-            y: cursorY + drawing.paintBounds.y,
-          }),
-          hitBounds: Object.freeze({
-            ...drawing.hitBounds,
-            x: columnX + drawing.hitBounds.x,
-            y: cursorY + drawing.hitBounds.y,
-          }),
         });
         return clipInlineDrawingRecordToRegion(placed, pageClip);
       });
@@ -2855,7 +2842,8 @@ function layoutBlocksPass(
   // The terminal flush closes the page the flow was still filling. When it does NOT run,
   // the last page was already closed by a page break and the cursor sits at the top of a
   // sheet that was never opened — nothing may be appended to what is in `pages`.
-  const flushesOpenPage = !converged && (pageFragments.length > 0 || pages.length === 0);
+  const flushesOpenPage =
+    !converged && (pageFragments.length > 0 || floatSignals.length > 0 || pages.length === 0);
   const endsOpenPage = converged && session ? session.endsOpenPage : flushesOpenPage;
 
   if (flushesOpenPage) flushPage();

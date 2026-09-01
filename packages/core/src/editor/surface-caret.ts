@@ -34,6 +34,7 @@ import {
   type SemanticSelection,
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
+import { isBottomToTopCaret } from '../layout/table-cell-text-direction.ts';
 
 /** What the caret reads at paint time. Both move independently of the caret itself. */
 export interface SurfaceCaretInput {
@@ -199,6 +200,9 @@ export function createSurfaceCaret(
     element.style.left = `${geometry.x * currentScale}px`;
     element.style.top = `${geometry.y * currentScale}px`;
     element.style.height = `${geometry.height * currentScale}px`;
+    const bottomToTop = isBottomToTopCaret(geometry);
+    element.style.transformOrigin = bottomToTop ? '0 0' : '';
+    element.style.transform = bottomToTop ? 'rotate(-90deg)' : '';
     if (element.parentNode !== host) host.append(element);
     // Suppress the native caret only while ours is up, and inline so it beats the
     // `[contenteditable='true']` rule in the stylesheet — pages layer AND scoped story.

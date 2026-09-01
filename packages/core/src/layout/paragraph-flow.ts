@@ -1138,7 +1138,7 @@ export function breakParagraph(
    * Height of the line's text band alone — the span an `auto` multiple scales.
    *
    * Recomputed from the spans rather than tracked alongside `line.height`, because it is only
-   * ever read on a line that also carries an inline drawing.
+   * read on a line that also carries a drawing or equation with its own physical extent.
    */
   const textBandHeight = (fallback: number): number => {
     let height = 0;
@@ -1208,20 +1208,17 @@ export function breakParagraph(
     // Line spacing applies to the finished box, once, so a paragraph's rule governs every
     // line it produced regardless of which run happened to be tallest.
     const naturalHeight = line.height;
-    // `w:lineRule="auto"` is a multiple of the TEXT line (17.3.1.33), not of whatever height
-    // an inline drawing gave the box. Word grows an image line to contain the image and stops
-    // there; scaling the image's own extent by the multiple leaves a band of dead space under
-    // it — a content-width picture under the 279/240 Word writes by default picks up most of
-    // an inch. `growLineHeightForDrawingExtent` below is what re-imposes the drawing as a
-    // floor, so a multiple tall enough to exceed the image still wins, and the baseline is
-    // left alone because it is already the drawing's bottom rather than a text baseline.
-    const scalesTextBandOnly = lineSpacing.rule === 'auto' && line.drawings.length > 0;
+    // `auto` scales the TEXT band, not a tall inline drawing or equation. The atom remains
+    // a floor, while a larger text multiple can still win (ECMA-376 17.3.1.33).
+    const hasUnscaledInlineExtent =
+      line.drawings.length > 0 || line.spans.some((span) => span.equation !== undefined);
+    const scalesTextBandOnly = lineSpacing.rule === 'auto' && hasUnscaledInlineExtent;
     const spacingBase = scalesTextBandOnly ? textBandHeight(metrics.height) : naturalHeight;
     const spaced = applyLineSpacing(lineSpacing, spacingBase, line.baseline);
     if (!scalesTextBandOnly) line.baseline = spaced.baseline;
     // Space ABOVE the glyph band only (exact centering, not auto/atLeast). Never negative.
     line.leading = Math.max(0, line.baseline - glyphBaseline);
-    line.height = spaced.height;
+    line.height = scalesTextBandOnly ? Math.max(spaced.height, naturalHeight) : spaced.height;
     // Baseline shifts from line spacing must move inline drawings too, or authored distT/distB
     // and the text baseline drift apart. For `exact`, keep the authored box — tall drawings
     // clip/overflow per content-clip policy; auto/atLeast still grow to contain distB.
@@ -1357,8 +1354,8 @@ export function breakParagraph(
           slotX,
           y: extentTopY,
           baseline: line.baseline,
-          contentLeft,
-          contentRight,
+          contentLeft: contentOriginX,
+          contentRight: contentOriginX + rightEdge,
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
         })
       );

@@ -43,6 +43,7 @@ import {
 } from './paragraph-lines.ts';
 import { wordBoundary } from './semantic-word-navigation.ts';
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
+import { bottomToTopCaretInLayout } from './table-cell-text-direction.ts';
 
 export { wordBoundary } from './semantic-word-navigation.ts';
 export { positionPastDeletion } from './paragraph-lines.ts';
@@ -241,14 +242,16 @@ function pushSegmentCaretStops(
     // at invisible positions. Derived from the spans rather than from the mode, so the rule
     // holds in any mode that suppresses them.
     if (insideDeletedContent(deleted, offset) && !painted(offset)) continue;
-    stops.push({
-      position: { paragraphId: segment.paragraphId, offset },
-      x: xWithinLine(line, offset, measurer, segment),
-      y: line.box.y,
-      height: line.box.height,
-      lineId: line.id,
-      pageIndex,
-    });
+    stops.push(
+      bottomToTopCaretInLayout(layout, {
+        position: { paragraphId: segment.paragraphId, offset },
+        x: xWithinLine(line, offset, measurer, segment),
+        y: line.box.y,
+        height: line.box.height,
+        lineId: line.id,
+        pageIndex,
+      })
+    );
   }
 }
 
@@ -452,7 +455,14 @@ export function caretAt(
       continue;
     }
     const box = caretBoxOnLine(line, position.offset, options.measurer, segment);
-    return { position, x: box.x, y: box.y, height: box.height, lineId: line.id, pageIndex };
+    return bottomToTopCaretInLayout(layout, {
+      position,
+      x: box.x,
+      y: box.y,
+      height: box.height,
+      lineId: line.id,
+      pageIndex,
+    });
   }
   if (afterBreak) {
     const box = caretBoxOnLine(
@@ -461,14 +471,14 @@ export function caretAt(
       options.measurer,
       lineSegmentFor(afterBreak.line, position.paragraphId)
     );
-    return {
+    return bottomToTopCaretInLayout(layout, {
       position,
       x: box.x,
       y: box.y,
       height: box.height,
       lineId: afterBreak.line.id,
       pageIndex: afterBreak.pageIndex,
-    };
+    });
   }
   return null;
 }

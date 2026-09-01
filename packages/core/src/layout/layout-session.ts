@@ -5,6 +5,7 @@
 
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { PageRecord, SemanticLayout } from './semantic-records.ts';
+import type { PositionedTableAnchorSignal } from './table-float-position.ts';
 
 /** The flow state as it stood immediately before one block was placed. */
 export interface FlowCheckpoint {
@@ -25,6 +26,9 @@ export interface FlowCheckpoint {
    */
   readonly deferredAnchoredDrawings: readonly AnchoredDrawingRecord[];
   readonly anchorPageDeferCounts: ReadonlyMap<string, number>;
+  /** Sheet-positioned tables and zero-line anchors still owed by the open page. */
+  readonly pendingPositionedTableTokens?: readonly string[];
+  readonly positionedTableAnchorSignals?: readonly PositionedTableAnchorSignal[];
   readonly cursorY: number;
   readonly lineCounter: number;
   /** Trailing paragraph spacing participating in adjacent-spacing collapse. */

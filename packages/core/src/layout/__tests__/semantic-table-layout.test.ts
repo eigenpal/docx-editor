@@ -308,7 +308,8 @@ describe('semantic table layout', () => {
         ) +
         '</w:tbl>'
     );
-    const cell = allTableFragments(layout(part))[0]!.rows[0]!.cells[0]!;
+    const result = layout(part);
+    const cell = allTableFragments(result)[0]!.rows[0]!.cells[0]!;
     const para = cell.blocks[0]!;
     // left 6pt, top 4pt from tcMar (120/80 twips).
     expect(para.box.x).toBe(cell.box.x + 6);

@@ -23,6 +23,7 @@ import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import {
   clipInlineDrawingRecordToRegion,
   publishAnchoredDrawingsForParagraph,
+  shiftInlineDrawingRecord,
   type AnchoredDrawingRecord,
   type DrawingAnchorFrameContext,
 } from './drawing-layout.ts';
@@ -104,6 +105,7 @@ import { borderExtentPt, type TableBorderOwnershipBudget } from './table-borders
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { acceptVMergeSpansAt, planTableVMergeHeights } from './table-vmerge-heights.ts';
 import { contentInsets } from './table-cell-geometry.ts';
+import { blockInlineRight } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
 export { rowWithSplitBorders } from './table-cell-geometry.ts';
@@ -693,22 +695,8 @@ function placeCellParagraph(
       pendingLine.drawings.map((drawing) =>
         clipInlineDrawingRecordToRegion(
           Object.freeze({
-            ...drawing,
+            ...shiftInlineDrawingRecord(drawing, originX, y),
             paragraphId,
-            x: originX + drawing.x,
-            advanceStart: originX + drawing.advanceStart,
-            advanceEnd: originX + drawing.advanceEnd,
-            y: y + drawing.y,
-            paintBounds: Object.freeze({
-              ...drawing.paintBounds,
-              x: originX + drawing.paintBounds.x,
-              y: y + drawing.paintBounds.y,
-            }),
-            hitBounds: Object.freeze({
-              ...drawing.hitBounds,
-              x: originX + drawing.hitBounds.x,
-              y: y + drawing.hitBounds.y,
-            }),
           }),
           cellClip
         )
@@ -1287,6 +1275,7 @@ export function layoutRowFragmentBounded(
     readonly blocks: readonly BlockFragmentRecord[];
     readonly contentTop: number;
     readonly contentBottom: number;
+    readonly physicalBottom: number;
     readonly insets: { top: number; right: number; bottom: number; left: number };
     readonly nextCursor: CellPlaceCursor;
     readonly complete: boolean;
@@ -1304,9 +1293,7 @@ export function layoutRowFragmentBounded(
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex += 1) {
     const cell = row.cells[cellIndex]!;
-    // Typed, not inferred: without `noUncheckedIndexedAccess` the indexed read is already
-    // non-nullable, so TypeScript discards the right operand's type and a member missing
-    // from it goes unreported — `precededByEmittedTable` would arrive as `undefined` wearing
+    // Keep this typed: otherwise TypeScript can hide a missing cursor member.
     // a `boolean`, and the collapse would silently never fire for that cell.
     const cursor: CellPlaceCursor = cursors[cellIndex] ?? {
       blockIndex: 0,
@@ -1328,7 +1315,6 @@ export function layoutRowFragmentBounded(
     const cellW = Math.max(slotW - 2 * inset, MIN_CELL_BOX_PT);
     const insets = contentInsets(cell.margins, cell.borders);
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
-    const contentTop = rowTop + topInset;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
     // A detached head answers to the page and to its own SPAN, and to nothing about this
     // row: `hRule="exact"` fixes the height of the ROW (17.18.37) while the merged content
@@ -1340,7 +1326,15 @@ export function layoutRowFragmentBounded(
     const cellMaxBottom = isDetached
       ? Math.min(detachedBottomPt, rowTop + spanHeightPt)
       : flowMaxBottom;
-    const contentMaxBottom = cellMaxBottom - insets.bottom;
+    const vertical = cell.textDirection === 'btLr';
+    const flowLeft = vertical ? cellX + insets.bottom : cellX + insets.left;
+    const flowRight = vertical
+      ? cellX + Math.max(0, cellMaxBottom - rowTop) - topInset
+      : cellX + cellW - insets.right;
+    const contentTop = vertical ? rowTop + insets.left : rowTop + topInset;
+    const contentMaxBottom = vertical
+      ? rowTop + cellW - insets.right
+      : cellMaxBottom - insets.bottom;
 
     let blocks: readonly BlockFragmentRecord[] = [];
     let contentBottom = contentTop;
@@ -1355,8 +1349,8 @@ export function layoutRowFragmentBounded(
       } else {
         const flow = flowBlocksInBoxBounded(
           cell.blocks,
-          cellX + insets.left,
-          cellX + cellW - insets.right,
+          flowLeft,
+          flowRight,
           contentTop,
           contentMaxBottom,
           depth,
@@ -1381,7 +1375,11 @@ export function layoutRowFragmentBounded(
     // shorter than the DEFAULT_RUN_STYLE line. Empty / continue cells still need one line.
     const cellBottom = Math.min(
       cellMaxBottom,
-      fitted ? contentBottom + insets.bottom : rowTop + topInset + defaultLineHeight + insets.bottom
+      vertical && fitted
+        ? rowTop + topInset + (blockInlineRight(blocks, flowLeft) - flowLeft) + insets.bottom
+        : fitted
+          ? contentBottom + insets.bottom
+          : rowTop + topInset + defaultLineHeight + insets.bottom
     );
     if (cellBottom > rowBottom && !isDetached) rowBottom = cellBottom;
 
@@ -1393,6 +1391,7 @@ export function layoutRowFragmentBounded(
       blocks,
       contentTop,
       contentBottom,
+      physicalBottom: cellBottom,
       insets: { ...insets, top: topInset },
       nextCursor,
       complete: cell.vMergeContinue ? true : complete,
@@ -1401,13 +1400,10 @@ export function layoutRowFragmentBounded(
     });
   }
 
-  // Coordinate fragment height: tallest placed content, never past the flow budget.
   rowBottom = Math.min(flowMaxBottom, Math.max(rowBottom, rowTop));
   for (const entry of flowed) {
     if (detachedSpans?.has(entry.cell.id) === true) continue;
-    const needed = entry.fitted
-      ? entry.contentBottom + entry.insets.bottom
-      : rowTop + entry.insets.top + defaultLineHeight + entry.insets.bottom;
+    const needed = entry.physicalBottom;
     if (needed > rowBottom && needed <= flowMaxBottom + 0.001) {
       rowBottom = needed;
     }
@@ -1461,7 +1457,10 @@ export function layoutRowFragmentBounded(
       blocks.length > 0
     ) {
       const contentHeight = entry.contentBottom - entry.contentTop;
-      const available = rowHeight - entry.insets.top - entry.insets.bottom - contentHeight;
+      const available =
+        entry.cell.textDirection === 'btLr'
+          ? entry.width - entry.insets.left - entry.insets.right - contentHeight
+          : rowHeight - entry.insets.top - entry.insets.bottom - contentHeight;
       if (available > 0) {
         const dy = entry.cell.vAlign === 'center' ? available / 2 : available;
         blocks = shiftBlocks(blocks, dy);
@@ -1476,6 +1475,7 @@ export function layoutRowFragmentBounded(
       ...(entry.cell.vMergeContinue ? { paintInert: true as const } : {}),
       rowSpan: 1,
       ...(entry.cell.shading === undefined ? {} : { shading: entry.cell.shading }),
+      ...(entry.cell.textDirection === 'btLr' ? { textDirection: 'btLr' as const } : {}),
       blocks,
       box: { x: entry.x, y: rowTop, width: entry.width, height: rowHeight },
     };

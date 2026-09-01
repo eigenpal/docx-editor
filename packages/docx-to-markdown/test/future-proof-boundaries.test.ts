@@ -65,6 +65,7 @@ test('Markdown policy exhausts output-affecting unions as well as record fields'
   expect(markdownPolicySource).toContain(
     "Record<NonNullable<StyleSpanRecord['noteNav']>['direction'], MarkdownFieldPolicy>"
   );
+  expect(markdownPolicySource).toContain("textDirection: 'layout-only'");
 });
 
 test('one-shot APIs keep layout options out of record-only translation', () => {
