@@ -4,11 +4,21 @@
 // (2) type solid-fill polygon geometry so paint can draw the shape instead of a card.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, WML_NAMESPACE_URI, type OoxmlPackage } from '../index.ts';
+import {
+  readOoxmlPart,
+  WML_NAMESPACE_URI,
+  type OoxmlDrawingNode,
+  type OoxmlElement,
+  type OoxmlPackage,
+  type OoxmlPart,
+} from '../index.ts';
 import {
   indexInlineDrawingProjectionsInPart,
   DEFAULT_DRAWING_PROJECTION_LIMITS,
+  DEFAULT_SUPPORTED_MC_REQUIRES,
+  projectDrawingWithState,
 } from '../package/drawing-projection.ts';
+import { createWalkState, type DrawingDiagnostic } from '../package/drawing-projection-walk.ts';
 import { createPackageShapeThemeResolvers } from '../package/theme-color-resolution.ts';
 
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
@@ -32,6 +42,32 @@ function parsePart(body: string) {
   expect(parsed.ok).toBe(true);
   if (!parsed.ok) throw new Error(parsed.reason);
   return parsed.part;
+}
+
+function drawingOf(part: OoxmlPart): OoxmlDrawingNode {
+  const stack: OoxmlElement[] = [part.root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (node.kind === 'drawing') return node;
+    for (const child of node.children) {
+      if (child.kind !== 'textValue') stack.push(child);
+    }
+  }
+  throw new Error('missing drawing');
+}
+
+function projectWithDiagnostics(part: OoxmlPart, diagnostics: DrawingDiagnostic[]) {
+  const state = createWalkState();
+  state.diagnostics.push(...diagnostics);
+  return projectDrawingWithState(
+    drawingOf(part),
+    {
+      ownerPartName: part.name,
+      supportedMcRequires: DEFAULT_SUPPORTED_MC_REQUIRES,
+      limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+    },
+    state
+  );
 }
 
 /** Double-rule custGeom shape, verbatim structure from Word's cover-page separator. */
@@ -84,6 +120,10 @@ function mcWrapped(drawing: string): string {
 /** Attribute-escape a raw value so a hostile spelling reaches the parser intact. */
 function escapeAttribute(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+}
+
+function unsupportedGraphic(nodeId: string, detail: string): DrawingDiagnostic {
+  return { code: 'unsupported-graphic', nodeId, detail };
 }
 
 /** A `wpg:wgp` group of two independently filled children, with a group `a:xfrm`. */
@@ -233,6 +273,74 @@ describe('wps vector shape projection', () => {
     // Points land in extent-EMU space (path w/h equals the extent here).
     expect(shape!.subpathsEmu[0]![0]).toEqual({ x: 6696075, y: 38100 });
     expect(shape!.subpathsEmu[1]![2]).toEqual({ x: 0, y: 9525 });
+  });
+
+  test('a supported vector shape removes its own provisional unsupported diagnostic', () => {
+    const part = parsePart(`<w:p><w:r>${doubleRuleShapeDrawing()}</w:r></w:p>`);
+    const projection = [...indexInlineDrawingProjectionsInPart(part).values()][0]!;
+
+    expect(projection.vectorShape).not.toBeNull();
+    expect(projection.diagnostics.filter(({ code }) => code === 'unsupported-graphic')).toEqual([]);
+  });
+
+  test('a supported vector shape leaves an unsupported sibling diagnostic intact', () => {
+    const part = parsePart(`<w:p><w:r>${doubleRuleShapeDrawing()}</w:r></w:p>`);
+    const sibling = unsupportedGraphic('unsupported-sibling', 'diagram');
+    const projection = projectWithDiagnostics(part, [sibling])!;
+    const unsupported = projection.diagnostics.filter(({ code }) => code === 'unsupported-graphic');
+
+    expect(projection.vectorShape).not.toBeNull();
+    expect(unsupported).toHaveLength(1);
+    expect(unsupported).toEqual(expect.arrayContaining([sibling]));
+  });
+
+  test('removing a vector provisional leaves multiple unrelated diagnostics intact', () => {
+    const part = parsePart(`<w:p><w:r>${doubleRuleShapeDrawing()}</w:r></w:p>`);
+    const firstUnsupported = unsupportedGraphic('unsupported-chart', 'chart');
+    const malformed: DrawingDiagnostic = {
+      code: 'wrap-polygon-malformed',
+      nodeId: 'malformed-wrap',
+      detail: 'invalid-coordinate',
+    };
+    const secondUnsupported = unsupportedGraphic('unsupported-diagram', 'diagram');
+    const projection = projectWithDiagnostics(part, [
+      firstUnsupported,
+      malformed,
+      secondUnsupported,
+    ])!;
+
+    expect(projection.vectorShape).not.toBeNull();
+    expect(projection.diagnostics).toHaveLength(3);
+    expect(projection.diagnostics).toEqual(
+      expect.arrayContaining([firstUnsupported, malformed, secondUnsupported])
+    );
+  });
+
+  test('diagnostic replacement does not change the rendered vector projection', () => {
+    const part = parsePart(`<w:p><w:r>${doubleRuleShapeDrawing()}</w:r></w:p>`);
+    const shape = [...indexInlineDrawingProjectionsInPart(part).values()][0]!.vectorShape;
+
+    expect(shape).toMatchObject({
+      extentEmu: { cx: 6696075, cy: 47625 },
+      fillHex: '000000',
+      strokeHex: null,
+      subpathsEmu: [
+        [
+          { x: 6696075, y: 38100 },
+          { x: 0, y: 38100 },
+          { x: 0, y: 47625 },
+          { x: 6696075, y: 47625 },
+          { x: 6696075, y: 38100 },
+        ],
+        [
+          { x: 6696075, y: 0 },
+          { x: 0, y: 0 },
+          { x: 0, y: 9525 },
+          { x: 6696075, y: 9525 },
+          { x: 6696075, y: 0 },
+        ],
+      ],
+    });
   });
 
   test('direct (unwrapped) wps shape also carries vector geometry', () => {

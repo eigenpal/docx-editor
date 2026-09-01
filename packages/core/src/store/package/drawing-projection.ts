@@ -62,6 +62,14 @@ export type { TextboxStoryProjection, VectorShapeProjection } from './drawing-sh
 
 export type { DrawingDiagnostic, DrawingProjectionLimits };
 
+function removeSupersededDrawingDiagnostic(
+  diagnostics: DrawingDiagnostic[],
+  superseded: DrawingDiagnostic
+): void {
+  const index = diagnostics.indexOf(superseded);
+  if (index !== -1) diagnostics.splice(index, 1);
+}
+
 /**
  * Whether a drawing sits in the text flow or is positioned against a frame.
  *
@@ -1403,6 +1411,16 @@ export function drawingAccessibility(projection: DrawingProjection): DrawingAcce
   });
 }
 
+type DrawingProjectionContext = Readonly<{
+  ownerPartName: string;
+  supportedMcRequires: ReadonlySet<string>;
+  limits: DrawingProjectionLimits;
+  namespaceScope?: ReadonlyMap<string, string>;
+  resolveRelationship?: RelationshipTargetResolver;
+  resolveSchemeColor?: ShapeSchemeColorResolver;
+  resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
+}>;
+
 /**
  * Project one `w:drawing` into the resolved shape layout and chrome read.
  *
@@ -1422,6 +1440,15 @@ export function projectDrawing(
     resolveStyleMatrixReference?: ShapeStyleMatrixResolver;
   }>
 ): DrawingProjection | null {
+  return projectDrawingWithState(drawing, context, createWalkState());
+}
+
+/** @internal Projection seam for diagnostic-association tests. */
+export function projectDrawingWithState(
+  drawing: OoxmlDrawingNode,
+  context: DrawingProjectionContext,
+  state: WalkState
+): DrawingProjection | null {
   const ctx: ProjectionContext = {
     ownerPartName: context.ownerPartName,
     supportedMcRequires: context.supportedMcRequires,
@@ -1432,7 +1459,6 @@ export function projectDrawing(
   };
   const namespaceScope = context.namespaceScope ?? emptyNamespaceScope();
   const compatibilityMode = isCompatibilityDrawing(drawing);
-  const state = createWalkState();
   if (state.depth >= ctx.limits.maxDrawingDepth) {
     state.refused = true;
   }
@@ -1531,12 +1557,8 @@ export function projectDrawing(
   const textboxStory = pictureResult.picture
     ? null
     : projectTextboxStory(anchor, extent, ctx.resolveSchemeColor, ctx.resolveStyleMatrixReference);
-  if (vectorShape) {
-    for (let index = state.diagnostics.length - 1; index >= 0; index -= 1) {
-      if (state.diagnostics[index]?.code === 'unsupported-graphic') {
-        state.diagnostics.splice(index, 1);
-      }
-    }
+  if (vectorShape && pictureResult.diagnostic) {
+    removeSupersededDrawingDiagnostic(state.diagnostics, pictureResult.diagnostic);
   }
   return freezeDrawingProjection(
     Object.freeze({
