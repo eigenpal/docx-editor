@@ -2139,8 +2139,9 @@ export function computeFootnoteReserves(
     const bodyPage = bodyOnlyPage(page);
     const pageRefs = filterRefsOnPage(bodyPage, allRefs, refIndex);
     const fnRefs = pageRefs.filter((r) => r.noteKind === 'footnote');
-    // Position from first ref's section (Word uses section of the page).
-    const sectionIndex = fnRefs[0]?.sectionIndex ?? 0;
+    const pageBottomRefs = fnRefs.filter(isPageBottomFootnoteRef);
+    // Position from the first page-local ref's section; sect/doc-end refs do not govern it.
+    const sectionIndex = pageBottomRefs[0]?.sectionIndex ?? 0;
     const props = footnotePropsFor(input, sectionIndex);
     const nextPage = layout.pages[pageAt + 1];
     const usedReservePt = previousReserves ? (previousReserves.get(page.index) ?? 0) : undefined;
@@ -2172,7 +2173,7 @@ export function computeFootnoteReserves(
             noteLayoutCache,
           })
         : 0;
-    if (collectsAtEnd(props.pos)) {
+    if (pageBottomRefs.length === 0 && carry.size === 0) {
       // No per-page reservation for THIS page's refs — collected later. The hold-out
       // still runs: a ref-free page in a mixed-position document (or one whose only
       // reference was evicted) answers section 0 here, and skipping it would let the
@@ -2205,7 +2206,7 @@ export function computeFootnoteReserves(
     const reasonsBefore = reasons.length;
     const { area, nextCarry, evictionTopPt } = buildFootnoteArea(
       bodyPage,
-      fnRefs,
+      pageBottomRefs,
       input,
       noteMarks,
       props.pos,
@@ -2373,16 +2374,20 @@ export function attachNotesToLayout(
     }
 
     const bodyPage = bodyOnlyPage(page);
-    const sectionIndex = fnRefs[0]?.sectionIndex ?? 0;
+    const pageBottomRefs = fnRefs.filter((ref) => {
+      const pos = footnotePropsFor(input, ref.sectionIndex).pos;
+      return pos === 'pageBottom' || pos === 'beneathText';
+    });
+    const sectionIndex = pageBottomRefs[0]?.sectionIndex ?? 0;
     const props = footnotePropsFor(input, sectionIndex);
     let footnotes: NoteAreaRecord | undefined;
     const carryWasEmpty = carry.size === 0;
     const reasonsBefore = reasons.length;
-    if (props.pos === 'pageBottom' || props.pos === 'beneathText') {
-      const pageBottomRefs = fnRefs.filter((ref) => {
-        const pos = footnotePropsFor(input, ref.sectionIndex).pos;
-        return pos === 'pageBottom' || pos === 'beneathText';
-      });
+    if (
+      pageBottomRefs.length > 0 ||
+      carry.size > 0 ||
+      (fnRefs.length === 0 && !collectsAtEnd(props.pos))
+    ) {
       const built = buildFootnoteArea(
         bodyPage,
         pageBottomRefs,
