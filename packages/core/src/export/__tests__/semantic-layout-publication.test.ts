@@ -11,7 +11,6 @@ test('publication recursively freezes shallow-frozen page records in bounded chu
   const layout = {
     revision: 1,
     pages: [page],
-    reviewArtifacts: [{ kind: 'comment', occurrences: [{ source: { start: 0 } }] }],
   } as unknown as SemanticLayout;
 
   const published = publishImmutableSemanticLayout(layout);
@@ -22,7 +21,6 @@ test('publication recursively freezes shallow-frozen page records in bounded chu
   expect(Object.isFrozen(page.fragments)).toBe(true);
   expect(Object.isFrozen(spans)).toBe(true);
   expect(Object.isFrozen(spans[0])).toBe(true);
-  expect(Object.isFrozen(published.reviewArtifacts?.[0]?.occurrences[0]?.source)).toBe(true);
 });
 
 test('publication rejects a cycle instead of recursing or silently exposing it', () => {
@@ -43,7 +41,7 @@ test('publication rejects executable values instead of silently exposing them', 
   expect(() => publishImmutableSemanticLayout(layout)).toThrow('function value');
 });
 
-test('publication batches many pages with shared furniture and many artifacts', () => {
+test('publication batches many pages with shared furniture', () => {
   let sharedRecordVisits = 0;
   const nested = new Proxy(
     { value: 'shared' },
@@ -61,17 +59,11 @@ test('publication batches many pages with shared furniture and many artifacts', 
     fragments: [],
     header: sharedHeader,
   }));
-  const reviewArtifacts = Array.from({ length: 70 }, (_, index) => ({
-    kind: 'comment',
-    id: `comment-${index}`,
-    occurrences: [{ source: { partName: '/word/document.xml' } }],
-  }));
-  const layout = { revision: 1, pages, reviewArtifacts } as unknown as SemanticLayout;
+  const layout = { revision: 1, pages } as unknown as SemanticLayout;
 
   const published = publishImmutableSemanticLayout(layout);
 
   expect(Object.isFrozen(published.pages[39])).toBe(true);
   expect(Object.isFrozen(sharedHeader.fragments[0]?.nested)).toBe(true);
   expect(sharedRecordVisits).toBe(1);
-  expect(Object.isFrozen(published.reviewArtifacts?.[69]?.occurrences[0]?.source)).toBe(true);
 });

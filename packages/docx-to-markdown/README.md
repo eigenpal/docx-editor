@@ -72,10 +72,6 @@ exporter. `exportMarkdownLayout` translates a snapshot after its session has bee
 interface MarkdownExportResult {
   /** Primary output: physical page projections with page furniture and provenance. */
   readonly pages: readonly MarkdownPage[];
-  /** All comments and tracked changes, including records without a page occurrence. */
-  readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
-  /** Stable links from review occurrences to generated Markdown strings. */
-  readonly reviewBindings: readonly MarkdownReviewBinding[];
   /** How this result's pages and revision content were produced. */
   readonly pagination: {
     readonly source: 'layout-engine';
@@ -97,35 +93,6 @@ interface MarkdownPage {
   /** Header and footer are separate from logical document content. */
   readonly headerMarkdown: string;
   readonly footerMarkdown: string;
-  /** Review artifacts physically occurring in body, furniture, or notes on this page. */
-  readonly comments: readonly MarkdownComment[];
-  readonly trackedChanges: readonly MarkdownTrackedChange[];
-}
-
-interface MarkdownReviewBinding {
-  readonly artifactId: string;
-  readonly artifactKind: 'comment' | 'tracked-change';
-  /** Index into the matching artifact's occurrences array. */
-  readonly occurrenceIndex: number;
-  readonly coverage: 'complete' | 'partial' | 'none';
-  readonly projection:
-    | { readonly kind: 'document' }
-    | {
-        readonly kind: 'page';
-        readonly pageIndex: number;
-        readonly pageNumber: number;
-        readonly field: 'markdown' | 'headerMarkdown' | 'footerMarkdown';
-      };
-  readonly ranges: readonly {
-    readonly start: number;
-    readonly end: number;
-    readonly unit: 'utf16-code-unit';
-    readonly precision: 'exact' | 'containing-construct';
-  }[];
-  readonly unmappedReason?:
-    | 'not-represented-in-markdown'
-    | 'non-linear-structural-change'
-    | 'omitted-story-content';
 }
 ```
 
@@ -162,82 +129,12 @@ cannot preserve page provenance.
 
 ### Comments and tracked changes
 
-Each page carries the comments and tracked changes that physically occur in its body, header,
-footer, footnotes, endnotes, or authored note separator. One artifact can occur on multiple pages:
-a range can cross a page boundary, and a change in a shared header can be rendered on every page.
-`page.comments` and `page.trackedChanges` are membership views: each entry is the complete
-document-wide artifact, so its `occurrences` array can also contain occurrences on other pages.
-Filter by `occurrence.pageIndex === page.number - 1` when the exact page-local story and DOCX
-source range matter.
-
-`result.reviewArtifacts` is the authoritative document-wide list. It also retains orphaned comments
-and other records that have no physical page occurrence, so page-local processing does not silently
-lose review data.
-
-`result.reviewBindings` connects those source occurrences to UTF-16 offsets in `result.markdown`,
-`page.markdown`, `page.headerMarkdown`, or `page.footerMarkdown`. The exporter creates bindings
-while it serializes, so escaping, repeated text, links, tables, lists, and page splits cannot make
-them ambiguous. Use the offsets directly with JavaScript `slice()`:
-
-```ts
-for (const binding of result.reviewBindings) {
-  const output =
-    binding.projection.kind === 'document'
-      ? result.markdown
-      : result.pages[binding.projection.pageIndex]![binding.projection.field];
-
-  const selected = binding.ranges.map(({ start, end }) => output.slice(start, end)).join('');
-
-  console.log(binding.artifactId, selected, binding.coverage, binding.unmappedReason);
-}
-```
-
-One source range may produce several Markdown ranges when Markdown delimiters or page boundaries
-split it. `coverage` says whether all, some, or none of the Core source occurrence is represented.
-A range has `precision: 'exact'` when its source boundaries map exactly to output boundaries, even
-when escaping changes the generated text or its length.
-Generated atoms such as image Markdown, note references, and equation fallbacks use
-`'containing-construct'`, meaning the range selects the smallest complete Markdown construct that
-represents the source. Textbox content and structural changes can have no honest linear Markdown
-range; those bindings carry `omitted-story-content` or `non-linear-structural-change` while the
-complete artifact and Core source provenance remain in `reviewArtifacts`.
-`not-represented-in-markdown` is the fallback for other source content that has no honest linear
-Markdown representation.
-
-For source-aligned edits, require `coverage === 'complete'` and every range to have
-`precision === 'exact'`. Citation and display workflows can still use partial or
-`containing-construct` bindings while showing their declared fidelity.
-
-Ordinary Markdown stays clean: comments and revision metadata are not injected as HTML comments,
-CriticMarkup, or visible footnotes. Presentation-oriented review markup can be added later as an
-explicit option without changing the default output or the lossless sidecar contract.
-
-```ts
-const result = await exportMarkdown(bytes);
-
-for (const page of result.pages) {
-  for (const comment of page.comments) {
-    const localOccurrences = comment.occurrences.filter(
-      (occurrence) => occurrence.pageIndex === page.number - 1
-    );
-    console.log(
-      `Comment ${comment.id} appears ${localOccurrences.length} time(s) on page ${page.number}: ${comment.text}`
-    );
-  }
-  for (const change of page.trackedChanges) {
-    const localOccurrences = change.occurrences.filter(
-      (occurrence) => occurrence.pageIndex === page.number - 1
-    );
-    console.log(
-      `${change.change} by ${change.author} appears ${localOccurrences.length} time(s) on page ${page.number}`
-    );
-  }
-}
-
-const orphanedComments = result.reviewArtifacts.filter(
-  (artifact) => artifact.kind === 'comment' && artifact.orphaned
-);
-```
+Tracked changes participate through `displayMode`: `all-markup` (default) keeps inserted and
+deleted text visible, `proposed` shows the document as if every change were accepted, and
+`original` shows it as if every change were rejected. A structured review sidecar (per-page
+comment and tracked-change records with Markdown offsets) is planned as a follow-up; ordinary
+Markdown stays clean either way — review metadata is never injected as HTML comments,
+CriticMarkup, or visible footnotes.
 
 ## Options
 
@@ -526,8 +423,6 @@ Markdown is a semantic degradation:
 
 - Physical Word-layout pages are first-class; flattened `markdown` is secondary.
 - Page headers and footers are returned separately per page.
-- Comments and tracked changes are normalized by core and exposed globally and per physical page.
-- Review bindings map Core source provenance to exact Markdown offsets without changing Markdown.
 - Merged table cells are flattened.
 - GFM has no nested-table construct. Nested tables alone use inline, standards-valid HTML spans
   with `docx-nested-table`, `docx-nested-table__row`, and `docx-nested-table__cell` classes; inline

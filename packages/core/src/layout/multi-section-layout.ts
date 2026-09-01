@@ -43,7 +43,6 @@ const MULTI_SECTION_LAYOUT_FIELD_ROLES = {
   revision: 'constructed',
   pages: 'constructed',
   displayMode: 'post-processed',
-  reviewArtifacts: 'post-processed',
   contentControls: 'post-processed',
   controlContextToken: 'post-processed',
 } as const satisfies Record<keyof SemanticLayout, MultiSectionLayoutFieldRole>;

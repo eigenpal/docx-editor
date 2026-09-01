@@ -59,16 +59,8 @@ export type {
 } from '@docx-editor.dev/core/export';
 export type {
   AnchoredDrawingLayoutFallback,
-  SemanticArtifactRootStoryKind,
-  SemanticArtifactStoryKind,
-  SemanticCommentArtifactRecord,
   SemanticDrawingVisit,
   SemanticLayout,
-  SemanticReviewArtifactOccurrence,
-  SemanticReviewArtifactPosition,
-  SemanticReviewArtifactRecord,
-  SemanticReviewArtifactSource,
-  SemanticTrackedChangeArtifactRecord,
   AnchoredDrawingRecord,
   DrawingAccessibility,
   DrawingGeometry,
@@ -102,18 +94,6 @@ export type {
   OpenMarkdownDocumentForExportOptions,
   MarkdownTranslationOptions,
 } from './markdown-types.ts';
-export type {
-  MarkdownComment,
-  MarkdownReviewCoverage,
-  MarkdownReviewArtifact,
-  MarkdownReviewBinding,
-  MarkdownReviewOccurrence,
-  MarkdownReviewProjection,
-  MarkdownReviewRange,
-  MarkdownReviewRangePrecision,
-  MarkdownReviewUnmappedReason,
-  MarkdownTrackedChange,
-} from './markdown-review-bindings.ts';
 
 /** Typed one-shot failure for bytes that cannot be opened as a supported DOCX. @public */
 export class DocumentOpenError extends Error {

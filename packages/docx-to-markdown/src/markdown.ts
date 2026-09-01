@@ -37,13 +37,6 @@ import {
 } from './markdown-source-map.ts';
 import { nestedTableHtml, tableWidth } from './markdown-nested-table.ts';
 import {
-  buildMarkdownReviewBindings,
-  buildMarkdownSourceCapture,
-  indexPageReviewArtifacts,
-  markdownReviewSourceScope,
-  type MarkdownPageProjectionValues,
-} from './markdown-review-bindings.ts';
-import {
   buildNoteLabels,
   buildNoteStoryIndexes,
   EMPTY_NOTE_STORIES,
@@ -126,6 +119,26 @@ function destination(url: string): string {
     /[\u0000-\u0020\u007f<>()\\]/g,
     (character) => `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
   );
+}
+
+/** Stable identity for one translated story, keyed the way capture consumers expect. */
+function markdownSourceScope(
+  rootStory: 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator',
+  partName: string,
+  noteScopeId: string | null
+): string {
+  switch (rootStory) {
+    case 'body':
+      return 'body';
+    case 'header':
+    case 'footer':
+      return `${rootStory}:${partName}`;
+    case 'footnote':
+    case 'endnote':
+      return `${rootStory}:${noteScopeId ?? partName}`;
+    case 'note-separator':
+      return `note-separator:${partName}`;
+  }
 }
 
 function mappedImageResult(value: unknown): MarkdownImageResult {
@@ -839,7 +852,7 @@ function storyMarkdown(
   indexTableBlocks(story.fragments, tablesById);
   const storyContext: TranslationContext = {
     ...context,
-    sourceScope: markdownReviewSourceScope(story.kind, story.partName, null),
+    sourceScope: markdownSourceScope(story.kind, story.partName, null),
     listIndentByParagraphId,
     listMarkerByParagraphId,
     tablesById,
@@ -891,7 +904,7 @@ function noteDefinitions(
     indexLists(logical, listIndentByParagraphId, listMarkerByParagraphId);
     const noteContext = {
       ...context,
-      sourceScope: markdownReviewSourceScope(note.kind, '', scopeId),
+      sourceScope: markdownSourceScope(note.kind, '', scopeId),
       listIndentByParagraphId,
       listMarkerByParagraphId,
     };
@@ -921,7 +934,6 @@ export function exportMarkdownLayout(
   layout: ExportSemanticLayout,
   options: MarkdownTranslationOptions = {}
 ): MarkdownExportResult {
-  const reviewArtifacts = layout.reviewArtifacts;
   const indexes = buildTranslationIndexes(layout);
   const notes = buildNoteStoryIndexes(layout);
   const context: TranslationContext = {
@@ -929,9 +941,8 @@ export function exportMarkdownLayout(
     noteLabelByScope: buildNoteLabels(layout),
     tableCell: false,
     displayMode: layout.displayMode,
-    sourceScope: markdownReviewSourceScope('body', '', null),
+    sourceScope: markdownSourceScope('body', '', null),
     imageResultByDrawing: new WeakMap(),
-    sourceCapture: buildMarkdownSourceCapture(reviewArtifacts),
     ...indexes,
   };
   const markdown = withDefinitions(
@@ -944,9 +955,7 @@ export function exportMarkdownLayout(
     ),
     noteDefinitions(notes.document, context)
   );
-  const artifactsByPage = indexPageReviewArtifacts(reviewArtifacts);
   const renderedNoteScopes = new Set<string>();
-  const pageProjectionValues = new Map<number, MarkdownPageProjectionValues>();
   const pages = layout.pages.map((page): MarkdownPage => {
     const pageContext = { ...context, pageIndex: page.index };
     const body = pageBody(page, context);
@@ -957,27 +966,16 @@ export function exportMarkdownLayout(
       body.noteLabels,
       renderedNoteScopes
     );
-    const pageArtifacts = artifactsByPage.get(page.index);
-    const values: MarkdownPageProjectionValues = {
-      markdown: withDefinitions(body.value, definitions),
-      headerMarkdown: page.header ? storyMarkdown(page.header, pageContext) : EMPTY_MAPPED_MARKDOWN,
-      footerMarkdown: page.footer ? storyMarkdown(page.footer, pageContext) : EMPTY_MAPPED_MARKDOWN,
-    };
-    pageProjectionValues.set(page.index, values);
     return Object.freeze({
       id: page.id,
       number: page.index + 1,
-      markdown: values.markdown.markdown,
-      headerMarkdown: values.headerMarkdown.markdown,
-      footerMarkdown: values.footerMarkdown.markdown,
-      comments: Object.freeze(pageArtifacts?.comments ?? []),
-      trackedChanges: Object.freeze(pageArtifacts?.trackedChanges ?? []),
+      markdown: withDefinitions(body.value, definitions).markdown,
+      headerMarkdown: page.header ? storyMarkdown(page.header, pageContext).markdown : '',
+      footerMarkdown: page.footer ? storyMarkdown(page.footer, pageContext).markdown : '',
     });
   });
   return Object.freeze({
     pages: Object.freeze(pages),
-    reviewArtifacts,
-    reviewBindings: buildMarkdownReviewBindings(reviewArtifacts, markdown, pageProjectionValues),
     pagination: Object.freeze({
       source: 'layout-engine',
       scope: 'export-snapshot',

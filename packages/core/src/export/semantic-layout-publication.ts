@@ -127,10 +127,6 @@ export function publishImmutableSemanticLayout<T extends SemanticLayout>(layout:
       freezeArrayInBatches(descriptor.value, 1, trustedFurnitureRoots);
       continue;
     }
-    if (key === 'reviewArtifacts' && Array.isArray(descriptor.value)) {
-      freezeArrayInBatches(descriptor.value, 8);
-      continue;
-    }
     const activePath = new Set<object>();
     activePath.add(layout);
     freezePublishedValue(descriptor.value, new Set(), activePath, key);

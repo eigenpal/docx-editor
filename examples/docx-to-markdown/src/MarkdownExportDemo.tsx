@@ -134,24 +134,16 @@ function MarkdownPagePreview({
   mode,
   showHeaders,
   showFooters,
-  showReviewCounts,
 }: {
   readonly page: MarkdownPage;
   readonly mode: PreviewMode;
   readonly showHeaders: boolean;
   readonly showFooters: boolean;
-  readonly showReviewCounts: boolean;
 }) {
-  const reviewCount = page.comments.length + page.trackedChanges.length;
   return (
     <article className="md-page-wrap" id={`markdown-page-${page.number}`}>
       <div className="md-page-meta">
         <span>Page {page.number}</span>
-        {showReviewCounts && reviewCount > 0 ? (
-          <span className="md-review-count">
-            {reviewCount} review {reviewCount === 1 ? 'artifact' : 'artifacts'}
-          </span>
-        ) : null}
       </div>
       <div className="md-page-sheet">
         {showHeaders ? (
@@ -223,7 +215,6 @@ export function MarkdownExportDemo() {
   const [previewMode, setPreviewMode] = useState<PreviewMode>('rendered');
   const [showHeaders, setShowHeaders] = useState(true);
   const [showFooters, setShowFooters] = useState(true);
-  const [showReviewCounts, setShowReviewCounts] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -618,14 +609,6 @@ export function MarkdownExportDemo() {
                       onChange={(event) => setShowFooters(event.target.checked)}
                     />
                   </label>
-                  <label className="md-setting-row">
-                    <span>Review counts</span>
-                    <input
-                      type="checkbox"
-                      checked={showReviewCounts}
-                      onChange={(event) => setShowReviewCounts(event.target.checked)}
-                    />
-                  </label>
                   {fontStatus ? <div className="md-settings-note">{fontStatus}</div> : null}
                 </div>
               </details>
@@ -665,7 +648,6 @@ export function MarkdownExportDemo() {
                     mode={previewMode}
                     showHeaders={showHeaders}
                     showFooters={showFooters}
-                    showReviewCounts={showReviewCounts}
                   />
                 ))}
               </div>
@@ -673,7 +655,7 @@ export function MarkdownExportDemo() {
               <div className="md-empty-state" role="status">
                 <Spinner />
                 <strong>Building the first page snapshot</strong>
-                <span>Settling fonts, layout, headers, footers, and review artifacts.</span>
+                <span>Settling fonts, layout, headers, and footers.</span>
               </div>
             )}
           </div>

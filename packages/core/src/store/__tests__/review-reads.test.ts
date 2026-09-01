@@ -28,7 +28,6 @@ import {
   type OoxmlPackage,
   type OoxmlPart,
 } from '../index.ts';
-import { createExportReviewDerivationScope } from '../store/review-export-derivation.ts';
 
 const FIXTURE = resolve(
   import.meta.dir,
@@ -164,10 +163,6 @@ describe('tracked rows inside a textbox keep their anchors', () => {
     expect(card).toBeDefined();
     expect(card!.ranges.length).toBeGreaterThan(0);
     expect(card!.ranges[0]!.start.paragraphId).toBe(boxParagraphId);
-    const exportedCards = createExportReviewDerivationScope().collectReviewItems({
-      storyPart: part,
-    });
-    expect(exportedCards).toEqual(cards);
     // The memoized index answers repeat reads with the same instance.
     expect(locateSites(part)).toBe(located);
   });
@@ -207,15 +202,6 @@ describe('the deep paragraph order reaches paragraphs the shallow one cannot', (
 
     // Repeat reads are memoized on the immutable root.
     expect(deepParagraphOrderOfPart(part)).toBe(deep);
-
-    // One-shot export derivation returns the same order without populating or borrowing the
-    // interactive root memo. Each call owns a transient result that can die after publication.
-    const scope = createExportReviewDerivationScope();
-    const transient = scope.deepParagraphOrderOfPart(part);
-    expect([...transient]).toEqual([...deep]);
-    expect(transient).not.toBe(deep);
-    expect(scope.deepParagraphOrderOfPart(part)).toBe(transient);
-    expect(createExportReviewDerivationScope().deepParagraphOrderOfPart(part)).not.toBe(transient);
   });
 
   test('a textbox comment stays between the body comments surrounding its host', () => {

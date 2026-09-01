@@ -30,11 +30,6 @@ export function locateSites(part: OoxmlPart): ReadonlyMap<string, SiteLocation> 
   return locateSitesWithPolicy(part, true);
 }
 
-/** Export-only cold derivation that does not populate interactive location memos. @internal */
-export function locateSitesTransient(part: OoxmlPart): ReadonlyMap<string, SiteLocation> {
-  return locateSitesWithPolicy(part, false);
-}
-
 function locateSitesWithPolicy(
   part: OoxmlPart,
   retainAcrossReads: boolean

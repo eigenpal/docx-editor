@@ -5,12 +5,6 @@ import type {
   OpenDocumentForExportOptions,
 } from '@docx-editor.dev/core/export';
 import type { FontOrigin } from '@docx-editor.dev/core/export';
-import type {
-  MarkdownComment,
-  MarkdownReviewArtifact,
-  MarkdownReviewBinding,
-  MarkdownTrackedChange,
-} from './markdown-review-bindings.ts';
 
 /** Markdown emitted for one physical layout page. @public */
 export interface MarkdownPage {
@@ -24,16 +18,6 @@ export interface MarkdownPage {
   readonly headerMarkdown: string;
   /** Footer story for this page, kept separate from logical document content. */
   readonly footerMarkdown: string;
-  /**
-   * Document-wide comment records with at least one occurrence on this page. Filter each
-   * artifact's occurrences by `pageIndex === number - 1` for page-local provenance.
-   */
-  readonly comments: readonly MarkdownComment[];
-  /**
-   * Document-wide tracked-change records with at least one occurrence on this page. Filter each
-   * artifact's occurrences by `pageIndex === number - 1` for page-local provenance.
-   */
-  readonly trackedChanges: readonly MarkdownTrackedChange[];
 }
 
 /** Machine-readable scope of the page numbers returned by this export. @public */
@@ -52,10 +36,6 @@ export interface MarkdownPaginationInfo {
 export interface MarkdownExportResult {
   /** Primary physical page projections, preserving Word layout boundaries and furniture. */
   readonly pages: readonly MarkdownPage[];
-  /** Every normalized comment and tracked change, including artifacts with no page occurrence. */
-  readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
-  /** Markdown offsets for every representable review-artifact occurrence. */
-  readonly reviewBindings: readonly MarkdownReviewBinding[];
   /** How page numbers and tracked changes were projected for this result. */
   readonly pagination: MarkdownPaginationInfo;
   /** Convenience logical Markdown with split records joined and repeated furniture excluded. */

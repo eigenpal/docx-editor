@@ -329,11 +329,6 @@ export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
   return collectRevisionSitesIn(part);
 }
 
-/** Export-only cold derivation that does not populate interactive subtree memos. @internal */
-export function collectRevisionSitesTransient(part: OoxmlPart): RevisionSite[] {
-  return collectRevisionSitesIn(part, undefined, false);
-}
-
 /**
  * Named move ranges: `@w:name` → the move wrappers inside that range, by half.
  *

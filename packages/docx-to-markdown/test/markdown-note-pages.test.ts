@@ -80,10 +80,7 @@ test('renders an endnote continuation on a page without its reference', async ()
       },
     ],
   } as unknown as SemanticLayout;
-  const exportLayout = {
-    ...layout,
-    reviewArtifacts: layout.reviewArtifacts ?? Object.freeze([]),
-  } as ExportSemanticLayout;
+  const exportLayout = layout as ExportSemanticLayout;
   const session: ExportSession = {
     layout: async () => exportLayout,
     layoutFor: async () => exportLayout,
@@ -130,39 +127,8 @@ test('labels a held-over note normally on its first rendered page', async () => 
         },
       },
     ],
-    reviewArtifacts: [
-      {
-        kind: 'comment',
-        id: 'held-note-comment',
-        author: 'Ada',
-        initials: 'AL',
-        text: 'Check continuation',
-        resolved: false,
-        replyIds: [],
-        orphaned: false,
-        occurrences: [
-          {
-            pageIndex: 2,
-            physicalPageNumber: 3,
-            story: 'footnote',
-            rootStory: 'footnote',
-            textboxPath: [],
-            noteScopeId: scopeId,
-            noteAreaKind: 'footnotes',
-            source: {
-              partName: '/word/footnotes.xml',
-              start: { paragraphId: 'held-continuation', offset: 0 },
-              end: { paragraphId: 'held-continuation', offset: 4 },
-            },
-          },
-        ],
-      },
-    ],
   } as unknown as SemanticLayout;
-  const exportLayout = {
-    ...layout,
-    reviewArtifacts: layout.reviewArtifacts ?? Object.freeze([]),
-  } as ExportSemanticLayout;
+  const exportLayout = layout as ExportSemanticLayout;
   const session: ExportSession = {
     layout: async () => exportLayout,
     layoutFor: async () => exportLayout,
@@ -175,23 +141,4 @@ test('labels a held-over note normally on its first rendered page', async () => 
   expect(result.pages[1]?.markdown).toContain('[^1]: Held body');
   expect(result.pages[1]?.markdown).not.toContain('(continued)');
   expect(result.pages[2]?.markdown).toContain('Footnote 1 (continued)');
-  const bindings = result.reviewBindings.filter(
-    (binding) => binding.artifactId === 'held-note-comment'
-  );
-  expect(bindings).toHaveLength(2);
-  expect(
-    bindings.map((binding) => {
-      const markdown =
-        binding.projection.kind === 'document'
-          ? result.markdown
-          : result.pages[binding.projection.pageIndex]![binding.projection.field];
-      return binding.ranges.map(({ start, end }) => markdown.slice(start, end)).join('');
-    })
-  ).toEqual(['More', 'More']);
-  expect(bindings[0]?.projection).toEqual({
-    kind: 'page',
-    pageIndex: 2,
-    pageNumber: 3,
-    field: 'markdown',
-  });
 });

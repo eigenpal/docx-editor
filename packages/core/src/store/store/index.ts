@@ -123,11 +123,7 @@ export {
   type FormattingDisplayMode,
   type FormattingRevisionAuthorFilter,
 } from './formattable-runs.ts';
-export {
-  collectRevisionSites,
-  isPotentialRevisionElement,
-  type RevisionAddress,
-} from './tree-op-revisions.ts';
+export { collectRevisionSites, type RevisionAddress } from './tree-op-revisions.ts';
 export {
   commentAnchorsOfStory,
   commentsOfPart,

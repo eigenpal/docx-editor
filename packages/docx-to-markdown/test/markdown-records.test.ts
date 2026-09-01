@@ -48,10 +48,7 @@ function anchor(label: string, textbox = false): AnchoredDrawingRecord {
 }
 
 function session(layout: SemanticLayout): ExportSession {
-  const exportLayout = {
-    ...layout,
-    reviewArtifacts: layout.reviewArtifacts ?? Object.freeze([]),
-  } as ExportSemanticLayout;
+  const exportLayout = layout as ExportSemanticLayout;
   return {
     layout: async () => exportLayout,
     layoutFor: async () => exportLayout,
@@ -84,7 +81,6 @@ describe('Markdown semantic-record policies', () => {
       layoutRevision: 1,
       revisionView: 'original',
     });
-    expect(Object.isFrozen(result.reviewArtifacts)).toBe(true);
   });
 
   test('preserves visual segment order when resolved revisions merge paragraph offsets', async () => {
