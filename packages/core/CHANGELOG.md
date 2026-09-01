@@ -1,5 +1,11 @@
 # @docx-editor.dev/core
 
+## 2.14.1
+
+### Patch Changes
+
+- @docx-editor.dev/i18n@2.14.1
+
 ## 2.14.0
 
 ### Minor Changes
