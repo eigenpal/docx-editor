@@ -45,6 +45,11 @@ export interface SplitDedupContext {
   readonly isPresent: (id: LogicalId) => boolean;
 }
 
+export interface SplitTextOverlays {
+  readonly values: ReadonlyMap<LogicalId, string>;
+  readonly changedIds: ReadonlySet<LogicalId>;
+}
+
 interface RunText {
   readonly ids: readonly LogicalId[];
   readonly witnessIds: readonly LogicalId[];
@@ -61,10 +66,14 @@ export class SplitDedupIndex {
   private replicasByOrigin = new Map<LogicalId, Set<string>>();
   /** Origins that more than one replica split — the only ones a dedup pass has to examine. */
   private contestedOrigins = new Set<LogicalId>();
-  /** Source text id → split origins that still use it as their concurrent-edit witness. */
-  private originsBySourceText = new Map<LogicalId, Set<LogicalId>>();
+  /** Text witness id → split origins whose derived text can change when that record changes. */
+  private originsByTextWitness = new Map<LogicalId, Set<LogicalId>>();
   /** Split origins whose source text changed since the last repair pass. */
   private pendingTextRepairOrigins = new Set<LogicalId>();
+  /** Product text id → derived value that rebases a concurrent edit without shared writes. */
+  private textOverlays = new Map<LogicalId, string>();
+  /** Split origin → product text ids carrying its current derived overlay. */
+  private overlayIdsByOrigin = new Map<LogicalId, Set<LogicalId>>();
   /**
    * Origins that are live again while products still point at them — an undo restored the origin.
    * A cold rebuild reads this straight from current state, so a peer joining after the undo drops
@@ -90,8 +99,10 @@ export class SplitDedupIndex {
     this.replicasByOrigin = new Map();
     this.contestedOrigins = new Set();
     this.liveRootedOrigins = new Set();
-    this.originsBySourceText = new Map();
+    this.originsByTextWitness = new Map();
     this.pendingTextRepairOrigins = new Set();
+    this.textOverlays = new Map();
+    this.overlayIdsByOrigin = new Map();
   }
 
   /**
@@ -115,7 +126,7 @@ export class SplitDedupIndex {
       products.every((product) => product.text !== null);
     if (canRepair) {
       rootRecord.set(NODE_SPLIT_BASE_TEXT_FIELD, baseline);
-      this.indexSourceText(root);
+      this.indexTextWitnesses(root, this.runText(root));
     }
     let cursor = start;
     for (const product of products) {
@@ -127,6 +138,7 @@ export class SplitDedupIndex {
       rec.set(NODE_SPLIT_FROM_FIELD, root);
       if (canRepair) rec.set(NODE_SPLIT_START_FIELD, cursor);
       this.index(root, product.id);
+      if (canRepair) this.indexTextWitnesses(root, product.text);
       cursor += product.text?.value.length ?? 0;
     }
     // A later round re-split a run an earlier round produced, and the shared origin was split by
@@ -140,15 +152,20 @@ export class SplitDedupIndex {
   /**
    * Rebase text written concurrently to a split source onto the winning split products.
    *
-   * Only the product owner writes the repair. This prevents two peers from inserting the same
-   * correction into one Y.Text. The baseline proves the product text has not changed since the
-   * split, so a later sequential edit is never overwritten.
+   * The overlay is derived from shared state and never writes to Yjs. Every live peer and late
+   * joiner therefore computes the same result without requiring the split author to stay online.
+   * The baseline proves the product text has not changed since the split, so a later sequential
+   * edit is never overwritten.
    */
-  repairConcurrentText(replicaId: string, isPresent: SplitDedupContext['isPresent']): number {
-    let repaired = 0;
+  concurrentTextOverlays(isPresent: SplitDedupContext['isPresent']): SplitTextOverlays {
+    const changedIds = new Set<LogicalId>();
     const pending = this.pendingTextRepairOrigins;
     this.pendingTextRepairOrigins = new Set();
     for (const root of pending) {
+      for (const id of this.overlayIdsByOrigin.get(root) ?? []) {
+        if (this.textOverlays.delete(id)) changedIds.add(id);
+      }
+      this.overlayIdsByOrigin.delete(root);
       const runs = this.runsBySplitOrigin.get(root);
       if (!runs) continue;
       if (this.isReSplit(root) || isPresent(root)) continue;
@@ -160,7 +177,7 @@ export class SplitDedupIndex {
         if (isPresent(runId)) presentReplicas.add(replicaOfLogicalId(runId) ?? '');
       }
       const winner = [...presentReplicas].sort()[0];
-      if (winner !== replicaId) continue;
+      if (winner === undefined) continue;
       const products = [...runs]
         .filter((runId) => isPresent(runId) && replicaOfLogicalId(runId) === winner)
         .map((runId) => ({
@@ -175,21 +192,25 @@ export class SplitDedupIndex {
       const boundaries = products.map((product) => product.start!);
       boundaries.push(base.length);
       const mapped = boundaries.map((offset) => mapBaseOffset(base, source.value, offset));
+      const overlayIds = new Set<LogicalId>();
       for (let index = 0; index < products.length; index += 1) {
         const product = products[index]!;
-        this.replaceText(product.text!, source.value.slice(mapped[index]!, mapped[index + 1]!));
-        const rec = this.nodes.get(product.id);
-        if (isNodeMap(rec)) rec.set(NODE_SPLIT_START_FIELD, mapped[index]!);
+        const value = source.value.slice(mapped[index]!, mapped[index + 1]!);
+        for (let textIndex = 0; textIndex < product.text!.ids.length; textIndex += 1) {
+          const id = product.text!.ids[textIndex]!;
+          const overlay = textIndex === 0 ? value : '';
+          if (this.textOverlays.get(id) !== overlay) changedIds.add(id);
+          this.textOverlays.set(id, overlay);
+          overlayIds.add(id);
+        }
       }
-      const rootRecord = this.nodes.get(root);
-      if (isNodeMap(rootRecord)) rootRecord.set(NODE_SPLIT_BASE_TEXT_FIELD, source.value);
-      repaired += 1;
+      this.overlayIdsByOrigin.set(root, overlayIds);
     }
-    return repaired;
+    return { values: this.textOverlays, changedIds };
   }
 
   noteChanged(logicalId: LogicalId): void {
-    for (const root of this.originsBySourceText.get(logicalId) ?? []) {
+    for (const root of this.originsByTextWitness.get(logicalId) ?? []) {
       this.pendingTextRepairOrigins.add(root);
     }
   }
@@ -244,16 +265,6 @@ export class SplitDedupIndex {
     return visit(runId, 0) && ids.length > 0 ? { ids, witnessIds, value } : null;
   }
 
-  private replaceText(run: RunText, value: string): void {
-    for (let index = 0; index < run.ids.length; index += 1) {
-      const rec = this.nodes.get(run.ids[index]!);
-      const text = isNodeMap(rec) ? rec.get(NODE_TEXT_FIELD) : null;
-      if (!(text instanceof Y.Text)) continue;
-      if (text.length > 0) text.delete(0, text.length);
-      if (index === 0 && value.length > 0) text.insert(0, value);
-    }
-  }
-
   /**
    * True if `root` is itself a split product whose shared origin two replicas split.
    *
@@ -277,7 +288,8 @@ export class SplitDedupIndex {
     const root = nodeRecordSplitFrom(this.nodes.get(runId));
     if (root !== null && root !== runId) {
       this.index(root, runId);
-      this.indexSourceText(root);
+      this.indexTextWitnesses(root, this.runText(root));
+      this.indexTextWitnesses(root, this.runText(runId));
       const base = nodeRecordSplitBaseText(this.nodes.get(root));
       const source = this.runText(root);
       if (base !== null && source && source.value !== base) {
@@ -286,13 +298,12 @@ export class SplitDedupIndex {
     }
   }
 
-  private indexSourceText(root: LogicalId): void {
-    const source = this.runText(root);
-    if (!source) return;
-    for (const witnessId of source.witnessIds) {
-      const origins = this.originsBySourceText.get(witnessId) ?? new Set<LogicalId>();
+  private indexTextWitnesses(root: LogicalId, text: RunText | null): void {
+    if (!text) return;
+    for (const witnessId of text.witnessIds) {
+      const origins = this.originsByTextWitness.get(witnessId) ?? new Set<LogicalId>();
       origins.add(root);
-      this.originsBySourceText.set(witnessId, origins);
+      this.originsByTextWitness.set(witnessId, origins);
     }
   }
 

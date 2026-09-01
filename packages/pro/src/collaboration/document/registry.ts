@@ -7,7 +7,7 @@ import * as Y from 'yjs';
 import type { CanonicalBinaryDescriptor } from '@docx-editor.dev/core/collaboration/replication';
 import { partNameKey } from '@docx-editor.dev/core/store';
 import { yjsItemKey, type LogicalId, type NodeIdentityMeta, wordFacingIdsOf } from './identity.ts';
-import { SplitDedupIndex } from './split-dedup.ts';
+import { SplitDedupIndex, type SplitTextOverlays } from './split-dedup.ts';
 import { runIsPresent } from './run-text-reads.ts';
 import {
   DEFAULT_DOCUMENT_LIMITS,
@@ -499,8 +499,8 @@ export class DocumentRegistry {
     return this.splitDedup.loserRuns({ isPresent: (id) => runIsPresent(this, id) });
   }
 
-  repairConcurrentSplitText(replicaId: string): number {
-    return this.splitDedup.repairConcurrentText(replicaId, (id) => runIsPresent(this, id));
+  concurrentSplitTextOverlays(): SplitTextOverlays {
+    return this.splitDedup.concurrentTextOverlays((id) => runIsPresent(this, id));
   }
 
   /**

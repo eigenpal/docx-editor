@@ -211,4 +211,59 @@ describe('concurrent run-format convergence (#581)', () => {
     expect(bodyText(alice)).toBe(expected);
     expect(bodyText(bob)).toBe(expected);
   });
+
+  test('concurrent typing survives after the formatting peer leaves', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(doc());
+    pause();
+    harness.apply(alice, [runProps(alice, 0, 0, 5, 'b')]);
+    harness.apply(bob, [
+      {
+        op: 'insertText',
+        paragraphId: harness.paragraphIdAt(bob, 0),
+        offset: 15,
+        text: 'ZZZ',
+      },
+    ]);
+    harness.leave(alice);
+    resume();
+    const expected = PARA0.slice(0, 15) + 'ZZZ' + PARA0.slice(15) + PARA1;
+    expect(bodyText(bob)).toBe(expected);
+    expect(markCount(bob, 'b')).toBeGreaterThan(0);
+    const carol = await harness.join(bob, 'carol');
+    harness.expectConverged(bob, carol);
+    expect(bodyText(carol)).toBe(expected);
+  });
+
+  test('concurrent typing survives when the typing peer receives the format', async () => {
+    const { alice, bob } = await race(
+      (peer): TreeDocOp => ({
+        op: 'insertText',
+        paragraphId: harness.paragraphIdAt(peer, 0),
+        offset: 15,
+        text: 'ZZZ',
+      }),
+      (peer) => runProps(peer, 0, 0, 5, 'b')
+    );
+    const expected = PARA0.slice(0, 15) + 'ZZZ' + PARA0.slice(15) + PARA1;
+    expect(bodyText(alice)).toBe(expected);
+    expect(bodyText(bob)).toBe(expected);
+    expect(markCount(alice, 'b')).toBeGreaterThan(0);
+  });
+
+  test('undo of concurrent typing updates the formatted products', async () => {
+    const { alice, bob } = await race(
+      (peer) => runProps(peer, 0, 0, 5, 'b'),
+      (peer): TreeDocOp => ({
+        op: 'insertText',
+        paragraphId: harness.paragraphIdAt(peer, 0),
+        offset: 15,
+        text: 'ZZZ',
+      })
+    );
+    expect(bob.room.session.undo()).toBe(true);
+    bob.port.flushPendingJournals();
+    harness.expectConverged(alice, bob);
+    expect(bodyText(alice)).toBe(PARA0 + PARA1);
+    expect(markCount(alice, 'b')).toBeGreaterThan(0);
+  });
 });

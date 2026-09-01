@@ -43,6 +43,7 @@ import {
 } from './materialize-custom-xml.ts';
 import { partMemberSpecFor } from './materialize-part-members.ts';
 import { PackageProjectionCache } from './materialize-package-cache.ts';
+import { MaterializeSplitProjection } from './materialize-split-projection.ts';
 import {
   attributesMatch,
   countPass,
@@ -108,10 +109,7 @@ export class PackageMaterializer {
   /** Adoptee signature per survivor at the end of the last pass. */
   private lastAdoption = new Map<LogicalId, string>();
   private placementContested = false;
-  /** Runs a concurrent format split superseded; skipped this pass. Recomputed each rebuild. */
-  private replacementLosers: ReadonlySet<LogicalId> = new Set();
-  /** The loser set the previous pass used, to dirty parents when the verdict flips. */
-  private lastLosers: ReadonlySet<LogicalId> = new Set();
+  private readonly splitProjection = new MaterializeSplitProjection();
   /**
    * What the last full pass decided for each contested id: the parent the registry resolved
    * then, `null` for none. Holds only ids that pass evidenced as contested, so a hostile peer
@@ -220,22 +218,6 @@ export class PackageMaterializer {
     return moved;
   }
 
-  /**
-   * Parents of runs whose format-split loser verdict flipped, so the incremental pass
-   * rebuilds them instead of reusing a cached subtree with the stale verdict (#581).
-   */
-  private loserChanges(losers: ReadonlySet<LogicalId>): readonly LogicalId[] {
-    const parents: LogicalId[] = [];
-    const flipped = (runId: LogicalId): void => {
-      const parent = this.registry.parentOf(runId);
-      if (parent !== null) parents.push(parent);
-    };
-    for (const runId of losers) if (!this.lastLosers.has(runId)) flipped(runId);
-    for (const runId of this.lastLosers) if (!losers.has(runId)) flipped(runId);
-    this.lastLosers = losers;
-    return parents;
-  }
-
   rebuild(): MaterializeResult {
     const rawDirty = new Set(this.pendingDirty);
     const packageChanged = this.pendingPackage;
@@ -254,10 +236,7 @@ export class PackageMaterializer {
     // delivered yet, so it disqualifies the package projections exactly as the flag does.
     if (packageChanged || unobserved) this.packageCache.invalidate();
     for (const survivor of this.adoptionChanges()) rawDirty.add(survivor);
-    // Recompute the split-loser set once here, dirty the parents whose verdict changed, and
-    // reuse it for the pass so incremental and cold agree on which runs to drop (#581).
-    this.replacementLosers = this.registry.replacementLoserRuns();
-    for (const parent of this.loserChanges(this.replacementLosers)) rawDirty.add(parent);
+    for (const id of this.splitProjection.update(this.registry)) rawDirty.add(id);
     const dirty = expandAncestors(this.registry, rawDirty);
     // A relationship-only change dirties no nodes. Reuse the node cache, then project `.rels`.
     //
@@ -342,8 +321,7 @@ export class PackageMaterializer {
     }
     this.customXmlRels = [];
     this.customXmlOverrides.clear();
-    // `this.replacementLosers` was set in `rebuild()`, which also dirtied the parents whose
-    // loser verdict changed so this pass rebuilds them (#581).
+    // The split projection was updated in `rebuild()`, which also dirtied changed products.
     const placed = new Set<LogicalId>();
     const parts = new Map<string, OoxmlPart>();
     for (const entry of this.registry.partEntries()) {
@@ -556,9 +534,10 @@ export class PackageMaterializer {
       return null;
     }
     if (isTextRecord(record)) {
+      const value = this.splitProjection.textValue(logicalId, record.value);
       const previous = this.cache.get(logicalId);
-      if (previous?.kind === 'textValue' && previous.value === record.value) return previous;
-      const next = freezeText(logicalId, record.value);
+      if (previous?.kind === 'textValue' && previous.value === value) return previous;
+      const next = freezeText(logicalId, value);
       this.remember(logicalId, next);
       return next;
     }
@@ -586,7 +565,7 @@ export class PackageMaterializer {
       // A run a concurrent split superseded: drop it, and mark it placed so reachability does
       // not report it as stranded content — its loss is deliberate, the winning split's runs
       // carry the text. Every replica picks the same loser, so this converges.
-      if (this.replacementLosers.has(childId)) {
+      if (this.splitProjection.losers.has(childId)) {
         placed.add(childId);
         continue;
       }
