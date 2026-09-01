@@ -190,8 +190,32 @@ describe('underline-to-margin headings', () => {
     paintSemanticLayout(container, layout, { scale: 1 });
     const leader = container.querySelector<HTMLElement>('[data-docx-tab-leader]')!;
     const glyphs = leader.firstElementChild as HTMLElement;
+    const tabRun = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (element) => element.textContent === '\t'
+    )!;
     expect(glyphs.style.fontFamily).toContain('SimSun');
     expect(glyphs.style.fontSize).toBe('18px');
     expect(glyphs.style.fontWeight).toBe('bold');
+    expect(tabRun.dataset.docxTabUnderline).toBeUndefined();
+    expect(tabRun.style.borderBottomStyle).toBe('');
+  });
+
+  test('an opaque tab highlight does not hide the underscore leader', () => {
+    const highlightedProps = `${RUN_PROPS}<w:highlight w:val="yellow"/>`;
+    const layout = layoutOf(
+      `<w:p><w:pPr><w:tabs><w:tab w:val="right" w:pos="3600" w:leader="underscore"/></w:tabs></w:pPr>` +
+        `<w:r><w:rPr>${RUN_PROPS}</w:rPr><w:t>${HEADING}</w:t></w:r>` +
+        `<w:r><w:rPr>${highlightedProps}</w:rPr><w:tab/></w:r></w:p>`
+    );
+    const container = document.createElement('div');
+    paintSemanticLayout(container, layout, { scale: 1 });
+    const leader = container.querySelector<HTMLElement>('[data-docx-tab-leader]')!;
+    const tabRun = [...container.querySelectorAll<HTMLElement>('.layout-run-text')].find(
+      (element) => element.textContent === '\t'
+    )!;
+
+    expect(tabRun.style.backgroundColor).not.toBe('');
+    expect(tabRun.style.borderBottomStyle).toBe('');
+    expect(leader.style.zIndex).toBe('1');
   });
 });
