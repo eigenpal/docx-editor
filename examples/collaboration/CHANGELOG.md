@@ -1,5 +1,19 @@
 # @docx-editor.dev/example-collaboration
 
+## 0.0.4
+
+### Patch Changes
+
+- Updated dependencies [7633b2c]
+- Updated dependencies [1afc5f2]
+- Updated dependencies [01022a4]
+- Updated dependencies [6b5bb8d]
+- Updated dependencies [f731c52]
+  - @docx-editor.dev/core@2.14.0
+  - @docx-editor.dev/editor-api@2.14.0
+  - @docx-editor.dev/pro@2.14.0
+  - @docx-editor.dev/i18n@2.14.0
+
 ## 0.0.3
 
 ### Patch Changes

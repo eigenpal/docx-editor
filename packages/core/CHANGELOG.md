@@ -1,5 +1,20 @@
 # @docx-editor.dev/core
 
+## 2.14.0
+
+### Minor Changes
+
+- 7633b2c: Add Review > Markup Options > Reviewers to filter tracked changes and comments by author without changing saved document data. Keep an optional composable toolbar shortcut with a host-provided icon. Fixes #666.
+- 01022a4: CJK text now measures and paints in the `eastAsia` font the document names (`w:rFonts w:eastAsia` / `w:eastAsiaTheme`, including through `w:docDefaults` and the theme's `a:ea` typefaces) instead of the run's Latin face. `ResolvedRunStyle` gains `fontFamilyEastAsia`, and `StyleSpanRecord` gains `fontSlot`; the format painter copies the East Asian face into `w:eastAsia`, and the font catalog lists the theme's East Asian faces.
+- 6b5bb8d: Add `setTrackedChangesFilter` with a predicate over complete revision items. Filtered revisions render as accepted without changing saved OOXML. Fixes #668.
+- f731c52: Add an `accept` or `reject` content projection mode to `setTrackedChangesFilter`. Both modes
+  remain view-only and preserve tracked changes in saved DOCX files.
+
+### Patch Changes
+
+- 1afc5f2: Treat contextual table controls as the first collapsible preset-toolbar group, so entering a table moves those controls into More before ordinary formatting controls instead of overlapping them. Keep table color pickers contained within the More panel so later controls remain clipped and scrollable while a picker is open. Fixes #669.
+- @docx-editor.dev/i18n@2.14.0
+
 ## 2.13.0
 
 ### Minor Changes
