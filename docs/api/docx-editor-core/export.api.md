@@ -17,16 +17,22 @@ export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
 
 // @public
 export class ExportResourceError extends Error {
-    constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed', message: string);
+    constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed', message: string);
     // (undocumented)
-    readonly code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed';
+    readonly code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed';
+}
+
+// @public
+export interface ExportSemanticLayout extends SemanticLayout {
+    // (undocumented)
+    readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
 }
 
 // @public
 export interface ExportSession {
     dispose(): void;
-    layout(): Promise<SemanticLayout>;
-    layoutFor(displayMode: RevisionDisplayMode): Promise<SemanticLayout>;
+    layout(): Promise<ExportSemanticLayout>;
+    layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
     validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
 }
 
@@ -40,7 +46,6 @@ export function openDocumentForExport(source: ExportDocumentSource, options?: Op
 export interface OpenDocumentForExportOptions {
     readonly convertPreservedImage?: PreservedImageConverter;
     readonly displayMode?: RevisionDisplayMode;
-    readonly hiddenRevisionAuthors?: readonly string[];
     readonly imageDecodePort?: ImageDecodePort;
     readonly measurer?: TextMeasurer;
     readonly producer?: string;

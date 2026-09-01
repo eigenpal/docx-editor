@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { micromark } from 'micromark';
 import { gfm, gfmHtml } from 'micromark-extension-gfm';
-import type { ExportSession } from '@docx-editor.dev/core/export';
+import type { ExportSemanticLayout, ExportSession } from '@docx-editor.dev/core/export';
 import { exportMarkdownFrom } from '../src/index.ts';
 import type { AnchoredDrawingRecord } from '@docx-editor.dev/core/layout';
 import type {
@@ -48,9 +48,13 @@ function anchor(label: string, textbox = false): AnchoredDrawingRecord {
 }
 
 function session(layout: SemanticLayout): ExportSession {
+  const exportLayout = {
+    ...layout,
+    reviewArtifacts: layout.reviewArtifacts ?? Object.freeze([]),
+  } as ExportSemanticLayout;
   return {
-    layout: async () => layout,
-    layoutFor: async () => layout,
+    layout: async () => exportLayout,
+    layoutFor: async () => exportLayout,
     validatedImageBytes: () => null,
     dispose: () => {},
   };
@@ -74,6 +78,14 @@ describe('Markdown semantic-record policies', () => {
     const result = await exportMarkdownFrom(session(layout));
 
     expect(result.markdown).toBe('3. # Scope');
+    expect(result.pagination).toEqual({
+      basis: 'docx-editor-layout',
+      stability: 'snapshot',
+      wordCompatibility: 'not-guaranteed',
+      layoutRevision: 1,
+      displayMode: 'original',
+    });
+    expect(Object.isFrozen(result.reviewArtifacts)).toBe(true);
   });
 
   test('preserves visual segment order when resolved revisions merge paragraph offsets', async () => {
@@ -316,8 +328,9 @@ describe('Markdown semantic-record policies', () => {
     const result = await exportMarkdownFrom(session(layout));
     expect(result.markdown.match(/Header/g)).toHaveLength(1);
     expect(result.pages[1]?.markdown).toContain('| Header |');
-    expect(result.pages[0]?.markdown).toContain('| AA continued |');
-    expect(result.pages[1]?.markdown).not.toContain('A continued');
+    expect(result.pages[0]?.markdown).toContain('| A |');
+    expect(result.pages[0]?.markdown).not.toContain('A continued');
+    expect(result.pages[1]?.markdown).toContain('| A continued |');
   });
 
   test('does not duplicate nested tables carried by repeated outer header rows', async () => {

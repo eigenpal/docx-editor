@@ -297,7 +297,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       replyIds: [],
     })
   );
-  return pairReplacements(items, paragraphOrderOfPart(part));
+  return pairReplacements(items, deepParagraphOrderOfPart(part));
 }
 
 /**
@@ -690,7 +690,7 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
   // With one story there is nothing to merge: the memoized per-part order IS the order,
   // and copying it entry-by-entry was a measurable slice of every full derivation.
   const order: ReadonlyMap<string, number> =
-    parts.length === 1 ? paragraphOrderOfPart(parts[0]!) : new Map<string, number>();
+    parts.length === 1 ? deepParagraphOrderOfPart(parts[0]!) : new Map<string, number>();
   for (const part of parts) {
     // Loops, not `push(...spread)`: a heavily tracked part yields tens of thousands of
     // items, and spreading them as call arguments overflows the engine's argument limit.
@@ -699,7 +699,7 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
     if (parts.length === 1) continue;
     const merged = order as Map<string, number>;
     const base = merged.size;
-    for (const [id, position] of paragraphOrderOfPart(part)) {
+    for (const [id, position] of deepParagraphOrderOfPart(part)) {
       if (!merged.has(id)) merged.set(id, base + position);
     }
   }
@@ -902,10 +902,9 @@ const paragraphOrderCache = createRecentRootCache<Map<string, number>>(8);
  * Like {@link paragraphOrderOfPart}, but descends INTO paragraphs, so paragraphs nested
  * in a run's content — a textbox's `w:txbxContent` — rank right after their host.
  *
- * A separate function on purpose: the shallow order feeds the review queue's card
- * ordering, and re-ranking nested paragraphs there would move cards. This one exists for
- * position containment tests ("is the caret inside this range"), where a paragraph the
- * shallow order cannot see is a position that can never match.
+ * Review queues and containment checks use this order so a textbox item stays adjacent to its
+ * host instead of falling behind later body items. The shallow variant remains for walks that
+ * deliberately treat hosted stories as separate lanes.
  */
 export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number> {
   const cached = deepParagraphOrderCache.get(part.root);

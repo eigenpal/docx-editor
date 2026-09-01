@@ -74,6 +74,20 @@ const PROPERTY_CHANGE_NAMES: ReadonlySet<string> = new Set(PROPERTY_CHANGE_WRAPP
 /** The two members of `EG_ParaRPrTrackChanges` that record a MOVE of the paragraph mark. */
 const MARK_MOVE_NAMES: ReadonlySet<string> = new Set(['moveFrom', 'moveTo']);
 
+/** Cheap canonical preflight for an element that may produce a review revision item. @internal */
+export function isPotentialRevisionElement(node: OoxmlNode): boolean {
+  return (
+    node.kind !== 'textValue' &&
+    node.namespaceUri === WML_NAMESPACE_URI &&
+    (isContentRevisionKind(node.kind) ||
+      MARK_MOVE_NAMES.has(node.localName) ||
+      REFUSED_REVISION_NAMES.has(node.localName) ||
+      PROPERTY_CHANGE_NAMES.has(node.localName) ||
+      node.localName === 'ins' ||
+      node.localName === 'del')
+  );
+}
+
 /**
  * Parents that make a `w:ins`/`w:del` a STRUCTURAL revision rather than a content one.
  *
@@ -235,6 +249,9 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
       // it; naming it here is what raises the card for a paragraph that was MOVED whole.
       const markMove =
         parentName === 'rPr' && grandparentName === 'pPr' && MARK_MOVE_NAMES.has(node.localName);
+      // The broad preflight intentionally recognizes mark-move names anywhere so artifact scans
+      // do not miss hostile markup. Resolution is narrower: only the schema-valid paragraph-mark
+      // position is an actionable move decision.
       const isNamedRevision =
         isContent ||
         markMove ||

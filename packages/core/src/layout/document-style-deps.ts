@@ -21,6 +21,8 @@ export function createDocumentStyleDependencies(
   let stylesRoot: OoxmlElement | null | undefined;
   let styleThemeMajor: string | null | undefined;
   let styleThemeMinor: string | null | undefined;
+  let styleThemeMajorEastAsia: string | null | undefined;
+  let styleThemeMinorEastAsia: string | null | undefined;
   let styles: StyleCascadeTable | undefined;
   let settingsRoot: OoxmlElement | null | undefined;
   let defaultTabStopPt: number | undefined;
@@ -32,11 +34,15 @@ export function createDocumentStyleDependencies(
         styles === undefined ||
         current !== stylesRoot ||
         theme.major !== styleThemeMajor ||
-        theme.minor !== styleThemeMinor
+        theme.minor !== styleThemeMinor ||
+        theme.majorEastAsia !== styleThemeMajorEastAsia ||
+        theme.minorEastAsia !== styleThemeMinorEastAsia
       ) {
         stylesRoot = current;
         styleThemeMajor = theme.major;
         styleThemeMinor = theme.minor;
+        styleThemeMajorEastAsia = theme.majorEastAsia;
+        styleThemeMinorEastAsia = theme.minorEastAsia;
         styles = buildStyleCascadeTable(current, theme);
       }
       return styles;

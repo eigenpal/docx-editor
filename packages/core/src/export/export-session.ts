@@ -13,6 +13,7 @@ import {
   createDocumentStyleDependencies,
   createFieldLinkRegistry,
   forEachSemanticDrawing,
+  TablePaginationError,
   type CreateDocumentFurnitureSourceOptions,
 } from '../layout/index.ts';
 import {
@@ -26,17 +27,21 @@ import { createParagraphLayoutCache } from '../layout/layout-cache.ts';
 import { createLayoutSession } from '../layout/layout-session.ts';
 import { releaseOverflowPageShellState } from '../layout/page-furniture-insets.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
-import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
+import type {
+  SemanticLayout,
+  SemanticReviewArtifactRecord,
+  TextMeasurer,
+} from '../layout/semantic-records.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
-import {
-  DEFAULT_REVISION_DISPLAY_MODE,
-  revisionAuthorFilter,
-} from '../layout/revision-projection.ts';
+import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import {
   createNodeImageDecodePort,
   type PreservedImageConverter,
 } from './node-image-decode-port.ts';
+import { projectReviewArtifacts } from './review-artifact-projection.ts';
 import { publishImmutableSemanticLayout } from './semantic-layout-publication.ts';
+
+const EMPTY_REVIEW_ARTIFACTS = Object.freeze([]);
 
 /** Source accepted by every exporter: untrusted bytes or an already-open live view. @public */
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
@@ -50,11 +55,18 @@ export interface OpenDocumentForExportOptions {
    * `proposed` or `original` explicitly only when a resolved view is intended.
    */
   readonly displayMode?: RevisionDisplayMode;
-  /** Reviewers whose revisions project as accepted across body, furniture, and notes. */
-  readonly hiddenRevisionAuthors?: readonly string[];
-  /** Host-owned measurement override; omit to use the core fixed fallback. */
+  /**
+   * Text measurement used for line wrapping and pagination. Omit only when deterministic
+   * approximate pagination is acceptable. Core then uses a fixed-width fallback that neither
+   * resolves nor shapes the document's fonts, so line and page breaks can differ from Word.
+   * Exporters promising physical-page fidelity must supply a font-backed measurer, for example
+   * one created through {@link acquireSharedExportShaping}.
+   */
   readonly measurer?: TextMeasurer;
-  /** Stable measurement implementation identity used by layout caches and diagnostics. */
+  /**
+   * Stable measurement implementation identity used by layout caches and diagnostics. Pair it
+   * with the exact shaping policy behind `measurer`; it is not a substitute for matching metrics.
+   */
   readonly producer?: string;
   /** Host image metadata decoder; omit for the bounded DOM-free Node decoder. */
   readonly imageDecodePort?: ImageDecodePort;
@@ -68,10 +80,25 @@ export interface OpenDocumentForExportOptions {
   readonly reuseAcrossRevisions?: boolean;
 }
 
-/** Bounded resource-settlement failure from a headless export session. @public */
+/**
+ * Export-ready semantic snapshot. Core guarantees normalized review artifacts for every session,
+ * including an empty immutable array when the source has none.
+ * @public
+ */
+export interface ExportSemanticLayout extends SemanticLayout {
+  readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
+}
+
+/** Bounded failure from a headless export session. @public */
 export class ExportResourceError extends Error {
   constructor(
-    readonly code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed',
+    readonly code:
+      | 'aborted'
+      | 'timedOut'
+      | 'nonConvergent'
+      | 'disposed'
+      | 'layoutInvariant'
+      | 'layoutFailed',
     message: string
   ) {
     super(message);
@@ -79,15 +106,60 @@ export class ExportResourceError extends Error {
   }
 }
 
+function safelyIsExportResourceError(error: unknown): error is ExportResourceError {
+  try {
+    return error instanceof ExportResourceError;
+  } catch {
+    return false;
+  }
+}
+
+function safelyIsTablePaginationError(error: unknown): error is TablePaginationError {
+  try {
+    return error instanceof TablePaginationError;
+  } catch {
+    return false;
+  }
+}
+
+function safeErrorMessage(error: unknown): string | null {
+  try {
+    if (!(error instanceof Error)) return null;
+    return typeof error.message === 'string' && error.message.length > 0 ? error.message : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizedLayoutFailure(error: unknown): ExportResourceError {
+  if (safelyIsExportResourceError(error)) return error;
+  const invariant = safelyIsTablePaginationError(error);
+  const message = safeErrorMessage(error);
+  const detail = message ? `: ${message}` : '';
+  const normalized = new ExportResourceError(
+    invariant ? 'layoutInvariant' : 'layoutFailed',
+    invariant
+      ? `Authored geometry could not be represented within the bounded page model${detail}`
+      : `Export layout failed${detail}`
+  );
+  Object.defineProperty(normalized, 'cause', {
+    configurable: true,
+    value: error,
+  });
+  return normalized;
+}
+
 /**
- * A single semantic-layout substrate reusable by Markdown, PDF, and later exporters.
+ * A single semantic-layout substrate reusable by Markdown, PDF, and later exporters. Pagination
+ * fidelity is determined by the session's measurer; core's default is deterministic, not
+ * font-accurate.
  * @public
  */
 export interface ExportSession {
   /** Settle resources and return the default revision projection. */
-  layout(): Promise<SemanticLayout>;
+  layout(): Promise<ExportSemanticLayout>;
   /** Settle resources and cache one explicit revision projection. */
-  layoutFor(displayMode: RevisionDisplayMode): Promise<SemanticLayout>;
+  layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
   /** Mint a defensive copy only for a ready drawing from this session. */
   validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
   /** Release per-document caches and pending resource work. Idempotent. */
@@ -105,6 +177,11 @@ function normalizedResourceTimeout(value: number | undefined): number {
     throw new RangeError('resourceTimeoutMs must be a positive finite number');
   }
   return Math.max(1, value);
+}
+
+function normalizedDisplayMode(value: unknown): RevisionDisplayMode {
+  if (value === 'all-markup' || value === 'proposed' || value === 'original') return value;
+  throw new RangeError('displayMode must be all-markup, proposed, or original');
 }
 
 const REVISION_POLL_INTERVAL_MS = 50;
@@ -140,6 +217,7 @@ export function openDocumentForExport(
   source: ExportDocumentSource,
   options: OpenDocumentForExportOptions = {}
 ): OpenDocumentForExportResult {
+  const displayMode = normalizedDisplayMode(options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE);
   const sourceIsView = isDocumentView(source);
   const opened = isDocumentView(source)
     ? { ok: true as const, view: source }
@@ -149,8 +227,6 @@ export function openDocumentForExport(
   const initialView = opened.view;
   const reuseAcrossRevisions = options.reuseAcrossRevisions ?? sourceIsView;
   const timeoutMs = normalizedResourceTimeout(options.resourceTimeoutMs);
-  const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
-  const authorFilter = revisionAuthorFilter(options.hiddenRevisionAuthors ?? []);
   const initialMeasurer = options.measurer ?? createFixedMeasurer();
   const producer =
     options.producer ?? (options.measurer ? 'host-export-measurer' : 'export-fixed-measurer');
@@ -188,10 +264,10 @@ export function openDocumentForExport(
         readonly revision: number;
         readonly pkg: ReturnType<HeadlessDocumentView['currentPackage']>;
         readonly internal: SemanticLayout;
-        readonly published: SemanticLayout;
+        readonly published: ExportSemanticLayout;
       }
     >;
-    readonly inFlight: Map<RevisionDisplayMode, Promise<SemanticLayout>>;
+    readonly inFlight: Map<RevisionDisplayMode, Promise<ExportSemanticLayout>>;
     readonly styles: ReturnType<typeof createDocumentStyleDependencies>;
     readonly fieldLinks: Map<
       RevisionDisplayMode,
@@ -298,7 +374,7 @@ export function openDocumentForExport(
     mode: RevisionDisplayMode,
     revisionRestarts = 0,
     absoluteDeadline = Date.now() + timeoutMs
-  ): Promise<SemanticLayout> => {
+  ): Promise<ExportSemanticLayout> => {
     assertActive();
     if (Date.now() >= absoluteDeadline) {
       throw new ExportResourceError(
@@ -315,8 +391,12 @@ export function openDocumentForExport(
 
     let fieldLinkState = state.fieldLinks.get(mode);
     if (!fieldLinkState || fieldLinkState.revision !== revision || fieldLinkState.pkg !== pkg) {
-      fieldLinkState?.registry.clear();
-      fieldLinkState = { revision, pkg, registry: createFieldLinkRegistry() };
+      // Cached paragraph lines can survive a live-view revision. Keep the registry's monotonic
+      // id counter alive with them: recycling `field-hyperlink:1` could otherwise give an
+      // unchanged cached link and a newly laid-out link the same semantic identity.
+      const registry = fieldLinkState?.registry ?? createFieldLinkRegistry();
+      registry.clear();
+      fieldLinkState = { revision, pkg, registry };
       state.fieldLinks.set(mode, fieldLinkState);
       // Furniture captures its mode/revision registry. A live-view edit must not reuse it.
       state.furniture.delete(mode);
@@ -336,7 +416,7 @@ export function openDocumentForExport(
         numberingIndex: state.styles.numberingIndex,
         defaultTabStopPt: state.styles.defaultTabStopPt,
         displayMode: mode,
-        revisionAuthorFilter: authorFilter,
+        revisionAuthorFilter: undefined,
         inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),
         drawingLayoutTokenForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         drawingTokenForParagraphForPart: (partName, paragraph) =>
@@ -382,7 +462,7 @@ export function openDocumentForExport(
         drawingLayoutEpoch: state.drawingBundle.cacheTokenForPart(state.view.part().name),
         drawingLayoutEpochForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         displayMode: mode,
-        revisionAuthorFilter: authorFilter,
+        revisionAuthorFilter: undefined,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
@@ -394,14 +474,24 @@ export function openDocumentForExport(
           }
           return runLayout(mode, revisionRestarts + 1, deadline);
         }
-        const published = publishImmutableSemanticLayout(layout);
-        state.completed.set(mode, { revision, pkg, internal: layout, published });
         if (!reuseAcrossRevisions) {
+          // Byte exports cannot relayout against a new revision. Drop construction-only caches
+          // before review projection and immutable publication so large serverless exports do
+          // not hold construction state while walking the package and published record graph.
           releasePageFieldProjectionState(layout);
           releaseOverflowPageShellState(layout);
           state.paragraphCache.clear();
           state.sessions.delete(mode);
+          state.furniture.delete(mode);
         }
+        const reviewArtifacts = projectReviewArtifacts(layout, pkg);
+        const enrichedLayout: ExportSemanticLayout = {
+          ...layout,
+          reviewArtifacts:
+            reviewArtifacts.length === 0 ? EMPTY_REVIEW_ARTIFACTS : Object.freeze(reviewArtifacts),
+        };
+        const published = publishImmutableSemanticLayout(enrichedLayout);
+        state.completed.set(mode, { revision, pkg, internal: layout, published });
         return published;
       }
       // One pass discovers every image referenced by the laid-out stories. Await the whole
@@ -439,17 +529,32 @@ export function openDocumentForExport(
     );
   };
 
-  const layoutFor = (mode: RevisionDisplayMode): Promise<SemanticLayout> => {
+  const layoutFor = (mode: RevisionDisplayMode): Promise<ExportSemanticLayout> => {
+    let normalizedMode: RevisionDisplayMode;
+    try {
+      normalizedMode = normalizedDisplayMode(mode);
+    } catch (error) {
+      return Promise.reject(error);
+    }
     if (!activeState) {
       return Promise.reject(
         new ExportResourceError('disposed', 'Export session has been disposed')
       );
     }
     const state = activeState;
-    const existing = state.inFlight.get(mode);
+    const existing = state.inFlight.get(normalizedMode);
     if (existing) return existing;
-    const promise = runLayout(mode).finally(() => state.inFlight.delete(mode));
-    state.inFlight.set(mode, promise);
+    // Layout engines fail closed when authored geometry cannot satisfy a bounded page. Keep those
+    // internal invariant types behind one exporter-neutral error contract so every current and
+    // future exporter can handle untrusted documents without importing layout implementation
+    // details. Preserve session lifecycle/resource failures and retain the original error as the
+    // standard non-enumerable `cause` for diagnostics.
+    const promise = runLayout(normalizedMode)
+      .catch((error: unknown) => {
+        throw normalizedLayoutFailure(error);
+      })
+      .finally(() => state.inFlight.delete(normalizedMode));
+    state.inFlight.set(normalizedMode, promise);
     return promise;
   };
 

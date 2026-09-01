@@ -13,6 +13,7 @@
 // a `basedOn` loop is file content too.
 
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import type { DocumentThemeFonts } from './document-theme.ts';
 
 /** What a run inherits at one point of the chain — null means "nothing authored". */
@@ -60,17 +61,6 @@ export function validStyleId(raw: string | undefined): string | null {
 }
 
 /**
- * A theme rFonts attribute (`asciiTheme`/`hAnsiTheme`) resolved to a typeface. Only the
- * LATIN slot values resolve — `minorEastAsia`/`minorBidi` (and major) name the `a:ea`/
- * `a:cs` faces this module does not harvest, and an honest null beats the wrong font.
- */
-function themeFamilyOf(value: string | undefined, themeFonts: DocumentThemeFonts): string | null {
-  if (value === 'minorAscii' || value === 'minorHAnsi') return themeFonts.minor;
-  if (value === 'majorAscii' || value === 'majorHAnsi') return themeFonts.major;
-  return null;
-}
-
-/**
  * The family an `w:rFonts` element names: the theme attributes through the font scheme,
  * then `ascii ?? hAnsi` (the spelling the engine reads back).
  *
@@ -83,9 +73,12 @@ export function familyFromRFonts(
   rFonts: OoxmlElement,
   themeFonts: DocumentThemeFonts
 ): string | null {
+  // The shared token table (`theme-font-scheme.ts`) resolves the East Asian tokens too:
+  // `w:asciiTheme="minorEastAsia"` is Word's "use East Asian fonts on Latin text", and
+  // this reader must answer the same face the layout lane paints.
   const themed =
-    themeFamilyOf(attributeValue(rFonts, 'asciiTheme'), themeFonts) ??
-    themeFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);
+    themeFontFamilyOf(attributeValue(rFonts, 'asciiTheme'), themeFonts) ??
+    themeFontFamilyOf(attributeValue(rFonts, 'hAnsiTheme'), themeFonts);
   if (themed !== null) return themed;
   const direct = attributeValue(rFonts, 'ascii') ?? attributeValue(rFonts, 'hAnsi');
   if (direct === undefined) return null;
@@ -176,8 +169,8 @@ export function createRunDefaultsResolver(
     // precedence `familyFromRFonts` applies within one element.
     const rFonts = runProperties?.find((property) => property.localName === 'rFonts');
     const runTheme = rFonts
-      ? (themeFamilyOf(rFonts.attributes?.asciiTheme, themeFonts) ??
-        themeFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts))
+      ? (themeFontFamilyOf(rFonts.attributes?.asciiTheme, themeFonts) ??
+        themeFontFamilyOf(rFonts.attributes?.hAnsiTheme, themeFonts))
       : null;
     return runTheme === null ? chain : { ...chain, fontFamily: runTheme };
   };

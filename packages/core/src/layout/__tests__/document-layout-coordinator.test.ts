@@ -15,6 +15,7 @@ import { createDocumentFurnitureSource } from '../document-furniture-source.ts';
 import { layoutDocumentView } from '../document-layout-coordinator.ts';
 import { createDocumentLinkProjectors } from '../document-link-projector.ts';
 import { createDocumentStyleDependencies } from '../document-style-deps.ts';
+import { createStoryProjectionDependencies } from '../text-projection-epoch.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { createLayoutSession } from '../layout-session.ts';
@@ -560,14 +561,26 @@ describe('shared document-layout coordinator invalidation', () => {
 
     const missesBeforeReferencedChange = cache.stats.misses;
     const fullPassesBeforeReferencedChange = session.stats.fullPasses;
+    const bodyPartName = firstPackage.mainDocumentPart;
+    const relationships = new Map(firstPackage.relationships);
+    relationships.set(bodyPartName, secondPackage.relationships.get(bodyPartName) ?? []);
     pkg = Object.freeze({
       ...firstPackage,
-      relationships: secondPackage.relationships,
-      externalTargets: secondPackage.externalTargets,
+      relationships,
+      externalTargets: Object.freeze([
+        ...firstPackage.externalTargets.filter(
+          (target) => !(target.ownerPart === bodyPartName && target.id === 'rIdBodyLink')
+        ),
+        ...secondPackage.externalTargets.filter(
+          (target) => target.ownerPart === bodyPartName && target.id === 'rIdBodyLink'
+        ),
+      ]),
     });
     revision += 1;
     const referenced = lay();
     expect(hrefOf(referenced, 'body')).toBe('https://body.two.example');
+    expect(hrefOf(referenced, 'header')).toBe('https://header.one.example');
+    expect(hrefOf(referenced, 'note')).toBe('https://note.one.example');
     expect(cache.stats.misses - missesBeforeReferencedChange).toBeLessThanOrEqual(3);
     expect(session.stats.placed).toBeLessThan(session.stats.total);
     expect(session.stats.reusedPages).toBeGreaterThan(0);
@@ -667,5 +680,53 @@ describe('shared document-layout coordinator invalidation', () => {
       first
     );
     expect(packageReads).toBeGreaterThan(64);
+  });
+
+  test('memoizes linked paragraph projection work across equivalent part epochs', () => {
+    const firstPackage = packageWithTargets('one');
+    const secondPackage = packageWithTargets('two');
+    const parsed = readOoxmlPart(
+      `<w:p xmlns:w="${W}" xmlns:r="${R}"><w:hyperlink r:id="rIdBodyLink"><w:r><w:t>linked</w:t></w:r></w:hyperlink></w:p>`,
+      { name: '/word/paragraph-test.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    let pkg = firstPackage;
+    let revision = 1;
+    let projections = 0;
+    let projectedHref = 'https://body.one.example';
+    const view = {
+      packageRevision: () => revision,
+      currentPackage: () => pkg,
+      documentProperties: () => ({}),
+    } as unknown as HeadlessDocumentView;
+    const project = () => {
+      projections += 1;
+      return { id: 'stable-link', kind: 'external' as const, href: projectedHref };
+    };
+    const dependencies = createStoryProjectionDependencies(view, () => project);
+
+    const first = dependencies.tokenForParagraphForPart(
+      firstPackage.mainDocumentPart,
+      parsed.part.root
+    );
+    expect(projections).toBe(1);
+    expect(
+      dependencies.tokenForParagraphForPart(firstPackage.mainDocumentPart, parsed.part.root)
+    ).toBe(first);
+    expect(projections).toBe(1);
+
+    revision += 1;
+    expect(
+      dependencies.tokenForParagraphForPart(firstPackage.mainDocumentPart, parsed.part.root)
+    ).toBe(first);
+    expect(projections).toBe(1);
+
+    pkg = secondPackage;
+    revision += 1;
+    projectedHref = 'https://body.two.example';
+    expect(
+      dependencies.tokenForParagraphForPart(firstPackage.mainDocumentPart, parsed.part.root)
+    ).not.toBe(first);
+    expect(projections).toBe(2);
   });
 });

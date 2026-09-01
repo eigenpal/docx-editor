@@ -17,6 +17,9 @@ export interface AbstractNumDefinition {
 // @public
 export function activeReviewItem(items: readonly ReviewItem[], position: ReviewPosition, order: ReadonlyMap<string, number>): ReviewItem | null;
 
+// @public
+export type AnchoredDrawingLayoutFallback = 'unresolvable-frame' | 'page-defer-exhausted';
+
 // @public (undocumented)
 export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' | 'baselineOffset' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'> {
     // (undocumented)
@@ -733,6 +736,52 @@ export interface DocumentStyleDependencies {
     readonly styleCascade: () => StyleCascadeTable | undefined;
 }
 
+// @public (undocumented)
+export interface DrawingAccessibility {
+    // (undocumented)
+    readonly decorative: boolean;
+    // (undocumented)
+    readonly hidden: boolean;
+    // (undocumented)
+    readonly label: string | null;
+}
+
+// @public (undocumented)
+export type DrawingClipFallback = 'none' | 'unsupported-preset';
+
+// @public (undocumented)
+export interface DrawingGeometry {
+    // (undocumented)
+    readonly clipFallback: DrawingClipFallback;
+    // (undocumented)
+    readonly clipPolygon: readonly DrawingPoint[] | null;
+    // (undocumented)
+    readonly contentBounds: LayoutBox;
+    // (undocumented)
+    readonly effectInsets: DrawingInsets;
+    // (undocumented)
+    readonly hitBounds: LayoutBox;
+    // (undocumented)
+    readonly paintBounds: LayoutBox;
+    // (undocumented)
+    readonly transformedCorners: readonly DrawingPoint[];
+}
+
+// @public (undocumented)
+export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMargin' | 'leftMargin' | 'margin' | 'outsideMargin' | 'page' | 'rightMargin';
+
+// @public (undocumented)
+export interface DrawingInsets {
+    // (undocumented)
+    readonly bottom: number;
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly right: number;
+    // (undocumented)
+    readonly top: number;
+}
+
 // @public
 export interface DrawingOverlayFrame {
     // (undocumented)
@@ -747,6 +796,35 @@ export interface DrawingOverlayFrame {
     // (undocumented)
     readonly y: number;
 }
+
+// @public (undocumented)
+export interface DrawingPoint {
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public (undocumented)
+export interface DrawingTransform {
+    readonly extentEmu: Readonly<{
+        cx: number;
+        cy: number;
+    }>;
+    // (undocumented)
+    readonly flipHorizontal: boolean;
+    // (undocumented)
+    readonly flipVertical: boolean;
+    readonly offsetEmu: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    // (undocumented)
+    readonly rotationDegrees: number;
+}
+
+// @public (undocumented)
+export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
 export function effectiveBorderSide(authored: TableBorderSide, tableSide: TableBorderSide, _options?: {
@@ -1065,6 +1143,12 @@ export function forEachSemanticSpan(layout: SemanticLayout, visitor: (visit: Sem
 export function forEachSemanticStory(layout: SemanticLayout, visit: (story: SemanticStoryVisit) => void): void;
 
 // @public
+export function forEachStoryParagraphFragment(story: StoryDrawingHost, visit: (fragment: ParagraphFragmentRecord, context: StoryParagraphFragmentContext) => void, rootOrigin?: Readonly<{
+    x: number;
+    y: number;
+}>, rootDrawingOrigin?: RootDrawingOrigin): void;
+
+// @public
 export function formatDecimal(value: number): string;
 
 // @public
@@ -1327,6 +1411,9 @@ export interface HyperlinkFieldSpec {
 
 // @public
 export type HyperlinkProjector = (link: OoxmlNode) => SpanLinkRecord | null;
+
+// @public
+export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
 
 // @public
 export function initializeHarfBuzz(): Promise<void>;
@@ -2695,6 +2782,7 @@ export interface ResolvedRunStyle {
     readonly doubleStrike: boolean;
     // (undocumented)
     readonly fontFamily: string | null;
+    readonly fontFamilyEastAsia: string | null;
     readonly fontSizePt: number;
     readonly hidden: boolean;
     readonly highlight: string | null;
@@ -3134,6 +3222,40 @@ order: readonly string[],
 measurer?: TextMeasurer): SelectionRect[];
 
 // @public
+export type SemanticArtifactRootStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
+
+// @public
+export type SemanticArtifactStoryKind = SemanticArtifactRootStoryKind | 'textbox';
+
+// @public
+export interface SemanticCommentArtifactRecord {
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly initials: string;
+    // (undocumented)
+    readonly kind: 'comment';
+    // (undocumented)
+    readonly occurrences: readonly SemanticReviewArtifactOccurrence[];
+    // (undocumented)
+    readonly orphaned: boolean;
+    // (undocumented)
+    readonly parentId?: string;
+    // (undocumented)
+    readonly parentRevisionId?: string;
+    // (undocumented)
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly resolved: boolean;
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public
 export type SemanticDrawingLayer = 'behind-text' | 'inline' | 'in-front-of-text';
 
 // @public
@@ -3190,6 +3312,7 @@ export interface SemanticLayout {
     readonly displayMode?: RevisionDisplayMode;
     // (undocumented)
     readonly pages: readonly PageRecord[];
+    readonly reviewArtifacts?: readonly SemanticReviewArtifactRecord[];
     readonly revision: number;
 }
 
@@ -3241,6 +3364,47 @@ export interface SemanticPosition {
     readonly offset: number;
     // (undocumented)
     readonly paragraphId: string;
+}
+
+// @public
+export interface SemanticReviewArtifactOccurrence {
+    // (undocumented)
+    readonly noteAreaKind: 'footnotes' | 'endnotes' | null;
+    // (undocumented)
+    readonly noteScopeId: string | null;
+    // (undocumented)
+    readonly pageIndex: number;
+    // (undocumented)
+    readonly physicalPageNumber: number;
+    readonly revisionRole?: 'replaced' | 'replacement' | 'neutral';
+    // (undocumented)
+    readonly rootStory: SemanticArtifactRootStoryKind;
+    // (undocumented)
+    readonly source: SemanticReviewArtifactSource;
+    // (undocumented)
+    readonly story: SemanticArtifactStoryKind;
+    readonly textboxPath: readonly string[];
+}
+
+// @public
+export interface SemanticReviewArtifactPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export type SemanticReviewArtifactRecord = SemanticTrackedChangeArtifactRecord | SemanticCommentArtifactRecord;
+
+// @public
+export interface SemanticReviewArtifactSource {
+    // (undocumented)
+    readonly end: SemanticReviewArtifactPosition;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly start: SemanticReviewArtifactPosition;
 }
 
 // @public
@@ -3380,6 +3544,36 @@ export interface SemanticTableStructure {
     readonly rows: readonly SemanticTableRow[];
     readonly tableBorders: TableBorderBox;
     readonly tableWidth: PreferredWidth;
+}
+
+// @public
+export interface SemanticTrackedChangeArtifactRecord {
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly change: 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'tracked-change';
+    // (undocumented)
+    readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
+    readonly nesting: number;
+    // (undocumented)
+    readonly occurrences: readonly SemanticReviewArtifactOccurrence[];
+    // (undocumented)
+    readonly pairedWith?: string;
+    // (undocumented)
+    readonly readOnly: boolean;
+    readonly replacedRangeCount?: number;
+    // (undocumented)
+    readonly replacedText: string;
+    // (undocumented)
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly text: string;
 }
 
 // @public
@@ -3604,6 +3798,18 @@ export function shownMarkRevision(revisions: readonly RevisionAttribution[]): Re
 export const SINGLE_LINE_SPACING: ParagraphLineSpacing;
 
 // @public
+export interface SourceCrop {
+    // (undocumented)
+    readonly bottom: number;
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly right: number;
+    // (undocumented)
+    readonly top: number;
+}
+
+// @public
 export interface SourceRange {
     // (undocumented)
     readonly end: number;
@@ -3712,12 +3918,16 @@ export interface StyleDefinition {
 }
 
 // @public
+export function styleForFontSlot(style: ResolvedRunStyle, slot: FontSlot | undefined): ResolvedRunStyle;
+
+// @public
 export interface StyleSpanRecord {
     // (undocumented)
     readonly box: LayoutBox;
     readonly caretEdges?: readonly number[];
     readonly equation?: EquationSpanRecord;
     readonly fieldAtom?: FieldAtomMarker;
+    readonly fontSlot?: FontSlot;
     readonly link?: SpanLinkRecord;
     readonly noteNav?: {
         readonly direction: 'to-note' | 'to-body';
@@ -3940,6 +4150,11 @@ export interface TabStop {
 export function tabStopsFingerprint(tabs: ResolvedTabStops): string;
 
 // @public
+export type TextboxStoryFallbackReason = 'textbox-nesting-limit' | 'textbox-fragment-limit'
+/** Flowed content is taller than the extent; trailing fragments were dropped. */
+| 'textbox-height-clip';
+
+// @public
 export interface TextboxStoryLayout {
     readonly clippedResourceToken?: string;
     readonly contentHeight: number;
@@ -3996,6 +4211,45 @@ export class UnsupportedScriptError extends Error {
 
 // @public
 export function utf16OffsetToGrapheme(text: string, utf16Offset: number): number;
+
+// @public (undocumented)
+export interface VectorShapeComponent {
+    // (undocumented)
+    readonly fillAlpha: number;
+    // (undocumented)
+    readonly fillHex: string | null;
+    // (undocumented)
+    readonly strokeAlpha: number;
+    // (undocumented)
+    readonly strokeHex: string | null;
+    // (undocumented)
+    readonly strokeWidthEmu: number;
+    // (undocumented)
+    readonly subpathsEmu: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
+}
+
+// @public
+export interface VectorShapeProjection {
+    readonly components: readonly VectorShapeComponent[];
+    readonly extentEmu: Readonly<{
+        cx: number;
+        cy: number;
+    }>;
+    // (undocumented)
+    readonly fillAlpha?: number;
+    readonly fillHex: string | null;
+    // (undocumented)
+    readonly strokeAlpha?: number;
+    readonly strokeHex: string | null;
+    readonly strokeWidthEmu: number;
+    readonly subpathsEmu: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
+}
 
 // @public
 export interface VersionedShapingLibrary {

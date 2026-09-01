@@ -2,10 +2,35 @@ import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { FONT_ASSET_MANIFEST } from '@docx-editor.dev/fonts';
-import { exportMarkdown, exportMarkdownFrom, openDocumentForExport } from '../src/index.ts';
+import {
+  DocumentOpenError,
+  ExportResourceError,
+  exportMarkdown,
+  exportMarkdownFrom,
+  openDocumentForExport,
+} from '../src/index.ts';
 import { docx } from './fixture.ts';
 
 describe('server-first defaults', () => {
+  test('one-shot conversion preserves structured DOCX open failures', async () => {
+    const error = await exportMarkdown(new Uint8Array([1, 2, 3])).catch((caught) => caught);
+    expect(error).toBeInstanceOf(DocumentOpenError);
+    expect(error).toMatchObject({ reason: 'inflate-error' });
+  });
+
+  test('one-shot conversion exposes layout invariants through the shared typed error', async () => {
+    const bytes = docx(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:hRule="exact" w:val="60000"/></w:trPr>' +
+        '<w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>' +
+        '<w:p><w:r><w:t>Authored overheight row</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+    );
+    const error = await exportMarkdown(bytes).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(ExportResourceError);
+    expect(error).toMatchObject({ code: 'layoutInvariant' });
+    expect((error as Error).cause).toMatchObject({ name: 'TablePaginationError' });
+  });
+
   test('pins the exact packaged font manifest used by server/browser shaping parity', () => {
     const fingerprint = createHash('sha256')
       .update(JSON.stringify(FONT_ASSET_MANIFEST))

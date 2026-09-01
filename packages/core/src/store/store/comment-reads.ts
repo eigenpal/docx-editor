@@ -22,12 +22,9 @@
 // IT LIVES IN THE STORE LANE, so every lane reads a reviewer's remarks through one derivation.
 // The paginated surface, the review rail and the automation host all ask "what comments does
 // this document hold", and the answer is a property of the canonical tree rather than of any one
-// of their views — layout re-exports what is here rather than owning it. The walk is the store's
-// own story walk (`storyRootsOf`), which is also why a comment anchored inside a footnote is
-// found: a notes part holds a story per NORMAL note, and the reader that stopped at one root
-// per part answered nothing for it. A comment anchored inside a `w:separator` or a
-// `w:continuationSeparator` is not found — those are not stories, Word writes no comment there,
-// and a malformed file that does keeps its markup on save rather than losing it.
+// of their views — layout re-exports what is here rather than owning it. The bounded whole-part
+// walk covers body, furniture, every normal note, separator and continuation-separator content,
+// and nested textboxes without making any one layout story model the store's authority.
 
 import type { OoxmlPackage } from '../package/ooxml-package.ts';
 import {
@@ -38,7 +35,6 @@ import {
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
-import { collectStoryParagraphs, storyRootsOf } from '../package/story-blocks.ts';
 import {
   chargePart,
   createCommentScanBudget,
@@ -242,13 +238,12 @@ export function commentAnchorsOfStory(part: OoxmlPart): CommentAnchor[] {
 }
 
 /**
- * Every paragraph of every story in one part, in reading order.
+ * Every authored paragraph in one story part, in reading order.
  *
- * `storyRootsOf` rather than "the story root", because a part is not a story: a notes part holds
- * one story per note, and a reader that took the first root found answered nothing for it — so a
- * comment on a footnote was reported orphaned in a document where Word shows it anchored. The
- * paragraph walk is the store's own, table cells and block content controls included, so the
- * offsets these anchors carry are the offsets the ops and the caret use.
+ * A notes part also holds separator and continuation-separator stories. They are not editable
+ * caret roots, but layout renders them and Word can retain comment markers inside them. Export
+ * provenance therefore scans the whole supplied story part, including normal notes, separators,
+ * table cells, content controls, and nested textbox stories.
  */
 function storyParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
   // Memoized on the immutable root: the enumeration is a pure function of the tree, and the
@@ -256,10 +251,16 @@ function storyParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
   const cached = storyParagraphsCache.get(part.root);
   if (cached) return cached;
   const found: OoxmlNode[] = [];
-  for (const story of storyRootsOf(part)) {
-    if (story.root.kind === 'textValue') continue;
-    collectStoryParagraphs(story.root.children, found, 0);
-  }
+  const collect = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || depth > 64) return;
+    if (node.kind === 'paragraph') found.push(node);
+    // Comment ranges can live in a textbox story nested inside a host paragraph. Unlike the
+    // editable root-story walk, anchor derivation must descend into that nested story while
+    // retaining the host paragraph itself. Marker lookup remains paragraph-local, so the host
+    // never consumes the nested paragraph's markers a second time.
+    for (const child of node.children) collect(child, depth + 1);
+  };
+  collect(part.root, 0);
   const paragraphs = found.filter((node): node is OoxmlParagraphNode => node.kind === 'paragraph');
   storyParagraphsCache.set(part.root, paragraphs);
   return paragraphs;

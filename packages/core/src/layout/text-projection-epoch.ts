@@ -143,40 +143,16 @@ export function createStoryProjectionDependencies(
   view: HeadlessDocumentView,
   projectLinkForPart: (partName: string) => HyperlinkProjector
 ): StoryProjectionDependencies {
-  // Per dependency bundle, then per immutable table and stable part projector. The epoch
-  // validates every relationship/property input without retaining package snapshots or part
-  // names. This is the table analogue of the drawing-token memo: one subtree walk per actual
-  // projection state, not one walk per layout pass.
+  // Per dependency bundle, then per immutable node and stable part projector. The epoch validates
+  // every relationship/property input without retaining package snapshots or part names.
+  const paragraphTokens = new WeakMap<
+    OoxmlNode,
+    WeakMap<HyperlinkProjector, { readonly epoch: string; readonly token: string }>
+  >();
   const tableTokens = new WeakMap<
     OoxmlNode,
     WeakMap<HyperlinkProjector, { readonly epoch: string; readonly token: string }>
   >();
-  const tokenForParagraphForPart = (partName: string, paragraph: OoxmlNode): string => {
-    const descriptor = descriptorOf(paragraph);
-    if (descriptor.links.length === 0 && descriptor.documentProperties.length === 0) return '';
-    const projectLink = projectLinkForPart(partName);
-    const properties = view.documentProperties();
-    const tokens: string[] = ['story-projection:v1'];
-    for (const link of descriptor.links) {
-      const projected = projectLink(link);
-      tokens.push(
-        projected
-          ? framedTokenJoin([
-              projected.id,
-              projected.kind,
-              projected.href ?? '',
-              projected.anchor ?? '',
-              projected.tooltip ?? '',
-            ])
-          : 'no-link'
-      );
-    }
-    for (const key of descriptor.documentProperties) {
-      tokens.push(framedTokenJoin([key, properties[key] ?? '']));
-    }
-    return `story-projection:${digest(tokens)}`;
-  };
-
   const epochForPart = (partName: string): string => {
     const revision = view.packageRevision();
     const pkg = view.currentPackage();
@@ -222,6 +198,40 @@ export function createStoryProjectionDependencies(
     // unbounded string-keyed cache; correctness does not depend on memo admission.
     if (memo.epochs.size < MAX_MEMOIZED_STORY_OWNERS) memo.epochs.set(partName, epoch);
     return epoch;
+  };
+
+  const tokenForParagraphForPart = (partName: string, paragraph: OoxmlNode): string => {
+    const descriptor = descriptorOf(paragraph);
+    if (descriptor.links.length === 0 && descriptor.documentProperties.length === 0) return '';
+    const projectLink = projectLinkForPart(partName);
+    const epoch = epochForPart(partName);
+    const byProjector = paragraphTokens.get(paragraph);
+    const cached = byProjector?.get(projectLink);
+    if (cached?.epoch === epoch) return cached.token;
+    const properties = view.documentProperties();
+    const tokens: string[] = ['story-projection:v1'];
+    for (const link of descriptor.links) {
+      const projected = projectLink(link);
+      tokens.push(
+        projected
+          ? framedTokenJoin([
+              projected.id,
+              projected.kind,
+              projected.href ?? '',
+              projected.anchor ?? '',
+              projected.tooltip ?? '',
+            ])
+          : 'no-link'
+      );
+    }
+    for (const key of descriptor.documentProperties) {
+      tokens.push(framedTokenJoin([key, properties[key] ?? '']));
+    }
+    const token = `story-projection:${digest(tokens)}`;
+    const target = byProjector ?? new WeakMap();
+    target.set(projectLink, { epoch, token });
+    if (!byProjector) paragraphTokens.set(paragraph, target);
+    return token;
   };
 
   const tokenForTableForPart = (partName: string, table: OoxmlNode): string => {

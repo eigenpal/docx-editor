@@ -11,6 +11,7 @@
 // which is what the D8 boundary covers.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
 // One reading of `CT_OnOff` for the whole lane. The style cascade combines toggle levels with
 // it and this resolver reads the combined result with it, so the two cannot drift apart.
@@ -35,6 +36,16 @@ export interface ResolvedUnderline {
  */
 export interface ResolvedRunStyle {
   readonly fontFamily: string | null;
+  /**
+   * The `eastAsia` slot's typeface (`w:rFonts w:eastAsia`/`w:eastAsiaTheme`), or null when
+   * no level authors one.
+   *
+   * OOXML picks a run's face per SCRIPT: `fontFamily` covers the ascii/hAnsi slots, and
+   * ideographic/kana/hangul text resolves through this one instead. Kept beside — not
+   * folded into — `fontFamily`, because a mixed run needs both at once and the split into
+   * slot-homogeneous pieces happens downstream (`piecesOfParagraph`).
+   */
+  readonly fontFamilyEastAsia: string | null;
   /** Points. `w:sz` is half-points, so 22 becomes 11. */
   readonly fontSizePt: number;
   /** RRGGBB, or null for the inherited/automatic colour. */
@@ -81,6 +92,7 @@ export interface ResolvedRunStyle {
 /** The style a run inherits when it authors nothing. */
 export const DEFAULT_RUN_STYLE: ResolvedRunStyle = Object.freeze({
   fontFamily: null,
+  fontFamilyEastAsia: null,
   // OOXML leaves the terminal fallback application-defined when no level in the style
   // hierarchy authors `w:sz`. Microsoft Word uses 10pt; 11pt comes from modern Normal
   // templates explicitly authoring `w:sz="22"`, not from the absence of a size.
@@ -117,30 +129,29 @@ function hexColor(raw: string | undefined): string | null {
 }
 
 /**
- * The theme part's two Latin typefaces, for resolving `w:rFonts` theme attributes.
+ * The theme part's typefaces, for resolving `w:rFonts` theme attributes.
  *
  * Structurally identical to the binding lane's `DocumentThemeFonts` and assignable from it.
- * Declared here so this lane reads two validated strings rather than the theme tree.
+ * Declared here so this lane reads validated strings rather than the theme tree.
  */
 export interface ThemeFonts {
   /** `a:majorFont` latin typeface — headings. */
   readonly major: string | null;
   /** `a:minorFont` latin typeface — body text. */
   readonly minor: string | null;
+  /** `a:majorFont` east asian typeface (`a:ea`) — headings. Optional for back-compat. */
+  readonly majorEastAsia?: string | null;
+  /** `a:minorFont` east asian typeface (`a:ea`) — body text. Optional for back-compat. */
+  readonly minorEastAsia?: string | null;
 }
 
-/**
- * A `w:rFonts` theme attribute resolved to a typeface.
- *
- * Only the LATIN slots resolve: `minorEastAsia`/`minorBidi` (and major) name the `a:ea`/
- * `a:cs` faces this lane does not read, and an honest null — which falls back to the
- * explicit attribute beside it — beats the wrong font.
- */
-function themeFamilyOf(value: string | undefined, themeFonts: ThemeFonts): string | null {
-  if (value === 'minorAscii' || value === 'minorHAnsi') return themeFonts.minor;
-  if (value === 'majorAscii' || value === 'majorHAnsi') return themeFonts.major;
-  return null;
-}
+/** A document with no theme part: every theme reference falls back to its explicit name. */
+export const NO_THEME_FONTS: ThemeFonts = {
+  major: null,
+  minor: null,
+  majorEastAsia: null,
+  minorEastAsia: null,
+};
 
 /**
  * Resolve one run's direct formatting.
@@ -172,11 +183,22 @@ export function resolveRunStyle(
         // nothing, because a stale face still beats no face at all.
         const attributes = property.attributes;
         const themed = themeFonts
-          ? (themeFamilyOf(attributes?.asciiTheme, themeFonts) ??
-            themeFamilyOf(attributes?.hAnsiTheme, themeFonts))
+          ? (themeFontFamilyOf(attributes?.asciiTheme, themeFonts) ??
+            themeFontFamilyOf(attributes?.hAnsiTheme, themeFonts))
           : null;
         const family = themed ?? attributes?.ascii ?? attributes?.hAnsi;
         if (family && family.length <= 128) style.fontFamily = family;
+        // The eastAsia slot resolves independently, on the same theme-over-explicit rule.
+        // An rFonts that authors only Latin faces leaves an inherited eastAsia face alone,
+        // which is how the docDefaults' `w:eastAsiaTheme` survives a style chain that only
+        // ever re-states `w:ascii`.
+        const themedEastAsia = themeFonts
+          ? themeFontFamilyOf(attributes?.eastAsiaTheme, themeFonts)
+          : null;
+        const familyEastAsia = themedEastAsia ?? attributes?.eastAsia;
+        if (familyEastAsia && familyEastAsia.length <= 128) {
+          style.fontFamilyEastAsia = familyEastAsia;
+        }
         break;
       }
       case 'sz': {
@@ -269,6 +291,32 @@ export function resolveRunStyle(
   return style;
 }
 
+const derivedFamilyStyles = new WeakMap<ResolvedRunStyle, Map<string, ResolvedRunStyle>>();
+
+/**
+ * `style` with `family` as its effective `fontFamily`, memoized per (style, family).
+ *
+ * The one sanctioned way to derive a style that differs only in face: measurers amortize
+ * font resolution and width caches over STYLE OBJECT IDENTITY, so a fresh derived object
+ * per call would re-resolve the face on every measurement probe. Serves the font-slot
+ * resolution at the measurer boundary ({@link styleForFontSlot} in `script-itemization.ts`)
+ * and the equation face in `equation-layout.ts` — one memo, not one per caller.
+ */
+export function withFontFamily(style: ResolvedRunStyle, family: string): ResolvedRunStyle {
+  if (style.fontFamily === family) return style;
+  let byFamily = derivedFamilyStyles.get(style);
+  if (!byFamily) {
+    byFamily = new Map();
+    derivedFamilyStyles.set(style, byFamily);
+  }
+  let derived = byFamily.get(family);
+  if (!derived) {
+    derived = Object.freeze({ ...style, fontFamily: family });
+    byFamily.set(family, derived);
+  }
+  return derived;
+}
+
 /** The text as it is DRAWN, after case transforms. Measurement must use this, not the source. */
 export function displayText(text: string, style: ResolvedRunStyle): string {
   if (style.caps) return text.toUpperCase();
@@ -294,6 +342,7 @@ export function measureDisplayText(
 export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolean {
   return (
     a.fontFamily === b.fontFamily &&
+    a.fontFamilyEastAsia === b.fontFamilyEastAsia &&
     a.fontSizePt === b.fontSizePt &&
     a.color === b.color &&
     a.bold === b.bold &&

@@ -228,6 +228,7 @@ export function createDocumentFurnitureSource(
         ...(numbering ? { numberingIndex: numbering } : {}),
         projectLink,
         ...(projectFieldLink ? { projectFieldLink } : {}),
+        projectionEpoch,
         projectionTokenForParagraph: (paragraph: OoxmlNode) =>
           linkProjectors.tokenForParagraphForPart(part.name, paragraph),
         projectionTokenForTable: (table: OoxmlNode) =>

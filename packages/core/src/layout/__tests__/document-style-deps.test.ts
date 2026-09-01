@@ -27,7 +27,12 @@ describe('document style dependencies', () => {
       '/word/settings.xml',
       `<w:settings xmlns:w="${W}"><w:defaultTabStop w:val="720"/></w:settings>`
     );
-    let theme: HeadlessThemeFonts = { major: 'Heading One', minor: 'Body One' };
+    let theme: HeadlessThemeFonts = {
+      major: 'Heading One',
+      minor: 'Body One',
+      majorEastAsia: 'EA Heading One',
+      minorEastAsia: 'EA Body One',
+    };
     const view = {
       stylesRoot: () => styles,
       settingsRoot: () => settings,
@@ -40,7 +45,12 @@ describe('document style dependencies', () => {
     expect(dependencies.styleCascade()).toBe(firstCascade);
     expect(dependencies.defaultTabStopPt()).toBe(36);
 
-    theme = { major: 'Heading Two', minor: 'Body Two' };
+    theme = {
+      major: 'Heading One',
+      minor: 'Body One',
+      majorEastAsia: 'EA Heading One',
+      minorEastAsia: 'EA Body Two',
+    };
     settings = root(
       '/word/settings.xml',
       `<w:settings xmlns:w="${W}"><w:defaultTabStop w:val="1134"/></w:settings>`

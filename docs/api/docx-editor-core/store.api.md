@@ -1656,8 +1656,10 @@ export interface HeadlessDocumentView {
 export interface HeadlessThemeFonts {
     // (undocumented)
     readonly major: string | null;
+    readonly majorEastAsia?: string | null;
     // (undocumented)
     readonly minor: string | null;
+    readonly minorEastAsia?: string | null;
 }
 
 // @public
@@ -2001,6 +2003,9 @@ export function isNoteRefNode(node: OoxmlNode): node is OoxmlNoteRefNode;
 
 // @public
 export function isPageBreakNode(node: OoxmlNode): node is OoxmlHardBreakNode;
+
+// @internal
+export function isPotentialRevisionElement(node: OoxmlNode): boolean;
 
 // @public
 export function isRangeMarkerKind(kind: OoxmlNode['kind']): kind is 'moveFromRangeStart' | 'moveFromRangeEnd' | 'moveToRangeStart' | 'moveToRangeEnd' | 'commentRangeStart' | 'commentRangeEnd';
@@ -3422,6 +3427,9 @@ export function removeNode(part: OoxmlPart, nodeId: string, options?: EditOption
 
 // @public
 export function removePackageCustomNode(packageStore: TreePackageStore, controlNodeId: string, scope?: StoryScope): CustomNodeWriteResult;
+
+// @public
+export type RenderableImageMime = SupportedImageMime | VectorImageMime;
 
 // @public
 export function replaceChildren(part: OoxmlPart, nodeId: string, children: readonly OoxmlNode[], options?: EditOptions): OoxmlEditResult;
@@ -4870,6 +4878,18 @@ export const twipsToPoints: (value: Twips) => Points;
 
 // @public
 export function usedParaIds(root: OoxmlElement): ReadonlySet<string>;
+
+// @public
+export interface ValidatedImageBytesHandle {
+    // (undocumented)
+    readonly contentId: string;
+    // (undocumented)
+    readonly generation: number;
+    // (undocumented)
+    readonly registryId: number;
+    // (undocumented)
+    readonly resourceKey: string;
+}
 
 // @public
 export interface ValidatedRasterHeader {

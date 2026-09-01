@@ -227,7 +227,10 @@ test('a real 500-page shaped export stays below the default Node peak-memory bud
 }, 120_000);
 
 test('the same 500-page export fits a constrained sub-768 MiB runtime', () => {
-  const measurement = performanceMeasurement(['--max-old-space-size=352']);
+  // The merged core now retains East Asian font-slot semantics on every published style span.
+  // Keep enough old-space headroom for that intentional record shape while the independent RSS
+  // assertion below continues to enforce the actual sub-768 MiB serverless container contract.
+  const measurement = performanceMeasurement(['--max-old-space-size=364']);
   expectProductionFixture(measurement);
   // Constraining old space makes V8 collect rather than retain transient layout allocations,
   // proving the complete shaped export's live working set fits a bounded container.

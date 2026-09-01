@@ -23,6 +23,7 @@ import {
 export {
   forEachSemanticDrawing,
   forEachSemanticStory,
+  forEachStoryParagraphFragment,
   type SemanticDrawingVisit,
   type SemanticDrawingLayer,
   type SemanticRootStoryKind,

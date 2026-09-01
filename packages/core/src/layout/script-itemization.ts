@@ -1,5 +1,6 @@
 import type { BidiEmbeddingLevels } from './bidi.ts';
 import type { TextDirection } from './shaped-run.ts';
+import { withFontFamily, type ResolvedRunStyle } from './run-style.ts';
 
 /**
  * Which `w:rFonts` slot a character resolves its face through.
@@ -160,16 +161,13 @@ const classify = (codePoint: number): Classified => {
 };
 
 /**
- * Split text into shapeable runs by script, bidi level and font slot.
- *
- * Consumes the bidi levels rather than re-deriving direction, so itemization and reordering agree
- * by construction instead of by two implementations happening to match.
+ * Per-code-point classification with the inheritance passes applied: Common/inherited
+ * characters take the preceding strong item's answer, and leading Common text takes the
+ * following one. Shared by full itemization and the slot-only pass below.
  */
-export function itemizeScriptFontSlots(
-  text: string,
-  paragraphOffset: number,
-  embedding: BidiEmbeddingLevels
-): readonly ScriptItem[] {
+function classifiedCodePoints(
+  text: string
+): { from: number; to: number; classified: Classified }[] {
   const codePoints: { from: number; to: number; classified: Classified }[] = [];
   for (let from = 0; from < text.length; ) {
     const codePoint = text.codePointAt(from)!;
@@ -188,6 +186,21 @@ export function itemizeScriptFontSlots(
     if (item.classified) inherited = item.classified;
     else if (inherited) item.classified = inherited;
   }
+  return codePoints;
+}
+
+/**
+ * Split text into shapeable runs by script, bidi level and font slot.
+ *
+ * Consumes the bidi levels rather than re-deriving direction, so itemization and reordering agree
+ * by construction instead of by two implementations happening to match.
+ */
+export function itemizeScriptFontSlots(
+  text: string,
+  paragraphOffset: number,
+  embedding: BidiEmbeddingLevels
+): readonly ScriptItem[] {
+  const codePoints = classifiedCodePoints(text);
 
   const out: ScriptItem[] = [];
   const commonOnlySlot: FontSlot = codePoints.every(({ from }) => text.codePointAt(from)! <= 0x7f)
@@ -222,5 +235,137 @@ export function itemizeScriptFontSlots(
       });
     }
   }
+  return out;
+}
+
+/**
+ * The style a piece's text is MEASURED AND PAINTED in, given the font slot it carries.
+ *
+ * This is the measurer-boundary resolution: pieces and spans keep the run's real resolved
+ * style — with `fontFamily` and `fontFamilyEastAsia` both intact, so formatting readback
+ * and the format painter see the run as authored — and every consumer that turns text into
+ * geometry or ink resolves the face through here. The derived object is memoized per
+ * (style, family) by {@link withFontFamily}, so measurers amortizing over style identity
+ * keep their caches.
+ */
+export function styleForFontSlot(
+  style: ResolvedRunStyle,
+  slot: FontSlot | undefined
+): ResolvedRunStyle {
+  if (slot !== 'eastAsia') return style;
+  const family = style.fontFamilyEastAsia;
+  return family === null ? style : withFontFamily(style, family);
+}
+
+/** An eastAsia-slot run of text inside segment `segment` of the classified sequence. */
+export interface SegmentSlotRange {
+  readonly segment: number;
+  readonly from: number;
+  readonly to: number;
+}
+
+/** How one code point participates in slot resolution. */
+type SlotClass = 'eastAsia' | 'base' | 'common';
+
+/**
+ * {@link classify}, projected to the eastAsia-or-not question, never throwing.
+ *
+ * An unsupported code point answers 'base' — a strong classification confined to that one
+ * character, so a single Tamil sign in a CJK piece costs itself the East Asian face and
+ * nothing else.
+ */
+const slotClassOf = (codePoint: number): SlotClass => {
+  let classified: Classified;
+  try {
+    classified = classify(codePoint);
+  } catch (error) {
+    if (error instanceof UnsupportedScriptError) return 'base';
+    throw error;
+  }
+  if (classified === null) return 'common';
+  return classified.slot === 'eastAsia' ? 'eastAsia' : 'base';
+};
+
+/** Whether `text` holds only code units below U+0080 — text that can never touch the eastAsia slot. */
+const pureAscii = (text: string): boolean => {
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.charCodeAt(index) >= 0x80) return false;
+  }
+  return true;
+};
+
+/**
+ * The `[from, to)` UTF-16 ranges that resolve through the `eastAsia` font slot, across a
+ * SEQUENCE of text segments classified as one paragraph. Merged and in order; `[]` means
+ * everything stays in the base (Latin) slots.
+ *
+ * One classification over the whole sequence, not one per segment, because Common
+ * characters inherit from their strong neighbours and `w:t` boundaries are not script
+ * boundaries: a fullwidth comma alone in its own run between two CJK runs is East Asian
+ * text. Inheritance follows {@link itemizeScriptFontSlots} — preceding strong item first,
+ * following strong item for leading Common text — with one restriction: an ASCII code
+ * point NEVER resolves through the eastAsia slot, because ECMA-376 routes ASCII-range
+ * characters through `w:ascii` and Word measures the `, ` in `中文, Hello` in the Latin
+ * face. Which face a character uses does not depend on its embedding level, so this pass
+ * is independent of bidi analysis.
+ *
+ * Cost discipline: a pure-ASCII segment (`charCodeAt` prescan) contributes its strong
+ * class without per-code-point classification, so the pure-Latin paragraphs of a document
+ * whose docDefaults author an East Asian face pay two compares per character, not a
+ * classifier call.
+ */
+export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly SegmentSlotRange[] {
+  const out: SegmentSlotRange[] = [];
+  const addEastAsia = (segment: number, from: number, to: number): void => {
+    const previous = out.at(-1);
+    if (previous && previous.segment === segment && previous.to === from) {
+      out[out.length - 1] = { segment, from: previous.from, to };
+    } else {
+      out.push({ segment, from, to });
+    }
+  };
+
+  /** Strongly classified text seen so far, or null while only Common text has streamed by. */
+  let precedingStrong: Exclude<SlotClass, 'common'> | null = null;
+  /** Leading Common units waiting for the FOLLOWING strong item; `ascii` blocks eastAsia. */
+  const pending: { segment: number; from: number; to: number; ascii: boolean }[] = [];
+  const resolvePending = (strong: Exclude<SlotClass, 'common'>): void => {
+    for (const unit of pending) {
+      if (strong === 'eastAsia' && !unit.ascii) addEastAsia(unit.segment, unit.from, unit.to);
+    }
+    pending.length = 0;
+  };
+
+  for (let segment = 0; segment < segments.length; segment += 1) {
+    const text = segments[segment]!;
+    if (pureAscii(text)) {
+      // Never eastAsia, so only the strong/Common distinction matters: any alphanumeric
+      // is a strong Latin item; pure punctuation and whitespace stay transparent.
+      if (/[0-9A-Za-z]/.test(text)) {
+        resolvePending('base');
+        precedingStrong = 'base';
+      }
+      continue;
+    }
+    for (let from = 0; from < text.length; ) {
+      const codePoint = text.codePointAt(from)!;
+      const to = from + (codePoint > 0xffff ? 2 : 1);
+      const slotClass = slotClassOf(codePoint);
+      if (slotClass === 'common') {
+        if (precedingStrong === null) {
+          pending.push({ segment, from, to, ascii: codePoint <= 0x7f });
+        } else if (precedingStrong === 'eastAsia' && codePoint > 0x7f) {
+          addEastAsia(segment, from, to);
+        }
+      } else {
+        resolvePending(slotClass);
+        precedingStrong = slotClass;
+        if (slotClass === 'eastAsia') addEastAsia(segment, from, to);
+      }
+      from = to;
+    }
+  }
+  // A sequence of nothing but Common text has no strong item to inherit from on either
+  // side; it stays in the base slots, exactly as it did before slot resolution existed.
   return out;
 }

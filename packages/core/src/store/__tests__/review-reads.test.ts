@@ -203,6 +203,39 @@ describe('the deep paragraph order reaches paragraphs the shallow one cannot', (
     // Repeat reads are memoized on the immutable root.
     expect(deepParagraphOrderOfPart(part)).toBe(deep);
   });
+
+  test('a textbox comment stays between the body comments surrounding its host', () => {
+    const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const V_NS = 'urn:schemas-microsoft-com:vml';
+    const story = readOoxmlPart(
+      `<w:document xmlns:w="${W_NS}" xmlns:v="${V_NS}"><w:body>` +
+        '<w:p><w:commentRangeStart w:id="0"/><w:r><w:t>before</w:t></w:r><w:commentRangeEnd w:id="0"/></w:p>' +
+        '<w:p><w:r><w:pict><v:textbox><w:txbxContent>' +
+        '<w:p><w:commentRangeStart w:id="1"/><w:r><w:t>inside</w:t></w:r><w:commentRangeEnd w:id="1"/></w:p>' +
+        '</w:txbxContent></v:textbox></w:pict></w:r></w:p>' +
+        '<w:p><w:commentRangeStart w:id="2"/><w:r><w:t>after</w:t></w:r><w:commentRangeEnd w:id="2"/></w:p>' +
+        '</w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    const comments = readOoxmlPart(
+      `<w:comments xmlns:w="${W_NS}">` +
+        [0, 1, 2]
+          .map(
+            (id) =>
+              `<w:comment w:id="${id}" w:author="QA"><w:p><w:r><w:t>C${id}</w:t></w:r></w:p></w:comment>`
+          )
+          .join('') +
+        '</w:comments>',
+      { name: '/word/comments.xml', contentType: 'app/xml' }
+    );
+    if (!story.ok || !comments.ok) throw new Error('failed to parse review fixture');
+
+    expect(
+      collectReviewItems({ storyPart: story.part, commentsPart: comments.part })
+        .filter((item) => item.kind === 'comment')
+        .map((item) => item.kind === 'comment' && item.comment.id)
+    ).toEqual(['0', '1', '2']);
+  });
 });
 
 describe('a card id names the part it lives in', () => {

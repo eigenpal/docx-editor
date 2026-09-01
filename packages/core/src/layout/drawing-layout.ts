@@ -31,6 +31,7 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import { measureDisplayText } from './run-style.ts';
+import { styleForFontSlot } from './script-itemization.ts';
 import {
   drawingGeometryFromProjection,
   clipGeometryToRegion,
@@ -1118,17 +1119,24 @@ export function anchorCharacterXOnLine(
       readonly box: LayoutBox;
       readonly text?: string;
       readonly style?: import('./run-style.ts').ResolvedRunStyle;
+      readonly fontSlot?: import('./script-itemization.ts').FontSlot;
     }[];
   },
   modelOffset: number,
   measurer?: import('./semantic-records.ts').TextMeasurer
 ): number {
+  // As drawn: the span's font slot decides the face this prefix measures in.
+  const measured = (
+    text: string,
+    style: import('./run-style.ts').ResolvedRunStyle,
+    slot: import('./script-itemization.ts').FontSlot | undefined
+  ): number => measureDisplayText(text, styleForFontSlot(style, slot), measurer!);
   for (const span of line.spans) {
     if (modelOffset < span.range.start) break;
     if (modelOffset < span.range.end) {
       if (measurer && span.text !== undefined && span.style !== undefined) {
         const within = modelOffset - span.range.start;
-        return span.box.x + measureDisplayText(span.text.slice(0, within), span.style, measurer);
+        return span.box.x + measured(span.text.slice(0, within), span.style, span.fontSlot);
       }
       const spanLength = span.range.end - span.range.start;
       if (spanLength <= 0) return span.box.x;
@@ -1137,7 +1145,7 @@ export function anchorCharacterXOnLine(
     }
     if (modelOffset === span.range.end) {
       if (measurer && span.text !== undefined && span.style !== undefined) {
-        return span.box.x + measureDisplayText(span.text, span.style, measurer);
+        return span.box.x + measured(span.text, span.style, span.fontSlot);
       }
       return span.box.x + span.box.width;
     }
@@ -1148,7 +1156,7 @@ export function anchorCharacterXOnLine(
   }
   if (trailing) {
     if (measurer && trailing.text !== undefined && trailing.style !== undefined) {
-      return trailing.box.x + measureDisplayText(trailing.text, trailing.style, measurer);
+      return trailing.box.x + measured(trailing.text, trailing.style, trailing.fontSlot);
     }
     return trailing.box.x + trailing.box.width;
   }

@@ -124,6 +124,42 @@ describe('documentFonts', () => {
     expect(collectDocumentFonts([result.part.root])).toEqual([]);
   });
 
+  test('an eastAsiaTheme reference surfaces the a:ea face, not the Latin one', () => {
+    // Word's own templates author the body's CJK face as `w:eastAsiaTheme="minorEastAsia"`.
+    // Mapping that token to the LATIN minor face meant the East Asian face never entered
+    // `documentFonts()`, so a function-form `resolveFonts` never fetched it and
+    // `detectFontSubstitutions` could not warn about it.
+    const result = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:pPr><w:rPr>` +
+        '<w:rFonts w:eastAsiaTheme="minorEastAsia"/>' +
+        '</w:rPr></w:pPr></w:p></w:body></w:document>',
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!result.ok) throw new Error(result.reason);
+    const root = result.part.root;
+    expect(
+      collectDocumentFonts([root], {
+        major: 'Aptos Display',
+        minor: 'Aptos',
+        majorEastAsia: 'MS Gothic',
+        minorEastAsia: 'SimSun',
+      })
+    ).toEqual(['SimSun']);
+    // The East Asian faces are part of the per-subtree memo key: the same immutable
+    // subtree re-asked under a retheme answers the NEW face, not a stale hit.
+    expect(
+      collectDocumentFonts([root], {
+        major: 'Aptos Display',
+        minor: 'Aptos',
+        majorEastAsia: 'MS Gothic',
+        minorEastAsia: 'DengXian',
+      })
+    ).toEqual(['DengXian']);
+    // A theme with no `a:ea` faces contributes nothing for the reference — an honest
+    // absence beats listing the Latin face the text does not render in.
+    expect(collectDocumentFonts([root], { major: 'Aptos Display', minor: 'Aptos' })).toEqual([]);
+  });
+
   test('header fonts require the header to be referenced by the section', () => {
     // The header PART exists but no sectPr references it, so resolveHeaderFooterParts
     // resolves nothing — its fonts must not leak in through mere part presence.

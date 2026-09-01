@@ -14,6 +14,7 @@
 
 import { baselineShiftPtOf, TAB_LEADER_GLYPH } from '@docx-editor.dev/core/layout';
 import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
+import { styleForFontSlot } from '../layout/script-itemization.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
   reviewAuthorSlotColor,
@@ -1109,11 +1110,14 @@ function paintSpan(
   extraLeadingPt: number
 ): HTMLElement {
   const element = document.createElement('span');
+  // Ink resolves the face through the span's font slot; `span.style` itself stays the
+  // run's full resolution for every consumer that reads formatting rather than glyphs.
+  const faceStyle = styleForFontSlot(span.style, span.fontSlot);
   if (span.equation) {
     element.dataset.paragraphId = span.range.paragraphId;
     element.dataset.start = String(span.range.start);
     element.dataset.end = String(span.range.end);
-    applyRunFaceStyle(element, span.style, ctx);
+    applyRunFaceStyle(element, faceStyle, ctx);
     mountEquationGeometry(document, element, span.equation, ctx.scale);
     applyRevisionPresentation(element, span, ctx);
     return element;
@@ -1156,7 +1160,7 @@ function paintSpan(
     element.setAttribute('aria-hidden', 'true');
     element.contentEditable = 'false';
   }
-  applyRunFaceStyle(element, span.style, ctx);
+  applyRunFaceStyle(element, faceStyle, ctx);
   applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span, ctx);
   // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform

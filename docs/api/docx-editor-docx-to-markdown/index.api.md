@@ -5,6 +5,100 @@
 ```ts
 
 // @public
+export type AnchoredDrawingLayoutFallback = 'unresolvable-frame' | 'page-defer-exhausted';
+
+// @public (undocumented)
+export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' | 'baselineOffset' | 'advanceStart' | 'advanceEnd' | 'distL' | 'distR' | 'distT' | 'distB'> {
+    // (undocumented)
+    readonly allowOverlap: boolean;
+    // (undocumented)
+    readonly anchorParagraphId: string;
+    // (undocumented)
+    readonly behindDocument: boolean;
+    // (undocumented)
+    readonly horizontalFrame: DrawingHorizontalReferenceFrame;
+    // (undocumented)
+    readonly horizontalFrameOrigin: number;
+    // (undocumented)
+    readonly kind: 'anchoredDrawing';
+    // (undocumented)
+    readonly layoutFallback?: AnchoredDrawingLayoutFallback;
+    // (undocumented)
+    readonly layoutInCell: boolean;
+    // (undocumented)
+    readonly relativeHeight: number;
+    readonly sourceOrder?: number;
+    readonly textboxStory?: TextboxStoryLayout;
+    // (undocumented)
+    readonly verticalFrame: DrawingVerticalReferenceFrame;
+    // (undocumented)
+    readonly verticalFrameOrigin: number;
+    // (undocumented)
+    readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
+}
+
+// @public
+export class DocumentOpenError extends Error {
+    constructor(reason: HeadlessDocumentRejection, detail?: string | undefined);
+    // (undocumented)
+    readonly detail?: string | undefined;
+    // (undocumented)
+    readonly reason: HeadlessDocumentRejection;
+}
+
+// @public (undocumented)
+export interface DrawingAccessibility {
+    // (undocumented)
+    readonly decorative: boolean;
+    // (undocumented)
+    readonly hidden: boolean;
+    // (undocumented)
+    readonly label: string | null;
+}
+
+// @public (undocumented)
+export interface DrawingGeometry {
+    // (undocumented)
+    readonly clipFallback: DrawingClipFallback;
+    // (undocumented)
+    readonly clipPolygon: readonly DrawingPoint[] | null;
+    // (undocumented)
+    readonly contentBounds: LayoutBox;
+    // (undocumented)
+    readonly effectInsets: DrawingInsets;
+    // (undocumented)
+    readonly hitBounds: LayoutBox;
+    // (undocumented)
+    readonly paintBounds: LayoutBox;
+    // (undocumented)
+    readonly transformedCorners: readonly DrawingPoint[];
+}
+
+// @public (undocumented)
+export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMargin' | 'leftMargin' | 'margin' | 'outsideMargin' | 'page' | 'rightMargin';
+
+// @public (undocumented)
+export interface DrawingTransform {
+    readonly extentEmu: Readonly<{
+        cx: number;
+        cy: number;
+    }>;
+    // (undocumented)
+    readonly flipHorizontal: boolean;
+    // (undocumented)
+    readonly flipVertical: boolean;
+    readonly offsetEmu: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    // (undocumented)
+    readonly rotationDegrees: number;
+}
+
+// @public (undocumented)
+export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
+
+// @public
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
 
 // @public
@@ -15,18 +109,176 @@ export function exportMarkdownFrom(session: ExportSession, options?: MarkdownTra
 
 // @public
 export class ExportResourceError extends Error {
-    constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed', message: string);
+    constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed', message: string);
     // (undocumented)
-    readonly code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed';
+    readonly code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed';
+}
+
+// @public
+export interface ExportSemanticLayout extends SemanticLayout {
+    // (undocumented)
+    readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
 }
 
 // @public
 export interface ExportSession {
     dispose(): void;
-    layout(): Promise<SemanticLayout>;
-    layoutFor(displayMode: RevisionDisplayMode): Promise<SemanticLayout>;
+    layout(): Promise<ExportSemanticLayout>;
+    layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
     validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
 }
+
+// @public
+export function forEachSemanticDrawing(layout: SemanticLayout, visit: (drawing: SemanticDrawingVisit) => void): void;
+
+// @public
+export type HeadlessDocumentRejection = OoxmlPackageRejection | 'no-main-document-tree';
+
+// @public
+export interface HeadlessDocumentView {
+    // (undocumented)
+    currentPackage(): OoxmlPackage;
+    // (undocumented)
+    documentProperties(): DocumentProperties;
+    // (undocumented)
+    documentThemeFonts(): HeadlessThemeFonts;
+    // (undocumented)
+    headerFooterPartsBySection(): readonly HeaderFooterParts[];
+    headerFooterResolutionBySection?(): readonly HeaderFooterSectionResolution[];
+    // (undocumented)
+    numberingRoot(): OoxmlElement | null;
+    // (undocumented)
+    packageRevision(): number;
+    // (undocumented)
+    part(): OoxmlPart;
+    // (undocumented)
+    relationshipTarget(relationshipId: string): ReturnType<typeof relationshipTargetIn>;
+    // (undocumented)
+    settingsRoot(): OoxmlElement | null;
+    // (undocumented)
+    stylesRoot(): OoxmlElement | null;
+}
+
+// @public
+export interface ImageDecodePort {
+    convertPreserved?(bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,
+    signal?: AbortSignal): Promise<Readonly<{
+        bytes: Uint8Array;
+        mime: SupportedImageMime;
+    }> | null>;
+    // (undocumented)
+    decode(bytes: Uint8Array, mime: SupportedImageMime, limits: ImageResourceLimits,
+    signal?: AbortSignal): Promise<Readonly<{
+        dpiX: number;
+        dpiY: number;
+        pixelHeight: number;
+        pixelWidth: number;
+    }>>;
+}
+
+// @public
+export type ImageResourceState = {
+    readonly contentId: string;
+    readonly dpiX: number;
+    readonly dpiY: number;
+    readonly kind: 'ready';
+    readonly mime: RenderableImageMime;
+    readonly partName: string;
+    readonly pixelHeight: number;
+    readonly pixelWidth: number;
+    readonly resourceKey: string;
+    readonly validatedHandle: ValidatedImageBytesHandle;
+} | {
+    readonly kind: 'unrenderable';
+    readonly mime: RenderableImageMime | PreservedImageMime | 'unknown';
+    readonly partName: string | null;
+    readonly reason: 'unsupported-format' | 'non-picture-graphic' | 'signature-mismatch' | 'decode-failed' | 'resource-limit';
+} | {
+    readonly kind: 'external';
+    readonly relationshipId: string;
+    readonly sinkSafe: boolean;
+} | {
+    readonly kind: 'missing';
+    readonly relationshipId: string;
+} | {
+    readonly kind: 'pending';
+    readonly resourceKey: string;
+};
+
+// @public
+export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
+
+// @public (undocumented)
+export interface InlineDrawingRecord {
+    // (undocumented)
+    readonly accessibility: DrawingAccessibility;
+    readonly advanceEnd: number;
+    readonly advanceStart: number;
+    // (undocumented)
+    readonly baselineOffset: number;
+    // (undocumented)
+    readonly crop: SourceCrop;
+    // (undocumented)
+    readonly distB: number;
+    // (undocumented)
+    readonly distL: number;
+    // (undocumented)
+    readonly distR: number;
+    // (undocumented)
+    readonly distT: number;
+    // (undocumented)
+    readonly drawingNodeId: string;
+    // (undocumented)
+    readonly effects: Readonly<{
+        readonly brightness: number;
+        readonly contrast: number;
+        readonly grayscale: boolean;
+    }>;
+    // (undocumented)
+    readonly geometry: DrawingGeometry;
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly hitBounds: LayoutBox;
+    readonly hyperlinkHref: string | null;
+    // (undocumented)
+    readonly kind: 'inlineDrawing';
+    // (undocumented)
+    readonly ownerPartName: string;
+    // (undocumented)
+    readonly paintBounds: LayoutBox;
+    // (undocumented)
+    readonly paragraphId: string;
+    readonly placeholderGraphicKind: string | null;
+    // (undocumented)
+    readonly resource: ImageResourceState;
+    readonly revisions?: readonly RevisionAttribution[];
+    // (undocumented)
+    readonly start: number;
+    // (undocumented)
+    readonly transform: DrawingTransform;
+    readonly vectorShape: VectorShapeProjection | null;
+    // (undocumented)
+    readonly width: number;
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface LayoutBox {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+    // (undocumented)
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export type MarkdownComment = SemanticCommentArtifactRecord;
 
 // @public
 export interface MarkdownExportOptions extends OpenDocumentForExportOptions, MarkdownTranslationOptions {
@@ -36,6 +288,8 @@ export interface MarkdownExportOptions extends OpenDocumentForExportOptions, Mar
 export interface MarkdownExportResult {
     readonly markdown: string;
     readonly pages: readonly MarkdownPage[];
+    readonly pagination: MarkdownPaginationInfo;
+    readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
 }
 
 // @public
@@ -47,11 +301,32 @@ export type MarkdownImageResult = {
 
 // @public
 export interface MarkdownPage {
+    readonly comments: readonly MarkdownComment[];
     readonly footerMarkdown: string;
     readonly headerMarkdown: string;
+    readonly id: string;
     readonly markdown: string;
     readonly number: number;
+    readonly trackedChanges: readonly MarkdownTrackedChange[];
 }
+
+// @public
+export interface MarkdownPaginationInfo {
+    readonly basis: 'docx-editor-layout';
+    readonly displayMode: NonNullable<ExportSemanticLayout['displayMode']>;
+    readonly layoutRevision: number;
+    readonly stability: 'snapshot';
+    readonly wordCompatibility: 'not-guaranteed';
+}
+
+// @public
+export type MarkdownReviewArtifact = SemanticReviewArtifactRecord;
+
+// @public
+export type MarkdownReviewOccurrence = SemanticReviewArtifactRecord['occurrences'][number];
+
+// @public
+export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
 
 // @public
 export interface MarkdownTranslationOptions {
@@ -65,7 +340,6 @@ export function openDocumentForExport(source: ExportDocumentSource, options?: Op
 export interface OpenDocumentForExportOptions {
     readonly convertPreservedImage?: PreservedImageConverter;
     readonly displayMode?: RevisionDisplayMode;
-    readonly hiddenRevisionAuthors?: readonly string[];
     readonly imageDecodePort?: ImageDecodePort;
     readonly measurer?: TextMeasurer;
     readonly producer?: string;
@@ -83,6 +357,221 @@ export type OpenDocumentForExportResult = {
     readonly ok: false;
     readonly reason: HeadlessDocumentRejection;
 };
+
+// @public
+export type PreservedImageConverter = (bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,
+signal?: AbortSignal) => Promise<Readonly<{
+    bytes: Uint8Array;
+    mime: SupportedImageMime;
+}> | null>;
+
+// @public
+export interface RevisionAttribution {
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: RevisionKind;
+    readonly nodeId: string;
+}
+
+// @public
+export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public
+export type SemanticArtifactRootStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
+
+// @public
+export type SemanticArtifactStoryKind = SemanticArtifactRootStoryKind | 'textbox';
+
+// @public
+export interface SemanticCommentArtifactRecord {
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly initials: string;
+    // (undocumented)
+    readonly kind: 'comment';
+    // (undocumented)
+    readonly occurrences: readonly SemanticReviewArtifactOccurrence[];
+    // (undocumented)
+    readonly orphaned: boolean;
+    // (undocumented)
+    readonly parentId?: string;
+    // (undocumented)
+    readonly parentRevisionId?: string;
+    // (undocumented)
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly resolved: boolean;
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public
+export interface SemanticDrawingVisit extends StoryDrawingContext {
+    readonly absoluteHitBounds: LayoutBox;
+    readonly absolutePaintBounds: LayoutBox;
+    readonly drawing: InlineDrawingRecord | AnchoredDrawingRecord;
+    readonly drawingOrigin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly noteAreaKind: NoteAreaRecord['kind'] | null;
+    readonly noteScopeId: string | null;
+    readonly page: PageRecord;
+    readonly paintLayer: SemanticDrawingLayer;
+    readonly root: SemanticStoryVisit;
+    readonly rootStory: SemanticRootStoryKind;
+    readonly story: SemanticStoryKind;
+}
+
+// @public
+export interface SemanticLayout {
+    readonly contentControls?: readonly ContentControlBoundaryRecord[];
+    readonly controlContextToken?: string;
+    readonly displayMode?: RevisionDisplayMode;
+    // (undocumented)
+    readonly pages: readonly PageRecord[];
+    readonly reviewArtifacts?: readonly SemanticReviewArtifactRecord[];
+    readonly revision: number;
+}
+
+// @public
+export interface SemanticReviewArtifactOccurrence {
+    // (undocumented)
+    readonly noteAreaKind: 'footnotes' | 'endnotes' | null;
+    // (undocumented)
+    readonly noteScopeId: string | null;
+    // (undocumented)
+    readonly pageIndex: number;
+    // (undocumented)
+    readonly physicalPageNumber: number;
+    readonly revisionRole?: 'replaced' | 'replacement' | 'neutral';
+    // (undocumented)
+    readonly rootStory: SemanticArtifactRootStoryKind;
+    // (undocumented)
+    readonly source: SemanticReviewArtifactSource;
+    // (undocumented)
+    readonly story: SemanticArtifactStoryKind;
+    readonly textboxPath: readonly string[];
+}
+
+// @public
+export interface SemanticReviewArtifactPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export type SemanticReviewArtifactRecord = SemanticTrackedChangeArtifactRecord | SemanticCommentArtifactRecord;
+
+// @public
+export interface SemanticReviewArtifactSource {
+    // (undocumented)
+    readonly end: SemanticReviewArtifactPosition;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly start: SemanticReviewArtifactPosition;
+}
+
+// @public
+export interface SemanticTrackedChangeArtifactRecord {
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly change: 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'tracked-change';
+    // (undocumented)
+    readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
+    readonly nesting: number;
+    // (undocumented)
+    readonly occurrences: readonly SemanticReviewArtifactOccurrence[];
+    // (undocumented)
+    readonly pairedWith?: string;
+    // (undocumented)
+    readonly readOnly: boolean;
+    readonly replacedRangeCount?: number;
+    // (undocumented)
+    readonly replacedText: string;
+    // (undocumented)
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public
+export interface SourceCrop {
+    // (undocumented)
+    readonly bottom: number;
+    // (undocumented)
+    readonly left: number;
+    // (undocumented)
+    readonly right: number;
+    // (undocumented)
+    readonly top: number;
+}
+
+// @public
+export interface TextboxStoryLayout {
+    readonly clippedResourceToken?: string;
+    readonly contentHeight: number;
+    readonly contentOffset: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    readonly contentWidth: number;
+    readonly fallbackReason?: TextboxStoryFallbackReason;
+    readonly fillHex: string | null;
+    readonly flowHeight: number;
+    readonly fragments: readonly BlockFragmentRecord[];
+    readonly strokeHex: string | null;
+    readonly strokeWidthPt: number;
+}
+
+// @public
+export interface TextMeasurer {
+    lineMetrics(style: ResolvedRunStyle): {
+        baseline: number;
+        height: number;
+    };
+    measure(text: string, style: ResolvedRunStyle): number;
+}
+
+// @public
+export interface VectorShapeProjection {
+    readonly components: readonly VectorShapeComponent[];
+    readonly extentEmu: Readonly<{
+        cx: number;
+        cy: number;
+    }>;
+    // (undocumented)
+    readonly fillAlpha?: number;
+    readonly fillHex: string | null;
+    // (undocumented)
+    readonly strokeAlpha?: number;
+    readonly strokeHex: string | null;
+    readonly strokeWidthEmu: number;
+    readonly subpathsEmu: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
+}
 
 // (No @packageDocumentation comment for this package)
 

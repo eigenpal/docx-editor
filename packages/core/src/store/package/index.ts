@@ -193,6 +193,7 @@ export {
 } from './ooxml-package.ts';
 export {
   type SupportedImageMime,
+  type RenderableImageMime,
   type PreservedImageMime,
   type ImageResourceState,
   type ImageDecodePort,
@@ -210,6 +211,7 @@ export {
   validateRasterHeader,
   type ValidatedRasterHeader,
 } from './image-resources.ts';
+export type { ValidatedImageBytesHandle } from './validated-image-bytes.ts';
 export {
   resolveHeaderFooterParts,
   resolveHeaderFooterPartsBySection,

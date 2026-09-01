@@ -484,6 +484,22 @@ describe('record-only Markdown export', () => {
       expect(second.markdown).toContain('Grace[body](https://b.example)');
       expect(second.markdown).toContain('[^1]: Grace[note](https://b.example)');
       expect(second.pages[0]?.headerMarkdown).toContain('Grace[header](https://b.example)');
+
+      // Change only the header relationship projection. Body geometry, body fields, and the
+      // authored header part stay identical, so this catches stale whole-page furniture reuse.
+      pkg = Object.freeze({
+        ...pkg,
+        externalTargets: pkg.externalTargets.map((target) =>
+          target.ownerPart === '/word/header1.xml'
+            ? { ...target, rawTarget: 'https://c.example' }
+            : target
+        ),
+      });
+      revision += 1;
+      const third = await exportMarkdownFrom(session.session);
+      expect(third.markdown).toContain('Grace[body](https://b.example)');
+      expect(third.markdown).toContain('[^1]: Grace[note](https://b.example)');
+      expect(third.pages[0]?.headerMarkdown).toContain('Grace[header](https://c.example)');
     } finally {
       session.session.dispose();
     }

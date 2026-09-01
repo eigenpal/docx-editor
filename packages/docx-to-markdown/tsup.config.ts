@@ -11,10 +11,5 @@ export default defineConfig({
   minify: true,
   metafile: true,
   // Core must remain a peer (one engine instance), and fonts must retain its packaged assets.
-  external: [
-    '@docx-editor.dev/core/export',
-    '@docx-editor.dev/core/layout',
-    '@docx-editor.dev/core/store',
-    '@docx-editor.dev/fonts',
-  ],
+  external: [/^@docx-editor\.dev\/core(?:\/|$)/, '@docx-editor.dev/fonts'],
 });

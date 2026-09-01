@@ -96,6 +96,7 @@ export {
 export {
   UnsupportedScriptError,
   itemizeScriptFontSlots,
+  styleForFontSlot,
   type FontSlot,
   type ScriptItem,
 } from './script-itemization.ts';
@@ -179,7 +180,15 @@ export {
   type ParagraphFragmentRecord,
   type ParagraphIndent,
   type ParagraphSpacing,
+  type SemanticArtifactRootStoryKind,
+  type SemanticArtifactStoryKind,
+  type SemanticCommentArtifactRecord,
   type SemanticLayout,
+  type SemanticReviewArtifactOccurrence,
+  type SemanticReviewArtifactPosition,
+  type SemanticReviewArtifactRecord,
+  type SemanticReviewArtifactSource,
+  type SemanticTrackedChangeArtifactRecord,
   type SourceRange,
   type SpanLinkRecord,
   type StyleSpanRecord,
@@ -193,6 +202,7 @@ export {
   forEachSemanticDrawing,
   forEachSemanticStory,
   forEachSemanticSpan,
+  forEachStoryParagraphFragment,
   type SemanticDrawingVisit,
   type SemanticDrawingLayer,
   type SemanticSpanVisit,
@@ -204,8 +214,31 @@ export {
   type StoryParagraphFragmentContext,
 } from './export-traversal.ts';
 export { lineSegments, type LineSegment } from './line-segments.ts';
-export type { AnchoredDrawingRecord, InlineDrawingRecord } from './drawing-layout.ts';
+export type {
+  AnchoredDrawingLayoutFallback,
+  AnchoredDrawingRecord,
+  InlineDrawingRecord,
+} from './drawing-layout.ts';
 export type { TextboxStoryLayout } from './textbox-story-layout.ts';
+export type { TextboxStoryFallbackReason } from './textbox-story-layout.ts';
+export type {
+  DrawingClipFallback,
+  DrawingGeometry,
+  DrawingInsets,
+  DrawingPoint,
+} from './drawing-geometry.ts';
+export type {
+  DrawingAccessibility,
+  DrawingHorizontalReferenceFrame,
+  DrawingTransform,
+  DrawingVerticalReferenceFrame,
+  ImageWrapTarget,
+  SourceCrop,
+} from '../store/package/drawing-projection.ts';
+export type {
+  VectorShapeComponent,
+  VectorShapeProjection,
+} from '../store/package/drawing-shape-projection.ts';
 export {
   createDocumentStyleDependencies,
   type DocumentStyleDependencies,

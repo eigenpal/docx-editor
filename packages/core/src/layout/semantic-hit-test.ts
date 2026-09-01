@@ -25,6 +25,7 @@ import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 import { lineSegments, type LineSegment } from './line-segments.ts';
 import { baselineShiftPtOf, measureDisplayText } from './run-style.ts';
+import { styleForFontSlot } from './script-itemization.ts';
 import type { CaretGeometry, SemanticPosition } from './semantic-interaction.ts';
 import type {
   BlockFragmentRecord,
@@ -926,7 +927,13 @@ function prefixWidth(span: StyleSpanRecord, utf16: number, measurer: TextMeasure
   // As DRAWN, matching `caretEdges` and the advance `breakParagraph` reserved: a `w:caps`
   // run paints uppercase, and measuring the source text would disagree with both.
   const width =
-    utf16 <= 0 ? 0 : measureDisplayText(span.text.slice(0, utf16), span.style, measurer);
+    utf16 <= 0
+      ? 0
+      : measureDisplayText(
+          span.text.slice(0, utf16),
+          styleForFontSlot(span.style, span.fontSlot),
+          measurer
+        );
   widths.set(utf16, width);
   return width;
 }
@@ -1086,7 +1093,7 @@ export function caretBoxOnLine(
   // painter baseline-aligns the glyphs in CSS. Taking the box directly drew a small run's
   // caret at the top of a tall line, floating above the text it belonged to. Aligning it the
   // way the text is aligned needs the run's own ascent, which is what the measurer answers.
-  const metrics = measurer?.lineMetrics(chosen.style);
+  const metrics = measurer?.lineMetrics(styleForFontSlot(chosen.style, chosen.fontSlot));
   if (!metrics || metrics.height <= 0) {
     return { x, y: line.box.y, height: line.box.height };
   }

@@ -238,6 +238,46 @@ export const PACKAGES = [
     root: 'packages/docx-to-markdown',
     pkgSlug: 'docx-editor-docx-to-markdown',
     tsconfigPath: 'packages/docx-to-markdown/tsconfig.api.json',
+    // This entry is a rolled-up public facade. Direct core types are deliberately re-exported;
+    // nested implementation types remain nameable from the declared `core` dependency and are
+    // allowlisted here so a newly introduced package-owned forgotten export still fails the gate.
+    forgottenExports: {
+      logLevel: 'warning',
+      allowlist: {
+        index: [
+          'BlockFragmentRecord',
+          'ContentControlBoundaryRecord',
+          'DocumentProperties',
+          'DrawingClipFallback',
+          'DrawingInsets',
+          'DrawingPoint',
+          'HeaderFooterParts',
+          'HeaderFooterSectionResolution',
+          'HeadlessThemeFonts',
+          'ImageResourceLimits',
+          'NoteAreaRecord',
+          'OoxmlElement',
+          'OoxmlPackage',
+          'OoxmlPackageRejection',
+          'OoxmlPart',
+          'PageRecord',
+          'PreservedImageMime',
+          'RenderableImageMime',
+          'ResolvedRunStyle',
+          'RevisionKind',
+          'SemanticDrawingLayer',
+          'SemanticRootStoryKind',
+          'SemanticStoryKind',
+          'SemanticStoryVisit',
+          'StoryDrawingContext',
+          'SupportedImageMime',
+          'TextboxStoryFallbackReason',
+          'ValidatedImageBytesHandle',
+          'VectorShapeComponent',
+          'relationshipTargetIn',
+        ],
+      },
+    },
   },
 ];
 

@@ -2,11 +2,11 @@
 
 import {
   layoutRowFragmentBounded,
-  stripAnchorSinksForProbe,
   type CellPlaceCursor,
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import type { SemanticTableRow } from './semantic-table.ts';
+import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 
 /**
  * Whether a bounded row placement can consume authored content without publishing anything.

@@ -97,6 +97,8 @@ export interface HeaderFooterStoryLayout {
    * PAGE/NUMPAGES/SECTIONPAGES projection shares this key; page context is cached separately.
    */
   readonly contentKey: string;
+  /** Snapshot identity for projected links and live document-property fields in this story. */
+  readonly projectionEpoch?: string;
   /** Story-relative fragments; origin at the story box's top-left. */
   readonly fragments: readonly BlockFragmentRecord[];
   /** The height the blocks actually flow to — what sizes the box on every page. */
@@ -184,6 +186,8 @@ export interface HeaderFooterStoryInputs {
   readonly projectionTokenForParagraph?: (paragraph: OoxmlNode) => string;
   /** Memoized aggregate projection identity for table subtrees. */
   readonly projectionTokenForTable?: (table: OoxmlNode) => string;
+  /** Aggregate identity of link and live-field projections for furniture reuse keys. */
+  readonly projectionEpoch?: string;
   /** Reviewers whose changes project as accepted in this story. */
   readonly revisionAuthorFilter?: import('./revision-projection.ts').RevisionAuthorFilter;
 }
@@ -453,6 +457,7 @@ export function layoutHeaderFooterStory(
       partName: part.name,
       part,
       contentKey,
+      ...(inputs?.projectionEpoch ? { projectionEpoch: inputs.projectionEpoch } : {}),
       fragments: flow.blocks,
       flowHeight: flow.bottom,
       pageFieldNeeds: needs,
@@ -651,6 +656,7 @@ export function framedStoryEntry(label: string, story: HeaderFooterStoryLayout):
     label,
     String(story.flowHeight),
     story.contentKey,
+    story.projectionEpoch ?? '',
     storyDrawingResourceToken(story),
     storyListMarkerToken(story),
   ]);

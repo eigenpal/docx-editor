@@ -11,15 +11,24 @@ import {
   type LineSegment,
   type PageRecord,
   type ParagraphFragmentRecord,
+  type SemanticCommentArtifactRecord,
   type SemanticLayout,
+  type SemanticReviewArtifactRecord,
+  type SemanticTrackedChangeArtifactRecord,
   type StyleSpanRecord,
   type TableFragmentRecord,
 } from '@docx-editor.dev/core/layout';
-import type { ExportSession, OpenDocumentForExportOptions } from '@docx-editor.dev/core/export';
+import type {
+  ExportSemanticLayout,
+  ExportSession,
+  OpenDocumentForExportOptions,
+} from '@docx-editor.dev/core/export';
 import { escapeText, MarkdownInlineWriter, type MarkdownTextToken } from './markdown-inline.ts';
 
 /** Markdown emitted for one physical layout page. @public */
 export interface MarkdownPage {
+  /** Snapshot-local layout page identity; it can change when the document repaginates. */
+  readonly id: string;
   /** One-based physical page number. */
   readonly number: number;
   /** Body projection, plus local note definitions or labelled continuation blocks. */
@@ -28,14 +37,48 @@ export interface MarkdownPage {
   readonly headerMarkdown: string;
   /** Footer story for this page, kept separate from logical document content. */
   readonly footerMarkdown: string;
+  /** Comments anchored in any story physically rendered on this page. */
+  readonly comments: readonly MarkdownComment[];
+  /** Tracked changes anchored in any story physically rendered on this page. */
+  readonly trackedChanges: readonly MarkdownTrackedChange[];
+}
+
+/** Page/story/source provenance for one exported review artifact. @public */
+export type MarkdownReviewOccurrence = SemanticReviewArtifactRecord['occurrences'][number];
+
+/** Normalized DOCX comment, independent of editor UI state. @public */
+export type MarkdownComment = SemanticCommentArtifactRecord;
+
+/** Normalized DOCX tracked change, independent of editor UI state. @public */
+export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
+
+/** Comment or tracked change returned by Markdown export. @public */
+export type MarkdownReviewArtifact = SemanticReviewArtifactRecord;
+
+/** Machine-readable scope of the page numbers returned by this export. @public */
+export interface MarkdownPaginationInfo {
+  /** Pages come from the docx-editor semantic layout engine, not stale DOCX page-break hints. */
+  readonly basis: 'docx-editor-layout';
+  /** Page ids and numbers describe this export snapshot and can change after repagination. */
+  readonly stability: 'snapshot';
+  /** Desktop Word parity depends on equivalent fonts and renderer behavior. */
+  readonly wordCompatibility: 'not-guaranteed';
+  /** Core store revision from which this layout snapshot was produced. */
+  readonly layoutRevision: number;
+  /** Tracked-change projection used to paginate and translate this snapshot. */
+  readonly displayMode: NonNullable<ExportSemanticLayout['displayMode']>;
 }
 
 /** Full logical document plus page-scoped projections. @public */
 export interface MarkdownExportResult {
-  /** Logical document Markdown with split records joined and repeats deduplicated. */
-  readonly markdown: string;
-  /** Physical page projections for workflows that preserve page boundaries. */
+  /** Primary physical page projections, preserving Word layout boundaries and furniture. */
   readonly pages: readonly MarkdownPage[];
+  /** Every normalized comment and tracked change, including artifacts with no page occurrence. */
+  readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
+  /** Fidelity scope callers should retain alongside page citations. */
+  readonly pagination: MarkdownPaginationInfo;
+  /** Convenience logical Markdown with split records joined and repeated furniture excluded. */
+  readonly markdown: string;
 }
 
 /** Caller decision for a laid-out image. @public */
@@ -67,7 +110,6 @@ interface TranslationContext {
     NonNullable<ParagraphFragmentRecord['marker']>
   >;
   readonly tablesById: ReadonlyMap<string, TableProjection>;
-  readonly rowStartPage: ReadonlyMap<string, number>;
   /** A translator maps each published drawing object at most once across full/page views. */
   readonly imageResultByDrawing: WeakMap<object, MarkdownImageResult>;
   /** Labels emitted into the current page body, when page-local note visibility is tracked. */
@@ -109,6 +151,8 @@ interface NoteProjection {
   readonly kind: 'footnote' | 'endnote';
   readonly blocks: BlockFragmentRecord[];
 }
+
+const EMPTY_NOTE_STORIES: ReadonlyMap<string, NoteProjection> = new Map();
 
 function assertNever(value: never): never {
   throw new TypeError(`Unsupported semantic record: ${JSON.stringify(value)}`);
@@ -436,6 +480,10 @@ function mergeRows(
     for (const row of fragment.rows) {
       if (row.isHeaderRepeat && !includeHeaderRepeats) continue;
       let logical = byId.get(row.id);
+      // A tall table can restart its repeating header inside another fragment on the same physical
+      // page. That is a visual occurrence of the row already collected, not additional cell
+      // content. Row continuations remain mergeable because they are not header repeats.
+      if (logical && includeHeaderRepeats && row.isHeaderRepeat) continue;
       if (!logical) {
         logical = {
           id: row.id,
@@ -471,14 +519,14 @@ function cellAlignment(cell: LogicalCell): ParagraphFragmentRecord['alignment'] 
   return 'left';
 }
 
-function cellValues(row: LogicalRow, context: TranslationContext): string[] {
+function cellValues(row: LogicalRow, context: TranslationContext, pageScoped: boolean): string[] {
   const values: string[] = [];
   const nestedContext = { ...context, tableCell: true };
   for (const cell of row.cells) {
     const value = cell.vMergeContinue
       ? ''
       : escapeTablePipes(
-          renderLogicalBlocks(logicalBlocks(cell.blocks), nestedContext, true)
+          renderLogicalBlocks(logicalBlocks(cell.blocks), nestedContext, true, pageScoped)
         ).replace(/\n+/g, '<br>');
     while (values.length < cell.gridColumn) values.push('');
     values[cell.gridColumn] = value;
@@ -496,20 +544,8 @@ function tableMarkdown(
 ): string {
   const tableId = fragments[0]?.tableId;
   const projection = tableId ? context.tablesById.get(tableId) : undefined;
-  const repeatedHeaderLocal =
-    pageScoped &&
-    projection !== undefined &&
-    !fragments.some((fragment) => projection.fragments.includes(fragment));
-  const completeFragments = repeatedHeaderLocal ? fragments : (projection?.fragments ?? fragments);
-  let rows = mergeRows(completeFragments, false);
-  if (pageScoped && !repeatedHeaderLocal && context.pageIndex !== undefined && tableId) {
-    const repeats = mergeRows(fragments, true).filter((row) => row.isHeaderRepeat);
-    const owned = rows.filter(
-      (row) => context.rowStartPage.get(`${tableId}\0${row.id}`) === context.pageIndex
-    );
-    const repeatedIds = new Set(repeats.map((row) => row.id));
-    rows = [...repeats, ...owned.filter((row) => !repeatedIds.has(row.id))];
-  }
+  const completeFragments = projection?.fragments ?? fragments;
+  const rows = pageScoped ? mergeRows(fragments, true) : mergeRows(completeFragments, false);
   if (rows.length === 0) return '';
   const width = Math.max(
     projection?.columnCount ??
@@ -519,7 +555,7 @@ function tableMarkdown(
   const normalize = (values: string[], fallback = ''): string[] =>
     Array.from({ length: width }, (_, index) => values[index] ?? fallback);
   const line = (row: LogicalRow): string =>
-    `| ${normalize(cellValues(row, context)).join(' | ')} |`;
+    `| ${normalize(cellValues(row, context, pageScoped)).join(' | ')} |`;
   // GFM requires the first emitted row to be its header row. Preserve authored order: OOXML's
   // tblHeader flag is only an effective repeated header on the contiguous table prefix, and a
   // malformed/later flag must never pull that row ahead of preceding data.
@@ -613,9 +649,7 @@ function indexLists(
 
 function indexTableBlocks(
   blocks: readonly BlockFragmentRecord[],
-  pageIndex: number,
-  tables: Map<string, TableProjection>,
-  rowStartPage: Map<string, number>
+  tables: Map<string, TableProjection>
 ): void {
   for (const block of blocks) {
     if (block.kind === 'paragraph') continue;
@@ -630,33 +664,27 @@ function indexTableBlocks(
     projection.fragments.push(block);
     for (const row of block.rows) {
       if (row.isHeaderRepeat) continue;
-      const key = `${block.tableId}\0${row.id}`;
-      if (!rowStartPage.has(key)) rowStartPage.set(key, pageIndex);
-      for (const cell of row.cells) indexTableBlocks(cell.blocks, pageIndex, tables, rowStartPage);
+      for (const cell of row.cells) indexTableBlocks(cell.blocks, tables);
     }
   }
 }
 
 function buildTranslationIndexes(
   layout: SemanticLayout
-): Pick<
-  TranslationContext,
-  'listIndentByParagraphId' | 'listMarkerByParagraphId' | 'tablesById' | 'rowStartPage'
-> {
+): Pick<TranslationContext, 'listIndentByParagraphId' | 'listMarkerByParagraphId' | 'tablesById'> {
   const listIndentByParagraphId = new Map<string, number>();
   const listMarkerByParagraphId = new Map<string, NonNullable<ParagraphFragmentRecord['marker']>>();
   const tablesById = new Map<string, TableProjection>();
-  const rowStartPage = new Map<string, number>();
   indexLists(bodyBlocks(layout), listIndentByParagraphId, listMarkerByParagraphId);
-  forEachSemanticStory(layout, ({ page, story, host }) => {
+  forEachSemanticStory(layout, ({ story, host }) => {
     // Headers and footers are page occurrences, not one logical document stream. Their table ids
     // intentionally repeat across pages, so `storyMarkdown` indexes each occurrence. Note tables
     // do span pages and retain one document-wide projection; note list scopes are indexed later
     // from the exact logical or page-local blocks each definition emits.
     if (story === 'header' || story === 'footer' || story === 'note-separator') return;
-    indexTableBlocks(host.fragments, page.index, tablesById, rowStartPage);
+    indexTableBlocks(host.fragments, tablesById);
   });
-  return { listIndentByParagraphId, listMarkerByParagraphId, tablesById, rowStartPage };
+  return { listIndentByParagraphId, listMarkerByParagraphId, tablesById };
 }
 
 function documentAnchoredDrawings(layout: SemanticLayout, context: TranslationContext): string {
@@ -709,15 +737,13 @@ function storyMarkdown(
   const listIndentByParagraphId = new Map<string, number>();
   const listMarkerByParagraphId = new Map<string, NonNullable<ParagraphFragmentRecord['marker']>>();
   const tablesById = new Map<string, TableProjection>();
-  const rowStartPage = new Map<string, number>();
   indexLists(logicalBlocks(story.fragments), listIndentByParagraphId, listMarkerByParagraphId);
-  indexTableBlocks(story.fragments, context.pageIndex ?? 0, tablesById, rowStartPage);
+  indexTableBlocks(story.fragments, tablesById);
   const storyContext: TranslationContext = {
     ...context,
     listIndentByParagraphId,
     listMarkerByParagraphId,
     tablesById,
-    rowStartPage,
   };
   const body = renderLogicalBlocks(logicalBlocks(story.fragments), storyContext);
   const drawings = (story.anchoredDrawings ?? [])
@@ -726,21 +752,35 @@ function storyMarkdown(
   return [body, ...drawings].filter(Boolean).join('\n\n');
 }
 
-function noteStories(layout: SemanticLayout, page?: PageRecord): Map<string, NoteProjection> {
-  const result = new Map<string, NoteProjection>();
-  forEachSemanticStory(layout, ({ page: current, story, host, noteScopeId }) => {
-    if (
-      noteScopeId === null ||
-      (story !== 'footnote' && story !== 'endnote') ||
-      (page && current !== page)
-    ) {
-      return;
+interface NoteStoryIndexes {
+  readonly document: ReadonlyMap<string, NoteProjection>;
+  readonly byPage: ReadonlyMap<PageRecord, ReadonlyMap<string, NoteProjection>>;
+}
+
+function noteStoryIndexes(layout: SemanticLayout): NoteStoryIndexes {
+  const document = new Map<string, NoteProjection>();
+  const byPage = new Map<PageRecord, Map<string, NoteProjection>>();
+  const append = (
+    target: Map<string, NoteProjection>,
+    scopeId: string,
+    story: 'footnote' | 'endnote',
+    blocks: readonly BlockFragmentRecord[]
+  ): void => {
+    const entry = target.get(scopeId) ?? { kind: story, blocks: [] };
+    entry.blocks.push(...blocks);
+    target.set(scopeId, entry);
+  };
+  forEachSemanticStory(layout, ({ page, story, host, noteScopeId }) => {
+    if (noteScopeId === null || (story !== 'footnote' && story !== 'endnote')) return;
+    append(document, noteScopeId, story, host.fragments);
+    let pageNotes = byPage.get(page);
+    if (!pageNotes) {
+      pageNotes = new Map();
+      byPage.set(page, pageNotes);
     }
-    const entry = result.get(noteScopeId) ?? { kind: story, blocks: [] };
-    entry.blocks.push(...host.fragments);
-    result.set(noteScopeId, entry);
+    append(pageNotes, noteScopeId, story, host.fragments);
   });
-  return result;
+  return { document, byPage };
 }
 
 function visibleNoteContinuation(note: NoteProjection, label: string, body: string): string {
@@ -758,7 +798,8 @@ function noteDefinitions(
   stories: ReadonlyMap<string, NoteProjection>,
   context: TranslationContext,
   pageScoped = false,
-  localReferenceLabels: ReadonlySet<string> = new Set()
+  localReferenceLabels: ReadonlySet<string> = new Set(),
+  previouslyRenderedScopes: Set<string> = new Set()
 ): string {
   const definitions: string[] = [];
   for (const [scopeId, note] of stories) {
@@ -780,7 +821,10 @@ function noteDefinitions(
       listMarkerByParagraphId,
     };
     const body = renderLogicalBlocks(logical, noteContext, false, pageScoped);
-    if (pageScoped && !localReferenceLabels.has(label)) {
+    const isContinuation =
+      pageScoped && previouslyRenderedScopes.has(scopeId) && !localReferenceLabels.has(label);
+    if (pageScoped) previouslyRenderedScopes.add(scopeId);
+    if (isContinuation) {
       definitions.push(visibleNoteContinuation(note, label, body));
       continue;
     }
@@ -806,6 +850,37 @@ function noteLabels(layout: SemanticLayout): Map<string, string> {
   return labels;
 }
 
+interface PageReviewArtifacts {
+  readonly comments: SemanticCommentArtifactRecord[];
+  readonly trackedChanges: SemanticTrackedChangeArtifactRecord[];
+  readonly keys: Set<string>;
+}
+
+function pageReviewArtifacts(
+  artifacts: readonly SemanticReviewArtifactRecord[]
+): ReadonlyMap<number, PageReviewArtifacts> {
+  const byPage = new Map<number, PageReviewArtifacts>();
+  for (const artifact of artifacts) {
+    for (const occurrence of artifact.occurrences) {
+      const page = byPage.get(occurrence.pageIndex) ?? {
+        comments: [],
+        trackedChanges: [],
+        keys: new Set<string>(),
+      };
+      byPage.set(occurrence.pageIndex, page);
+      const key = `${artifact.kind}\0${artifact.id}`;
+      if (page.keys.has(key)) continue;
+      page.keys.add(key);
+      if (artifact.kind === 'comment') {
+        page.comments.push(artifact);
+      } else {
+        page.trackedChanges.push(artifact);
+      }
+    }
+  }
+  return byPage;
+}
+
 /** Translate one shared semantic layout session to Markdown. @public */
 export async function exportMarkdownFrom(
   session: ExportSession,
@@ -813,6 +888,7 @@ export async function exportMarkdownFrom(
 ): Promise<MarkdownExportResult> {
   const layout = await session.layout();
   const indexes = buildTranslationIndexes(layout);
+  const notes = noteStoryIndexes(layout);
   const context: TranslationContext = {
     options,
     noteLabelByScope: noteLabels(layout),
@@ -825,23 +901,42 @@ export async function exportMarkdownFrom(
     [renderLogicalBlocks(bodyBlocks(layout), context), documentAnchoredDrawings(layout, context)]
       .filter(Boolean)
       .join('\n\n'),
-    noteDefinitions(noteStories(layout), context)
+    noteDefinitions(notes.document, context)
   );
+  const reviewArtifacts = layout.reviewArtifacts;
+  const artifactsByPage = pageReviewArtifacts(reviewArtifacts);
+  const renderedNoteScopes = new Set<string>();
   const pages = layout.pages.map((page): MarkdownPage => {
     const pageContext = { ...context, pageIndex: page.index };
     const body = pageBody(page, context);
     const definitions = noteDefinitions(
-      noteStories(layout, page),
+      notes.byPage.get(page) ?? EMPTY_NOTE_STORIES,
       pageContext,
       true,
-      body.noteLabels
+      body.noteLabels,
+      renderedNoteScopes
     );
+    const pageArtifacts = artifactsByPage.get(page.index);
     return Object.freeze({
+      id: page.id,
       number: page.index + 1,
       markdown: withDefinitions(body.markdown, definitions),
       headerMarkdown: page.header ? storyMarkdown(page.header, pageContext) : '',
       footerMarkdown: page.footer ? storyMarkdown(page.footer, pageContext) : '',
+      comments: Object.freeze(pageArtifacts?.comments ?? []),
+      trackedChanges: Object.freeze(pageArtifacts?.trackedChanges ?? []),
     });
   });
-  return Object.freeze({ markdown, pages: Object.freeze(pages) });
+  return Object.freeze({
+    pages: Object.freeze(pages),
+    reviewArtifacts,
+    pagination: Object.freeze({
+      basis: 'docx-editor-layout',
+      stability: 'snapshot',
+      wordCompatibility: 'not-guaranteed',
+      layoutRevision: layout.revision,
+      displayMode: layout.displayMode ?? 'all-markup',
+    }),
+    markdown,
+  });
 }

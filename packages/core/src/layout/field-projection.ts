@@ -79,6 +79,7 @@ import { synthesizeAtomicField } from './field-synthesis.ts';
 import { isSymbolRunChild, symbolGlyphOf, symbolRunStyle } from './symbol-run.ts';
 import {
   appendModelRange,
+  applyEastAsiaFontSlots,
   positionalTabOf,
   type FieldAtomMarker,
   type FieldAwarePiece,
@@ -873,7 +874,7 @@ export function piecesOfParagraph(
    * their nesting. Content-control nesting shares {@link MAX_CONTENT_CONTROL_NESTING} with
    * block flattening; field-scan depth stays separate.
    */
-  if (!consumeScanNode(budget)) return pieces;
+  if (!consumeScanNode(budget)) return applyEastAsiaFontSlots(pieces);
   const paragraphScope = emptyNamespaceScope();
 
   /**
@@ -992,5 +993,7 @@ export function piecesOfParagraph(
   // Malformed field missing end: demote — surface cached/buffered text, no live projection.
   abandonPending();
 
-  return pieces;
+  // Slot resolution is a paragraph-wide question (Common characters inherit across run
+  // boundaries), so it runs after the walk, over the assembled pieces.
+  return applyEastAsiaFontSlots(pieces);
 }

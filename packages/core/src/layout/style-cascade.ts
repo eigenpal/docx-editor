@@ -46,7 +46,7 @@ import {
   tabStopsFingerprint,
   type ResolvedTabStops,
 } from './paragraph-tabs.ts';
-import type { ThemeFonts } from './run-style.ts';
+import { NO_THEME_FONTS, type ThemeFonts } from './run-style.ts';
 import { combineStyleToggles } from './style-toggles.ts';
 import {
   findParagraphProperties,
@@ -96,7 +96,7 @@ export interface StyleCascadeTable {
    */
   readonly defaultTableStyleId: string | null;
   /**
-   * The theme part's Latin typefaces, for `w:rFonts` theme references.
+   * The theme part's typefaces, for `w:rFonts` theme references.
    *
    * Lives on the cascade because it is document-level style material with the same
    * lifetime, and because every site that resolves run properties already holds this table.
@@ -104,9 +104,6 @@ export interface StyleCascadeTable {
   readonly themeFonts: ThemeFonts;
   readonly styles: ReadonlyMap<string, StyleDefinition>;
 }
-
-/** A document with no theme part: every theme reference falls back to its explicit name. */
-export const NO_THEME_FONTS: ThemeFonts = { major: null, minor: null };
 
 /**
  * A paragraph's properties after the cascade, plus the same list WITHOUT its own `w:pPr`.

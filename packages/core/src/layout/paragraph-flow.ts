@@ -54,6 +54,7 @@ import {
   type ResolvedRunStyle,
   type ThemeFonts,
 } from './run-style.ts';
+import { styleForFontSlot } from './script-itemization.ts';
 import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   buildInlineDrawingRecord,
@@ -234,6 +235,13 @@ interface Piece {
   readonly inlineDrawing?: import('./drawing-layout.ts').InlineDrawingLayoutInput;
   /** Bounded OMML equation occupying one UTF-16 model unit. */
   readonly equation?: FieldAwarePiece['equation'];
+  /**
+   * The `w:rFonts` slot this piece's text resolves its face through, from
+   * `applyEastAsiaFontSlots`. `style` stays the run's real resolution; every measurement
+   * below resolves the face with `styleForFontSlot`, and the slot is republished on the
+   * span so paint and hit-testing resolve the same one.
+   */
+  readonly fontSlot?: FieldAwarePiece['fontSlot'];
 }
 
 export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
@@ -322,6 +330,7 @@ function measureFollowingTabSegment(
   let sawDecimal = false;
   for (let index = pieceIndex; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
+    const style = styleForFontSlot(piece.style, piece.fontSlot);
     const from = index === pieceIndex ? offsetInPiece : 0;
     for (let cursor = from; cursor < piece.text.length; ) {
       const ch = piece.text[cursor]!;
@@ -332,7 +341,7 @@ function measureFollowingTabSegment(
       // contract (UTF-16), matching how source offsets are counted elsewhere.
       const next = cursor + 1;
       const glyph = piece.text.slice(cursor, next);
-      const advance = measurer.measure(displayText(glyph, piece.style), piece.style);
+      const advance = measurer.measure(displayText(glyph, style), style);
       if (!sawDecimal && ch === '.') {
         sawDecimal = true;
         // Decimal point itself sits ON the stop — offset is the advance before it.
@@ -509,7 +518,10 @@ export function alignSpans(
   // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
   // over-stretches the line.
   const trailing =
-    visible === last.text ? 0 : last.box.width - measureDisplayText(visible, last.style, measurer);
+    visible === last.text
+      ? 0
+      : last.box.width -
+        measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
   const used = lineUsedWidth ?? last.box.x - indentLeft + last.box.width - trailing;
   const slack = available - used;
   if (slack <= 0) return spans;
@@ -738,7 +750,7 @@ export function breakParagraph(
       for (const boundary of wordBoundaries(piece.text)) {
         const candidate = piece.text.slice(consumed, boundary);
         if (candidate.length === 0) continue;
-        const style = piece.style;
+        const style = styleForFontSlot(piece.style, piece.fontSlot);
         const width = measurer.measure(candidate, style);
         const modelStart = piece.start + consumed;
         if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(modelStart);
@@ -1085,7 +1097,10 @@ export function breakParagraph(
   const textBandHeight = (fallback: number): number => {
     let height = 0;
     for (const span of line.spans) {
-      height = Math.max(height, measurer.lineMetrics(span.style).height);
+      height = Math.max(
+        height,
+        measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot)).height
+      );
     }
     return height > 0 ? height : fallback;
   };
@@ -1364,7 +1379,10 @@ export function breakParagraph(
     ) {
       advancePastAnchorExclusionForPlacement(piece.start);
     }
-    const metrics = measurer.lineMetrics(piece.style);
+    // The face this piece MEASURES in. Spans keep `piece.style` — the run's real
+    // resolution — plus the slot, and re-resolve through the same helper.
+    const faceStyle = styleForFontSlot(piece.style, piece.fontSlot);
+    const metrics = measurer.lineMetrics(faceStyle);
     let consumed = 0;
     for (const boundary of wordBoundaries(piece.text)) {
       const candidate = piece.text.slice(consumed, boundary);
@@ -1468,7 +1486,7 @@ export function breakParagraph(
       // would size the line for characters the reader never sees. Note marks may reserve
       // a wider measureText (eachPage) while painting the real digits.
       const measureSource = piece.measureText ?? candidate;
-      const width = measurer.measure(displayText(measureSource, piece.style), piece.style);
+      const width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
       // A candidate may open a line only at a real break opportunity. Within a piece,
       // `wordBoundaries` cuts after spaces, dashes and tabs, so every candidate but the
       // first is one. The FIRST candidate of a piece continues whatever the previous piece
@@ -1509,13 +1527,13 @@ export function breakParagraph(
           line.height = 0;
           line.baseline = 0;
           for (const span of line.spans) {
-            const spanMetrics = measurer.lineMetrics(span.style);
+            const spanMetrics = measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot));
             line.height = Math.max(line.height, spanMetrics.height);
             line.baseline = Math.max(line.baseline, spanMetrics.baseline);
           }
           closeLine();
           for (const span of carried) {
-            const spanMetrics = measurer.lineMetrics(span.style);
+            const spanMetrics = measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot));
             line.spans.push({
               ...span,
               box: { ...span.box, x: lineOrigin() + line.width },
@@ -1557,8 +1575,8 @@ export function breakParagraph(
           while (low <= high) {
             const mid = (low + high) >> 1;
             const midWidth = measurer.measure(
-              displayText(remaining.slice(0, mid), piece.style),
-              piece.style
+              displayText(remaining.slice(0, mid), faceStyle),
+              faceStyle
             );
             if (midWidth <= lineAvailable()) {
               fitLength = mid;
@@ -1568,7 +1586,7 @@ export function breakParagraph(
             }
           }
           const prefix = remaining.slice(0, fitLength);
-          const prefixWidth = measurer.measure(displayText(prefix, piece.style), piece.style);
+          const prefixWidth = measurer.measure(displayText(prefix, faceStyle), faceStyle);
           line.spans.push({
             range: { paragraphId, start: remainingStart, end: remainingStart + fitLength },
             text: prefix,
@@ -1577,6 +1595,7 @@ export function breakParagraph(
             box: { x: lineOrigin() + line.width, y: 0, width: prefixWidth, height: metrics.height },
             ...(piece.link ? { link: piece.link } : {}),
             ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+            ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
             ...revisionsOf(piece),
           });
           line.width += prefixWidth;
@@ -1586,7 +1605,7 @@ export function breakParagraph(
           closeLine();
           remaining = remaining.slice(fitLength);
           remainingStart += fitLength;
-          remainingWidth = measurer.measure(displayText(remaining, piece.style), piece.style);
+          remainingWidth = measurer.measure(displayText(remaining, faceStyle), faceStyle);
         }
       }
       line.spans.push({
@@ -1600,6 +1619,7 @@ export function breakParagraph(
         ...(piece.link ? { link: piece.link } : {}),
         ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
         ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+        ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
         ...revisionsOf(piece),
       });
       line.width += remainingWidth;

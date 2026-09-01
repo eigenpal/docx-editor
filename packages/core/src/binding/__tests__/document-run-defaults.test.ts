@@ -90,16 +90,29 @@ describe('createRunDefaultsResolver', () => {
     expect(result).toEqual({ fontFamily: 'Calibri Light', fontSizeHalfPoints: 22 });
   });
 
-  test('EastAsia/Bidi theme slots do not resolve to the latin typeface', () => {
-    const resolve = createRunDefaultsResolver(
-      stylesRoot(
-        '<w:docDefaults><w:rPrDefault><w:rPr>' +
-          '<w:rFonts w:asciiTheme="minorEastAsia"/><w:sz w:val="22"/>' +
-          '</w:rPr></w:rPrDefault></w:docDefaults>'
-      ),
-      { major: 'Calibri Light', minor: 'Calibri' }
+  test('an East Asian token on a Latin slot resolves the a:ea face, never the Latin one', () => {
+    // `w:asciiTheme="minorEastAsia"` is legal: Word's "use East Asian fonts also on
+    // Latin text". The token decides the face; the attribute that carried it does not.
+    const styles = stylesRoot(
+      '<w:docDefaults><w:rPrDefault><w:rPr>' +
+        '<w:rFonts w:asciiTheme="minorEastAsia"/><w:sz w:val="22"/>' +
+        '</w:rPr></w:rPrDefault></w:docDefaults>'
     );
-    expect(resolve(null).fontFamily).toBeNull();
+    const withEastAsia = createRunDefaultsResolver(styles, {
+      major: 'Calibri Light',
+      minor: 'Calibri',
+      majorEastAsia: 'MS Gothic',
+      minorEastAsia: 'SimSun',
+    });
+    expect(withEastAsia(null).fontFamily).toBe('SimSun');
+    // A theme with no `a:ea` faces answers an honest null, not the Latin face.
+    const withoutEastAsia = createRunDefaultsResolver(styles, {
+      major: 'Calibri Light',
+      minor: 'Calibri',
+      majorEastAsia: null,
+      minorEastAsia: null,
+    });
+    expect(withoutEastAsia(null).fontFamily).toBeNull();
   });
 
   test('invalid names and out-of-range sizes are dropped, never repaired', () => {

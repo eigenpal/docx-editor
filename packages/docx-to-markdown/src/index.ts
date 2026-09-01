@@ -21,6 +21,7 @@ import {
   type PreparedLayoutFontConfiguration,
 } from '@docx-editor.dev/core/layout';
 import { openHeadlessDocument } from '@docx-editor.dev/core/store';
+import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
 import { loadDefaultFonts } from '@docx-editor.dev/fonts';
 import {
   exportMarkdownFrom as translateMarkdown,
@@ -31,20 +32,73 @@ import {
 import { createRetryingLoader } from './retrying-loader.ts';
 
 export { ExportResourceError } from '@docx-editor.dev/core/export';
+export { forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
 
 export type {
   ExportDocumentSource,
+  ExportSemanticLayout,
   ExportSession,
   OpenDocumentForExportOptions,
   OpenDocumentForExportResult,
+  PreservedImageConverter,
 } from '@docx-editor.dev/core/export';
+export type {
+  AnchoredDrawingLayoutFallback,
+  SemanticArtifactRootStoryKind,
+  SemanticArtifactStoryKind,
+  SemanticCommentArtifactRecord,
+  SemanticDrawingVisit,
+  SemanticLayout,
+  SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactPosition,
+  SemanticReviewArtifactRecord,
+  SemanticReviewArtifactSource,
+  SemanticTrackedChangeArtifactRecord,
+  AnchoredDrawingRecord,
+  DrawingAccessibility,
+  DrawingGeometry,
+  DrawingHorizontalReferenceFrame,
+  DrawingTransform,
+  DrawingVerticalReferenceFrame,
+  ImageWrapTarget,
+  InlineDrawingRecord,
+  LayoutBox,
+  RevisionAttribution,
+  RevisionDisplayMode,
+  SourceCrop,
+  TextboxStoryLayout,
+  TextMeasurer,
+  VectorShapeProjection,
+} from '@docx-editor.dev/core/layout';
+export type {
+  HeadlessDocumentRejection,
+  HeadlessDocumentView,
+  ImageDecodePort,
+  ImageResourceState,
+} from '@docx-editor.dev/core/store';
 export type {
   MarkdownExportOptions,
   MarkdownExportResult,
   MarkdownImageResult,
+  MarkdownComment,
   MarkdownPage,
+  MarkdownPaginationInfo,
+  MarkdownReviewArtifact,
+  MarkdownReviewOccurrence,
+  MarkdownTrackedChange,
   MarkdownTranslationOptions,
 } from './markdown.ts';
+
+/** Typed one-shot failure for bytes that cannot be opened as a supported DOCX. @public */
+export class DocumentOpenError extends Error {
+  constructor(
+    readonly reason: HeadlessDocumentRejection,
+    readonly detail?: string
+  ) {
+    super(`Unable to open DOCX for export: ${reason}${detail ? ` (${detail})` : ''}`);
+    this.name = 'DocumentOpenError';
+  }
+}
 
 const packagedFileFetch = (async (input: RequestInfo | URL): Promise<Response> => {
   const value =
@@ -128,9 +182,7 @@ export async function exportMarkdown(
 ): Promise<MarkdownExportResult> {
   const opened = await openDocumentForExport(source, options);
   if (!opened.ok) {
-    throw new Error(
-      `Unable to open DOCX for export: ${opened.reason}${opened.detail ? ` (${opened.detail})` : ''}`
-    );
+    throw new DocumentOpenError(opened.reason, opened.detail);
   }
   try {
     return await translateMarkdown(opened.session, options);

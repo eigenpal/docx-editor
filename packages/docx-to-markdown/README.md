@@ -15,13 +15,22 @@ import { readFile } from 'node:fs/promises';
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
 
 const bytes = new Uint8Array(await readFile('document.docx'));
-const result = await exportMarkdown(bytes);
+const { pages } = await exportMarkdown(bytes);
 
-console.log(result.markdown);
+for (const page of pages) {
+  console.log(`Page ${page.number} (snapshot id: ${page.id})`);
+  console.log(page.headerMarkdown);
+  console.log(page.markdown);
+  console.log(page.footerMarkdown);
+}
 ```
 
 The package is private in this change and cannot be installed from the public registry yet.
 Inside this monorepo, depend on it with `workspace:*`.
+
+The final release step must remove the package from Changesets `ignore`, choose the public version,
+align the `@docx-editor.dev/core` and `@docx-editor.dev/fonts` version floors with that release, and
+only then remove `private: true`. Repository tests intentionally reject a partial release state.
 
 ## Public interface
 
@@ -50,13 +59,25 @@ images, or share the same layout with another exporter.
 
 ```ts
 interface MarkdownExportResult {
-  /** Logical, full-document Markdown. */
-  readonly markdown: string;
-  /** Physical page projections, including page furniture. */
+  /** Primary output: physical page projections with page furniture and provenance. */
   readonly pages: readonly MarkdownPage[];
+  /** All comments and tracked changes, including records without a page occurrence. */
+  readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
+  /** Machine-readable scope of these page citations. */
+  readonly pagination: {
+    readonly basis: 'docx-editor-layout';
+    readonly stability: 'snapshot';
+    readonly wordCompatibility: 'not-guaranteed';
+    readonly layoutRevision: number;
+    readonly displayMode: 'all-markup' | 'proposed' | 'original';
+  };
+  /** Convenience logical, full-document Markdown. */
+  readonly markdown: string;
 }
 
 interface MarkdownPage {
+  /** Snapshot-local identity; changes when the document repaginates. */
+  readonly id: string;
   /** One-based physical page number. */
   readonly number: number;
   /** Body content and page-local note definitions or continuations. */
@@ -64,47 +85,98 @@ interface MarkdownPage {
   /** Header and footer are separate from logical document content. */
   readonly headerMarkdown: string;
   readonly footerMarkdown: string;
+  /** Review artifacts physically occurring in body, furniture, or notes on this page. */
+  readonly comments: readonly MarkdownComment[];
+  readonly trackedChanges: readonly MarkdownTrackedChange[];
 }
 ```
 
-Use `result.markdown` for a conventional Markdown document. Use `result.pages` when the consumer
-must preserve physical page boundaries or render headers and footers.
+`pages` is the primary interface. Page boundaries come from the same layout engine that renders
+the editor; they are not inferred from `w:lastRenderedPageBreak` or approximated after Markdown
+conversion. This is the appropriate shape for engine-snapshot citations such as “page 12”,
+legal/compliance review, retrieval chunks tied to one rendered snapshot, and page-aware agent
+workflows.
+
+Pagination metadata describes how one result was produced; it does **not** identify the source
+document or render configuration. Persist a caller-owned immutable document version (or content
+hash), the relevant render configuration/engine version, and the page number together. For example:
+
+```ts
+const citation = {
+  documentVersion: contract.sha256,
+  engineVersion: applicationBuild.docxEditorVersion,
+  pageNumber: result.pages[11]!.number,
+  pageSnapshotId: result.pages[11]!.id,
+  pagination: result.pagination,
+};
+```
+
+The engine computes layout pages rather than reading stale page-break hints, but this private
+preview does not claim byte-for-byte desktop Word parity: missing document-embedded fonts, font
+substitutions, and renderer differences can change breaks. `page.id` and `layoutRevision` are
+snapshot-local, not durable document identifiers. A public Word-parity benchmark and stricter
+fidelity diagnostics are release gates, not assumptions hidden behind authoritative-looking page
+numbers.
+
+`result.markdown` is a convenience projection for consumers that only need one conventional
+Markdown document. It joins split records and excludes repeated page furniture, so it deliberately
+cannot preserve page provenance.
+
+### Comments and tracked changes
+
+Each page carries the comments and tracked changes that physically occur in its body, header,
+footer, footnotes, endnotes, or authored note separator. One artifact can occur on multiple pages:
+a range can cross a page boundary, and a change in a shared header can be rendered on every page.
+Inspect `artifact.occurrences` when the exact story and source range matter.
+
+`result.reviewArtifacts` is the authoritative document-wide list. It also retains orphaned comments
+and other records that have no physical page occurrence, so page-local processing does not silently
+lose review data.
+
+```ts
+const result = await exportMarkdown(bytes);
+
+for (const page of result.pages) {
+  for (const comment of page.comments) {
+    console.log(`Comment ${comment.id} appears on page ${page.number}: ${comment.text}`);
+  }
+  for (const change of page.trackedChanges) {
+    console.log(`${change.change} by ${change.author} on page ${page.number}`);
+  }
+}
+
+const orphanedComments = result.reviewArtifacts.filter(
+  (artifact) => artifact.kind === 'comment' && artifact.orphaned
+);
+```
 
 ## Options
 
 `MarkdownExportOptions` combines layout/session options with the Markdown image callback.
 
-| Option                  | Meaning                                                                                                                         |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `displayMode`           | Tracked-change projection: `all-markup` (default), `proposed`, or `original`.                                                   |
-| `hiddenRevisionAuthors` | Reviewer names whose revisions are projected as accepted across body, headers/footers, notes, tables, drawings, and text boxes. |
-| `image`                 | Synchronous mapping from a laid-out drawing to `{ url }` or `{ skip: true }`.                                                   |
-| `signal`                | Aborts resource waits and later layout work.                                                                                    |
-| `resourceTimeoutMs`     | Maximum resource-settlement time for one layout call; default `60_000`.                                                         |
-| `reuseAcrossRevisions`  | Retains incremental state for a live view; defaults to `true` for views and `false` for bytes.                                  |
-| `measurer`              | Host-owned text measurer. Omit to use packaged fonts and shared HarfBuzz shaping.                                               |
-| `producer`              | Stable identity for a host-owned measurer and its cache entries.                                                                |
-| `imageDecodePort`       | Host image metadata decoder. Omit for the bounded Node decoder.                                                                 |
-| `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                                                        |
+| Option                  | Meaning                                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| `displayMode`           | Tracked-change projection: `all-markup` (default), `proposed`, or `original`.                  |
+| `image`                 | Synchronous mapping from a laid-out drawing to `{ url }` or `{ skip: true }`.                  |
+| `signal`                | Aborts resource waits and later layout work.                                                   |
+| `resourceTimeoutMs`     | Maximum resource-settlement time for one layout call; default `60_000`.                        |
+| `reuseAcrossRevisions`  | Retains incremental state for a live view; defaults to `true` for views and `false` for bytes. |
+| `measurer`              | Host-owned text measurer. Omit to use packaged fonts and shared HarfBuzz shaping.              |
+| `producer`              | Stable identity for a host-owned measurer and its cache entries.                               |
+| `imageDecodePort`       | Host image metadata decoder. Omit for the bounded Node decoder.                                |
+| `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                       |
 
-### Tracked changes and reviewers
+### Tracked changes
 
-The default keeps all pending changes visible. A resolved view must be requested explicitly.
+The default keeps all pending changes visible in Markdown. A whole-document resolved view must be
+requested explicitly. The artifact list remains available as provenance; this option controls the
+whole-document revision projection.
 
 ```ts
 const proposed = await exportMarkdown(bytes, {
   displayMode: 'proposed',
 });
-
-const hideAdaMarkup = await exportMarkdown(bytes, {
-  displayMode: 'all-markup',
-  hiddenRevisionAuthors: ['Ada Lovelace'],
-});
 ```
-
-`hiddenRevisionAuthors` does not mutate or accept revisions in the DOCX. It changes only this
-layout projection. Hidden reviewers use the accepted projection; every other reviewer continues
-to follow `displayMode`.
 
 ## Reusing an export session
 
@@ -115,7 +187,6 @@ import { exportMarkdownFrom, openDocumentForExport } from '@docx-editor.dev/docx
 const bytes = new Uint8Array(await readFile('document.docx'));
 const opened = await openDocumentForExport(bytes, {
   displayMode: 'all-markup',
-  hiddenRevisionAuthors: ['Ada Lovelace'],
 });
 
 if (!opened.ok) {
@@ -131,7 +202,7 @@ try {
 
   const first = await exportMarkdownFrom(opened.session);
   const second = await exportMarkdownFrom(opened.session);
-  console.log(first.markdown === second.markdown);
+  console.log(first.pages.length === second.pages.length);
 } finally {
   opened.session.dispose();
 }
@@ -149,8 +220,11 @@ Returning a Promise is rejected instead of emitting a broken destination.
 
 ```ts
 import { mkdir, writeFile } from 'node:fs/promises';
-import { forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
-import { exportMarkdownFrom, openDocumentForExport } from '@docx-editor.dev/docx-to-markdown';
+import {
+  exportMarkdownFrom,
+  forEachSemanticDrawing,
+  openDocumentForExport,
+} from '@docx-editor.dev/docx-to-markdown';
 
 const opened = await openDocumentForExport(bytes);
 if (!opened.ok) throw new Error(`DOCX was refused: ${opened.reason}`);
@@ -193,12 +267,21 @@ resource limits, and session abort signal.
 
 ## Errors and cancellation
 
-Use `openDocumentForExport` when a caller needs a typed refusal for malformed or unsupported DOCX
-input. Resource settlement can throw `ExportResourceError` with `code` equal to `aborted`,
-`timedOut`, `nonConvergent`, or `disposed`.
+The one-shot `exportMarkdown` API throws `DocumentOpenError` for malformed or unsupported DOCX
+input. Use `openDocumentForExport` when control flow should inspect its typed `{ ok: false,
+reason, detail }` result instead. Layout or resource processing can throw `ExportResourceError`
+with `code` equal to `aborted`, `timedOut`, `nonConvergent`, `disposed`, `layoutInvariant`, or
+`layoutFailed` in either workflow. `layoutInvariant` means recognized authored geometry could not
+be represented within the engine's bounded page model. `layoutFailed` identifies another engine
+or host-integration failure, such as an unavailable custom measurer. Both retain the original
+diagnostic as the standard `cause` without making consumers import a layout implementation type.
 
 ```ts
-import { ExportResourceError, exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
+import {
+  DocumentOpenError,
+  ExportResourceError,
+  exportMarkdown,
+} from '@docx-editor.dev/docx-to-markdown';
 
 const controller = new AbortController();
 
@@ -209,7 +292,9 @@ try {
   });
   console.log(result.markdown);
 } catch (error) {
-  if (error instanceof ExportResourceError) {
+  if (error instanceof DocumentOpenError) {
+    console.error(error.reason, error.detail);
+  } else if (error instanceof ExportResourceError) {
     console.error(error.code, error.message);
   } else {
     throw error;
@@ -230,10 +315,13 @@ Logical full-document Markdown remains independent of page breaks.
 
 Markdown is a semantic degradation:
 
+- Physical Word-layout pages are first-class; flattened `markdown` is secondary.
 - Page headers and footers are returned separately per page.
+- Comments and tracked changes are normalized by core and exposed globally and per physical page.
 - Merged table cells are flattened.
-- Positioned anchored images are emitted in stable record order.
-- Anchored text boxes are omitted because they have no unambiguous linear position.
+- Positioned anchored images are appended after their owning story body in stable record order.
+- Anchored text-box text is omitted because it has no unambiguous linear position; comments and
+  tracked changes inside it remain available as page artifacts with exact text-box provenance.
 - Office Math uses the core semantic equation fallback.
 - A note continued without its reference is emitted as a labelled continuation block in page
   Markdown.

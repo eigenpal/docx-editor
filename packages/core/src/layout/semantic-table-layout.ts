@@ -19,6 +19,7 @@
 // `breakParagraph`, so they hit the same cache with keys at the cell's content width.
 
 import type { OoxmlElement, OoxmlNode } from '@docx-editor.dev/core/store';
+import { stripAnchorSinksForProbe } from './table-probe-deps.ts';
 import {
   clipInlineDrawingRecordToRegion,
   publishAnchoredDrawingsForParagraph,
@@ -1507,24 +1508,6 @@ export function layoutRowFragmentBounded(
     remainder: complete ? null : remainderCursors,
     fitted: anyFitted || row.cells.every((cell) => cell.vMergeContinue) || clipExact,
     nestedSplitBlocked: anyNestedBlocked,
-  };
-}
-
-/**
- * Measure the natural height of a full (unsplit) row without allocating line ids.
- * Used for whole-row preflight before committing placement.
- * @internal
- */
-export function stripAnchorSinksForProbe(deps: TableFlowDeps): TableFlowDeps {
-  return {
-    ...deps,
-    measuringOnly: true,
-    collectAnchoredDrawings: undefined,
-    publishAnchoredDrawings: undefined,
-    deferAnchoredDrawings: undefined,
-    onAnchorRepublish: undefined,
-    onAnchorShift: undefined,
-    anchorDeferOnly: true,
   };
 }
 

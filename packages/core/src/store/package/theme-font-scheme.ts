@@ -1,0 +1,109 @@
+// The `w:rFonts` theme-token table, shared by every lane that resolves one.
+//
+// ECMA-376 §17.18.96 (ST_Theme) names eight tokens; each is a (major|minor) × (ascii|
+// hAnsi|eastAsia|bidi) pair pointing into the theme part's font scheme. The layout lane
+// (`layout/run-style.ts`) and the binding lane (`binding/document-run-defaults.ts`,
+// `binding/document-catalog.ts`) each resolve these tokens, and until this module they
+// each kept a private copy of the mapping — copies that drifted the moment one lane
+// learned the `a:ea` faces. Lives beside `theme-color-resolution.ts` for the same reason
+// that table does: theme resolution is package material both lanes may read.
+
+import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
+
+/**
+ * The faces a theme's font scheme offers, per script slot.
+ *
+ * Structurally satisfied by both lanes' theme-font shapes (`DocumentThemeFonts`,
+ * layout's `ThemeFonts`). The East Asian faces are optional so callers that have not
+ * harvested them yet still type-check; an absent face resolves to null, which every
+ * caller already treats as "fall back to the explicit attribute".
+ */
+export interface ThemeSchemeFaces {
+  /** `a:majorFont` latin typeface — headings. */
+  readonly major: string | null;
+  /** `a:minorFont` latin typeface — body text. */
+  readonly minor: string | null;
+  /** `a:majorFont` east asian typeface (`a:ea`). */
+  readonly majorEastAsia?: string | null;
+  /** `a:minorFont` east asian typeface (`a:ea`). */
+  readonly minorEastAsia?: string | null;
+}
+
+function isElement(node: OoxmlNode): node is OoxmlElement {
+  return node.kind !== 'textValue';
+}
+
+function child(parent: OoxmlElement, localName: string): OoxmlElement | null {
+  for (const candidate of parent.children) {
+    if (isElement(candidate) && candidate.localName === localName) return candidate;
+  }
+  return null;
+}
+
+function firstDescendant(root: OoxmlElement, localName: string): OoxmlElement | null {
+  const stack: OoxmlNode[] = [root];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (!isElement(current)) continue;
+    if (current.localName === localName) return current;
+    for (let index = current.children.length - 1; index >= 0; index -= 1) {
+      stack.push(current.children[index]!);
+    }
+  }
+  return null;
+}
+
+const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
+
+function schemeTypeface(
+  scheme: OoxmlElement,
+  slot: 'majorFont' | 'minorFont',
+  face: 'latin' | 'ea'
+): string | null {
+  const font = child(scheme, slot);
+  const element = font ? child(font, face) : null;
+  const raw = element?.attributes.find((attribute) => attribute.localName === 'typeface')?.value;
+  return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
+}
+
+/** Collect every font face consumed by live and headless layout from one canonical theme tree. */
+export function collectThemeSchemeFaces(
+  themeRoot: OoxmlElement | null
+): Required<ThemeSchemeFaces> {
+  const scheme = themeRoot ? firstDescendant(themeRoot, 'fontScheme') : null;
+  if (!scheme) {
+    return { major: null, minor: null, majorEastAsia: null, minorEastAsia: null };
+  }
+  return {
+    major: schemeTypeface(scheme, 'majorFont', 'latin'),
+    minor: schemeTypeface(scheme, 'minorFont', 'latin'),
+    majorEastAsia: schemeTypeface(scheme, 'majorFont', 'ea'),
+    minorEastAsia: schemeTypeface(scheme, 'minorFont', 'ea'),
+  };
+}
+
+// A Map, not an object literal: the token is file content, and `__proto__` must answer
+// undefined — the same rule `theme-color-resolution.ts` applies to its tables.
+const TOKEN_FACE: ReadonlyMap<string, (faces: ThemeSchemeFaces) => string | null> = new Map([
+  ['minorAscii', (faces: ThemeSchemeFaces) => faces.minor],
+  ['minorHAnsi', (faces: ThemeSchemeFaces) => faces.minor],
+  ['majorAscii', (faces: ThemeSchemeFaces) => faces.major],
+  ['majorHAnsi', (faces: ThemeSchemeFaces) => faces.major],
+  // The East Asian tokens are legal on the LATIN theme attributes too: Word's "use East
+  // Asian fonts also on Latin text" writes `w:asciiTheme="minorEastAsia"`, and both
+  // scripts then paint in the East Asian face. The token decides the face; which
+  // attribute carried it does not.
+  ['minorEastAsia', (faces: ThemeSchemeFaces) => faces.minorEastAsia ?? null],
+  ['majorEastAsia', (faces: ThemeSchemeFaces) => faces.majorEastAsia ?? null],
+  // `minorBidi`/`majorBidi` name the `a:cs` face no lane harvests yet; an honest null —
+  // which falls back to the explicit attribute beside the token — beats the wrong font.
+]);
+
+/** A `w:rFonts` theme token resolved to its theme face, or null when it names none we hold. */
+export function themeFontFamilyOf(
+  token: string | undefined,
+  faces: ThemeSchemeFaces
+): string | null {
+  if (token === undefined) return null;
+  return TOKEN_FACE.get(token)?.(faces) ?? null;
+}

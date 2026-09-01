@@ -12,6 +12,7 @@ export {
   ExportResourceError,
   openDocumentForExport,
   type ExportDocumentSource,
+  type ExportSemanticLayout,
   type ExportSession,
   type OpenDocumentForExportOptions,
   type OpenDocumentForExportResult,

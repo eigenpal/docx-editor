@@ -1,7 +1,7 @@
 // Deterministic DOM-free geometry for the bounded equation expression tree.
 
 import type { EquationExpression, OmmlEquationProjection } from '@docx-editor.dev/core/store';
-import { measureDisplayText, type ResolvedRunStyle } from './run-style.ts';
+import { measureDisplayText, withFontFamily, type ResolvedRunStyle } from './run-style.ts';
 import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 
 const SCRIPT_SCALE = 0.7;
@@ -10,9 +10,9 @@ const EQUATION_FONT_FAMILY = 'Cambria Math';
 
 /** Use Word's math face when installed while retaining the measurer's safe fallback stack. */
 export function equationRunStyle(style: ResolvedRunStyle): ResolvedRunStyle {
-  return style.fontFamily === EQUATION_FONT_FAMILY
-    ? style
-    : Object.freeze({ ...style, fontFamily: EQUATION_FONT_FAMILY });
+  // The shared memoized derivation: measurers amortize font resolution over style object
+  // identity, and a fresh object per call would defeat their caches.
+  return withFontFamily(style, EQUATION_FONT_FAMILY);
 }
 
 interface EquationGeometryBase {

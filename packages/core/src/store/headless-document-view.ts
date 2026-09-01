@@ -17,15 +17,20 @@ import {
   type OoxmlPackageRejection,
 } from './package/ooxml-package.ts';
 import { resolveRelationship } from './package/relationships.ts';
-import { type OoxmlElement, type OoxmlNode, type OoxmlPart } from './package/ooxml-tree.ts';
+import { type OoxmlElement, type OoxmlPart } from './package/ooxml-tree.ts';
 import { normalizeParagraphIdentity } from './package/para-id.ts';
 import { relationshipTargetIn } from './package/hyperlink-part.ts';
+import { collectThemeSchemeFaces } from './package/theme-font-scheme.ts';
 import { TreePackageStore } from './store/tree-package-store.ts';
 
 /** Theme typefaces already validated for use by layout. @public */
 export interface HeadlessThemeFonts {
   readonly major: string | null;
   readonly minor: string | null;
+  /** East Asian heading face; optional for backwards-compatible custom views. */
+  readonly majorEastAsia?: string | null;
+  /** East Asian body face; optional for backwards-compatible custom views. */
+  readonly minorEastAsia?: string | null;
 }
 
 /**
@@ -93,48 +98,6 @@ function relatedPart(
   return pkg.parts.get(fallbackName);
 }
 
-function isElement(node: OoxmlNode): node is OoxmlElement {
-  return node.kind !== 'textValue';
-}
-
-function child(parent: OoxmlElement, localName: string): OoxmlElement | null {
-  for (const candidate of parent.children) {
-    if (isElement(candidate) && candidate.localName === localName) return candidate;
-  }
-  return null;
-}
-
-function firstDescendant(root: OoxmlElement, localName: string): OoxmlElement | null {
-  const stack: OoxmlNode[] = [root];
-  while (stack.length > 0) {
-    const current = stack.pop()!;
-    if (!isElement(current)) continue;
-    if (current.localName === localName) return current;
-    for (let index = current.children.length - 1; index >= 0; index -= 1) {
-      stack.push(current.children[index]!);
-    }
-  }
-  return null;
-}
-
-const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
-
-function themeTypeface(scheme: OoxmlElement, slot: string): string | null {
-  const font = child(scheme, slot);
-  const latin = font ? child(font, 'latin') : null;
-  const raw = latin?.attributes.find((attribute) => attribute.localName === 'typeface')?.value;
-  return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
-}
-
-function themeFontsOf(root: OoxmlElement | null): HeadlessThemeFonts {
-  const scheme = root ? firstDescendant(root, 'fontScheme') : null;
-  if (!scheme) return Object.freeze({ major: null, minor: null });
-  return Object.freeze({
-    major: themeTypeface(scheme, 'majorFont'),
-    minor: themeTypeface(scheme, 'minorFont'),
-  });
-}
-
 /**
  * Open DOCX bytes through the bounded store reader and expose only neutral layout reads.
  * @public
@@ -164,7 +127,7 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     relatedPart(currentPackage(), currentPackage().mainDocumentPart, relationshipType, fallbackName)
       ?.root ?? null;
 
-  let themeFonts: HeadlessThemeFonts = themeFontsOf(null);
+  let themeFonts: HeadlessThemeFonts = Object.freeze(collectThemeSchemeFaces(null));
   let themeFontsPackage: OoxmlPackage | null = null;
   let properties: DocumentProperties = EMPTY_DOCUMENT_PROPERTIES;
   let propertiesPackage: OoxmlPackage | null = null;
@@ -179,7 +142,9 @@ export function openHeadlessDocument(bytes: Uint8Array): OpenHeadlessDocumentRes
     documentThemeFonts() {
       const pkg = currentPackage();
       if (themeFontsPackage !== pkg) {
-        themeFonts = themeFontsOf(rootOf(REL.theme, '/word/theme/theme1.xml'));
+        themeFonts = Object.freeze(
+          collectThemeSchemeFaces(rootOf(REL.theme, '/word/theme/theme1.xml'))
+        );
         themeFontsPackage = pkg;
       }
       return themeFonts;

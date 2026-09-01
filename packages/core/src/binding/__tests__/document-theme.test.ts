@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlElement } from '../../store/package/ooxml-tree.ts';
-import { collectDocumentThemeColors } from '../document-theme.ts';
+import { collectDocumentThemeColors, collectDocumentThemeFonts } from '../document-theme.ts';
 
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 
@@ -10,6 +10,16 @@ function themeRoot(scheme: string): OoxmlElement {
   const xml =
     `<a:theme xmlns:a="${A}"><a:themeElements>` +
     `<a:clrScheme name="Office">${scheme}</a:clrScheme>` +
+    `</a:themeElements></a:theme>`;
+  const result = readOoxmlPart(xml, { name: '/word/theme/theme1.xml', contentType: 'app/xml' });
+  if (!result.ok) throw new Error(result.reason);
+  return result.part.root;
+}
+
+function fontThemeRoot(scheme: string): OoxmlElement {
+  const xml =
+    `<a:theme xmlns:a="${A}"><a:themeElements>` +
+    `<a:fontScheme name="Office">${scheme}</a:fontScheme>` +
     `</a:themeElements></a:theme>`;
   const result = readOoxmlPart(xml, { name: '/word/theme/theme1.xml', contentType: 'app/xml' });
   if (!result.ok) throw new Error(result.reason);
@@ -71,5 +81,21 @@ describe('collectDocumentThemeColors', () => {
 
   test('no theme root answers nothing', () => {
     expect(collectDocumentThemeColors(null)).toEqual([]);
+  });
+});
+
+test('theme fonts accept faces only beneath their schema slot', () => {
+  const malformed = collectDocumentThemeFonts(
+    fontThemeRoot(
+      '<a:latin typeface="Injected"/><a:ea typeface="Injected EA"/>' +
+        '<a:minorFont><a:latin typeface="Valid Minor"/><a:ea typeface="Valid EA"/></a:minorFont>'
+    )
+  );
+
+  expect(malformed).toEqual({
+    major: null,
+    minor: 'Valid Minor',
+    majorEastAsia: null,
+    minorEastAsia: 'Valid EA',
   });
 });

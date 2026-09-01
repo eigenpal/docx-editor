@@ -4,6 +4,7 @@ import {
   itemizeScriptFontSlots,
   type BidiEmbeddingLevels,
 } from '../index.ts';
+import { eastAsiaRunsOfSegments } from '../script-itemization.ts';
 
 const ltr = (text: string): BidiEmbeddingLevels => ({
   paragraphs: [{ from: 0, to: text.length, level: 0 }],
@@ -130,5 +131,80 @@ describe('deterministic script itemization', () => {
       { text: 'עברית', script: 'Hebr', slot: 'cs' },
       { text: '。漢字', script: 'Hani', slot: 'eastAsia' },
     ]);
+  });
+});
+
+describe('eastAsiaRunsOfSegments — the slot projection for piece splitting', () => {
+  const one = (text: string) => eastAsiaRunsOfSegments([text]);
+
+  test('mixed CJK and Latin text answers the merged eastAsia ranges in order', () => {
+    expect(one('甲方shall履行')).toEqual([
+      { segment: 0, from: 0, to: 2 },
+      { segment: 0, from: 7, to: 9 },
+    ]);
+  });
+
+  test('non-ASCII Common characters inherit the surrounding strong classification', () => {
+    // The fullwidth comma (U+FF0C, Common) takes the preceding CJK answer.
+    expect(one('甲，方')).toEqual([{ segment: 0, from: 0, to: 3 }]);
+    // Leading non-ASCII Common text takes the FOLLOWING strong item, same as itemization.
+    expect(one('§甲')).toEqual([{ segment: 0, from: 0, to: 2 }]);
+  });
+
+  test('ASCII characters never resolve through the eastAsia slot (ECMA-376 w:ascii)', () => {
+    // Word measures the `, ` in `中文, Hello` in the Latin face; inheriting the eastAsia
+    // slot painted the same separator at two widths depending on which side it sat.
+    expect(one('中文, Hello')).toEqual([{ segment: 0, from: 0, to: 2 }]);
+    expect(one('Hello, 中文')).toEqual([{ segment: 0, from: 7, to: 9 }]);
+    // An ASCII comma BETWEEN ideographs still stays in the base slots.
+    expect(one('甲, 方')).toEqual([
+      { segment: 0, from: 0, to: 1 },
+      { segment: 0, from: 3, to: 4 },
+    ]);
+  });
+
+  test('Latin-only text answers no ranges', () => {
+    expect(one('shall perform')).toEqual([]);
+    expect(one('')).toEqual([]);
+    expect(eastAsiaRunsOfSegments([])).toEqual([]);
+  });
+
+  test('classification crosses segment boundaries — a weak character alone in its own run', () => {
+    // A fullwidth comma alone in its own `w:t` between two CJK runs is East Asian text;
+    // per-piece classification saw no strong neighbour and dropped it to the Latin face.
+    expect(eastAsiaRunsOfSegments(['甲', '，', '方'])).toEqual([
+      { segment: 0, from: 0, to: 1 },
+      { segment: 1, from: 0, to: 1 },
+      { segment: 2, from: 0, to: 1 },
+    ]);
+    // A pure-ASCII segment between them keeps its own text Latin and blocks nothing else.
+    expect(eastAsiaRunsOfSegments(['中文', ', ', 'Hello'])).toEqual([
+      { segment: 0, from: 0, to: 2 },
+    ]);
+  });
+
+  test('an unsupported code point costs itself the face, not its whole piece', () => {
+    // U+0BA4 TAMIL LETTER TA is outside every supported range. Full itemization throws;
+    // slot resolution confines the fallback to that one character.
+    expect(() => itemizeScriptFontSlots('த甲', 0, ltr('த甲'))).toThrow(UnsupportedScriptError);
+    expect(one('甲த文')).toEqual([
+      { segment: 0, from: 0, to: 1 },
+      { segment: 0, from: 2, to: 3 },
+    ]);
+  });
+
+  test('surrogate-pair ideographs stay whole', () => {
+    // U+20000 (Ext B) is two UTF-16 units; the range must cover both.
+    expect(one('\u{20000}a')).toEqual([{ segment: 0, from: 0, to: 2 }]);
+  });
+
+  test('agrees with full itemization on strong slot boundaries', () => {
+    const text = 'A甲B';
+    const slots = itemizeScriptFontSlots(text, 0, ltr(text));
+    expect(one(text)).toEqual(
+      slots
+        .filter((item) => item.slot === 'eastAsia')
+        .map(({ from, to }) => ({ segment: 0, from, to }))
+    );
   });
 });
