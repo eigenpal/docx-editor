@@ -69,6 +69,7 @@ import {
   type PaintImageUrlPort,
 } from './semantic-paint-drawings.ts';
 import { mountEquationGeometry } from './semantic-paint-equation.ts';
+import { prepareTextPaintHost } from './semantic-paint-line-end-whitespace.ts';
 
 /**
  * When a field's result is drawn on its grey block, following Word's own View option.
@@ -1169,13 +1170,7 @@ function paintSpan(
   applyRunFaceStyle(element, faceStyle, ctx);
   applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span, ctx);
-  // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
-  // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
-  // native tab). Both must take the published box width so following runs start where
-  // breakParagraph placed them — body, cells, and headers/footers share this painter.
-  if (span.style.horizontalScalePercent !== 100 || span.text === '\t') {
-    element.style.width = `${span.box.width * ctx.scale}px`;
-  }
+  const textHost = prepareTextPaintHost(document, element, span, ctx.scale);
   if (span.text === '\t') {
     // Keep the model character for range mapping, but clip any native tab ink that would
     // spill past the reserved advance.
@@ -1200,7 +1195,7 @@ function paintSpan(
       applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
     }
   }
-  mountRunText(document, element, span.text, span.style, ctx.scale);
+  mountRunText(document, textHost, span.text, span.style, ctx.scale);
   if (span.projected) {
     element.dataset.docxField = '';
     element.setAttribute('contenteditable', 'false');

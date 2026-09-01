@@ -142,6 +142,8 @@ export interface StyleSpanRecord {
    */
   readonly fontSlot?: FontSlot;
   readonly box: LayoutBox;
+  /** Authored trailing spaces that layout may clip at the line's right edge. */
+  readonly lineEndWhitespace?: true;
   /**
    * Cumulative advances from {@link box}.x to each UTF-16 caret boundary in {@link text}.
    *
