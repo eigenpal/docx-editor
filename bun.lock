@@ -386,7 +386,7 @@
       "name": "@docx-editor.dev/docx-to-markdown",
       "version": "2.14.0",
       "dependencies": {
-        "@docx-editor.dev/fonts": "~2.14.0",
+        "@docx-editor.dev/fonts": "~2.14.1",
       },
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
