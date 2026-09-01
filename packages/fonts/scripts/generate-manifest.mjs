@@ -1,7 +1,7 @@
-// Generates src/manifest.generated.ts: one entry per shipped face with its byte length
-// and `sha256:` content hash, BAKED at authoring time so the runtime never hashes and a
-// consumer can pin what it loads. `--check` re-derives and fails on drift, which is the
-// CI guard that the recorded hashes always match the shipped bytes.
+// Generates src/manifest.generated.ts: one entry per shipped face with its byte length,
+// `sha256:` content hash, and a statically analyzable asset URL. The URL arguments must be
+// literals: bundlers cannot reliably expand a runtime filename inside `new URL(...,
+// import.meta.url)`. `--check` re-derives and fails on metadata or URL-map drift.
 
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
@@ -35,11 +35,11 @@ const body =
   ' * fetched asset is content-checked without hashing at runtime.\n' +
   ' */\n' +
   'export interface FontAssetManifestEntry {\n' +
-  '  /** Asset filename under the package\'s `assets/` directory, e.g. `Carlito-Bold.ttf`. */\n' +
+  "  /** Asset filename under the package's `assets/` directory, e.g. `Carlito-Bold.ttf`. */\n" +
   '  readonly file: string;\n' +
   '  /** Exact packaged size. A fetch returning any other length is rejected. */\n' +
   '  readonly byteLength: number;\n' +
-  '  /** `sha256:`-prefixed digest, re-derived and compared by the engine\'s admission path. */\n' +
+  "  /** `sha256:`-prefixed digest, re-derived and compared by the engine's admission path. */\n" +
   '  readonly hash: string;\n' +
   '}\n\n' +
   '/**\n' +
@@ -54,7 +54,19 @@ const body =
         `  { file: '${entry.file}', byteLength: ${entry.byteLength}, hash: '${entry.hash}' },`
     )
     .join('\n') +
-  '\n];\n';
+  '\n];\n\n' +
+  '/**\n' +
+  ' * Bundler-visible URL for every packaged face. Each `new URL` argument is deliberately\n' +
+  ' * a literal so Vite, webpack, and Turbopack emit the matching asset instead of collapsing\n' +
+  ' * a dynamic template to one arbitrary file.\n' +
+  ' *\n' +
+  ' * @internal\n' +
+  ' */\n' +
+  'export const FONT_ASSET_URLS: Readonly<Record<string, URL>> = {\n' +
+  entries
+    .map((entry) => `  '${entry.file}': new URL('../assets/${entry.file}', import.meta.url),`)
+    .join('\n') +
+  '\n};\n';
 
 if (process.argv.includes('--check')) {
   // Compare PARSED entries, not raw text: prettier re-wraps the generated file (the
@@ -67,11 +79,23 @@ if (process.argv.includes('--check')) {
   for (const match of current.matchAll(entryPattern)) {
     recorded.set(match[1], { byteLength: Number(match[2]), hash: match[3] });
   }
+  const recordedUrls = new Map();
+  const urlPattern =
+    /'([^']+\.(?:ttf|otf))'\s*:\s*new URL\(\s*'\.\.\/assets\/([^']+)'\s*,\s*import\.meta\.url\s*\)/g;
+  for (const match of current.matchAll(urlPattern)) {
+    recordedUrls.set(match[1], match[2]);
+  }
   const stale =
     recorded.size !== entries.length ||
+    recordedUrls.size !== entries.length ||
     entries.some((entry) => {
       const found = recorded.get(entry.file);
-      return !found || found.byteLength !== entry.byteLength || found.hash !== entry.hash;
+      return (
+        !found ||
+        found.byteLength !== entry.byteLength ||
+        found.hash !== entry.hash ||
+        recordedUrls.get(entry.file) !== entry.file
+      );
     });
   if (stale) {
     console.error(

@@ -143,3 +143,49 @@ export const FONT_ASSET_MANIFEST: readonly FontAssetManifestEntry[] = [
     hash: 'sha256:17bfc0a97d48393453f28422f109d47099d54875600ea88a8d61c5ddd2dbffc4',
   },
 ];
+
+/**
+ * Bundler-visible URL for every packaged face. Each `new URL` argument is deliberately
+ * a literal so Vite, webpack, and Turbopack emit the matching asset instead of collapsing
+ * a dynamic template to one arbitrary file.
+ *
+ * @internal
+ */
+export const FONT_ASSET_URLS: Readonly<Record<string, URL>> = {
+  'Caladea-Bold.ttf': new URL('../assets/Caladea-Bold.ttf', import.meta.url),
+  'Caladea-BoldItalic.ttf': new URL('../assets/Caladea-BoldItalic.ttf', import.meta.url),
+  'Caladea-Italic.ttf': new URL('../assets/Caladea-Italic.ttf', import.meta.url),
+  'Caladea-Regular.ttf': new URL('../assets/Caladea-Regular.ttf', import.meta.url),
+  'Carlito-Bold.ttf': new URL('../assets/Carlito-Bold.ttf', import.meta.url),
+  'Carlito-BoldItalic.ttf': new URL('../assets/Carlito-BoldItalic.ttf', import.meta.url),
+  'Carlito-Italic.ttf': new URL('../assets/Carlito-Italic.ttf', import.meta.url),
+  'Carlito-Regular.ttf': new URL('../assets/Carlito-Regular.ttf', import.meta.url),
+  'LiberationMono-Bold.ttf': new URL('../assets/LiberationMono-Bold.ttf', import.meta.url),
+  'LiberationMono-BoldItalic.ttf': new URL(
+    '../assets/LiberationMono-BoldItalic.ttf',
+    import.meta.url
+  ),
+  'LiberationMono-Italic.ttf': new URL('../assets/LiberationMono-Italic.ttf', import.meta.url),
+  'LiberationMono-Regular.ttf': new URL('../assets/LiberationMono-Regular.ttf', import.meta.url),
+  'LiberationSans-Bold.ttf': new URL('../assets/LiberationSans-Bold.ttf', import.meta.url),
+  'LiberationSans-BoldItalic.ttf': new URL(
+    '../assets/LiberationSans-BoldItalic.ttf',
+    import.meta.url
+  ),
+  'LiberationSans-Italic.ttf': new URL('../assets/LiberationSans-Italic.ttf', import.meta.url),
+  'LiberationSans-Regular.ttf': new URL('../assets/LiberationSans-Regular.ttf', import.meta.url),
+  'LiberationSerif-Bold.ttf': new URL('../assets/LiberationSerif-Bold.ttf', import.meta.url),
+  'LiberationSerif-BoldItalic.ttf': new URL(
+    '../assets/LiberationSerif-BoldItalic.ttf',
+    import.meta.url
+  ),
+  'LiberationSerif-Italic.ttf': new URL('../assets/LiberationSerif-Italic.ttf', import.meta.url),
+  'LiberationSerif-Regular.ttf': new URL('../assets/LiberationSerif-Regular.ttf', import.meta.url),
+  'TeXGyreAdventor-Bold.otf': new URL('../assets/TeXGyreAdventor-Bold.otf', import.meta.url),
+  'TeXGyreAdventor-BoldItalic.otf': new URL(
+    '../assets/TeXGyreAdventor-BoldItalic.otf',
+    import.meta.url
+  ),
+  'TeXGyreAdventor-Italic.otf': new URL('../assets/TeXGyreAdventor-Italic.otf', import.meta.url),
+  'TeXGyreAdventor-Regular.otf': new URL('../assets/TeXGyreAdventor-Regular.otf', import.meta.url),
+};

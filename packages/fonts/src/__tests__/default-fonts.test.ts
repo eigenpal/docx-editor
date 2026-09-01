@@ -200,6 +200,20 @@ describe('loadDefaultFonts', () => {
       expect(source.includes('base64')).toBe(false);
     }
   });
+
+  test('every packaged face uses a literal bundler-visible asset URL', () => {
+    const moduleSource = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
+    const manifestSource = readFileSync(
+      new URL('../manifest.generated.ts', import.meta.url),
+      'utf8'
+    );
+
+    expect(moduleSource).not.toContain('new URL(`../assets/${');
+    for (const entry of FONT_ASSET_MANIFEST) {
+      expect(manifestSource).toContain(`'../assets/${entry.file}'`);
+    }
+    expect(manifestSource.match(/new URL\(/g)).toHaveLength(FONT_ASSET_MANIFEST.length);
+  });
 });
 
 describe('lane boundary', () => {
