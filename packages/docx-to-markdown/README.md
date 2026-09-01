@@ -7,6 +7,10 @@ browser editor, PDF, and future exporters. It requires no DOM, browser, editor i
 
 ## Quick start
 
+To try the private package from this workspace, run `bun dev:markdown`. The standalone demo opens
+the real paginated editor beside a live page-by-page GFM preview, supports upload and drag/drop,
+and re-exports the current DOCX after edits.
+
 The one-shot API accepts DOCX bytes, opens and lays out the document, translates it, and disposes
 its internal session.
 

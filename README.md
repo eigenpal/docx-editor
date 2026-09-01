@@ -127,13 +127,14 @@ See [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 ```bash
 bun install
 bun run dev        # localhost:5173
+bun run dev:markdown # DOCX → paginated Markdown demo on localhost:5177
 bun run build
 bun run typecheck
 ```
 
 A live preview of `main` is auto-deployed at **[latest.docx-editor.dev](https://latest.docx-editor.dev/)** — useful for trying out changes before they ship to npm.
 
-Examples: [Vite](examples/vite) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration)
+Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration)
 
 **[Documentation](https://www.docx-editor.dev/docs)** | **[React props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props)** | **[Vue props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props)**
 

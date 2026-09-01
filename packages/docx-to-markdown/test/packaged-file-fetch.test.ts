@@ -37,3 +37,33 @@ test('packaged file fetch distinguishes missing files from cancellation', async 
     missing(new URL('file:///missing-font.woff2'), { signal: controller.signal })
   ).rejects.toBe('already-stopped');
 });
+
+test('packaged file fetch delegates bundler HTTP asset URLs to the host fetch', async () => {
+  const calls: Array<{ readonly url: string; readonly signal: AbortSignal | null }> = [];
+  const controller = new AbortController();
+  const fetcher = createPackagedFileFetch(
+    async () => {
+      throw new Error('file reader must not receive browser assets');
+    },
+    (async (input, init) => {
+      calls.push({
+        url: input instanceof URL ? input.href : String(input),
+        signal: init?.signal ?? null,
+      });
+      return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    }) as typeof fetch
+  );
+
+  const response = await fetcher(new URL('https://demo.test/assets/Carlito-Regular.ttf'), {
+    signal: controller.signal,
+  });
+
+  expect(response.status).toBe(200);
+  expect(new Uint8Array(await response.arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+  expect(calls).toEqual([
+    {
+      url: 'https://demo.test/assets/Carlito-Regular.ttf',
+      signal: controller.signal,
+    },
+  ]);
+});

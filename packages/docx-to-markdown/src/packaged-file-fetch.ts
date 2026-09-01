@@ -1,13 +1,11 @@
-import { open, readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-
 export type PackagedFileRead = (
-  path: string,
+  path: string | URL,
   options: { readonly signal?: AbortSignal }
 ) => Promise<Uint8Array>;
 
-async function readThroughHandle(path: string, signal?: AbortSignal): Promise<Uint8Array> {
+async function readThroughHandle(path: string | URL, signal?: AbortSignal): Promise<Uint8Array> {
   if (signal?.aborted) throw signal.reason;
+  const { open } = await import('node:fs/promises');
   const handle = await open(path, 'r');
   const closeOnAbort = (): void => {
     void handle.close();
@@ -36,6 +34,7 @@ async function readThroughHandle(path: string, signal?: AbortSignal): Promise<Ui
 }
 
 const nodePackagedFileRead: PackagedFileRead = async (path, { signal }) => {
+  const { readFile } = await import('node:fs/promises');
   try {
     return await readFile(path, { ...(signal ? { signal } : {}) });
   } catch (error) {
@@ -53,9 +52,10 @@ const nodePackagedFileRead: PackagedFileRead = async (path, { signal }) => {
   }
 };
 
-/** Build the file-only fetch adapter used for packaged fonts. Kept injectable for lifecycle tests. */
+/** Build the packaged-asset fetch adapter. Kept injectable for lifecycle and host-fetch tests. */
 export function createPackagedFileFetch(
-  read: PackagedFileRead = nodePackagedFileRead
+  read: PackagedFileRead = nodePackagedFileRead,
+  networkFetch: typeof fetch = fetch
 ): typeof fetch {
   return (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const hostSignal = init?.signal;
@@ -63,7 +63,11 @@ export function createPackagedFileFetch(
     const value =
       input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
     if (value.protocol !== 'file:') {
-      throw new TypeError(`Packaged font URL must use file:, received ${value.protocol}`);
+      // Source builds run the same package in browser demos. Vite and other bundlers rewrite
+      // `new URL('../assets/face.ttf', import.meta.url)` to an HTTP asset URL, so let the host
+      // fetch it normally. Published Node builds retain file: URLs and stay on the bounded
+      // file-reader path below.
+      return networkFetch(value, init);
     }
     // A host signal can come from another JS realm. Node's fs validator rejects such signals
     // even though fetch accepts them, so bridge it through this module's native controller.
@@ -72,7 +76,7 @@ export function createPackagedFileFetch(
     hostSignal?.addEventListener('abort', forwardAbort, { once: true });
     let bytes: Uint8Array;
     try {
-      bytes = await read(fileURLToPath(value), {
+      bytes = await read(value, {
         ...(readController ? { signal: readController.signal } : {}),
       });
       if (hostSignal?.aborted) throw hostSignal.reason;
