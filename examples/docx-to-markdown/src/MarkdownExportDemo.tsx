@@ -337,20 +337,22 @@ export function MarkdownExportDemo() {
 
   const openFile = useCallback(
     async (file: File) => {
+      // A validation error is terminal for whatever was in flight: supersede any queued live
+      // export, or its later completion silently overwrites this banner with 'ready'.
+      const refuse = (message: string): void => {
+        beginOperation();
+        if (exportTimer.current !== null) {
+          window.clearTimeout(exportTimer.current);
+          exportTimer.current = null;
+        }
+        setExportView((current) => ({ ...current, status: 'error', error: message }));
+      };
       if (!file.name.toLowerCase().endsWith('.docx') && file.type !== DOCX_MIME) {
-        setExportView((current) => ({
-          ...current,
-          status: 'error',
-          error: 'Choose a .docx file.',
-        }));
+        refuse('Choose a .docx file.');
         return;
       }
       if (file.size > MAX_DOCUMENT_BYTES) {
-        setExportView((current) => ({
-          ...current,
-          status: 'error',
-          error: 'This demo accepts DOCX files up to 64 MiB.',
-        }));
+        refuse('This demo accepts DOCX files up to 64 MiB.');
         return;
       }
       const operation = beginOperation();
@@ -376,22 +378,30 @@ export function MarkdownExportDemo() {
     exportTimer.current = window.setTimeout(() => {
       exportTimer.current = null;
       if (!operations.isCurrent(operation)) return;
-      void editor.current
-        ?.save()
-        .then((buffer) => {
-          if (buffer && operations.isCurrent(operation)) {
-            return runExport(new Uint8Array(buffer), operation);
-          }
-          return undefined;
-        })
-        .catch((error) => {
-          if (!operations.isCurrent(operation)) return;
-          setExportView((current) => ({
-            ...current,
-            status: 'error',
-            error: errorMessage(error),
-          }));
-        });
+      // Every exit must leave a terminal status: a null editor ref (unmount race) or a null
+      // save() result would otherwise pin the UI at 'queued' with Copy disabled forever.
+      const settle = (buffer: ArrayBuffer | null | undefined): Promise<void> | undefined => {
+        if (!operations.isCurrent(operation)) return undefined;
+        if (buffer) return runExport(new Uint8Array(buffer), operation);
+        setExportView((current) => ({
+          ...current,
+          status: current.result ? 'ready' : 'idle',
+        }));
+        return undefined;
+      };
+      const saved = editor.current?.save();
+      if (!saved) {
+        settle(null);
+        return;
+      }
+      void saved.then(settle).catch((error) => {
+        if (!operations.isCurrent(operation)) return;
+        setExportView((current) => ({
+          ...current,
+          status: 'error',
+          error: errorMessage(error),
+        }));
+      });
     }, LIVE_EXPORT_DELAY_MS);
   }, [beginOperation, operations, runExport]);
 

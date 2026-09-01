@@ -863,15 +863,20 @@ export function openTreeSession(
       },
 
       documentStyles() {
+        // Both resolvers invalidate `stylesCache`/`runDefaultsResolver` as a side effect of
+        // being CALLED after their part changes. Resolve them before the `??=` short-circuit,
+        // or a theme/styles part swap keeps serving previews through the replaced faces.
+        const stylesRootNow = resolveStylesRoot();
+        const themeRootNow = resolveThemeRoot();
         // Font and size for each style's PREVIEW come from the run-defaults resolver, which
         // already owns the basedOn chain, `docDefaults` and the theme font scheme — a
         // picker showing every row in the UI font is the thing this avoids.
         runDefaultsResolver ??= createRunDefaultsResolver(
-          resolveStylesRoot(),
-          collectDocumentThemeFonts(resolveThemeRoot())
+          stylesRootNow,
+          collectDocumentThemeFonts(themeRootNow)
         );
         const resolve = runDefaultsResolver;
-        stylesCache ??= collectDocumentStyles(resolveStylesRoot(), (styleId) => resolve(styleId));
+        stylesCache ??= collectDocumentStyles(stylesRootNow, (styleId) => resolve(styleId));
         return stylesCache;
       },
 
@@ -896,9 +901,12 @@ export function openTreeSession(
       },
 
       effectiveRunDefaults(paragraphId, runProperties) {
+        // Same rule as `documentStyles`: resolving runs the invalidation side effects.
+        const stylesRootNow = resolveStylesRoot();
+        const themeRootNow = resolveThemeRoot();
         runDefaultsResolver ??= createRunDefaultsResolver(
-          resolveStylesRoot(),
-          collectDocumentThemeFonts(resolveThemeRoot())
+          stylesRootNow,
+          collectDocumentThemeFonts(themeRootNow)
         );
         const store = bodyStore();
         if (!pStyleCache || pStyleCache.revision !== store.revision) {
