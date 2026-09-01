@@ -2434,6 +2434,7 @@ export interface ParagraphLayoutCache<T> {
     clear(): void;
     // (undocumented)
     get(key: ParagraphLayoutKey): T | undefined;
+    keyFor?(inputs: ParagraphKeyInputs): ParagraphLayoutKey;
     release?(key: ParagraphLayoutKey): void;
     retain(keys: ReadonlySet<ParagraphLayoutKey>): void;
     readonly retainAcrossPasses?: boolean;

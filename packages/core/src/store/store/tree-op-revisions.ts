@@ -204,7 +204,11 @@ const subtreeSitesCache = new WeakMap<OoxmlNode, readonly RevisionSite[]>();
  * One walk, so accept-all does not pay a traversal per revision — and paragraphs the last
  * commit did not touch are answered from {@link paragraphSitesCache} rather than re-walked.
  */
-function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): RevisionSite[] {
+function collectRevisionSitesIn(
+  part: OoxmlPart,
+  scopeRootId?: string,
+  retainAcrossReads = true
+): RevisionSite[] {
   const sites: RevisionSite[] = [];
   const visit = (
     node: OoxmlNode,
@@ -223,7 +227,7 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
     // live OUTSIDE any paragraph: a long document of tables otherwise re-walked every
     // `w:trPr`/`w:tcPr` per derivation even though only one paragraph had changed.
     if (node.kind === 'paragraph' || node.kind === 'table') {
-      const cached = subtreeSitesCache.get(node);
+      const cached = retainAcrossReads ? subtreeSitesCache.get(node) : undefined;
       if (cached) {
         // A plain loop, not a spread: spreading is bounded by the engine's argument-count
         // limit, and one adversarial table can legally hold more tracked markers than that
@@ -237,7 +241,7 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
       // paragraph, so a content site's depth inside its paragraph IS its depth.
       for (const child of node.children) visit(child, node, parent, 0);
       const own = sites.slice(before);
-      subtreeSitesCache.set(node, own);
+      if (retainAcrossReads) subtreeSitesCache.set(node, own);
       return;
     }
     const parentName = parent?.namespaceUri === WML_NAMESPACE_URI ? parent.localName : undefined;
@@ -323,6 +327,11 @@ function collectRevisionSitesIn(part: OoxmlPart, scopeRootId?: string): Revision
 /** Every revision-bearing element in the part. */
 export function collectRevisionSites(part: OoxmlPart): RevisionSite[] {
   return collectRevisionSitesIn(part);
+}
+
+/** Export-only cold derivation that does not populate interactive subtree memos. @internal */
+export function collectRevisionSitesTransient(part: OoxmlPart): RevisionSite[] {
+  return collectRevisionSitesIn(part, undefined, false);
 }
 
 /**

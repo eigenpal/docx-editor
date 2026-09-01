@@ -433,6 +433,7 @@ function placeCellParagraph(
   readonly fitted: boolean;
 } {
   const paragraphId = paragraph.id;
+  const keyFor = deps.cache?.keyFor?.bind(deps.cache) ?? paragraphLayoutKey;
   const listItem = deps.listItems?.get(paragraphId);
   const layoutInputs = resolveParagraphLayoutInputs(
     paragraph,
@@ -515,7 +516,7 @@ function placeCellParagraph(
   // `txbxList` property. A numbering edit moves only this property while the host's
   // subtree stays byte-identical; box-free paragraphs keep their pre-existing key shape.
   const hostedListToken = deps.hostedListTokenForParagraph?.(paragraph) ?? '';
-  const key = paragraphLayoutKey({
+  const key = keyFor({
     paragraph,
     properties: [
       ...props,

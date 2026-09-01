@@ -176,9 +176,12 @@ describe('browser/server semantic layout parity', () => {
   );
 });
 
-function performanceMeasurement(nodeArguments: readonly string[] = []): {
+function performanceMeasurement(
+  nodeArguments: readonly string[] = [],
+  mode: 'performance' | 'one-shot-performance' = 'performance'
+): {
   readonly pages: number;
-  readonly paragraphs: number;
+  readonly paragraphs?: number;
   readonly sourceBytes: number;
   readonly markdownLength: number;
   readonly hasDom: boolean;
@@ -187,7 +190,7 @@ function performanceMeasurement(nodeArguments: readonly string[] = []): {
   const result = spawnSync('node', [...nodeArguments, nodeWorker.path], {
     cwd: nodeWorker.repositoryRoot,
     env: childEnvironment({
-      DOCX_EDITOR_WORKER_MODE: 'performance',
+      DOCX_EDITOR_WORKER_MODE: mode,
       DOCX_EDITOR_WORKER_FIXTURE: fileURLToPath(
         new URL('../../../e2e/fixtures/typing-perf-521pp.docx', import.meta.url)
       ),
@@ -209,9 +212,12 @@ test('literal Node workers ignore inherited NODE_OPTIONS', () => {
   ).toEqual({ DOCX_EDITOR_WORKER_MODE: 'parity' });
 });
 
-function expectProductionFixture(measurement: ReturnType<typeof performanceMeasurement>): void {
+function expectProductionFixture(
+  measurement: ReturnType<typeof performanceMeasurement>,
+  options: { readonly inspectLayout?: boolean } = {}
+): void {
   expect(measurement.pages).toBeGreaterThanOrEqual(500);
-  expect(measurement.paragraphs).toBeGreaterThan(12_000);
+  if (options.inspectLayout ?? true) expect(measurement.paragraphs).toBeGreaterThan(12_000);
   expect(measurement.sourceBytes).toBeGreaterThan(400_000);
   expect(measurement.markdownLength).toBeGreaterThan(400_000);
   expect(measurement.hasDom).toBe(false);
@@ -226,13 +232,20 @@ test('a real 500-page shaped export stays below the default Node peak-memory bud
   expect(measurement.peakRssBytes).toBeLessThan(1024 * 1024 * 1024);
 }, 120_000);
 
-test('the same 500-page export fits a constrained sub-768 MiB runtime', () => {
-  // The merged core now retains East Asian font-slot semantics on every published style span.
-  // Keep enough old-space headroom for that intentional record shape while the independent RSS
-  // assertion below continues to enforce the actual sub-768 MiB serverless container contract.
-  const measurement = performanceMeasurement(['--max-old-space-size=364']);
-  expectProductionFixture(measurement);
+const CONSTRAINED_NODE_ARGUMENTS = ['--max-old-space-size=364', '--max-semi-space-size=8'] as const;
+
+test('the one-shot 500-page export fits a constrained sub-768 MiB runtime', () => {
+  const measurement = performanceMeasurement(CONSTRAINED_NODE_ARGUMENTS, 'one-shot-performance');
+  expectProductionFixture(measurement, { inspectLayout: false });
   // Constraining old space makes V8 collect rather than retain transient layout allocations,
   // proving the complete shaped export's live working set fits a bounded container.
+  expect(measurement.peakRssBytes).toBeLessThan(768 * 1024 * 1024);
+}, 120_000);
+
+test('the shared core session fits the same constrained sub-768 MiB runtime', () => {
+  const measurement = performanceMeasurement(CONSTRAINED_NODE_ARGUMENTS);
+  expectProductionFixture(measurement);
+  // Guard the exporter-neutral workflow used by PDF and future projections, including callers
+  // that intentionally retain the settled layout while translating it.
   expect(measurement.peakRssBytes).toBeLessThan(768 * 1024 * 1024);
 }, 120_000);

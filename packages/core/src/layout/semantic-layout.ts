@@ -731,6 +731,7 @@ function layoutBlocksPass(
   options: BlockLayoutOptions
 ): BlockLayoutResult {
   const geometry = options.geometry;
+  const keyFor = options.cache?.keyFor?.bind(options.cache) ?? paragraphLayoutKey;
   const contentWidthForReflow = geometry.width - geometry.margin.left - geometry.margin.right;
   const columns = resolveSectionColumns(
     options.sectionColumns ?? DEFAULT_SECTION_PROPERTIES.columns,
@@ -1158,7 +1159,7 @@ function layoutBlocksPass(
       entry = {
         kind: 'table',
         table: block,
-        key: paragraphLayoutKey({
+        key: keyFor({
           paragraph: block,
           properties: [
             ...(listToken ? [{ localName: 'list', attributes: { token: listToken } }] : []),
@@ -1230,7 +1231,7 @@ function layoutBlocksPass(
         tabStops,
         keeps: paragraphKeeps(props),
         ...(listItem ? { listItem } : {}),
-        key: paragraphLayoutKey({
+        key: keyFor({
           paragraph: block,
           properties: [
             ...props,

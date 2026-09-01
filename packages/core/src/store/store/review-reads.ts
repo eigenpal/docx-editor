@@ -115,6 +115,15 @@ const CONTENT_KINDS: Readonly<Record<string, ReviewRevisionKind>> = {
   revisionMoveTo: 'moveTo',
 };
 
+/** @internal */
+export interface ReviewDerivationDependencies {
+  readonly retainRevisionItems: boolean;
+  readonly revisionSites: typeof collectRevisionSites;
+  readonly locations: typeof locateSites;
+  readonly commentAnchors: typeof commentAnchorsOfStory;
+  readonly deepOrder: (part: OoxmlPart) => ReadonlyMap<string, number>;
+}
+
 /**
  * Every revision in one story, one card per DECISION.
  *
@@ -131,16 +140,25 @@ const CONTENT_KINDS: Readonly<Record<string, ReviewRevisionKind>> = {
  * SHARED, so the return type is readonly.
  */
 export function revisionItemsOf(part: OoxmlPart): readonly ReviewRevisionItem[] {
+  return revisionItemsOfWith(part, interactiveReviewDerivation);
+}
+
+function revisionItemsOfWith(
+  part: OoxmlPart,
+  dependencies: ReviewDerivationDependencies
+): readonly ReviewRevisionItem[] {
   const cacheable = part.root.kind !== 'paragraph';
-  if (cacheable) {
+  if (cacheable && dependencies.retainRevisionItems) {
     const cached = revisionItemsCache.get(part.root);
     // The name rides along because the items embed it (`ranges[*].partName`): a root is
     // the cache key, and serving one part's items to another part that shares the root
     // under a different name would stamp every range with the wrong part.
     if (cached && cached.name === part.name) return cached.items;
   }
-  const items = computeRevisionItemsOf(part);
-  if (cacheable) revisionItemsCache.set(part.root, { name: part.name, items });
+  const items = computeRevisionItemsOf(part, dependencies);
+  if (cacheable && dependencies.retainRevisionItems) {
+    revisionItemsCache.set(part.root, { name: part.name, items });
+  }
   return items;
 }
 
@@ -150,14 +168,17 @@ const revisionItemsCache = createRecentRootCache<{
   readonly items: readonly ReviewRevisionItem[];
 }>(8);
 
-function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
+function computeRevisionItemsOf(
+  part: OoxmlPart,
+  dependencies: ReviewDerivationDependencies
+): ReviewRevisionItem[] {
   // Sites FIRST, and the site index only when there is at least one. `locateSites` merges
   // an O(document) index per fresh root, and a structural keystroke on an untracked
   // document paid that merge for a list this function was about to answer "empty" over.
   // The site walk itself is per-subtree memoized, so it is the cheap half.
-  const sites = collectRevisionSites(part);
+  const sites = dependencies.revisionSites(part);
   if (sites.length === 0) return [];
-  const located = locateSites(part);
+  const located = dependencies.locations(part);
   const byAddress = new Map<
     string,
     {
@@ -297,7 +318,7 @@ function computeRevisionItemsOf(part: OoxmlPart): ReviewRevisionItem[] {
       replyIds: [],
     })
   );
-  return pairReplacements(items, deepParagraphOrderOfPart(part));
+  return pairReplacements(items, dependencies.deepOrder(part));
 }
 
 /**
@@ -667,6 +688,14 @@ export function commentItemsOf(
  * on) is a layout question the queue deliberately does not answer.
  */
 export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
+  return collectReviewItemsWith(input, interactiveReviewDerivation);
+}
+
+/** @internal */
+export function collectReviewItemsWith(
+  input: ReviewModelInput,
+  dependencies: ReviewDerivationDependencies
+): ReviewItem[] {
   // The body part deduped against the furniture list, so a caller passing a part twice —
   // or the same shared header under two sections — cannot double every card in it.
   const parts: OoxmlPart[] = [input.storyPart];
@@ -690,16 +719,16 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
   // With one story there is nothing to merge: the memoized per-part order IS the order,
   // and copying it entry-by-entry was a measurable slice of every full derivation.
   const order: ReadonlyMap<string, number> =
-    parts.length === 1 ? deepParagraphOrderOfPart(parts[0]!) : new Map<string, number>();
+    parts.length === 1 ? dependencies.deepOrder(parts[0]!) : new Map<string, number>();
   for (const part of parts) {
     // Loops, not `push(...spread)`: a heavily tracked part yields tens of thousands of
     // items, and spreading them as call arguments overflows the engine's argument limit.
-    for (const item of revisionItemsOf(part)) revisions.push(item);
-    for (const anchor of commentAnchorsOfStory(part)) anchors.push(anchor);
+    for (const item of revisionItemsOfWith(part, dependencies)) revisions.push(item);
+    for (const anchor of dependencies.commentAnchors(part)) anchors.push(anchor);
     if (parts.length === 1) continue;
     const merged = order as Map<string, number>;
     const base = merged.size;
-    for (const [id, position] of deepParagraphOrderOfPart(part)) {
+    for (const [id, position] of dependencies.deepOrder(part)) {
       if (!merged.has(id)) merged.set(id, base + position);
     }
   }
@@ -916,6 +945,14 @@ export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, n
   deepParagraphOrderCache.set(part.root, order);
   return order;
 }
+
+const interactiveReviewDerivation: ReviewDerivationDependencies = {
+  retainRevisionItems: true,
+  revisionSites: collectRevisionSites,
+  locations: locateSites,
+  commentAnchors: commentAnchorsOfStory,
+  deepOrder: deepParagraphOrderOfPart,
+};
 
 /** One shared empty list for the subtrees that hold no paragraph. */
 const EMPTY_DEEP_PARAGRAPH_IDS: readonly string[] = Object.freeze([]);

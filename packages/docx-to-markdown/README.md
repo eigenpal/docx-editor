@@ -49,11 +49,18 @@ exportMarkdownFrom(
   session: ExportSession,
   options?: MarkdownTranslationOptions
 ): Promise<MarkdownExportResult>;
+
+exportMarkdownLayout(
+  layout: ExportSemanticLayout,
+  options?: MarkdownTranslationOptions
+): MarkdownExportResult;
 ```
 
-`exportMarkdown` is the usual entry point. `openDocumentForExport` and `exportMarkdownFrom` are
-for workflows that need to reuse one settled layout, inspect semantic records, pre-process
-images, or share the same layout with another exporter.
+`exportMarkdown` is the usual entry point. It disposes its producer session after layout and
+translates the detached immutable snapshot, keeping the one-shot memory lifecycle bounded.
+`openDocumentForExport` and `exportMarkdownFrom` are for workflows that need to reuse one settled
+layout, inspect semantic records, pre-process images, or share the same layout with another
+exporter. `exportMarkdownLayout` translates a snapshot after its session has been disposed.
 
 ### Result shape
 
@@ -212,6 +219,12 @@ Always dispose a reusable session. `dispose()` is idempotent and releases docume
 pending resource work. A live `HeadlessDocumentView` can retain incremental state across document
 revisions; immutable byte sources default to one-shot cache ownership.
 
+If only one projection is needed, prefer `exportMarkdown(bytes)`. A reusable session deliberately
+retains source, resource, and alternate-display-mode state. To inspect or share a layout without
+retaining that producer state, finish any `validatedImageBytes` reads, dispose the session, then
+pass the already-published layout to `exportMarkdownLayout`. Published layouts are immutable
+snapshots and remain valid after disposal.
+
 ## Images
 
 Without an `image` mapper, a drawing emits only its escaped accessibility label. The mapper is
@@ -221,7 +234,7 @@ Returning a Promise is rejected instead of emitting a broken destination.
 ```ts
 import { mkdir, writeFile } from 'node:fs/promises';
 import {
-  exportMarkdownFrom,
+  exportMarkdownLayout,
   forEachSemanticDrawing,
   openDocumentForExport,
 } from '@docx-editor.dev/docx-to-markdown';
@@ -229,32 +242,35 @@ import {
 const opened = await openDocumentForExport(bytes);
 if (!opened.ok) throw new Error(`DOCX was refused: ${opened.reason}`);
 
-try {
-  const layout = await opened.session.layout();
-  const urls = new WeakMap<object, string>();
-  const writes: Promise<void>[] = [];
-  let index = 0;
+const { layout, urls } = await (async () => {
+  try {
+    const layout = await opened.session.layout();
+    const urls = new WeakMap<object, string>();
+    const writes: Promise<void>[] = [];
+    let index = 0;
 
-  await mkdir('public/docx-media', { recursive: true });
-  forEachSemanticDrawing(layout, ({ drawing }) => {
-    const media = opened.session.validatedImageBytes(drawing);
-    if (!media) return;
-    const name = `image-${++index}.bin`;
-    urls.set(drawing, `/docx-media/${name}`);
-    writes.push(writeFile(`public/docx-media/${name}`, media));
-  });
-  await Promise.all(writes);
+    await mkdir('public/docx-media', { recursive: true });
+    forEachSemanticDrawing(layout, ({ drawing }) => {
+      const media = opened.session.validatedImageBytes(drawing);
+      if (!media) return;
+      const name = `image-${++index}.bin`;
+      urls.set(drawing, `/docx-media/${name}`);
+      writes.push(writeFile(`public/docx-media/${name}`, media));
+    });
+    await Promise.all(writes);
+    return { layout, urls };
+  } finally {
+    opened.session.dispose();
+  }
+})();
 
-  const result = await exportMarkdownFrom(opened.session, {
-    image: (drawing) => {
-      const url = urls.get(drawing);
-      return url ? { url } : { skip: true };
-    },
-  });
-  console.log(result.markdown);
-} finally {
-  opened.session.dispose();
-}
+const result = exportMarkdownLayout(layout, {
+  image: (drawing) => {
+    const url = urls.get(drawing);
+    return url ? { url } : { skip: true };
+  },
+});
+console.log(result.markdown);
 ```
 
 `validatedImageBytes` returns a defensive copy only for a ready drawing belonging to that

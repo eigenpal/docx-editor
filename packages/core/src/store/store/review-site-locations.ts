@@ -5,7 +5,7 @@
 // per-row memos, and the tracked-row anchors; the queue asks it for ranges.
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { paragraphOffsetIndex } from './tree-op-segments.ts';
+import { paragraphOffsetIndex, transientParagraphOffsetIndex } from './tree-op-segments.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 
 /** The `w:p` a node sits inside, and the model offset it starts at within that paragraph. */
@@ -27,26 +27,38 @@ export interface SiteLocation {
  * range the caret and the ops disagreed with.
  */
 export function locateSites(part: OoxmlPart): ReadonlyMap<string, SiteLocation> {
+  return locateSitesWithPolicy(part, true);
+}
+
+/** Export-only cold derivation that does not populate interactive location memos. @internal */
+export function locateSitesTransient(part: OoxmlPart): ReadonlyMap<string, SiteLocation> {
+  return locateSitesWithPolicy(part, false);
+}
+
+function locateSitesWithPolicy(
+  part: OoxmlPart,
+  retainAcrossReads: boolean
+): ReadonlyMap<string, SiteLocation> {
   // Memoized on the immutable root: the merged index is a pure function of the tree, and
   // every caller in one derivation pass — the revision cards, the pro custom-node cards, an
   // automation read — asks for the same one. Rebuilding it merged 80k+ entries per call on
   // a long document. The instance is SHARED, so the return type is ReadonlyMap: a caller
   // mutating it would poison every later reader of this root, undo included.
-  const merged = locatedSitesCache.get(part.root);
+  const merged = retainAcrossReads ? locatedSitesCache.get(part.root) : undefined;
   if (merged) return merged;
   const located = new Map<string, SiteLocation>();
   const walkParagraph = (paragraph: OoxmlParagraphNode): void => {
     // Paragraph-local by construction: every offset here is measured inside this paragraph,
     // so an unchanged paragraph's answer is still true and is reused rather than re-walked.
     // A keystroke otherwise re-derived the location of every node in the document.
-    const memo = paragraphLocationsCache.get(paragraph);
+    const memo = retainAcrossReads ? paragraphLocationsCache.get(paragraph) : undefined;
     if (memo) {
       for (const [id, location] of memo) located.set(id, location);
       return;
     }
     const own = new Map<string, SiteLocation>();
-    locateInParagraph(paragraph, own);
-    paragraphLocationsCache.set(paragraph, own);
+    locateInParagraph(paragraph, own, retainAcrossReads);
+    if (retainAcrossReads) paragraphLocationsCache.set(paragraph, own);
     for (const [id, location] of own) located.set(id, location);
   };
   const walk = (node: OoxmlNode, depth: number): void => {
@@ -66,12 +78,12 @@ export function locateSites(part: OoxmlPart): ReadonlyMap<string, SiteLocation> 
     // like the location walk above: the ordinary paragraph with no textbox costs one
     // cached empty answer instead of a descent through every run.
     if (node.kind === 'paragraph') {
-      let entries = paragraphRowAnchorsCache.get(node);
+      let entries = retainAcrossReads ? paragraphRowAnchorsCache.get(node) : undefined;
       if (!entries) {
         const own: (readonly [string, SiteLocation])[] = [];
-        collectRowAnchorEntries(node, 0, own);
+        collectRowAnchorEntries(node, 0, own, retainAcrossReads);
         entries = own;
-        paragraphRowAnchorsCache.set(node, entries);
+        if (retainAcrossReads) paragraphRowAnchorsCache.set(node, entries);
       }
       for (const [markerId, location] of entries) located.set(markerId, location);
       return;
@@ -82,17 +94,17 @@ export function locateSites(part: OoxmlPart): ReadonlyMap<string, SiteLocation> 
       // markers are recorded by the OUTER row's walk too, anchored to the outer row's
       // first paragraph — and then overwritten when the walk below reaches the nested row
       // itself, whose own anchor wins. The per-row entries replay in that same order.
-      let entries = rowMarkerAnchorsCache.get(node);
+      let entries = retainAcrossReads ? rowMarkerAnchorsCache.get(node) : undefined;
       if (!entries) {
         entries = computeRowMarkerAnchors(node);
-        rowMarkerAnchorsCache.set(node, entries);
+        if (retainAcrossReads) rowMarkerAnchorsCache.set(node, entries);
       }
       for (const [markerId, location] of entries) located.set(markerId, location);
     }
     for (const child of node.children) anchorTrackedRows(child, depth + 1);
   };
   anchorTrackedRows(part.root, 0);
-  locatedSitesCache.set(part.root, located);
+  if (retainAcrossReads) locatedSitesCache.set(part.root, located);
   return located;
 }
 
@@ -103,18 +115,21 @@ export function locateSites(part: OoxmlPart): ReadonlyMap<string, SiteLocation> 
 function collectRowAnchorEntries(
   node: OoxmlNode,
   depth: number,
-  out: (readonly [string, SiteLocation])[]
+  out: (readonly [string, SiteLocation])[],
+  retainAcrossReads: boolean
 ): void {
   if (node.kind === 'textValue' || depth > 64) return;
   if (node.kind === 'tableRow') {
-    let entries = rowMarkerAnchorsCache.get(node);
+    let entries = retainAcrossReads ? rowMarkerAnchorsCache.get(node) : undefined;
     if (!entries) {
       entries = computeRowMarkerAnchors(node);
-      rowMarkerAnchorsCache.set(node, entries);
+      if (retainAcrossReads) rowMarkerAnchorsCache.set(node, entries);
     }
     for (const entry of entries) out.push(entry);
   }
-  for (const child of node.children) collectRowAnchorEntries(child, depth + 1, out);
+  for (const child of node.children) {
+    collectRowAnchorEntries(child, depth + 1, out, retainAcrossReads);
+  }
 }
 
 /** Tracked row/cell marker anchors of one row subtree, memoized on the immutable row. */
@@ -185,9 +200,12 @@ const paragraphRowAnchorsCache = new WeakMap<
 
 function locateInParagraph(
   paragraph: OoxmlParagraphNode,
-  located: Map<string, SiteLocation>
+  located: Map<string, SiteLocation>,
+  retainAcrossReads: boolean
 ): void {
-  const offsets = paragraphOffsetIndex(paragraph);
+  const offsets = retainAcrossReads
+    ? paragraphOffsetIndex(paragraph)
+    : transientParagraphOffsetIndex(paragraph);
   const place = (node: OoxmlNode, start: number, end: number, depth: number): void => {
     if (node.kind === 'textValue' || depth > 64) return;
     located.set(node.id, { paragraphId: paragraph.id, start, end });

@@ -10,6 +10,7 @@ import {
   acquireSharedExportShaping,
   openDocumentForExport as openCoreDocumentForExport,
   type ExportDocumentSource,
+  type ExportSemanticLayout,
   type ExportSession,
   type OpenDocumentForExportOptions,
   type OpenDocumentForExportResult,
@@ -25,6 +26,7 @@ import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
 import { loadDefaultFonts } from '@docx-editor.dev/fonts';
 import {
   exportMarkdownFrom as translateMarkdown,
+  exportMarkdownLayout as translateMarkdownLayout,
   type MarkdownExportOptions,
   type MarkdownExportResult,
   type MarkdownTranslationOptions,
@@ -175,6 +177,14 @@ export function exportMarkdownFrom(
   return translateMarkdown(session, options);
 }
 
+/** Translate a detached immutable core layout after its producer session is disposed. @public */
+export function exportMarkdownLayout(
+  layout: ExportSemanticLayout,
+  options: MarkdownTranslationOptions = {}
+): MarkdownExportResult {
+  return translateMarkdownLayout(layout, options);
+}
+
 /** Convert untrusted DOCX bytes with Node-safe fonts, shaping, and image decoding defaults. @public */
 export async function exportMarkdown(
   source: ExportDocumentSource,
@@ -184,9 +194,11 @@ export async function exportMarkdown(
   if (!opened.ok) {
     throw new DocumentOpenError(opened.reason, opened.detail);
   }
+  let layout: ExportSemanticLayout;
   try {
-    return await translateMarkdown(opened.session, options);
+    layout = await opened.session.layout();
   } finally {
     opened.session.dispose();
   }
+  return translateMarkdownLayout(layout, options);
 }

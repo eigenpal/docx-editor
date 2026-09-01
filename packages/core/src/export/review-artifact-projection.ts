@@ -1,12 +1,10 @@
 // Normalize comments and tracked changes onto the exact layout/package revision being published.
 
 import {
-  collectReviewItems,
   commentBodyText,
   commentInitials,
   commentPartNameOf,
   commentsExtendedPartNameOf,
-  deepParagraphOrderOfPart,
   isPotentialRevisionElement,
   reviewItemRanges,
   resolveHeaderFooterPartsBySection,
@@ -17,6 +15,7 @@ import {
   type ReviewItem,
   type ReviewRange,
 } from '@docx-editor.dev/core/store';
+import { createExportReviewDerivationScope } from '../store/store/review-export-derivation.ts';
 import {
   forEachSemanticDrawing,
   forEachSemanticStory,
@@ -139,9 +138,10 @@ function paragraphOccurrences(
   layout: SemanticLayout,
   pkg: OoxmlPackage,
   parts: readonly OoxmlPart[],
-  ranges: readonly ReviewRange[]
+  ranges: readonly ReviewRange[],
+  deepOrder: (part: OoxmlPart) => ReadonlyMap<string, number>
 ): ParagraphOccurrenceIndex {
-  const orderByPart = new Map(parts.map((part) => [part.name, deepParagraphOrderOfPart(part)]));
+  const orderByPart = new Map(parts.map((part) => [part.name, deepOrder(part)]));
   const boundsByPart = paragraphBoundsByPart(ranges, orderByPart);
   const byPart = new Map<string, Map<string, ParagraphOccurrence[]>>();
   const occurrenceMaps = new Map<string, Map<string, ParagraphOccurrence>>();
@@ -571,7 +571,8 @@ export function projectReviewArtifacts(
   const parts = [main, ...furnitureParts];
   const commentsPart = pkg.parts.get(commentPartNameOf(pkg, main.name));
   if (!hasReviewMarkup(parts, commentsPart)) return [];
-  const items = collectReviewItems({
+  const derivation = createExportReviewDerivationScope();
+  const items = derivation.collectReviewItems({
     storyPart: main,
     furnitureParts,
     commentsPart,
@@ -583,7 +584,10 @@ export function projectReviewArtifacts(
   const ranges = items.flatMap((item) => reviewItemRanges(item));
   // Orphan-only documents still publish their metadata, but avoid walking a potentially huge
   // semantic graph when there is no source range that can have a physical page occurrence.
-  const occurrences = ranges.length > 0 ? paragraphOccurrences(layout, pkg, parts, ranges) : null;
+  const occurrences =
+    ranges.length > 0
+      ? paragraphOccurrences(layout, pkg, parts, ranges, derivation.deepParagraphOrderOfPart)
+      : null;
   const ids = publicReviewIds(items);
   return items
     .map((item) => artifactOf(item, occurrences, ids))

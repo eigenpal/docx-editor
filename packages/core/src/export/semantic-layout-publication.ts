@@ -19,8 +19,8 @@ function isPlainRecord(value: object): boolean {
 
 function freezePublishedValue(
   value: unknown,
-  visited: WeakSet<object>,
-  activePath: WeakSet<object>,
+  visited: Set<object>,
+  activePath: Set<object>,
   ownerKey?: PropertyKey,
   trustedRoots?: ReadonlySet<object>
 ): void {
@@ -90,9 +90,9 @@ export function publishImmutableSemanticLayout<T extends SemanticLayout>(layout:
       const root = descriptor.value;
       if (root === null || typeof root !== 'object') continue;
       if (trustedFurnitureRoots.has(root)) continue;
-      const activePath = new WeakSet<object>();
+      const activePath = new Set<object>();
       activePath.add(layout);
-      freezePublishedValue(root, new WeakSet(), activePath, key);
+      freezePublishedValue(root, new Set(), activePath, key);
       trustedFurnitureRoots.add(root);
     }
   }
@@ -102,9 +102,11 @@ export function publishImmutableSemanticLayout<T extends SemanticLayout>(layout:
     trustedRoots?: ReadonlySet<object>
   ): void => {
     for (let offset = 0; offset < values.length; offset += batchSize) {
-      const visited = new WeakSet<object>();
+      // The published graph already owns every visited record. Strong membership cannot extend
+      // a record's lifetime here, while avoiding V8 ephemeron bookkeeping at peak export memory.
+      const visited = new Set<object>();
       for (let index = offset; index < Math.min(values.length, offset + batchSize); index += 1) {
-        const activePath = new WeakSet<object>();
+        const activePath = new Set<object>();
         activePath.add(layout);
         freezePublishedValue(values[index], visited, activePath, undefined, trustedRoots);
       }
@@ -129,9 +131,9 @@ export function publishImmutableSemanticLayout<T extends SemanticLayout>(layout:
       freezeArrayInBatches(descriptor.value, 8);
       continue;
     }
-    const activePath = new WeakSet<object>();
+    const activePath = new Set<object>();
     activePath.add(layout);
-    freezePublishedValue(descriptor.value, new WeakSet(), activePath, key);
+    freezePublishedValue(descriptor.value, new Set(), activePath, key);
   }
   Object.freeze(layout);
   return layout;

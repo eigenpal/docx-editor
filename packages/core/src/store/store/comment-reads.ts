@@ -40,7 +40,7 @@ import {
   createCommentScanBudget,
   walkCharged,
 } from '../package/comment-lifecycle-scan.ts';
-import { paragraphOffsetIndex } from './tree-op-segments.ts';
+import { paragraphOffsetIndex, transientParagraphOffsetIndex } from './tree-op-segments.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 
 /** The `w15` namespace: `commentsExtended.xml` — thread parent and resolved state. */
@@ -132,22 +132,47 @@ interface MarkerPoint {
  * yielded no anchor at all and reported the comment orphaned; and it gave a note reference or
  * an atomic field nothing where the model gives them one unit each.
  */
-function markersInParagraph(paragraph: OoxmlParagraphNode): readonly MarkerPoint[] {
+function markersInParagraphWithPolicy(
+  paragraph: OoxmlParagraphNode,
+  retainAcrossReads: boolean
+): readonly MarkerPoint[] {
   // Paragraph-local by construction, like the offset index it reads — an unchanged
   // paragraph's markers sit at the offsets they sat at last time. Every full anchor pass
   // otherwise re-walked all paragraphs of the story, comments or none.
-  const cached = markerPointsCache.get(paragraph);
+  const cached = retainAcrossReads ? markerPointsCache.get(paragraph) : undefined;
   if (cached) return cached;
-  const points = computeMarkersInParagraph(paragraph);
-  markerPointsCache.set(paragraph, points);
+  const points = computeMarkersInParagraph(paragraph, retainAcrossReads);
+  if (retainAcrossReads) markerPointsCache.set(paragraph, points);
   return points;
 }
 
 /** Marker points per immutable paragraph node. */
 const markerPointsCache = new WeakMap<OoxmlParagraphNode, readonly MarkerPoint[]>();
 
-function computeMarkersInParagraph(paragraph: OoxmlParagraphNode): MarkerPoint[] {
-  const offsets = paragraphOffsetIndex(paragraph);
+function computeMarkersInParagraph(
+  paragraph: OoxmlParagraphNode,
+  retainAcrossReads: boolean
+): MarkerPoint[] {
+  // Nearly every paragraph has no marker. Check the exact bounded containers the real walk
+  // descends before building a full node-offset index, which is the expensive retained value.
+  const hasMarker = (children: readonly OoxmlNode[], depth: number): boolean => {
+    for (const child of children) {
+      if (child.kind === 'textValue') continue;
+      if (child.kind === 'commentRangeStart' || child.kind === 'commentRangeEnd') return true;
+      if (
+        (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) &&
+        depth < 32 &&
+        hasMarker(child.children, depth + 1)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+  if (!hasMarker(paragraph.children, 0)) return [];
+  const offsets = retainAcrossReads
+    ? paragraphOffsetIndex(paragraph)
+    : transientParagraphOffsetIndex(paragraph);
   const points: MarkerPoint[] = [];
   const walk = (children: readonly OoxmlNode[], depth: number): void => {
     for (const child of children) {
@@ -190,12 +215,24 @@ function computeMarkersInParagraph(paragraph: OoxmlParagraphNode): MarkerPoint[]
  * to text they never saw.
  */
 export function commentAnchorsOfStory(part: OoxmlPart): CommentAnchor[] {
+  return commentAnchorsOfStoryWithPolicy(part, true);
+}
+
+/** Export-only cold derivation that does not populate interactive comment memos. @internal */
+export function commentAnchorsOfStoryTransient(part: OoxmlPart): CommentAnchor[] {
+  return commentAnchorsOfStoryWithPolicy(part, false);
+}
+
+function commentAnchorsOfStoryWithPolicy(
+  part: OoxmlPart,
+  retainAcrossReads: boolean
+): CommentAnchor[] {
   const open = new Map<string, CommentPosition>();
   const anchors: CommentAnchor[] = [];
   let lastPosition: CommentPosition | null = null;
 
-  for (const paragraph of storyParagraphsOfPart(part)) {
-    for (const point of markersInParagraph(paragraph)) {
+  for (const paragraph of storyParagraphsOfPartWithPolicy(part, retainAcrossReads)) {
+    for (const point of markersInParagraphWithPolicy(paragraph, retainAcrossReads)) {
       const position: CommentPosition = { paragraphId: paragraph.id, offset: point.offset };
       lastPosition = position;
       if (point.kind === 'start') {
@@ -245,10 +282,13 @@ export function commentAnchorsOfStory(part: OoxmlPart): CommentAnchor[] {
  * provenance therefore scans the whole supplied story part, including normal notes, separators,
  * table cells, content controls, and nested textbox stories.
  */
-function storyParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
+function storyParagraphsOfPartWithPolicy(
+  part: OoxmlPart,
+  retainAcrossReads: boolean
+): readonly OoxmlParagraphNode[] {
   // Memoized on the immutable root: the enumeration is a pure function of the tree, and the
   // anchor pass runs once per story part per derivation.
-  const cached = storyParagraphsCache.get(part.root);
+  const cached = retainAcrossReads ? storyParagraphsCache.get(part.root) : undefined;
   if (cached) return cached;
   const found: OoxmlNode[] = [];
   const collect = (node: OoxmlNode, depth: number): void => {
@@ -262,7 +302,7 @@ function storyParagraphsOfPart(part: OoxmlPart): readonly OoxmlParagraphNode[] {
   };
   collect(part.root, 0);
   const paragraphs = found.filter((node): node is OoxmlParagraphNode => node.kind === 'paragraph');
-  storyParagraphsCache.set(part.root, paragraphs);
+  if (retainAcrossReads) storyParagraphsCache.set(part.root, paragraphs);
   return paragraphs;
 }
 

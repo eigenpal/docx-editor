@@ -51,6 +51,13 @@ export interface ParagraphLayoutCache<T> {
    * only purpose is protecting a value reused by a future pass.
    */
   readonly retainAcrossPasses?: boolean;
+  /**
+   * Derive a break key inside this cache's ownership scope.
+   *
+   * Export caches use this hook to release construction-only subtree fingerprints together
+   * with measured breaks. Optional so structural/custom cache implementations remain valid.
+   */
+  keyFor?(inputs: ParagraphKeyInputs): ParagraphLayoutKey;
   get(key: ParagraphLayoutKey): T | undefined;
   set(key: ParagraphLayoutKey, value: T): void;
   /** Release a break after final placement when this cache was created for a one-shot pass. */
@@ -238,7 +245,32 @@ export function aggregateParagraphTokensForTableBlock(
  * parent's token, avoiding a WeakMap entry for every leaf. No inherited/contextual state enters
  * this digest; every field below belongs to the node itself, so identity reuse is always sound.
  */
-const nodeLayoutDigests = new WeakMap<object, string>();
+interface LayoutKeyMemoMap<K extends object, V> {
+  get(key: K): V | undefined;
+  set(key: K, value: V): unknown;
+}
+
+interface LayoutKeyMemoScope {
+  readonly nodeDigests: LayoutKeyMemoMap<object, string>;
+  readonly paragraphKeys: LayoutKeyMemoMap<object, ParagraphKeyMemo>;
+}
+
+function createLayoutKeyMemoScope(retainAcrossPasses: boolean): LayoutKeyMemoScope {
+  return retainAcrossPasses
+    ? {
+        nodeDigests: new WeakMap<object, string>(),
+        paragraphKeys: new WeakMap<object, ParagraphKeyMemo>(),
+      }
+    : {
+        // A one-shot export owns the complete immutable tree until publication, so weak keys
+        // cannot disappear during layout. Ordinary maps avoid ephemeron bookkeeping and, more
+        // importantly, are discarded by ParagraphLayoutCache.clear() before review projection.
+        nodeDigests: new Map<object, string>(),
+        paragraphKeys: new Map<object, ParagraphKeyMemo>(),
+      };
+}
+
+const sharedLayoutKeyMemoScope = createLayoutKeyMemoScope(true);
 
 interface NodeTokenTestObserver {
   nodeVisits: number;
@@ -280,16 +312,19 @@ export function layoutNodeTokenVisitTestRecorder(): {
   };
 }
 
-function nodeLayoutIdentity(node: OoxmlNode): string {
+function nodeLayoutIdentity(node: OoxmlNode, scope: LayoutKeyMemoScope): string {
   if (node.kind === 'textValue') return layoutTokenDigest(computeNodeToken(node));
-  const cached = nodeLayoutDigests.get(node);
+  const cached = scope.nodeDigests.get(node);
   if (cached !== undefined) return cached;
-  const digest = layoutTokenDigest(computeNodeToken(node));
-  nodeLayoutDigests.set(node, digest);
+  const digest = layoutTokenDigest(computeNodeToken(node, scope));
+  scope.nodeDigests.set(node, digest);
   return digest;
 }
 
-function computeNodeToken(node: OoxmlNode): string {
+function computeNodeToken(
+  node: OoxmlNode,
+  scope: LayoutKeyMemoScope = sharedLayoutKeyMemoScope
+): string {
   if (nodeTokenTestObserver) nodeTokenTestObserver.nodeVisits += 1;
   if (node.kind === 'textValue') return framedTokenJoin(['text', node.value]);
   const attributes: string[] = [];
@@ -311,7 +346,7 @@ function computeNodeToken(node: OoxmlNode): string {
     children.push(
       child.kind === 'textValue'
         ? computeNodeToken(child)
-        : framedTokenJoin(['child-digest', nodeLayoutIdentity(child)])
+        : framedTokenJoin(['child-digest', nodeLayoutIdentity(child, scope)])
     );
   }
   return framedTokenJoin([
@@ -403,7 +438,6 @@ interface ParagraphKeyMemo {
  * entire OOXML subtree into every cache key. A few slots preserve the common prepass/placement
  * widths; eviction only causes a safe miss.
  */
-const paragraphKeyMemos = new WeakMap<object, ParagraphKeyMemo>();
 const MAX_PARAGRAPH_KEY_SLOTS = 8;
 
 /**
@@ -413,6 +447,13 @@ const MAX_PARAGRAPH_KEY_SLOTS = 8;
  * where lines fall must be in here, or the cache serves a break taken under different conditions.
  */
 export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutKey {
+  return paragraphLayoutKeyInScope(inputs, sharedLayoutKeyMemoScope);
+}
+
+function paragraphLayoutKeyInScope(
+  inputs: ParagraphKeyInputs,
+  scope: LayoutKeyMemoScope
+): ParagraphLayoutKey {
   // Width is quantized to a thousandth of a point: a width that differs by less than that
   // cannot move a break, and keying on the raw float would miss on every scroll that
   // recomputes it.
@@ -421,12 +462,12 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
   const projectionToken = inputs.projectionToken ?? '';
   const exclusionToken = inputs.exclusionToken ?? '';
   const properties = reusableLayoutTokenDigest(propertiesToken(inputs.properties));
-  const nodeIdentity = nodeLayoutIdentity(inputs.paragraph);
+  const nodeIdentity = nodeLayoutIdentity(inputs.paragraph, scope);
   const producerIdentity = reusableLayoutTokenDigest(inputs.producer);
   const drawingIdentity = reusableLayoutTokenDigest(drawingToken);
   const projectionIdentity = reusableLayoutTokenDigest(projectionToken);
   const exclusionIdentity = reusableLayoutTokenDigest(exclusionToken);
-  let memo = paragraphKeyMemos.get(inputs.paragraph);
+  let memo = scope.paragraphKeys.get(inputs.paragraph);
   const entryIndex = memo?.entries.findIndex(
     (entry) =>
       entry.producerIdentity === producerIdentity &&
@@ -444,7 +485,7 @@ export function paragraphLayoutKey(inputs: ParagraphKeyInputs): ParagraphLayoutK
   const key = `plk:${nodeIdentity}:${producerIdentity}:${width}:${drawingIdentity}:${projectionIdentity}:${exclusionIdentity}:${properties}`;
   if (!memo) {
     memo = { entries: [] };
-    paragraphKeyMemos.set(inputs.paragraph, memo);
+    scope.paragraphKeys.set(inputs.paragraph, memo);
   }
   const sharedProperties =
     memo.entries.find((entry) => entry.propertiesToken === properties)?.propertiesToken ??
@@ -567,6 +608,7 @@ export function createParagraphLayoutCache<T>(
   // Insertion order IS the recency order: a hit deletes and re-inserts, so the oldest key
   // is always the first one the iterator yields.
   const entries = new Map<ParagraphLayoutKey, { value: T; generation: number }>();
+  let keyMemoScope = createLayoutKeyMemoScope(retainAcrossPasses);
   let generation = 0;
   let retentionTick = 0;
   let hits = 0;
@@ -575,6 +617,9 @@ export function createParagraphLayoutCache<T>(
 
   return {
     retainAcrossPasses,
+    keyFor(inputs) {
+      return paragraphLayoutKeyInScope(inputs, keyMemoScope);
+    },
     get(key) {
       const entry = entries.get(key);
       if (entry === undefined) {
@@ -628,6 +673,9 @@ export function createParagraphLayoutCache<T>(
 
     clear() {
       entries.clear();
+      // Reset both weak live-editor memos and strong one-shot memos. For byte exports this is
+      // the phase boundary before review projection/publication, not merely cache housekeeping.
+      keyMemoScope = createLayoutKeyMemoScope(retainAcrossPasses);
     },
 
     get stats() {

@@ -188,6 +188,34 @@ describe('the cache is bounded and self-pruning (task 9.2)', () => {
     expect(reusable.get('paragraph')).toBe('break');
   });
 
+  test('clearing a one-shot cache releases its subtree key memo scope', () => {
+    const cache = createParagraphLayoutCache<never>({ retainAcrossPasses: false });
+    const part = load('<w:p><w:r><w:t>construction-only identity</w:t></w:r></w:p>');
+    const body = part.root.children.find((node) => node.kind === 'body')!;
+    const paragraphNode = body.children.find((node) => node.kind === 'paragraph')!;
+    const inputs = {
+      paragraph: paragraphNode,
+      properties: [],
+      width: 100,
+      producer: 'one-shot',
+    } as const;
+    const recorder = layoutNodeTokenVisitTestRecorder();
+    try {
+      const first = cache.keyFor!(inputs);
+      expect(recorder.nodeVisits).toBeGreaterThan(0);
+      recorder.reset();
+      expect(cache.keyFor!(inputs)).toBe(first);
+      expect(recorder.nodeVisits).toBe(0);
+
+      cache.clear();
+      recorder.reset();
+      expect(cache.keyFor!(inputs)).toBe(first);
+      expect(recorder.nodeVisits).toBeGreaterThan(0);
+    } finally {
+      recorder.dispose();
+    }
+  });
+
   test('legacy structural caches without the optional release hook still lay out', () => {
     const inner = createParagraphLayoutCache<never>();
     const legacy: ParagraphLayoutCache<never> = {
@@ -200,6 +228,47 @@ describe('the cache is bounded and self-pruning (task 9.2)', () => {
       },
     };
     expect(() => geometryOf(load(MANY), 1, legacy as Cache)).not.toThrow();
+  });
+
+  test('custom key hooks keep their cache receiver', () => {
+    const inner = createParagraphLayoutCache<never>();
+    let calls = 0;
+    const seenNodeIds = new Set<string>();
+    const custom: ParagraphLayoutCache<never> = {
+      get: (key) => inner.get(key),
+      set: (key, value) => inner.set(key, value),
+      retain: (keys) => inner.retain(keys),
+      clear: () => inner.clear(),
+      keyFor(inputs) {
+        expect(this).toBe(custom);
+        calls += 1;
+        seenNodeIds.add(inputs.paragraph.id);
+        return inner.keyFor!(inputs);
+      },
+      get stats() {
+        return inner.stats;
+      },
+    };
+    const table = '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+    const part = load(`${MANY}${table}`);
+    let bodyParagraphId: string | undefined;
+    let cellParagraphId: string | undefined;
+    const visit = (node: OoxmlNode, insideCell: boolean): void => {
+      if (node.kind === 'textValue') return;
+      if (node.kind === 'paragraph') {
+        if (insideCell) cellParagraphId ??= node.id;
+        else bodyParagraphId ??= node.id;
+      }
+      for (const child of node.children) visit(child, insideCell || node.kind === 'tableCell');
+    };
+    visit(part.root, false);
+
+    expect(() => lay(part, 1, custom as Cache)).not.toThrow();
+    expect(calls).toBeGreaterThan(0);
+    expect(bodyParagraphId).toBeDefined();
+    expect(cellParagraphId).toBeDefined();
+    expect(seenNodeIds.has(bodyParagraphId!)).toBe(true);
+    expect(seenNodeIds.has(cellParagraphId!)).toBe(true);
   });
 
   test('it evicts least-recently-used entries from PAST generations over its limit', () => {

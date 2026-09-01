@@ -68,8 +68,14 @@ test('Markdown policy exhausts output-affecting unions as well as record fields'
 });
 
 test('one-shot APIs forward the complete option object to translation', () => {
-  expect(wrapperSource).toContain('translateMarkdown(opened.session, options)');
-  expect(wrapperSource).not.toMatch(/translateMarkdown\([^)]*\{\s*image:/);
+  const oneShot = wrapperSource.slice(
+    wrapperSource.indexOf('export async function exportMarkdown(')
+  );
+  expect(oneShot).toContain('translateMarkdownLayout(layout, options)');
+  expect(oneShot).not.toMatch(/translateMarkdownLayout\([^)]*\{\s*image:/);
+  expect(oneShot.indexOf('opened.session.dispose()')).toBeLessThan(
+    oneShot.indexOf('return translateMarkdownLayout(layout, options)')
+  );
 });
 
 test('font configuration sampling and cache identity both exhaust every public key', () => {

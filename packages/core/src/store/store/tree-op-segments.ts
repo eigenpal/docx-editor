@@ -164,6 +164,11 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
   return index;
 }
 
+/** Build an offset index without populating the interactive paragraph memo. @internal */
+export function transientParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
+  return buildParagraphOffsetIndex(paragraph);
+}
+
 function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
   const spans = new Map<string, OffsetSpan>();
   const segments = walkParagraph(paragraph, spans, null);

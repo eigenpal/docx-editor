@@ -108,6 +108,9 @@ export function exportMarkdown(source: ExportDocumentSource, options?: MarkdownE
 export function exportMarkdownFrom(session: ExportSession, options?: MarkdownTranslationOptions): Promise<MarkdownExportResult>;
 
 // @public
+export function exportMarkdownLayout(layout: ExportSemanticLayout, options?: MarkdownTranslationOptions): MarkdownExportResult;
+
+// @public
 export class ExportResourceError extends Error {
     constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed', message: string);
     // (undocumented)

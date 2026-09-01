@@ -89,7 +89,9 @@ export interface MarkdownTranslationOptions {
   /**
    * Map a laid-out drawing to a destination. Without a mapper (or when skipped), only its
    * escaped accessibility label is emitted. This callback is synchronous: perform uploads
-   * first and return a precomputed URL. Validated bytes stay available from the session.
+   * first and return a precomputed URL. Reading validated bytes requires a live reusable
+   * session; copy or upload them before disposal, then this mapper can translate its detached
+   * immutable layout using the retained drawing-to-URL mapping.
    */
   readonly image?: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => MarkdownImageResult;
 }
@@ -881,12 +883,11 @@ function pageReviewArtifacts(
   return byPage;
 }
 
-/** Translate one shared semantic layout session to Markdown. @public */
-export async function exportMarkdownFrom(
-  session: ExportSession,
+/** Translate an immutable exporter-neutral layout snapshot without retaining its producer. @public */
+export function exportMarkdownLayout(
+  layout: ExportSemanticLayout,
   options: MarkdownTranslationOptions = {}
-): Promise<MarkdownExportResult> {
-  const layout = await session.layout();
+): MarkdownExportResult {
   const indexes = buildTranslationIndexes(layout);
   const notes = noteStoryIndexes(layout);
   const context: TranslationContext = {
@@ -939,4 +940,12 @@ export async function exportMarkdownFrom(
     }),
     markdown,
   });
+}
+
+/** Translate one shared semantic layout session to Markdown. @public */
+export async function exportMarkdownFrom(
+  session: ExportSession,
+  options: MarkdownTranslationOptions = {}
+): Promise<MarkdownExportResult> {
+  return exportMarkdownLayout(await session.layout(), options);
 }

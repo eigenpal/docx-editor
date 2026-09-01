@@ -10,6 +10,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import {
   exportMarkdownFrom,
+  exportMarkdownLayout,
   type MarkdownExportOptions,
   type MarkdownExportResult,
 } from '../src/markdown.ts';
@@ -124,6 +125,39 @@ function manyImageDocx(count: number): Uint8Array {
 }
 
 describe('record-only Markdown export', () => {
+  test('translates an immutable layout after its producer session is disposed', async () => {
+    const opened = openDocumentForExport(docx('<w:p><w:r><w:t>Detached</w:t></w:r></w:p>'));
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const layout = await opened.session.layout();
+    opened.session.dispose();
+
+    expect(Object.isFrozen(layout)).toBe(true);
+    expect(exportMarkdownLayout(layout).markdown).toBe('Detached');
+  });
+
+  test('translates preprocessed images from a detached layout after disposal', async () => {
+    const opened = openDocumentForExport(imageDocx());
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    const layout = await opened.session.layout();
+    const paragraph = layout.pages[0]?.fragments[0];
+    expect(paragraph?.kind).toBe('paragraph');
+    if (paragraph?.kind !== 'paragraph') return;
+    const drawing = paragraph.lines.flatMap((line) => line.drawings ?? [])[0]!;
+    expect(opened.session.validatedImageBytes(drawing)?.[0]).toBe(0x89);
+    const urls = new WeakMap<object, string>([[drawing, 'https://cdn.example/detached.png']]);
+    opened.session.dispose();
+
+    const rendered = exportMarkdownLayout(layout, {
+      image: (candidate) => {
+        const url = urls.get(candidate);
+        return url ? { url } : { skip: true };
+      },
+    });
+    expect(rendered.markdown).toContain('![Diagram](https://cdn.example/detached.png)');
+  });
+
   test('translates real OMML through the published equation fallback', async () => {
     const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
     const result = await exportMarkdown(

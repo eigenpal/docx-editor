@@ -82,7 +82,9 @@ export interface OpenDocumentForExportOptions {
 
 /**
  * Export-ready semantic snapshot. Core guarantees normalized review artifacts for every session,
- * including an empty immutable array when the source has none.
+ * including an empty immutable array when the source has none. A resolved snapshot is recursively
+ * immutable and remains traversable after its producer session is disposed; disposal only revokes
+ * session-owned work and capabilities such as {@link ExportSession.validatedImageBytes}.
  * @public
  */
 export interface ExportSemanticLayout extends SemanticLayout {
@@ -162,7 +164,10 @@ export interface ExportSession {
   layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
   /** Mint a defensive copy only for a ready drawing from this session. */
   validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
-  /** Release per-document caches and pending resource work. Idempotent. */
+  /**
+   * Release per-document caches, pending resource work, and image-byte capabilities. Idempotent.
+   * Previously resolved layout snapshots remain immutable and traversable after disposal.
+   */
   dispose(): void;
 }
 
