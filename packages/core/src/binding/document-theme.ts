@@ -40,17 +40,8 @@ export interface DocumentThemeColorEntry {
   readonly hex: string;
 }
 
-/** The theme's font slots, for resolving `w:rFonts` theme attributes. */
-export interface DocumentThemeFonts {
-  /** `a:majorFont` latin typeface — headings. */
-  readonly major: string | null;
-  /** `a:minorFont` latin typeface — body text. */
-  readonly minor: string | null;
-  /** `a:majorFont` east asian typeface (`a:ea`) — headings. */
-  readonly majorEastAsia: string | null;
-  /** `a:minorFont` east asian typeface (`a:ea`) — body text. */
-  readonly minorEastAsia: string | null;
-}
+export type { DocumentThemeFonts } from '../store/package/theme-font-scheme.ts';
+import type { DocumentThemeFonts } from '../store/package/theme-font-scheme.ts';
 
 /**
  * The theme part's `a:fontScheme` typefaces. Independent slots — a valid minor font

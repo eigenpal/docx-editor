@@ -29,6 +29,18 @@ export interface ThemeSchemeFaces {
   readonly minorEastAsia?: string | null;
 }
 
+/** The theme's font slots, fully resolved, for resolving `w:rFonts` theme attributes. */
+export interface DocumentThemeFonts {
+  /** `a:majorFont` latin typeface — headings. */
+  readonly major: string | null;
+  /** `a:minorFont` latin typeface — body text. */
+  readonly minor: string | null;
+  /** `a:majorFont` east asian typeface (`a:ea`) — headings. */
+  readonly majorEastAsia: string | null;
+  /** `a:minorFont` east asian typeface (`a:ea`) — body text. */
+  readonly minorEastAsia: string | null;
+}
+
 function isElement(node: OoxmlNode): node is OoxmlElement {
   return node.kind !== 'textValue';
 }

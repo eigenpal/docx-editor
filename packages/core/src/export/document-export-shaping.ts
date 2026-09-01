@@ -1,17 +1,17 @@
 // Document-aware font resolution shared by every headless exporter.
 
-import { collectRenderedFontFamilyCandidates } from '../binding/document-rendered-fonts.ts';
-import { validFontFamily } from '../binding/document-run-defaults.ts';
+import { collectRenderedFontFamilyCandidates } from '../store/package/rendered-fonts.ts';
+import { validFontFamily } from '../store/package/run-defaults.ts';
 import {
   MAX_RESOLVER_FAMILIES,
   WORD_DEFAULT_FONT,
   composeFontConfiguration,
-} from '../editor/font-composition.ts';
+} from '../layout/font-composition.ts';
 import {
   composePreparedFontOrigins,
   type FontOrigin,
   type FontOriginFailure,
-} from '../editor/font-resolver.ts';
+} from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
 import {
   FontResolutionError,

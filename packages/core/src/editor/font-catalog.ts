@@ -12,8 +12,9 @@
 // and listing both would offer the same metrics twice under two names — the stand-in is
 // an implementation face, not a choice.
 
-import type { FontConfiguration } from '../contracts/editor.ts';
-import { WORD_DEFAULT_FONT, type FontConfigurationBase } from './font-composition.ts';
+import { configuredDefaultFontFamily, type FontCatalogConfiguration } from './font-composition.ts';
+
+export { configuredDefaultFontFamily, type FontCatalogConfiguration };
 
 /**
  * The same family-name bound `document-catalog.ts` and the paint sink enforce: kept in
@@ -21,18 +22,6 @@ import { WORD_DEFAULT_FONT, type FontConfigurationBase } from './font-compositio
  * there). Every name this module emits can end up in a CSS `font-family` declaration.
  */
 const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
-
-/** A configuration in either public spelling — full or fragment-with-defaults. */
-export type FontCatalogConfiguration = FontConfiguration | FontConfigurationBase;
-
-/**
- * The face a run with no authored font is measured and reported as: the configured
- * default when it names a valid family, Word's own (Calibri) otherwise.
- */
-export function configuredDefaultFontFamily(configuration?: FontCatalogConfiguration): string {
-  const family = configuration?.defaultFont?.family;
-  return family !== undefined && FONT_NAME.test(family) ? family : WORD_DEFAULT_FONT.family;
-}
 
 /**
  * Every family a font picker can offer: the configured catalog (default face,
