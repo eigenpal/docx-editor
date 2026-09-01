@@ -5,7 +5,8 @@ import type {
   SemanticLayout,
   TableFragmentRecord,
 } from '@docx-editor.dev/core/layout';
-import { exportMarkdownFrom } from '../src/index.ts';
+import { exportMarkdown, exportMarkdownFrom } from '../src/index.ts';
+import { docx } from './fixture.ts';
 
 function paragraph(id: string, text: string): ParagraphFragmentRecord {
   return {
@@ -153,4 +154,15 @@ test('does not append a same-page repeated header to its original row', async ()
   expect(result.pages[0]?.markdown.match(/Header/g)).toHaveLength(1);
   expect(result.pages[0]?.markdown).toContain('| A |');
   expect(result.pages[0]?.markdown).toContain('| B |');
+});
+
+test('keeps row cells past the declared w:tblGrid width', async () => {
+  const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+  const table =
+    '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+    `<w:tr>${cell('One')}${cell('Two')}${cell('Overflow')}</w:tr>` +
+    `<w:tr>${cell('A')}${cell('B')}${cell('C')}</w:tr></w:tbl>`;
+  const result = await exportMarkdown(docx(table));
+  expect(result.markdown).toContain('| One | Two | Overflow |');
+  expect(result.markdown).toContain('| A | B | C |');
 });

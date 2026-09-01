@@ -220,7 +220,9 @@ function cellValues(
     const value = cell.vMergeContinue
       ? EMPTY_MAPPED_MARKDOWN
       : replaceNewlinesWithHtmlBreaks(
-          escapeUnescapedTablePipes(render(logicalBlocks(cell.blocks), nestedContext, true, pageScoped))
+          escapeUnescapedTablePipes(
+            render(logicalBlocks(cell.blocks), nestedContext, true, pageScoped)
+          )
         );
     while (values.length < cell.gridColumn) values.push(EMPTY_MAPPED_MARKDOWN);
     values[cell.gridColumn] = value;

@@ -222,16 +222,6 @@ describe('record-only Markdown export', () => {
     expect(result.markdown).toContain('| A\\|B | 2 |');
   });
 
-  test('keeps row cells past the declared w:tblGrid width', async () => {
-    const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
-    const table =
-      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
-      `<w:tr>${cell('One')}${cell('Two')}${cell('Overflow')}</w:tr>` +
-      `<w:tr>${cell('A')}${cell('B')}${cell('C')}</w:tr></w:tbl>`;
-    const result = await exportMarkdown(docx(table));
-    expect(result.markdown).toContain('| One | Two | Overflow |');
-    expect(result.markdown).toContain('| A | B | C |');
-  });
 
   test('does not turn preserved paragraph spacing or table-cell outlines into GFM blocks', async () => {
     const table =
