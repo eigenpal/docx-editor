@@ -160,7 +160,6 @@ button {
 
 .md-button,
 .md-icon-button,
-.md-code-action,
 .md-segmented button {
   border: 0;
   cursor: pointer;
@@ -173,7 +172,6 @@ button {
 
 .md-button:focus-visible,
 .md-icon-button:focus-visible,
-.md-code-action:focus-visible,
 .md-segmented button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--md-accent) 80%, white);
   outline-offset: 2px;
@@ -181,7 +179,6 @@ button {
 
 .md-button:active,
 .md-icon-button:active:not(:disabled),
-.md-code-action:active,
 .md-segmented button:active {
   transform: scale(0.97);
 }
@@ -348,30 +345,6 @@ button {
   gap: 6px;
 }
 
-.md-code-action {
-  display: inline-flex;
-  height: 32px;
-  align-items: center;
-  gap: 6px;
-  padding: 0 9px;
-  border: 1px solid var(--md-line);
-  border-radius: 8px;
-  background: #fff;
-  color: #4e5661;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.md-code-action > span {
-  color: #66788b;
-  font:
-    700 9px/1 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    monospace;
-}
-
 .md-segmented {
   display: inline-flex;
   align-items: center;
@@ -468,74 +441,35 @@ button {
   line-height: 1.45;
 }
 
-.md-developer-dialog {
-  width: min(760px, calc(100vw - 32px));
-  max-width: none;
-  height: min(620px, calc(100vh - 48px));
-  max-height: none;
-  padding: 0;
-  overflow: hidden;
-  border: 1px solid #ccd4de;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 28px 80px rgb(20 27 36 / 24%);
-  color: var(--md-ink);
-}
-
-.md-developer-dialog::backdrop {
-  background: rgb(26 33 42 / 34%);
-  backdrop-filter: blur(3px);
-}
-
-.md-developer-panel {
+.md-developer-view {
   display: grid;
+  width: 100%;
   height: 100%;
   min-height: 0;
   grid-template-rows: auto auto minmax(0, 1fr);
+  background: #fff;
 }
 
-.md-developer-panel__header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 18px 20px 14px;
-}
-
-.md-developer-panel__header > div {
+.md-developer-view__header {
   display: grid;
   gap: 3px;
+  padding: 24px 28px 16px;
 }
 
-.md-developer-panel__header strong {
+.md-developer-view__header strong {
   font-size: 15px;
   letter-spacing: -0.015em;
 }
 
-.md-developer-panel__header span {
+.md-developer-view__header span {
   color: var(--md-muted);
   font-size: 11px;
-}
-
-.md-developer-close {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: none;
-  place-items: center;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: #707987;
-  cursor: pointer;
-  font-size: 21px;
-  line-height: 1;
 }
 
 .md-developer-tabs {
   display: flex;
   gap: 18px;
-  padding: 0 20px;
+  padding: 0 28px;
   border-bottom: 1px solid var(--md-line);
 }
 
@@ -565,10 +499,9 @@ button {
   content: '';
 }
 
-.md-developer-code {
+.md-highlighted-code {
   min-height: 0;
   margin: 0;
-  padding: 18px 20px 28px;
   overflow: auto;
   background: #f7f8fa;
   color: #263444;
@@ -580,6 +513,19 @@ button {
     monospace;
   tab-size: 2;
   white-space: pre;
+}
+
+.md-highlighted-code--plain {
+  padding: 22px 28px 36px;
+}
+
+.md-highlighted-code .shiki {
+  min-width: max-content;
+  min-height: 100%;
+  margin: 0;
+  padding: 22px 28px 36px;
+  background: #f7f8fa !important;
+  font: inherit;
 }
 
 .md-setting-row {
@@ -1153,9 +1099,7 @@ button {
   }
 
   .md-button--quiet:hover,
-  .md-icon-button:hover:not(:disabled),
-  .md-code-action:hover,
-  .md-developer-close:hover {
+  .md-icon-button:hover:not(:disabled) {
     border-color: #c6cbd2;
     background: #f7f8fa;
   }
@@ -1303,20 +1247,16 @@ button {
     display: none;
   }
 
-  .md-code-action {
-    width: 32px;
-    justify-content: center;
-    padding: 0;
-    font-size: 0;
+  .md-developer-view__header,
+  .md-developer-tabs {
+    padding-right: 18px;
+    padding-left: 18px;
   }
 
-  .md-code-action > span {
-    font-size: 9px;
-  }
-
-  .md-developer-dialog {
-    width: calc(100vw - 16px);
-    height: calc(100vh - 16px);
+  .md-highlighted-code--plain,
+  .md-highlighted-code .shiki {
+    padding-right: 18px;
+    padding-left: 18px;
   }
 
   .md-page-sheet {
@@ -1328,7 +1268,6 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .md-button,
   .md-icon-button,
-  .md-code-action,
   .md-segmented button,
   .md-pages,
   .md-drop-overlay,

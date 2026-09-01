@@ -15,8 +15,10 @@ import { BrandLogo } from '../../shared/BrandLogo';
 import { canCopyExport, copyableMarkdown, type ExportStatus } from './export-state';
 import { developerPanelContent, type DeveloperPanelTab } from './developer-reference';
 import { createLatestOperationGate } from './latest-operation';
+import { HighlightedCode } from './HighlightedCode';
 import { MarkdownBlock } from './MarkdownBlock';
 import { PageReviewArtifacts } from './PageReviewArtifacts';
+import { markdownPageToReveal, type PreviewMode } from './preview-navigation';
 import { indexPageReviewSelections, type PageReviewSelectionIndex } from './review-presentation';
 import {
   clampSplit,
@@ -33,7 +35,6 @@ const EDITOR_PACKAGED_FONTS = packagedFonts();
 const GOOGLE_FONT_FALLBACK = googleFonts({
   onFailure: (failure) => console.warn(`[google-fonts] ${failure.diagnostic}`),
 });
-type PreviewMode = 'rendered' | 'source';
 type MobilePane = 'source' | 'markdown';
 
 interface ExportViewState {
@@ -85,73 +86,48 @@ function Spinner() {
   return <span className="md-spinner" aria-hidden="true" />;
 }
 
-function DeveloperPanel({
+function DeveloperView({
   tab,
   result,
   status,
   error,
   onTabChange,
-  onClose,
 }: {
   readonly tab: DeveloperPanelTab;
   readonly result: MarkdownExportResult | null;
   readonly status: ExportStatus;
   readonly error: string | null;
   readonly onTabChange: (tab: DeveloperPanelTab) => void;
-  readonly onClose: () => void;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    if (dialog.current?.open === false) dialog.current.showModal();
-  }, []);
-  const requestClose = () => dialog.current?.close();
   const content = developerPanelContent(tab, result, status, error);
   return (
-    <dialog
-      ref={dialog}
-      className="md-developer-dialog"
-      aria-labelledby="developer-panel-title"
-      onClose={onClose}
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) requestClose();
-      }}
-    >
-      <section className="md-developer-panel" onMouseDown={(event) => event.stopPropagation()}>
-        <header className="md-developer-panel__header">
-          <div>
-            <strong id="developer-panel-title">Use the export API</strong>
-            <span>One call returns logical and page-aware Markdown.</span>
-          </div>
-          <button
-            type="button"
-            className="md-developer-close"
-            onClick={requestClose}
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </header>
-        <div className="md-developer-tabs" role="group" aria-label="Developer reference">
-          <button
-            type="button"
-            aria-pressed={tab === 'example'}
-            onClick={() => onTabChange('example')}
-          >
-            Code example
-          </button>
-          <button
-            type="button"
-            aria-pressed={tab === 'response'}
-            onClick={() => onTabChange('response')}
-          >
-            Live API response
-          </button>
-        </div>
-        <pre className="md-developer-code" tabIndex={0}>
-          <code>{content}</code>
-        </pre>
-      </section>
-    </dialog>
+    <section className="md-developer-view" aria-labelledby="developer-view-title">
+      <header className="md-developer-view__header">
+        <strong id="developer-view-title">Use the export API</strong>
+        <span>One call returns logical and page-aware Markdown.</span>
+      </header>
+      <div className="md-developer-tabs" role="group" aria-label="Developer reference">
+        <button
+          type="button"
+          aria-pressed={tab === 'example'}
+          onClick={() => onTabChange('example')}
+        >
+          Example
+        </button>
+        <button
+          type="button"
+          aria-pressed={tab === 'response'}
+          onClick={() => onTabChange('response')}
+        >
+          Response
+        </button>
+      </div>
+      <HighlightedCode
+        code={content}
+        language={tab === 'example' ? 'typescript' : 'json'}
+        label={tab === 'example' ? 'TypeScript code example' : 'JSON API response'}
+      />
+    </section>
   );
 }
 
@@ -162,7 +138,7 @@ function PageField({
 }: {
   readonly kind: 'header' | 'body' | 'footer';
   readonly markdown: string;
-  readonly mode: PreviewMode;
+  readonly mode: Exclude<PreviewMode, 'developer'>;
 }) {
   if (!markdown && kind !== 'body') return null;
   return (
@@ -196,7 +172,7 @@ function MarkdownPagePreview({
   readonly page: MarkdownPage;
   readonly commentById: ReadonlyMap<string, MarkdownComment>;
   readonly selectionIndex: PageReviewSelectionIndex;
-  readonly mode: PreviewMode;
+  readonly mode: Exclude<PreviewMode, 'developer'>;
   readonly showHeaders: boolean;
   readonly showFooters: boolean;
   readonly showComments: boolean;
@@ -283,7 +259,6 @@ export function MarkdownExportDemo() {
   const [showTrackedChanges, setShowTrackedChanges] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [developerPanelOpen, setDeveloperPanelOpen] = useState(false);
   const [developerPanelTab, setDeveloperPanelTab] = useState<DeveloperPanelTab>('example');
 
   const revealMarkdownPage = useCallback((pageNumber: number) => {
@@ -309,10 +284,16 @@ export function MarkdownExportDemo() {
   }, []);
 
   useEffect(() => {
-    if (exportView.status !== 'ready' || !exportView.result) return;
-    const frame = window.requestAnimationFrame(() => revealMarkdownPage(latestEditorPage.current));
+    const pageNumber = markdownPageToReveal(
+      previewMode,
+      exportView.status,
+      exportView.result !== null,
+      latestEditorPage.current
+    );
+    if (pageNumber === null) return;
+    const frame = window.requestAnimationFrame(() => revealMarkdownPage(pageNumber));
     return () => window.cancelAnimationFrame(frame);
-  }, [exportView.result, exportView.status, revealMarkdownPage]);
+  }, [exportView.result, exportView.status, previewMode, revealMarkdownPage]);
 
   useEffect(
     () => () => {
@@ -662,8 +643,15 @@ export function MarkdownExportDemo() {
               >
                 Source
               </button>
+              <button
+                type="button"
+                aria-pressed={previewMode === 'developer'}
+                onClick={() => setPreviewMode('developer')}
+              >
+                Code
+              </button>
             </div>
-            <details className="md-settings">
+            <details className="md-settings" hidden={previewMode === 'developer'}>
               <summary
                 className="md-icon-button"
                 aria-label={
@@ -719,14 +707,6 @@ export function MarkdownExportDemo() {
             </details>
           </div>
           <div className="md-preview-actions">
-            <button
-              type="button"
-              className="md-code-action"
-              onClick={() => setDeveloperPanelOpen(true)}
-            >
-              <span aria-hidden="true">{'</>'}</span>
-              Code
-            </button>
             <button
               type="button"
               className="md-icon-button md-copy-action"
@@ -849,10 +829,22 @@ export function MarkdownExportDemo() {
         <section
           id="markdown-preview-panel"
           className="md-panel md-panel--preview"
-          aria-label="Live paginated Markdown"
+          aria-label={
+            previewMode === 'developer'
+              ? 'DOCX to Markdown API reference'
+              : 'Live paginated Markdown'
+          }
         >
           <div ref={previewScroll} className="md-preview-scroll" aria-busy={busy}>
-            {exportView.error ? (
+            {previewMode === 'developer' ? (
+              <DeveloperView
+                tab={developerPanelTab}
+                result={exportView.status === 'ready' ? exportView.result : null}
+                status={exportView.status}
+                error={exportView.error}
+                onTabChange={setDeveloperPanelTab}
+              />
+            ) : exportView.error ? (
               <div className="md-error" role="alert">
                 <span className="md-error__icon" aria-hidden="true">
                   !
@@ -863,7 +855,7 @@ export function MarkdownExportDemo() {
                 </div>
               </div>
             ) : null}
-            {exportView.result ? (
+            {previewMode === 'developer' ? null : exportView.result ? (
               <div
                 className={`md-pages${busy ? ' md-pages--updating' : ''}${exportView.status === 'error' ? ' md-pages--stale' : ''}`}
               >
@@ -902,16 +894,6 @@ export function MarkdownExportDemo() {
             <span>Document bytes stay local; missing fonts may load from a pinned CDN.</span>
           </div>
         </div>
-      ) : null}
-      {developerPanelOpen ? (
-        <DeveloperPanel
-          tab={developerPanelTab}
-          result={exportView.status === 'ready' ? exportView.result : null}
-          status={exportView.status}
-          error={exportView.error}
-          onTabChange={setDeveloperPanelTab}
-          onClose={() => setDeveloperPanelOpen(false)}
-        />
       ) : null}
     </div>
   );
