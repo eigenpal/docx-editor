@@ -379,7 +379,7 @@ export interface MarkdownPage {
 
 // @public
 export interface MarkdownPaginationInfo {
-    readonly displayMode: NonNullable<ExportSemanticLayout['displayMode']>;
+    readonly displayMode: RevisionDisplayMode;
     readonly layoutRevision: number;
     readonly scope: 'export-snapshot';
     readonly source: 'layout-engine';

@@ -1,9 +1,9 @@
 import type {
   ExportFontResolutionReport,
-  ExportSemanticLayout,
   OpenDocumentForExportOptions,
 } from '@docx-editor.dev/core/export';
 import type { FontOrigin } from '@docx-editor.dev/core/export';
+import type { RevisionDisplayMode } from '@docx-editor.dev/core/layout';
 import type {
   MarkdownComment,
   MarkdownReviewArtifact,
@@ -23,9 +23,17 @@ export interface MarkdownPage {
   readonly headerMarkdown: string;
   /** Footer story for this page, kept separate from logical document content. */
   readonly footerMarkdown: string;
-  /** Comments with at least one physical occurrence on this page. */
+  /**
+   * Membership view of comments occurring on this page. Each entry is the complete document-wide
+   * artifact and can contain occurrences from other pages. For page-local provenance, filter with
+   * `occurrence.pageIndex === page.number - 1`.
+   */
   readonly comments: readonly MarkdownComment[];
-  /** Tracked changes with at least one physical occurrence on this page. */
+  /**
+   * Membership view of tracked changes occurring on this page. Each entry is the complete
+   * document-wide artifact and can contain occurrences from other pages. For page-local
+   * provenance, filter with `occurrence.pageIndex === page.number - 1`.
+   */
   readonly trackedChanges: readonly MarkdownTrackedChange[];
 }
 
@@ -38,16 +46,19 @@ export interface MarkdownPaginationInfo {
   /** Core store revision from which this layout snapshot was produced. */
   readonly layoutRevision: number;
   /** Tracked-change display mode used to paginate and translate this snapshot. */
-  readonly displayMode: NonNullable<ExportSemanticLayout['displayMode']>;
+  readonly displayMode: RevisionDisplayMode;
 }
 
 /** Full logical document plus page-scoped projections. @public */
 export interface MarkdownExportResult {
   /** Primary physical page projections, preserving Word layout boundaries and furniture. */
   readonly pages: readonly MarkdownPage[];
-  /** Every normalized comment and tracked change, including artifacts without a page occurrence. */
+  /**
+   * Every normalized comment and tracked change, including artifacts without a page occurrence.
+   * Artifact IDs are opaque and stable only within this result.
+   */
   readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
-  /** Markdown offsets stable within this immutable result, with explicit mapping fidelity. */
+  /** Markdown offsets valid only within this immutable result, with explicit mapping fidelity. */
   readonly reviewBindings: readonly MarkdownReviewBinding[];
   /** Structured font-resolution evidence, or null when the layout's font origin is unavailable. */
   readonly fontResolution: ExportFontResolutionReport | null;

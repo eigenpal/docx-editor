@@ -76,7 +76,7 @@ interface MarkdownExportResult {
   readonly pages: readonly MarkdownPage[];
   /** All comments and tracked changes, including artifacts without a page occurrence. */
   readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
-  /** Links stable within this immutable result, with explicit mapping fidelity. */
+  /** Offsets and artifact IDs valid only within this immutable result. */
   readonly reviewBindings: readonly MarkdownReviewBinding[];
   /** Structured font evidence, or null when the layout's font origin is unavailable. */
   readonly fontResolution: ExportFontResolutionReport | null;
@@ -101,7 +101,7 @@ interface MarkdownPage {
   /** Header and footer are separate from logical document content. */
   readonly headerMarkdown: string;
   readonly footerMarkdown: string;
-  /** Complete artifacts with at least one physical occurrence on this page. */
+  /** Membership views: complete artifacts with at least one occurrence on this page. */
   readonly comments: readonly MarkdownComment[];
   readonly trackedChanges: readonly MarkdownTrackedChange[];
 }
@@ -178,11 +178,23 @@ cannot preserve page provenance.
 Ordinary Markdown stays clean: comments and revision metadata are not injected as HTML comments,
 CriticMarkup, or visible footnotes. Normalized structured review metadata is returned beside it.
 
-Each page carries the complete comments and tracked changes that physically occur in its body,
-header, footer, footnotes, endnotes, or note separator. An artifact can occur on several pages, so
-filter its occurrences by `occurrence.pageIndex === page.number - 1` when exact page-local source
-provenance matters. `result.reviewArtifacts` is the authoritative document-wide list and also
-retains orphaned comments or structural changes with no linear page occurrence.
+> **Important:** Review IDs are opaque and stable only within one export result. Never store or
+> compare them across exports. Pair any persisted citation with your own document version or
+> content hash.
+
+`page.comments` and `page.trackedChanges` are membership views. Each entry is the complete
+document-wide artifact, not a page-trimmed copy, so its `occurrences` can include other pages. To
+avoid double counting and select page-local provenance, always filter the occurrences:
+
+```ts
+const localOccurrences = page.comments.flatMap((artifact) =>
+  artifact.occurrences.filter(({ pageIndex }) => pageIndex === page.number - 1)
+);
+```
+
+Page membership covers artifacts physically occurring in the body, header, footer, footnotes,
+endnotes, or note separator. `result.reviewArtifacts` is the authoritative document-wide list and
+also retains orphaned comments or structural changes with no linear page occurrence.
 
 `result.reviewBindings` connects each occurrence to offsets in `result.markdown`,
 `page.markdown`, `page.headerMarkdown`, or `page.footerMarkdown`. Offsets use JavaScript UTF-16
@@ -207,8 +219,8 @@ preserving the declared fidelity. Text boxes and structural changes that have no
 Markdown range remain available as artifacts and carry an explicit `unmappedReason`.
 
 Artifact IDs, occurrence indexes, page IDs, and binding offsets are local to this immutable export
-result. Do not join them across exports; store your own document version or content hash when a
-workflow needs durable identity.
+result. IDs are opaque, even when their string values look familiar. Do not join them across
+exports; store your own document version or content hash when a workflow needs durable identity.
 
 Tracked changes also participate in layout through `displayMode`: `all-markup` (default) keeps
 inserted and deleted text visible, `proposed` shows the accepted view, and `original` shows the

@@ -14,13 +14,28 @@ import { markdownSourceCaptureKey, type MarkdownSourceCapture } from './markdown
 /** Page/story/source provenance for one exported review artifact. @public */
 export type MarkdownReviewOccurrence = SemanticReviewArtifactRecord['occurrences'][number];
 
-/** Normalized DOCX comment, independent of editor UI state. @public */
+/**
+ * Normalized DOCX comment, independent of editor UI state.
+ *
+ * Its ID is opaque and stable only within one {@link MarkdownExportResult}. Never persist the ID
+ * across exports; pair citations with the caller's own document version or content hash.
+ * @public
+ */
 export type MarkdownComment = SemanticCommentArtifactRecord;
 
-/** Normalized DOCX tracked change, independent of editor UI state. @public */
+/**
+ * Normalized DOCX tracked change, independent of editor UI state.
+ *
+ * Its ID is opaque and stable only within one {@link MarkdownExportResult}. Never persist the ID
+ * across exports; pair citations with the caller's own document version or content hash.
+ * @public
+ */
 export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
 
-/** Comment or tracked change returned by Markdown export. @public */
+/**
+ * Comment or tracked change returned by Markdown export. IDs are opaque and result-local.
+ * @public
+ */
 export type MarkdownReviewArtifact = SemanticReviewArtifactRecord;
 
 /** A UTF-16 range suitable for slicing the named Markdown projection. @public */
