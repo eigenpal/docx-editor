@@ -215,9 +215,19 @@ const catalogByFamily = ((): ReadonlyMap<string, readonly GoogleFontFace[]> => {
 const MAX_CACHED_FONT_BYTES = 16 * 1024 * 1024;
 const MAX_CACHED_FONT_FACES = 64;
 
+interface PendingFontFetch {
+  /** Signal-scoped waiters still racing this fetch; the last aborting one cancels it. */
+  waiters: number;
+  /** An unsigned waiter joined, so no abort may cancel the shared work under it. */
+  pinned: boolean;
+  readonly controller: AbortController;
+}
+
 interface FontByteCache {
   readonly entries: Map<string, Promise<Uint8Array>>;
   readonly sizes: Map<string, number>;
+  /** In-flight state per URL; absent once the entry holds settled bytes. */
+  readonly pending: Map<string, PendingFontFetch>;
   totalBytes: number;
 }
 
@@ -226,7 +236,7 @@ const byteCaches = new WeakMap<object, FontByteCache>();
 function cacheFor(fetcher: typeof fetch): FontByteCache {
   let cache = byteCaches.get(fetcher);
   if (!cache) {
-    cache = { entries: new Map(), sizes: new Map(), totalBytes: 0 };
+    cache = { entries: new Map(), sizes: new Map(), pending: new Map(), totalBytes: 0 };
     byteCaches.set(fetcher, cache);
   }
   return cache;
@@ -242,7 +252,16 @@ function cacheSuccess(cache: FontByteCache, url: string, bytes: Uint8Array): voi
   cache.sizes.set(url, bytes.byteLength);
   cache.totalBytes += bytes.byteLength;
   while (cache.entries.size > MAX_CACHED_FONT_FACES || cache.totalBytes > MAX_CACHED_FONT_BYTES) {
-    const oldest = cache.entries.keys().next().value as string | undefined;
+    // Evict oldest SETTLED entries only. A pending entry has no recorded bytes to reclaim,
+    // and dropping its cache reference would both orphan the downloaded bytes (the settle
+    // handler declines to record a replaced entry) and break single-flight for new callers.
+    let oldest: string | undefined;
+    for (const key of cache.entries.keys()) {
+      if (cache.sizes.has(key)) {
+        oldest = key;
+        break;
+      }
+    }
     if (oldest === undefined) break;
     cache.entries.delete(oldest);
     cache.totalBytes -= cache.sizes.get(oldest) ?? 0;
@@ -257,28 +276,26 @@ async function fetchFace(
 ): Promise<Uint8Array> {
   const byteCache = cacheFor(fetcher);
   const inFlight = byteCache.entries.get(face.url);
-  if (inFlight && (signal === undefined || byteCache.sizes.has(face.url))) {
+  const inFlightState = inFlight ? byteCache.pending.get(face.url) : undefined;
+  // Reuse a settled entry, or join a shared in-flight fetch. The one refusal: a signal-scoped
+  // caller never joins a PINNED fetch (one an unsigned caller owns), because that fetch may be
+  // stranded and nothing can cancel it — the caller replaces it with work it can cancel.
+  if (inFlight && (!inFlightState || !signal || !inFlightState.pinned)) {
     // Map insertion order is the LRU order. Pending entries can move too; successful byte
     // accounting is unchanged until their completion records the actual size.
     byteCache.entries.delete(face.url);
     byteCache.entries.set(face.url, inFlight);
-    return raceWithAbort(inFlight, signal);
+    if (!inFlightState) return raceWithAbort(inFlight, signal);
+    return joinPendingFetch(inFlight, inFlightState, signal);
   }
-  if (signal) {
-    // Caller-owned work must be physically cancellable: do not put its pending promise into the
-    // process cache. A successful immutable response is safe to seed for later documents; an
-    // abort, timeout, or hung request can never poison retries.
-    const response = await fetcher(face.url, { signal });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength !== face.byteLength) {
-      throw new Error(`unexpected byte length ${bytes.byteLength}, catalogued ${face.byteLength}`);
-    }
-    cacheSuccess(byteCache, face.url, bytes);
-    return bytes;
-  }
+  // The fetch is cache-owned under its own controller: concurrent documents share ONE download
+  // per face instead of one each. Signal-scoped waiters are refcounted and the LAST aborting
+  // waiter cancels the shared request, so caller-owned work stays physically cancellable. A
+  // failed or cancelled fetch is forgotten below, so it can never poison retries.
+  const controller = new AbortController();
+  const state: PendingFontFetch = { waiters: 0, pinned: !signal, controller };
   const pending = (async () => {
-    const response = await fetcher(face.url);
+    const response = await fetcher(face.url, { signal: controller.signal });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
     // The cheap half of content-checking, done here so an error page served with 200
@@ -290,19 +307,67 @@ async function fetchFace(
     return bytes;
   })();
   byteCache.entries.set(face.url, pending);
+  byteCache.pending.set(face.url, state);
   // A failed fetch must not be remembered as a failure forever: the next document gets to
-  // try again. Only successes stay cached.
+  // try again. Only successes stay cached. Identity checks keep a replaced fetch's late
+  // settlement from touching its successor's cache slot.
   pending.then(
     (bytes) => {
+      if (byteCache.pending.get(face.url) === state) byteCache.pending.delete(face.url);
       if (byteCache.entries.get(face.url) === pending) cacheSuccess(byteCache, face.url, bytes);
     },
     () => {
+      if (byteCache.pending.get(face.url) === state) byteCache.pending.delete(face.url);
       if (byteCache.entries.get(face.url) !== pending) return;
       byteCache.entries.delete(face.url);
       byteCache.sizes.delete(face.url);
     }
   );
-  return raceWithAbort(pending, signal);
+  return joinPendingFetch(pending, state, signal);
+}
+
+function joinPendingFetch(
+  work: Promise<Uint8Array>,
+  state: PendingFontFetch,
+  signal: AbortSignal | undefined
+): Promise<Uint8Array> {
+  if (!signal) {
+    // An unsigned waiter can never abandon the fetch, so no abort may cancel it either.
+    state.pinned = true;
+    return work;
+  }
+  if (signal.aborted) {
+    return Promise.reject(signal.reason ?? new Error('Font loading was aborted'));
+  }
+  state.waiters += 1;
+  let counted = true;
+  const leave = (abandoning: boolean): void => {
+    if (!counted) return;
+    counted = false;
+    state.waiters -= 1;
+    if (abandoning && state.waiters === 0 && !state.pinned) {
+      state.controller.abort(signal.reason ?? new Error('Font loading was aborted'));
+    }
+  };
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const abort = (): void => {
+      reject(signal.reason ?? new Error('Font loading was aborted'));
+      leave(true);
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', abort);
+        leave(false);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', abort);
+        leave(false);
+        reject(error);
+      }
+    );
+  });
 }
 
 function raceWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {

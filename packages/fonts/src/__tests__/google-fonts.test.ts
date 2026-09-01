@@ -584,6 +584,44 @@ describe('googleFonts resolver', () => {
     expect(calls).toBe(8);
   });
 
+  test('concurrent signal-scoped loads share one download per face', async () => {
+    // Server exports always pass a signal. Two documents naming the same face must not cost
+    // two CDN downloads, and one caller aborting must not cancel the other's shared fetch.
+    let calls = 0;
+    const resolveByUrl = new Map<string, (response: Response) => void>();
+    const fetcher = ((input: RequestInfo | URL) => {
+      calls += 1;
+      const face = GOOGLE_FONT_CATALOG.find((entry) => entry.url === String(input));
+      if (!face) return Promise.resolve(new Response(null, { status: 404 }));
+      return new Promise<Response>((resolve) => resolveByUrl.set(face.url, resolve));
+    }) as typeof fetch;
+    const resolver = googleFonts({ fetcher, onFailure: () => {} });
+    const abandoning = new AbortController();
+    const first = resolver({
+      families: ['Tinos'],
+      defaultFamily: 'No Such Family',
+      signal: abandoning.signal,
+    });
+    await Promise.resolve();
+    const second = resolver({
+      families: ['Tinos'],
+      defaultFamily: 'No Such Family',
+      signal: new AbortController().signal,
+    });
+    await Promise.resolve();
+    const sharedCalls = calls;
+    // One waiter abandons; the survivor keeps the shared fetch alive to completion.
+    abandoning.abort('first-caller-deadline');
+    expect((await first).sources).toHaveLength(0);
+    for (const [url, resolve] of resolveByUrl) {
+      const face = GOOGLE_FONT_CATALOG.find((entry) => entry.url === url)!;
+      resolve(new Response(new Uint8Array(face.byteLength)));
+    }
+    expect((await second).sources).toHaveLength(4);
+    expect(calls).toBe(sharedCalls);
+    expect(sharedCalls).toBe(4);
+  });
+
   test('a signal-scoped retry can replace a stranded shared request without late cache deletion', async () => {
     let retrying = false;
     let calls = 0;
