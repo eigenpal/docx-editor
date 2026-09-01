@@ -97,6 +97,25 @@ describe('collectRenderedFontFamilies', () => {
     expect(session.documentFonts()).toEqual(['Garamond', 'Segoe UI', 'Times New Roman Bold']);
   });
 
+  test('the eastAsia face renders only when the run carries East Asian text', () => {
+    // CJK-locale Office builds stamp w:eastAsia on nearly every run. A Latin-only run
+    // resolves no glyph through it, so reporting it rendered raises a false missing-font
+    // notice and burns a resolver slot.
+    const latinOnly = open(
+      docx({
+        body: '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond" w:eastAsia="DengXian"/></w:rPr><w:t>Latin</w:t></w:r></w:p>',
+      })
+    );
+    expect(latinOnly.renderedFontFamilies()).toEqual(['Garamond']);
+
+    const cjk = open(
+      docx({
+        body: '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond" w:eastAsia="DengXian"/></w:rPr><w:t>漢字</w:t></w:r></w:p>',
+      })
+    );
+    expect(cjk.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
+  });
+
   test('a run without text contributes nothing; an empty document answers []', () => {
     const empty = open(docx({ body: '<w:p/>' }));
     expect(empty.renderedFontFamilies()).toEqual([]);

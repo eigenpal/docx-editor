@@ -82,7 +82,9 @@ function fontCatalogDocx(): Uint8Array {
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:m="${M}"><w:body>` +
-        '<w:p><w:r><w:rPr><w:rFonts w:ascii="Body Face" w:eastAsia="CJK Face"/></w:rPr><w:t>Body</w:t><w:sym w:font="Symbol Face" w:char="F0B7"/><w:footnoteReference w:id="1"/></w:r></w:p>' +
+        '<w:p><w:r><w:rPr><w:rFonts w:ascii="Body Face"/></w:rPr><w:t>Body</w:t><w:sym w:font="Symbol Face" w:char="F0B7"/><w:footnoteReference w:id="1"/></w:r></w:p>' +
+        // The eastAsia face only counts as rendered when the run carries East Asian text.
+        '<w:p><w:r><w:rPr><w:rFonts w:eastAsia="CJK Face"/></w:rPr><w:t>漢</w:t></w:r></w:p>' +
         '<w:p><w:pPr><w:pStyle w:val="S"/></w:pPr><w:bookmarkStart w:id="1" w:name="Target"/><w:r><w:t>Styled</w:t></w:r><w:bookmarkEnd w:id="1"/></w:p>' +
         '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>Listed</w:t></w:r></w:p>' +
         '<w:p><w:r><w:drawing><w:txbxContent><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="2"/></w:numPr></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Box Text"/></w:rPr><w:t>Boxed</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:p>' +
@@ -214,8 +216,8 @@ test('the public export opener requests run, style, story, symbol, and equation 
   if (!opened.ok) return;
   expect(request?.families).toEqual([
     'Body Face',
-    'CJK Face',
     'Symbol Face',
+    'CJK Face',
     'Box Text',
     'Field Face',
     'Autonum Marker',
