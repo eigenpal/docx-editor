@@ -1275,6 +1275,7 @@ export interface Editor {
     setEditingMode(mode: DocumentEditingMode): ExecResult;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
+    setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
     setZoom(zoom: number): ExecResult;
     setZoomMode(mode: ZoomMode | 'auto'): ExecResult;
     // (undocumented)
@@ -2903,6 +2904,12 @@ export interface ToolbarCommandState {
 
 // @public
 export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): ToolbarCommandState;
+
+// @public
+export type TrackedChangeFilterMode = 'accept' | 'reject';
+
+// @public
+export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
 
 // @public
 export type Unsubscribe = () => void;

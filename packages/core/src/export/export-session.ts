@@ -239,7 +239,7 @@ export function openDocumentForExport(
   const producer =
     options.producer ?? (options.measurer ? 'host-export-measurer' : 'export-fixed-measurer');
   // Byte exports are immutable one-shot snapshots. Their break cache exists only to share work
-  // inside the pass, so cap it much more tightly than a live editor's cross-revision cache.
+  // inside the pass, so release entries after placement instead of retaining them across revisions.
   const initialParagraphCache = createParagraphLayoutCache<never>({
     retainAcrossPasses: reuseAcrossRevisions,
   });
@@ -303,11 +303,39 @@ export function openDocumentForExport(
   };
   const resourceAbort = new AbortController();
   const callerSignal = options.signal;
-  const abortFromCaller = (): void => resourceAbort.abort(callerSignal?.reason);
+  let callerAborted = false;
+  const unavailableError = (): ExportResourceError =>
+    callerAborted
+      ? new ExportResourceError('aborted', 'Export resource settlement was aborted')
+      : new ExportResourceError('disposed', 'Export session has been disposed');
+  const abortFromCaller = (): void => {
+    callerAborted = true;
+    disposeSession();
+  };
+  function disposeSession(): void {
+    const state = activeState;
+    if (!state) return;
+    activeState = null;
+    callerSignal?.removeEventListener('abort', abortFromCaller);
+    resourceAbort.abort(callerSignal?.reason);
+    state.drawingBundle.dispose();
+    state.paragraphCache.clear();
+    for (const completed of state.completed.values()) {
+      releasePageFieldProjectionState(completed.internal);
+      releaseOverflowPageShellState(completed.internal);
+    }
+    for (const fieldLinks of state.fieldLinks.values()) fieldLinks.registry.clear();
+    state.fieldLinks.clear();
+    state.completed.clear();
+    state.inFlight.clear();
+    state.furniture.clear();
+    state.sessions.clear();
+    resourcesChanged();
+  }
   callerSignal?.addEventListener('abort', abortFromCaller, { once: true });
   if (callerSignal?.aborted) abortFromCaller();
   const assertActive = (): void => {
-    if (!activeState) throw new ExportResourceError('disposed', 'Export session has been disposed');
+    if (!activeState) throw unavailableError();
     if (resourceAbort.signal.aborted) {
       throw new ExportResourceError('aborted', 'Export resource settlement was aborted');
     }
@@ -545,9 +573,7 @@ export function openDocumentForExport(
       return Promise.reject(error);
     }
     if (!activeState) {
-      return Promise.reject(
-        new ExportResourceError('disposed', 'Export session has been disposed')
-      );
+      return Promise.reject(unavailableError());
     }
     const state = activeState;
     const existing = state.inFlight.get(normalizedMode);
@@ -578,26 +604,7 @@ export function openDocumentForExport(
           ?.slice() ?? null
       );
     },
-    dispose() {
-      const state = activeState;
-      if (!state) return;
-      activeState = null;
-      callerSignal?.removeEventListener('abort', abortFromCaller);
-      resourceAbort.abort();
-      state.drawingBundle.dispose();
-      state.paragraphCache.clear();
-      for (const completed of state.completed.values()) {
-        releasePageFieldProjectionState(completed.internal);
-        releaseOverflowPageShellState(completed.internal);
-      }
-      for (const fieldLinks of state.fieldLinks.values()) fieldLinks.registry.clear();
-      state.fieldLinks.clear();
-      state.completed.clear();
-      state.inFlight.clear();
-      state.furniture.clear();
-      state.sessions.clear();
-      resourcesChanged();
-    },
+    dispose: disposeSession,
   };
   return { ok: true, session: exportSession };
 }

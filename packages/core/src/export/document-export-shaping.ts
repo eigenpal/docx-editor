@@ -166,8 +166,10 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
  *
  * This is the composition root exporters should use. It parses before requesting fonts, applies
  * cancellation/deadlines to provisioning, atomically binds the resulting measurer to that parsed
- * view, and releases the document-specific font lease with the returned session. Mutable views are
- * intentionally excluded: a live editor host must supply its own revision-stable measurer.
+ * view, and releases the document-specific font lease with the returned session. When best-effort
+ * resolution admits no source, the session retains Core's deterministic fixed measurer; strict
+ * policy already refuses that incomplete coverage. Mutable views are intentionally excluded: a
+ * live editor host must supply its own revision-stable measurer.
  *
  * @public
  */
@@ -186,49 +188,58 @@ export async function openFontBackedDocumentForExport(
     fontPolicy,
     onFontResolution,
   });
-  if (!shaping) {
-    throw new ExportResourceError(
-      'layoutFailed',
-      'Font-backed export requires at least one admitted font source'
-    );
-  }
   let result: OpenDocumentForExportResult;
   try {
     result = openDocumentForExport(opened.view, {
       ...sessionOptions,
       reuseAcrossRevisions: false,
-      measurer: shaping.createMeasurer(),
-      producer: options.producer ?? shaping.producer,
+      ...(shaping
+        ? {
+            measurer: shaping.createMeasurer(),
+            producer: options.producer ?? shaping.producer,
+          }
+        : options.producer
+          ? { producer: options.producer }
+          : {}),
     });
   } catch (error) {
-    shaping.dispose();
+    shaping?.dispose();
     throw error;
   }
   if (!result.ok) {
-    shaping.dispose();
+    shaping?.dispose();
     return result;
   }
   const session = result.session;
   let ownedShaping: DocumentExportShaping | undefined = shaping;
-  let disposed = false;
+  let termination: 'active' | 'aborted' | 'disposed' = 'active';
+  const unavailable = (): ExportResourceError =>
+    termination === 'aborted'
+      ? new ExportResourceError('aborted', 'Export resource settlement was aborted')
+      : new ExportResourceError('disposed', 'Export session has been disposed');
+  const disposeOwned = (next: 'aborted' | 'disposed'): void => {
+    if (termination !== 'active') return;
+    termination = next;
+    options.signal?.removeEventListener('abort', abortOwned);
+    try {
+      session.dispose();
+    } finally {
+      ownedShaping?.dispose();
+      ownedShaping = undefined;
+    }
+  };
+  const abortOwned = (): void => disposeOwned('aborted');
+  options.signal?.addEventListener('abort', abortOwned, { once: true });
+  if (options.signal?.aborted) abortOwned();
   return {
     ok: true,
     session: Object.freeze({
-      layout: () => session.layout(),
+      layout: () => (termination === 'active' ? session.layout() : Promise.reject(unavailable())),
       layoutFor: (displayMode: Parameters<ExportSession['layoutFor']>[0]) =>
-        session.layoutFor(displayMode),
+        termination === 'active' ? session.layoutFor(displayMode) : Promise.reject(unavailable()),
       validatedImageBytes: (drawing: Parameters<ExportSession['validatedImageBytes']>[0]) =>
-        session.validatedImageBytes(drawing),
-      dispose() {
-        if (disposed) return;
-        disposed = true;
-        try {
-          session.dispose();
-        } finally {
-          ownedShaping?.dispose();
-          ownedShaping = undefined;
-        }
-      },
+        termination === 'active' ? session.validatedImageBytes(drawing) : null,
+      dispose: () => disposeOwned('disposed'),
     }),
   };
 }
@@ -410,11 +421,7 @@ function publishFontResolutionReport(
         console.warn('[fonts] font-resolution diagnostics callback failed', cause);
       });
     } catch (cause) {
-      throw new ExportResourceError(
-        'layoutFailed',
-        'The font-resolution diagnostics callback failed',
-        { cause }
-      );
+      console.warn('[fonts] font-resolution diagnostics callback failed', cause);
     }
     return;
   }

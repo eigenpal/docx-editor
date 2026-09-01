@@ -26,7 +26,8 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/check-built-assets.mjs",
+    "assets:check": "node scripts/check-built-assets.mjs",
     "typecheck": "tsc --noEmit",
     "manifest": "node scripts/generate-manifest.mjs",
     "manifest:check": "node scripts/generate-manifest.mjs --check",

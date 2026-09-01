@@ -1434,8 +1434,11 @@ export type FormattingDisplayMode = 'all-markup' | 'proposed' | 'original';
 
 // @public
 export interface FormattingRevisionAuthorFilter {
+    readonly excludedNodeMode?: (nodeId: string, author: string) => 'proposed' | 'original';
     // (undocumented)
     readonly hiddenAuthors: ReadonlySet<string>;
+    // (undocumented)
+    readonly includesNode?: (nodeId: string, author: string) => boolean;
 }
 
 // @public

@@ -37,7 +37,12 @@ import { createSuccessfulValueCache, provisionWithExportDeadline } from './expor
 import { createPackagedFileFetch } from './packaged-file-fetch.ts';
 
 export { ExportResourceError } from '@docx-editor.dev/core/export';
-export { forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
+export {
+  forEachSemanticDrawing,
+  HARD_MAX_AGGREGATE_FONT_BYTES,
+  HARD_MAX_FONT_BYTES,
+  HARD_MAX_FONT_SOURCES,
+} from '@docx-editor.dev/core/layout';
 export { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 
 export type {

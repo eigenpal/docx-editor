@@ -244,10 +244,28 @@ test('the public export opener requests run, style, story, symbol, and equation 
   opened.session.dispose();
 });
 
-test('empty origins fail with a typed resource error', async () => {
+test('empty origins report missing coverage and retain the deterministic fallback', async () => {
+  let coverage: readonly string[] | undefined;
+  const opened = await openFontBackedDocumentForExport(fontCatalogDocx(), {
+    fonts: [],
+    onFontResolution: (report) => {
+      coverage = report.families.map((family) => family.coverage);
+    },
+  });
+  expect(opened.ok).toBe(true);
+  expect(coverage?.every((entry) => entry === 'none')).toBe(true);
+  if (!opened.ok) return;
+  expect((await opened.session.layout()).pages).toHaveLength(1);
+  opened.session.dispose();
+});
+
+test('strict font policy still refuses an export when no origin admits a source', async () => {
   try {
-    await openFontBackedDocumentForExport(fontCatalogDocx(), { fonts: [] });
-    throw new Error('expected font provisioning to fail');
+    await openFontBackedDocumentForExport(fontCatalogDocx(), {
+      fonts: [],
+      fontPolicy: 'strict',
+    });
+    throw new Error('expected strict font provisioning to fail');
   } catch (error) {
     expect(error).toBeInstanceOf(ExportResourceError);
     expect((error as ExportResourceError).code).toBe('layoutFailed');
@@ -366,6 +384,31 @@ test('a pre-aborted custom-font export invokes no origin and preserves the host 
   expect(calls).toBe(0);
 });
 
+test('caller abort releases the document font lease without requiring explicit disposal', async () => {
+  const controller = new AbortController();
+  const opened = await openFontBackedDocumentForExport(fontCatalogDocx(), {
+    fonts: fontFragment(),
+    signal: controller.signal,
+  });
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+
+  controller.abort('job-cancelled');
+  await expect(opened.session.layout()).rejects.toMatchObject({ code: 'aborted' });
+
+  const parsed = openHeadlessDocument(fontCatalogDocx());
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+  const activeBytes: number[] = [];
+  const probe = await acquireDocumentExportShaping(parsed.view, [fontFragment('Probe Face')], {
+    onActiveFontBytesChange: (bytes) => activeBytes.push(bytes),
+  });
+  expect(activeBytes[0]).toBe(0);
+  probe?.dispose();
+  expect(activeBytes.at(-1)).toBe(0);
+  opened.session.dispose();
+});
+
 test('structured font evidence reports failures and strict mode enforces complete coverage', async () => {
   const failed = defineFontResolver(() => {
     throw new Error('licensed font service unavailable');
@@ -415,7 +458,7 @@ test('structured font evidence reports failures and strict mode enforces complet
   }
 });
 
-test('observes rejected async font-report callbacks without process rejection', async () => {
+test('font-report callback failures are observed without affecting export', async () => {
   const unhandled: unknown[] = [];
   const warnings: unknown[][] = [];
   const onUnhandled = (reason: unknown): void => {
@@ -425,6 +468,18 @@ test('observes rejected async font-report callbacks without process rejection', 
   console.warn = (...args: unknown[]) => warnings.push(args);
   process.on('unhandledRejection', onUnhandled);
   try {
+    const synchronous = await openFontBackedDocumentForExport(
+      minimalDocx('<w:p><w:r><w:t>Synchronous diagnostics</w:t></w:r></w:p>'),
+      {
+        fonts: fontFragment(),
+        onFontResolution: () => {
+          throw new Error('sync report failed');
+        },
+      }
+    );
+    expect(synchronous.ok).toBe(true);
+    if (synchronous.ok) synchronous.session.dispose();
+
     const opened = await openFontBackedDocumentForExport(
       minimalDocx('<w:p><w:r><w:t>Diagnostics</w:t></w:r></w:p>'),
       {
@@ -438,7 +493,7 @@ test('observes rejected async font-report callbacks without process rejection', 
     if (opened.ok) opened.session.dispose();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(unhandled).toHaveLength(0);
-    expect(warnings).toHaveLength(1);
+    expect(warnings).toHaveLength(2);
   } finally {
     process.removeListener('unhandledRejection', onUnhandled);
     console.warn = warn;
@@ -549,7 +604,7 @@ test('strict evidence is derived from admitted font bytes, not declared sources'
   }
 });
 
-test('total font-origin failure still publishes structured evidence before refusal', async () => {
+test('total font-origin failure publishes evidence before best-effort fallback', async () => {
   const bytes = minimalDocx(
     '<w:p><w:r><w:rPr><w:rFonts w:ascii="Missing Face"/></w:rPr><w:t>x</w:t></w:r></w:p>'
   );
@@ -578,22 +633,18 @@ test('total font-origin failure still publishes structured evidence before refus
           NonNullable<Parameters<typeof openFontBackedDocumentForExport>[1]['onFontResolution']>
         >[0]
       | undefined;
-    try {
-      await openFontBackedDocumentForExport(bytes, {
-        fonts,
-        onFontResolution: (next) => {
-          report = next;
-        },
-      });
-      throw new Error('expected refusal without paintable font bytes');
-    } catch (error) {
-      expect(error).toBeInstanceOf(ExportResourceError);
-      expect((error as ExportResourceError).code).toBe('layoutFailed');
-    }
+    const opened = await openFontBackedDocumentForExport(bytes, {
+      fonts,
+      onFontResolution: (next) => {
+        report = next;
+      },
+    });
+    expect(opened.ok).toBe(true);
     expect(report?.originFailures).toHaveLength(expectedFailures);
     expect(report?.families.find((family) => family.family === 'Missing Face')?.coverage).toBe(
       'none'
     );
+    if (opened.ok) opened.session.dispose();
   }
 });
 

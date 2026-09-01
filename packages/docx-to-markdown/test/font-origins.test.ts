@@ -91,6 +91,46 @@ test('default packaged-font startup honors a pre-aborted export before loading r
   }
 });
 
+test('public best-effort font failure reports approximation while strict mode refuses it', async () => {
+  const bytes = docx('<w:p><w:r><w:t>Bounded fallback</w:t></w:r></w:p>');
+  const oneByteFontBudget = {
+    epoch: 0,
+    maxFontBytes: 1,
+    sources: [],
+    defaultFont: { family: 'Calibri', sizeHalfPoints: 22 },
+  } as const;
+  let failures = 0;
+  let coverage: readonly string[] = [];
+  const opened = await openDocumentForExport(bytes, {
+    // Establish a valid caller ceiling that intentionally refuses every bundled face.
+    fonts: oneByteFontBudget,
+    onFontResolution: (report) => {
+      failures = report.originFailures.length;
+      coverage = report.families.map((family) => family.coverage);
+    },
+  });
+  expect(opened.ok).toBe(true);
+  expect(failures).toBe(1);
+  expect(coverage.length).toBeGreaterThan(0);
+  expect(coverage.every((entry) => entry === 'none')).toBe(true);
+  if (!opened.ok) return;
+  expect((await opened.session.layout()).pages).toHaveLength(1);
+  opened.session.dispose();
+  await expect(opened.session.layout()).rejects.toMatchObject({ code: 'disposed' });
+
+  try {
+    await openDocumentForExport(bytes, {
+      fonts: oneByteFontBudget,
+      fontPolicy: 'strict',
+      onFontResolution: () => {},
+    });
+    throw new Error('expected strict font policy to refuse approximate pagination');
+  } catch (error) {
+    expect(error).toBeInstanceOf(ExportResourceError);
+    expect((error as ExportResourceError).code).toBe('layoutFailed');
+  }
+});
+
 test('no-options byte export uses document-aware packaged fonts for Century Gothic', async () => {
   const bytes = docx(
     '<w:p><w:r><w:rPr><w:rFonts w:ascii="Century Gothic" w:hAnsi="Century Gothic"/></w:rPr>' +

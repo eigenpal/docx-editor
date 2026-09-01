@@ -63,7 +63,7 @@
 
 import { FACES, FAMILY_PLANS, planFaceFile, planLineBox } from './family-plans.ts';
 import type { WordDefaultFamily } from './family-plans.ts';
-import { FONT_ASSET_MANIFEST } from './manifest.generated.ts';
+import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
 
 export type { WordDefaultFamily } from './family-plans.ts';
 
@@ -141,7 +141,7 @@ export interface LoadDefaultFontsOptions {
 const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, entry]));
 
 /** Bundler-visible asset URL for one packaged face. */
-const assetUrl = (file: string): URL => new URL(`../assets/${file}`, import.meta.url);
+const assetUrl = (file: string): URL => FONT_ASSET_URLS[file];
 
 /**
  * The families Word applies to a document by DEFAULT, and what

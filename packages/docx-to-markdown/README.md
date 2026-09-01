@@ -373,6 +373,9 @@ with `code` equal to `aborted`, `timedOut`, `nonConvergent`, `disposed`, `layout
 be represented within the engine's bounded page model. `layoutFailed` identifies another engine
 or host-integration failure, such as an unavailable custom measurer. Both retain the original
 diagnostic as the standard `cause` without making consumers import a layout implementation type.
+Aborting the caller signal is terminal for a reusable session and immediately runs its idempotent
+resource teardown, including pending image work and document-specific font leases. Calling
+`dispose()` afterward remains safe.
 
 ```ts
 import {
@@ -401,6 +404,33 @@ try {
 ```
 
 ## Layout and Markdown policy
+
+### Export fidelity contract
+
+Pagination is created in Core before Markdown translation. The export lane must therefore settle
+every input that can change geometry before it asks for a layout snapshot:
+
+- DOCX page geometry, section breaks, margins, columns, styles, theme mappings, run font family,
+  run font size, weight, italic state, character spacing, scaling, and line spacing come from the
+  immutable document snapshot. There is intentionally no Markdown-only page-width override.
+- Font origins are resolved in `fonts` → bundled substitutes → `fallbackFonts` order. Core measures
+  every run at its resolved OOXML size. It shapes a run with admitted bytes when its face resolves
+  and uses the deterministic fixed measurer for that run otherwise; Markdown never measures text
+  or invents page breaks after the fact.
+- Images and preserved-format conversion settle through the same bounded Core session before the
+  semantic layout is published. `signal` and `resourceTimeoutMs` cover that work.
+- `displayMode` is applied by Core before pagination, so inserted/deleted content and page fields
+  are measured in the same revision view reported by `pagination.revisionView`.
+- The resulting layout is immutable. Markdown, PDF, and future translators must consume that one
+  snapshot rather than reopening the DOCX or re-resolving fonts independently.
+
+For citation-sensitive production exports, supply the same licensed font files used by the author
+through `fonts`, use `fontPolicy: 'strict'`, persist `onFontResolution` with the job record, and pin
+the exporter/Core/font-catalog versions. Only complete strict coverage establishes that every
+requested static face used font-backed shaping. In `best-effort`, any family reported as `partial`
+or `none` can use Core's deterministic approximate measurer for unresolved runs; if no source is
+admitted, the whole layout uses it rather than losing the document. That fallback is bounded and
+reproducible, but it is not a high-fidelity pagination claim.
 
 The Node defaults use the packaged, validated metric-compatible faces from
 `@docx-editor.dev/fonts` with shared HarfBuzz shaping: Calibri → Carlito, Cambria → Caladea, Times
@@ -472,6 +502,16 @@ bold-italic coverage; `onFontResolution` records the direct and substituted face
 the page breaks. Documents whose candidate catalog exceeds the safe 64-family resolver boundary
 also fail with a typed `layoutFailed` error instead of silently dropping a face. Google fallback is
 opt-in, uses a bounded process cache, and a timeout or abort never leaves a failed request cached.
+
+Font admission is deliberately bounded against hostile or unexpectedly large inputs. The public
+`HARD_MAX_FONT_BYTES`, `HARD_MAX_FONT_SOURCES`, and `HARD_MAX_AGGREGATE_FONT_BYTES` constants are
+re-exported by this package; currently they cap one face at 64 MiB, one composition at 256 sources
+and 128 MiB, and all active document-specific export leases in a process at 128 MiB. A malformed or
+individually over-limit origin is reported and skipped before later origins are consulted. A
+process-wide lease refusal is a typed `layoutFailed` error: it does not start another network
+fallback or silently substitute approximate pagination. Serverless and worker hosts should return
+only the document-requested faces from resolvers, cap concurrent font-heavy exports, dispose every
+reusable session promptly, and use the exported constants rather than duplicating numeric limits.
 
 Document-embedded fonts are not automatically admitted by the Node defaults yet. A DOCX that
 depends on `w:embedRegular`, `w:embedBold`, `w:embedItalic`, or `w:embedBoldItalic` is affected.

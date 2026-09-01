@@ -727,6 +727,34 @@ describe('record-only Markdown export', () => {
   });
 
   test('waits for image quiescence, bounds a stalled decoder, and returns defensive media copies', async () => {
+    const controller = new AbortController();
+    let cancelledDecodeLifetime: AbortSignal | undefined;
+    let markDecodeStarted!: () => void;
+    const decodeStarted = new Promise<void>((resolve) => {
+      markDecodeStarted = resolve;
+    });
+    const cancelled = openDocumentForExport(imageDocx(), {
+      signal: controller.signal,
+      imageDecodePort: {
+        decode: (_bytes, _mime, _limits, signal) => {
+          cancelledDecodeLifetime = signal;
+          markDecodeStarted();
+          return new Promise(() => {});
+        },
+      },
+      resourceTimeoutMs: 500,
+    });
+    expect(cancelled.ok).toBe(true);
+    if (cancelled.ok) {
+      const pending = cancelled.session.layout();
+      await decodeStarted;
+      controller.abort('job-cancelled');
+      await expect(pending).rejects.toMatchObject({ code: 'aborted' });
+      expect(cancelledDecodeLifetime?.aborted).toBe(true);
+      await expect(cancelled.session.layout()).rejects.toMatchObject({ code: 'aborted' });
+      cancelled.session.dispose();
+    }
+
     let decodeLifetime: AbortSignal | undefined;
     const stalled = openDocumentForExport(imageDocx(), {
       imageDecodePort: {

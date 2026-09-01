@@ -184,6 +184,15 @@ export interface FontOriginFailure {
 export function forEachSemanticDrawing(layout: SemanticLayout, visit: (drawing: SemanticDrawingVisit) => void): void;
 
 // @public
+export const HARD_MAX_AGGREGATE_FONT_BYTES: number;
+
+// @public
+export const HARD_MAX_FONT_BYTES: number;
+
+// @public
+export const HARD_MAX_FONT_SOURCES = 256;
+
+// @public
 export type HeadlessDocumentRejection = OoxmlPackageRejection | 'no-main-document-tree';
 
 // @public
