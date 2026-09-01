@@ -88,6 +88,10 @@ export default defineConfig({
         find: '@docx-editor.dev/i18n',
         replacement: path.join(monorepoRoot, 'packages/i18n/src/index.ts'),
       },
+      {
+        find: '@docx-editor.dev/fonts',
+        replacement: path.join(monorepoRoot, 'packages/fonts/src/index.ts'),
+      },
     ],
   },
   // The library's chrome is Tailwind scoped to `.docx-editor` (see the monorepo preset), so a
