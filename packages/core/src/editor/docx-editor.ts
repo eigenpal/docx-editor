@@ -179,6 +179,7 @@ import {
 import {
   MAX_RESOLVER_FAMILIES,
   composeFontConfiguration,
+  normalizeFontResolverResult,
   type FontConfigurationBase,
 } from './font-composition.ts';
 import { availableFontFamilies, configuredDefaultFontFamily } from './font-catalog.ts';
@@ -757,10 +758,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // fixed measurer, exactly like a failed byte source.
       const explicit: FontConfigurationBase | undefined =
         typeof configured === 'function'
-          ? await configured({
-              families: mounted.session.documentFonts().slice(0, MAX_RESOLVER_FAMILIES),
-              defaultFamily: configuredDefaultFontFamily(fontConfiguration()),
-            })
+          ? normalizeFontResolverResult(
+              await configured({
+                families: mounted.session.documentFonts().slice(0, MAX_RESOLVER_FAMILIES),
+                defaultFamily: configuredDefaultFontFamily(fontConfiguration()),
+              })
+            )
           : configured;
       // Awaiting handed control back: this load may have been superseded (or the editor
       // destroyed) while the resolver ran, and installing its answer would overwrite a
@@ -770,8 +773,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return;
       }
       resolvedFontConfiguration = explicit;
-      // A resolver covering none of this document's families is a normal answer, not a
-      // failure — and with nothing embedded there is no font work left to do.
+      // An empty resolver result is normal whether spelled `undefined` or as a fragment;
+      // sources, substitutions, or populated failures retain the genuine error path below.
       if (!explicit && embedded.length === 0) {
         fontsResolving = false;
         bump();

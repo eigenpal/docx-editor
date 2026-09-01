@@ -17,6 +17,7 @@ import { createLayoutSession } from '../layout-session.ts';
 import { layoutSemanticDocument } from '../semantic-layout.ts';
 import { enumerateDocumentSections } from '../section-properties.ts';
 import {
+  attachNotesToLayout,
   buildPageRefHits,
   computeFootnoteReserves,
   layoutSemanticDocumentWithNotes,
@@ -109,8 +110,8 @@ function loadNotesDoc(bytes: Uint8Array): {
   return { part, notes };
 }
 
-/** Single-paragraph body with one footnote ref — enough for a controlled mock reflow. */
-function singleRefFootnoteDoc(): Uint8Array {
+/** Small footnote body — enough for controlled mock reflow and reserve tests. */
+function singleRefFootnoteDoc(withSecondRef = false): Uint8Array {
   return zipSync({
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}">` +
@@ -128,6 +129,9 @@ function singleRefFootnoteDoc(): Uint8Array {
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>` +
         '<w:p><w:r><w:t>Body with footnote</w:t><w:footnoteReference w:id="1"/></w:r></w:p>' +
+        (withSecondRef
+          ? '<w:p><w:r><w:t>Second footnote</w:t><w:footnoteReference w:id="2"/></w:r></w:p>'
+          : '') +
         '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>' +
         '</w:body></w:document>'
     ),
@@ -136,6 +140,9 @@ function singleRefFootnoteDoc(): Uint8Array {
         `<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>` +
         `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
         `<w:footnote w:id="1"><w:p><w:r><w:t>Note ${'line '.repeat(12)}</w:t></w:r></w:p></w:footnote>` +
+        (withSecondRef
+          ? '<w:footnote w:id="2"><w:p><w:r><w:t>Section-end note</w:t></w:r></w:p></w:footnote>'
+          : '') +
         '</w:footnotes>'
     ),
   });
@@ -265,6 +272,57 @@ describe('footnote bottom reservation', () => {
       const b = again.pages[i]!.footnotes?.box.height ?? 0;
       expect(b).toBeCloseTo(a, 3);
       expect(bodyUsedHeight(again.pages[i]!)).toBeCloseTo(bodyUsedHeight(layout.pages[i]!), 3);
+    }
+  });
+
+  test('sectEnd refs do not affect pageBottom notes on the same page in either order', () => {
+    const { part, notes } = loadNotesDoc(singleRefFootnoteDoc(true));
+    const refs = collectNoteReferences(part);
+    expect(refs).toHaveLength(2);
+    const contentHeight = 400;
+    const bodyLayout: SemanticLayout = {
+      revision: 1,
+      pages: [
+        mockPage(
+          0,
+          refs.map((ref, index) =>
+            paraFrag(ref.paragraphId, {
+              atomEnd: ref.atomOffset + 1,
+              y: index * 20,
+              height: 14,
+            })
+          ),
+          contentHeight
+        ),
+      ],
+    };
+    for (const pageBottomIndex of [0, 1]) {
+      const sectionByParagraph = new Map(
+        refs.map((ref, index) => [ref.paragraphId, index === pageBottomIndex ? 0 : 1])
+      );
+      const allHits = buildPageRefHits(refs, sectionByParagraph);
+      const mixedNotes: NotesLayoutInput = {
+        ...notes,
+        footnotePropsBySection: [
+          resolveFootnoteProperties({ pos: 'pageBottom' }),
+          resolveFootnoteProperties({ pos: 'sectEnd' }),
+        ],
+      };
+      const noteMarks = provisionalNoteMarks(allHits, mixedNotes);
+      const pageBottomOnly = computeFootnoteReserves(
+        bodyLayout,
+        [allHits[pageBottomIndex]!],
+        mixedNotes,
+        noteMarks
+      );
+      const mixed = computeFootnoteReserves(bodyLayout, allHits, mixedNotes, noteMarks);
+      const attached = attachNotesToLayout(bodyLayout, allHits, mixedNotes);
+
+      expect(pageBottomOnly.reserves.get(0)).toBeGreaterThan(0);
+      expect(mixed.reserves.get(0)).toBe(pageBottomOnly.reserves.get(0));
+      expect(attached.layout.pages[0]!.footnotes?.notes.map((note) => note.noteId)).toEqual([
+        allHits[pageBottomIndex]!.noteId,
+      ]);
     }
   });
 

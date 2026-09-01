@@ -320,6 +320,7 @@ async function composeFontOriginsInternal(
   let committedSourceBytes = 0;
   let substitutions: FontSourceSubstitution[] = [];
   const committedSubstitutionKeys = new Set<string>();
+  const failures: unknown[] = [];
   const inherited = request.resolvedFaces ?? [];
   let defaultFamily = request.defaultFamily;
 
@@ -375,6 +376,7 @@ async function composeFontOriginsInternal(
         );
         continue;
       }
+      const answerFailures = 'failures' in answer ? answer.failures : undefined;
       // Read the whole answer BEFORE committing any of it. A malformed source — no
       // `request`, an unusable family — throws in `faceKey`, and an origin half-ingested
       // is worse than one skipped: it would sit in `present` with its faces unrecorded and
@@ -399,6 +401,11 @@ async function composeFontOriginsInternal(
         reportOriginFailure(options, origin, originIndex, cause);
       }
       const sampled = sampledOrigin.fragment;
+      if (Array.isArray(answerFailures)) {
+        failures.push(...answerFailures);
+      } else if (answerFailures !== undefined) {
+        failures.push(answerFailures);
+      }
       const faces = (sampled.sources ?? []).map((source) => {
         fontRequestKey(source.request);
         return [faceKey(source.request), source.request] as const;
@@ -448,7 +455,9 @@ async function composeFontOriginsInternal(
     sources: winningSources,
     substitutions,
   });
-  return merged;
+  return failures.length === 0
+    ? merged
+    : ({ ...merged, failures: Object.freeze(failures) } as FontConfigurationFragment);
 }
 
 type ObservedOriginOutcome =
