@@ -90,7 +90,8 @@ describe('bounded OMML equation projection', () => {
         '<m:r><m:t>E=mc</m:t></m:r>' +
         '<m:sSup><m:e><m:r><m:t>2</m:t></m:r></m:e>' +
         '<m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup>' +
-        '<m:f><m:num><m:r><m:t>a+b</m:t></m:r></m:num>' +
+        '<m:f><m:fPr><m:type m:val="bar"/></m:fPr>' +
+        '<m:num><m:r><m:t>a+b</m:t></m:r></m:num>' +
         '<m:den><m:r><m:t>2</m:t></m:r></m:den></m:f>' +
         '<m:rad><m:deg/><m:e><m:r><m:t>x</m:t></m:r></m:e></m:rad>' +
         '<m:nary><m:naryPr><m:chr m:val="∑"/></m:naryPr>' +

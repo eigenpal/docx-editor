@@ -9,7 +9,16 @@ import { readOoxmlPart, type OoxmlPart } from '../../store/package/ooxml-tree.ts
 import { applyTreeOp } from '../../store/store/tree-ops.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
-import { caretStops, documentOrder, paragraphTextFromLayout } from '../semantic-interaction.ts';
+import {
+  caretAt,
+  caretStopsForBlocks,
+  caretStops,
+  documentOrder,
+  paragraphTextFromLayout,
+  selectionRects,
+} from '../semantic-interaction.ts';
+import { hitTestFragments, hitTestPage } from '../semantic-hit-test.ts';
+import { isBottomToTopCaret } from '../table-cell-text-direction.ts';
 import {
   createFixedMeasurer,
   createLayoutSession,
@@ -300,7 +309,8 @@ describe('semantic table layout', () => {
         ) +
         '</w:tbl>'
     );
-    const cell = allTableFragments(layout(part))[0]!.rows[0]!.cells[0]!;
+    const result = layout(part);
+    const cell = allTableFragments(result)[0]!.rows[0]!.cells[0]!;
     const para = cell.blocks[0]!;
     // left 6pt, top 4pt from tcMar (120/80 twips).
     expect(para.box.x).toBe(cell.box.x + 6);
@@ -411,6 +421,113 @@ describe('semantic table layout', () => {
     const shortTop = short.blocks[0]!.box.y;
     // Centered content sits below the top pad of a top-aligned cell.
     expect(shortTop).toBeGreaterThan(short.box.y + 3);
+  });
+
+  test('btLr cells lay text along the row height instead of the narrow column width', () => {
+    const part = loadPart(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="510"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:trHeight w:val="2000" w:hRule="exact"/></w:trPr>' +
+        '<w:tc><w:tcPr><w:textDirection w:val="btLr"/><w:vAlign w:val="center"/></w:tcPr>' +
+        p('vertical label') +
+        '</w:tc></w:tr></w:tbl>'
+    );
+    const result = layout(part);
+    const cell = allTableFragments(result)[0]!.rows[0]!.cells[0]!;
+    const paragraph = cell.blocks[0]!;
+    if (paragraph.kind !== 'paragraph') throw new Error('expected paragraph');
+    expect(cell.textDirection).toBe('btLr');
+    expect(cell.box).toMatchObject({ width: 25.5, height: 100 });
+    expect(paragraph.lines).toHaveLength(1);
+    expect(paragraph.lines[0]!.spans.map((span) => span.text).join('')).toBe('vertical label');
+
+    const span = paragraph.lines[0]!.spans[0]!;
+    const paintedPoint = {
+      x: cell.box.x + (span.box.y - cell.box.y) + span.box.height / 2,
+      y: cell.box.y + cell.box.height - (span.box.x - cell.box.x) - span.box.width / 2,
+    };
+    const hit = hitTestPage(result, 0, paintedPoint)!;
+    expect(hit.position.paragraphId).toBe(paragraph.paragraphId);
+    expect(isBottomToTopCaret(hit.caret)).toBe(true);
+    const caret = caretAt(result, { paragraphId: paragraph.paragraphId, offset: 0 })!;
+    expect(isBottomToTopCaret(caret)).toBe(true);
+    expect(hit.caret).toEqual(caretAt(result, hit.position, { preferredPageIndex: 0 }));
+    expect(hit.caret.x).toBeGreaterThanOrEqual(cell.box.x);
+    expect(hit.caret.x).toBeLessThanOrEqual(cell.box.x + cell.box.width);
+    expect(caret.x).toBeGreaterThanOrEqual(cell.box.x);
+    expect(caret.x).toBeLessThanOrEqual(cell.box.x + cell.box.width);
+    const selection = {
+      anchor: { paragraphId: paragraph.paragraphId, offset: 0 },
+      head: { paragraphId: paragraph.paragraphId, offset: 'vertical label'.length },
+    };
+    const [rect] = selectionRects(result, selection, documentOrder(result));
+    expect(rect!.width).toBeCloseTo(paragraph.lines[0]!.box.height, 3);
+    expect(rect!.height).toBeGreaterThan(rect!.width);
+  });
+
+  test('btLr caret geometry is available in furniture and note stories', () => {
+    const part = loadPart(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="510"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:trHeight w:val="2000" w:hRule="exact"/></w:trPr>' +
+        '<w:tc><w:tcPr><w:textDirection w:val="btLr"/></w:tcPr>' +
+        p('story label') +
+        '</w:tc></w:tr></w:tbl>'
+    );
+    const bodyLayout = layout(part);
+    const page = bodyLayout.pages[0]!;
+    const fragments = page.fragments;
+    const storyLayouts: SemanticLayout[] = [
+      {
+        ...bodyLayout,
+        pages: [
+          {
+            ...page,
+            fragments: [],
+            header: {
+              kind: 'header',
+              variant: 'default',
+              partName: '/word/header1.xml',
+              box: page.contentBox,
+              fragments,
+            },
+          },
+        ],
+      },
+      {
+        ...bodyLayout,
+        pages: [
+          {
+            ...page,
+            fragments: [],
+            footnotes: {
+              kind: 'footnotes',
+              placement: 'pageBottom',
+              box: page.contentBox,
+              notes: [
+                {
+                  noteKind: 'footnote',
+                  noteId: 1,
+                  scopeId: 'footnote:1',
+                  mark: '1',
+                  box: page.contentBox,
+                  fragments,
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+    const table = fragments[0]!;
+    if (table.kind !== 'table') throw new Error('expected table');
+    const cell = table.rows[0]!.cells[0]!;
+    const point = { x: cell.box.x + cell.box.width / 2, y: cell.box.y + cell.box.height / 2 };
+    for (const storyLayout of storyLayouts) {
+      const hit = hitTestFragments(storyLayout, 0, fragments, point)!;
+      expect(isBottomToTopCaret(hit.caret)).toBe(true);
+      const stops = caretStopsForBlocks(storyLayout, 0, fragments);
+      expect(stops.length).toBeGreaterThan(1);
+      expect(stops.every(isBottomToTopCaret)).toBe(true);
+    }
   });
 
   test('column widths come from the grid when present', () => {

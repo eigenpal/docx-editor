@@ -64,6 +64,7 @@ import {
   readMarginSides,
   type CellMarginsPt,
 } from './table-cell-margins.ts';
+import { readCellTextDirection } from './table-cell-text-direction.ts';
 
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
 // where the published table surface lives.
@@ -222,6 +223,8 @@ export interface SemanticTableCell {
   readonly vMergeContinue: boolean;
   /** `w:vAlign` — defaults to top when omitted/unrecognised. */
   readonly vAlign: CellVerticalAlign;
+  /** `w:textDirection`; unsupported values keep horizontal layout. */
+  readonly textDirection: 'horizontal' | 'btLr';
   /** Resolved per-side margins (tcMar over tblCellMar over the table style over Word's default). */
   readonly margins: CellMarginsPt;
   /** Three-state authored `tcBorders` (omitted / none / edge). */
@@ -999,6 +1002,7 @@ function readTableStructureUncached(
         ...(gridCols[gridColumn]?.id ? { gridColumnId: gridCols[gridColumn]!.id } : {}),
         vMergeContinue: readVMergeContinue(cellProperties),
         vAlign: readVAlign(cellProperties),
+        textDirection: readCellTextDirection(cellProperties),
         margins: cellMargins,
         borders: mergeCellBorders(
           conditionalBorders,

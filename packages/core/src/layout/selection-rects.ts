@@ -11,6 +11,7 @@ import type { BlockFragmentRecord, SemanticLayout, TextMeasurer } from './semant
 import { documentOrderIndex } from './document-order.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
+import { bottomToTopRectInLayout } from './table-cell-text-direction.ts';
 
 /**
  * The rectangles covering a selection, one per line it spans.
@@ -162,13 +163,15 @@ function rangeRects(
           );
           const startX = Math.min(...edges);
           const endX = Math.max(...edges);
-          rects.push({
-            pageIndex: page.index,
-            x: startX,
-            y: line.box.y,
-            width: endX - startX,
-            height: line.box.height,
-          });
+          rects.push(
+            bottomToTopRectInLayout(layout, segment.paragraphId, {
+              pageIndex: page.index,
+              x: startX,
+              y: line.box.y,
+              width: endX - startX,
+              height: line.box.height,
+            })
+          );
         }
       }
     }
@@ -219,13 +222,15 @@ export function keyedRangeRects(
             const startX = xWithinLine(line, overlap.start, measurer, segment);
             const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
-            rects.push({
-              pageIndex: page.index,
-              x: Math.min(startX, endX),
-              y: line.box.y,
-              width: Math.abs(endX - startX),
-              height: line.box.height,
-            });
+            rects.push(
+              bottomToTopRectInLayout(layout, segment.paragraphId, {
+                pageIndex: page.index,
+                x: Math.min(startX, endX),
+                y: line.box.y,
+                width: Math.abs(endX - startX),
+                height: line.box.height,
+              })
+            );
             found.set(range.key, rects);
           }
       }

@@ -1357,8 +1357,8 @@ export function breakParagraph(
           slotX,
           y: extentTopY,
           baseline: line.baseline,
-          contentLeft,
-          contentRight,
+          contentLeft: contentOriginX,
+          contentRight: contentOriginX + rightEdge,
           ...(piece.revisions ? { revisions: piece.revisions } : {}),
         })
       );

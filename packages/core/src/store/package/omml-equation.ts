@@ -274,8 +274,13 @@ function isSupportedExpressionNode(node: OoxmlNode): boolean {
       return false;
     }
     const property = namedChild(node, 'fPr');
+    const propertySupported =
+      !property ||
+      isEmptyProperty(property) ||
+      (hasOnlyMathChildren(property, { type: { min: 1, max: 1 } }) &&
+        hasOnlyMathVal(namedChildren(property, 'type')[0]!, new Set(['bar'])));
     return (
-      (!property || isEmptyProperty(property)) &&
+      propertySupported &&
       childrenOf(namedChildren(node, 'num')[0]!).every(isSupportedExpressionNode) &&
       childrenOf(namedChildren(node, 'den')[0]!).every(isSupportedExpressionNode)
     );

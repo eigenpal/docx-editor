@@ -42,6 +42,7 @@ import type {
 } from './semantic-records.ts';
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
 import { pointInDrawingClip } from './drawing-wrap.ts';
+import { bottomToTopCaretInLayout, pointInBottomToTopCell } from './table-cell-text-direction.ts';
 
 /** A point in the coordinate space named by the function taking it. */
 export interface HitPoint {
@@ -130,6 +131,10 @@ interface HitContext {
   readonly pageIndex: number;
   readonly verticalWeight: number;
   readonly measurer: TextMeasurer | undefined;
+}
+
+function bottomToTopHit(layout: SemanticLayout, hit: SemanticHit | null): SemanticHit | null {
+  return hit ? { ...hit, caret: bottomToTopCaretInLayout(layout, hit.caret) } : null;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -341,7 +346,7 @@ export function hitTestPage(
   const behindDrawings = (page.anchoredDrawings ?? []).filter((drawing) => drawing.behindDocument);
   const frontHit = hitAnchoredDrawingAtPoint(frontDrawings, point, context.pageIndex);
   if (frontHit) return { ...frontHit, contentControlId };
-  const textHit = resolveBlocks(page.fragments, point, context, null);
+  const textHit = bottomToTopHit(layout, resolveBlocks(page.fragments, point, context, null));
   if (textHit?.onGlyphs) return { ...textHit, contentControlId };
   const behindHit = hitAnchoredDrawingAtPoint(behindDrawings, point, context.pageIndex);
   if (behindHit) return { ...behindHit, contentControlId };
@@ -355,11 +360,9 @@ export function hitTestPage(
     for (const index of [pageIndex - distance, pageIndex + distance]) {
       const neighbour = layout.pages[index];
       if (!neighbour) continue;
-      const found = resolveBlocks(
-        neighbour.fragments,
-        point,
-        { ...context, pageIndex: neighbour.index },
-        null
+      const found = bottomToTopHit(
+        layout,
+        resolveBlocks(neighbour.fragments, point, { ...context, pageIndex: neighbour.index }, null)
       );
       if (found) {
         return {
@@ -393,7 +396,7 @@ export function hitTestFragments(
     verticalWeight: options.verticalWeight ?? DEFAULT_VERTICAL_WEIGHT,
     measurer: options.measurer,
   };
-  return resolveBlocks(fragments, point, context, null);
+  return bottomToTopHit(layout, resolveBlocks(fragments, point, context, null));
 }
 
 /**
@@ -1272,7 +1275,9 @@ function resolveTable(
     // the padding is outside every block box, so the nearest-block rule picks the block beside
     // it and the line clamp finishes the job — bottom padding lands at the end of the last
     // block.
-    const hit = resolveBlocks(cell.blocks, point, context, address);
+    const cellPoint =
+      cell.textDirection === 'btLr' ? pointInBottomToTopCell(point, cell.box) : point;
+    const hit = resolveBlocks(cell.blocks, cellPoint, context, address);
     if (hit) return hit;
   }
   // This fragment paints no text at all. The caller keeps looking.

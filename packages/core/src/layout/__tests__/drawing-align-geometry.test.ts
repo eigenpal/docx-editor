@@ -89,6 +89,39 @@ function expectGeometryTracksBounds(drawing: InlineDrawingRecord): void {
 }
 
 describe('inline drawing geometry tracks alignment shifts', () => {
+  test('a drawing moved into the second body column keeps non-empty paint bounds', () => {
+    const preceding = Array.from(
+      { length: 60 },
+      (_, index) => `<w:p><w:r><w:t>line ${index}</w:t></w:r></w:p>`
+    ).join('');
+    const layout = layoutOf(
+      documentXml(
+        preceding +
+          `<w:p>${inlinePictureRun()}</w:p>` +
+          '<w:sectPr><w:cols w:num="2" w:space="720"/></w:sectPr>'
+      )
+    );
+    const drawing = firstDrawing(layout);
+    expect(drawing.x).toBeGreaterThan(200);
+    expect(drawing.paintBounds.width).toBeCloseTo(drawing.width, 3);
+    expect(drawing.paintBounds.height).toBeCloseTo(drawing.height, 3);
+    expectGeometryTracksBounds(drawing);
+  });
+
+  test('a drawing in a later table cell keeps geometry translated with its record', () => {
+    const layout = layoutOf(
+      documentXml(
+        '<w:tbl><w:tblGrid><w:gridCol w:w="2340"/><w:gridCol w:w="2340"/></w:tblGrid>' +
+          '<w:tr><w:tc><w:p><w:r><w:t>left</w:t></w:r></w:p></w:tc>' +
+          `<w:tc><w:p>${inlinePictureRun()}</w:p></w:tc></w:tr></w:tbl>`
+      )
+    );
+    const drawing = firstDrawing(layout);
+    expect(drawing.x).toBeGreaterThan(100);
+    expect(drawing.paintBounds.width).toBeCloseTo(drawing.width, 3);
+    expectGeometryTracksBounds(drawing);
+  });
+
   test('centered body paragraph keeps geometry in the aligned space', () => {
     const layout = layoutOf(
       documentXml(`<w:p><w:pPr><w:jc w:val="center"/></w:pPr>${inlinePictureRun()}</w:p>`)

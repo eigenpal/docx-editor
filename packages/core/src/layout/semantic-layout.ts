@@ -99,6 +99,7 @@ import {
   anchoredDrawingAtomsInParagraph,
   pageClipRegion,
   shiftAnchoredDrawingRecords,
+  shiftInlineDrawingRecord,
   type AnchoredDrawingRecord,
 } from './drawing-layout.ts';
 import {
@@ -2729,27 +2730,15 @@ function layoutBlocksPass(
       const pageClip = Object.freeze({
         x: 0,
         y: 0,
-        width: contentWidth,
+        // Inline records are already placed in page-content coordinates. In a multi-column
+        // section `contentWidth` is only column zero; clipping to it erases later columns.
+        width: contentWidthForReflow,
         height: contentHeight(),
       });
       const placedDrawings = pendingLine.drawings.map((drawing) => {
         const placed = Object.freeze({
-          ...drawing,
+          ...shiftInlineDrawingRecord(drawing, columnX, cursorY),
           paragraphId,
-          x: columnX + drawing.x,
-          y: cursorY + drawing.y,
-          advanceStart: drawing.advanceStart + columnX,
-          advanceEnd: drawing.advanceEnd + columnX,
-          paintBounds: Object.freeze({
-            ...drawing.paintBounds,
-            x: columnX + drawing.paintBounds.x,
-            y: cursorY + drawing.paintBounds.y,
-          }),
-          hitBounds: Object.freeze({
-            ...drawing.hitBounds,
-            x: columnX + drawing.hitBounds.x,
-            y: cursorY + drawing.hitBounds.y,
-          }),
         });
         return clipInlineDrawingRecordToRegion(placed, pageClip);
       });
