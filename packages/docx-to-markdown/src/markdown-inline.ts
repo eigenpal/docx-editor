@@ -53,6 +53,24 @@ export function markdownSourceCaptureKey(sourceScope: string, paragraphId: strin
 
 const MARKDOWN_PUNCTUATION = new Set('\\`*{}[]()#+-.!_|~=');
 const MARKDOWN_UNICODE_PUNCTUATION = /[\p{P}\p{S}]/u;
+const WORD_CHARACTER = /[\p{L}\p{N}]/u;
+
+function isInWordHyphen(
+  value: string,
+  index: number,
+  adjacent: { readonly before?: string; readonly after?: string }
+): boolean {
+  if (value[index] !== '-') return false;
+  const before = index > 0 ? sourceEdge(value.slice(0, index), 'last') : adjacent.before;
+  const after =
+    index + 1 < value.length ? sourceEdge(value.slice(index + 1), 'first') : adjacent.after;
+  return (
+    before !== undefined &&
+    after !== undefined &&
+    WORD_CHARACTER.test(before) &&
+    WORD_CHARACTER.test(after)
+  );
+}
 
 function assertNever(value: never): never {
   throw new TypeError(`Unsupported Markdown inline style: ${String(value)}`);
@@ -66,7 +84,8 @@ export function escapeText(value: string, tableCell = false): string {
 function escapedText(
   value: string,
   tableCell: boolean,
-  requestedBoundaries: ReadonlySet<number> = new Set()
+  requestedBoundaries: ReadonlySet<number> = new Set(),
+  adjacent: { readonly before?: string; readonly after?: string } = {}
 ): { readonly markdown: string; readonly boundaries: ReadonlyMap<number, number> } {
   let markdown = '';
   const boundaries = new Map<number, number>();
@@ -96,7 +115,9 @@ function escapedText(
     } else if (character === '\t') {
       markdown += ' ';
     } else {
-      if (MARKDOWN_PUNCTUATION.has(character)) markdown += '\\';
+      if (MARKDOWN_PUNCTUATION.has(character) && !isInWordHyphen(value, index, adjacent)) {
+        markdown += '\\';
+      }
       markdown += character;
     }
     index += 1;
@@ -109,13 +130,14 @@ function mappedTextChunk(
   chunk: Extract<MarkdownInlineChunk, { kind: 'text' }>,
   tableCell: boolean,
   capture: MarkdownSourceCapture | undefined,
-  sourceScope: string
+  sourceScope: string,
+  adjacent: { readonly before?: string; readonly after?: string } = {}
 ): MappedMarkdown {
   const requested = capture?.offsetsBySource.get(
     markdownSourceCaptureKey(sourceScope, chunk.paragraphId)
   );
   if (!capture || (!capture.allSourceScopes.has(sourceScope) && !requested)) {
-    return literalMarkdown(escapeText(chunk.sourceText, tableCell));
+    return literalMarkdown(escapedText(chunk.sourceText, tableCell, new Set(), adjacent).markdown);
   }
   const relativeBoundaries = new Set<number>([0, chunk.sourceText.length]);
   if (chunk.exact) {
@@ -133,7 +155,7 @@ function mappedTextChunk(
       relativeBoundaries.add(offset - chunk.sourceStart);
     }
   }
-  const escaped = escapedText(chunk.sourceText, tableCell, relativeBoundaries);
+  const escaped = escapedText(chunk.sourceText, tableCell, relativeBoundaries, adjacent);
   const markdownBoundaries = chunk.exact
     ? [...escaped.boundaries].map(([sourceOffset, markdownOffset]) => ({
         sourceOffset: chunk.sourceStart + sourceOffset,
@@ -221,6 +243,24 @@ function sourceEdge(value: string, edge: 'first' | 'last'): string | undefined {
   return value.slice(startsSurrogatePair ? last - 1 : last);
 }
 
+function chunkAdjacency(
+  chunks: readonly MarkdownInlineChunk[],
+  index: number
+): { readonly before?: string; readonly after?: string } {
+  const current = chunks[index];
+  if (current?.kind !== 'text') return {};
+  const previous = chunks[index - 1];
+  const next = chunks[index + 1];
+  return {
+    ...(previous?.kind === 'text' && previous.paragraphId === current.paragraphId
+      ? { before: sourceEdge(previous.sourceText, 'last') }
+      : {}),
+    ...(next?.kind === 'text' && next.paragraphId === current.paragraphId
+      ? { after: sourceEdge(next.sourceText, 'first') }
+      : {}),
+  };
+}
+
 function inlineIslandNeedsHtml(
   chunks: readonly MarkdownInlineChunk[],
   start: number,
@@ -288,7 +328,9 @@ function htmlInlineIsland(
     for (let styleIndex = retained; styleIndex < chunk.styles.length; styleIndex += 1) {
       parts.push(literalMarkdown(`<${markdownStyleTag(chunk.styles[styleIndex]!)}>`));
     }
-    parts.push(mappedTextChunk(chunk, tableCell, capture, sourceScope));
+    parts.push(
+      mappedTextChunk(chunk, tableCell, capture, sourceScope, chunkAdjacency(chunks, index))
+    );
     openStyles = chunk.styles;
   }
   for (let index = openStyles.length - 1; index >= 0; index -= 1) {
@@ -381,7 +423,7 @@ export class MarkdownInlineWriter {
       }
       if (chunk.styles.length === 0) {
         transition([]);
-        parts.push(this.#mappedSourceChunk(chunk));
+        parts.push(this.#mappedSourceChunk(chunk, index));
         continue;
       }
       let end = index + 1;
@@ -406,19 +448,23 @@ export class MarkdownInlineWriter {
         continue;
       }
       transition(chunk.styles);
-      parts.push(this.#mappedSourceChunk(chunk));
+      parts.push(this.#mappedSourceChunk(chunk, index));
     }
     transition([]);
     return concatMarkdown(parts);
   }
 
-  #mappedSourceChunk(chunk: Extract<MarkdownInlineChunk, { kind: 'text' }>): MappedMarkdown {
+  #mappedSourceChunk(
+    chunk: Extract<MarkdownInlineChunk, { kind: 'text' }>,
+    index: number
+  ): MappedMarkdown {
     const tableCell = this.#context.tableCell || this.#context.hardBreakHtml === true;
     return mappedTextChunk(
       chunk,
       tableCell,
       this.#context.sourceCapture,
-      this.#context.sourceScope
+      this.#context.sourceScope,
+      chunkAdjacency(this.#chunks, index)
     );
   }
 

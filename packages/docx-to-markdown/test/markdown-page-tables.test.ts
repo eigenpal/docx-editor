@@ -57,7 +57,7 @@ function selectedBindingText(
 }
 
 test('keeps nested table fragments inside their physical page projection', async () => {
-  const nested = (fragmentIndex: number, text: string): TableFragmentRecord =>
+  const nested = (fragmentIndex: number, text: string, header = false): TableFragmentRecord =>
     ({
       kind: 'table',
       id: `nested:f${fragmentIndex}`,
@@ -67,7 +67,7 @@ test('keeps nested table fragments inside their physical page projection', async
       rows: [
         {
           id: `nested-row-${fragmentIndex}`,
-          isHeaderRow: false,
+          isHeaderRow: header,
           isHeaderRepeat: false,
           cells: [
             {
@@ -80,7 +80,7 @@ test('keeps nested table fragments inside their physical page projection', async
         },
       ],
     }) as unknown as TableFragmentRecord;
-  const outer = (fragmentIndex: number, text: string): TableFragmentRecord =>
+  const outer = (fragmentIndex: number, text: string, header = false): TableFragmentRecord =>
     ({
       kind: 'table',
       id: `outer-split:f${fragmentIndex}`,
@@ -97,7 +97,7 @@ test('keeps nested table fragments inside their physical page projection', async
               gridColumn: 0,
               gridSpan: 1,
               vMergeContinue: false,
-              blocks: [nested(fragmentIndex, text)],
+              blocks: [nested(fragmentIndex, text, header)],
             },
           ],
         },
@@ -119,6 +119,21 @@ test('keeps nested table fragments inside their physical page projection', async
   expect(result.pages[0]?.markdown).not.toContain('Only page two');
   expect(result.pages[1]?.markdown).toContain('Only page two');
   expect(result.pages[1]?.markdown).not.toContain('Only page one');
+  expect(result.pages[0]?.markdown).toContain(
+    '<span class="docx-nested-table__cell" role="cell">Only page one</span>'
+  );
+  expect(result.pages[1]?.markdown).toContain(
+    '<span class="docx-nested-table__cell" role="cell">Only page two</span>'
+  );
+  const headerResult = await exportMarkdownFrom(
+    session({
+      revision: 2,
+      pages: [{ index: 0, fragments: [outer(0, 'Header', true)] }],
+    } as unknown as SemanticLayout)
+  );
+  expect(headerResult.markdown).toContain(
+    '<span class="docx-nested-table__cell" role="columnheader">Header</span>'
+  );
 });
 
 test('does not append a same-page repeated header to its original row', async () => {

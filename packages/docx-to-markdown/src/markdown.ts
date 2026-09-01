@@ -35,6 +35,7 @@ import {
   withSourceParagraphs,
   type MappedMarkdown,
 } from './markdown-source-map.ts';
+import { nestedTableHtml, tableWidth } from './markdown-nested-table.ts';
 import {
   buildMarkdownReviewBindings,
   buildMarkdownSourceCapture,
@@ -106,6 +107,7 @@ interface LogicalCell {
 
 interface LogicalRow {
   readonly id: string;
+  readonly isHeaderRow: boolean;
   readonly isHeaderRepeat: boolean;
   readonly cells: LogicalCell[];
 }
@@ -528,6 +530,7 @@ function mergeRows(
       if (!logical) {
         logical = {
           id: row.id,
+          isHeaderRow: row.isHeaderRow,
           isHeaderRepeat: row.isHeaderRepeat,
           cells: [],
         };
@@ -558,6 +561,27 @@ function cellAlignment(cell: LogicalCell): ParagraphFragmentRecord['alignment'] 
     if (block.kind === 'paragraph') return block.alignment;
   }
   return 'left';
+}
+
+/** GFM's unsupported nested-table shape uses mapped inline HTML wrappers. */
+function nestedTableMarkdown(
+  fragments: readonly TableFragmentRecord[],
+  context: TranslationContext,
+  pageScoped: boolean
+): MappedMarkdown {
+  const tableId = fragments[0]?.tableId;
+  const projection = tableId ? context.tablesById.get(tableId) : undefined;
+  const completeFragments = projection?.fragments ?? fragments;
+  const rows = pageScoped ? mergeRows(fragments, true) : mergeRows(completeFragments, false);
+  if (rows.length === 0) return EMPTY_MAPPED_MARKDOWN;
+  const width = tableWidth(projection?.columnCount, fragments[0]?.columnEdges.length);
+  const nestedContext = { ...context, tableCell: true };
+  return nestedTableHtml(rows, width, (row, columnIndex) => {
+    const cell = row.cells.find((candidate) => candidate.gridColumn === columnIndex);
+    return !cell || cell.vMergeContinue
+      ? EMPTY_MAPPED_MARKDOWN
+      : renderLogicalBlocks(logicalBlocks(cell.blocks), nestedContext, true, pageScoped);
+  });
 }
 
 function cellValues(
@@ -594,11 +618,7 @@ function tableMarkdown(
   const completeFragments = projection?.fragments ?? fragments;
   const rows = pageScoped ? mergeRows(fragments, true) : mergeRows(completeFragments, false);
   if (rows.length === 0) return EMPTY_MAPPED_MARKDOWN;
-  const width = Math.max(
-    projection?.columnCount ??
-      (fragments[0]?.columnEdges.length ? fragments[0].columnEdges.length - 1 : 0),
-    1
-  );
+  const width = tableWidth(projection?.columnCount, fragments[0]?.columnEdges.length);
   const normalize = (
     values: MappedMarkdown[],
     fallback: MappedMarkdown = EMPTY_MAPPED_MARKDOWN
@@ -649,7 +669,9 @@ function renderLogicalBlocks(
       case 'paragraph':
         return paragraphMarkdown(block.fragments, context, !pageScoped);
       case 'table':
-        return tableMarkdown(block.fragments, context, pageScoped);
+        return context.tableCell
+          ? nestedTableMarkdown(block.fragments, context, pageScoped)
+          : tableMarkdown(block.fragments, context, pageScoped);
       default:
         return assertNever(block);
     }

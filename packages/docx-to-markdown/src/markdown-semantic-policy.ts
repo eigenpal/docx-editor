@@ -173,7 +173,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     revisionAuthor: 'explicitly-omitted',
     revisionDate: 'explicitly-omitted',
     rowIndex: 'layout-only',
-    isHeaderRow: 'explicitly-omitted',
+    isHeaderRow: 'represented',
     isHeaderRepeat: 'represented',
     isContinuation: 'layout-only',
     cells: 'represented',

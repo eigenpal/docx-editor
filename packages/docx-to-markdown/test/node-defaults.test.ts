@@ -95,10 +95,10 @@ describe('server-first defaults', () => {
       }).toEqual({
         pages: 26,
         bodyLineCount: 280,
-        markdownLength: 19_325,
+        markdownLength: 20_460,
         headers: 25,
         footers: 25,
-        markdownHash: 'db95064b05c7567f2307cda73a9f514ab85113091cdf4b9ddb7181465a934644',
+        markdownHash: '6a271a8b50de2436929fd24c13cdfebc93d6db10f5e9cd9eb56467ee3ed92e69',
       });
       expect(translated.markdown).toStartWith('**COMPREHENSIVE** **WORD** **ELEMENT**');
       expect(translated.markdown).toEndWith(

@@ -959,7 +959,7 @@ describe('record-only Markdown export', () => {
     expect(second.session.validatedImageBytes(secondDrawing)).toBeNull();
   });
 
-  test('keeps nested lists and nested table delimiters valid inside outer GFM cells', async () => {
+  test('keeps nested lists and renders nested tables as inline HTML inside outer GFM cells', async () => {
     const numbering =
       `<w:numbering xmlns:w="${W}"><w:abstractNum w:abstractNumId="0">` +
       '<w:lvl w:ilvl="0"><w:start w:val="10"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>' +
@@ -975,7 +975,8 @@ describe('record-only Markdown export', () => {
       '</w:tc></w:tr></w:tbl>';
     const result = await exportMarkdown(docx(item(0, 'ten') + item(1, 'child') + outer, numbering));
     expect(result.markdown).toContain('10. ten\n\n    - child');
-    expect(result.markdown).toContain('\\| inner \\|');
+    expect(result.markdown).toContain('<span class="docx-nested-table" role="table">');
+    expect(result.markdown).not.toContain('\\| inner \\|');
     const html = micromark(result.markdown, {
       extensions: [gfm()],
       htmlExtensions: [gfmHtml()],
@@ -983,6 +984,8 @@ describe('record-only Markdown export', () => {
     });
     expect(html).toContain('<ol start="10">');
     expect(html).toContain('<li>\n<p>ten</p>\n<ul>');
+    expect(html).toContain('<span class="docx-nested-table" role="table">');
+    expect(html).toContain('<span class="docx-nested-table__cell" role="cell">inner</span>');
     expect(html).not.toContain('<pre>');
   });
 });

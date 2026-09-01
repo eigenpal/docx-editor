@@ -12,7 +12,7 @@ import {
 } from '@docx-editor.dev/docx-to-markdown';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { canCopyExport, type ExportStatus } from './export-state';
@@ -26,6 +26,17 @@ const EDITOR_PACKAGED_FONTS = packagedFonts();
 const GOOGLE_FONT_FALLBACK = googleFonts({
   onFailure: (failure) => console.warn(`[google-fonts] ${failure.diagnostic}`),
 });
+const MARKDOWN_SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    span: [
+      ...(defaultSchema.attributes?.span ?? []),
+      ['className', /^docx-nested-table(?:__row|__cell)?$/],
+      ['role', 'table', 'row', 'cell', 'columnheader'],
+    ],
+  },
+};
 
 type PreviewMode = 'rendered' | 'source';
 
@@ -33,7 +44,6 @@ interface ExportViewState {
   readonly status: ExportStatus;
   readonly result: MarkdownExportResult | null;
   readonly error: string | null;
-  readonly durationMs: number | null;
   readonly fontReport: ExportFontResolutionReport | null;
 }
 
@@ -41,7 +51,6 @@ const EMPTY_EXPORT: ExportViewState = {
   status: 'idle',
   result: null,
   error: null,
-  durationMs: null,
   fontReport: null,
 };
 
@@ -68,6 +77,14 @@ function CopyIcon({ copied }: { readonly copied: boolean }) {
   );
 }
 
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M3 5h5m4 0h5M8 3v4M3 15h5m4 0h5m-5-2v4M3 10h9m4 0h1m-5-2v4" />
+    </svg>
+  );
+}
+
 function Spinner() {
   return <span className="md-spinner" aria-hidden="true" />;
 }
@@ -75,7 +92,10 @@ function Spinner() {
 function MarkdownBlock({ children }: { readonly children: string }) {
   return (
     <div className="markdown-body">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeSanitize]}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeRaw, [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA]]}
+      >
         {children}
       </ReactMarkdown>
     </div>
@@ -83,18 +103,17 @@ function MarkdownBlock({ children }: { readonly children: string }) {
 }
 
 function PageField({
-  label,
+  kind,
   markdown,
   mode,
 }: {
-  readonly label: 'Header' | 'Body' | 'Footer';
+  readonly kind: 'header' | 'body' | 'footer';
   readonly markdown: string;
   readonly mode: PreviewMode;
 }) {
-  if (!markdown && label !== 'Body') return null;
+  if (!markdown && kind !== 'body') return null;
   return (
-    <section className={`md-page-field md-page-field--${label.toLowerCase()}`}>
-      {label !== 'Body' ? <span className="md-page-field__label">{label}</span> : null}
+    <section className={`md-page-field md-page-field--${kind}`} aria-label={`${kind} Markdown`}>
       {mode === 'rendered' ? (
         markdown ? (
           <MarkdownBlock>{markdown}</MarkdownBlock>
@@ -113,25 +132,35 @@ function PageField({
 function MarkdownPagePreview({
   page,
   mode,
+  showHeaders,
+  showFooters,
+  showReviewCounts,
 }: {
   readonly page: MarkdownPage;
   readonly mode: PreviewMode;
+  readonly showHeaders: boolean;
+  readonly showFooters: boolean;
+  readonly showReviewCounts: boolean;
 }) {
   const reviewCount = page.comments.length + page.trackedChanges.length;
   return (
     <article className="md-page-wrap" id={`markdown-page-${page.number}`}>
       <div className="md-page-meta">
         <span>Page {page.number}</span>
-        {reviewCount > 0 ? (
+        {showReviewCounts && reviewCount > 0 ? (
           <span className="md-review-count">
             {reviewCount} review {reviewCount === 1 ? 'artifact' : 'artifacts'}
           </span>
         ) : null}
       </div>
       <div className="md-page-sheet">
-        <PageField label="Header" markdown={page.headerMarkdown} mode={mode} />
-        <PageField label="Body" markdown={page.markdown} mode={mode} />
-        <PageField label="Footer" markdown={page.footerMarkdown} mode={mode} />
+        {showHeaders ? (
+          <PageField kind="header" markdown={page.headerMarkdown} mode={mode} />
+        ) : null}
+        <PageField kind="body" markdown={page.markdown} mode={mode} />
+        {showFooters ? (
+          <PageField kind="footer" markdown={page.footerMarkdown} mode={mode} />
+        ) : null}
       </div>
     </article>
   );
@@ -140,10 +169,30 @@ function MarkdownPagePreview({
 function coverageLabel(report: ExportFontResolutionReport | null): string | null {
   if (!report) return null;
   const incomplete = report.families.filter((family) => family.coverage !== 'complete').length;
-  if (report.originFailures.length > 0) return 'Font fallback used';
   if (incomplete > 0)
     return `${incomplete} font ${incomplete === 1 ? 'family' : 'families'} approximated`;
+  if (report.originFailures.length > 0) return 'Fonts resolved from an alternate source';
   return 'Fonts settled';
+}
+
+function coverageWarning(
+  report: ExportFontResolutionReport | null
+): { readonly label: string; readonly detail: string } | null {
+  if (!report) return null;
+  const incomplete = report.families.filter((family) => family.coverage !== 'complete').length;
+  if (incomplete > 0) {
+    return {
+      label: `${incomplete} ${incomplete === 1 ? 'font' : 'fonts'} approximated`,
+      detail: 'Some document fonts are unresolved; page breaks may be approximate.',
+    };
+  }
+  if (report.originFailures.length > 0) {
+    return {
+      label: 'Alternate font source used',
+      detail: 'One font source failed, but complete coverage was resolved from another source.',
+    };
+  }
+  return null;
 }
 
 function errorMessage(error: unknown): string {
@@ -157,6 +206,10 @@ function carriesFiles(dataTransfer: DataTransfer): boolean {
 export function MarkdownExportDemo() {
   const editor = useRef<DocxEditorRef>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const previewScroll = useRef<HTMLDivElement>(null);
+  const editorSelectionCleanup = useRef<(() => void) | null>(null);
+  const latestEditorPage = useRef(1);
+  const sourcePointerReveal = useRef(false);
   const exportTimer = useRef<number | null>(null);
   const exportController = useRef<AbortController | null>(null);
   const sourceLoadController = useRef<AbortController | null>(null);
@@ -168,8 +221,39 @@ export function MarkdownExportDemo() {
   const [documentName, setDocumentName] = useState('sample');
   const [exportView, setExportView] = useState<ExportViewState>(EMPTY_EXPORT);
   const [previewMode, setPreviewMode] = useState<PreviewMode>('rendered');
+  const [showHeaders, setShowHeaders] = useState(true);
+  const [showFooters, setShowFooters] = useState(true);
+  const [showReviewCounts, setShowReviewCounts] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const revealMarkdownPage = useCallback((pageNumber: number) => {
+    const scroller = previewScroll.current;
+    const page = scroller?.querySelector<HTMLElement>(`#markdown-page-${pageNumber}`);
+    if (!scroller || !page) return;
+    const scrollerBox = scroller.getBoundingClientRect();
+    const pageBox = page.getBoundingClientRect();
+    const target = scroller.scrollTop + pageBox.top - scrollerBox.top - 12;
+    if (Math.abs(scroller.scrollTop - target) < 2) return;
+    scroller.scrollTo({
+      top: target,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+  }, []);
+
+  useEffect(() => {
+    if (exportView.status !== 'ready' || !exportView.result) return;
+    const frame = window.requestAnimationFrame(() => revealMarkdownPage(latestEditorPage.current));
+    return () => window.cancelAnimationFrame(frame);
+  }, [exportView.result, exportView.status, revealMarkdownPage]);
+
+  useEffect(
+    () => () => {
+      editorSelectionCleanup.current?.();
+      editorSelectionCleanup.current = null;
+    },
+    []
+  );
 
   const beginOperation = useCallback(() => {
     const operation = operations.begin();
@@ -189,7 +273,6 @@ export function MarkdownExportDemo() {
       if (!operations.isCurrent(operation)) return;
       const controller = new AbortController();
       exportController.current = controller;
-      const began = performance.now();
       let fontReport: ExportFontResolutionReport | null = null;
       setExportView((current) => ({ ...current, status: 'exporting', error: null }));
       try {
@@ -206,7 +289,6 @@ export function MarkdownExportDemo() {
           status: 'ready',
           result,
           error: null,
-          durationMs: performance.now() - began,
           fontReport,
         });
       } catch (error) {
@@ -215,7 +297,6 @@ export function MarkdownExportDemo() {
           ...current,
           status: 'error',
           error: errorMessage(error),
-          durationMs: null,
           fontReport,
         }));
       } finally {
@@ -228,6 +309,8 @@ export function MarkdownExportDemo() {
   const openBytes = useCallback(
     (bytes: Uint8Array, name: string, operation: number) => {
       if (!operations.isCurrent(operation)) return;
+      latestEditorPage.current = 1;
+      sourcePointerReveal.current = false;
       setDocumentName(name.replace(/\.docx$/i, '') || 'document');
       setDocument(bytes);
       void runExport(bytes, operation);
@@ -342,10 +425,22 @@ export function MarkdownExportDemo() {
       .catch((error) => console.warn(`[clipboard] ${errorMessage(error)}`));
   }, [exportView.result, exportView.status]);
 
-  const pageCount = exportView.result?.pages.length ?? 0;
   const fontStatus = coverageLabel(exportView.fontReport);
+  const fontWarning = coverageWarning(exportView.fontReport);
   const busy = exportView.status === 'queued' || exportView.status === 'exporting';
   const canCopy = canCopyExport(exportView.status, exportView.result !== null);
+  const exportStatusLabel =
+    exportView.status === 'queued'
+      ? 'Waiting for your pause'
+      : exportView.status === 'exporting'
+        ? 'Updating Markdown export'
+        : exportView.status === 'error'
+          ? exportView.result
+            ? 'Export failed; showing the last successful snapshot'
+            : 'Export failed'
+          : exportView.status === 'ready'
+            ? 'Markdown export ready'
+            : 'Preparing sample';
 
   return (
     <div
@@ -377,50 +472,12 @@ export function MarkdownExportDemo() {
       <header className="md-topbar">
         <BrandLogo />
         <div className="md-product-title">
-          <span className="md-product-title__arrow" aria-hidden="true">
-            →
-          </span>
-          <div>
-            <strong>Page-aware Markdown</strong>
-            <span>Live, layout-backed export</span>
-          </div>
-        </div>
-        <div className="md-topbar__actions">
-          <div className="md-export-health" role="status" aria-live="polite">
-            {busy ? (
-              <Spinner />
-            ) : (
-              <span
-                className={`md-live-dot${exportView.status === 'error' ? ' md-live-dot--error' : ''}`}
-              />
-            )}
-            <span className="md-export-health__text">
-              {exportView.status === 'queued'
-                ? 'Waiting for your pause…'
-                : exportView.status === 'exporting'
-                  ? 'Laying out document…'
-                  : exportView.status === 'error'
-                    ? pageCount > 0
-                      ? 'Export failed · showing last successful snapshot'
-                      : 'Export failed'
-                    : pageCount > 0
-                      ? `${pageCount} ${pageCount === 1 ? 'page' : 'pages'}${exportView.durationMs ? ` · ${Math.round(exportView.durationMs)} ms` : ''}`
-                      : 'Preparing sample…'}
-            </span>
-          </div>
-          <button type="button" className="md-button md-button--quiet" onClick={() => loadSample()}>
-            Reset sample
-          </button>
-          <button
-            type="button"
-            className="md-button md-button--primary"
-            onClick={() => fileInput.current?.click()}
-          >
-            <UploadIcon />
-            Open DOCX
-          </button>
+          <strong>Markdown export</strong>
         </div>
       </header>
+      <span className="md-visually-hidden" role="status" aria-live="polite">
+        {exportStatusLabel}
+      </span>
 
       <input
         ref={fileInput}
@@ -441,9 +498,32 @@ export function MarkdownExportDemo() {
               <span className="md-panel-kicker">Source</span>
               <strong>DOCX editor</strong>
             </div>
-            <span className="md-panel-badge">Word layout</span>
+            <div className="md-source-actions">
+              <button
+                type="button"
+                className="md-button md-button--compact md-button--quiet"
+                onClick={() => loadSample()}
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                className="md-button md-button--compact md-button--primary"
+                onClick={() => fileInput.current?.click()}
+                title="Open or drop a DOCX"
+              >
+                <UploadIcon />
+                Open DOCX
+              </button>
+            </div>
           </div>
-          <div className="md-editor-frame">
+          <div
+            className="md-editor-frame"
+            onPointerDownCapture={(event) => {
+              sourcePointerReveal.current =
+                event.target instanceof Element && event.target.closest('.docx-page') !== null;
+            }}
+          >
             <DocxEditor
               ref={editor}
               document={document}
@@ -454,6 +534,18 @@ export function MarkdownExportDemo() {
               onTitleChange={setDocumentName}
               onOpen={() => fileInput.current?.click()}
               onChange={scheduleLiveExport}
+              onReady={(instance) => {
+                editorSelectionCleanup.current?.();
+                latestEditorPage.current = instance.snapshot().page.current;
+                revealMarkdownPage(latestEditorPage.current);
+                editorSelectionCleanup.current = instance.on('selectionChange', (snapshot) => {
+                  const pageChanged = latestEditorPage.current !== snapshot.page.current;
+                  latestEditorPage.current = snapshot.page.current;
+                  const pointerRequested = sourcePointerReveal.current;
+                  sourcePointerReveal.current = false;
+                  if (pageChanged || pointerRequested) revealMarkdownPage(snapshot.page.current);
+                });
+              }}
               navigation={false}
               zoomMode="auto"
               onFontError={(error) => console.warn(`[editor-fonts] ${error.message}`)}
@@ -468,9 +560,19 @@ export function MarkdownExportDemo() {
             <div>
               <span className="md-panel-kicker">Export</span>
               <strong>Markdown</strong>
+              {fontWarning ? (
+                <span
+                  className="md-fidelity-warning"
+                  role="status"
+                  title={fontWarning.detail}
+                  aria-label={fontWarning.detail}
+                >
+                  <span aria-hidden="true">!</span>
+                  <span className="md-fidelity-warning__text">{fontWarning.label}</span>
+                </span>
+              ) : null}
             </div>
             <div className="md-preview-actions">
-              {fontStatus ? <span className="md-font-status">{fontStatus}</span> : null}
               <div className="md-segmented" role="group" aria-label="Markdown view">
                 <button
                   type="button"
@@ -487,6 +589,46 @@ export function MarkdownExportDemo() {
                   Source
                 </button>
               </div>
+              <details className="md-settings">
+                <summary
+                  className="md-icon-button"
+                  aria-label="Page display settings"
+                  title="Page display settings"
+                >
+                  <SettingsIcon />
+                </summary>
+                <div className="md-settings-popover">
+                  <div className="md-settings-heading">
+                    <strong>Page display</strong>
+                    <span>Choose what appears in the preview.</span>
+                  </div>
+                  <label className="md-setting-row">
+                    <span>Page headers</span>
+                    <input
+                      type="checkbox"
+                      checked={showHeaders}
+                      onChange={(event) => setShowHeaders(event.target.checked)}
+                    />
+                  </label>
+                  <label className="md-setting-row">
+                    <span>Page footers</span>
+                    <input
+                      type="checkbox"
+                      checked={showFooters}
+                      onChange={(event) => setShowFooters(event.target.checked)}
+                    />
+                  </label>
+                  <label className="md-setting-row">
+                    <span>Review counts</span>
+                    <input
+                      type="checkbox"
+                      checked={showReviewCounts}
+                      onChange={(event) => setShowReviewCounts(event.target.checked)}
+                    />
+                  </label>
+                  {fontStatus ? <div className="md-settings-note">{fontStatus}</div> : null}
+                </div>
+              </details>
               <button
                 type="button"
                 className="md-icon-button"
@@ -500,7 +642,7 @@ export function MarkdownExportDemo() {
             </div>
           </div>
 
-          <div className="md-preview-scroll" aria-busy={busy}>
+          <div ref={previewScroll} className="md-preview-scroll" aria-busy={busy}>
             {exportView.error ? (
               <div className="md-error" role="alert">
                 <span className="md-error__icon" aria-hidden="true">
@@ -517,7 +659,14 @@ export function MarkdownExportDemo() {
                 className={`md-pages${busy ? ' md-pages--updating' : ''}${exportView.status === 'error' ? ' md-pages--stale' : ''}`}
               >
                 {exportView.result.pages.map((page) => (
-                  <MarkdownPagePreview key={page.id} page={page} mode={previewMode} />
+                  <MarkdownPagePreview
+                    key={page.id}
+                    page={page}
+                    mode={previewMode}
+                    showHeaders={showHeaders}
+                    showFooters={showFooters}
+                    showReviewCounts={showReviewCounts}
+                  />
                 ))}
               </div>
             ) : exportView.error ? null : (
