@@ -305,7 +305,7 @@ export function MarkdownExportDemo() {
     const controller = new AbortController();
     sourceLoadController.current = controller;
     setExportView((current) => ({ ...current, status: 'exporting', error: null }));
-    void fetch('/sample.docx', { signal: controller.signal })
+    void fetch(`${import.meta.env.BASE_URL}sample.docx`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Sample document returned HTTP ${response.status}`);
         return response.arrayBuffer();

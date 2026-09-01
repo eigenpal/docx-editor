@@ -1,7 +1,7 @@
-# Parity demo
+# Combined demo deployment
 
-This demo serves the React and Vue examples from one origin.
-Each adapter owns the full viewport without an iframe or shared wrapper.
+This artifact serves the React, Vue, Igloo, and DOCX-to-Markdown examples from one Vercel
+deployment. Each app owns the full viewport without an iframe or shared wrapper.
 
 ## Run source development
 
@@ -23,16 +23,27 @@ Build and preview the assembled site from the repository root:
 bun run preview
 ```
 
-Open `http://localhost:4173/react/` or `http://localhost:4173/vue/`.
+Open one of these explicit local paths:
+
+- `http://localhost:4173/react/`
+- `http://localhost:4173/vue/`
+- `http://localhost:4173/igloo/`
+- `http://localhost:4173/docx-to-markdown/`
+
+The local static preview does not apply `vercel.json`, so its root and custom-host behavior are not
+representative of the deployed site.
 
 The build performs these steps:
 
-1. It builds the six demo workspace packages.
-2. It builds both adapters from workspace `dist/` output.
-3. It sets `/react/` and `/vue/` as the respective base paths.
-4. It assembles both builds in `examples/parity/dist/`.
+1. It builds the seven demo workspace packages.
+2. It builds the React and Vue adapters plus the Igloo and DOCX-to-Markdown apps.
+3. It assigns `/react/`, `/vue/`, `/igloo/`, and `/docx-to-markdown/` as their base paths.
+4. It assembles all four builds in `examples/parity/dist/`.
 
-The root path redirects to `/react/`.
+On Vercel, `/` rewrites to the React app. Host-conditioned rewrites serve
+`igloo.docx-editor.dev` from `/igloo/` and `docx-to-markdown.docx-editor.dev` from
+`/docx-to-markdown/` without changing the browser URL. Both custom domains must be attached to the
+same Vercel project before the old standalone Igloo project is removed.
 
 ## Adapter switcher
 

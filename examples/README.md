@@ -49,11 +49,14 @@ Run all main framework examples together:
 bun run dev:demo
 ```
 
-Build and serve the combined React and Vue preview:
+Build and serve the combined deployment preview:
 
 ```bash
 bun run preview
 ```
+
+Open `/react/`, `/vue/`, `/igloo/`, or `/docx-to-markdown/` on the printed local URL. The local
+static server does not apply the hostname rewrites from `vercel.json`, so use these explicit paths.
 
 Fill a DOCX template without a browser:
 
@@ -86,7 +89,8 @@ Stop one server before you start the other.
   server.
 - `collaboration-hocuspocus/` uses a Hocuspocus server for authenticated rooms and durable
   storage.
-- `parity/` serves the React and Vue builds through `bun run preview`.
+- `parity/` assembles the React, Vue, Igloo, and DOCX-to-Markdown builds for the primary Vercel
+  deployment and `bun run preview`.
 - `shared/` contains reusable example chrome, links, branding, and framework switchers. It is
   not runnable.
 - `dev-all.sh` starts the main framework examples for `bun run dev:demo`.

@@ -3,9 +3,34 @@
   "buildCommand": "export NODE_OPTIONS=\"--max-old-space-size=4096${NODE_OPTIONS:+ $NODE_OPTIONS}\"; if [ \"$VERCEL_ENV\" = production ]; then bun run build; else bun run build:preview; fi",
   "outputDirectory": "examples/parity/dist",
   "installCommand": "rm -rf node_modules && bun install --frozen-lockfile",
-  "redirects": [{ "source": "/", "destination": "/react/", "permanent": false }],
   "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "igloo.docx-editor.dev" }],
+      "destination": "/igloo/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "igloo.docx-editor.dev" }],
+      "destination": "/igloo/index.html"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "docx-to-markdown.docx-editor.dev" }],
+      "destination": "/docx-to-markdown/index.html"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "docx-to-markdown.docx-editor.dev" }],
+      "destination": "/docx-to-markdown/index.html"
+    },
     { "source": "/react/(.*)", "destination": "/react/index.html" },
-    { "source": "/vue/(.*)", "destination": "/vue/index.html" }
+    { "source": "/vue/(.*)", "destination": "/vue/index.html" },
+    { "source": "/igloo/(.*)", "destination": "/igloo/index.html" },
+    {
+      "source": "/docx-to-markdown/(.*)",
+      "destination": "/docx-to-markdown/index.html"
+    },
+    { "source": "/", "destination": "/react/index.html" }
   ]
 }

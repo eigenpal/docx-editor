@@ -39,6 +39,7 @@ function sampleDocumentPlugin(): Plugin {
 
 export default defineConfig(
   (): UserConfig => ({
+    base: process.env.VITE_BASE_PATH ?? '/',
     plugins: [react(), sampleDocumentPlugin()],
     root: __dirname,
     resolve: {

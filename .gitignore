@@ -65,6 +65,7 @@ examples/plugins/*/node_modules/
 examples/*/.next/
 examples/*/.astro/
 examples/*/build/
+examples/*/dist-check/
 examples/*/bun.lockb
 examples/*/package-lock.json
 examples/plugins/*/bun.lockb
