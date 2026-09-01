@@ -2227,9 +2227,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
       },
     }),
-    setTrackedChangesFilter(predicate) {
-      if (surface) return surface.setTrackedChangesFilter(predicate);
-      if (!reviewAuthorVisibility.setTrackedChangePredicate(predicate)) return;
+    setTrackedChangesFilter(predicate, mode) {
+      if (surface) return surface.setTrackedChangesFilter(predicate, mode);
+      if (!reviewAuthorVisibility.setPredicate(predicate, mode)) return;
       bump();
       emitSelectionChange();
     },

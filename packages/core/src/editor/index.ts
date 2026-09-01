@@ -16,7 +16,7 @@
 // and the paginated surface into the PM-free Editor contract.
 
 export type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
-export type { TrackedChangePredicate } from '../contracts/editor.ts';
+export type { TrackedChangeFilterMode, TrackedChangePredicate } from '../contracts/editor.ts';
 export {
   createLayoutShaping,
   disposeLayoutShaping,

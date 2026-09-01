@@ -10,6 +10,8 @@ import {
 } from '@docx-editor.dev/core/store';
 import { piecesOfParagraph } from '../../layout/field-projection.ts';
 import type { RevisionAuthorFilter } from '../../layout/revision-projection.ts';
+import { readTableStructure } from '../../layout/semantic-table.ts';
+import { storyBlocks } from '../../layout/story-roots.ts';
 import { createRevisionAuthorVisibility } from '../revision-author-visibility.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -36,6 +38,21 @@ function firstParagraph(part: OoxmlPart): OoxmlNode {
   const paragraph = find(part.root);
   if (!paragraph) throw new Error('no paragraph');
   return paragraph;
+}
+
+function firstTable(part: OoxmlPart): OoxmlNode {
+  const find = (node: OoxmlNode): OoxmlNode | null => {
+    if (node.kind === 'table') return node;
+    if (node.kind === 'textValue') return null;
+    for (const child of node.children) {
+      const table = find(child);
+      if (table) return table;
+    }
+    return null;
+  };
+  const table = find(part.root);
+  if (!table) throw new Error('no table');
+  return table;
 }
 
 function pieces(part: OoxmlPart, filter: RevisionAuthorFilter | undefined) {
@@ -77,7 +94,7 @@ describe('tracked-change predicate', () => {
     );
     const visibility = createRevisionAuthorVisibility();
     const seen: ReviewRevisionItem[] = [];
-    visibility.setTrackedChangePredicate((revision) => {
+    visibility.setPredicate((revision) => {
       seen.push(revision);
       return (
         revision.author === 'Bob' &&
@@ -110,6 +127,116 @@ describe('tracked-change predicate', () => {
     expect(result[1]!.revisions?.[0]?.author).toBe('Bob');
   });
 
+  test('projects excluded content as accepted by default or rejected on request', () => {
+    const part = load(
+      `<w:p>${insertion('1', 'Alice', '2026-01-01T00:00:00Z', 'NEW')}${deletion(
+        '2',
+        'Alice',
+        '2026-01-01T00:00:00Z',
+        'OLD'
+      )}</w:p>`
+    );
+    const items = revisionItemsOf(part);
+    const visibility = createRevisionAuthorVisibility();
+    const excludeAll = (): boolean => false;
+
+    visibility.setPredicate(excludeAll);
+    const acceptedFilter = visibility.filterFor(items);
+    expect(pieces(part, acceptedFilter).map((piece) => piece.text)).toEqual(['NEW']);
+
+    visibility.setPredicate(excludeAll, 'reject');
+    const rejectedFilter = visibility.filterFor(items);
+    expect(rejectedFilter).not.toBe(acceptedFilter);
+    expect(pieces(part, rejectedFilter).map((piece) => piece.text)).toEqual(['OLD']);
+    expect(pieces(part, rejectedFilter)[0]!.revisions).toBeUndefined();
+    expect(visibility.filterItems(items)).toHaveLength(0);
+  });
+
+  test('keeps the reviewer menu accepted while a predicate uses rejected projection', () => {
+    const part = load(
+      `<w:p>${insertion('1', 'Alice', '2026-01-01T00:00:00Z', 'AUTHOR')}${insertion(
+        '2',
+        'Bob',
+        '2026-01-01T00:00:00Z',
+        'PREDICATE'
+      )}</w:p>`
+    );
+    const visibility = createRevisionAuthorVisibility(['Alice']);
+    visibility.setPredicate(() => false, 'reject');
+
+    const result = pieces(part, visibility.filterFor(revisionItemsOf(part)));
+
+    expect(result.map((piece) => piece.text)).toEqual(['AUTHOR']);
+    expect(result[0]!.revisions).toBeUndefined();
+  });
+
+  test('projects excluded paragraph-mark revisions in the selected mode', () => {
+    const marked =
+      '<w:p><w:pPr><w:rPr><w:del w:id="3" w:author="Alice"/></w:rPr></w:pPr>' +
+      `${run('FIRST')}</w:p><w:p>${run('SECOND')}</w:p>`;
+    const part = load(marked);
+    const items = revisionItemsOf(part);
+    const visibility = createRevisionAuthorVisibility();
+
+    visibility.setPredicate(() => false);
+    expect(storyBlocks(part, 'all-markup', visibility.filterFor(items))).toHaveLength(1);
+
+    visibility.setPredicate(() => false, 'reject');
+    expect(storyBlocks(part, 'all-markup', visibility.filterFor(items))).toHaveLength(2);
+  });
+
+  test('uses distinct layout cache keys for accept and reject visibility instances', () => {
+    const part = load(
+      '<w:p><w:pPr><w:rPr><w:del w:id="30" w:author="Alice"/></w:rPr></w:pPr>' +
+        `${run('FIRST')}</w:p><w:p>${run('SECOND')}</w:p>`
+    );
+    const items = revisionItemsOf(part);
+    const accepted = createRevisionAuthorVisibility();
+    const rejected = createRevisionAuthorVisibility();
+    accepted.setPredicate(() => false);
+    rejected.setPredicate(() => false, 'reject');
+    const acceptedFilter = accepted.filterFor(items)!;
+    const rejectedFilter = rejected.filterFor(items)!;
+
+    expect(acceptedFilter.cacheKey).not.toBe(rejectedFilter.cacheKey);
+    expect(storyBlocks(part, 'all-markup', acceptedFilter)).toHaveLength(1);
+    expect(storyBlocks(part, 'all-markup', rejectedFilter)).toHaveLength(2);
+  });
+
+  test('projects excluded structural revisions in the selected mode', () => {
+    const part = load(
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid>' +
+        '<w:tr><w:trPr><w:ins w:id="4" w:author="Alice"/></w:trPr>' +
+        `<w:tc><w:p>${run('CELL')}</w:p></w:tc></w:tr></w:tbl>`
+    );
+    const items = revisionItemsOf(part);
+    const visibility = createRevisionAuthorVisibility();
+
+    visibility.setPredicate(() => false);
+    expect(
+      readTableStructure(
+        firstTable(part),
+        468,
+        0,
+        undefined,
+        'all-markup',
+        visibility.filterFor(items)
+      )?.rows
+    ).toHaveLength(1);
+
+    visibility.setPredicate(() => false, 'reject');
+    expect(
+      readTableStructure(
+        firstTable(part),
+        468,
+        0,
+        undefined,
+        'all-markup',
+        visibility.filterFor(items)
+      )?.rows
+    ).toHaveLength(0);
+  });
+
   test('re-evaluates the same predicate after its captured state changes', () => {
     const part = load(
       `<w:p>${insertion('1', 'Alice', '2026-01-01T00:00:00Z', 'ONE')}${insertion(
@@ -122,14 +249,14 @@ describe('tracked-change predicate', () => {
     const visibility = createRevisionAuthorVisibility();
     let author = 'Alice';
     const predicate = (revision: ReviewRevisionItem): boolean => revision.author === author;
-    visibility.setTrackedChangePredicate(predicate);
+    visibility.setPredicate(predicate);
     const items = revisionItemsOf(part);
     expect(
       pieces(part, visibility.filterFor(items)).map((piece) => piece.revisions?.[0]?.author)
     ).toEqual(['Alice', undefined]);
 
     author = 'Bob';
-    visibility.setTrackedChangePredicate(predicate);
+    visibility.setPredicate(predicate);
     expect(
       pieces(part, visibility.filterFor(items)).map((piece) => piece.revisions?.[0]?.author)
     ).toEqual([undefined, 'Bob']);
@@ -145,7 +272,7 @@ describe('tracked-change predicate', () => {
       )}</w:p>`
     );
     const visibility = createRevisionAuthorVisibility(['Alice']);
-    visibility.setTrackedChangePredicate(() => true);
+    visibility.setPredicate(() => true);
     const items = revisionItemsOf(part);
     const filter = visibility.filterFor(items);
 
@@ -165,7 +292,7 @@ describe('tracked-change predicate', () => {
     const part = load(`<w:p>${insertion('1', 'Alice', '2026-01-01T00:00:00Z', 'ONE')}</w:p>`);
     const visibility = createRevisionAuthorVisibility();
     let calls = 0;
-    visibility.setTrackedChangePredicate(() => {
+    visibility.setPredicate(() => {
       calls += 1;
       return false;
     });
@@ -190,7 +317,7 @@ describe('tracked-change predicate', () => {
     );
     const visibility = createRevisionAuthorVisibility();
     const items = revisionItemsOf(part);
-    visibility.setTrackedChangePredicate((revision) => revision.author === 'Alice');
+    visibility.setPredicate((revision) => revision.author === 'Alice');
     visibility.filterFor(items);
     const [alice, bob] = items;
     expect(alice?.kind).toBe('revision');
@@ -199,7 +326,7 @@ describe('tracked-change predicate', () => {
     expect(visibility.includesRevisionItem(alice)).toBe(true);
     expect(visibility.includesRevisionItem(bob)).toBe(false);
 
-    visibility.setTrackedChangePredicate((revision) => {
+    visibility.setPredicate((revision) => {
       if (revision.author === 'Bob') throw new Error('predicate failed');
       return false;
     });
@@ -230,12 +357,12 @@ describe('tracked-change predicate', () => {
       if (fails) throw new Error('same predicate failed');
       return revision.author === author;
     };
-    visibility.setTrackedChangePredicate(predicate);
+    visibility.setPredicate(predicate);
     visibility.filterFor(items);
 
     author = 'Bob';
     fails = true;
-    visibility.setTrackedChangePredicate(predicate);
+    visibility.setPredicate(predicate);
     expect(() => visibility.filterFor(items)).toThrow('same predicate failed');
 
     const restored = visibility.filterFor(items);
@@ -255,7 +382,7 @@ describe('tracked-change predicate', () => {
       )}</w:p>`
     );
     const visibility = createRevisionAuthorVisibility();
-    visibility.setTrackedChangePredicate((revision) => {
+    visibility.setPredicate((revision) => {
       if (revision.text === 'THROW') throw new Error('document predicate failed');
       return revision.author === 'Alice';
     });
@@ -298,7 +425,7 @@ describe('tracked-change predicate', () => {
     };
     const items = [revision, comment];
     const visibility = createRevisionAuthorVisibility();
-    visibility.setTrackedChangePredicate(() => false);
+    visibility.setPredicate(() => false);
 
     const filtered = visibility.filterItems(items);
 
@@ -350,7 +477,7 @@ describe('tracked-change predicate', () => {
     const part = load(`<w:p>${insertion('1', 'Alice', '2026-01-01T00:00:00Z', 'ONE')}</w:p>`);
     const items = revisionItemsOf(part);
     const visibility = createRevisionAuthorVisibility();
-    visibility.setTrackedChangePredicate(() => true);
+    visibility.setPredicate(() => true);
 
     expect(visibility.filterItems(items)).toBe(items);
   });
@@ -360,11 +487,11 @@ describe('tracked-change predicate', () => {
     const items = revisionItemsOf(part);
     const revision = items[0]!;
     const visibility = createRevisionAuthorVisibility();
-    visibility.setTrackedChangePredicate(() => false);
+    visibility.setPredicate(() => false);
     visibility.filterFor(items);
     expect(visibility.includesRevisionItem(revision)).toBe(false);
 
-    visibility.setTrackedChangePredicate(null);
+    visibility.setPredicate(null);
 
     expect(visibility.includesRevisionItem(revision)).toBe(true);
     expect(visibility.filterItems(items)).toBe(items);
@@ -383,7 +510,7 @@ describe('tracked-change predicate', () => {
     expect(items).toHaveLength(2);
     const rejected = items[0]!;
     const visibility = createRevisionAuthorVisibility();
-    visibility.setTrackedChangePredicate((revision) => revision !== rejected);
+    visibility.setPredicate((revision) => revision !== rejected);
     const filter = visibility.filterFor(items);
 
     const states = collectRevisionSites(part)
@@ -403,7 +530,7 @@ describe('tracked-change predicate', () => {
     expect(items).toHaveLength(2);
     const rejected = items.find((item) => item.markDirection === 'delete')!;
     const visibility = createRevisionAuthorVisibility();
-    visibility.setTrackedChangePredicate((revision) => revision !== rejected);
+    visibility.setPredicate((revision) => revision !== rejected);
     const filter = visibility.filterFor(items);
 
     const states = collectRevisionSites(part)
@@ -428,7 +555,7 @@ describe('tracked-change predicate', () => {
       '<w:rPrChange w:id="4" w:author="Alice" w:date="2026-04-01T00:00:00Z"><w:rPr><w:i/></w:rPr></w:rPrChange>';
     const part = load(`<w:p>${run('FORMATTED', `<w:b/>${change}`)}</w:p>`);
     const visibility = createRevisionAuthorVisibility();
-    visibility.setTrackedChangePredicate((revision) => revision.revisionKind !== 'format');
+    visibility.setPredicate((revision) => revision.revisionKind !== 'format');
     const [piece] = pieces(part, visibility.filterFor(revisionItemsOf(part)));
 
     expect(piece!.style.bold).toBe(true);
@@ -450,9 +577,7 @@ describe('tracked-change predicate', () => {
     const header = headerResult.part;
     const items = [...revisionItemsOf(body), ...revisionItemsOf(header)];
     const visibility = createRevisionAuthorVisibility();
-    visibility.setTrackedChangePredicate(
-      (revision) => revision.ranges[0]?.partName === '/word/document.xml'
-    );
+    visibility.setPredicate((revision) => revision.ranges[0]?.partName === '/word/document.xml');
     const filter = visibility.filterFor(items);
 
     expect(pieces(body, filter)[0]!.revisions?.[0]?.author).toBe('Alice');

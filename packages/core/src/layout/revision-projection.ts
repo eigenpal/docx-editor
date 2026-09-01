@@ -67,8 +67,8 @@ export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 export const DEFAULT_REVISION_DISPLAY_MODE: RevisionDisplayMode = 'all-markup';
 
 /**
- * A view-time tracked-change filter. Revisions rejected by `includes` render as accepted,
- * while included revisions keep the display mode's normal projection.
+ * A view-time tracked-change filter. Revisions rejected by `includes` use the filter's accepted
+ * or rejected projection, while included revisions keep the display mode's normal projection.
  *
  * `cacheKey` is a canonical, content-based identity for layout caches. The set itself is kept
  * because author names are attacker-controlled strings and must never be parsed back from a
@@ -78,6 +78,8 @@ export interface RevisionFilter {
   readonly hiddenAuthors: ReadonlySet<string>;
   readonly includes?: (revision: RevisionAttribution) => boolean;
   readonly includesNode?: (nodeId: string, author: string) => boolean;
+  /** Accepted/original projection for a revision excluded by `includesNode`. */
+  readonly excludedNodeMode?: (nodeId: string, author: string) => 'proposed' | 'original';
   readonly cacheKey: string;
 }
 
@@ -113,6 +115,27 @@ export function revisionNodeIncluded(
   author: string
 ): boolean {
   return filter.includesNode?.(nodeId, author) ?? !filter.hiddenAuthors.has(author);
+}
+
+/** The display mode one attributed revision uses after applying a view-time filter. */
+export function revisionProjectionMode(
+  filter: RevisionFilter,
+  revision: RevisionAttribution,
+  includedMode: RevisionDisplayMode
+): RevisionDisplayMode {
+  if (revisionIncluded(filter, revision)) return includedMode;
+  return filter.excludedNodeMode?.(revision.nodeId, revision.author) ?? 'proposed';
+}
+
+/** Node-addressed form of {@link revisionProjectionMode} for structural revision sites. */
+export function revisionNodeProjectionMode(
+  filter: RevisionFilter,
+  nodeId: string,
+  author: string,
+  includedMode: RevisionDisplayMode
+): RevisionDisplayMode {
+  if (revisionNodeIncluded(filter, nodeId, author)) return includedMode;
+  return filter.excludedNodeMode?.(nodeId, author) ?? 'proposed';
 }
 
 /** No enclosing revision. Shared so the common untracked case allocates nothing. */
@@ -196,8 +219,7 @@ export function revisionsVisible(
 ): boolean {
   if (revisions.length === 0 || (mode === 'all-markup' && !authorFilter)) return true;
   for (const revision of revisions) {
-    const revisionMode =
-      authorFilter && !revisionIncluded(authorFilter, revision) ? 'proposed' : mode;
+    const revisionMode = authorFilter ? revisionProjectionMode(authorFilter, revision, mode) : mode;
     if (revisionMode === 'all-markup') continue;
     const removed =
       revisionMode === 'proposed'

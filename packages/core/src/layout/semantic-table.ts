@@ -23,7 +23,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
 import {
-  revisionNodeIncluded,
+  revisionNodeProjectionMode,
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
@@ -876,11 +876,8 @@ function readTableStructureUncached(
       ? (wmlRevisionAttribute(authoredRevision, 'author') ?? '')
       : undefined;
     const projectedMode =
-      authoredRevision &&
-      revisionAuthor !== undefined &&
-      authorFilter &&
-      !revisionNodeIncluded(authorFilter, authoredRevision.id, revisionAuthor)
-        ? 'proposed'
+      authoredRevision && revisionAuthor !== undefined && authorFilter
+        ? revisionNodeProjectionMode(authorFilter, authoredRevision.id, revisionAuthor, displayMode)
         : displayMode;
     if (
       (projectedMode === 'proposed' && revisionKind === 'del') ||

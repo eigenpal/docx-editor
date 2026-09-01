@@ -2611,6 +2611,7 @@ export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 export interface RevisionFilter {
     // (undocumented)
     readonly cacheKey: string;
+    readonly excludedNodeMode?: (nodeId: string, author: string) => 'proposed' | 'original';
     // (undocumented)
     readonly hiddenAuthors: ReadonlySet<string>;
     // (undocumented)

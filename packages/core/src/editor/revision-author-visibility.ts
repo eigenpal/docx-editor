@@ -1,4 +1,4 @@
-import type { TrackedChangePredicate } from '../contracts/editor.ts';
+import type { TrackedChangeFilterMode, TrackedChangePredicate } from '../contracts/editor.ts';
 import {
   revisionSiteNodeIdsOf,
   type ReviewItem,
@@ -25,7 +25,7 @@ export interface RevisionAuthorVisibility {
   filterForSession(session: RevisionFilterSession): RevisionAuthorFilter | undefined;
   filterItems(items: readonly ReviewItem[]): readonly ReviewItem[];
   includesRevisionItem(item: ReviewRevisionItem): boolean;
-  setTrackedChangePredicate(predicate: TrackedChangePredicate | null): boolean;
+  setPredicate(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): boolean;
   isVisible(author: string): boolean;
   setVisible(author: string, visible: boolean): boolean;
   setAllVisible(authors: Iterable<string>, visible: boolean): boolean;
@@ -107,12 +107,13 @@ export function createRevisionAuthorVisibility(
   let hiddenList: readonly string[] = Object.freeze([...hidden]);
   let authorOnlyFilter = revisionAuthorFilter(hidden);
   let predicate: TrackedChangePredicate | null = null;
+  let predicateMode: TrackedChangeFilterMode = 'accept';
   let predicateBeforePending: TrackedChangePredicate | null = null;
+  let predicateModeBeforePending: TrackedChangeFilterMode = 'accept';
   let predicateDecisionsBeforePending = new WeakMap<ReviewRevisionItem, boolean>();
   let seenItemsBeforePending: readonly ReviewItem[] | null = null;
   let predicatePending = false;
   let stateVersion = 0;
-  let filterVersion = 0;
   let authorSeenItems: readonly ReviewItem[] | null = null;
   let authorFilteredItems: readonly ReviewItem[] = [];
   let seenItems: readonly ReviewItem[] | null = null;
@@ -120,6 +121,7 @@ export function createRevisionAuthorVisibility(
   let filter: RevisionAuthorFilter | undefined = authorOnlyFilter;
   let filterHiddenAuthors: ReadonlySet<string> = hidden;
   let filterExcludedNodeIds: ReadonlySet<string> = new Set();
+  let filterPredicateMode: TrackedChangeFilterMode = 'accept';
   let excludedRevisions = new WeakSet<ReviewRevisionItem>();
   let predicateDecisions = new WeakMap<ReviewRevisionItem, boolean>();
   let completedDecisions = new Map<string, boolean>();
@@ -141,25 +143,31 @@ export function createRevisionAuthorVisibility(
   ): void => {
     const excludedNodeIds = excludedRevisionNodeIds(predicateExcluded);
     const hiddenSnapshot = hidden;
+    const modeSnapshot = predicateMode;
     let nextFilter: RevisionAuthorFilter | undefined;
     if (
       hiddenSnapshot === filterHiddenAuthors &&
-      sameStringSet(excludedNodeIds, filterExcludedNodeIds)
+      sameStringSet(excludedNodeIds, filterExcludedNodeIds) &&
+      (excludedNodeIds.size === 0 || modeSnapshot === filterPredicateMode)
     ) {
       nextFilter = filter;
     } else if (excludedNodeIds.size === 0 && hiddenSnapshot.size === 0) {
       nextFilter = undefined;
     } else {
-      const nextFilterVersion = filterVersion + 1;
       nextFilter = Object.freeze({
         hiddenAuthors: hiddenSnapshot,
         includes: (revision: RevisionAttribution) =>
           !hiddenSnapshot.has(revision.author) && !excludedNodeIds.has(revision.nodeId),
         includesNode: (nodeId: string, author: string) =>
           !hiddenSnapshot.has(author) && !excludedNodeIds.has(nodeId),
-        cacheKey: String(nextFilterVersion),
+        excludedNodeMode: (nodeId: string, author: string) =>
+          hiddenSnapshot.has(author)
+            ? 'proposed'
+            : excludedNodeIds.has(nodeId) && modeSnapshot === 'reject'
+              ? 'original'
+              : 'proposed',
+        cacheKey: revisionFilterCacheKey(hiddenSnapshot, excludedNodeIds, modeSnapshot),
       });
-      filterVersion = nextFilterVersion;
     }
     const keptItems: ReviewItem[] = [];
     for (const item of items) {
@@ -175,8 +183,10 @@ export function createRevisionAuthorVisibility(
     filter = nextFilter;
     filterHiddenAuthors = hiddenSnapshot;
     filterExcludedNodeIds = excludedNodeIds;
+    filterPredicateMode = modeSnapshot;
     predicatePending = false;
     predicateBeforePending = null;
+    predicateModeBeforePending = 'accept';
     predicateDecisionsBeforePending = new WeakMap<ReviewRevisionItem, boolean>();
     seenItemsBeforePending = null;
   };
@@ -202,9 +212,11 @@ export function createRevisionAuthorVisibility(
     } catch (error) {
       if (predicatePending) {
         predicate = predicateBeforePending;
+        predicateMode = predicateModeBeforePending;
         predicateDecisions = predicateDecisionsBeforePending;
         seenItems = seenItemsBeforePending;
         predicateBeforePending = null;
+        predicateModeBeforePending = 'accept';
         predicateDecisionsBeforePending = new WeakMap<ReviewRevisionItem, boolean>();
         seenItemsBeforePending = null;
         stateVersion += 1;
@@ -276,11 +288,13 @@ export function createRevisionAuthorVisibility(
     includesRevisionItem(item) {
       return !excludedRevisions.has(item);
     },
-    setTrackedChangePredicate(next) {
+    setPredicate(next, mode = 'accept') {
       if (predicate === null && next === null) return false;
       if (next === null) {
         predicate = null;
+        predicateMode = 'accept';
         predicateBeforePending = null;
+        predicateModeBeforePending = 'accept';
         predicatePending = false;
         predicateDecisions = new WeakMap<ReviewRevisionItem, boolean>();
         predicateDecisionsBeforePending = new WeakMap<ReviewRevisionItem, boolean>();
@@ -291,14 +305,17 @@ export function createRevisionAuthorVisibility(
         filter = authorOnlyFilter;
         filterHiddenAuthors = hidden;
         filterExcludedNodeIds = new Set<string>();
+        filterPredicateMode = 'accept';
         invalidate();
         return true;
       }
       predicateBeforePending = predicate;
+      predicateModeBeforePending = predicateMode;
       predicateDecisionsBeforePending = predicateDecisions;
       seenItemsBeforePending = seenItems;
       predicatePending = true;
       predicate = next;
+      predicateMode = mode;
       predicateDecisions = new WeakMap<ReviewRevisionItem, boolean>();
       invalidate();
       return true;
@@ -357,6 +374,18 @@ function sameStringSet(left: ReadonlySet<string>, right: ReadonlySet<string>): b
     if (!right.has(value)) return false;
   }
   return true;
+}
+
+function revisionFilterCacheKey(
+  hiddenAuthors: ReadonlySet<string>,
+  excludedNodeIds: ReadonlySet<string>,
+  mode: TrackedChangeFilterMode
+): string {
+  return JSON.stringify({
+    hiddenAuthors: [...hiddenAuthors].sort(),
+    excludedNodeIds: [...excludedNodeIds].sort(),
+    mode: excludedNodeIds.size === 0 ? 'accept' : mode,
+  });
 }
 
 export function reviewItemAuthorOrNull(item: {

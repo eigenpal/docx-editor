@@ -62,6 +62,22 @@ test('a full-data predicate controls tracked markup and review cards without cha
   expect(await savedDigest(page)).toBe(before);
 
   await page.evaluate(() => {
+    window
+      .__DOCX_EDITOR_E2E__!.getEditor()!
+      .setTrackedChangesFilter(
+        (revision) => revision.author === 'Bob Editor' && revision.revisionKind === 'insert',
+        'reject'
+      );
+  });
+  await expect(page.locator('.docx-revision-insert[data-review-author="Bob Editor"]')).toHaveCount(
+    1
+  );
+  await expect(page.locator('.docx-revision-delete')).toHaveCount(0);
+  await expect(page.locator('.docx-pages')).not.toContainText('ALICE_INSERT');
+  await expect(page.locator('.docx-pages')).toContainText('ALICE_DELETE');
+  expect(await savedDigest(page)).toBe(before);
+
+  await page.evaluate(() => {
     window.__DOCX_EDITOR_E2E__!.getEditor()!.setTrackedChangesFilter(null);
   });
   await expect(page.locator('[data-testid="review-card"]')).toHaveCount(6);

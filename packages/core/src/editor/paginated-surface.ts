@@ -5422,8 +5422,8 @@ export function mountPaginatedSurface(
     showAllRevisionAuthors() {
       applyRevisionAuthorVisibility(revisionAuthorVisibility.showAll());
     },
-    setTrackedChangesFilter(predicate) {
-      applyRevisionAuthorVisibility(revisionAuthorVisibility.setTrackedChangePredicate(predicate));
+    setTrackedChangesFilter(predicate, mode) {
+      applyRevisionAuthorVisibility(revisionAuthorVisibility.setPredicate(predicate, mode));
     },
     collaborationSession: () => collaborationSession ?? null,
     remotePresenceColor,

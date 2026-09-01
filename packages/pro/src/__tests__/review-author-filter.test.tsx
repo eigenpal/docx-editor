@@ -113,6 +113,23 @@ describe('reviewer visibility chrome', () => {
     expect(new Uint8Array(await editor!.save())).toEqual(before);
 
     await act(async () => {
+      editor!.setTrackedChangesFilter(
+        (revision) => revision.author === 'Grace' && revision.revisionKind === 'insert',
+        'reject'
+      );
+    });
+    await waitFor(() => {
+      expect(view.container.querySelectorAll('.docx-revision-insert')).toHaveLength(1);
+      expect(view.container.querySelectorAll('.docx-revision-delete')).toHaveLength(0);
+    });
+    expect(view.container.textContent).not.toContain('ADA_INSERT');
+    expect(view.container.textContent).toContain('GRACE_INSERT');
+    expect(view.container.textContent).toContain('ADA_DELETE');
+    expect(view.container.textContent).toContain('GRACE_DELETE');
+    expect(editor!.getReviewItems({ placement: false })).toHaveLength(1);
+    expect(new Uint8Array(await editor!.save())).toEqual(before);
+
+    await act(async () => {
       editor!.setTrackedChangesFilter(null);
     });
     await waitFor(() => {
