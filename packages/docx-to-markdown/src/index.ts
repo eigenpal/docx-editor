@@ -98,7 +98,7 @@ export type {
 /** Typed one-shot failure for bytes that cannot be opened as a supported DOCX. @public */
 export class DocumentOpenError extends Error {
   constructor(
-    readonly reason: HeadlessDocumentRejection,
+    readonly reason: HeadlessDocumentRejection | 'aborted',
     readonly detail?: string
   ) {
     super(`Unable to open DOCX for export: ${reason}${detail ? ` (${detail})` : ''}`);

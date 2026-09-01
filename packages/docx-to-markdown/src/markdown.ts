@@ -12,30 +12,36 @@ import {
   type ParagraphFragmentRecord,
   type SemanticLayout,
   type StyleSpanRecord,
-  type TableFragmentRecord,
 } from '@docx-editor.dev/core/layout';
 import type { ExportSemanticLayout, ExportSession } from '@docx-editor.dev/core/export';
 import {
   escapeText,
   markdownSourceCaptureKey,
   MarkdownInlineWriter,
-  type MarkdownSourceCapture,
   type MarkdownTextToken,
 } from './markdown-inline.ts';
 import {
   concatMarkdown,
   EMPTY_MAPPED_MARKDOWN,
-  escapeUnescapedTablePipes,
   indentContinuationLines,
   literalMarkdown,
   quoteMarkdownLines,
   replaceLeadingWhitespaceWithEntities,
-  replaceNewlinesWithHtmlBreaks,
   wrapMarkdown,
   withSourceParagraphs,
   type MappedMarkdown,
 } from './markdown-source-map.ts';
-import { nestedTableHtml, tableWidth } from './markdown-nested-table.ts';
+import {
+  assertNever,
+  indexTableBlocks,
+  logicalBlocks,
+  mergeRows,
+  nestedTableMarkdown,
+  tableMarkdown,
+  type LogicalBlock,
+  type TableProjection,
+  type TranslationContext,
+} from './markdown-logical.ts';
 import {
   buildNoteLabels,
   buildNoteStoryIndexes,
@@ -56,63 +62,6 @@ export type {
   MarkdownPaginationInfo,
   MarkdownTranslationOptions,
 } from './markdown-types.ts';
-
-interface TranslationContext {
-  readonly options: MarkdownTranslationOptions;
-  readonly noteLabelByScope: Map<string, string>;
-  readonly tableCell: boolean;
-  readonly hardBreakHtml?: boolean;
-  readonly displayMode: SemanticLayout['displayMode'];
-  /** Translator-local story/part scope disambiguating paragraph ids across DOCX parts. */
-  readonly sourceScope: string;
-  readonly listIndentByParagraphId: ReadonlyMap<string, number>;
-  readonly listMarkerByParagraphId: ReadonlyMap<
-    string,
-    NonNullable<ParagraphFragmentRecord['marker']>
-  >;
-  readonly tablesById: ReadonlyMap<string, TableProjection>;
-  /** A translator maps each published drawing object at most once across full/page views. */
-  readonly imageResultByDrawing: WeakMap<object, MarkdownImageResult>;
-  readonly sourceCapture?: MarkdownSourceCapture;
-  /** Labels emitted into the current page body, when page-local note visibility is tracked. */
-  readonly emittedNoteLabels?: Set<string>;
-  readonly pageIndex?: number;
-}
-
-interface LogicalParagraph {
-  readonly kind: 'paragraph';
-  readonly fragments: ParagraphFragmentRecord[];
-}
-
-interface LogicalTable {
-  readonly kind: 'table';
-  readonly fragments: TableFragmentRecord[];
-}
-
-type LogicalBlock = LogicalParagraph | LogicalTable;
-
-interface LogicalCell {
-  readonly blocks: BlockFragmentRecord[];
-  readonly gridSpan: number;
-  readonly vMergeContinue: boolean;
-  readonly gridColumn: number;
-}
-
-interface LogicalRow {
-  readonly id: string;
-  readonly isHeaderRow: boolean;
-  readonly isHeaderRepeat: boolean;
-  readonly cells: LogicalCell[];
-}
-
-interface TableProjection {
-  readonly fragments: TableFragmentRecord[];
-  readonly columnCount: number;
-}
-
-function assertNever(value: never): never {
-  throw new TypeError(`Unsupported semantic record: ${JSON.stringify(value)}`);
-}
 
 function destination(url: string): string {
   return url.replace(
@@ -497,199 +446,6 @@ function paragraphMarkdown(
   ]);
 }
 
-function logicalBlocks(blocks: readonly BlockFragmentRecord[]): LogicalBlock[] {
-  const result: LogicalBlock[] = [];
-  for (const block of blocks) {
-    const previous = result[result.length - 1];
-    switch (block.kind) {
-      case 'paragraph':
-        if (
-          previous?.kind === 'paragraph' &&
-          previous.fragments[0]?.paragraphId === block.paragraphId
-        ) {
-          previous.fragments.push(block);
-        } else {
-          result.push({ kind: 'paragraph', fragments: [block] });
-        }
-        break;
-      case 'table':
-        if (previous?.kind === 'table' && previous.fragments[0]?.tableId === block.tableId) {
-          previous.fragments.push(block);
-        } else {
-          result.push({ kind: 'table', fragments: [block] });
-        }
-        break;
-      default:
-        assertNever(block);
-    }
-  }
-  return result;
-}
-
-function mergeRows(
-  fragments: readonly TableFragmentRecord[],
-  includeHeaderRepeats: boolean
-): LogicalRow[] {
-  const rows: LogicalRow[] = [];
-  const byId = new Map<string, LogicalRow>();
-  for (const fragment of fragments) {
-    for (const row of fragment.rows) {
-      if (row.isHeaderRepeat && !includeHeaderRepeats) continue;
-      let logical = byId.get(row.id);
-      // A tall table can restart its repeating header inside another fragment on the same physical
-      // page. That is a visual occurrence of the row already collected, not additional cell
-      // content. Row continuations remain mergeable because they are not header repeats.
-      if (logical && includeHeaderRepeats && row.isHeaderRepeat) continue;
-      if (!logical) {
-        logical = {
-          id: row.id,
-          isHeaderRow: row.isHeaderRow,
-          isHeaderRepeat: row.isHeaderRepeat,
-          cells: [],
-        };
-        byId.set(row.id, logical);
-        rows.push(logical);
-      }
-      for (const [index, cell] of row.cells.entries()) {
-        const gridColumn = cell.gridColumn ?? index;
-        const existing = logical.cells.find((candidate) => candidate.gridColumn === gridColumn);
-        if (existing) existing.blocks.push(...cell.blocks);
-        else {
-          logical.cells.push({
-            blocks: [...cell.blocks],
-            gridSpan: cell.gridSpan,
-            vMergeContinue: cell.vMergeContinue,
-            gridColumn,
-          });
-        }
-      }
-      logical.cells.sort((left, right) => left.gridColumn - right.gridColumn);
-    }
-  }
-  return rows;
-}
-
-function cellAlignment(cell: LogicalCell): ParagraphFragmentRecord['alignment'] {
-  for (const block of cell.blocks) {
-    if (block.kind === 'paragraph') return block.alignment;
-  }
-  return 'left';
-}
-
-/**
- * Column count for emission. The declared grid is preferred, but a row can carry more cells
- * than `w:tblGrid` declares; widening to the widest laid-out cell keeps every painted cell in
- * the output instead of silently dropping the overflow.
- */
-function emittedTableWidth(
-  rows: readonly LogicalRow[],
-  projection: TableProjection | undefined,
-  fragments: readonly TableFragmentRecord[]
-): number {
-  let width = tableWidth(projection?.columnCount, fragments[0]?.columnEdges.length);
-  for (const row of rows) {
-    for (const cell of row.cells) {
-      width = Math.max(width, cell.gridColumn + Math.max(cell.gridSpan, 1));
-    }
-  }
-  return width;
-}
-
-/** GFM's unsupported nested-table shape uses mapped inline HTML wrappers. */
-function nestedTableMarkdown(
-  fragments: readonly TableFragmentRecord[],
-  context: TranslationContext,
-  pageScoped: boolean
-): MappedMarkdown {
-  const tableId = fragments[0]?.tableId;
-  const projection = tableId ? context.tablesById.get(tableId) : undefined;
-  const completeFragments = projection?.fragments ?? fragments;
-  const rows = pageScoped ? mergeRows(fragments, true) : mergeRows(completeFragments, false);
-  if (rows.length === 0) return EMPTY_MAPPED_MARKDOWN;
-  const width = emittedTableWidth(rows, projection, fragments);
-  const nestedContext = { ...context, tableCell: true };
-  return nestedTableHtml(rows, width, (row, columnIndex) => {
-    const cell = row.cells.find((candidate) => candidate.gridColumn === columnIndex);
-    return !cell || cell.vMergeContinue
-      ? EMPTY_MAPPED_MARKDOWN
-      : renderLogicalBlocks(logicalBlocks(cell.blocks), nestedContext, true, pageScoped);
-  });
-}
-
-function cellValues(
-  row: LogicalRow,
-  context: TranslationContext,
-  pageScoped: boolean
-): MappedMarkdown[] {
-  const values: MappedMarkdown[] = [];
-  const nestedContext = { ...context, tableCell: true };
-  for (const cell of row.cells) {
-    const value = cell.vMergeContinue
-      ? EMPTY_MAPPED_MARKDOWN
-      : replaceNewlinesWithHtmlBreaks(
-          escapeUnescapedTablePipes(
-            renderLogicalBlocks(logicalBlocks(cell.blocks), nestedContext, true, pageScoped)
-          )
-        );
-    while (values.length < cell.gridColumn) values.push(EMPTY_MAPPED_MARKDOWN);
-    values[cell.gridColumn] = value;
-    for (let span = 1; span < cell.gridSpan; span += 1) {
-      values[cell.gridColumn + span] = EMPTY_MAPPED_MARKDOWN;
-    }
-  }
-  return values;
-}
-
-function tableMarkdown(
-  fragments: readonly TableFragmentRecord[],
-  context: TranslationContext,
-  pageScoped: boolean
-): MappedMarkdown {
-  const tableId = fragments[0]?.tableId;
-  const projection = tableId ? context.tablesById.get(tableId) : undefined;
-  const completeFragments = projection?.fragments ?? fragments;
-  const rows = pageScoped ? mergeRows(fragments, true) : mergeRows(completeFragments, false);
-  if (rows.length === 0) return EMPTY_MAPPED_MARKDOWN;
-  const width = emittedTableWidth(rows, projection, fragments);
-  const normalize = (
-    values: MappedMarkdown[],
-    fallback: MappedMarkdown = EMPTY_MAPPED_MARKDOWN
-  ): MappedMarkdown[] => Array.from({ length: width }, (_, index) => values[index] ?? fallback);
-  const line = (row: LogicalRow): MappedMarkdown =>
-    concatMarkdown(
-      [
-        literalMarkdown('| '),
-        concatMarkdown(normalize(cellValues(row, context, pageScoped)), ' | '),
-        literalMarkdown(' |'),
-      ],
-      ''
-    );
-  // GFM requires the first emitted row to be its header row. Preserve authored order: OOXML's
-  // tblHeader flag is only an effective repeated header on the contiguous table prefix, and a
-  // malformed/later flag must never pull that row ahead of preceding data.
-  const header = rows[0]!;
-  const alignments: string[] = [];
-  for (const cell of header.cells) {
-    const token = cellAlignment(cell);
-    const rule = token === 'center' ? ':---:' : token === 'right' ? '---:' : '---';
-    while (alignments.length < cell.gridColumn) alignments.push('---');
-    alignments[cell.gridColumn] = rule;
-    for (let span = 1; span < cell.gridSpan; span += 1) {
-      alignments[cell.gridColumn + span] = '---';
-    }
-  }
-  return concatMarkdown(
-    [
-      line(header),
-      literalMarkdown(
-        `| ${Array.from({ length: width }, (_, index) => alignments[index] ?? '---').join(' | ')} |`
-      ),
-      ...rows.slice(1).map(line),
-    ],
-    '\n'
-  );
-}
-
 function renderLogicalBlocks(
   blocks: readonly LogicalBlock[],
   context: TranslationContext,
@@ -702,8 +458,8 @@ function renderLogicalBlocks(
         return paragraphMarkdown(block.fragments, context, !pageScoped);
       case 'table':
         return context.tableCell
-          ? nestedTableMarkdown(block.fragments, context, pageScoped)
-          : tableMarkdown(block.fragments, context, pageScoped);
+          ? nestedTableMarkdown(block.fragments, context, pageScoped, renderLogicalBlocks)
+          : tableMarkdown(block.fragments, context, pageScoped, renderLogicalBlocks);
       default:
         return assertNever(block);
     }
@@ -763,28 +519,6 @@ function indexLists(
     ancestorWidths.set(marker.level, markerWidth(marker));
     for (const level of ancestorWidths.keys()) {
       if (level > marker.level) ancestorWidths.delete(level);
-    }
-  }
-}
-
-function indexTableBlocks(
-  blocks: readonly BlockFragmentRecord[],
-  tables: Map<string, TableProjection>
-): void {
-  for (const block of blocks) {
-    if (block.kind === 'paragraph') continue;
-    let projection = tables.get(block.tableId);
-    if (!projection) {
-      projection = {
-        fragments: [],
-        columnCount: Math.max(1, block.columnEdges.length - 1),
-      };
-      tables.set(block.tableId, projection);
-    }
-    projection.fragments.push(block);
-    for (const row of block.rows) {
-      if (row.isHeaderRepeat) continue;
-      for (const cell of row.cells) indexTableBlocks(cell.blocks, tables);
     }
   }
 }
@@ -975,6 +709,20 @@ export function exportMarkdownLayout(
     noteDefinitions(notes.document, context)
   );
   const renderedNoteScopes = new Set<string>();
+  // A baseline furniture story shares ONE fragments array across its section's pages when it
+  // carries no page fields and no anchored drawings; translate each such story once. A story
+  // with per-page projections gets a fresh record and fragments per page and misses the memo.
+  // Nothing on the furniture path reads `pageIndex`, so the shared translation is exact.
+  const furnitureMemo = new WeakMap<object, { readonly scope: string; readonly value: string }>();
+  const furnitureMarkdown = (story: NonNullable<PageRecord['header']> | undefined): string => {
+    if (!story) return '';
+    const scope = `${story.kind}:${story.partName}`;
+    const cached = furnitureMemo.get(story.fragments);
+    if (cached && cached.scope === scope) return cached.value;
+    const value = storyMarkdown(story, context).markdown;
+    furnitureMemo.set(story.fragments, { scope, value });
+    return value;
+  };
   const pages = layout.pages.map((page): MarkdownPage => {
     const pageContext = { ...context, pageIndex: page.index };
     const body = pageBody(page, context);
@@ -989,8 +737,8 @@ export function exportMarkdownLayout(
       id: page.id,
       number: page.index + 1,
       markdown: withDefinitions(body.value, definitions).markdown,
-      headerMarkdown: page.header ? storyMarkdown(page.header, pageContext).markdown : '',
-      footerMarkdown: page.footer ? storyMarkdown(page.footer, pageContext).markdown : '',
+      headerMarkdown: furnitureMarkdown(page.header),
+      footerMarkdown: furnitureMarkdown(page.footer),
     });
   });
   return Object.freeze({

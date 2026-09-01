@@ -96,26 +96,24 @@ export function publishImmutableSemanticLayout<T extends SemanticLayout>(layout:
       trustedFurnitureRoots.add(root);
     }
   }
-  const freezeArrayInBatches = (
+  const freezeArrayWithSharedVisits = (
     values: readonly unknown[],
-    batchSize: number,
     trustedRoots?: ReadonlySet<object>
   ): void => {
-    for (let offset = 0; offset < values.length; offset += batchSize) {
-      // The published graph already owns every visited record. Strong membership cannot extend
-      // a record's lifetime here, while avoiding V8 ephemeron bookkeeping at peak export memory.
-      const visited = new Set<object>();
-      for (let index = offset; index < Math.min(values.length, offset + batchSize); index += 1) {
-        const activePath = new Set<object>();
-        activePath.add(layout);
-        freezePublishedValue(values[index], visited, activePath, undefined, trustedRoots);
-      }
+    // The published graph already owns every visited record, so strong membership cannot
+    // extend a lifetime. ONE set across the whole array means a subtree reachable from
+    // several pages (shared furniture fragments, split-table continuations) is walked once
+    // per publish instead of once per page.
+    const visited = new Set<object>();
+    for (const value of values) {
+      const activePath = new Set<object>();
+      activePath.add(layout);
+      freezePublishedValue(value, visited, activePath, undefined, trustedRoots);
     }
     Object.freeze(values);
   };
-  // Pages dominate large layouts. Per-batch membership bounds weak-table metadata, while the
-  // furniture-only memo prevents shared headers and footers from being re-walked each batch.
-  // Review metadata is bounded independently for adversarial files with many comments/changes.
+  // Pages dominate large layouts; the furniture-only memo above additionally prevents shared
+  // headers and footers from being re-walked at all.
   // Already-frozen records are still traversed: shallow freezing does not prove descendants are.
   for (const key of Reflect.ownKeys(layout)) {
     const descriptor = Object.getOwnPropertyDescriptor(layout, key);
@@ -124,7 +122,7 @@ export function publishImmutableSemanticLayout<T extends SemanticLayout>(layout:
       throw new TypeError('Semantic layout publication encountered an accessor property');
     }
     if (key === 'pages' && Array.isArray(descriptor.value)) {
-      freezeArrayInBatches(descriptor.value, 1, trustedFurnitureRoots);
+      freezeArrayWithSharedVisits(descriptor.value, trustedFurnitureRoots);
       continue;
     }
     const activePath = new Set<object>();

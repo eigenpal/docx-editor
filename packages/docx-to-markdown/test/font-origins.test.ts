@@ -110,7 +110,9 @@ test('public best-effort font failure reports approximation while strict mode re
     },
   });
   expect(opened.ok).toBe(true);
-  expect(failures).toBe(1);
+  // Font faults degrade per FACE: each refused bundled face reports its own failure while
+  // the origin's substitution map still composes, instead of one opaque whole-origin skip.
+  expect(failures).toBe(4);
   expect(coverage.length).toBeGreaterThan(0);
   expect(coverage.every((entry) => entry === 'none')).toBe(true);
   if (!opened.ok) return;

@@ -164,10 +164,14 @@ export interface ExportSession {
   dispose(): void;
 }
 
-/** Typed refusal for bytes that cannot become a document view. @public */
+/** Typed refusal for bytes that cannot become a document view, or an already-aborted open. @public */
 export type OpenDocumentForExportResult =
   | { readonly ok: true; readonly session: ExportSession }
-  | { readonly ok: false; readonly reason: HeadlessDocumentRejection; readonly detail?: string };
+  | {
+      readonly ok: false;
+      readonly reason: HeadlessDocumentRejection | 'aborted';
+      readonly detail?: string;
+    };
 
 function normalizedResourceTimeout(value: number | undefined): number {
   if (value === undefined) return 60_000;
@@ -183,6 +187,12 @@ function normalizedDisplayMode(value: unknown): RevisionDisplayMode {
 }
 
 const REVISION_POLL_INTERVAL_MS = 50;
+
+/**
+ * Bound on image-quiescence layout passes AND on live-view revision restarts: one budget,
+ * because both loops guard the same non-convergence (a document that never stops moving).
+ */
+const MAX_CONVERGENCE_PASSES = 64;
 
 function resourceIsPending(resource: ImageResourceState): boolean {
   switch (resource.kind) {
@@ -215,6 +225,11 @@ export function openDocumentForExport(
   source: ExportDocumentSource,
   options: OpenDocumentForExportOptions = {}
 ): OpenDocumentForExportResult {
+  if (options.signal?.aborted) {
+    // A session whose every method already throws is `ok: true` in shape only; answer the
+    // typed refusal the caller can branch on instead.
+    return { ok: false, reason: 'aborted' };
+  }
   const displayMode = normalizedDisplayMode(options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE);
   const sourceIsView = isDocumentView(source);
   const opened = isDocumentView(source)
@@ -415,6 +430,21 @@ export function openDocumentForExport(
     const cached = state.completed.get(mode);
     if (cached && cached.revision === revision && cached.pkg === pkg) return cached.published;
 
+    // One rule for every drift check below: a live view that moved mid-pass restarts the
+    // whole layout against the new package, up to the shared convergence bound.
+    const restartOnRevisionDrift = (): Promise<ExportSemanticLayout> | null => {
+      if (state.view.packageRevision() === revision && state.view.currentPackage() === pkg) {
+        return null;
+      }
+      if (revisionRestarts >= MAX_CONVERGENCE_PASSES - 1) {
+        throw new ExportResourceError(
+          'nonConvergent',
+          'Document revision did not stabilize during export layout'
+        );
+      }
+      return runLayout(mode, revisionRestarts + 1, deadline);
+    };
+
     let fieldLinkState = state.fieldLinks.get(mode);
     if (!fieldLinkState || fieldLinkState.revision !== revision || fieldLinkState.pkg !== pkg) {
       // Cached paragraph lines can survive a live-view revision. Keep the registry's monotonic
@@ -454,18 +484,11 @@ export function openDocumentForExport(
       state.furniture.set(mode, source);
     }
 
-    for (let pass = 0; pass < 64; pass += 1) {
+    for (let pass = 0; pass < MAX_CONVERGENCE_PASSES; pass += 1) {
       const observedEpoch = resourceEpoch;
       state.drawingBundle.sync(state.view);
-      if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
-        if (revisionRestarts >= 63) {
-          throw new ExportResourceError(
-            'nonConvergent',
-            'Document revision did not stabilize during export layout'
-          );
-        }
-        return runLayout(mode, revisionRestarts + 1, deadline);
-      }
+      const restartedBeforeLayout = restartOnRevisionDrift();
+      if (restartedBeforeLayout) return restartedBeforeLayout;
       const layout = layoutDocumentView({
         view: state.view,
         revision: state.view.packageRevision(),
@@ -491,15 +514,8 @@ export function openDocumentForExport(
         revisionAuthorFilter: undefined,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
-        if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
-          if (revisionRestarts >= 63) {
-            throw new ExportResourceError(
-              'nonConvergent',
-              'Document revision did not stabilize during export layout'
-            );
-          }
-          return runLayout(mode, revisionRestarts + 1, deadline);
-        }
+        const restartedBeforePublish = restartOnRevisionDrift();
+        if (restartedBeforePublish) return restartedBeforePublish;
         if (!reuseAcrossRevisions) {
           // Byte exports cannot relayout against a new revision. Drop construction-only caches
           // before review projection and immutable publication so large serverless exports do
@@ -522,30 +538,16 @@ export function openDocumentForExport(
         await waitForResourceChange(settlementEpoch, revision, pkg, deadline);
         settlementEpoch = resourceEpoch;
         assertActive();
-        if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
-          if (revisionRestarts >= 63) {
-            throw new ExportResourceError(
-              'nonConvergent',
-              'Document revision did not stabilize during export layout'
-            );
-          }
-          return runLayout(mode, revisionRestarts + 1, deadline);
-        }
+        const restartedDuringWait = restartOnRevisionDrift();
+        if (restartedDuringWait) return restartedDuringWait;
       }
       assertActive();
-      if (state.view.packageRevision() !== revision || state.view.currentPackage() !== pkg) {
-        if (revisionRestarts >= 63) {
-          throw new ExportResourceError(
-            'nonConvergent',
-            'Document revision did not stabilize during export layout'
-          );
-        }
-        return runLayout(mode, revisionRestarts + 1, deadline);
-      }
+      const restartedAfterWait = restartOnRevisionDrift();
+      if (restartedAfterWait) return restartedAfterWait;
     }
     throw new ExportResourceError(
       'nonConvergent',
-      'Image resources did not reach quiescence after 64 layout passes'
+      `Image resources did not reach quiescence after ${MAX_CONVERGENCE_PASSES} layout passes`
     );
   };
 
