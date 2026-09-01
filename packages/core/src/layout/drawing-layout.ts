@@ -489,9 +489,7 @@ export interface DrawingAnchorFrameContext {
    * header taller than the top margin pushes the body content box down, and a page-relative
    * anchor resolved against the authored margin then lands that difference too low (#274).
    *
-   * Header and footer stories keep passing their authored margin here — their own origin is
-   * the story box, and `hfAnchorOnPageSheet` cancels whatever this is for page-frame axes.
-   *
+   * HF stories keep authored page/landmark insets; attached pages supply effective margin frames.
    * The horizontal pair stays `marginLeft` / `marginRight` because nothing pushes the content
    * box sideways: `contentBox.x - box.x` is always the authored left margin. A future gutter
    * or binding offset would need its own inset field rather than a change of meaning here.
@@ -499,6 +497,7 @@ export interface DrawingAnchorFrameContext {
   readonly contentInsetTop: number;
   readonly contentInsetBottom: number;
   readonly contentWidth: number;
+  readonly verticalMarginFrame?: { readonly top: number; readonly height: number };
   /** Body flow height on the current page (may shrink for notes/HF reserves). */
   readonly contentHeight: number;
   /** Content band between the insets: pageHeight − contentInsetTop − contentInsetBottom. */
@@ -698,12 +697,14 @@ function verticalEdges(
   const pageBottomSheet = contentBandHeight + ctx.contentInsetBottom;
   const contentTop = 0;
   const contentBottom = ctx.contentHeight;
+  const marginTop = ctx.verticalMarginFrame?.top ?? contentTop;
+  const marginBottom = marginTop + (ctx.verticalMarginFrame?.height ?? ctx.contentHeight);
 
   switch (frame) {
     case 'page':
       return { top: pageTop, bottom: pageBottomSheet, center: (pageTop + pageBottomSheet) / 2 };
     case 'margin':
-      return { top: contentTop, bottom: contentBottom, center: contentTop + ctx.contentHeight / 2 };
+      return { top: marginTop, bottom: marginBottom, center: (marginTop + marginBottom) / 2 };
     case 'paragraph':
       return {
         top: ctx.paragraphBox.y,
@@ -1303,7 +1304,11 @@ export function publishAnchoredDrawingsForParagraph(options: {
       options.cellBox.height > 0 &&
       Number.isFinite(options.cellBox.width) &&
       options.cellBox.width > 0;
-    const clipRegion = clipToCell ? options.cellBox! : pageClipRegion(options.frameBase);
+    const pageClip =
+      projection.position?.vertical.relativeFrom === 'margin'
+        ? options.pageClip
+        : pageClipRegion(options.frameBase);
+    const clipRegion = clipToCell ? options.cellBox! : pageClip;
     const record = buildAnchoredDrawingRecord({
       input: Object.freeze({
         drawingNodeId: atom.atomId,

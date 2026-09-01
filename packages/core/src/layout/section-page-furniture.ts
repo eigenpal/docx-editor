@@ -8,7 +8,7 @@
 
 import type { FieldPageContext } from './field-page-furniture.ts';
 import { storyNeedsPageFields } from './field-projection.ts';
-import type { HeaderFooterStoryLayout } from './hf-layout.ts';
+import type { HeaderFooterLayoutPageContext, HeaderFooterStoryLayout } from './hf-layout.ts';
 import {
   headerFooterVariantFor,
   type HeaderFooterVariantName,
@@ -79,7 +79,7 @@ export function createSectionPageFurniture(
     // An absent variant shows nothing — Word falls back to blank, not to `default`.
     if (!story) return undefined;
     const place = (laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord => {
-      const y =
+      const storyY =
         kind === 'header'
           ? box.y + headerDistance
           : box.y + geometry.height - footerDistance - laid.flowHeight;
@@ -91,7 +91,7 @@ export function createSectionPageFurniture(
         ...(laid.rId ? { rId: laid.rId } : {}),
         box: {
           x: box.x + geometry.margin.left,
-          y,
+          y: storyY,
           width: inputs.contentWidth,
           height: laid.flowHeight,
         },
@@ -105,15 +105,33 @@ export function createSectionPageFurniture(
       pageCount: Math.max(pageNumber, inputs.pageCount() + 1),
       sectionPageCount: index + 1,
     };
+    const insets = inputs.insetsFor(index);
+    const layoutForPage = (fields: FieldPageContext): HeaderFooterStoryLayout => {
+      let laid = story;
+      for (let pass = 0; pass < 8; pass += 1) {
+        const storyTop =
+          kind === 'header' ? headerDistance : geometry.height - footerDistance - laid.flowHeight;
+        const context: HeaderFooterLayoutPageContext = {
+          ...fields,
+          contentInsetTop: insets.top,
+          contentInsetBottom: insets.bottom,
+          storyTop,
+        };
+        const next = story.withPageContext(context);
+        if (Math.abs(next.flowHeight - laid.flowHeight) <= 0.001) return next;
+        laid = next;
+      }
+      throw new Error('header/footer attached-page anchor layout did not converge');
+    };
     const needs = story.pageFieldNeeds;
     const needsPerPageLayout =
       storyNeedsPageFields(needs) || (story.anchoredDrawings?.length ?? 0) > 0;
-    const laid = needsPerPageLayout ? story.withPageContext(pageContext) : story;
+    const laid = needsPerPageLayout ? layoutForPage(pageContext) : story;
     const placed = place(laid);
     if (storyNeedsPageFields(needs)) {
       return {
         ...placed,
-        pageFieldProjector: (context) => place(story.withPageContext(context)),
+        pageFieldProjector: (context) => place(layoutForPage(context)),
       };
     }
     return placed;

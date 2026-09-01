@@ -76,6 +76,16 @@ export interface HeaderFooterPageContext {
   readonly marginBottom: number;
 }
 
+/** Per-sheet geometry needed to resolve header/footer anchors before wrap and clipping. */
+export interface HeaderFooterLayoutPageContext extends FieldPageContext {
+  /** Effective content-box inset after this page's header/footer reserves are applied. */
+  readonly contentInsetTop?: number;
+  /** Effective bottom content-box inset after footer reserve. */
+  readonly contentInsetBottom?: number;
+  /** Story-box top measured from the physical sheet top. */
+  readonly storyTop?: number;
+}
+
 export interface HeaderFooterStoryLayout {
   readonly partName: string;
   /**
@@ -110,12 +120,12 @@ export interface HeaderFooterStoryLayout {
   /** Anchored drawings owned by this story, in story-relative coordinates. */
   readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   /**
-   * Re-layout this story under a page-field context.
+   * Re-layout this story under page-field and optional attached-page geometry context.
    *
    * Field-free stories return `this`. Count-only stories cache by the counts they read.
    * PAGE stories cache by the distinct evaluated values (including format) with a bounded LRU.
    */
-  readonly withPageContext: (ctx: FieldPageContext) => HeaderFooterStoryLayout;
+  readonly withPageContext: (ctx: HeaderFooterLayoutPageContext) => HeaderFooterStoryLayout;
 }
 
 /** Memoized per immutable part: the fingerprint+hash walk is pure and parts never mutate. */
@@ -248,11 +258,20 @@ export function layoutHeaderFooterStory(
   );
   let baseline: HeaderFooterStoryLayout | undefined;
 
-  const layoutOnce = (ctx: FieldPageContext | undefined): HeaderFooterStoryLayout => {
+  const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
     const effectiveCtx = storyNeedsPageFields(needs) || inlineDrawingLayout ? ctx : undefined;
     const pageNumber = effectiveCtx?.pageNumber ?? hfPageContext?.pageNumber ?? 1;
+    const anchorPageToken =
+      inlineDrawingLayout &&
+      effectiveCtx?.contentInsetTop !== undefined &&
+      effectiveCtx.contentInsetBottom !== undefined &&
+      effectiveCtx.storyTop !== undefined
+        ? `|hf:${effectiveCtx.contentInsetTop},${effectiveCtx.contentInsetBottom},${effectiveCtx.storyTop}`
+        : '';
     const token =
-      fieldPageContextToken(effectiveCtx, needs) + (inlineDrawingLayout ? `|pn:${pageNumber}` : '');
+      fieldPageContextToken(effectiveCtx, needs) +
+      (inlineDrawingLayout ? `|pn:${pageNumber}` : '') +
+      anchorPageToken;
 
     if (token === '') {
       if (baseline) return baseline;
@@ -280,6 +299,18 @@ export function layoutHeaderFooterStory(
       const marginTop = hfPageContext?.marginTop ?? 0;
       const marginBottom = hfPageContext?.marginBottom ?? 0;
       const hfContentHeight = Math.max(1, pageHeight - marginTop - marginBottom);
+      const verticalMarginFrame =
+        effectiveCtx?.contentInsetTop !== undefined &&
+        effectiveCtx.contentInsetBottom !== undefined &&
+        effectiveCtx.storyTop !== undefined
+          ? Object.freeze({
+              top: effectiveCtx.contentInsetTop - effectiveCtx.storyTop,
+              height: Math.max(
+                1,
+                pageHeight - effectiveCtx.contentInsetTop - effectiveCtx.contentInsetBottom
+              ),
+            })
+          : undefined;
       return Object.freeze({
         pageNumber,
         pageWidth,
@@ -287,12 +318,14 @@ export function layoutHeaderFooterStory(
         marginLeft,
         marginRight,
         marginBottom,
-        // ON PURPOSE, unlike the body story: a header/footer frame keeps the AUTHORED margin
-        // here. Its origin is the story box, and `hfAnchorOnPageSheet` re-bases page-frame
-        // axes by subtracting `verticalFrameOrigin`, so this value cancels exactly.
+        // ON PURPOSE, unlike the body story: the established page/topMargin/bottomMargin
+        // frames keep the AUTHORED margin here. `hfAnchorOnPageSheet` re-bases page-frame
+        // axes by subtracting `verticalFrameOrigin`, so this value cancels exactly. The
+        // vertical margin frame above carries the effective content-box geometry separately.
         contentInsetTop: marginTop,
         contentInsetBottom: marginBottom,
         contentWidth,
+        ...(verticalMarginFrame ? { verticalMarginFrame } : {}),
         contentHeight: hfContentHeight,
         contentBandHeight: hfContentHeight,
         ownerPartName: part.name,
@@ -329,7 +362,17 @@ export function layoutHeaderFooterStory(
           ...(documentProperties ? { documentProperties } : {}),
           inlineDrawingLayout,
           anchorFrameBase,
-          pageContentClip: () => pageClipRegion(anchorFrameBase()),
+          pageContentClip: () => {
+            const frame = anchorFrameBase();
+            return effectiveCtx?.storyTop !== undefined
+              ? Object.freeze({
+                  x: -frame.marginLeft,
+                  y: -effectiveCtx.storyTop,
+                  width: frame.pageWidth,
+                  height: frame.pageHeight,
+                })
+              : pageClipRegion(frame);
+          },
           // Textbox stories flow with the SAME page-field context as the host story, so a
           // PAGE field inside an anchored footer text box evaluates per page like a direct
           // footer field. The context token already keys this cache entry.
