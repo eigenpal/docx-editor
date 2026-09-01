@@ -67,14 +67,14 @@ test('Markdown policy exhausts output-affecting unions as well as record fields'
   );
 });
 
-test('one-shot APIs forward the complete option object to translation', () => {
+test('one-shot APIs keep layout options out of record-only translation', () => {
   const oneShot = wrapperSource.slice(
     wrapperSource.indexOf('export async function exportMarkdown(')
   );
-  expect(oneShot).toContain('translateMarkdownLayout(layout, options)');
-  expect(oneShot).not.toMatch(/translateMarkdownLayout\([^)]*\{\s*image:/);
+  expect(oneShot).toContain('translateMarkdownLayout(layout)');
+  expect(oneShot).not.toContain('translateMarkdownLayout(layout, options)');
   expect(oneShot.indexOf('opened.session.dispose()')).toBeLessThan(
-    oneShot.indexOf('translateMarkdownLayout(layout, options)')
+    oneShot.indexOf('translateMarkdownLayout(layout)')
   );
 });
 

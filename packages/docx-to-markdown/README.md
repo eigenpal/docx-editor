@@ -56,21 +56,17 @@ openDocumentForExport(
 ): Promise<OpenMarkdownDocumentForExportResult>;
 
 exportMarkdownFrom(
-  session: MarkdownExportSession | ExportSession,
-  options?: MarkdownTranslationOptions
+  session: MarkdownExportSession | ExportSession
 ): Promise<MarkdownExportResult>;
 
-exportMarkdownLayout(
-  layout: ExportSemanticLayout,
-  options?: MarkdownTranslationOptions
-): MarkdownExportResult;
+exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult;
 ```
 
 `exportMarkdown` is the usual entry point. It disposes its producer session after layout and
 translates the detached immutable snapshot, keeping the one-shot memory lifecycle bounded.
 `openDocumentForExport` and `exportMarkdownFrom` are for workflows that need to reuse one settled
-layout, inspect semantic records, pre-process images, or share the same layout with another
-exporter. `exportMarkdownLayout` translates a snapshot after its session has been disposed.
+layout, inspect semantic records, or share the same layout with another exporter.
+`exportMarkdownLayout` translates a snapshot after its session has been disposed.
 
 ### Result shape
 
@@ -220,12 +216,11 @@ rejected view. There is no reviewer/author filtering in this API.
 
 ## Options
 
-`MarkdownExportOptions` combines layout/session options with the Markdown image callback.
+`MarkdownExportOptions` contains layout and resource controls for the export snapshot.
 
 | Option                  | Meaning                                                                                       |
 | ----------------------- | --------------------------------------------------------------------------------------------- |
 | `displayMode`           | Tracked-change projection: `all-markup` (default), `proposed`, or `original`.                 |
-| `image`                 | Synchronous mapping from a laid-out drawing to `{ url }` or `{ skip: true }`.                 |
 | `signal`                | Aborts resource waits and later layout work.                                                  |
 | `resourceTimeoutMs`     | Deadline applied separately to initial font provisioning and each layout resource wait.       |
 | `reuseAcrossRevisions`  | Retains state for live/caller-measured sessions; document-aware byte sessions reject `true`.  |
@@ -286,65 +281,17 @@ revisions; immutable byte sources default to one-shot cache ownership.
 
 If only one projection is needed, prefer `exportMarkdown(bytes)`. A reusable session deliberately
 retains source, resource, and alternate-display-mode state. To inspect or share a layout without
-retaining that producer state, finish any `validatedImageBytes` reads, dispose the session, then
-pass the already-published layout to `exportMarkdownLayout`. Published layouts are immutable
-snapshots and remain valid after disposal.
+retaining that producer state, dispose the session, then pass the already-published layout to
+`exportMarkdownLayout`. Published layouts are immutable snapshots and remain valid after disposal.
 
 ## Images
 
-Without an `image` mapper, a drawing emits only its escaped accessibility label. The mapper is
-synchronous. Upload or persist validated media before translation, then return a precomputed URL.
-Returning a Promise is rejected instead of emitting a broken destination.
-
-```ts
-import { mkdir, writeFile } from 'node:fs/promises';
-import {
-  exportMarkdownLayout,
-  forEachSemanticDrawing,
-  openDocumentForExport,
-} from '@docx-editor.dev/docx-to-markdown';
-
-const opened = await openDocumentForExport(bytes);
-if (!opened.ok) throw new Error(`DOCX was refused: ${opened.reason}`);
-
-const { layout, urls } = await (async () => {
-  try {
-    const layout = await opened.session.layout();
-    const urls = new WeakMap<object, string>();
-    const writes: Promise<void>[] = [];
-    let index = 0;
-
-    await mkdir('public/docx-media', { recursive: true });
-    forEachSemanticDrawing(layout, ({ drawing }) => {
-      const media = opened.session.validatedImageBytes(drawing);
-      if (!media) return;
-      const name = `image-${++index}.bin`;
-      urls.set(drawing, `/docx-media/${name}`);
-      writes.push(writeFile(`public/docx-media/${name}`, media));
-    });
-    await Promise.all(writes);
-    return { layout, urls };
-  } finally {
-    opened.session.dispose();
-  }
-})();
-
-const result = exportMarkdownLayout(layout, {
-  image: (drawing) => {
-    const url = urls.get(drawing);
-    return url ? { url } : { skip: true };
-  },
-});
-console.log(result.markdown);
-```
-
-`validatedImageBytes` returns a defensive copy only for a ready drawing belonging to that
-session. Choose a file extension from your own media pipeline; the example uses `.bin` only to
-avoid guessing a format.
-
-EMF, WMF, and TIFF remain labelled placeholders by default because Node cannot decode them
-without a format-specific dependency. `convertPreservedImage` receives the preserved MIME type,
-resource limits, and session abort signal.
+Image geometry participates in layout and therefore in page boundaries, but v1 deliberately omits
+image content from Markdown. The package does not expose an image URL callback or emit temporary
+browser URLs. This keeps the initial contract portable while a durable asset-manifest design is
+developed. When omission would fuse word-like text on either side of an inline drawing, the
+translator inserts one neutral space; punctuation is left untouched. Core image facilities remain
+exporter-neutral and available to future exporters.
 
 ## Errors and cancellation
 
@@ -509,7 +456,7 @@ Markdown is a semantic degradation:
 - GFM has no nested-table construct. Nested tables alone use plain inline `<table>`, `<tr>`,
   `<td>`, and `<th>` HTML on one line, so strict sanitizers (including GitHub's) keep the
   structure and inline Markdown inside each cell remains parseable.
-- Positioned anchored images are appended after their owning story body in stable record order.
+- Image content is omitted in v1, while image geometry still participates in page layout.
 - Anchored text-box text is omitted because it has no unambiguous linear position; comments and
   tracked changes inside it remain available as page artifacts with exact text-box provenance.
 - Office Math uses the core semantic equation fallback.
@@ -518,5 +465,5 @@ Markdown is a semantic degradation:
 
 Browser and headless export use the same core layout coordinator. Core projection and layout
 improvements therefore flow into Markdown automatically. Compile-time policy ratchets require a
-new semantic record field or kind to be represented or explicitly classified as callback-exposed,
-layout-only, or omitted; focused output tests remain the behavioral authority.
+new semantic record field or kind to be represented or explicitly classified as layout-only or
+omitted; focused output tests remain the behavioral authority.

@@ -87,39 +87,44 @@ export function PageReviewArtifacts({
             <span>Comments</span>
             <span>{comments.length}</span>
           </div>
-          {commentThreads.map(({ root: comment, replies }) => {
+          {commentThreads.map(({ root: comment, replies }, threadIndex) => {
             const selected = selectionFor(comment.id);
             return (
               <article key={`comment:${comment.id}`} className="md-review-thread">
-                <div className="md-review-selection">
-                  <span>{selected?.label ?? 'Markdown selection'}</span>
-                  {selected?.markdown ? (
-                    <MarkdownBlock>{selected.markdown}</MarkdownBlock>
-                  ) : (
-                    <p>
-                      Not represented in this Markdown page
-                      {selected?.unmappedReasons.length
-                        ? ` · ${selected.unmappedReasons.join(', ')}`
-                        : ''}
-                    </p>
-                  )}
-                </div>
                 <div className="md-review-message">
-                  <div>
+                  <div className="md-review-message__meta">
+                    <span className="md-review-pin" aria-label={`Comment ${threadIndex + 1}`}>
+                      {threadIndex + 1}
+                    </span>
                     <strong>{comment.author || 'Unknown author'}</strong>
-                    <span>{comment.resolved ? 'Resolved' : 'Open'}</span>
+                    <span className="md-review-state">
+                      {comment.resolved ? 'Resolved' : 'Open'}
+                    </span>
                   </div>
                   <p>{comment.text || 'Empty comment'}</p>
+                  <div className="md-review-selection">
+                    <span>{selected?.label ?? 'Markdown selection'}</span>
+                    {selected?.markdown ? (
+                      <MarkdownBlock>{selected.markdown}</MarkdownBlock>
+                    ) : (
+                      <p>
+                        Not represented in this Markdown page
+                        {selected?.unmappedReasons.length
+                          ? ` · ${selected.unmappedReasons.join(', ')}`
+                          : ''}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 {replies.map((reply) => (
                   <div
                     key={reply.comment.id}
                     className="md-review-message md-review-message--reply"
-                    style={{ marginLeft: Math.min(reply.depth, 4) * 18 }}
+                    style={{ marginLeft: Math.min(reply.depth, 4) * 12 }}
                   >
-                    <div>
+                    <div className="md-review-message__meta">
                       <strong>{reply.comment.author || 'Unknown author'}</strong>
-                      <span>Reply</span>
+                      <span className="md-review-state">Reply</span>
                     </div>
                     <p>{reply.comment.text || 'Empty reply'}</p>
                   </div>
@@ -135,20 +140,25 @@ export function PageReviewArtifacts({
             <span>Tracked changes</span>
             <span>{trackedChanges.length}</span>
           </div>
-          {trackedChanges.map((change) => {
+          {trackedChanges.map((change, changeIndex) => {
             const selected = selectionFor(change.id);
             return (
               <article key={`change:${change.id}`} className="md-review-thread">
-                <div className="md-review-selection">
-                  <span>{selected?.label ?? 'Markdown selection'}</span>
-                  {selected?.markdown ? <MarkdownBlock>{selected.markdown}</MarkdownBlock> : null}
-                </div>
                 <div className="md-review-message md-review-message--change">
-                  <div>
+                  <div className="md-review-message__meta">
+                    <span className="md-review-pin md-review-pin--change" aria-hidden="true">
+                      {changeIndex + 1}
+                    </span>
                     <strong>{change.author || 'Unknown author'}</strong>
-                    <span>{change.change.replace(/([A-Z])/g, ' $1')}</span>
+                    <span className="md-review-state">
+                      {change.change.replace(/([A-Z])/g, ' $1')}
+                    </span>
                   </div>
                   <p>{change.text || change.replacedText || 'Structural document change'}</p>
+                  <div className="md-review-selection">
+                    <span>{selected?.label ?? 'Markdown selection'}</span>
+                    {selected?.markdown ? <MarkdownBlock>{selected.markdown}</MarkdownBlock> : null}
+                  </div>
                 </div>
               </article>
             );

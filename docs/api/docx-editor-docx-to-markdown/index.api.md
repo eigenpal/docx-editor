@@ -146,10 +146,10 @@ export interface ExportFontResolutionReport {
 export function exportMarkdown(source: ExportDocumentSource, options?: MarkdownExportOptions): Promise<MarkdownExportResult>;
 
 // @public
-export function exportMarkdownFrom(session: ExportSession, options?: MarkdownTranslationOptions): Promise<MarkdownExportResult>;
+export function exportMarkdownFrom(session: ExportSession): Promise<MarkdownExportResult>;
 
 // @public
-export function exportMarkdownLayout(layout: ExportSemanticLayout, options?: MarkdownTranslationOptions): MarkdownExportResult;
+export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult;
 
 // @public
 export class ExportResourceError extends Error {
@@ -342,7 +342,7 @@ export interface LayoutBox {
 export type MarkdownComment = SemanticCommentArtifactRecord;
 
 // @public
-export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions, MarkdownTranslationOptions {
+export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions {
 }
 
 // @public
@@ -365,13 +365,6 @@ export type MarkdownFontOrigin = FontOrigin;
 
 // @public
 export type MarkdownFontsSource = MarkdownFontOrigin | readonly MarkdownFontOrigin[];
-
-// @public
-export type MarkdownImageResult = {
-    readonly url: string;
-} | {
-    readonly skip: true;
-};
 
 // @public
 export interface MarkdownPage {
@@ -438,11 +431,6 @@ export type MarkdownReviewUnmappedReason = 'not-represented-in-markdown' | 'non-
 
 // @public
 export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
-
-// @public
-export interface MarkdownTranslationOptions {
-    readonly image?: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => MarkdownImageResult;
-}
 
 // @public
 export function openDocumentForExport(source: ExportDocumentSource, options?: OpenMarkdownDocumentForExportOptions): Promise<OpenMarkdownDocumentForExportResult>;

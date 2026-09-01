@@ -19,11 +19,9 @@ implement a Markdown parser. Because GFM cannot represent a table inside another
 uses narrowly scoped inline HTML for nested tables; the demo's sanitizer admits only those known
 span classes and ARIA roles.
 
-Embedded pictures stay client-side. The demo opens a reusable export session, reads only
-Core-validated image bytes, deduplicates them by content identity, and maps drawings to revocable
-Blob URLs. The exporter emits ordinary `![alt](url)` Markdown. Blob URLs are appropriate for the
-live preview only; production callers should use the same image callback to return persisted URLs,
-data URLs, or paths in an exported asset directory.
+Pictures still participate in Core layout so page boundaries reflect their geometry, but this v1
+Markdown projection deliberately omits image content. A portable asset contract will be designed
+before image syntax becomes part of the package API.
 
 The demo uses the same font ordering as production export: packaged metric-compatible faces first,
 then the opt-in Google Fonts resolver for families declared by the current document. Both the editor

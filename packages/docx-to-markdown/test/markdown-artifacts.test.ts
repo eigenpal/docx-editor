@@ -466,17 +466,14 @@ test('binds represented drawings, marks omitted drawings honestly, and biases po
       ],
     } as unknown as SemanticLayout)
   );
-  expect(visible.markdown).toBe('AdiagramB');
+  expect(visible.markdown).toBe('A B');
   const visiblePageBindings = visible.reviewBindings.filter(
     (binding) => binding.projection.kind === 'page'
   );
-  const drawingRange = visiblePageBindings.find(
-    (binding) => binding.artifactId === 'drawing'
-  )?.ranges;
-  expect(drawingRange).toEqual([
-    { start: 1, end: 8, unit: 'utf16-code-unit', precision: 'containing-construct' },
-  ]);
-  expect(visible.markdown.slice(drawingRange?.[0]?.start, drawingRange?.[0]?.end)).toBe('diagram');
+  const drawingBinding = visiblePageBindings.find((binding) => binding.artifactId === 'drawing');
+  expect(drawingBinding?.ranges).toEqual([]);
+  expect(drawingBinding?.coverage).toBe('none');
+  expect(drawingBinding?.unmappedReason).toBe('not-represented-in-markdown');
   expect(
     visiblePageBindings.find((binding) => binding.artifactId === 'drawing-point')?.ranges
   ).toEqual([{ start: 1, end: 1, unit: 'utf16-code-unit', precision: 'exact' }]);
@@ -491,7 +488,7 @@ test('binds represented drawings, marks omitted drawings honestly, and biases po
       ],
     } as unknown as SemanticLayout)
   );
-  expect(omitted.markdown).toBe('AB');
+  expect(omitted.markdown).toBe('A B');
   const omittedBindings = omitted.reviewBindings.filter(
     (binding) => binding.artifactId === 'omitted-drawing'
   );
@@ -508,8 +505,9 @@ test('binds represented drawings, marks omitted drawings honestly, and biases po
   expect(
     mixedBindings.every(
       (binding) =>
-        binding.ranges.length === 1 &&
-        omitted.markdown.slice(binding.ranges[0]!.start, binding.ranges[0]!.end) === 'AB'
+        binding.ranges.length === 2 &&
+        binding.ranges.map((range) => omitted.markdown.slice(range.start, range.end)).join('') ===
+          'AB'
     )
   ).toBe(true);
 

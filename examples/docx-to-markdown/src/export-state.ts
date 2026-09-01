@@ -4,10 +4,7 @@ export function canCopyExport(status: ExportStatus, hasResult: boolean): boolean
   return status === 'ready' && hasResult;
 }
 
-/** Return only the durable copy projection; preview Blob URLs never enter the clipboard. */
-export function copyableMarkdown(
-  status: ExportStatus,
-  portableMarkdown: string | null
-): string | null {
-  return canCopyExport(status, portableMarkdown !== null) ? portableMarkdown : null;
+/** Return the last complete full-document Markdown projection. */
+export function copyableMarkdown(status: ExportStatus, markdown: string | null): string | null {
+  return canCopyExport(status, markdown !== null) ? markdown : null;
 }

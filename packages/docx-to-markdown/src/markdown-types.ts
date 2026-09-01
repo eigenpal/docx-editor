@@ -1,4 +1,3 @@
-import type { AnchoredDrawingRecord, InlineDrawingRecord } from '@docx-editor.dev/core/layout';
 import type {
   ExportFontResolutionReport,
   ExportSemanticLayout,
@@ -58,21 +57,6 @@ export interface MarkdownExportResult {
   readonly markdown: string;
 }
 
-/** Caller decision for a laid-out image. @public */
-export type MarkdownImageResult = { readonly url: string } | { readonly skip: true };
-
-/** Translation-only controls over already-published layout records. @public */
-export interface MarkdownTranslationOptions {
-  /**
-   * Map a laid-out drawing to a destination. Without a mapper (or when skipped), only its
-   * escaped accessibility label is emitted. This callback is synchronous: perform uploads
-   * first and return a precomputed URL. Reading validated bytes requires a live reusable
-   * session; copy or upload them before disposal, then this mapper can translate its detached
-   * immutable layout using the retained drawing-to-URL mapping.
-   */
-  readonly image?: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => MarkdownImageResult;
-}
-
 /** One caller-controlled font origin used for headless pagination. @public */
 export type MarkdownFontOrigin = FontOrigin;
 
@@ -109,6 +93,5 @@ export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExp
   readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
 }
 
-/** One-shot options combine neutral layout provisioning with translation. @public */
-export interface MarkdownExportOptions
-  extends OpenMarkdownDocumentForExportOptions, MarkdownTranslationOptions {}
+/** Layout and resource controls for one-shot Markdown export. @public */
+export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions {}

@@ -22,7 +22,7 @@ async function exportMarkdown(
   const opened = openDocumentForExport(source, options);
   if (!opened.ok) throw new Error(opened.reason);
   try {
-    return await exportMarkdownFrom(opened.session, options);
+    return await exportMarkdownFrom(opened.session);
   } finally {
     opened.session.dispose();
   }
@@ -136,7 +136,7 @@ describe('record-only Markdown export', () => {
     expect(exportMarkdownLayout(layout).markdown).toBe('Detached');
   });
 
-  test('translates preprocessed images from a detached layout after disposal', async () => {
+  test('keeps image geometry in detached layouts while omitting image Markdown', async () => {
     const opened = openDocumentForExport(imageDocx());
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
@@ -146,16 +146,10 @@ describe('record-only Markdown export', () => {
     if (paragraph?.kind !== 'paragraph') return;
     const drawing = paragraph.lines.flatMap((line) => line.drawings ?? [])[0]!;
     expect(opened.session.validatedImageBytes(drawing)?.[0]).toBe(0x89);
-    const urls = new WeakMap<object, string>([[drawing, 'https://cdn.example/detached.png']]);
     opened.session.dispose();
 
-    const rendered = exportMarkdownLayout(layout, {
-      image: (candidate) => {
-        const url = urls.get(candidate);
-        return url ? { url } : { skip: true };
-      },
-    });
-    expect(rendered.markdown).toContain('![Diagram](https://cdn.example/detached.png)');
+    const rendered = exportMarkdownLayout(layout);
+    expect(rendered.markdown).not.toContain('Diagram');
   });
 
   test('translates real OMML through the published equation fallback', async () => {
@@ -371,15 +365,10 @@ describe('record-only Markdown export', () => {
           },
         }
       ),
-      {
-        displayMode: 'all-markup',
-        image: () => ({ url: 'https://cdn.example/diagram.png' }),
-      }
+      { displayMode: 'all-markup' }
     );
     expect(result.markdown).toContain('*C*[^1]*D*');
-    expect(result.markdown).toContain(
-      '~~E~~<del>![Diagram](https://cdn.example/diagram.png)</del>~~F~~'
-    );
+    expect(result.markdown).toContain('~~E~~ ~~F~~');
     const html = micromark(result.markdown, {
       extensions: [gfm()],
       htmlExtensions: [gfmHtml()],
@@ -387,9 +376,7 @@ describe('record-only Markdown export', () => {
     });
     expect(html).toContain('<em>C</em><sup>');
     expect(html).toContain('</sup><em>D</em>');
-    expect(html).toContain(
-      '<p><del>E</del><del><img src="https://cdn.example/diagram.png" alt="Diagram" /></del><del>F</del></p>'
-    );
+    expect(html).toContain('<p><del>E</del> <del>F</del></p>');
   });
 
   test('reuses one settled layout and returns typed refusals for bad bytes', async () => {
@@ -796,15 +783,8 @@ describe('record-only Markdown export', () => {
       first[0] = 0;
       const second = opened.session.validatedImageBytes(drawing)!;
       expect(second[0]).toBe(0x89);
-      const rendered = await exportMarkdownFrom(opened.session, {
-        image: () => ({ url: 'https://cdn.example/image\\folder (1).png' }),
-      });
-      expect(rendered.markdown).toContain(
-        '![Diagram](https://cdn.example/image%5Cfolder%20%281%29.png)'
-      );
-      expect(
-        micromark(rendered.markdown, { extensions: [gfm()], htmlExtensions: [gfmHtml()] })
-      ).toContain('<img src="https://cdn.example/image%5Cfolder%20%281%29.png" alt="Diagram" />');
+      const rendered = await exportMarkdownFrom(opened.session);
+      expect(rendered.markdown).not.toContain('Diagram');
     } finally {
       opened.session.dispose();
     }
@@ -881,45 +861,14 @@ describe('record-only Markdown export', () => {
     }
   });
 
-  test('maps each drawing once across logical and page projections', async () => {
+  test('omits drawings from logical and page projections', async () => {
     const opened = openDocumentForExport(imageDocx());
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
     try {
-      let calls = 0;
-      const rendered = await exportMarkdownFrom(opened.session, {
-        image: () => {
-          calls += 1;
-          return { url: 'https://cdn.example/image.png' };
-        },
-      });
-      expect(rendered.markdown).toContain('image.png');
-      expect(rendered.pages[0]?.markdown).toContain('image.png');
-      expect(calls).toBe(1);
-      await expect(
-        exportMarkdownFrom(opened.session, {
-          image: (() => Promise.resolve({ url: 'late.png' })) as never,
-        })
-      ).rejects.toThrow('must return synchronously');
-      const unhandled: unknown[] = [];
-      const onUnhandled = (reason: unknown) => unhandled.push(reason);
-      process.on('unhandledRejection', onUnhandled);
-      try {
-        await expect(
-          exportMarkdownFrom(opened.session, {
-            image: (async () => {
-              throw new Error('upload failed');
-            }) as never,
-          })
-        ).rejects.toThrow('must return synchronously');
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
-        expect(unhandled).toEqual([]);
-      } finally {
-        process.off('unhandledRejection', onUnhandled);
-      }
-      await expect(
-        exportMarkdownFrom(opened.session, { image: (() => undefined) as never })
-      ).rejects.toThrow('must return { url: string } or { skip: true }');
+      const rendered = await exportMarkdownFrom(opened.session);
+      expect(rendered.markdown).not.toContain('Diagram');
+      expect(rendered.pages[0]?.markdown).not.toContain('Diagram');
     } finally {
       opened.session.dispose();
     }
@@ -936,22 +885,13 @@ describe('record-only Markdown export', () => {
     const second = openDocumentForExport(prepared.view, { imageDecodePort: decodePort });
     expect(first.ok && second.ok).toBe(true);
     if (!first.ok || !second.ok) return;
-    await first.session.layout();
-    await second.session.layout();
-    let firstDrawing: Parameters<typeof first.session.validatedImageBytes>[0] | undefined;
-    let secondDrawing: Parameters<typeof second.session.validatedImageBytes>[0] | undefined;
-    await exportMarkdownFrom(first.session, {
-      image: (drawing) => {
-        firstDrawing = drawing;
-        return { url: 'first.png' };
-      },
-    });
-    await exportMarkdownFrom(second.session, {
-      image: (drawing) => {
-        secondDrawing = drawing;
-        return { url: 'second.png' };
-      },
-    });
+    const firstLayout = await first.session.layout();
+    const secondLayout = await second.session.layout();
+    const firstFragment = firstLayout.pages[0]?.fragments[0];
+    const secondFragment = secondLayout.pages[0]?.fragments[0];
+    if (firstFragment?.kind !== 'paragraph' || secondFragment?.kind !== 'paragraph') return;
+    const firstDrawing = firstFragment.lines.flatMap((line) => line.drawings ?? [])[0];
+    const secondDrawing = secondFragment.lines.flatMap((line) => line.drawings ?? [])[0];
     expect(firstDrawing).toBeDefined();
     expect(secondDrawing).toBeDefined();
     if (!firstDrawing || !secondDrawing) return;

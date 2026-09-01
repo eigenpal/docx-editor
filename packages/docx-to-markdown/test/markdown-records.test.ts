@@ -134,11 +134,9 @@ describe('Markdown semantic-record policies', () => {
       pages: [{ index: 0, fragments: [merged] }],
     } as unknown as SemanticLayout;
 
-    const result = await exportMarkdownFrom(session(layout), {
-      image: () => ({ url: 'image.png' }),
-    });
+    const result = await exportMarkdownFrom(session(layout));
 
-    expect(result.markdown).toBe('A![X](image.png)');
+    expect(result.markdown).toBe('A');
   });
 
   test('emits Office Math fallback text rather than the atomic object marker', async () => {
@@ -159,7 +157,7 @@ describe('Markdown semantic-record policies', () => {
     expect(result.markdown).not.toContain('\uFFFC');
   });
 
-  test('keeps positioned media in full, page, header, and footer output but omits textboxes', async () => {
+  test('omits positioned media and textboxes from Markdown projections', async () => {
     const layout = {
       revision: 1,
       displayMode: 'original',
@@ -174,14 +172,14 @@ describe('Markdown semantic-record policies', () => {
       ],
     } as unknown as SemanticLayout;
     const result = await exportMarkdownFrom(session(layout));
-    expect(result.markdown).toContain('Body anchor');
-    expect(result.pages[0]?.markdown).toContain('Body anchor');
-    expect(result.pages[0]?.headerMarkdown).toBe('Header anchor');
-    expect(result.pages[0]?.footerMarkdown).toBe('Footer anchor');
-    expect(JSON.stringify(result)).not.toContain('Textbox');
+    expect(result.markdown).toBe('Body');
+    expect(result.pages[0]?.markdown).toBe('Body');
+    expect(result.pages[0]?.headerMarkdown).toBe('');
+    expect(result.pages[0]?.footerMarkdown).toBe('');
+    expect(JSON.stringify(result)).not.toMatch(/Body anchor|Header anchor|Footer anchor|Textbox/);
   });
 
-  test('represents sanitized drawing links and deletion attribution', async () => {
+  test('does not leak drawing links or revision wrappers when images are omitted', async () => {
     const drawing = {
       ...anchor('Linked image'),
       hyperlinkHref: 'https://example.com/a(b)',
@@ -193,11 +191,9 @@ describe('Markdown semantic-record policies', () => {
       pages: [{ index: 0, fragments: [], anchoredDrawings: [drawing] }],
     } as unknown as SemanticLayout;
 
-    const result = await exportMarkdownFrom(session(layout), {
-      image: () => ({ url: 'image.png' }),
-    });
+    const result = await exportMarkdownFrom(session(layout));
 
-    expect(result.markdown).toBe('~~[![Linked image](image.png)](https://example.com/a%28b%29)~~');
+    expect(result.markdown).toBe('');
   });
 
   test('indexes repeated header and footer tables per page occurrence', async () => {

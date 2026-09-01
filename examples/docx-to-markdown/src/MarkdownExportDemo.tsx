@@ -5,9 +5,7 @@ import { DocxEditorReview } from '@docx-editor.dev/pro/react';
 import { packagedFonts } from '@docx-editor.dev/fonts';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 import {
-  exportMarkdownLayout,
-  forEachSemanticDrawing,
-  openDocumentForExport,
+  exportMarkdown,
   type ExportFontResolutionReport,
   type MarkdownComment,
   type MarkdownExportResult,
@@ -15,9 +13,9 @@ import {
 } from '@docx-editor.dev/docx-to-markdown';
 import { BrandLogo } from '../../shared/BrandLogo';
 import { canCopyExport, copyableMarkdown, type ExportStatus } from './export-state';
+import { developerPanelContent, type DeveloperPanelTab } from './developer-reference';
 import { createLatestOperationGate } from './latest-operation';
 import { MarkdownBlock } from './MarkdownBlock';
-import { replaceObjectUrls, revokeObjectUrls } from './object-url-lifecycle';
 import { PageReviewArtifacts } from './PageReviewArtifacts';
 import { indexPageReviewSelections, type PageReviewSelectionIndex } from './review-presentation';
 import {
@@ -43,8 +41,6 @@ interface ExportViewState {
   readonly result: MarkdownExportResult | null;
   readonly error: string | null;
   readonly fontReport: ExportFontResolutionReport | null;
-  readonly portableMarkdown: string | null;
-  readonly hasImages: boolean;
 }
 
 const EMPTY_EXPORT: ExportViewState = {
@@ -52,8 +48,6 @@ const EMPTY_EXPORT: ExportViewState = {
   result: null,
   error: null,
   fontReport: null,
-  portableMarkdown: null,
-  hasImages: false,
 };
 
 function UploadIcon() {
@@ -89,6 +83,76 @@ function SettingsIcon() {
 
 function Spinner() {
   return <span className="md-spinner" aria-hidden="true" />;
+}
+
+function DeveloperPanel({
+  tab,
+  result,
+  status,
+  error,
+  onTabChange,
+  onClose,
+}: {
+  readonly tab: DeveloperPanelTab;
+  readonly result: MarkdownExportResult | null;
+  readonly status: ExportStatus;
+  readonly error: string | null;
+  readonly onTabChange: (tab: DeveloperPanelTab) => void;
+  readonly onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (dialog.current?.open === false) dialog.current.showModal();
+  }, []);
+  const requestClose = () => dialog.current?.close();
+  const content = developerPanelContent(tab, result, status, error);
+  return (
+    <dialog
+      ref={dialog}
+      className="md-developer-dialog"
+      aria-labelledby="developer-panel-title"
+      onClose={onClose}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) requestClose();
+      }}
+    >
+      <section className="md-developer-panel" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="md-developer-panel__header">
+          <div>
+            <strong id="developer-panel-title">Use the export API</strong>
+            <span>One call returns logical and page-aware Markdown.</span>
+          </div>
+          <button
+            type="button"
+            className="md-developer-close"
+            onClick={requestClose}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </header>
+        <div className="md-developer-tabs" role="group" aria-label="Developer reference">
+          <button
+            type="button"
+            aria-pressed={tab === 'example'}
+            onClick={() => onTabChange('example')}
+          >
+            Code example
+          </button>
+          <button
+            type="button"
+            aria-pressed={tab === 'response'}
+            onClick={() => onTabChange('response')}
+          >
+            Live API response
+          </button>
+        </div>
+        <pre className="md-developer-code" tabIndex={0}>
+          <code>{content}</code>
+        </pre>
+      </section>
+    </dialog>
+  );
 }
 
 function PageField({
@@ -127,6 +191,7 @@ function MarkdownPagePreview({
   showFooters,
   showComments,
   showTrackedChanges,
+  onRevealDocumentPage,
 }: {
   readonly page: MarkdownPage;
   readonly commentById: ReadonlyMap<string, MarkdownComment>;
@@ -136,11 +201,16 @@ function MarkdownPagePreview({
   readonly showFooters: boolean;
   readonly showComments: boolean;
   readonly showTrackedChanges: boolean;
+  readonly onRevealDocumentPage: (pageNumber: number) => void;
 }) {
+  const revealPage = () => onRevealDocumentPage(page.number);
   return (
     <article className="md-page-wrap" id={`markdown-page-${page.number}`}>
       <div className="md-page-meta">
-        <span>Page {page.number}</span>
+        <button type="button" onClick={revealPage}>
+          <span>Page {page.number}</span>
+          <span className="md-page-meta__action">View in DOCX</span>
+        </button>
       </div>
       <div className="md-page-sheet">
         {showHeaders ? (
@@ -193,7 +263,6 @@ export function MarkdownExportDemo() {
   const exportTimer = useRef<number | null>(null);
   const exportController = useRef<AbortController | null>(null);
   const sourceLoadController = useRef<AbortController | null>(null);
-  const imageObjectUrls = useRef<readonly string[]>([]);
   const dragDepth = useRef(0);
   const copiedTimer = useRef<number | null>(null);
   const [operations] = useState(createLatestOperationGate);
@@ -214,6 +283,8 @@ export function MarkdownExportDemo() {
   const [showTrackedChanges, setShowTrackedChanges] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [developerPanelOpen, setDeveloperPanelOpen] = useState(false);
+  const [developerPanelTab, setDeveloperPanelTab] = useState<DeveloperPanelTab>('example');
 
   const revealMarkdownPage = useCallback((pageNumber: number) => {
     const scroller = previewScroll.current;
@@ -226,6 +297,14 @@ export function MarkdownExportDemo() {
     scroller.scrollTo({
       top: target,
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+  }, []);
+
+  const revealDocumentPage = useCallback((pageNumber: number) => {
+    latestEditorPage.current = pageNumber;
+    setMobilePane('source');
+    window.requestAnimationFrame(() => {
+      editor.current?.getEditor()?.scrollToPage(pageNumber);
     });
   }, []);
 
@@ -282,10 +361,9 @@ export function MarkdownExportDemo() {
       const controller = new AbortController();
       exportController.current = controller;
       let fontReport: ExportFontResolutionReport | null = null;
-      const nextImageUrls: string[] = [];
       setExportView((current) => ({ ...current, status: 'exporting', error: null }));
       try {
-        const opened = await openDocumentForExport(bytes, {
+        const result = await exportMarkdown(bytes, {
           fallbackFonts: GOOGLE_FONT_FALLBACK,
           resourceTimeoutMs: 30_000,
           signal: controller.signal,
@@ -293,64 +371,15 @@ export function MarkdownExportDemo() {
             fontReport = report;
           },
         });
-        if (!opened.ok) {
-          throw new Error(
-            `Unable to open DOCX for export: ${opened.reason}${opened.detail ? ` (${opened.detail})` : ''}`
-          );
-        }
-        fontReport = opened.session.fontResolution;
-
-        const imageUrls = new WeakMap<object, string>();
-        const urlByContent = new Map<string, string>();
-        let result: MarkdownExportResult;
-        let portableMarkdown: string;
-        try {
-          const layout = await opened.session.layout();
-          forEachSemanticDrawing(layout, ({ drawing }) => {
-            if (drawing.resource.kind !== 'ready') return;
-            let url = urlByContent.get(drawing.resource.contentId);
-            if (!url) {
-              const media = opened.session.validatedImageBytes(drawing);
-              if (!media) return;
-              const bytesForBlob = new Uint8Array(media).buffer;
-              url = URL.createObjectURL(new Blob([bytesForBlob], { type: drawing.resource.mime }));
-              urlByContent.set(drawing.resource.contentId, url);
-              nextImageUrls.push(url);
-            }
-            imageUrls.set(drawing, url);
-          });
-          const previewResult = exportMarkdownLayout(layout, {
-            image: (drawing) => {
-              const url = imageUrls.get(drawing);
-              return url ? { url } : { skip: true };
-            },
-          });
-          result = Object.freeze({
-            ...previewResult,
-            fontResolution: opened.session.fontResolution,
-          });
-          portableMarkdown = exportMarkdownLayout(layout, {
-            image: () => ({ skip: true }),
-          }).markdown;
-        } finally {
-          opened.session.dispose();
-        }
-
-        if (!operations.isCurrent(operation)) {
-          revokeObjectUrls(nextImageUrls);
-          return;
-        }
-        imageObjectUrls.current = replaceObjectUrls(imageObjectUrls.current, nextImageUrls);
+        fontReport = result.fontResolution;
+        if (!operations.isCurrent(operation)) return;
         setExportView({
           status: 'ready',
           result,
           error: null,
           fontReport,
-          portableMarkdown,
-          hasImages: urlByContent.size > 0,
         });
       } catch (error) {
-        revokeObjectUrls(nextImageUrls);
         if (controller.signal.aborted || !operations.isCurrent(operation)) return;
         setExportView((current) => ({
           ...current,
@@ -406,8 +435,6 @@ export function MarkdownExportDemo() {
       operations.invalidate();
       sourceLoadController.current?.abort('demo unmounted');
       exportController.current?.abort('demo unmounted');
-      revokeObjectUrls(imageObjectUrls.current);
-      imageObjectUrls.current = [];
       if (exportTimer.current !== null) window.clearTimeout(exportTimer.current);
       if (copiedTimer.current !== null) window.clearTimeout(copiedTimer.current);
     };
@@ -484,7 +511,7 @@ export function MarkdownExportDemo() {
   }, [beginOperation, operations, runExport]);
 
   const copyMarkdown = useCallback(() => {
-    const markdown = copyableMarkdown(exportView.status, exportView.portableMarkdown);
+    const markdown = copyableMarkdown(exportView.status, exportView.result?.markdown ?? null);
     if (markdown === null) return;
     void navigator.clipboard
       .writeText(markdown)
@@ -494,7 +521,7 @@ export function MarkdownExportDemo() {
         copiedTimer.current = window.setTimeout(() => setCopied(false), 1_500);
       })
       .catch((error) => console.warn(`[clipboard] ${errorMessage(error)}`));
-  }, [exportView.portableMarkdown, exportView.status]);
+  }, [exportView.result, exportView.status]);
 
   const fontStatus = coverageLabel(exportView.fontReport);
   const commentById = useMemo(() => {
@@ -513,7 +540,7 @@ export function MarkdownExportDemo() {
     [exportView.result]
   );
   const busy = exportView.status === 'queued' || exportView.status === 'exporting';
-  const canCopy = canCopyExport(exportView.status, exportView.portableMarkdown !== null);
+  const canCopy = canCopyExport(exportView.status, exportView.result !== null);
   const exportStatusLabel =
     exportView.status === 'queued'
       ? 'Waiting for your pause'
@@ -691,28 +718,26 @@ export function MarkdownExportDemo() {
               </div>
             </details>
           </div>
-          <button
-            type="button"
-            className="md-icon-button md-copy-action"
-            onClick={copyMarkdown}
-            disabled={!canCopy}
-            aria-label={
-              copied
-                ? 'Markdown copied'
-                : exportView.hasImages
-                  ? 'Copy full-document Markdown with image labels'
-                  : 'Copy full-document Markdown'
-            }
-            title={
-              copied
-                ? 'Copied'
-                : exportView.hasImages
-                  ? 'Copy Markdown (image labels only)'
-                  : 'Copy Markdown'
-            }
-          >
-            <CopyIcon copied={copied} />
-          </button>
+          <div className="md-preview-actions">
+            <button
+              type="button"
+              className="md-code-action"
+              onClick={() => setDeveloperPanelOpen(true)}
+            >
+              <span aria-hidden="true">{'</>'}</span>
+              Code
+            </button>
+            <button
+              type="button"
+              className="md-icon-button md-copy-action"
+              onClick={copyMarkdown}
+              disabled={!canCopy}
+              aria-label={copied ? 'Markdown copied' : 'Copy full-document Markdown'}
+              title={copied ? 'Copied' : 'Copy Markdown'}
+            >
+              <CopyIcon copied={copied} />
+            </button>
+          </div>
         </div>
       </header>
       <span className="md-visually-hidden" role="status" aria-live="polite">
@@ -853,6 +878,7 @@ export function MarkdownExportDemo() {
                     showFooters={showFooters}
                     showComments={showComments}
                     showTrackedChanges={showTrackedChanges}
+                    onRevealDocumentPage={revealDocumentPage}
                   />
                 ))}
               </div>
@@ -876,6 +902,16 @@ export function MarkdownExportDemo() {
             <span>Document bytes stay local; missing fonts may load from a pinned CDN.</span>
           </div>
         </div>
+      ) : null}
+      {developerPanelOpen ? (
+        <DeveloperPanel
+          tab={developerPanelTab}
+          result={exportView.status === 'ready' ? exportView.result : null}
+          status={exportView.status}
+          error={exportView.error}
+          onTabChange={setDeveloperPanelTab}
+          onClose={() => setDeveloperPanelOpen(false)}
+        />
       ) : null}
     </div>
   );

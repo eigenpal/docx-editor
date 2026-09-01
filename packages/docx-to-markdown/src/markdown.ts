@@ -3,7 +3,6 @@
 import {
   forEachSemanticStory,
   lineSegments,
-  revisionsAreDeletion,
   type AnchoredDrawingRecord,
   type BlockFragmentRecord,
   type InlineDrawingRecord,
@@ -15,7 +14,6 @@ import {
 } from '@docx-editor.dev/core/layout';
 import type { ExportSemanticLayout, ExportSession } from '@docx-editor.dev/core/export';
 import {
-  escapeText,
   markdownSourceCaptureKey,
   MarkdownInlineWriter,
   type MarkdownTextToken,
@@ -54,19 +52,12 @@ import {
   EMPTY_NOTE_STORIES,
   type NoteProjection,
 } from './markdown-notes.ts';
-import type {
-  MarkdownExportResult,
-  MarkdownImageResult,
-  MarkdownPage,
-  MarkdownTranslationOptions,
-} from './markdown-types.ts';
+import type { MarkdownExportResult, MarkdownPage } from './markdown-types.ts';
 export type {
   MarkdownExportOptions,
   MarkdownExportResult,
-  MarkdownImageResult,
   MarkdownPage,
   MarkdownPaginationInfo,
-  MarkdownTranslationOptions,
 } from './markdown-types.ts';
 
 const EMPTY_REVIEW_ARTIFACTS = Object.freeze([]);
@@ -98,63 +89,21 @@ function markdownSourceScope(
   }
 }
 
-function mappedImageResult(value: unknown): MarkdownImageResult {
-  if (typeof value === 'object' && value !== null) {
-    if ('then' in value && typeof value.then === 'function') {
-      // Observe a mistaken async mapper's settlement before rejecting the synchronous contract.
-      // This prevents an already-rejected Promise from becoming a process-level unhandled rejection.
-      void Promise.resolve(value as PromiseLike<unknown>).catch(() => undefined);
-      throw new TypeError(
-        'Markdown image mapper must return synchronously; upload media and precompute URLs before translation'
-      );
-    }
-    if ('skip' in value && value.skip === true) return { skip: true };
-    if ('url' in value && typeof value.url === 'string') return { url: value.url };
-  }
-  throw new TypeError('Markdown image mapper must return { url: string } or { skip: true }');
-}
-
 function drawingContentMarkdown(
-  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
-  context: TranslationContext
+  _drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  _context: TranslationContext
 ): string {
-  const label = escapeText(
-    drawing.accessibility.label ?? '',
-    context.tableCell || context.hardBreakHtml === true
-  );
-  const mapper = context.options.image;
-  let mapped = context.imageResultByDrawing.get(drawing);
-  if (mapper && !context.imageResultByDrawing.has(drawing)) {
-    mapped = mappedImageResult(mapper(drawing));
-    context.imageResultByDrawing.set(drawing, mapped);
-  }
-  let markdown = !mapped || 'skip' in mapped ? label : `![${label}](${destination(mapped.url)})`;
-  if (markdown.length === 0) return markdown;
-  if (drawing.hyperlinkHref) markdown = `[${markdown}](${destination(drawing.hyperlinkHref)})`;
-  return markdown;
-}
-
-function drawingIsDeleted(
-  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
-  context: TranslationContext
-): boolean {
-  return (
-    context.displayMode === 'all-markup' &&
-    drawing.revisions !== undefined &&
-    revisionsAreDeletion(drawing.revisions)
-  );
+  // Drawings still participate in Core layout so page boundaries remain faithful, but v1 does
+  // not project them into Markdown. Image transport and presentation need a stronger portable
+  // asset contract than ad-hoc URLs before they become part of this package's public output.
+  return '';
 }
 
 function drawingMarkdown(
   drawing: InlineDrawingRecord | AnchoredDrawingRecord,
   context: TranslationContext
 ): string {
-  let markdown = drawingContentMarkdown(drawing, context);
-  if (markdown.length === 0) return markdown;
-  if (drawingIsDeleted(drawing, context)) {
-    markdown = `~~${markdown}~~`;
-  }
-  return markdown;
+  return drawingContentMarkdown(drawing, context);
 }
 
 function capturesParagraph(context: TranslationContext, paragraphId: string): boolean {
@@ -297,11 +246,10 @@ function writeSpanAtoms(
     const atom = atoms[index]!;
     if (atom.kind === 'drawing') {
       const drawing = drawingContentMarkdown(atom.drawing, context);
-      const markdown =
-        drawing.length > 0 && drawingIsDeleted(atom.drawing, context)
-          ? `<del>${drawing}</del>`
-          : drawing;
-      writer.writeMappedBoundary(mappedDrawingMarkdown(atom.drawing, context, markdown));
+      writer.writeMappedBoundary(mappedDrawingMarkdown(atom.drawing, context, drawing));
+      if (drawing.length === 0 && omittedDrawingNeedsBoundary(atoms, index)) {
+        writer.writeBoundary(' ');
+      }
       continue;
     }
     const paragraphId = atom.span.range.paragraphId;
@@ -360,6 +308,19 @@ function writeSpanAtoms(
   }
 }
 
+function atomText(atom: MarkdownAtom | undefined): string {
+  return atom?.kind === 'span' ? sourceTextOf(atom.span) : '';
+}
+
+function omittedDrawingNeedsBoundary(atoms: readonly MarkdownAtom[], index: number): boolean {
+  if (atoms[index - 1]?.kind === 'drawing') return false;
+  let nextIndex = index + 1;
+  while (atoms[nextIndex]?.kind === 'drawing') nextIndex += 1;
+  const before = atomText(atoms[index - 1]);
+  const after = atomText(atoms[nextIndex]);
+  return /[\p{L}\p{N}_]\p{M}*$/u.test(before) && /^[\p{L}\p{N}_]\p{M}*/u.test(after);
+}
+
 type MarkdownAtom =
   | {
       readonly kind: 'span';
@@ -390,12 +351,13 @@ function paragraphBody(
   context: TranslationContext
 ): MappedMarkdown {
   const writer = new MarkdownInlineWriter(context);
+  const atoms: MarkdownAtom[] = [];
   for (const fragment of fragments) {
     for (const line of fragment.lines) {
-      for (const segment of lineSegments(line))
-        writeSpanAtoms(markdownAtoms(segment), context, writer);
+      for (const segment of lineSegments(line)) atoms.push(...markdownAtoms(segment));
     }
   }
+  writeSpanAtoms(atoms, context, writer);
   return writer.finishMapped();
 }
 
@@ -716,10 +678,7 @@ function withDefinitions(markdown: MappedMarkdown, definitions: MappedMarkdown):
 }
 
 /** Translate an immutable exporter-neutral layout snapshot without retaining its producer. @public */
-export function exportMarkdownLayout(
-  layout: ExportSemanticLayout,
-  options: MarkdownTranslationOptions = {}
-): MarkdownExportResult {
+export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult {
   // Core export sessions always publish the array. The fallback keeps detached layouts produced
   // by older/custom hosts translatable while preserving the same empty immutable contract.
   const reviewArtifacts = layout.reviewArtifacts ?? EMPTY_REVIEW_ARTIFACTS;
@@ -727,12 +686,10 @@ export function exportMarkdownLayout(
   const indexes = buildTranslationIndexes(layout);
   const notes = buildNoteStoryIndexes(layout);
   const context: TranslationContext = {
-    options,
     noteLabelByScope: buildNoteLabels(layout),
     tableCell: false,
     displayMode,
     sourceScope: markdownSourceScope('body', '', null),
-    imageResultByDrawing: new WeakMap(),
     sourceCapture: buildMarkdownSourceCapture(reviewArtifacts),
     ...indexes,
   };
@@ -811,9 +768,6 @@ export function exportMarkdownLayout(
 }
 
 /** Translate one shared semantic layout session to Markdown. @public */
-export async function exportMarkdownFrom(
-  session: ExportSession,
-  options: MarkdownTranslationOptions = {}
-): Promise<MarkdownExportResult> {
-  return exportMarkdownLayout(await session.layout(), options);
+export async function exportMarkdownFrom(session: ExportSession): Promise<MarkdownExportResult> {
+  return exportMarkdownLayout(await session.layout());
 }

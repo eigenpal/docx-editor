@@ -34,7 +34,6 @@ import type {
   MarkdownFontOrigin,
   MarkdownFontsSource,
   OpenMarkdownDocumentForExportOptions,
-  MarkdownTranslationOptions,
 } from './markdown-types.ts';
 import { createSuccessfulValueCache, provisionWithExportDeadline } from './export-deadline.ts';
 import { createPackagedFileFetch } from './packaged-file-fetch.ts';
@@ -99,11 +98,9 @@ export type {
   MarkdownExportResult,
   MarkdownFontOrigin,
   MarkdownFontsSource,
-  MarkdownImageResult,
   MarkdownPage,
   MarkdownPaginationInfo,
   OpenMarkdownDocumentForExportOptions,
-  MarkdownTranslationOptions,
 } from './markdown-types.ts';
 export type {
   MarkdownComment,
@@ -286,11 +283,8 @@ export async function openDocumentForExport(
 }
 
 /** Translate an existing shared export session without reopening or re-laying out it. @public */
-export function exportMarkdownFrom(
-  session: ExportSession,
-  options: MarkdownTranslationOptions = {}
-): Promise<MarkdownExportResult> {
-  return translateMarkdown(session, options).then((result) =>
+export function exportMarkdownFrom(session: ExportSession): Promise<MarkdownExportResult> {
+  return translateMarkdown(session).then((result) =>
     withFontResolution(
       result,
       'fontResolution' in session
@@ -301,14 +295,11 @@ export function exportMarkdownFrom(
 }
 
 /** Translate a detached immutable core layout after its producer session is disposed. @public */
-export function exportMarkdownLayout(
-  layout: ExportSemanticLayout,
-  options: MarkdownTranslationOptions = {}
-): MarkdownExportResult {
-  return translateMarkdownLayout(layout, options);
+export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult {
+  return translateMarkdownLayout(layout);
 }
 
-/** Convert untrusted DOCX bytes with Node-safe fonts, shaping, and image decoding defaults. @public */
+/** Convert untrusted DOCX bytes with Node-safe resource and shaping defaults. @public */
 export async function exportMarkdown(
   source: ExportDocumentSource,
   options: MarkdownExportOptions = {}
@@ -328,8 +319,5 @@ export async function exportMarkdown(
   } finally {
     opened.session.dispose();
   }
-  return withFontResolution(
-    translateMarkdownLayout(layout, options),
-    opened.session.fontResolution
-  );
+  return withFontResolution(translateMarkdownLayout(layout), opened.session.fontResolution);
 }

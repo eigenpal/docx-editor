@@ -52,7 +52,7 @@ async function exportMarkdown(
   const opened = openDocumentForExport(bytes, options);
   if (!opened.ok) throw new Error(opened.reason);
   try {
-    return await exportMarkdownFrom(opened.session, options);
+    return await exportMarkdownFrom(opened.session);
   } finally {
     opened.session.dispose();
   }

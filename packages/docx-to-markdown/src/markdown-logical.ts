@@ -21,10 +21,8 @@ import {
 } from './markdown-source-map.ts';
 import { nestedTableHtml, tableWidth } from './markdown-nested-table.ts';
 import type { MarkdownSourceCapture } from './markdown-inline.ts';
-import type { MarkdownImageResult, MarkdownTranslationOptions } from './markdown-types.ts';
 
 export interface TranslationContext {
-  readonly options: MarkdownTranslationOptions;
   readonly noteLabelByScope: Map<string, string>;
   readonly tableCell: boolean;
   readonly hardBreakHtml?: boolean;
@@ -38,8 +36,6 @@ export interface TranslationContext {
     NonNullable<ParagraphFragmentRecord['marker']>
   >;
   readonly tablesById: ReadonlyMap<string, TableProjection>;
-  /** A translator maps each published drawing object at most once across full/page views. */
-  readonly imageResultByDrawing: WeakMap<object, MarkdownImageResult>;
   readonly sourceCapture?: MarkdownSourceCapture;
   /** Labels emitted into the current page body, when page-local note visibility is tracked. */
   readonly emittedNoteLabels?: Set<string>;

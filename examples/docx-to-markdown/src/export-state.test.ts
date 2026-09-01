@@ -10,12 +10,9 @@ describe('Markdown export actions', () => {
     expect(canCopyExport('ready', true)).toBe(true);
   });
 
-  it('copies the portable projection rather than revocable preview URLs', () => {
-    const preview = '![figure](blob:https://example.test/temporary)';
-    const portable = 'figure';
-    expect(preview).toContain('blob:');
-    expect(copyableMarkdown('ready', portable)).toBe('figure');
-    expect(copyableMarkdown('ready', portable)).not.toContain('blob:');
-    expect(copyableMarkdown('exporting', portable)).toBeNull();
+  it('copies only the completed Markdown value', () => {
+    expect(copyableMarkdown('ready', 'document')).toBe('document');
+    expect(copyableMarkdown('exporting', 'stale document')).toBeNull();
+    expect(copyableMarkdown('ready', null)).toBeNull();
   });
 });
