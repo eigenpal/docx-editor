@@ -26,7 +26,7 @@ import {
   indentContinuationLines,
   literalMarkdown,
   quoteMarkdownLines,
-  replaceLeadingWhitespaceWithEntities,
+  preserveLeadingWhitespace,
   wrapMarkdown,
   withSourceParagraphs,
   type MappedMarkdown,
@@ -391,6 +391,22 @@ function paragraphBody(
   return writer.finishMapped();
 }
 
+function paragraphIsUniformlyBold(fragments: readonly ParagraphFragmentRecord[]): boolean {
+  let hasText = false;
+  for (const fragment of fragments) {
+    for (const line of fragment.lines) {
+      for (const segment of lineSegments(line)) {
+        for (const span of segment.spans) {
+          if (sourceTextOf(span).trim().length === 0) continue;
+          hasText = true;
+          if (!span.style.bold) return false;
+        }
+      }
+    }
+  }
+  return hasText;
+}
+
 function paragraphMarkdown(
   fragments: readonly ParagraphFragmentRecord[],
   context: TranslationContext,
@@ -403,11 +419,20 @@ function paragraphMarkdown(
     !context.tableCell && headingLevel !== null && headingLevel >= 1 && headingLevel <= 9
       ? `${'#'.repeat(Math.min(headingLevel, 6))} `
       : '';
-  // Leading preserved whitespace is visual OOXML spacing, not a Markdown code-block request.
-  // Entities retain every authored space without creating a four-space code-block prefix. List
-  // indentation is added structurally below, after this conversion.
-  const body = replaceLeadingWhitespaceWithEntities(
-    paragraphBody(fragments, heading.length > 0 ? { ...context, hardBreakHtml: true } : context)
+  // Literal non-breaking spaces preserve authored leading whitespace without HTML entities or a
+  // four-space Markdown code block. List indentation is added structurally below. A heading
+  // already carries uniform bold semantics of its own.
+  const body = preserveLeadingWhitespace(
+    paragraphBody(
+      fragments,
+      heading.length > 0
+        ? {
+            ...context,
+            hardBreakHtml: true,
+            suppressBold: paragraphIsUniformlyBold(fragments),
+          }
+        : context
+    )
   );
   const marker = first.marker ?? context.listMarkerByParagraphId.get(first.paragraphId);
   const indent = ' '.repeat(
@@ -687,13 +712,14 @@ export function exportMarkdownLayout(
   layout: ExportSemanticLayout,
   options: MarkdownTranslationOptions = {}
 ): MarkdownExportResult {
+  const displayMode = layout.displayMode ?? 'all-markup';
   const indexes = buildTranslationIndexes(layout);
   const notes = buildNoteStoryIndexes(layout);
   const context: TranslationContext = {
     options,
     noteLabelByScope: buildNoteLabels(layout),
     tableCell: false,
-    displayMode: layout.displayMode,
+    displayMode,
     sourceScope: markdownSourceScope('body', '', null),
     imageResultByDrawing: new WeakMap(),
     ...indexes,
@@ -747,7 +773,7 @@ export function exportMarkdownLayout(
       source: 'layout-engine',
       scope: 'export-snapshot',
       layoutRevision: layout.revision,
-      revisionView: layout.displayMode ?? 'all-markup',
+      displayMode,
     }),
     markdown: markdown.markdown,
   });

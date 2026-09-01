@@ -95,12 +95,12 @@ describe('server-first defaults', () => {
       }).toEqual({
         pages: 26,
         bodyLineCount: 280,
-        markdownLength: 19_353,
+        markdownLength: 17_326,
         headers: 25,
         footers: 25,
-        markdownHash: 'fd594ee70e86501ff864d8bbdd18791f7771ed5ab77bcdeb01ebc4cd43a39098',
+        markdownHash: '2db9b8abc4ca12c2a413e375ce38d9e685d75b0dce7d4422148769b27f5b7b43',
       });
-      expect(translated.markdown).toStartWith('**COMPREHENSIVE** **WORD** **ELEMENT**');
+      expect(translated.markdown).toStartWith('**COMPREHENSIVE WORD ELEMENT**');
       expect(translated.markdown).toEndWith(
         'Endnote 2: Additional bibliography reference – Smith et al\\., 2025\\.'
       );

@@ -79,7 +79,7 @@ describe('Markdown semantic-record policies', () => {
       source: 'layout-engine',
       scope: 'export-snapshot',
       layoutRevision: 1,
-      revisionView: 'original',
+      displayMode: 'original',
     });
   });
 

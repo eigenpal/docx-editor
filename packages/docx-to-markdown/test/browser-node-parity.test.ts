@@ -219,7 +219,8 @@ function expectProductionFixture(
   expect(measurement.pages).toBeGreaterThanOrEqual(500);
   if (options.inspectLayout ?? true) expect(measurement.paragraphs).toBeGreaterThan(12_000);
   expect(measurement.sourceBytes).toBeGreaterThan(400_000);
-  expect(measurement.markdownLength).toBeGreaterThan(400_000);
+  // Keep this a production-sized output guard without depending on redundant inline delimiters.
+  expect(measurement.markdownLength).toBeGreaterThan(350_000);
   expect(measurement.hasDom).toBe(false);
 }
 

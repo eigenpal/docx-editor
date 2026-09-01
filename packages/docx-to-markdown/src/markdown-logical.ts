@@ -28,6 +28,7 @@ export interface TranslationContext {
   readonly noteLabelByScope: Map<string, string>;
   readonly tableCell: boolean;
   readonly hardBreakHtml?: boolean;
+  readonly suppressBold?: boolean;
   readonly displayMode: SemanticLayout['displayMode'];
   /** Translator-local story/part scope disambiguating paragraph ids across DOCX parts. */
   readonly sourceScope: string;

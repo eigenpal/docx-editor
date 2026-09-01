@@ -222,7 +222,6 @@ describe('record-only Markdown export', () => {
     expect(result.markdown).toContain('| A\\|B | 2 |');
   });
 
-
   test('does not turn preserved paragraph spacing or table-cell outlines into GFM blocks', async () => {
     const table =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>' +
@@ -231,7 +230,8 @@ describe('record-only Markdown export', () => {
     const result = await exportMarkdown(
       docx('<w:p><w:r><w:t xml:space="preserve">    ordinary text</w:t></w:r></w:p>' + table)
     );
-    expect(result.markdown).toStartWith('&nbsp;&nbsp;&nbsp;&nbsp;ordinary text');
+    expect(result.markdown).toStartWith(`${'\u00a0'.repeat(4)}ordinary text`);
+    expect(result.markdown).not.toContain('&nbsp;');
     expect(result.markdown).toContain('| Cell heading |');
     expect(result.markdown).not.toContain('| # Cell heading |');
   });
@@ -568,16 +568,25 @@ describe('record-only Markdown export', () => {
           '<w:r><w:rPr><w:b/></w:rPr><w:t>Line one</w:t><w:br/><w:t>Line two</w:t></w:r></w:p>'
       )
     );
-    expect(result.markdown).toBe('# **Line** **one**<br>**Line** **two**');
+    expect(result.markdown).toBe('# Line one<br>Line two');
     expect(
       micromark(result.markdown, {
         extensions: [gfm()],
         htmlExtensions: [gfmHtml()],
         allowDangerousHtml: true,
       })
-    ).toBe(
-      '<h1><strong>Line</strong> <strong>one</strong><br><strong>Line</strong> <strong>two</strong></h1>'
+    ).toBe('<h1>Line one<br>Line two</h1>');
+  });
+
+  test('keeps intentional partial bold emphasis inside headings', async () => {
+    const result = await exportMarkdown(
+      docx(
+        '<w:p><w:pPr><w:outlineLvl w:val="0"/></w:pPr>' +
+          '<w:r><w:t>Review </w:t></w:r>' +
+          '<w:r><w:rPr><w:b/></w:rPr><w:t>carefully</w:t></w:r></w:p>'
+      )
     );
+    expect(result.markdown).toBe('# Review **carefully**');
   });
 
   test('uses sanitized external links and leaves internal, refused, and unresolved links inert', async () => {
@@ -724,7 +733,7 @@ describe('record-only Markdown export', () => {
       '[^1]: New note'
     );
     const markupNote = (await exportMarkdown(bytes, { displayMode: 'all-markup' })).markdown;
-    expect(markupNote).toContain('[^1]: ~~Old~~ ~~note~~New note');
+    expect(markupNote).toContain('[^1]: ~~Old note~~New note');
   });
 
   test('waits for image quiescence, bounds a stalled decoder, and returns defensive media copies', async () => {

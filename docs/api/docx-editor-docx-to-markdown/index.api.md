@@ -370,8 +370,8 @@ export interface MarkdownPage {
 
 // @public
 export interface MarkdownPaginationInfo {
+    readonly displayMode: NonNullable<ExportSemanticLayout['displayMode']>;
     readonly layoutRevision: number;
-    readonly revisionView: NonNullable<ExportSemanticLayout['displayMode']>;
     readonly scope: 'export-snapshot';
     readonly source: 'layout-engine';
 }

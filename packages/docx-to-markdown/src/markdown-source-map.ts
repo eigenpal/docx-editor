@@ -116,14 +116,14 @@ export function withSourceParagraphs(
   return { ...value, paragraphs: Object.freeze([...paragraphs]) };
 }
 
-export function replaceLeadingWhitespaceWithEntities(value: MappedMarkdown): MappedMarkdown {
+export function preserveLeadingWhitespace(value: MappedMarkdown): MappedMarkdown {
   const leadingLength = /^[ \t]+/.exec(value.markdown)?.[0].length ?? 0;
   if (leadingLength === 0) return value;
   return transformMarkdown(value, (input) => {
     let markdown = '';
     const boundaryMap = [0];
     for (let index = 0; index < input.length; index += 1) {
-      markdown += index < leadingLength ? '&nbsp;' : input[index]!;
+      markdown += index < leadingLength ? '\u00a0' : input[index]!;
       boundaryMap.push(markdown.length);
     }
     return { markdown, boundaryMap };

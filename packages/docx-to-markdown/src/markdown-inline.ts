@@ -25,6 +25,7 @@ type MarkdownInlineChunk =
       readonly kind: 'text';
       readonly sourceText: string;
       readonly styles: readonly MarkdownInlineStyle[];
+      readonly semanticStyles: readonly MarkdownInlineStyle[];
       readonly paragraphId: string;
       readonly sourceStart: number;
       readonly sourceEnd: number;
@@ -35,6 +36,8 @@ type MarkdownInlineChunk =
 interface MarkdownInlineContext {
   readonly tableCell: boolean;
   readonly hardBreakHtml?: boolean;
+  /** A Markdown heading already communicates uniform bold emphasis. */
+  readonly suppressBold?: boolean;
   readonly displayMode: SemanticLayout['displayMode'];
   readonly sourceScope: string;
   readonly sourceCapture?: MarkdownSourceCapture;
@@ -187,9 +190,81 @@ function markdownInlineStyles(
   // delimiter, while `*~~text~~*` and `**~~text~~**` remain valid in every transition direction.
   return [
     ...(span.style.italic ? (['italic'] as const) : []),
-    ...(span.style.bold ? (['bold'] as const) : []),
+    ...(span.style.bold && !context.suppressBold ? (['bold'] as const) : []),
     ...(span.style.strike || span.style.doubleStrike || deleted ? (['strike'] as const) : []),
   ];
+}
+
+function sameInlineStyles(
+  left: readonly MarkdownInlineStyle[],
+  right: readonly MarkdownInlineStyle[]
+): boolean {
+  return left.length === right.length && left.every((style, index) => style === right[index]);
+}
+
+function isBridgeableWhitespace(value: string): boolean {
+  return value.length > 0 && /^[ \t]+$/u.test(value);
+}
+
+/**
+ * Word commonly divides a visually continuous phrase into one run per word. `writeText` keeps
+ * leading and trailing whitespace outside delimiters so an isolated run always produces valid
+ * Markdown. When whitespace is surrounded by matching styled runs in the same paragraph, it is
+ * safe—and materially cleaner—to retain that style across the run boundary.
+ */
+function bridgeMatchingStylesAcrossWhitespace(
+  chunks: readonly MarkdownInlineChunk[]
+): MarkdownInlineChunk[] {
+  const bridged = [...chunks];
+  let index = 0;
+  while (index < chunks.length) {
+    const chunk = chunks[index];
+    if (
+      chunk?.kind !== 'text' ||
+      chunk.styles.length > 0 ||
+      !isBridgeableWhitespace(chunk.sourceText)
+    ) {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    let matchingWhitespaceStyles = true;
+    while (index < chunks.length) {
+      const candidate = chunks[index];
+      if (
+        candidate?.kind !== 'text' ||
+        candidate.styles.length > 0 ||
+        candidate.paragraphId !== chunk.paragraphId ||
+        !isBridgeableWhitespace(candidate.sourceText)
+      ) {
+        break;
+      }
+      if (!sameInlineStyles(candidate.semanticStyles, chunk.semanticStyles)) {
+        matchingWhitespaceStyles = false;
+      }
+      index += 1;
+    }
+    const previous = chunks[start - 1];
+    const next = chunks[index];
+    if (
+      previous?.kind !== 'text' ||
+      next?.kind !== 'text' ||
+      previous.paragraphId !== chunk.paragraphId ||
+      next.paragraphId !== chunk.paragraphId ||
+      !matchingWhitespaceStyles ||
+      previous.styles.length === 0 ||
+      !sameInlineStyles(chunk.semanticStyles, previous.styles) ||
+      !sameInlineStyles(previous.styles, next.styles)
+    ) {
+      continue;
+    }
+    for (let whitespace = start; whitespace < index; whitespace += 1) {
+      const candidate = chunks[whitespace];
+      if (candidate?.kind === 'text')
+        bridged[whitespace] = { ...candidate, styles: previous.styles };
+    }
+  }
+  return bridged;
 }
 
 function markdownStyleDelimiter(style: MarkdownInlineStyle): string {
@@ -353,13 +428,15 @@ export class MarkdownInlineWriter {
     sourceText: string,
     relativeStart: number,
     styles: readonly MarkdownInlineStyle[],
-    exact: boolean
+    exact: boolean,
+    semanticStyles: readonly MarkdownInlineStyle[] = styles
   ): void {
     if (sourceText.length === 0) return;
     this.#chunks.push({
       kind: 'text',
       sourceText,
       styles,
+      semanticStyles,
       paragraphId: token.paragraphId,
       sourceStart: exact
         ? token.span.range.start + (token.sourceOffset ?? 0) + relativeStart
@@ -381,15 +458,10 @@ export class MarkdownInlineWriter {
       (token.span.projected !== true &&
         token.span.equation === undefined &&
         token.sourceText.length === token.span.range.end - token.span.range.start);
-    this.#writeSourceText(token, leading, 0, [], exact);
-    this.#writeSourceText(
-      token,
-      text,
-      leading.length,
-      markdownInlineStyles(token.span, this.#context),
-      exact
-    );
-    this.#writeSourceText(token, trailing, leading.length + text.length, [], exact);
+    const styles = markdownInlineStyles(token.span, this.#context);
+    this.#writeSourceText(token, leading, 0, [], exact, styles);
+    this.#writeSourceText(token, text, leading.length, styles, exact);
+    this.#writeSourceText(token, trailing, leading.length + text.length, [], exact, styles);
   }
 
   writeBoundary(markdown: string): void {
@@ -402,6 +474,7 @@ export class MarkdownInlineWriter {
   }
 
   finishMapped(): MappedMarkdown {
+    const chunks = bridgeMatchingStylesAcrossWhitespace(this.#chunks);
     const parts: MappedMarkdown[] = [];
     let openStyles: readonly MarkdownInlineStyle[] = [];
     const transition = (nextStyles: readonly MarkdownInlineStyle[]): void => {
@@ -414,8 +487,8 @@ export class MarkdownInlineWriter {
       }
       openStyles = nextStyles;
     };
-    for (let index = 0; index < this.#chunks.length; index += 1) {
-      const chunk = this.#chunks[index]!;
+    for (let index = 0; index < chunks.length; index += 1) {
+      const chunk = chunks[index]!;
       if (chunk.kind === 'boundary') {
         transition([]);
         parts.push(chunk.value);
@@ -427,16 +500,16 @@ export class MarkdownInlineWriter {
         continue;
       }
       let end = index + 1;
-      while (end < this.#chunks.length) {
-        const candidate = this.#chunks[end];
+      while (end < chunks.length) {
+        const candidate = chunks[end];
         if (candidate?.kind !== 'text' || candidate.styles.length === 0) break;
         end += 1;
       }
-      if (inlineIslandNeedsHtml(this.#chunks, index, end)) {
+      if (inlineIslandNeedsHtml(chunks, index, end)) {
         transition([]);
         parts.push(
           htmlInlineIsland(
-            this.#chunks,
+            chunks,
             index,
             end,
             this.#context.tableCell || this.#context.hardBreakHtml === true,
@@ -448,7 +521,7 @@ export class MarkdownInlineWriter {
         continue;
       }
       transition(chunk.styles);
-      parts.push(this.#mappedSourceChunk(chunk, index));
+      parts.push(this.#mappedSourceChunk(chunk, index, chunks));
     }
     transition([]);
     return concatMarkdown(parts);
@@ -456,7 +529,8 @@ export class MarkdownInlineWriter {
 
   #mappedSourceChunk(
     chunk: Extract<MarkdownInlineChunk, { kind: 'text' }>,
-    index: number
+    index: number,
+    chunks: readonly MarkdownInlineChunk[] = this.#chunks
   ): MappedMarkdown {
     const tableCell = this.#context.tableCell || this.#context.hardBreakHtml === true;
     return mappedTextChunk(
@@ -464,7 +538,7 @@ export class MarkdownInlineWriter {
       tableCell,
       this.#context.sourceCapture,
       this.#context.sourceScope,
-      chunkAdjacency(this.#chunks, index)
+      chunkAdjacency(chunks, index)
     );
   }
 

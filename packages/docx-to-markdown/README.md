@@ -77,7 +77,7 @@ interface MarkdownExportResult {
     readonly source: 'layout-engine';
     readonly scope: 'export-snapshot';
     readonly layoutRevision: number;
-    readonly revisionView: 'all-markup' | 'proposed' | 'original';
+    readonly displayMode: 'all-markup' | 'proposed' | 'original';
   };
   /** Convenience logical, full-document Markdown. */
   readonly markdown: string;
@@ -103,8 +103,8 @@ review, retrieval chunks tied to one rendered result, and page-aware agent workf
 
 `pagination.source` confirms that pages came from the layout engine. `pagination.scope` means the
 page numbers describe this returned export. `layoutRevision` identifies the Core document state,
-and `revisionView` says whether tracked changes were shown as markup, proposed content, or original
-content.
+and `displayMode` repeats the option used to show tracked changes as markup, proposed content, or
+original content.
 
 Page IDs and numbers are local to this returned export; do not use them as permanent document
 identifiers. They reflect the same Core layout the editor uses, but are not a certification that a
@@ -321,7 +321,7 @@ every input that can change geometry before it asks for a layout snapshot:
 - Images and preserved-format conversion settle through the same bounded Core session before the
   semantic layout is published. `signal` and `resourceTimeoutMs` cover that work.
 - `displayMode` is applied by Core before pagination, so inserted/deleted content and page fields
-  are measured in the same revision view reported by `pagination.revisionView`.
+  are measured in the same mode reported by `pagination.displayMode`.
 - The resulting layout is immutable. Markdown, PDF, and future translators must consume that one
   snapshot rather than reopening the DOCX or re-resolving fonts independently.
 

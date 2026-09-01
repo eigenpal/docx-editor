@@ -28,8 +28,8 @@ export interface MarkdownPaginationInfo {
   readonly scope: 'export-snapshot';
   /** Core store revision from which this layout snapshot was produced. */
   readonly layoutRevision: number;
-  /** Tracked-change projection used to paginate and translate this snapshot. */
-  readonly revisionView: NonNullable<ExportSemanticLayout['displayMode']>;
+  /** Tracked-change display mode used to paginate and translate this snapshot. */
+  readonly displayMode: NonNullable<ExportSemanticLayout['displayMode']>;
 }
 
 /** Full logical document plus page-scoped projections. @public */
