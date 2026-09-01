@@ -222,6 +222,17 @@ describe('record-only Markdown export', () => {
     expect(result.markdown).toContain('| A\\|B | 2 |');
   });
 
+  test('keeps row cells past the declared w:tblGrid width', async () => {
+    const cell = (text: string) => `<w:tc><w:tcPr/><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:tc>`;
+    const table =
+      '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/><w:gridCol w:w="2000"/></w:tblGrid>' +
+      `<w:tr>${cell('One')}${cell('Two')}${cell('Overflow')}</w:tr>` +
+      `<w:tr>${cell('A')}${cell('B')}${cell('C')}</w:tr></w:tbl>`;
+    const result = await exportMarkdown(docx(table));
+    expect(result.markdown).toContain('| One | Two | Overflow |');
+    expect(result.markdown).toContain('| A | B | C |');
+  });
+
   test('does not turn preserved paragraph spacing or table-cell outlines into GFM blocks', async () => {
     const table =
       '<w:tbl><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc>' +
@@ -975,7 +986,7 @@ describe('record-only Markdown export', () => {
       '</w:tc></w:tr></w:tbl>';
     const result = await exportMarkdown(docx(item(0, 'ten') + item(1, 'child') + outer, numbering));
     expect(result.markdown).toContain('10. ten\n\n    - child');
-    expect(result.markdown).toContain('<span class="docx-nested-table" role="table">');
+    expect(result.markdown).toContain('<table><tr><td>inner</td></tr></table>');
     expect(result.markdown).not.toContain('\\| inner \\|');
     const html = micromark(result.markdown, {
       extensions: [gfm()],
@@ -984,8 +995,7 @@ describe('record-only Markdown export', () => {
     });
     expect(html).toContain('<ol start="10">');
     expect(html).toContain('<li>\n<p>ten</p>\n<ul>');
-    expect(html).toContain('<span class="docx-nested-table" role="table">');
-    expect(html).toContain('<span class="docx-nested-table__cell" role="cell">inner</span>');
+    expect(html).toContain('<table><tr><td>inner</td></tr></table>');
     expect(html).not.toContain('<pre>');
   });
 });

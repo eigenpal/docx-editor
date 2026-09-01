@@ -424,10 +424,9 @@ Markdown is a semantic degradation:
 - Physical Word-layout pages are first-class; flattened `markdown` is secondary.
 - Page headers and footers are returned separately per page.
 - Merged table cells are flattened.
-- GFM has no nested-table construct. Nested tables alone use inline, standards-valid HTML spans
-  with `docx-nested-table`, `docx-nested-table__row`, and `docx-nested-table__cell` classes; inline
-  Markdown remains parseable and review offsets remain mapped. Renderers that sanitize raw HTML
-  must explicitly allow only those exporter-owned span classes and table/row/cell ARIA roles.
+- GFM has no nested-table construct. Nested tables alone use plain inline `<table>`, `<tr>`,
+  `<td>`, and `<th>` HTML on one line, so strict sanitizers (including GitHub's) keep the
+  structure and inline Markdown inside each cell remains parseable.
 - Positioned anchored images are appended after their owning story body in stable record order.
 - Anchored text-box text is omitted because it has no unambiguous linear position; comments and
   tracked changes inside it remain available as page artifacts with exact text-box provenance.

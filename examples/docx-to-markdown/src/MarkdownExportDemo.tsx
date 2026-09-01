@@ -26,17 +26,8 @@ const EDITOR_PACKAGED_FONTS = packagedFonts();
 const GOOGLE_FONT_FALLBACK = googleFonts({
   onFailure: (failure) => console.warn(`[google-fonts] ${failure.diagnostic}`),
 });
-const MARKDOWN_SANITIZE_SCHEMA = {
-  ...defaultSchema,
-  attributes: {
-    ...defaultSchema.attributes,
-    span: [
-      ...(defaultSchema.attributes?.span ?? []),
-      ['className', /^docx-nested-table(?:__row|__cell)?$/],
-      ['role', 'table', 'row', 'cell', 'columnheader'],
-    ],
-  },
-};
+// Nested tables arrive as plain <table>/<tr>/<td>, which the stock schema already allows.
+const MARKDOWN_SANITIZE_SCHEMA = defaultSchema;
 
 type PreviewMode = 'rendered' | 'source';
 

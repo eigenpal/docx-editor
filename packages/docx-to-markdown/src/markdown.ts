@@ -576,6 +576,25 @@ function cellAlignment(cell: LogicalCell): ParagraphFragmentRecord['alignment'] 
   return 'left';
 }
 
+/**
+ * Column count for emission. The declared grid is preferred, but a row can carry more cells
+ * than `w:tblGrid` declares; widening to the widest laid-out cell keeps every painted cell in
+ * the output instead of silently dropping the overflow.
+ */
+function emittedTableWidth(
+  rows: readonly LogicalRow[],
+  projection: TableProjection | undefined,
+  fragments: readonly TableFragmentRecord[]
+): number {
+  let width = tableWidth(projection?.columnCount, fragments[0]?.columnEdges.length);
+  for (const row of rows) {
+    for (const cell of row.cells) {
+      width = Math.max(width, cell.gridColumn + Math.max(cell.gridSpan, 1));
+    }
+  }
+  return width;
+}
+
 /** GFM's unsupported nested-table shape uses mapped inline HTML wrappers. */
 function nestedTableMarkdown(
   fragments: readonly TableFragmentRecord[],
@@ -587,7 +606,7 @@ function nestedTableMarkdown(
   const completeFragments = projection?.fragments ?? fragments;
   const rows = pageScoped ? mergeRows(fragments, true) : mergeRows(completeFragments, false);
   if (rows.length === 0) return EMPTY_MAPPED_MARKDOWN;
-  const width = tableWidth(projection?.columnCount, fragments[0]?.columnEdges.length);
+  const width = emittedTableWidth(rows, projection, fragments);
   const nestedContext = { ...context, tableCell: true };
   return nestedTableHtml(rows, width, (row, columnIndex) => {
     const cell = row.cells.find((candidate) => candidate.gridColumn === columnIndex);
@@ -631,7 +650,7 @@ function tableMarkdown(
   const completeFragments = projection?.fragments ?? fragments;
   const rows = pageScoped ? mergeRows(fragments, true) : mergeRows(completeFragments, false);
   if (rows.length === 0) return EMPTY_MAPPED_MARKDOWN;
-  const width = tableWidth(projection?.columnCount, fragments[0]?.columnEdges.length);
+  const width = emittedTableWidth(rows, projection, fragments);
   const normalize = (
     values: MappedMarkdown[],
     fallback: MappedMarkdown = EMPTY_MAPPED_MARKDOWN

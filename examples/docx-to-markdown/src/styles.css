@@ -610,40 +610,12 @@ button {
   background: #f6f8fa;
 }
 
-.markdown-body .docx-nested-table {
-  display: table;
+.markdown-body td table {
   width: 100%;
   margin: 8px 0;
-  overflow: hidden;
   border: 1px solid #cfd8e3;
-  border-radius: 6px;
   border-spacing: 0;
   background: #fff;
-}
-
-.markdown-body .docx-nested-table__row {
-  display: table-row;
-}
-
-.markdown-body .docx-nested-table__cell {
-  display: table-cell;
-  padding: 7px 9px;
-  border-top: 1px solid #dbe2ea;
-  border-left: 1px solid #dbe2ea;
-  overflow-wrap: anywhere;
-}
-
-.markdown-body .docx-nested-table__row:first-child > .docx-nested-table__cell {
-  border-top: 0;
-}
-
-.markdown-body .docx-nested-table__cell[role='columnheader'] {
-  background: #f4f7fa;
-  font-weight: 650;
-}
-
-.markdown-body .docx-nested-table__cell:first-child {
-  border-left: 0;
 }
 
 .markdown-body pre {
