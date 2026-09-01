@@ -51,9 +51,15 @@ export interface SplitTextOverlays {
 }
 
 interface RunText {
-  readonly ids: readonly LogicalId[];
+  readonly parts: readonly { readonly id: LogicalId; readonly value: string }[];
   readonly witnessIds: readonly LogicalId[];
   readonly value: string;
+}
+
+interface SplitProduct {
+  readonly id: LogicalId;
+  readonly start: number | null;
+  readonly text: RunText | null;
 }
 
 /** Cap on the `splitFrom` walk that classifies a re-split; stops a peer-crafted chain or cycle. */
@@ -189,17 +195,15 @@ export class SplitDedupIndex {
         .sort(
           (left, right) => (left.start ?? 0) - (right.start ?? 0) || left.id.localeCompare(right.id)
         );
-      if (!this.productsMatchBaseline(products, base)) continue;
-      const boundaries = products.map((product) => product.start!);
-      boundaries.push(base.length);
-      const mapped = boundaries.map((offset) => mapBaseOffset(base, source.value, offset));
+      if (!this.productsCoverBaseline(products, base)) continue;
+      const merged = mergeSourceEditIntoProducts(base, source.value, products);
       const overlayIds = new Set<LogicalId>();
       for (let index = 0; index < products.length; index += 1) {
         const product = products[index]!;
-        const value = source.value.slice(mapped[index]!, mapped[index + 1]!);
-        for (let textIndex = 0; textIndex < product.text!.ids.length; textIndex += 1) {
-          const id = product.text!.ids[textIndex]!;
-          const overlay = textIndex === 0 ? value : '';
+        const values = partitionRunText(product.text!, merged[index]!);
+        for (let textIndex = 0; textIndex < product.text!.parts.length; textIndex += 1) {
+          const id = product.text!.parts[textIndex]!.id;
+          const overlay = values[textIndex]!;
           if (this.textOverlays.get(id) !== overlay) changedIds.add(id);
           this.textOverlays.set(id, overlay);
           overlayIds.add(id);
@@ -216,27 +220,20 @@ export class SplitDedupIndex {
     }
   }
 
-  private productsMatchBaseline(
-    products: readonly {
-      readonly start: number | null;
-      readonly text: RunText | null;
-    }[],
-    baseline: string
-  ): boolean {
+  private productsCoverBaseline(products: readonly SplitProduct[], baseline: string): boolean {
     if (products.length === 0 || products[0]?.start !== 0) return false;
     for (let index = 0; index < products.length; index += 1) {
       const product = products[index]!;
       if (product.start === null || !product.text) return false;
       const end = products[index + 1]?.start ?? baseline.length;
-      if (end < product.start || product.text.value !== baseline.slice(product.start, end))
-        return false;
+      if (end < product.start || end > baseline.length) return false;
     }
     return true;
   }
 
   private runText(runId: LogicalId): RunText | null {
     if (nodeKindOf(this.nodes, runId) !== 'run') return null;
-    const ids: LogicalId[] = [];
+    const parts: { id: LogicalId; value: string }[] = [];
     const witnessIds: LogicalId[] = [];
     let value = '';
     const seen = new Set<LogicalId>();
@@ -249,9 +246,10 @@ export class SplitDedupIndex {
       if (isTextNodeMap(rec)) {
         const text = rec.get(NODE_TEXT_FIELD);
         if (!(text instanceof Y.Text)) return false;
-        value += text.toString();
+        const part = text.toString();
+        value += part;
         if (value.length > this.limits.maxTextLength) return false;
-        ids.push(id);
+        parts.push({ id, value: part });
         return true;
       }
       const shell = rec.get(NODE_SHELL_FIELD);
@@ -263,7 +261,7 @@ export class SplitDedupIndex {
       }
       return true;
     };
-    return visit(runId, 0) && ids.length > 0 ? { ids, witnessIds, value } : null;
+    return visit(runId, 0) && parts.length > 0 ? { parts, witnessIds, value } : null;
   }
 
   /**
@@ -405,4 +403,73 @@ function mapBaseOffset(base: string, next: string, offset: number): number {
   if (offset <= prefix) return offset;
   if (offset >= baseEnd) return nextEnd + offset - baseEnd;
   return prefix;
+}
+
+function mergeSourceEditIntoProducts(
+  base: string,
+  source: string,
+  products: readonly SplitProduct[]
+): readonly string[] {
+  const edit = textSplice(base, source);
+  const owner = products.findIndex((product, index) => {
+    const end = products[index + 1]?.start ?? base.length;
+    return product.start !== null && edit.start >= product.start && edit.start <= end;
+  });
+  return products.map((product, index) => {
+    const start = product.start!;
+    const end = products[index + 1]?.start ?? base.length;
+    const basePart = base.slice(start, end);
+    const current = product.text!.value;
+    const deleteStart = Math.max(edit.start, start);
+    const deleteEnd = Math.min(edit.end, end);
+    const ownsInsert = index === owner && edit.insert.length > 0;
+    if (deleteStart >= deleteEnd && !ownsInsert) return current;
+    const localStart = Math.max(0, (ownsInsert ? edit.start : deleteStart) - start);
+    const localEnd = Math.max(localStart, deleteEnd - start);
+    const mappedStart = mapBaseOffset(basePart, current, localStart);
+    const mappedEnd = mapBaseOffset(basePart, current, localEnd);
+    if (
+      mappedStart === mappedEnd &&
+      ownsInsert &&
+      current.slice(mappedStart, mappedStart + edit.insert.length) === edit.insert
+    ) {
+      return current;
+    }
+    return (
+      current.slice(0, mappedStart) + (ownsInsert ? edit.insert : '') + current.slice(mappedEnd)
+    );
+  });
+}
+
+function partitionRunText(run: RunText, merged: string): readonly string[] {
+  const boundaries = [0];
+  for (const part of run.parts) boundaries.push(boundaries.at(-1)! + part.value.length);
+  const mapped = boundaries.map((offset) => mapBaseOffset(run.value, merged, offset));
+  return run.parts.map((_, index) => merged.slice(mapped[index]!, mapped[index + 1]!));
+}
+
+function textSplice(
+  base: string,
+  next: string
+): {
+  readonly start: number;
+  readonly end: number;
+  readonly insert: string;
+} {
+  let start = 0;
+  const shared = Math.min(base.length, next.length);
+  while (start < shared && base.charCodeAt(start) === next.charCodeAt(start)) start += 1;
+  let suffix = 0;
+  while (
+    suffix < base.length - start &&
+    suffix < next.length - start &&
+    base.charCodeAt(base.length - suffix - 1) === next.charCodeAt(next.length - suffix - 1)
+  ) {
+    suffix += 1;
+  }
+  return {
+    start,
+    end: base.length - suffix,
+    insert: next.slice(start, next.length - suffix),
+  };
 }

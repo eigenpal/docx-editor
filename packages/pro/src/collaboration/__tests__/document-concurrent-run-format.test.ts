@@ -299,4 +299,31 @@ describe('concurrent run-format convergence (#581)', () => {
     expect(bodyText(alice)).toBe('HelloWoXrld' + PARA1);
     expect(markCount(alice, 'tab')).toBe(1);
   });
+
+  test('concurrent source typing merges with typing on a split product', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(doc());
+    pause();
+    harness.apply(alice, [runProps(alice, 0, 0, 5, 'b')]);
+    harness.apply(alice, [
+      {
+        op: 'insertText',
+        paragraphId: harness.paragraphIdAt(alice, 0),
+        offset: 2,
+        text: 'A',
+      },
+    ]);
+    harness.apply(bob, [
+      {
+        op: 'insertText',
+        paragraphId: harness.paragraphIdAt(bob, 0),
+        offset: 15,
+        text: 'B',
+      },
+    ]);
+    resume();
+    harness.expectConverged(alice, bob);
+    const expected = 'AlApha bravo canBvas delta editor' + PARA1;
+    expect(bodyText(alice)).toBe(expected);
+    expect(bodyText(bob)).toBe(expected);
+  });
 });
