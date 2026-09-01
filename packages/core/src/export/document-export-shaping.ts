@@ -272,13 +272,10 @@ export async function acquireDocumentExportShaping(
       const fontByteLease = createDocumentFontByteLease(options.onActiveFontBytesChange);
       let leaseTransferred = false;
       try {
-        const families = documentFontFamilies(view);
-        if (families.length > MAX_RESOLVER_FAMILIES) {
-          throw new ExportResourceError(
-            'layoutFailed',
-            `Document export requires ${families.length} font families; the safe resolver limit is ${MAX_RESOLVER_FAMILIES}`
-          );
-        }
+        // Family names are file-supplied, so the cap truncates rather than refuses the document.
+        // documentFontFamilies orders body before furniture before notes, which makes the cut
+        // safe: a hostile header cannot crowd the body's faces out. The editor caps the same way.
+        const families = documentFontFamilies(view).slice(0, MAX_RESOLVER_FAMILIES);
         const originFailures: FontOriginFailure[] = [];
         const resolved = await composePreparedFontOrigins(
           origins,

@@ -329,6 +329,7 @@ async function composeFontOriginsInternal(
     // Faces recomputed per origin rather than accumulated, because a substitution an
     // earlier origin emitted can become paintable when a LATER origin supplies its target.
     const covered = paintableFaces(inherited, sourceFaces, substitutions);
+    let sampledAnswer: ReturnType<typeof validateOriginAnswer> | undefined;
     try {
       const observation = observed[originIndex]!;
       let answer: FontConfiguration | FontConfigurationFragment | undefined;
@@ -391,6 +392,12 @@ async function composeFontOriginsInternal(
         options.reserveOwnedBytes,
         options.instrumentation
       );
+      sampledAnswer = sampledOrigin;
+      // A dropped face degraded alone; its siblings still compose below. Report each drop the
+      // same way a whole-origin failure is reported, so hosts see exactly what went missing.
+      for (const cause of sampledOrigin.dropped) {
+        reportOriginFailure(options, origin, originIndex, cause);
+      }
       const sampled = sampledOrigin.fragment;
       const faces = (sampled.sources ?? []).map((source) => {
         fontRequestKey(source.request);
@@ -420,6 +427,9 @@ async function composeFontOriginsInternal(
         committedSubstitutionKeys.add(fontRequestKey(substitution.from));
       }
     } catch (cause) {
+      // A validated answer that fails after its reservation but before it commits must hand
+      // the reserved bytes back, or the lease leaks them for its whole lifetime.
+      sampledAnswer?.releaseOwnedBytes?.();
       // Cancellation is a composition boundary, not an origin-local failure. In particular,
       // never start a later network fallback after the document export has already timed out.
       if (request.signal?.aborted) throw request.signal.reason ?? cause;
@@ -451,6 +461,9 @@ class FontOwnershipReservationError extends Error {
     this.name = 'FontOwnershipReservationError';
   }
 }
+
+/** Tipping the cumulative source bound is an origin-level refusal, never a face-level drop. */
+class FontSourceCountError extends RangeError {}
 
 async function awaitObservedOrigin(
   observation: Promise<ObservedOriginOutcome>,
@@ -498,6 +511,10 @@ function validateOriginAnswer(
   readonly fragment: FontConfiguration | FontConfigurationFragment;
   readonly sourceKeys: readonly string[];
   readonly ownedBytes: number;
+  /** Per-face defects skipped while their siblings composed; reported, never swallowed. */
+  readonly dropped: readonly unknown[];
+  /** Undoes this answer's owned-byte reservation if the origin fails before it commits. */
+  readonly releaseOwnedBytes: (() => void) | undefined;
 } {
   const sourceInput = answer.sources ?? [];
   const substitutionInput = answer.substitutions ?? [];
@@ -531,105 +548,130 @@ function validateOriginAnswer(
   const sourceKeys: string[] = [];
   const candidateKeys = new Set<string>();
   const candidateSources: FontSource[] = [];
+  const droppedFaces: unknown[] = [];
+  // Face-level defects drop that face and keep its siblings, mirroring the embedded-font
+  // budget path: one oversized or malformed face must not discard an origin's other coverage.
   for (let sourceIndex = 0; sourceIndex < sourceCount; sourceIndex += 1) {
     const sourceInputValue = sourceInput[sourceIndex]!;
-    const request = snapshotFontFaceRequest(sourceInputValue.request);
-    const availability = sourceInputValue.availability;
-    const faceIndex = sourceInputValue.faceIndex;
-    const hash = sourceInputValue.hash;
-    const id = sourceInputValue.id;
-    const key = fontRequestKey(request);
-    if (
-      availability !== undefined &&
-      availability !== 'available' &&
-      availability !== 'forbidden'
-    ) {
-      throw new TypeError('Font source availability must be available or forbidden');
-    }
-    if (!Number.isSafeInteger(faceIndex) || faceIndex < 0) {
-      throw new RangeError('Font face index must be a non-negative safe integer');
-    }
-    if (typeof hash !== 'string' || hash.length === 0) {
-      throw new TypeError('Font source hash must be a non-empty string');
-    }
-    let bytes: Uint8Array;
-    if (availability !== 'forbidden') {
-      if (typeof id !== 'string' || id.length === 0) {
-        throw new TypeError('Font source id must be a non-empty string');
+    try {
+      const request = snapshotFontFaceRequest(sourceInputValue.request);
+      const availability = sourceInputValue.availability;
+      const faceIndex = sourceInputValue.faceIndex;
+      const hash = sourceInputValue.hash;
+      const id = sourceInputValue.id;
+      const key = fontRequestKey(request);
+      if (
+        availability !== undefined &&
+        availability !== 'available' &&
+        availability !== 'forbidden'
+      ) {
+        throw new TypeError('Font source availability must be available or forbidden');
       }
-      bytes = sourceInputValue.bytes;
-      const byteLength = fontByteLength(bytes);
-      if (byteLength > sourceByteCeiling) {
-        throw new RangeError('Font source exceeds the effective base byte ceiling');
+      if (!Number.isSafeInteger(faceIndex) || faceIndex < 0) {
+        throw new RangeError('Font face index must be a non-negative safe integer');
       }
+      if (typeof hash !== 'string' || hash.length === 0) {
+        throw new TypeError('Font source hash must be a non-empty string');
+      }
+      let bytes: Uint8Array;
+      if (availability !== 'forbidden') {
+        if (typeof id !== 'string' || id.length === 0) {
+          throw new TypeError('Font source id must be a non-empty string');
+        }
+        bytes = sourceInputValue.bytes;
+        const byteLength = fontByteLength(bytes);
+        if (byteLength > sourceByteCeiling) {
+          throw new RangeError('Font source exceeds the effective base byte ceiling');
+        }
+        if (committedSourceKeys.has(key) || candidateKeys.has(key)) continue;
+        if (committedSourceBytes + aggregateBytes + byteLength > HARD_MAX_AGGREGATE_FONT_BYTES) {
+          throw new RangeError(
+            `Font sources exceed the aggregate byte ceiling of ${HARD_MAX_AGGREGATE_FONT_BYTES}`
+          );
+        }
+        aggregateBytes += byteLength;
+      } else bytes = new Uint8Array(0);
       if (committedSourceKeys.has(key) || candidateKeys.has(key)) continue;
-      aggregateBytes += byteLength;
-      if (committedSourceBytes + aggregateBytes > HARD_MAX_AGGREGATE_FONT_BYTES) {
-        throw new RangeError(
-          `Font sources exceed the aggregate byte ceiling of ${HARD_MAX_AGGREGATE_FONT_BYTES}`
+      if (committedSourceKeys.size + candidateKeys.size >= HARD_MAX_FONT_SOURCES) {
+        throw new FontSourceCountError(
+          `Font source count must not exceed ${HARD_MAX_FONT_SOURCES}`
         );
       }
-    } else bytes = new Uint8Array(0);
-    if (committedSourceKeys.has(key) || candidateKeys.has(key)) continue;
-    candidateKeys.add(key);
-    if (committedSourceKeys.size + candidateKeys.size > HARD_MAX_FONT_SOURCES) {
-      throw new RangeError(`Font source count must not exceed ${HARD_MAX_FONT_SOURCES}`);
+      candidateKeys.add(key);
+      sourceKeys.push(key);
+      candidateSources.push(
+        Object.freeze({
+          request,
+          id,
+          bytes,
+          hash,
+          faceIndex,
+          ...(availability ? { availability } : {}),
+        })
+      );
+    } catch (cause) {
+      if (cause instanceof FontSourceCountError) throw cause;
+      droppedFaces.push(cause);
     }
-    sourceKeys.push(key);
-    candidateSources.push(
-      Object.freeze({
-        request,
-        id,
-        bytes,
-        hash,
-        faceIndex,
-        ...(availability ? { availability } : {}),
-      })
-    );
   }
   const candidateSubstitutionKeys = new Set<string>();
   const substitutions: FontSourceSubstitution[] = [];
   for (let substitutionIndex = 0; substitutionIndex < substitutionCount; substitutionIndex += 1) {
     const substitution = substitutionInput[substitutionIndex]!;
-    const from = snapshotFontFaceRequest(substitution.from);
-    const to = snapshotFontFaceRequest(substitution.to);
-    fontRequestKey(from);
-    fontRequestKey(to);
-    const metricsInput = substitution.lineMetrics;
-    const metrics = metricsInput
-      ? Object.freeze({
-          heightEm: metricsInput.heightEm,
-          baselineEm: metricsInput.baselineEm,
+    try {
+      const from = snapshotFontFaceRequest(substitution.from);
+      const to = snapshotFontFaceRequest(substitution.to);
+      fontRequestKey(from);
+      fontRequestKey(to);
+      const metricsInput = substitution.lineMetrics;
+      const metrics = metricsInput
+        ? Object.freeze({
+            heightEm: metricsInput.heightEm,
+            baselineEm: metricsInput.baselineEm,
+          })
+        : undefined;
+      if (
+        metrics &&
+        (!Number.isFinite(metrics.heightEm) ||
+          !Number.isFinite(metrics.baselineEm) ||
+          metrics.heightEm <= 0 ||
+          metrics.heightEm > 4 ||
+          metrics.baselineEm < 0 ||
+          metrics.baselineEm > metrics.heightEm)
+      ) {
+        throw new RangeError('Font substitution line metrics must fit within a bounded em box');
+      }
+      const key = fontRequestKey(from);
+      if (
+        committedSourceKeys.has(key) ||
+        candidateKeys.has(key) ||
+        committedSubstitutionKeys.has(key) ||
+        candidateSubstitutionKeys.has(key)
+      ) {
+        continue;
+      }
+      candidateSubstitutionKeys.add(key);
+      substitutions.push(
+        Object.freeze({
+          from,
+          to,
+          ...(metrics ? { lineMetrics: metrics } : {}),
         })
-      : undefined;
-    if (
-      metrics &&
-      (!Number.isFinite(metrics.heightEm) ||
-        !Number.isFinite(metrics.baselineEm) ||
-        metrics.heightEm <= 0 ||
-        metrics.heightEm > 4 ||
-        metrics.baselineEm < 0 ||
-        metrics.baselineEm > metrics.heightEm)
-    ) {
-      throw new RangeError('Font substitution line metrics must fit within a bounded em box');
+      );
+    } catch (cause) {
+      droppedFaces.push(cause);
     }
-    const key = fontRequestKey(from);
-    if (
-      committedSourceKeys.has(key) ||
-      candidateKeys.has(key) ||
-      committedSubstitutionKeys.has(key) ||
-      candidateSubstitutionKeys.has(key)
-    ) {
-      continue;
-    }
-    candidateSubstitutionKeys.add(key);
-    substitutions.push(
-      Object.freeze({
-        from,
-        to,
-        ...(metrics ? { lineMetrics: metrics } : {}),
-      })
-    );
+  }
+  // An answer whose every face and substitution dropped contributes nothing. Failing it
+  // wholesale (with the first drop as the reason) keeps base selection intact: an empty
+  // fragment must not become the composition base and poison later origins' byte ceiling.
+  if (
+    (sourceCount > 0 || substitutionCount > 0) &&
+    candidateSources.length === 0 &&
+    substitutions.length === 0 &&
+    droppedFaces.length > 0
+  ) {
+    throw droppedFaces[0];
   }
   let retainedCommittedSubstitutions = committedSubstitutionKeys.size;
   for (const key of candidateKeys) {
@@ -689,6 +731,8 @@ function validateOriginAnswer(
     }) as FontConfiguration | FontConfigurationFragment,
     sourceKeys: Object.freeze(sourceKeys),
     ownedBytes: aggregateBytes,
+    dropped: Object.freeze(droppedFaces),
+    releaseOwnedBytes: releaseReservation,
   };
 }
 

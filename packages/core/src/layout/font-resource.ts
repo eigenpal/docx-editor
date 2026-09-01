@@ -665,10 +665,13 @@ export const createFontResourceSnapshot = (
     }
   }
 
+  // The key is case- and whitespace-folded, so 'Arial' and 'ARIAL' collide by contract.
+  // First-wins, matching the composed origin dedupe: a per-face skip degrades one duplicate,
+  // where a throw would degrade the whole document to fixed-metric measurement.
   const resources = new Map<string, StoredResource>();
   for (const definition of sampledResources) {
     const key = fontRequestKey(definition.request);
-    if (resources.has(key)) throw new TypeError(`Duplicate font resource request: ${key}`);
+    if (resources.has(key)) continue;
     resources.set(key, storeResource(definition, maxFontBytes, validateFont, instrumentation));
   }
 
@@ -681,7 +684,7 @@ export const createFontResourceSnapshot = (
   >();
   for (const substitution of sampledSubstitutions) {
     const key = fontRequestKey(substitution.from);
-    if (substitutions.has(key)) throw new TypeError(`Duplicate font substitution request: ${key}`);
+    if (substitutions.has(key)) continue;
     substitutions.set(
       key,
       Object.freeze({

@@ -422,20 +422,24 @@ test('shares safe source and substitution permutations without masking authored 
   expect(admissions).toBe(5);
 });
 
-test('still rejects duplicate resolution keys after safe-order canonicalization', async () => {
+test('duplicate resolution keys degrade first-wins instead of failing the snapshot', async () => {
   const bytes = new Uint8Array(await Bun.file(fontUrl).arrayBuffer());
   const hash = sha256FontBytes(bytes);
   const request = { family: 'Duplicate Key DejaVu', weight: 400, style: 'normal' as const };
   const source = { request, id: 'duplicate-key-a', bytes, hash, faceIndex: 0 };
+  // Case-variant families fold to one key by contract; a throw here would degrade the whole
+  // document to fixed metrics, so the snapshot keeps the first definition and skips the rest.
   const duplicateSource = prepareLayoutFontConfiguration({
     epoch: 1,
     maxFontBytes: 2_000_000,
-    sources: [source, { ...source, id: 'duplicate-key-b' }],
+    sources: [
+      source,
+      { ...source, id: 'duplicate-key-b', request: { ...request, family: 'DUPLICATE KEY DEJAVU' } },
+    ],
     defaultFont: { family: request.family, sizeHalfPoints: 22 },
   });
-  await expect(acquireSharedExportShaping(duplicateSource)).rejects.toThrow(
-    'Duplicate font resource request'
-  );
+  const sharedSource = await acquireSharedExportShaping(duplicateSource);
+  expect(sharedSource.extensionFingerprint).toBe(duplicateSource.fingerprint);
 
   const duplicateFrom = {
     family: 'Duplicate Substitution Alias',
@@ -452,28 +456,8 @@ test('still rejects duplicate resolution keys after safe-order canonicalization'
     ],
     defaultFont: { family: request.family, sizeHalfPoints: 22 },
   });
-  await expect(acquireSharedExportShaping(duplicateSubstitution)).rejects.toThrow(
-    'Duplicate font substitution request'
-  );
-
-  const laterRequest = { family: 'Later Duplicate DejaVu', weight: 400, style: 'normal' as const };
-  const laterSource = { ...source, request: laterRequest, id: 'later-duplicate-a' };
-  const sourceOrder = (firstFamily: 'early' | 'later') =>
-    prepareLayoutFontConfiguration({
-      epoch: 1,
-      maxFontBytes: 2_000_000,
-      sources:
-        firstFamily === 'early'
-          ? [source, { ...source, id: 'duplicate-key-b' }, laterSource, { ...laterSource }]
-          : [laterSource, { ...laterSource }, source, { ...source, id: 'duplicate-key-b' }],
-      defaultFont: { family: request.family, sizeHalfPoints: 22 },
-    });
-  await expect(acquireSharedExportShaping(sourceOrder('early'))).rejects.toThrow(
-    request.family.toLowerCase()
-  );
-  await expect(acquireSharedExportShaping(sourceOrder('later'))).rejects.toThrow(
-    laterRequest.family.toLowerCase()
-  );
+  const sharedSubstitution = await acquireSharedExportShaping(duplicateSubstitution);
+  expect(sharedSubstitution.extensionFingerprint).toBe(duplicateSubstitution.fingerprint);
 });
 
 test('keeps genuinely distinct shared shaping content separate', async () => {

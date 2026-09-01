@@ -797,19 +797,19 @@ test('a timed-out non-cooperative origin unwinds every earlier font-byte lease',
   expect(retryBytes.at(-1)).toBe(retryBytes[0]);
 });
 
-test('a family catalog beyond the safe resolver bound fails typed before any network origin', async () => {
+test('a family catalog beyond the safe resolver bound truncates instead of refusing', async () => {
   let request: FontResolutionRequest | undefined;
   const resolver = defineFontResolver((next: FontResolutionRequest) => {
     request = next;
     return fontFragment();
   });
-  try {
-    await openFontBackedDocumentForExport(priorityDocx(), { fonts: resolver });
-    throw new Error('expected bounded font-catalog refusal');
-  } catch (error) {
-    expect(error).toBeInstanceOf(ExportResourceError);
-    expect((error as ExportResourceError).code).toBe('layoutFailed');
-    expect(String(error)).toContain('safe resolver limit is 64');
-  }
-  expect(request).toBeUndefined();
+  const opened = await openFontBackedDocumentForExport(priorityDocx(), { fonts: resolver });
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  opened.session.dispose();
+  // File-supplied names cannot refuse the document; the resolver sees at most the cap, and the
+  // body tier survives the cut ahead of the hostile header flood.
+  expect(request).toBeDefined();
+  expect(request!.families.length).toBeLessThanOrEqual(64);
+  expect(request!.families).toContain('Body Priority Face');
 });

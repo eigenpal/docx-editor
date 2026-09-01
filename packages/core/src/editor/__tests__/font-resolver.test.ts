@@ -123,6 +123,28 @@ describe('composeFontOrigins', () => {
     expect(request?.defaultFamily).toBe('Aptos');
   });
 
+  test('one invalid face drops alone and is reported; its origin siblings still compose', async () => {
+    const failures: unknown[] = [];
+    const oversized: FontSource = {
+      ...source('Bloated', 'oversized'),
+      bytes: new Uint8Array(64),
+    };
+    const composed = await composeFontOrigins(
+      [
+        {
+          maxFontBytes: 16,
+          sources: [source('Calibri', 'kept-a'), oversized, source('Montserrat', 'kept-b')],
+        },
+      ],
+      REQUEST,
+      { onOriginFailure: (failure) => failures.push(failure.cause) }
+    );
+
+    expect(composed?.sources?.map((entry) => entry.id)).toEqual(['kept-a', 'kept-b']);
+    expect(failures).toHaveLength(1);
+    expect(String(failures[0])).toContain('byte ceiling');
+  });
+
   test('merges first-wins in LIST order, however long an origin takes to answer', async () => {
     const slowFirst = defineFontResolver(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
