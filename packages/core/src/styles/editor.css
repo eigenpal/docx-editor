@@ -3330,9 +3330,16 @@ a.docx-hyperlink:focus-visible {
 /* Same hatch for the font and style pickers: their 300px lists are popovers too,
  * and the panel's scrollport would clip them when the group collapses into More. */
 .docx-toolbar__more-panel:has(.docx-toolbar__font-family-content),
-.docx-toolbar__more-panel:has(.docx-toolbar__style-content),
-.docx-toolbar__more-panel:has(.docx-table-chrome__panel) {
+.docx-toolbar__more-panel:has(.docx-toolbar__style-content) {
   overflow-y: visible;
+}
+
+/* Table popovers open in the first More section. Keep the panel as a scrollport while
+ * one is open: making its overflow visible also exposes every later section below the card's
+ * max-height, so controls appear to leak through the panel. The absolutely positioned popover
+ * contributes to the scrollable overflow and remains reachable inside the bounded card. */
+.docx-toolbar__more-panel:has(.docx-table-chrome__panel) {
+  overflow-y: auto;
 }
 
 /* Right-edge escape, matching the font-size menu below. */

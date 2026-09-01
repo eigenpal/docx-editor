@@ -545,9 +545,16 @@ describe('toolbar overflow integration', () => {
 
     const pickerHatch =
       coreCss.match(
-        /\.docx-toolbar__more-panel:has\(\.docx-toolbar__font-family-content\),\s*\.docx-toolbar__more-panel:has\(\.docx-toolbar__style-content\),\s*\.docx-toolbar__more-panel:has\(\.docx-table-chrome__panel\)\s*\{[^}]+\}/
+        /\.docx-toolbar__more-panel:has\(\.docx-toolbar__font-family-content\),\s*\.docx-toolbar__more-panel:has\(\.docx-toolbar__style-content\)\s*\{[^}]+\}/
       )?.[0] ?? '';
     expect(pickerHatch).toContain('overflow-y: visible');
+
+    const tablePickerContainment =
+      coreCss.match(
+        /\.docx-toolbar__more-panel:has\(\.docx-table-chrome__panel\)\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(tablePickerContainment).toContain('overflow-y: auto');
+    expect(tablePickerContainment).not.toContain('overflow-y: visible');
 
     const fontSizeRule =
       coreCss.match(/\.docx-toolbar__more-panel \.docx-toolbar__font-size-menu\s*\{[^}]+\}/)?.[0] ??
