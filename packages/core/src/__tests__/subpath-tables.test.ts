@@ -159,6 +159,24 @@ describe('the published subpath tables agree', () => {
     }
   });
 
+  test('one build owns the one declaration graph selected by every export', () => {
+    // `types` is the outer condition for every JS subpath, so import and require
+    // consumers both select the same `.d.ts` declaration graph. tsup evaluates
+    // array configs concurrently: enabling DTS on both formats does not improve
+    // that public contract, but it does build a second unused `.d.cts` graph at
+    // the same time and can exhaust a constrained preview builder.
+    const typeTargets = jsSubpaths.map((subpath) => {
+      const value = manifest.exports[subpath] as { types?: unknown };
+      return value.types;
+    });
+    expect(
+      typeTargets.every((target) => typeof target === 'string' && target.endsWith('.d.ts'))
+    ).toBe(true);
+
+    const [esm, cjs] = configs as readonly (BuildConfig & { dts?: boolean })[];
+    expect({ esm: esm!.dts, cjs: cjs!.dts }).toEqual({ esm: true, cjs: false });
+  });
+
   test('only the build that inlines the runtime aliases Node’s `module`', () => {
     // `module` is a bare Node specifier, not a subpath of this package. Aliasing it is how
     // the inlined HarfBuzz runtime stops reaching for a builtin no browser bundler can

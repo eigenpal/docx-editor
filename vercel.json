@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "if [ \"$VERCEL_ENV\" = production ]; then bun run build; else bun run build:preview; fi",
+  "buildCommand": "export NODE_OPTIONS=\"--max-old-space-size=4096${NODE_OPTIONS:+ $NODE_OPTIONS}\"; if [ \"$VERCEL_ENV\" = production ]; then bun run build; else bun run build:preview; fi",
   "outputDirectory": "examples/parity/dist",
   "installCommand": "rm -rf node_modules && bun install --frozen-lockfile",
   "redirects": [{ "source": "/", "destination": "/react/", "permanent": false }],
