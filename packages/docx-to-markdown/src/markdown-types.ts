@@ -5,6 +5,12 @@ import type {
   OpenDocumentForExportOptions,
 } from '@docx-editor.dev/core/export';
 import type { FontOrigin } from '@docx-editor.dev/core/export';
+import type {
+  MarkdownComment,
+  MarkdownReviewArtifact,
+  MarkdownReviewBinding,
+  MarkdownTrackedChange,
+} from './markdown-review-bindings.ts';
 
 /** Markdown emitted for one physical layout page. @public */
 export interface MarkdownPage {
@@ -18,6 +24,10 @@ export interface MarkdownPage {
   readonly headerMarkdown: string;
   /** Footer story for this page, kept separate from logical document content. */
   readonly footerMarkdown: string;
+  /** Comments with at least one physical occurrence on this page. */
+  readonly comments: readonly MarkdownComment[];
+  /** Tracked changes with at least one physical occurrence on this page. */
+  readonly trackedChanges: readonly MarkdownTrackedChange[];
 }
 
 /** Machine-readable scope of the page numbers returned by this export. @public */
@@ -36,6 +46,12 @@ export interface MarkdownPaginationInfo {
 export interface MarkdownExportResult {
   /** Primary physical page projections, preserving Word layout boundaries and furniture. */
   readonly pages: readonly MarkdownPage[];
+  /** Every normalized comment and tracked change, including artifacts without a page occurrence. */
+  readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
+  /** Markdown offsets stable within this immutable result, with explicit mapping fidelity. */
+  readonly reviewBindings: readonly MarkdownReviewBinding[];
+  /** Structured font-resolution evidence, or null when the layout's font origin is unavailable. */
+  readonly fontResolution: ExportFontResolutionReport | null;
   /** How page numbers and tracked changes were projected for this result. */
   readonly pagination: MarkdownPaginationInfo;
   /** Convenience logical Markdown with split records joined and repeated furniture excluded. */
@@ -65,6 +81,11 @@ export type MarkdownFontsSource = MarkdownFontOrigin | readonly MarkdownFontOrig
 
 /** Layout controls for a reusable Markdown export session. @public */
 export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExportOptions {
+  /**
+   * Retains incremental state for a live view or caller-measured session. Document-aware byte
+   * sessions are immutable and reject `true` instead of silently ignoring it.
+   */
+  readonly reuseAcrossRevisions?: boolean;
   /**
    * Caller-supplied font bytes or resolvers, in first-wins order. These take precedence over the
    * package's bundled metric-compatible Word substitutes. A resolver is invoked after the DOCX is

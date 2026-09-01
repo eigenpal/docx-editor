@@ -119,7 +119,8 @@ const CONTENT_KINDS: Readonly<Record<string, ReviewRevisionKind>> = {
   revisionMoveTo: 'moveTo',
 };
 
-interface ReviewDerivationDependencies {
+/** @internal */
+export interface ReviewDerivationDependencies {
   readonly retainRevisionItems: boolean;
   readonly revisionSites: typeof collectRevisionSites;
   readonly locations: typeof locateSites;
@@ -720,7 +721,8 @@ export function collectReviewItems(input: ReviewModelInput): ReviewItem[] {
   return collectReviewItemsWith(input, interactiveReviewDerivation);
 }
 
-function collectReviewItemsWith(
+/** @internal */
+export function collectReviewItemsWith(
   input: ReviewModelInput,
   dependencies: ReviewDerivationDependencies
 ): ReviewItem[] {

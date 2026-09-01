@@ -159,7 +159,10 @@ export class ExportResourceError extends Error {
 }
 
 // @public
-export type ExportSemanticLayout = SemanticLayout;
+export interface ExportSemanticLayout extends SemanticLayout {
+    // (undocumented)
+    readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
+}
 
 // @public
 export interface ExportSession {
@@ -336,14 +339,25 @@ export interface LayoutBox {
 }
 
 // @public
+export type MarkdownComment = SemanticCommentArtifactRecord;
+
+// @public
 export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions, MarkdownTranslationOptions {
 }
 
 // @public
 export interface MarkdownExportResult {
+    readonly fontResolution: ExportFontResolutionReport | null;
     readonly markdown: string;
     readonly pages: readonly MarkdownPage[];
     readonly pagination: MarkdownPaginationInfo;
+    readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
+    readonly reviewBindings: readonly MarkdownReviewBinding[];
+}
+
+// @public
+export interface MarkdownExportSession extends ExportSession {
+    readonly fontResolution: ExportFontResolutionReport | null;
 }
 
 // @public
@@ -361,11 +375,13 @@ export type MarkdownImageResult = {
 
 // @public
 export interface MarkdownPage {
+    readonly comments: readonly MarkdownComment[];
     readonly footerMarkdown: string;
     readonly headerMarkdown: string;
     readonly id: string;
     readonly markdown: string;
     readonly number: number;
+    readonly trackedChanges: readonly MarkdownTrackedChange[];
 }
 
 // @public
@@ -377,12 +393,59 @@ export interface MarkdownPaginationInfo {
 }
 
 // @public
+export type MarkdownReviewArtifact = SemanticReviewArtifactRecord;
+
+// @public
+export interface MarkdownReviewBinding {
+    readonly artifactId: string;
+    readonly artifactKind: MarkdownReviewArtifact['kind'];
+    readonly coverage: MarkdownReviewCoverage;
+    readonly occurrenceIndex: number;
+    readonly projection: MarkdownReviewProjection;
+    readonly ranges: readonly MarkdownReviewRange[];
+    readonly unmappedReason?: MarkdownReviewUnmappedReason;
+}
+
+// @public
+export type MarkdownReviewCoverage = 'complete' | 'partial' | 'none';
+
+// @public
+export type MarkdownReviewOccurrence = SemanticReviewArtifactRecord['occurrences'][number];
+
+// @public
+export type MarkdownReviewProjection = {
+    readonly kind: 'document';
+} | {
+    readonly field: 'markdown' | 'headerMarkdown' | 'footerMarkdown';
+    readonly kind: 'page';
+    readonly pageIndex: number;
+    readonly pageNumber: number;
+};
+
+// @public
+export interface MarkdownReviewRange {
+    readonly end: number;
+    readonly precision: MarkdownReviewRangePrecision;
+    readonly start: number;
+    readonly unit: 'utf16-code-unit';
+}
+
+// @public
+export type MarkdownReviewRangePrecision = 'exact' | 'containing-construct';
+
+// @public
+export type MarkdownReviewUnmappedReason = 'not-represented-in-markdown' | 'non-linear-structural-change' | 'omitted-story-content';
+
+// @public
+export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
+
+// @public
 export interface MarkdownTranslationOptions {
     readonly image?: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => MarkdownImageResult;
 }
 
 // @public
-export function openDocumentForExport(source: ExportDocumentSource, options?: OpenMarkdownDocumentForExportOptions): Promise<OpenDocumentForExportResult>;
+export function openDocumentForExport(source: ExportDocumentSource, options?: OpenMarkdownDocumentForExportOptions): Promise<OpenMarkdownDocumentForExportResult>;
 
 // @public
 export interface OpenDocumentForExportOptions {
@@ -412,7 +475,16 @@ export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExp
     readonly fontPolicy?: 'best-effort' | 'strict';
     readonly fonts?: MarkdownFontsSource;
     readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
+    readonly reuseAcrossRevisions?: boolean;
 }
+
+// @public
+export type OpenMarkdownDocumentForExportResult = {
+    readonly ok: true;
+    readonly session: MarkdownExportSession;
+} | Exclude<OpenDocumentForExportResult, {
+    readonly ok: true;
+}>;
 
 // @public
 export type PreservedImageConverter = (bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,
@@ -436,6 +508,40 @@ export interface RevisionAttribution {
 
 // @public
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public
+export type SemanticArtifactRootStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
+
+// @public
+export type SemanticArtifactStoryKind = SemanticArtifactRootStoryKind | 'textbox';
+
+// @public
+export interface SemanticCommentArtifactRecord {
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly initials: string;
+    // (undocumented)
+    readonly kind: 'comment';
+    // (undocumented)
+    readonly occurrences: readonly SemanticReviewArtifactOccurrence[];
+    // (undocumented)
+    readonly orphaned: boolean;
+    // (undocumented)
+    readonly parentId?: string;
+    // (undocumented)
+    readonly parentRevisionId?: string;
+    // (undocumented)
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly resolved: boolean;
+    // (undocumented)
+    readonly text: string;
+}
 
 // @public
 export interface SemanticDrawingVisit extends StoryDrawingContext {
@@ -462,7 +568,79 @@ export interface SemanticLayout {
     readonly displayMode?: RevisionDisplayMode;
     // (undocumented)
     readonly pages: readonly PageRecord[];
+    readonly reviewArtifacts?: readonly SemanticReviewArtifactRecord[];
     readonly revision: number;
+}
+
+// @public
+export interface SemanticReviewArtifactOccurrence {
+    // (undocumented)
+    readonly noteAreaKind: 'footnotes' | 'endnotes' | null;
+    // (undocumented)
+    readonly noteScopeId: string | null;
+    // (undocumented)
+    readonly pageIndex: number;
+    // (undocumented)
+    readonly physicalPageNumber: number;
+    readonly revisionRole?: 'replaced' | 'replacement' | 'neutral';
+    // (undocumented)
+    readonly rootStory: SemanticArtifactRootStoryKind;
+    // (undocumented)
+    readonly source: SemanticReviewArtifactSource;
+    // (undocumented)
+    readonly story: SemanticArtifactStoryKind;
+    readonly textboxPath: readonly string[];
+}
+
+// @public
+export interface SemanticReviewArtifactPosition {
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export type SemanticReviewArtifactRecord = SemanticTrackedChangeArtifactRecord | SemanticCommentArtifactRecord;
+
+// @public
+export interface SemanticReviewArtifactSource {
+    // (undocumented)
+    readonly end: SemanticReviewArtifactPosition;
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly start: SemanticReviewArtifactPosition;
+}
+
+// @public
+export interface SemanticTrackedChangeArtifactRecord {
+    // (undocumented)
+    readonly author: string;
+    // (undocumented)
+    readonly change: 'insert' | 'delete' | 'replace' | 'moveFrom' | 'moveTo' | 'format' | 'paragraphMark' | 'structural';
+    // (undocumented)
+    readonly date?: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: 'tracked-change';
+    // (undocumented)
+    readonly markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
+    readonly nesting: number;
+    // (undocumented)
+    readonly occurrences: readonly SemanticReviewArtifactOccurrence[];
+    // (undocumented)
+    readonly pairedWith?: string;
+    // (undocumented)
+    readonly readOnly: boolean;
+    readonly replacedRangeCount?: number;
+    // (undocumented)
+    readonly replacedText: string;
+    // (undocumented)
+    readonly replyIds: readonly string[];
+    // (undocumented)
+    readonly text: string;
 }
 
 // @public

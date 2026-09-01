@@ -316,17 +316,39 @@ test('font provisioning maps host abort and deadline to typed errors and permits
         request.signal?.addEventListener('abort', () => resolve(undefined), { once: true });
       })
   );
-  for (const [options, code] of [
-    [{ fonts: never, signal: controller.signal }, 'aborted'],
-    [{ fonts: never, fontResolutionTimeoutMs: 5 }, 'timedOut'],
-  ] as const) {
-    try {
-      await openFontBackedDocumentForExport(fontCatalogDocx(), options);
-      throw new Error('expected resource failure');
-    } catch (error) {
-      expect(error).toBeInstanceOf(ExportResourceError);
-      expect((error as ExportResourceError).code).toBe(code);
-    }
+  const aborted = await openFontBackedDocumentForExport(fontCatalogDocx(), {
+    fonts: never,
+    signal: controller.signal,
+  });
+  expect(aborted).toEqual({ ok: false, reason: 'aborted' });
+  const inFlightController = new AbortController();
+  let markStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+  const inFlight = openFontBackedDocumentForExport(fontCatalogDocx(), {
+    fonts: defineFontResolver(
+      (request: FontResolutionRequest) =>
+        new Promise<undefined>((resolve) => {
+          markStarted?.();
+          request.signal?.addEventListener('abort', () => resolve(undefined), { once: true });
+        })
+    ),
+    signal: inFlightController.signal,
+  });
+  await started;
+  // A caller may use the old textual timeout marker as its own reason; it must remain a host abort.
+  inFlightController.abort('font-resolution-timeout');
+  expect(await inFlight).toEqual({ ok: false, reason: 'aborted' });
+  try {
+    await openFontBackedDocumentForExport(fontCatalogDocx(), {
+      fonts: never,
+      fontResolutionTimeoutMs: 5,
+    });
+    throw new Error('expected resource failure');
+  } catch (error) {
+    expect(error).toBeInstanceOf(ExportResourceError);
+    expect((error as ExportResourceError).code).toBe('timedOut');
   }
 
   let lateFallbackCalls = 0;
@@ -363,7 +385,7 @@ test('font provisioning maps host abort and deadline to typed errors and permits
   if (retry.ok) retry.session.dispose();
 });
 
-test('a pre-aborted custom-font export invokes no origin and preserves the host reason', async () => {
+test('a pre-aborted custom-font export returns the typed refusal and invokes no origin', async () => {
   const reason = { job: 'cancelled-before-fonts' };
   const controller = new AbortController();
   controller.abort(reason);
@@ -372,18 +394,21 @@ test('a pre-aborted custom-font export invokes no origin and preserves the host 
     calls += 1;
     return fontFragment();
   });
-  try {
-    await openFontBackedDocumentForExport(fontCatalogDocx(), {
-      fonts: resolver,
-      signal: controller.signal,
-    });
-    throw new Error('expected pre-abort');
-  } catch (error) {
-    expect(error).toBeInstanceOf(ExportResourceError);
-    expect((error as ExportResourceError).code).toBe('aborted');
-    expect((error as Error & { cause?: unknown }).cause).toBe(reason);
-  }
+  const opened = await openFontBackedDocumentForExport(fontCatalogDocx(), {
+    fonts: resolver,
+    signal: controller.signal,
+  });
+  expect(opened).toEqual({ ok: false, reason: 'aborted' });
   expect(calls).toBe(0);
+});
+
+test('font-backed byte sessions reject incremental reuse at the Core boundary', async () => {
+  await expect(
+    openFontBackedDocumentForExport(fontCatalogDocx(), {
+      fonts: fontFragment(),
+      ...({ reuseAcrossRevisions: true } as Record<string, unknown>),
+    })
+  ).rejects.toThrow('document-aware byte sessions are immutable');
 });
 
 test('caller abort releases the document font lease without requiring explicit disposal', async () => {
@@ -444,7 +469,13 @@ test('structured font evidence reports failures and strict mode enforces complet
   expect(report?.originFailures).toHaveLength(1);
   expect(report?.originFailures[0]?.originIndex).toBe(0);
   expect(report?.families.every((family) => family.coverage === 'complete')).toBe(true);
-  if (bestEffort.ok) bestEffort.session.dispose();
+  if (!report) throw new Error('expected font-resolution evidence');
+  if (bestEffort.ok) {
+    expect(bestEffort.session.fontResolution).toBe(report);
+    expect(Object.isFrozen(bestEffort.session.fontResolution)).toBe(true);
+    bestEffort.session.dispose();
+    expect(bestEffort.session.fontResolution).toBe(report);
+  }
 
   try {
     await openFontBackedDocumentForExport(fontCatalogDocx(), {
@@ -480,7 +511,10 @@ test('font-report callback failures are observed without affecting export', asyn
       }
     );
     expect(synchronous.ok).toBe(true);
-    if (synchronous.ok) synchronous.session.dispose();
+    if (synchronous.ok) {
+      expect(synchronous.session.fontResolution.families.length).toBeGreaterThan(0);
+      synchronous.session.dispose();
+    }
 
     const opened = await openFontBackedDocumentForExport(
       minimalDocx('<w:p><w:r><w:t>Diagnostics</w:t></w:r></w:p>'),
@@ -492,7 +526,10 @@ test('font-report callback failures are observed without affecting export', asyn
       }
     );
     expect(opened.ok).toBe(true);
-    if (opened.ok) opened.session.dispose();
+    if (opened.ok) {
+      expect(opened.session.fontResolution.families.length).toBeGreaterThan(0);
+      opened.session.dispose();
+    }
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(unhandled).toHaveLength(0);
     expect(warnings).toHaveLength(2);

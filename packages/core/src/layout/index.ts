@@ -189,6 +189,16 @@ export {
   type TableRowFragmentRecord,
   type TextMeasurer,
 } from './semantic-records.ts';
+export type {
+  SemanticArtifactRootStoryKind,
+  SemanticArtifactStoryKind,
+  SemanticCommentArtifactRecord,
+  SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactPosition,
+  SemanticReviewArtifactRecord,
+  SemanticReviewArtifactSource,
+  SemanticTrackedChangeArtifactRecord,
+} from './review-artifact-records.ts';
 export {
   exportSourceRangeOf,
   forEachSemanticDrawing,

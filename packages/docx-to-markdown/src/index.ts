@@ -6,12 +6,15 @@
  */
 import {
   acquireSharedExportShaping,
+  ExportResourceError,
   openFontBackedDocumentForExport,
   openDocumentForExport as openCoreDocumentForExport,
   type ExportDocumentSource,
+  type ExportFontResolutionReport,
   type ExportSemanticLayout,
   type ExportSession,
   type OpenDocumentForExportResult,
+  type OpenFontBackedDocumentForExportResult,
 } from '@docx-editor.dev/core/export';
 import {
   HARD_MAX_FONT_BYTES,
@@ -59,8 +62,16 @@ export type {
 } from '@docx-editor.dev/core/export';
 export type {
   AnchoredDrawingLayoutFallback,
+  SemanticArtifactRootStoryKind,
+  SemanticArtifactStoryKind,
+  SemanticCommentArtifactRecord,
   SemanticDrawingVisit,
   SemanticLayout,
+  SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactPosition,
+  SemanticReviewArtifactRecord,
+  SemanticReviewArtifactSource,
+  SemanticTrackedChangeArtifactRecord,
   AnchoredDrawingRecord,
   DrawingAccessibility,
   DrawingGeometry,
@@ -94,6 +105,18 @@ export type {
   OpenMarkdownDocumentForExportOptions,
   MarkdownTranslationOptions,
 } from './markdown-types.ts';
+export type {
+  MarkdownComment,
+  MarkdownReviewCoverage,
+  MarkdownReviewArtifact,
+  MarkdownReviewBinding,
+  MarkdownReviewOccurrence,
+  MarkdownReviewProjection,
+  MarkdownReviewRange,
+  MarkdownReviewRangePrecision,
+  MarkdownReviewUnmappedReason,
+  MarkdownTrackedChange,
+} from './markdown-review-bindings.ts';
 
 /** Typed one-shot failure for bytes that cannot be opened as a supported DOCX. @public */
 export class DocumentOpenError extends Error {
@@ -149,11 +172,62 @@ function fontOrigins(source: MarkdownFontsSource | undefined): readonly Markdown
   return Array.isArray(source) ? source : [source as MarkdownFontOrigin];
 }
 
+/** Reusable Markdown session with the font evidence captured while it opened. @public */
+export interface MarkdownExportSession extends ExportSession {
+  /**
+   * Non-null for document-aware byte sessions opened by Markdown or Core; null for detached
+   * layouts, caller-supplied measurers, ordinary Core sessions, and live shared-shaping sessions.
+   */
+  readonly fontResolution: ExportFontResolutionReport | null;
+}
+
+/** Open result whose successful session retains its structured font-resolution report. @public */
+export type OpenMarkdownDocumentForExportResult =
+  | { readonly ok: true; readonly session: MarkdownExportSession }
+  | Exclude<OpenDocumentForExportResult, { readonly ok: true }>;
+
+function markdownSession(
+  session: ExportSession,
+  fontResolution: ExportFontResolutionReport | null
+): MarkdownExportSession {
+  return Object.freeze({
+    fontResolution,
+    layout: () => session.layout(),
+    layoutFor: (displayMode: Parameters<ExportSession['layoutFor']>[0]) =>
+      session.layoutFor(displayMode),
+    validatedImageBytes: (drawing: Parameters<ExportSession['validatedImageBytes']>[0]) =>
+      session.validatedImageBytes(drawing),
+    dispose: () => session.dispose(),
+  });
+}
+
+function markdownOpenResult(
+  result: OpenDocumentForExportResult,
+  fontResolution: ExportFontResolutionReport | null
+): OpenMarkdownDocumentForExportResult {
+  return result.ok
+    ? { ok: true, session: markdownSession(result.session, fontResolution) }
+    : result;
+}
+
+function markdownFontBackedOpenResult(
+  result: OpenFontBackedDocumentForExportResult
+): OpenMarkdownDocumentForExportResult {
+  return result.ok ? { ok: true, session: result.session } : result;
+}
+
+function withFontResolution(
+  result: MarkdownExportResult,
+  fontResolution: ExportFontResolutionReport | null
+): MarkdownExportResult {
+  return Object.freeze({ ...result, fontResolution });
+}
+
 /** Open a reusable export session with packaged fonts and HarfBuzz shaping by default. @public */
 export async function openDocumentForExport(
   source: ExportDocumentSource,
   options: OpenMarkdownDocumentForExportOptions = {}
-): Promise<OpenDocumentForExportResult> {
+): Promise<OpenMarkdownDocumentForExportResult> {
   const { fonts: _fonts, fallbackFonts: _fallbackFonts, ...coreOptions } = options;
   if (options.measurer) {
     if (options.fontPolicy !== undefined || options.onFontResolution !== undefined) {
@@ -162,7 +236,7 @@ export async function openDocumentForExport(
           'omit measurer to use document-aware Core font resolution'
       );
     }
-    return openCoreDocumentForExport(source, coreOptions);
+    return markdownOpenResult(await openCoreDocumentForExport(source, coreOptions), null);
   }
   const callerFonts = fontOrigins(options.fonts);
   const missingFonts = fontOrigins(options.fallbackFonts);
@@ -172,10 +246,19 @@ export async function openDocumentForExport(
     options.fontPolicy !== undefined ||
     options.onFontResolution !== undefined;
   if (isByteSource(source)) {
-    return openFontBackedDocumentForExport(source, {
+    if (options.reuseAcrossRevisions === true) {
+      throw new TypeError(
+        'reuseAcrossRevisions requires a live view or caller-supplied measurer; ' +
+          'document-aware byte sessions are immutable'
+      );
+    }
+    const opened = await openFontBackedDocumentForExport(source, {
       ...coreOptions,
+      reuseAcrossRevisions: false,
       fonts: [...callerFonts, packagedExportFonts, ...missingFonts],
+      onFontResolution: options.onFontResolution,
     });
+    return markdownFontBackedOpenResult(opened);
   }
   if (hasCustomFontPolicy) {
     throw new TypeError(
@@ -191,12 +274,15 @@ export async function openDocumentForExport(
       defaultFonts(signal).then((loaded) => acquireSharedExportShaping(loaded.configuration)),
     options
   );
-  return openCoreDocumentForExport(source, {
-    ...coreOptions,
-    reuseAcrossRevisions: options.reuseAcrossRevisions,
-    measurer: shared.createMeasurer(),
-    producer: options.producer ?? shared.producer,
-  });
+  return markdownOpenResult(
+    await openCoreDocumentForExport(source, {
+      ...coreOptions,
+      reuseAcrossRevisions: options.reuseAcrossRevisions,
+      measurer: shared.createMeasurer(),
+      producer: options.producer ?? shared.producer,
+    }),
+    null
+  );
 }
 
 /** Translate an existing shared export session without reopening or re-laying out it. @public */
@@ -204,7 +290,14 @@ export function exportMarkdownFrom(
   session: ExportSession,
   options: MarkdownTranslationOptions = {}
 ): Promise<MarkdownExportResult> {
-  return translateMarkdown(session, options);
+  return translateMarkdown(session, options).then((result) =>
+    withFontResolution(
+      result,
+      'fontResolution' in session
+        ? (session as MarkdownExportSession).fontResolution
+        : result.fontResolution
+    )
+  );
 }
 
 /** Translate a detached immutable core layout after its producer session is disposed. @public */
@@ -222,6 +315,11 @@ export async function exportMarkdown(
 ): Promise<MarkdownExportResult> {
   const opened = await openDocumentForExport(source, options);
   if (!opened.ok) {
+    if (opened.reason === 'aborted') {
+      throw new ExportResourceError('aborted', 'Export was aborted before layout', {
+        cause: options.signal?.reason,
+      });
+    }
     throw new DocumentOpenError(opened.reason, opened.detail);
   }
   let layout: ExportSemanticLayout;
@@ -230,5 +328,8 @@ export async function exportMarkdown(
   } finally {
     opened.session.dispose();
   }
-  return translateMarkdownLayout(layout, options);
+  return withFontResolution(
+    translateMarkdownLayout(layout, options),
+    opened.session.fontResolution
+  );
 }

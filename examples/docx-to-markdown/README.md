@@ -10,12 +10,20 @@ bun dev:markdown
 
 Open <http://localhost:5177>. Upload or drag in a `.docx`, edit it, and pause briefly to refresh the
 Markdown. Preview mode renders GitHub-flavored Markdown, including tables and task lists; Source mode
-shows the exact Markdown for each page's body, header, and footer.
+shows the exact Markdown for each page's body, header, and footer. Comments are presented from the
+separate review sidecar: Preview pairs each thread with its selected Markdown range, while Source
+shows the same information as plain text without modifying the exported document Markdown.
 
 The preview uses `react-markdown`, `remark-gfm`, `rehype-raw`, and `rehype-sanitize`. It does not
 implement a Markdown parser. Because GFM cannot represent a table inside another table, the exporter
 uses narrowly scoped inline HTML for nested tables; the demo's sanitizer admits only those known
 span classes and ARIA roles.
+
+Embedded pictures stay client-side. The demo opens a reusable export session, reads only
+Core-validated image bytes, deduplicates them by content identity, and maps drawings to revocable
+Blob URLs. The exporter emits ordinary `![alt](url)` Markdown. Blob URLs are appropriate for the
+live preview only; production callers should use the same image callback to return persisted URLs,
+data URLs, or paths in an exported asset directory.
 
 The demo uses the same font ordering as production export: packaged metric-compatible faces first,
 then the opt-in Google Fonts resolver for families declared by the current document. Both the editor

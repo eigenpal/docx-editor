@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test';
-import type { SemanticLayout } from '@docx-editor.dev/core/layout';
+import type { ExportSemanticLayout } from '@docx-editor.dev/core/export';
 import { exportMarkdownLayout } from '../src/index.ts';
 
 test('uses all-markup consistently when a raw Core layout omits displayMode', () => {
   const layout = {
     revision: 1,
+    reviewArtifacts: [],
     pages: [
       {
         index: 0,
@@ -35,7 +36,7 @@ test('uses all-markup consistently when a raw Core layout omits displayMode', ()
         ],
       },
     ],
-  } as unknown as SemanticLayout;
+  } as unknown as ExportSemanticLayout;
 
   const result = exportMarkdownLayout(layout);
 

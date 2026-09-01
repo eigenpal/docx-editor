@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { FONT_ASSET_MANIFEST } from '@docx-editor.dev/fonts';
+import { openHeadlessDocument } from '@docx-editor.dev/core/store';
 import {
   DocumentOpenError,
   ExportResourceError,
@@ -47,6 +48,10 @@ describe('server-first defaults', () => {
     expect(opened.ok).toBe(true);
     if (!opened.ok) return;
     try {
+      expect(opened.session.fontResolution).toMatchObject({
+        defaultFamily: 'Calibri',
+        originFailures: [],
+      });
       const layout = await opened.session.layout();
       expect(layout.pages).toHaveLength(1);
       const paragraph = layout.pages[0]?.fragments.find(
@@ -54,9 +59,25 @@ describe('server-first defaults', () => {
       );
       expect(paragraph?.kind === 'paragraph' ? paragraph.lines.length : 0).toBe(4);
       const translated = await exportMarkdown(bytes);
+      expect(translated.fontResolution).toEqual(opened.session.fontResolution);
       expect(translated.markdown).toBe(
         'The quick brown fox jumps over the lazy dog repeatedly across this narrow page\\.'
       );
+    } finally {
+      opened.session.dispose();
+    }
+  });
+
+  test('reports unavailable font evidence for live views using shared shaping', async () => {
+    const parsed = openHeadlessDocument(docx('<w:p><w:r><w:t>Live view</w:t></w:r></w:p>'));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const opened = await openDocumentForExport(parsed.view);
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) return;
+    try {
+      expect(opened.session.fontResolution).toBeNull();
+      expect((await exportMarkdownFrom(opened.session)).fontResolution).toBeNull();
     } finally {
       opened.session.dispose();
     }

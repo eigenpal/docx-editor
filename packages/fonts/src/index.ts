@@ -134,7 +134,10 @@ export interface LoadDefaultFontsOptions {
   readonly families?: readonly WordDefaultFamily[];
   /** Injectable for tests; defaults to global `fetch`. */
   readonly fetcher?: typeof fetch;
-  /** Cancels outstanding face reads. */
+  /**
+   * Cancels outstanding reads in `loadDefaultFonts` and `defaultFonts`. Cancellation rejects with
+   * `signal.reason`; it is not reported as one failure per face and does not call `onFailure`.
+   */
   readonly signal?: AbortSignal;
 }
 
@@ -197,7 +200,8 @@ const fileFromSourceId = (id: string): string | undefined =>
  *
  * Only the requested families' assets are fetched, in parallel. A face that fails to
  * load appears in `failures` and the rest of the fragment stays usable — compose it
- * anyway and the missing face measures via the engine's fixed fallback.
+ * anyway and the missing face measures via the engine's fixed fallback. Caller cancellation is
+ * different: the promise rejects with `signal.reason` and returns no partial failure report.
  */
 export async function loadDefaultFonts(
   options: LoadDefaultFontsOptions = {}
@@ -255,6 +259,10 @@ export async function loadDefaultFonts(
               faceIndex: 0,
             });
           } catch (error) {
+            // Cancellation belongs to the caller's operation, not to any individual face.
+            // Propagate it so superseded exports do not report every concurrent fetch as a
+            // separate font failure (or seed a partial fragment from an abandoned load).
+            if (options.signal?.aborted) throw options.signal.reason ?? error;
             failures.push({
               family,
               file,
@@ -381,9 +389,10 @@ export async function installDefaultFontFaces(
  * substitutes; {@link installDefaultFontFaces} alone paints correctly and paginates wrong.
  * Every host was writing the same six lines to pair them, so this is that pairing.
  *
- * Failures are WARNED, not thrown: a face that will not load degrades that one family to
- * fixed-width measurement, which is a worse-looking document rather than no document. Pass
- * `onFailure` to route them somewhere other than the console.
+ * Non-cancellation face failures are WARNED, not thrown: one unavailable face degrades that
+ * family to fixed-width measurement rather than refusing the document. Pass `onFailure` to route
+ * them somewhere other than the console. Caller cancellation rejects with `signal.reason` before
+ * any per-face warnings or callbacks are produced.
  */
 export async function defaultFonts(
   options: LoadDefaultFontsOptions & {
@@ -469,7 +478,10 @@ export interface FontOriginRequest {
   readonly families: readonly string[];
   /** The face a run naming no font resolves to. The engine reports Calibri by default. */
   readonly defaultFamily: string;
-  /** Cancels document-scoped resolution. */
+  /**
+   * Cancels document-scoped resolution. `packagedFonts` rejects with `signal.reason` and does not
+   * translate cancellation into per-face failures or `onFailure` callbacks.
+   */
   readonly signal?: AbortSignal;
   /** Faces an earlier origin in the same composition can already paint. */
   readonly resolvedFaces?: readonly ResolvedFontFace[];
@@ -493,7 +505,10 @@ export interface PackagedFontsOptions {
   readonly allow?: readonly WordDefaultFamily[];
   /** Injectable for tests; defaults to global `fetch`. */
   readonly fetcher?: typeof fetch;
-  /** Per-face failures. Defaults to a console warning; pass a handler to route them. */
+  /**
+   * Non-cancellation per-face failures. Defaults to a console warning; pass a handler to route
+   * them. Caller cancellation rejects the resolver without invoking this callback.
+   */
   readonly onFailure?: (failure: DefaultFontLoadFailure) => void;
   /**
    * Set `false` to skip the paint-side `FontFace` registration

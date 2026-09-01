@@ -285,4 +285,27 @@ describe('packagedFonts', () => {
     expect(fragment.sources).toHaveLength(0);
     expect(fragment.substitutions).toHaveLength(4);
   });
+
+  test('propagates cancellation without reporting every face as a failure', async () => {
+    const controller = new AbortController();
+    const failures: string[] = [];
+    const waiting = ((_input: RequestInfo | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('The user aborted a request.', 'AbortError')),
+          { once: true }
+        );
+      })) as typeof fetch;
+    const pending = packagedFonts({
+      fetcher: waiting,
+      install: false,
+      onFailure: (failure) => failures.push(failure.diagnostic),
+    })({ families: [], defaultFamily: 'Calibri', signal: controller.signal });
+
+    controller.abort('superseded');
+
+    await expect(pending).rejects.toBe('superseded');
+    expect(failures).toEqual([]);
+  });
 });

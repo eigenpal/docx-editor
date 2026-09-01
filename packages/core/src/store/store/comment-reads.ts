@@ -218,6 +218,11 @@ export function commentAnchorsOfStory(part: OoxmlPart): CommentAnchor[] {
   return commentAnchorsOfStoryWithPolicy(part, true);
 }
 
+/** Export-only cold derivation that does not populate interactive comment memos. @internal */
+export function commentAnchorsOfStoryTransient(part: OoxmlPart): CommentAnchor[] {
+  return commentAnchorsOfStoryWithPolicy(part, false);
+}
+
 function commentAnchorsOfStoryWithPolicy(
   part: OoxmlPart,
   retainAcrossReads: boolean

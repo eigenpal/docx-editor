@@ -19,7 +19,13 @@ import { readFile } from 'node:fs/promises';
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
 
 const bytes = new Uint8Array(await readFile('document.docx'));
-const { pages } = await exportMarkdown(bytes);
+const { pages, fontResolution } = await exportMarkdown(bytes);
+
+for (const family of fontResolution?.families ?? []) {
+  if (family.coverage !== 'complete') {
+    console.warn(`Incomplete font-face coverage: ${family.family}`);
+  }
+}
 
 for (const page of pages) {
   console.log(`Page ${page.number} (page id: ${page.id})`);
@@ -47,10 +53,10 @@ exportMarkdown(
 openDocumentForExport(
   source: Uint8Array | HeadlessDocumentView,
   options?: OpenMarkdownDocumentForExportOptions
-): Promise<OpenDocumentForExportResult>;
+): Promise<OpenMarkdownDocumentForExportResult>;
 
 exportMarkdownFrom(
-  session: ExportSession,
+  session: MarkdownExportSession | ExportSession,
   options?: MarkdownTranslationOptions
 ): Promise<MarkdownExportResult>;
 
@@ -72,6 +78,12 @@ exporter. `exportMarkdownLayout` translates a snapshot after its session has bee
 interface MarkdownExportResult {
   /** Primary output: physical page projections with page furniture and provenance. */
   readonly pages: readonly MarkdownPage[];
+  /** All comments and tracked changes, including artifacts without a page occurrence. */
+  readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
+  /** Links stable within this immutable result, with explicit mapping fidelity. */
+  readonly reviewBindings: readonly MarkdownReviewBinding[];
+  /** Structured font evidence, or null when the layout's font origin is unavailable. */
+  readonly fontResolution: ExportFontResolutionReport | null;
   /** How this result's pages and revision content were produced. */
   readonly pagination: {
     readonly source: 'layout-engine';
@@ -93,8 +105,46 @@ interface MarkdownPage {
   /** Header and footer are separate from logical document content. */
   readonly headerMarkdown: string;
   readonly footerMarkdown: string;
+  /** Complete artifacts with at least one physical occurrence on this page. */
+  readonly comments: readonly MarkdownComment[];
+  readonly trackedChanges: readonly MarkdownTrackedChange[];
+}
+
+interface MarkdownReviewBinding {
+  readonly artifactId: string;
+  readonly artifactKind: 'comment' | 'tracked-change';
+  readonly occurrenceIndex: number;
+  readonly coverage: 'complete' | 'partial' | 'none';
+  readonly projection:
+    | { readonly kind: 'document' }
+    | {
+        readonly kind: 'page';
+        readonly pageIndex: number;
+        readonly pageNumber: number;
+        readonly field: 'markdown' | 'headerMarkdown' | 'footerMarkdown';
+      };
+  readonly ranges: readonly {
+    readonly start: number;
+    readonly end: number;
+    readonly unit: 'utf16-code-unit';
+    readonly precision: 'exact' | 'containing-construct';
+  }[];
+  readonly unmappedReason?:
+    | 'not-represented-in-markdown'
+    | 'non-linear-structural-change'
+    | 'omitted-story-content';
 }
 ```
+
+`fontResolution` is returned data, not a console side effect. It lists requested families, every
+resolved face and whether it was direct or substituted, per-family `complete`/`partial`/`none`
+coverage, and nonfatal `originFailures`. A reusable `opened.session.fontResolution` retains the
+same report and `exportMarkdownFrom(opened.session)` copies it into its result. It is non-null for
+document-aware byte sessions opened by Markdown or Core. It is `null` when no session owns font
+evidence: detached layouts, caller-supplied measurers, ordinary Core sessions, and live views using
+shared shaping. Fatal
+document-open and resource/layout failures remain typed refusals or thrown
+`DocumentOpenError`/`ExportResourceError`; they are not disguised as font warnings.
 
 `pages` is the primary interface. Page boundaries come from the same layout engine that renders
 the editor; they are not inferred from `w:lastRenderedPageBreak` or approximated after Markdown
@@ -129,32 +179,64 @@ cannot preserve page provenance.
 
 ### Comments and tracked changes
 
-Tracked changes participate through `displayMode`: `all-markup` (default) keeps inserted and
-deleted text visible, `proposed` shows the document as if every change were accepted, and
-`original` shows it as if every change were rejected. A structured review sidecar (per-page
-comment and tracked-change records with Markdown offsets) is planned as a follow-up; ordinary
-Markdown stays clean either way — review metadata is never injected as HTML comments,
-CriticMarkup, or visible footnotes.
+Ordinary Markdown stays clean: comments and revision metadata are not injected as HTML comments,
+CriticMarkup, or visible footnotes. Normalized structured review metadata is returned beside it.
+
+Each page carries the complete comments and tracked changes that physically occur in its body,
+header, footer, footnotes, endnotes, or note separator. An artifact can occur on several pages, so
+filter its occurrences by `occurrence.pageIndex === page.number - 1` when exact page-local source
+provenance matters. `result.reviewArtifacts` is the authoritative document-wide list and also
+retains orphaned comments or structural changes with no linear page occurrence.
+
+`result.reviewBindings` connects each occurrence to offsets in `result.markdown`,
+`page.markdown`, `page.headerMarkdown`, or `page.footerMarkdown`. Offsets use JavaScript UTF-16
+string indexing and can be passed directly to `slice()`:
+
+```ts
+for (const binding of result.reviewBindings) {
+  const output =
+    binding.projection.kind === 'document'
+      ? result.markdown
+      : result.pages[binding.projection.pageIndex]![binding.projection.field];
+
+  for (const range of binding.ranges) {
+    console.log(output.slice(range.start, range.end));
+  }
+}
+```
+
+Use `coverage === 'complete'` with only `precision === 'exact'` ranges for source-aligned edits.
+Citation or presentation workflows can accept partial or `containing-construct` bindings while
+preserving the declared fidelity. Text boxes and structural changes that have no honest linear
+Markdown range remain available as artifacts and carry an explicit `unmappedReason`.
+
+Artifact IDs, occurrence indexes, page IDs, and binding offsets are local to this immutable export
+result. Do not join them across exports; store your own document version or content hash when a
+workflow needs durable identity.
+
+Tracked changes also participate in layout through `displayMode`: `all-markup` (default) keeps
+inserted and deleted text visible, `proposed` shows the accepted view, and `original` shows the
+rejected view. There is no reviewer/author filtering in this API.
 
 ## Options
 
 `MarkdownExportOptions` combines layout/session options with the Markdown image callback.
 
-| Option                  | Meaning                                                                                        |
-| ----------------------- | ---------------------------------------------------------------------------------------------- |
-| `displayMode`           | Tracked-change projection: `all-markup` (default), `proposed`, or `original`.                  |
-| `image`                 | Synchronous mapping from a laid-out drawing to `{ url }` or `{ skip: true }`.                  |
-| `signal`                | Aborts resource waits and later layout work.                                                   |
-| `resourceTimeoutMs`     | Deadline applied separately to initial font provisioning and each layout resource wait.        |
-| `reuseAcrossRevisions`  | Retains incremental state for a live view; defaults to `true` for views and `false` for bytes. |
-| `fonts`                 | Caller configuration/resolver, first-wins; requires immutable DOCX-byte input.                 |
-| `fallbackFonts`         | Opt-in origins after bundled substitutes; requires bytes; use for `googleFonts()`.             |
-| `fontPolicy`            | `best-effort` (default), or `strict` to require all four static faces and no origin failures.  |
-| `onFontResolution`      | Receives requested, direct/substituted, unresolved, and failed-origin evidence.                |
-| `measurer`              | Host-owned text measurer; when present it takes precedence over all font origins.              |
-| `producer`              | Stable identity for a host-owned measurer and its cache entries.                               |
-| `imageDecodePort`       | Host image metadata decoder. Omit for the bounded Node decoder.                                |
-| `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                       |
+| Option                  | Meaning                                                                                       |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| `displayMode`           | Tracked-change projection: `all-markup` (default), `proposed`, or `original`.                 |
+| `image`                 | Synchronous mapping from a laid-out drawing to `{ url }` or `{ skip: true }`.                 |
+| `signal`                | Aborts resource waits and later layout work.                                                  |
+| `resourceTimeoutMs`     | Deadline applied separately to initial font provisioning and each layout resource wait.       |
+| `reuseAcrossRevisions`  | Retains state for live/caller-measured sessions; document-aware byte sessions reject `true`.  |
+| `fonts`                 | Caller configuration/resolver, first-wins; requires immutable DOCX-byte input.                |
+| `fallbackFonts`         | Opt-in origins after bundled substitutes; requires bytes; use for `googleFonts()`.            |
+| `fontPolicy`            | `best-effort` (default), or `strict` to require all four static faces and no origin failures. |
+| `onFontResolution`      | Receives requested, direct/substituted, unresolved, and failed-origin evidence.               |
+| `measurer`              | Host-owned text measurer; when present it takes precedence over all font origins.             |
+| `producer`              | Stable identity for a host-owned measurer and its cache entries.                              |
+| `imageDecodePort`       | Host image metadata decoder. Omit for the bounded Node decoder.                               |
+| `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                      |
 
 ### Tracked changes
 

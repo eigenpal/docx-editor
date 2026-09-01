@@ -31,6 +31,8 @@ export {
   type ExportFontFaceResolution,
   type ExportFontFamilyResolution,
   type ExportFontResolutionReport,
+  type FontBackedExportSession,
   type OpenFontBackedDocumentForExportOptions,
+  type OpenFontBackedDocumentForExportResult,
 } from './document-export-shaping.ts';
 export type { FontOrigin, FontOriginFailure } from '../editor/font-resolver.ts';

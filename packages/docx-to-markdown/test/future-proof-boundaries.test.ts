@@ -74,7 +74,7 @@ test('one-shot APIs forward the complete option object to translation', () => {
   expect(oneShot).toContain('translateMarkdownLayout(layout, options)');
   expect(oneShot).not.toMatch(/translateMarkdownLayout\([^)]*\{\s*image:/);
   expect(oneShot.indexOf('opened.session.dispose()')).toBeLessThan(
-    oneShot.indexOf('return translateMarkdownLayout(layout, options)')
+    oneShot.indexOf('translateMarkdownLayout(layout, options)')
   );
 });
 

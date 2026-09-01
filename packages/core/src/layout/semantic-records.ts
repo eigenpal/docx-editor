@@ -27,6 +27,7 @@ import type { ResolvedRunStyle } from './run-style.ts';
 import type { FontSlot } from './script-itemization.ts';
 import type { ResolvedCellBorders } from './table-borders.ts';
 import type { EquationSpanRecord } from './equation-layout.ts';
+import type { SemanticReviewArtifactRecord } from './review-artifact-records.ts';
 
 export type {
   InlineDrawingRecord,
@@ -840,6 +841,11 @@ export interface SemanticLayout {
   /** Revision projection already applied to every published record. */
   readonly displayMode?: import('./revision-projection.ts').RevisionDisplayMode;
   readonly pages: readonly PageRecord[];
+  /**
+   * Normalized comments and tracked changes from the same package revision as these pages.
+   * Exporters consume this plain-data stream instead of re-reading OOXML or review state.
+   */
+  readonly reviewArtifacts?: readonly SemanticReviewArtifactRecord[];
   /**
    * Every content-control boundary in document order, including multi-page fragment lists.
    *

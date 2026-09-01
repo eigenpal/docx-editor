@@ -57,7 +57,10 @@ export class ExportResourceError extends Error {
 }
 
 // @public
-export type ExportSemanticLayout = SemanticLayout;
+export interface ExportSemanticLayout extends SemanticLayout {
+    // (undocumented)
+    readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
+}
 
 // @public
 export interface ExportSession {
@@ -65,6 +68,11 @@ export interface ExportSession {
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
     validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
+}
+
+// @public
+export interface FontBackedExportSession extends ExportSession {
+    readonly fontResolution: ExportFontResolutionReport;
 }
 
 // @public
@@ -107,7 +115,7 @@ export type OpenDocumentForExportResult = {
 };
 
 // @public
-export function openFontBackedDocumentForExport(source: Uint8Array, options: OpenFontBackedDocumentForExportOptions): Promise<OpenDocumentForExportResult>;
+export function openFontBackedDocumentForExport(source: Uint8Array, options: OpenFontBackedDocumentForExportOptions): Promise<OpenFontBackedDocumentForExportResult>;
 
 // @public
 export interface OpenFontBackedDocumentForExportOptions extends Omit<OpenDocumentForExportOptions, 'measurer' | 'reuseAcrossRevisions'> {
@@ -115,7 +123,16 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<OpenDocumen
     readonly fontResolutionTimeoutMs?: number;
     readonly fonts: FontOrigin | readonly FontOrigin[];
     readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
+    readonly reuseAcrossRevisions?: false;
 }
+
+// @public
+export type OpenFontBackedDocumentForExportResult = {
+    readonly ok: true;
+    readonly session: FontBackedExportSession;
+} | Exclude<OpenDocumentForExportResult, {
+    readonly ok: true;
+}>;
 
 // @public
 export type PreservedImageConverter = (bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,

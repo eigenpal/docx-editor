@@ -43,6 +43,12 @@ import {
   type TranslationContext,
 } from './markdown-logical.ts';
 import {
+  buildMarkdownReviewBindings,
+  buildMarkdownSourceCapture,
+  indexPageReviewArtifacts,
+  type MarkdownPageProjectionValues,
+} from './markdown-review-bindings.ts';
+import {
   buildNoteLabels,
   buildNoteStoryIndexes,
   EMPTY_NOTE_STORIES,
@@ -62,6 +68,8 @@ export type {
   MarkdownPaginationInfo,
   MarkdownTranslationOptions,
 } from './markdown-types.ts';
+
+const EMPTY_REVIEW_ARTIFACTS = Object.freeze([]);
 
 function destination(url: string): string {
   return url.replace(
@@ -712,6 +720,9 @@ export function exportMarkdownLayout(
   layout: ExportSemanticLayout,
   options: MarkdownTranslationOptions = {}
 ): MarkdownExportResult {
+  // Core export sessions always publish the array. The fallback keeps detached layouts produced
+  // by older/custom hosts translatable while preserving the same empty immutable contract.
+  const reviewArtifacts = layout.reviewArtifacts ?? EMPTY_REVIEW_ARTIFACTS;
   const displayMode = layout.displayMode ?? 'all-markup';
   const indexes = buildTranslationIndexes(layout);
   const notes = buildNoteStoryIndexes(layout);
@@ -722,6 +733,7 @@ export function exportMarkdownLayout(
     displayMode,
     sourceScope: markdownSourceScope('body', '', null),
     imageResultByDrawing: new WeakMap(),
+    sourceCapture: buildMarkdownSourceCapture(reviewArtifacts),
     ...indexes,
   };
   const markdown = withDefinitions(
@@ -734,21 +746,28 @@ export function exportMarkdownLayout(
     ),
     noteDefinitions(notes.document, context)
   );
+  const artifactsByPage = indexPageReviewArtifacts(reviewArtifacts);
   const renderedNoteScopes = new Set<string>();
   // A baseline furniture story shares ONE fragments array across its section's pages when it
   // carries no page fields and no anchored drawings; translate each such story once. A story
   // with per-page projections gets a fresh record and fragments per page and misses the memo.
   // Nothing on the furniture path reads `pageIndex`, so the shared translation is exact.
-  const furnitureMemo = new WeakMap<object, { readonly scope: string; readonly value: string }>();
-  const furnitureMarkdown = (story: NonNullable<PageRecord['header']> | undefined): string => {
-    if (!story) return '';
+  const furnitureMemo = new WeakMap<
+    object,
+    { readonly scope: string; readonly value: MappedMarkdown }
+  >();
+  const furnitureMarkdown = (
+    story: NonNullable<PageRecord['header']> | undefined
+  ): MappedMarkdown => {
+    if (!story) return EMPTY_MAPPED_MARKDOWN;
     const scope = `${story.kind}:${story.partName}`;
     const cached = furnitureMemo.get(story.fragments);
     if (cached && cached.scope === scope) return cached.value;
-    const value = storyMarkdown(story, context).markdown;
+    const value = storyMarkdown(story, context);
     furnitureMemo.set(story.fragments, { scope, value });
     return value;
   };
+  const pageProjectionValues = new Map<number, MarkdownPageProjectionValues>();
   const pages = layout.pages.map((page): MarkdownPage => {
     const pageContext = { ...context, pageIndex: page.index };
     const body = pageBody(page, context);
@@ -759,16 +778,28 @@ export function exportMarkdownLayout(
       body.noteLabels,
       renderedNoteScopes
     );
+    const pageArtifacts = artifactsByPage.get(page.index);
+    const values: MarkdownPageProjectionValues = {
+      markdown: withDefinitions(body.value, definitions),
+      headerMarkdown: furnitureMarkdown(page.header),
+      footerMarkdown: furnitureMarkdown(page.footer),
+    };
+    pageProjectionValues.set(page.index, values);
     return Object.freeze({
       id: page.id,
       number: page.index + 1,
-      markdown: withDefinitions(body.value, definitions).markdown,
-      headerMarkdown: furnitureMarkdown(page.header),
-      footerMarkdown: furnitureMarkdown(page.footer),
+      markdown: values.markdown.markdown,
+      headerMarkdown: values.headerMarkdown.markdown,
+      footerMarkdown: values.footerMarkdown.markdown,
+      comments: Object.freeze(pageArtifacts?.comments ?? []),
+      trackedChanges: Object.freeze(pageArtifacts?.trackedChanges ?? []),
     });
   });
   return Object.freeze({
     pages: Object.freeze(pages),
+    reviewArtifacts,
+    reviewBindings: buildMarkdownReviewBindings(reviewArtifacts, markdown, pageProjectionValues),
+    fontResolution: null,
     pagination: Object.freeze({
       source: 'layout-engine',
       scope: 'export-snapshot',

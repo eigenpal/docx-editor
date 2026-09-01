@@ -28,13 +28,17 @@ import { createLayoutSession } from '../layout/layout-session.ts';
 import { releaseOverflowPageShellState } from '../layout/page-furniture-insets.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
 import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
+import type { SemanticReviewArtifactRecord } from '../layout/review-artifact-records.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import {
   createNodeImageDecodePort,
   type PreservedImageConverter,
 } from './node-image-decode-port.ts';
+import { projectReviewArtifacts } from './review-artifact-projection.ts';
 import { publishImmutableSemanticLayout } from './semantic-layout-publication.ts';
+
+const EMPTY_REVIEW_ARTIFACTS = Object.freeze([]);
 
 /** Source accepted by every exporter: untrusted bytes or an already-open live view. @public */
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
@@ -76,12 +80,15 @@ export interface OpenDocumentForExportOptions {
 }
 
 /**
- * Export-ready semantic snapshot. A resolved snapshot is recursively immutable and remains
- * traversable after its producer session is disposed; disposal only revokes session-owned work
- * and capabilities such as {@link ExportSession.validatedImageBytes}.
+ * Export-ready semantic snapshot. Core guarantees normalized review artifacts for every session,
+ * including an empty immutable array when the source has none. A resolved snapshot is recursively
+ * immutable and remains traversable after its producer session is disposed; disposal only revokes
+ * session-owned work and capabilities such as {@link ExportSession.validatedImageBytes}.
  * @public
  */
-export type ExportSemanticLayout = SemanticLayout;
+export interface ExportSemanticLayout extends SemanticLayout {
+  readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
+}
 
 /** Bounded failure from a headless export session. @public */
 export class ExportResourceError extends Error {
@@ -526,7 +533,13 @@ export function openDocumentForExport(
           state.sessions.delete(mode);
           state.furniture.delete(mode);
         }
-        const published = publishImmutableSemanticLayout(layout);
+        const reviewArtifacts = projectReviewArtifacts(layout, pkg);
+        const enrichedLayout: ExportSemanticLayout = {
+          ...layout,
+          reviewArtifacts:
+            reviewArtifacts.length === 0 ? EMPTY_REVIEW_ARTIFACTS : Object.freeze(reviewArtifacts),
+        };
+        const published = publishImmutableSemanticLayout(enrichedLayout);
         state.completed.set(mode, { revision, pkg, internal: layout, published });
         return published;
       }

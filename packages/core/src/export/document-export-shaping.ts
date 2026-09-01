@@ -99,11 +99,24 @@ export interface ExportFontResolutionReport {
   readonly originFailures: readonly FontOriginFailure[];
 }
 
+/** Export session retaining the exact font evidence used to construct its measurer. @public */
+export interface FontBackedExportSession extends ExportSession {
+  /** Immutable font-resolution evidence; remains readable after session disposal. */
+  readonly fontResolution: ExportFontResolutionReport;
+}
+
+/** Result of opening immutable bytes through Core's document-aware font composition root. @public */
+export type OpenFontBackedDocumentForExportResult =
+  | { readonly ok: true; readonly session: FontBackedExportSession }
+  | Exclude<OpenDocumentForExportResult, { readonly ok: true }>;
+
 /** Font-backed one-shot session options shared by Markdown, PDF, and future exporters. @public */
 export interface OpenFontBackedDocumentForExportOptions extends Omit<
   OpenDocumentForExportOptions,
   'measurer' | 'reuseAcrossRevisions'
 > {
+  /** Immutable font-backed byte sessions reject incremental revision reuse. */
+  readonly reuseAcrossRevisions?: false;
   /** Ordered first-wins font origins resolved against this immutable DOCX. */
   readonly fonts: FontOrigin | readonly FontOrigin[];
   /** Font provisioning deadline; defaults to `resourceTimeoutMs`, then 60 seconds. */
@@ -116,6 +129,7 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
 }
 
 let activeDocumentFontBytes = 0;
+const FONT_RESOLUTION_TIMEOUT = Symbol('font-resolution-timeout');
 
 function createDocumentFontByteLease(onChange?: (activeBytes: number) => void): {
   readonly reserve: (byteLength: number) => () => void;
@@ -176,18 +190,44 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
 export async function openFontBackedDocumentForExport(
   source: Uint8Array,
   options: OpenFontBackedDocumentForExportOptions
-): Promise<OpenDocumentForExportResult> {
+): Promise<OpenFontBackedDocumentForExportResult> {
+  if ((options as { readonly reuseAcrossRevisions?: boolean }).reuseAcrossRevisions === true) {
+    throw new TypeError(
+      'reuseAcrossRevisions requires a live view or caller-supplied measurer; ' +
+        'document-aware byte sessions are immutable'
+    );
+  }
+  if (options.signal?.aborted) return { ok: false, reason: 'aborted' };
   const opened = openHeadlessDocument(source);
   if (!opened.ok) return opened;
   const { fonts, fontResolutionTimeoutMs, fontPolicy, onFontResolution, ...sessionOptions } =
     options;
   const origins = Array.isArray(fonts) ? fonts : [fonts as FontOrigin];
-  const shaping = await acquireDocumentExportShaping(opened.view, origins, {
-    signal: options.signal,
-    timeoutMs: fontResolutionTimeoutMs ?? options.resourceTimeoutMs,
-    fontPolicy,
-    onFontResolution,
-  });
+  let fontResolution: ExportFontResolutionReport | undefined;
+  let shaping: DocumentExportShaping | undefined;
+  try {
+    shaping = await acquireDocumentExportShaping(opened.view, origins, {
+      signal: options.signal,
+      timeoutMs: fontResolutionTimeoutMs ?? options.resourceTimeoutMs,
+      fontPolicy,
+      onFontResolution: (report) => {
+        fontResolution = report;
+        return onFontResolution?.(report);
+      },
+    });
+  } catch (error) {
+    if (error instanceof ExportResourceError && error.code === 'aborted') {
+      return { ok: false, reason: 'aborted' };
+    }
+    throw error;
+  }
+  if (!fontResolution) {
+    shaping?.dispose();
+    throw new ExportResourceError(
+      'layoutFailed',
+      'Document font resolution completed without publishing its evidence'
+    );
+  }
   let result: OpenDocumentForExportResult;
   try {
     result = openDocumentForExport(opened.view, {
@@ -234,6 +274,7 @@ export async function openFontBackedDocumentForExport(
   return {
     ok: true,
     session: Object.freeze({
+      fontResolution,
       layout: () => (termination === 'active' ? session.layout() : Promise.reject(unavailable())),
       layoutFor: (displayMode: Parameters<ExportSession['layoutFor']>[0]) =>
         termination === 'active' ? session.layoutFor(displayMode) : Promise.reject(unavailable()),
@@ -264,7 +305,7 @@ export async function acquireDocumentExportShaping(
   const abortFromHost = (): void => controller.abort(options.signal?.reason);
   options.signal?.addEventListener('abort', abortFromHost, { once: true });
   if (options.signal?.aborted) abortFromHost();
-  const timer = setTimeout(() => controller.abort('font-resolution-timeout'), timeoutMs);
+  const timer = setTimeout(() => controller.abort(FONT_RESOLUTION_TIMEOUT), timeoutMs);
 
   try {
     throwIfAborted(controller.signal);
@@ -348,7 +389,7 @@ function abortFailure(signal: AbortSignal): Promise<never> {
 }
 
 function exportAbortError(signal: AbortSignal): ExportResourceError {
-  const timedOut = signal.reason === 'font-resolution-timeout';
+  const timedOut = signal.reason === FONT_RESOLUTION_TIMEOUT;
   return new ExportResourceError(
     timedOut ? 'timedOut' : 'aborted',
     timedOut ? 'Font resolution timed out' : 'Font resolution was aborted',

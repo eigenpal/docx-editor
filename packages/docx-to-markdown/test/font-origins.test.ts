@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { defineFontResolver, type FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import { createFixedMeasurer } from '@docx-editor.dev/core/layout';
 import { openHeadlessDocument } from '@docx-editor.dev/core/store';
-import { ExportResourceError, openDocumentForExport } from '../src/index.ts';
+import { ExportResourceError, exportMarkdown, openDocumentForExport } from '../src/index.ts';
 import { docx } from './fixture.ts';
 
 test('caller fonts precede packaged defaults and opt-in missing-family origins', async () => {
@@ -79,16 +79,46 @@ test('custom origins reject live views before resolution, while a host measurer 
 test('default packaged-font startup honors a pre-aborted export before loading resources', async () => {
   const controller = new AbortController();
   controller.abort('cancel-before-open');
-  try {
-    await openDocumentForExport(docx('<w:p><w:r><w:t>Stopped</w:t></w:r></w:p>'), {
-      signal: controller.signal,
-    });
-    throw new Error('expected typed abort');
-  } catch (error) {
-    expect(error).toBeInstanceOf(ExportResourceError);
-    expect((error as ExportResourceError).code).toBe('aborted');
-    expect((error as Error & { cause?: unknown }).cause).toBe('cancel-before-open');
-  }
+  const opened = await openDocumentForExport(docx('<w:p><w:r><w:t>Stopped</w:t></w:r></w:p>'), {
+    signal: controller.signal,
+  });
+  expect(opened).toEqual({ ok: false, reason: 'aborted' });
+  const oneShotError = await exportMarkdown(docx('<w:p><w:r><w:t>Stopped</w:t></w:r></w:p>'), {
+    signal: controller.signal,
+  }).catch((error: unknown) => error);
+  expect(oneShotError).toBeInstanceOf(ExportResourceError);
+  expect(oneShotError).toMatchObject({ code: 'aborted', cause: 'cancel-before-open' });
+});
+
+test('one-shot cancellation during font loading stays an aborted resource error', async () => {
+  const controller = new AbortController();
+  let markStarted: (() => void) | undefined;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+  const pending = exportMarkdown(docx('<w:p><w:r><w:t>Stopped</w:t></w:r></w:p>'), {
+    signal: controller.signal,
+    fonts: defineFontResolver(
+      (request: FontResolutionRequest) =>
+        new Promise<undefined>((resolve) => {
+          markStarted?.();
+          request.signal?.addEventListener('abort', () => resolve(undefined), { once: true });
+        })
+    ),
+  });
+  await started;
+  controller.abort('cancel-during-fonts');
+  const error = await pending.catch((caught: unknown) => caught);
+  expect(error).toBeInstanceOf(ExportResourceError);
+  expect(error).toMatchObject({ code: 'aborted', cause: 'cancel-during-fonts' });
+});
+
+test('document-aware byte sessions reject incremental reuse instead of ignoring it', async () => {
+  await expect(
+    openDocumentForExport(docx('<w:p><w:r><w:t>Immutable</w:t></w:r></w:p>'), {
+      reuseAcrossRevisions: true,
+    })
+  ).rejects.toThrow('document-aware byte sessions are immutable');
 });
 
 test('public best-effort font failure reports approximation while strict mode refuses it', async () => {
