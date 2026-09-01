@@ -13,11 +13,7 @@ console.log(result.markdown);       // complete logical document
 console.log(result.pages[0]);       // page-aware Markdown + review artifacts
 console.log(result.fontResolution); // font fidelity evidence`;
 
-const MAX_PREVIEW_PAGES = 3;
-const MAX_PREVIEW_ARRAY_ITEMS = 16;
-const MAX_PREVIEW_STRING_LENGTH = 8_000;
-
-function boundedJson(value: unknown): string {
+function responseJson(value: unknown): string {
   return JSON.stringify(
     value,
     (_key, candidate: unknown) => {
@@ -25,15 +21,6 @@ function boundedJson(value: unknown): string {
         return { name: candidate.name, message: candidate.message };
       }
       if (typeof candidate === 'bigint') return `${candidate}n`;
-      if (typeof candidate === 'string' && candidate.length > MAX_PREVIEW_STRING_LENGTH) {
-        return `${candidate.slice(0, MAX_PREVIEW_STRING_LENGTH)}\n… ${candidate.length - MAX_PREVIEW_STRING_LENGTH} characters omitted`;
-      }
-      if (Array.isArray(candidate) && candidate.length > MAX_PREVIEW_ARRAY_ITEMS) {
-        return [
-          ...candidate.slice(0, MAX_PREVIEW_ARRAY_ITEMS),
-          `… ${candidate.length - MAX_PREVIEW_ARRAY_ITEMS} items omitted`,
-        ];
-      }
       return candidate;
     },
     2
@@ -53,17 +40,7 @@ function responsePreview(
   }
   if (!result) return '// The live API response appears here after the DOCX export completes.';
   try {
-    return boundedJson({
-      $preview:
-        'Live response, bounded for this browser panel. Application code receives the complete object.',
-      pages: result.pages.slice(0, MAX_PREVIEW_PAGES),
-      pagesOmitted: Math.max(0, result.pages.length - MAX_PREVIEW_PAGES),
-      reviewArtifacts: result.reviewArtifacts,
-      reviewBindings: result.reviewBindings,
-      fontResolution: result.fontResolution,
-      pagination: result.pagination,
-      markdown: result.markdown,
-    });
+    return responseJson(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return `// The live API response could not be formatted safely.\n// ${message}`;

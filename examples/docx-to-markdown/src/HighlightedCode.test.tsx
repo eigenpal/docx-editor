@@ -4,7 +4,7 @@ import '../../../packages/react/test/dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
 import { cleanup, render, waitFor } from '@testing-library/react';
-import { HighlightedCode } from './HighlightedCode';
+import { HighlightedCode, MAX_HIGHLIGHTED_CODE_CHARACTERS } from './HighlightedCode';
 
 afterEach(cleanup);
 
@@ -37,5 +37,18 @@ describe('HighlightedCode', () => {
       )
     );
     expect(view.container.textContent).not.toContain('contract-a');
+  });
+
+  test('keeps large responses complete while bypassing token-heavy highlighting', async () => {
+    const tail = 'LAST_PAGE_AND_BINDING';
+    const response = `${'x'.repeat(MAX_HIGHLIGHTED_CODE_CHARACTERS + 1)}${tail}`;
+    const view = render(<HighlightedCode code={response} language="json" label="Response" />);
+
+    expect(view.container.querySelector('.shiki')).toBeNull();
+    expect(view.container.textContent?.endsWith(tail)).toBe(true);
+
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+    expect(view.container.querySelector('.shiki')).toBeNull();
+    expect(view.container.textContent?.length).toBe(response.length);
   });
 });

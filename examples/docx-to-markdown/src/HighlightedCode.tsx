@@ -4,6 +4,8 @@ type CodeLanguage = 'typescript' | 'json';
 
 type Highlight = (code: string, language: CodeLanguage) => string;
 
+export const MAX_HIGHLIGHTED_CODE_CHARACTERS = 300_000;
+
 let highlightPromise: Promise<Highlight> | null = null;
 
 function loadHighlighter(): Promise<Highlight> {
@@ -44,6 +46,11 @@ export function HighlightedCode({ code, language, label }: HighlightedCodeProps)
   const [highlighted, setHighlighted] = useState<HighlightedOutput | null>(null);
 
   useEffect(() => {
+    if (code.length > MAX_HIGHLIGHTED_CODE_CHARACTERS) {
+      setHighlighted(null);
+      return;
+    }
+
     let current = true;
 
     void loadHighlighter()

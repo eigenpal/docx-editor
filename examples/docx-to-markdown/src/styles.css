@@ -613,7 +613,7 @@ button {
 }
 
 .md-pages--updating {
-  opacity: 0.58;
+  opacity: 0.46;
 }
 
 .md-pages--stale {
@@ -996,6 +996,70 @@ button {
   border-width: 1.5px;
 }
 
+.md-export-loading {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  justify-items: center;
+  padding: 40px;
+  color: var(--md-ink);
+  text-align: center;
+}
+
+.md-export-loading__indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  color: var(--md-accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.md-export-loading__indicator .md-spinner {
+  width: 13px;
+  height: 13px;
+}
+
+.md-export-loading > strong {
+  font-size: 15px;
+  letter-spacing: -0.015em;
+}
+
+.md-export-loading > p {
+  min-height: 18px;
+  margin: 7px 0 0;
+  color: var(--md-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.md-live-update {
+  position: sticky;
+  z-index: 4;
+  top: 12px;
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 7px;
+  margin: 12px auto -44px;
+  padding: 7px 10px;
+  border: 1px solid var(--md-line);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 5px 18px rgb(31 35 40 / 8%);
+  color: var(--md-muted);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.md-live-update .md-spinner {
+  width: 11px;
+  height: 11px;
+}
+
 .md-error {
   position: sticky;
   z-index: 4;
@@ -1266,6 +1330,10 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .md-spinner {
+    animation-duration: 1.4s;
+  }
+
   .md-button,
   .md-icon-button,
   .md-segmented button,

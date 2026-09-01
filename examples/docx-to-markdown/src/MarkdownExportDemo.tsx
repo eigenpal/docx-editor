@@ -12,7 +12,15 @@ import {
   type MarkdownPage,
 } from '@docx-editor.dev/docx-to-markdown';
 import { BrandLogo } from '../../shared/BrandLogo';
-import { canCopyExport, copyableMarkdown, type ExportStatus } from './export-state';
+import {
+  canCopyExport,
+  copyableMarkdown,
+  DOCUMENT_EXPORT_START,
+  markdownBusyPresentation,
+  shouldRefreshMarkdownForChange,
+  type ExportActivity,
+  type ExportStatus,
+} from './export-state';
 import { developerPanelContent, type DeveloperPanelTab } from './developer-reference';
 import { createLatestOperationGate } from './latest-operation';
 import { HighlightedCode } from './HighlightedCode';
@@ -86,6 +94,42 @@ function Spinner() {
   return <span className="md-spinner" aria-hidden="true" />;
 }
 
+const MARKDOWN_LOADING_MESSAGES = [
+  'Markdowning with page boundaries intact',
+  'Keeping headers and footers close to their pages',
+  'Giving tables, lists, and review notes careful treatment',
+  'Making the document citation-ready',
+] as const;
+
+function MarkdownLoadingState({ status }: { readonly status: 'queued' | 'exporting' }) {
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  useEffect(() => {
+    setMessageIndex(0);
+    if (status === 'queued') return;
+    const timer = window.setInterval(
+      () => setMessageIndex((current) => (current + 1) % MARKDOWN_LOADING_MESSAGES.length),
+      1_800
+    );
+    return () => window.clearInterval(timer);
+  }, [status]);
+
+  return (
+    <div className="md-export-loading" aria-label="Building page-aware Markdown">
+      <div className="md-export-loading__indicator">
+        <Spinner />
+        <span>{status === 'queued' ? 'Catching up with your edits' : 'Building Markdown'}</span>
+      </div>
+      <strong>Preparing a page-aware export</strong>
+      <p aria-hidden="true">
+        {status === 'queued'
+          ? 'Waiting for a quiet moment before the next layout pass'
+          : MARKDOWN_LOADING_MESSAGES[messageIndex]}
+      </p>
+    </div>
+  );
+}
+
 function DeveloperView({
   tab,
   result,
@@ -99,7 +143,10 @@ function DeveloperView({
   readonly error: string | null;
   readonly onTabChange: (tab: DeveloperPanelTab) => void;
 }) {
-  const content = developerPanelContent(tab, result, status, error);
+  const content = useMemo(
+    () => developerPanelContent(tab, result, status, error),
+    [error, result, status, tab]
+  );
   return (
     <section className="md-developer-view" aria-labelledby="developer-view-title">
       <header className="md-developer-view__header">
@@ -260,6 +307,7 @@ export function MarkdownExportDemo() {
   const [dragging, setDragging] = useState(false);
   const [copied, setCopied] = useState(false);
   const [developerPanelTab, setDeveloperPanelTab] = useState<DeveloperPanelTab>('example');
+  const [exportActivity, setExportActivity] = useState<ExportActivity>('document');
 
   const revealMarkdownPage = useCallback((pageNumber: number) => {
     const scroller = previewScroll.current;
@@ -337,8 +385,9 @@ export function MarkdownExportDemo() {
   }, [operations]);
 
   const runExport = useCallback(
-    async (bytes: Uint8Array, operation: number) => {
+    async (bytes: Uint8Array, operation: number, activity: ExportActivity) => {
       if (!operations.isCurrent(operation)) return;
+      setExportActivity(activity);
       const controller = new AbortController();
       exportController.current = controller;
       let fontReport: ExportFontResolutionReport | null = null;
@@ -381,7 +430,7 @@ export function MarkdownExportDemo() {
       latestEditorPage.current = 1;
       sourcePointerReveal.current = false;
       setDocument(bytes);
-      void runExport(bytes, operation);
+      void runExport(bytes, operation, 'document');
     },
     [operations, runExport]
   );
@@ -390,7 +439,8 @@ export function MarkdownExportDemo() {
     const operation = beginOperation();
     const controller = new AbortController();
     sourceLoadController.current = controller;
-    setExportView((current) => ({ ...current, status: 'exporting', error: null }));
+    setExportActivity('document');
+    setExportView(DOCUMENT_EXPORT_START);
     void fetch(`${import.meta.env.BASE_URL}sample.docx`, { signal: controller.signal })
       .then((response) => {
         if (!response.ok) throw new Error(`Sample document returned HTTP ${response.status}`);
@@ -442,7 +492,8 @@ export function MarkdownExportDemo() {
         return;
       }
       const operation = beginOperation();
-      setExportView((current) => ({ ...current, status: 'exporting', error: null }));
+      setExportActivity('document');
+      setExportView(DOCUMENT_EXPORT_START);
       try {
         const buffer = await file.arrayBuffer();
         openBytes(new Uint8Array(buffer), file.name, operation);
@@ -460,6 +511,7 @@ export function MarkdownExportDemo() {
 
   const scheduleLiveExport = useCallback(() => {
     const operation = beginOperation();
+    setExportActivity('live-edit');
     setExportView((current) => ({ ...current, status: 'queued', error: null }));
     exportTimer.current = window.setTimeout(() => {
       exportTimer.current = null;
@@ -468,7 +520,7 @@ export function MarkdownExportDemo() {
       // save() result would otherwise pin the UI at 'queued' with Copy disabled forever.
       const settle = (buffer: ArrayBuffer | null | undefined): Promise<void> | undefined => {
         if (!operations.isCurrent(operation)) return undefined;
-        if (buffer) return runExport(new Uint8Array(buffer), operation);
+        if (buffer) return runExport(new Uint8Array(buffer), operation, 'live-edit');
         setExportView((current) => ({
           ...current,
           status: current.result ? 'ready' : 'idle',
@@ -520,7 +572,17 @@ export function MarkdownExportDemo() {
       ),
     [exportView.result]
   );
-  const busy = exportView.status === 'queued' || exportView.status === 'exporting';
+  const busyPresentation = markdownBusyPresentation(
+    exportView.status,
+    exportView.result !== null,
+    exportActivity
+  );
+  const busy = busyPresentation !== 'none';
+  const loadingStatus =
+    busyPresentation === 'replace' &&
+    (exportView.status === 'queued' || exportView.status === 'exporting')
+      ? exportView.status
+      : null;
   const canCopy = canCopyExport(exportView.status, exportView.result !== null);
   const exportStatusLabel =
     exportView.status === 'queued'
@@ -757,7 +819,13 @@ export function MarkdownExportDemo() {
               author="Markdown demo"
               title="Document"
               onOpen={() => fileInput.current?.click()}
-              onChange={scheduleLiveExport}
+              onChange={(change) => {
+                // Core emits one provenance-free change when a new document mounts so
+                // subscribed hosts re-read it. The document export already in flight owns
+                // that load; only authored commits carry identity deltas and need a refresh.
+                if (!shouldRefreshMarkdownForChange(change)) return;
+                scheduleLiveExport();
+              }}
               onReady={(instance) => {
                 editorSelectionCleanup.current?.();
                 latestEditorPage.current = instance.snapshot().page.current;
@@ -844,41 +912,57 @@ export function MarkdownExportDemo() {
                 error={exportView.error}
                 onTabChange={setDeveloperPanelTab}
               />
-            ) : exportView.error ? (
-              <div className="md-error" role="alert">
-                <span className="md-error__icon" aria-hidden="true">
-                  !
-                </span>
-                <div>
-                  <strong>Could not export this document</strong>
-                  <p>{exportView.error}</p>
-                </div>
-              </div>
-            ) : null}
-            {previewMode === 'developer' ? null : exportView.result ? (
-              <div
-                className={`md-pages${busy ? ' md-pages--updating' : ''}${exportView.status === 'error' ? ' md-pages--stale' : ''}`}
-              >
-                {exportView.result.pages.map((page) => (
-                  <MarkdownPagePreview
-                    key={page.id}
-                    page={page}
-                    commentById={commentById}
-                    selectionIndex={reviewSelectionIndex}
-                    mode={previewMode}
-                    showHeaders={showHeaders}
-                    showFooters={showFooters}
-                    showComments={showComments}
-                    showTrackedChanges={showTrackedChanges}
-                    onRevealDocumentPage={revealDocumentPage}
-                  />
-                ))}
-              </div>
-            ) : exportView.error ? null : (
-              <div className="md-empty-state" role="status">
-                <Spinner />
-                <span>Preparing Markdown…</span>
-              </div>
+            ) : loadingStatus ? (
+              <MarkdownLoadingState status={loadingStatus} />
+            ) : (
+              <>
+                {busyPresentation === 'overlay' ? (
+                  <div className="md-live-update" role="status">
+                    <Spinner />
+                    <span>
+                      {exportView.status === 'queued'
+                        ? 'Changes pending—Markdown will update when you pause'
+                        : 'Updating page-aware Markdown'}
+                    </span>
+                  </div>
+                ) : null}
+                {exportView.error ? (
+                  <div className="md-error" role="alert">
+                    <span className="md-error__icon" aria-hidden="true">
+                      !
+                    </span>
+                    <div>
+                      <strong>Could not export this document</strong>
+                      <p>{exportView.error}</p>
+                    </div>
+                  </div>
+                ) : null}
+                {exportView.result ? (
+                  <div
+                    className={`md-pages${busyPresentation === 'overlay' ? ' md-pages--updating' : ''}${exportView.status === 'error' ? ' md-pages--stale' : ''}`}
+                  >
+                    {exportView.result.pages.map((page) => (
+                      <MarkdownPagePreview
+                        key={page.id}
+                        page={page}
+                        commentById={commentById}
+                        selectionIndex={reviewSelectionIndex}
+                        mode={previewMode}
+                        showHeaders={showHeaders}
+                        showFooters={showFooters}
+                        showComments={showComments}
+                        showTrackedChanges={showTrackedChanges}
+                        onRevealDocumentPage={revealDocumentPage}
+                      />
+                    ))}
+                  </div>
+                ) : exportView.error ? null : (
+                  <div className="md-empty-state" role="status">
+                    <Spinner />
+                    <span>Preparing Markdown…</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>
