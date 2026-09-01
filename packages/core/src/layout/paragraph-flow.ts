@@ -77,6 +77,7 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { createEquationLayouter } from './equation-layout.ts';
+import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 
 /**
  * How far past the line's right edge a span may reach before it counts as overflow.
@@ -301,22 +302,27 @@ function wordBoundaries(text: string): number[] {
  * page. Stops at a hard break, which ends the line anyway, and skips further tabs and
  * spaces, which are themselves trimmed at the line end.
  */
-function placeableContentFollows(
-  pieces: readonly Piece[],
-  pieceIndex: number,
-  offsetInPiece: number
-): boolean {
-  for (let index = pieceIndex; index < pieces.length; index += 1) {
-    const piece = pieces[index]!;
-    if (piece.inlineDrawing) return true;
-    const from = index === pieceIndex ? offsetInPiece : 0;
-    for (let cursor = from; cursor < piece.text.length; cursor += 1) {
-      const ch = piece.text[cursor]!;
-      if (ch === '\n' || ch === PAGE_BREAK_CHAR) return false;
-      if (ch !== '\t' && ch !== ' ') return true;
+function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uint8Array[] {
+  const suffixes = new Array<Uint8Array>(pieces.length);
+  let follows = false;
+  for (let pieceIndex = pieces.length - 1; pieceIndex >= 0; pieceIndex -= 1) {
+    const piece = pieces[pieceIndex]!;
+    const suffix = new Uint8Array(piece.text.length + 1);
+    suffix[piece.text.length] = follows ? 1 : 0;
+    if (piece.inlineDrawing) {
+      suffix.fill(1);
+    } else {
+      for (let cursor = piece.text.length - 1; cursor >= 0; cursor -= 1) {
+        const ch = piece.text[cursor]!;
+        if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
+        else if (ch !== '\t' && !isCollapsibleLineEndWhitespace(ch)) suffix[cursor] = 1;
+        else suffix[cursor] = suffix[cursor + 1]!;
+      }
     }
+    suffixes[pieceIndex] = suffix;
+    follows = suffix[0] === 1;
   }
-  return false;
+  return suffixes;
 }
 
 function measureFollowingTabSegment(
@@ -507,6 +513,45 @@ export function alignSpans(
   if (spans.length === 0) return spans;
   if (alignment === 'left') return spans;
 
+  let trailingEnd = spans.length;
+  while (
+    trailingEnd > 0 &&
+    spans[trailingEnd - 1]!.box.width === 0 &&
+    (spans[trailingEnd - 1]!.text === '\n' || spans[trailingEnd - 1]!.text === PAGE_BREAK_CHAR)
+  ) {
+    trailingEnd -= 1;
+  }
+  let trailingStart = trailingEnd;
+  while (trailingStart > 0 && spans[trailingStart - 1]!.lineEndWhitespace) {
+    trailingStart -= 1;
+  }
+  const lastContentSpan = spans[trailingEnd - 1];
+  const spansReachLineEnd =
+    lineUsedWidth !== undefined &&
+    lastContentSpan !== undefined &&
+    Math.abs(lastContentSpan.box.x + lastContentSpan.box.width - indentLeft - lineUsedWidth) <=
+      OVERFLOW_TOLERANCE_PT;
+  if (
+    trailingStart < trailingEnd &&
+    spansReachLineEnd &&
+    (alignment === 'center' || alignment === 'right')
+  ) {
+    const used = spans[trailingStart]!.box.x - indentLeft;
+    const slack = available - used;
+    if (slack <= 0) return spans;
+    const offset = alignment === 'center' ? slack / 2 : slack;
+    const clipsAtMargin = (lineUsedWidth ?? 0) >= available - OVERFLOW_TOLERANCE_PT;
+    let fillX = spans[trailingStart]!.box.x + offset;
+    return spans.map((span, index) => {
+      if (index < trailingStart) return { ...span, box: { ...span.box, x: span.box.x + offset } };
+      if (!clipsAtMargin) return { ...span, box: { ...span.box, x: span.box.x + offset } };
+      const width = Math.min(span.box.width, Math.max(0, indentLeft + available - fillX));
+      const aligned = { ...span, box: { ...span.box, x: fillX, width } };
+      fillX += width;
+      return aligned;
+    });
+  }
+
   // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
   // is what Word does and what stops a line ending in a space from looking misaligned.
   const last = spans[spans.length - 1]!;
@@ -623,6 +668,7 @@ export function breakParagraph(
       },
     ];
   });
+  const placeableSuffixes = placeableContentSuffixes(pieces);
   const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
   const equationLayoutOf = (piece: FieldAwarePiece) =>
     piece.equation ? layoutEquation(piece.equation, piece.style) : null;
@@ -1410,7 +1456,7 @@ export function breakParagraph(
         if (
           (line.spans.length > 0 || line.drawings.length > 0) &&
           line.width >= lineAvailable() &&
-          placeableContentFollows(pieces, pieceIndex, boundary)
+          placeableSuffixes[pieceIndex]![boundary] === 1
         )
           closeLine();
         const currentX = lineOrigin() + line.width;
@@ -1486,7 +1532,7 @@ export function breakParagraph(
       // would size the line for characters the reader never sees. Note marks may reserve
       // a wider measureText (eachPage) while painting the real digits.
       const measureSource = piece.measureText ?? candidate;
-      const width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
+      let width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
       // A candidate may open a line only at a real break opportunity. Within a piece,
       // `wordBoundaries` cuts after spaces, dashes and tabs, so every candidate but the
       // first is one. The FIRST candidate of a piece continues whatever the previous piece
@@ -1506,6 +1552,13 @@ export function breakParagraph(
         wordStartEnd = line.end;
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
+      // Word hangs trailing fill spaces at the line edge: they occupy the remaining band
+      // (and keep their underline) but never open continuation lines of their own.
+      const lineEndWhitespace =
+        isCollapsibleLineEndWhitespace(candidate) && placeableSuffixes[pieceIndex]![boundary] !== 1;
+      if (lineEndWhitespace) {
+        width = Math.min(width, Math.max(0, lineAvailable() - line.width));
+      }
       if (
         line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
         (line.spans.length > 0 || line.drawings.length > 0)
@@ -1620,6 +1673,7 @@ export function breakParagraph(
         ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
         ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
         ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
+        ...(lineEndWhitespace ? { lineEndWhitespace: true as const } : {}),
         ...revisionsOf(piece),
       });
       line.width += remainingWidth;

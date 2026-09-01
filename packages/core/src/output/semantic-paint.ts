@@ -70,6 +70,7 @@ import {
   type PaintImageUrlPort,
 } from './semantic-paint-drawings.ts';
 import { mountEquationGeometry } from './semantic-paint-equation.ts';
+import { prepareTextPaintHost } from './semantic-paint-line-end-whitespace.ts';
 
 /**
  * When a field's result is drawn on its grey block, following Word's own View option.
@@ -1163,13 +1164,7 @@ function paintSpan(
   applyRunFaceStyle(element, faceStyle, ctx);
   applyFieldShading(element, span, ctx);
   applyRevisionPresentation(element, span, ctx);
-  // Layout owns advances that the browser cannot reconstruct: horizontal scaling (transform
-  // does not reserve space) and OOXML tab stops (`\t` would otherwise paint as a narrow
-  // native tab). Both must take the published box width so following runs start where
-  // breakParagraph placed them — body, cells, and headers/footers share this painter.
-  if (span.style.horizontalScalePercent !== 100 || span.text === '\t') {
-    element.style.width = `${span.box.width * ctx.scale}px`;
-  }
+  const textHost = prepareTextPaintHost(document, element, span, ctx.scale);
   if (span.text === '\t') {
     // Keep the model character for range mapping, but clip any native tab ink that would
     // spill past the reserved advance.
@@ -1188,13 +1183,16 @@ function paintSpan(
     // is exactly where a baseline-aligned run of the same band lands anyway.
     element.style.verticalAlign = 'top';
     // Form blanks: `w:u` on `w:tab` underlines the ADVANCE (Word), not the `\t` glyph.
+    // An underscore leader already supplies that rule with repeated glyphs in the active
+    // face. Adding the advance border as well paints two parallel lines; retain the border
+    // for every other leader, where underline remains independent.
     const tabUnderline = underlineDecorationOf(span.style);
-    if (tabUnderline) {
+    if (tabUnderline && span.tabLeader !== 'underscore') {
       element.dataset.docxTabUnderline = '';
       applyTabAdvanceUnderline(element.style, tabUnderline, ctx.scale);
     }
   }
-  mountRunText(document, element, span.text, span.style, ctx.scale);
+  mountRunText(document, textHost, span.text, span.style, ctx.scale);
   if (span.projected) {
     element.dataset.docxField = '';
     element.setAttribute('contenteditable', 'false');
@@ -1647,8 +1645,8 @@ function paintFragment(
   if (fragment.marker) {
     element.append(paintListMarker(document, fragment, ctx));
   }
-  // Tab leaders are furniture too, and they are painted BEFORE the lines so the glyphs sit
-  // behind the text rather than over it.
+  // Punctuation leaders sit behind the text. Underscores rise above the tab's own background
+  // below, or an opaque highlight/shading/revision wash would erase their only visible rule.
   for (const line of fragment.lines) {
     for (const span of line.spans) {
       if (!span.tabLeader) continue;
@@ -1805,6 +1803,7 @@ function paintTabLeader(
   layer.setAttribute('contenteditable', 'false');
   layer.setAttribute('aria-hidden', 'true');
   layer.style.position = 'absolute';
+  if (span.tabLeader === 'underscore') layer.style.zIndex = '1';
   layer.style.left = `${(span.box.x - fragment.box.x) * scale}px`;
   layer.style.top = `${(line.box.y - fragment.box.y) * scale}px`;
   layer.style.width = `${span.box.width * scale}px`;

@@ -3832,6 +3832,7 @@ export interface StyleSpanRecord {
     readonly equation?: EquationSpanRecord;
     readonly fieldAtom?: FieldAtomMarker;
     readonly fontSlot?: FontSlot;
+    readonly lineEndWhitespace?: true;
     readonly link?: SpanLinkRecord;
     readonly noteNav?: {
         readonly direction: 'to-note' | 'to-body';

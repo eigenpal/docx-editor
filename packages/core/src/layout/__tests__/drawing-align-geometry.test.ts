@@ -48,6 +48,9 @@ function inlinePictureRun(): string {
   );
 }
 
+const TEXT_AND_SPACE = '<w:r><w:t>x</w:t></w:r><w:r><w:t xml:space="preserve"> </w:t></w:r>';
+const TERMINAL_FILL = `<w:r><w:t xml:space="preserve">${'\u3000'.repeat(80)}</w:t></w:r>`;
+
 function documentXml(body: string): string {
   return `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`;
 }
@@ -104,6 +107,68 @@ describe('inline drawing geometry tracks alignment shifts', () => {
     expect(drawing.paintBounds.x).toBeGreaterThan(50);
     expectGeometryTracksBounds(drawing);
   });
+
+  for (const alignment of ['center', 'right'] as const) {
+    test(`${alignment} alignment counts a drawing after a pure whitespace run`, () => {
+      const body = layoutOf(
+        documentXml(
+          `<w:p><w:pPr><w:jc w:val="${alignment}"/></w:pPr>` +
+            `${TEXT_AND_SPACE}${inlinePictureRun()}</w:p>`
+        )
+      );
+      const table = layoutOf(
+        documentXml(
+          '<w:tbl><w:tblGrid><w:gridCol w:w="4680"/></w:tblGrid><w:tr><w:tc>' +
+            `<w:p><w:pPr><w:jc w:val="${alignment}"/></w:pPr>` +
+            `${TEXT_AND_SPACE}${inlinePictureRun()}</w:p>` +
+            '</w:tc></w:tr></w:tbl><w:p/>'
+        )
+      );
+
+      for (const layout of [body, table]) {
+        const line = linesOf(layout).find((candidate) => candidate.drawings?.length)!;
+        const drawing = line.drawings![0]!;
+        const rightEdge = line.box.x + line.box.width;
+        if (alignment === 'right') expect(drawing.advanceEnd).toBeCloseTo(rightEdge, 5);
+        else {
+          const leading = line.spans[0]!.box.x - line.box.x;
+          expect(leading).toBeCloseTo(rightEdge - drawing.advanceEnd, 5);
+        }
+        expectGeometryTracksBounds(drawing);
+      }
+    });
+
+    test(`${alignment} alignment keeps an interleaved drawing before the terminal fill`, () => {
+      const paragraph =
+        `<w:p><w:pPr><w:jc w:val="${alignment}"/></w:pPr>` +
+        `${TEXT_AND_SPACE}${inlinePictureRun()}${TERMINAL_FILL}</w:p>`;
+      const body = layoutOf(documentXml(paragraph));
+      const table = layoutOf(
+        documentXml(
+          '<w:tbl><w:tblGrid><w:gridCol w:w="4680"/></w:tblGrid><w:tr><w:tc>' +
+            paragraph +
+            '</w:tc></w:tr></w:tbl><w:p/>'
+        )
+      );
+
+      for (const layout of [body, table]) {
+        const line = linesOf(layout).find((candidate) => candidate.drawings?.length)!;
+        const drawing = line.drawings![0]!;
+        const fill = line.spans.find((span) => span.lineEndWhitespace)!;
+        const rightEdge = line.box.x + line.box.width;
+        const visibleWidth = drawing.advanceEnd - line.spans[0]!.box.x;
+        const expectedLeading =
+          alignment === 'center'
+            ? (line.box.width - visibleWidth) / 2
+            : line.box.width - visibleWidth;
+
+        expect(line.spans[0]!.box.x - line.box.x).toBeCloseTo(expectedLeading, 5);
+        expect(fill.box.x).toBeGreaterThanOrEqual(drawing.advanceEnd - 0.001);
+        expect(fill.box.x + fill.box.width).toBeCloseTo(rightEdge, 5);
+        expectGeometryTracksBounds(drawing);
+      }
+    });
+  }
 
   test('centered paragraph inside a table cell keeps geometry in the aligned space', () => {
     const layout = layoutOf(
