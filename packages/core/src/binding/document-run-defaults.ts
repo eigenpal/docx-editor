@@ -85,6 +85,23 @@ export function familyFromRFonts(
   return FONT_NAME.test(direct) ? direct : null;
 }
 
+/** The independently resolved East Asian family named by an `w:rFonts` element. */
+export function eastAsiaFamilyFromRFonts(
+  rFonts: OoxmlElement,
+  themeFonts: DocumentThemeFonts
+): string | null {
+  const themed = themeFontFamilyOf(attributeValue(rFonts, 'eastAsiaTheme'), themeFonts);
+  if (themed !== null) return themed;
+  const direct = attributeValue(rFonts, 'eastAsia');
+  if (direct === undefined) return null;
+  return FONT_NAME.test(direct) ? direct : null;
+}
+
+/** A validated literal family name from another Word font-bearing attribute such as `w:sym`. */
+export function validFontFamily(raw: string | undefined): string | null {
+  return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
+}
+
 /** What one `w:rPr` container contributes: validated family and size, or nulls. */
 function rPrDefaults(
   rPr: OoxmlElement | undefined,

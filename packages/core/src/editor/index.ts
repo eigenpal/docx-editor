@@ -37,7 +37,9 @@ export {
   composeFontOrigins,
   defineFontResolver,
   isFontResolver,
+  type ComposeFontOriginsOptions,
   type FontOrigin,
+  type FontOriginFailure,
   type FontResolverMark,
   type MarkedFontResolver,
 } from './font-resolver.ts';

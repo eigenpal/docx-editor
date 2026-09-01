@@ -164,8 +164,9 @@ export class LayoutShapingConfigurationError extends Error {
  * HarfBuzz will receive. Count ceilings are checked before visiting any caller-owned entry.
  * @internal
  */
-export function snapshotLayoutFontConfiguration(
-  configuration: LayoutFontConfiguration
+function snapshotLayoutFontConfigurationInternal(
+  configuration: LayoutFontConfiguration,
+  preservePreparedSources: boolean
 ): LayoutFontConfiguration {
   const epoch = configuration.epoch;
   const maxFontBytes = configuration.maxFontBytes;
@@ -234,18 +235,20 @@ export function snapshotLayoutFontConfiguration(
       }
     }
     sources.push(
-      Object.freeze({
-        request: Object.freeze({
-          family: request.family,
-          weight: request.weight,
-          style: request.style,
-        }),
-        id,
-        bytes,
-        hash,
-        faceIndex,
-        ...(availability ? { availability } : {}),
-      })
+      preservePreparedSources && preparedFontResourceActualHash(source) !== undefined
+        ? source
+        : Object.freeze({
+            request: Object.freeze({
+              family: request.family,
+              weight: request.weight,
+              style: request.style,
+            }),
+            id,
+            bytes,
+            hash,
+            faceIndex,
+            ...(availability ? { availability } : {}),
+          })
     );
   }
   let substitutions: LayoutFontSubstitution[] | undefined;
@@ -288,6 +291,12 @@ export function snapshotLayoutFontConfiguration(
     language,
   } satisfies Readonly<Record<keyof LayoutFontConfiguration, unknown>>;
   return Object.freeze(snapshot) as LayoutFontConfiguration;
+}
+
+export function snapshotLayoutFontConfiguration(
+  configuration: LayoutFontConfiguration
+): LayoutFontConfiguration {
+  return snapshotLayoutFontConfigurationInternal(configuration, false);
 }
 
 function orderedByResolutionKey<Value>(
@@ -467,16 +476,34 @@ export function prepareLayoutFontConfiguration(
   configuration: LayoutFontConfiguration,
   instrumentation?: LayoutShapingInstrumentation
 ): PreparedLayoutFontConfiguration {
-  const snapshot = snapshotLayoutFontConfiguration(configuration);
+  return prepareLayoutFontConfigurationInternal(configuration, instrumentation, false);
+}
+
+/** Prepare an internal composition whose sources are already owned and hashed. @internal */
+export function prepareOwnedLayoutFontConfiguration(
+  configuration: LayoutFontConfiguration,
+  instrumentation?: LayoutShapingInstrumentation
+): PreparedLayoutFontConfiguration {
+  return prepareLayoutFontConfigurationInternal(configuration, instrumentation, true);
+}
+
+function prepareLayoutFontConfigurationInternal(
+  configuration: LayoutFontConfiguration,
+  instrumentation: LayoutShapingInstrumentation | undefined,
+  preservePreparedSources: boolean
+): PreparedLayoutFontConfiguration {
+  const snapshot = snapshotLayoutFontConfigurationInternal(configuration, preservePreparedSources);
   const preparedConfiguration = Object.freeze({
     epoch: snapshot.epoch,
     maxFontBytes: snapshot.maxFontBytes,
     sources: Object.freeze(
       snapshot.sources.map((source) =>
-        prepareFontResourceDefinition(source, {
-          onOwnedByteCopy: instrumentation?.onFontByteCopy,
-          onHash: instrumentation?.onFontHash,
-        })
+        preservePreparedSources && preparedFontResourceActualHash(source) !== undefined
+          ? source
+          : prepareFontResourceDefinition(source, {
+              onOwnedByteCopy: instrumentation?.onFontByteCopy,
+              onHash: instrumentation?.onFontHash,
+            })
       )
     ),
     substitutions: snapshot.substitutions,

@@ -636,7 +636,12 @@ export interface CommentRecord {
 export function composeFontConfiguration(base: FontConfigurationBase, ...fragments: readonly FontConfigurationFragment[]): FontConfiguration;
 
 // @public
-export function composeFontOrigins(origins: readonly FontOrigin[], request: FontResolutionRequest): Promise<FontConfigurationFragment | undefined>;
+export function composeFontOrigins(origins: readonly FontOrigin[], request: FontResolutionRequest, options?: ComposeFontOriginsOptions): Promise<FontConfigurationFragment | undefined>;
+
+// @public
+export interface ComposeFontOriginsOptions {
+    readonly onOriginFailure?: (failure: FontOriginFailure) => void;
+}
 
 // @public
 export type ContainerRef = {
@@ -1884,10 +1889,19 @@ export interface FontMeasurementState {
 export type FontOrigin = FontConfiguration | FontConfigurationFragment | MarkedFontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
 
 // @public
+export interface FontOriginFailure {
+    // (undocumented)
+    readonly cause: unknown;
+    readonly originIndex: number;
+    readonly originName?: string;
+}
+
+// @public
 export interface FontResolutionRequest {
     readonly defaultFamily: string;
     readonly families: readonly string[];
     readonly resolvedFaces?: readonly FontFaceRequest[];
+    readonly signal?: AbortSignal;
 }
 
 // @public

@@ -16,8 +16,42 @@ export function createNodeImageDecodePort(options?: {
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
 
 // @public
+export interface ExportFontFaceResolution {
+    // (undocumented)
+    readonly sourceFamily: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly via: 'direct' | 'substitution';
+    // (undocumented)
+    readonly weight: 400 | 700;
+}
+
+// @public
+export interface ExportFontFamilyResolution {
+    // (undocumented)
+    readonly coverage: 'complete' | 'partial' | 'none';
+    // (undocumented)
+    readonly faces: readonly ExportFontFaceResolution[];
+    // (undocumented)
+    readonly family: string;
+}
+
+// @public
+export interface ExportFontResolutionReport {
+    // (undocumented)
+    readonly defaultFamily: string;
+    // (undocumented)
+    readonly families: readonly ExportFontFamilyResolution[];
+    // (undocumented)
+    readonly originFailures: readonly FontOriginFailure[];
+    // (undocumented)
+    readonly requestedFamilies: readonly string[];
+}
+
+// @public
 export class ExportResourceError extends Error {
-    constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed', message: string);
+    constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed', message: string, options?: ErrorOptions);
     // (undocumented)
     readonly code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed';
 }
@@ -34,6 +68,17 @@ export interface ExportSession {
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
     validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
+}
+
+// @public
+export type FontOrigin = FontConfiguration | FontConfigurationFragment | MarkedFontResolver | Promise<FontConfiguration | FontConfigurationFragment | undefined> | undefined;
+
+// @public
+export interface FontOriginFailure {
+    // (undocumented)
+    readonly cause: unknown;
+    readonly originIndex: number;
+    readonly originName?: string;
 }
 
 // @public
@@ -63,6 +108,17 @@ export type OpenDocumentForExportResult = {
     readonly ok: false;
     readonly reason: HeadlessDocumentRejection;
 };
+
+// @public
+export function openFontBackedDocumentForExport(source: Uint8Array, options: OpenFontBackedDocumentForExportOptions): Promise<OpenDocumentForExportResult>;
+
+// @public
+export interface OpenFontBackedDocumentForExportOptions extends Omit<OpenDocumentForExportOptions, 'measurer' | 'reuseAcrossRevisions'> {
+    readonly fontPolicy?: 'best-effort' | 'strict';
+    readonly fontResolutionTimeoutMs?: number;
+    readonly fonts: FontOrigin | readonly FontOrigin[];
+    readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
+}
 
 // @public
 export type PreservedImageConverter = (bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,

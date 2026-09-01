@@ -60,12 +60,14 @@ export interface FontConfigurationBase extends FontConfigurationFragment {
  */
 export interface FontResolutionRequest {
   /**
-   * Families declared anywhere in the document (body, headers/footers, styles), deduped,
-   * sorted, and capped at {@link MAX_RESOLVER_FAMILIES}.
+   * Families needed by the document, deduped and capped at {@link MAX_RESOLVER_FAMILIES}.
+   * Order is deterministic but may express host priority; do not sort it before resolving.
    */
   readonly families: readonly string[];
   /** The face a run naming no font resolves to, so a resolver can cover it too. */
   readonly defaultFamily: string;
+  /** Cancels document-scoped resolution; network-backed resolvers should pass it to fetch. */
+  readonly signal?: AbortSignal;
   /**
    * Faces an EARLIER origin in the same composition can already PAINT — either because it
    * supplied the bytes, or because it mapped that face onto one it did supply.

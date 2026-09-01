@@ -337,7 +337,7 @@ const freezeLineMetrics = (
  */
 export const fontRequestKey = (request: FontRequest): string => {
   assertRequest(request);
-  return JSON.stringify([request.family, request.weight, request.style]);
+  return JSON.stringify([request.family.trim().toLowerCase(), request.weight, request.style]);
 };
 
 class OwnedResolvedFont implements ResolvedFont {

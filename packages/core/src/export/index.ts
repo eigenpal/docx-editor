@@ -26,3 +26,11 @@ export {
   acquireSharedExportShaping,
   type SharedExportShaping,
 } from './shared-export-shaping.ts';
+export {
+  openFontBackedDocumentForExport,
+  type ExportFontFaceResolution,
+  type ExportFontFamilyResolution,
+  type ExportFontResolutionReport,
+  type OpenFontBackedDocumentForExportOptions,
+} from './document-export-shaping.ts';
+export type { FontOrigin, FontOriginFailure } from '../editor/font-resolver.ts';

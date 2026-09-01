@@ -38,14 +38,26 @@
 import type {
   FontConfiguration,
   FontFaceRequest,
+  FontSource,
   FontSourceSubstitution,
 } from '@docx-editor.dev/core/contracts/editor';
 import {
   composeFontConfiguration,
+  type FontConfigurationBase,
   type FontConfigurationFragment,
   type FontResolutionRequest,
   type FontResolver,
 } from './font-composition.ts';
+import { configuredDefaultFontFamily } from './font-catalog.ts';
+import {
+  HARD_MAX_AGGREGATE_FONT_BYTES,
+  HARD_MAX_FONT_BYTES,
+  HARD_MAX_FONT_SOURCES,
+  fontByteLength,
+  fontRequestKey,
+  prepareFontResourceDefinition,
+  type FontResourceInstrumentation,
+} from '../layout/font-resource.ts';
 
 /**
  * The namespaced key carrying the type-level half of the mark, and the runtime property
@@ -176,6 +188,21 @@ export type FontOrigin =
   | Promise<FontConfiguration | FontConfigurationFragment | undefined>
   | undefined;
 
+/** One font origin that could not contribute a valid fragment. @public */
+export interface FontOriginFailure {
+  /** Zero-based position in the first-wins origin list. */
+  readonly originIndex: number;
+  /** Resolver function name when one is safely available. */
+  readonly originName?: string;
+  readonly cause: unknown;
+}
+
+/** Diagnostics hook for ordered font-origin composition. @public */
+export interface ComposeFontOriginsOptions {
+  /** Fire-and-forget diagnostics; returned promises are observed but do not delay resolution. */
+  readonly onOriginFailure?: (failure: FontOriginFailure) => void;
+}
+
 /**
  * Face identity for coverage bookkeeping: family (case-folded, as Word matches names),
  * weight and style.
@@ -256,22 +283,78 @@ function paintableFaces(
  */
 export async function composeFontOrigins(
   origins: readonly FontOrigin[],
-  request: FontResolutionRequest
+  request: FontResolutionRequest,
+  options: ComposeFontOriginsOptions = {}
 ): Promise<FontConfigurationFragment | undefined> {
-  const present: (FontConfiguration | FontConfigurationFragment)[] = [];
-  const sourceFaces = new Map<string, FontFaceRequest>();
-  const substitutions: FontSourceSubstitution[] = [];
-  const inherited = request.resolvedFaces ?? [];
+  return composeFontOriginsInternal(origins, request, options);
+}
 
-  for (const origin of origins) {
+/** Internal composition whose returned source objects have not escaped Core ownership. @internal */
+export async function composePreparedFontOrigins(
+  origins: readonly FontOrigin[],
+  request: FontResolutionRequest,
+  options: ComposePreparedFontOriginsOptions = {}
+): Promise<FontConfigurationFragment | undefined> {
+  return composeFontOriginsInternal(origins, request, options);
+}
+
+/** Internal ownership hook used to reserve process bytes before copying an origin. @internal */
+export interface ComposePreparedFontOriginsOptions extends ComposeFontOriginsOptions {
+  readonly reserveOwnedBytes?: (byteLength: number) => () => void;
+  readonly instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>;
+}
+
+async function composeFontOriginsInternal(
+  origins: readonly FontOrigin[],
+  request: FontResolutionRequest,
+  options: ComposePreparedFontOriginsOptions
+): Promise<FontConfigurationFragment | undefined> {
+  // Promise origins may already be running. Observe every one immediately so a rejection behind
+  // a slow earlier resolver cannot become an unhandled process-level rejection; results are still
+  // consumed and committed strictly in authored order below.
+  const observed = origins.map(observePromiseOrigin);
+  let base: FontConfiguration | FontConfigurationFragment | undefined;
+  const winningSources: FontSource[] = [];
+  const sourceFaces = new Map<string, FontFaceRequest>();
+  const committedSourceKeys = new Set<string>();
+  let committedSourceBytes = 0;
+  let substitutions: FontSourceSubstitution[] = [];
+  const committedSubstitutionKeys = new Set<string>();
+  const inherited = request.resolvedFaces ?? [];
+  let defaultFamily = request.defaultFamily;
+
+  for (let originIndex = 0; originIndex < origins.length; originIndex += 1) {
+    throwIfFontResolutionAborted(request.signal);
+    const origin = origins[originIndex];
     // Faces recomputed per origin rather than accumulated, because a substitution an
     // earlier origin emitted can become paintable when a LATER origin supplies its target.
     const covered = paintableFaces(inherited, sourceFaces, substitutions);
     try {
-      const answer =
-        typeof origin === 'function'
-          ? await origin(covered.length === 0 ? request : { ...request, resolvedFaces: covered })
-          : await origin;
+      const observation = observed[originIndex]!;
+      let answer: FontConfiguration | FontConfigurationFragment | undefined;
+      if (observation) {
+        const outcome = await awaitObservedOrigin(observation, request.signal);
+        if (!outcome.ok) throw outcome.cause;
+        answer = outcome.value;
+      } else if (typeof origin === 'function') {
+        const outcome = await awaitObservedOrigin(
+          Promise.resolve(
+            origin({
+              ...request,
+              defaultFamily,
+              ...(covered.length > 0 ? { resolvedFaces: covered } : {}),
+            })
+          ).then(
+            (value) => ({ ok: true as const, value }),
+            (cause) => ({ ok: false as const, cause })
+          ),
+          request.signal
+        );
+        if (!outcome.ok) throw outcome.cause;
+        answer = outcome.value;
+      } else {
+        answer = origin as FontConfiguration | FontConfigurationFragment | undefined;
+      }
       // `== null`, not `=== undefined`: "returning nothing is a valid answer" reads as
       // `null` to plenty of hosts, and reading `.sources` off it took every OTHER origin
       // down with it.
@@ -281,9 +364,13 @@ export async function composeFontOrigins(
       // tell from a resolver, and one that used to compose as a fragment with no sources
       // and no complaint.
       if (typeof answer === 'function') {
-        console.warn(
-          '[fonts] a font origin answered with a function and was skipped; pass the ' +
-            'resolver itself rather than a function returning one'
+        reportOriginFailure(
+          options,
+          origin,
+          originIndex,
+          new TypeError(
+            'A font origin answered with a function; pass the resolver itself rather than a function returning one'
+          )
         );
         continue;
       }
@@ -291,23 +378,366 @@ export async function composeFontOrigins(
       // `request`, an unusable family — throws in `faceKey`, and an origin half-ingested
       // is worse than one skipped: it would sit in `present` with its faces unrecorded and
       // break composition later, outside anyone's catch.
-      const faces = (answer.sources ?? []).map(
-        (source) => [faceKey(source.request), source.request] as const
+      const sampledOrigin = validateOriginAnswer(
+        answer,
+        committedSourceKeys,
+        committedSourceBytes,
+        committedSubstitutionKeys,
+        base
+          ? 'maxFontBytes' in base && base.maxFontBytes !== undefined
+            ? base.maxFontBytes
+            : HARD_MAX_FONT_BYTES
+          : undefined,
+        options.reserveOwnedBytes,
+        options.instrumentation
       );
-      const answerSubstitutions = [...(answer.substitutions ?? [])];
-      present.push(answer);
+      const sampled = sampledOrigin.fragment;
+      const faces = (sampled.sources ?? []).map((source) => {
+        fontRequestKey(source.request);
+        return [faceKey(source.request), source.request] as const;
+      });
+      const answerSubstitutions = [...(sampled.substitutions ?? [])];
+      // The first origin is the composition base, so its configured default face is also the
+      // default later on-demand origins must try to cover. Without this, a caller choosing Aptos
+      // as the default still made a Google fallback fetch Calibri while leaving Aptos unresolved.
+      if (!base && 'defaultFont' in sampled) {
+        defaultFamily = configuredDefaultFontFamily(sampled as FontConfigurationBase);
+      }
+      if (!base) base = sampled;
+      const newlyDirect = new Set(sampledOrigin.sourceKeys);
+      if (newlyDirect.size > 0) {
+        substitutions = substitutions.filter(
+          (substitution) => !newlyDirect.has(fontRequestKey(substitution.from))
+        );
+        for (const key of newlyDirect) committedSubstitutionKeys.delete(key);
+      }
+      winningSources.push(...(sampled.sources ?? []));
+      for (const key of sampledOrigin.sourceKeys) committedSourceKeys.add(key);
+      committedSourceBytes += sampledOrigin.ownedBytes;
       for (const [key, face] of faces) sourceFaces.set(key, face);
-      for (const substitution of answerSubstitutions) substitutions.push(substitution);
+      for (const substitution of answerSubstitutions) {
+        substitutions.push(substitution);
+        committedSubstitutionKeys.add(fontRequestKey(substitution.from));
+      }
     } catch (cause) {
+      // Cancellation is a composition boundary, not an origin-local failure. In particular,
+      // never start a later network fallback after the document export has already timed out.
+      if (request.signal?.aborted) throw request.signal.reason ?? cause;
+      if (cause instanceof FontOwnershipReservationError) throw cause.cause;
       // Reported, never swallowed: a font origin that throws is a host bug (an unmarked
       // resolver called as a loader is the common one) and it degrades the document
       // silently otherwise.
-      console.warn('[fonts] a font origin failed and was skipped', cause);
+      reportOriginFailure(options, origin, originIndex, cause);
       continue;
     }
   }
 
-  if (present.length === 0) return undefined;
-  const { epoch: _perLoad, ...merged } = composeFontConfiguration(present[0]!, ...present.slice(1));
+  if (!base) return undefined;
+  const { epoch: _perLoad, ...merged } = composeFontConfiguration({
+    ...base,
+    sources: winningSources,
+    substitutions,
+  });
   return merged;
+}
+
+type ObservedOriginOutcome =
+  | { readonly ok: true; readonly value: FontConfiguration | FontConfigurationFragment | undefined }
+  | { readonly ok: false; readonly cause: unknown };
+
+class FontOwnershipReservationError extends Error {
+  constructor(readonly cause: unknown) {
+    super('Unable to reserve owned font bytes');
+    this.name = 'FontOwnershipReservationError';
+  }
+}
+
+async function awaitObservedOrigin(
+  observation: Promise<ObservedOriginOutcome>,
+  signal: AbortSignal | undefined
+): Promise<ObservedOriginOutcome> {
+  if (!signal) return observation;
+  throwIfFontResolutionAborted(signal);
+  let rejectAbort: ((cause: unknown) => void) | undefined;
+  const aborted = new Promise<never>((_resolve, reject) => {
+    rejectAbort = reject;
+  });
+  const onAbort = (): void => rejectAbort?.(signal.reason);
+  signal.addEventListener('abort', onAbort, { once: true });
+  try {
+    return await Promise.race([observation, aborted]);
+  } finally {
+    signal.removeEventListener('abort', onAbort);
+  }
+}
+
+function observePromiseOrigin(origin: FontOrigin): Promise<ObservedOriginOutcome> | undefined {
+  if (origin === null || typeof origin !== 'object') return undefined;
+  let then: unknown;
+  try {
+    then = (origin as { readonly then?: unknown }).then;
+  } catch (cause) {
+    return Promise.resolve({ ok: false, cause });
+  }
+  if (typeof then !== 'function') return undefined;
+  return Promise.resolve(origin).then(
+    (value) => ({ ok: true as const, value }),
+    (cause) => ({ ok: false as const, cause })
+  );
+}
+
+function validateOriginAnswer(
+  answer: FontConfiguration | FontConfigurationFragment,
+  committedSourceKeys: ReadonlySet<string>,
+  committedSourceBytes: number,
+  committedSubstitutionKeys: ReadonlySet<string>,
+  effectiveMaxFontBytes: number | undefined,
+  reserveOwnedBytes?: (byteLength: number) => () => void,
+  instrumentation?: Pick<FontResourceInstrumentation, 'onOwnedByteCopy' | 'onHash'>
+): {
+  readonly fragment: FontConfiguration | FontConfigurationFragment;
+  readonly sourceKeys: readonly string[];
+  readonly ownedBytes: number;
+} {
+  const sourceInput = answer.sources ?? [];
+  const substitutionInput = answer.substitutions ?? [];
+  const configuredMaxInput = 'maxFontBytes' in answer ? answer.maxFontBytes : undefined;
+  const defaultFontInput = 'defaultFont' in answer ? answer.defaultFont : undefined;
+  const epochInput = 'epoch' in answer ? answer.epoch : undefined;
+  const languageInput = 'language' in answer ? answer.language : undefined;
+  if (!Array.isArray(sourceInput) || !Array.isArray(substitutionInput)) {
+    throw new TypeError('Font origin sources and substitutions must be arrays');
+  }
+  const sourceCount = sourceInput.length;
+  const substitutionCount = substitutionInput.length;
+  if (sourceCount > HARD_MAX_FONT_SOURCES) {
+    throw new RangeError(`Font source count must not exceed ${HARD_MAX_FONT_SOURCES}`);
+  }
+  if (substitutionCount > HARD_MAX_FONT_SOURCES) {
+    throw new RangeError(`Font substitution count must not exceed ${HARD_MAX_FONT_SOURCES}`);
+  }
+  const configuredMax = configuredMaxInput ?? HARD_MAX_FONT_BYTES;
+  if (
+    !Number.isSafeInteger(configuredMax) ||
+    configuredMax <= 0 ||
+    configuredMax > HARD_MAX_FONT_BYTES
+  ) {
+    throw new RangeError(
+      `Font byte ceiling must be a positive safe integer no greater than ${HARD_MAX_FONT_BYTES}`
+    );
+  }
+  const sourceByteCeiling = effectiveMaxFontBytes ?? configuredMax;
+  let aggregateBytes = 0;
+  const sourceKeys: string[] = [];
+  const candidateKeys = new Set<string>();
+  const candidateSources: FontSource[] = [];
+  for (let sourceIndex = 0; sourceIndex < sourceCount; sourceIndex += 1) {
+    const sourceInputValue = sourceInput[sourceIndex]!;
+    const request = snapshotFontFaceRequest(sourceInputValue.request);
+    const availability = sourceInputValue.availability;
+    const faceIndex = sourceInputValue.faceIndex;
+    const hash = sourceInputValue.hash;
+    const id = sourceInputValue.id;
+    const key = fontRequestKey(request);
+    if (
+      availability !== undefined &&
+      availability !== 'available' &&
+      availability !== 'forbidden'
+    ) {
+      throw new TypeError('Font source availability must be available or forbidden');
+    }
+    if (!Number.isSafeInteger(faceIndex) || faceIndex < 0) {
+      throw new RangeError('Font face index must be a non-negative safe integer');
+    }
+    if (typeof hash !== 'string' || hash.length === 0) {
+      throw new TypeError('Font source hash must be a non-empty string');
+    }
+    let bytes: Uint8Array;
+    if (availability !== 'forbidden') {
+      if (typeof id !== 'string' || id.length === 0) {
+        throw new TypeError('Font source id must be a non-empty string');
+      }
+      bytes = sourceInputValue.bytes;
+      const byteLength = fontByteLength(bytes);
+      if (byteLength > sourceByteCeiling) {
+        throw new RangeError('Font source exceeds the effective base byte ceiling');
+      }
+      if (committedSourceKeys.has(key) || candidateKeys.has(key)) continue;
+      aggregateBytes += byteLength;
+      if (committedSourceBytes + aggregateBytes > HARD_MAX_AGGREGATE_FONT_BYTES) {
+        throw new RangeError(
+          `Font sources exceed the aggregate byte ceiling of ${HARD_MAX_AGGREGATE_FONT_BYTES}`
+        );
+      }
+    } else bytes = new Uint8Array(0);
+    if (committedSourceKeys.has(key) || candidateKeys.has(key)) continue;
+    candidateKeys.add(key);
+    if (committedSourceKeys.size + candidateKeys.size > HARD_MAX_FONT_SOURCES) {
+      throw new RangeError(`Font source count must not exceed ${HARD_MAX_FONT_SOURCES}`);
+    }
+    sourceKeys.push(key);
+    candidateSources.push(
+      Object.freeze({
+        request,
+        id,
+        bytes,
+        hash,
+        faceIndex,
+        ...(availability ? { availability } : {}),
+      })
+    );
+  }
+  const candidateSubstitutionKeys = new Set<string>();
+  const substitutions: FontSourceSubstitution[] = [];
+  for (let substitutionIndex = 0; substitutionIndex < substitutionCount; substitutionIndex += 1) {
+    const substitution = substitutionInput[substitutionIndex]!;
+    const from = snapshotFontFaceRequest(substitution.from);
+    const to = snapshotFontFaceRequest(substitution.to);
+    fontRequestKey(from);
+    fontRequestKey(to);
+    const metricsInput = substitution.lineMetrics;
+    const metrics = metricsInput
+      ? Object.freeze({
+          heightEm: metricsInput.heightEm,
+          baselineEm: metricsInput.baselineEm,
+        })
+      : undefined;
+    if (
+      metrics &&
+      (!Number.isFinite(metrics.heightEm) ||
+        !Number.isFinite(metrics.baselineEm) ||
+        metrics.heightEm <= 0 ||
+        metrics.heightEm > 4 ||
+        metrics.baselineEm < 0 ||
+        metrics.baselineEm > metrics.heightEm)
+    ) {
+      throw new RangeError('Font substitution line metrics must fit within a bounded em box');
+    }
+    const key = fontRequestKey(from);
+    if (
+      committedSourceKeys.has(key) ||
+      candidateKeys.has(key) ||
+      committedSubstitutionKeys.has(key) ||
+      candidateSubstitutionKeys.has(key)
+    ) {
+      continue;
+    }
+    candidateSubstitutionKeys.add(key);
+    substitutions.push(
+      Object.freeze({
+        from,
+        to,
+        ...(metrics ? { lineMetrics: metrics } : {}),
+      })
+    );
+  }
+  let retainedCommittedSubstitutions = committedSubstitutionKeys.size;
+  for (const key of candidateKeys) {
+    if (committedSubstitutionKeys.has(key)) retainedCommittedSubstitutions -= 1;
+  }
+  if (retainedCommittedSubstitutions + candidateSubstitutionKeys.size > HARD_MAX_FONT_SOURCES) {
+    throw new RangeError(`Font substitution count must not exceed ${HARD_MAX_FONT_SOURCES}`);
+  }
+  let defaultFont: FontConfigurationBase['defaultFont'];
+  if (defaultFontInput !== undefined) {
+    const family = defaultFontInput.family;
+    const sizeHalfPoints = defaultFontInput.sizeHalfPoints;
+    fontRequestKey({
+      family,
+      weight: 400,
+      style: 'normal',
+    });
+    if (!Number.isSafeInteger(sizeHalfPoints) || sizeHalfPoints <= 0) {
+      throw new RangeError('Default font size must be a positive safe integer in half-points');
+    }
+    defaultFont = Object.freeze({
+      family,
+      sizeHalfPoints,
+    });
+  }
+  if (epochInput !== undefined && (!Number.isSafeInteger(epochInput) || epochInput < 0)) {
+    throw new RangeError('Font configuration epoch must be a non-negative safe integer');
+  }
+  if (languageInput !== undefined && typeof languageInput !== 'string') {
+    throw new TypeError('Font shaping language must be a string');
+  }
+  let releaseReservation: (() => void) | undefined;
+  if (aggregateBytes > 0 && reserveOwnedBytes) {
+    try {
+      releaseReservation = reserveOwnedBytes(aggregateBytes);
+    } catch (cause) {
+      throw new FontOwnershipReservationError(cause);
+    }
+  }
+  let sources: ReturnType<typeof prepareFontResourceDefinition>[];
+  try {
+    sources = candidateSources.map((source) =>
+      prepareFontResourceDefinition(source, instrumentation)
+    );
+  } catch (error) {
+    releaseReservation?.();
+    throw error;
+  }
+  return {
+    fragment: Object.freeze({
+      sources: Object.freeze(sources),
+      substitutions: Object.freeze(substitutions),
+      ...(epochInput !== undefined ? { epoch: epochInput } : {}),
+      ...(configuredMaxInput !== undefined ? { maxFontBytes: configuredMaxInput } : {}),
+      ...(defaultFont ? { defaultFont } : {}),
+      ...(languageInput !== undefined ? { language: languageInput } : {}),
+    }) as FontConfiguration | FontConfigurationFragment,
+    sourceKeys: Object.freeze(sourceKeys),
+    ownedBytes: aggregateBytes,
+  };
+}
+
+function snapshotFontFaceRequest(request: FontFaceRequest): FontFaceRequest {
+  return Object.freeze({
+    family: request.family,
+    weight: request.weight,
+    style: request.style,
+  });
+}
+
+function throwIfFontResolutionAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  throw signal.reason ?? new DOMException('Font resolution was aborted', 'AbortError');
+}
+
+function reportOriginFailure(
+  options: ComposeFontOriginsOptions,
+  origin: FontOrigin,
+  originIndex: number,
+  cause: unknown
+): void {
+  let originName: string | undefined;
+  try {
+    if (typeof origin === 'function' && origin.name.length > 0) originName = origin.name;
+  } catch {
+    // Hostile function proxies do not get to turn diagnostics into another failure.
+  }
+  const failure: FontOriginFailure = Object.freeze({
+    originIndex,
+    ...(originName !== undefined ? { originName } : {}),
+    cause,
+  });
+  if (options.onOriginFailure) {
+    try {
+      const result = (options.onOriginFailure as (value: FontOriginFailure) => unknown)(failure);
+      void Promise.resolve(result).catch((callbackError: unknown) => {
+        console.warn('[fonts] font-origin diagnostic callback failed', callbackError);
+      });
+      return;
+    } catch (callbackError) {
+      console.warn('[fonts] font-origin diagnostic callback failed', callbackError);
+    }
+  }
+  let diagnostic = '';
+  try {
+    if (cause instanceof Error && cause.message.length > 0) diagnostic = `: ${cause.message}`;
+  } catch {
+    // A hostile error proxy cannot make reporting the original origin failure throw.
+  }
+  console.warn(`[fonts] a font origin failed and was skipped${diagnostic}`, cause);
 }

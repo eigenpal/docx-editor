@@ -4,15 +4,13 @@
  * @packageDocumentation
  * @public
  */
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import {
   acquireSharedExportShaping,
+  openFontBackedDocumentForExport,
   openDocumentForExport as openCoreDocumentForExport,
   type ExportDocumentSource,
   type ExportSemanticLayout,
   type ExportSession,
-  type OpenDocumentForExportOptions,
   type OpenDocumentForExportResult,
 } from '@docx-editor.dev/core/export';
 import {
@@ -21,23 +19,33 @@ import {
   type LayoutFontConfiguration,
   type PreparedLayoutFontConfiguration,
 } from '@docx-editor.dev/core/layout';
-import { openHeadlessDocument } from '@docx-editor.dev/core/store';
 import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
-import { loadDefaultFonts } from '@docx-editor.dev/fonts';
+import { loadDefaultFonts, packagedFonts } from '@docx-editor.dev/fonts';
 import {
   exportMarkdownFrom as translateMarkdown,
   exportMarkdownLayout as translateMarkdownLayout,
-  type MarkdownExportOptions,
-  type MarkdownExportResult,
-  type MarkdownTranslationOptions,
 } from './markdown.ts';
-import { createRetryingLoader } from './retrying-loader.ts';
+import type {
+  MarkdownExportOptions,
+  MarkdownExportResult,
+  MarkdownFontOrigin,
+  MarkdownFontsSource,
+  OpenMarkdownDocumentForExportOptions,
+  MarkdownTranslationOptions,
+} from './markdown-types.ts';
+import { createSuccessfulValueCache, provisionWithExportDeadline } from './export-deadline.ts';
+import { createPackagedFileFetch } from './packaged-file-fetch.ts';
 
 export { ExportResourceError } from '@docx-editor.dev/core/export';
 export { forEachSemanticDrawing } from '@docx-editor.dev/core/layout';
+export { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 
 export type {
   ExportDocumentSource,
+  ExportFontFaceResolution,
+  ExportFontFamilyResolution,
+  ExportFontResolutionReport,
+  FontOriginFailure,
   ExportSemanticLayout,
   ExportSession,
   OpenDocumentForExportOptions,
@@ -81,15 +89,26 @@ export type {
 export type {
   MarkdownExportOptions,
   MarkdownExportResult,
+  MarkdownFontOrigin,
+  MarkdownFontsSource,
   MarkdownImageResult,
-  MarkdownComment,
   MarkdownPage,
   MarkdownPaginationInfo,
-  MarkdownReviewArtifact,
-  MarkdownReviewOccurrence,
-  MarkdownTrackedChange,
+  OpenMarkdownDocumentForExportOptions,
   MarkdownTranslationOptions,
-} from './markdown.ts';
+} from './markdown-types.ts';
+export type {
+  MarkdownComment,
+  MarkdownReviewCoverage,
+  MarkdownReviewArtifact,
+  MarkdownReviewBinding,
+  MarkdownReviewOccurrence,
+  MarkdownReviewProjection,
+  MarkdownReviewRange,
+  MarkdownReviewRangePrecision,
+  MarkdownReviewUnmappedReason,
+  MarkdownTrackedChange,
+} from './markdown-review-bindings.ts';
 
 /** Typed one-shot failure for bytes that cannot be opened as a supported DOCX. @public */
 export class DocumentOpenError extends Error {
@@ -102,25 +121,14 @@ export class DocumentOpenError extends Error {
   }
 }
 
-const packagedFileFetch = (async (input: RequestInfo | URL): Promise<Response> => {
-  const value =
-    input instanceof URL ? input : new URL(typeof input === 'string' ? input : input.url);
-  if (value.protocol !== 'file:') {
-    throw new TypeError(`Packaged font URL must use file:, received ${value.protocol}`);
-  }
-  try {
-    return new Response(await readFile(fileURLToPath(value)), { status: 200 });
-  } catch {
-    return new Response(null, { status: 404 });
-  }
-}) as typeof fetch;
+const packagedFileFetch = createPackagedFileFetch();
 
 interface DefaultExportFonts {
   readonly configuration: PreparedLayoutFontConfiguration;
 }
 
-const defaultFonts = createRetryingLoader(async (): Promise<DefaultExportFonts> => {
-  const fragment = await loadDefaultFonts({ fetcher: packagedFileFetch });
+const defaultFonts = createSuccessfulValueCache(async (signal): Promise<DefaultExportFonts> => {
+  const fragment = await loadDefaultFonts({ fetcher: packagedFileFetch, signal });
   if (fragment.failures.length > 0 || fragment.sources.length === 0) {
     const detail = fragment.failures
       .map((failure) => `${failure.file}: ${failure.diagnostic}`)
@@ -142,28 +150,65 @@ const defaultFonts = createRetryingLoader(async (): Promise<DefaultExportFonts> 
   });
 });
 
+const packagedExportFonts = packagedFonts({
+  fetcher: packagedFileFetch,
+  install: false,
+});
+
 function isByteSource(source: ExportDocumentSource): source is Uint8Array {
   return ArrayBuffer.isView(source);
+}
+
+function fontOrigins(source: MarkdownFontsSource | undefined): readonly MarkdownFontOrigin[] {
+  if (source === undefined) return [];
+  return Array.isArray(source) ? source : [source as MarkdownFontOrigin];
 }
 
 /** Open a reusable export session with packaged fonts and HarfBuzz shaping by default. @public */
 export async function openDocumentForExport(
   source: ExportDocumentSource,
-  options: OpenDocumentForExportOptions = {}
+  options: OpenMarkdownDocumentForExportOptions = {}
 ): Promise<OpenDocumentForExportResult> {
-  if (options.measurer) return openCoreDocumentForExport(source, options);
-  // Reject attacker-controlled junk before loading or admitting any packaged font bytes.
-  const prepared = isByteSource(source)
-    ? openHeadlessDocument(source)
-    : { ok: true as const, view: source };
-  if (!prepared.ok) return prepared;
-  const defaults = await defaultFonts();
-  const shared = await acquireSharedExportShaping(defaults.configuration);
-  return openCoreDocumentForExport(prepared.view, {
-    ...options,
-    reuseAcrossRevisions: isByteSource(source)
-      ? (options.reuseAcrossRevisions ?? false)
-      : options.reuseAcrossRevisions,
+  const { fonts: _fonts, fallbackFonts: _fallbackFonts, ...coreOptions } = options;
+  if (options.measurer) {
+    if (options.fontPolicy !== undefined || options.onFontResolution !== undefined) {
+      throw new TypeError(
+        'fontPolicy and onFontResolution cannot verify a caller-supplied measurer; ' +
+          'omit measurer to use document-aware Core font resolution'
+      );
+    }
+    return openCoreDocumentForExport(source, coreOptions);
+  }
+  const callerFonts = fontOrigins(options.fonts);
+  const missingFonts = fontOrigins(options.fallbackFonts);
+  const hasCustomFontPolicy =
+    callerFonts.length > 0 ||
+    missingFonts.length > 0 ||
+    options.fontPolicy !== undefined ||
+    options.onFontResolution !== undefined;
+  if (isByteSource(source)) {
+    return openFontBackedDocumentForExport(source, {
+      ...coreOptions,
+      fonts: [...callerFonts, packagedExportFonts, ...missingFonts],
+    });
+  }
+  if (hasCustomFontPolicy) {
+    throw new TypeError(
+      'fonts and fallbackFonts require immutable DOCX bytes; pass a revision-stable measurer ' +
+        'when exporting a live HeadlessDocumentView'
+    );
+  }
+  // A live view cannot be safely reopened around asynchronous document-aware font origins.
+  // Keep its process-static shaping snapshot stable across revisions; fidelity-sensitive hosts
+  // should pass the exact measurer already used by their editor.
+  const shared = await provisionWithExportDeadline(
+    (signal) =>
+      defaultFonts(signal).then((loaded) => acquireSharedExportShaping(loaded.configuration)),
+    options
+  );
+  return openCoreDocumentForExport(source, {
+    ...coreOptions,
+    reuseAcrossRevisions: options.reuseAcrossRevisions,
     measurer: shared.createMeasurer(),
     producer: options.producer ?? shared.producer,
   });

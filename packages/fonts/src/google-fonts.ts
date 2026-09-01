@@ -212,21 +212,71 @@ const catalogByFamily = ((): ReadonlyMap<string, readonly GoogleFontFace[]> => {
  * host that supplied its own (a CSP-constrained proxy, a test double) never receives
  * bytes some other fetcher produced. A `WeakMap` so a discarded fetcher's bytes go too.
  */
-const byteCaches = new WeakMap<object, Map<string, Promise<Uint8Array>>>();
+const MAX_CACHED_FONT_BYTES = 16 * 1024 * 1024;
+const MAX_CACHED_FONT_FACES = 64;
 
-function cacheFor(fetcher: typeof fetch): Map<string, Promise<Uint8Array>> {
+interface FontByteCache {
+  readonly entries: Map<string, Promise<Uint8Array>>;
+  readonly sizes: Map<string, number>;
+  totalBytes: number;
+}
+
+const byteCaches = new WeakMap<object, FontByteCache>();
+
+function cacheFor(fetcher: typeof fetch): FontByteCache {
   let cache = byteCaches.get(fetcher);
   if (!cache) {
-    cache = new Map();
+    cache = { entries: new Map(), sizes: new Map(), totalBytes: 0 };
     byteCaches.set(fetcher, cache);
   }
   return cache;
 }
 
-async function fetchFace(face: GoogleFontFace, fetcher: typeof fetch): Promise<Uint8Array> {
+function cacheSuccess(cache: FontByteCache, url: string, bytes: Uint8Array): void {
+  const previous = cache.sizes.get(url) ?? 0;
+  cache.entries.delete(url);
+  cache.sizes.delete(url);
+  cache.totalBytes -= previous;
+  if (bytes.byteLength > MAX_CACHED_FONT_BYTES) return;
+  cache.entries.set(url, Promise.resolve(bytes));
+  cache.sizes.set(url, bytes.byteLength);
+  cache.totalBytes += bytes.byteLength;
+  while (cache.entries.size > MAX_CACHED_FONT_FACES || cache.totalBytes > MAX_CACHED_FONT_BYTES) {
+    const oldest = cache.entries.keys().next().value as string | undefined;
+    if (oldest === undefined) break;
+    cache.entries.delete(oldest);
+    cache.totalBytes -= cache.sizes.get(oldest) ?? 0;
+    cache.sizes.delete(oldest);
+  }
+}
+
+async function fetchFace(
+  face: GoogleFontFace,
+  fetcher: typeof fetch,
+  signal?: AbortSignal
+): Promise<Uint8Array> {
   const byteCache = cacheFor(fetcher);
-  const inFlight = byteCache.get(face.url);
-  if (inFlight) return inFlight;
+  const inFlight = byteCache.entries.get(face.url);
+  if (inFlight && (signal === undefined || byteCache.sizes.has(face.url))) {
+    // Map insertion order is the LRU order. Pending entries can move too; successful byte
+    // accounting is unchanged until their completion records the actual size.
+    byteCache.entries.delete(face.url);
+    byteCache.entries.set(face.url, inFlight);
+    return raceWithAbort(inFlight, signal);
+  }
+  if (signal) {
+    // Caller-owned work must be physically cancellable: do not put its pending promise into the
+    // process cache. A successful immutable response is safe to seed for later documents; an
+    // abort, timeout, or hung request can never poison retries.
+    const response = await fetcher(face.url, { signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength !== face.byteLength) {
+      throw new Error(`unexpected byte length ${bytes.byteLength}, catalogued ${face.byteLength}`);
+    }
+    cacheSuccess(byteCache, face.url, bytes);
+    return bytes;
+  }
   const pending = (async () => {
     const response = await fetcher(face.url);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -239,11 +289,39 @@ async function fetchFace(face: GoogleFontFace, fetcher: typeof fetch): Promise<U
     }
     return bytes;
   })();
-  byteCache.set(face.url, pending);
+  byteCache.entries.set(face.url, pending);
   // A failed fetch must not be remembered as a failure forever: the next document gets to
   // try again. Only successes stay cached.
-  pending.catch(() => byteCache.delete(face.url));
-  return pending;
+  pending.then(
+    (bytes) => {
+      if (byteCache.entries.get(face.url) === pending) cacheSuccess(byteCache, face.url, bytes);
+    },
+    () => {
+      if (byteCache.entries.get(face.url) !== pending) return;
+      byteCache.entries.delete(face.url);
+      byteCache.sizes.delete(face.url);
+    }
+  );
+  return raceWithAbort(pending, signal);
+}
+
+function raceWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return work;
+  if (signal.aborted) return Promise.reject(signal.reason ?? new Error('Font loading was aborted'));
+  return new Promise<T>((resolve, reject) => {
+    const abort = (): void => reject(signal.reason ?? new Error('Font loading was aborted'));
+    signal.addEventListener('abort', abort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', abort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', abort);
+        reject(error);
+      }
+    );
+  });
 }
 
 /**
@@ -366,6 +444,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       const fragment = await loadDefaultFonts({
         families: [...new Set(packaged.values())],
         fetcher,
+        signal: request.signal,
       });
       sources.push(...fragment.sources);
       // Re-keyed onto the DOCUMENT's spelling for the same reason the catalog path does
@@ -391,7 +470,7 @@ export function googleFonts(options: GoogleFontsOptions = {}): GoogleFontsResolv
       packagedJob(),
       ...[...wanted.values()].flat().map(async (face) => {
         try {
-          const bytes = await fetchFace(face, fetcher);
+          const bytes = await fetchFace(face, fetcher, request.signal);
           sources.push({
             request: { family: face.family, weight: face.weight, style: face.style },
             id: `google-fonts:${face.family}#${face.weight}#${face.style}`,

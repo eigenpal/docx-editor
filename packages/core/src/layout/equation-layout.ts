@@ -6,7 +6,8 @@ import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 
 const SCRIPT_SCALE = 0.7;
 const NARY_OPERATOR_SCALE = 1.25;
-const EQUATION_FONT_FAMILY = 'Cambria Math';
+/** The synthetic face Core layout uses for every OMML equation. @internal */
+export const EQUATION_FONT_FAMILY = 'Cambria Math';
 
 /** Use Word's math face when installed while retaining the measurer's safe fallback stack. */
 export function equationRunStyle(style: ResolvedRunStyle): ResolvedRunStyle {

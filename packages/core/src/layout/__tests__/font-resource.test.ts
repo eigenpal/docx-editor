@@ -119,11 +119,10 @@ describe('font resource contracts', () => {
     });
 
     expect(snapshot.resolve(regular)).not.toBeInstanceOf(FontResolutionError);
-    for (const request of [
-      { ...regular, family: 'document sans' },
-      { ...regular, weight: 700 },
-      italic,
-    ]) {
+    expect(snapshot.resolve({ ...regular, family: 'document sans' })).not.toBeInstanceOf(
+      FontResolutionError
+    );
+    for (const request of [{ ...regular, weight: 700 }, italic]) {
       const result = snapshot.resolve(request);
       expect(result).toBeInstanceOf(FontResolutionError);
       expect(result).toMatchObject({ code: 'missing', request });

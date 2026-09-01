@@ -31,6 +31,9 @@ const LANES = Object.keys(CORE_LANES) as LaneName[];
  * — coupling that predates the lane move and is compile-time only.
  */
 const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: LaneName }[] = [
+  // The neutral export composition root shares the existing public FontOrigin type. This is
+  // erased and does not make the browser editor depend on the Node-oriented export lane.
+  { file: 'export/index.ts', to: 'editor' },
   { file: 'contracts/editor.ts', to: 'layout' },
   { file: 'contracts/editor.ts', to: 'store' },
   { file: 'contracts/editor.ts', to: 'collaboration' },
@@ -54,7 +57,13 @@ const GRANDFATHERED_TYPE_EDGES: readonly { readonly file: string; readonly to: L
  * when the review vocabulary moved to `store/store/review-items.ts`, a lane both binding
  * and layout may import.
  */
-const GRANDFATHERED_VALUE_EDGES: readonly { readonly file: string; readonly to: LaneName }[] = [];
+const GRANDFATHERED_VALUE_EDGES: readonly { readonly file: string; readonly to: LaneName }[] = [
+  // These specific modules are DOM-free derivations/composition primitives already shared by
+  // browser layout. The export composition root centralizes them for every headless exporter;
+  // keep the pins file-specific so no other binding/editor runtime can enter the neutral lane.
+  { file: 'export/document-export-shaping.ts', to: 'binding' },
+  { file: 'export/document-export-shaping.ts', to: 'editor' },
+];
 
 interface ImportEdge {
   readonly file: string; // relative to src/, posix separators

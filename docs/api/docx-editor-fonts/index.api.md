@@ -83,6 +83,7 @@ export interface FontOriginRequest {
     readonly defaultFamily: string;
     readonly families: readonly string[];
     readonly resolvedFaces?: readonly ResolvedFontFace[];
+    readonly signal?: AbortSignal;
 }
 
 // @public
@@ -103,6 +104,7 @@ export function loadDefaultFonts(options?: LoadDefaultFontsOptions): Promise<Def
 export interface LoadDefaultFontsOptions {
     readonly families?: readonly WordDefaultFamily[];
     readonly fetcher?: typeof fetch;
+    readonly signal?: AbortSignal;
 }
 
 // @public

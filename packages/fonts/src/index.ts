@@ -134,6 +134,8 @@ export interface LoadDefaultFontsOptions {
   readonly families?: readonly WordDefaultFamily[];
   /** Injectable for tests; defaults to global `fetch`. */
   readonly fetcher?: typeof fetch;
+  /** Cancels outstanding face reads. */
+  readonly signal?: AbortSignal;
 }
 
 const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, entry]));
@@ -227,7 +229,9 @@ export async function loadDefaultFonts(
       jobs.push(
         (async () => {
           try {
-            const response = await fetcher(assetUrl(file) as unknown as RequestInfo);
+            const response = await fetcher(assetUrl(file) as unknown as RequestInfo, {
+              signal: options.signal,
+            });
             if (!response.ok) {
               failures.push({ family, file, diagnostic: `HTTP ${response.status}` });
               return;
@@ -465,6 +469,8 @@ export interface FontOriginRequest {
   readonly families: readonly string[];
   /** The face a run naming no font resolves to. The engine reports Calibri by default. */
   readonly defaultFamily: string;
+  /** Cancels document-scoped resolution. */
+  readonly signal?: AbortSignal;
   /** Faces an earlier origin in the same composition can already paint. */
   readonly resolvedFaces?: readonly ResolvedFontFace[];
 }
@@ -611,6 +617,7 @@ export function packagedFonts(options: PackagedFontsOptions = {}): PackagedFonts
     const loadOptions = {
       families,
       ...(options.fetcher ? { fetcher: options.fetcher } : {}),
+      ...(request.signal ? { signal: request.signal } : {}),
     };
     const fragment = await loadDefaultFonts(loadOptions);
     for (const failure of fragment.failures) {

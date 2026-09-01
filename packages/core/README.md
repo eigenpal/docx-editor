@@ -74,6 +74,43 @@ Export sessions use the editor's reader-safe revision view by default: `all-mark
 halves of pending tracked changes visible. Pass `displayMode: 'proposed'` or
 `displayMode: 'original'` explicitly when the exporter should present a resolved view instead.
 
+### Building a physical-page exporter
+
+Use the document-aware font composition root for Markdown, PDF, or any exporter whose page breaks
+matter. `openDocumentForExport(bytes)` without a measurer intentionally uses deterministic
+fixed-width approximation. `openFontBackedDocumentForExport` discovers the document's actual run,
+style, header, footer, note, field, symbol, and equation families, then binds the resolved shaping
+snapshot to the layout session.
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { openFontBackedDocumentForExport } from '@docx-editor.dev/core/export';
+import { packagedFonts } from '@docx-editor.dev/fonts';
+
+const bytes = new Uint8Array(await readFile('contract.docx'));
+const opened = await openFontBackedDocumentForExport(bytes, {
+  // First wins: put caller-supplied licensed fonts first, bundled metric substitutes next,
+  // and an optional network resolver last.
+  fonts: [callerFonts, packagedFonts({ install: false }), optionalNetworkFonts],
+  fontPolicy: 'strict',
+  onFontResolution: (report) => auditLogger.info(report),
+});
+
+if (!opened.ok) throw new Error(`DOCX rejected: ${opened.reason}`);
+try {
+  const layout = await opened.session.layout();
+  await writeExporterOutput(layout);
+} finally {
+  opened.session.dispose(); // releases document-owned shaping bytes
+}
+```
+
+Keep font retrieval, substitution, cancellation, diagnostics, and memory ownership in this Core
+lane. Format adapters should consume the resulting semantic pages; Markdown binds Core source
+artifacts to string offsets, while PDF can bind the same artifacts to page rectangles. For a live
+`HeadlessDocumentView`, pass the revision-stable measurer already used by its editor rather than
+starting asynchronous document-specific font resolution against mutable state.
+
 ## Fidelity
 
 Untouched content, unsupported OOXML, and package payloads survive editing and save. The

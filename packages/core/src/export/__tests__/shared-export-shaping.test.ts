@@ -468,9 +468,11 @@ test('still rejects duplicate resolution keys after safe-order canonicalization'
           : [laterSource, { ...laterSource }, source, { ...source, id: 'duplicate-key-b' }],
       defaultFont: { family: request.family, sizeHalfPoints: 22 },
     });
-  await expect(acquireSharedExportShaping(sourceOrder('early'))).rejects.toThrow(request.family);
+  await expect(acquireSharedExportShaping(sourceOrder('early'))).rejects.toThrow(
+    request.family.toLowerCase()
+  );
   await expect(acquireSharedExportShaping(sourceOrder('later'))).rejects.toThrow(
-    laterRequest.family
+    laterRequest.family.toLowerCase()
   );
 });
 

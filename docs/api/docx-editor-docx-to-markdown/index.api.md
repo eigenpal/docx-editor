@@ -4,6 +4,9 @@
 
 ```ts
 
+import { createFontSource } from '@docx-editor.dev/core/editor';
+import { defineFontResolver } from '@docx-editor.dev/core/editor';
+
 // @public
 export type AnchoredDrawingLayoutFallback = 'unresolvable-frame' | 'page-defer-exhausted';
 
@@ -36,6 +39,10 @@ export interface AnchoredDrawingRecord extends Omit<InlineDrawingRecord, 'kind' 
     // (undocumented)
     readonly wrap: Exclude<ImageWrapTarget, 'inline'>;
 }
+
+export { createFontSource }
+
+export { defineFontResolver }
 
 // @public
 export class DocumentOpenError extends Error {
@@ -102,6 +109,40 @@ export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'l
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
 
 // @public
+export interface ExportFontFaceResolution {
+    // (undocumented)
+    readonly sourceFamily: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly via: 'direct' | 'substitution';
+    // (undocumented)
+    readonly weight: 400 | 700;
+}
+
+// @public
+export interface ExportFontFamilyResolution {
+    // (undocumented)
+    readonly coverage: 'complete' | 'partial' | 'none';
+    // (undocumented)
+    readonly faces: readonly ExportFontFaceResolution[];
+    // (undocumented)
+    readonly family: string;
+}
+
+// @public
+export interface ExportFontResolutionReport {
+    // (undocumented)
+    readonly defaultFamily: string;
+    // (undocumented)
+    readonly families: readonly ExportFontFamilyResolution[];
+    // (undocumented)
+    readonly originFailures: readonly FontOriginFailure[];
+    // (undocumented)
+    readonly requestedFamilies: readonly string[];
+}
+
+// @public
 export function exportMarkdown(source: ExportDocumentSource, options?: MarkdownExportOptions): Promise<MarkdownExportResult>;
 
 // @public
@@ -112,7 +153,7 @@ export function exportMarkdownLayout(layout: ExportSemanticLayout, options?: Mar
 
 // @public
 export class ExportResourceError extends Error {
-    constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed', message: string);
+    constructor(code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed', message: string, options?: ErrorOptions);
     // (undocumented)
     readonly code: 'aborted' | 'timedOut' | 'nonConvergent' | 'disposed' | 'layoutInvariant' | 'layoutFailed';
 }
@@ -129,6 +170,14 @@ export interface ExportSession {
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
     validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
+}
+
+// @public
+export interface FontOriginFailure {
+    // (undocumented)
+    readonly cause: unknown;
+    readonly originIndex: number;
+    readonly originName?: string;
 }
 
 // @public
@@ -284,7 +333,7 @@ export interface LayoutBox {
 export type MarkdownComment = SemanticCommentArtifactRecord;
 
 // @public
-export interface MarkdownExportOptions extends OpenDocumentForExportOptions, MarkdownTranslationOptions {
+export interface MarkdownExportOptions extends OpenMarkdownDocumentForExportOptions, MarkdownTranslationOptions {
 }
 
 // @public
@@ -293,7 +342,14 @@ export interface MarkdownExportResult {
     readonly pages: readonly MarkdownPage[];
     readonly pagination: MarkdownPaginationInfo;
     readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
+    readonly reviewBindings: readonly MarkdownReviewBinding[];
 }
+
+// @public
+export type MarkdownFontOrigin = FontOrigin;
+
+// @public
+export type MarkdownFontsSource = MarkdownFontOrigin | readonly MarkdownFontOrigin[];
 
 // @public
 export type MarkdownImageResult = {
@@ -315,18 +371,55 @@ export interface MarkdownPage {
 
 // @public
 export interface MarkdownPaginationInfo {
-    readonly basis: 'docx-editor-layout';
-    readonly displayMode: NonNullable<ExportSemanticLayout['displayMode']>;
     readonly layoutRevision: number;
-    readonly stability: 'snapshot';
-    readonly wordCompatibility: 'not-guaranteed';
+    readonly revisionView: NonNullable<ExportSemanticLayout['displayMode']>;
+    readonly scope: 'export-snapshot';
+    readonly source: 'layout-engine';
 }
 
 // @public
 export type MarkdownReviewArtifact = SemanticReviewArtifactRecord;
 
 // @public
+export interface MarkdownReviewBinding {
+    readonly artifactId: string;
+    readonly artifactKind: MarkdownReviewArtifact['kind'];
+    readonly coverage: MarkdownReviewCoverage;
+    readonly occurrenceIndex: number;
+    readonly projection: MarkdownReviewProjection;
+    readonly ranges: readonly MarkdownReviewRange[];
+    readonly unmappedReason?: MarkdownReviewUnmappedReason;
+}
+
+// @public
+export type MarkdownReviewCoverage = 'complete' | 'partial' | 'none';
+
+// @public
 export type MarkdownReviewOccurrence = SemanticReviewArtifactRecord['occurrences'][number];
+
+// @public
+export type MarkdownReviewProjection = {
+    readonly kind: 'document';
+} | {
+    readonly field: 'markdown' | 'headerMarkdown' | 'footerMarkdown';
+    readonly kind: 'page';
+    readonly pageIndex: number;
+    readonly pageNumber: number;
+};
+
+// @public
+export interface MarkdownReviewRange {
+    readonly end: number;
+    readonly precision: MarkdownReviewRangePrecision;
+    readonly start: number;
+    readonly unit: 'utf16-code-unit';
+}
+
+// @public
+export type MarkdownReviewRangePrecision = 'exact' | 'containing-construct';
+
+// @public
+export type MarkdownReviewUnmappedReason = 'not-represented-in-markdown' | 'non-linear-structural-change' | 'omitted-story-content';
 
 // @public
 export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
@@ -337,7 +430,7 @@ export interface MarkdownTranslationOptions {
 }
 
 // @public
-export function openDocumentForExport(source: ExportDocumentSource, options?: OpenDocumentForExportOptions): Promise<OpenDocumentForExportResult>;
+export function openDocumentForExport(source: ExportDocumentSource, options?: OpenMarkdownDocumentForExportOptions): Promise<OpenDocumentForExportResult>;
 
 // @public
 export interface OpenDocumentForExportOptions {
@@ -360,6 +453,14 @@ export type OpenDocumentForExportResult = {
     readonly ok: false;
     readonly reason: HeadlessDocumentRejection;
 };
+
+// @public
+export interface OpenMarkdownDocumentForExportOptions extends OpenDocumentForExportOptions {
+    readonly fallbackFonts?: MarkdownFontsSource;
+    readonly fontPolicy?: 'best-effort' | 'strict';
+    readonly fonts?: MarkdownFontsSource;
+    readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
+}
 
 // @public
 export type PreservedImageConverter = (bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,

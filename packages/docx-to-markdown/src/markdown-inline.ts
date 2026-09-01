@@ -3,12 +3,21 @@ import {
   type SemanticLayout,
   type StyleSpanRecord,
 } from '@docx-editor.dev/core/layout';
+import {
+  concatMarkdown,
+  literalMarkdown,
+  type MappedMarkdown,
+  type MarkdownSourceSlice,
+} from './markdown-source-map.ts';
 
 type MarkdownInlineStyle = 'strike' | 'italic' | 'bold';
 
 export interface MarkdownTextToken {
   readonly span: StyleSpanRecord;
+  readonly paragraphId: string;
   readonly sourceText: string;
+  readonly sourceOffset?: number;
+  readonly exact?: boolean;
 }
 
 type MarkdownInlineChunk =
@@ -16,16 +25,33 @@ type MarkdownInlineChunk =
       readonly kind: 'text';
       readonly sourceText: string;
       readonly styles: readonly MarkdownInlineStyle[];
+      readonly paragraphId: string;
+      readonly sourceStart: number;
+      readonly sourceEnd: number;
+      readonly exact: boolean;
     }
-  | { readonly kind: 'boundary'; readonly markdown: string };
+  | { readonly kind: 'boundary'; readonly value: MappedMarkdown };
 
 interface MarkdownInlineContext {
   readonly tableCell: boolean;
   readonly hardBreakHtml?: boolean;
   readonly displayMode: SemanticLayout['displayMode'];
+  readonly sourceScope: string;
+  readonly sourceCapture?: MarkdownSourceCapture;
 }
 
-const MARKDOWN_PUNCTUATION = /([\\`*{}\[\]()#+\-.!_|~=])/g;
+export interface MarkdownSourceCapture {
+  /** Scopes whose cross-paragraph occurrences require every paragraph's source slices. */
+  readonly allSourceScopes: ReadonlySet<string>;
+  /** Sorted source boundaries needed for each reviewed paragraph. */
+  readonly offsetsBySource: ReadonlyMap<string, readonly number[]>;
+}
+
+export function markdownSourceCaptureKey(sourceScope: string, paragraphId: string): string {
+  return `${sourceScope}\0${paragraphId}`;
+}
+
+const MARKDOWN_PUNCTUATION = new Set('\\`*{}[]()#+-.!_|~=');
 const MARKDOWN_UNICODE_PUNCTUATION = /[\p{P}\p{S}]/u;
 
 function assertNever(value: never): never {
@@ -34,13 +60,97 @@ function assertNever(value: never): never {
 
 /** Escape every file-derived character that can open Markdown or raw HTML. */
 export function escapeText(value: string, tableCell = false): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\t/g, ' ')
-    .replace(MARKDOWN_PUNCTUATION, '\\$1')
-    .replace(/\r\n?|\n|\f/g, tableCell ? '<br>' : '  \n');
+  return escapedText(value, tableCell).markdown;
+}
+
+function escapedText(
+  value: string,
+  tableCell: boolean,
+  requestedBoundaries: ReadonlySet<number> = new Set()
+): { readonly markdown: string; readonly boundaries: ReadonlyMap<number, number> } {
+  let markdown = '';
+  const boundaries = new Map<number, number>();
+  const record = (offset: number): void => {
+    if (requestedBoundaries.has(offset)) boundaries.set(offset, markdown.length);
+  };
+  record(0);
+  let index = 0;
+  while (index < value.length) {
+    const character = value[index]!;
+    if (character === '\r' && value[index + 1] === '\n') {
+      markdown += tableCell ? '<br>' : '  \n';
+      index += 1;
+      record(index);
+      index += 1;
+      record(index);
+      continue;
+    }
+    if (character === '\r' || character === '\n' || character === '\f') {
+      markdown += tableCell ? '<br>' : '  \n';
+    } else if (character === '&') {
+      markdown += '&amp;';
+    } else if (character === '<') {
+      markdown += '&lt;';
+    } else if (character === '>') {
+      markdown += '&gt;';
+    } else if (character === '\t') {
+      markdown += ' ';
+    } else {
+      if (MARKDOWN_PUNCTUATION.has(character)) markdown += '\\';
+      markdown += character;
+    }
+    index += 1;
+    record(index);
+  }
+  return { markdown, boundaries };
+}
+
+function mappedTextChunk(
+  chunk: Extract<MarkdownInlineChunk, { kind: 'text' }>,
+  tableCell: boolean,
+  capture: MarkdownSourceCapture | undefined,
+  sourceScope: string
+): MappedMarkdown {
+  const requested = capture?.offsetsBySource.get(
+    markdownSourceCaptureKey(sourceScope, chunk.paragraphId)
+  );
+  if (!capture || (!capture.allSourceScopes.has(sourceScope) && !requested)) {
+    return literalMarkdown(escapeText(chunk.sourceText, tableCell));
+  }
+  const relativeBoundaries = new Set<number>([0, chunk.sourceText.length]);
+  if (chunk.exact) {
+    const offsets = requested ?? [];
+    let low = 0;
+    let high = offsets.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (offsets[middle]! < chunk.sourceStart) low = middle + 1;
+      else high = middle;
+    }
+    for (let index = low; index < offsets.length; index += 1) {
+      const offset = offsets[index]!;
+      if (offset > chunk.sourceEnd) break;
+      relativeBoundaries.add(offset - chunk.sourceStart);
+    }
+  }
+  const escaped = escapedText(chunk.sourceText, tableCell, relativeBoundaries);
+  const markdownBoundaries = chunk.exact
+    ? [...escaped.boundaries].map(([sourceOffset, markdownOffset]) => ({
+        sourceOffset: chunk.sourceStart + sourceOffset,
+        markdownOffset,
+      }))
+    : undefined;
+  const source: MarkdownSourceSlice = {
+    sourceScope,
+    paragraphId: chunk.paragraphId,
+    sourceStart: chunk.sourceStart,
+    sourceEnd: chunk.sourceEnd,
+    markdownStart: 0,
+    markdownEnd: escaped.markdown.length,
+    ...(markdownBoundaries ? { markdownBoundaries } : {}),
+    exact: chunk.exact,
+  };
+  return { markdown: escaped.markdown, sources: [source] };
 }
 
 function markdownInlineStyles(
@@ -129,10 +239,10 @@ function inlineIslandNeedsHtml(
     const first = sourceEdge(chunk.sourceText, 'first');
     const last = sourceEdge(chunk.sourceText, 'last');
     const before = previous
-      ? sourceEdge(previous.kind === 'text' ? previous.sourceText : previous.markdown, 'last')
+      ? sourceEdge(previous.kind === 'text' ? previous.sourceText : previous.value.markdown, 'last')
       : undefined;
     const after = next
-      ? sourceEdge(next.kind === 'text' ? next.sourceText : next.markdown, 'first')
+      ? sourceEdge(next.kind === 'text' ? next.sourceText : next.value.markdown, 'first')
       : undefined;
     // Backslash escaping punctuation does not change CommonMark delimiter flanking. Use fixed
     // semantic tags for this island when a delimiter would open or close against that boundary.
@@ -162,27 +272,29 @@ function htmlInlineIsland(
   chunks: readonly MarkdownInlineChunk[],
   start: number,
   end: number,
-  tableCell: boolean
-): string {
-  let markdown = '';
+  tableCell: boolean,
+  capture: MarkdownSourceCapture | undefined,
+  sourceScope: string
+): MappedMarkdown {
+  const parts: MappedMarkdown[] = [];
   let openStyles: readonly MarkdownInlineStyle[] = [];
   for (let index = start; index < end; index += 1) {
     const chunk = chunks[index]!;
     if (chunk.kind !== 'text') continue;
     const retained = sharedStylePrefix(openStyles, chunk.styles);
     for (let styleIndex = openStyles.length - 1; styleIndex >= retained; styleIndex -= 1) {
-      markdown += `</${markdownStyleTag(openStyles[styleIndex]!)}>`;
+      parts.push(literalMarkdown(`</${markdownStyleTag(openStyles[styleIndex]!)}>`));
     }
     for (let styleIndex = retained; styleIndex < chunk.styles.length; styleIndex += 1) {
-      markdown += `<${markdownStyleTag(chunk.styles[styleIndex]!)}>`;
+      parts.push(literalMarkdown(`<${markdownStyleTag(chunk.styles[styleIndex]!)}>`));
     }
-    markdown += escapeText(chunk.sourceText, tableCell);
+    parts.push(mappedTextChunk(chunk, tableCell, capture, sourceScope));
     openStyles = chunk.styles;
   }
   for (let index = openStyles.length - 1; index >= 0; index -= 1) {
-    markdown += `</${markdownStyleTag(openStyles[index]!)}>`;
+    parts.push(literalMarkdown(`</${markdownStyleTag(openStyles[index]!)}>`));
   }
-  return markdown;
+  return concatMarkdown(parts);
 }
 
 /** Keep delimiter state across run, line, and page-fragment boundaries of one logical paragraph. */
@@ -194,8 +306,27 @@ export class MarkdownInlineWriter {
     this.#context = context;
   }
 
-  #writeSourceText(sourceText: string, styles: readonly MarkdownInlineStyle[]): void {
-    if (sourceText.length > 0) this.#chunks.push({ kind: 'text', sourceText, styles });
+  #writeSourceText(
+    token: MarkdownTextToken,
+    sourceText: string,
+    relativeStart: number,
+    styles: readonly MarkdownInlineStyle[],
+    exact: boolean
+  ): void {
+    if (sourceText.length === 0) return;
+    this.#chunks.push({
+      kind: 'text',
+      sourceText,
+      styles,
+      paragraphId: token.paragraphId,
+      sourceStart: exact
+        ? token.span.range.start + (token.sourceOffset ?? 0) + relativeStart
+        : token.span.range.start,
+      sourceEnd: exact
+        ? token.span.range.start + (token.sourceOffset ?? 0) + relativeStart + sourceText.length
+        : token.span.range.end,
+      exact,
+    });
   }
 
   writeText(token: MarkdownTextToken): void {
@@ -203,26 +334,41 @@ export class MarkdownInlineWriter {
     const leading = boundary?.[1] ?? '';
     const text = boundary?.[2] ?? token.sourceText;
     const trailing = boundary?.[3] ?? '';
-    this.#writeSourceText(leading, []);
-    this.#writeSourceText(text, markdownInlineStyles(token.span, this.#context));
-    this.#writeSourceText(trailing, []);
+    const exact =
+      token.exact ??
+      (token.span.projected !== true &&
+        token.span.equation === undefined &&
+        token.sourceText.length === token.span.range.end - token.span.range.start);
+    this.#writeSourceText(token, leading, 0, [], exact);
+    this.#writeSourceText(
+      token,
+      text,
+      leading.length,
+      markdownInlineStyles(token.span, this.#context),
+      exact
+    );
+    this.#writeSourceText(token, trailing, leading.length + text.length, [], exact);
   }
 
   writeBoundary(markdown: string): void {
-    if (markdown.length === 0) return;
-    this.#chunks.push({ kind: 'boundary', markdown });
+    this.writeMappedBoundary(literalMarkdown(markdown));
   }
 
-  finish(): string {
-    let markdown = '';
+  writeMappedBoundary(value: MappedMarkdown): void {
+    if (value.markdown.length === 0 && value.sources.length === 0) return;
+    this.#chunks.push({ kind: 'boundary', value });
+  }
+
+  finishMapped(): MappedMarkdown {
+    const parts: MappedMarkdown[] = [];
     let openStyles: readonly MarkdownInlineStyle[] = [];
     const transition = (nextStyles: readonly MarkdownInlineStyle[]): void => {
       const retained = sharedStylePrefix(openStyles, nextStyles);
       for (let index = openStyles.length - 1; index >= retained; index -= 1) {
-        markdown += markdownStyleDelimiter(openStyles[index]!);
+        parts.push(literalMarkdown(markdownStyleDelimiter(openStyles[index]!)));
       }
       for (let index = retained; index < nextStyles.length; index += 1) {
-        markdown += markdownStyleDelimiter(nextStyles[index]!);
+        parts.push(literalMarkdown(markdownStyleDelimiter(nextStyles[index]!)));
       }
       openStyles = nextStyles;
     };
@@ -230,15 +376,12 @@ export class MarkdownInlineWriter {
       const chunk = this.#chunks[index]!;
       if (chunk.kind === 'boundary') {
         transition([]);
-        markdown += chunk.markdown;
+        parts.push(chunk.value);
         continue;
       }
       if (chunk.styles.length === 0) {
         transition([]);
-        markdown += escapeText(
-          chunk.sourceText,
-          this.#context.tableCell || this.#context.hardBreakHtml === true
-        );
+        parts.push(this.#mappedSourceChunk(chunk));
         continue;
       }
       let end = index + 1;
@@ -249,22 +392,37 @@ export class MarkdownInlineWriter {
       }
       if (inlineIslandNeedsHtml(this.#chunks, index, end)) {
         transition([]);
-        markdown += htmlInlineIsland(
-          this.#chunks,
-          index,
-          end,
-          this.#context.tableCell || this.#context.hardBreakHtml === true
+        parts.push(
+          htmlInlineIsland(
+            this.#chunks,
+            index,
+            end,
+            this.#context.tableCell || this.#context.hardBreakHtml === true,
+            this.#context.sourceCapture,
+            this.#context.sourceScope
+          )
         );
         index = end - 1;
         continue;
       }
       transition(chunk.styles);
-      markdown += escapeText(
-        chunk.sourceText,
-        this.#context.tableCell || this.#context.hardBreakHtml === true
-      );
+      parts.push(this.#mappedSourceChunk(chunk));
     }
     transition([]);
-    return markdown;
+    return concatMarkdown(parts);
+  }
+
+  #mappedSourceChunk(chunk: Extract<MarkdownInlineChunk, { kind: 'text' }>): MappedMarkdown {
+    const tableCell = this.#context.tableCell || this.#context.hardBreakHtml === true;
+    return mappedTextChunk(
+      chunk,
+      tableCell,
+      this.#context.sourceCapture,
+      this.#context.sourceScope
+    );
+  }
+
+  finish(): string {
+    return this.finishMapped().markdown;
   }
 }

@@ -12,12 +12,14 @@ import {
   FONT_RESOLVER_BRAND,
   FONT_RESOLVER_MARK_KEY,
   composeFontOrigins,
+  composePreparedFontOrigins,
   defineFontResolver,
   isFontResolver,
 } from '../font-resolver.ts';
 import type { FontOrigin } from '../font-resolver.ts';
 import type { FontConfigurationFragment, FontResolutionRequest } from '../font-composition.ts';
 import type { FontSource } from '@docx-editor.dev/core/contracts/editor';
+import { prepareLayoutFontConfiguration } from '../../layout/layout-shaping.ts';
 
 const REQUEST: FontResolutionRequest = {
   families: ['Calibri', 'Montserrat'],
@@ -98,6 +100,29 @@ describe('the resolver mark', () => {
 });
 
 describe('composeFontOrigins', () => {
+  test('passes the first origin default family to later missing-face resolvers', async () => {
+    let request: FontResolutionRequest | undefined;
+    const fallback = defineFontResolver((next: FontResolutionRequest) => {
+      request = next;
+      return undefined;
+    });
+
+    await composeFontOrigins(
+      [
+        {
+          defaultFont: { family: 'Aptos', sizeHalfPoints: 22 },
+          epoch: 7,
+          maxFontBytes: 1_000_000,
+          sources: [],
+        },
+        fallback,
+      ],
+      REQUEST
+    );
+
+    expect(request?.defaultFamily).toBe('Aptos');
+  });
+
   test('merges first-wins in LIST order, however long an origin takes to answer', async () => {
     const slowFirst = defineFontResolver(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -262,6 +287,33 @@ describe('composeFontOrigins', () => {
     expect(seen[0]!.resolvedFaces).toBeUndefined();
   });
 
+  test('an aborting origin never starts a later fallback', async () => {
+    const controller = new AbortController();
+    let fallbackCalls = 0;
+    const first = defineFontResolver(
+      (request: FontResolutionRequest) =>
+        new Promise<undefined>((_resolve, reject) => {
+          request.signal?.addEventListener(
+            'abort',
+            () => reject(request.signal?.reason ?? new Error('aborted')),
+            { once: true }
+          );
+        })
+    );
+    const fallback = defineFontResolver(() => {
+      fallbackCalls += 1;
+      return { sources: [source('Calibri', 'too-late')] };
+    });
+    const pending = composeFontOrigins([first, fallback], {
+      ...REQUEST,
+      signal: controller.signal,
+    });
+    controller.abort('host-stop');
+
+    await expect(pending).rejects.toBe('host-stop');
+    expect(fallbackCalls).toBe(0);
+  });
+
   test('calls a function origin again on the NEXT composition, never caching its answer', async () => {
     let calls = 0;
     const perLoad = defineFontResolver(async () => {
@@ -350,6 +402,167 @@ describe('composeFontOrigins', () => {
     expect(warnings).toHaveLength(1);
   });
 
+  test('malformed substitutions, requests, and defaults are isolated to their origin', async () => {
+    const failures: Array<{ originIndex: number }> = [];
+    const malformed = [
+      { substitutions: [{} as never] },
+      {
+        sources: [
+          {
+            ...source('Bad', 'bad-request'),
+            request: { family: ' ', weight: 0, style: 'oblique' as never },
+          },
+        ],
+      },
+      {
+        sources: [source('Bad Default Source', 'bad-default')],
+        defaultFont: { family: ' ', sizeHalfPoints: 0 },
+      },
+      { sources: [{ ...source('Bad Id', 'unused'), id: '' }] },
+      {
+        sources: [source('Bad Ceiling', 'bad-ceiling')],
+        maxFontBytes: Number.MAX_SAFE_INTEGER,
+      },
+    ];
+    const merged = await composeFontOrigins(
+      [
+        { sources: [source('Calibri', 'before')] },
+        ...malformed,
+        { sources: [source('Cambria', 'after')] },
+      ],
+      REQUEST,
+      { onOriginFailure: (failure) => failures.push(failure) }
+    );
+
+    expect(merged?.sources?.map((entry) => entry.id)).toEqual(['before', 'after']);
+    expect(failures.map((failure) => failure.originIndex)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  test('rejects non-array origin collections without invoking hostile iterators', async () => {
+    let iteratorCalls = 0;
+    const hostile = {
+      length: 1,
+      [Symbol.iterator]() {
+        iteratorCalls += 1;
+        return {
+          next: () => ({ done: false, value: source('Hostile', 'unbounded') }),
+        };
+      },
+    };
+    const failures: number[] = [];
+    const merged = await composeFontOrigins(
+      [
+        { sources: hostile as never },
+        { substitutions: hostile as never },
+        { sources: [source('Calibri', 'safe-fallback')] },
+      ],
+      REQUEST,
+      { onOriginFailure: ({ originIndex }) => failures.push(originIndex) }
+    );
+
+    expect(iteratorCalls).toBe(0);
+    expect(failures).toEqual([0, 1]);
+    expect(merged?.sources?.map((entry) => entry.id)).toEqual(['safe-fallback']);
+  });
+
+  test('samples nested origin inputs before awaiting a later resolver', async () => {
+    const mutableSource = source('Stable Family', 'stable-source');
+    const mutableSubstitution = {
+      from: { family: 'Alias', weight: 400, style: 'normal' as const },
+      to: { family: 'Stable Family', weight: 400, style: 'normal' as const },
+      lineMetrics: { heightEm: 1, baselineEm: 0.8 },
+    };
+    const later = defineFontResolver(async () => {
+      mutableSource.request.family = 'Mutated Family';
+      mutableSource.bytes[0] = 255;
+      mutableSubstitution.from.family = 'Mutated Alias';
+      mutableSubstitution.lineMetrics.heightEm = 3;
+      return undefined;
+    });
+    const merged = await composeFontOrigins(
+      [{ sources: [mutableSource], substitutions: [mutableSubstitution] }, later],
+      REQUEST
+    );
+
+    expect(merged?.sources?.[0]?.request.family).toBe('Stable Family');
+    expect(merged?.sources?.[0]?.bytes[0]).toBe(0);
+    expect(merged?.substitutions?.[0]?.from.family).toBe('Alias');
+    expect(merged?.substitutions?.[0]?.lineMetrics?.heightEm).toBe(1);
+  });
+
+  test('samples accessor-backed source fields once before budgeting and ownership', async () => {
+    let availabilityReads = 0;
+    let bytesReads = 0;
+    let familyReads = 0;
+    let hashReads = 0;
+    let copies = 0;
+    const accessorSource = {
+      request: {
+        get family() {
+          familyReads += 1;
+          return familyReads === 1 ? 'Stable Accessor' : 'Mutated Accessor';
+        },
+        weight: 400,
+        style: 'normal' as const,
+      },
+      id: 'accessor-source',
+      get bytes() {
+        bytesReads += 1;
+        return new Uint8Array(1024 * 1024);
+      },
+      get hash() {
+        hashReads += 1;
+        return hashReads === 1 ? 'sha256:stable' : '';
+      },
+      faceIndex: 0,
+      get availability() {
+        availabilityReads += 1;
+        return availabilityReads === 1 ? ('forbidden' as const) : ('available' as const);
+      },
+    };
+    const merged = await composePreparedFontOrigins([{ sources: [accessorSource] }], REQUEST, {
+      instrumentation: {
+        onOwnedByteCopy: () => {
+          copies += 1;
+        },
+      },
+    });
+
+    expect(availabilityReads).toBe(1);
+    expect(bytesReads).toBe(0);
+    expect(familyReads).toBe(1);
+    expect(hashReads).toBe(1);
+    expect(copies).toBe(0);
+    expect(merged?.sources?.[0]?.request.family).toBe('Stable Accessor');
+    expect(merged?.sources?.[0]?.availability).toBe('forbidden');
+  });
+
+  test('already-rejected promise origins are observed before a slow earlier resolver settles', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const slow = defineFontResolver(
+        () => new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 10))
+      );
+      const rejected = Promise.reject(new Error('early promise rejection'));
+      const failures: Array<{ originIndex: number }> = [];
+      const merged = await composeFontOrigins(
+        [slow, rejected, { sources: [source('Cambria', 'after-promise')] }],
+        REQUEST,
+        { onOriginFailure: (failure) => failures.push(failure) }
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(merged?.sources?.map((entry) => entry.id)).toEqual(['after-promise']);
+      expect(failures.map((failure) => failure.originIndex)).toEqual([1]);
+      expect(unhandled).toHaveLength(0);
+    } finally {
+      process.removeListener('unhandledRejection', onUnhandled);
+    }
+  });
+
   test('one throwing origin is reported and skipped; the others still compose', async () => {
     const warnings: unknown[][] = [];
     const warn = console.warn;
@@ -374,6 +587,35 @@ describe('composeFontOrigins', () => {
     // Reported, not swallowed: this is the failure mode an empty catch made undebuggable.
     expect(warnings).toHaveLength(1);
     expect(String(warnings[0]?.[0])).toContain('font origin failed');
+  });
+
+  test('observes rejected async origin-diagnostic callbacks without process rejection', async () => {
+    const unhandled: unknown[] = [];
+    const warnings: unknown[][] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => warnings.push(args);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const merged = await composeFontOrigins(
+        [{ sources: [{} as never] }, { sources: [source('Calibri', 'after-diagnostic')] }],
+        REQUEST,
+        {
+          onOriginFailure: async () => {
+            throw new Error('async origin diagnostic failed');
+          },
+        }
+      );
+      expect(merged?.sources?.map((entry) => entry.id)).toEqual(['after-diagnostic']);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(unhandled).toHaveLength(0);
+      expect(warnings).toHaveLength(1);
+    } finally {
+      process.removeListener('unhandledRejection', onUnhandled);
+      console.warn = warn;
+    }
   });
 
   test('carries NO epoch, so the engine stamps the load sequence', async () => {
@@ -422,5 +664,140 @@ describe('composeFontOrigins', () => {
     );
 
     expect(merged?.sources?.map((entry) => entry.id)).toEqual(['awaited']);
+  });
+
+  test('prepares one owned winner when many origins repeat the same face', async () => {
+    let copies = 0;
+    let hashes = 0;
+    const repeated = source('Calibri', 'same-face');
+    const merged = await composePreparedFontOrigins(
+      Array.from({ length: 100 }, () => ({ sources: [repeated] })),
+      REQUEST,
+      {
+        instrumentation: {
+          onOwnedByteCopy: () => {
+            copies += 1;
+          },
+          onHash: () => {
+            hashes += 1;
+          },
+        },
+      }
+    );
+
+    expect(merged?.sources?.map((entry) => entry.id)).toEqual(['same-face']);
+    expect(copies).toBe(1);
+    expect(hashes).toBe(1);
+  });
+
+  test('reservation refusal escapes unchanged before copying or starting fallbacks', async () => {
+    const refusal = new Error('process font-byte budget exhausted');
+    let fallbackCalls = 0;
+    let copies = 0;
+    const fallback = defineFontResolver(() => {
+      fallbackCalls += 1;
+      return { sources: [source('Cambria', 'must-not-run')] };
+    });
+
+    await expect(
+      composePreparedFontOrigins(
+        [{ sources: [source('Calibri', 'reservation-candidate')] }, fallback],
+        REQUEST,
+        {
+          reserveOwnedBytes: () => {
+            throw refusal;
+          },
+          instrumentation: {
+            onOwnedByteCopy: () => {
+              copies += 1;
+            },
+          },
+        }
+      )
+    ).rejects.toBe(refusal);
+    expect(fallbackCalls).toBe(0);
+    expect(copies).toBe(0);
+  });
+
+  test('isolates the origin that tips the cumulative source count', async () => {
+    const makeSources = (prefix: string, count: number, offset = 0): FontSource[] =>
+      Array.from({ length: count }, (_, index) =>
+        source(`${prefix}-${index + offset}`, `${prefix}-${index + offset}`)
+      );
+    const failures: number[] = [];
+    const merged = await composeFontOrigins(
+      [{ sources: makeSources('first', 128) }, { sources: makeSources('second', 129) }],
+      REQUEST,
+      { onOriginFailure: ({ originIndex }) => failures.push(originIndex) }
+    );
+
+    expect(merged?.sources).toHaveLength(128);
+    expect(failures).toEqual([1]);
+  });
+
+  test('uses the first base byte ceiling and skips only a later violating origin', async () => {
+    const twoBytes = { ...source('Cambria', 'too-large'), bytes: new Uint8Array([0, 1]) };
+    const failures: number[] = [];
+    const merged = await composeFontOrigins(
+      [
+        { maxFontBytes: 1, sources: [source('Calibri', 'base')] },
+        { maxFontBytes: 64, sources: [twoBytes] },
+        { sources: [source('Arial', 'fallback')] },
+      ],
+      REQUEST,
+      { onOriginFailure: ({ originIndex }) => failures.push(originIndex) }
+    );
+
+    expect(merged?.sources?.map((entry) => entry.id)).toEqual(['base', 'fallback']);
+    expect(failures).toEqual([1]);
+    expect(() => prepareLayoutFontConfiguration({ epoch: 0, ...merged! })).not.toThrow();
+
+    const badBaseFailures: number[] = [];
+    const recovered = await composeFontOrigins(
+      [
+        { maxFontBytes: 1, sources: [twoBytes] },
+        { maxFontBytes: 2, sources: [twoBytes] },
+      ],
+      REQUEST,
+      { onOriginFailure: ({ originIndex }) => badBaseFailures.push(originIndex) }
+    );
+    expect(badBaseFailures).toEqual([0]);
+    expect(recovered?.sources?.map((entry) => entry.id)).toEqual(['too-large']);
+    expect(() => prepareLayoutFontConfiguration({ epoch: 0, ...recovered! })).not.toThrow();
+  });
+
+  test('bounds substitutions across origins and credits a later direct source', async () => {
+    const substitution = (name: string) => ({
+      from: { family: name, weight: 400, style: 'normal' as const },
+      to: { family: 'Calibri', weight: 400, style: 'normal' as const },
+    });
+    const first = Array.from({ length: 128 }, (_, index) => substitution(`First ${index}`));
+    const tipping = Array.from({ length: 129 }, (_, index) => substitution(`Second ${index}`));
+    const failures: number[] = [];
+    const bounded = await composeFontOrigins(
+      [{ substitutions: first }, { substitutions: tipping }],
+      REQUEST,
+      { onOriginFailure: ({ originIndex }) => failures.push(originIndex) }
+    );
+    expect(bounded?.substitutions).toHaveLength(128);
+    expect(failures).toEqual([1]);
+
+    const full = Array.from({ length: 256 }, (_, index) => substitution(`At Cap ${index}`));
+    const credited = await composeFontOrigins(
+      [
+        { substitutions: full },
+        {
+          sources: [source('At Cap 0', 'direct-at-cap')],
+          substitutions: [substitution('Replacement Slot')],
+        },
+      ],
+      REQUEST
+    );
+    expect(credited?.sources).toHaveLength(1);
+    expect(credited?.substitutions).toHaveLength(256);
+    expect(credited?.substitutions?.some((entry) => entry.from.family === 'At Cap 0')).toBe(false);
+    expect(credited?.substitutions?.some((entry) => entry.from.family === 'Replacement Slot')).toBe(
+      true
+    );
   });
 });

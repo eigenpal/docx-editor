@@ -1,0 +1,118 @@
+import { expect, test } from 'bun:test';
+import { defineFontResolver, type FontResolutionRequest } from '@docx-editor.dev/core/editor';
+import { createFixedMeasurer } from '@docx-editor.dev/core/layout';
+import { openHeadlessDocument } from '@docx-editor.dev/core/store';
+import { ExportResourceError, openDocumentForExport } from '../src/index.ts';
+import { docx } from './fixture.ts';
+
+test('caller fonts precede packaged defaults and opt-in missing-family origins', async () => {
+  const calls: { caller?: FontResolutionRequest; fallback?: FontResolutionRequest } = {};
+  const caller = defineFontResolver((request: FontResolutionRequest) => {
+    calls.caller = request;
+    return undefined;
+  });
+  const fallback = defineFontResolver((request: FontResolutionRequest) => {
+    calls.fallback = request;
+    return undefined;
+  });
+  const bytes = docx(
+    '<w:p><w:r><w:rPr><w:rFonts w:ascii="Roboto" w:hAnsi="Roboto"/></w:rPr><w:t>Fonts</w:t></w:r></w:p>'
+  );
+
+  const opened = await openDocumentForExport(bytes, { fonts: caller, fallbackFonts: fallback });
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    expect(calls.caller?.families).toEqual(['Roboto']);
+    expect(calls.caller?.resolvedFaces).toBeUndefined();
+    expect(calls.fallback?.families).toEqual(['Roboto']);
+    expect(calls.fallback?.resolvedFaces?.some((face) => face.family === 'Calibri')).toBe(true);
+    expect(calls.fallback?.resolvedFaces?.some((face) => face.family === 'Carlito')).toBe(true);
+    expect((await opened.session.layout()).pages).toHaveLength(1);
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+test('custom origins reject live views before resolution, while a host measurer takes precedence', async () => {
+  const parsed = openHeadlessDocument(docx('<w:p><w:r><w:t>Live</w:t></w:r></w:p>'));
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+  let calls = 0;
+  const fonts = defineFontResolver(() => {
+    calls += 1;
+    return undefined;
+  });
+
+  try {
+    await openDocumentForExport(parsed.view, { fonts });
+    throw new Error('expected immutable-byte restriction');
+  } catch (error) {
+    expect(error).toBeInstanceOf(TypeError);
+    expect(String(error)).toContain('immutable DOCX bytes');
+  }
+  expect(calls).toBe(0);
+
+  const opened = await openDocumentForExport(parsed.view, {
+    fonts,
+    measurer: createFixedMeasurer(),
+    producer: 'test:revision-stable-measurer',
+  });
+  expect(opened.ok).toBe(true);
+  expect(calls).toBe(0);
+  if (opened.ok) opened.session.dispose();
+
+  await expect(
+    openDocumentForExport(parsed.view, {
+      measurer: createFixedMeasurer(),
+      fontPolicy: 'strict',
+    })
+  ).rejects.toThrow('cannot verify a caller-supplied measurer');
+  await expect(
+    openDocumentForExport(parsed.view, {
+      measurer: createFixedMeasurer(),
+      onFontResolution: () => {},
+    })
+  ).rejects.toThrow('cannot verify a caller-supplied measurer');
+});
+
+test('default packaged-font startup honors a pre-aborted export before loading resources', async () => {
+  const controller = new AbortController();
+  controller.abort('cancel-before-open');
+  try {
+    await openDocumentForExport(docx('<w:p><w:r><w:t>Stopped</w:t></w:r></w:p>'), {
+      signal: controller.signal,
+    });
+    throw new Error('expected typed abort');
+  } catch (error) {
+    expect(error).toBeInstanceOf(ExportResourceError);
+    expect((error as ExportResourceError).code).toBe('aborted');
+    expect((error as Error & { cause?: unknown }).cause).toBe('cancel-before-open');
+  }
+});
+
+test('no-options byte export uses document-aware packaged fonts for Century Gothic', async () => {
+  const bytes = docx(
+    '<w:p><w:r><w:rPr><w:rFonts w:ascii="Century Gothic" w:hAnsi="Century Gothic"/></w:rPr>' +
+      '<w:t>Document-aware pagination uses the named family.</w:t></w:r></w:p>'
+  );
+  const ordinary = await openDocumentForExport(bytes);
+  expect(ordinary.ok).toBe(true);
+  if (!ordinary.ok) return;
+  const ordinaryLayout = await ordinary.session.layout();
+  ordinary.session.dispose();
+
+  let coverage: string | undefined;
+  const inspected = await openDocumentForExport(bytes, {
+    onFontResolution: (report) => {
+      coverage = report.families.find((family) => family.family === 'Century Gothic')?.coverage;
+    },
+  });
+  expect(inspected.ok).toBe(true);
+  if (!inspected.ok) return;
+  const inspectedLayout = await inspected.session.layout();
+  inspected.session.dispose();
+
+  expect(coverage).toBe('complete');
+  expect(ordinaryLayout.pages).toEqual(inspectedLayout.pages);
+});

@@ -18,7 +18,7 @@ const bytes = new Uint8Array(await readFile('document.docx'));
 const { pages } = await exportMarkdown(bytes);
 
 for (const page of pages) {
-  console.log(`Page ${page.number} (snapshot id: ${page.id})`);
+  console.log(`Page ${page.number} (page id: ${page.id})`);
   console.log(page.headerMarkdown);
   console.log(page.markdown);
   console.log(page.footerMarkdown);
@@ -42,7 +42,7 @@ exportMarkdown(
 
 openDocumentForExport(
   source: Uint8Array | HeadlessDocumentView,
-  options?: OpenDocumentForExportOptions
+  options?: OpenMarkdownDocumentForExportOptions
 ): Promise<OpenDocumentForExportResult>;
 
 exportMarkdownFrom(
@@ -70,20 +70,21 @@ interface MarkdownExportResult {
   readonly pages: readonly MarkdownPage[];
   /** All comments and tracked changes, including records without a page occurrence. */
   readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
-  /** Machine-readable scope of these page citations. */
+  /** Stable links from review occurrences to generated Markdown strings. */
+  readonly reviewBindings: readonly MarkdownReviewBinding[];
+  /** How this result's pages and revision content were produced. */
   readonly pagination: {
-    readonly basis: 'docx-editor-layout';
-    readonly stability: 'snapshot';
-    readonly wordCompatibility: 'not-guaranteed';
+    readonly source: 'layout-engine';
+    readonly scope: 'export-snapshot';
     readonly layoutRevision: number;
-    readonly displayMode: 'all-markup' | 'proposed' | 'original';
+    readonly revisionView: 'all-markup' | 'proposed' | 'original';
   };
   /** Convenience logical, full-document Markdown. */
   readonly markdown: string;
 }
 
 interface MarkdownPage {
-  /** Snapshot-local identity; changes when the document repaginates. */
+  /** Identifier for this page within this export result. */
   readonly id: string;
   /** One-based physical page number. */
   readonly number: number;
@@ -96,34 +97,60 @@ interface MarkdownPage {
   readonly comments: readonly MarkdownComment[];
   readonly trackedChanges: readonly MarkdownTrackedChange[];
 }
+
+interface MarkdownReviewBinding {
+  readonly artifactId: string;
+  readonly artifactKind: 'comment' | 'tracked-change';
+  /** Index into the matching artifact's occurrences array. */
+  readonly occurrenceIndex: number;
+  readonly coverage: 'complete' | 'partial' | 'none';
+  readonly projection:
+    | { readonly kind: 'document' }
+    | {
+        readonly kind: 'page';
+        readonly pageIndex: number;
+        readonly pageNumber: number;
+        readonly field: 'markdown' | 'headerMarkdown' | 'footerMarkdown';
+      };
+  readonly ranges: readonly {
+    readonly start: number;
+    readonly end: number;
+    readonly unit: 'utf16-code-unit';
+    readonly precision: 'exact' | 'containing-construct';
+  }[];
+  readonly unmappedReason?:
+    | 'not-represented-in-markdown'
+    | 'non-linear-structural-change'
+    | 'omitted-story-content';
+}
 ```
 
 `pages` is the primary interface. Page boundaries come from the same layout engine that renders
 the editor; they are not inferred from `w:lastRenderedPageBreak` or approximated after Markdown
-conversion. This is the appropriate shape for engine-snapshot citations such as “page 12”,
-legal/compliance review, retrieval chunks tied to one rendered snapshot, and page-aware agent
-workflows.
+conversion. This is the appropriate shape for page citations such as “page 12”, legal/compliance
+review, retrieval chunks tied to one rendered result, and page-aware agent workflows.
 
-Pagination metadata describes how one result was produced; it does **not** identify the source
-document or render configuration. Persist a caller-owned immutable document version (or content
-hash), the relevant render configuration/engine version, and the page number together. For example:
+`pagination.source` confirms that pages came from the layout engine. `pagination.scope` means the
+page numbers describe this returned export. `layoutRevision` identifies the Core document state,
+and `revisionView` says whether tracked changes were shown as markup, proposed content, or original
+content.
+
+Page IDs and numbers are local to this returned export; do not use them as permanent document
+identifiers. They reflect the same Core layout the editor uses, but are not a certification that a
+particular Microsoft Word build with a different font installation will produce identical breaks.
+
+For citations that must survive storage or document updates, retain your own document version or
+content hash alongside the page number. For example:
 
 ```ts
 const citation = {
   documentVersion: contract.sha256,
   engineVersion: applicationBuild.docxEditorVersion,
   pageNumber: result.pages[11]!.number,
-  pageSnapshotId: result.pages[11]!.id,
+  pageId: result.pages[11]!.id,
   pagination: result.pagination,
 };
 ```
-
-The engine computes layout pages rather than reading stale page-break hints, but this private
-preview does not claim byte-for-byte desktop Word parity: missing document-embedded fonts, font
-substitutions, and renderer differences can change breaks. `page.id` and `layoutRevision` are
-snapshot-local, not durable document identifiers. A public Word-parity benchmark and stricter
-fidelity diagnostics are release gates, not assumptions hidden behind authoritative-looking page
-numbers.
 
 `result.markdown` is a convenience projection for consumers that only need one conventional
 Markdown document. It joins split records and excludes repeated page furniture, so it deliberately
@@ -134,21 +161,72 @@ cannot preserve page provenance.
 Each page carries the comments and tracked changes that physically occur in its body, header,
 footer, footnotes, endnotes, or authored note separator. One artifact can occur on multiple pages:
 a range can cross a page boundary, and a change in a shared header can be rendered on every page.
-Inspect `artifact.occurrences` when the exact story and source range matter.
+`page.comments` and `page.trackedChanges` are membership views: each entry is the complete
+document-wide artifact, so its `occurrences` array can also contain occurrences on other pages.
+Filter by `occurrence.pageIndex === page.number - 1` when the exact page-local story and DOCX
+source range matter.
 
 `result.reviewArtifacts` is the authoritative document-wide list. It also retains orphaned comments
 and other records that have no physical page occurrence, so page-local processing does not silently
 lose review data.
+
+`result.reviewBindings` connects those source occurrences to UTF-16 offsets in `result.markdown`,
+`page.markdown`, `page.headerMarkdown`, or `page.footerMarkdown`. The exporter creates bindings
+while it serializes, so escaping, repeated text, links, tables, lists, and page splits cannot make
+them ambiguous. Use the offsets directly with JavaScript `slice()`:
+
+```ts
+for (const binding of result.reviewBindings) {
+  const output =
+    binding.projection.kind === 'document'
+      ? result.markdown
+      : result.pages[binding.projection.pageIndex]![binding.projection.field];
+
+  const selected = binding.ranges.map(({ start, end }) => output.slice(start, end)).join('');
+
+  console.log(binding.artifactId, selected, binding.coverage, binding.unmappedReason);
+}
+```
+
+One source range may produce several Markdown ranges when Markdown delimiters or page boundaries
+split it. `coverage` says whether all, some, or none of the Core source occurrence is represented.
+A range has `precision: 'exact'` when its source boundaries map exactly to output boundaries, even
+when escaping changes the generated text or its length.
+Generated atoms such as image Markdown, note references, and equation fallbacks use
+`'containing-construct'`, meaning the range selects the smallest complete Markdown construct that
+represents the source. Textbox content and structural changes can have no honest linear Markdown
+range; those bindings carry `omitted-story-content` or `non-linear-structural-change` while the
+complete artifact and Core source provenance remain in `reviewArtifacts`.
+`not-represented-in-markdown` is the fallback for other source content that has no honest linear
+Markdown representation.
+
+For source-aligned edits, require `coverage === 'complete'` and every range to have
+`precision === 'exact'`. Citation and display workflows can still use partial or
+`containing-construct` bindings while showing their declared fidelity.
+
+Ordinary Markdown stays clean: comments and revision metadata are not injected as HTML comments,
+CriticMarkup, or visible footnotes. Presentation-oriented review markup can be added later as an
+explicit option without changing the default output or the lossless sidecar contract.
 
 ```ts
 const result = await exportMarkdown(bytes);
 
 for (const page of result.pages) {
   for (const comment of page.comments) {
-    console.log(`Comment ${comment.id} appears on page ${page.number}: ${comment.text}`);
+    const localOccurrences = comment.occurrences.filter(
+      (occurrence) => occurrence.pageIndex === page.number - 1
+    );
+    console.log(
+      `Comment ${comment.id} appears ${localOccurrences.length} time(s) on page ${page.number}: ${comment.text}`
+    );
   }
   for (const change of page.trackedChanges) {
-    console.log(`${change.change} by ${change.author} on page ${page.number}`);
+    const localOccurrences = change.occurrences.filter(
+      (occurrence) => occurrence.pageIndex === page.number - 1
+    );
+    console.log(
+      `${change.change} by ${change.author} appears ${localOccurrences.length} time(s) on page ${page.number}`
+    );
   }
 }
 
@@ -166,9 +244,13 @@ const orphanedComments = result.reviewArtifacts.filter(
 | `displayMode`           | Tracked-change projection: `all-markup` (default), `proposed`, or `original`.                  |
 | `image`                 | Synchronous mapping from a laid-out drawing to `{ url }` or `{ skip: true }`.                  |
 | `signal`                | Aborts resource waits and later layout work.                                                   |
-| `resourceTimeoutMs`     | Maximum resource-settlement time for one layout call; default `60_000`.                        |
+| `resourceTimeoutMs`     | Deadline applied separately to initial font provisioning and each layout resource wait.        |
 | `reuseAcrossRevisions`  | Retains incremental state for a live view; defaults to `true` for views and `false` for bytes. |
-| `measurer`              | Host-owned text measurer. Omit to use packaged fonts and shared HarfBuzz shaping.              |
+| `fonts`                 | Caller configuration/resolver, first-wins; requires immutable DOCX-byte input.                 |
+| `fallbackFonts`         | Opt-in origins after bundled substitutes; requires bytes; use for `googleFonts()`.             |
+| `fontPolicy`            | `best-effort` (default), or `strict` to require all four static faces and no origin failures.  |
+| `onFontResolution`      | Receives requested, direct/substituted, unresolved, and failed-origin evidence.                |
+| `measurer`              | Host-owned text measurer; when present it takes precedence over all font origins.              |
 | `producer`              | Stable identity for a host-owned measurer and its cache entries.                               |
 | `imageDecodePort`       | Host image metadata decoder. Omit for the bounded Node decoder.                                |
 | `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                       |
@@ -320,9 +402,76 @@ try {
 
 ## Layout and Markdown policy
 
-The Node defaults use the metric-compatible faces from `@docx-editor.dev/fonts`, shared HarfBuzz
-shaping, bounded image-header decoding, and the core export session. Pass `measurer` only when
-host-owned metrics are intentional, and pair it with a stable `producer`.
+The Node defaults use the packaged, validated metric-compatible faces from
+`@docx-editor.dev/fonts` with shared HarfBuzz shaping: Calibri → Carlito, Cambria → Caladea, Times
+New Roman → Liberation Serif, Arial → Liberation Sans, and Courier New → Liberation Mono. These
+open faces are selected for matching layout metrics and require no runtime Google Fonts request.
+
+For higher fidelity, pass licensed or application-owned faces through `fonts`. The value can be a
+Core font configuration, a marked on-demand resolver, or an ordered list; earlier entries win.
+The exporter parses the DOCX first, asks resolvers only for the bounded family list used by the
+body, styles, headers, footers, and notes, then lays out once with the settled HarfBuzz measurer.
+Bundled Word-compatible substitutes fill any gaps after caller fonts.
+
+Google Fonts is an explicit last resort because it performs network requests and can disclose the
+font families a document uses to the CDN. Opt in with `fallbackFonts`; the resolver uses a closed,
+commit-pinned catalog and content hashes rather than constructing URLs from DOCX text:
+
+```ts
+import { readFile } from 'node:fs/promises';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
+import {
+  createFontSource,
+  exportMarkdown,
+  type ExportFontResolutionReport,
+} from '@docx-editor.dev/docx-to-markdown';
+
+const faceSpecs = [
+  ['Aptos.ttf', 400, 'normal'],
+  ['Aptos-Bold.ttf', 700, 'normal'],
+  ['Aptos-Italic.ttf', 400, 'italic'],
+  ['Aptos-BoldItalic.ttf', 700, 'italic'],
+] as const;
+
+const sources = [];
+for (const [file, weight, style] of faceSpecs) {
+  const admitted = createFontSource(new Uint8Array(await readFile(file)), {
+    family: 'Aptos',
+    weight,
+    style,
+  });
+  if ('failure' in admitted)
+    throw new Error(admitted.failure.diagnostic ?? admitted.failure.reason);
+  sources.push(admitted.source);
+}
+
+let fontReport: ExportFontResolutionReport | undefined;
+
+const result = await exportMarkdown(bytes, {
+  fonts: { sources },
+  // Consulted only for faces application fonts and bundled substitutes cannot paint.
+  fallbackFonts: googleFonts({ onFailure: (failure) => console.error(failure) }),
+  fontPolicy: 'strict',
+  onFontResolution: (report) => {
+    fontReport = report;
+  },
+});
+```
+
+Omit `fallbackFonts` for a network-free export. Supply only `fallbackFonts: googleFonts()` when
+there are no application-owned faces. If a host already owns a complete measurement stack, pass
+`measurer` with a stable `producer`; that explicit measurer takes precedence over font origins.
+Custom `fonts` and `fallbackFonts` are accepted only with immutable DOCX bytes. A live
+`HeadlessDocumentView` may change between resolution and layout, so export it with the host's
+revision-stable `measurer`; when `measurer` is present, neither font-origin option is invoked.
+
+For audit-sensitive jobs, route `googleFonts({ onFailure })` failures into job diagnostics and
+supply licensed/application faces in `fonts` for every required family. `fontPolicy: 'strict'`
+refuses the export if an origin failed or any requested family lacks regular, bold, italic, or
+bold-italic coverage; `onFontResolution` records the direct and substituted faces that produced
+the page breaks. Documents whose candidate catalog exceeds the safe 64-family resolver boundary
+also fail with a typed `layoutFailed` error instead of silently dropping a face. Google fallback is
+opt-in, uses a bounded process cache, and a timeout or abort never leaves a failed request cached.
 
 Document-embedded fonts are not automatically admitted by the Node defaults yet. A DOCX that
 depends on `w:embedRegular`, `w:embedBold`, `w:embedItalic`, or `w:embedBoldItalic` is affected.
@@ -334,6 +483,7 @@ Markdown is a semantic degradation:
 - Physical Word-layout pages are first-class; flattened `markdown` is secondary.
 - Page headers and footers are returned separately per page.
 - Comments and tracked changes are normalized by core and exposed globally and per physical page.
+- Review bindings map Core source provenance to exact Markdown offsets without changing Markdown.
 - Merged table cells are flattened.
 - Positioned anchored images are appended after their owning story body in stable record order.
 - Anchored text-box text is omitted because it has no unambiguous linear position; comments and

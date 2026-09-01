@@ -201,7 +201,8 @@ export function textboxStoryListItems(
 /** Hard ceiling on nodes visited when discovering `w:txbxContent` under one block. */
 const MAX_HOSTED_STORY_SCAN_NODES = 20_000;
 
-interface HostedContentsScan {
+/** Bounded text-box story discovery used by layout and export font provisioning. @internal */
+export interface HostedContentsScan {
   readonly contents: readonly OoxmlNode[];
   /** True when the budget stopped the walk before the whole subtree was seen. */
   readonly truncated: boolean;
@@ -222,7 +223,8 @@ const NO_HOSTED_CONTENTS: HostedContentsScan = Object.freeze({
  */
 const hostedTextboxContentsByBlock = new WeakMap<OoxmlNode, HostedContentsScan>();
 
-function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
+/** Discover text-box stories hosted by one layout block. @internal */
+export function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
   const cached = hostedTextboxContentsByBlock.get(block);
   if (cached) return cached;
   const found: OoxmlNode[] = [];

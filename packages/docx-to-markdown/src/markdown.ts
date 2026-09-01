@@ -1,7 +1,6 @@
 // Record-only Markdown translation. No OOXML or package reads belong in this file.
 
 import {
-  forEachSemanticSpan,
   forEachSemanticStory,
   lineSegments,
   revisionsAreDeletion,
@@ -11,94 +10,58 @@ import {
   type LineSegment,
   type PageRecord,
   type ParagraphFragmentRecord,
-  type SemanticCommentArtifactRecord,
   type SemanticLayout,
-  type SemanticReviewArtifactRecord,
-  type SemanticTrackedChangeArtifactRecord,
   type StyleSpanRecord,
   type TableFragmentRecord,
 } from '@docx-editor.dev/core/layout';
+import type { ExportSemanticLayout, ExportSession } from '@docx-editor.dev/core/export';
+import {
+  escapeText,
+  markdownSourceCaptureKey,
+  MarkdownInlineWriter,
+  type MarkdownSourceCapture,
+  type MarkdownTextToken,
+} from './markdown-inline.ts';
+import {
+  concatMarkdown,
+  EMPTY_MAPPED_MARKDOWN,
+  escapeUnescapedTablePipes,
+  indentContinuationLines,
+  literalMarkdown,
+  quoteMarkdownLines,
+  replaceLeadingWhitespaceWithEntities,
+  replaceNewlinesWithHtmlBreaks,
+  wrapMarkdown,
+  withSourceParagraphs,
+  type MappedMarkdown,
+} from './markdown-source-map.ts';
+import {
+  buildMarkdownReviewBindings,
+  buildMarkdownSourceCapture,
+  indexPageReviewArtifacts,
+  markdownReviewSourceScope,
+  type MarkdownPageProjectionValues,
+} from './markdown-review-bindings.ts';
+import {
+  buildNoteLabels,
+  buildNoteStoryIndexes,
+  EMPTY_NOTE_STORIES,
+  type NoteProjection,
+} from './markdown-notes.ts';
 import type {
-  ExportSemanticLayout,
-  ExportSession,
-  OpenDocumentForExportOptions,
-} from '@docx-editor.dev/core/export';
-import { escapeText, MarkdownInlineWriter, type MarkdownTextToken } from './markdown-inline.ts';
-
-/** Markdown emitted for one physical layout page. @public */
-export interface MarkdownPage {
-  /** Snapshot-local layout page identity; it can change when the document repaginates. */
-  readonly id: string;
-  /** One-based physical page number. */
-  readonly number: number;
-  /** Body projection, plus local note definitions or labelled continuation blocks. */
-  readonly markdown: string;
-  /** Header story for this page, kept separate from logical document content. */
-  readonly headerMarkdown: string;
-  /** Footer story for this page, kept separate from logical document content. */
-  readonly footerMarkdown: string;
-  /** Comments anchored in any story physically rendered on this page. */
-  readonly comments: readonly MarkdownComment[];
-  /** Tracked changes anchored in any story physically rendered on this page. */
-  readonly trackedChanges: readonly MarkdownTrackedChange[];
-}
-
-/** Page/story/source provenance for one exported review artifact. @public */
-export type MarkdownReviewOccurrence = SemanticReviewArtifactRecord['occurrences'][number];
-
-/** Normalized DOCX comment, independent of editor UI state. @public */
-export type MarkdownComment = SemanticCommentArtifactRecord;
-
-/** Normalized DOCX tracked change, independent of editor UI state. @public */
-export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
-
-/** Comment or tracked change returned by Markdown export. @public */
-export type MarkdownReviewArtifact = SemanticReviewArtifactRecord;
-
-/** Machine-readable scope of the page numbers returned by this export. @public */
-export interface MarkdownPaginationInfo {
-  /** Pages come from the docx-editor semantic layout engine, not stale DOCX page-break hints. */
-  readonly basis: 'docx-editor-layout';
-  /** Page ids and numbers describe this export snapshot and can change after repagination. */
-  readonly stability: 'snapshot';
-  /** Desktop Word parity depends on equivalent fonts and renderer behavior. */
-  readonly wordCompatibility: 'not-guaranteed';
-  /** Core store revision from which this layout snapshot was produced. */
-  readonly layoutRevision: number;
-  /** Tracked-change projection used to paginate and translate this snapshot. */
-  readonly displayMode: NonNullable<ExportSemanticLayout['displayMode']>;
-}
-
-/** Full logical document plus page-scoped projections. @public */
-export interface MarkdownExportResult {
-  /** Primary physical page projections, preserving Word layout boundaries and furniture. */
-  readonly pages: readonly MarkdownPage[];
-  /** Every normalized comment and tracked change, including artifacts with no page occurrence. */
-  readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
-  /** Fidelity scope callers should retain alongside page citations. */
-  readonly pagination: MarkdownPaginationInfo;
-  /** Convenience logical Markdown with split records joined and repeated furniture excluded. */
-  readonly markdown: string;
-}
-
-/** Caller decision for a laid-out image. @public */
-export type MarkdownImageResult = { readonly url: string } | { readonly skip: true };
-
-/** Translation-only controls over already-published layout records. @public */
-export interface MarkdownTranslationOptions {
-  /**
-   * Map a laid-out drawing to a destination. Without a mapper (or when skipped), only its
-   * escaped accessibility label is emitted. This callback is synchronous: perform uploads
-   * first and return a precomputed URL. Reading validated bytes requires a live reusable
-   * session; copy or upload them before disposal, then this mapper can translate its detached
-   * immutable layout using the retained drawing-to-URL mapping.
-   */
-  readonly image?: (drawing: InlineDrawingRecord | AnchoredDrawingRecord) => MarkdownImageResult;
-}
-
-/** One-shot options combine neutral layout provisioning with translation. @public */
-export interface MarkdownExportOptions
-  extends OpenDocumentForExportOptions, MarkdownTranslationOptions {}
+  MarkdownExportResult,
+  MarkdownImageResult,
+  MarkdownPage,
+  MarkdownTranslationOptions,
+} from './markdown-types.ts';
+export type {
+  MarkdownExportOptions,
+  MarkdownExportResult,
+  MarkdownImageResult,
+  MarkdownPage,
+  MarkdownPaginationInfo,
+  MarkdownTranslationOptions,
+} from './markdown-types.ts';
 
 interface TranslationContext {
   readonly options: MarkdownTranslationOptions;
@@ -106,6 +69,8 @@ interface TranslationContext {
   readonly tableCell: boolean;
   readonly hardBreakHtml?: boolean;
   readonly displayMode: SemanticLayout['displayMode'];
+  /** Translator-local story/part scope disambiguating paragraph ids across DOCX parts. */
+  readonly sourceScope: string;
   readonly listIndentByParagraphId: ReadonlyMap<string, number>;
   readonly listMarkerByParagraphId: ReadonlyMap<
     string,
@@ -114,6 +79,7 @@ interface TranslationContext {
   readonly tablesById: ReadonlyMap<string, TableProjection>;
   /** A translator maps each published drawing object at most once across full/page views. */
   readonly imageResultByDrawing: WeakMap<object, MarkdownImageResult>;
+  readonly sourceCapture?: MarkdownSourceCapture;
   /** Labels emitted into the current page body, when page-local note visibility is tracked. */
   readonly emittedNoteLabels?: Set<string>;
   readonly pageIndex?: number;
@@ -149,13 +115,6 @@ interface TableProjection {
   readonly columnCount: number;
 }
 
-interface NoteProjection {
-  readonly kind: 'footnote' | 'endnote';
-  readonly blocks: BlockFragmentRecord[];
-}
-
-const EMPTY_NOTE_STORIES: ReadonlyMap<string, NoteProjection> = new Map();
-
 function assertNever(value: never): never {
   throw new TypeError(`Unsupported semantic record: ${JSON.stringify(value)}`);
 }
@@ -165,22 +124,6 @@ function destination(url: string): string {
     /[\u0000-\u0020\u007f<>()\\]/g,
     (character) => `%${character.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
   );
-}
-
-function escapeTablePipes(value: string): string {
-  let escaped = '';
-  let precedingBackslashes = 0;
-  for (const character of value) {
-    if (character === '\\') {
-      escaped += character;
-      precedingBackslashes += 1;
-      continue;
-    }
-    if (character === '|' && precedingBackslashes % 2 === 0) escaped += '\\';
-    escaped += character;
-    precedingBackslashes = 0;
-  }
-  return escaped;
 }
 
 function mappedImageResult(value: unknown): MarkdownImageResult {
@@ -242,6 +185,38 @@ function drawingMarkdown(
   return markdown;
 }
 
+function capturesParagraph(context: TranslationContext, paragraphId: string): boolean {
+  const capture = context.sourceCapture;
+  return Boolean(
+    capture &&
+    (capture.allSourceScopes.has(context.sourceScope) ||
+      capture.offsetsBySource.has(markdownSourceCaptureKey(context.sourceScope, paragraphId)))
+  );
+}
+
+function mappedDrawingMarkdown(
+  drawing: InlineDrawingRecord | AnchoredDrawingRecord,
+  context: TranslationContext,
+  markdown: string
+): MappedMarkdown {
+  if (markdown.length === 0) return EMPTY_MAPPED_MARKDOWN;
+  if (!capturesParagraph(context, drawing.paragraphId)) return literalMarkdown(markdown);
+  return {
+    markdown,
+    sources: [
+      {
+        sourceScope: context.sourceScope,
+        paragraphId: drawing.paragraphId,
+        sourceStart: drawing.start,
+        sourceEnd: drawing.start + 1,
+        markdownStart: 0,
+        markdownEnd: markdown.length,
+        exact: false,
+      },
+    ],
+  };
+}
+
 function noteNavigationMarkdown(span: StyleSpanRecord, context: TranslationContext): string | null {
   if (!span.noteNav) return null;
   switch (span.noteNav.direction) {
@@ -258,52 +233,70 @@ function noteNavigationMarkdown(span: StyleSpanRecord, context: TranslationConte
 }
 
 function trimTokenWhitespace(tokens: readonly MarkdownTextToken[]): {
-  readonly leading: string;
+  readonly leading: readonly MarkdownTextToken[];
   readonly content: readonly MarkdownTextToken[];
-  readonly trailing: string;
+  readonly trailing: readonly MarkdownTextToken[];
 } {
   const content = tokens.map((token) => ({ ...token }));
-  let leading = '';
+  const leading: MarkdownTextToken[] = [];
   for (let index = 0; index < content.length; index += 1) {
     const token = content[index]!;
     if (token.sourceText.length === 0) continue;
     const match = /^\s+/.exec(token.sourceText);
     if (!match) break;
-    leading += match[0];
-    content[index] = { ...token, sourceText: token.sourceText.slice(match[0].length) };
+    leading.push({ ...token, sourceText: match[0] });
+    content[index] = {
+      ...token,
+      sourceText: token.sourceText.slice(match[0].length),
+      sourceOffset: (token.sourceOffset ?? 0) + match[0].length,
+    };
     if (content[index]!.sourceText.length > 0) break;
   }
-  let trailing = '';
+  const trailing: MarkdownTextToken[] = [];
   for (let index = content.length - 1; index >= 0; index -= 1) {
     const token = content[index]!;
     if (token.sourceText.length === 0) continue;
     const match = /\s+$/.exec(token.sourceText);
     if (!match) break;
-    trailing = match[0] + trailing;
+    trailing.unshift({
+      ...token,
+      sourceText: match[0],
+      sourceOffset: (token.sourceOffset ?? 0) + token.sourceText.length - match[0].length,
+    });
     content[index] = { ...token, sourceText: token.sourceText.slice(0, -match[0].length) };
     if (content[index]!.sourceText.length > 0) break;
   }
   return { leading, content, trailing };
 }
 
+function textTokensMarkdown(
+  tokens: readonly MarkdownTextToken[],
+  context: TranslationContext
+): MappedMarkdown {
+  const writer = new MarkdownInlineWriter(context);
+  for (const token of tokens) writer.writeText(token);
+  return writer.finishMapped();
+}
+
 function linkedSpansMarkdown(
   tokens: readonly MarkdownTextToken[],
   href: string,
   context: TranslationContext
-): string {
+): MappedMarkdown {
   const { leading, content, trailing } = trimTokenWhitespace(tokens);
-  const writer = new MarkdownInlineWriter(context);
-  for (const token of content) writer.writeText(token);
-  const label = writer.finish();
-  const breakAsHtml = context.tableCell || context.hardBreakHtml === true;
-  if (label.length === 0 && leading.length + trailing.length > 0) {
-    return `[${escapeText(leading + trailing, breakAsHtml)}](${destination(href)})`;
+  const before = textTokensMarkdown(leading, context);
+  const label = textTokensMarkdown(content, context);
+  const after = textTokensMarkdown(trailing, context);
+  if (label.markdown.length === 0 && before.markdown.length + after.markdown.length > 0) {
+    return wrapMarkdown(concatMarkdown([before, after]), '[', `](${destination(href)})`);
   }
-  return (
-    escapeText(leading, breakAsHtml) +
-    (label.length > 0 ? `[${label}](${destination(href)})` : '') +
-    escapeText(trailing, breakAsHtml)
-  );
+  return concatMarkdown([
+    before,
+    label.markdown.length > 0
+      ? concatMarkdown([literalMarkdown('['), label, literalMarkdown(`](${destination(href)})`)])
+      : EMPTY_MAPPED_MARKDOWN,
+    after,
+  ]);
 }
 
 function sourceTextOf(span: StyleSpanRecord): string {
@@ -332,21 +325,41 @@ function writeSpanAtoms(
     const atom = atoms[index]!;
     if (atom.kind === 'drawing') {
       const drawing = drawingContentMarkdown(atom.drawing, context);
-      writer.writeBoundary(
+      const markdown =
         drawing.length > 0 && drawingIsDeleted(atom.drawing, context)
           ? `<del>${drawing}</del>`
-          : drawing
-      );
+          : drawing;
+      writer.writeMappedBoundary(mappedDrawingMarkdown(atom.drawing, context, markdown));
       continue;
     }
+    const paragraphId = atom.span.range.paragraphId;
     const navigation = noteNavigationMarkdown(atom.span, context);
     if (navigation !== null) {
-      writer.writeBoundary(navigation);
+      if (navigation.length > 0 && capturesParagraph(context, paragraphId)) {
+        writer.writeMappedBoundary({
+          markdown: navigation,
+          sources: [
+            {
+              sourceScope: context.sourceScope,
+              paragraphId,
+              sourceStart: atom.span.range.start,
+              sourceEnd: atom.span.range.end,
+              markdownStart: 0,
+              markdownEnd: navigation.length,
+              exact: false,
+            },
+          ],
+        });
+      } else writer.writeBoundary(navigation);
       continue;
     }
     if (atom.span.link?.kind === 'external' && atom.span.link.href) {
       const linked: MarkdownTextToken[] = [
-        { span: atom.span, sourceText: sourceTextOf(atom.span) },
+        {
+          span: atom.span,
+          paragraphId,
+          sourceText: sourceTextOf(atom.span),
+        },
       ];
       while (atoms[index + 1]?.kind === 'span') {
         const next = atoms[index + 1];
@@ -357,13 +370,21 @@ function writeSpanAtoms(
         ) {
           break;
         }
-        linked.push({ span: next.span, sourceText: sourceTextOf(next.span) });
+        linked.push({
+          span: next.span,
+          paragraphId: next.span.range.paragraphId,
+          sourceText: sourceTextOf(next.span),
+        });
         index += 1;
       }
-      writer.writeBoundary(linkedSpansMarkdown(linked, atom.span.link.href, context));
+      writer.writeMappedBoundary(linkedSpansMarkdown(linked, atom.span.link.href, context));
       continue;
     }
-    writer.writeText({ span: atom.span, sourceText: sourceTextOf(atom.span) });
+    writer.writeText({
+      span: atom.span,
+      paragraphId,
+      sourceText: sourceTextOf(atom.span),
+    });
   }
 }
 
@@ -395,7 +416,7 @@ function markdownAtoms(segment: LineSegment): MarkdownAtom[] {
 function paragraphBody(
   fragments: readonly ParagraphFragmentRecord[],
   context: TranslationContext
-): string {
+): MappedMarkdown {
   const writer = new MarkdownInlineWriter(context);
   for (const fragment of fragments) {
     for (const line of fragment.lines) {
@@ -403,16 +424,16 @@ function paragraphBody(
         writeSpanAtoms(markdownAtoms(segment), context, writer);
     }
   }
-  return writer.finish();
+  return writer.finishMapped();
 }
 
 function paragraphMarkdown(
   fragments: readonly ParagraphFragmentRecord[],
   context: TranslationContext,
   logical = true
-): string {
+): MappedMarkdown {
   const first = fragments[0];
-  if (!first) return '';
+  if (!first) return EMPTY_MAPPED_MARKDOWN;
   const headingLevel = first.outlineLevel === null ? null : first.outlineLevel + 1;
   const heading =
     !context.tableCell && headingLevel !== null && headingLevel >= 1 && headingLevel <= 9
@@ -421,26 +442,44 @@ function paragraphMarkdown(
   // Leading preserved whitespace is visual OOXML spacing, not a Markdown code-block request.
   // Entities retain every authored space without creating a four-space code-block prefix. List
   // indentation is added structurally below, after this conversion.
-  const body = paragraphBody(
-    fragments,
-    heading.length > 0 ? { ...context, hardBreakHtml: true } : context
-  ).replace(/^[ \t]+/, (whitespace) => '&nbsp;'.repeat(whitespace.length));
+  const body = replaceLeadingWhitespaceWithEntities(
+    paragraphBody(fragments, heading.length > 0 ? { ...context, hardBreakHtml: true } : context)
+  );
   const marker = first.marker ?? context.listMarkerByParagraphId.get(first.paragraphId);
   const indent = ' '.repeat(
     context.listIndentByParagraphId.get(first.paragraphId) ?? (marker?.level ?? 0) * 4
   );
+  let projected: MappedMarkdown;
   if (!logical && first.fragmentIndex > 0) {
-    if (!marker) return body;
-    const bullet = marker.numFmt === 'bullet' ? '-' : `${marker.ordinal ?? 1}.`;
-    return `${indent}${' '.repeat(bullet.length + 1)}${body}`;
-  }
-  if (marker) {
+    if (!marker) projected = body;
+    else {
+      const bullet = marker.numFmt === 'bullet' ? '-' : `${marker.ordinal ?? 1}.`;
+      projected = wrapMarkdown(body, `${indent}${' '.repeat(bullet.length + 1)}`);
+    }
+  } else if (marker) {
     const bullet = marker.numFmt === 'bullet' ? '-' : `${marker.ordinal ?? 1}.`;
     // CommonMark permits a heading as list-item content. Preserve both authored semantics so a
     // numbered Word heading remains navigable without losing its visible ordinal.
-    return `${indent}${bullet} ${heading}${body}`;
-  }
-  return heading + body;
+    projected = wrapMarkdown(body, `${indent}${bullet} ${heading}`);
+  } else projected = wrapMarkdown(body, heading);
+  if (!context.sourceCapture?.allSourceScopes.has(context.sourceScope)) return projected;
+  const extentOf = (fragment: ParagraphFragmentRecord): { start: number; end: number } => {
+    if (fragment.range) return fragment.range;
+    const ranges = fragment.lines.map((line) => line.range);
+    return {
+      start: Math.min(...ranges.map((range) => range.start)),
+      end: Math.max(...ranges.map((range) => range.end)),
+    };
+  };
+  const extents = fragments.map(extentOf);
+  return withSourceParagraphs(projected, [
+    {
+      sourceScope: context.sourceScope,
+      paragraphId: first.paragraphId,
+      sourceStart: Math.min(...extents.map((extent) => extent.start)),
+      sourceEnd: Math.max(...extents.map((extent) => extent.end)),
+    },
+  ]);
 }
 
 function logicalBlocks(blocks: readonly BlockFragmentRecord[]): LogicalBlock[] {
@@ -521,19 +560,25 @@ function cellAlignment(cell: LogicalCell): ParagraphFragmentRecord['alignment'] 
   return 'left';
 }
 
-function cellValues(row: LogicalRow, context: TranslationContext, pageScoped: boolean): string[] {
-  const values: string[] = [];
+function cellValues(
+  row: LogicalRow,
+  context: TranslationContext,
+  pageScoped: boolean
+): MappedMarkdown[] {
+  const values: MappedMarkdown[] = [];
   const nestedContext = { ...context, tableCell: true };
   for (const cell of row.cells) {
     const value = cell.vMergeContinue
-      ? ''
-      : escapeTablePipes(
-          renderLogicalBlocks(logicalBlocks(cell.blocks), nestedContext, true, pageScoped)
-        ).replace(/\n+/g, '<br>');
-    while (values.length < cell.gridColumn) values.push('');
+      ? EMPTY_MAPPED_MARKDOWN
+      : replaceNewlinesWithHtmlBreaks(
+          escapeUnescapedTablePipes(
+            renderLogicalBlocks(logicalBlocks(cell.blocks), nestedContext, true, pageScoped)
+          )
+        );
+    while (values.length < cell.gridColumn) values.push(EMPTY_MAPPED_MARKDOWN);
     values[cell.gridColumn] = value;
     for (let span = 1; span < cell.gridSpan; span += 1) {
-      values[cell.gridColumn + span] = '';
+      values[cell.gridColumn + span] = EMPTY_MAPPED_MARKDOWN;
     }
   }
   return values;
@@ -543,21 +588,30 @@ function tableMarkdown(
   fragments: readonly TableFragmentRecord[],
   context: TranslationContext,
   pageScoped: boolean
-): string {
+): MappedMarkdown {
   const tableId = fragments[0]?.tableId;
   const projection = tableId ? context.tablesById.get(tableId) : undefined;
   const completeFragments = projection?.fragments ?? fragments;
   const rows = pageScoped ? mergeRows(fragments, true) : mergeRows(completeFragments, false);
-  if (rows.length === 0) return '';
+  if (rows.length === 0) return EMPTY_MAPPED_MARKDOWN;
   const width = Math.max(
     projection?.columnCount ??
       (fragments[0]?.columnEdges.length ? fragments[0].columnEdges.length - 1 : 0),
     1
   );
-  const normalize = (values: string[], fallback = ''): string[] =>
-    Array.from({ length: width }, (_, index) => values[index] ?? fallback);
-  const line = (row: LogicalRow): string =>
-    `| ${normalize(cellValues(row, context, pageScoped)).join(' | ')} |`;
+  const normalize = (
+    values: MappedMarkdown[],
+    fallback: MappedMarkdown = EMPTY_MAPPED_MARKDOWN
+  ): MappedMarkdown[] => Array.from({ length: width }, (_, index) => values[index] ?? fallback);
+  const line = (row: LogicalRow): MappedMarkdown =>
+    concatMarkdown(
+      [
+        literalMarkdown('| '),
+        concatMarkdown(normalize(cellValues(row, context, pageScoped)), ' | '),
+        literalMarkdown(' |'),
+      ],
+      ''
+    );
   // GFM requires the first emitted row to be its header row. Preserve authored order: OOXML's
   // tblHeader flag is only an effective repeated header on the contiguous table prefix, and a
   // malformed/later flag must never pull that row ahead of preceding data.
@@ -572,11 +626,16 @@ function tableMarkdown(
       alignments[cell.gridColumn + span] = '---';
     }
   }
-  return [
-    line(header),
-    `| ${normalize(alignments, '---').join(' | ')} |`,
-    ...rows.slice(1).map(line),
-  ].join('\n');
+  return concatMarkdown(
+    [
+      line(header),
+      literalMarkdown(
+        `| ${Array.from({ length: width }, (_, index) => alignments[index] ?? '---').join(' | ')} |`
+      ),
+      ...rows.slice(1).map(line),
+    ],
+    '\n'
+  );
 }
 
 function renderLogicalBlocks(
@@ -584,7 +643,7 @@ function renderLogicalBlocks(
   context: TranslationContext,
   nested = false,
   pageScoped = false
-): string {
+): MappedMarkdown {
   const rendered = blocks.map((block) => {
     switch (block.kind) {
       case 'paragraph':
@@ -595,9 +654,14 @@ function renderLogicalBlocks(
         return assertNever(block);
     }
   });
-  return rendered
-    .filter((value, index) => value.length > 0 || index < rendered.length - 1)
-    .join(nested ? '\n' : '\n\n');
+  const visible = concatMarkdown(
+    rendered.filter((value, index) => value.markdown.length > 0 || index < rendered.length - 1),
+    nested ? '\n' : '\n\n'
+  );
+  return withSourceParagraphs(
+    visible,
+    rendered.flatMap((value) => value.paragraphs ?? [])
+  );
 }
 
 function bodyBlocks(layout: SemanticLayout): LogicalBlock[] {
@@ -689,23 +753,26 @@ function buildTranslationIndexes(
   return { listIndentByParagraphId, listMarkerByParagraphId, tablesById };
 }
 
-function documentAnchoredDrawings(layout: SemanticLayout, context: TranslationContext): string {
-  return (
+function documentAnchoredDrawings(
+  layout: SemanticLayout,
+  context: TranslationContext
+): MappedMarkdown {
+  return concatMarkdown(
     layout.pages
       .flatMap((page) => page.anchoredDrawings ?? [])
       // Textbox stories are not linear body content. Their deliberate omission is documented;
       // non-textbox drawings retain deterministic page/record order here.
       .filter((drawing) => drawing.textboxStory === undefined)
-      .map((drawing) => drawingMarkdown(drawing, context))
-      .filter(Boolean)
-      .join('\n\n')
+      .map((drawing) => mappedDrawingMarkdown(drawing, context, drawingMarkdown(drawing, context)))
+      .filter((value) => value.markdown.length > 0),
+    '\n\n'
   );
 }
 
 function pageBody(
   page: PageRecord,
   context: TranslationContext
-): { readonly markdown: string; readonly noteLabels: ReadonlySet<string> } {
+): { readonly value: MappedMarkdown; readonly noteLabels: ReadonlySet<string> } {
   const blocks = logicalBlocks(page.fragments);
   const listIndentByParagraphId = new Map<string, number>();
   const listMarkerByParagraphId = new Map<string, NonNullable<ParagraphFragmentRecord['marker']>>();
@@ -721,21 +788,28 @@ function pageBody(
   const markdown = renderLogicalBlocks(blocks, pageContext, false, true);
   const anchored = (page.anchoredDrawings ?? [])
     .filter((drawing) => drawing.textboxStory === undefined)
-    .map((drawing) => drawingMarkdown(drawing, pageContext))
-    .filter(Boolean);
+    .map((drawing) =>
+      mappedDrawingMarkdown(drawing, pageContext, drawingMarkdown(drawing, pageContext))
+    )
+    .filter((value) => value.markdown.length > 0);
   return {
-    markdown: [markdown, ...anchored].filter(Boolean).join('\n\n'),
+    value: concatMarkdown(
+      [markdown, ...anchored].filter((value) => value.markdown.length > 0),
+      '\n\n'
+    ),
     noteLabels,
   };
 }
 
 function storyMarkdown(
   story: {
+    readonly kind: 'header' | 'footer';
+    readonly partName: string;
     readonly fragments: readonly BlockFragmentRecord[];
     readonly anchoredDrawings?: readonly AnchoredDrawingRecord[];
   },
   context: TranslationContext
-): string {
+): MappedMarkdown {
   const listIndentByParagraphId = new Map<string, number>();
   const listMarkerByParagraphId = new Map<string, NonNullable<ParagraphFragmentRecord['marker']>>();
   const tablesById = new Map<string, TableProjection>();
@@ -743,6 +817,7 @@ function storyMarkdown(
   indexTableBlocks(story.fragments, tablesById);
   const storyContext: TranslationContext = {
     ...context,
+    sourceScope: markdownReviewSourceScope(story.kind, story.partName, null),
     listIndentByParagraphId,
     listMarkerByParagraphId,
     tablesById,
@@ -750,50 +825,25 @@ function storyMarkdown(
   const body = renderLogicalBlocks(logicalBlocks(story.fragments), storyContext);
   const drawings = (story.anchoredDrawings ?? [])
     .filter((drawing) => drawing.textboxStory === undefined)
-    .map((drawing) => drawingMarkdown(drawing, storyContext));
-  return [body, ...drawings].filter(Boolean).join('\n\n');
+    .map((drawing) =>
+      mappedDrawingMarkdown(drawing, storyContext, drawingMarkdown(drawing, storyContext))
+    )
+    .filter((value) => value.markdown.length > 0);
+  return concatMarkdown(
+    [body, ...drawings].filter((value) => value.markdown.length > 0),
+    '\n\n'
+  );
 }
 
-interface NoteStoryIndexes {
-  readonly document: ReadonlyMap<string, NoteProjection>;
-  readonly byPage: ReadonlyMap<PageRecord, ReadonlyMap<string, NoteProjection>>;
-}
-
-function noteStoryIndexes(layout: SemanticLayout): NoteStoryIndexes {
-  const document = new Map<string, NoteProjection>();
-  const byPage = new Map<PageRecord, Map<string, NoteProjection>>();
-  const append = (
-    target: Map<string, NoteProjection>,
-    scopeId: string,
-    story: 'footnote' | 'endnote',
-    blocks: readonly BlockFragmentRecord[]
-  ): void => {
-    const entry = target.get(scopeId) ?? { kind: story, blocks: [] };
-    entry.blocks.push(...blocks);
-    target.set(scopeId, entry);
-  };
-  forEachSemanticStory(layout, ({ page, story, host, noteScopeId }) => {
-    if (noteScopeId === null || (story !== 'footnote' && story !== 'endnote')) return;
-    append(document, noteScopeId, story, host.fragments);
-    let pageNotes = byPage.get(page);
-    if (!pageNotes) {
-      pageNotes = new Map();
-      byPage.set(page, pageNotes);
-    }
-    append(pageNotes, noteScopeId, story, host.fragments);
-  });
-  return { document, byPage };
-}
-
-function visibleNoteContinuation(note: NoteProjection, label: string, body: string): string {
+function visibleNoteContinuation(
+  note: NoteProjection,
+  label: string,
+  body: MappedMarkdown
+): MappedMarkdown {
   const title = note.kind === 'footnote' ? 'Footnote' : 'Endnote';
   const heading = `> **${title} ${label} (continued):**`;
-  if (body.length === 0) return heading;
-  const quoted = body
-    .split('\n')
-    .map((line) => (line.length > 0 ? `> ${line}` : '>'))
-    .join('\n');
-  return `${heading}\n>\n${quoted}`;
+  if (body.markdown.length === 0) return literalMarkdown(heading);
+  return concatMarkdown([literalMarkdown(`${heading}\n>\n`), quoteMarkdownLines(body)]);
 }
 
 function noteDefinitions(
@@ -802,8 +852,8 @@ function noteDefinitions(
   pageScoped = false,
   localReferenceLabels: ReadonlySet<string> = new Set(),
   previouslyRenderedScopes: Set<string> = new Set()
-): string {
-  const definitions: string[] = [];
+): MappedMarkdown {
+  const definitions: MappedMarkdown[] = [];
   for (const [scopeId, note] of stories) {
     const label = context.noteLabelByScope.get(scopeId);
     if (!label) continue;
@@ -819,6 +869,7 @@ function noteDefinitions(
     indexLists(logical, listIndentByParagraphId, listMarkerByParagraphId);
     const noteContext = {
       ...context,
+      sourceScope: markdownReviewSourceScope(note.kind, '', scopeId),
       listIndentByParagraphId,
       listMarkerByParagraphId,
     };
@@ -830,57 +881,17 @@ function noteDefinitions(
       definitions.push(visibleNoteContinuation(note, label, body));
       continue;
     }
-    const indented = body.replace(/\n/g, '\n    ');
-    definitions.push(`[^${label}]: ${indented}`);
+    const indented = indentContinuationLines(body, '    ');
+    definitions.push(wrapMarkdown(indented, `[^${label}]: `));
   }
-  return definitions.join('\n\n');
+  return concatMarkdown(definitions, '\n\n');
 }
 
-function withDefinitions(markdown: string, definitions: string): string {
-  return [markdown, definitions].filter(Boolean).join('\n\n');
-}
-
-function noteLabels(layout: SemanticLayout): Map<string, string> {
-  const labels = new Map<string, string>();
-  forEachSemanticSpan(layout, ({ span, story }) => {
-    // Textbox stories have no linear Markdown position and are deliberately omitted, so their
-    // citations cannot consume labels or shift references in represented stories.
-    if (story === 'textbox') return;
-    if (span.noteNav?.direction !== 'to-note' || labels.has(span.noteNav.scopeId)) return;
-    labels.set(span.noteNav.scopeId, String(labels.size + 1));
-  });
-  return labels;
-}
-
-interface PageReviewArtifacts {
-  readonly comments: SemanticCommentArtifactRecord[];
-  readonly trackedChanges: SemanticTrackedChangeArtifactRecord[];
-  readonly keys: Set<string>;
-}
-
-function pageReviewArtifacts(
-  artifacts: readonly SemanticReviewArtifactRecord[]
-): ReadonlyMap<number, PageReviewArtifacts> {
-  const byPage = new Map<number, PageReviewArtifacts>();
-  for (const artifact of artifacts) {
-    for (const occurrence of artifact.occurrences) {
-      const page = byPage.get(occurrence.pageIndex) ?? {
-        comments: [],
-        trackedChanges: [],
-        keys: new Set<string>(),
-      };
-      byPage.set(occurrence.pageIndex, page);
-      const key = `${artifact.kind}\0${artifact.id}`;
-      if (page.keys.has(key)) continue;
-      page.keys.add(key);
-      if (artifact.kind === 'comment') {
-        page.comments.push(artifact);
-      } else {
-        page.trackedChanges.push(artifact);
-      }
-    }
-  }
-  return byPage;
+function withDefinitions(markdown: MappedMarkdown, definitions: MappedMarkdown): MappedMarkdown {
+  return concatMarkdown(
+    [markdown, definitions].filter((value) => value.markdown.length > 0),
+    '\n\n'
+  );
 }
 
 /** Translate an immutable exporter-neutral layout snapshot without retaining its producer. @public */
@@ -888,25 +899,32 @@ export function exportMarkdownLayout(
   layout: ExportSemanticLayout,
   options: MarkdownTranslationOptions = {}
 ): MarkdownExportResult {
+  const reviewArtifacts = layout.reviewArtifacts;
   const indexes = buildTranslationIndexes(layout);
-  const notes = noteStoryIndexes(layout);
+  const notes = buildNoteStoryIndexes(layout);
   const context: TranslationContext = {
     options,
-    noteLabelByScope: noteLabels(layout),
+    noteLabelByScope: buildNoteLabels(layout),
     tableCell: false,
     displayMode: layout.displayMode,
+    sourceScope: markdownReviewSourceScope('body', '', null),
     imageResultByDrawing: new WeakMap(),
+    sourceCapture: buildMarkdownSourceCapture(reviewArtifacts),
     ...indexes,
   };
   const markdown = withDefinitions(
-    [renderLogicalBlocks(bodyBlocks(layout), context), documentAnchoredDrawings(layout, context)]
-      .filter(Boolean)
-      .join('\n\n'),
+    concatMarkdown(
+      [
+        renderLogicalBlocks(bodyBlocks(layout), context),
+        documentAnchoredDrawings(layout, context),
+      ].filter((value) => value.markdown.length > 0),
+      '\n\n'
+    ),
     noteDefinitions(notes.document, context)
   );
-  const reviewArtifacts = layout.reviewArtifacts;
-  const artifactsByPage = pageReviewArtifacts(reviewArtifacts);
+  const artifactsByPage = indexPageReviewArtifacts(reviewArtifacts);
   const renderedNoteScopes = new Set<string>();
+  const pageProjectionValues = new Map<number, MarkdownPageProjectionValues>();
   const pages = layout.pages.map((page): MarkdownPage => {
     const pageContext = { ...context, pageIndex: page.index };
     const body = pageBody(page, context);
@@ -918,12 +936,18 @@ export function exportMarkdownLayout(
       renderedNoteScopes
     );
     const pageArtifacts = artifactsByPage.get(page.index);
+    const values: MarkdownPageProjectionValues = {
+      markdown: withDefinitions(body.value, definitions),
+      headerMarkdown: page.header ? storyMarkdown(page.header, pageContext) : EMPTY_MAPPED_MARKDOWN,
+      footerMarkdown: page.footer ? storyMarkdown(page.footer, pageContext) : EMPTY_MAPPED_MARKDOWN,
+    };
+    pageProjectionValues.set(page.index, values);
     return Object.freeze({
       id: page.id,
       number: page.index + 1,
-      markdown: withDefinitions(body.markdown, definitions),
-      headerMarkdown: page.header ? storyMarkdown(page.header, pageContext) : '',
-      footerMarkdown: page.footer ? storyMarkdown(page.footer, pageContext) : '',
+      markdown: values.markdown.markdown,
+      headerMarkdown: values.headerMarkdown.markdown,
+      footerMarkdown: values.footerMarkdown.markdown,
       comments: Object.freeze(pageArtifacts?.comments ?? []),
       trackedChanges: Object.freeze(pageArtifacts?.trackedChanges ?? []),
     });
@@ -931,14 +955,14 @@ export function exportMarkdownLayout(
   return Object.freeze({
     pages: Object.freeze(pages),
     reviewArtifacts,
+    reviewBindings: buildMarkdownReviewBindings(reviewArtifacts, markdown, pageProjectionValues),
     pagination: Object.freeze({
-      basis: 'docx-editor-layout',
-      stability: 'snapshot',
-      wordCompatibility: 'not-guaranteed',
+      source: 'layout-engine',
+      scope: 'export-snapshot',
       layoutRevision: layout.revision,
-      displayMode: layout.displayMode ?? 'all-markup',
+      revisionView: layout.displayMode ?? 'all-markup',
     }),
-    markdown,
+    markdown: markdown.markdown,
   });
 }
 

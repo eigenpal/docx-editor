@@ -79,11 +79,10 @@ describe('Markdown semantic-record policies', () => {
 
     expect(result.markdown).toBe('3. # Scope');
     expect(result.pagination).toEqual({
-      basis: 'docx-editor-layout',
-      stability: 'snapshot',
-      wordCompatibility: 'not-guaranteed',
+      source: 'layout-engine',
+      scope: 'export-snapshot',
       layoutRevision: 1,
-      displayMode: 'original',
+      revisionView: 'original',
     });
     expect(Object.isFrozen(result.reviewArtifacts)).toBe(true);
   });

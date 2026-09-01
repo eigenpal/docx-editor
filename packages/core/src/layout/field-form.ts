@@ -19,9 +19,11 @@ import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import { parseButtonInstruction, type ButtonFieldSpec } from './field-button.ts';
 import { parseDocPropertyInstruction, type DocPropertyField } from './field-doc-property.ts';
 import { normalizeFieldInstruction } from './field-instruction.ts';
+import { allowlistedPageField } from './field-instruction.ts';
 import { parseHyperlinkInstruction, type HyperlinkFieldSpec } from './field-link.ts';
 import { parseAutonumInstruction, type AutonumFieldSpec } from './field-autonum.ts';
 import { parseRefInstruction, type RefFieldSpec } from './field-ref.ts';
+import { refSpecModifiersOf } from './field-ref-parse.ts';
 import { parseSymbolInstruction, type SymbolFieldSpec } from './field-symbol.ts';
 import { resolveRunStyle, type ResolvedRunStyle, type ThemeFonts } from './run-style.ts';
 
@@ -79,6 +81,83 @@ export function captureInstructionSpecs(pending: CapturedInstructionSpecs, raw: 
   pending.refSpec = parseRefInstruction(raw);
   if (pending.refSpec) return;
   pending.autonumSpec = parseAutonumInstruction(raw);
+}
+
+/**
+ * Whether a recognized complex field can create visible text when no stored result paints.
+ *
+ * Font preflight and field projection share this allowlist so adding a new synthesized field to
+ * Core cannot silently leave headless exporters measuring it with the fixed fallback. PAGE-family
+ * fields require a separator; SYMBOL and AUTONUM are valid in Word's begin/instruction/end shape.
+ * A form field additionally requires the legacy state payload that supplies its display value.
+ * @internal
+ */
+export function complexFieldInstructionMaySynthesizeGlyph(
+  raw: string,
+  options: {
+    readonly hasSeparate: boolean;
+    readonly hasLegacyFormData: boolean;
+    readonly allowPageFields: boolean;
+    readonly allowRefFields: boolean;
+    readonly allowPageRef: boolean;
+    readonly allowAutonum: boolean;
+  }
+): boolean {
+  if (options.allowPageFields && options.hasSeparate && allowlistedPageField(raw) !== null) {
+    return true;
+  }
+  const specs: CapturedInstructionSpecs = {
+    symbolSpec: null,
+    linkSpec: null,
+    formSpec: null,
+    buttonSpec: null,
+    docPropertySpec: null,
+    refSpec: null,
+    autonumSpec: null,
+  };
+  captureInstructionSpecs(specs, raw);
+  return (
+    specs.symbolSpec !== null ||
+    specs.buttonSpec !== null ||
+    specs.docPropertySpec !== null ||
+    (options.allowRefFields &&
+      specs.refSpec !== null &&
+      (options.allowPageRef || !refSpecModifiersOf(specs.refSpec).pageRef)) ||
+    (options.allowAutonum && specs.autonumSpec !== null) ||
+    (specs.formSpec !== null && options.hasLegacyFormData)
+  );
+}
+
+/** Recognized `w:fldSimple` instructions that may synthesize an empty stored result. @internal */
+export function simpleFieldInstructionMaySynthesizeGlyph(
+  raw: string,
+  options: {
+    readonly allowPageFields: boolean;
+    readonly allowRefFields: boolean;
+    readonly allowPageRef: boolean;
+    readonly allowAutonum: boolean;
+  }
+): boolean {
+  if (options.allowPageFields && allowlistedPageField(raw) !== null) return true;
+  const specs: CapturedInstructionSpecs = {
+    symbolSpec: null,
+    linkSpec: null,
+    formSpec: null,
+    buttonSpec: null,
+    docPropertySpec: null,
+    refSpec: null,
+    autonumSpec: null,
+  };
+  captureInstructionSpecs(specs, raw);
+  return (
+    specs.symbolSpec !== null ||
+    specs.buttonSpec !== null ||
+    specs.docPropertySpec !== null ||
+    (options.allowRefFields &&
+      specs.refSpec !== null &&
+      (options.allowPageRef || !refSpecModifiersOf(specs.refSpec).pageRef)) ||
+    (options.allowAutonum && specs.autonumSpec !== null)
+  );
 }
 
 /** The synthesized form-field result: text plus the props/style the piece should carry. */

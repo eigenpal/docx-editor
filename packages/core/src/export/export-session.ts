@@ -59,8 +59,10 @@ export interface OpenDocumentForExportOptions {
    * Text measurement used for line wrapping and pagination. Omit only when deterministic
    * approximate pagination is acceptable. Core then uses a fixed-width fallback that neither
    * resolves nor shapes the document's fonts, so line and page breaks can differ from Word.
-   * Exporters promising physical-page fidelity must supply a font-backed measurer, for example
-   * one created through {@link acquireSharedExportShaping}.
+   * Exporters promising physical-page fidelity must supply a font-backed measurer. For immutable
+   * DOCX bytes with document-aware font origins, use {@link openFontBackedDocumentForExport};
+   * {@link acquireSharedExportShaping} is for process-static prepared configurations or a live
+   * host that already owns revision-stable shaping.
    */
   readonly measurer?: TextMeasurer;
   /**
@@ -101,9 +103,10 @@ export class ExportResourceError extends Error {
       | 'disposed'
       | 'layoutInvariant'
       | 'layoutFailed',
-    message: string
+    message: string,
+    options?: ErrorOptions
   ) {
-    super(message);
+    super(message, options);
     this.name = 'ExportResourceError';
   }
 }

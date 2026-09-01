@@ -15,6 +15,7 @@ import {
   type TextShaper,
 } from '../layout/index.ts';
 import { FIXED_MEASURER_FINGERPRINT } from '../layout/fixed-measurer.ts';
+import type { FontRequest, ResolvedFont } from '../layout/font-resource.ts';
 import { LAYOUT_HARFBUZZ_SHAPER_POLICY } from '../layout/layout-shaper-policy.ts';
 import {
   configurationOfPreparedLayoutFonts,
@@ -31,6 +32,11 @@ export interface SharedExportShaping {
   readonly producer: string;
   /** Font and substitution identity shared with browser layout caches. */
   readonly extensionFingerprint: string;
+}
+
+/** Session-owned shaping plus the exact admitted face lookup used by its measurer. @internal */
+export interface SessionExportShaping extends SharedExportShaping {
+  resolveFont(request: FontRequest): ResolvedFont | FontResolutionError;
 }
 
 interface SharedExportShapingSubstrate {
@@ -95,6 +101,42 @@ function shapedMeasurer(shaping: LayoutShapingOptions): TextMeasurer {
       return result instanceof FontResolutionError ? null : result;
     },
     fallback: createFixedMeasurer(),
+  });
+}
+
+/**
+ * Build an exporter shaping view without retaining its document-specific configuration in the
+ * process-wide configuration cache. The HarfBuzz engine remains shared and independently bounded;
+ * the returned closures own only this configuration's admitted font snapshot and become
+ * collectible with the export session that holds them.
+ *
+ * @internal
+ */
+export async function createSessionExportShaping(
+  prepared: PreparedLayoutFontConfiguration,
+  instrumentation?: LayoutShapingInstrumentation
+): Promise<SessionExportShaping> {
+  if (!isPreparedLayoutFontConfiguration(prepared)) {
+    throw new TypeError('Session exporter shaping requires a prepared font handle');
+  }
+  const shaper = await acquireProcessWideExportShaper();
+  const shaping = await createLayoutShapingWithTextShaper(
+    prepared,
+    shaper,
+    LAYOUT_HARFBUZZ_SHAPER_POLICY,
+    instrumentation
+  );
+  return Object.freeze({
+    createMeasurer: () => shapedMeasurer(shaping),
+    resolveFont: (request: FontRequest) => shaping.fonts.resolve(request),
+    producer: [
+      'node-export-session',
+      prepared.fingerprint,
+      shaping.operation.shapingHash,
+      `producer:${shaping.operation.producerVersion}`,
+      `fallback:${FIXED_MEASURER_FINGERPRINT}`,
+    ].join('|'),
+    extensionFingerprint: prepared.fingerprint,
   });
 }
 

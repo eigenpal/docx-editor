@@ -33,13 +33,27 @@ function paragraph(id: string, text: string): ParagraphFragmentRecord {
 }
 
 function session(layout: SemanticLayout): ExportSession {
-  const exportLayout = { ...layout, reviewArtifacts: Object.freeze([]) } as ExportSemanticLayout;
+  const exportLayout = {
+    ...layout,
+    reviewArtifacts: layout.reviewArtifacts ?? Object.freeze([]),
+  } as ExportSemanticLayout;
   return {
     layout: async () => exportLayout,
     layoutFor: async () => exportLayout,
     validatedImageBytes: () => null,
     dispose: () => {},
   };
+}
+
+function selectedBindingText(
+  result: Awaited<ReturnType<typeof exportMarkdownFrom>>,
+  binding: Awaited<ReturnType<typeof exportMarkdownFrom>>['reviewBindings'][number]
+): string {
+  const projection =
+    binding.projection.kind === 'document'
+      ? result.markdown
+      : result.pages[binding.projection.pageIndex]![binding.projection.field];
+  return binding.ranges.map(({ start, end }) => projection.slice(start, end)).join('');
 }
 
 test('keeps nested table fragments inside their physical page projection', async () => {
@@ -144,4 +158,126 @@ test('does not append a same-page repeated header to its original row', async ()
   expect(result.pages[0]?.markdown.match(/Header/g)).toHaveLength(1);
   expect(result.pages[0]?.markdown).toContain('| A |');
   expect(result.pages[0]?.markdown).toContain('| B |');
+});
+
+test('binds split paragraphs and repeated table headers to each physical page', async () => {
+  const splitFirst = paragraph('split-p', 'PageOne');
+  const splitSecond = paragraph('split-p', 'PageTwo') as ParagraphFragmentRecord & {
+    fragmentIndex: number;
+    id: string;
+  };
+  splitSecond.fragmentIndex = 1;
+  splitSecond.id = 'split-p:f1';
+  const secondLine = splitSecond.lines[0]! as unknown as {
+    range: { paragraphId: string; start: number; end: number };
+    spans: Array<{ range: { paragraphId: string; start: number; end: number } }>;
+  };
+  secondLine.range = { paragraphId: 'split-p', start: 7, end: 14 };
+  secondLine.spans[0]!.range = { paragraphId: 'split-p', start: 7, end: 14 };
+
+  const headerRow = (repeat: boolean) => ({
+    id: 'header-row',
+    isHeaderRow: true,
+    isHeaderRepeat: repeat,
+    isContinuation: false,
+    cells: [
+      {
+        gridColumn: 0,
+        gridSpan: 1,
+        vMergeContinue: false,
+        blocks: [paragraph('header-p', 'Header')],
+      },
+    ],
+  });
+  const table = (fragmentIndex: number, repeat: boolean) =>
+    ({
+      kind: 'table',
+      id: `repeated:f${fragmentIndex}`,
+      tableId: 'repeated',
+      fragmentIndex,
+      columnEdges: [0, 100],
+      rows: [headerRow(repeat)],
+    }) as unknown as TableFragmentRecord;
+  const occurrence = (pageIndex: number, paragraphId: string, start: number, end: number) => ({
+    pageIndex,
+    physicalPageNumber: pageIndex + 1,
+    story: 'body' as const,
+    rootStory: 'body' as const,
+    textboxPath: [],
+    noteScopeId: null,
+    noteAreaKind: null,
+    source: {
+      partName: '/word/document.xml',
+      start: { paragraphId, offset: start },
+      end: { paragraphId, offset: end },
+    },
+  });
+  const splitArtifact = {
+    kind: 'comment' as const,
+    id: 'split-comment',
+    author: 'Ada',
+    initials: 'AL',
+    text: 'Split',
+    resolved: false,
+    replyIds: [],
+    orphaned: false,
+    occurrences: [occurrence(0, 'split-p', 0, 7), occurrence(1, 'split-p', 7, 14)],
+  };
+  const splitResult = await exportMarkdownFrom(
+    session({
+      revision: 2,
+      pages: [
+        { id: 'page-a', index: 0, fragments: [splitFirst] },
+        { id: 'page-b', index: 1, fragments: [splitSecond] },
+      ],
+      reviewArtifacts: [splitArtifact],
+    } as unknown as SemanticLayout)
+  );
+
+  const splitPageBindings = splitResult.reviewBindings.filter(
+    (binding) => binding.artifactId === 'split-comment' && binding.projection.kind === 'page'
+  );
+  expect(splitPageBindings.map((binding) => binding.projection)).toEqual([
+    { kind: 'page', pageIndex: 0, pageNumber: 1, field: 'markdown' },
+    { kind: 'page', pageIndex: 1, pageNumber: 2, field: 'markdown' },
+  ]);
+  expect(splitPageBindings.map((binding) => selectedBindingText(splitResult, binding))).toEqual([
+    'PageOne',
+    'PageTwo',
+  ]);
+
+  const headerArtifact = {
+    kind: 'comment' as const,
+    id: 'header-comment',
+    author: 'Ada',
+    initials: 'AL',
+    text: 'Header',
+    resolved: false,
+    replyIds: [],
+    orphaned: false,
+    occurrences: [occurrence(0, 'header-p', 0, 6), occurrence(1, 'header-p', 0, 6)],
+  };
+  const headerResult = await exportMarkdownFrom(
+    session({
+      revision: 3,
+      pages: [
+        { id: 'page-a', index: 0, fragments: [table(0, false)] },
+        { id: 'page-b', index: 1, fragments: [table(1, true)] },
+      ],
+      reviewArtifacts: [headerArtifact],
+    } as unknown as SemanticLayout)
+  );
+  const headerBindings = headerResult.reviewBindings.filter(
+    (binding) => binding.artifactId === 'header-comment'
+  );
+  expect(
+    headerBindings
+      .filter((binding) => binding.projection.kind === 'page')
+      .map((binding) => selectedBindingText(headerResult, binding))
+  ).toEqual(['Header', 'Header']);
+  expect(
+    headerBindings
+      .filter((binding) => binding.projection.kind === 'document')
+      .map((binding) => selectedBindingText(headerResult, binding))
+  ).toEqual(['Header', 'Header']);
 });

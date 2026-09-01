@@ -28,7 +28,12 @@
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import type { DocumentThemeFonts } from './document-theme.ts';
-import { familyFromRFonts, validStyleId } from './document-run-defaults.ts';
+import {
+  eastAsiaFamilyFromRFonts,
+  familyFromRFonts,
+  validFontFamily,
+  validStyleId,
+} from './document-run-defaults.ts';
 
 /** `basedOn` walk cap, matching `document-run-defaults`. */
 const CHAIN_CAP = 16;
@@ -145,7 +150,8 @@ const GLYPH_MARKS: ReadonlySet<string> = new Set([
  * deletions render in markup view — over-reporting in final view, never hiding), or a
  * glyph mark element.
  */
-function runRendersGlyphs(run: OoxmlElement): boolean {
+function runRendersGlyphs(run: OoxmlElement, projectedGlyphIds?: ReadonlySet<string>): boolean {
+  if (projectedGlyphIds?.has(run.id)) return true;
   for (const child of run.children as readonly OoxmlNode[]) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (GLYPH_MARKS.has(child.localName)) return true;
@@ -158,13 +164,17 @@ function runRendersGlyphs(run: OoxmlElement): boolean {
 }
 
 /** Whether any descendant `w:r` renders glyphs — the terminal-path block answer. */
-function subtreeHasGlyphRun(subtree: OoxmlElement): boolean {
+function subtreeHasGlyphRun(
+  subtree: OoxmlElement,
+  projectedGlyphIds?: ReadonlySet<string>
+): boolean {
   const stack: OoxmlNode[] = [subtree];
   while (stack.length > 0) {
     const node = stack.pop()!;
     if (!isElement(node)) continue;
+    if (projectedGlyphIds?.has(node.id)) return true;
     if (node.localName === 'r' && node.namespaceUri === WML_NAMESPACE_URI) {
-      if (runRendersGlyphs(node)) return true;
+      if (runRendersGlyphs(node, projectedGlyphIds)) return true;
       continue;
     }
     for (const child of node.children as readonly OoxmlNode[]) stack.push(child);
@@ -175,13 +185,23 @@ function subtreeHasGlyphRun(subtree: OoxmlElement): boolean {
 function applyRun(
   run: OoxmlElement,
   summary: MutableSummary,
-  themeFonts: DocumentThemeFonts
+  themeFonts: DocumentThemeFonts,
+  projectedGlyphIds?: ReadonlySet<string>
 ): void {
-  if (!runRendersGlyphs(run)) return;
+  if (!runRendersGlyphs(run, projectedGlyphIds)) return;
   summary.anyText = true;
   const rPr = childElement(run, 'rPr');
   const rFonts = rPr ? childElement(rPr, 'rFonts') : undefined;
-  if (rFonts) addFamily(summary.families, familyFromRFonts(rFonts, themeFonts));
+  if (rFonts) {
+    addFamily(summary.families, familyFromRFonts(rFonts, themeFonts));
+    addFamily(summary.families, eastAsiaFamilyFromRFonts(rFonts, themeFonts));
+  }
+  for (const child of run.children as readonly OoxmlNode[]) {
+    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
+    if (child.localName === 'sym') {
+      addFamily(summary.families, validFontFamily(attributeValue(child, 'font')));
+    }
+  }
   const rStyle = rPr ? childElement(rPr, 'rStyle') : undefined;
   const styleId = validStyleId(rStyle ? attributeValue(rStyle, 'val') : undefined);
   if (styleId !== null) summary.styleIds.add(styleId);
@@ -195,6 +215,7 @@ function applyRun(
  */
 function applyBlock(block: OoxmlElement, summary: MutableSummary, containsText: boolean): void {
   if (!containsText) return;
+  summary.anyText = true;
   const isTable = block.localName === 'tbl';
   const properties = childElement(block, isTable ? 'tblPr' : 'pPr');
   const reference = properties
@@ -216,16 +237,23 @@ function applyNode(
   node: OoxmlElement,
   summary: MutableSummary,
   themeFonts: DocumentThemeFonts,
-  containsText: boolean
+  containsText: boolean,
+  projectedGlyphIds?: ReadonlySet<string>
 ): void {
   if (node.namespaceUri !== WML_NAMESPACE_URI) return;
-  if (node.localName === 'r') applyRun(node, summary, themeFonts);
+  if (projectedGlyphIds?.has(node.id) && node.localName === 'fldSimple') {
+    summary.anyText = true;
+    summary.bareRun = true;
+  }
+  if (node.localName === 'r') applyRun(node, summary, themeFonts, projectedGlyphIds);
   else if (isStyledBlock(node)) applyBlock(node, summary, containsText);
 }
 
 interface SummaryMemo {
   readonly major: string | null;
   readonly minor: string | null;
+  readonly majorEastAsia: string | null;
+  readonly minorEastAsia: string | null;
   readonly summary: RenderedFontsSummary;
 }
 const summaryMemos = new WeakMap<OoxmlElement, SummaryMemo>();
@@ -236,7 +264,13 @@ function summaryOf(
   depth: number
 ): RenderedFontsSummary {
   const cached = summaryMemos.get(subtree);
-  if (cached && cached.major === themeFonts.major && cached.minor === themeFonts.minor) {
+  if (
+    cached &&
+    cached.major === themeFonts.major &&
+    cached.minor === themeFonts.minor &&
+    cached.majorEastAsia === themeFonts.majorEastAsia &&
+    cached.minorEastAsia === themeFonts.minorEastAsia
+  ) {
     return cached.summary;
   }
   const summary = createSummary();
@@ -263,7 +297,13 @@ function summaryOf(
       for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);
     }
   }
-  summaryMemos.set(subtree, { major: themeFonts.major, minor: themeFonts.minor, summary });
+  summaryMemos.set(subtree, {
+    major: themeFonts.major,
+    minor: themeFonts.minor,
+    majorEastAsia: themeFonts.majorEastAsia,
+    minorEastAsia: themeFonts.minorEastAsia,
+    summary,
+  });
   return summary;
 }
 
@@ -272,12 +312,13 @@ function summaryOf(
 interface StyleIndexEntry {
   readonly basedOn: string | null;
   readonly family: string | null;
+  readonly eastAsiaFamily: string | null;
   /** Families named by `w:tblStylePr` conditional-format `w:rPr/w:rFonts`. */
   readonly conditionalFamilies: readonly string[];
 }
 
 interface StyleIndex {
-  readonly docDefaultFamily: string | null;
+  readonly docDefaultFamilies: readonly string[];
   readonly defaultParagraph: string | null;
   readonly defaultCharacter: string | null;
   readonly defaultTable: string | null;
@@ -290,7 +331,7 @@ interface StyleIndex {
 }
 
 const EMPTY_STYLE_INDEX: StyleIndex = {
-  docDefaultFamily: null,
+  docDefaultFamilies: [],
   defaultParagraph: null,
   defaultCharacter: null,
   defaultTable: null,
@@ -300,6 +341,8 @@ const EMPTY_STYLE_INDEX: StyleIndex = {
 interface StyleIndexMemo {
   readonly major: string | null;
   readonly minor: string | null;
+  readonly majorEastAsia: string | null;
+  readonly minorEastAsia: string | null;
   readonly index: StyleIndex;
 }
 const styleIndexMemos = new WeakMap<OoxmlElement, StyleIndexMemo>();
@@ -310,16 +353,26 @@ function rPrFamily(container: OoxmlElement, themeFonts: DocumentThemeFonts): str
   return rFonts ? familyFromRFonts(rFonts, themeFonts) : null;
 }
 
+function rPrEastAsiaFamily(container: OoxmlElement, themeFonts: DocumentThemeFonts): string | null {
+  const rPr = childElement(container, 'rPr');
+  const rFonts = rPr ? childElement(rPr, 'rFonts') : undefined;
+  return rFonts ? eastAsiaFamilyFromRFonts(rFonts, themeFonts) : null;
+}
+
 function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFonts): StyleIndex {
   const entries = new Map<string, StyleIndexEntry>();
   let docDefaultFamily: string | null = null;
+  let docDefaultEastAsiaFamily: string | null = null;
   let defaultParagraph: string | null = null;
   let defaultCharacter: string | null = null;
   let defaultTable: string | null = null;
 
   const docDefaults = childElement(stylesRoot, 'docDefaults');
   const rPrDefault = docDefaults ? childElement(docDefaults, 'rPrDefault') : undefined;
-  if (rPrDefault) docDefaultFamily = rPrFamily(rPrDefault, themeFonts);
+  if (rPrDefault) {
+    docDefaultFamily = rPrFamily(rPrDefault, themeFonts);
+    docDefaultEastAsiaFamily = rPrEastAsiaFamily(rPrDefault, themeFonts);
+  }
 
   let counted = 0;
   for (const child of stylesRoot.children as readonly OoxmlNode[]) {
@@ -334,6 +387,8 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       if (!isElement(condition) || condition.localName !== 'tblStylePr') continue;
       const family = rPrFamily(condition, themeFonts);
       if (family !== null) conditionalFamilies.push(family);
+      const eastAsiaFamily = rPrEastAsiaFamily(condition, themeFonts);
+      if (eastAsiaFamily !== null) conditionalFamilies.push(eastAsiaFamily);
     }
     // Last duplicate wins, and a later duplicate that is not the default CLEARS a default
     // the earlier one claimed — both matching `buildStyleCascadeTable` in
@@ -341,6 +396,7 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     entries.set(styleId, {
       basedOn: validStyleId(basedOnElement ? attributeValue(basedOnElement, 'val') : undefined),
       family: rPrFamily(child, themeFonts),
+      eastAsiaFamily: rPrEastAsiaFamily(child, themeFonts),
       conditionalFamilies,
     });
     const isDefault = isDefaultFlag(attributeValue(child, 'default'));
@@ -364,6 +420,7 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
     if (cached) return cached;
     const families: string[] = [];
     let nearest: string | null = null;
+    let nearestEastAsia: string | null = null;
     const seen = new Set<string>();
     let at: string | null = styleId;
     for (let hop = 0; at !== null && hop < CHAIN_CAP && !seen.has(at); hop += 1) {
@@ -371,25 +428,48 @@ function buildStyleIndex(stylesRoot: OoxmlElement, themeFonts: DocumentThemeFont
       const entry = entries.get(at);
       if (!entry) break;
       nearest ??= entry.family;
+      nearestEastAsia ??= entry.eastAsiaFamily;
       families.push(...entry.conditionalFamilies);
       at = entry.basedOn;
     }
     if (nearest !== null) families.unshift(nearest);
+    if (nearestEastAsia !== null) families.unshift(nearestEastAsia);
     chainMemo.set(styleId, families);
     return families;
   };
 
-  return { docDefaultFamily, defaultParagraph, defaultCharacter, defaultTable, chainFamilies };
+  const docDefaultFamilies = [docDefaultFamily, docDefaultEastAsiaFamily].filter(
+    (family): family is string => family !== null
+  );
+  return {
+    docDefaultFamilies,
+    defaultParagraph,
+    defaultCharacter,
+    defaultTable,
+    chainFamilies,
+  };
 }
 
 function styleIndexOf(stylesRoot: OoxmlElement | null, themeFonts: DocumentThemeFonts): StyleIndex {
   if (!stylesRoot) return EMPTY_STYLE_INDEX;
   const cached = styleIndexMemos.get(stylesRoot);
-  if (cached && cached.major === themeFonts.major && cached.minor === themeFonts.minor) {
+  if (
+    cached &&
+    cached.major === themeFonts.major &&
+    cached.minor === themeFonts.minor &&
+    cached.majorEastAsia === themeFonts.majorEastAsia &&
+    cached.minorEastAsia === themeFonts.minorEastAsia
+  ) {
     return cached.index;
   }
   const index = buildStyleIndex(stylesRoot, themeFonts);
-  styleIndexMemos.set(stylesRoot, { major: themeFonts.major, minor: themeFonts.minor, index });
+  styleIndexMemos.set(stylesRoot, {
+    major: themeFonts.major,
+    minor: themeFonts.minor,
+    majorEastAsia: themeFonts.majorEastAsia,
+    minorEastAsia: themeFonts.minorEastAsia,
+    index,
+  });
   return index;
 }
 
@@ -401,38 +481,87 @@ function styleIndexOf(stylesRoot: OoxmlElement | null, themeFonts: DocumentTheme
  * case-insensitively (first-seen casing wins), sorted by code point. A document that
  * renders no character answers `[]`, whatever it declares.
  */
+export interface RenderedFontFamilyCandidates {
+  /** Families named directly by glyph-bearing runs, in story/read priority. */
+  readonly direct: readonly string[];
+  /** Families contributed by active style/default cascades but not already direct. */
+  readonly inherited: readonly string[];
+}
+
+/** Rendered-family candidates split into cap-safe direct and inherited priority tiers. */
+export function collectRenderedFontFamilyCandidates(
+  storyRoots: readonly OoxmlElement[],
+  stylesRoot: OoxmlElement | null,
+  themeFonts: DocumentThemeFonts,
+  /** Nodes whose glyphs are synthesized by layout rather than stored as literal text. @internal */
+  projectedGlyphIds?: ReadonlySet<string>
+): RenderedFontFamilyCandidates {
+  const summary = createSummary();
+  const directByFold = new Map<string, string>();
+  for (const root of storyRoots) {
+    const rootSummary = createSummary();
+    // The root element is never a run or a styled block; its children carry the memo.
+    for (const child of root.children as readonly OoxmlNode[]) {
+      if (!isElement(child)) continue;
+      if (!projectedGlyphIds || projectedGlyphIds.size === 0) {
+        mergeSummary(rootSummary, summaryOf(child, themeFonts, 0));
+        continue;
+      }
+      const projectedSummary = createSummary();
+      const stack: OoxmlNode[] = [child];
+      while (stack.length > 0) {
+        const node = stack.pop()!;
+        if (!isElement(node)) continue;
+        const containsText = isStyledBlock(node) && subtreeHasGlyphRun(node, projectedGlyphIds);
+        applyNode(node, projectedSummary, themeFonts, containsText, projectedGlyphIds);
+        for (let index = node.children.length - 1; index >= 0; index -= 1) {
+          stack.push(node.children[index]!);
+        }
+      }
+      mergeSummary(rootSummary, projectedSummary);
+    }
+    mergeSummary(summary, rootSummary);
+    for (const family of rootSummary.families.values()) addFamily(directByFold, family);
+  }
+
+  const index = styleIndexOf(stylesRoot, themeFonts);
+  const inheritedByFold = new Map<string, string>();
+  for (const styleId of summary.styleIds) {
+    for (const family of index.chainFamilies(styleId)) addFamily(inheritedByFold, family);
+  }
+  if (summary.bareParagraph) {
+    for (const family of index.chainFamilies(index.defaultParagraph)) {
+      addFamily(inheritedByFold, family);
+    }
+  }
+  if (summary.bareRun) {
+    for (const family of index.chainFamilies(index.defaultCharacter)) {
+      addFamily(inheritedByFold, family);
+    }
+  }
+  if (summary.bareTable) {
+    for (const family of index.chainFamilies(index.defaultTable))
+      addFamily(inheritedByFold, family);
+  }
+  if (summary.anyText) {
+    for (const family of index.docDefaultFamilies) addFamily(inheritedByFold, family);
+  }
+
+  for (const fold of directByFold.keys()) inheritedByFold.delete(fold);
+  const inherited = [...inheritedByFold.values()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return Object.freeze({
+    direct: Object.freeze([...directByFold.values()]),
+    inherited: Object.freeze(inherited),
+  });
+}
+
 export function collectRenderedFontFamilies(
   storyRoots: readonly OoxmlElement[],
   stylesRoot: OoxmlElement | null,
   themeFonts: DocumentThemeFonts
 ): readonly string[] {
-  const summary = createSummary();
-  for (const root of storyRoots) {
-    // The root element is never a run or a styled block; its children carry the memo.
-    for (const child of root.children as readonly OoxmlNode[]) {
-      if (!isElement(child)) continue;
-      mergeSummary(summary, summaryOf(child, themeFonts, 0));
-    }
-  }
-
-  const index = styleIndexOf(stylesRoot, themeFonts);
-  const byFold = new Map<string, string>();
-  for (const family of summary.families.values()) addFamily(byFold, family);
-  for (const styleId of summary.styleIds) {
-    for (const family of index.chainFamilies(styleId)) addFamily(byFold, family);
-  }
-  if (summary.bareParagraph) {
-    for (const family of index.chainFamilies(index.defaultParagraph)) addFamily(byFold, family);
-  }
-  if (summary.bareRun) {
-    for (const family of index.chainFamilies(index.defaultCharacter)) addFamily(byFold, family);
-  }
-  if (summary.bareTable) {
-    for (const family of index.chainFamilies(index.defaultTable)) addFamily(byFold, family);
-  }
-  if (summary.anyText) addFamily(byFold, index.docDefaultFamily);
-
-  const families = [...byFold.values()];
+  const candidates = collectRenderedFontFamilyCandidates(storyRoots, stylesRoot, themeFonts);
+  const families = [...candidates.direct, ...candidates.inherited];
   families.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return families;
 }
