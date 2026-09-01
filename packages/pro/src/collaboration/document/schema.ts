@@ -482,10 +482,10 @@ export function nodeRecordSplitFrom(record: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-export function nodeRecordSplitBaseText(record: unknown): string | null {
+export function nodeRecordSplitBaseText(record: unknown, maxLength: number): string | null {
   if (!isNodeMap(record)) return null;
   const value = record.get(NODE_SPLIT_BASE_TEXT_FIELD);
-  return typeof value === 'string' ? value : null;
+  return typeof value === 'string' && value.length <= maxLength ? value : null;
 }
 
 export function nodeRecordSplitStart(record: unknown): number | null {

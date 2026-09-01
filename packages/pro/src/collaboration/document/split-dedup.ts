@@ -117,7 +117,8 @@ export class SplitDedupIndex {
     const rootRecord = this.nodes.get(root);
     const replacedRecord = this.nodes.get(replacedRunId);
     if (!isNodeMap(rootRecord) || !isNodeMap(replacedRecord)) return;
-    const baseline = nodeRecordSplitBaseText(rootRecord) ?? this.runText(root)?.value;
+    const baseline =
+      nodeRecordSplitBaseText(rootRecord, this.limits.maxTextLength) ?? this.runText(root)?.value;
     const start = nodeRecordSplitStart(replacedRecord) ?? 0;
     const products = runIds.map((id) => ({ id, text: this.runText(id) }));
     const canRepair =
@@ -169,7 +170,7 @@ export class SplitDedupIndex {
       const runs = this.runsBySplitOrigin.get(root);
       if (!runs) continue;
       if (this.isReSplit(root) || isPresent(root)) continue;
-      const base = nodeRecordSplitBaseText(this.nodes.get(root));
+      const base = nodeRecordSplitBaseText(this.nodes.get(root), this.limits.maxTextLength);
       const source = this.runText(root);
       if (base === null || !source || source.value === base) continue;
       const presentReplicas = new Set<string>();
@@ -290,7 +291,7 @@ export class SplitDedupIndex {
       this.index(root, runId);
       this.indexTextWitnesses(root, this.runText(root));
       this.indexTextWitnesses(root, this.runText(runId));
-      const base = nodeRecordSplitBaseText(this.nodes.get(root));
+      const base = nodeRecordSplitBaseText(this.nodes.get(root), this.limits.maxTextLength);
       const source = this.runText(root);
       if (base !== null && source && source.value !== base) {
         this.pendingTextRepairOrigins.add(root);

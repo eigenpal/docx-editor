@@ -19,6 +19,7 @@ import {
   seedPackage,
   MemoryBlobStore,
 } from '../document/index.ts';
+import { NODE_SPLIT_BASE_TEXT_FIELD, nodeRecordSplitBaseText } from '../document/schema.ts';
 import * as Y from 'yjs';
 
 describe('shared-state security and limits', () => {
@@ -189,6 +190,19 @@ describe('shared-state security and limits', () => {
       });
     } finally {
       destroyReplica(replica);
+    }
+  });
+
+  test('rejects an oversized split text baseline before projection', () => {
+    const doc = new Y.Doc();
+    try {
+      const record = new Y.Map<unknown>();
+      doc.getMap<Y.Map<unknown>>('nodes').set('run', record);
+      record.set(NODE_SPLIT_BASE_TEXT_FIELD, 'ABCDE');
+      expect(nodeRecordSplitBaseText(record, 4)).toBeNull();
+      expect(nodeRecordSplitBaseText(record, 5)).toBe('ABCDE');
+    } finally {
+      doc.destroy();
     }
   });
 });

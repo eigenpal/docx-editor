@@ -37,6 +37,13 @@ function doc(): Uint8Array {
   );
 }
 
+function mixedRunDoc(): Uint8Array {
+  return zipDocument(
+    '<w:p><w:r><w:t>HelloWorld</w:t></w:r></w:p>' +
+      `<w:p><w:r><w:t>${PARA1}</w:t></w:r></w:p><w:sectPr/>`
+  );
+}
+
 function bodyText(peer: Peer): string {
   const texts: string[] = [];
   walk(peer.store.bodyStore().part.root, (node: OoxmlNode) => {
@@ -265,5 +272,31 @@ describe('concurrent run-format convergence (#581)', () => {
     harness.expectConverged(alice, bob);
     expect(bodyText(alice)).toBe(PARA0 + PARA1);
     expect(markCount(alice, 'b')).toBeGreaterThan(0);
+  });
+
+  test('concurrent typing survives formatting a run that contains a tab', async () => {
+    const { alice, bob, pause, resume } = await harness.pair(mixedRunDoc());
+    harness.apply(alice, [
+      {
+        op: 'insertTab',
+        paragraphId: harness.paragraphIdAt(alice, 0),
+        offset: 5,
+      },
+    ]);
+    harness.expectConverged(alice, bob);
+    pause();
+    harness.apply(alice, [runProps(alice, 0, 0, 5, 'b')]);
+    harness.apply(bob, [
+      {
+        op: 'insertText',
+        paragraphId: harness.paragraphIdAt(bob, 0),
+        offset: 8,
+        text: 'X',
+      },
+    ]);
+    resume();
+    harness.expectConverged(alice, bob);
+    expect(bodyText(alice)).toBe('HelloWoXrld' + PARA1);
+    expect(markCount(alice, 'tab')).toBe(1);
   });
 });
