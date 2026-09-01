@@ -154,6 +154,31 @@ describe('atomic equation paragraph layout', () => {
     expect(equations[0]!.range.end - equations[0]!.range.start).toBe(1);
   });
 
+  test('auto line spacing scales the text band instead of the built-up fraction', () => {
+    const fraction =
+      '<m:oMath><m:f><m:fPr><m:type m:val="bar"/></m:fPr>' +
+      '<m:num><m:r><m:t>1</m:t></m:r></m:num>' +
+      '<m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:oMath>';
+    const single = linesOf(layout(`<w:p>${fraction}</w:p>`))[0]!;
+    const multiple = linesOf(
+      layout(
+        '<w:p><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr>' + `${fraction}</w:p>`
+      )
+    )[0]!;
+    const plainMultiple = linesOf(
+      layout(
+        '<w:p><w:pPr><w:spacing w:line="360" w:lineRule="auto"/></w:pPr>' +
+          '<w:r><w:t>x</w:t></w:r></w:p>'
+      )
+    )[0]!;
+
+    expect(multiple.box.height).toBeCloseTo(
+      Math.max(single.box.height, plainMultiple.box.height),
+      5
+    );
+    expect(multiple.box.height).toBeLessThan(single.box.height * 1.5);
+  });
+
   test('publishes bounded fallback text geometry for unsupported OMML', () => {
     const span = equationSpan(
       '<w:p><m:oMath><m:bar><m:e><m:r><m:t>safe fallback</m:t></m:r>' +
