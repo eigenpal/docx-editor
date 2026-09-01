@@ -1,5 +1,14 @@
 # @docx-editor.dev/example-collaboration
 
+## 0.0.5
+
+### Patch Changes
+
+- @docx-editor.dev/core@2.14.1
+  - @docx-editor.dev/editor-api@2.14.1
+  - @docx-editor.dev/i18n@2.14.1
+  - @docx-editor.dev/pro@2.14.1
+
 ## 0.0.4
 
 ### Patch Changes
