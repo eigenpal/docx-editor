@@ -272,7 +272,8 @@ bun scripts/bench/pipeline-bench.ts --json     # machine-readable
 bun --cpu-prof scripts/bench/pipeline-bench.ts # writes CPU.*.cpuprofile
 
 # Review-path benchmark: the same document carrying ~1,080 comments and ~800
-# tracked-change sites (gitignored fixture)
+# tracked-change sites (gitignored fixture). It also measures cold/cached
+# tracked-change predicate projection and filtered cold/warm layout.
 node scripts/create-review-20x-fixture.mjs
 bun scripts/bench/review-bench.ts
 ```
