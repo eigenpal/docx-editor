@@ -531,6 +531,7 @@ export {
   revisionsVisible,
   type RevisionAttribution,
   type RevisionAuthorFilter,
+  type RevisionFilter,
   type RevisionDisplayMode,
   type RevisionKind,
 } from './revision-projection.ts';

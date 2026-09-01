@@ -70,6 +70,8 @@ export function useToolbarOverflow(
   // observer) whenever a parent re-renders with a fresh array literal.
   const inputs = useRef({ groups, order });
   inputs.current = { groups, order };
+  const groupsKey = groups.join('\u0000');
+  const orderKey = order.join('\u0000');
 
   const measure = useCallback(() => {
     const bar = barRef.current;
@@ -146,7 +148,7 @@ export function useToolbarOverflow(
       return;
     }
     measure();
-  }, [enabled, measure]);
+  }, [enabled, groupsKey, measure, orderKey]);
 
   // Width changes come from two directions and both are observed: the bar's own box (window
   // resize, a navigation pane opening) and each group's content (a longer font name, a
@@ -177,7 +179,7 @@ export function useToolbarOverflow(
     // Re-observes when the composition changes: a group that just came back into the bar is
     // a new element, and an unobserved one stops reporting the growth that would push it out
     // again. `overflow` in the deps is what makes that re-attachment happen.
-  }, [enabled, measure, overflow]);
+  }, [enabled, groupsKey, measure, orderKey, overflow]);
 
   return { attach, overflow };
 }

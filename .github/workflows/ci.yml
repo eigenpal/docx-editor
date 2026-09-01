@@ -257,6 +257,11 @@ jobs:
         # it on the PR, not in `docx-editor-page`'s build.
         run: bun run check:docs-mdx
 
+      - name: Docs chrome slot coverage
+        # Keep the authored slot reference aligned with the public core union and
+        # both adapter toolbar namespaces as those APIs grow.
+        run: bun run check:docs-chrome-slots
+
       - name: Docs Vue ref check
         # A Vue template unwraps a ref only when the ref is a top-level binding.
         # Most composables return a plain object of refs, so a sample that drops

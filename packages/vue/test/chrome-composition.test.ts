@@ -21,9 +21,38 @@ import {
   navigationShift,
 } from '../src/editor/navigation/navigation-geometry';
 import { flush, mountEditorTree } from './helpers/mount';
+import { docx } from './helpers/fixtures';
+
+class MockResizeObserver {
+  static readonly instances: MockResizeObserver[] = [];
+  private readonly callback: ResizeObserverCallback;
+  readonly observed: Element[] = [];
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback;
+    MockResizeObserver.instances.push(this);
+  }
+
+  observe(element: Element): void {
+    this.observed.push(element);
+  }
+
+  disconnect(): void {
+    const index = MockResizeObserver.instances.indexOf(this);
+    if (index >= 0) MockResizeObserver.instances.splice(index, 1);
+  }
+
+  flush(): void {
+    this.callback([], this as unknown as ResizeObserver);
+  }
+}
+
+const RealResizeObserver = globalThis.ResizeObserver;
 
 afterEach(() => {
   document.body.innerHTML = '';
+  globalThis.ResizeObserver = RealResizeObserver;
+  MockResizeObserver.instances.length = 0;
 });
 
 const label = createT(en);
@@ -35,10 +64,19 @@ const EXPECTED_TOOLBAR: readonly string[] = defaultChromeGroups().flatMap((group
     : group.controls.map((control) => chromeSlotId(group, control) as string)),
 ]);
 
+const SOURCE_WITH_TABLE = docx(
+  '<w:p><w:r><w:t>outside table</w:t></w:r></w:p>' +
+    '<w:tbl><w:tblGrid><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>inside table</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
 function toolbarArrangement(toolbar: Element): string[] {
   return [...toolbar.children].flatMap((child) => {
     if (child.getAttribute('role') === 'separator') return 'separator';
-    if (child.classList.contains('docx-toolbar__group')) {
+    if (
+      child.classList.contains('docx-toolbar__group') ||
+      child.classList.contains('docx-toolbar__contextual')
+    ) {
       return [...child.children].map(
         (entry) =>
           entry.getAttribute('data-slot') ?? entry.getAttribute('aria-label') ?? entry.className
@@ -72,6 +110,80 @@ function openContextMenu(container: HTMLElement): MouseEvent {
 }
 
 describe('DocxEditorToolbar composition', () => {
+  test('collapses contextual table chrome before ordinary formatting groups', async () => {
+    globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+    const view = mountEditorTree(() => h(DocxEditorToolbar), SOURCE_WITH_TABLE);
+    await flush();
+    const toolbar = view.container.querySelector<HTMLElement>('[data-testid="docx-toolbar"]')!;
+    const contextual = view.container.querySelector<HTMLElement>('.docx-toolbar__contextual');
+    expect(contextual).not.toBeNull();
+    expect(contextual!.getAttribute('data-toolbar-group')).toBe('contextual-table');
+    expect(contextual!.hasAttribute('data-toolbar-fixed')).toBe(false);
+    expect(contextual!.children.length).toBe(0);
+    expect(
+      MockResizeObserver.instances.some((observer) => observer.observed.includes(contextual!))
+    ).toBe(true);
+
+    Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 600 });
+    for (const group of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+      Object.defineProperty(group, 'offsetWidth', {
+        configurable: true,
+        get: () => (group === contextual && group.children.length > 0 ? 220 : 40),
+      });
+    }
+    for (const fixed of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-fixed]')) {
+      Object.defineProperty(fixed, 'offsetWidth', { configurable: true, get: () => 40 });
+    }
+    const separator = toolbar.querySelector<HTMLElement>('.docx-toolbar__separator');
+    if (separator) {
+      Object.defineProperty(separator, 'offsetWidth', { configurable: true, get: () => 1 });
+    }
+    for (const observer of [...MockResizeObserver.instances]) observer.flush();
+    await flush();
+    expect(toolbar.querySelector('[data-slot="toolbar.more"]')).toBeNull();
+
+    const tableParagraphId = view.editor().surface!.session.paragraphIds()[1]!;
+    view.editor().surface!.setSelection({
+      anchor: { paragraphId: tableParagraphId, offset: 1 },
+      head: { paragraphId: tableParagraphId, offset: 1 },
+    });
+    await flush();
+    expect(contextual!.querySelector('[data-slot="table.borderTarget"]')).not.toBeNull();
+    Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 320 });
+    for (const observer of [...MockResizeObserver.instances]) observer.flush();
+    await flush();
+
+    const trigger = toolbar.querySelector<HTMLButtonElement>('[data-slot="toolbar.more"]');
+    expect(trigger).not.toBeNull();
+    expect(toolbar.querySelector('[data-slot="text.color"]')).not.toBeNull();
+    expect(toolbar.querySelector('.docx-toolbar__contextual')).toBeNull();
+    trigger!.click();
+    await flush();
+    const panel = view.container.querySelector('[data-testid="toolbar-overflow-panel"]')!;
+    const overflowSections = panel.querySelectorAll<HTMLElement>('.docx-toolbar__more-section');
+    expect(overflowSections.length).toBeGreaterThan(1);
+    expect(overflowSections[0]!.getAttribute('aria-label')).toBe(
+      label('formattingBar.groups.table')
+    );
+    expect(panel.querySelector('[data-slot="table.borderTarget"]')).not.toBeNull();
+    expect(panel.querySelector('[data-slot="text.color"]')).toBeNull();
+    panel.querySelector<HTMLButtonElement>('[data-slot="table.borderTarget"] button')!.click();
+    await flush();
+    expect(panel.querySelector('.docx-table-chrome__panel')).not.toBeNull();
+    expect(view.container.querySelector('[data-testid="toolbar-overflow-panel"]')).toBe(panel);
+
+    const outsideParagraphId = view.editor().surface!.session.paragraphIds()[0]!;
+    Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 600 });
+    view.editor().surface!.setSelection({
+      anchor: { paragraphId: outsideParagraphId, offset: 1 },
+      head: { paragraphId: outsideParagraphId, offset: 1 },
+    });
+    await flush();
+    expect(toolbar.querySelector('[data-slot="toolbar.more"]')).toBeNull();
+    expect(toolbar.querySelector('.docx-toolbar__contextual')?.children.length).toBe(0);
+    view.unmount();
+  });
+
   test('hidden removes a slot from the default bar', async () => {
     const view = mountEditorTree(() =>
       h(DocxEditorToolbar, null, { default: () => h(DocxEditorToolbar.Strike, { hidden: true }) })

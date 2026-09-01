@@ -116,7 +116,10 @@ function entryIdentity(entry: Element): string {
 function toolbarArrangement(toolbar: HTMLElement): string[] {
   return [...toolbar.children].flatMap((child) => {
     if (child.getAttribute('role') === 'separator') return 'separator';
-    if (child.classList.contains('docx-toolbar__group')) {
+    if (
+      child.classList.contains('docx-toolbar__group') ||
+      child.classList.contains('docx-toolbar__contextual')
+    ) {
       return [...child.children].map(entryIdentity);
     }
     return entryIdentity(child);
@@ -131,7 +134,10 @@ function entryRootAtFlatIndex(toolbar: HTMLElement, index: number): Element | nu
       flat += 1;
       continue;
     }
-    if (child.classList.contains('docx-toolbar__group')) {
+    if (
+      child.classList.contains('docx-toolbar__group') ||
+      child.classList.contains('docx-toolbar__contextual')
+    ) {
       for (const entry of child.children) {
         if (flat === index) return entry;
         flat += 1;

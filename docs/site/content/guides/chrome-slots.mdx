@@ -1,0 +1,165 @@
+---
+title: 'Chrome slot reference'
+description: 'Reference every editor chrome slot and its React and Vue toolbar part across default, contextual, menu, dialog, and header or footer surfaces.'
+category: 'Guides'
+---
+
+Chrome slots are stable control identifiers. Use fixed-command slots with
+`useEditorCommand()`, `ContextMenu.Slot`, or the generic toolbar button. Use
+named parts for controls that collect a value or open host UI.
+
+## Read the tables
+
+The **Toolbar part** column gives the shared suffix. For example, `Bold` means
+`DocxEditor.Toolbar.Bold` in React and `DocxEditorToolbar.Bold` in Vue. An em
+dash means that neither adapter provides a named part.
+
+The **Packaged surface** column shows where the standard editor places the
+control. **Explicit composition** means that you must add its named part to a
+custom toolbar.
+
+Use the named part for controls that collect a value or open UI, such as
+`FontColor`, `TableBorderWidth`, or `ImageProperties`. Use `Toolbar.Button` in
+React or `DocxEditorToolbar.Button` in Vue for a fixed-command slot without a
+named part:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+<DocxEditor.Toolbar.Button slot="format.painter" />
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<DocxEditorToolbar.Button slot="format.painter" />
+```
+
+</Framework>
+</FrameworkTabs>
+
+Use `Action` for a host-owned action without a registry slot. Use `Separator`
+only for layout. The `Button`, `Action`, and `Separator` helpers don't add slot
+IDs.
+
+## History, zoom, styles, and font
+
+| Slot           | Packaged surface | Toolbar part  | Purpose                       |
+| -------------- | ---------------- | ------------- | ----------------------------- |
+| `history.undo` | Default toolbar  | `Undo`        | Undo the last document change |
+| `history.redo` | Default toolbar  | `Redo`        | Redo the last undone change   |
+| `zoom.level`   | Default toolbar  | `Zoom`        | Change the viewport zoom      |
+| `styles.style` | Default toolbar  | `StylePicker` | Apply a paragraph style       |
+| `font.family`  | Default toolbar  | `FontFamily`  | Choose a font family          |
+| `font.size`    | Default toolbar  | `FontSize`    | Choose a font size            |
+
+## Text and script
+
+| Slot             | Packaged surface | Toolbar part  | Purpose                     |
+| ---------------- | ---------------- | ------------- | --------------------------- |
+| `text.bold`      | Default toolbar  | `Bold`        | Toggle bold                 |
+| `text.italic`    | Default toolbar  | `Italic`      | Toggle italic               |
+| `text.underline` | Default toolbar  | `Underline`   | Toggle underline            |
+| `text.strike`    | Default toolbar  | `Strike`      | Toggle strikethrough        |
+| `text.color`     | Default toolbar  | `FontColor`   | Choose and apply text color |
+| `text.highlight` | Default toolbar  | `Highlight`   | Choose and apply highlight  |
+| `text.link`      | Default toolbar  | `Link`        | Open the link editor        |
+| `script.super`   | Default toolbar  | `Superscript` | Toggle superscript          |
+| `script.sub`     | Default toolbar  | `Subscript`   | Toggle subscript            |
+
+## Alignment, lists, and formatting
+
+The default toolbar combines the four alignment slots into `Alignment`. Use
+the four `Align*` parts when you want separate controls.
+
+| Slot                | Packaged surface | Toolbar part             | Purpose                   |
+| ------------------- | ---------------- | ------------------------ | ------------------------- |
+| `alignment.left`    | Default toolbar  | `Alignment`, `AlignLeft` | Align left                |
+| `alignment.center`  | Default toolbar  | `AlignCenter`            | Align center              |
+| `alignment.right`   | Default toolbar  | `AlignRight`             | Align right               |
+| `alignment.justify` | Default toolbar  | `AlignJustify`           | Justify                   |
+| `list.bullet`       | Default toolbar  | `BulletList`             | Toggle a bulleted list    |
+| `list.numbered`     | Default toolbar  | `NumberedList`           | Toggle a numbered list    |
+| `list.outdent`      | Default toolbar  | `Outdent`                | Decrease list indent      |
+| `list.indent`       | Default toolbar  | `Indent`                 | Increase list indent      |
+| `list.lineSpacing`  | Default toolbar  | `LineSpacing`            | Set line spacing          |
+| `format.painter`    | Default toolbar  | —                        | Copy and apply formatting |
+| `format.clear`      | Default toolbar  | `ClearFormatting`        | Clear direct formatting   |
+| `paragraph.dialog`  | Format menu      | —                        | Open paragraph settings   |
+
+## Review and content controls
+
+Comments and reviewer filtering require the Pro review module. Content-control
+slots require the typed content-control capability. The two surface toggles can
+be composed anywhere; inspector and remove become enabled when the selection
+supports them.
+
+| Slot                       | Packaged surface     | Toolbar part              | Purpose                         |
+| -------------------------- | -------------------- | ------------------------- | ------------------------------- |
+| `review.comments`          | Default toolbar      | `Comments`                | Open comments and changes       |
+| `review.authors`           | Review menu          | `Reviewers`               | Filter markup by reviewer       |
+| `review.editingMode`       | Default toolbar      | `EditingMode`             | Select editing or review mode   |
+| `contentControl.showAll`   | Explicit composition | `ContentControlShowAll`   | Show content-control boundaries |
+| `contentControl.formFill`  | Explicit composition | `ContentControlFormFill`  | Toggle form-fill mode           |
+| `contentControl.inspector` | Explicit composition | `ContentControlInspector` | Open content-control properties |
+| `contentControl.remove`    | Explicit composition | `ContentControlRemove`    | Remove the selected control     |
+
+## Images and tables
+
+The toolbar shows image controls when you select an image. It shows table border
+and fill controls when you place the caret or a cell selection in a table. The
+Insert menu also provides image and table insertion.
+
+| Slot                 | Packaged surface           | Toolbar part        | Purpose                        |
+| -------------------- | -------------------------- | ------------------- | ------------------------------ |
+| `image.insert`       | Insert menu, image context | `ImageInsert`       | Insert an image                |
+| `image.properties`   | Image context              | `ImageProperties`   | Open image properties          |
+| `image.wrap`         | Image context              | `ImageWrap`         | Choose text wrapping           |
+| `image.altText`      | Image context              | `ImageAltText`      | Edit alternative text          |
+| `table.insert`       | Insert menu                | `TableInsert`       | Insert a table                 |
+| `table.borderTarget` | Table context              | `TableBorderTarget` | Choose which borders to affect |
+| `table.borderColor`  | Table context              | `TableBorderColor`  | Choose and apply border color  |
+| `table.borderStyle`  | Table context              | `TableBorderStyle`  | Choose border style            |
+| `table.borderWidth`  | Table context              | `TableBorderWidth`  | Choose border width            |
+| `table.cellFill`     | Table context              | `TableCellFill`     | Choose and apply cell fill     |
+
+## File and insert
+
+The packaged menus provide file, break, note, and table-of-contents slots.
+Header/footer options provide page-field slots.
+
+| Slot                            | Packaged surface      | Toolbar part | Purpose                               |
+| ------------------------------- | --------------------- | ------------ | ------------------------------------- |
+| `file.open`                     | File menu             | —            | Load a document                       |
+| `file.save`                     | File menu             | `Save`       | Save a document                       |
+| `file.pageSetup`                | File menu             | —            | Open page setup                       |
+| `insert.footnote`               | Insert menu           | —            | Insert a footnote                     |
+| `insert.endnote`                | Insert menu           | —            | Insert an endnote                     |
+| `insert.pageNumber`             | Header/footer options | —            | Insert the current page number        |
+| `insert.totalPages`             | Header/footer options | —            | Insert the document page count        |
+| `insert.sectionPages`           | Header/footer options | —            | Insert the current section page count |
+| `insert.pageXofY`               | Header/footer options | —            | Insert a Page X of Y field pair       |
+| `insert.pageBreak`              | Insert menu           | —            | Insert a page break                   |
+| `insert.sectionBreakNextPage`   | Insert menu           | —            | Start a section on the next page      |
+| `insert.sectionBreakContinuous` | Insert menu           | —            | Start a section on the current page   |
+| `insert.toc`                    | Insert menu           | —            | Insert a table of contents            |
+
+## Use a slot directly
+
+For a fixed-command slot, `useEditorCommand(slot)` supplies enabled state,
+active state, the engine's disabled reason, and `execute()`. Value and dialog
+controls also need input from your UI. Pass their complete `EditorCommand` to
+`useEditorCommand()`, or use the packaged part or menu. Handle `file.open` and
+`file.save` with the document loading and saving APIs.
+
+For complete signatures, see the [core API reference](/docs/2.x/api/core),
+[React API reference](/docs/2.x/api/react), or
+[Vue API reference](/docs/2.x/api/vue).
+
+## Next steps
+
+- [Customize the toolbar](/docs/2.x/guides/toolbar)
+- [Compose a React editor](/docs/2.x/react/composition)
+- [Compose a Vue editor](/docs/2.x/vue/composition)

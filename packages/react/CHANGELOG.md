@@ -1,5 +1,18 @@
 # @eigenpal/docx-js-editor
 
+## 2.14.0
+
+### Patch Changes
+
+- 1afc5f2: Treat contextual table controls as the first collapsible preset-toolbar group, so entering a table moves those controls into More before ordinary formatting controls instead of overlapping them. Keep table color pickers contained within the More panel so later controls remain clipped and scrollable while a picker is open. Fixes #669.
+- Updated dependencies [7633b2c]
+- Updated dependencies [1afc5f2]
+- Updated dependencies [01022a4]
+- Updated dependencies [6b5bb8d]
+- Updated dependencies [f731c52]
+  - @docx-editor.dev/core@2.14.0
+  - @docx-editor.dev/i18n@2.14.0
+
 ## 2.13.0
 
 ### Patch Changes

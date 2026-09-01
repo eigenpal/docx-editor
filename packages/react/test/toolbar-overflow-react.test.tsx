@@ -54,6 +54,12 @@ function docx(body: string): Uint8Array {
 
 const SOURCE = docx('<w:p><w:r><w:t>hello world</w:t></w:r></w:p>');
 
+const SOURCE_WITH_TABLE = docx(
+  '<w:p><w:r><w:t>outside table</w:t></w:r></w:p>' +
+    '<w:tbl><w:tblGrid><w:gridCol w:w="3600"/></w:tblGrid>' +
+    '<w:tr><w:tc><w:p><w:r><w:t>inside table</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+);
+
 /** Shared ResizeObserver harness for overflow measurement tests in this file only. */
 class MockResizeObserver {
   static readonly instances: MockResizeObserver[] = [];
@@ -224,6 +230,108 @@ describe('toolbar overflow integration', () => {
     ).not.toBeNull();
     expect(panel.querySelector('[role="menuitem"]')).toBeNull();
     expect(panel.querySelector('.docx-toolbar__more-command')).not.toBeNull();
+  });
+
+  test('collapses contextual table chrome before ordinary formatting groups', async () => {
+    installResizeObserverMock();
+    const { view, editor } = mountToolbar(
+      <DocxEditorToolbar t={(key) => (key === 'formattingBar.more' ? 'More' : key)}>
+        <>
+          <DocxEditorToolbar.TableBorderStyle hidden />
+        </>
+      </DocxEditorToolbar>,
+      SOURCE_WITH_TABLE
+    );
+    await waitFor(() => {
+      expect(editor().surface).not.toBeNull();
+    });
+
+    const toolbar = view.getByTestId('docx-toolbar');
+    const contextual = toolbar.querySelector<HTMLElement>('.docx-toolbar__contextual');
+    expect(contextual).not.toBeNull();
+    expect(contextual!.getAttribute('data-toolbar-group')).toBe('contextual-table');
+    expect(contextual!.hasAttribute('data-toolbar-fixed')).toBe(false);
+    expect(contextual!.children.length).toBe(0);
+    expect(
+      MockResizeObserver.instances.some((observer) => observer.observed.includes(contextual!))
+    ).toBe(true);
+
+    toolbar.style.width = '600px';
+    toolbar.style.boxSizing = 'border-box';
+    Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 600 });
+    for (const group of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-group]')) {
+      Object.defineProperty(group, 'offsetWidth', {
+        configurable: true,
+        get: () => (group === contextual && group.children.length > 0 ? 220 : 40),
+      });
+    }
+    for (const fixed of toolbar.querySelectorAll<HTMLElement>('[data-toolbar-fixed]')) {
+      Object.defineProperty(fixed, 'offsetWidth', { configurable: true, get: () => 40 });
+    }
+    const separator = toolbar.querySelector<HTMLElement>('.docx-toolbar__separator');
+    if (separator) {
+      Object.defineProperty(separator, 'offsetWidth', { configurable: true, get: () => 1 });
+    }
+
+    await act(async () => {
+      for (const observer of MockResizeObserver.instances) observer.flush();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(view.queryByLabelText('More')).toBeNull();
+
+    const tableParagraphId = editor().surface!.session.paragraphIds()[1]!;
+    await act(async () => {
+      editor().surface!.setSelection({
+        anchor: { paragraphId: tableParagraphId, offset: 1 },
+        head: { paragraphId: tableParagraphId, offset: 1 },
+      });
+    });
+    expect(contextual!.querySelector('[data-slot="table.borderTarget"]')).not.toBeNull();
+
+    await act(async () => {
+      // Force ordinary groups into More as well. Table must still be the first section so
+      // opening its nested picker cannot strand it below a reset scroll position.
+      Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 320 });
+      for (const observer of MockResizeObserver.instances) observer.flush();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    const trigger = view.getByLabelText('More');
+    expect(toolbar.querySelector('[data-slot="text.color"]')).not.toBeNull();
+    expect(toolbar.querySelector('.docx-toolbar__contextual')).toBeNull();
+
+    await act(async () => {
+      trigger.click();
+    });
+    const panel = view.getByTestId('toolbar-overflow-panel');
+    const overflowSections = panel.querySelectorAll<HTMLElement>('.docx-toolbar__more-section');
+    expect(overflowSections.length).toBeGreaterThan(1);
+    expect(overflowSections[0]!.getAttribute('aria-label')).toBe('formattingBar.groups.table');
+    const tableSection = overflowSections[0]!;
+    expect(panel.querySelector('[data-slot="table.borderTarget"]')).not.toBeNull();
+    expect(panel.querySelector('[data-slot="table.borderStyle"]')).toBeNull();
+    expect(tableSection.querySelectorAll('.docx-toolbar__more-control').length).toBe(4);
+    expect(panel.querySelector('[data-slot="text.color"]')).toBeNull();
+
+    await act(async () => {
+      panel.querySelector<HTMLButtonElement>('[data-slot="table.borderTarget"] button')!.click();
+    });
+    expect(panel.querySelector('.docx-table-chrome__panel')).not.toBeNull();
+    expect(view.getByTestId('toolbar-overflow-panel')).toBe(panel);
+
+    const outsideParagraphId = editor().surface!.session.paragraphIds()[0]!;
+    await act(async () => {
+      Object.defineProperty(toolbar, 'clientWidth', { configurable: true, get: () => 600 });
+      editor().surface!.setSelection({
+        anchor: { paragraphId: outsideParagraphId, offset: 1 },
+        head: { paragraphId: outsideParagraphId, offset: 1 },
+      });
+    });
+    await waitFor(() => {
+      expect(view.queryByLabelText('More')).toBeNull();
+    });
+    const restored = toolbar.querySelector<HTMLElement>('.docx-toolbar__contextual');
+    expect(restored).not.toBeNull();
+    expect(restored!.children.length).toBe(0);
   });
 
   test('value rows in the panel label from the catalogue, and a provider localizes them', async () => {
@@ -441,6 +549,13 @@ describe('toolbar overflow integration', () => {
       )?.[0] ?? '';
     expect(pickerHatch).toContain('overflow-y: visible');
 
+    const tablePickerContainment =
+      coreCss.match(
+        /\.docx-toolbar__more-panel:has\(\.docx-table-chrome__panel\)\s*\{[^}]+\}/
+      )?.[0] ?? '';
+    expect(tablePickerContainment).toContain('overflow-y: auto');
+    expect(tablePickerContainment).not.toContain('overflow-y: visible');
+
     const fontSizeRule =
       coreCss.match(/\.docx-toolbar__more-panel \.docx-toolbar__font-size-menu\s*\{[^}]+\}/)?.[0] ??
       '';
@@ -462,6 +577,13 @@ describe('toolbar overflow integration', () => {
     expect(lowerMenuRule).toContain('right: 0');
     expect(lowerMenuRule).toContain('bottom: 100%');
     expect(lowerMenuRule).toContain('left: auto');
+
+    const tableMenuRule =
+      coreCss.match(/\.docx-toolbar__more-panel \.docx-table-chrome__panel\s*\{[^}]+\}/)?.[0] ?? '';
+    expect(tableMenuRule).toContain('right: 0');
+    expect(tableMenuRule).toContain('left: auto');
+    expect(tableMenuRule).not.toContain('top: auto');
+    expect(tableMenuRule).not.toContain('bottom: 100%');
 
     const demoCss = readFileSync(
       new URL('../../../examples/vite/src/styles.css', import.meta.url),

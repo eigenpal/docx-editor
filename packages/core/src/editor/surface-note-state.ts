@@ -34,7 +34,6 @@ import { paragraphTextOf } from '@docx-editor.dev/core/store';
 import type { OoxmlElement, OoxmlNode } from '../store/package/ooxml-tree.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from '../layout/revision-projection.ts';
-import { revisionAuthorFilter } from '../layout/revision-projection.ts';
 
 export type NotePropertiesSlice = {
   readonly resolved: ResolvedFootnoteProperties | ResolvedEndnoteProperties;
@@ -75,13 +74,12 @@ function sectionSectPrNodes(
 }
 
 export function notePropertiesStateOf(
-  surface: PaginatedSurface | null
+  surface: PaginatedSurface | null,
+  authorFilter?: RevisionAuthorFilter
 ): NotePropertiesStateSnapshot | null {
   if (!surface) return null;
   const session = surface.session;
   const displayMode = surface.revisionDisplayMode();
-  const hiddenAuthors = surface.hiddenRevisionAuthors();
-  const authorFilter: RevisionAuthorFilter | undefined = revisionAuthorFilter(hiddenAuthors);
   const paragraphId = surface.state().selection.head.paragraphId;
   const sectionIndex = sectionIndexForCaret(
     session,

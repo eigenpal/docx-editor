@@ -551,6 +551,21 @@ export interface Editor {
   getReviewItems(query?: ReviewItemQuery): readonly ReviewItemPlacement[];
 
   /**
+   * Set the view-time tracked-change filter, or clear it with `null`.
+   *
+   * The predicate receives each full revision item. A false result renders that revision as
+   * accepted by default. With `reject`, excluded content, moves, paragraph marks, and table-row
+   * insertions/deletions use their rejected projection; formatting and other property-change
+   * records keep their current values with revision markup hidden. Both modes are view-only: they
+   * change no OOXML and do not change saved bytes. Calling this method again re-evaluates every
+   * revision, even when the function reference is unchanged.
+   */
+  setTrackedChangesFilter(
+    predicate: TrackedChangePredicate | null,
+    mode?: TrackedChangeFilterMode
+  ): void;
+
+  /**
    * Custom-node definitions registered through `createDocxEditor({ modules })`, in
    * registration order.
    *
@@ -813,6 +828,19 @@ export type EditorCommandShape<T> = {
  * written twice, once per framework. {@link item} stays for a host that wants more.
  */
 export type { ReviewItem, ReviewRevisionKind };
+
+/**
+ * Decides whether one tracked change renders as markup.
+ *
+ * Return `true` to keep the revision visible as tracked markup. Return `false` to render it with
+ * the selected {@link TrackedChangeFilterMode} without changing the document. The callback
+ * receives the complete revision item, including its author, date, kind, text, ranges, nesting,
+ * and resolution metadata.
+ */
+export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
+
+/** How revisions excluded by a tracked-changes predicate project into the view. */
+export type TrackedChangeFilterMode = 'accept' | 'reject';
 
 /**
  * Narrows what `getReviewItems` returns.

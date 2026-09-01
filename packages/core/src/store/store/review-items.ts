@@ -219,6 +219,22 @@ export interface ReviewCustomItem {
  */
 export type ReviewItem = ReviewRevisionItem | ReviewCommentItem | ReviewCustomItem;
 
+const revisionSiteNodeIds = new WeakMap<object, readonly string[]>();
+
+/** Attach engine-only canonical site identities to one immutable review item. */
+export function registerRevisionSiteNodeIds<T extends object>(
+  item: T,
+  nodeIds: readonly string[]
+): T {
+  revisionSiteNodeIds.set(item, nodeIds);
+  return item;
+}
+
+/** Exact canonical sites that contribute to one revision decision. */
+export function revisionSiteNodeIdsOf(item: object): readonly string[] {
+  return revisionSiteNodeIds.get(item) ?? [];
+}
+
 /** What the review queue derivation reads: one story part plus its comment parts. */
 export interface ReviewModelInput {
   /** The story the ranges live in — the main document, a header, a note. */

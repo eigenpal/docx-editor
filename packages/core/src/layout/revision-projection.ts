@@ -67,15 +67,19 @@ export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
 export const DEFAULT_REVISION_DISPLAY_MODE: RevisionDisplayMode = 'all-markup';
 
 /**
- * A view-time reviewer filter. Authors in `hiddenAuthors` render as if their revisions were
- * accepted, while every other author keeps the display mode's normal projection.
+ * A view-time tracked-change filter. Revisions rejected by `includes` use the filter's accepted
+ * or rejected projection, while included revisions keep the display mode's normal projection.
  *
  * `cacheKey` is a canonical, content-based identity for layout caches. The set itself is kept
  * because author names are attacker-controlled strings and must never be parsed back from a
  * delimiter-based key.
  */
-export interface RevisionAuthorFilter {
+export interface RevisionFilter {
   readonly hiddenAuthors: ReadonlySet<string>;
+  readonly includes?: (revision: RevisionAttribution) => boolean;
+  readonly includesNode?: (nodeId: string, author: string) => boolean;
+  /** Accepted/original projection for a revision excluded by `includesNode`. */
+  readonly excludedNodeMode?: (nodeId: string, author: string) => 'proposed' | 'original';
   readonly cacheKey: string;
 }
 
@@ -213,6 +217,9 @@ class ImmutableStringSet implements ReadonlySet<string> {
 /** Shared immutable empty author set for editor-facing visibility snapshots. @internal */
 export const EMPTY_REVISION_AUTHOR_SET: ReadonlySet<string> = new ImmutableStringSet([]);
 
+/** @deprecated Use {@link RevisionFilter}. */
+export interface RevisionAuthorFilter extends RevisionFilter {}
+
 /** Build a canonical reviewer filter. An empty input returns `undefined` for the fast path. */
 export function revisionAuthorFilter(
   hiddenAuthors: Iterable<string>
@@ -221,10 +228,49 @@ export function revisionAuthorFilter(
   for (const author of hiddenAuthors) hidden.add(author);
   if (hidden.size === 0) return undefined;
   const ordered = [...hidden].sort();
+  const hiddenSnapshot = new ImmutableStringSet(ordered);
   return Object.freeze({
-    hiddenAuthors: new ImmutableStringSet(ordered),
+    hiddenAuthors: hiddenSnapshot,
+    includes: (revision: RevisionAttribution) => !hiddenSnapshot.has(revision.author),
+    includesNode: (_nodeId: string, author: string) => !hiddenSnapshot.has(author),
     cacheKey: JSON.stringify(ordered),
   });
+}
+
+function revisionIncluded(filter: RevisionFilter, revision: RevisionAttribution): boolean {
+  return (
+    filter.includes?.(revision) ?? revisionNodeIncluded(filter, revision.nodeId, revision.author)
+  );
+}
+
+/** Whether one revision site remains tracked in the filtered view. */
+export function revisionNodeIncluded(
+  filter: RevisionFilter,
+  nodeId: string,
+  author: string
+): boolean {
+  return filter.includesNode?.(nodeId, author) ?? !filter.hiddenAuthors.has(author);
+}
+
+/** The display mode one attributed revision uses after applying a view-time filter. */
+export function revisionProjectionMode(
+  filter: RevisionFilter,
+  revision: RevisionAttribution,
+  includedMode: RevisionDisplayMode
+): RevisionDisplayMode {
+  if (revisionIncluded(filter, revision)) return includedMode;
+  return filter.excludedNodeMode?.(revision.nodeId, revision.author) ?? 'proposed';
+}
+
+/** Node-addressed form of {@link revisionProjectionMode} for structural revision sites. */
+export function revisionNodeProjectionMode(
+  filter: RevisionFilter,
+  nodeId: string,
+  author: string,
+  includedMode: RevisionDisplayMode
+): RevisionDisplayMode {
+  if (revisionNodeIncluded(filter, nodeId, author)) return includedMode;
+  return filter.excludedNodeMode?.(nodeId, author) ?? 'proposed';
 }
 
 /** No enclosing revision. Shared so the common untracked case allocates nothing. */
@@ -308,7 +354,7 @@ export function revisionsVisible(
 ): boolean {
   if (revisions.length === 0 || (mode === 'all-markup' && !authorFilter)) return true;
   for (const revision of revisions) {
-    const revisionMode = authorFilter?.hiddenAuthors.has(revision.author) ? 'proposed' : mode;
+    const revisionMode = authorFilter ? revisionProjectionMode(authorFilter, revision, mode) : mode;
     if (revisionMode === 'all-markup') continue;
     const removed =
       revisionMode === 'proposed'
@@ -333,7 +379,7 @@ export function projectedRevisions(
   if (!authorFilter && mode === 'all-markup') return revisions;
   if (!revisionsVisible(revisions, mode, authorFilter)) return null;
   if (!authorFilter) return revisions;
-  const visible = revisions.filter((revision) => !authorFilter.hiddenAuthors.has(revision.author));
+  const visible = revisions.filter((revision) => revisionIncluded(authorFilter, revision));
   return visible.length === 0 ? NO_REVISIONS : visible;
 }
 
@@ -343,7 +389,7 @@ export function revisionMarkupVisible(
   mode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
 ): boolean {
-  return mode === 'all-markup' && !authorFilter?.hiddenAuthors.has(revision.author);
+  return mode === 'all-markup' && (!authorFilter || revisionIncluded(authorFilter, revision));
 }
 
 /** Remove hidden revision provenance while preserving the accepted formatting itself. */
@@ -352,11 +398,20 @@ export function projectedRevisionProperties(
   authorFilter?: RevisionAuthorFilter
 ): readonly OoxmlProperty[] {
   if (!authorFilter) return properties;
-  return properties.filter(
-    (property) =>
-      (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') ||
-      !authorFilter.hiddenAuthors.has(property.attributes?.author ?? '')
-  );
+  return properties.filter((property) => {
+    if (property.localName !== 'rPrChange' && property.localName !== 'pPrChange') return true;
+    const nodeId =
+      'revisionNodeId' in property && typeof property.revisionNodeId === 'string'
+        ? property.revisionNodeId
+        : '';
+    return revisionIncluded(authorFilter, {
+      kind: 'format',
+      id: property.attributes?.id ?? '',
+      author: property.attributes?.author ?? '',
+      ...(property.attributes?.date === undefined ? {} : { date: property.attributes.date }),
+      nodeId,
+    });
+  });
 }
 
 /** Paragraph-mark revisions that remain attributed in the current reviewer view. */
@@ -400,9 +455,9 @@ export function paragraphMarkMarkupVisible(
   if (!authorFilter) {
     return revisions.length > 0 || paragraphMarkFormatRevisionOf(paragraph) !== null;
   }
-  if (revisions.some((revision) => !authorFilter.hiddenAuthors.has(revision.author))) return true;
+  if (revisions.some((revision) => revisionIncluded(authorFilter, revision))) return true;
   const formatRevision = paragraphMarkFormatRevisionOf(paragraph);
-  return formatRevision !== null && !authorFilter.hiddenAuthors.has(formatRevision.author);
+  return formatRevision !== null && revisionIncluded(authorFilter, formatRevision);
 }
 
 /**

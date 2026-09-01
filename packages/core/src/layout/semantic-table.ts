@@ -1,14 +1,10 @@
 // Bounded table structure over the typed canonical tree.
 //
-// Reads `w:tbl`/`w:tr`/`w:tc` typed nodes plus their generic property subtrees into a plain
-// bounded structure the table layout consumes. All widths leave here in POINTS — twips are
-// converted once at this boundary, matching `geometryOfSection` and `paragraphIndent`.
+// Reads `w:tbl`/`w:tr`/`w:tc` into the bounded structure consumed by table layout. All widths
+// leave in POINTS, matching `geometryOfSection` and `paragraphIndent`.
 //
-// Every value below is attacker-controlled (a .docx is a zip of XML the author fully
-// controls), so every read clamps before anything is allocated from it and no attacker-sized
-// collection is ever spread or passed as varargs. Do not relax these limits: hostile inputs
-// can otherwise trigger multi-gigabyte allocation attempts or spread-arity failures that vary
-// by JavaScript engine.
+// Every value is attacker-controlled. Clamp before allocation, and never spread or pass an
+// attacker-sized collection as varargs: either can trigger unbounded allocation or arity failure.
 //
 // Width reconciliation lives in `table-widths.ts`: settling one column depends on every cell
 // covering it across every row, not any one node visited here.
@@ -19,7 +15,11 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
-import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
+import {
+  revisionNodeProjectionMode,
+  type RevisionAuthorFilter,
+  type RevisionDisplayMode,
+} from './revision-projection.ts';
 import { mergedFlowBlocks } from './story-roots.ts';
 import {
   EMPTY_TABLE_CELL_STYLE_FORMATTING,
@@ -869,8 +869,8 @@ function readTableStructureUncached(
       ? (wmlRevisionAttribute(authoredRevision, 'author') ?? '')
       : undefined;
     const projectedMode =
-      revisionAuthor !== undefined && authorFilter?.hiddenAuthors.has(revisionAuthor)
-        ? 'proposed'
+      authoredRevision && revisionAuthor !== undefined && authorFilter
+        ? revisionNodeProjectionMode(authorFilter, authoredRevision.id, revisionAuthor, displayMode)
         : displayMode;
     if (
       (projectedMode === 'proposed' && revisionKind === 'del') ||

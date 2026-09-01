@@ -1,5 +1,18 @@
 # @docx-editor.dev/pro
 
+## 2.14.0
+
+### Patch Changes
+
+- Updated dependencies [7633b2c]
+- Updated dependencies [1afc5f2]
+- Updated dependencies [01022a4]
+- Updated dependencies [6b5bb8d]
+- Updated dependencies [f731c52]
+  - @docx-editor.dev/core@2.14.0
+  - @docx-editor.dev/react@2.14.0
+  - @docx-editor.dev/vue@2.14.0
+
 ## 2.13.0
 
 ### Patch Changes

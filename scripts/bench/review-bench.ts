@@ -2,8 +2,9 @@
 //
 // Runs against the review-heavy fixture built by scripts/create-review-20x-fixture.mjs
 // (~1080 comments + ~800 tracked-change sites at 20x) and measures the paths a review
-// document actually exercises: session open, the full queue derivation, the per-keystroke
-// cached / locally-patched reads, the store-lane sub-derivations, and layout with markup.
+// document actually exercises: session open, the full queue derivation, predicate projection,
+// the per-keystroke cached / locally-patched reads, the store-lane sub-derivations, and layout
+// with both full and predicate-filtered markup.
 //
 // The review-model hooks come from the pro review module, exactly as `createDocxEditor`
 // receives them. Pro's `@docx-editor.dev/core/*` imports resolve to core SRC through its
@@ -26,6 +27,7 @@ import {
 import { reviewModule } from '../../packages/pro/src/index.ts';
 import { commentsOfPart } from '../../packages/core/src/store/store/comment-reads.ts';
 import { openTreeSession } from '../../packages/core/src/binding/tree-session.ts';
+import { createRevisionAuthorVisibility } from '../../packages/core/src/editor/revision-author-visibility.ts';
 import {
   createFixedMeasurer,
   createLayoutSession,
@@ -76,6 +78,29 @@ const items = stage(
 stage('reviewItems (cached)', () => session.reviewItems());
 stage('hasReviewContent', () => session.hasReviewContent());
 
+// ── predicate projection ──
+// The editor asks for this projection from several render paths. The first read may scan the
+// review queue, but every later read of the unchanged queue must be an identity hit: a predicate
+// cannot become a per-page or per-paint full-document walk on revision-heavy files.
+const predicateVisibility = createRevisionAuthorVisibility();
+const firstRevisionId = items.find((item) => item.kind === 'revision')?.id;
+let predicateCalls = 0;
+predicateVisibility.setTrackedChangePredicate((revision) => {
+  predicateCalls += 1;
+  return revision.id !== firstRevisionId;
+});
+const predicateFilter = stage(
+  'tracked-change predicate (cold)',
+  () => predicateVisibility.filterFor(items),
+  () => `${predicateCalls} predicate calls`
+);
+const callsAfterColdProjection = predicateCalls;
+stage(
+  'tracked-change predicate (cached)',
+  () => predicateVisibility.filterFor(items),
+  () => `${predicateCalls - callsAfterColdProjection} additional predicate calls`
+);
+
 // ── keystroke paths ──
 const paragraphs = (() => {
   const found: OoxmlParagraphNode[] = [];
@@ -98,9 +123,7 @@ for (const item of items) {
     for (const range of item.ranges) reviewedParagraphIds.add(range.start.paragraphId);
   }
 }
-const plainParagraph = paragraphs.find(
-  (paragraph) => !reviewedParagraphIds.has(paragraph.id)
-);
+const plainParagraph = paragraphs.find((paragraph) => !reviewedParagraphIds.has(paragraph.id));
 const revisionParagraphId = items.find((item) => item.kind === 'revision' && item.ranges.length > 0)
   ?.ranges?.[0]?.start.paragraphId;
 const revisionParagraph = paragraphs.find((paragraph) => paragraph.id === revisionParagraphId);
@@ -144,7 +167,9 @@ const commentsPart = [...pkg.parts.values()].find((candidate) =>
 // The keystroke rounds above local-patched without a full derivation, so the root-level
 // memos are cold for the CURRENT tree: this is the re-derive an accept, reject, comment
 // write or undo pays.
-stage('collectReviewItems (fresh root)', () => collectReviewItems({ storyPart: part, commentsPart }));
+stage('collectReviewItems (fresh root)', () =>
+  collectReviewItems({ storyPart: part, commentsPart })
+);
 // And this is what any second reader of the same revision pays.
 {
   const timings: number[] = [];
@@ -160,12 +185,32 @@ stage('collectReviewItems (fresh root)', () => collectReviewItems({ storyPart: p
     note: 'median of 5 repeats',
   });
 }
-stage('revisionItemsOf', () => revisionItemsOf(part), (list) => `${list.length} cards`);
-stage('locateSites', () => locateSites(part), (map) => `${map.size} sites`);
-stage('commentAnchorsOfStory', () => commentAnchorsOfStory(part), (list) => `${list.length} anchors`);
-stage('paragraphOrderOfPart', () => paragraphOrderOfPart(part), (map) => `${map.size} paragraphs`);
+stage(
+  'revisionItemsOf',
+  () => revisionItemsOf(part),
+  (list) => `${list.length} cards`
+);
+stage(
+  'locateSites',
+  () => locateSites(part),
+  (map) => `${map.size} sites`
+);
+stage(
+  'commentAnchorsOfStory',
+  () => commentAnchorsOfStory(part),
+  (list) => `${list.length} anchors`
+);
+stage(
+  'paragraphOrderOfPart',
+  () => paragraphOrderOfPart(part),
+  (map) => `${map.size} paragraphs`
+);
 if (commentsPart) {
-  stage('commentsOfPart', () => commentsOfPart(commentsPart), (list) => `${list.length} records`);
+  stage(
+    'commentsOfPart',
+    () => commentsOfPart(commentsPart),
+    (list) => `${list.length} records`
+  );
 }
 
 // ── layout with markup (the painted view of a reviewed document) ──
@@ -179,6 +224,28 @@ const layout = stage(
 stage('layout (no-change, warm)', () =>
   layoutSemanticDocument(part, 2, { measurer, session: layoutSession, producer: 'bench' })
 );
+if (predicateFilter) {
+  const predicateLayoutSession = createLayoutSession();
+  stage(
+    'layout with predicate (cold)',
+    () =>
+      layoutSemanticDocument(part, 1, {
+        measurer,
+        session: predicateLayoutSession,
+        producer: 'bench-predicate',
+        revisionAuthorFilter: predicateFilter,
+      }),
+    (value) => `${value.pages.length} pages`
+  );
+  stage('layout with predicate (no-change, warm)', () =>
+    layoutSemanticDocument(part, 2, {
+      measurer,
+      session: predicateLayoutSession,
+      producer: 'bench-predicate',
+      revisionAuthorFilter: predicateFilter,
+    })
+  );
+}
 
 if (asJson) {
   console.log(JSON.stringify(results, null, 2));

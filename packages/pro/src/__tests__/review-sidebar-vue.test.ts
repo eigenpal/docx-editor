@@ -37,6 +37,31 @@ afterEach(() => {
 });
 
 describe('DocxEditorReview (Vue)', () => {
+  test('updates Vue cards after a full-data tracked-change predicate changes', async () => {
+    const mounted = mountReview(FORMAT_AND_INSERT, { formatting: true });
+    try {
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelectorAll('[data-testid="review-card"]').length === 2
+      );
+      const before = new Uint8Array(await mounted.editor().save());
+
+      mounted.editor().setTrackedChangesFilter((revision) => revision.revisionKind === 'insert');
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelectorAll('[data-testid="review-card"]').length === 1
+      );
+
+      expect(mounted.editor().getReviewItems({ placement: false })).toHaveLength(1);
+      expect(mounted.container.querySelector('[data-testid="review-card"]')?.textContent).toContain(
+        'added text'
+      );
+      expect(new Uint8Array(await mounted.editor().save())).toEqual(before);
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   test('uses the default author ramp without declarations', async () => {
     const mounted = mountReview(TRACKED);
     try {

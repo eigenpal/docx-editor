@@ -35,10 +35,16 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
     if (child.kind === 'textValue') continue;
     const attributes: Record<string, string> = {};
     for (const entry of child.attributes) attributes[entry.localName] = entry.value;
+    const hasAttributes = Object.keys(attributes).length > 0;
+    if (child.localName === 'rPrChange' || child.localName === 'pPrChange') {
+      const revisionProperty: OoxmlProperty & { readonly revisionNodeId: string } = hasAttributes
+        ? { localName: child.localName, attributes, revisionNodeId: child.id }
+        : { localName: child.localName, revisionNodeId: child.id };
+      props.push(revisionProperty);
+      continue;
+    }
     props.push(
-      Object.keys(attributes).length > 0
-        ? { localName: child.localName, attributes }
-        : { localName: child.localName }
+      hasAttributes ? { localName: child.localName, attributes } : { localName: child.localName }
     );
   }
   return props;

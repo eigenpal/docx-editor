@@ -28,10 +28,13 @@ import {
 } from './comment-reads.ts';
 import { locateSites } from './review-site-locations.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
+import { deepParagraphOrderOfPart } from './review-paragraph-order.ts';
 // The vocabulary this derivation speaks — the item shapes and their pure helpers — lives in
 // `review-items.ts`, where the binding and layout lanes can reach it too.
 import {
+  registerRevisionSiteNodeIds,
   reviewItemPositionRank,
+  revisionSiteNodeIdsOf,
   type ReviewCommentItem,
   type ReviewItem,
   type ReviewModelInput,
@@ -42,6 +45,7 @@ import {
 } from './review-items.ts';
 
 export { locateSites } from './review-site-locations.ts';
+export { deepParagraphOrderOfPart, paragraphOrderOfPart } from './review-paragraph-order.ts';
 
 /** `EG_ParaRPrTrackChanges` by element name: the four decisions a paragraph mark can carry. */
 const MARK_DIRECTIONS: Readonly<Record<string, 'insert' | 'delete' | 'moveFrom' | 'moveTo'>> = {
@@ -124,6 +128,14 @@ export interface ReviewDerivationDependencies {
   readonly deepOrder: (part: OoxmlPart) => ReadonlyMap<string, number>;
 }
 
+const interactiveReviewDerivation: ReviewDerivationDependencies = {
+  retainRevisionItems: true,
+  revisionSites: collectRevisionSites,
+  locations: locateSites,
+  commentAnchors: commentAnchorsOfStory,
+  deepOrder: deepParagraphOrderOfPart,
+};
+
 /**
  * Every revision in one story, one card per DECISION.
  *
@@ -191,6 +203,7 @@ function computeRevisionItemsOf(
       /** Kept apart from `text`: a replacement needs both halves to word its card. */
       deletedText: string;
       ranges: ReviewRange[];
+      siteNodeIds: string[];
       readOnly: boolean;
       /** The DEEPEST site in the group: the reading a caret in this text gets. */
       nesting: number;
@@ -237,6 +250,7 @@ function computeRevisionItemsOf(
         : `${site.node.localName}\u0000${addressKey(address)}`;
     const existing = byAddress.get(key);
     if (existing) {
+      existing.siteNodeIds.push(site.node.id);
       if (
         range &&
         !existing.ranges.some(
@@ -285,6 +299,7 @@ function computeRevisionItemsOf(
           : textUnder(site.node),
       deletedText: kind === 'delete' || kind === 'moveFrom' ? textUnder(site.node) : '',
       ranges: range ? [range] : [],
+      siteNodeIds: [site.node.id],
       nesting: site.nesting,
       // A format or paragraph-mark change is resolvable; the structural kinds are not, and
       // nor is one with no author to address it by.
@@ -293,30 +308,34 @@ function computeRevisionItemsOf(
   }
 
   const items = [...byAddress.values()].map(
-    (entry): ReviewRevisionItem => ({
-      kind: 'revision' as const,
-      // The PART is in the id, because `@w:id` is unique only within one. A body `w:ins`
-      // and a header `w:ins` numbered 1 by the same author on the same date produced one
-      // id for two decisions: the rail's `byId` map kept whichever came last, so one card
-      // was unreachable, its replies were attached to the other, and React saw two
-      // children under one key.
-      id: `${entry.revisionKind}-${part.name}\u0000${addressKey(entry.address)}`,
-      address: entry.address,
-      addresses: [entry.address],
-      revisionKind: entry.revisionKind,
-      ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
-      author: entry.author,
-      ...(entry.date === undefined ? {} : { date: entry.date }),
-      // A pure deletion shows the words it removes as its text; a replacement shows what
-      // takes their place, with the removed half beside it.
-      text: entry.revisionKind === 'replace' ? entry.text : entry.text || entry.deletedText,
-      replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
-      ranges: entry.ranges,
-      nesting: entry.nesting,
-      readOnly: entry.readOnly,
-      // Filled by `collectReviewItems`, which is the only place that sees the comments too.
-      replyIds: [],
-    })
+    (entry): ReviewRevisionItem =>
+      registerRevisionSiteNodeIds(
+        {
+          kind: 'revision' as const,
+          // The PART is in the id, because `@w:id` is unique only within one. A body `w:ins`
+          // and a header `w:ins` numbered 1 by the same author on the same date produced one
+          // id for two decisions: the rail's `byId` map kept whichever came last, so one card
+          // was unreachable, its replies were attached to the other, and React saw two
+          // children under one key.
+          id: `${entry.revisionKind}-${part.name}\u0000${addressKey(entry.address)}`,
+          address: entry.address,
+          addresses: [entry.address],
+          revisionKind: entry.revisionKind,
+          ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
+          author: entry.author,
+          ...(entry.date === undefined ? {} : { date: entry.date }),
+          // A pure deletion shows the words it removes as its text; a replacement shows what
+          // takes their place, with the removed half beside it.
+          text: entry.revisionKind === 'replace' ? entry.text : entry.text || entry.deletedText,
+          replacedText: entry.revisionKind === 'replace' ? entry.deletedText : '',
+          ranges: entry.ranges,
+          nesting: entry.nesting,
+          readOnly: entry.readOnly,
+          // Filled by `collectReviewItems`, which is the only place that sees the comments too.
+          replyIds: [],
+        },
+        entry.siteNodeIds
+      )
   );
   return pairReplacements(items, dependencies.deepOrder(part));
 }
@@ -404,22 +423,28 @@ function pairReplacements(
       const first = before(deletion.ranges[0]!, insertion.ranges[0]!, order) ? deletion : insertion;
       // The card is dated when the replacement was COMPLETED: the later half's stamp.
       const date = replacementDate(deletion.date, insertion.date);
-      replacements.set(deletion.id, {
-        ...first,
-        id: `replace-${deletion.id}-${insertion.id}`,
-        revisionKind: 'replace',
-        ...(date === undefined ? {} : { date }),
-        // DEDUPED: when this engine wrote the replacement both halves share one identity,
-        // and applying the same `acceptRevision` twice in one transaction refuses the second
-        // — which refused the whole thing and left the replacement unresolved.
-        addresses: dedupeAddresses([...deletion.addresses, ...insertion.addresses]),
-        text: insertion.text,
-        replacedText: deletion.text,
-        ranges: [...deletion.ranges, ...insertion.ranges],
-        // Struck half first, so the split point is simply how many the deletion contributed.
-        replacedRangeCount: deletion.ranges.length,
-        readOnly: deletion.readOnly || insertion.readOnly,
-      });
+      replacements.set(
+        deletion.id,
+        registerRevisionSiteNodeIds(
+          {
+            ...first,
+            id: `replace-${deletion.id}-${insertion.id}`,
+            revisionKind: 'replace',
+            ...(date === undefined ? {} : { date }),
+            // DEDUPED: when this engine wrote the replacement both halves share one identity,
+            // and applying the same `acceptRevision` twice in one transaction refuses the second
+            // — which refused the whole thing and left the replacement unresolved.
+            addresses: dedupeAddresses([...deletion.addresses, ...insertion.addresses]),
+            text: insertion.text,
+            replacedText: deletion.text,
+            ranges: [...deletion.ranges, ...insertion.ranges],
+            // Struck half first, so the split point is simply how many the deletion contributed.
+            replacedRangeCount: deletion.ranges.length,
+            readOnly: deletion.readOnly || insertion.readOnly,
+          },
+          [...revisionSiteNodeIdsOf(deletion), ...revisionSiteNodeIdsOf(insertion)]
+        )
+      );
       break;
     }
   }
@@ -498,6 +523,7 @@ function foldChain(chain: readonly ReviewRevisionItem[]): ReviewRevisionItem {
   const first = chain[0]!;
   const addresses = [...first.addresses];
   const ranges = [...first.ranges];
+  const siteNodeIds = [...revisionSiteNodeIdsOf(first)];
   let text = first.text;
   let date = first.date;
   for (const next of chain.slice(1)) {
@@ -505,17 +531,21 @@ function foldChain(chain: readonly ReviewRevisionItem[]): ReviewRevisionItem {
       if (!addresses.some((known) => sameAddress(known, address))) addresses.push(address);
     }
     for (const range of next.ranges) ranges.push(range);
+    for (const nodeId of revisionSiteNodeIdsOf(next)) siteNodeIds.push(nodeId);
     text += next.text;
     date = laterStamp(date, next.date);
   }
-  return {
-    ...first,
-    id: chain.map((item) => item.id).join('+'),
-    addresses,
-    ranges,
-    text,
-    ...(date === undefined ? {} : { date }),
-  };
+  return registerRevisionSiteNodeIds(
+    {
+      ...first,
+      id: chain.map((item) => item.id).join('+'),
+      addresses,
+      ranges,
+      text,
+      ...(date === undefined ? {} : { date }),
+    },
+    siteNodeIds
+  );
 }
 
 /** The later of two stamps; the first one when they cannot be compared. */
@@ -762,6 +792,25 @@ export interface LinkableReviewItem {
   readonly nesting?: number;
 }
 
+function normalizeRetainedCommentLinks<T extends LinkableReviewItem>(
+  item: T,
+  retainedCommentIds: ReadonlySet<string>
+): T {
+  if (item.kind !== 'comment') return item;
+  const replyIds = item.replyIds ?? [];
+  const retainedReplyIds = replyIds.filter((id) => retainedCommentIds.has(id));
+  const parentWasRemoved = item.parentId !== undefined && !retainedCommentIds.has(item.parentId);
+  if (!parentWasRemoved && retainedReplyIds.length === replyIds.length) return item;
+  if (parentWasRemoved) {
+    // Promote an answer whose thread head was filtered; rebuild its revision link below.
+    const { parentId: _parentId, parentRevisionId: _parentRevisionId, ...rest } = item;
+    return (
+      retainedReplyIds.length === replyIds.length ? rest : { ...rest, replyIds: retainedReplyIds }
+    ) as T;
+  }
+  return { ...item, replyIds: retainedReplyIds } as T;
+}
+
 /** A range as a comparable key, so "exactly these characters" is one lookup. */
 function rangeKey(range: ReviewRange): string {
   return (
@@ -773,32 +822,26 @@ function rangeKey(range: ReviewRange): string {
 /**
  * Attach each comment that answers a tracked change to the change it answers.
  *
- * The evidence is the RANGE, exactly as it is for a coincident comment thread: replying to a
- * revision writes a comment over that revision's own characters, because OOXML gives `w:ins`
- * and `w:del` nowhere else to put the text. Without this the reply came back as an independent
- * card in the rail, sitting beside the change rather than inside it, and the reader had no way
- * to see which change their answer belonged to.
- *
- * Three things keep it from over-claiming. A ZERO-WIDTH range is evidence of nothing — the same
- * rule the comment threading uses, and a format or paragraph-mark revision decorates no
- * characters at all. A comment already stated to be a REPLY to another comment is not claimed
- * directly, because a stated link always beats an inferred one. And the FIRST revision on a span
- * wins, so a card cannot claim a reply another card already holds.
+ * A matching non-empty RANGE is the evidence. A stated comment reply beats an inferred revision
+ * link, and the deepest revision on a shared span wins to match click targeting.
  *
  * The WHOLE conversation moves, not its head. A change's card renders `replyIds` as a flat list,
  * so linking only the top comment of a thread left every answer to that answer rendered by
- * nobody: reply twice to one change and the second reply existed in `comments.xml` and appeared
- * nowhere on screen. Descendants ride along, in the order they were authored.
+ * nobody. Descendants ride along in authoring order.
  *
- * IDEMPOTENT, and that is load-bearing. The session re-runs this over a list whose comments are
- * ALREADY linked, so a pass that only ever added links left a stale `parentRevisionId` behind
- * when a keystroke shifted the revision's offsets out from under it — the rail filters such a
- * comment out of its roots, and with no revision claiming it any more the card vanished until
- * the next full re-derivation. Every link is rebuilt from the ranges on every pass.
+ * The pass is idempotent: every link is rebuilt from ranges, so locally patched queues cannot
+ * retain stale `parentRevisionId` values after edits move a revision.
  */
 export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonly T[]): T[] {
-  const revisionBySpan = new Map<string, { readonly id: string; readonly nesting: number }>();
+  const retainedCommentIds = new Set<string>();
   for (const item of items) {
+    if (item.kind === 'comment') retainedCommentIds.add(item.id);
+  }
+  const retainedItems = items.map((item) =>
+    normalizeRetainedCommentLinks(item, retainedCommentIds)
+  );
+  const revisionBySpan = new Map<string, { readonly id: string; readonly nesting: number }>();
+  for (const item of retainedItems) {
     if (item.kind !== 'revision') continue;
     for (const range of item.ranges ?? []) {
       if (
@@ -822,7 +865,7 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
 
   // Comment threads as the derivation stated them, so a claimed head brings its answers.
   const commentRepliesOf = new Map<string, readonly string[]>();
-  for (const item of items) {
+  for (const item of retainedItems) {
     if (item.kind === 'comment' && item.replyIds && item.replyIds.length > 0) {
       commentRepliesOf.set(item.id, item.replyIds);
     }
@@ -843,7 +886,7 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
 
   const repliesOf = new Map<string, string[]>();
   const parentOf = new Map<string, string>();
-  for (const item of items) {
+  for (const item of retainedItems) {
     if (item.kind !== 'comment' || item.parentId !== undefined) continue;
     if (item.orphaned || !item.range) continue;
     const revisionId = revisionBySpan.get(rangeKey(item.range))?.id;
@@ -855,11 +898,14 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
     else repliesOf.set(revisionId, thread);
   }
 
-  return items.map((item) => {
+  return retainedItems.map((item) => {
     if (item.kind === 'revision') {
       const replies = repliesOf.get(item.id) ?? [];
       if (replies.length === 0 && (item.replyIds ?? []).length === 0) return item;
-      return { ...item, replyIds: replies };
+      return registerRevisionSiteNodeIds(
+        { ...item, replyIds: replies },
+        revisionSiteNodeIdsOf(item)
+      );
     }
     if (item.kind === 'comment') {
       const parent = parentOf.get(item.id);
@@ -874,126 +920,3 @@ export function linkRevisionReplies<T extends LinkableReviewItem>(items: readonl
     return item;
   });
 }
-
-/**
- * Paragraph node id → document position, from the TREE rather than from a layout.
- *
- * Memoized on the immutable root: one full derivation pass asks this question three times
- * (replacement pairing, the queue's merged order, the session's cached order), and each
- * answer was a fresh full-tree walk. The instance is SHARED, so the return type is
- * ReadonlyMap: a caller mutating it would poison every later reader of this root.
- */
-export function paragraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number> {
-  const cached = paragraphOrderCache.get(part.root);
-  if (cached) return cached;
-  const order = new Map<string, number>();
-  const walk = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || depth > 64) return;
-    if (node.kind === 'paragraph') {
-      if (!order.has(node.id)) order.set(node.id, order.size);
-      return;
-    }
-    // A table's paragraph sequence is a pure function of the table subtree, so an unchanged
-    // table hands back its list instead of being re-descended — an edit outside any table
-    // otherwise re-walked every cell of every table in the document.
-    if (node.kind === 'table') {
-      let ids = tableParagraphIdsCache.get(node);
-      if (!ids) {
-        const found: string[] = [];
-        const collect = (candidate: OoxmlNode, nestedDepth: number): void => {
-          if (candidate.kind === 'textValue' || nestedDepth > 64) return;
-          if (candidate.kind === 'paragraph') {
-            found.push(candidate.id);
-            return;
-          }
-          for (const child of candidate.children) collect(child, nestedDepth + 1);
-        };
-        for (const child of node.children) collect(child, 0);
-        ids = found;
-        tableParagraphIdsCache.set(node, ids);
-      }
-      for (const id of ids) {
-        if (!order.has(id)) order.set(id, order.size);
-      }
-      return;
-    }
-    for (const child of node.children) walk(child, depth + 1);
-  };
-  walk(part.root, 0);
-  paragraphOrderCache.set(part.root, order);
-  return order;
-}
-
-/** The paragraph order index per part root, bounded like {@link locatedSitesCache}. */
-const paragraphOrderCache = createRecentRootCache<Map<string, number>>(8);
-
-/**
- * Like {@link paragraphOrderOfPart}, but descends INTO paragraphs, so paragraphs nested
- * in a run's content — a textbox's `w:txbxContent` — rank right after their host.
- *
- * Review queues and containment checks use this order so a textbox item stays adjacent to its
- * host instead of falling behind later body items. The shallow variant remains for walks that
- * deliberately treat hosted stories as separate lanes.
- */
-export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number> {
-  const cached = deepParagraphOrderCache.get(part.root);
-  if (cached) return cached;
-  const order = new Map<string, number>();
-  for (const id of subtreeDeepParagraphIds(part.root, 0)) {
-    if (!order.has(id)) order.set(id, order.size);
-  }
-  deepParagraphOrderCache.set(part.root, order);
-  return order;
-}
-
-const interactiveReviewDerivation: ReviewDerivationDependencies = {
-  retainRevisionItems: true,
-  revisionSites: collectRevisionSites,
-  locations: locateSites,
-  commentAnchors: commentAnchorsOfStory,
-  deepOrder: deepParagraphOrderOfPart,
-};
-
-/** One shared empty list for the subtrees that hold no paragraph. */
-const EMPTY_DEEP_PARAGRAPH_IDS: readonly string[] = Object.freeze([]);
-
-/**
- * Deep paragraph ids under one immutable node, in document order, memoized per node.
- *
- * The deep order re-derives per fresh root, and a structural keystroke re-walked every
- * node of the document — every run of every paragraph — to relist ids that did not move.
- * Composing from per-subtree memos re-walks only the rebuilt spine.
- *
- * The entry remembers the depth it was computed at, because the 64-level cap makes the
- * list depth-dependent: an op can republish a shared subtree at a different depth (an
- * unwrap rebuilds only the spine ABOVE it), and serving a list computed under the old
- * cap would diverge from a cold walk on hostile >64-deep nesting. A depth mismatch just
- * recomputes, so the memo stays exactly the cold walk's answer.
- */
-const subtreeDeepParagraphIdsCache = new WeakMap<
-  OoxmlNode,
-  { readonly depth: number; readonly ids: readonly string[] }
->();
-
-function subtreeDeepParagraphIds(node: OoxmlNode, depth: number): readonly string[] {
-  if (node.kind === 'textValue' || depth > 64) return EMPTY_DEEP_PARAGRAPH_IDS;
-  const cached = subtreeDeepParagraphIdsCache.get(node);
-  if (cached && cached.depth === depth) return cached.ids;
-  let found: string[] | null = null;
-  if (node.kind === 'paragraph') (found ??= []).push(node.id);
-  for (const child of node.children) {
-    const ids = subtreeDeepParagraphIds(child, depth + 1);
-    if (ids.length === 0) continue;
-    found ??= [];
-    for (const id of ids) found.push(id);
-  }
-  const result: readonly string[] = found ?? EMPTY_DEEP_PARAGRAPH_IDS;
-  subtreeDeepParagraphIdsCache.set(node, { depth, ids: result });
-  return result;
-}
-
-/** The deep paragraph order per part root, bounded like the shallow one above. */
-const deepParagraphOrderCache = createRecentRootCache<Map<string, number>>(8);
-
-/** Paragraph ids of one table subtree, in reading order, per immutable table node. */
-const tableParagraphIdsCache = new WeakMap<OoxmlNode, readonly string[]>();

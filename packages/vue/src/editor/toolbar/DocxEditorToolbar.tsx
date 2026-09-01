@@ -95,13 +95,15 @@ import { TableChromeProvider } from './useTableChrome';
 import { ToolbarEditingMode } from './EditingMode';
 import { ToolbarReviewers } from './Reviewers';
 
-const TABLE_CHROME_SLOTS: readonly ArrangementKey[] = [
+const TABLE_CHROME_SLOTS: readonly ChromeSlotId[] = [
   'table.borderTarget',
   'table.borderColor',
   'table.borderStyle',
   'table.borderWidth',
   'table.cellFill',
 ];
+
+const TABLE_CONTEXTUAL_GROUP_ID = 'contextual-table';
 
 type ArrangementKey = ChromeSlotId | 'alignment';
 
@@ -139,6 +141,12 @@ const SHAPED_PARTS: Partial<Record<ChromeSlotId, PartLike>> = {
   'image.insert': ToolbarImageInsert,
   'image.wrap': ToolbarImageWrap,
   'image.altText': ToolbarImageAltText,
+};
+
+const TABLE_CONTEXTUAL_GROUP: DefaultGroup = {
+  id: TABLE_CONTEXTUAL_GROUP_ID,
+  labelKey: 'formattingBar.groups.table',
+  entries: TABLE_CHROME_SLOTS.map((slot) => ({ slot, Part: SHAPED_PARTS[slot]! })),
 };
 
 const iconPartCache = new Map<ChromeSlotId, PartLike>();
@@ -180,6 +188,7 @@ function buildDefaultGroups(image: EditorSnapshot['image']): readonly DefaultGro
 const selectToolbarImage = (snapshot: EditorSnapshot) => snapshot.image;
 const selectToolbarDisabled = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
+const selectTableChromeVisible = (snapshot: EditorSnapshot) => snapshot.table !== null;
 
 function isValueSlot(slot: ArrangementKey): boolean {
   return slot === 'alignment' || slot in SHAPED_PARTS;
@@ -295,14 +304,18 @@ const DocxEditorToolbarRoot = defineComponent({
     const label = useToolbarLabel();
     const image = useEditorState(selectToolbarImage);
     const toolbarDisabled = useEditorState(selectToolbarDisabled);
+    const tableChromeVisible = useEditorState(selectTableChromeVisible);
     const defaultGroups = computed(() => buildDefaultGroups(image.value));
     const defaultSlots = computed(
       () =>
         new Set(defaultGroups.value.flatMap((group) => group.entries.map((entry) => entry.slot)))
     );
-    const collapsible = computed(() =>
-      defaultGroups.value.map((group) => group.id).filter((id) => !TOOLBAR_PINNED_GROUPS.has(id))
-    );
+    const collapsible = computed(() => [
+      ...defaultGroups.value
+        .map((group) => group.id)
+        .filter((id) => !TOOLBAR_PINNED_GROUPS.has(id)),
+      ...(tableChromeVisible.value ? [TABLE_CONTEXTUAL_GROUP_ID] : []),
+    ]);
     const collapseOrderIds = computed(() => collapseOrder(collapsible.value));
     const measuring = computed(() => props.preset && props.overflow);
     const { attach, overflow } = useToolbarOverflow(
@@ -331,6 +344,12 @@ const DocxEditorToolbarRoot = defineComponent({
 
         const render = (entry: DefaultEntry) => {
           const override = overrides.get(entry.slot);
+          if (override) return override;
+          return h(entry.Part);
+        };
+
+        const renderTable = (entry: DefaultEntry) => {
+          const override = tableOverrides.get(entry.slot);
           if (override) return override;
           return h(entry.Part);
         };
@@ -373,9 +392,50 @@ const DocxEditorToolbarRoot = defineComponent({
           );
         }
 
+        const tableOverflowed = overflow.value.has(TABLE_CONTEXTUAL_GROUP_ID);
+        if (tableChromeVisible.value && tableOverflowed) {
+          const rows = TABLE_CONTEXTUAL_GROUP.entries.flatMap((entry) => {
+            const override = tableOverrides.get(entry.slot);
+            if (isHiddenOverride(override)) return [];
+            return [
+              <Fragment key={entry.slot}>
+                <ToolbarOverflowControl
+                  label={labelOf(label, entry, TABLE_CONTEXTUAL_GROUP.labelKey)}
+                >
+                  {renderTable(entry)}
+                </ToolbarOverflowControl>
+              </Fragment>,
+            ];
+          });
+          if (rows.length > 0) {
+            // Keep contextual controls at the top of More. Table pickers render inside the
+            // panel, so their trigger must remain visible when opening one temporarily lifts
+            // the panel's scroll clipping.
+            sections.unshift({
+              id: TABLE_CONTEXTUAL_GROUP.id,
+              labelKey: TABLE_CONTEXTUAL_GROUP.labelKey,
+              children: rows,
+            });
+          }
+        }
+
         content = [
           ...bar,
-          h(TableChromeGroup, { overrides: tableOverrides }),
+          ...(tableChromeVisible.value && !tableOverflowed
+            ? [h(ToolbarSeparator, { key: 'separator-contextual-table' })]
+            : []),
+          ...(!tableOverflowed
+            ? [
+                h(
+                  'div',
+                  {
+                    class: 'docx-toolbar__contextual',
+                    [GROUP_ATTRIBUTE]: TABLE_CONTEXTUAL_GROUP_ID,
+                  },
+                  h(TableChromeGroup, { overrides: tableOverrides, separator: false })
+                ),
+              ]
+            : []),
           ...(appended.length > 0
             ? [h('div', { class: 'docx-toolbar__group', [FIXED_ATTRIBUTE]: '' }, appended)]
             : []),

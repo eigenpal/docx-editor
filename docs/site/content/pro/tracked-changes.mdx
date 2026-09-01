@@ -315,6 +315,195 @@ Use `editor.getReviewAuthors()` to build custom chrome. Read visibility with
 `editor.setReviewAuthorVisible(author, visible)`, or call
 `editor.setAllReviewAuthorsVisible(visible)` and `editor.showAllReviewAuthors()`.
 
+## Filter tracked changes with a predicate
+
+Use a tracked-changes predicate when reviewer names are not enough—for example, to show only
+recent changes, only deletions, or a combination of author, date, kind, and document location.
+The API is view-only:
+
+```ts
+import type { TrackedChangeFilterMode, TrackedChangePredicate } from '@docx-editor.dev/core/editor';
+
+const predicate: TrackedChangePredicate = (revision) => true;
+
+editor.setTrackedChangesFilter(predicate); // install or re-evaluate a filter
+editor.setTrackedChangesFilter(predicate, 'reject'); // show excluded revisions as rejected
+editor.setTrackedChangesFilter(null); // clear it
+```
+
+The predicate receives one complete `ReviewRevisionItem` for each revision decision. Return
+`true` to keep the revision as tracked markup and in the review list. Return `false` to remove
+its revision card and render it with the selected mode. The default mode is `accept`, matching
+Word's **Show Markup → Specific People** behavior.
+
+| Revision kind                         | `accept` mode                                        | `reject` mode                                        |
+| ------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------- |
+| `insert`, `moveTo`                    | Proposed content remains as ordinary content.        | Proposed content is omitted.                         |
+| `delete`, `moveFrom`                  | Deleted content is omitted.                          | Deleted content returns as ordinary content.         |
+| `replace`                             | Replacement remains; replaced content is omitted.    | Replacement is omitted; replaced content returns.    |
+| `paragraphMark`, inserted/deleted row | Accepted structure is rendered.                      | Original structure is rendered.                      |
+| `format`, other structural/property   | Current values remain without tracked-change markup. | Current values remain without tracked-change markup. |
+
+### Predicate data
+
+The predicate can use the following revision data:
+
+| Field                                    | Description                                                                  |
+| ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `author`                                 | Reviewer name stored in the DOCX revision.                                   |
+| `date`                                   | Optional raw OOXML timestamp. Validate it before date comparisons.           |
+| `revisionKind`                           | Insert, delete, replace, move, format, paragraph-mark, or structural change. |
+| `text`, `replacedText`                   | Proposed text and, for replacements, the text being replaced.                |
+| `ranges`                                 | All document ranges covered by the decision, including part names.           |
+| `address`, `addresses`                   | The OOXML revision address or addresses resolved together.                   |
+| `nesting`, `pairedWith`, `markDirection` | Nesting, move/replacement pairing, and paragraph-mark metadata.              |
+| `readOnly`                               | Whether the engine can accept or reject this revision.                       |
+| `id`, `replacedRangeCount`, `replyIds`   | Stable decision identity and additional review-card metadata.                |
+
+Dates are document data and can be absent or invalid. Use `Date.parse` together with
+`Number.isFinite` before comparing them.
+
+### Install a filter
+
+This example keeps only insertions from Jess on or after February 1, 2026:
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { useEffect } from 'react';
+import { useDocxEditor } from '@docx-editor.dev/react';
+
+const CUTOFF = Date.parse('2026-02-01T00:00:00Z');
+
+export function RecentJessInsertions() {
+  const editor = useDocxEditor();
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setTrackedChangesFilter((revision) => {
+      const timestamp = Date.parse(revision.date ?? '');
+      return (
+        revision.author === 'Jess' &&
+        revision.revisionKind === 'insert' &&
+        Number.isFinite(timestamp) &&
+        timestamp >= CUTOFF
+      );
+    });
+    return () => editor.setTrackedChangesFilter(null);
+  }, [editor]);
+
+  return null;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+```vue
+<script setup lang="ts">
+import { watch } from 'vue';
+import { useDocxEditor } from '@docx-editor.dev/vue';
+
+const CUTOFF = Date.parse('2026-02-01T00:00:00Z');
+const editor = useDocxEditor();
+
+watch(
+  editor,
+  (current, _previous, onCleanup) => {
+    if (!current) return;
+    current.setTrackedChangesFilter((revision) => {
+      const timestamp = Date.parse(revision.date ?? '');
+      return (
+        revision.author === 'Jess' &&
+        revision.revisionKind === 'insert' &&
+        Number.isFinite(timestamp) &&
+        timestamp >= CUTOFF
+      );
+    });
+    onCleanup(() => current.setTrackedChangesFilter(null));
+  },
+  { immediate: true }
+);
+</script>
+```
+
+</Framework>
+</FrameworkTabs>
+
+### Common recipes
+
+Predicates are ordinary functions, so compose small rules with boolean logic:
+
+```ts
+import type { TrackedChangePredicate } from '@docx-editor.dev/core/editor';
+
+const byJess: TrackedChangePredicate = (revision) => revision.author === 'Jess';
+const deletionsOnly: TrackedChangePredicate = (revision) =>
+  revision.revisionKind === 'delete' || revision.revisionKind === 'moveFrom';
+const inMainDocument: TrackedChangePredicate = (revision) =>
+  revision.ranges.some((range) => range.partName === '/word/document.xml');
+
+editor.setTrackedChangesFilter(
+  (revision) => byJess(revision) && deletionsOnly(revision) && inMainDocument(revision)
+);
+```
+
+### Choose how excluded revisions render
+
+Pass `accept` to temporarily apply revisions that return `false`. Pass `reject` to render the
+rejected result for content revisions, moves, paragraph marks, and inserted or deleted table rows.
+Both modes are projections only: changing the mode restores the other view immediately, and saving
+preserves the canonical revision markup.
+
+```ts
+const mode: TrackedChangeFilterMode = 'reject';
+
+editor.setTrackedChangesFilter((revision) => revision.author === 'Jess', mode);
+```
+
+The mode applies only to revisions excluded by the predicate. Authors unchecked in **Review →
+Markup Options → Reviewers** continue to use Word's accepted projection, even when the predicate
+uses `reject`. Formatting revisions and structural property-change records do not carry a separate
+layout projection today; in either mode their card and markup hide while their current values remain
+painted. Use the normal reject action to restore supported formatting revisions. Read-only
+structural property records cannot currently be restored by the engine.
+
+The predicate filter and the reviewer menu compose. A revision stays tracked only when its author
+is checked under **Review → Markup Options → Reviewers** and the predicate returns `true`.
+The predicate runs for revisions, not comments. Comments remain visible unless the reviewer menu
+hides their author.
+
+### Update and clear a filter
+
+The editor evaluates the predicate once per revision item when the filter or document changes and
+caches the decisions for pagination. Keep it synchronous, deterministic, and free of side effects.
+If the function closes over mutable state, call `setTrackedChangesFilter` again after that state
+changes—even when you reuse the same function reference:
+
+```ts
+let visibleKinds = new Set(['insert', 'replace']);
+const predicate: TrackedChangePredicate = (revision) => visibleKinds.has(revision.revisionKind);
+
+editor.setTrackedChangesFilter(predicate);
+
+visibleKinds = new Set(['delete']);
+editor.setTrackedChangesFilter(predicate); // re-evaluate the captured state
+
+editor.setTrackedChangesFilter(null); // restore all tracked markup
+```
+
+If evaluation throws, the editor preserves the last complete projection and surfaces the error.
+Clear the predicate during component cleanup so a filter does not outlive the UI that owns it.
+
+### Saving and review actions
+
+Filtering changes layout, painted markup, review cards, and bulk actions over the currently visible
+review list. The `accept` and `reject` modes do not accept or reject revisions, mutate the document,
+or change saved OOXML.
+Saving while a filter is active writes the same canonical revision markup as saving with no filter.
+To change the document, call the normal accept or reject actions explicitly.
+
 If `preset={false}`, use
 `useStackedReviewPositions(items, heights, { gap, scale })`. Pass
 `editor.getRenderScale()` as `scale`. Card heights use CSS pixels. Anchors use
