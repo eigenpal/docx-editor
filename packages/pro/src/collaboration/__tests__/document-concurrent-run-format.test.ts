@@ -168,11 +168,7 @@ describe('concurrent run-format convergence (#581)', () => {
     harness.expectConverged(bob, carol);
   });
 
-  test('concurrent typing and formatting converges without duplicating text', async () => {
-    // This peer's insert grows the origin run in place rather than splitting it, so it never
-    // enters the dedup. The concurrent format split still discards the typed characters when it
-    // copies the origin (issue #590, a separate concurrency gap); what this pins is that the
-    // dedup does not compound it — the peers converge and the text is not doubled.
+  test('concurrent typing survives formatting the same run', async () => {
     const { alice, bob } = await race(
       (peer) => runProps(peer, 0, 0, 5, 'b'),
       (peer): TreeDocOp => ({
@@ -182,8 +178,37 @@ describe('concurrent run-format convergence (#581)', () => {
         text: 'ZZZ',
       })
     );
-    // Converged (asserted by race), and the base text appears once, not doubled.
-    expect(bodyText(alice)).toBe(PARA0 + PARA1);
-    expect(bodyText(bob)).toBe(PARA0 + PARA1);
+    const expected = PARA0.slice(0, 15) + 'ZZZ' + PARA0.slice(15) + PARA1;
+    expect(bodyText(alice)).toBe(expected);
+    expect(bodyText(bob)).toBe(expected);
+    harness.apply(bob, [
+      {
+        op: 'insertText',
+        paragraphId: harness.paragraphIdAt(bob, 0),
+        offset: 18,
+        text: 'Q',
+      },
+    ]);
+    harness.expectConverged(alice, bob);
+    const edited = expected.slice(0, 18) + 'Q' + expected.slice(18);
+    expect(bodyText(alice)).toBe(edited);
+    const carol = await harness.join(alice, 'carol');
+    harness.expectConverged(alice, carol);
+    expect(bodyText(carol)).toBe(edited);
+  });
+
+  test('concurrent deletion survives formatting the same run', async () => {
+    const { alice, bob } = await race(
+      (peer) => runProps(peer, 0, 0, 5, 'b'),
+      (peer): TreeDocOp => ({
+        op: 'deleteText',
+        paragraphId: harness.paragraphIdAt(peer, 0),
+        start: 3,
+        end: 8,
+      })
+    );
+    const expected = PARA0.slice(0, 3) + PARA0.slice(8) + PARA1;
+    expect(bodyText(alice)).toBe(expected);
+    expect(bodyText(bob)).toBe(expected);
   });
 });

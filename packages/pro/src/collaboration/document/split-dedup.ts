@@ -15,14 +15,25 @@ Production use requires a commercial agreement: licensing@eigenpal.com
  * the same tree with the text intact.
  */
 
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 import { replicaOfLogicalId, type LogicalId } from './identity.ts';
+import type { DocumentLimits } from './limits.ts';
 import {
+  NODE_SPLIT_BASE_TEXT_FIELD,
   NODE_SPLIT_FROM_FIELD,
+  NODE_SPLIT_START_FIELD,
+  NODE_SHELL_FIELD,
+  NODE_TEXT_FIELD,
+  childArrayOf,
   isNodeMap,
+  isTextNodeMap,
+  nodeRecordSplitBaseText,
   nodeRecordSplitFrom,
+  nodeRecordSplitStart,
   nodeRecordTombstoned,
+  unpackNodeShell,
 } from './schema.ts';
+import { nodeKindOf } from './registry-node-reads.ts';
 
 /**
  * What the dedup reads about the tree it is projecting, injected so the index stays free of the
@@ -32,6 +43,12 @@ import {
  */
 export interface SplitDedupContext {
   readonly isPresent: (id: LogicalId) => boolean;
+}
+
+interface RunText {
+  readonly ids: readonly LogicalId[];
+  readonly witnessIds: readonly LogicalId[];
+  readonly value: string;
 }
 
 /** Cap on the `splitFrom` walk that classifies a re-split; stops a peer-crafted chain or cycle. */
@@ -44,6 +61,10 @@ export class SplitDedupIndex {
   private replicasByOrigin = new Map<LogicalId, Set<string>>();
   /** Origins that more than one replica split — the only ones a dedup pass has to examine. */
   private contestedOrigins = new Set<LogicalId>();
+  /** Source text id → split origins that still use it as their concurrent-edit witness. */
+  private originsBySourceText = new Map<LogicalId, Set<LogicalId>>();
+  /** Split origins whose source text changed since the last repair pass. */
+  private pendingTextRepairOrigins = new Set<LogicalId>();
   /**
    * Origins that are live again while products still point at them — an undo restored the origin.
    * A cold rebuild reads this straight from current state, so a peer joining after the undo drops
@@ -59,13 +80,18 @@ export class SplitDedupIndex {
    */
   private declinedTangleCount = 0;
 
-  constructor(private readonly nodes: Y.Map<Y.Map<unknown>>) {}
+  constructor(
+    private readonly nodes: Y.Map<Y.Map<unknown>>,
+    private readonly limits: Pick<DocumentLimits, 'maxTextLength' | 'maxTreeDepth'>
+  ) {}
 
   reset(): void {
     this.runsBySplitOrigin = new Map();
     this.replicasByOrigin = new Map();
     this.contestedOrigins = new Set();
     this.liveRootedOrigins = new Set();
+    this.originsBySourceText = new Map();
+    this.pendingTextRepairOrigins = new Set();
   }
 
   /**
@@ -76,21 +102,156 @@ export class SplitDedupIndex {
    * Both concurrent splits of one run must reach the SAME root, or their products land in
    * separate groups and both survive.
    */
-  record(root: LogicalId, runId: LogicalId): void {
-    const rec = this.nodes.get(runId);
-    if (!isNodeMap(rec)) return;
-    // A run is not split from itself. Wrapping a run (a TOC bookmark, a hyperlink) removes and
-    // reinserts the SAME node, which looks like a replacement but partitions nothing; stamping it
-    // would let the dedup drop the run as a copy of itself.
-    if (root === runId) return;
-    rec.set(NODE_SPLIT_FROM_FIELD, root);
-    this.index(root, runId);
+  record(root: LogicalId, replacedRunId: LogicalId, runIds: readonly LogicalId[]): void {
+    const rootRecord = this.nodes.get(root);
+    const replacedRecord = this.nodes.get(replacedRunId);
+    if (!isNodeMap(rootRecord) || !isNodeMap(replacedRecord)) return;
+    const baseline = nodeRecordSplitBaseText(rootRecord) ?? this.runText(root)?.value;
+    const start = nodeRecordSplitStart(replacedRecord) ?? 0;
+    const products = runIds.map((id) => ({ id, text: this.runText(id) }));
+    const canRepair =
+      baseline !== undefined &&
+      baseline.length <= this.limits.maxTextLength &&
+      products.every((product) => product.text !== null);
+    if (canRepair) {
+      rootRecord.set(NODE_SPLIT_BASE_TEXT_FIELD, baseline);
+      this.indexSourceText(root);
+    }
+    let cursor = start;
+    for (const product of products) {
+      const rec = this.nodes.get(product.id);
+      if (!isNodeMap(rec)) return;
+      // A run is not split from itself. Wrapping a run (a TOC bookmark, a hyperlink) removes and
+      // reinserts the SAME node, which looks like a replacement but partitions nothing.
+      if (root === product.id) continue;
+      rec.set(NODE_SPLIT_FROM_FIELD, root);
+      if (canRepair) rec.set(NODE_SPLIT_START_FIELD, cursor);
+      this.index(root, product.id);
+      cursor += product.text?.value.length ?? 0;
+    }
     // A later round re-split a run an earlier round produced, and the shared origin was split by
     // two replicas — the tangle the dedup declines. Count it, so the session reconciles the
     // author's store only on the edit that creates the tangle, not on every keystroke while it
     // persists. A single author re-formatting a paragraph re-splits products too, but its origin
     // is never contested, so this ignores it — no wasted reconcile without a real conflict.
-    if (this.reSplitOfContestedOrigin(root)) this.declinedTangleCount += 1;
+    if (this.reSplitOfContestedOrigin(root)) this.declinedTangleCount += products.length;
+  }
+
+  /**
+   * Rebase text written concurrently to a split source onto the winning split products.
+   *
+   * Only the product owner writes the repair. This prevents two peers from inserting the same
+   * correction into one Y.Text. The baseline proves the product text has not changed since the
+   * split, so a later sequential edit is never overwritten.
+   */
+  repairConcurrentText(replicaId: string, isPresent: SplitDedupContext['isPresent']): number {
+    let repaired = 0;
+    const pending = this.pendingTextRepairOrigins;
+    this.pendingTextRepairOrigins = new Set();
+    for (const root of pending) {
+      const runs = this.runsBySplitOrigin.get(root);
+      if (!runs) continue;
+      if (this.isReSplit(root) || isPresent(root)) continue;
+      const base = nodeRecordSplitBaseText(this.nodes.get(root));
+      const source = this.runText(root);
+      if (base === null || !source || source.value === base) continue;
+      const presentReplicas = new Set<string>();
+      for (const runId of runs) {
+        if (isPresent(runId)) presentReplicas.add(replicaOfLogicalId(runId) ?? '');
+      }
+      const winner = [...presentReplicas].sort()[0];
+      if (winner !== replicaId) continue;
+      const products = [...runs]
+        .filter((runId) => isPresent(runId) && replicaOfLogicalId(runId) === winner)
+        .map((runId) => ({
+          id: runId,
+          start: nodeRecordSplitStart(this.nodes.get(runId)),
+          text: this.runText(runId),
+        }))
+        .sort(
+          (left, right) => (left.start ?? 0) - (right.start ?? 0) || left.id.localeCompare(right.id)
+        );
+      if (!this.productsMatchBaseline(products, base)) continue;
+      const boundaries = products.map((product) => product.start!);
+      boundaries.push(base.length);
+      const mapped = boundaries.map((offset) => mapBaseOffset(base, source.value, offset));
+      for (let index = 0; index < products.length; index += 1) {
+        const product = products[index]!;
+        this.replaceText(product.text!, source.value.slice(mapped[index]!, mapped[index + 1]!));
+        const rec = this.nodes.get(product.id);
+        if (isNodeMap(rec)) rec.set(NODE_SPLIT_START_FIELD, mapped[index]!);
+      }
+      const rootRecord = this.nodes.get(root);
+      if (isNodeMap(rootRecord)) rootRecord.set(NODE_SPLIT_BASE_TEXT_FIELD, source.value);
+      repaired += 1;
+    }
+    return repaired;
+  }
+
+  noteChanged(logicalId: LogicalId): void {
+    for (const root of this.originsBySourceText.get(logicalId) ?? []) {
+      this.pendingTextRepairOrigins.add(root);
+    }
+  }
+
+  private productsMatchBaseline(
+    products: readonly {
+      readonly start: number | null;
+      readonly text: RunText | null;
+    }[],
+    baseline: string
+  ): boolean {
+    if (products.length === 0 || products[0]?.start !== 0) return false;
+    for (let index = 0; index < products.length; index += 1) {
+      const product = products[index]!;
+      if (product.start === null || !product.text) return false;
+      const end = products[index + 1]?.start ?? baseline.length;
+      if (end < product.start || product.text.value !== baseline.slice(product.start, end))
+        return false;
+    }
+    return true;
+  }
+
+  private runText(runId: LogicalId): RunText | null {
+    if (nodeKindOf(this.nodes, runId) !== 'run') return null;
+    const ids: LogicalId[] = [];
+    const witnessIds: LogicalId[] = [];
+    let value = '';
+    const seen = new Set<LogicalId>();
+    const visit = (id: LogicalId, depth: number): boolean => {
+      if (depth > this.limits.maxTreeDepth || seen.has(id)) return false;
+      seen.add(id);
+      witnessIds.push(id);
+      const rec = this.nodes.get(id);
+      if (!isNodeMap(rec)) return false;
+      if (isTextNodeMap(rec)) {
+        const text = rec.get(NODE_TEXT_FIELD);
+        if (!(text instanceof Y.Text)) return false;
+        value += text.toString();
+        if (value.length > this.limits.maxTextLength) return false;
+        ids.push(id);
+        return true;
+      }
+      const shell = rec.get(NODE_SHELL_FIELD);
+      const decoded = unpackNodeShell(typeof shell === 'string' ? shell : '');
+      if (depth > 0 && decoded.kind === 'runProperties') return true;
+      if (depth > 0 && decoded.localName !== 't') return false;
+      for (const childId of childArrayOf(rec)?.toArray() ?? []) {
+        if (!visit(childId, depth + 1)) return false;
+      }
+      return true;
+    };
+    return visit(runId, 0) && ids.length > 0 ? { ids, witnessIds, value } : null;
+  }
+
+  private replaceText(run: RunText, value: string): void {
+    for (let index = 0; index < run.ids.length; index += 1) {
+      const rec = this.nodes.get(run.ids[index]!);
+      const text = isNodeMap(rec) ? rec.get(NODE_TEXT_FIELD) : null;
+      if (!(text instanceof Y.Text)) continue;
+      if (text.length > 0) text.delete(0, text.length);
+      if (index === 0 && value.length > 0) text.insert(0, value);
+    }
   }
 
   /**
@@ -114,7 +275,25 @@ export class SplitDedupIndex {
   /** Index a run that already carries a `splitFrom` (a rebuild scan, or a remote arrival). */
   indexExisting(runId: LogicalId): void {
     const root = nodeRecordSplitFrom(this.nodes.get(runId));
-    if (root !== null && root !== runId) this.index(root, runId);
+    if (root !== null && root !== runId) {
+      this.index(root, runId);
+      this.indexSourceText(root);
+      const base = nodeRecordSplitBaseText(this.nodes.get(root));
+      const source = this.runText(root);
+      if (base !== null && source && source.value !== base) {
+        this.pendingTextRepairOrigins.add(root);
+      }
+    }
+  }
+
+  private indexSourceText(root: LogicalId): void {
+    const source = this.runText(root);
+    if (!source) return;
+    for (const witnessId of source.witnessIds) {
+      const origins = this.originsBySourceText.get(witnessId) ?? new Set<LogicalId>();
+      origins.add(root);
+      this.originsBySourceText.set(witnessId, origins);
+    }
   }
 
   private index(root: LogicalId, runId: LogicalId): void {
@@ -195,4 +374,23 @@ export class SplitDedupIndex {
     }
     return losers;
   }
+}
+
+function mapBaseOffset(base: string, next: string, offset: number): number {
+  let prefix = 0;
+  const shared = Math.min(base.length, next.length);
+  while (prefix < shared && base.charCodeAt(prefix) === next.charCodeAt(prefix)) prefix += 1;
+  let suffix = 0;
+  while (
+    suffix < base.length - prefix &&
+    suffix < next.length - prefix &&
+    base.charCodeAt(base.length - suffix - 1) === next.charCodeAt(next.length - suffix - 1)
+  ) {
+    suffix += 1;
+  }
+  const baseEnd = base.length - suffix;
+  const nextEnd = next.length - suffix;
+  if (offset <= prefix) return offset;
+  if (offset >= baseEnd) return nextEnd + offset - baseEnd;
+  return prefix;
 }

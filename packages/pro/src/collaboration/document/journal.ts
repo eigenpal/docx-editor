@@ -500,9 +500,8 @@ function recordSplitProvenance(registry: DocumentRegistry, planned: JournalPlan)
   for (const [removedId, insertedIds] of planned.replacementsByRemoved) {
     if (registry.kindOf(removedId) !== 'run') continue;
     const root = resolveSplitRoot(registry, removedId, planned.reinserted);
-    for (const runId of insertedIds) {
-      if (registry.kindOf(runId) === 'run') registry.recordSplitFrom(root, runId);
-    }
+    const runs = insertedIds.filter((runId) => registry.kindOf(runId) === 'run');
+    registry.recordRunSplit(root, removedId, runs);
   }
 }
 

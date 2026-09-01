@@ -116,6 +116,7 @@ class DocumentSession implements DocumentCollaborationSession {
     (participants: readonly CollaborationParticipant[]) => void
   >();
   private readonly localOrigin = Object.freeze({ kind: 'docx-document-local' });
+  private readonly splitTextRepairOrigin = Object.freeze({ kind: 'docx-split-text-repair' });
   private readonly undoManager: Y.UndoManager;
   private port: CollaborationDocumentPort | null = null;
   private detachPort: (() => void) | null = null;
@@ -614,6 +615,7 @@ class DocumentSession implements DocumentCollaborationSession {
 
   private readonly onYjsTransaction = (transaction: Y.Transaction): void => {
     if (this.destroyed || !this.port) return;
+    if (transaction.origin === this.splitTextRepairOrigin) return;
     // The canonical store already holds a local commit. Materializing it back would rebuild
     // the package for an edit the store authored — so this normally skips a local transaction.
     // The exception is a concurrent-split tangle the dedup declines (#581): the materialized
@@ -636,6 +638,9 @@ class DocumentSession implements DocumentCollaborationSession {
     // offset or the wrong sibling — inside bounds, so admitted, so agreed on by every replica.
     // Journals reach shared state in the frame that commits them instead, which is why there
     // is nothing left to publish at this point.
+    this.ydoc.transact(() => {
+      this.registry.repairConcurrentSplitText(this.identityMap.replicaId);
+    }, this.splitTextRepairOrigin);
     this.publishSharedToPort();
   };
 

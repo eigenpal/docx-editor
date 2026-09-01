@@ -39,6 +39,10 @@ export const NODE_REPLACED_BY_FIELD = 'replacedBy';
  * Internal shared state, never serialized to the `.docx`.
  */
 export const NODE_SPLIT_FROM_FIELD = 'splitFrom';
+/** Source text when a run split, used to rebase a concurrent text edit onto its products. */
+export const NODE_SPLIT_BASE_TEXT_FIELD = 'splitBaseText';
+/** UTF-16 start of one split product in {@link NODE_SPLIT_BASE_TEXT_FIELD}. */
+export const NODE_SPLIT_START_FIELD = 'splitStart';
 
 /** Unit separator. XML names and NCName prefixes cannot hold this character. */
 export const FIELD_SEP = '\u001f';
@@ -476,4 +480,16 @@ export function nodeRecordSplitFrom(record: unknown): string | null {
   if (!isNodeMap(record)) return null;
   const value = record.get(NODE_SPLIT_FROM_FIELD);
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+export function nodeRecordSplitBaseText(record: unknown): string | null {
+  if (!isNodeMap(record)) return null;
+  const value = record.get(NODE_SPLIT_BASE_TEXT_FIELD);
+  return typeof value === 'string' ? value : null;
+}
+
+export function nodeRecordSplitStart(record: unknown): number | null {
+  if (!isNodeMap(record)) return null;
+  const value = record.get(NODE_SPLIT_START_FIELD);
+  return Number.isSafeInteger(value) && (value as number) >= 0 ? (value as number) : null;
 }

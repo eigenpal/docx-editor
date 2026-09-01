@@ -126,7 +126,7 @@ export class DocumentRegistry {
   ) {
     this.schema = packageSchemaOf(doc);
     this.limits = mergeLimits(limits);
-    this.splitDedup = new SplitDedupIndex(this.schema.nodes);
+    this.splitDedup = new SplitDedupIndex(this.schema.nodes, this.limits);
     this.stopObserving = observeRegistrySchema(this.schema, {
       onNodeEvents: (events) => {
         if (this.bulkLoad > 0) return;
@@ -485,9 +485,8 @@ export class DocumentRegistry {
     if (replacedBy) rec.set(NODE_REPLACED_BY_FIELD, replacedBy);
   }
 
-  /** Stamp a run with the root origin a concurrent split superseded (#581). */
-  recordSplitFrom(root: LogicalId, runId: LogicalId): void {
-    this.splitDedup.record(root, runId);
+  recordRunSplit(root: LogicalId, replaced: LogicalId, runs: readonly LogicalId[]): void {
+    this.splitDedup.record(root, replaced, runs);
   }
 
   /** The run a given run split off from, or null — the caller resolves the chain (#581). */
@@ -498,6 +497,10 @@ export class DocumentRegistry {
   /** Runs a concurrent format split superseded and this replica must not materialize (#581). */
   replacementLoserRuns(): ReadonlySet<LogicalId> {
     return this.splitDedup.loserRuns({ isPresent: (id) => runIsPresent(this, id) });
+  }
+
+  repairConcurrentSplitText(replicaId: string): number {
+    return this.splitDedup.repairConcurrentText(replicaId, (id) => runIsPresent(this, id));
   }
 
   /**
@@ -752,6 +755,7 @@ export class DocumentRegistry {
     this.pendingNodeAdds = 0;
     const changed = new Set<LogicalId>();
     for (const event of events) {
+      if (event.path.length > 0) this.splitDedup.noteChanged(String(event.path[0]));
       // A remote applyUpdate delivers a new element record with its children already filled.
       // Yjs does not emit a child-array event for that initial fill. Skipping it left
       // `parentOf` null, so an attribute-only journal could not dirty the part root and the
