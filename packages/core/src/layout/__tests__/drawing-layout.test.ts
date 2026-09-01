@@ -19,6 +19,7 @@ import {
   measureInlineDrawing,
   pageClipRegion,
   resolveAnchoredDrawingPosition,
+  shiftAnchoredDrawingRecords,
   type InlineDrawingLayoutContext,
 } from '../drawing-layout.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
@@ -800,6 +801,9 @@ describe('places anchors in story and cell context', () => {
     const drawing = layout.pages[0]!.anchoredDrawings![0]!;
     expect(drawing.layoutInCell).toBe(false);
     expect(drawing.x).toBeCloseTo(-72, 2);
+    const shifted = [drawing];
+    shiftAnchoredDrawingRecords(shifted, drawing.anchorParagraphId, 100);
+    expect(shifted[0]!.y).toBe(drawing.y);
   });
 });
 

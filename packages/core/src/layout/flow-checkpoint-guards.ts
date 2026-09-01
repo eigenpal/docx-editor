@@ -39,6 +39,8 @@ export const FLOW_CHECKPOINT_GUARDS = {
   // A flow that still owes the next page a drawing is not one that owes it nothing.
   deferredAnchoredDrawings: 'compared', // sameAnchoredDrawings
   anchorPageDeferCounts: 'compared', // sameDeferCounts
+  pendingPositionedTableTokens: 'compared',
+  positionedTableAnchorSignals: 'compared',
   cursorY: 'compared',
   lineCounter: 'restore-only',
   previousSpaceAfter: 'compared',

@@ -33,9 +33,15 @@ import {
   type SemanticTableRow,
   type TableAnchorFrames,
 } from './semantic-table.ts';
+import { tableFloatOriginY, type TableVerticalAnchorFrames } from './table-float-position.ts';
+import { shiftBlocks } from './table-fragment-finalize.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import type { BlockFragmentRecord, TableRowFragmentRecord } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  TableFragmentRecord,
+  TableRowFragmentRecord,
+} from './semantic-records.ts';
 
 /** The body flow a table is placed into: the cursor it moves, and what it publishes to. */
 export interface TableFlowCursor {
@@ -59,6 +65,8 @@ export interface TableFlowCursor {
   readonly advanceColumn: () => void;
   /** Frames a `w:tblpPr` table positions against. */
   readonly anchorFrames: () => TableAnchorFrames;
+  /** Vertical frames a `w:tblpPr` table positions against. */
+  readonly verticalAnchorFrames: () => TableVerticalAnchorFrames;
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
@@ -79,6 +87,14 @@ export interface TableFlowCursor {
   readonly publishFragment: (fragment: BlockFragmentRecord) => void;
 }
 
+export interface TableFlowPlacementResult {
+  /** True when the table paints on the anchor sheet without advancing the body cursor. */
+  readonly outOfFlow: boolean;
+}
+
+/** Enough vertical room to lay a positioned table as one visual object on its anchor sheet. */
+const POSITIONED_TABLE_LAYOUT_BOTTOM_PT = Number.MAX_SAFE_INTEGER / 1024;
+
 /**
  * Lay out one top-level table with OOXML-aligned row pagination.
  *
@@ -90,13 +106,17 @@ export interface TableFlowCursor {
  * placed together, moved whole when the remainder is too short, re-emitted complete atop
  * each continuation page, and rejected when the group itself exceeds a fresh content page.
  */
-export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor): void {
+export function paginateTableInFlow(
+  table: OoxmlElement,
+  flow: TableFlowCursor
+): TableFlowPlacementResult {
   const {
     columnWidth,
     columnLeft,
-    contentHeight,
+    contentHeight: flowContentHeight,
     advanceColumn,
     anchorFrames,
+    verticalAnchorFrames,
     styleCascade,
     displayMode,
     revisionAuthorFilter,
@@ -113,7 +133,16 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
     displayMode,
     revisionAuthorFilter
   );
-  if (!structure || structure.rows.length === 0) return;
+  if (!structure || structure.rows.length === 0) return { outOfFlow: false };
+  const outOfFlow =
+    structure.float !== undefined &&
+    structure.float.vertAnchor !== 'text' &&
+    structure.float.ySpec !== 'inline';
+  const bodyCursorY = flow.cursorY;
+  const verticalFrames = outOfFlow ? verticalAnchorFrames() : undefined;
+  const contentHeight = outOfFlow
+    ? (): number => POSITIONED_TABLE_LAYOUT_BOTTOM_PT
+    : flowContentHeight;
   // `w:tblInd` / `w:jc` place the table inside the text column, `w:tblpPr` against a wider
   // anchor box; every row and the fragment box share the one origin so cell geometry and
   // the reported box cannot drift apart.
@@ -123,11 +152,14 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
       ? tableFloatOriginX(structure.float, tableWidthPt, anchorFrames())
       : columnLeft() + tableOriginX(structure, columnWidth());
   let tableLeft = originX();
-  // `w:tblpY` against the text anchor is an offset from where the table would otherwise
-  // sit, so it moves the table within the flow. The page and margin anchors state an
-  // absolute position on the sheet, which this layout does not model — those stay in flow.
+  // A text anchor offsets the current body position. Page and margin anchors are sheet
+  // positions, so the table uses a private cursor and the body cursor is restored below.
   if (structure.float && structure.float.vertAnchor === 'text' && !structure.float.ySpec) {
     flow.cursorY = Math.max(0, Math.min(flow.cursorY + structure.float.yPt, contentHeight()));
+  } else if (outOfFlow && structure.float && verticalFrames) {
+    // Alignment needs the final table height. Start at the frame origin, then shift the
+    // complete fragment in closeTableFragment once that height is known.
+    flow.cursorY = tableFloatOriginY(structure.float, 0, verticalFrames);
   }
   /** One row's natural height where the table stands now. `tableLeft` moves; this reads it. */
   const rowHeightOf = (probeRow: SemanticTableRow): number =>
@@ -163,26 +195,47 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
       tableDeps
     );
     const last = finalized[finalized.length - 1]!;
-    publishFragment(
-      annotateTableFragmentGeometry(
-        {
-          kind: 'table',
-          id: `${table.id}#f${fragmentIndex}`,
-          tableId: table.id,
-          fragmentIndex,
-          rows: finalized,
-          box: {
-            x: tableLeft,
-            y: fragmentTop,
-            width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
-            height: last.box.y + last.box.height - fragmentTop,
-          },
+    const fragment = annotateTableFragmentGeometry(
+      {
+        kind: 'table',
+        ...(outOfFlow ? { outOfFlow: true as const } : {}),
+        id: `${table.id}#f${fragmentIndex}`,
+        tableId: table.id,
+        fragmentIndex,
+        rows: finalized,
+        box: {
+          x: tableLeft,
+          y: fragmentTop,
+          width: structure.columnWidthsPt.reduce((sum, columnWidth) => sum + columnWidth, 0),
+          height: last.box.y + last.box.height - fragmentTop,
         },
-        structure.columnWidthsPt,
-        0,
-        rowOrdinals
-      )
+      },
+      structure.columnWidthsPt,
+      0,
+      rowOrdinals
     );
+    let positionedFragment: TableFragmentRecord = fragment;
+    if (outOfFlow && structure.float && verticalFrames) {
+      const top = tableFloatOriginY(structure.float, fragment.box.height, verticalFrames);
+      const dy = top - fragment.box.y;
+      positionedFragment = shiftBlocks([fragment], dy)[0] as TableFragmentRecord;
+      if (Math.abs(dy) > 0.001) {
+        const shiftParagraphAnchors = (blocks: readonly BlockFragmentRecord[]): void => {
+          for (const block of blocks) {
+            if (block.kind === 'paragraph') shiftAnchor(block.paragraphId, dy);
+            else {
+              for (const row of block.rows) {
+                for (const cell of row.cells) shiftParagraphAnchors(cell.blocks);
+              }
+            }
+          }
+        };
+        for (const row of fragment.rows) {
+          for (const cell of row.cells) shiftParagraphAnchors(cell.blocks);
+        }
+      }
+    }
+    publishFragment(positionedFragment);
     fragmentIndex += 1;
     rows = [];
     sourceRows = [];
@@ -461,4 +514,6 @@ export function paginateTableInFlow(table: OoxmlElement, flow: TableFlowCursor):
     }
   }
   closeTableFragment();
+  if (outOfFlow) flow.cursorY = bodyCursorY;
+  return { outOfFlow };
 }

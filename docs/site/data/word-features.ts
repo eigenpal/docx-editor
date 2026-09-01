@@ -443,7 +443,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'An anchored table lands where Word puts it across the page: tblpXSpec or tblpX against the text, margin, or page box, plus a tblpY offset from the text anchor. Text does not wrap beside it yet. Page-anchored and margin-anchored vertical positions keep their place in the flow.',
+      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box. It uses tblpY or tblpYSpec against the selected vertical anchor. Page-anchored and margin-anchored tables do not advance body flow. Text does not wrap beside them yet.',
   },
   {
     id: 'tables.text-direction',

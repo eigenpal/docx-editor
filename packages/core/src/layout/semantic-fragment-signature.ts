@@ -8,6 +8,7 @@ import type {
   ParagraphFragmentRecord,
   TableFragmentRecord,
 } from './semantic-records.ts';
+import { isOutOfFlowTableFragment } from './table-float-position.ts';
 
 /**
  * What one field of a fragment record does in the signature.
@@ -121,7 +122,10 @@ export function fragmentSignature(fragment: BlockFragmentRecord): string {
   // values stay positionally aligned with the key list that produced them.
   const signature =
     fragment.kind === 'table'
-      ? JSON.stringify(TABLE_KEYS.map((key) => fragment[key]))
+      ? JSON.stringify([
+          isOutOfFlowTableFragment(fragment),
+          ...TABLE_KEYS.map((key) => fragment[key]),
+        ])
       : JSON.stringify(PARAGRAPH_KEYS.map((key) => fragment[key]));
   signatures.set(fragment, signature);
   return signature;

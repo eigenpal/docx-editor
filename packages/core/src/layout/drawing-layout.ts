@@ -1201,7 +1201,6 @@ export function columnBoxForSection(options: {
     height: options.paragraphHeight,
   });
 }
-
 export function shiftAnchoredDrawingRecords(
   drawings: AnchoredDrawingRecord[],
   paragraphId: string,
@@ -1211,6 +1210,7 @@ export function shiftAnchoredDrawingRecords(
   for (let index = 0; index < drawings.length; index += 1) {
     const drawing = drawings[index]!;
     if (drawing.anchorParagraphId !== paragraphId) continue;
+    if (!drawing.layoutInCell && !['paragraph', 'line'].includes(drawing.verticalFrame)) continue;
     drawings[index] = Object.freeze({
       ...drawing,
       y: drawing.y + dy,
