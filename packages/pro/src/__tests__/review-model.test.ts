@@ -214,6 +214,18 @@ describe('one decision is one card', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
+  test('tracked row and content wrappers sharing one decision produce one card', () => {
+    const part = story(
+      `<w:tbl><w:tr><w:trPr><w:del w:id="7" w:author="QA" w:date="D"/></w:trPr>` +
+        `<w:tc><w:tcPr><w:cellDel w:id="7" w:author="QA" w:date="D"/></w:tcPr>` +
+        `<w:p>${del('7', delRun('cell'), 'QA')}</w:p></w:tc></w:tr></w:tbl>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('delete');
+    expect(items[0]!.text).toBe('cell');
+  });
+
   test('card ids are unique, so a list key never collides', () => {
     const part = story(
       `<w:p>${ins('7', run('a'))}${run(' x ')}${ins('7', run('b'))}${del('7', delRun('c'), 'QA')}</w:p>`

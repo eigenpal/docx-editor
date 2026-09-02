@@ -55,6 +55,24 @@ function coincidentKey(item: ReviewRevisionItem): string | null {
   return `${addressKey(item.address)}\u0000${ranges.join('\u0001')}`;
 }
 
+function startKey(item: ReviewRevisionItem): string | null {
+  if (item.revisionKind === 'structural' || item.ranges.length === 0) return null;
+  const start = item.ranges[0]!.start;
+  return `${addressKey(item.address)}\u0000${item.ranges[0]!.partName}\u0000${start.paragraphId}:${start.offset}`;
+}
+
+function structuralPointKey(item: ReviewRevisionItem): string | null {
+  if (
+    item.revisionKind !== 'structural' ||
+    item.ranges.length !== 1 ||
+    hasCharacters(item.ranges[0]!)
+  ) {
+    return null;
+  }
+  const point = item.ranges[0]!.start;
+  return `${addressKey(item.address)}\u0000${item.ranges[0]!.partName}\u0000${point.paragraphId}:${point.offset}`;
+}
+
 function sameDirection(left: ReviewRevisionItem, right: ReviewRevisionItem): boolean {
   const removed = (kind: ReviewRevisionItem['revisionKind']): boolean =>
     kind === 'delete' || kind === 'moveFrom';
@@ -73,12 +91,35 @@ export function mergeCoincidentSameAddressEdits(
 ): readonly ReviewRevisionItem[] {
   if (items.length < 2) return items;
   const groups = new Map<string, number[]>();
+  const contentByStart = new Map<string, number[]>();
   for (const [index, item] of items.entries()) {
     const key = coincidentKey(item);
-    if (key === null) continue;
-    const group = groups.get(key);
-    if (group) group.push(index);
-    else groups.set(key, [index]);
+    if (key !== null) {
+      const group = groups.get(key);
+      if (group) group.push(index);
+      else groups.set(key, [index]);
+    }
+    const start = startKey(item);
+    if (start !== null) {
+      const group = contentByStart.get(start);
+      if (group) group.push(index);
+      else contentByStart.set(start, [index]);
+    }
+  }
+  // A tracked row's `w:trPr/w:del` and `w:cellDel` markers anchor at the first
+  // paragraph's start. Word can stamp the row's text wrapper with the same address. Accept
+  // already resolves them together, so attach an unambiguous structural point to that card.
+  for (const [index, item] of items.entries()) {
+    const point = structuralPointKey(item);
+    if (point === null) continue;
+    const candidates = contentByStart.get(point) ?? [];
+    const keys = new Set(candidates.map((candidate) => coincidentKey(items[candidate]!)));
+    keys.delete(null);
+    if (keys.size !== 1) continue;
+    const key = keys.values().next().value;
+    if (key === undefined || key === null) continue;
+    const group = groups.get(key)!;
+    group.push(index);
   }
 
   const merged = new Map<number, ReviewRevisionItem>();
@@ -86,18 +127,20 @@ export function mergeCoincidentSameAddressEdits(
   for (const group of groups.values()) {
     if (group.length < 2) continue;
     const members = group.map((index) => items[index]!);
-    const first = members[0]!;
-    if (
-      new Set(members.map((item) => item.nesting)).size !== members.length ||
-      members.some((item) => !sameDirection(first, item))
-    ) {
+    const content = members.filter((item) => item.revisionKind !== 'structural');
+    if (content.length === 0) continue;
+    const firstContent = content[0]!;
+    const hasStructural = content.length !== members.length;
+    if (content.some((item) => !sameDirection(firstContent, item))) continue;
+    if (!hasStructural && new Set(members.map((item) => item.nesting)).size !== members.length) {
       continue;
     }
     // Keep the pairable content kind when a move wrapper duplicates it. The replacement pass
-    // that follows only pairs `insert` and `delete`.
+    // that follows only pairs `insert` and `delete`. It also gives a tracked row's text-bearing
+    // wrapper precedence over its structural markers.
     const representative =
-      members.find((item) => item.revisionKind === 'insert' || item.revisionKind === 'delete') ??
-      members.reduce((deepest, item) => (item.nesting > deepest.nesting ? item : deepest));
+      content.find((item) => item.revisionKind === 'insert' || item.revisionKind === 'delete') ??
+      content.reduce((deepest, item) => (item.nesting > deepest.nesting ? item : deepest));
     const ranges: ReviewRange[] = [];
     const rangeKeys = new Set<string>();
     const siteNodeIds: string[] = [];
