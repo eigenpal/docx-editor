@@ -1,0 +1,55 @@
+{
+  "name": "@docx-editor.dev/docx-to-pdf",
+  "version": "2.14.0",
+  "private": true,
+  "description": "Server-first DOCX to PDF conversion powered by the shared docx-editor.dev semantic layout engine.",
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": "^20.16.0 || >=22.3.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/metafile-*.json",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf"
+  },
+  "peerDependencies": {
+    "@docx-editor.dev/core": "~2.14.0"
+  },
+  "dependencies": {
+    "@docx-editor.dev/fonts": "~2.14.1",
+    "pdfkit": "^0.20.1"
+  },
+  "devDependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@types/pdfkit": "^0.17.6",
+    "typescript": "^5.3.3"
+  },
+  "keywords": [
+    "docx",
+    "pdf",
+    "converter",
+    "headless"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eigenpal/docx-editor.git",
+    "directory": "packages/docx-to-pdf"
+  }
+}

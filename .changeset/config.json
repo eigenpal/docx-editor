@@ -15,7 +15,7 @@
     ]
   ],
   "linked": [],
-  "ignore": ["@docx-editor.dev/docx-to-markdown"],
+  "ignore": ["@docx-editor.dev/docx-to-markdown", "@docx-editor.dev/docx-to-pdf"],
   "access": "public",
   "privatePackages": { "version": true, "tag": false },
   "baseBranch": "main",

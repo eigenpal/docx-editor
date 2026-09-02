@@ -234,6 +234,12 @@ export const PACKAGES = [
     tsconfigPath: 'packages/fonts/tsconfig.api.json',
   },
   {
+    name: '@docx-editor.dev/docx-to-pdf',
+    root: 'packages/docx-to-pdf',
+    pkgSlug: 'docx-editor-docx-to-pdf',
+    tsconfigPath: 'packages/docx-to-pdf/tsconfig.api.json',
+  },
+  {
     name: '@docx-editor.dev/docx-to-markdown',
     root: 'packages/docx-to-markdown',
     pkgSlug: 'docx-editor-docx-to-markdown',

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@docx-editor.dev/core/export": ["../core/dist/export.d.ts"],
+      "@docx-editor.dev/core/layout": ["../core/dist/layout.d.ts"],
+      "@docx-editor.dev/core/store": ["../core/dist/store.d.ts"],
+      "@docx-editor.dev/fonts": ["../fonts/dist/index.d.ts"]
+    }
+  },
+  "include": ["src"]
+}
