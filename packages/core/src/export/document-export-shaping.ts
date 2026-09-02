@@ -13,12 +13,7 @@ import {
   type FontOriginFailure,
 } from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
-import {
-  FontResolutionError,
-  HARD_MAX_AGGREGATE_FONT_BYTES,
-  type FontRequest,
-  type ResolvedFont,
-} from '../layout/font-resource.ts';
+import { HARD_MAX_AGGREGATE_FONT_BYTES } from '../layout/font-resource.ts';
 import { buildNumberingIndex } from '../layout/numbering-index.ts';
 import { resolveStoryListItems } from '../layout/list-resolve.ts';
 import { buildStyleCascadeTable } from '../layout/style-cascade.ts';
@@ -56,47 +51,48 @@ import {
   type OpenDocumentForExportOptions,
   type OpenDocumentForExportResult,
 } from './export-session.ts';
-import { createSessionExportShaping, type SharedExportShaping } from './shared-export-shaping.ts';
+import {
+  documentEmbeddedFontOrigin,
+  type DocumentEmbeddedFontDiagnostics,
+} from './document-embedded-fonts.ts';
+import {
+  bindSessionAdmittedFont,
+  enforceStrictFontPolicy,
+  fontResolutionReport,
+  hasExportAdmittedFont,
+  publishFontResolutionReport,
+  type DocumentExportFontResolutionOptions,
+  type ExportAdmittedFontApi,
+  type ExportFontResolutionReport,
+} from './document-export-font-resolution.ts';
+import {
+  bindSessionExportLaidOutText,
+  hasExportLaidOutText,
+  type ExportLaidOutTextApi,
+} from './export-laid-out-text.ts';
+import { createSessionExportShaping, type SessionExportShaping } from './shared-export-shaping.ts';
+
+export type {
+  ExportDroppedEmbeddedFont,
+  ExportFontFaceResolution,
+  ExportFontFamilyResolution,
+  ExportFontResolutionReport,
+} from './document-export-font-resolution.ts';
+export { hasExportAdmittedFont, hasExportLaidOutText };
 
 /** Session-owned shaping over one document-specific font composition. @internal */
-export interface DocumentExportShaping extends SharedExportShaping {
+export interface DocumentExportShaping extends SessionExportShaping {
   /** Release this active document's font-byte reservation. Idempotent. */
   dispose(): void;
 }
 
 /** Cancellation and deadline controls for document-specific font resolution. @internal */
-export interface DocumentExportShapingOptions {
+export interface DocumentExportShapingOptions extends DocumentExportFontResolutionOptions {
   readonly signal?: AbortSignal;
   /** Maximum time for font origins and shaping initialization. Default: 60 seconds. */
   readonly timeoutMs?: number;
-  readonly fontPolicy?: 'best-effort' | 'strict';
-  /** Fire-and-forget diagnostics; returned promises are observed but do not delay export. */
-  readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
   /** Process-byte lease observations for resource-lifecycle tests and diagnostics. @internal */
   readonly onActiveFontBytesChange?: (activeBytes: number) => void;
-}
-
-/** One paintable face in an export font-resolution report. @public */
-export interface ExportFontFaceResolution {
-  readonly weight: 400 | 700;
-  readonly style: 'normal' | 'italic';
-  readonly sourceFamily: string;
-  readonly via: 'direct' | 'substitution';
-}
-
-/** Coverage of one family Core layout may request. @public */
-export interface ExportFontFamilyResolution {
-  readonly family: string;
-  readonly coverage: 'complete' | 'partial' | 'none';
-  readonly faces: readonly ExportFontFaceResolution[];
-}
-
-/** Exporter-neutral evidence for the font policy behind one layout session. @public */
-export interface ExportFontResolutionReport {
-  readonly requestedFamilies: readonly string[];
-  readonly defaultFamily: string;
-  readonly families: readonly ExportFontFamilyResolution[];
-  readonly originFailures: readonly FontOriginFailure[];
 }
 
 /** Export session retaining the exact font evidence used to construct its measurer. @public */
@@ -105,12 +101,23 @@ export interface FontBackedExportSession extends ExportSession {
   readonly fontResolution: ExportFontResolutionReport;
 }
 
+/** Core-produced font-backed session with admitted-face and laid-out-text capabilities. @public */
+export interface FontBackedExportCapabilities
+  extends FontBackedExportSession, ExportAdmittedFontApi, ExportLaidOutTextApi {}
+
+/** Whether a value publishes both font-backed session capabilities. @public */
+export function hasFontBackedExportCapabilities<T extends object>(
+  value: T
+): value is T & ExportAdmittedFontApi & ExportLaidOutTextApi {
+  return hasExportAdmittedFont(value) && hasExportLaidOutText(value);
+}
+
 /** Result of opening immutable bytes through Core's document-aware font composition root. @public */
 export type OpenFontBackedDocumentForExportResult =
-  | { readonly ok: true; readonly session: FontBackedExportSession }
+  | { readonly ok: true; readonly session: FontBackedExportCapabilities }
   | Exclude<OpenDocumentForExportResult, { readonly ok: true }>;
 
-/** Font-backed one-shot session options shared by Markdown, PDF, and future exporters. @public */
+/** Font-backed one-shot session options shared by Markdown and future exporters. @public */
 export interface OpenFontBackedDocumentForExportOptions extends Omit<
   OpenDocumentForExportOptions,
   'measurer' | 'reuseAcrossRevisions'
@@ -123,7 +130,6 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
   readonly fontResolutionTimeoutMs?: number;
   /** `strict` refuses incomplete face coverage or any failed origin. Default: `best-effort`. */
   readonly fontPolicy?: 'best-effort' | 'strict';
-  /** Structured evidence for the exact font composition used to create page breaks. */
   /** Fire-and-forget diagnostics; returned promises are observed but do not delay export. */
   readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
 }
@@ -280,6 +286,16 @@ export async function openFontBackedDocumentForExport(
         termination === 'active' ? session.layoutFor(displayMode) : Promise.reject(unavailable()),
       validatedImageBytes: (drawing: Parameters<ExportSession['validatedImageBytes']>[0]) =>
         termination === 'active' ? session.validatedImageBytes(drawing) : null,
+      admittedFontFace: bindSessionAdmittedFont({
+        status: () => termination,
+        unavailable,
+        resolve: () => ownedShaping?.resolveFont,
+      }),
+      shapeLaidOutText: bindSessionExportLaidOutText({
+        status: () => termination,
+        unavailable,
+        shaping: () => ownedShaping,
+      }),
       dispose: () => disposeOwned('disposed'),
     }),
   };
@@ -318,8 +334,11 @@ export async function acquireDocumentExportShaping(
         // safe: a hostile header cannot crowd the body's faces out. The editor caps the same way.
         const families = documentFontFamilies(view).slice(0, MAX_RESOLVER_FAMILIES);
         const originFailures: FontOriginFailure[] = [];
+        const embeddedFontDiagnostics: DocumentEmbeddedFontDiagnostics = { dropped: [] };
+        const embeddedOrigin = documentEmbeddedFontOrigin(view, embeddedFontDiagnostics);
+        const resolvedOrigins = embeddedOrigin ? [...origins, embeddedOrigin] : origins;
         const resolved = await composePreparedFontOrigins(
-          origins,
+          resolvedOrigins,
           {
             families,
             defaultFamily: WORD_DEFAULT_FONT.family,
@@ -336,7 +355,9 @@ export async function acquireDocumentExportShaping(
           const report = fontResolutionReport(
             families,
             configuration.defaultFont.family,
-            originFailures
+            originFailures,
+            undefined,
+            embeddedFontDiagnostics.dropped
           );
           publishFontResolutionReport(report, options);
           enforceStrictFontPolicy(report, options);
@@ -350,7 +371,8 @@ export async function acquireDocumentExportShaping(
           families,
           configuration.defaultFont.family,
           originFailures,
-          shaping.resolveFont
+          shaping.resolveFont,
+          embeddedFontDiagnostics.dropped
         );
         publishFontResolutionReport(report, options);
         enforceStrictFontPolicy(report, options);
@@ -399,94 +421,6 @@ function exportAbortError(signal: AbortSignal): ExportResourceError {
 
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw exportAbortError(signal);
-}
-
-const REQUIRED_FACE_VARIANTS = Object.freeze([
-  { weight: 400 as const, style: 'normal' as const },
-  { weight: 700 as const, style: 'normal' as const },
-  { weight: 400 as const, style: 'italic' as const },
-  { weight: 700 as const, style: 'italic' as const },
-]);
-
-function fontResolutionReport(
-  requestedFamilies: readonly string[],
-  defaultFamily: string,
-  originFailures: readonly FontOriginFailure[],
-  resolve?: (request: FontRequest) => ResolvedFont | FontResolutionError
-): ExportFontResolutionReport {
-  const familyNames = new Map<string, string>();
-  for (const family of [...requestedFamilies, defaultFamily]) {
-    const fold = family.toLowerCase();
-    if (!familyNames.has(fold)) familyNames.set(fold, family);
-  }
-  const families = [...familyNames.values()].map((family): ExportFontFamilyResolution => {
-    const faces: ExportFontFaceResolution[] = [];
-    for (const variant of REQUIRED_FACE_VARIANTS) {
-      const answer = resolve?.({ family, ...variant });
-      if (!answer || answer instanceof FontResolutionError) continue;
-      faces.push(
-        Object.freeze({
-          ...variant,
-          sourceFamily: answer.family,
-          via: answer.substitution ? ('substitution' as const) : ('direct' as const),
-        })
-      );
-    }
-    return Object.freeze({
-      family,
-      coverage: faces.length === 4 ? 'complete' : faces.length > 0 ? 'partial' : 'none',
-      faces: Object.freeze(faces),
-    });
-  });
-  return Object.freeze({
-    requestedFamilies: Object.freeze([...requestedFamilies]),
-    defaultFamily,
-    families: Object.freeze(families),
-    originFailures: Object.freeze([...originFailures]),
-  });
-}
-
-function publishFontResolutionReport(
-  report: ExportFontResolutionReport,
-  options: DocumentExportShapingOptions
-): void {
-  if (options.onFontResolution) {
-    try {
-      const result = (options.onFontResolution as (value: ExportFontResolutionReport) => unknown)(
-        report
-      );
-      void Promise.resolve(result).catch((cause: unknown) => {
-        console.warn('[fonts] font-resolution diagnostics callback failed', cause);
-      });
-    } catch (cause) {
-      console.warn('[fonts] font-resolution diagnostics callback failed', cause);
-    }
-    return;
-  }
-  for (const failure of report.originFailures) {
-    console.warn('[fonts] a document export font origin failed and was skipped', failure);
-  }
-}
-
-function enforceStrictFontPolicy(
-  report: ExportFontResolutionReport,
-  options: DocumentExportShapingOptions
-): void {
-  if (
-    options.fontPolicy !== 'strict' ||
-    (report.originFailures.length === 0 &&
-      report.families.every((family) => family.coverage === 'complete'))
-  ) {
-    return;
-  }
-  const incomplete = report.families
-    .filter((family) => family.coverage !== 'complete')
-    .map((family) => family.family)
-    .join(', ');
-  throw new ExportResourceError(
-    'layoutFailed',
-    `Strict font policy refused export${incomplete ? `; incomplete families: ${incomplete}` : '; a font origin failed'}`
-  );
 }
 
 function documentFontFamilies(view: HeadlessDocumentView): readonly string[] {

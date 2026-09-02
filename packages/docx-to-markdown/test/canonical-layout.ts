@@ -1,7 +1,15 @@
 export function canonicalLayout(value: unknown, key = ''): unknown {
   // Image decode is a host port (happy-dom refuses the fixture's tiny PNGs while the Node
-  // header parser admits them); drawing geometry is compared, transient resource state is not.
-  if (key === 'revision' || key === 'part' || key === 'resource' || key === 'reviewArtifacts') {
+  // header parser admits them); drawing geometry is compared, transient and export-only
+  // resource state is not.
+  if (
+    key === 'revision' ||
+    key === 'part' ||
+    key === 'resource' ||
+    key === 'reviewArtifacts' ||
+    key === 'documentMetadata' ||
+    key === 'destinations'
+  ) {
     return undefined;
   }
   if (typeof value === 'number') return Number(value.toFixed(6));

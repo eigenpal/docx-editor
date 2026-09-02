@@ -349,6 +349,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     noteAreaKind: 'represented',
     revisionRole: 'represented',
     source: 'represented',
+    geometry: 'layout-only',
   } satisfies Record<keyof SemanticReviewArtifactOccurrence, MarkdownFieldPolicy>,
   reviewArtifactPosition: {
     paragraphId: 'represented',

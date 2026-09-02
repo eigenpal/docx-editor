@@ -25,6 +25,28 @@ export interface SemanticReviewArtifactSource {
   readonly end: SemanticReviewArtifactPosition;
 }
 
+/** Rectangle in page-content coordinates, the same space as line boxes. @public */
+export interface SemanticReviewArtifactPageContentRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Rectangle in stacked page coordinates. @public */
+export interface SemanticReviewArtifactPageStackRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Laid-out bounds for one review occurrence. @public */
+export interface SemanticReviewArtifactOccurrenceGeometry {
+  readonly pageContent: readonly SemanticReviewArtifactPageContentRect[];
+  readonly pageStack: readonly SemanticReviewArtifactPageStackRect[];
+}
+
 /** One physical occurrence of a comment or tracked-change source range. @public */
 export interface SemanticReviewArtifactOccurrence {
   readonly pageIndex: number;
@@ -38,6 +60,8 @@ export interface SemanticReviewArtifactOccurrence {
   /** Replacement-half meaning for tracked-change occurrences; absent for comments. */
   readonly revisionRole?: 'replaced' | 'replacement' | 'neutral';
   readonly source: SemanticReviewArtifactSource;
+  /** Laid-out bounds when this occurrence can be measured; omitted otherwise. */
+  readonly geometry?: SemanticReviewArtifactOccurrenceGeometry;
 }
 
 /** Normalized change; ids are opaque and stable only within the source snapshot. @public */

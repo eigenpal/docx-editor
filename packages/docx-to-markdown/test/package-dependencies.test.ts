@@ -104,8 +104,8 @@ describe('engine dependency integrity', () => {
 
   test('documents the current embedded-font parity boundary before private release', () => {
     const readme = readFileSync(join(import.meta.dir, '..', 'README.md'), 'utf8');
-    expect(readme).toContain('Document-embedded fonts are not automatically admitted');
-    expect(readme).toContain('paginate differently from the browser editor');
+    expect(readme).toContain('Document-embedded fonts are admitted after explicit origins');
+    expect(readme).toContain('same mapper as the browser editor');
     expect(readme).toContain('host-owned');
   });
 });

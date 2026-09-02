@@ -3,7 +3,7 @@
 > Private workspace package. Publishing is intentionally deferred to the final release step.
 
 Server-first DOCX-to-Markdown conversion powered by the same semantic layout engine as the
-browser editor, PDF, and future exporters. It requires no DOM, browser, editor instance, or CLI.
+browser editor and future exporters. It requires no DOM, browser, editor instance, or CLI.
 
 ## Quick start
 
@@ -367,7 +367,7 @@ every input that can change geometry before it asks for a layout snapshot:
   semantic layout is published. `signal` and `resourceTimeoutMs` cover that work.
 - `displayMode` is applied by Core before pagination, so inserted/deleted content and page fields
   are measured in the same mode reported by `pagination.displayMode`.
-- The resulting layout is immutable. Markdown, PDF, and future translators must consume that one
+- The resulting layout is immutable. Markdown and future translators must consume that one
   snapshot rather than reopening the DOCX or re-resolving fonts independently.
 
 For citation-sensitive production exports, supply the same licensed font files used by the author
@@ -459,9 +459,8 @@ fallback or silently substitute approximate pagination. Serverless and worker ho
 only the document-requested faces from resolvers, cap concurrent font-heavy exports, dispose every
 reusable session promptly, and use the exported constants rather than duplicating numeric limits.
 
-Document-embedded fonts are not automatically admitted by the Node defaults yet. A DOCX that
-depends on `w:embedRegular`, `w:embedBold`, `w:embedItalic`, or `w:embedBoldItalic` is affected.
-Those documents can paginate differently from the browser editor, which auto-wires those faces.
+Document-embedded fonts are admitted after explicit origins, using the same mapper as the browser editor. A DOCX that depends on `w:embedRegular`, `w:embedBold`, `w:embedItalic`, or
+`w:embedBoldItalic` therefore paginates with those faces when they pass the shared byte budgets.
 Logical full-document Markdown remains independent of page breaks.
 
 Markdown is a semantic degradation:

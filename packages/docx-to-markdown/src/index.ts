@@ -6,6 +6,7 @@
  */
 import {
   acquireSharedExportShaping,
+  createPackagedFileFetch,
   ExportResourceError,
   openFontBackedDocumentForExport,
   openDocumentForExport as openCoreDocumentForExport,
@@ -36,7 +37,6 @@ import type {
   OpenMarkdownDocumentForExportOptions,
 } from './markdown-types.ts';
 import { createSuccessfulValueCache, provisionWithExportDeadline } from './export-deadline.ts';
-import { createPackagedFileFetch } from './packaged-file-fetch.ts';
 
 export { ExportResourceError } from '@docx-editor.dev/core/export';
 export {
@@ -48,7 +48,11 @@ export {
 export { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 
 export type {
+  ExportDestinationAnchor,
+  ExportDestinationGeometry,
+  ExportDocumentMetadata,
   ExportDocumentSource,
+  ExportDroppedEmbeddedFont,
   ExportFontFaceResolution,
   ExportFontFamilyResolution,
   ExportFontResolutionReport,
@@ -61,12 +65,17 @@ export type {
 } from '@docx-editor.dev/core/export';
 export type {
   AnchoredDrawingLayoutFallback,
+  FontRequest,
+  FontSubstitution,
   SemanticArtifactRootStoryKind,
   SemanticArtifactStoryKind,
   SemanticCommentArtifactRecord,
   SemanticDrawingVisit,
   SemanticLayout,
   SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactOccurrenceGeometry,
+  SemanticReviewArtifactPageContentRect,
+  SemanticReviewArtifactPageStackRect,
   SemanticReviewArtifactPosition,
   SemanticReviewArtifactRecord,
   SemanticReviewArtifactSource,
@@ -126,7 +135,16 @@ export class DocumentOpenError extends Error {
   }
 }
 
-const packagedFileFetch = createPackagedFileFetch();
+// Workspace and published sibling packages keep faces in fonts/assets. Bundled Node
+// workers copy those same faces beside the entry as ../assets/.
+const packagedFontRoots = Object.freeze([
+  new URL('../../fonts/assets/', import.meta.url),
+  new URL('../assets/', import.meta.url),
+]);
+const packagedFileFetch = createPackagedFileFetch({
+  trustedRoot: packagedFontRoots,
+  maxBytes: HARD_MAX_FONT_BYTES,
+});
 
 interface DefaultExportFonts {
   readonly configuration: PreparedLayoutFontConfiguration;
