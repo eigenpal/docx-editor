@@ -29,8 +29,6 @@ import {
 import { locateSites } from './review-site-locations.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 import { deepParagraphOrderOfPart } from './review-paragraph-order.ts';
-import { mergeCoincidentSameAddressEdits } from './review-coincident-revisions.ts';
-import { mergeEmptyBoundaryRevisions } from './review-empty-boundary-revisions.ts';
 // The vocabulary this derivation speaks — the item shapes and their pure helpers — lives in
 // `review-items.ts`, where the binding and layout lanes can reach it too.
 import {
@@ -362,9 +360,7 @@ function pairReplacements(
   allItems: readonly ReviewRevisionItem[],
   order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
-  const items = mergeEmptyBoundaryRevisions(
-    mergeAdjacentSameKindEdits(mergeCoincidentSameAddressEdits(allItems))
-  );
+  const items = mergeAdjacentSameKindEdits(allItems);
   // Not `ranges.length === 1`. One tracked edit becomes SEVERAL `w:del` elements whenever the
   // struck text crosses something that is not text — an endnote or footnote reference, a
   // field, a break — because those cannot go inside the same wrapper. Requiring a single range
@@ -481,11 +477,7 @@ function mergeAdjacentSameKindEdits(
     (item) =>
       (item.revisionKind === 'insert' || item.revisionKind === 'delete') &&
       !item.readOnly &&
-      item.ranges.some(
-        (range) =>
-          range.start.paragraphId !== range.end.paragraphId ||
-          range.start.offset !== range.end.offset
-      )
+      item.ranges.length > 0
   );
   if (mergeable.length < 2) return items;
 
@@ -495,7 +487,17 @@ function mergeAdjacentSameKindEdits(
   const endKeys = new Set<string>();
   for (const item of mergeable) {
     byStart.set(keyOf(item, item.ranges[0]!.start), item);
-    endKeys.add(keyOf(item, item.ranges[item.ranges.length - 1]!.end));
+    // An empty field-control wrapper can prefix a visible revision at the same position.
+    // Its point is not evidence that the visible revision has a predecessor.
+    if (
+      item.ranges.some(
+        (range) =>
+          range.start.paragraphId !== range.end.paragraphId ||
+          range.start.offset !== range.end.offset
+      )
+    ) {
+      endKeys.add(keyOf(item, item.ranges[item.ranges.length - 1]!.end));
+    }
   }
 
   const consumed = new Set<string>();
