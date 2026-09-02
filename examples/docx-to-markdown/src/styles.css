@@ -999,41 +999,13 @@ button {
 .md-export-loading {
   display: grid;
   min-height: 100%;
-  place-content: center;
-  justify-items: center;
+  place-items: center;
   padding: 40px;
-  color: var(--md-ink);
-  text-align: center;
 }
 
-.md-export-loading__indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-  color: var(--md-accent);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.md-export-loading__indicator .md-spinner {
-  width: 13px;
-  height: 13px;
-}
-
-.md-export-loading > strong {
-  font-size: 15px;
-  letter-spacing: -0.015em;
-}
-
-.md-export-loading > p {
-  min-height: 18px;
-  margin: 7px 0 0;
-  color: var(--md-muted);
-  font-size: 11px;
-  line-height: 1.55;
+.md-export-loading .md-spinner {
+  width: 18px;
+  height: 18px;
 }
 
 .md-live-update {

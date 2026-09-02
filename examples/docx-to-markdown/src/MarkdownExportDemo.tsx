@@ -94,38 +94,11 @@ function Spinner() {
   return <span className="md-spinner" aria-hidden="true" />;
 }
 
-const MARKDOWN_LOADING_MESSAGES = [
-  'Markdowning with page boundaries intact',
-  'Keeping headers and footers close to their pages',
-  'Giving tables, lists, and review notes careful treatment',
-  'Making the document citation-ready',
-] as const;
-
-function MarkdownLoadingState({ status }: { readonly status: 'queued' | 'exporting' }) {
-  const [messageIndex, setMessageIndex] = useState(0);
-
-  useEffect(() => {
-    setMessageIndex(0);
-    if (status === 'queued') return;
-    const timer = window.setInterval(
-      () => setMessageIndex((current) => (current + 1) % MARKDOWN_LOADING_MESSAGES.length),
-      1_800
-    );
-    return () => window.clearInterval(timer);
-  }, [status]);
-
+function MarkdownLoadingState() {
   return (
-    <div className="md-export-loading" aria-label="Building page-aware Markdown">
-      <div className="md-export-loading__indicator">
-        <Spinner />
-        <span>{status === 'queued' ? 'Catching up with your edits' : 'Building Markdown'}</span>
-      </div>
-      <strong>Preparing a page-aware export</strong>
-      <p aria-hidden="true">
-        {status === 'queued'
-          ? 'Waiting for a quiet moment before the next layout pass'
-          : MARKDOWN_LOADING_MESSAGES[messageIndex]}
-      </p>
+    <div className="md-export-loading" role="status" aria-live="polite">
+      <Spinner />
+      <span className="md-visually-hidden">Building Markdown</span>
     </div>
   );
 }
@@ -913,7 +886,7 @@ export function MarkdownExportDemo() {
                 onTabChange={setDeveloperPanelTab}
               />
             ) : loadingStatus ? (
-              <MarkdownLoadingState status={loadingStatus} />
+              <MarkdownLoadingState />
             ) : (
               <>
                 {busyPresentation === 'overlay' ? (
