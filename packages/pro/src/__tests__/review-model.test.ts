@@ -194,6 +194,77 @@ describe('one decision is one card', () => {
     expect(items[0]!.addresses.map((address) => address.id)).toEqual(['33', '34', '35', '36']);
   });
 
+  test('field controls join a deletion split across adjacent revision ids', () => {
+    const part = story(
+      `<w:p><w:del w:id="33" w:author="QA" w:date="D">` +
+        `<w:r><w:fldChar w:fldCharType="separate"/></w:r></w:del>` +
+        `${del('34', delRun('old '), 'QA')}${del('37', delRun('text'), 'QA')}` +
+        `<w:del w:id="35" w:author="QA" w:date="D">` +
+        `<w:r><w:fldChar w:fldCharType="end"/></w:r></w:del>` +
+        `${ins('36', run('new'), 'QA')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('replace');
+    expect(items[0]!.replacedText).toBe('old text');
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual([
+      '33',
+      '34',
+      '37',
+      '35',
+      '36',
+    ]);
+  });
+
+  test('coincident wrappers sharing an address are one decision', () => {
+    const part = story(
+      `<w:p><w:del w:id="1" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="1" w:author="QA" w:date="D">${delRun('same')}</w:moveFrom>` +
+        `</w:del></w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.text).toBe('same');
+  });
+
+  test('coincident wrappers with different addresses stay separate', () => {
+    const part = story(
+      `<w:p><w:del w:id="1" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="2" w:author="QA" w:date="D">${delRun('same')}</w:moveFrom>` +
+        `</w:del></w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
+  test('a nested wrapper covering only part of its parent stays separate', () => {
+    const part = story(
+      `<w:p><w:del w:id="1" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="1" w:author="QA" w:date="D">${delRun('part')}</w:moveFrom>` +
+        `${delRun(' rest')}</w:del></w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
+  test('a zero-width nested wrapper stays separate', () => {
+    const part = story(
+      `<w:p><w:del w:id="1" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="1" w:author="QA" w:date="D"/>${delRun('same')}</w:del></w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
+  test('tracked row and content wrappers sharing one decision produce one card', () => {
+    const part = story(
+      `<w:tbl><w:tr><w:trPr><w:del w:id="7" w:author="QA" w:date="D"/></w:trPr>` +
+        `<w:tc><w:tcPr><w:cellDel w:id="7" w:author="QA" w:date="D"/></w:tcPr>` +
+        `<w:p>${del('7', delRun('cell'), 'QA')}</w:p></w:tc></w:tr></w:tbl>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('delete');
+    expect(items[0]!.text).toBe('cell');
+  });
+
   test('card ids are unique, so a list key never collides', () => {
     const part = story(
       `<w:p>${ins('7', run('a'))}${run(' x ')}${ins('7', run('b'))}${del('7', delRun('c'), 'QA')}</w:p>`
@@ -227,6 +298,19 @@ describe('a replacement says where its halves divide', () => {
     const struck = item.ranges[0]!;
     expect(struck.start.offset).toBe(5);
     expect(struck.end.offset).toBe(8);
+  });
+
+  test('a coincident move wrapper does not prevent replacement pairing', () => {
+    const part = story(
+      `<w:p><w:del w:id="2" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="2" w:author="QA" w:date="D">${delRun('old')}</w:moveFrom>` +
+        `</w:del>${ins('1', run('new'))}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('replace');
+    expect(items[0]!.replacedText).toBe('old');
+    expect(items[0]!.text).toBe('new');
   });
 
   test('a deletion split across several elements is counted in full', () => {

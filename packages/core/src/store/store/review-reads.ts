@@ -29,6 +29,7 @@ import {
 import { locateSites } from './review-site-locations.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 import { deepParagraphOrderOfPart } from './review-paragraph-order.ts';
+import { mergeCoincidentSameAddressEdits } from './review-coincident-revisions.ts';
 import { mergeEmptyBoundaryRevisions } from './review-empty-boundary-revisions.ts';
 // The vocabulary this derivation speaks — the item shapes and their pure helpers — lives in
 // `review-items.ts`, where the binding and layout lanes can reach it too.
@@ -361,7 +362,9 @@ function pairReplacements(
   allItems: readonly ReviewRevisionItem[],
   order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
-  const items = mergeAdjacentSameKindEdits(mergeEmptyBoundaryRevisions(allItems));
+  const items = mergeEmptyBoundaryRevisions(
+    mergeAdjacentSameKindEdits(mergeCoincidentSameAddressEdits(allItems))
+  );
   // Not `ranges.length === 1`. One tracked edit becomes SEVERAL `w:del` elements whenever the
   // struck text crosses something that is not text — an endnote or footnote reference, a
   // field, a break — because those cannot go inside the same wrapper. Requiring a single range
@@ -478,7 +481,11 @@ function mergeAdjacentSameKindEdits(
     (item) =>
       (item.revisionKind === 'insert' || item.revisionKind === 'delete') &&
       !item.readOnly &&
-      item.ranges.length > 0
+      item.ranges.some(
+        (range) =>
+          range.start.paragraphId !== range.end.paragraphId ||
+          range.start.offset !== range.end.offset
+      )
   );
   if (mergeable.length < 2) return items;
 
