@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Show coincident tracked-change wrappers as one review decision instead of duplicate cards.
+Show tracked field controls with their adjacent replacement instead of separate Deleted cards.
