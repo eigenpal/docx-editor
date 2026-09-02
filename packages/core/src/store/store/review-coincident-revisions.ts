@@ -35,6 +35,32 @@ function dedupeAddresses(addresses: readonly RevisionAddress[]): RevisionAddress
   return out;
 }
 
+function hasCharacters(range: ReviewRange): boolean {
+  return (
+    range.start.paragraphId !== range.end.paragraphId || range.start.offset !== range.end.offset
+  );
+}
+
+function coincidentKey(item: ReviewRevisionItem): string | null {
+  if (
+    item.revisionKind !== 'insert' &&
+    item.revisionKind !== 'delete' &&
+    item.revisionKind !== 'moveFrom' &&
+    item.revisionKind !== 'moveTo'
+  ) {
+    return null;
+  }
+  if (item.ranges.length === 0 || item.ranges.some((range) => !hasCharacters(range))) return null;
+  const ranges = item.ranges.map(rangeKey).sort();
+  return `${addressKey(item.address)}\u0000${ranges.join('\u0001')}`;
+}
+
+function sameDirection(left: ReviewRevisionItem, right: ReviewRevisionItem): boolean {
+  const removed = (kind: ReviewRevisionItem['revisionKind']): boolean =>
+    kind === 'delete' || kind === 'moveFrom';
+  return removed(left.revisionKind) === removed(right.revisionKind);
+}
+
 /**
  * Fold nested wrappers that name one decision and cover the same characters.
  *
@@ -46,43 +72,13 @@ export function mergeCoincidentSameAddressEdits(
   items: readonly ReviewRevisionItem[]
 ): readonly ReviewRevisionItem[] {
   if (items.length < 2) return items;
-  const parents = items.map((_, index) => index);
-  const rootOf = (initial: number): number => {
-    let index = initial;
-    while (parents[index] !== index) index = parents[index]!;
-    const root = index;
-    index = initial;
-    while (parents[index] !== index) {
-      const next = parents[index]!;
-      parents[index] = root;
-      index = next;
-    }
-    return root;
-  };
-  const join = (left: number, right: number): void => {
-    const leftRoot = rootOf(left);
-    const rightRoot = rootOf(right);
-    if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot;
-  };
-  const firstByAddressRange = new Map<string, number>();
+  const groups = new Map<string, number[]>();
   for (const [index, item] of items.entries()) {
-    const address = addressKey(item.address);
-    for (const range of item.ranges) {
-      const key = `${address}\u0000${rangeKey(range)}`;
-      const first = firstByAddressRange.get(key);
-      if (first === undefined) firstByAddressRange.set(key, index);
-      // Coincident siblings can be separate decisions. Paragraph-mark insertion and deletion
-      // can share an address and point, for example. Different nesting proves one wrapper
-      // encloses the other, which is the duplicate shape this pass removes.
-      else if (items[first]!.nesting !== item.nesting) join(first, index);
-    }
-  }
-  const groups = new Map<number, number[]>();
-  for (const index of items.keys()) {
-    const root = rootOf(index);
-    const group = groups.get(root);
+    const key = coincidentKey(item);
+    if (key === null) continue;
+    const group = groups.get(key);
     if (group) group.push(index);
-    else groups.set(root, [index]);
+    else groups.set(key, [index]);
   }
 
   const merged = new Map<number, ReviewRevisionItem>();
@@ -90,9 +86,18 @@ export function mergeCoincidentSameAddressEdits(
   for (const group of groups.values()) {
     if (group.length < 2) continue;
     const members = group.map((index) => items[index]!);
-    const representative = members.reduce((deepest, item) =>
-      item.nesting > deepest.nesting ? item : deepest
-    );
+    const first = members[0]!;
+    if (
+      new Set(members.map((item) => item.nesting)).size !== members.length ||
+      members.some((item) => !sameDirection(first, item))
+    ) {
+      continue;
+    }
+    // Keep the pairable content kind when a move wrapper duplicates it. The replacement pass
+    // that follows only pairs `insert` and `delete`.
+    const representative =
+      members.find((item) => item.revisionKind === 'insert' || item.revisionKind === 'delete') ??
+      members.reduce((deepest, item) => (item.nesting > deepest.nesting ? item : deepest));
     const ranges: ReviewRange[] = [];
     const rangeKeys = new Set<string>();
     const siteNodeIds: string[] = [];

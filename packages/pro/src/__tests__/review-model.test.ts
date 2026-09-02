@@ -197,6 +197,23 @@ describe('one decision is one card', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
+  test('a nested wrapper covering only part of its parent stays separate', () => {
+    const part = story(
+      `<w:p><w:del w:id="1" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="1" w:author="QA" w:date="D">${delRun('part')}</w:moveFrom>` +
+        `${delRun(' rest')}</w:del></w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
+  test('a zero-width nested wrapper stays separate', () => {
+    const part = story(
+      `<w:p><w:del w:id="1" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="1" w:author="QA" w:date="D"/>${delRun('same')}</w:del></w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
   test('card ids are unique, so a list key never collides', () => {
     const part = story(
       `<w:p>${ins('7', run('a'))}${run(' x ')}${ins('7', run('b'))}${del('7', delRun('c'), 'QA')}</w:p>`
@@ -230,6 +247,19 @@ describe('a replacement says where its halves divide', () => {
     const struck = item.ranges[0]!;
     expect(struck.start.offset).toBe(5);
     expect(struck.end.offset).toBe(8);
+  });
+
+  test('a coincident move wrapper does not prevent replacement pairing', () => {
+    const part = story(
+      `<w:p><w:del w:id="2" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="2" w:author="QA" w:date="D">${delRun('old')}</w:moveFrom>` +
+        `</w:del>${ins('1', run('new'))}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('replace');
+    expect(items[0]!.replacedText).toBe('old');
+    expect(items[0]!.text).toBe('new');
   });
 
   test('a deletion split across several elements is counted in full', () => {
