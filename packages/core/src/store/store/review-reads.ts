@@ -29,6 +29,7 @@ import {
 import { locateSites } from './review-site-locations.ts';
 import { createRecentRootCache } from './recent-root-cache.ts';
 import { deepParagraphOrderOfPart } from './review-paragraph-order.ts';
+import { mergeCoincidentSameAddressEdits } from './review-coincident-revisions.ts';
 // The vocabulary this derivation speaks — the item shapes and their pure helpers — lives in
 // `review-items.ts`, where the binding and layout lanes can reach it too.
 import {
@@ -360,7 +361,7 @@ function pairReplacements(
   allItems: readonly ReviewRevisionItem[],
   order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
-  const items = mergeAdjacentSameKindEdits(allItems);
+  const items = mergeAdjacentSameKindEdits(mergeCoincidentSameAddressEdits(allItems));
   // Not `ranges.length === 1`. One tracked edit becomes SEVERAL `w:del` elements whenever the
   // struck text crosses something that is not text — an endnote or footnote reference, a
   // field, a break — because those cannot go inside the same wrapper. Requiring a single range

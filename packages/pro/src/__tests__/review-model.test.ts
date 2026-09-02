@@ -177,6 +177,26 @@ describe('one decision is one card', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
+  test('coincident wrappers sharing an address are one decision', () => {
+    const part = story(
+      `<w:p><w:del w:id="1" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="1" w:author="QA" w:date="D">${delRun('same')}</w:moveFrom>` +
+        `</w:del></w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.text).toBe('same');
+  });
+
+  test('coincident wrappers with different addresses stay separate', () => {
+    const part = story(
+      `<w:p><w:del w:id="1" w:author="QA" w:date="D">` +
+        `<w:moveFrom w:id="2" w:author="QA" w:date="D">${delRun('same')}</w:moveFrom>` +
+        `</w:del></w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
   test('card ids are unique, so a list key never collides', () => {
     const part = story(
       `<w:p>${ins('7', run('a'))}${run(' x ')}${ins('7', run('b'))}${del('7', delRun('c'), 'QA')}</w:p>`
