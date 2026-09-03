@@ -34,6 +34,9 @@ export function chopOversizedWord(
     readonly overflowTolerancePt: number;
   }
 ): OversizedWordRemainder {
+  if (width <= options.remainingLineWidth() + options.overflowTolerancePt) {
+    return { text, modelStart, width, brokeLine: false };
+  }
   const graphemes = segmentGraphemes(text);
   let graphemeFrom = 0;
   let utf16From = 0;

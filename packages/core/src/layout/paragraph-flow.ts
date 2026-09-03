@@ -1550,8 +1550,7 @@ export function breakParagraph(
         wordStartEnd = line.end;
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
-      // Word hangs trailing fill spaces at the line edge: they occupy the remaining band
-      // (and keep their underline) but never open continuation lines of their own.
+      // Trailing fill spaces occupy the remaining band but never open continuation lines.
       const lineEndWhitespace =
         isCollapsibleLineEndWhitespace(candidate) && placeableSuffixes[pieceIndex]![boundary] !== 1;
       if (lineEndWhitespace) {
@@ -1562,14 +1561,14 @@ export function breakParagraph(
         (line.spans.length > 0 || line.drawings.length > 0)
       ) {
         if (!opensWord && wordStartSpan === 0) {
-          // Fill this oversized word's remaining capacity in the chop below.
+          // Prefer a later float passage; otherwise fill this one's remainder in the chop below.
+          tryAdvanceToNextPassage();
         } else if (opensWord || wordStartSpan < 0) {
           if (tryAdvanceToNextPassage() && line.width + width <= lineAvailable() + 0.001) {
             // carry on in the next horizontal passage on this line
           } else {
             closeLine();
             if (!ensurePlacementWidth(width)) continue;
-            // This candidate starts the word anew after closeLine cleared its state.
             wordStartSpan = 0;
             wordStartWidth = 0;
             wordStartEnd = line.end;
@@ -1610,12 +1609,16 @@ export function breakParagraph(
       ) {
         if (!ensurePlacementWidth(width)) continue;
       }
-      // Break an oversized ordinary word at the margin. Layout-owned pieces stay whole because
-      // each span publishes the whole model range; measureText pieces reserve an unsliceable width.
+      // Layout-owned and measureText pieces have ranges or widths that cannot be sliced.
       let remaining = candidate;
       let remainingStart = piece.start + consumed;
       let remainingWidth = width;
-      if (!layoutOwned && piece.measureText === undefined) {
+      const canChopWord = !layoutOwned && piece.measureText === undefined;
+      if (
+        canChopWord &&
+        (line.spans.length === 0 || (!opensWord && wordStartSpan === 0)) &&
+        width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
+      ) {
         const chopped = chopOversizedWord(candidate, remainingStart, width, {
           remainingLineWidth,
           lineHasText: () => line.spans.length > 0,
@@ -1653,7 +1656,6 @@ export function breakParagraph(
         remainingStart = chopped.modelStart;
         remainingWidth = chopped.width;
         if (chopped.brokeLine) {
-          // Preserve the split word through future run boundaries after closeLine reset it.
           wordStartSpan = 0;
           wordStartWidth = 0;
           wordStartEnd = line.end;
