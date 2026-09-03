@@ -104,6 +104,7 @@ import { createPresenceColors } from './surface-presence-color.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
   detachDrawingUrlRegistry,
+  drawingPaintStringsCacheToken,
   type DrawingPaintStrings,
 } from '../output/semantic-paint-drawings.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
@@ -5355,6 +5356,8 @@ export function mountPaginatedSurface(
     },
     setDrawingStrings: (strings) => {
       if (drawingStrings === strings) return;
+      if (drawingPaintStringsCacheToken(drawingStrings) === drawingPaintStringsCacheToken(strings))
+        return;
       drawingStrings = strings;
       flushPendingInputAndLayout();
       render(false);

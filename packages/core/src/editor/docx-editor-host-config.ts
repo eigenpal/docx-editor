@@ -10,6 +10,7 @@ import {
 } from '@docx-editor.dev/i18n';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
+  drawingPaintStringsCacheToken,
   drawingPaintStringsFromTranslate,
   type DrawingPaintStrings,
 } from '../output/semantic-paint-drawings.ts';
@@ -72,9 +73,17 @@ export function createDocxEditorHostConfigState(initial: {
     setTranslate(next) {
       if (translate === next) return null;
       translate = next;
-      drawingStrings = next
+      const nextDrawingStrings = next
         ? drawingPaintStringsFromTranslate(next)
         : DEFAULT_DRAWING_PAINT_STRINGS;
+      if (
+        drawingPaintStringsCacheToken(drawingStrings) ===
+        drawingPaintStringsCacheToken(nextDrawingStrings)
+      ) {
+        drawingStrings = nextDrawingStrings;
+        return null;
+      }
+      drawingStrings = nextDrawingStrings;
       return drawingStrings;
     },
     tocLabels: () => locale.labels,

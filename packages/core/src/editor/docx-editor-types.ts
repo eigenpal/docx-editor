@@ -293,8 +293,8 @@ export interface DocxEditorInstance extends Editor {
    * Set the host editing mode without rebuilding the editor.
    *
    * This has the same meaning as {@link DocxEditorConfig.mode}. Passing `undefined` lets the
-   * document's tracking settings select the mode again. Host changes do not count as a reader
-   * toolbar choice.
+   * document's tracking settings select the mode again. A host change clears the reader's
+   * toolbar choice, so a later document reload can adopt `w:trackRevisions` again.
    *
    * @public
    */

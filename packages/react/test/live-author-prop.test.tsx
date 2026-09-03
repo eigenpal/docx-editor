@@ -180,4 +180,32 @@ describe('DocxEditor.Root author prop', () => {
     expect(instance).toBe(firstInstance);
     expect(resolver?.('image.pendingResource')).toBe('Second loading label');
   });
+
+  test('a fresh equivalent inline translation does not publish a selection change', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const tree = (marker: string) => (
+      <DocxEditorRoot
+        document={SOURCE}
+        translate={(key) => `same:${key}`}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <span>{marker}</span>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const view = render(tree('first'));
+    const firstInstance = instance!;
+    let changes = 0;
+    firstInstance.on('selectionChange', () => changes++);
+
+    await act(async () => {
+      view.rerender(tree('second'));
+    });
+    expect(instance).toBe(firstInstance);
+    expect(changes).toBe(0);
+  });
 });

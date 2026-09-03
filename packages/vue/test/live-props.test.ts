@@ -211,6 +211,22 @@ describe('live Vue props', () => {
     }
   });
 
+  test('a fresh equivalent inline translation does not publish a selection change', async () => {
+    const wrapper = mountWithProps(DocxEditor, { t: (key: string) => `same:${key}` });
+    try {
+      await flush();
+      const editor = wrapper.editor();
+      let changes = 0;
+      editor.on('selectionChange', () => changes++);
+
+      await wrapper.setProps({ t: (key: string) => `same:${key}` });
+      expect(wrapper.editor()).toBe(editor);
+      expect(changes).toBe(0);
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   test('DocxEditor sugar applies frame prop changes', async () => {
     const wrapper = mountWithProps(DocxEditor, {
       rulers: true,

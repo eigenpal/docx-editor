@@ -261,23 +261,24 @@ describe('live host configuration', () => {
   test('translation changes repaint drawing placeholder labels', () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const editor = createDocxEditor({ container });
+    const translate = (key: string) => `initial:${key}`;
+    const editor = createDocxEditor({ container, translate });
     try {
       editor.load(drawingDocx());
       expect(editor.snapshot().parseError).toBeNull();
-      expect(container.querySelector('.docx-drawing-placeholder')?.textContent).toBe(
-        'Loading image'
-      );
+      const placeholder = container.querySelector('.docx-drawing-placeholder');
+      expect(placeholder?.textContent).toBe('initial:image.pendingResource');
       let changes = 0;
       editor.on('selectionChange', () => changes++);
-      const translate = (key: string) => (key === 'image.pendingResource' ? 'REMOTE IMAGE' : key);
-      editor.setTranslate(translate);
+      editor.setTranslate((key) => `initial:${key}`);
+      expect(changes).toBe(0);
+      expect(container.querySelector('.docx-drawing-placeholder')).toBe(placeholder);
+
+      editor.setTranslate((key) => `updated:${key}`);
       expect(changes).toBe(1);
       expect(container.querySelector('.docx-drawing-placeholder')?.textContent).toBe(
-        'REMOTE IMAGE'
+        'updated:image.pendingResource'
       );
-      editor.setTranslate(translate);
-      expect(changes).toBe(1);
     } finally {
       editor.destroy();
       container.remove();
