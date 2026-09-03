@@ -18,7 +18,7 @@
 //
 // WHAT IS SEARCHED: body, furniture, footnotes, then endnotes. Each story uses the shared
 // paragraph walk, which descends into tables, nested tables, and block controls. Text-box
-// stories remain excluded until the surface can place a caret inside them.
+// stories follow the owning story; navigation selects their anchoring drawing, not their text.
 
 import {
   SEARCH_MATCH_LIMIT,
@@ -40,6 +40,7 @@ import {
 } from '../store/package/note-nodes.ts';
 import { isFldSimple } from '../store/package/field-nodes.ts';
 import { bodyStoryRoot, storyParagraphs, storyRootsOf } from '../store/package/story-blocks.ts';
+import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { projectVisibleParagraphText } from '../store/store/text-projection.ts';
@@ -81,6 +82,10 @@ export interface DocumentSearchMatch {
   readonly runOffset: number;
   /** Story containing the match. Omitted for the body. */
   readonly scope?: ViewScope;
+  /** Drawing that hosts a frame match. */
+  readonly drawingNodeId?: string;
+  /** Paragraph that anchors the drawing for a frame match. */
+  readonly hostParagraphId?: string;
   /** The matched text as it appears in the document, control characters flattened. */
   readonly text: string;
   /** Paragraph text immediately before the match, bounded and flattened. */
@@ -155,6 +160,8 @@ interface SearchStory {
   readonly part: OoxmlPart;
   readonly root: OoxmlNode;
   readonly scope?: ViewScope;
+  readonly drawingNodeId?: string;
+  readonly hostParagraphId?: string;
 }
 
 function bodyStories(part: OoxmlPart): SearchStory[] {
@@ -209,20 +216,45 @@ function noteStories(
 
 function searchStories(part: OoxmlPart, sources?: DocumentSearchSources): SearchStory[] {
   const stories = bodyStories(part);
-  if (!sources) return stories;
-  const seen = new Set<OoxmlPart>();
-  for (const story of furnitureStories(sources.headerFooterBySection, seen)) stories.push(story);
-  for (const story of noteStories(
-    sources.footnotes,
-    'footnote',
-    sources.referencedNoteIds.footnote
-  )) {
-    stories.push(story);
+  if (sources) {
+    const seen = new Set<OoxmlPart>();
+    for (const story of furnitureStories(sources.headerFooterBySection, seen)) stories.push(story);
+    for (const story of noteStories(
+      sources.footnotes,
+      'footnote',
+      sources.referencedNoteIds.footnote
+    )) {
+      stories.push(story);
+    }
+    for (const story of noteStories(
+      sources.endnotes,
+      'endnote',
+      sources.referencedNoteIds.endnote
+    )) {
+      stories.push(story);
+    }
   }
-  for (const story of noteStories(sources.endnotes, 'endnote', sources.referencedNoteIds.endnote)) {
-    stories.push(story);
+  const expanded: SearchStory[] = [];
+  for (const story of stories) {
+    expanded.push(story);
+    const hostParagraphIds = new Set(storyParagraphs(story.root).map((node) => node.id));
+    for (const frame of textboxStoriesInPart(story.part)) {
+      if (!hostParagraphIds.has(frame.hostParagraphId)) continue;
+      const owner = story.scope;
+      expanded.push({
+        part: story.part,
+        root: frame.root,
+        scope: {
+          kind: 'frame',
+          id: frame.root.id,
+          ...(owner?.kind === 'headerFooter' || owner?.kind === 'note' ? { owner } : {}),
+        },
+        drawingNodeId: frame.drawingNodeId,
+        hostParagraphId: frame.hostParagraphId,
+      });
+    }
   }
-  return stories;
+  return expanded;
 }
 
 /** The run a paragraph offset falls in, and the offset inside it. */
@@ -314,6 +346,8 @@ export function collectTextMatches(
           runIndex: address.index,
           runOffset: address.offset,
           ...(story.scope ? { scope: story.scope } : {}),
+          ...(story.drawingNodeId ? { drawingNodeId: story.drawingNodeId } : {}),
+          ...(story.hostParagraphId ? { hostParagraphId: story.hostParagraphId } : {}),
           text: bounded(projected.text.slice(occurrence.start, projectedEnd), SEARCH_QUERY_MAX),
           contextBefore: bounded(
             projected.text.slice(Math.max(0, occurrence.start - CONTEXT_RADIUS), occurrence.start),

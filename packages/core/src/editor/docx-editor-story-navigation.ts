@@ -42,7 +42,7 @@ export function isScopedStory(scope: ViewScope | undefined): scope is ScopedStor
   return scope?.kind === 'headerFooter' || scope?.kind === 'note';
 }
 
-/** Whether navigation can open every story returned by document search. */
+/** Whether navigation can open every non-body story returned by document search. */
 export function searchStoriesForSurface(
   surface: PaginatedSurface,
   editingMode: DocumentEditingMode
@@ -73,6 +73,34 @@ export function selectDocumentSearchMatch(surface: PaginatedSurface, match: Text
     match.length < 0
   ) {
     return { ok: false, code: 'invalidArgs', reason: 'match must carry a blockId and offsets' };
+  }
+  if (match.scope?.kind === 'frame') {
+    if (
+      typeof match.drawingNodeId !== 'string' ||
+      match.drawingNodeId.length === 0 ||
+      typeof match.hostParagraphId !== 'string' ||
+      match.hostParagraphId.length === 0
+    ) {
+      return {
+        ok: false,
+        code: 'invalidArgs',
+        reason: 'a frame match must carry drawing and host paragraph ids',
+      };
+    }
+    const owner = match.scope.owner;
+    if (owner) {
+      const entered = enterStoryPosition(surface, owner, {
+        paragraphId: match.hostParagraphId,
+        offset: 0,
+      });
+      if (!entered.ok) return entered;
+    } else {
+      leaveScopeForBodyParagraph(surface, match.hostParagraphId);
+    }
+    surface.revealParagraph(match.hostParagraphId);
+    return surface.selectDrawing?.(match.drawingNodeId, match.hostParagraphId)
+      ? { ok: true, changed: false }
+      : { ok: false, code: 'unsupported', reason: 'the text box drawing could not be selected' };
   }
   const position = { paragraphId: match.blockId, offset: match.start };
   if (isScopedStory(match.scope)) {

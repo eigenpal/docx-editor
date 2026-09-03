@@ -533,6 +533,8 @@ export interface PaginatedSurface {
   revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
   /** Set the selection directly, for a host driving the surface programmatically. */
   setSelection(next: SemanticSelection): void;
+  /** Select one painted drawing at its host paragraph, as a pointer press would. */
+  selectDrawing?(drawingNodeId: string, hostParagraphId: string): boolean;
   /**
    * Select a rectangle of table cells, or clear one with null.
    *

@@ -14,18 +14,22 @@ export type EditorScope = {
 /**
 * A footnote/endnote region.
 *
-* `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
-* (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
-* store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
+* `id` encodes kind and signed note id as `footnote:<id>` or `endnote:<id>`. Use
+* `formatNoteScopeId` or `parseNoteScopeId` from the store package.
 */
 | {
     id: string;
     kind: 'note';
-}
-/** A text box or floating frame with its own content, addressed by id. */
-| {
+} | {
     id: string;
     kind: 'frame';
+    owner?: {
+        kind: 'headerFooter';
+        rId: string;
+    } | {
+        id: string;
+        kind: 'note';
+    };
 }
 /** Read-only aggregate across every view. Valid for queries, not for writes. */
 | {

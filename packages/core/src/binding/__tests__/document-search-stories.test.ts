@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { MAX_NOTES_PER_PART } from '../../store/package/note-nodes.ts';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
+import { textboxStoriesInPart } from '../../store/package/textbox-stories.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -41,7 +42,7 @@ function fixture(): Uint8Array {
     `xmlns:a="${A}" xmlns:wps="${WPS}"><w:body>` +
     p('needle body') +
     '<w:p><w:r><w:footnoteReference w:id="1"/><w:endnoteReference w:id="2"/></w:r></w:p>' +
-    `<w:p>${textbox('needle textbox')}<w:pPr>${section}</w:pPr></w:p>` +
+    `<w:p><w:pPr>${section}</w:pPr>${textbox('needle textbox')}</w:p>` +
     section +
     '</w:body></w:document>';
   const contentTypes =
@@ -66,7 +67,11 @@ function fixture(): Uint8Array {
     ),
     'word/document.xml': strToU8(document),
     'word/_rels/document.xml.rels': strToU8(relationships),
-    'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('needle header')}</w:hdr>`),
+    'word/header1.xml': strToU8(
+      `<w:hdr xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+        p('needle header') +
+        `<w:p>${textbox('needle header textbox')}</w:p></w:hdr>`
+    ),
     'word/footer1.xml': strToU8(`<w:ftr xmlns:w="${W}">${p('needle footer')}</w:ftr>`),
     'word/footnotes.xml': strToU8(
       `<w:footnotes xmlns:w="${W}">` +
@@ -208,11 +213,16 @@ describe('navigation Find stories', () => {
   test('searches stories in order with scopes and deduplicated furniture parts', () => {
     const matches = open().findText('needle').matches;
 
-    expect(matches.map((match) => match.text)).toEqual(Array(5).fill('needle'));
-    expect(matches.map((match) => match.paragraphIndex)).toEqual([0, 0, 0, 0, 0]);
+    expect(matches.map((match) => match.text)).toEqual(Array(7).fill('needle'));
+    expect(matches.map((match) => match.paragraphIndex)).toEqual([0, 0, 0, 0, 0, 0, 0]);
     expect(matches.map((match) => match.scope)).toEqual([
       undefined,
+      expect.objectContaining({ kind: 'frame' }),
       { kind: 'headerFooter', rId: 'rHeader' },
+      expect.objectContaining({
+        kind: 'frame',
+        owner: { kind: 'headerFooter', rId: 'rHeader' },
+      }),
       { kind: 'headerFooter', rId: 'rFooter' },
       { kind: 'note', id: 'footnote:1' },
       { kind: 'note', id: 'endnote:2' },
@@ -280,8 +290,16 @@ describe('navigation Find stories', () => {
     expect(session.findText('outside cap').matches).toEqual([]);
   });
 
-  test('skips text-box stories until the surface can address them', () => {
-    expect(open().findText('needle textbox').matches).toEqual([]);
+  test('searches body text-box stories after body paragraphs', () => {
+    const session = open();
+    const [root] = textboxStoriesInPart(session.part());
+    const matches = session.findText('needle').matches;
+    const frame = matches[1]!;
+
+    expect(frame.scope).toEqual({ kind: 'frame', id: root?.root.id });
+    expect(frame.drawingNodeId).toBe(root?.drawingNodeId);
+    expect(frame.hostParagraphId).toBe(root?.hostParagraphId);
+    expect(frame.text).toBe('needle');
   });
 
   test.each([
@@ -312,6 +330,12 @@ describe('navigation Find stories', () => {
     const result = open().findText('needle', { limit: 4 });
 
     expect(result.matches).toHaveLength(4);
+    expect(result.matches.map((match) => match.scope?.kind ?? 'body')).toEqual([
+      'body',
+      'frame',
+      'headerFooter',
+      'frame',
+    ]);
     expect(result.truncated).toBe(true);
   });
 });

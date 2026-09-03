@@ -12,6 +12,8 @@
  */
 
 import type { ContentControlSummary, DocEdits, DocQueries, DocQueryResults } from './document.ts';
+import type { EditorScope, ViewScope } from './editor-scope.ts';
+export type { EditorScope, ViewScope } from './editor-scope.ts';
 // Type-only, so the adapters reach the review vocabulary through THIS contract rather than
 // naming the store lane, which they are not allowed to import.
 import type {
@@ -241,35 +243,6 @@ export interface DocumentChange {
 }
 
 /**
- * The editor is N+1 editing views: one body plus one per header/footer
- * relationship, plus footnotes, text boxes, and other addressable regions.
- * Commands must say which one they target, or they silently hit the wrong
- * surface when a header is focused.
- *
- * Intentionally open-ended: this set is expected to grow (notes, frames, and
- * whatever regions later prove addressable), so treat it as non-exhaustive
- * rather than a closed enum.
- */
-export type EditorScope =
-  | { kind: 'body' }
-  | { kind: 'headerFooter'; rId: string }
-  /**
-   * A footnote/endnote region.
-   *
-   * `id` encodes kind + signed note id as `footnote:<id>` or `endnote:<id>`
-   * (e.g. `footnote:2`). Use `formatNoteScopeId` / `parseNoteScopeId` from the
-   * store package. Do not invent a parallel `{ noteKind, noteId }` scope arm.
-   */
-  | { kind: 'note'; id: string }
-  /** A text box or floating frame with its own content, addressed by id. */
-  | { kind: 'frame'; id: string }
-  /** Read-only aggregate across every view. Valid for queries, not for writes. */
-  | { kind: 'all' };
-
-/** A concrete editing view — every scope except the read-only `all` aggregate. */
-export type ViewScope = Exclude<EditorScope, { kind: 'all' }>;
-
-/**
  * What a fit mode fits the page to.
  *
  * One member today. It is a union rather than a boolean because Word's other two — the whole
@@ -477,10 +450,10 @@ export interface Editor {
   } | null;
 
   /**
-   * Find across body, headers, footers, footnotes, then endnotes. Shared parts appear once.
+   * Find across body, headers, footers, footnotes, endnotes, and their text boxes.
    *
-   * The search narrows to the body when the surface cannot open other stories. This includes
-   * viewing mode and surfaces without header, footer, or note entry methods.
+   * The search narrows to the body and its selectable text boxes when other stories cannot open.
+   * This includes viewing mode and surfaces without header, footer, or note entry methods.
    */
   findMatches(
     query: string,
@@ -1458,6 +1431,7 @@ export interface EditorQueryResults extends DocQueryResults {
  *
  * A match can span runs when formatting changes mid-word; the run address is where it
  * STARTS. `scope` identifies a non-body story so navigation opens the correct surface.
+ * A frame scope selects its anchoring drawing and never places a caret inside its story.
  * A match inside a field result reports the field atom's model range. Its `length` is one,
  * while `text` carries the visible match and can be longer. Select with `start` and `length`.
  * Never derive the selected length from `text.length`.
@@ -1477,6 +1451,10 @@ export interface TextMatch {
   readonly runOffset: number;
   /** Story containing the match. Absence means the body. */
   readonly scope?: ViewScope;
+  /** Drawing that hosts a frame match. Omitted for ordinary story matches. */
+  readonly drawingNodeId?: string;
+  /** Paragraph that anchors the drawing for a frame match. Omitted for other matches. */
+  readonly hostParagraphId?: string;
   /** The matched text as it appears in the document. */
   readonly text: string;
   /**

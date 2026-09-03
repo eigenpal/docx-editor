@@ -504,6 +504,7 @@ export {
   type OoxmlStoryKind,
   type OoxmlStoryRoot,
 } from './story-blocks.ts';
+export { textboxStoriesInPart, type TextboxStoryRoot } from './textbox-stories.ts';
 export {
   CUSTOM_XML_PROPS_REL,
   CUSTOM_XML_PROPS_TYPE,

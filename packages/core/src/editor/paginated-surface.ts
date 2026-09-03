@@ -40,6 +40,7 @@ import {
   keyedRangeRects,
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
+  findDrawingOverlayFrameInLayout,
   paragraphFragmentsOf,
   paragraphFragmentsOfBlocks,
   reviewItemKey,
@@ -5095,6 +5096,16 @@ export function mountPaginatedSurface(
       // (the carried initialDrawingSelectionIntent already preserves a real one).
       if (!selectionsEqual(next, selection)) setDrawingIntent({ kind: 'programmatic' }, false);
       setSelection(next);
+    },
+
+    selectDrawing(drawingNodeId, hostParagraphId) {
+      flushLayout();
+      const found = findDrawingOverlayFrameInLayout(currentLayout, drawingNodeId);
+      if (!found || found.record.paragraphId !== hostParagraphId) return false;
+      const next = collapsedAt({ paragraphId: hostParagraphId, offset: found.record.start });
+      setDrawingIntent({ kind: 'pointer', drawingNodeId }, selectionsEqual(next, selection));
+      setSelection(next);
+      return resolveSelectedDrawingRecord(surface)?.drawingNodeId === drawingNodeId;
     },
 
     revealPage(pageIndex, options) {

@@ -4,12 +4,69 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
+import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
 import { FOOTNOTE_SCOPE_ID, HEADER_R_ID, storyParityDocx } from './story-parity-fixture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const DOC_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+
+function textbox(text: string): string {
+  return (
+    `<w:r><w:drawing xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" ' +
+    'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="914400" cy="457200"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    '<wp:wrapNone/><wp:docPr id="7" name="Find text box"/>' +
+    `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
+    '<wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+    `<wps:txbx><w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p>` +
+    '</w:txbxContent></wps:txbx><wps:bodyPr/></wps:wsp></a:graphicData></a:graphic>' +
+    '</wp:anchor></w:drawing></w:r>'
+  );
+}
+
+function textboxDocx(inHeader = false, includeBodyFrame = !inHeader): Uint8Array {
+  const headerReference = inHeader
+    ? '<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/></w:sectPr>'
+    : '';
+  const body =
+    '<w:p><w:r><w:t>body</w:t></w:r></w:p>' +
+    (includeBodyFrame ? `<w:p>${textbox('boxed needle')}</w:p>` : '') +
+    headerReference;
+  const files: Record<string, Uint8Array> = {
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        (inHeader
+          ? '<Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>'
+          : '') +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${DOC_REL}"><w:body>${body}</w:body></w:document>`
+    ),
+  };
+  if (inHeader) {
+    files['word/_rels/document.xml.rels'] = strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rHeader" Type="${DOC_REL}/header" Target="header1.xml"/></Relationships>`
+    );
+    files['word/header1.xml'] = strToU8(
+      `<w:hdr xmlns:w="${W}"><w:p>${textbox('boxed needle')}</w:p></w:hdr>`
+    );
+  }
+  return zipSync(files);
+}
 
 function docx(body: string): Uint8Array {
   return zipSync({
@@ -36,6 +93,78 @@ function storyParityDocxWithBodyTable(): Uint8Array {
 }
 
 describe('document search facade', () => {
+  test('selects a body text-box drawing without selecting its story text', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: textboxDocx(),
+    });
+    if (!editor.surface) throw new Error('surface did not open');
+    const match = editor.findMatches('needle')[0];
+    if (!match?.drawingNodeId || !match.hostParagraphId) throw new Error('frame match missing');
+    let revealed: string | null = null;
+    const revealParagraph = editor.surface.revealParagraph.bind(editor.surface);
+    editor.surface.revealParagraph = (paragraphId, options) => {
+      revealed = paragraphId;
+      return revealParagraph(paragraphId, options);
+    };
+
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    expect(revealed).toBe(match.hostParagraphId);
+    expect(editor.surface.state().selection).toEqual({
+      anchor: { paragraphId: match.hostParagraphId, offset: 0 },
+      head: { paragraphId: match.hostParagraphId, offset: 0 },
+    });
+    expect(editor.surface.drawingSelectionIntent()).toEqual({
+      kind: 'pointer',
+      drawingNodeId: match.drawingNodeId,
+    });
+    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(match.drawingNodeId);
+
+    expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
+    expect(editor.findMatches('boxed needle')[0]?.blockId).toBe(match.blockId);
+    editor.destroy();
+  });
+
+  test('opens a header before selecting its text-box drawing', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: textboxDocx(true),
+    });
+    if (!editor.surface) throw new Error('surface did not open');
+    const match = editor.findMatches('needle')[0];
+    if (!match?.drawingNodeId || !match.hostParagraphId) throw new Error('frame match missing');
+
+    expect(match.scope).toMatchObject({
+      kind: 'frame',
+      owner: { kind: 'headerFooter', rId: 'rHeader' },
+    });
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    expect(editor.getActiveScope()).toEqual({ kind: 'headerFooter', rId: 'rHeader' });
+    expect(editor.surface.drawingSelectionIntent()).toEqual({
+      kind: 'pointer',
+      drawingNodeId: match.drawingNodeId,
+    });
+    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(match.drawingNodeId);
+    editor.destroy();
+  });
+
+  test('keeps body text-box Find navigation available in viewing mode', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: textboxDocx(true, true),
+      mode: 'view',
+    });
+    const match = editor.findMatches('needle')[0];
+    if (!match) throw new Error('frame match missing');
+
+    expect(match.scope?.kind).toBe('frame');
+    expect(match.scope?.kind === 'frame' ? match.scope.owner : undefined).toBeUndefined();
+    expect(editor.findMatches('needle')).toHaveLength(1);
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(match.drawingNodeId);
+    editor.destroy();
+  });
+
   test('selects a match inside a table cell by paragraph id', () => {
     const body =
       '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>one</w:t></w:r></w:p></w:tc>' +
