@@ -227,9 +227,9 @@ describe('secondary-story hyperlink relationship scope', () => {
       ]);
       expect(textboxHref(page.footer?.anchoredDrawings)).toBe('https://footer.example/');
 
-      // Text-box stories and page furniture are read-only today, so paint intentionally omits
-      // href while retaining an anchor + link id. The semantic record above remains the target
-      // authority for export and for any future interactive story surface.
+      // Page furniture and text-box paint intentionally omit href while retaining an anchor +
+      // link id. The semantic record above remains the target authority for export and future
+      // interaction paths.
       for (const label of [
         'BodyTextboxLink',
         'HeaderLink',
@@ -264,11 +264,12 @@ describe('secondary-story hyperlink relationship scope', () => {
         relationshipTargetIn(pkg, pkg.mainDocumentPart, relationshipId),
     };
     const links = createDocumentLinkProjectors(view);
+    const cache = createParagraphLayoutCache<readonly PendingLine[]>();
     const furniture = createDocumentFurnitureSource({
       view,
       measurer: createFixedMeasurer(6, 14),
       producer: 'secondary-story-link-rels-only',
-      cache: createParagraphLayoutCache<readonly PendingLine[]>(),
+      cache,
       inlineDrawingLayoutForPart: (partName) => drawingLayoutFor(pkg.parts.get(partName)!),
       linkProjectors: links,
     });
@@ -281,6 +282,7 @@ describe('secondary-story hyperlink relationship scope', () => {
       targetFor('header', 'one'),
       targetFor('header', 'one'),
     ]);
+    const missesAfterFirst = cache.stats.misses;
 
     const relationships = new Map(firstPackage.relationships);
     relationships.set(
@@ -312,6 +314,7 @@ describe('secondary-story hyperlink relationship scope', () => {
     expect(updatedFooter).toBe(firstFooter);
     expect(directHref(updatedFooter)).toBe(targetFor('footer', 'one'));
     expect(textboxHref(updatedFooter?.anchoredDrawings)).toBe(targetFor('footer', 'one'));
+    expect(cache.stats.misses - missesAfterFirst).toBeLessThanOrEqual(5);
   });
 
   test('a rels-only body retarget invalidates its hosted story with one cache and session', () => {
@@ -360,6 +363,7 @@ describe('secondary-story hyperlink relationship scope', () => {
 
     const first = layout();
     expect(textboxHref(first.pages[0]!.anchoredDrawings)).toBe(targetFor('body', 'one'));
+    const missesAfterFirst = cache.stats.misses;
 
     const relationships = new Map(firstPackage.relationships);
     relationships.set(
@@ -391,5 +395,6 @@ describe('secondary-story hyperlink relationship scope', () => {
     expect(textboxHref(updated.pages[0]!.footer?.anchoredDrawings)).toBe(
       targetFor('footer', 'one')
     );
+    expect(cache.stats.misses - missesAfterFirst).toBeLessThanOrEqual(3);
   });
 });
