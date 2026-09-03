@@ -5,7 +5,11 @@
 // half both of them need.
 
 import { findNode, parentNodeOf, type OoxmlEditResult } from '../package/ooxml-edit.ts';
-import { readOnOffChild, W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
+import {
+  isInlineRunContainer,
+  readOnOffChild,
+  W14_NAMESPACE_URI,
+} from '../package/ooxml-shared.ts';
 import {
   WML_NAMESPACE_URI,
   type OoxmlElement,
@@ -266,30 +270,41 @@ export function hasGlossaryPlaceholderRef(control: OoxmlNode): boolean {
  * The innermost inline CONTAINER (hyperlink, field, content control) holding a run, within
  * one paragraph. Null for an ordinary top-level run.
  */
+export function inlineContainersOf(
+  paragraph: { readonly children: readonly OoxmlNode[] },
+  runId: string
+): readonly OoxmlNode[] {
+  let held: OoxmlNode[] | null = null;
+  const path: OoxmlNode[] = [];
+  const visit = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || held !== null) return;
+    if (node.id === runId) {
+      held = path.slice().reverse();
+      return;
+    }
+    const counted =
+      node.kind === 'fldSimple' ||
+      (node.kind === 'generic' && node.localName === 'fldSimple') ||
+      isInlineRunContainer(node) ||
+      // A content control is a container the same way a link is: typing at its OUTER edge
+      // must not join the run inside and grow the control (pro-review-and-custom-nodes 4.6).
+      node.kind === 'contentControl';
+    if (counted && depth >= MAX_CONTENT_CONTROL_NESTING) return;
+    const nextDepth = counted ? depth + 1 : depth;
+    if (counted) path.push(node);
+    for (const child of node.children) visit(child, nextDepth);
+    if (counted) path.pop();
+  };
+  for (const child of paragraph.children) visit(child, 0);
+  return held ?? [];
+}
+
+/** The innermost inline container holding a run, or null for a direct paragraph run. */
 export function inlineContainerOf(
   paragraph: { readonly children: readonly OoxmlNode[] },
   runId: string
 ): OoxmlNode | null {
-  let held: OoxmlNode | null = null;
-  const visit = (node: OoxmlNode, inside: OoxmlNode | null): void => {
-    if (node.kind === 'textValue' || held) return;
-    if (node.id === runId) {
-      held = inside;
-      return;
-    }
-    const nested =
-      node.kind === 'hyperlink' ||
-      node.kind === 'fldSimple' ||
-      // A content control is a container the same way a link is: typing at its OUTER edge
-      // must not join the run inside and grow the control (pro-review-and-custom-nodes 4.6).
-      node.kind === 'contentControl' ||
-      (node.kind === 'generic' && node.localName === 'fldSimple')
-        ? node
-        : inside;
-    for (const child of node.children) visit(child, nested);
-  };
-  for (const child of paragraph.children) visit(child, null);
-  return held;
+  return inlineContainersOf(paragraph, runId)[0] ?? null;
 }
 
 /**

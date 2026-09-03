@@ -11,7 +11,7 @@
 // worse than a refused one, because only the refusal can be reconciled.
 
 import { createRecentRootCache } from '../store/store/recent-root-cache.ts';
-import { Node as PMNode } from 'prosemirror-model';
+import { Node as PMNode, type Mark } from 'prosemirror-model';
 import {
   collectStoryParagraphs,
   findNode,
@@ -23,8 +23,14 @@ import {
   type OoxmlProperty,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import { walkParagraphInline } from '../store/package/content-control-walk.ts';
-import { runPropsOf, treeSchema } from './tree-schema.ts';
+import {
+  contentControlContentOf,
+  isContentControl,
+  MAX_CONTENT_CONTROL_NESTING,
+} from '../store/package/content-control-walk.ts';
+import { isInlineContainerProperty } from '../store/package/inline-container-properties.ts';
+import { isContentRevisionKind, isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import { inlineOwnerOf, runPropsOf, treeSchema } from './tree-schema.ts';
 
 /**
  * Why an edited projection could not be mapped back into tree ops.
@@ -39,6 +45,7 @@ export type TreeBindingRejection =
   | 'paragraph-reordered'
   | 'unknown-paragraph-id'
   | 'unknown-content-moved'
+  | 'inline-owner-mismatch'
   | 'unsupported-node'
   | 'split-not-clean'
   | 'join-not-clean';
@@ -55,11 +62,16 @@ export type MapResult =
   | { readonly ok: false; readonly reason: TreeBindingRejection; readonly detail?: string };
 
 /** One projected inline token, in paragraph order. */
+type EditableToken = { readonly inside?: string };
 type Token =
-  | { readonly kind: 'text'; readonly text: string; readonly props: readonly OoxmlProperty[] }
-  | { readonly kind: 'tab' }
-  | { readonly kind: 'hardBreak' }
-  | { readonly kind: 'pageBreak' }
+  | ({
+      readonly kind: 'text';
+      readonly text: string;
+      readonly props: readonly OoxmlProperty[];
+    } & EditableToken)
+  | ({ readonly kind: 'tab' } & EditableToken)
+  | ({ readonly kind: 'hardBreak' } & EditableToken)
+  | ({ readonly kind: 'pageBreak' } & EditableToken)
   | { readonly kind: 'unknown'; readonly nodeId: string; readonly label: string };
 
 function propsEqual(a: readonly OoxmlProperty[], b: readonly OoxmlProperty[]): boolean {
@@ -130,18 +142,22 @@ function unknownLabel(node: OoxmlNode): string {
 function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
   if (paragraph.kind === 'textValue') return [];
   const tokens: Token[] = [];
-  const emitRun = (run: OoxmlNode): void => {
+  const emitRun = (run: OoxmlNode, inside?: string): void => {
     if (run.kind !== 'run') return;
     const rPr = run.children.find((grand) => grand.kind === 'runProperties');
     const props = propertiesOf(rPr);
     for (const grand of run.children) {
       if (grand.kind === 'runProperties') continue;
       if (grand.kind === 'tab') {
-        tokens.push({ kind: 'tab' });
+        tokens.push({ kind: 'tab', ...(inside ? { inside } : {}) });
         continue;
       }
       if (grand.kind === 'hardBreak') {
-        tokens.push(isPageBreakNode(grand) ? { kind: 'pageBreak' } : { kind: 'hardBreak' });
+        tokens.push(
+          isPageBreakNode(grand)
+            ? { kind: 'pageBreak', ...(inside ? { inside } : {}) }
+            : { kind: 'hardBreak', ...(inside ? { inside } : {}) }
+        );
         continue;
       }
       if (grand.kind === 'text') {
@@ -149,20 +165,47 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
         for (const value of grand.children) {
           if (value.kind === 'textValue') text += value.value;
         }
-        if (text.length > 0) tokens.push({ kind: 'text', text, props });
+        if (text.length > 0) {
+          tokens.push({ kind: 'text', text, props, ...(inside ? { inside } : {}) });
+        }
         continue;
       }
       tokens.push({ kind: 'unknown', nodeId: grand.id, label: unknownLabel(grand) });
     }
   };
-  walkParagraphInline(paragraph.children, 0, (child) => {
+  const visit = (child: OoxmlNode, inside?: string): void => {
     if (child.kind === 'run') {
-      emitRun(child);
+      emitRun(child, inside);
       return;
     }
     // Paragraph-level unknown content keeps a position in the inline sequence.
     tokens.push({ kind: 'unknown', nodeId: child.id, label: unknownLabel(child) });
-  });
+  };
+  const walkEditable = (children: readonly OoxmlNode[], depth: number, inside?: string): void => {
+    for (const child of children) {
+      if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
+      if (
+        isInlineRunContainer(child) &&
+        !isContentRevisionKind(child.kind) &&
+        depth < MAX_CONTENT_CONTROL_NESTING
+      ) {
+        walkEditable(
+          child.children.filter((grand) => !isInlineContainerProperty(child, grand)),
+          depth + 1,
+          child.kind === 'generic' ? child.id : inside
+        );
+        continue;
+      }
+      if (isContentControl(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+        const content = contentControlContentOf(child);
+        if (content) walkEditable(content, depth + 1, inside);
+        continue;
+      }
+      visit(child, inside);
+    }
+  };
+  // Revisions stay opaque here. The reverse PM binding must preserve their authored identity.
+  walkEditable(paragraph.children, 0);
   return tokens;
 }
 
@@ -245,18 +288,22 @@ export function treeToDoc(part: OoxmlPart): PMNode {
         ? undefined
         : paragraph.children.find((child) => child.kind === 'paragraphProperties');
     const inline = tokensOfParagraph(paragraph).map((token) => {
+      const marks: Mark[] = [];
+      if (token.kind === 'text' && token.props.length > 0) {
+        marks.push(treeSchema.marks.runProps.create({ props: token.props }));
+      }
+      if (token.kind !== 'unknown' && token.inside) {
+        marks.push(treeSchema.marks.inlineOwner.create({ nodeId: token.inside }));
+      }
       switch (token.kind) {
         case 'text':
-          return treeSchema.text(
-            token.text,
-            token.props.length > 0 ? [treeSchema.marks.runProps.create({ props: token.props })] : []
-          );
+          return treeSchema.text(token.text, marks);
         case 'tab':
-          return treeSchema.node('tab');
+          return treeSchema.node('tab', null, undefined, marks);
         case 'hardBreak':
-          return treeSchema.node('hardBreak');
+          return treeSchema.node('hardBreak', null, undefined, marks);
         case 'pageBreak':
-          return treeSchema.node('pageBreak');
+          return treeSchema.node('pageBreak', null, undefined, marks);
         default:
           return treeSchema.node('unknownInline', {
             nodeId: token.nodeId,
@@ -278,13 +325,22 @@ function tokensOfNode(node: PMNode): Token[] {
   const tokens: Token[] = [];
   node.forEach((child) => {
     if (child.isText && child.text) {
-      tokens.push({ kind: 'text', text: child.text, props: runPropsOf(child) });
+      const inside = inlineOwnerOf(child);
+      tokens.push({
+        kind: 'text',
+        text: child.text,
+        props: runPropsOf(child),
+        ...(inside ? { inside } : {}),
+      });
       return;
     }
-    if (child.type.name === 'tab') tokens.push({ kind: 'tab' });
-    else if (child.type.name === 'hardBreak') tokens.push({ kind: 'hardBreak' });
-    else if (child.type.name === 'pageBreak') tokens.push({ kind: 'pageBreak' });
-    else if (child.type.name === 'unknownInline') {
+    const inside = inlineOwnerOf(child);
+    if (child.type.name === 'tab') tokens.push({ kind: 'tab', ...(inside ? { inside } : {}) });
+    else if (child.type.name === 'hardBreak') {
+      tokens.push({ kind: 'hardBreak', ...(inside ? { inside } : {}) });
+    } else if (child.type.name === 'pageBreak') {
+      tokens.push({ kind: 'pageBreak', ...(inside ? { inside } : {}) });
+    } else if (child.type.name === 'unknownInline') {
       tokens.push({
         kind: 'unknown',
         nodeId: String(child.attrs.nodeId ?? ''),
@@ -306,6 +362,56 @@ function textOf(tokens: readonly Token[]): string {
     // An unknown token occupies no text offset: it is not addressable content.
   }
   return text;
+}
+
+/** Preserving inline owner at each addressable offset. */
+function ownersByOffset(tokens: readonly Token[]): (string | undefined)[] {
+  const owners: (string | undefined)[] = [];
+  for (const token of tokens) {
+    if (token.kind === 'unknown') continue;
+    const length = token.kind === 'text' ? token.text.length : 1;
+    for (let index = 0; index < length; index += 1) owners.push(token.inside);
+  }
+  return owners;
+}
+
+/** One owner for a range, `undefined` for none, or `null` when the range crosses owners. */
+function soleOwner(owners: readonly (string | undefined)[]): string | undefined | null {
+  if (owners.length === 0) return undefined;
+  const first = owners[0];
+  for (const owner of owners) {
+    if (owner !== first) return null;
+  }
+  return first;
+}
+
+/** Generic wrapper owner and its generic wrapper ancestors, innermost first. */
+function inlineOwnerAncestors(paragraph: OoxmlNode): ReadonlyMap<string, readonly string[]> {
+  const out = new Map<string, readonly string[]>();
+  const walk = (node: OoxmlNode, ancestors: readonly string[], depth: number): void => {
+    if (node.kind === 'textValue' || depth >= MAX_CONTENT_CONTROL_NESTING) return;
+    const owns = node.kind === 'generic' && isInlineRunContainer(node);
+    const next = owns ? [node.id, ...ancestors] : ancestors;
+    if (owns) out.set(node.id, next);
+    for (const child of node.children) walk(child, next, depth + 1);
+  };
+  walk(paragraph, [], 0);
+  return out;
+}
+
+/** Innermost wrapper which contains every addressed owner. */
+function commonOwner(
+  owners: readonly (string | undefined)[],
+  ancestors: ReadonlyMap<string, readonly string[]>
+): string | undefined | null {
+  if (owners.length === 0) return undefined;
+  if (owners.every((owner) => owner === undefined)) return undefined;
+  if (owners.some((owner) => owner === undefined)) return null;
+  const chains = owners.map((owner) => ancestors.get(owner!));
+  if (chains.some((chain) => chain === undefined)) return null;
+  return (
+    chains[0]!.find((candidate) => chains.every((chain) => chain!.includes(candidate))) ?? null
+  );
 }
 
 /**
@@ -344,6 +450,84 @@ function diffRange(
   return { start, endBefore, endAfter };
 }
 
+/** Expand a text diff when a ProseMirror replacement also removed preserving owner marks. */
+function ownerAwareDiffRange(
+  before: readonly Token[],
+  after: readonly Token[]
+): { start: number; endBefore: number; endAfter: number } | null {
+  const range = diffRange(textOf(before), textOf(after));
+  if (!range) return null;
+  const beforeAt = ownersByOffset(before);
+  const afterAt = ownersByOffset(after);
+  let { start, endBefore, endAfter } = range;
+  while (start > 0 && beforeAt[start - 1] !== afterAt[start - 1]) start -= 1;
+  while (
+    endBefore < beforeAt.length &&
+    endAfter < afterAt.length &&
+    beforeAt[endBefore] !== afterAt[endAfter]
+  ) {
+    endBefore += 1;
+    endAfter += 1;
+  }
+  return { start, endBefore, endAfter };
+}
+
+type OwnerResolution = { readonly ok: true; readonly inside?: string } | { readonly ok: false };
+
+/** Prove that a text diff keeps the projection's preserving wrapper boundary. */
+function insertionOwner(
+  before: readonly Token[],
+  after: readonly Token[],
+  range: { readonly start: number; readonly endBefore: number; readonly endAfter: number } | null,
+  ancestors: ReadonlyMap<string, readonly string[]>
+): OwnerResolution {
+  const beforeAt = ownersByOffset(before);
+  const afterAt = ownersByOffset(after);
+  if (range === null) {
+    return beforeAt.length === afterAt.length &&
+      beforeAt.every((owner, index) => owner === afterAt[index])
+      ? { ok: true }
+      : { ok: false };
+  }
+  for (let index = 0; index < range.start; index += 1) {
+    if (beforeAt[index] !== afterAt[index]) return { ok: false };
+  }
+  const suffixLength = beforeAt.length - range.endBefore;
+  for (let index = 0; index < suffixLength; index += 1) {
+    if (beforeAt[range.endBefore + index] !== afterAt[range.endAfter + index]) {
+      return { ok: false };
+    }
+  }
+
+  const inserted = afterAt.slice(range.start, range.endAfter);
+  if (inserted.length === 0) return { ok: true };
+  const inside = soleOwner(inserted);
+  if (inside === null) return { ok: false };
+  const replaced = beforeAt.slice(range.start, range.endBefore);
+  const prior = commonOwner(replaced, ancestors);
+  if (prior === null) return { ok: false };
+  if (replaced.length > 0) {
+    if (prior === undefined && inside !== undefined) return { ok: false };
+    if (prior !== undefined) {
+      if (inside !== undefined && !ancestors.get(inside)?.includes(prior)) return { ok: false };
+      return { ok: true, inside: prior };
+    }
+  }
+
+  const known = new Set(beforeAt.filter((owner): owner is string => owner !== undefined));
+  if (inside !== undefined && !known.has(inside)) return { ok: false };
+  if (
+    inside === undefined &&
+    replaced.length === 0 &&
+    range.start > 0 &&
+    beforeAt[range.start - 1] !== undefined &&
+    beforeAt[range.start - 1] === beforeAt[range.start]
+  ) {
+    return { ok: false };
+  }
+  return inside === undefined ? { ok: true } : { ok: true, inside };
+}
+
 /** The accepted run properties in force at each text offset. */
 function propsByOffset(tokens: readonly Token[]): (readonly OoxmlProperty[])[] {
   const at: (readonly OoxmlProperty[])[] = [];
@@ -360,12 +544,13 @@ function propsByOffset(tokens: readonly Token[]): (readonly OoxmlProperty[])[] {
 }
 
 function paragraphOps(
-  paragraphId: string,
+  paragraph: OoxmlNode,
   before: readonly Token[],
   after: readonly Token[],
   beforeProps: readonly OoxmlProperty[],
   afterProps: readonly OoxmlProperty[]
 ): MapResult {
+  const paragraphId = paragraph.id;
   const ops: TreeDocOp[] = [];
 
   // Unknown content must survive an edit unchanged and in place. A projection that lost or
@@ -380,9 +565,10 @@ function paragraphOps(
     ops.push({ op: 'setParagraphProperties', paragraphId, properties: normalizeProps(afterProps) });
   }
 
-  const beforeText = textOf(before);
   const afterText = textOf(after);
-  const range = diffRange(beforeText, afterText);
+  const range = ownerAwareDiffRange(before, after);
+  const owner = insertionOwner(before, after, range, inlineOwnerAncestors(paragraph));
+  if (!owner.ok) return { ok: false, reason: 'inline-owner-mismatch', detail: paragraphId };
   if (range) {
     // Delete first, then insert at the same offset: two ops that compose to a replacement
     // without needing a replace primitive.
@@ -397,22 +583,43 @@ function paragraphOps(
       let buffer = '';
       const flush = (): void => {
         if (buffer.length === 0) return;
-        ops.push({ op: 'insertText', paragraphId, offset: cursor, text: buffer });
+        ops.push({
+          op: 'insertText',
+          paragraphId,
+          offset: cursor,
+          text: buffer,
+          ...(owner.inside ? { inside: owner.inside } : {}),
+        });
         cursor += buffer.length;
         buffer = '';
       };
       for (const character of inserted) {
         if (character === '\t') {
           flush();
-          ops.push({ op: 'insertTab', paragraphId, offset: cursor });
+          ops.push({
+            op: 'insertTab',
+            paragraphId,
+            offset: cursor,
+            ...(owner.inside ? { inside: owner.inside } : {}),
+          });
           cursor += 1;
         } else if (character === '\n') {
           flush();
-          ops.push({ op: 'insertHardBreak', paragraphId, offset: cursor });
+          ops.push({
+            op: 'insertHardBreak',
+            paragraphId,
+            offset: cursor,
+            ...(owner.inside ? { inside: owner.inside } : {}),
+          });
           cursor += 1;
         } else if (character === PAGE_BREAK_CHAR) {
           flush();
-          ops.push({ op: 'insertPageBreak', paragraphId, offset: cursor });
+          ops.push({
+            op: 'insertPageBreak',
+            paragraphId,
+            offset: cursor,
+            ...(owner.inside ? { inside: owner.inside } : {}),
+          });
           cursor += 1;
         } else buffer += character;
       }
@@ -486,7 +693,7 @@ export function docToTreeOps(part: OoxmlPart, doc: PMNode): MapResult {
         return { ok: false, reason: 'paragraph-reordered', detail: String(node.attrs.nodeId) };
       }
       const result = paragraphOps(
-        paragraph.id,
+        paragraph,
         tokensOfParagraph(paragraph),
         tokensOfNode(node),
         propertiesOf(

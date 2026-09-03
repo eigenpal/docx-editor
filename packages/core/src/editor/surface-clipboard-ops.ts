@@ -147,6 +147,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
         paragraphId: target.paragraphId,
         offset: target.offset,
         text: joined,
+        ...(plan.replaceInside === undefined ? {} : { inside: plan.replaceInside }),
       });
       ops.push(...pendingOps);
     }
@@ -260,6 +261,7 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
             fragmentBytes: bytes,
             lastMarkCovered,
             priorOps: plan.ops as unknown as TreeDocOp[],
+            ...(plan.replaceInside === undefined ? {} : { inside: plan.replaceInside }),
             ...(actorId !== undefined ? { actorId } : {}),
           }
         );

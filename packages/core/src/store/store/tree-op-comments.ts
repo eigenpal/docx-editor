@@ -16,7 +16,7 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isInlineRunContainer } from '../package/ooxml-shared.ts';
 // The SAME predicate and accessor the offset authority walks with. A second pair that
 // disagreed — `content-control-nodes.ts` matches only a TYPED control, while the authority
 // also measures a demoted generic `w:sdt` — would refuse offsets the authority hands out.
@@ -125,7 +125,7 @@ const MAX_CONTAINER_DEPTH = 32;
  */
 function descendableContainer(child: OoxmlNode): OoxmlElement | null {
   if (child.kind === 'textValue') return null;
-  if (isContentRevisionKind(child.kind) || child.kind === 'hyperlink') {
+  if (isInlineRunContainer(child)) {
     return child as OoxmlElement;
   }
   // An inline content control holds its content in `w:sdtContent`; the wrapper's other

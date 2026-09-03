@@ -34,7 +34,7 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isInlineRunContainer } from '../package/ooxml-shared.ts';
 import {
   chargePart,
   createCommentScanBudget,
@@ -159,11 +159,7 @@ function computeMarkersInParagraph(
     for (const child of children) {
       if (child.kind === 'textValue') continue;
       if (child.kind === 'commentRangeStart' || child.kind === 'commentRangeEnd') return true;
-      if (
-        (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) &&
-        depth < 32 &&
-        hasMarker(child.children, depth + 1)
-      ) {
+      if (isInlineRunContainer(child) && depth < 32 && hasMarker(child.children, depth + 1)) {
         return true;
       }
     }
@@ -195,7 +191,7 @@ function computeMarkersInParagraph(
       // A link is a run container like a revision wrapper, and either can hold the other.
       // Depth is bounded for the same reason the layout walk bounds it: nesting is the
       // cheapest unbounded axis in an attacker-controlled file.
-      if ((child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) && depth < 32) {
+      if (isInlineRunContainer(child) && depth < 32) {
         walk(child.children, depth + 1);
       }
     }

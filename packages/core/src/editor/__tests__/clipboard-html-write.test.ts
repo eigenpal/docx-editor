@@ -146,6 +146,22 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('>styled<');
   });
 
+  test('inline run wrappers contribute their text in reading order', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:t>before </w:t></w:r>' +
+          '<w:smartTag><w:r><w:t>smart</w:t></w:r></w:smartTag>' +
+          '<w:customXml><w:r><w:t>custom</w:t></w:r></w:customXml>' +
+          '<w:dir><w:r><w:t>dir</w:t></w:r></w:dir>' +
+          '<w:bdo><w:r><w:t>bdo</w:t></w:r></w:bdo>' +
+          '<w:r><w:t> after</w:t></w:r></w:p>',
+      })
+    );
+
+    expect(html).toContain('before smartcustomdirbdo after');
+  });
+
   test('an RTL run exports its complex-script font', () => {
     const html = interopHtmlFromFragment(
       fragment({

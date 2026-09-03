@@ -15,7 +15,6 @@ import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core
 import {
   hardBreakText,
   hyperlinkTargetOf,
-  isContentRevisionKind,
   isInstrText,
   paragraphOffsetIndex,
   type OoxmlNode,
@@ -24,6 +23,7 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import {
   fragmentsOfParagraph,
   type SemanticLayout,
@@ -70,7 +70,7 @@ function elementChildren(node: OoxmlNode): readonly OoxmlNode[] {
 
 /** The kinds whose nesting is file-controlled, and therefore depth-capped. */
 function isDepthCountedContainer(node: OoxmlNode): boolean {
-  return node.kind === 'hyperlink' || isContentControl(node) || isContentRevisionKind(node.kind);
+  return isInlineRunContainer(node) || isContentControl(node);
 }
 
 /**
@@ -113,7 +113,7 @@ function walkInlineChildren(
     }
     // Transparent, so a link a tracked edit wraps is still found and reported in order.
     // Depth-counted like every descent here: wrapper nesting is file-derived.
-    if (isContentRevisionKind(child.kind)) {
+    if (isInlineRunContainer(child)) {
       walkInlineChildren(elementChildren(child), depth + 1, visit);
       continue;
     }

@@ -7,7 +7,8 @@
 // spans of the two pages it rebuilt, not the whole document.
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
-import { storyRootsOf } from '../store/package/story-blocks.ts';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import { blockStoryContainerChildren, storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
   contentControlContentChildren,
@@ -43,7 +44,7 @@ function addressableInlineLength(node: OoxmlNode): number {
   if (node.kind === 'textValue') return node.value.length;
   if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
   if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return 0;
-  if (node.kind === 'generic') return 0;
+  if (node.kind === 'generic' && !isInlineRunContainer(node)) return 0;
   if (isContentControl(node)) {
     let total = 0;
     for (const inner of contentControlContentChildren(node))
@@ -152,18 +153,19 @@ const EMPTY_CONTROLS: readonly CollectedControl[] = Object.freeze([]);
 function collectControlLists(part: OoxmlPart): readonly (readonly CollectedControl[])[] {
   const out: CollectedControl[] = [];
 
-  const collectBlocks = (nodes: readonly OoxmlNode[], into: string[]): void => {
+  const collectBlocks = (nodes: readonly OoxmlNode[], into: string[], containerDepth = 0): void => {
     for (const child of nodes) {
       if (child.kind === 'paragraph' || child.kind === 'table') {
         into.push(child.id);
         continue;
       }
-      if (isContentControl(child)) {
-        collectBlocks(contentControlContentChildren(child), into);
+      const nested = blockStoryContainerChildren(child);
+      if (nested !== null && containerDepth < MAX_SDT_NESTING) {
+        collectBlocks(nested, into, containerDepth + 1);
         continue;
       }
       if (child.kind === 'tableRow' || child.kind === 'tableCell') {
-        collectBlocks(child.children, into);
+        collectBlocks(child.children, into, containerDepth);
       }
     }
   };
@@ -173,13 +175,14 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
     paragraphId: string,
     offset: number,
     depth: number,
+    containerDepth: number,
     lockStack: readonly ContentControlLock[]
   ): number => {
     let cursor = offset;
     for (const child of nodes) {
       if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
       if (isContentControl(child)) {
-        if (depth >= MAX_SDT_NESTING) {
+        if (containerDepth >= MAX_SDT_NESTING) {
           cursor += addressableInlineLength(child);
           continue;
         }
@@ -192,6 +195,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
           paragraphId,
           cursor,
           depth + 1,
+          containerDepth + 1,
           nextStack
         );
         out.push({
@@ -206,8 +210,16 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
         cursor = end;
         continue;
       }
-      if (child.kind === 'hyperlink') {
-        cursor = walkInline(child.children, paragraphId, cursor, depth, lockStack);
+      if (isInlineRunContainer(child)) {
+        if (containerDepth >= MAX_SDT_NESTING) continue;
+        cursor = walkInline(
+          child.children,
+          paragraphId,
+          cursor,
+          depth,
+          containerDepth + 1,
+          lockStack
+        );
         continue;
       }
       cursor += addressableInlineLength(child);
@@ -218,38 +230,45 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
   const walkBlocks = (
     nodes: readonly OoxmlNode[],
     depth: number,
-    lockStack: readonly ContentControlLock[]
+    lockStack: readonly ContentControlLock[],
+    containerDepth = 0
   ): void => {
     for (const child of nodes) {
       if (child.kind === 'textValue') continue;
       if (child.kind === 'paragraph') {
-        walkInline(child.children, child.id, 0, depth, lockStack);
+        walkInline(child.children, child.id, 0, depth, 0, lockStack);
         continue;
       }
       if (child.kind === 'table') {
         for (const row of child.children) {
           if (row.kind !== 'tableRow') continue;
-          walkBlocks([row], depth, lockStack);
+          walkBlocks([row], depth, lockStack, containerDepth);
         }
         continue;
       }
       if (child.kind === 'tableRow') {
         for (const cell of child.children) {
-          if (cell.kind === 'tableCell') walkBlocks(cell.children, depth, lockStack);
-          else if (isContentControl(cell)) walkBlocks([cell], depth, lockStack);
+          if (cell.kind === 'tableCell')
+            walkBlocks(cell.children, depth, lockStack, containerDepth);
+          else if (isContentControl(cell)) walkBlocks([cell], depth, lockStack, containerDepth);
         }
         continue;
       }
-      if (!isContentControl(child)) continue;
+      if (!isContentControl(child)) {
+        const nested = blockStoryContainerChildren(child);
+        if (nested !== null && containerDepth < MAX_SDT_NESTING)
+          walkBlocks(nested, depth, lockStack, containerDepth + 1);
+        continue;
+      }
       if (depth >= MAX_SDT_NESTING) continue;
       const properties = contentControlPropertiesOf(child);
       const lock = parseContentControlLock(propertyVal(properties, 'lock'));
       const nextStack = [...lockStack, lock];
       const level = controlLevelOf(child);
-      const content = contentControlContentChildren(child);
+      const content = blockStoryContainerChildren(child) ?? [];
       if (level === 'inline') {
         // Inline at body level is malformed; still walk content for nested discovery.
-        walkBlocks(content, depth + 1, nextStack);
+        walkBlocks(content, depth + 1, nextStack, containerDepth + 1);
         continue;
       }
       const blockIds: string[] = [];
@@ -261,7 +280,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
         level,
         blockIds,
       });
-      walkBlocks(content, depth + 1, nextStack);
+      walkBlocks(content, depth + 1, nextStack, containerDepth + 1);
     }
   };
 

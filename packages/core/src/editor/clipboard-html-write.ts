@@ -22,6 +22,7 @@ import { relationshipsOf } from '../store/package/package-edit.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
 import {
   foldAttribute,
@@ -76,6 +77,7 @@ const ENDNOTES_REL = `${R_NS}/endnotes`;
 const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_IMAGE_BYTES = 8 * 1024 * 1024;
 const EMU_PER_PX = 9525;
+const MAX_INLINE_CONTAINER_DEPTH = 32;
 const CLIPBOARD_IMAGE_MIMES: ReadonlyMap<string, string> = new Map([
   ['image/png', 'image/png'],
   ['image/jpeg', 'image/jpeg'],
@@ -625,8 +627,10 @@ function renderInline(
   ctx: RenderContext,
   children: readonly OoxmlNode[],
   paragraphPPr: OoxmlElement | null,
-  fields: FieldState
+  fields: FieldState,
+  depth = 0
 ): string {
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return '';
   let out = '';
   for (const child of children) {
     if (!isElement(child)) continue;
@@ -635,7 +639,7 @@ function renderInline(
         out += renderRun(ctx, child, paragraphPPr, fields);
         break;
       case 'hyperlink': {
-        const inner = renderInline(ctx, child.children, paragraphPPr, fields);
+        const inner = renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
         if (inner === '') break;
         const relId = attributeValueOf(child, 'id', RELATIONSHIPS_NAMESPACE_URI);
         // Match by id alone: producers vary the relationship Type string, and the
@@ -663,18 +667,18 @@ function renderInline(
       }
       case 'fldSimple':
         // The cached result runs are the visible value.
-        out += renderInline(ctx, child.children, paragraphPPr, fields);
+        out += renderInline(ctx, child.children, paragraphPPr, fields, depth);
         break;
       case 'contentControl': {
         const content = child.children.find((inner) => inner.kind === 'contentControlContent');
         if (content && isElement(content)) {
-          out += renderInline(ctx, content.children, paragraphPPr, fields);
+          out += renderInline(ctx, content.children, paragraphPPr, fields, depth + 1);
         }
         break;
       }
       case 'revisionInsert':
       case 'revisionMoveTo':
-        out += renderInline(ctx, child.children, paragraphPPr, fields);
+        out += renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
         break;
       // Deleted and moved-away content never travels to external apps — but its
       // fldChars still terminate fields, or an unbalanced 'instr' state would blank
@@ -684,7 +688,13 @@ function renderInline(
         advanceFieldState(child, fields);
         break;
       case 'generic':
-        out += renderInline(ctx, child.children, paragraphPPr, fields);
+        out += renderInline(
+          ctx,
+          child.children,
+          paragraphPPr,
+          fields,
+          isInlineRunContainer(child) ? depth + 1 : depth
+        );
         break;
       default:
         break;

@@ -10,7 +10,7 @@
 // bookmarks as it likes, and a lookup structure built from attacker input gets a cap like
 // every other one.
 
-import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { isInlineRunContainer, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
 
 /** Word's own limit is 40 characters; this is the fail-closed bound, not a fidelity claim. */
@@ -18,6 +18,9 @@ const MAX_BOOKMARK_NAME_LENGTH = 256;
 
 /** Ceiling on indexed anchors. Beyond it the extra names simply do not resolve. */
 const MAX_BOOKMARKS = 10_000;
+
+/** Matches the paragraph offset walk's file-controlled inline-container bound. */
+const MAX_INLINE_CONTAINER_DEPTH = 32;
 
 /**
  * Word's own scratch bookmark, present in most documents and never a jump target: it marks
@@ -73,7 +76,7 @@ export function buildBookmarkIndex(part: OoxmlPart): BookmarkIndex {
   const scanParagraph = (paragraph: OoxmlNode): void => {
     if (paragraph.kind === 'textValue') return;
     let offset = 0;
-    const walkInline = (child: OoxmlNode): void => {
+    const walkInline = (child: OoxmlNode, depth: number): void => {
       if (child.kind === 'bookmarkStart') {
         const name = attributeValue(child, 'name');
         if (
@@ -94,11 +97,11 @@ export function buildBookmarkIndex(part: OoxmlPart): BookmarkIndex {
       }
       // A link's markers sit at real positions inside it, so the walk descends rather than
       // charging the whole link's width before looking.
-      if (child.kind === 'hyperlink') {
-        for (const inner of child.children) walkInline(inner);
+      if (isInlineRunContainer(child) && depth < MAX_INLINE_CONTAINER_DEPTH) {
+        for (const inner of child.children) walkInline(inner, depth + 1);
       }
     };
-    for (const child of paragraph.children) walkInline(child);
+    for (const child of paragraph.children) walkInline(child, 0);
   };
 
   const walk = (node: OoxmlNode): void => {

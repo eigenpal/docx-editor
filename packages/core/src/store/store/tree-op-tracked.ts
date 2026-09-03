@@ -33,13 +33,22 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
+import { isContentRevisionKind, isInlineRunContainer } from '../package/ooxml-shared.ts';
+import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
 import { createNodeIdAllocator, replaceChildren } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
-import { paragraphOffsetIndex, type ParagraphOffsetIndex } from './tree-op-segments.ts';
+import {
+  paragraphOffsetIndex,
+  trailingInsertionDestination,
+  type ParagraphOffsetIndex,
+} from './tree-op-segments.ts';
 import { insertionAuthor, insideDeletion } from './tree-op-retraction.ts';
+import { sameEditingMoment } from './tree-op-tracked-time.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
+
+export { sameEditingMoment } from './tree-op-tracked-time.ts';
 
 function attr(localName: string, value: string) {
   return {
@@ -132,26 +141,6 @@ function copy(mint: () => string, node: OoxmlNode): OoxmlNode {
     children: node.children.map((child) => copy(mint, child)),
   } as OoxmlNode;
 }
-
-/**
- * Whether an existing revision's timestamp belongs to the edit being made now.
- *
- * Coalescing is for a continuous editing run, so the window is small: two keystrokes a
- * minute apart are still one thought, two edits a month apart are not one revision. Two
- * dateless wrappers join — a file written with date stamping off has nothing else to go on.
- */
-export function sameEditingMoment(
-  existing: string | undefined,
-  current: string | undefined
-): boolean {
-  if (existing === undefined || current === undefined) return existing === current;
-  const from = Date.parse(existing);
-  const to = Date.parse(current);
-  if (Number.isNaN(from) || Number.isNaN(to)) return existing === current;
-  return Math.abs(to - from) <= COALESCE_WINDOW_MS;
-}
-
-const COALESCE_WINDOW_MS = 60_000;
 
 /** A wrapper's `@w:date`, or undefined. */
 function revisionDateOf(node: OoxmlNode): string | undefined {
@@ -268,7 +257,8 @@ export function applyInsertTracked(
   offset: number,
   text: string,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
+  options?: { readonly deferValidation?: boolean },
+  inside?: string
 ): TreeOpResult {
   return applyTrackedInsertion(
     part,
@@ -276,7 +266,8 @@ export function applyInsertTracked(
     offset,
     { length: text.length, nodes: (mint) => [textNode(mint, text, false)] },
     revision,
-    options
+    options,
+    inside
   );
 }
 
@@ -294,7 +285,8 @@ export function applyInsertTrackedElement(
   offset: number,
   element: (mint: () => string) => OoxmlNode,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
+  options?: { readonly deferValidation?: boolean },
+  inside?: string
 ): TreeOpResult {
   return applyInsertTrackedElements(
     part,
@@ -303,7 +295,8 @@ export function applyInsertTrackedElement(
     (mint) => [element(mint)],
     1,
     revision,
-    options
+    options,
+    inside
   );
 }
 
@@ -323,7 +316,8 @@ export function applyInsertTrackedElements(
   elements: (mint: () => string) => readonly OoxmlNode[],
   length: number,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
+  options?: { readonly deferValidation?: boolean },
+  inside?: string
 ): TreeOpResult {
   return applyTrackedInsertion(
     part,
@@ -331,7 +325,8 @@ export function applyInsertTrackedElements(
     offset,
     { length, nodes: elements },
     revision,
-    options
+    options,
+    inside
   );
 }
 
@@ -368,10 +363,13 @@ function applyTrackedInsertion(
   offset: number,
   payload: TrackedInsertionPayload,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
+  options?: { readonly deferValidation?: boolean },
+  inside?: string
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const offsets = paragraphOffsetIndex(paragraph);
+  const trailingDestination =
+    inside === undefined ? trailingInsertionDestination(paragraph, offset) : null;
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
     created: [],
@@ -448,7 +446,12 @@ function applyTrackedInsertion(
       // `w:sdtPr`/`w:sdtEndPr` ahead of `w:sdtContent`, they measure nothing, and the
       // boundary rule below would otherwise put an insertion aimed at the control's first
       // character in FRONT of them.
-      if (node.kind === 'contentControlProperties' || node.kind === 'contentControlEndProperties') {
+      const parent = stack.at(-1);
+      if (
+        node.kind === 'contentControlProperties' ||
+        node.kind === 'contentControlEndProperties' ||
+        (parent !== undefined && isInlineContainerProperty(parent, node))
+      ) {
         out.push(node);
         continue;
       }
@@ -457,34 +460,23 @@ function applyTrackedInsertion(
       const start = cursor.offset;
       const end = start + length;
 
-      // Chrome of an atom already passed: never a place to put words. A field's instruction,
-      // separator, cached result and end run all measure nothing and all sit at the same
-      // offset as each other, so the first of them would take an insertion aimed at the
-      // position AFTER the field — putting the typed text inside the field, where it is
-      // invisible to every reader including this one.
+      // Atom chrome measures zero at one offset. Let all of it pass before inserting, or the
+      // new text lands inside the field and remains invisible.
       if (isAtomTailRun(node, atoms)) {
         out.push(node);
         continue;
       }
 
-      // A container the offset falls inside: descend, and let the split happen at the run.
-      //
-      // At a BOUNDARY the rule is narrower — descend only into our own `w:ins`. Typing on at
-      // the end of your own insertion is one continuous proposal and Word records it as one
-      // `w:ins`; without this every keystroke opened a new revision, so a typed word arrived
-      // in the review pane as a column of one-letter cards. Stepping into anyone ELSE's
-      // wrapper at a boundary would be the opposite mistake: putting your words inside their
-      // proposal, where accepting theirs would accept yours.
-      // A DELETION is not descended into. Text placed inside one would be written as `w:t`
-      // where §17.3.3.7 requires `w:delText`, and — worse — accepting that unrelated
-      // deletion would take the newly typed words with it. The insertion goes beside it.
+      // Descend inside a container. At a boundary, only an explicit or shared owner keeps it.
+      // Never descend into a deletion: it requires `w:delText`, and accepting it would also
+      // take the new insertion.
       const container =
         node.kind !== 'textValue' &&
-        (node.kind === 'hyperlink' ||
+        ((isInlineRunContainer(node) &&
+          node.kind !== 'revisionDelete' &&
+          node.kind !== 'revisionMoveFrom') ||
           node.kind === 'contentControl' ||
-          node.kind === 'contentControlContent' ||
-          node.kind === 'revisionInsert' ||
-          node.kind === 'revisionMoveTo');
+          node.kind === 'contentControlContent');
       // Same MOMENT as well as the same author — the deletion path already gates on this.
       // Typing at the end of your own month-old insertion backdated today's edit into that
       // revision, and rejecting one then rejected both.
@@ -492,6 +484,8 @@ function applyTrackedInsertion(
         container &&
         insertionAuthor([node]) === revision.author &&
         sameEditingMoment(revisionDateOf(node), revision.date);
+      const namedOwner = inside !== undefined && node.id === inside && isInlineRunContainer(node);
+      const sharedTrailingOwner = trailingDestination?.path.has(node.id) === true;
       // THE REPLACEMENT FOLLOWS THE DELETION IT REPLACES — into a link or a control, and
       // only when the WHOLE deletion lives there. Replacing a link's display text strikes
       // runs INSIDE the `w:hyperlink`, and the insertion adopting that deletion aims at
@@ -508,7 +502,7 @@ function applyTrackedInsertion(
       // adopted deletion exists at all.
       const followable =
         container &&
-        (node.kind === 'hyperlink' ||
+        ((isInlineRunContainer(node) && !isContentRevisionKind(node.kind)) ||
           node.kind === 'contentControl' ||
           node.kind === 'contentControlContent');
       const wrappersInside =
@@ -519,13 +513,21 @@ function applyTrackedInsertion(
       if (
         container &&
         ((offset > start && offset < end) ||
-          ((ownInsertion || holdsReplaced) && offset >= start && offset <= end))
+          ((namedOwner || ownInsertion || holdsReplaced || sharedTrailingOwner) &&
+            offset >= start &&
+            offset <= end))
       ) {
         const rebuilt = rebuild(node.children, [...stack, node]);
         // The adopted deletion ends exactly where the container does, so the inner walk
         // comes back unplaced. The replacement still belongs beside the struck words,
         // INSIDE the container that holds them.
-        if (!placed && holdsReplaced && offset === cursor.offset) {
+        if (
+          !placed &&
+          (namedOwner ||
+            holdsReplaced ||
+            (sharedTrailingOwner && node.id === trailingDestination?.holderId)) &&
+          offset === cursor.offset
+        ) {
           rebuilt.push(wrap([]));
           placed = true;
         }
@@ -812,17 +814,13 @@ export function applyDeleteTracked(
 
       if (
         node.kind !== 'textValue' &&
-        (node.kind === 'hyperlink' ||
+        (isInlineRunContainer(node) ||
           // A content control is a run container too (`w:sdtContent` takes `EG_PContent`,
           // `w:del` included). Passing it through whole made a suggested deletion over its
           // text a silent NO-OP: the transaction committed, nothing was struck, and the
           // reviewer's replacement landed beside words that were never proposed away.
           node.kind === 'contentControl' ||
-          node.kind === 'contentControlContent' ||
-          node.kind === 'revisionInsert' ||
-          node.kind === 'revisionDelete' ||
-          node.kind === 'revisionMoveFrom' ||
-          node.kind === 'revisionMoveTo')
+          node.kind === 'contentControlContent')
       ) {
         const rebuilt = rebuild(node.children, [...stack, node]);
         // A wrapper emptied by the removal of our own insertion goes with it; one that
@@ -830,7 +828,10 @@ export function applyDeleteTracked(
         // content. A CONTROL is not a wrapper: it is document structure the user placed,
         // so it keeps its (possibly emptied) `w:sdtContent` — dropping it left a `w:sdt`
         // husk with properties and no content element, a shape Word never writes.
-        const structural = node.kind === 'contentControl' || node.kind === 'contentControlContent';
+        const structural =
+          node.kind === 'contentControl' ||
+          node.kind === 'contentControlContent' ||
+          (node.kind === 'generic' && isInlineRunContainer(node));
         if (rebuilt.length > 0 || structural) {
           out.push({ ...node, children: rebuilt } as OoxmlNode);
         }

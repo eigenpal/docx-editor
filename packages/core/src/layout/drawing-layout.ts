@@ -30,6 +30,7 @@ import {
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
+import { walkDrawingRunContent } from './drawing-inline-walk.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import {
@@ -1093,19 +1094,7 @@ export function drawingModelOffsetsInParagraph(paragraph: OoxmlNode): ReadonlyMa
       for (const child of node.children) visitRunContent(child);
     }
   };
-  // Descends hyperlinks and revision wrappers in either order: a `w:ins` wraps runs and
-  // hyperlinks the model still counts, so skipping it left every drawing after (or inside)
-  // the wrapper at a stale offset and an anchored drawing in a tracked insertion invisible.
-  const visitInlineChild = (child: OoxmlNode): void => {
-    if (child.kind === 'run') {
-      for (const grand of child.children) visitRunContent(grand);
-      return;
-    }
-    if (child.kind === 'hyperlink' || isRevisionWrapper(child)) {
-      for (const grand of child.children) visitInlineChild(grand);
-    }
-  };
-  for (const child of paragraph.children) visitInlineChild(child);
+  walkDrawingRunContent(paragraph, visitRunContent);
   return offsets;
 }
 

@@ -17,7 +17,7 @@ import {
   isContentControl,
   MAX_CONTENT_CONTROL_NESTING,
 } from './content-control-walk.ts';
-import { isContentRevisionKind, WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { isInlineRunContainer, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
   OoxmlFldCharNode,
   OoxmlFldSimpleNode,
@@ -484,7 +484,7 @@ export function parsedFieldSpansOf(
     return ids;
   };
 
-  const visitInline = (child: OoxmlNode, sdtDepth = 0): void => {
+  const visitInline = (child: OoxmlNode, containerDepth = 0): void => {
     if (child.kind === 'fldSimple' || (child.kind === 'generic' && isFldSimple(child))) {
       spans.push({
         kind: 'simple',
@@ -508,17 +508,14 @@ export function parsedFieldSpansOf(
     // in an `w:sdt` was worth one offset to layout and nothing to the store — the same
     // disagreement, in the same direction, as the revision wrappers below.
     if (isContentControl(child)) {
-      if (sdtDepth < MAX_CONTENT_CONTROL_NESTING) {
+      if (containerDepth < MAX_CONTENT_CONTROL_NESTING) {
         for (const inner of contentControlContentChildren(child)) {
-          visitInline(inner, sdtDepth + 1);
+          visitInline(inner, containerDepth + 1);
         }
       }
       return;
     }
-    if (
-      child.kind !== 'textValue' &&
-      (child.kind === 'hyperlink' || isContentRevisionKind(child.kind))
-    ) {
+    if (isInlineRunContainer(child) && containerDepth < MAX_CONTENT_CONTROL_NESTING) {
       // Revision wrappers are run containers like `w:hyperlink` is. Not descending made a
       // field whose RESULT is wrapped in `w:del` disagree with itself: the begin/end markers
       // formed an atom worth one offset, but the struck result run was not among the nodes
@@ -526,7 +523,7 @@ export function parsedFieldSpansOf(
       // ordinary text. Layout folds them into the atom, the store did not, and every offset
       // after the field was out by the length of the deleted words — the caret painted in one
       // place and typing landed elsewhere.
-      for (const inner of child.children) visitInline(inner, sdtDepth);
+      for (const inner of child.children) visitInline(inner, containerDepth + 1);
     }
   };
   for (const child of paragraph.children) visitInline(child);

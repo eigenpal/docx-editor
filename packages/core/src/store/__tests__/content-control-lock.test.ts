@@ -73,12 +73,115 @@ function firstHyperlink(part: OoxmlPart): string {
   return firstOfKind(part, 'hyperlink');
 }
 
+function firstNamed(part: OoxmlPart, localName: string): OoxmlNode {
+  const walk = (node: OoxmlNode): OoxmlNode | null => {
+    if (node.kind === 'textValue') return null;
+    if (node.localName === localName) return node;
+    for (const child of node.children) {
+      const found = walk(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const found = walk(part.root);
+  if (!found) throw new Error(`no ${localName}`);
+  return found;
+}
+
+function textUnder(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return node.value;
+  return node.children.map(textUnder).join('');
+}
+
 const PARAGRAPH = '/word/document.xml#0.0.0';
 
 const TABLE_WITH = (inner: string) =>
   `<w:tbl><w:tr><w:tc><w:p>${inner}</w:p><w:p/></w:tc></w:tr></w:tbl>`;
 
 describe('ST_Lock content edits', () => {
+  const wrapperUnderControl = (properties: string): OoxmlPart =>
+    load(
+      `<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent><w:p>` +
+        '<w:smartTag><w:r><w:t>word</w:t></w:r></w:smartTag>' +
+        '</w:p></w:sdtContent></w:sdt>'
+    );
+
+  const wrapperOps = (part: OoxmlPart): readonly TreeDocOp[] => {
+    const paragraphId = firstOfKind(part, 'paragraph');
+    return [
+      {
+        op: 'insertText',
+        paragraphId,
+        offset: 2,
+        text: 'X',
+        inside: firstNamed(part, 'smartTag').id,
+      },
+      { op: 'deleteText', paragraphId, start: 1, end: 3 },
+      {
+        op: 'setRunProperties',
+        paragraphId,
+        start: 1,
+        end: 3,
+        properties: [{ localName: 'b' }],
+      },
+    ];
+  };
+
+  test('an inline wrapper owner inherits its enclosing content lock', () => {
+    const part = wrapperUnderControl('<w:lock w:val="sdtContentLocked"/>');
+    expect(wrapperOps(part).map((op) => reject(part, op))).toEqual(['locked', 'locked', 'locked']);
+  });
+
+  test('an inline wrapper owner inherits its enclosing data binding', () => {
+    const part = wrapperUnderControl('<w:dataBinding w:xpath="/a" w:storeItemID="{G}"/>');
+    expect(wrapperOps(part).map((op) => reject(part, op))).toEqual(['bound', 'bound', 'bound']);
+  });
+
+  test('the same wrapper edits succeed under an unlocked control', () => {
+    const part = wrapperUnderControl('');
+    for (const op of wrapperOps(part)) expect(applyTreeOp(part, op).ok).toBe(true);
+  });
+
+  const trailingWrapperControl = (properties: string): OoxmlPart =>
+    load(
+      '<w:p><w:sdt><w:sdtPr>' +
+        properties +
+        '</w:sdtPr><w:sdtContent>' +
+        '<w:smartTag><w:r><w:t>word</w:t></w:r></w:smartTag>' +
+        '</w:sdtContent></w:sdt></w:p>'
+    );
+
+  test('an unscoped trailing wrapper insertion resolves inside its locked control', () => {
+    const part = trailingWrapperControl('<w:lock w:val="sdtContentLocked"/>');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    expect(reject(part, { op: 'insertText', paragraphId, offset: 4, text: 'X' })).toBe('locked');
+  });
+
+  test('the same unlocked insertion exits the wrapper but stays in the control', () => {
+    const part = trailingWrapperControl('');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, { op: 'insertText', paragraphId, offset: 4, text: 'X' });
+    expect(textUnder(firstNamed(next, 'smartTag'))).toBe('word');
+    expect(textUnder(firstSdt(next))).toBe('wordX');
+    expect(paragraphTextOf(next, paragraphId)).toBe('wordX');
+  });
+
+  test('a tracked trailing insertion uses the same control landing site', () => {
+    const part = trailingWrapperControl('');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, {
+      op: 'insertText',
+      paragraphId,
+      offset: 4,
+      text: 'X',
+      revision: { author: 'Ada' },
+    });
+    const wrapper = firstNamed(next, 'smartTag');
+    expect(textUnder(wrapper)).toBe('word');
+    expect(textUnder(firstSdt(next))).toBe('wordX');
+    expect(paragraphTextOf(next, paragraphId)).toBe('wordX');
+  });
+
   test('contentLocked refuses insert/delete inside the control', () => {
     const part = load(
       '<w:p><w:r><w:t>aa</w:t></w:r>' +

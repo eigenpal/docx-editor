@@ -140,6 +140,7 @@ export interface OoxmlProperty {
 }
 
 import type { RevisionAddress, RevisionAttributionInput } from './tree-op-revision-attribution.ts';
+import type { InlineUnitInsertOp } from './tree-op-inline-unit-types.ts';
 export {
   invalidRevisionAttribution,
   type RevisionAddress,
@@ -294,27 +295,7 @@ export type TreeDocOp =
       /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
       readonly scopeRootId?: string;
     }
-  | {
-      readonly op: 'insertTab';
-      readonly paragraphId: string;
-      readonly offset: number;
-      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
-      readonly revision?: RevisionAttributionInput;
-    }
-  | {
-      readonly op: 'insertHardBreak';
-      readonly paragraphId: string;
-      readonly offset: number;
-      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
-      readonly revision?: RevisionAttributionInput;
-    }
-  | {
-      readonly op: 'insertPageBreak';
-      readonly paragraphId: string;
-      readonly offset: number;
-      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
-      readonly revision?: RevisionAttributionInput;
-    }
+  | InlineUnitInsertOp
   | {
       /**
        * Insert an allowlisted page-number complex field at a UTF-16 offset.
@@ -938,6 +919,8 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly offset: number;
       readonly blocks: readonly OoxmlNode[];
+      /** Inline wrapper or content control that receives an inline-only fragment. */
+      readonly inside?: string;
       /** True when the fragment's last paragraph mark travelled (its paragraph stays whole). */
       readonly lastMarkCovered?: boolean;
     }

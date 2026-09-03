@@ -180,6 +180,52 @@ export function isContentRevisionKind(
   );
 }
 
+const MAX_INLINE_RUN_CONTAINER_SHAPE_DEPTH = 32;
+
+/** Whether a run/block-polymorphic wrapper contains block-level content. */
+function hasBlockContent(node: OoxmlElement, depth = 0): boolean {
+  if (depth >= MAX_INLINE_RUN_CONTAINER_SHAPE_DEPTH) return true;
+  for (const child of node.children) {
+    if (child.kind === 'textValue') continue;
+    if (
+      child.kind === 'paragraph' ||
+      child.kind === 'table' ||
+      child.kind === 'tableRow' ||
+      child.kind === 'tableCell'
+    ) {
+      return true;
+    }
+    const nestedContainer =
+      child.kind === 'contentControl' ||
+      child.kind === 'contentControlContent' ||
+      (child.kind === 'generic' &&
+        child.namespaceUri === WML_NAMESPACE_URI &&
+        child.localName === 'customXml');
+    if (nestedContainer && hasBlockContent(child, depth + 1)) return true;
+  }
+  return false;
+}
+
+/** A paragraph-level wrapper whose descendants contribute ordinary run content. */
+export function isInlineRunContainer(node: OoxmlNode): node is Extract<
+  OoxmlElement,
+  {
+    readonly kind:
+      | 'generic'
+      | 'hyperlink'
+      | 'revisionInsert'
+      | 'revisionDelete'
+      | 'revisionMoveFrom'
+      | 'revisionMoveTo';
+  }
+> {
+  if (node.kind === 'textValue') return false;
+  if (node.kind === 'hyperlink' || isContentRevisionKind(node.kind)) return true;
+  if (node.kind !== 'generic' || node.namespaceUri !== WML_NAMESPACE_URI) return false;
+  if (node.localName === 'customXml') return !hasBlockContent(node);
+  return node.localName === 'smartTag' || node.localName === 'dir' || node.localName === 'bdo';
+}
+
 /** Move-range and comment-range boundary markers, which are empty and sit between runs. */
 export function isRangeMarkerKind(
   kind: OoxmlNode['kind']

@@ -30,7 +30,7 @@ import {
   isContentControlNode,
 } from './tree-op-nodes.ts';
 import { isFldSimple } from '../package/field-nodes.ts';
-import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isContentRevisionKind, isInlineRunContainer } from '../package/ooxml-shared.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 
 /**
@@ -177,7 +177,7 @@ function collectFormattableRuns(
     // A revision wrapper and a link are both run containers, and either can hold the other:
     // a link inside a tracked insertion is ordinary. Stopping at the wrapper made every
     // property write over tracked text plan zero edits (#493).
-    if (child.kind === 'hyperlink') {
+    if (isInlineRunContainer(child) && !isContentRevisionKind(child.kind)) {
       collectFormattableRuns(child.children, displayMode, authorFilter, depth + 1, out);
       continue;
     }

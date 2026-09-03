@@ -21,6 +21,7 @@ import {
   serializeOoxmlPart,
   writeOoxmlPackage,
   type OoxmlPackage,
+  type OoxmlNode,
   type OoxmlPart,
 } from '../package/index.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
@@ -194,6 +195,80 @@ describe('insertNote', () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected failure');
     expect(result.reason).toBe('invalidArgs');
+  });
+
+  test('a citation escapes only the revision inside each neutral outer wrapper', () => {
+    const runs = '<w:r><w:t>A</w:t></w:r><w:r><w:t>B</w:t></w:r>';
+    const revision = `<w:ins w:id="1" w:author="A">${runs}</w:ins>`;
+    const cases = [
+      { outer: 'hyperlink', xml: `<w:hyperlink w:anchor="mark">${revision}</w:hyperlink>` },
+      { outer: 'smartTag', xml: `<w:smartTag>${revision}</w:smartTag>` },
+      {
+        outer: 'sdt',
+        xml: `<w:sdt><w:sdtPr><w:id w:val="7"/></w:sdtPr><w:sdtContent>${revision}</w:sdtContent></w:sdt>`,
+      },
+    ];
+    for (const sample of cases) {
+      const store = openStore(build({ body: `<w:p>${sample.xml}</w:p>` }));
+      const paragraphId = firstParagraphId(store.currentPackage());
+      expect(
+        store.applyLifecycleOp({ op: 'insertNote', noteKind: 'footnote', paragraphId, offset: 1 })
+          .ok
+      ).toBe(true);
+      const pkg = store.currentPackage();
+      const main = pkg.parts.get(pkg.mainDocumentPart)!;
+      const path: OoxmlNode[] = [];
+      const findCitation = (node: OoxmlNode, ancestors: OoxmlNode[]): boolean => {
+        if (node.kind === 'textValue') return false;
+        if (node.localName === 'footnoteReference') {
+          for (const ancestor of ancestors) path.push(ancestor);
+          return true;
+        }
+        ancestors.push(node);
+        for (const child of node.children) if (findCitation(child, ancestors)) return true;
+        ancestors.pop();
+        return false;
+      };
+      expect(findCitation(main.root, [])).toBe(true);
+      expect(path.some((node) => node.localName === sample.outer)).toBe(true);
+      expect(path.some((node) => node.kind === 'revisionInsert')).toBe(false);
+      expect(paragraphTextOf(main, paragraphId)).toBe('A\u{fffc}B');
+    }
+  });
+
+  test('a control inside a revision moves whole to the citation boundary', () => {
+    const store = openStore(
+      build({
+        body:
+          '<w:p><w:ins w:id="1" w:author="A"><w:sdt>' +
+          '<w:sdtPr><w:id w:val="7"/><w:lock w:val="sdtLocked"/></w:sdtPr>' +
+          '<w:sdtContent><w:r><w:t>A</w:t></w:r><w:r><w:t>B</w:t></w:r>' +
+          '</w:sdtContent></w:sdt></w:ins></w:p>',
+      })
+    );
+    const paragraphId = firstParagraphId(store.currentPackage());
+    const result = store.applyLifecycleOp({
+      op: 'insertNote',
+      noteKind: 'footnote',
+      paragraphId,
+      offset: 1,
+    });
+    expect(result.ok).toBe(true);
+    const main = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
+    const controls: OoxmlNode[] = [];
+    const collect = (node: OoxmlNode): void => {
+      if (node.kind === 'textValue') return;
+      if (node.kind === 'contentControl') controls.push(node);
+      for (const child of node.children) collect(child);
+    };
+    collect(main.root);
+    expect(controls).toHaveLength(1);
+    for (const control of controls) {
+      expect(
+        control.kind !== 'textValue' &&
+          control.children.some((child) => child.kind === 'contentControlProperties')
+      ).toBe(true);
+    }
   });
 });
 

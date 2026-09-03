@@ -290,6 +290,38 @@ describe('the file-lane stand-down against real fragments', () => {
 });
 
 describe('rich paste', () => {
+  test('replacing all smartTag text keeps the rich fragment inside the wrapper', () => {
+    const source = mount('<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>rich</w:t></w:r></w:p>');
+    const sourceId = source.surface.session.paragraphIds()[0]!;
+    source.surface.setSelection({
+      anchor: { paragraphId: sourceId, offset: 0 },
+      head: { paragraphId: sourceId, offset: 4 },
+    });
+    const flavours = source.surface.copyFlavours();
+
+    const target = mount(
+      '<w:p><w:smartTag><w:r><w:t>old</w:t></w:r></w:smartTag>' +
+        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+    const targetId = target.surface.session.paragraphIds()[0]!;
+    target.surface.setSelection({
+      anchor: { paragraphId: targetId, offset: 0 },
+      head: { paragraphId: targetId, offset: 3 },
+    });
+    expect(target.surface.pasteRich(flavours.text, flavours.html)).toBe(true);
+    expect(target.surface.session.bodyText()).toBe('rich after');
+
+    const markup = serializeOoxmlPart(target.surface.session.part());
+    const wrapperStart = markup.indexOf('<w:smartTag');
+    const wrapperEnd = markup.indexOf('</w:smartTag>');
+    expect(markup.indexOf('<w:b/>')).toBeGreaterThan(wrapperStart);
+    expect(markup.indexOf('<w:b/>')).toBeLessThan(wrapperEnd);
+    expect(markup.indexOf('<w:t>rich</w:t>')).toBeLessThan(wrapperEnd);
+
+    source.surface.destroy();
+    target.surface.destroy();
+  });
+
   test('the embedded fragment lands structure and formatting, one undo unit', () => {
     const flavours = copyRichFlavours();
     const target = mount(paragraph(''));

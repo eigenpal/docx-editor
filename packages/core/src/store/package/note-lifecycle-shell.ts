@@ -2,6 +2,8 @@
 // Mirrors hf-lifecycle-shell but admits footnotes/endnotes part targets.
 
 import type { OoxmlPackage } from './ooxml-package.ts';
+import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
+import { isContentRevisionKind, isInlineRunContainer } from './ooxml-shared.ts';
 import type { RelationshipRecord } from './relationships.ts';
 import { appendFixedRelationship } from './hf-lifecycle-shell.ts';
 
@@ -12,6 +14,19 @@ export {
   withoutContentTypeOverride,
   withFreshIds,
 } from './hf-lifecycle-shell.ts';
+
+/** Whether a neutral inline owner and its ancestor path can receive a note citation. */
+export function canHoldNoteCitation(
+  node: OoxmlNode | null,
+  ancestors: readonly OoxmlNode[] = []
+): node is OoxmlElement {
+  return Boolean(
+    node &&
+    !ancestors.some((ancestor) => isContentRevisionKind(ancestor.kind)) &&
+    (node.kind === 'contentControlContent' ||
+      (isInlineRunContainer(node) && !isContentRevisionKind(node.kind)))
+  );
+}
 
 /**
  * Add an Internal relationship from the main document to a notes part.

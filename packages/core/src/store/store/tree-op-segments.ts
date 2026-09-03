@@ -20,11 +20,12 @@ import {
   isInstrText,
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
-import { isContentRevisionKind } from '../package/ooxml-shared.ts';
+import { isInlineRunContainer } from '../package/ooxml-shared.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING,
   contentControlContentOf,
   inlineContainerOf,
+  inlineContainersOf,
   isContentControlNode,
 } from './tree-op-nodes.ts';
 
@@ -352,7 +353,7 @@ function walkParagraph(
     // revision wrapper are both containers, and either can hold the other — a link inside a
     // tracked insertion is ordinary. Not descending is what made tracked text invisible to the
     // op offset space, so every op past it was refused as out of range.
-    if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+    if (isInlineRunContainer(child)) {
       ancestorPath.push(child);
       for (const inner of child.children) visitInline(inner, depth + 1);
       ancestorPath.pop();
@@ -396,7 +397,7 @@ const MAX_INLINE_CONTAINER_DEPTH = 32;
 export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
   if (child.kind === 'run') return [child];
   if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return [];
-  if (child.kind === 'hyperlink' || isContentRevisionKind(child.kind)) {
+  if (isInlineRunContainer(child)) {
     return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
   }
   if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
@@ -424,15 +425,15 @@ export type InsertionSite =
   | { readonly kind: 'atBoundary'; readonly segment: Segment }
   /** Past every segment in scope: the content is appended to this run. */
   | { readonly kind: 'appendToRun'; readonly run: OoxmlElement }
-  /** No run in scope holds the offset: a run is minted as this node's last child. */
-  | { readonly kind: 'newRun'; readonly holder: OoxmlElement };
+  /** No run in scope holds the offset: a run is minted in this node at `index`. */
+  | { readonly kind: 'newRun'; readonly holder: OoxmlElement; readonly index?: number };
 
 /**
  * Resolve {@link InsertionSite} for an offset, optionally narrowed to one owner's own content.
  *
  * `owner` is the content control a caller NAMED as the destination. Narrowing to it is what
- * makes a control's trailing edge mean "the end of the field" rather than "the run after it";
- * without one the paragraph is the scope and only its direct runs can be appended to.
+ * makes a control's trailing edge mean "the end of the field" rather than "the run after it".
+ * Without one, a trailing run wrapper is left and a sibling run receives the insertion.
  */
 export function insertionSite(
   paragraph: OoxmlParagraphNode,
@@ -450,6 +451,29 @@ export function insertionSite(
   }
   const boundary = segments.find((segment) => segment.start === offset);
   if (boundary) return { kind: 'atBoundary', segment: boundary };
+
+  if (owner === null) {
+    const trailing = segments[segments.length - 1];
+    if (trailing?.end === offset) {
+      const containers = inlineContainersOf(paragraph, trailing.runId);
+      let outermostWrapper = -1;
+      for (let index = 0; index < containers.length; index += 1) {
+        if (isInlineRunContainer(containers[index]!)) outermostWrapper = index;
+      }
+      const exited = outermostWrapper >= 0 ? containers[outermostWrapper] : (containers[0] ?? null);
+      if (exited) {
+        const holder = directParentOf(paragraph, exited.id) ?? paragraph;
+        const index = holder.children.findIndex((child) => child.id === exited.id);
+        return {
+          kind: 'newRun',
+          holder,
+          ...(index < 0 ? {} : { index: index + 1 }),
+        };
+      }
+      const direct = paragraph.children.find((child) => child.id === trailing.runId);
+      if (direct?.kind === 'run') return { kind: 'appendToRun', run: direct };
+    }
+  }
 
   const runs =
     owner === null
@@ -499,10 +523,48 @@ export function insertionLandingNodeId(
   return site.holder.id;
 }
 
+export interface TrailingInsertionDestination {
+  readonly holderId: string;
+  readonly path: ReadonlySet<string>;
+}
+
+/** Holder and ancestor ids for the shared unowned trailing insertion site. */
+export function trailingInsertionDestination(
+  paragraph: OoxmlParagraphNode,
+  offset: number
+): TrailingInsertionDestination | null {
+  const site = insertionSite(paragraph, offset, null);
+  if (site.kind !== 'newRun') return null;
+  const path = new Set<string>();
+  const collect = (node: OoxmlNode): boolean => {
+    if (node.id === site.holder.id) {
+      path.add(node.id);
+      return true;
+    }
+    if (node.kind === 'textValue') return false;
+    const holds = node.children.some(collect);
+    if (holds) path.add(node.id);
+    return holds;
+  };
+  collect(paragraph);
+  return { holderId: site.holder.id, path };
+}
+
 function containsNode(node: OoxmlNode, id: string): boolean {
   if (node.id === id) return true;
   if (node.kind === 'textValue') return false;
   return node.children.some((child) => containsNode(child, id));
+}
+
+/** Direct element parent of one descendant within a paragraph. */
+function directParentOf(parent: OoxmlElement, id: string): OoxmlElement | null {
+  for (const child of parent.children) {
+    if (child.id === id) return parent;
+    if (child.kind === 'textValue') continue;
+    const found = directParentOf(child, id);
+    if (found) return found;
+  }
+  return null;
 }
 
 /** UTF-16 length of a paragraph under the shared segment model. */

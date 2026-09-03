@@ -26,11 +26,12 @@ import {
   isFldSimple,
   projectOmmlEquation,
   type DocumentProperties,
+  type OoxmlElement,
   type OoxmlNode,
-  type OoxmlParagraphNode,
   type OoxmlProperty,
   type HardBreakKind,
 } from '@docx-editor.dev/core/store';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import {
   allowlistedPageField,
   consumeScanNode,
@@ -44,7 +45,6 @@ import {
   isInsideFieldResult,
   isInstrText,
   MAX_FIELD_INSTRUCTION_CHARS,
-  MAX_FIELD_NESTING,
   MAX_STORY_FIELD_SCAN_DEPTH,
   MAX_STORY_FIELD_SCAN_NODES,
   normalizeFieldInstruction,
@@ -92,7 +92,8 @@ import {
 } from './field-pieces.ts';
 import type { InlineDrawingLayoutContext, InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { isRunDrawingAtom, runDrawingAtomPlan } from './field-drawing-atom.ts';
-import { legacyFormFieldDataOf, parsedFieldSpansOf } from '../store/package/field-nodes.ts';
+import { legacyFormFieldDataOf } from '../store/package/field-nodes.ts';
+import { fieldProjectionSpansOf } from './field-projection-spans.ts';
 import {
   emptyNamespaceScope,
   namespaceScopeForNode,
@@ -198,23 +199,7 @@ export function piecesOfParagraph(
   /** The link the walk is currently inside, so every piece it emits is tagged with it. */
   let currentLink: SpanLinkRecord | undefined;
 
-  const fields = parsedFieldSpansOf(paragraph as OoxmlParagraphNode, {
-    maxNesting: MAX_FIELD_NESTING,
-    maxInstructionChars: MAX_FIELD_INSTRUCTION_CHARS,
-  });
-  const atoms = fields.filter((span) => span.addressing === 'atomic');
-  const atomBeginIds = new Set(
-    atoms.filter((span) => span.kind === 'complex').map((span) => span.node.id)
-  );
-  const editableResultBeginIds = new Set(
-    fields
-      .filter((span) => span.kind === 'complex' && span.addressing === 'editable-result')
-      .map((span) => span.node.id)
-  );
-  const coveredIds = new Set<string>();
-  for (const span of atoms) {
-    for (const id of span.removeNodeIds) coveredIds.add(id);
-  }
+  const { atomBeginIds, editableResultBeginIds, coveredIds } = fieldProjectionSpansOf(paragraph);
 
   const field = createFieldParseState();
   const budget = createScanBudget();
@@ -979,14 +964,21 @@ export function piecesOfParagraph(
       currentLink = previous;
       return;
     }
-    if (!isRevisionWrapper(child)) return;
-    const attribution = revisionAttributionOf(child);
-    if (!attribution) return;
-    if (!consumeScanNode(budget)) return;
-    const enclosing = revisions;
-    revisions = withRevision(enclosing, attribution);
-    for (const inner of child.children) processInline(inner, depth + 1, childScope, sdtDepth);
-    revisions = enclosing;
+    if (isRevisionWrapper(child)) {
+      const attribution = revisionAttributionOf(child);
+      if (!attribution) return;
+      if (!consumeScanNode(budget)) return;
+      const enclosing = revisions;
+      revisions = withRevision(enclosing, attribution);
+      for (const inner of child.children) processInline(inner, depth + 1, childScope, sdtDepth);
+      revisions = enclosing;
+      return;
+    }
+    if (!isInlineRunContainer(child)) return;
+    // The wrapper text participates in layout. Its authored direction waits for the full
+    // shaping, atom, and visual-caret pipeline tracked by #714.
+    for (const inner of (child as OoxmlElement).children)
+      processInline(inner, depth + 1, childScope, sdtDepth);
   };
   // Paragraph root counts as depth 0; run children sit at depth 1.
   for (const child of paragraph.children) processInline(child, 1, paragraphScope, 0);

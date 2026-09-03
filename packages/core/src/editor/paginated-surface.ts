@@ -29,6 +29,7 @@ import {
   type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
@@ -2032,7 +2033,8 @@ export function mountPaginatedSurface(
   function addressableLength(node: OoxmlNode): number {
     if (node.kind === 'textValue') return node.value.length;
     if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-    if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
+    if (node.kind === 'runProperties') return 0;
+    if (node.kind === 'generic' && !isInlineRunContainer(node)) return 0;
     const kind = (node as { kind: string }).kind;
     if (kind === 'contentControl') {
       let total = 0;
@@ -2122,7 +2124,7 @@ export function mountPaginatedSurface(
           cursor += length;
           continue;
         }
-        if (node.kind === 'run' || node.kind === 'hyperlink') {
+        if (node.kind === 'run' || isInlineRunContainer(node)) {
           if (scanInline(node.children, cursor, paraId)) return true;
           cursor += addressableLength(node);
           continue;
@@ -4700,7 +4702,13 @@ export function mountPaginatedSurface(
       const pendingOps = consumePendingFormatOps(target.paragraphId, target.offset, text.length);
       const insertOps: TreeDocOp[] = [
         ...plan.ops,
-        { op: 'insertText', paragraphId: target.paragraphId, offset: target.offset, text },
+        {
+          op: 'insertText',
+          paragraphId: target.paragraphId,
+          offset: target.offset,
+          text,
+          ...(plan.replaceInside === undefined ? {} : { inside: plan.replaceInside }),
+        },
       ];
       const redoMark = {
         paragraphId: target.paragraphId,

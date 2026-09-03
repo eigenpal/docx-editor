@@ -17,6 +17,7 @@
 // dropping it would lose text. Only the intersection is removed.
 
 import type { OoxmlNode } from '@docx-editor.dev/core/store';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import {
   contentControlContentOf,
   isContentControl,
@@ -133,7 +134,7 @@ function rendersNoText(
         if (content && !walkChildren(content, childDepth + 1)) return false;
         continue;
       }
-      if (child.kind === 'hyperlink') {
+      if (isInlineRunContainer(child) && !isRevisionWrapper(child)) {
         if (!rendersNoText(child, childDepth + 1, displayMode, authorFilter, revisions))
           return false;
         continue;

@@ -11,6 +11,7 @@ import { OFFICE_MATH_NAMESPACE_URI, parseLinearMath } from '../package/omml-equa
 import { isValidXmlText } from '../package/sinks.ts';
 import { isDangerousKey } from '../package/safe-record.ts';
 import { isAuthorableDataBinding } from '../package/custom-node-payloads.ts';
+import { isInlineRunContainer } from '../package/ooxml-shared.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
 import {
   deleteBlockTouchesContentRestriction,
@@ -187,19 +188,13 @@ function validateHyperlinkTarget(op: {
 }
 
 /**
- * Whether the control an insertion names is one it could actually be writing into.
+ * Whether the inline owner an insertion names is one it could actually be writing into.
  *
- * Three things have to hold, and each of them is a way in if it does not. The name must resolve
- * to a TYPED content control — a paragraph, a run, or a `w:sdt` the read demoted is not something
- * this engine can address as a field. The control and the addressed paragraph must be on one
- * ancestor line: a block control holds the paragraph, an inline control sits in it, and a control
- * somewhere else in the document is not the owner of this write however sincerely it is named.
- * And the offset must fall in the span the control covers IN THAT PARAGRAPH, so the write lands
- * where the name claims.
+ * Three things have to hold. The name must resolve to a typed content control or inline run
+ * container. The owner and paragraph must be on one ancestor line. The offset must fall in the
+ * span that owner covers in the paragraph.
  *
- * The two kinds of control are constrained by the same rule rather than by two: a block control
- * covers the whole of a paragraph it holds, an inline one covers its own offsets, and "any offset
- * in an enclosed paragraph is fine" was a rule only one of them was ever checked against.
+ * A block control covers a paragraph it holds. An inline owner covers its own offsets.
  */
 function namedOwnerRefusal(
   part: OoxmlPart,
@@ -210,7 +205,12 @@ function namedOwnerRefusal(
   if (typeof inside !== 'string' || inside.length === 0) return 'invalidArgs';
   const owner = findNode(part, inside);
   if (!owner) return 'unknown-content-control';
-  if (owner.kind !== 'contentControl') return 'not-a-content-control';
+  if (
+    owner.kind !== 'contentControl' &&
+    (owner.kind !== 'generic' || !isInlineRunContainer(owner))
+  ) {
+    return 'not-a-content-control';
+  }
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || !isParagraph(paragraph)) return null;
   const span = holds(owner, paragraphId)
@@ -228,16 +228,24 @@ function namedOwnerRefusal(
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
-  if (isDrawingTreeDocOp(op)) return validateDrawingOp(part, op);
+  if (isDrawingTreeDocOp(op)) {
+    const drawingRefusal = validateDrawingOp(part, op);
+    if (drawingRefusal) return drawingRefusal;
+  }
   if (op.op === 'replaceStoryBlocks') {
     return validateReplaceStoryBlocks(part, op.storyRootId, op.paragraphs);
   }
 
   // A NAMED OWNER IS AN ASSERTION ABOUT THE DOCUMENT, so it is checked before anything acts on
-  // it. `inside` decides where the text goes AND what the refusals are resolved against — a name
-  // that is not a control the write lands in would classify the op as filling in a field, which
-  // is the one thing forms protection lets through.
-  if (op.op === 'insertText' && op.inside !== undefined) {
+  // it. `inside` decides where the text goes AND what the refusals are resolved against.
+  if (
+    (op.op === 'insertText' ||
+      op.op === 'insertTab' ||
+      op.op === 'insertHardBreak' ||
+      op.op === 'insertPageBreak' ||
+      op.op === 'insertFragment') &&
+    op.inside !== undefined
+  ) {
     const owner = namedOwnerRefusal(part, op.paragraphId, op.offset, op.inside);
     if (owner) return owner;
   }
@@ -252,6 +260,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   // so every content mutation meets it, not only the value write that names the control.
   const bindingRefusal = contentControlBindingRefusal(part, op);
   if (bindingRefusal) return bindingRefusal;
+  if (isDrawingTreeDocOp(op)) return null;
 
   if (
     op.op === 'setContentControlProperties' ||
@@ -691,6 +700,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'invalid-property-value';
       }
       if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
+      if (op.inside !== undefined) return null;
       return rejectContentEdit(part, paragraph, op.offset, op.offset);
     }
     case 'insertPageField': {

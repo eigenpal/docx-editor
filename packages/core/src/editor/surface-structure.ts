@@ -462,7 +462,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           applyOps(
             [
               ...plan.ops,
-              { op: 'insertTab', paragraphId: start.paragraphId, offset: start.offset },
+              {
+                op: 'insertTab',
+                paragraphId: start.paragraphId,
+                offset: start.offset,
+                ...(plan.replaceInside === undefined ? {} : { inside: plan.replaceInside }),
+              },
             ],
             selectionMark()
           ),
@@ -478,7 +483,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           applyOps(
             [
               ...plan.ops,
-              { op: 'insertHardBreak', paragraphId: start.paragraphId, offset: start.offset },
+              {
+                op: 'insertHardBreak',
+                paragraphId: start.paragraphId,
+                offset: start.offset,
+                ...(plan.replaceInside === undefined ? {} : { inside: plan.replaceInside }),
+              },
             ],
             selectionMark()
           ),
@@ -494,7 +504,12 @@ export function createSurfaceStructure(deps: SurfaceStructureDeps): StructureMet
           applyOps(
             [
               ...plan.ops,
-              { op: 'insertPageBreak', paragraphId: start.paragraphId, offset: start.offset },
+              {
+                op: 'insertPageBreak',
+                paragraphId: start.paragraphId,
+                offset: start.offset,
+                ...(plan.replaceInside === undefined ? {} : { inside: plan.replaceInside }),
+              },
             ],
             selectionMark()
           ),

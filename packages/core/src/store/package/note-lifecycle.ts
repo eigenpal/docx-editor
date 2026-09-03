@@ -41,12 +41,14 @@ import {
   NOTE_ID_MIN,
 } from './note-nodes.ts';
 import {
+  canHoldNoteCitation,
   freeRelationshipId,
   withContentTypeOverride,
   withFreshIds,
   withNotesRelationship,
 } from './note-lifecycle-shell.ts';
 import { writeDocumentNoteProperties, writeSectionNoteProperties } from './note-lifecycle-props.ts';
+import { ancestorPathHolding, placeOutsideOutermostRevision } from './note-citation-placement.ts';
 import {
   isLegalEndnotePosition,
   isLegalFootnotePosition,
@@ -970,17 +972,6 @@ function topChildIndexOf(paragraph: OoxmlParagraphNode, nodeId: string): number 
   return paragraph.children.findIndex((child) => holds(child));
 }
 
-/** The node whose DIRECT child is `nodeId`, anywhere under `root`, or null. */
-function parentHolding(root: OoxmlNode, nodeId: string): OoxmlNode | null {
-  if (root.kind === 'textValue') return null;
-  for (const child of root.children) {
-    if (child.id === nodeId) return root;
-    const found = parentHolding(child, nodeId);
-    if (found) return found;
-  }
-  return null;
-}
-
 function insertNodesAtOffset(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
@@ -1085,13 +1076,21 @@ function insertNodesAtOffset(
         const inserted = insertChildren(part, paragraph.id, index, nodes);
         return inserted.ok ? inserted.part : null;
       }
-      // An interior boundary joins the DIRECT parent's content at the caret, whatever the
-      // nesting — a citation mid-link belongs in the link. ONLY neutral containers accept
-      // it: spliced into a revision wrapper, the citation would join somebody's proposal
-      // (or their deletion), and rejecting their revision would take the citation and its
-      // note body with it. Everything else refuses rather than misplaces.
-      const parent = parentHolding(top, anchorId);
-      if (parent && (parent.kind === 'hyperlink' || parent.kind === 'contentControlContent')) {
+      // A citation at an interior boundary can join only a revision-neutral container.
+      const path = ancestorPathHolding(top, anchorId);
+      const parent = path?.at(-1) ?? null;
+      if (path) {
+        const placed = placeOutsideOutermostRevision(
+          part,
+          paragraph,
+          path,
+          anchorId,
+          nodes,
+          nextId
+        );
+        if (placed !== undefined) return placed;
+      }
+      if (canHoldNoteCitation(parent, path ?? [])) {
         const at = parent.children.findIndex((child) => child.id === anchorId);
         const inserted = insertChildren(part, parent.id, Math.max(0, at), nodes);
         return inserted.ok ? inserted.part : null;

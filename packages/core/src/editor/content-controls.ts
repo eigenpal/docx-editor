@@ -35,6 +35,7 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
@@ -79,7 +80,8 @@ function elementChildren(node: OoxmlNode): readonly OoxmlNode[] {
 function addressableLength(node: OoxmlNode): number {
   if (node.kind === 'textValue') return node.value.length;
   if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
+  if (node.kind === 'runProperties') return 0;
+  if (node.kind === 'generic' && !isInlineRunContainer(node)) return 0;
   if (isContentControlNode(node)) {
     let total = 0;
     for (const inner of contentControlContentChildren(node)) total += addressableLength(inner);
@@ -309,8 +311,9 @@ function inlineControlRangesOf(paragraph: OoxmlElement): InlineControlRange[] {
         position += addressableLength(child);
         continue;
       }
-      if (child.kind === 'hyperlink') {
-        position = walk(child.children, position, depth, sdtDepth);
+      if (isInlineRunContainer(child)) {
+        if (sdtDepth >= MAX_SDT_NESTING) continue;
+        position = walk(child.children, position, depth, sdtDepth + 1);
         continue;
       }
       if (isContentControlNode(child) && sdtDepth < MAX_SDT_NESTING) {

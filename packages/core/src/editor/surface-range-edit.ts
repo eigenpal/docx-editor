@@ -28,10 +28,12 @@ import {
   findNode,
   inlineControlEndingAt,
   inlineControlStartingAt,
+  paragraphOffsetIndex,
   parentNodeOf,
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
+import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import {
   paragraphTextFromLayout,
   paragraphsInCells,
@@ -43,6 +45,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
+import { inlineContainersOf } from '../store/store/tree-op-nodes.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
@@ -190,6 +193,7 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // every reader below sees either a non-empty author or undefined, never a blank.
     const author = trackedAuthor?.trim() || undefined;
     const plan = rangeDeletionPlan();
+    const replaceInside = replacementInlineOwner();
     // A GETTER, so delete-only lanes — Backspace, Delete, proposeDeletion — never pay for a
     // landing they do not read. Replacing lanes read it once, before the ops apply, which is
     // the only window where the pre-edit layout it consults is the right oracle. The
@@ -199,11 +203,38 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     let landing: SemanticPosition | null = null;
     return {
       ...plan,
+      ...(replaceInside === undefined ? {} : { replaceInside }),
       get replaceAt(): SemanticPosition {
         landing ??= replacementTarget(plan, author, rectangle);
         return landing;
       },
     };
+  }
+
+  /** Innermost inline wrapper or content control that fully owns the selected range. */
+  function replacementInlineOwner(): string | undefined {
+    const selection = deps.selection();
+    if (selection.anchor.paragraphId !== selection.head.paragraphId) return undefined;
+    const start = Math.min(selection.anchor.offset, selection.head.offset);
+    const end = Math.max(selection.anchor.offset, selection.head.offset);
+    if (start === end) return undefined;
+    const part = partOfNodeId(session, selection.anchor.paragraphId) ?? session.part();
+    const paragraph = findNode(part, selection.anchor.paragraphId);
+    if (!paragraph || paragraph.kind !== 'paragraph') return undefined;
+    const offsets = paragraphOffsetIndex(paragraph);
+    const first = offsets.segments.find((segment) => segment.start <= start && segment.end > start);
+    if (!first) return undefined;
+    for (const owner of inlineContainersOf(paragraph, first.runId)) {
+      if (
+        owner.kind !== 'contentControl' &&
+        (owner.kind !== 'generic' || !isInlineRunContainer(owner))
+      ) {
+        continue;
+      }
+      const span = offsets.spanOf(owner);
+      if (span && start >= span.start && end <= span.end) return owner.id;
+    }
+    return undefined;
   }
 
   function rangeDeletionPlan(): RangeDeletionPlan {

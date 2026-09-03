@@ -15,6 +15,8 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import type { OoxmlNode } from '../../store/package/ooxml-tree.ts';
+import { serializeOoxmlPart } from '../../store/package/ooxml-serialize.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -45,6 +47,24 @@ function mount(body: string): DocxEditorInstance {
   return editor;
 }
 
+function textUnder(node: OoxmlNode, localName: string): string | null {
+  if (node.kind === 'textValue') return null;
+  if (node.localName === localName) {
+    const collect = (child: OoxmlNode): string => {
+      if (child.kind === 'textValue') return child.value;
+      let text = '';
+      for (const inner of child.children) text += collect(inner);
+      return text;
+    };
+    return collect(node);
+  }
+  for (const child of node.children) {
+    const found = textUnder(child, localName);
+    if (found !== null) return found;
+  }
+  return null;
+}
+
 describe('Editor find', () => {
   test('findMatches answers from the tree, and selectMatch moves the selection onto one', () => {
     const editor = mount(p('Exhibit A') + p('See Exhibit B'));
@@ -56,6 +76,102 @@ describe('Editor find', () => {
     const selection = editor.surface!.state().selection;
     expect(selection.anchor.paragraphId).toBe(matches[1]!.blockId);
     expect([selection.anchor.offset, selection.head.offset]).toEqual([4, 11]);
+  });
+
+  test('selectMatch and typing address text inside a smartTag', () => {
+    const editor = mount(
+      '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
+        '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
+        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    expect(editor.surface!.state().selection).toEqual({
+      anchor: { paragraphId: match.blockId, offset: 7 },
+      head: { paragraphId: match.blockId, offset: 13 },
+    });
+    editor.surface!.type('X');
+    expect(editor.surface!.session.bodyText()).toBe('before X after');
+    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
+  });
+
+  test('a replacement spanning a nested wrapper stays in its outer smartTag', () => {
+    const editor = mount(
+      '<w:p><w:smartTag><w:customXml><w:r><w:t>need</w:t></w:r></w:customXml>' +
+        '<w:r><w:t>le</w:t></w:r></w:smartTag><w:r><w:t> after</w:t></w:r></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+    expect(editor.surface!.session.bodyText()).toBe('X after');
+    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
+  });
+
+  test('a replacement spanning a smartTag stays in its inline content control', () => {
+    const editor = mount(
+      '<w:p><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr><w:sdtContent>' +
+        '<w:smartTag><w:r><w:t>need</w:t></w:r></w:smartTag>' +
+        '<w:r><w:t>le</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+    expect(editor.surface!.session.bodyText()).toBe('X after');
+    expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
+  });
+
+  test('a tab replacing all smartTag text stays inside the wrapper', () => {
+    const editor = mount(
+      '<w:p><w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
+        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.insertTab();
+    expect(editor.surface!.session.bodyText()).toBe('\t after');
+    const xml = serializeOoxmlPart(editor.surface!.session.part());
+    const wrapperStart = xml.indexOf('<w:smartTag');
+    const wrapperEnd = xml.indexOf('</w:smartTag>');
+    const tab = xml.indexOf('<w:tab/>');
+    expect(tab).toBeGreaterThan(wrapperStart);
+    expect(tab).toBeLessThan(wrapperEnd);
+  });
+
+  test('smartTag boundary typing agrees with the binding owner rule', () => {
+    const insertAt = (offset: number): DocxEditorInstance => {
+      const editor = mount(
+        '<w:p><w:r><w:t>A</w:t></w:r><w:smartTag><w:r><w:t>BC</w:t></w:r></w:smartTag>' +
+          '<w:r><w:t>D</w:t></w:r></w:p>'
+      );
+      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+      editor.surface!.setSelection({
+        anchor: { paragraphId, offset },
+        head: { paragraphId, offset },
+      });
+      editor.surface!.type('X');
+      return editor;
+    };
+    const leading = insertAt(1);
+    expect(leading.surface!.session.bodyText()).toBe('AXBCD');
+    expect(textUnder(leading.surface!.session.part().root, 'smartTag')).toBe('BC');
+    const interior = insertAt(2);
+    expect(interior.surface!.session.bodyText()).toBe('ABXCD');
+    expect(textUnder(interior.surface!.session.part().root, 'smartTag')).toBe('BXC');
+    const trailing = insertAt(3);
+    expect(trailing.surface!.session.bodyText()).toBe('ABCXD');
+    expect(textUnder(trailing.surface!.session.part().root, 'smartTag')).toBe('BC');
+
+    const terminal = mount('<w:p><w:smartTag><w:r><w:t>BC</w:t></w:r></w:smartTag></w:p>');
+    const paragraphId = terminal.surface!.session.paragraphIds()[0]!;
+    terminal.surface!.setSelection({
+      anchor: { paragraphId, offset: 2 },
+      head: { paragraphId, offset: 2 },
+    });
+    terminal.surface!.type('X');
+    expect(terminal.surface!.session.bodyText()).toBe('BCX');
+    expect(textUnder(terminal.surface!.session.part().root, 'smartTag')).toBe('BC');
   });
 
   test('findMatches narrows on matchCase and wholeWord', () => {

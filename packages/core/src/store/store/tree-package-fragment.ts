@@ -29,6 +29,8 @@ export const MAX_FRAGMENT_DECODED_BYTES = 16 * 1024 * 1024;
 export interface FragmentPasteInput {
   readonly paragraphId: string;
   readonly offset: number;
+  /** Inline owner that receives an inline-only fragment. */
+  readonly inside?: string;
   /** The fragment package zip (from the clipboard codec or the HTML projection). */
   readonly fragmentBytes: Uint8Array;
   readonly lastMarkCovered: boolean;
@@ -164,6 +166,7 @@ export function applyFragmentPaste(
             paragraphId: input.paragraphId,
             offset: input.offset,
             blocks: landed.blocks,
+            ...(input.inside === undefined ? {} : { inside: input.inside }),
             lastMarkCovered: input.lastMarkCovered,
           });
         },
