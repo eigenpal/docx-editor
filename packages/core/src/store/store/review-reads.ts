@@ -506,15 +506,24 @@ function mergeAdjacentSameKindEdits(
     if (bucket) bucket.push(item);
     else buckets.set(key, [item]);
   }
-  // The same rank the queue itself is ordered by. Coincident members score EQUAL, so the
-  // sort is stable over them and the wrappers sharing one offset keep file order.
-  const rank = (item: ReviewRevisionItem): number => reviewItemPositionRank(item, order);
+  // Position as a PAIR, not the packed rank the queue itself sorts by: that one folds the
+  // offset into a fixed stride and clamps it, so every offset past the clamp in one
+  // paragraph scores the same — and a bucket ordered by it would report itself sorted in
+  // exactly the paragraph long enough to reach it. Coincident members compare EQUAL, and the
+  // sort is stable, so wrappers sharing one offset keep the order the file wrote them in;
+  // the sort fixes where a decision SITS, never how two at one offset are stacked.
+  const compare = (a: ReviewRevisionItem, b: ReviewRevisionItem): number => {
+    const first = a.ranges[0]!.start;
+    const second = b.ranges[0]!.start;
+    const paragraph = (order.get(first.paragraphId) ?? 0) - (order.get(second.paragraphId) ?? 0);
+    return paragraph !== 0 ? paragraph : first.offset - second.offset;
+  };
   for (const bucket of buckets.values()) {
     let sorted = true;
     for (let index = 1; index < bucket.length && sorted; index += 1) {
-      sorted = rank(bucket[index - 1]!) <= rank(bucket[index]!);
+      sorted = compare(bucket[index - 1]!, bucket[index]!) <= 0;
     }
-    if (!sorted) bucket.sort((a, b) => rank(a) - rank(b));
+    if (!sorted) bucket.sort(compare);
   }
 
   const consumed = new Set<string>();
