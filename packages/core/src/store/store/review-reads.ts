@@ -360,7 +360,7 @@ function pairReplacements(
   allItems: readonly ReviewRevisionItem[],
   order: ReadonlyMap<string, number>
 ): ReviewRevisionItem[] {
-  const items = mergeAdjacentSameKindEdits(allItems);
+  const items = mergeAdjacentSameKindEdits(allItems, order);
   // Not `ranges.length === 1`. One tracked edit becomes SEVERAL `w:del` elements whenever the
   // struck text crosses something that is not text — an endnote or footnote reference, a
   // field, a break — because those cannot go inside the same wrapper. Requiring a single range
@@ -480,7 +480,8 @@ function pairReplacements(
  * revision it sits against still begins where the wrapper does.
  */
 function mergeAdjacentSameKindEdits(
-  items: readonly ReviewRevisionItem[]
+  items: readonly ReviewRevisionItem[],
+  order: ReadonlyMap<string, number>
 ): readonly ReviewRevisionItem[] {
   const mergeable = items.filter(
     (item) =>
@@ -492,15 +493,28 @@ function mergeAdjacentSameKindEdits(
 
   const keyOf = (position: ReviewPosition): string =>
     `${position.paragraphId}\u0000${position.offset}`;
-  // A chain never crosses kinds or authors, so each pair sweeps on its own. `mergeable` is
-  // in document order, because the site walk that built the items is, and bucketing keeps
-  // that order — which is what lets one forward pass find every chain.
+  // A chain never crosses kinds or authors, so each pair sweeps on its own. The sweep needs
+  // each bucket in document order, and `mergeable` almost always already is: the site walk
+  // that built the items runs in document order. It is only ALMOST, because an item is
+  // positioned by its first LOCATED site, and a site inside a drawing or a text box has no
+  // location at all — so a group that starts in one carries a later range than its place in
+  // the list claims. Checking costs one pass and sorting is skipped whenever it holds.
   const buckets = new Map<string, ReviewRevisionItem[]>();
   for (const item of mergeable) {
     const key = `${item.revisionKind}\u0000${item.author}`;
     const bucket = buckets.get(key);
     if (bucket) bucket.push(item);
     else buckets.set(key, [item]);
+  }
+  // The same rank the queue itself is ordered by. Coincident members score EQUAL, so the
+  // sort is stable over them and the wrappers sharing one offset keep file order.
+  const rank = (item: ReviewRevisionItem): number => reviewItemPositionRank(item, order);
+  for (const bucket of buckets.values()) {
+    let sorted = true;
+    for (let index = 1; index < bucket.length && sorted; index += 1) {
+      sorted = rank(bucket[index - 1]!) <= rank(bucket[index]!);
+    }
+    if (!sorted) bucket.sort((a, b) => rank(a) - rank(b));
   }
 
   const consumed = new Set<string>();
@@ -517,14 +531,15 @@ function mergeAdjacentSameKindEdits(
     };
     for (const item of bucket) {
       const start = keyOf(item.ranges[0]!.start);
-      const end = keyOf(item.ranges[item.ranges.length - 1]!.end);
       if (chain.length > 0 && start !== frontier) close();
       const opening = chain.length === 0;
       chain.push(item);
       // Covering no characters leaves the frontier where it is, so the next member is still
       // measured against the text this wrapper sits in front of. An opening member sets the
       // frontier either way: there is nothing yet for it to sit in front of.
-      if (opening || start !== end) frontier = end;
+      if (opening || coversCharacters(item)) {
+        frontier = keyOf(item.ranges[item.ranges.length - 1]!.end);
+      }
     }
     close();
   }
@@ -536,6 +551,20 @@ function mergeAdjacentSameKindEdits(
     out.push(merged.get(item.id) ?? item);
   }
   return out;
+}
+
+/**
+ * Whether a revision covers any text at all.
+ *
+ * Asked per RANGE rather than of the whole span, because a group's outermost start and end
+ * can differ while every range in it is a point: the wrappers a tracked field is made of are
+ * empty, and a group that reuses one id across two paragraphs holds two of them.
+ */
+function coversCharacters(item: ReviewRevisionItem): boolean {
+  return item.ranges.some(
+    (range) =>
+      range.start.paragraphId !== range.end.paragraphId || range.start.offset !== range.end.offset
+  );
 }
 
 /** One card from a chain of adjacent same-kind halves, in document order. */

@@ -265,6 +265,20 @@ describe('one decision is one card', () => {
     expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
   });
 
+  // Grouping follows DOCUMENT position, not list position. A revision whose first site sits
+  // somewhere with no offset of its own — inside a drawing or a text box — is listed by a
+  // later range than its place in the list claims, and a sweep that trusted the list split
+  // the run it belonged to.
+  test('grouping follows document position when the item list does not', () => {
+    const part = story(
+      `<w:p><w:r><w:del w:id="5" w:author="QA" w:date="D">${delRun('x')}</w:del></w:r>` +
+        `${del('3', delRun('ab'), 'QA')}${del('5', delRun('cd'), 'QA')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['3', '5']);
+  });
+
   test('card ids are unique, so a list key never collides', () => {
     const part = story(
       `<w:p>${ins('7', run('a'))}${run(' x ')}${ins('7', run('b'))}${del('7', delRun('c'), 'QA')}</w:p>`
