@@ -15,7 +15,7 @@ Use `document` for the document source.
 | Prop       | Type                               | Description                                                     |
 | ---------- | ---------------------------------- | --------------------------------------------------------------- |
 | `document` | `DocumentSource`                   | DOCX bytes, `'blank'`, or a `DocumentHandle`.                   |
-| `author`   | `string`                           | Author for comments and review commands.                        |
+| `author`   | `string`                           | Author for later comments, replies, and tracked changes.        |
 | `locale`   | `string`                           | Locale passed to the editor.                                    |
 | `mode`     | `'edit' \| 'view' \| 'suggesting'` | Opening mode. The packaged `<DocxEditor>` defaults to `'edit'`. |
 | `zoom`     | `number`                           | Numeric display scale.                                          |
@@ -36,7 +36,8 @@ import { DocxEditor } from '@docx-editor.dev/vue';
 ```
 
 `<DocxEditor>` rebuilds when the `document` identity changes. It applies later
-`zoom` and `zoomMode` changes through the editor facade.
+`author`, `zoom`, and `zoomMode` changes through the editor facade without a rebuild.
+Existing revisions keep their authors.
 
 ## Modules
 

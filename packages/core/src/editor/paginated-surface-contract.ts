@@ -764,6 +764,8 @@ export interface PaginatedSurface {
    */
   editingMode(): SurfaceEditingMode;
   setEditingMode(mode: SurfaceEditingMode): void;
+  /** Set the ambient author after buffered text commits under the previous author. */
+  setAuthor(author: string | undefined): void;
   /**
    * Every author with a revision in the CURRENT layout, mapped to Word's colour slot by
    * order of first appearance. One map instance per layout, so a caller can key caches on

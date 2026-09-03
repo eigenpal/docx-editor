@@ -469,9 +469,9 @@ const DocxEditorImpl = defineComponent({
         api.value?.snapshot(options) ?? createDocxEditorRefApi(() => null).snapshot(options),
     } satisfies DocxEditorRef);
 
-    const { i18n, ...frameProps } = props;
-    return () =>
-      h(LocaleProvider, i18n !== undefined ? { i18n } : {}, {
+    return () => {
+      const { i18n, ...frameProps } = props;
+      return h(LocaleProvider, i18n !== undefined ? { i18n } : {}, {
         default: () =>
           h(
             DocxEditorFrame,
@@ -515,6 +515,7 @@ const DocxEditorImpl = defineComponent({
             }
           ),
       });
+    };
   },
 });
 

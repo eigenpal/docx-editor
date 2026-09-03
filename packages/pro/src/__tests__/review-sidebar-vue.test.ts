@@ -167,6 +167,7 @@ describe('DocxEditorReview (Vue)', () => {
           author: 'Demo Reviewer',
           color: '#b42318',
         }),
+        h(DocxEditorAuthorStyle, { author: 'Updated Reviewer', color: '#0b7285' }),
       ],
       SOURCE,
       () => [h(DocxEditorReview)],
@@ -183,6 +184,13 @@ describe('DocxEditorReview (Vue)', () => {
       const draft = mounted.container.querySelector('[data-testid="review-draft"]') as HTMLElement;
       expect(draft.dataset.reviewAuthor).toBe('Demo Reviewer');
       expect(draft.style.getPropertyValue('--doc-review-author-current')).toBe('#b42318');
+      mounted.editor().setAuthor('Updated Reviewer');
+      await flushMount();
+      const updatedDraft = mounted.container.querySelector(
+        '[data-testid="review-draft"]'
+      ) as HTMLElement;
+      expect(updatedDraft.dataset.reviewAuthor).toBe('Updated Reviewer');
+      expect(updatedDraft.style.getPropertyValue('--doc-review-author-current')).toBe('#0b7285');
     } finally {
       mounted.unmount();
     }

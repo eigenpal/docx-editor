@@ -315,6 +315,7 @@ export function mountPaginatedSurface(
   }
   const session = opened.session;
   const collaborationSession = options.collaborationModel?.session;
+  let author = options.author;
   let scale = options.scale ?? 96 / 72;
   const tableLabelState = {
     resolve:
@@ -1395,8 +1396,8 @@ export function mountPaginatedSurface(
     authorOverride?: string
   ): boolean {
     flushTypeBuffer();
-    const author = authorOverride?.trim() || options.author?.trim();
-    if (!author) {
+    const writer = authorOverride?.trim() || author?.trim();
+    if (!writer) {
       lastRejection = 'tracked changes need a non-empty author';
       options.onChange?.(currentState());
       return false;
@@ -1417,7 +1418,7 @@ export function mountPaginatedSurface(
       options.onChange?.(currentState());
       return false;
     }
-    const revision = { author, date: trackedDate() };
+    const revision = { author: writer, date: trackedDate() };
     const range = orderedRange();
     const collapsed =
       range.from.paragraphId === range.to.paragraphId && range.from.offset === range.to.offset;
@@ -1440,7 +1441,7 @@ export function mountPaginatedSurface(
             ops: [] as readonly TreeDocOp[],
             collapseTo: positionPastDeletion(currentLayout, range.from),
           }
-        : deleteSelectionPlan(author);
+        : deleteSelectionPlan(writer);
     const ops = attributeTrackedOps(plan.ops, revision, formattingTracked());
     let caret = plan.collapseTo;
     if (kind === 'insertion' || kind === 'replacement') {
@@ -3026,7 +3027,7 @@ export function mountPaginatedSurface(
     // EVERY edit, not just the destructive ones. Letting insertions through wrote permanent
     // changes to someone else's document while the pill said Suggesting and the review pane
     // stayed empty — half the keyboard proposing and half editing outright.
-    if (editingMode === 'suggest' && !options.author?.trim() && edits) {
+    if (editingMode === 'suggest' && !author?.trim() && edits) {
       return 'suggesting needs an author before it can propose a change';
     }
     // Deleting a note is a package-level removal with no tracked form: the reference and
@@ -3212,8 +3213,8 @@ export function mountPaginatedSurface(
    * that decides how to attribute it.
    */
   function trackedAuthorOrNone(): string | undefined {
-    const author = options.author?.trim();
-    return editingMode === 'suggest' && author ? author : undefined;
+    const writer = author?.trim();
+    return editingMode === 'suggest' && writer ? writer : undefined;
   }
 
   /** Suggesting attributes text and structural row edits as Word tracked changes. */
@@ -4525,7 +4526,7 @@ export function mountPaginatedSurface(
     selection: () => selection,
     cellSelection: () => cellSelection,
     editingMode: () => editingMode,
-    author: () => options.author,
+    author: () => author,
     storyScope,
     paragraphOrder,
     flushPendingInputAndLayout,
@@ -5347,6 +5348,11 @@ export function mountPaginatedSurface(
     },
 
     editingMode: () => editingMode,
+    setAuthor: (nextAuthor) => {
+      if (author === nextAuthor) return;
+      flushTypeBuffer();
+      author = nextAuthor;
+    },
     setEditingMode: (mode) => {
       // Text typed under the OLD mode commits under it — a buffered edit must
       // not silently become a suggestion (or a viewing-mode refusal). The layout
@@ -5705,7 +5711,7 @@ export function mountPaginatedSurface(
       storyScope,
       selectionMark,
       editingMode: () => editingMode,
-      author: () => options.author,
+      author: () => author,
       trackedDate,
       decodePort: () => decodePort,
       actorId: () => collaborationSession?.identity.actorId,

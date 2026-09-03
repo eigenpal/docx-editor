@@ -56,7 +56,8 @@ Listen for `@ready`, `@change`, and `@font-error` on the root.
 
 The root samples `document`, `fonts`, `translate`, and `imageDecodePort` when it
 creates the editor. An identity change rebuilds the editor. Changes to `zoom`
-and `zoomMode` apply without a rebuild.
+and `zoomMode` apply without a rebuild. Changes to `author` also apply without a
+rebuild, and existing revisions keep their authors.
 
 For full prop types, see the
 [Vue API reference](/docs/2.x/api/vue).

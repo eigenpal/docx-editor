@@ -788,7 +788,6 @@ export interface DocxEditorRootListeners {
 
 // @public
 export interface DocxEditorRootProps {
-    // (undocumented)
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;

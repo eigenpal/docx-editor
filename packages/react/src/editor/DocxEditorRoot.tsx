@@ -52,10 +52,10 @@ import {
 } from './revision-style-registry';
 
 /**
- * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `author`,
- * `locale`, and the initial `mode`/`zoom`) are sampled when the instance is created;
- * only `document` and `fonts` identity remount it. Later `mode` and `zoom` changes flow through
- * `Editor.setZoom` so edits, the caret, and the undo history survive.
+ * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `locale`, and the
+ * initial `mode`/`zoom`) are sampled when the instance is created. Only `document` and `fonts`
+ * identity remount it. Later `author`, `zoom`, and `zoomMode` changes use instance setters, so
+ * edits, the caret, and the undo history survive. `mode` and `modules` are sampled at mount only.
  *
  * @public
  */
@@ -73,6 +73,7 @@ export interface DocxEditorRootProps {
    * failures degrade to the fixed measurer and report through `onFontError`.
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
   locale?: string;
   /** Drawing refusal labels for painted placeholders; defaults to the active locale catalogue. */
@@ -203,6 +204,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   const {
     document: doc,
     fonts,
+    author,
     zoom,
     zoomMode,
     tableInteractionLabel,
@@ -333,6 +335,12 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       editor.setZoomMode(zoomMode!);
     }
   }, [editor, zoom, zoomMode]);
+
+  // Author is runtime state. Prop changes preserve the editor instance and existing revisions.
+  useEffect(() => {
+    if (!editor) return;
+    editor.setAuthor(author);
+  }, [editor, author]);
 
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {

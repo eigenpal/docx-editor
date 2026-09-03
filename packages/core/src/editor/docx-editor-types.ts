@@ -279,6 +279,17 @@ export interface DocxEditorInstance extends Editor {
    */
   getConfiguredAuthor(): string | null;
   /**
+   * Set the author for runtime editor state.
+   *
+   * Unlike the construction-time {@link DocxEditorConfig.author}, this value applies to every
+   * later comment, reply, and tracked change. It does not rewrite existing revisions. The value
+   * survives document reloads and font remounts. An empty or whitespace value clears the author,
+   * after which suggesting refuses writes with its existing reason.
+   *
+   * @public
+   */
+  setAuthor(author: string | undefined): void;
+  /**
    * The style declared for one author, whether or not the SURFACE has published them yet —
    * so review chrome can draw a card the rail is holding before the roster catches up.
    *

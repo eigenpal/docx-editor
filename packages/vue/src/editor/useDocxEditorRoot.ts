@@ -291,6 +291,14 @@ export function useDocxEditorRootOwner(
   );
 
   watch(
+    () => [editorRef.value, toValue(props).author] as const,
+    ([editor, author]) => {
+      if (editor) editor.setAuthor(author);
+    },
+    { flush: 'post' }
+  );
+
+  watch(
     () => [editorRef.value, toValue(props).tableInteractionLabel] as const,
     ([editor, label]) => {
       if (editor) editor.setTableInteractionLabel(label ?? defaultTableLabel);

@@ -216,6 +216,7 @@ import {
 } from './opening-editing-mode.ts';
 import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
+import { initialsOfAuthor, normalizeEditorAuthor } from './docx-editor-author.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -314,6 +315,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let readerChoseMode = false;
   /** A refusal this facade made before the surface could see the request; see `snapshot`. */
   let facadeRejection: string | null = null;
+  let author = normalizeEditorAuthor(config.author);
   const mode = config.mode ?? 'edit';
 
   // The HOST's opening mode, when `config.mode` is explicit — precedence and reasons live
@@ -504,7 +506,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         : {}),
       // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
       // which survives a document reload because the reader chose it, not the file.
-      ...(config.author ? { author: config.author } : {}),
+      ...(author ? { author } : {}),
       // Presentation policy for tracked changes, applied wherever revision markup paints.
       // The facade's state, not `config`: a reload keeps a live `setRevisionStyles`.
       ...(revisionStyleState.current() !== undefined
@@ -1633,7 +1635,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     const decision = documentTrackingAdoption({
       viewOnly: mode === 'view',
       reviewEnabled,
-      hasAuthor: Boolean(config.author),
+      hasAuthor: Boolean(author),
       hostChoseMode: config.mode !== undefined,
       readerChoseMode,
       currentMode: editingMode,
@@ -1669,16 +1671,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function dateOfItem(item: ReviewItem): string | undefined {
     if (item.kind === 'comment') return item.comment.date;
     return item.kind === 'revision' ? item.date : undefined;
-  }
-
-  /** Initials from a name, for a revision — `CT_TrackChange` carries no `@w:initials`. */
-  function initialsOfAuthor(author: string): string {
-    const words = author.trim().split(/\s+/).filter(Boolean);
-    if (words.length === 0) return '?';
-    return words
-      .slice(0, 2)
-      .map((word) => word[0]!.toUpperCase())
-      .join('');
   }
 
   function resolveReviewItem(key: string, action: 'accept' | 'reject'): ExecResult {
@@ -1968,7 +1960,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         command.type === 'proposeDeletion' ||
         command.type === 'proposeReplacement'
       ) {
-        const writer = (command.author ?? config.author ?? '').trim();
+        const writer = (command.author ?? author ?? '').trim();
         if (!writer) {
           return {
             ok: false,
@@ -2163,7 +2155,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getCustomNodeDefinitions: () => modules.customNodes,
     reportCustomNodeDiagnostic: reportDiagnostic,
 
-    addComment(text: string, author?: string): ExecResult {
+    addComment(text: string, authorOverride?: string): ExecResult {
       // Comment AUTHORING is the review module's capability, like every other
       // review write above. Missed in the first gating pass — caught by review.
       if (!reviewEnabled) {
@@ -2177,7 +2169,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!range || !surface) {
         return { ok: false, code: 'invalidArgs', reason: 'a comment needs a selected range' };
       }
-      const writer = (author ?? config.author ?? '').trim();
+      const writer = (authorOverride ?? author ?? '').trim();
       if (writer.length === 0 || text.trim().length === 0) {
         return {
           ok: false,
@@ -2235,7 +2227,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       bump();
       emitSelectionChange();
     },
-    getConfiguredAuthor: () => config.author?.trim() || null,
+    getConfiguredAuthor: () => author ?? null,
+    setAuthor(nextAuthor) {
+      const normalized = normalizeEditorAuthor(nextAuthor);
+      if (author === normalized) return;
+      author = normalized;
+      surface?.setAuthor(author);
+      bump();
+      emitSelectionChange();
+    },
     presenceColorFor: (name) => surface?.remotePresenceColor(name) ?? 'var(--doc-accent)',
     collaborationSession: () => surface?.collaborationSession() ?? null,
     getReviewAuthorStyle: (author) => revisionStyleState.styleFor(author),
@@ -2454,7 +2454,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return { ok: true, changed: true };
     },
 
-    replyToReviewItem(key: string, text: string, author?: string): ExecResult {
+    replyToReviewItem(key: string, text: string, authorOverride?: string): ExecResult {
       if (!reviewEnabled) {
         return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
       }
@@ -2471,7 +2471,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (!range) {
         return { ok: false, code: 'invalidArgs', reason: 'the item has no anchorable range' };
       }
-      const writer = (author ?? config.author ?? '').trim();
+      const writer = (authorOverride ?? author ?? '').trim();
       const refusal = reviewReplyRefusal(item, text, writer);
       if (refusal) return refusal;
       // Against a REVISION this is a comment over that revision's range: OOXML gives `w:ins`

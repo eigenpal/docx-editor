@@ -854,6 +854,7 @@ export interface DocxEditorInstance extends Editor {
     readonly mountGeneration: number;
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
+    setAuthor(author: string | undefined): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
@@ -1527,6 +1528,7 @@ export interface PaginatedSurface {
     readonly session: TreeDocxSessionView;
     setActiveScope(scope: ViewScope): boolean;
     setAllRevisionAuthorsVisible(visible: boolean): void;
+    setAuthor(author: string | undefined): void;
     setCellSelection(next: CellSelection | null): void;
     setEditable(editable: boolean): void;
     // (undocumented)
