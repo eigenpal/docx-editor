@@ -198,6 +198,14 @@ export class TablePaginationError extends Error {
   }
 }
 
+/** Coupled text-box layout and cache invalidation for a hosted-story table flow lane. */
+export interface HostedStoryFlowDeps {
+  readonly layoutTextboxStoryFor: (
+    projection: import('../store/package/drawing-projection.ts').DrawingProjection
+  ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
+  readonly hostedListTokenForParagraph: ((paragraph: OoxmlNode) => string) | null;
+}
+
 export interface TableFlowDeps {
   readonly measurer: TextMeasurer;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]> | undefined;
@@ -221,13 +229,8 @@ export interface TableFlowDeps {
    * stories that do not share the body counter stream.
    */
   readonly listItems?: ReadonlyMap<string, ResolvedListItem>;
-  /**
-   * The hosted text-box list state a cell paragraph's break key folds — the cell twin of
-   * the `hostedTextboxListToken` fold in `prepareBlock`, built with `hostedListTokenDeps`
-   * and provided only by lanes that lay hosted stories out
-   * ({@link layoutTextboxStoryFor}): where no story renders, the fold would be key churn.
-   */
-  readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string;
+  /** Text-box story layout and its host break-key invalidation, structurally inseparable. */
+  readonly hostedStory?: HostedStoryFlowDeps;
   /**
    * `w:settings/w:defaultTabStop` in points; absent keeps the 0.5" schema default. A cell
    * paragraph tabs on the same document-wide grid as a body paragraph.
@@ -295,10 +298,6 @@ export interface TableFlowDeps {
     DrawingAnchorFrameContext,
     'paragraphBox' | 'anchorLineBox' | 'anchorCharacterX' | 'columnBox' | 'cellBox' | 'layoutInCell'
   >;
-  /** Lays out a textbox drawing's story; absent hosts degrade to the placeholder path. */
-  readonly layoutTextboxStoryFor?: (
-    projection: import('../store/package/drawing-projection.ts').DrawingProjection
-  ) => import('./textbox-story-layout.ts').TextboxStoryLayout | null;
   readonly pageContentClip?: () => import('./semantic-records.ts').LayoutBox;
   readonly collectAnchoredDrawings?: (drawings: readonly AnchoredDrawingRecord[]) => void;
   /** Root anchor sink — preserved when row defer strips {@link collectAnchoredDrawings}. */
@@ -517,7 +516,7 @@ function placeCellParagraph(
   // The list state of any hosted text-box story, keyed as the body flow keys it: its own
   // `txbxList` property. A numbering edit moves only this property while the host's
   // subtree stays byte-identical; box-free paragraphs keep their pre-existing key shape.
-  const hostedListToken = deps.hostedListTokenForParagraph?.(paragraph) ?? '';
+  const hostedListToken = deps.hostedStory?.hostedListTokenForParagraph?.(paragraph) ?? '';
   const key = keyFor({
     paragraph,
     properties: [
@@ -955,7 +954,9 @@ function placeCellParagraph(
           cellBox,
           pageClip: deps.pageContentClip(),
           measurer: deps.measurer,
-          ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
+          ...(deps.hostedStory
+            ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor }
+            : {}),
           ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
           ...(deps.revisionAuthorFilter ? { revisionAuthorFilter: deps.revisionAuthorFilter } : {}),
         })
