@@ -511,7 +511,9 @@ function mergeAdjacentSameKindEdits(
   // paragraph scores the same — and a bucket ordered by it would report itself sorted in
   // exactly the paragraph long enough to reach it. Coincident members compare EQUAL, and the
   // sort is stable, so wrappers sharing one offset keep the order the file wrote them in;
-  // the sort fixes where a decision SITS, never how two at one offset are stacked.
+  // the sort fixes where a decision SITS, never how two at one offset are stacked. `order`
+  // is total over the paragraphs a located site can name, so the fallback below asserts that
+  // rather than guarding it: it would rank an unmapped paragraph FIRST, not last.
   const compare = (a: ReviewRevisionItem, b: ReviewRevisionItem): number => {
     const first = a.ranges[0]!.start;
     const second = b.ranges[0]!.start;
