@@ -1509,6 +1509,7 @@ export interface PaginatedSurface {
         readonly commitGuard?: () => boolean;
         readonly expectedPackageRevision: number;
     }): Promise<ImageIntentResult>;
+    replacementLanding(paragraphId: string, start: number, end: number): number | null;
     retainedSelection(): SemanticSelection | null;
     retainSelection(): SelectionPin;
     revealPage(pageIndex: number, options?: RevealOptions): boolean;

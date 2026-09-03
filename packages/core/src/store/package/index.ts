@@ -243,6 +243,7 @@ export {
   replaceNode,
   type EditOptions,
   type OoxmlEditResult,
+  type TransactionRevisionIds,
 } from './ooxml-edit.ts';
 export {
   PAGE_BREAK_CHAR,

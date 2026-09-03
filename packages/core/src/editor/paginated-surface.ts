@@ -1102,6 +1102,16 @@ export function mountPaginatedSurface(
         level
       ) !== null,
   });
+  /** The contract's `replacementLanding`; the hyperlink lane reads the same rule. */
+  function replacementLanding(paragraphId: string, start: number, end: number): number | null {
+    if (editingMode !== 'suggest') return null;
+    // A POSITIONAL READ, and it does not settle anything itself: flushing here would commit
+    // buffered typing in the middle of a caller that had already captured the offsets it
+    // builds ops from. Both callers settle first — the hyperlink lane through
+    // `orderedRange()`, an automation batch at its own entry — which is where a flush belongs.
+    return replacementOffset({ paragraphId, offset: start }, { paragraphId, offset: end });
+  }
+
   const hyperlinks = createHyperlinkOps({
     session: gatedSession,
     // A HYPERLINK field is not a tree node, so its link resolves from the layout projection
@@ -1114,14 +1124,8 @@ export function mountPaginatedSurface(
     refusesWrite: () => writeRefusal(true) !== null,
     withMintActor: (mint) => runWithTransactionActor(collaborationSession?.identity.actorId, mint),
     storyScope,
-    // Non-null exactly when suggesting: the link lane then replaces the selection with
-    // tracked ops and wraps the fresh insertion, instead of writing an unattributed wrap.
-    // The landing is the SAME rule every replacing lane reads — past the struck words,
-    // minus this author's own retracted insertion.
-    suggestReplacementOffset: (paragraphId, start, end) =>
-      editingMode === 'suggest'
-        ? replacementOffset({ paragraphId, offset: start }, { paragraphId, offset: end })
-        : null,
+    // Non-null exactly when suggesting: the link lane then replaces with tracked ops.
+    replacementLanding,
     insertionLanding: (paragraphId, offset) =>
       positionPastDeletion(currentLayout, { paragraphId, offset }).offset,
     selection: () => selection,
@@ -4528,6 +4532,7 @@ export function mountPaginatedSurface(
     cellSelection: () => cellSelection,
     editingMode: () => editingMode,
     author: () => author,
+    trackedDate,
     storyScope,
     paragraphOrder,
     flushPendingInputAndLayout,
@@ -5273,6 +5278,7 @@ export function mountPaginatedSurface(
     },
 
     revisionDisplayMode,
+    replacementLanding,
     applyAutomationOps: (staged, scope) => {
       // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
       // refuses and where suggesting turns an edit into a proposal, and `commit` is where the

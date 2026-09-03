@@ -18,6 +18,7 @@ import { describe, expect, test } from 'bun:test';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { createBrowserAutomationHost } from '../automation-host.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { serializeOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import type { AutomationHandle, AutomationHost } from '../../automation/index.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -86,6 +87,25 @@ function noteDocx(): Uint8Array {
       `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}${p('beta')}<w:sectPr/></w:body></w:document>`
     ),
     'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W}">${footnotes}</w:footnotes>`),
+  });
+}
+
+/** A document whose body is exactly `body`, for a write that needs particular words. */
+function bodyDocx(body: string): Uint8Array {
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(`<Relationships xmlns="${REL}"/>`),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}<w:sectPr/></w:body></w:document>`
+    ),
   });
 }
 
@@ -247,6 +267,405 @@ describe('a scripted write obeys the editing mode', () => {
     const xml = savedDocumentXml(host);
     expect(xml).toContain('w:ins');
     expect(xml).toContain('Ada');
+  });
+
+  test('suggesting writes a replacement as Word does and answers where the text landed', () => {
+    // A scripted `Range.insertText(…, 'Replace')` aims the insertion where the range began,
+    // which in suggesting mode is the front edge of the fresh strike. The store puts the
+    // replacement AFTER the struck words — `w:del` then `w:ins`, each under its own id, as
+    // Word writes it (#691) — so the answered span must name where the text actually sits,
+    // not the struck words it was aimed at.
+    const { host, editor } = mount({
+      author: 'Ada',
+      bytes: bodyDocx(
+        '<w:p><w:r><w:t xml:space="preserve">The Receiving Party shall hold it.</w:t></w:r></w:p>'
+      ),
+    });
+    editor.surface!.setEditingMode('suggest');
+    const body = bodyOf(host);
+    const found = host.execute({
+      operations: [{ op: 'search', scope: { body }, text: 'Receiving Party' }],
+    });
+    const hit = found.results[0];
+    if (hit?.status !== 'ok' || hit.value.kind !== 'spans' || !hit.value.spans[0]) {
+      throw new Error('expected one search result');
+    }
+
+    const write = host.execute({
+      operations: [{ op: 'replaceSpan', span: hit.value.spans[0], text: 'Recipient' }],
+    });
+    expect({ ok: write.ok, changed: write.changed }).toEqual({ ok: true, changed: true });
+    const answered = write.results[0];
+    if (answered?.status !== 'ok' || answered.value.kind !== 'span') {
+      throw new Error('expected the written span');
+    }
+    const readBack = host.execute({
+      operations: [{ op: 'getSpanText', span: answered.value.span, projection: 'allMarkup' }],
+    });
+    const text = readBack.results[0];
+    if (text?.status !== 'ok' || text.value.kind !== 'text') throw new Error('expected text');
+    expect(text.value.text).toBe('Recipient');
+
+    const xml = savedDocumentXml(host);
+    const struck = xml.indexOf('<w:del ');
+    const inserted = xml.indexOf('<w:ins ');
+    expect(struck).toBeGreaterThan(-1);
+    expect(inserted).toBeGreaterThan(struck);
+    const ids = [...xml.matchAll(/<w:(?:ins|del) [^>]*w:id="(\d+)"/g)].map((match) => match[1]);
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  test('two replacements in one batch, in edit mode, each answer their own text', () => {
+    // The answer is the planned landing, not an inference from the paragraph's length after
+    // the whole batch — which counted the first replacement's growth into the second's span.
+    const { host } = mount({
+      bytes: bodyDocx(
+        '<w:p><w:r><w:t>The quick brown fox jumps over the lazy dog.</w:t></w:r></w:p>'
+      ),
+    });
+    const body = bodyOf(host);
+    const found = host.execute({
+      operations: [
+        { op: 'search', scope: { body }, text: 'lazy' },
+        { op: 'search', scope: { body }, text: 'quick' },
+      ],
+    });
+    const lazy = found.results[0];
+    const quick = found.results[1];
+    if (lazy?.status !== 'ok' || lazy.value.kind !== 'spans' || !lazy.value.spans[0])
+      throw new Error('lazy');
+    if (quick?.status !== 'ok' || quick.value.kind !== 'spans' || !quick.value.spans[0])
+      throw new Error('quick');
+    const write = host.execute({
+      operations: [
+        { op: 'replaceSpan', span: lazy.value.spans[0], text: 'sleepy' },
+        { op: 'replaceSpan', span: quick.value.spans[0], text: 'extraordinarily fast' },
+      ],
+    });
+    expect(write.ok).toBe(true);
+    const second = write.results[1];
+    if (second?.status !== 'ok' || second.value.kind !== 'span') throw new Error('expected a span');
+    const read = host.execute({ operations: [{ op: 'getSpanText', span: second.value.span }] });
+    const text = read.results[0];
+    if (text?.status !== 'ok' || text.value.kind !== 'text') throw new Error('expected text');
+    expect(text.value.text).toBe('extraordinarily fast');
+  });
+
+  test('suggesting over words another author already struck lands after them, and says so', () => {
+    // Nothing of the range is struck by THIS edit, so the front edge of the range is the front
+    // edge of Grace's deletion. The landing rule aims past it, as typing does; the new text
+    // sits after the struck words, and the answered span names it.
+    const { host, editor } = mount({
+      author: 'Ada',
+      bytes: bodyDocx(
+        '<w:p><w:r><w:t xml:space="preserve">The </w:t></w:r>' +
+          '<w:del w:id="3" w:author="Grace" w:date="2020-01-01T00:00:00Z">' +
+          '<w:r><w:delText>Receiving Party</w:delText></w:r></w:del>' +
+          '<w:r><w:t xml:space="preserve"> shall hold it.</w:t></w:r></w:p>'
+      ),
+    });
+    editor.surface!.setEditingMode('suggest');
+    const body = bodyOf(host);
+    const found = host.execute({
+      operations: [
+        {
+          op: 'search',
+          scope: { body },
+          text: 'Receiving Party',
+          options: { projection: 'allMarkup' },
+        },
+      ],
+    });
+    const hit = found.results[0];
+    if (hit?.status !== 'ok' || hit.value.kind !== 'spans' || !hit.value.spans[0]) {
+      throw new Error('expected one search result');
+    }
+    const write = host.execute({
+      operations: [{ op: 'replaceSpan', span: hit.value.spans[0], text: 'Recipient' }],
+    });
+    expect(write.ok).toBe(true);
+    const answered = write.results[0];
+    if (answered?.status !== 'ok' || answered.value.kind !== 'span')
+      throw new Error('expected a span');
+    const read = host.execute({
+      operations: [{ op: 'getSpanText', span: answered.value.span, projection: 'allMarkup' }],
+    });
+    const text = read.results[0];
+    if (text?.status !== 'ok' || text.value.kind !== 'text') throw new Error('expected text');
+    expect(text.value.text).toBe('Recipient');
+    const xml = savedDocumentXml(host);
+    expect(xml.indexOf('<w:del ')).toBeLessThan(xml.indexOf('<w:ins '));
+  });
+
+  test('replacing with nothing in suggesting mode answers where a replacement would go', () => {
+    const { host, editor } = mount({
+      author: 'Ada',
+      bytes: bodyDocx('<w:p><w:r><w:t>alpha beta</w:t></w:r></w:p>'),
+    });
+    editor.surface!.setEditingMode('suggest');
+    const body = bodyOf(host);
+    const found = host.execute({ operations: [{ op: 'search', scope: { body }, text: 'beta' }] });
+    const hit = found.results[0];
+    if (hit?.status !== 'ok' || hit.value.kind !== 'spans' || !hit.value.spans[0])
+      throw new Error('hit');
+    const write = host.execute({
+      operations: [{ op: 'replaceSpan', span: hit.value.spans[0], text: '' }],
+    });
+    expect(write.ok).toBe(true);
+    const answered = write.results[0];
+    if (answered?.status !== 'ok' || answered.value.kind !== 'span')
+      throw new Error('expected a span');
+    // The struck words keep their offsets, so the spot after them is the range END.
+    expect(answered.value.span.start.offset).toBe('alpha beta'.length);
+    expect(answered.value.span.end.offset).toBe('alpha beta'.length);
+  });
+
+  test('a scripted replacement across a paragraph mark lands after the struck head', () => {
+    // The whole range is struck, the mark between the paragraphs is proposed deleted, and the
+    // new text goes after the FIRST paragraph's struck tail. Not the last paragraph, where
+    // typing puts it: the proposed merge really merges when the first paragraph's mark is
+    // this author's own pending insertion, and an op naming the second paragraph would then
+    // veto the transaction.
+    const { host, editor } = mount({ author: 'Ada' });
+    editor.surface!.setEditingMode('suggest');
+    const paragraphs = paragraphsOf(host);
+    const write = host.execute({
+      operations: [
+        {
+          op: 'replaceSpan',
+          span: {
+            start: { paragraph: paragraphs[0]!, offset: 2 },
+            end: { paragraph: paragraphs[1]!, offset: 2 },
+          },
+          text: 'XY',
+        },
+      ],
+    });
+    expect({ ok: write.ok, changed: write.changed }).toEqual({ ok: true, changed: true });
+    const answered = write.results[0];
+    if (answered?.status !== 'ok' || answered.value.kind !== 'span') {
+      throw new Error('expected a span');
+    }
+    const read = host.execute({
+      operations: [{ op: 'getSpanText', span: answered.value.span, projection: 'allMarkup' }],
+    });
+    const text = read.results[0];
+    if (text?.status !== 'ok' || text.value.kind !== 'text') throw new Error('expected text');
+    expect(text.value.text).toBe('XY');
+    const xml = savedDocumentXml(host);
+    expect(xml).toMatch(
+      /<w:delText>pha<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t>XY<\/w:t><\/w:r><\/w:ins>/
+    );
+  });
+
+  test('a spanning replacement commits when the first mark is the author’s own insertion', () => {
+    // The proposed merge REALLY merges here — the first paragraph retracts its own mark, so
+    // the second leaves the tree. Writing the new text into that second paragraph refused the
+    // whole batch with `unknown-paragraph`, and the scripted edit did nothing at all.
+    const { host, editor } = mount({
+      author: 'Ada',
+      bytes: bodyDocx(
+        '<w:p><w:pPr><w:rPr><w:ins w:id="4" w:author="Ada" w:date="2026-09-01T00:00:00Z"/></w:rPr></w:pPr>' +
+          '<w:r><w:t>alpha</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:t>beta</w:t></w:r></w:p>'
+      ),
+    });
+    editor.surface!.setEditingMode('suggest');
+    const paragraphs = paragraphsOf(host);
+    const write = host.execute({
+      operations: [
+        {
+          op: 'replaceSpan',
+          span: {
+            start: { paragraph: paragraphs[0]!, offset: 2 },
+            end: { paragraph: paragraphs[1]!, offset: 2 },
+          },
+          text: 'XY',
+        },
+      ],
+    });
+    expect({ ok: write.ok, changed: write.changed }).toEqual({ ok: true, changed: true });
+    // Pinned: the merge really happens, so the words land after the FIRST paragraph's struck
+    // tail and the second paragraph's strike follows them into the merged host.
+    expect(savedDocumentXml(host)).toMatch(
+      /<w:delText>pha<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t>XY<\/w:t><\/w:r><\/w:ins><w:del[^>]*><w:r><w:delText>be<\/w:delText>/
+    );
+  });
+
+  test("setting a whole story's text in suggesting mode answers the new words", () => {
+    // `Body.insertText(…, 'Replace')` strikes the story and writes its text after the struck
+    // words, the same relocation a span replacement gets. Answering offset 0 named the struck
+    // words instead, so a script that formatted what it wrote formatted the strike.
+    const { host, editor } = mount({
+      author: 'Ada',
+      bytes: bodyDocx('<w:p><w:r><w:t>alpha beta</w:t></w:r></w:p>'),
+    });
+    editor.surface!.setEditingMode('suggest');
+    const body = bodyOf(host);
+    const write = host.execute({
+      operations: [{ op: 'replaceSpan', span: { body }, text: 'omega' }],
+    });
+    expect({ ok: write.ok, changed: write.changed }).toEqual({ ok: true, changed: true });
+    const answered = write.results[0];
+    if (answered?.status !== 'ok' || answered.value.kind !== 'span') {
+      throw new Error('expected a span');
+    }
+    const read = host.execute({
+      operations: [{ op: 'getSpanText', span: answered.value.span, projection: 'allMarkup' }],
+    });
+    const text = read.results[0];
+    if (text?.status !== 'ok' || text.value.kind !== 'text') throw new Error('expected text');
+    expect(text.value.text).toBe('omega');
+    const xml = savedDocumentXml(host);
+    expect(xml.indexOf('<w:del ')).toBeLessThan(xml.indexOf('<w:ins '));
+  });
+
+  test('a replacement whose strike JOINS one already standing answers the new words', () => {
+    // The fresh strike merges with Ada\'s existing one, so the store clears the whole merged
+    // wrapper before writing. The planner predicted the shorter, unmerged landing and answered
+    // a span over the struck words instead of over what replaced them.
+    const { host, editor } = mount({
+      author: 'Ada',
+      bytes: bodyDocx(
+        '<w:p><w:r><w:t xml:space="preserve">hello </w:t></w:r>' +
+          '<w:del w:id="5" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
+          '<w:r><w:delText>world</w:delText></w:r></w:del></w:p>'
+      ),
+    });
+    editor.surface!.setEditingMode('suggest');
+    const body = bodyOf(host);
+    const found = host.execute({
+      operations: [
+        { op: 'search', scope: { body }, text: 'hello ', options: { projection: 'allMarkup' } },
+      ],
+    });
+    const hit = found.results[0];
+    if (hit?.status !== 'ok' || hit.value.kind !== 'spans' || !hit.value.spans[0]) {
+      throw new Error('expected one search result');
+    }
+    const write = host.execute({
+      operations: [{ op: 'replaceSpan', span: hit.value.spans[0], text: 'hi ' }],
+    });
+    expect(write.ok).toBe(true);
+    const answered = write.results[0];
+    if (answered?.status !== 'ok' || answered.value.kind !== 'span') {
+      throw new Error('expected a span');
+    }
+    const read = host.execute({
+      operations: [{ op: 'getSpanText', span: answered.value.span, projection: 'allMarkup' }],
+    });
+    const text = read.results[0];
+    if (text?.status !== 'ok' || text.value.kind !== 'text') throw new Error('expected text');
+    expect(text.value.text).toBe('hi ');
+  });
+
+  test('typing over your own pending insertion plus a strike lands before the live words', () => {
+    // The landing rule maps past the strike in the paragraph\'s PRE-edit offsets and only then
+    // subtracts what this author\'s own insertion retracts. Mixing the two spaces read the
+    // post-retraction offset against pre-edit spans and carried the words past "gh", which the
+    // edit never touched.
+    const { editor } = mount({
+      author: 'Ada',
+      bytes: bodyDocx(
+        '<w:p><w:ins w:id="1" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
+          '<w:r><w:t>ab</w:t></w:r></w:ins>' +
+          '<w:del w:id="2" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
+          '<w:r><w:delText>cd</w:delText></w:r></w:del><w:r><w:t>gh</w:t></w:r></w:p>'
+      ),
+    });
+    const surface = editor.surface!;
+    surface.setEditingMode('suggest');
+    const paragraphId = surface.session.paragraphIds()[0]!;
+    surface.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 4 },
+    });
+    surface.type('X');
+    const out = serializeOoxmlPart(surface.session.part());
+    expect(out).toMatch(
+      /<w:delText>cd<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t>X<\/w:t><\/w:r><\/w:ins><w:r><w:t>gh<\/w:t>/
+    );
+  });
+
+  test('a zero-width replaceSpan writes exactly where an insert at the same point writes', () => {
+    // It strikes nothing, so it replaces nothing, and the landing rule has no words to put it
+    // after. Asking anyway carried it past a whole chain of struck text it never named.
+    const paragraph =
+      '<w:p><w:r><w:t>AA</w:t></w:r>' +
+      '<w:del w:id="7" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
+      '<w:r><w:delText>BB</w:delText></w:r></w:del>' +
+      '<w:bookmarkStart w:id="1" w:name="m"/>' +
+      '<w:del w:id="7" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
+      '<w:r><w:delText>CC</w:delText></w:r></w:del>' +
+      '<w:bookmarkEnd w:id="1"/><w:r><w:t>DD</w:t></w:r></w:p>';
+
+    const replaced = mount({ author: 'Ada', bytes: bodyDocx(paragraph) });
+    replaced.editor.surface!.setEditingMode('suggest');
+    const target = paragraphsOf(replaced.host)[0]!;
+    expect(
+      replaced.host.execute({
+        operations: [
+          {
+            op: 'replaceSpan',
+            span: {
+              start: { paragraph: target, offset: 3 },
+              end: { paragraph: target, offset: 3 },
+            },
+            text: 'X',
+          },
+        ],
+      }).ok
+    ).toBe(true);
+
+    const inserted = mount({ author: 'Ada', bytes: bodyDocx(paragraph) });
+    inserted.editor.surface!.setEditingMode('suggest');
+    expect(
+      inserted.host.execute({
+        operations: [
+          {
+            op: 'insertText',
+            at: { paragraph: paragraphsOf(inserted.host)[0]!, offset: 3 },
+            text: 'X',
+          },
+        ],
+      }).ok
+    ).toBe(true);
+
+    expect(savedDocumentXml(replaced.host)).toBe(savedDocumentXml(inserted.host));
+  });
+
+  test('a batch settles buffered typing before it plans, and refuses a stale expectation', () => {
+    // Coalesced keystrokes land as their own transaction the moment the host reads the
+    // surface. Settled at the batch's entry, so `expectedRevision` is compared against the
+    // document the batch will actually write to rather than the one it was about to leave.
+    const { host, editor } = mount();
+    const before = host.revision();
+    const paragraphs = paragraphsOf(host);
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 0 },
+    });
+    editor.surface!.enqueueType('QQQ');
+
+    // The stale expectation is refused rather than silently planned against.
+    const stale = host.execute({
+      expectedRevision: before,
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Z' }],
+    });
+    expect(stale.ok).toBe(false);
+    // And the buffered keystrokes are in the document, not still pending.
+    expect(textOf(host, paragraphs[0]!)).toBe('QQQalpha');
+    expect(host.revision()).toBeGreaterThan(before);
+
+    // A batch that names the settled revision goes through.
+    const fresh = host.execute({
+      expectedRevision: host.revision(),
+      operations: [{ op: 'insertText', at: { paragraph: paragraphs[0]!, offset: 0 }, text: 'Z' }],
+    });
+    expect(fresh.ok).toBe(true);
+    expect(textOf(host, paragraphs[0]!)).toBe('ZQQQalpha');
   });
 
   test('suggesting with no author refuses, exactly as a keystroke would', () => {

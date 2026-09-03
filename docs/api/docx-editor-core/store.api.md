@@ -1188,6 +1188,7 @@ export interface EditOptions {
     // (undocumented)
     readonly deferValidation?: boolean;
     readonly revisionIds?: () => string;
+    readonly trackedRevisionIds?: TransactionRevisionIds;
 }
 
 // @public
@@ -4102,6 +4103,13 @@ export interface TocOutlineHeading {
 
 // @public
 export function toSafeRecord(value: unknown, path?: string): unknown;
+
+// @public
+export interface TransactionRevisionIds {
+    mint(): string;
+    wrote(key: string): void;
+    wroteUnder(key: string): boolean;
+}
 
 // @public
 export interface TransportPort {
