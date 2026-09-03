@@ -429,17 +429,11 @@ export default [
   {
     files: [
       'packages/core/src/contracts/editor.ts',
+      'packages/core/src/layout/paragraph-flow.ts',
       'packages/pro/src/__tests__/review-facade.test.ts',
     ],
     rules: {
       'max-lines': ['error', { max: 1700, skipBlankLines: false, skipComments: false }],
-    },
-  },
-
-  {
-    files: ['packages/core/src/layout/paragraph-flow.ts'],
-    rules: {
-      'max-lines': ['error', { max: 1750, skipBlankLines: false, skipComments: false }],
     },
   },
 

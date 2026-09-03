@@ -2,5 +2,5 @@
 '@docx-editor.dev/core': patch
 ---
 
-Reflow long unbroken words across tracked-insertion run boundaries while typing in Suggesting
-mode. Fixes #716.
+Reflow long unbroken words continuously across tracked-insertion run boundaries while typing in
+Suggesting mode, without splitting Unicode graphemes. Fixes #716.

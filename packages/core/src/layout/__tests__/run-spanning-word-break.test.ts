@@ -168,4 +168,59 @@ describe('a word wider than the measure breaks at the margin', () => {
 
     expect(linesOf(body)).toEqual(['xxxx ', 'aaaaabbbbb', 'bbbbb']);
   });
+
+  test('a word keeps filling lines through runs after its inserted part was chopped', () => {
+    const body =
+      `<w:p>${run('xxxx ')}${run('aaaaa')}` +
+      `<w:ins w:id="1" w:author="A" w:date="D">${run('bbbbbbbbbbbb')}</w:ins>` +
+      `${run('ccccc')}</w:p>`;
+
+    expect(linesOf(body)).toEqual(['xxxx ', 'aaaaabbbbb', 'bbbbbbbccc', 'cc']);
+  });
+
+  test('a nine-character prefix leaves the final character on the next line', () => {
+    const body =
+      `<w:p>${run('xxxx ')}${run('a')}` +
+      `<w:ins w:id="1" w:author="A" w:date="D">${run('bbbbbbbbbb')}</w:ins></w:p>`;
+
+    expect(linesOf(body)).toEqual(['xxxx ', 'abbbbbbbbb', 'b']);
+  });
+
+  test('oversized-word splits preserve graphemes and UTF-16 model ranges', () => {
+    const lines = breakParagraph(
+      paragraph(`<w:p>${run('aa😀bb')}</w:p>`),
+      'p',
+      0,
+      18,
+      measurer,
+      undefined,
+      null
+    );
+
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+      'aa',
+      '😀b',
+      'b',
+    ]);
+    expect(
+      lines.map((line) => line.spans.map((span) => [span.range.start, span.range.end]))
+    ).toEqual([[[0, 2]], [[2, 5]], [[5, 6]]]);
+  });
+
+  test('a grapheme wider than the measure overflows whole instead of splitting UTF-16', () => {
+    const lines = breakParagraph(
+      paragraph(`<w:p>${run('😀a')}</w:p>`),
+      'p',
+      0,
+      6,
+      measurer,
+      undefined,
+      null
+    );
+
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual(['😀', 'a']);
+    expect(
+      lines.map((line) => line.spans.map((span) => [span.range.start, span.range.end]))
+    ).toEqual([[[0, 2]], [[2, 3]]]);
+  });
 });
