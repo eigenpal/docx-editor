@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 import type { FontSlot, ResolvedRunStyle } from '@docx-editor.dev/core/layout';
 import { baselineShiftPtOf, displayText, styleForFontSlot } from '@docx-editor.dev/core/layout';
 import { validateColor, validateCoordinate } from './pdf-paint-bounds.ts';

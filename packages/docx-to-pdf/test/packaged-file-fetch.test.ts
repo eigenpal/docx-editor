@@ -1,8 +1,14 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 import { expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createPackagedFileFetch, type PackagedFileRead } from '@docx-editor.dev/core/export';
 import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
+import { FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
 
 const TEST_ROOT = new URL('file:///packaged/');
 const TEST_FILE = new URL('file:///packaged/font.woff2');
@@ -21,11 +27,13 @@ function confinedFetch(
   });
 }
 
-test('PDF export pins packaged file reads to workspace and bundle-co-located roots', () => {
+test('PDF export derives its packaged file root from the fonts package', () => {
   const source = readFileSync(exportSourcePath, 'utf8');
   expect(existsSync(join(import.meta.dir, '..', 'src', 'packaged-file-fetch.ts'))).toBe(false);
-  expect(source).toContain("new URL('../../fonts/assets/', import.meta.url)");
-  expect(source).toContain("new URL('../assets/', import.meta.url)");
+  expect(source).toContain(
+    "import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts'"
+  );
+  expect(source).toContain("trustedRoot: new URL('./', FONT_ASSET_ROOT)");
   expect(source).toContain('maxBytes: HARD_MAX_FONT_BYTES');
   expect(source).not.toMatch(/createPackagedFileFetch\(\s*\)/);
 });
@@ -95,13 +103,11 @@ test('packaged file fetch delegates bundler HTTP asset URLs to the host fetch', 
   ]);
 });
 
-test('PDF packaged-font roots admit workspace and bundle-co-located assets only', async () => {
-  const exportModuleUrl = new URL('../src/pdf-export.ts', import.meta.url);
-  const workspaceRoot = new URL('../../fonts/assets/', exportModuleUrl);
-  const bundledRoot = new URL('../assets/', exportModuleUrl);
+test('PDF packaged-font root admits only assets reported by the fonts package', async () => {
+  const trustedRoot = new URL('./', FONT_ASSET_ROOT);
   const reads: string[] = [];
   const fetcher = createPackagedFileFetch({
-    trustedRoot: [workspaceRoot, bundledRoot],
+    trustedRoot,
     maxBytes: HARD_MAX_FONT_BYTES,
     read: async (path) => {
       reads.push(String(path));
@@ -109,12 +115,9 @@ test('PDF packaged-font roots admit workspace and bundle-co-located assets only'
     },
   });
 
-  const workspaceFace = new URL('Carlito-Regular.ttf', workspaceRoot);
-  const bundledFace = new URL('Carlito-Regular.ttf', bundledRoot);
-  expect((await fetcher(workspaceFace)).status).toBe(200);
-  expect((await fetcher(bundledFace)).status).toBe(200);
+  const packagedFace = new URL('Carlito-Regular.ttf', trustedRoot);
+  expect((await fetcher(packagedFace)).status).toBe(200);
   expect((await fetcher(new URL('file:///etc/passwd'))).status).toBe(404);
-  expect((await fetcher(new URL('../secret.ttf', workspaceRoot))).status).toBe(404);
-  expect((await fetcher(new URL('../secret.ttf', bundledRoot))).status).toBe(404);
-  expect(reads).toEqual([workspaceFace.href, bundledFace.href]);
+  expect((await fetcher(new URL('../secret.ttf', trustedRoot))).status).toBe(404);
+  expect(reads).toEqual([packagedFace.href]);
 });

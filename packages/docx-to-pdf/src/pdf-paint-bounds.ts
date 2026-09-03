@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 /** Maximum page width or height in points (~200 inches). @public */
 export const HARD_MAX_PAGE_DIMENSION_PT = 14_400;
 

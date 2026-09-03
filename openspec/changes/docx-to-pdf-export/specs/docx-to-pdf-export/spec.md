@@ -18,7 +18,8 @@ returns immutable PDF bytes with structured export metadata.
 ### Requirement: Reusable export session
 
 The package SHALL support a reusable session over Core's export session without reparsing OOXML or
-reconstructing document semantics.
+reconstructing document semantics. This requirement is deferred until the one-shot private first
+slice is stable.
 
 #### Scenario: Several PDF projections
 
@@ -44,17 +45,25 @@ content geometry, line breaks, headers, footers, tables, drawings, and revision 
 
 The exporter SHALL paint page backgrounds, borders, fills, text, equations, inline drawings,
 anchored drawings, headers, footers, and overlays in a deterministic order derived from semantic
-records.
+records. In the private first slice, only page boxes, body/header/footer text spans, list markers,
+links, and named destinations are painted; other record kinds emit diagnostics and remain deferred.
 
 #### Scenario: Overlapping content
 
 - **WHEN** a page contains normal flow and an anchored drawing with explicit stacking
 - **THEN** the PDF preserves the semantic stacking order and clipping boundaries
 
+#### Scenario: Table cell text in the first slice
+
+- **WHEN** Core lays out text inside table cells
+- **THEN** the first slice paints the cell text spans at semantic geometry and records a bounded
+  `table` diagnostic for unsupported table structure and decoration
+
 ### Requirement: Exact text placement
 
 The exporter SHALL preserve Core's selected font face, shaped glyph sequence, glyph positions,
-baseline, and span geometry without running an independent line-breaking or shaping pipeline.
+baseline, and span geometry without running an independent line-breaking or shaping pipeline. Exact
+text placement is not complete in the private first slice.
 
 #### Scenario: Complex script text
 
@@ -63,33 +72,101 @@ baseline, and span geometry without running an independent line-breaking or shap
 
 #### Scenario: Writer cannot encode Core shaping
 
-- **WHEN** the PDF writer cannot embed Core's admitted font program or encode Core's HarfBuzz glyph
-  run for a painted span
+- **WHEN** the PDF writer cannot encode Core's HarfBuzz glyph run for a painted span
 - **THEN** best-effort export records a bounded approximation diagnostic and strict export refuses
   with a typed fidelity error
 
+#### Scenario: First slice embeds admitted bytes but reshapes Unicode
+
+- **WHEN** Core admits a matching font face, the PDF-layer embedding gate accepts its sfnt OS/2
+  `fsType` and `faceIndex`, and the writer paints a text span with those bytes
+- **THEN** the PDF embeds the exact admitted font program through PDFKit, records a bounded
+  `shaped-glyph-run` approximation because PDFKit reshapes Unicode and does not encode Core glyph
+  IDs or positions, and strict export refuses the document
+
+#### Scenario: First slice falls back to built-in fonts
+
+- **WHEN** no Core-admitted face matches a painted span's requested `(family, weight, style)`, or
+  the PDF-layer embedding gate refuses the admitted face, and the span text is WinAnsi-representable
+- **THEN** the writer uses a PDF built-in font, records a truthful `shaped-glyph-run` approximation,
+  records `standard-font-substitution` when the built-in mapping is not exact, and strict export
+  refuses the document
+
+#### Scenario: Built-in fallback cannot encode span text
+
+- **WHEN** a painted span would use a PDF built-in font and its text is not WinAnsi-representable
+- **THEN** the writer omits the span, records a `standard-font-encoding` unsupported diagnostic with
+  the page index and requested family, and strict export refuses the document
+
+#### Scenario: TTC or OTC collection container
+
+- **WHEN** Core admits a TTC or OTC collection container with any `faceIndex`
+- **THEN** the writer refuses embedding because a verifiable collection face selector is
+  unavailable, records a `font-embedding-permission` unsupported diagnostic, falls back to a PDF
+  built-in font for painting only when the span text is WinAnsi-representable, and strict export
+  refuses the document
+
+#### Scenario: Nonzero TTC or OTC faceIndex
+
+- **WHEN** Core admits a collection container with a non-zero `faceIndex`
+- **THEN** the writer refuses embedding because a verifiable collection face selector is
+  unavailable, records a `font-embedding-permission` unsupported diagnostic, falls back to a PDF
+  built-in font for painting only when the span text is WinAnsi-representable, and strict export
+  refuses the document
+
 ### Requirement: Embedded and subset fonts
 
-The exporter SHALL embed the exact resolved font programs used by Core and SHALL subset them without
-changing visual glyph identity, Unicode extraction, or positioning. The PDF encoder MAY remap source
-glyph identifiers to deterministic subset character identifiers.
+The exporter SHALL embed the exact resolved font programs Core admits and SHALL subset them without
+changing visual glyph identity, Unicode extraction, or positioning once strict text fidelity is
+complete. The PDF encoder MAY remap source glyph identifiers to deterministic subset character
+identifiers. In the private first slice, the writer registers exact admitted bytes through PDFKit
+when the PDF-layer embedding gate accepts the face; subsetting and Unicode mapping follow
+PDFKit/fontkit, and Core glyph positions remain unencoded.
 
 #### Scenario: Packaged or caller font
 
-- **WHEN** Core resolves a packaged or caller-provided face and the writer consumes its admitted
-  bytes
-- **THEN** the PDF embeds a subset of that exact face and maps painted glyphs back to Unicode
+- **WHEN** Core resolves a packaged or caller-provided face, the PDF-layer embedding gate accepts
+  its sfnt OS/2 `fsType` and `faceIndex`, and the writer consumes its admitted bytes
+- **THEN** the PDF embeds a subset of that exact face through PDFKit and maps painted Unicode
+  through fontkit reshaping until Core glyph positions are encoded
 
 #### Scenario: Embedded document font
 
-- **WHEN** Core resolves an embedded DOCX font permitted for output and the writer consumes its
-  admitted bytes
-- **THEN** the PDF uses the same admitted bytes and respects the font embedding permissions
+- **WHEN** Core resolves an embedded DOCX font permitted for output, the PDF-layer embedding gate
+  accepts its sfnt OS/2 `fsType` and `faceIndex`, and the writer consumes its admitted bytes
+- **THEN** the PDF uses the same admitted bytes
+
+#### Scenario: Forbidden face at Core admission
+
+- **WHEN** Core marks a font source as `availability: 'forbidden'` or drops a document-embedded face
+  before admission
+- **THEN** the PDF writer never receives those bytes and does not embed the face
+
+#### Scenario: Restricted or no-subsetting OS/2 fsType
+
+- **WHEN** an admitted face's sfnt OS/2 `fsType` forbids embedding or forbids subsetting
+- **THEN** the PDF writer refuses embedding, records a `font-embedding-permission` unsupported
+  diagnostic, falls back to a PDF built-in font for painting only when the span text is
+  WinAnsi-representable, and strict export refuses the document
+
+#### Scenario: Nonzero TTC or OTC faceIndex
+
+- **WHEN** Core admits a collection container with a non-zero `faceIndex`
+- **THEN** the writer refuses embedding because a verifiable collection face selector is
+  unavailable, records a `font-embedding-permission` unsupported diagnostic, falls back to a PDF
+  built-in font for painting, and strict export refuses the document
+
+#### Scenario: Admitted-face aliases share one byte resource
+
+- **WHEN** Core admits the same resource identity for multiple request aliases
+- **THEN** `exportPdf` preserves each alias while sharing one bounded byte copy per resource
+  identity through PDF encoding
 
 ### Requirement: Validated image reuse
 
 The exporter SHALL obtain image bytes only through the owning `ExportSession` capability and SHALL
 preserve semantic crop, transform, clip, opacity, and accessibility metadata where PDF supports it.
+Image embedding is deferred in the private first slice.
 
 #### Scenario: Ready image
 

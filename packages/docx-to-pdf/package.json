@@ -19,12 +19,14 @@
   "files": [
     "dist",
     "!dist/metafile-*.json",
-    "README.md",
+    "LICENSE.md",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",
+    "license:check": "license-check-and-add check -f license-check.json",
+    "license:add": "license-check-and-add add -f license-check.json",
     "api:extract": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf --local",
     "api:check": "node ../../scripts/api-extractor.mjs --package @docx-editor.dev/docx-to-pdf"
   },
@@ -38,6 +40,9 @@
   "devDependencies": {
     "@docx-editor.dev/core": "workspace:*",
     "@types/pdfkit": "^0.17.6",
+    "dejavu-fonts-ttf": "^2.37.3",
+    "license-check-and-add": "^4.0.5",
+    "pdfjs-dist": "^6.2.108",
     "typescript": "^5.3.3"
   },
   "keywords": [
@@ -46,7 +51,13 @@
     "converter",
     "headless"
   ],
-  "license": "Apache-2.0",
+  "author": {
+    "name": "EigenPal, Inc.",
+    "email": "licensing@eigenpal.com",
+    "url": "https://eigenpal.com"
+  },
+  "license": "LicenseRef-EigenPal-Pro-Evaluation-1.0",
+  "homepage": "https://docx-editor.dev/",
   "repository": {
     "type": "git",
     "url": "https://github.com/eigenpal/docx-editor.git",

@@ -1,18 +1,20 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 import {
   createPackagedFileFetch,
   ExportResourceError,
   openFontBackedDocumentForExport,
-  type ExportSemanticLayout,
   type FontBackedExportCapabilities,
 } from '@docx-editor.dev/core/export';
-import { HARD_MAX_FONT_BYTES, forEachSemanticSpan } from '@docx-editor.dev/core/layout';
-import { packagedFonts } from '@docx-editor.dev/fonts';
+import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
+import { FONT_ASSET_ROOT, packagedFonts } from '@docx-editor.dev/fonts';
 import {
   createFidelityDiagnosticCollector,
-  pdfApproximationDiagnostic,
   type PdfFidelityDiagnostic,
   type PdfFidelityDiagnosticCollector,
-  type PdfFidelityStoryKind,
 } from './pdf-fidelity-diagnostics.ts';
 import type {
   PdfExportOptions,
@@ -24,15 +26,10 @@ import { PdfDocumentOpenError, PdfFidelityError } from './pdf-export-types.ts';
 import { planPdfPaintFromLayout } from './pdf-page-planner.ts';
 import { writePdfPaintPlanToBytes } from './pdfkit-paint-writer.ts';
 import { HARD_MAX_OUTPUT_BYTES, validateOutputByteLimit } from './pdf-paint-bounds.ts';
+import type { PdfAdmittedFont } from './pdf-paint-writer-port.ts';
 
-// Workspace and published sibling packages keep faces in fonts/assets. Bundled Node
-// workers copy those same faces beside the entry as ../assets/.
-const packagedFontRoots = Object.freeze([
-  new URL('../../fonts/assets/', import.meta.url),
-  new URL('../assets/', import.meta.url),
-]);
 const packagedFileFetch = createPackagedFileFetch({
-  trustedRoot: packagedFontRoots,
+  trustedRoot: new URL('./', FONT_ASSET_ROOT),
   maxBytes: HARD_MAX_FONT_BYTES,
 });
 
@@ -40,13 +37,6 @@ const packagedExportFonts = packagedFonts({
   fetcher: packagedFileFetch,
   install: false,
 });
-
-const PAINTED_TEXT_STORIES = new Set<PdfFidelityStoryKind>(['body', 'header', 'footer']);
-
-const PDFKIT_RESHAPE_REASON =
-  'PDFKit reshapes Unicode text; Core HarfBuzz glyph IDs are not encoded';
-const MISSING_SHAPING_REASON =
-  'PDFKit reshapes Unicode text; Core HarfBuzz glyph IDs and admitted font bytes are not available';
 
 function fontOrigins(source: PdfFontsSource | undefined): readonly PdfFontOrigin[] {
   if (source === undefined) return [];
@@ -64,28 +54,47 @@ function hasVisibleFidelityIssue(diagnostics: readonly PdfFidelityDiagnostic[]):
   );
 }
 
-function recordLaidOutTextFidelity(
-  layout: ExportSemanticLayout,
-  session: FontBackedExportCapabilities,
-  diagnostics: PdfFidelityDiagnosticCollector
-): void {
-  forEachSemanticSpan(layout, (visit) => {
-    if (!PAINTED_TEXT_STORIES.has(visit.rootStory as PdfFidelityStoryKind)) return;
-    if (visit.span.style?.hidden || visit.span.equation) return;
-    if (visit.span.text.length === 0) return;
-
-    const laidOut = session.shapeLaidOutText(visit.span);
-    diagnostics.push(
-      pdfApproximationDiagnostic({
-        feature: 'shaped-glyph-run',
-        pageIndex: visit.page.index,
-        recordKind: 'styleSpan',
-        recordId: visit.span.range.paragraphId,
-        story: visit.rootStory as PdfFidelityStoryKind,
-        reason: laidOut === null ? MISSING_SHAPING_REASON : PDFKIT_RESHAPE_REASON,
-      })
-    );
-  });
+function admittedFonts(session: FontBackedExportCapabilities): readonly PdfAdmittedFont[] {
+  const byteResources = new Map<string, Uint8Array>();
+  const fonts = new Map<string, PdfAdmittedFont>();
+  for (const family of session.fontResolution.families) {
+    for (const face of family.faces) {
+      const request = face.substitution?.requested ?? {
+        family: family.family,
+        weight: face.weight,
+        style: face.style,
+      };
+      const admitted = session.admittedFontFace({
+        family: request.family,
+        weight: request.weight,
+        style: request.style,
+      });
+      if (!admitted) continue;
+      const requestKey = `${admitted.identity}\u001f${request.family}\u001f${request.weight}\u001f${request.style}`;
+      if (fonts.has(requestKey)) continue;
+      let bytes = byteResources.get(admitted.identity);
+      if (!bytes) {
+        // The Core session owns this buffer. Make one bounded copy per resource so
+        // PDFKit cannot observe mutation while it encodes aliases of the same face.
+        bytes = admitted.bytes.slice();
+        byteResources.set(admitted.identity, bytes);
+      }
+      fonts.set(
+        requestKey,
+        Object.freeze({
+          id: admitted.id,
+          identity: admitted.identity,
+          family: admitted.family,
+          request: Object.freeze(request),
+          byteLength: admitted.byteLength,
+          hash: admitted.hash,
+          faceIndex: admitted.faceIndex,
+          bytes,
+        })
+      );
+    }
+  }
+  return Object.freeze([...fonts.values()]);
 }
 
 function absorbDiagnostics(
@@ -125,13 +134,19 @@ export async function exportPdf(
     const planned = planPdfPaintFromLayout(layout, { signal: options.signal });
     const diagnostics = createFidelityDiagnosticCollector();
     absorbDiagnostics(diagnostics, planned.diagnostics);
-    recordLaidOutTextFidelity(layout, opened.session, diagnostics);
     const written = await writePdfPaintPlanToBytes(planned.plan, {
       signal: options.signal,
       maxOutputBytes: outputByteLimit,
+      admittedFonts: admittedFonts(opened.session),
+      defaultFontFamily: opened.session.fontResolution.defaultFamily,
     });
     throwIfAborted(options.signal, 'Export was aborted during PDF encoding');
     absorbDiagnostics(diagnostics, written.diagnostics);
+    if (written.pageCount !== planned.pageCount) {
+      throw new Error(
+        `PDF writer page count ${written.pageCount} does not match planned page count ${planned.pageCount}`
+      );
+    }
 
     const snapshot = diagnostics.snapshot();
     if ((fidelityPolicy ?? 'best-effort') === 'strict' && hasVisibleFidelityIssue(snapshot)) {
