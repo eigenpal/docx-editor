@@ -469,6 +469,15 @@ function pairReplacements(
  * decision to the reviewer, and Word shows them as one. Adjacency is the same exact
  * end-to-start test the replacement pairing uses, so an untracked character between two
  * deletions keeps them apart.
+ *
+ * ZERO-WIDTH members are why this is a sweep rather than a lookup keyed by start position.
+ * Tracking the removal of a field wraps each `w:fldChar` and each `w:instrText` run in a
+ * `w:del` of its own, so a struck form field arrives as several revisions that cover no
+ * characters and share one offset with the struck text beside them. They are not separate
+ * decisions — Word cards the field once — and a map from start position to item can hold
+ * only one of them, which stranded every other one as a blank `Deleted` card. A member
+ * covering no characters therefore joins the chain WITHOUT moving its frontier: the
+ * revision it sits against still begins where the wrapper does.
  */
 function mergeAdjacentSameKindEdits(
   items: readonly ReviewRevisionItem[]
@@ -481,42 +490,43 @@ function mergeAdjacentSameKindEdits(
   );
   if (mergeable.length < 2) return items;
 
-  const keyOf = (item: ReviewRevisionItem, position: ReviewPosition): string =>
-    `${item.revisionKind}\u0000${item.author}\u0000${position.paragraphId}\u0000${position.offset}`;
-  const byStart = new Map<string, ReviewRevisionItem>();
-  const endKeys = new Set<string>();
+  const keyOf = (position: ReviewPosition): string =>
+    `${position.paragraphId}\u0000${position.offset}`;
+  // A chain never crosses kinds or authors, so each pair sweeps on its own. `mergeable` is
+  // in document order, because the site walk that built the items is, and bucketing keeps
+  // that order — which is what lets one forward pass find every chain.
+  const buckets = new Map<string, ReviewRevisionItem[]>();
   for (const item of mergeable) {
-    byStart.set(keyOf(item, item.ranges[0]!.start), item);
-    // An empty field-control wrapper can prefix a visible revision at the same position.
-    // Its point is not evidence that the visible revision has a predecessor.
-    if (
-      item.ranges.some(
-        (range) =>
-          range.start.paragraphId !== range.end.paragraphId ||
-          range.start.offset !== range.end.offset
-      )
-    ) {
-      endKeys.add(keyOf(item, item.ranges[item.ranges.length - 1]!.end));
-    }
+    const key = `${item.revisionKind}\u0000${item.author}`;
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(item);
+    else buckets.set(key, [item]);
   }
 
   const consumed = new Set<string>();
   const merged = new Map<string, ReviewRevisionItem>();
-  for (const head of mergeable) {
-    if (consumed.has(head.id)) continue;
-    // A chain is walked from its HEAD only — an item whose start some sibling's end meets
-    // is a tail, and walking it early would split the chain in two.
-    if (endKeys.has(keyOf(head, head.ranges[0]!.start))) continue;
-    const chain = [head];
-    let current = head;
-    for (;;) {
-      const next = byStart.get(keyOf(current, current.ranges[current.ranges.length - 1]!.end));
-      if (!next || next === current || consumed.has(next.id)) break;
-      consumed.add(next.id);
-      chain.push(next);
-      current = next;
+  for (const bucket of buckets.values()) {
+    let chain: ReviewRevisionItem[] = [];
+    let frontier = '';
+    const close = (): void => {
+      if (chain.length > 1) {
+        merged.set(chain[0]!.id, foldChain(chain));
+        for (let index = 1; index < chain.length; index += 1) consumed.add(chain[index]!.id);
+      }
+      chain = [];
+    };
+    for (const item of bucket) {
+      const start = keyOf(item.ranges[0]!.start);
+      const end = keyOf(item.ranges[item.ranges.length - 1]!.end);
+      if (chain.length > 0 && start !== frontier) close();
+      const opening = chain.length === 0;
+      chain.push(item);
+      // Covering no characters leaves the frontier where it is, so the next member is still
+      // measured against the text this wrapper sits in front of. An opening member sets the
+      // frontier either way: there is nothing yet for it to sit in front of.
+      if (opening || start !== end) frontier = end;
     }
-    if (chain.length > 1) merged.set(head.id, foldChain(chain));
+    close();
   }
   if (merged.size === 0) return items;
 
