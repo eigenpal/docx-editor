@@ -160,4 +160,12 @@ describe('a word wider than the measure breaks at the margin', () => {
   test('a word that follows text on the line wraps first, then chops', () => {
     expect(linesOf(`<w:p>${run('aaa cccccccccccc')}</w:p>`)).toEqual(['aaa ', 'cccccccccc', 'cc']);
   });
+
+  test('a tracked insertion extending a run-spanning word reflows within the measure', () => {
+    const body =
+      `<w:p>${run('xxxx ')}${run('aaaaa')}` +
+      `<w:ins w:id="1" w:author="A" w:date="D">${run('bbbbbbbbbb')}</w:ins></w:p>`;
+
+    expect(linesOf(body)).toEqual(['xxxx ', 'aaaaabbbbb', 'bbbbb']);
+  });
 });

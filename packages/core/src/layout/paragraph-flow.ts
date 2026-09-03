@@ -1556,6 +1556,7 @@ export function breakParagraph(
       if (lineEndWhitespace) {
         width = Math.min(width, Math.max(0, lineAvailable() - line.width));
       }
+      let carriedWordToEmptyLine = false;
       if (
         line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
         (line.spans.length > 0 || line.drawings.length > 0)
@@ -1595,6 +1596,7 @@ export function breakParagraph(
           }
           wordStartSpan = 0;
           wordStartWidth = 0;
+          carriedWordToEmptyLine = true;
         }
       } else if (
         line.spans.length === 0 &&
@@ -1615,26 +1617,52 @@ export function breakParagraph(
       let remainingWidth = width;
       if (!layoutOwned && piece.measureText === undefined) {
         while (
-          line.spans.length === 0 &&
-          remaining.length > 1 &&
-          remainingWidth > lineAvailable()
+          (line.spans.length === 0 || carriedWordToEmptyLine) &&
+          remaining.length > 0 &&
+          remainingWidth > lineAvailable() - line.width + OVERFLOW_TOLERANCE_PT
         ) {
+          const availableForPrefix = lineAvailable() - line.width;
+          // The carried prefix may exactly fill the fresh line. Close it before placing the
+          // next character; forcing one character into zero slack would recreate the overflow
+          // this path exists to prevent.
+          if (line.spans.length > 0 && availableForPrefix <= OVERFLOW_TOLERANCE_PT) {
+            closeLine();
+            carriedWordToEmptyLine = false;
+            continue;
+          }
+          // One glyph wider than an empty measure cannot be split further and must overflow.
+          if (remaining.length === 1) {
+            if (line.spans.length > 0) {
+              closeLine();
+              carriedWordToEmptyLine = false;
+              continue;
+            }
+            break;
+          }
           let low = 1;
           let high = remaining.length - 1;
-          let fitLength = 1;
+          let fitLength = 0;
           while (low <= high) {
             const mid = (low + high) >> 1;
             const midWidth = measurer.measure(
               displayText(remaining.slice(0, mid), faceStyle),
               faceStyle
             );
-            if (midWidth <= lineAvailable()) {
+            if (midWidth <= availableForPrefix) {
               fitLength = mid;
               low = mid + 1;
             } else {
               high = mid - 1;
             }
           }
+          // No character fits after a carried prefix. Finish that line and retry against the
+          // full width; on an empty line the fallback below lets one unsplittable glyph stand.
+          if (fitLength === 0 && line.spans.length > 0) {
+            closeLine();
+            carriedWordToEmptyLine = false;
+            continue;
+          }
+          if (fitLength === 0) fitLength = 1;
           const prefix = remaining.slice(0, fitLength);
           const prefixWidth = measurer.measure(displayText(prefix, faceStyle), faceStyle);
           line.spans.push({
@@ -1653,6 +1681,7 @@ export function breakParagraph(
           line.baseline = Math.max(line.baseline, metrics.baseline);
           line.end = remainingStart + fitLength;
           closeLine();
+          carriedWordToEmptyLine = false;
           remaining = remaining.slice(fitLength);
           remainingStart += fitLength;
           remainingWidth = measurer.measure(displayText(remaining, faceStyle), faceStyle);
