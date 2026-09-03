@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 import {
   ExportResourceError,
   exportDestinationNamed,
@@ -16,7 +21,10 @@ import {
   baselineShiftPtOf,
   exportSourceRangeOf,
   forEachSemanticSpan,
+  forEachSemanticStory,
+  forEachStoryParagraphFragment,
   styleForFontSlot,
+  type SemanticRootStoryKind,
 } from '@docx-editor.dev/core/layout';
 import { coreBoxToPdfRect, coreYToPdfY } from './pdf-coordinates.ts';
 import {
@@ -56,8 +64,10 @@ export interface PdfPagePlanResult {
 }
 
 const TEXT_STORY_KINDS = new Set<PdfFidelityStoryKind>(['body', 'header', 'footer']);
+const ROOT_TEXT_STORY_KINDS = new Set<SemanticRootStoryKind>(['body', 'header', 'footer']);
 const PLANNER_ABORT_BATCH_SIZE = 256;
 const DESTINATION_CARET_WIDTH_PT = 1;
+const NON_PAINTING_CONTROL_CHARS = new Set(['\f', '\n', '\r', '\t']);
 
 /** Optional planner controls. Existing callers may omit this argument. @public */
 export interface PdfPagePlanOptions {
@@ -194,6 +204,30 @@ function shouldPaintSpan(span: StyleSpanRecord): boolean {
   if (span.style.hidden) return false;
   if (span.equation) return false;
   if (span.text.length === 0 && span.range.end <= span.range.start) return false;
+  return true;
+}
+
+function hasUsablePaintGeometry(
+  box: Readonly<{ readonly width: number; readonly height: number }>
+): boolean {
+  return box.width > 0 && box.height > 0;
+}
+
+function isNonPaintingControlSpan(span: StyleSpanRecord): boolean {
+  if (span.text.length === 0) return false;
+  for (const codeUnit of span.text) {
+    if (!NON_PAINTING_CONTROL_CHARS.has(codeUnit)) return false;
+  }
+  return true;
+}
+
+function shouldPaintSpanText(
+  span: StyleSpanRecord,
+  absoluteBox: Readonly<{ readonly width: number; readonly height: number }>
+): boolean {
+  if (!shouldPaintSpan(span)) return false;
+  if (!hasUsablePaintGeometry(absoluteBox)) return false;
+  if (isNonPaintingControlSpan(span)) return false;
   return true;
 }
 
@@ -352,6 +386,14 @@ function appendSpanCommands(
     );
   }
 
+  if (!shouldPaintSpanText(span, absoluteBox)) {
+    if (hasUsablePaintGeometry(absoluteBox)) {
+      const rect = pageRelativeBox(page, absoluteBox);
+      appendSpanLinkCommands(layout, page, span, rect, commands, diagnostics, tally);
+    }
+    return;
+  }
+
   const faceStyle = styleForFontSlot(span.style, span.fontSlot);
   const rect = pageRelativeBox(page, absoluteBox);
   const baseline = pageRelativeBaselineY(
@@ -452,6 +494,11 @@ function visitBlocksForUnsupported(
   for (const block of blocks) {
     if (block.kind === 'table') {
       recordTableDiagnostics(page, block, story, diagnostics);
+      for (const row of block.rows) {
+        for (const cell of row.cells) {
+          visitBlocksForUnsupported(page, cell.blocks, story, diagnostics);
+        }
+      }
       continue;
     }
     for (const line of block.lines) {
@@ -592,34 +639,25 @@ export function planPdfPaintFromLayout(
     );
   });
 
-  for (const page of layout.pages) {
-    throwIfAborted(options.signal, 'PDF page planning was aborted');
-    for (const fragment of page.fragments) {
-      if (fragment.kind !== 'paragraph') continue;
-      appendParagraphMarkerCommands(
-        page,
-        Object.freeze({ x: page.contentBox.x, y: page.contentBox.y }),
-        fragment,
-        pageCommands.get(page.index) ?? commands,
-        diagnostics,
-        tally
-      );
-    }
-    for (const story of [page.header, page.footer]) {
-      if (!story) continue;
-      for (const fragment of story.fragments) {
-        if (fragment.kind !== 'paragraph') continue;
+  forEachSemanticStory(layout as SemanticLayout, (storyVisit) => {
+    if (!ROOT_TEXT_STORY_KINDS.has(storyVisit.story)) return;
+    const pageCommandsForStory = pageCommands.get(storyVisit.page.index);
+    if (!pageCommandsForStory) return;
+    forEachStoryParagraphFragment(
+      storyVisit.host,
+      (fragment, context) => {
         appendParagraphMarkerCommands(
-          page,
-          Object.freeze({ x: story.box.x, y: story.box.y }),
+          storyVisit.page,
+          context.storyOrigin,
           fragment,
-          pageCommands.get(page.index) ?? commands,
+          pageCommandsForStory,
           diagnostics,
           tally
         );
-      }
-    }
-  }
+      },
+      storyVisit.origin
+    );
+  });
 
   for (const page of layout.pages) {
     const planned = pageCommands.get(page.index);

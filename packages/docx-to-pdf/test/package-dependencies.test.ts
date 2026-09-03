@@ -1,22 +1,31 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 import { describe, expect, test } from 'bun:test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 
 const repositoryRoot = join(import.meta.dir, '..', '..', '..');
-const manifest = JSON.parse(readFileSync(join(import.meta.dir, '..', 'package.json'), 'utf8')) as {
+const packageRoot = join(import.meta.dir, '..');
+const manifest = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
   private?: boolean;
+  license?: string;
+  files?: readonly string[];
   publishConfig?: unknown;
   dependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
   peerDependenciesMeta?: Record<string, { optional?: boolean }>;
   devDependencies?: Record<string, string>;
+  scripts?: Record<string, string>;
 };
 const changesetConfig = JSON.parse(
   readFileSync(join(repositoryRoot, '.changeset', 'config.json'), 'utf8')
 ) as { fixed?: string[][]; ignore?: string[]; updateInternalDependencies?: string };
 const coreManifest = JSON.parse(
   readFileSync(join(repositoryRoot, 'packages', 'core', 'package.json'), 'utf8')
-) as { version: string };
+) as { version: string; peerDependencies?: Record<string, string> };
 const fontsManifest = JSON.parse(
   readFileSync(join(repositoryRoot, 'packages', 'fonts', 'package.json'), 'utf8')
 ) as { version: string };
@@ -77,9 +86,13 @@ describe('engine dependency integrity', () => {
     expect(existsSync(join(repositoryRoot, 'packages/core/src/export/pdf.ts'))).toBe(false);
   });
 
+  test('does not leave the unused pdf-lib optional peer on core', () => {
+    expect(coreManifest.peerDependencies?.['pdf-lib']).toBeUndefined();
+  });
+
   test('declares pdfkit as a runtime dependency and keeps it out of the public barrel', () => {
     expect(manifest.dependencies?.pdfkit).toMatch(/^\^0\.20\./);
-    const indexSource = readFileSync(join(import.meta.dir, '..', 'src', 'index.ts'), 'utf8');
+    const indexSource = readFileSync(join(packageRoot, 'src', 'index.ts'), 'utf8');
     expect(indexSource).toContain('HARD_MAX_FIDELITY_DIAGNOSTICS');
     expect(indexSource).toContain('HARD_MAX_OUTPUT_BYTES');
     expect(indexSource).toContain('HARD_MAX_PAINT_COMMANDS');
@@ -92,3 +105,44 @@ describe('engine dependency integrity', () => {
     expect(indexSource).not.toContain('PdfKitPaintWriter');
   });
 });
+
+describe('EigenPal Pro License wiring', () => {
+  test('names the evaluation licence and ships LICENSE.md instead of Apache LICENSE', () => {
+    expect(manifest.license).toBe('LicenseRef-EigenPal-Pro-Evaluation-1.0');
+    expect(manifest.files).toContain('LICENSE.md');
+    expect(manifest.files).not.toContain('LICENSE');
+    expect(existsSync(join(packageRoot, 'LICENSE.md'))).toBe(true);
+    expect(existsSync(join(packageRoot, 'LICENSE'))).toBe(false);
+  });
+
+  test('covers this directory in LICENSE.md and exposes header-check scripts', () => {
+    const text = readFileSync(join(packageRoot, 'LICENSE.md'), 'utf8');
+    expect(text).toContain('“packages/docx-to-pdf/” directory');
+    expect(manifest.scripts?.['license:check']).toContain('license-check.json');
+    expect(manifest.scripts?.['license:add']).toContain('license-check.json');
+  });
+
+  test('is excluded from the repository Apache licence notice', () => {
+    const text = readFileSync(join(repositoryRoot, 'LICENSE'), 'utf8');
+    expect(text).toContain('packages/docx-to-pdf/LICENSE.md');
+  });
+
+  test('carries the Pro license header on every src file', () => {
+    const header = readFileSync(join(packageRoot, 'license-header.txt'), 'utf8').trim();
+    const banner = `/*\n${header}\n*/\n`;
+    const unlicensed = sourceFiles(join(packageRoot, 'src'))
+      .filter((file) => !readFileSync(file, 'utf8').startsWith(banner))
+      .map((file) => relative(packageRoot, file));
+    expect(unlicensed).toEqual([]);
+  });
+});
+
+function sourceFiles(directory: string): string[] {
+  const found: string[] = [];
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) found.push(...sourceFiles(path));
+    else if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) found.push(path);
+  }
+  return found;
+}

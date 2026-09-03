@@ -172,17 +172,18 @@ describe('a browser bundle cannot reach the server (task 10.1)', () => {
   });
 
   test('heavy lane runtimes are OPTIONAL peers, not dependencies', () => {
-    // pdf-lib (output) and yjs (sync) are real runtimes of real lanes, but a consumer that
-    // only parses and paints a document needs neither. As plain dependencies they were
-    // installed by everyone; as optional peers they are installed only by consumers that use
-    // those lanes. This is about INSTALL weight — it says nothing about what a bundle pulls
-    // in, which is the import-graph walk's job, because a manifest cannot stop an import.
+    // yjs (sync) is a real runtime of the sync lane, but a consumer that only parses and paints a
+    // document does not need it. As a plain dependency it was installed by everyone; as an optional
+    // peer it is installed only by consumers that use that lane. This is about INSTALL weight — it
+    // says nothing about what a bundle pulls in, which is the import-graph walk's job, because a
+    // manifest cannot stop an import. PDF export moved to @docx-editor.dev/docx-to-pdf, so Core no
+    // longer declares the unused pdf-lib optional peer.
     const core = manifestOf('contracts') ?? {};
     const dependencies = Object.keys((core.dependencies as Record<string, string>) ?? {});
     const peers = (core.peerDependencies as Record<string, string>) ?? {};
     const meta = (core.peerDependenciesMeta as Record<string, { optional?: boolean }>) ?? {};
 
-    for (const heavy of ['pdf-lib', 'yjs']) {
+    for (const heavy of ['yjs']) {
       expect({ heavy, inDependencies: dependencies.includes(heavy) }).toEqual({
         heavy,
         inDependencies: false,

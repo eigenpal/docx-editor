@@ -1,3 +1,8 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 import PDFDocument from 'pdfkit';
 import { ExportResourceError } from '@docx-editor.dev/core/export';
 import {
@@ -6,6 +11,7 @@ import {
   pdfUnsupportedDiagnostic,
 } from './pdf-fidelity-diagnostics.ts';
 import type {
+  PdfAdmittedFont,
   PdfPaintWriteOptions,
   PdfPaintWriterPort,
   PdfPaintWriterResult,
@@ -22,6 +28,7 @@ import {
   PdfPaintValidationError,
   validateOutputByteLimit,
 } from './pdf-paint-bounds.ts';
+import { isWinAnsiRepresentable } from './pdf-winansi-encoding.ts';
 
 const DETERMINISTIC_PDF_INFO: PDFKit.DocumentInfo = Object.freeze({
   Producer: 'docx-editor.dev',
@@ -47,6 +54,102 @@ interface ResolvedStandardFont {
   readonly requested: string;
   readonly recordId: string | null;
   readonly exactBuiltIn: boolean;
+}
+
+interface ResolvedEmbeddedFont {
+  readonly font: PdfAdmittedFont;
+  readonly key: string;
+}
+
+type FontEmbeddingDecision =
+  | { readonly kind: 'embed' }
+  | { readonly kind: 'refuse'; readonly reason: string };
+
+function readUint16(bytes: Uint8Array, offset: number): number | null {
+  if (offset < 0 || offset > bytes.byteLength - 2) return null;
+  return (bytes[offset]! << 8) | bytes[offset + 1]!;
+}
+
+function readUint32(bytes: Uint8Array, offset: number): number | null {
+  if (offset < 0 || offset > bytes.byteLength - 4) return null;
+  return (
+    (bytes[offset]! * 0x1000000 +
+      (bytes[offset + 1]! << 16) +
+      (bytes[offset + 2]! << 8) +
+      bytes[offset + 3]!) >>>
+    0
+  );
+}
+
+function isFontCollection(bytes: Uint8Array): boolean {
+  return (
+    bytes.byteLength >= 4 &&
+    String.fromCharCode(bytes[0]!, bytes[1]!, bytes[2]!, bytes[3]!) === 'ttcf'
+  );
+}
+
+function fontEmbeddingDecision(font: PdfAdmittedFont): FontEmbeddingDecision {
+  const { bytes, faceIndex } = font;
+  if (isFontCollection(bytes)) {
+    return {
+      kind: 'refuse',
+      reason:
+        'PDFKit exposes a collection family selector, but Core does not expose the selected face name needed to prove faceIndex selection',
+    };
+  }
+  if (faceIndex !== 0) {
+    return {
+      kind: 'refuse',
+      reason: 'A nonzero faceIndex requires a TrueType collection resource',
+    };
+  }
+
+  const base = 0;
+  const tableCount = readUint16(bytes, base + 4);
+  if (tableCount === null || tableCount > 4096) {
+    return { kind: 'refuse', reason: 'The admitted font has no bounded SFNT table directory' };
+  }
+  const directoryEnd = base + 12 + tableCount * 16;
+  if (!Number.isSafeInteger(directoryEnd) || directoryEnd > bytes.byteLength) {
+    return { kind: 'refuse', reason: 'The admitted font has a truncated SFNT table directory' };
+  }
+  for (let index = 0; index < tableCount; index += 1) {
+    const record = base + 12 + index * 16;
+    const tag = String.fromCharCode(
+      bytes[record]!,
+      bytes[record + 1]!,
+      bytes[record + 2]!,
+      bytes[record + 3]!
+    );
+    if (tag !== 'OS/2') continue;
+    const offset = readUint32(bytes, record + 8);
+    const length = readUint32(bytes, record + 12);
+    if (
+      offset === null ||
+      length === null ||
+      offset > bytes.byteLength ||
+      length > bytes.byteLength - offset ||
+      length < 10
+    ) {
+      return { kind: 'refuse', reason: 'The admitted font has an invalid OS/2 table range' };
+    }
+    const fsType = readUint16(bytes, offset + 8);
+    if (fsType === null) {
+      return { kind: 'refuse', reason: 'The admitted font has a truncated OS/2 fsType value' };
+    }
+    if ((fsType & 0x0002) !== 0) {
+      return { kind: 'refuse', reason: 'The OS/2 fsType forbids font embedding' };
+    }
+    if ((fsType & 0x0100) !== 0) {
+      return {
+        kind: 'refuse',
+        reason:
+          'The OS/2 fsType forbids subsetting, and PDFKit has no safe full-font embedding mode',
+      };
+    }
+    return { kind: 'embed' };
+  }
+  return { kind: 'embed' };
 }
 
 function pdfRectToPdfKit(rect: PdfRect, pageHeight: number): PdfKitRect {
@@ -127,6 +230,30 @@ function resolveStandardFont(style: PdfTextStyle): ResolvedStandardFont {
     recordId,
     exactBuiltIn: isExactBuiltIn(token, base),
   });
+}
+
+function fontRequestMatches(
+  style: PdfTextStyle,
+  defaultFontFamily: string | undefined,
+  font: PdfAdmittedFont
+): boolean {
+  return (
+    fontToken(font.request.family) === fontToken(style.fontFamily ?? defaultFontFamily ?? null) &&
+    font.request.weight === (style.fontWeight === 'bold' ? 700 : 400) &&
+    font.request.style === (style.italic ? 'italic' : 'normal')
+  );
+}
+
+function resolveEmbeddedFont(
+  style: PdfTextStyle,
+  admittedFonts: readonly PdfAdmittedFont[],
+  defaultFontFamily: string | undefined
+): ResolvedEmbeddedFont | null {
+  for (const font of admittedFonts) {
+    if (!fontRequestMatches(style, defaultFontFamily, font)) continue;
+    return Object.freeze({ font, key: `docx-editor:${font.identity}` });
+  }
+  return null;
 }
 
 function textColorOf(style: PdfTextStyle): string {
@@ -272,11 +399,46 @@ function collectPdfBytes(
   };
 }
 
+function paintTextDecoration(
+  doc: PDFKit.PDFDocument,
+  command: Extract<PdfPaintCommand, { kind: 'textSpan' }>,
+  y: number
+): void {
+  const { decoration, fontSizePt } = command.style;
+  if (decoration === 'none') return;
+  const x = command.rect.x;
+  const right = x + command.rect.width;
+  if (!(right > x)) return;
+  const lineWidth = Math.max(0.5, fontSizePt / 18);
+  const color = textColorOf(command.style);
+  const stroke = (offset: number): void => {
+    doc
+      .lineWidth(lineWidth)
+      .strokeColor(color)
+      .moveTo(x, y + offset)
+      .lineTo(right, y + offset)
+      .stroke();
+  };
+  if (decoration === 'underline') {
+    stroke(Math.max(1, fontSizePt * 0.08));
+    return;
+  }
+  if (decoration === 'strike') {
+    stroke(-fontSizePt * 0.3);
+    return;
+  }
+  stroke(-fontSizePt * 0.22);
+  stroke(-fontSizePt * 0.4);
+}
+
 function paintCommand(
   doc: PDFKit.PDFDocument,
   command: PdfPaintCommand,
   page: { height: number; index: number; open: boolean },
-  diagnostics: { push(diagnostic: ReturnType<typeof pdfUnsupportedDiagnostic>): void }
+  diagnostics: { push(diagnostic: ReturnType<typeof pdfUnsupportedDiagnostic>): void },
+  admittedFonts: readonly PdfAdmittedFont[],
+  defaultFontFamily: string | undefined,
+  registeredFonts: Map<string, FontEmbeddingDecision>
 ): { height: number; index: number; open: boolean; pageCountDelta: number } {
   switch (command.kind) {
     case 'beginPage': {
@@ -326,24 +488,79 @@ function paintCommand(
     case 'textSpan': {
       if (!page.open) throw new Error('PDF paint command requires beginPage before page content');
       const style = command.style;
-      const mapped = resolveStandardFont(style);
+      const embedded = resolveEmbeddedFont(style, admittedFonts, defaultFontFamily);
+      const decision = embedded
+        ? (registeredFonts.get(embedded.font.identity) ?? fontEmbeddingDecision(embedded.font))
+        : null;
+      if (embedded && decision && !registeredFonts.has(embedded.font.identity)) {
+        registeredFonts.set(embedded.font.identity, decision);
+      }
+      const useEmbedded = embedded !== null && decision?.kind === 'embed';
+      const mapped = useEmbedded ? null : resolveStandardFont(style);
+      if (embedded && decision?.kind === 'refuse') {
+        diagnostics.push(
+          pdfUnsupportedDiagnostic({
+            feature: 'font-embedding-permission',
+            pageIndex: page.index,
+            recordKind: 'textSpan',
+            recordId: embedded.font.identity,
+            reason: decision.reason,
+          })
+        );
+      }
+      if (!useEmbedded && !isWinAnsiRepresentable(command.text)) {
+        diagnostics.push(
+          pdfUnsupportedDiagnostic({
+            feature: 'standard-font-encoding',
+            pageIndex: page.index,
+            recordKind: 'textSpan',
+            recordId: mapped!.recordId,
+            reason: `Text cannot be encoded with PDF built-in font WinAnsiEncoding for "${mapped!.requested}"`,
+          })
+        );
+        return { ...page, pageCountDelta: 0 };
+      }
       // Command baseline already includes Core baseline shift; do not apply style.baselineShiftPt again.
       const y = baselineToPdfKitY(command.baseline, page.height);
-      doc.font(mapped.pdfkitName).fontSize(style.fontSizePt).fillColor(textColorOf(style));
+      if (useEmbedded) {
+        if (!registeredFonts.has(embedded!.key)) {
+          doc.registerFont(embedded!.key, Buffer.from(embedded!.font.bytes));
+          registeredFonts.set(embedded!.key, { kind: 'embed' });
+        }
+        doc.font(embedded!.key);
+      } else {
+        doc.font(mapped!.pdfkitName);
+      }
+      doc.fontSize(style.fontSizePt).fillColor(textColorOf(style));
+      const width = doc.widthOfString(command.text);
+      const horizontalScaling =
+        width > 0 && command.rect.width > 0 ? (command.rect.width / width) * 100 : undefined;
       doc.text(command.text, command.rect.x, y, {
         lineBreak: false,
         baseline: 'alphabetic',
-        underline: style.decoration === 'underline',
-        strike: style.decoration === 'strike' || style.decoration === 'double-strike',
+        ...(horizontalScaling === undefined ? {} : { horizontalScaling }),
       });
-      if (!mapped.exactBuiltIn) {
+      paintTextDecoration(doc, command, y);
+      diagnostics.push(
+        pdfApproximationDiagnostic({
+          feature: 'shaped-glyph-run',
+          pageIndex: page.index,
+          recordKind: 'textSpan',
+          recordId: useEmbedded ? embedded!.font.identity : mapped!.recordId,
+          reason: useEmbedded
+            ? 'PDFKit reshapes text from the exact Core-admitted font bytes; Core glyph IDs and positions are not encoded'
+            : 'PDFKit independently reshapes and positions text with a PDF built-in font; Core glyph IDs and positions are not encoded',
+        })
+      );
+      if (useEmbedded) {
+      } else if (!mapped!.exactBuiltIn) {
         diagnostics.push(
           pdfApproximationDiagnostic({
             feature: 'standard-font-substitution',
             pageIndex: page.index,
             recordKind: 'textSpan',
-            recordId: mapped.recordId,
-            reason: `Substituted PDF built-in font ${mapped.base} for "${mapped.requested}"`,
+            recordId: mapped!.recordId,
+            reason: `Substituted PDF built-in font ${mapped!.base} for "${mapped!.requested}"`,
           })
         );
       }
@@ -396,10 +613,11 @@ export class PdfKitPaintWriter implements PdfPaintWriterPort {
     const diagnostics = createFidelityDiagnosticCollector();
     let pageCount = 0;
     let page = { height: 0, index: 0, open: false };
+    const registeredFonts = new Map<string, FontEmbeddingDecision>();
 
     const doc = new PDFDocument({
       autoFirstPage: false,
-      compress: false,
+      compress: true,
       margin: 0,
       info: pdfDocumentInfo(plan.documentMetadata),
     });
@@ -415,7 +633,15 @@ export class PdfKitPaintWriter implements PdfPaintWriterPort {
           await yieldToEventLoop();
           throwIfAborted(options.signal, 'PDF encoding was aborted');
         }
-        const next = paintCommand(doc, plan.commands[index]!, page, diagnostics);
+        const next = paintCommand(
+          doc,
+          plan.commands[index]!,
+          page,
+          diagnostics,
+          options.admittedFonts ?? [],
+          options.defaultFontFamily,
+          registeredFonts
+        );
         pageCount += next.pageCountDelta;
         page = { height: next.height, index: next.index, open: next.open };
       }

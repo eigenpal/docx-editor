@@ -1,6 +1,12 @@
+/*
+Copyright (c) 2026 EigenPal, Inc. All rights reserved.
+Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
+Production use requires a commercial agreement: licensing@eigenpal.com
+*/
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { defineFontResolver, type FontResolutionRequest } from '@docx-editor.dev/core/editor';
 import {
   ExportResourceError,
@@ -23,7 +29,19 @@ function pdfContainsText(bytes: Uint8Array, text: string): boolean {
   const pdf = pdfLatin1(bytes);
   const hex = Buffer.from(text, 'utf8').toString('hex').toLowerCase();
   if (pdf.toLowerCase().includes(`<${hex}>`)) return true;
-  const payloads = [...pdf.matchAll(/<([0-9A-Fa-f]+)>/g)]
+  const inflated = [...pdf.matchAll(/\/Filter \/FlateDecode\s*>>\s*stream\n/g)]
+    .map((match) => {
+      const start = match.index! + match[0].length;
+      const end = pdf.indexOf('\nendstream', start);
+      return end < 0 ? '' : inflateSync(Buffer.from(bytes).subarray(start, end)).toString('latin1');
+    })
+    .join('\n');
+  if (pdf.includes('/ToUnicode')) {
+    return [...text].every((character) =>
+      inflated.toLowerCase().includes(character.codePointAt(0)!.toString(16).padStart(4, '0'))
+    );
+  }
+  const payloads = [...inflated.matchAll(/<([0-9A-Fa-f]+)>/g)]
     .map((match) => match[1].toLowerCase())
     .filter((payload) => payload.length <= 256)
     .join('');
@@ -61,10 +79,10 @@ describe('one-shot exportPdf', () => {
     );
     expect(shaped).toMatchObject({
       kind: 'approximation',
-      recordKind: 'styleSpan',
+      recordKind: 'textSpan',
     });
-    expect(shaped?.reason).toContain('PDFKit reshapes Unicode text');
-    expect(shaped?.reason).toContain('not encoded');
+    expect(shaped?.reason).toContain('exact Core-admitted font bytes');
+    expect(pdf).toContain('/FontFile2');
     expect(result.diagnostics.length).toBeLessThanOrEqual(HARD_MAX_FIDELITY_DIAGNOSTICS);
   });
 
@@ -207,16 +225,18 @@ describe('one-shot exportPdf', () => {
     );
   });
 
-  test('discloses the standard-font substitution used for Hello PDF text', async () => {
+  test('uses the admitted Calibri substitute instead of a standard PDF font', async () => {
     const result = await exportPdf(helloDocx());
-    const substitution = result.diagnostics.find(
-      (diagnostic) => diagnostic.feature === 'standard-font-substitution'
+    const reshaped = result.diagnostics.find(
+      (diagnostic) => diagnostic.feature === 'shaped-glyph-run'
     );
-    expect(substitution).toMatchObject({
+    expect(reshaped).toMatchObject({
       kind: 'approximation',
     });
-    expect(substitution?.reason).toContain('Helvetica');
-    expect(substitution?.recordId === 'Helvetica').toBe(false);
+    expect(
+      result.diagnostics.some((diagnostic) => diagnostic.feature === 'standard-font-substitution')
+    ).toBe(false);
+    expect(pdfLatin1(result.bytes)).toContain('/FontFile2');
   });
 
   test('identical inputs produce identical PDF bytes', async () => {
@@ -228,7 +248,7 @@ describe('one-shot exportPdf', () => {
     expect(first.diagnostics).toEqual(second.diagnostics);
   });
 
-  test('aggregates repeated laid-out text approximations under the diagnostic cap', async () => {
+  test('aggregates PDFKit reshaping diagnostics under the diagnostic cap', async () => {
     const paragraphs = Array.from(
       { length: 12 },
       () => '<w:p><w:r><w:t>Hello PDF</w:t></w:r></w:p>'
@@ -262,9 +282,9 @@ describe('one-shot exportPdf', () => {
 
   test('keeps the font-backed session alive through planning and encoding', () => {
     const oneShot = exportSource.slice(exportSource.indexOf('export async function exportPdf('));
-    expect(exportSource).toContain('session.shapeLaidOutText(visit.span)');
     expect(oneShot).toContain('createFidelityDiagnosticCollector()');
-    expect(oneShot).toContain('recordLaidOutTextFidelity(layout, opened.session, diagnostics)');
+    expect(oneShot).toContain('admittedFonts(opened.session)');
+    expect(oneShot).not.toContain('shapeLaidOutText(');
     expect(oneShot).toContain('planPdfPaintFromLayout(layout, { signal: options.signal })');
     expect(oneShot).toContain('writePdfPaintPlanToBytes(planned.plan');
     expect(oneShot).not.toMatch(/\.\.\.written\.diagnostics/);
@@ -275,9 +295,7 @@ describe('one-shot exportPdf', () => {
     expect(oneShot.indexOf('writePdfPaintPlanToBytes(planned.plan')).toBeLessThan(
       oneShot.indexOf('opened.session.dispose()')
     );
-    expect(
-      oneShot.indexOf('recordLaidOutTextFidelity(layout, opened.session, diagnostics)')
-    ).toBeLessThan(oneShot.indexOf('opened.session.dispose()'));
+    expect(oneShot).toContain('admittedFonts(opened.session)');
     expect(oneShot.indexOf('try {')).toBeLessThan(
       oneShot.indexOf('planPdfPaintFromLayout(layout, { signal: options.signal })')
     );

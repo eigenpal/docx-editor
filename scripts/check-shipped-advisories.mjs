@@ -14,7 +14,7 @@
 //   - devDependencies. They never leave CI.
 //   - examples/*. Demos, never published.
 //   - private packages (vue, nuxt today). Not published, so not shipped.
-//   - peerDependencies (react, react-dom, vue, pdf-lib, yjs). The consumer
+//   - peerDependencies (react, react-dom, vue, yjs). The consumer
 //     installs and upgrades those; we only declare a range. Listed, never gated.
 //
 // GitHub's own Dependabot alerts do NOT cover this closure. GitHub cannot parse

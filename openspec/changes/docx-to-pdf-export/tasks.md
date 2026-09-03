@@ -1,7 +1,7 @@
 ## 1. Package and writer evaluation
 
 - [x] 1.1 Add the private `@docx-editor.dev/docx-to-pdf` package with build, typecheck, test,
-      notice, and API Extractor wiring.
+      notice, API Extractor, and EigenPal Pro License wiring.
 - [x] 1.2 Define a dependency-neutral PDF paint-command model and page coordinate transform.
 - [x] 1.3 Add command-model tests for mixed page sizes, clipping, stacking, and deterministic
       numeric serialization.
@@ -9,6 +9,7 @@
       deterministic document identifiers.
 - [x] 1.5 Record the writer decision for glyph positioning, font subsetting, images, links, bundle
       size, and license notices.
+- [x] 1.6 Remove Core's unused `pdf-lib` optional peer now that PDF export lives in this package.
 
 ## 2. Semantic page planning
 
@@ -27,11 +28,14 @@
 - [ ] 3.1 Add Latin, combining-mark, Arabic, Indic, CJK, bidirectional, and fallback-font
       characterization fixtures.
 - [x] 3.2 Record that PDFKit cannot encode externally shaped glyph IDs with extractable Unicode.
-- [x] 3.3 Confirm Core already publishes admitted font bytes and HarfBuzz glyph runs; the remaining
-      gap is PDFKit writer integration.
+- [x] 3.3 Confirm Core publishes admitted font bytes and HarfBuzz glyph runs; preserve admitted-face
+      aliases while sharing one bounded byte copy per resource identity; embed exact admitted bytes
+      through PDFKit when the PDF-layer sfnt OS/2 `fsType` and `faceIndex` gate accepts the face;
+      record truthful `shaped-glyph-run` diagnostics for every painted span until glyph positions
+      are encoded.
 - [x] 3.4 Add strict refusal when visible approximations or unsupported records exist.
-- [ ] 3.5 Embed and subset admitted font programs and encode Core glyph positions in the writer
-      port.
+- [ ] 3.5 Encode Core HarfBuzz glyph positions in the writer port; add verifiable TTC/OTC
+      collection face selection; preserve deterministic subset CID and ToUnicode mapping.
 
 ## 4. Images, links, and metadata
 

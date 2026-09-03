@@ -189,8 +189,9 @@ describe('the licence this package ships under', () => {
   test('the repository Apache licence expressly excludes this package', () => {
     const text = readFileSync(join(REPO, 'LICENSE'), 'utf8');
     expect(text).toContain(
-      'The contents of packages/editor-api/ and packages/pro/ are not licensed under'
+      'The contents of packages/docx-to-pdf/, packages/editor-api/, and packages/pro/ are not licensed under'
     );
+    expect(text).toContain('packages/docx-to-pdf/LICENSE.md');
     expect(text).toContain('packages/editor-api/LICENSE.md');
     expect(text).toContain('packages/pro/LICENSE.md');
   });
