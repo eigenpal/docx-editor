@@ -25,7 +25,8 @@
  * request being dropped in silence.
  */
 
-import type { DocumentEditingMode } from '../contracts/editor.ts';
+import type { DocumentEditingMode, ExecResult } from '../contracts/editor.ts';
+import type { DocumentTrackingSettings } from '../store/package/tracking-settings.ts';
 
 /**
  * The refusal every review write gets when no review module is registered.
@@ -110,4 +111,17 @@ export function documentTrackingAdoption(
     };
   }
   return { mode: 'suggesting', rejection: null };
+}
+
+/** Refuse editing when document protection permits tracked changes only. */
+export function documentEditingModeRestriction(
+  tracking: DocumentTrackingSettings,
+  next: DocumentEditingMode
+): ExecResult | null {
+  if (next !== 'editing' || !tracking.restrictedToTrackedChanges) return null;
+  return {
+    ok: false,
+    code: 'locked',
+    reason: 'this document permits editing only as tracked changes',
+  };
 }

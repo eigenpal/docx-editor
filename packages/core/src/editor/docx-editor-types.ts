@@ -290,6 +290,32 @@ export interface DocxEditorInstance extends Editor {
    */
   setAuthor(author: string | undefined): void;
   /**
+   * Set the host editing mode without rebuilding the editor.
+   *
+   * This has the same meaning as {@link DocxEditorConfig.mode}. Passing `undefined` lets the
+   * document's tracking settings select the mode again. Host changes do not count as a reader
+   * toolbar choice.
+   *
+   * @public
+   */
+  setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
+  /**
+   * Set the drawing-label resolver without rebuilding the editor. Painted placeholders update
+   * immediately, and later surface mounts use the same resolver.
+   *
+   * @public
+   */
+  setTranslate(
+    translate: ((key: string, params?: Record<string, string | number>) => string) | undefined
+  ): void;
+  /**
+   * Set the engine locale without rebuilding the editor. Later table-of-contents insertions use
+   * the resolved locale label. Unsupported and omitted locales resolve to English.
+   *
+   * @public
+   */
+  setLocale(locale: string | undefined): void;
+  /**
    * The style declared for one author, whether or not the SURFACE has published them yet —
    * so review chrome can draw a card the rail is holding before the roster catches up.
    *

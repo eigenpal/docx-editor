@@ -780,8 +780,8 @@ export function mountPaginatedSurface(
     decodePort,
     onResourcesChanged: () => onDrawingResourcesChanged?.(),
   });
-  const drawingStrings: DrawingPaintStrings =
-    options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  let drawingStrings: DrawingPaintStrings = options.drawingStrings ?? DEFAULT_DRAWING_PAINT_STRINGS;
+  let tocLabels = options.tocLabels;
   /**
    * The insertion point, or null when the selection is not collapsed — a range has two ends
    * and is not "inside" anything, and a second background under one of them would read as a
@@ -4371,7 +4371,7 @@ export function mountPaginatedSurface(
       op: 'insertToc' as const,
       beforeParagraphId: selection.head.paragraphId,
       instruction: INSERT_TOC_INSTRUCTION,
-      alias: options.tocLabels?.title ?? 'TOC',
+      alias: tocLabels?.title ?? 'TOC',
       entries: plan.entries,
       bookmarksToCreate: plan.bookmarksToCreate,
     };
@@ -5352,6 +5352,15 @@ export function mountPaginatedSurface(
       if (author === nextAuthor) return;
       flushTypeBuffer();
       author = nextAuthor;
+    },
+    setDrawingStrings: (strings) => {
+      if (drawingStrings === strings) return;
+      drawingStrings = strings;
+      flushPendingInputAndLayout();
+      render(false);
+    },
+    setTocLabels: (labels) => {
+      tocLabels = labels;
     },
     setEditingMode: (mode) => {
       // Text typed under the OLD mode commits under it — a buffered edit must

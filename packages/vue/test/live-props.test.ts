@@ -1,13 +1,14 @@
 import './dom-setup.ts';
 
 import { afterEach, describe, expect, test } from 'bun:test';
-import { createApp, h, reactive, type Component } from 'vue';
+import { createApp, h, reactive, ref, type Component } from 'vue';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditor } from '../src/components/DocxEditor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
+import { LocaleProvider } from '../src/i18n/LocaleContext';
 import { flush, SOURCE } from './helpers/mount';
 
 function mountWithProps(component: Component, initialProps: Record<string, unknown>) {
@@ -84,6 +85,129 @@ describe('live Vue props', () => {
       expect(xml.match(/w:author="Updated Author"/g)).toHaveLength(2);
     } finally {
       wrapper.unmount();
+    }
+  });
+
+  test('DocxEditorRoot applies mode, translate, and locale changes in place', async () => {
+    const initialTranslate = (key: string) => `initial:${key}`;
+    const updatedTranslate = (key: string) => `updated:${key}`;
+    const wrapper = mountWithProps(DocxEditorRoot, {
+      mode: 'edit',
+      translate: initialTranslate,
+      locale: 'en',
+    });
+    try {
+      await flush();
+      const editor = wrapper.editor();
+      let receivedTranslate: typeof updatedTranslate | undefined;
+      let receivedLocale: string | undefined;
+      const setTranslate = editor.setTranslate.bind(editor);
+      const setLocale = editor.setLocale.bind(editor);
+      editor.setTranslate = (value) => {
+        receivedTranslate = value as typeof updatedTranslate;
+        setTranslate(value);
+      };
+      editor.setLocale = (value) => {
+        receivedLocale = value;
+        setLocale(value);
+      };
+
+      await wrapper.setProps({ mode: 'view', translate: updatedTranslate, locale: 'de' });
+      expect(wrapper.editor()).toBe(editor);
+      expect(editor.getEditingMode()).toBe('viewing');
+      expect(receivedTranslate?.('probe')).toBe('updated:probe');
+      expect(receivedLocale).toBe('de');
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
+  test('an unrelated prop change does not restore a host mode after a reader change', async () => {
+    const wrapper = mountWithProps(DocxEditorRoot, { mode: 'edit', author: 'First Author' });
+    try {
+      await flush();
+      const editor = wrapper.editor();
+      expect(editor.exec({ type: 'setEditingMode', mode: 'viewing' })).toMatchObject({ ok: true });
+      await wrapper.setProps({ author: 'Second Author' });
+      expect(wrapper.editor()).toBe(editor);
+      expect(editor.getEditingMode()).toBe('viewing');
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
+  test('a locale catalog change updates translation without replacing the editor', async () => {
+    const catalog = (label: string) => ({ image: { pendingResource: label } });
+    const wrapper = mountWithProps(DocxEditor, { i18n: catalog('First loading label') });
+    try {
+      await flush();
+      const editor = wrapper.editor();
+      let resolver: ((key: string) => string) | undefined;
+      const setTranslate = editor.setTranslate.bind(editor);
+      editor.setTranslate = (value) => {
+        resolver = value;
+        setTranslate(value);
+      };
+
+      await wrapper.setProps({ i18n: catalog('Second loading label') });
+      expect(wrapper.editor()).toBe(editor);
+      expect(resolver?.('image.pendingResource')).toBe('Second loading label');
+
+      const catalogResolver = resolver;
+      await wrapper.setProps({ t: (key: string) => `custom:${key}` });
+      expect(wrapper.editor()).toBe(editor);
+      expect(resolver).not.toBe(catalogResolver);
+      expect(resolver?.('image.pendingResource')).toBe('custom:image.pendingResource');
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
+  test('a bare root reads a changed locale catalog without replacing the editor', async () => {
+    const catalog = (label: string) => ({ image: { pendingResource: label } });
+    const i18n = ref(catalog('First loading label'));
+    const container = document.createElement('div');
+    document.body.append(container);
+    const ready: DocxEditorInstance[] = [];
+    const app = createApp({
+      render: () =>
+        h(
+          LocaleProvider,
+          { i18n: i18n.value },
+          {
+            default: () =>
+              h(
+                DocxEditorRoot,
+                {
+                  document: SOURCE,
+                  onReady: (editor: unknown) => ready.push(editor as DocxEditorInstance),
+                },
+                {
+                  default: () =>
+                    h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+                }
+              ),
+          }
+        ),
+    });
+    app.mount(container);
+    try {
+      await flush();
+      const editor = ready.at(-1)!;
+      let resolver: ((key: string) => string) | undefined;
+      const setTranslate = editor.setTranslate.bind(editor);
+      editor.setTranslate = (value) => {
+        resolver = value;
+        setTranslate(value);
+      };
+
+      i18n.value = catalog('Second loading label');
+      await flush();
+      expect(ready.at(-1)).toBe(editor);
+      expect(resolver?.('image.pendingResource')).toBe('Second loading label');
+    } finally {
+      app.unmount();
+      container.remove();
     }
   });
 

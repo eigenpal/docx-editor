@@ -2,8 +2,76 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
+import { strToU8, zipSync } from 'fflate';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
+import { stubReviewModule } from './review-test-module.ts';
+
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const OD = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument';
+const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+function packageDocx(parts: Record<string, string>): Uint8Array {
+  return zipSync(
+    Object.fromEntries(Object.entries(parts).map(([name, xml]) => [name, strToU8(xml)]))
+  );
+}
+
+function trackedDocx(): Uint8Array {
+  return packageDocx({
+    '[Content_Types].xml':
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>',
+    '_rels/.rels': `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`,
+    'word/_rels/document.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="rIdSettings" Type="${R}/settings" Target="settings.xml"/></Relationships>`,
+    'word/settings.xml': `<w:settings xmlns:w="${W}"><w:trackRevisions/></w:settings>`,
+    'word/document.xml': `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>tracked</w:t></w:r></w:p></w:body></w:document>`,
+  });
+}
+
+function drawingDocx(): Uint8Array {
+  const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+  const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+  const drawing =
+    '<w:r><w:drawing><wp:inline><wp:extent cx="228600" cy="114300"/>' +
+    '<wp:docPr id="1" name="picture"/><a:graphic><a:graphicData ' +
+    `uri="${PIC}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/>` +
+    '<pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rIdImg"/>' +
+    '<a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm>' +
+    '<a:ext cx="228600" cy="114300"/></a:xfrm><a:prstGeom prst="rect"/>' +
+    '</pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+  return packageDocx({
+    '[Content_Types].xml':
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+    '_rels/.rels': `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`,
+    'word/_rels/document.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="rIdImg" Type="${R}/image" Target="https://example.com/image.png" TargetMode="External"/></Relationships>`,
+    'word/document.xml': `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p>${drawing}</w:p></w:body></w:document>`,
+  });
+}
+
+function tocDocx(): Uint8Array {
+  const stylesRel = `${R}/styles`;
+  const heading =
+    '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Introduction</w:t></w:r></w:p>';
+  return packageDocx({
+    '[Content_Types].xml':
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
+    '_rels/.rels': `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`,
+    'word/_rels/document.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="rIdStyles" Type="${stylesRel}" Target="styles.xml"/></Relationships>`,
+    'word/styles.xml':
+      `<w:styles xmlns:w="${W}"><w:style w:type="paragraph" w:styleId="Normal" w:default="1"><w:name w:val="Normal"/></w:style>` +
+      '<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/></w:style>' +
+      '<w:style w:type="paragraph" w:styleId="TOC1"><w:name w:val="toc 1"/></w:style></w:styles>',
+    'word/document.xml': `<w:document xmlns:w="${W}"><w:body>${heading}</w:body></w:document>`,
+  });
+}
 
 function mounted(author: string) {
   const container = document.createElement('div');
@@ -113,6 +181,127 @@ describe('live author state', () => {
       off();
     } finally {
       dispose();
+    }
+  });
+});
+
+describe('live host configuration', () => {
+  test('mode changes enforce and lift the host view lock', () => {
+    const { editor, dispose } = mounted('Author A');
+    try {
+      let changes = 0;
+      editor.on('selectionChange', () => changes++);
+      editor.setMode('view');
+      expect(changes).toBe(1);
+      editor.setMode('view');
+      expect(changes).toBe(1);
+      expect(editor.getEditingMode()).toBe('viewing');
+      expect(editor.exec({ type: 'insertText', text: 'x' })).toMatchObject({
+        ok: false,
+        code: 'locked',
+      });
+      expect(editor.can({ type: 'setEditingMode', mode: 'editing' })).toMatchObject({
+        ok: false,
+        code: 'locked',
+      });
+
+      editor.setMode('edit');
+      expect(editor.getEditingMode()).toBe('editing');
+      expect(editor.exec({ type: 'insertText', text: 'x' })).toMatchObject({ ok: true });
+    } finally {
+      dispose();
+    }
+  });
+
+  test('an editor constructed for viewing can become editable', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container, document: 'blank', mode: 'view' });
+    try {
+      expect(editor.getEditingMode()).toBe('viewing');
+      editor.setMode('edit');
+      expect(editor.getEditingMode()).toBe('editing');
+      expect(editor.exec({ type: 'insertText', text: 'x' })).toMatchObject({ ok: true });
+    } finally {
+      editor.destroy();
+      container.remove();
+    }
+  });
+
+  test('mode changes resolve suggesting and let document tracking decide again', () => {
+    const { editor, dispose } = mounted('Author A');
+    try {
+      editor.setMode('suggesting');
+      expect(editor.getEditingMode()).toBe('editing');
+      expect(editor.snapshot().lastRejection).toContain('pro review module');
+    } finally {
+      dispose();
+    }
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    const tracked = createDocxEditor({
+      container,
+      author: 'Author A',
+      mode: 'edit',
+      modules: [stubReviewModule()],
+    });
+    try {
+      tracked.load(trackedDocx());
+      expect(tracked.snapshot().parseError).toBeNull();
+      expect(tracked.getEditingMode()).toBe('editing');
+      tracked.setMode(undefined);
+      expect(tracked.getEditingMode()).toBe('suggesting');
+    } finally {
+      tracked.destroy();
+      container.remove();
+    }
+  });
+
+  test('translation changes repaint drawing placeholder labels', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container });
+    try {
+      editor.load(drawingDocx());
+      expect(editor.snapshot().parseError).toBeNull();
+      expect(container.querySelector('.docx-drawing-placeholder')?.textContent).toBe(
+        'Loading image'
+      );
+      let changes = 0;
+      editor.on('selectionChange', () => changes++);
+      const translate = (key: string) => (key === 'image.pendingResource' ? 'REMOTE IMAGE' : key);
+      editor.setTranslate(translate);
+      expect(changes).toBe(1);
+      expect(container.querySelector('.docx-drawing-placeholder')?.textContent).toBe(
+        'REMOTE IMAGE'
+      );
+      editor.setTranslate(translate);
+      expect(changes).toBe(1);
+    } finally {
+      editor.destroy();
+      container.remove();
+    }
+  });
+
+  test('locale changes apply to later TOC insertions', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const editor = createDocxEditor({ container });
+    try {
+      editor.load(tocDocx());
+      expect(editor.snapshot().parseError).toBeNull();
+      let changes = 0;
+      editor.on('selectionChange', () => changes++);
+      editor.setLocale('de');
+      expect(changes).toBe(1);
+      editor.setLocale('de');
+      expect(changes).toBe(1);
+      expect(editor.exec({ type: 'insertToc' })).toMatchObject({ ok: true, changed: true });
+      expect(xmlOf(editor)).toContain('w:alias w:val="Inhaltsverzeichnis"');
+    } finally {
+      editor.destroy();
+      container.remove();
     }
   });
 });

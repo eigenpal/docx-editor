@@ -1075,9 +1075,12 @@ export interface DocxEditorInstance extends Editor {
     setAuthor(author: string | undefined): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setLocale(locale: string | undefined): void;
+    setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setRevisionStyles(styles: RevisionStyles): void;
+    setTranslate(translate: ((key: string, params?: Record<string, string | number>) => string) | undefined): void;
     showAllReviewAuthors(): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;

@@ -52,10 +52,9 @@ import {
 } from './revision-style-registry';
 
 /**
- * Props for `DocxEditor.Root`. Creation parameters (`document`, `fonts`, `locale`, and the
- * initial `mode`/`zoom`) are sampled when the instance is created. Only `document` and `fonts`
- * identity remount it. Later `author`, `zoom`, and `zoomMode` changes use instance setters, so
- * edits, the caret, and the undo history survive. `mode` and `modules` are sampled at mount only.
+ * Props for `DocxEditor.Root`. Only `document`, `fonts`, and `imageDecodePort` identity remounts
+ * the editor. Later `author`, `locale`, `mode`, `translate`, `zoom`, and `zoomMode` changes use
+ * instance setters. `modules` is sampled at mount only.
  *
  * @public
  */
@@ -75,18 +74,20 @@ export interface DocxEditorRootProps {
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
+  /**
+   * Engine locale for engine-generated content, such as the table of contents title.
+   * Changes apply without a remount.
+   */
   locale?: string;
-  /** Drawing refusal labels for painted placeholders; defaults to the active locale catalogue. */
+  /** Live drawing labels for painted placeholders; defaults to the active locale catalogue. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
-   * Capability modules to register (`@docx-editor.dev/pro`'s review module,
-   * custom nodes, collaboration). Sampled at mount only, like `mode`: module registration is
-   * construction-time in the engine.
+   * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes,
+   * collaboration). Sampled at mount only because registration is construction-time.
    */
   modules?: readonly EditorModule[];
   /**
-   * The mode the editor opens in, matching the toolbar's three-state pill. Sampled at
-   * mount only.
+   * The host mode, matching the toolbar's three-state pill. Changes apply without a remount.
    *
    * `'edit'` opens in editing even when the document's `w:trackRevisions` asks for
    * tracked changes; `'suggesting'` opens in suggesting (needs a review module and an
@@ -205,6 +206,9 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     document: doc,
     fonts,
     author,
+    locale,
+    translate,
+    mode,
     zoom,
     zoomMode,
     tableInteractionLabel,
@@ -217,6 +221,8 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       catalogT(key as TranslationKey, params),
     [catalogT]
   );
+  const defaultTranslateRef = useRef(defaultTranslate);
+  defaultTranslateRef.current = defaultTranslate;
 
   // Latest props, read inside effects without retriggering them.
   const propsRef = useRef(props);
@@ -240,7 +246,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   // terminal, so a StrictMode re-run must build anew rather than resurrect.
   useEffect(() => {
     const p = propsRef.current;
-    const translate = p.translate ?? defaultTranslate;
+    const translate = p.translate ?? defaultTranslateRef.current;
     // Declarations mounted in this same commit registered BEFORE this effect (child
     // effects run bottom-up), so they reach the engine as construction config and the
     // FIRST paint is already styled — no kind-coloured frame.
@@ -268,7 +274,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       // Functional update: a StrictMode re-run's second instance must not be clobbered.
       setEditor((current) => (current === instance ? null : current));
     };
-  }, [doc, fonts, defaultTranslate, imageDecodePort, revisionStyleRegistry]);
+  }, [doc, fonts, imageDecodePort, revisionStyleRegistry]);
 
   // Fired AFTER the instance is published: this effect runs in the commit that rendered
   // the new editor, after child layout effects — so a `DocxEditor.Content` in the tree
@@ -341,6 +347,31 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     if (!editor) return;
     editor.setAuthor(author);
   }, [editor, author]);
+
+  const appliedMode = useRef<{
+    editor: DocxEditorInstance | null;
+    value: 'edit' | 'view' | 'suggesting' | undefined;
+  }>({ editor: null, value: undefined });
+  useEffect(() => {
+    if (!editor) return;
+    if (appliedMode.current.editor !== editor) {
+      appliedMode.current = { editor, value: mode };
+      return;
+    }
+    if (appliedMode.current.value === mode) return;
+    appliedMode.current.value = mode;
+    editor.setMode(mode);
+  }, [editor, mode]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setTranslate(translate ?? defaultTranslate);
+  }, [editor, translate, defaultTranslate]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setLocale(locale);
+  }, [editor, locale]);
 
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {

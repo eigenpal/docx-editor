@@ -18,7 +18,7 @@ Your controls can use the same command and state APIs.
 | `DocxEditor.Root`        | Every composed editor            | Owns and provides the editor instance                            |
 | `DocxEditor.Viewport`    | Every composed editor            | Supplies the scroll container and page-layout classes            |
 | `DocxEditor.Content`     | Every composed editor            | Mounts the painted document surface                              |
-| Stable `modules` array   | When you register modules        | Prevents unintended module changes during construction           |
+| Remount `key`            | When you change modules          | Registers the new construction-only module set                   |
 | Positioned workspace row | When you use the navigation pane | Anchors the navigation pane                                      |
 | Pro review module        | When you use Pro review chrome   | Enables comments, tracked changes, and custom-node review chrome |
 
@@ -60,26 +60,26 @@ hyperlink popover, and context menu.
 ### Root props
 
 The editor reads construction props when it creates the instance.
-Changes to `document`, `fonts`, `imageDecodePort`, or the locale catalog
-remount the editor.
-Changes to `author`, `zoom`, and `zoomMode` apply without a remount.
+Changes to `document`, `fonts`, or `imageDecodePort` remount the editor.
+Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, or the locale catalog
+apply without a remount.
 These changes preserve edits, caret position, and undo history.
 
-| Prop                    | Type                                                             | Description                                                                                        |
-| ----------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `document`              | `DocumentSource`                                                 | Loads DOCX bytes, `'blank'`, or a `DocumentHandle`. An identity change remounts the editor.        |
-| `fonts`                 | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Supplies font bytes or a resolver. An identity change remounts the editor.                         |
-| `author`                | `string`                                                         | Sets the author for later comments, replies, and tracked changes. Changes apply without a remount. |
-| `locale`                | `string`                                                         | Sets the document locale for the editor engine.                                                    |
-| `mode`                  | `'edit' \| 'view' \| 'suggesting'`                               | Sets the initial mode. When omitted, `w:trackRevisions` can select suggesting mode.                |
-| `modules`               | `readonly EditorModule[]`                                        | Registers capability modules during construction. Keep the array identity stable.                  |
-| `zoom` / `zoomMode`     | `number` / `ZoomMode \| 'auto'`                                  | Sets the display scale and its source. `'auto'` fits the page width.                               |
-| `onReady`               | `(editor: Editor) => void`                                       | Runs once per instance after `Content` attaches.                                                   |
-| `onChange`              | `(change: DocumentChange) => void`                               | Reports revision and identity changes after mutations.                                             |
-| `onFontError`           | `(error: EditorFontError) => void`                               | Reports typed font-resolution failures.                                                            |
-| `translate`             | `(key, params?) => string`                                       | Resolves document-surface labels. It defaults to the active catalog.                               |
-| `tableInteractionLabel` | `(key) => string`                                                | Resolves labels for table insertion controls.                                                      |
-| `imageDecodePort`       | `ImageDecodePort`                                                | Overrides raster decoding for tests or custom hosts.                                               |
+| Prop                    | Type                                                             | Description                                                                                                       |
+| ----------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `document`              | `DocumentSource`                                                 | Loads DOCX bytes, `'blank'`, or a `DocumentHandle`. An identity change remounts the editor.                       |
+| `fonts`                 | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Supplies font bytes or a resolver. An identity change remounts the editor.                                        |
+| `author`                | `string`                                                         | Sets the author for later comments, replies, and tracked changes. Changes apply without a remount.                |
+| `locale`                | `string`                                                         | Engine locale for engine-generated content, such as the table of contents title. Changes apply without a remount. |
+| `mode`                  | `'edit' \| 'view' \| 'suggesting'`                               | Sets the live host mode. When omitted, `w:trackRevisions` can select suggesting mode.                             |
+| `modules`               | `readonly EditorModule[]`                                        | Registers modules during construction. Remount with a different `key` to change them.                             |
+| `zoom` / `zoomMode`     | `number` / `ZoomMode \| 'auto'`                                  | Sets the display scale and its source. `'auto'` fits the page width.                                              |
+| `onReady`               | `(editor: Editor) => void`                                       | Runs once per instance after `Content` attaches.                                                                  |
+| `onChange`              | `(change: DocumentChange) => void`                               | Reports revision and identity changes after mutations.                                                            |
+| `onFontError`           | `(error: EditorFontError) => void`                               | Reports typed font-resolution failures.                                                                           |
+| `translate`             | `(key, params?) => string`                                       | Resolves live document-surface labels. It defaults to the active catalog.                                         |
+| `tableInteractionLabel` | `(key) => string`                                                | Resolves labels for table insertion controls.                                                                     |
+| `imageDecodePort`       | `ImageDecodePort`                                                | Overrides raster decoding for tests or custom hosts.                                                              |
 
 For exact signatures, see the [React API reference](/docs/2.x/api/react).
 

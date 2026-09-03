@@ -33,6 +33,7 @@ export type EditorMode = 'edit' | 'view' | 'suggesting';
 export interface DocxEditorProps {
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   colorMode?: 'light' | 'dark' | 'system';
+  /** Live resolver for chrome and drawing labels. */
   t?: (key: string, params?: Record<string, string | number>) => string;
   i18n?: Translations;
   chrome?: boolean;
@@ -43,11 +44,17 @@ export interface DocxEditorProps {
   navigation?: boolean;
   rulers?: boolean;
   document?: DocumentSource;
+  /** Live host mode. */
   mode?: EditorMode;
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Engine locale for engine-generated content, such as the table of contents title.
+   * Changes apply without a remount.
+   */
   locale?: string;
   author?: string;
+  /** Construction-time capability modules. Later array changes need a remount. */
   modules?: readonly EditorModule[];
   class?: string;
 }

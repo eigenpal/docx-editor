@@ -184,9 +184,7 @@ export interface PaginatedSurfaceOptions {
    * The update ACTIONS are not here: they are rows in the host's context menu, which owns
    * its own labels. The engine paints no menu of its own.
    */
-  readonly tocLabels?: {
-    readonly title: string;
-  };
+  readonly tocLabels?: { readonly title: string };
 }
 
 /**
@@ -766,6 +764,12 @@ export interface PaginatedSurface {
   setEditingMode(mode: SurfaceEditingMode): void;
   /** Set the ambient author after buffered text commits under the previous author. */
   setAuthor(author: string | undefined): void;
+  /** Replace localized drawing labels and repaint materialized pages. */
+  setDrawingStrings(
+    strings: import('../output/semantic-paint-drawings.ts').DrawingPaintStrings
+  ): void;
+  /** Replace the localized title used by later TOC insertions. */
+  setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
   /**
    * Every author with a revision in the CURRENT layout, mapped to Word's colour slot by
    * order of first appearance. One map instance per layout, so a caller can key caches on

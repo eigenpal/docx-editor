@@ -15,7 +15,7 @@ need a different interface.
 | `DocxEditorRoot`         | Every composed editor            | Owns and provides the editor instance                            |
 | `DocxEditorViewport`     | Every composed editor            | Supplies the scroll container and page-layout classes            |
 | `DocxEditorContent`      | Every composed editor            | Mounts the painted document surface                              |
-| Stable `modules` array   | When you register modules        | Prevents unintended module changes during construction           |
+| Remount `:key`           | When you change modules          | Registers the new construction-only module set                   |
 | Positioned workspace row | When you use the navigation pane | Anchors the navigation pane                                      |
 | Pro review module        | When you use Pro review chrome   | Enables comments, tracked changes, and custom-node review chrome |
 
@@ -54,10 +54,13 @@ You can place all optional chrome inside `DocxEditorRoot`.
 
 Listen for `@ready`, `@change`, and `@font-error` on the root.
 
-The root samples `document`, `fonts`, `translate`, and `imageDecodePort` when it
-creates the editor. An identity change rebuilds the editor. Changes to `zoom`
-and `zoomMode` apply without a rebuild. Changes to `author` also apply without a
-rebuild, and existing revisions keep their authors.
+The root rebuilds for `document`, `fonts`, and `imageDecodePort` identity changes.
+Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and the locale catalog
+apply without a rebuild. Existing revisions keep their authors.
+The root ignores a later `modules` array change until you remount it with a different `:key`.
+
+The engine uses `locale` for engine-generated content, such as the table of contents title.
+Changes apply without a remount.
 
 For full prop types, see the
 [Vue API reference](/docs/2.x/api/vue).

@@ -735,7 +735,6 @@ export interface DocxEditorProps {
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     hyperlinkPopup?: boolean;
     i18n?: Translations;
-    // (undocumented)
     locale?: string;
     menu?: boolean | DocxEditorMenuProps;
     mode?: EditorMode;
@@ -794,7 +793,6 @@ export interface DocxEditorRootProps {
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
-    // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];

@@ -50,10 +50,18 @@ import {
 export interface DocxEditorRootProps {
   document?: DocumentSource;
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
+  /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
+  /**
+   * Engine locale for engine-generated content, such as the table of contents title.
+   * Changes apply without a remount.
+   */
   locale?: string;
+  /** Live drawing labels. Defaults to the active locale catalog. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
+  /** Construction-time capability modules. Later array changes need a remount. */
   modules?: readonly EditorModule[];
+  /** Live host mode. Omit it to let document tracking settings select the mode. */
   mode?: 'edit' | 'view' | 'suggesting';
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
@@ -109,14 +117,12 @@ export function useDocxEditorRootOwner(
   const revisionStyleRegistry = createRevisionStyleRegistry();
   provide(RevisionStyleRegistryContext, revisionStyleRegistry);
 
-  const { t: catalogT, catalogue } = useTranslation();
+  const translation = useTranslation();
   const translateResolver = computed(() => {
-    catalogue.value;
+    translation.catalogue.value;
     const custom = toValue(props).translate;
-    if (custom) return custom;
-    const t = catalogT;
     return (key: string, params?: Record<string, string | number>) =>
-      t(key as TranslationKey, params);
+      custom ? custom(key, params) : translation.t(key as TranslationKey, params);
   });
 
   const railCount = shallowRef(0);
@@ -247,12 +253,7 @@ export function useDocxEditorRootOwner(
   if (typeof window !== 'undefined') {
     watch(
       () =>
-        [
-          toValue(props).document,
-          toValue(props).fonts,
-          catalogue.value,
-          toValue(props).imageDecodePort,
-        ] as const,
+        [toValue(props).document, toValue(props).fonts, toValue(props).imageDecodePort] as const,
       createEditor,
       { immediate: true, flush: 'post' }
     );
@@ -294,6 +295,42 @@ export function useDocxEditorRootOwner(
     () => [editorRef.value, toValue(props).author] as const,
     ([editor, author]) => {
       if (editor) editor.setAuthor(author);
+    },
+    { flush: 'post' }
+  );
+
+  const appliedHostMode = {
+    editor: null as DocxEditorInstance | null,
+    value: undefined as 'edit' | 'view' | 'suggesting' | undefined,
+  };
+  watch(
+    () => [editorRef.value, toValue(props).mode] as const,
+    ([editor, mode]) => {
+      if (!editor) return;
+      if (appliedHostMode.editor !== editor) {
+        appliedHostMode.editor = editor;
+        appliedHostMode.value = mode;
+        return;
+      }
+      if (appliedHostMode.value === mode) return;
+      appliedHostMode.value = mode;
+      editor.setMode(mode);
+    },
+    { flush: 'post', immediate: true }
+  );
+
+  watch(
+    () => [editorRef.value, translateResolver.value] as const,
+    ([editor, translate]) => {
+      if (editor) editor.setTranslate(translate);
+    },
+    { flush: 'post' }
+  );
+
+  watch(
+    () => [editorRef.value, toValue(props).locale] as const,
+    ([editor, locale]) => {
+      if (editor) editor.setLocale(locale);
     },
     { flush: 'post' }
   );

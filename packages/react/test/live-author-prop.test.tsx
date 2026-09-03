@@ -10,6 +10,7 @@ import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { LocaleProvider } from '../src/i18n/LocaleContext.tsx';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -76,5 +77,107 @@ describe('DocxEditor.Root author prop', () => {
     const xml = serializeOoxmlPart(firstInstance.surface!.session.part());
     expect(xml.match(/w:author="Initial Author"/g)).toHaveLength(2);
     expect(xml.match(/w:author="Updated Author"/g)).toHaveLength(2);
+  });
+
+  test('applies mode, translate, and locale changes without replacing the editor', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const initialTranslate = (key: string) => `initial:${key}`;
+    const updatedTranslate = (key: string) => `updated:${key}`;
+    const tree = (mode: 'edit' | 'view', translate: (key: string) => string, locale: string) => (
+      <DocxEditorRoot
+        document={SOURCE}
+        mode={mode}
+        translate={translate}
+        locale={locale}
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const view = render(tree('edit', initialTranslate, 'en'));
+    const firstInstance = instance!;
+    let receivedTranslate: typeof updatedTranslate | undefined;
+    let receivedLocale: string | undefined;
+    const setTranslate = firstInstance.setTranslate.bind(firstInstance);
+    const setLocale = firstInstance.setLocale.bind(firstInstance);
+    firstInstance.setTranslate = (value) => {
+      receivedTranslate = value as typeof updatedTranslate;
+      setTranslate(value);
+    };
+    firstInstance.setLocale = (value) => {
+      receivedLocale = value;
+      setLocale(value);
+    };
+
+    await act(async () => {
+      view.rerender(tree('view', updatedTranslate, 'de'));
+    });
+    expect(instance).toBe(firstInstance);
+    expect(firstInstance.getEditingMode()).toBe('viewing');
+    expect(receivedTranslate?.('probe')).toBe('updated:probe');
+    expect(receivedLocale).toBe('de');
+  });
+
+  test('an unrelated rerender does not restore a host mode after a reader change', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const tree = (marker: string) => (
+      <DocxEditorRoot
+        document={SOURCE}
+        mode="edit"
+        onReady={(editor) => {
+          instance = editor as DocxEditorInstance;
+        }}
+      >
+        <span>{marker}</span>
+        <DocxEditorViewport>
+          <DocxEditorContent />
+        </DocxEditorViewport>
+      </DocxEditorRoot>
+    );
+    const view = render(tree('first'));
+    const firstInstance = instance!;
+    await act(async () => {
+      firstInstance.exec({ type: 'setEditingMode', mode: 'viewing' });
+      view.rerender(tree('second'));
+    });
+    expect(instance).toBe(firstInstance);
+    expect(firstInstance.getEditingMode()).toBe('viewing');
+  });
+
+  test('a locale catalog change updates translation without replacing the editor', async () => {
+    let instance: DocxEditorInstance | null = null;
+    const catalog = (label: string) => ({ image: { pendingResource: label } });
+    const tree = (label: string) => (
+      <LocaleProvider i18n={catalog(label)}>
+        <DocxEditorRoot
+          document={SOURCE}
+          onReady={(editor) => {
+            instance = editor as DocxEditorInstance;
+          }}
+        >
+          <DocxEditorViewport>
+            <DocxEditorContent />
+          </DocxEditorViewport>
+        </DocxEditorRoot>
+      </LocaleProvider>
+    );
+    const view = render(tree('First loading label'));
+    const firstInstance = instance!;
+    let resolver: ((key: string) => string) | undefined;
+    const setTranslate = firstInstance.setTranslate.bind(firstInstance);
+    firstInstance.setTranslate = (value) => {
+      resolver = value;
+      setTranslate(value);
+    };
+
+    await act(async () => {
+      view.rerender(tree('Second loading label'));
+    });
+    expect(instance).toBe(firstInstance);
+    expect(resolver?.('image.pendingResource')).toBe('Second loading label');
   });
 });

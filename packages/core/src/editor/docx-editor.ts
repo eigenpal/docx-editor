@@ -116,14 +116,6 @@ import {
   snapshotsEqual,
   unloadableSourceReason,
 } from './docx-editor-support.ts';
-import {
-  createT,
-  deepMerge,
-  en,
-  locales,
-  type LocaleCode,
-  type LocaleStrings,
-} from '@docx-editor.dev/i18n';
 import { execEditorCommand } from './docx-editor-exec.ts';
 import { createPublishSignal } from './surface-publish-signal.ts';
 import { FORMAT_PAINTER_OFF } from './surface-format-painter-contract.ts';
@@ -206,17 +198,17 @@ import {
   type PaginatedSurfaceOptions,
   type RemoteCaretLabelHost,
 } from './paginated-surface.ts';
-import { drawingPaintStringsFromTranslate } from '../output/semantic-paint-drawings.ts';
 import { surfaceScroller } from './surface-pages.ts';
 import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import {
+  documentEditingModeRestriction,
   documentTrackingAdoption,
   PRO_REVIEW_REASON,
-  resolveOpeningEditingMode,
 } from './opening-editing-mode.ts';
 import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
 import { initialsOfAuthor, normalizeEditorAuthor } from './docx-editor-author.ts';
+import { createDocxEditorHostConfigState } from './docx-editor-host-config.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -257,13 +249,8 @@ const EMPTY_FONT_SUBSTITUTIONS: readonly string[] = Object.freeze([]);
  * @public
  */
 export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
-  const localeCode =
-    config.locale && config.locale in locales ? (config.locale as LocaleCode) : ('en' as const);
-  const t = createT(
-    deepMerge(en, localeCode === 'en' ? undefined : locales[localeCode]) as LocaleStrings,
-    localeCode
-  );
-  const tocLabels = { title: t('toolbar.tableOfContents') };
+  const hostConfig = createDocxEditorHostConfigState(config);
+  let author = normalizeEditorAuthor(config.author);
   let container: HTMLElement | null = config.container ?? null;
   /**
    * The capability registry, resolved once — module registration is
@@ -288,7 +275,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * and the opening-mode decision below may move it. Declared here because the surface is
    * handed it at mount, and a document reload keeps the reader's choice.
    */
-  let editingMode: DocumentEditingMode = config.mode === 'view' ? 'viewing' : 'editing';
+  let editingMode: DocumentEditingMode = hostConfig.mode() === 'view' ? 'viewing' : 'editing';
 
   /**
    * The host rail's activation filter, held here so a surface rebuilt on load or font
@@ -315,14 +302,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let readerChoseMode = false;
   /** A refusal this facade made before the surface could see the request; see `snapshot`. */
   let facadeRejection: string | null = null;
-  let author = normalizeEditorAuthor(config.author);
-  const mode = config.mode ?? 'edit';
 
   // The HOST's opening mode, when `config.mode` is explicit — precedence and reasons live
   // in `opening-editing-mode.ts`. Applied before the first mount reads `editingMode`.
-  const openingModeDecision = resolveOpeningEditingMode(config.mode, {
+  const openingModeDecision = hostConfig.openingModeDecision({
     reviewEnabled,
-    hasAuthor: Boolean(config.author),
+    hasAuthor: Boolean(author),
   });
   if (openingModeDecision.mode !== null) editingMode = openingModeDecision.mode;
   if (openingModeDecision.rejection !== null) facadeRejection = openingModeDecision.rejection;
@@ -501,9 +486,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // as (`resolveFont`'s fallback below) — so a blank document's font box reads
       // "Calibri", not an em-dash.
       defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
-      ...(config.translate
-        ? { drawingStrings: drawingPaintStringsFromTranslate(config.translate) }
-        : {}),
+      drawingStrings: hostConfig.drawingStrings(),
       // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
       // which survives a document reload because the reader chose it, not the file.
       ...(author ? { author } : {}),
@@ -566,7 +549,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         bump();
         emitSelectionChange();
       },
-      tocLabels,
+      tocLabels: hostConfig.tocLabels(),
       onChange: (state) => {
         // The mount-time render reports before `surface` is assigned; nothing observable
         // has changed at that point, so it is not a selection change.
@@ -1080,7 +1063,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       editable:
         surface !== null &&
         surface.session.editable &&
-        mode !== 'view' &&
+        hostConfig.mode() !== 'view' &&
         editingMode !== 'viewing',
       zoom: zoomLane.zoom(),
       zoomMode: zoomLane.mode(),
@@ -1630,42 +1613,33 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * is published, lives with the decision: `documentTrackingAdoption` in
    * `opening-editing-mode.ts`.
    */
-  function adoptDocumentTracking(): void {
+  function documentTrackingDecision(currentMode = editingMode, readerChoice = readerChoseMode) {
     const tracking = documentTracking();
-    const decision = documentTrackingAdoption({
-      viewOnly: mode === 'view',
+    return documentTrackingAdoption({
+      viewOnly: hostConfig.mode() === 'view',
       reviewEnabled,
       hasAuthor: Boolean(author),
-      hostChoseMode: config.mode !== undefined,
-      readerChoseMode,
-      currentMode: editingMode,
+      hostChoseMode: hostConfig.mode() !== undefined,
+      readerChoseMode: readerChoice,
+      currentMode,
       trackRevisions: tracking.trackRevisions,
       restrictedToTrackedChanges: tracking.restrictedToTrackedChanges,
     });
-    if (decision.rejection !== null) facadeRejection = decision.rejection;
-    if (decision.mode !== 'suggesting') return;
-    editingMode = 'suggesting';
-    surface?.setEditingMode('suggest');
   }
 
-  /**
-   * The document's own refusal of a mode change, or null.
-   *
-   * `w:documentProtection/@w:edit="trackedChanges"` says the document permits editing ONLY as
-   * tracked changes, so leaving suggesting is refused. It is ADVISORY and never presented as
-   * enforcement — the password hash is not verified and the file is editable by anyone
-   * holding it — but ignoring it silently produces exactly the untracked edits its author
-   * asked not to have. Viewing is always reachable: reading less than the document permits
-   * is not something a protection setting has an interest in.
-   */
-  function modeRestriction(next: DocumentEditingMode): ExecResult | null {
-    if (next !== 'editing') return null;
-    if (!documentTracking().restrictedToTrackedChanges) return null;
-    return {
-      ok: false,
-      code: 'locked',
-      reason: 'this document permits editing only as tracked changes',
-    };
+  function applyEditingMode(next: DocumentEditingMode): void {
+    editingMode = next;
+    surface?.setEditingMode(
+      next === 'suggesting' ? 'suggest' : next === 'viewing' ? 'view' : 'edit'
+    );
+    surface?.setEditable(next !== 'viewing');
+  }
+
+  function adoptDocumentTracking(): void {
+    const decision = documentTrackingDecision();
+    if (decision.rejection !== null) facadeRejection = decision.rejection;
+    if (decision.mode !== 'suggesting') return;
+    applyEditingMode('suggesting');
   }
 
   function dateOfItem(item: ReviewItem): string | undefined {
@@ -1843,25 +1817,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // A document opened with `mode: 'view'` is read-only for the session. Letting the
         // control move off Viewing put "Editing" on the pill of a document where every
         // command was still refused.
-        if (mode === 'view' && command.mode !== 'viewing') {
+        if (hostConfig.mode() === 'view' && command.mode !== 'viewing') {
           return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
         }
         if (command.mode === 'suggesting' && !reviewEnabled) {
           return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
         }
-        const restriction = modeRestriction(command.mode);
+        const restriction = documentEditingModeRestriction(documentTracking(), command.mode);
         if (restriction) return restriction;
         readerChoseMode = true;
         facadeRejection = null;
-        editingMode = command.mode;
-        // The SURFACE decides what an op becomes, so it has to hear about this; `viewing`
-        // additionally gates every command below through `gateCommand`.
-        surface?.setEditingMode(
-          command.mode === 'suggesting' ? 'suggest' : command.mode === 'viewing' ? 'view' : 'edit'
-        );
-        // The DOM affordance is separate from the op gate: `setEditingMode` decides what a
-        // write becomes, this decides whether the browser offers one at all.
-        surface?.setEditable(command.mode !== 'viewing');
+        // The surface decides what an op becomes and whether the browser offers edits.
+        applyEditingMode(command.mode);
         bump();
         emitSelectionChange();
         return { ok: true, changed: false };
@@ -1891,7 +1858,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (editingMode === 'viewing' && viewingGate.supported && viewingGate.mutating) {
         return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
       }
-      const gated = gateCommand(command, surface, mode, options);
+      const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
       if (!gated.ok) return gated.refusal;
       const mounted = surface!;
       // Package revision covers body, furniture stories, and lifecycle ops; body-only
@@ -1916,7 +1883,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (command.type === 'insertImage' || command.type === 'replaceImage') {
         if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
         if (options?.scope) {
-          const scoped = gateCommand(command, surface, mode, options);
+          const scoped = gateCommand(command, surface, hostConfig.modeForGate(), options);
           if (!scoped.ok) return scoped.refusal;
         }
         return canAsyncImageCommandOf(command, surface);
@@ -1931,14 +1898,18 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (command.type === 'toggleReviewPane' && !reviewEnabled) {
           return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
         }
-        if (command.type === 'setEditingMode' && mode === 'view' && command.mode !== 'viewing') {
+        if (
+          command.type === 'setEditingMode' &&
+          hostConfig.mode() === 'view' &&
+          command.mode !== 'viewing'
+        ) {
           return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
         }
         if (command.type === 'setEditingMode') {
           if (command.mode === 'suggesting' && !reviewEnabled) {
             return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
           }
-          const restriction = modeRestriction(command.mode);
+          const restriction = documentEditingModeRestriction(documentTracking(), command.mode);
           if (restriction) return restriction;
         }
         return { ok: true };
@@ -1953,7 +1924,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (editingMode === 'viewing' && viewingSupport.supported && viewingSupport.mutating) {
         return { ok: false, code: 'locked', reason: 'the document is open for viewing' };
       }
-      const gated = gateCommand(command, surface, mode, options);
+      const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
       if (!gated.ok) return gated.refusal;
       if (
         command.type === 'proposeInsertion' ||
@@ -2121,7 +2092,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     canExecuteImageCommand(command, options) {
       if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
       if (options?.scope) {
-        const gated = gateCommand(command, surface, mode, options);
+        const gated = gateCommand(command, surface, hostConfig.modeForGate(), options);
         if (!gated.ok) return gated.refusal;
       }
       return canExecuteImageCommandOf(command, surface);
@@ -2233,6 +2204,36 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (author === normalized) return;
       author = normalized;
       surface?.setAuthor(author);
+      bump();
+      emitSelectionChange();
+    },
+    setMode(nextMode) {
+      if (!hostConfig.setMode(nextMode)) return;
+      readerChoseMode = false;
+      const hostDecision = hostConfig.openingModeDecision({
+        reviewEnabled,
+        hasAuthor: Boolean(author),
+      });
+      let next: DocumentEditingMode =
+        nextMode === 'view' ? 'viewing' : (hostDecision.mode ?? 'editing');
+      const documentDecision = documentTrackingDecision(next, false);
+      if (documentDecision.mode !== null) next = documentDecision.mode;
+      facadeRejection = documentDecision.rejection ?? hostDecision.rejection;
+      applyEditingMode(next);
+      bump();
+      emitSelectionChange();
+    },
+    setTranslate(nextTranslate) {
+      const drawingStrings = hostConfig.setTranslate(nextTranslate);
+      if (drawingStrings === null) return;
+      surface?.setDrawingStrings(drawingStrings);
+      bump();
+      emitSelectionChange();
+    },
+    setLocale(nextLocale) {
+      const labels = hostConfig.setLocale(nextLocale);
+      if (labels === null) return;
+      surface?.setTocLabels(labels);
       bump();
       emitSelectionChange();
     },
