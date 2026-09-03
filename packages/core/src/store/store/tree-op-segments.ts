@@ -18,6 +18,7 @@ import {
   isFldChar,
   isFldSimple,
   isInstrText,
+  type AtomicFieldSpan,
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
 import { isContentRevisionKind } from '../package/ooxml-shared.ts';
@@ -83,6 +84,14 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  */
 export function segmentsOf(paragraph: OoxmlParagraphNode): Segment[] {
   return walkParagraph(paragraph, null, null);
+}
+
+/** Build segments with field spans already computed by the caller. @internal */
+export function segmentsOfWithFieldSpans(
+  paragraph: OoxmlParagraphNode,
+  fieldSpans: readonly AtomicFieldSpan[]
+): Segment[] {
+  return walkParagraph(paragraph, null, null, fieldSpans);
 }
 
 export interface NoteSegmentProjection {
@@ -189,7 +198,8 @@ function buildParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffs
 function walkParagraph(
   paragraph: OoxmlParagraphNode,
   spans: Map<string, OffsetSpan> | null,
-  noteAncestors: Map<string, readonly OoxmlNode[]> | null
+  noteAncestors: Map<string, readonly OoxmlNode[]> | null,
+  suppliedFieldSpans?: readonly AtomicFieldSpan[]
 ): Segment[] {
   const segments: Segment[] = [];
   let offset = 0;
@@ -197,7 +207,7 @@ function walkParagraph(
   const record = (node: OoxmlNode, start: number): void => {
     if (spans !== null) spans.set(node.id, { start, end: offset });
   };
-  const atoms = atomicFieldSpansOf(paragraph);
+  const atoms = suppliedFieldSpans ?? atomicFieldSpansOf(paragraph);
   const noteAtoms = atomicNoteSpansOf(paragraph);
   const atomByBeginId = new Map(atoms.map((span) => [span.node.id, span]));
   const noteAtomById = new Map(noteAtoms.map((span) => [span.node.id, span]));

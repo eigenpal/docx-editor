@@ -59,6 +59,63 @@ describe('inserting text at a position', () => {
     expect(paragraphTexts(host, body)).toEqual(['<one', 'two>']);
   });
 
+  test('uses raw endpoints around a field while display reads show its result', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1 January 2030</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const paragraph = `<w:p><w:r><w:t>A</w:t></w:r>${field}<w:r><w:t>Z</w:t></w:r></w:p>`;
+
+    for (const [at, expected] of [
+      ['start', '<A1 January 2030Z'],
+      ['end', 'A1 January 2030Z>'],
+    ] as const) {
+      const host = open(docx(paragraph));
+      const body = bodyOf(host);
+      const [handle] = paragraphsOf(host, body);
+      const response = host.execute({
+        operations: [
+          { op: 'insertText', at: { paragraph: handle!, at }, text: at === 'start' ? '<' : '>' },
+        ],
+      });
+
+      expect(response.ok).toBe(true);
+      expect(paragraphTexts(host, body)).toEqual([expected]);
+    }
+
+    const host = open(docx(paragraph));
+    const body = bodyOf(host);
+    const [handle] = paragraphsOf(host, body);
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: { paragraph: handle! }, text: 'replacement' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['replacement']);
+  });
+
+  test('replaces the field atom behind a visible search result', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1 January 2030</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const host = open(docx(`<w:p><w:r><w:t>A</w:t></w:r>${field}<w:r><w:t>Z</w:t></w:r></w:p>`));
+    const body = bodyOf(host);
+    const [match] = spansAt(
+      host.execute({ operations: [{ op: 'search', scope: { body }, text: 'January' }] }),
+      0
+    );
+
+    const response = host.execute({
+      operations: [{ op: 'replaceSpan', span: match!, text: 'new' }],
+    });
+    expect(response.ok).toBe(true);
+    expect(paragraphTexts(host, body)).toEqual(['AnewZ']);
+  });
+
   test('two inserts into one paragraph shift each other, as two sequential edits would', () => {
     const host = open(docx(p('abcd')));
     const body = bodyOf(host);

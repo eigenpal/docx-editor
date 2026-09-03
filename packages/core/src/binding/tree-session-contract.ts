@@ -360,11 +360,10 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    */
   sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
   /**
-   * Every occurrence of `query` in the BODY story, in document order, addressed in the
-   * same offset vocabulary the tree ops and the surface selection use — so a match can be
-   * handed straight to `setSelection` without re-deriving anything.
+   * Every occurrence of `query` across editable stories, in navigation order. Each match uses
+   * the same offset vocabulary as tree operations and surface selections.
    *
-   * Memoized one deep, keyed on the revision AND the question asked: a find panel asks the
+   * Memoized one deep, keyed on the package revision AND the question asked: a find panel asks the
    * same question on every tick, and a different query replaces the entry rather than
    * growing a cache the session would have to bound.
    */

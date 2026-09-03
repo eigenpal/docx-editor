@@ -150,11 +150,11 @@ export interface AutomationError {
 /**
  * One end of a stretch of a story: a paragraph, and a UTF-16 offset in it.
  *
- * The only addressing vocabulary in this protocol. A stable paragraph handle plus a model
- * offset is what the tree ops take, what selection uses and what the layout reports — so a
- * position a consumer reads and a position it then writes at mean the same thing. Painted DOM
- * indices and document-wide character counters appear nowhere: the first is a picture, and the
- * second is a coordinate space no part of the engine maintains.
+ * The only addressing vocabulary in this protocol. A stable paragraph handle plus a raw model
+ * offset is what tree operations, selection, and layout use. Display text reads can expand field
+ * atoms and apply a review view. A client must not calculate offsets from display text. It can
+ * request the `model` projection when it needs text in this offset vocabulary. Painted DOM
+ * indices and document-wide character counters appear nowhere.
  */
 export interface AutomationEndpoint {
   /**

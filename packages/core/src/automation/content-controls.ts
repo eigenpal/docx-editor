@@ -109,7 +109,7 @@ export function contentControlSpan(
   if (held.length > 0) {
     const first = held[0]!;
     const last = held[held.length - 1]!;
-    const lastText = reads.paragraphText(last);
+    const lastText = reads.rawText(last);
     if (lastText === null || !reads.has(first)) return null;
     return {
       start: { paragraphId: first, offset: 0 },
@@ -138,7 +138,7 @@ export function contentControlText(
   node: OoxmlNode,
   projection: AutomationTextProjection = 'allMarkup'
 ): string {
-  // Preserve the existing content-control value semantics for ordinary reads.
+  // Control values keep their established semantics. They omit struck text and paragraph marks.
   if (projection === 'allMarkup') return contentControlTextOf(node);
   const span = contentControlSpan(reads, node);
   if (!span) return '';
@@ -149,7 +149,7 @@ export function contentControlText(
   for (let index = first; index <= last; index += 1) {
     const paragraphId = reads.paragraphIds[index]!;
     const projected = reads.projectedText(paragraphId, projection);
-    const raw = reads.paragraphText(paragraphId);
+    const raw = reads.rawText(paragraphId);
     if (!projected || raw === null) return '';
     text.push(
       projected.sliceRaw(

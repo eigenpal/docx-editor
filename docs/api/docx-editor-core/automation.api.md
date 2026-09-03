@@ -215,14 +215,18 @@ export type AutomationOperation =
 * Text of a body or a paragraph.
 *
 * A story reads as its paragraphs joined by a carriage return — one paragraph mark, one
-* `\r` — which is the separator Word's own text property uses.
+* `\r` — which is the separator Word's own text property uses. Display projections expand
+* fields, so clients must not derive model offsets from this text.
 */
 | {
     readonly op: 'getText';
     readonly projection?: AutomationTextProjection;
     readonly target: AutomationHandle;
 }
-/** Text between two endpoints, with a carriage return at every paragraph mark crossed. */
+/**
+* Display text between two endpoints, with a carriage return at each paragraph boundary.
+* Use the `model` projection when a client needs text in the endpoint offset vocabulary.
+*/
 | {
     readonly op: 'getSpanText';
     readonly projection?: AutomationTextProjection;
@@ -1132,7 +1136,7 @@ export type AutomationStoryId = {
 };
 
 // @public
-export type AutomationTextProjection = 'allMarkup' | 'original';
+export type AutomationTextProjection = 'allMarkup' | 'original' | 'model';
 
 // @public
 export type AutomationUnsubscribe = () => void;

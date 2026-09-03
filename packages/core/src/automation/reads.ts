@@ -6,10 +6,9 @@
 // drift from the headless one: it is not that two implementations agree, it is that there is
 // one implementation.
 //
-// TEXT COMES FROM `paragraphTextOf`, the same offset authority the tree ops validate against,
-// so a length a consumer reads and an offset it then writes at are the same vocabulary. A
-// paragraph text derived any other way — a layout span, a painted node, a projection — reads a
-// field or a note differently and puts every subsequent offset one character out.
+// RAW OFFSETS COME FROM `paragraphTextOf`, the same authority tree ops validate against.
+// Display reads use a projection that can expand one field atom into its visible result.
+// Projected ranges map back to the raw vocabulary before any write reaches the store.
 //
 // A DOCUMENT IS SEVERAL STORIES, and each is read on its own. The body, a header or footer per
 // variant per section, and one story per footnote and endnote: they live in different parts, hold
@@ -61,6 +60,7 @@ export interface AutomationParagraphRead {
   readonly nodeId: string;
   /** `w14:paraId` as the document writes it, or null when the file declared none. */
   readonly paraId: string | null;
+  /** Display text for the default review view. Do not derive model offsets from its length. */
   readonly text: string;
 }
 
@@ -123,9 +123,11 @@ export interface AutomationStoryReads {
    * alternative is every such read walking the part again to find a node this file already holds.
    */
   node(paragraphId: string): OoxmlNode | null;
-  /** A paragraph's text in model-offset vocabulary, or null when it is not in the story. */
+  /** A paragraph's raw model text. Every automation offset uses this vocabulary. */
+  rawText(paragraphId: string): string | null;
+  /** A paragraph's projected text. Display views can differ from model offset length. */
   paragraphText(paragraphId: string, projection?: AutomationTextProjection): string | null;
-  /** A paragraph projection with mappings back to model offsets. */
+  /** Projected text with mappings back to raw model offsets. */
   projectedText(
     paragraphId: string,
     projection?: AutomationTextProjection
@@ -281,9 +283,14 @@ function storyReadsOver(
     paragraph(paragraphId) {
       const node = byId.get(paragraphId);
       if (!node) return null;
-      return { nodeId: paragraphId, paraId: paraIdOf(node), text: rawTextOf(paragraphId) ?? '' };
+      return {
+        nodeId: paragraphId,
+        paraId: paraIdOf(node),
+        text: projectionOf(paragraphId)?.text ?? '',
+      };
     },
     node: (paragraphId) => byId.get(paragraphId) ?? null,
+    rawText: rawTextOf,
     paragraphText: (paragraphId, projection) => projectionOf(paragraphId, projection)?.text ?? null,
     projectedText: projectionOf,
     text: (projection) =>

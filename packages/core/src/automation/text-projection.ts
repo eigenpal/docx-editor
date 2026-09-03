@@ -1,35 +1,68 @@
 // Text projections for automation reads and searches.
 //
-// Model offsets always include every addressable segment. A projection can hide text from a
-// caller, but it must map every visible match back to that same model-offset space. Otherwise a
-// search can return words that its range cannot read, select, or edit.
+// Model offsets always include every addressable segment. A projection can show text that the
+// model does not address one-for-one. Every visible match still maps to one editable model range.
 
 import type { AutomationTextProjection } from './operations.ts';
 import type { OoxmlNode, OoxmlParagraphNode } from '../store/package/ooxml-tree.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import {
+  identityProjection,
+  projectionFromPieces,
+  visibleParagraphPieces,
+  type ProjectedParagraphText,
+  type VisiblePiece,
+} from '../store/store/text-projection.ts';
 
-interface VisiblePiece {
-  readonly projectedStart: number;
-  readonly projectedEnd: number;
-  readonly rawStart: number;
-  readonly rawEnd: number;
+export {
+  identityProjection,
+  projectionFromPieces,
+  projectVisibleParagraphText,
+  visibleParagraphPieces,
+  type ProjectedParagraphText,
+  type VisiblePiece,
+} from '../store/store/text-projection.ts';
+
+interface RawSpan {
+  readonly start: number;
+  readonly end: number;
 }
 
-/** One paragraph under a chosen text projection, with lossless links to model offsets. */
-export interface ProjectedParagraphText {
-  readonly text: string;
-  /** Map one model boundary into the projected UTF-16 offset space. */
-  projectedOffset(rawOffset: number): number;
-  /** Map a non-empty projected range back to one editable model range. */
-  rawRange(
-    start: number,
-    end: number
-  ): {
-    readonly start: number;
-    readonly end: number;
-  } | null;
-  /** Read a model range through this projection. */
-  sliceRaw(start: number, end: number): string;
+function clippedIdentityPiece(
+  piece: VisiblePiece,
+  start: number,
+  end: number
+): VisiblePiece | null {
+  if (start >= end) return null;
+  return {
+    text: piece.text.slice(start - piece.rawStart, end - piece.rawStart),
+    rawStart: start,
+    rawEnd: end,
+  };
+}
+
+function hideFromPiece(piece: VisiblePiece, hidden: readonly RawSpan[]): VisiblePiece[] {
+  const rawLength = piece.rawEnd - piece.rawStart;
+  if (piece.text.length !== rawLength) {
+    // Whole-atom revision wrappers are hidden here. Insertions inside a field result are
+    // removed while its cached result text is built.
+    const covered = hidden.some((span) => span.start < piece.rawEnd && span.end > piece.rawStart);
+    return covered ? [] : [piece];
+  }
+
+  const shown: VisiblePiece[] = [];
+  let cursor = piece.rawStart;
+  for (const span of hidden) {
+    if (span.end <= cursor) continue;
+    if (span.start >= piece.rawEnd) break;
+    const visible = clippedIdentityPiece(piece, cursor, Math.min(span.start, piece.rawEnd));
+    if (visible) shown.push(visible);
+    cursor = Math.max(cursor, span.end);
+    if (cursor >= piece.rawEnd) break;
+  }
+  const tail = clippedIdentityPiece(piece, cursor, piece.rawEnd);
+  if (tail) shown.push(tail);
+  return shown;
 }
 
 /** Build the projection once for one immutable paragraph node. */
@@ -38,102 +71,23 @@ export function projectParagraphText(
   rawText: string,
   projection: AutomationTextProjection
 ): ProjectedParagraphText {
-  if (projection === 'allMarkup') return identityProjection(rawText);
+  if (projection === 'model') return identityProjection(rawText);
+  const base = visibleParagraphPieces(paragraph, rawText, projection);
+  if (projection === 'allMarkup') return projectionFromPieces(base);
 
   const hidden = hiddenInsertionSpans(paragraph);
-  if (hidden.length === 0) return identityProjection(rawText);
-
+  if (hidden.length === 0) return projectionFromPieces(base);
   const pieces: VisiblePiece[] = [];
-  const text: string[] = [];
-  let raw = 0;
-  let projected = 0;
-  for (const span of hidden) {
-    if (raw < span.start) {
-      const value = rawText.slice(raw, span.start);
-      pieces.push({
-        projectedStart: projected,
-        projectedEnd: projected + value.length,
-        rawStart: raw,
-        rawEnd: span.start,
-      });
-      text.push(value);
-      projected += value.length;
-    }
-    raw = Math.max(raw, span.end);
+  for (const piece of base) {
+    for (const visible of hideFromPiece(piece, hidden)) pieces.push(visible);
   }
-  if (raw < rawText.length) {
-    const value = rawText.slice(raw);
-    pieces.push({
-      projectedStart: projected,
-      projectedEnd: projected + value.length,
-      rawStart: raw,
-      rawEnd: rawText.length,
-    });
-    text.push(value);
-  }
-
-  return projectionFromPieces(text.join(''), pieces);
-}
-
-function identityProjection(text: string): ProjectedParagraphText {
-  return projectionFromPieces(
-    text,
-    text.length === 0
-      ? []
-      : [{ projectedStart: 0, projectedEnd: text.length, rawStart: 0, rawEnd: text.length }]
-  );
-}
-
-function projectionFromPieces(
-  text: string,
-  pieces: readonly VisiblePiece[]
-): ProjectedParagraphText {
-  return {
-    text,
-    projectedOffset(rawOffset) {
-      let offset = 0;
-      for (const piece of pieces) {
-        if (rawOffset <= piece.rawStart) return offset;
-        offset += Math.max(0, Math.min(rawOffset, piece.rawEnd) - piece.rawStart);
-        if (rawOffset <= piece.rawEnd) return offset;
-      }
-      return offset;
-    },
-    rawRange(start, end) {
-      const first = pieces.find(
-        (piece) => start >= piece.projectedStart && start < piece.projectedEnd
-      );
-      const last = pieces.find((piece) => end > piece.projectedStart && end <= piece.projectedEnd);
-      if (!first || !last || start >= end) return null;
-      return {
-        start: first.rawStart + start - first.projectedStart,
-        end: last.rawStart + end - last.projectedStart,
-      };
-    },
-    sliceRaw(start, end) {
-      if (start >= end) return '';
-      return pieces
-        .map((piece) => {
-          const from = Math.max(start, piece.rawStart);
-          const to = Math.min(end, piece.rawEnd);
-          return from < to
-            ? text.slice(
-                piece.projectedStart + from - piece.rawStart,
-                piece.projectedStart + to - piece.rawStart
-              )
-            : '';
-        })
-        .join('');
-    },
-  };
+  return projectionFromPieces(pieces);
 }
 
 /** Pending insertions and move destinations are absent from Word's Original review view. */
-function hiddenInsertionSpans(
-  paragraph: OoxmlParagraphNode
-): readonly { readonly start: number; readonly end: number }[] {
+function hiddenInsertionSpans(paragraph: OoxmlParagraphNode): readonly RawSpan[] {
   const index = paragraphOffsetIndex(paragraph);
-  const found: { start: number; end: number }[] = [];
+  const found: RawSpan[] = [];
   const visit = (node: OoxmlNode, depth: number): void => {
     if (depth > 64 || node.kind === 'textValue') return;
     if (node.kind === 'revisionInsert' || node.kind === 'revisionMoveTo') {

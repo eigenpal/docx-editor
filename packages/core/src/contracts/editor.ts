@@ -476,7 +476,12 @@ export interface Editor {
     readonly underline?: boolean;
   } | null;
 
-  /** Find matches for a query, for the find/replace dialog. The BODY story only. */
+  /**
+   * Find across body, headers, footers, footnotes, then endnotes. Shared parts appear once.
+   *
+   * The search narrows to the body when the surface cannot open other stories. This includes
+   * viewing mode and surfaces without header, footer, or note entry methods.
+   */
   findMatches(
     query: string,
     options?: { readonly matchCase?: boolean; readonly wholeWord?: boolean }
@@ -997,6 +1002,7 @@ import type {
   TableCellVerticalAlignment,
   TableColumnDividerResizeTarget,
   TableColumnOccurrenceTarget,
+  TableContext,
   TableRightEdgeResizeTarget,
   TableRowOccurrenceTarget,
 } from './table-targets.ts';
@@ -1015,6 +1021,7 @@ export type {
   TableCellVerticalAlignment,
   TableColumnDividerResizeTarget,
   TableColumnOccurrenceTarget,
+  TableContext,
   TableRightEdgeResizeTarget,
   TableRowOccurrenceTarget,
 } from './table-targets.ts';
@@ -1441,21 +1448,6 @@ export interface EditorQueryResults extends DocQueryResults {
 }
 
 /**
- * Where the caret sits inside a table: the table's shape, and the cell holding it.
- *
- * Null from the `tableContext` query when the selection is not in a table at all, which is how
- * table-only chrome decides whether to render.
- */
-export interface TableContext {
-  readonly rows: number;
-  readonly columns: number;
-  /** Zero-based, within the table. */
-  readonly rowIndex: number;
-  /** Zero-based, within the row. */
-  readonly columnIndex: number;
-}
-
-/**
  * One occurrence of a search query in the document.
  *
  * Carries TWO addresses on purpose. `blockId` + `start` is the engine's own: stable
@@ -1465,18 +1457,26 @@ export interface TableContext {
  * guessing at run boundaries would send the selection to the wrong place.
  *
  * A match can span runs when formatting changes mid-word; the run address is where it
- * STARTS.
+ * STARTS. `scope` identifies a non-body story so navigation opens the correct surface.
+ * A match inside a field result reports the field atom's model range. Its `length` is one,
+ * while `text` carries the visible match and can be longer. Select with `start` and `length`.
+ * Never derive the selected length from `text.length`.
  */
 export interface TextMatch {
   readonly blockId: string;
   /** Character offset within the paragraph's concatenated run text. */
   readonly start: number;
   readonly length: number;
-  /** Ordinal among PARAGRAPHS in the body, skipping tables and other non-paragraph blocks. */
+  /**
+   * Paragraph ordinal within this match's story. Table and nested-table paragraphs count.
+   * Non-paragraph blocks add no ordinal.
+   */
   readonly paragraphIndex: number;
   /** Index of the run the match starts in, and the offset within that run. */
   readonly runIndex: number;
   readonly runOffset: number;
+  /** Story containing the match. Absence means the body. */
+  readonly scope?: ViewScope;
   /** The matched text as it appears in the document. */
   readonly text: string;
   /**

@@ -1035,7 +1035,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Searches the body story. Text in headers, footers and notes is not matched.',
+    notes: 'Searches headers, footers, footnotes, endnotes, table cells, and saved field results.',
   },
   {
     id: 'collab.clipboard',

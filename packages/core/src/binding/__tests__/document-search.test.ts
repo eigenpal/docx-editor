@@ -10,6 +10,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
+import { bodyStoryRoot, storyParagraphs } from '../../store/package/story-blocks.ts';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 import { collectTextMatches, SEARCH_MATCH_LIMIT, SEARCH_QUERY_MAX } from '../document-search.ts';
 
@@ -47,6 +48,23 @@ function open(bytes: Uint8Array): TreeDocxSession {
 
 const para = (...runs: string[]) => `<w:p>${runs.join('')}</w:p>`;
 const run = (text: string) => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
+const cell = (...blocks: string[]) => `<w:tc>${blocks.join('')}</w:tc>`;
+const row = (...cells: string[]) => `<w:tr>${cells.join('')}</w:tr>`;
+const table = (...rows: string[]) => `<w:tbl>${rows.join('')}</w:tbl>`;
+
+const complexField = (instruction: string, result: string) =>
+  '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+  `<w:r><w:instrText xml:space="preserve">${instruction}</w:instrText></w:r>` +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+  run(result) +
+  '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+
+const complexFieldMarkup = (instruction: string, result: string) =>
+  '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+  `<w:r><w:instrText xml:space="preserve">${instruction}</w:instrText></w:r>` +
+  '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+  result +
+  '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
 
 function search(body: string, query: string, options?: Parameters<typeof collectTextMatches>[2]) {
   return collectTextMatches(open(docx(body)).part(), query, options);
@@ -124,14 +142,83 @@ describe('collectTextMatches', () => {
     expect(matches[0]!.runOffset).toBe(1);
   });
 
-  test('does not descend into table cells, matching the contract paragraph ordinal', () => {
-    const body =
-      para(run('Body Exhibit.')) +
-      `<w:tbl><w:tr><w:tc>${para(run('Cell Exhibit.'))}</w:tc></w:tr></w:tbl>`;
-    const { matches } = search(body, 'Exhibit');
+  test('finds a cell in a 2x3 table by its paragraph block id', () => {
+    const body = table(
+      row(cell(para(run('one'))), cell(para(run('two'))), cell(para(run('three')))),
+      row(cell(para(run('four'))), cell(para(run('five'))), cell(para(run('six'))))
+    );
+    const session = open(docx(body));
+    const root = bodyStoryRoot(session.part());
+    if (!root) throw new Error('body missing');
+    const cellParagraph = storyParagraphs(root)[3]!;
+    const { matches } = collectTextMatches(session.part(), 'four');
 
     expect(matches).toHaveLength(1);
-    expect(matches[0]!.paragraphIndex).toBe(0);
+    expect(matches[0]!.blockId).toBe(cellParagraph.id);
+    expect(matches[0]!.paragraphIndex).toBe(3);
+  });
+
+  test('finds text in a nested table', () => {
+    const nested = table(row(cell(para(run('outer')), table(row(cell(para(run('deep'))))))));
+    expect(search(nested, 'deep').matches).toHaveLength(1);
+  });
+
+  test('finds a paragraph in a block content control', () => {
+    const body = `<w:sdt><w:sdtPr/><w:sdtContent>${para(run('controlled'))}</w:sdtContent></w:sdt>`;
+    expect(search(body, 'controlled').matches).toHaveLength(1);
+  });
+
+  test('keeps body, cell, and later body paragraphs in document order', () => {
+    const body =
+      para(run('needle before')) +
+      table(row(cell(para(run('needle cell'))))) +
+      para(run('needle after'));
+    const { matches } = search(body, 'needle');
+
+    expect(matches.map((match) => match.paragraphIndex)).toEqual([0, 1, 2]);
+  });
+
+  test('searches a visible field result through its one model atom', () => {
+    const body = para(
+      run('Renewal date: '),
+      complexField(' DATE \\@ "d MMMM yyyy" ', '1 January 2030'),
+      run(' is synthetic.')
+    );
+    const result = search(body, '1 January 2030', { matchCase: true });
+
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]).toMatchObject({
+      start: 'Renewal date: '.length,
+      length: 1,
+      text: '1 January 2030',
+    });
+    expect(search(body, '\uFFFC').matches).toEqual([]);
+  });
+
+  test('reports repeated text inside one field result as one atom match', () => {
+    const result = search(para(run('A'), complexField(' PAGE ', 'x x'), run('B')), 'x');
+
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]).toMatchObject({ start: 1, length: 1, text: 'x' });
+    expect(result.truncated).toBe(false);
+  });
+
+  test('keeps store segment order for a nested simple field without endorsing visible order', () => {
+    const simple = `<w:fldSimple w:instr=" PAGE ">${run('7')}</w:fldSimple>`;
+    const outer = complexFieldMarkup(' IF ', run('x') + simple + run('y'));
+    const result = search(para(run('A'), outer, run('Z')), '7');
+
+    expect(result.matches).toHaveLength(1);
+    expect(result.matches[0]).toMatchObject({ start: 2, length: 1, text: '7' });
+  });
+
+  test('uses model run spans for matches around an atomic field', () => {
+    const body = para(run('A'), complexField(' PAGE ', '12'), run('B'));
+    const after = search(body, 'B').matches[0];
+    const fieldResult = search(body, '12').matches[0];
+
+    expect(after).toMatchObject({ start: 2, runIndex: 6, runOffset: 0 });
+    expect(fieldResult).toMatchObject({ start: 1, runIndex: 1, runOffset: 0 });
   });
 
   test('flattens control characters out of every string it returns', () => {

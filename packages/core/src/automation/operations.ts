@@ -123,7 +123,7 @@ export type AutomationParagraphRef =
 export interface AutomationSearchOptions {
   readonly matchCase?: boolean;
   readonly matchWholeWord?: boolean;
-  /** Text view to search. `allMarkup` preserves the historical behavior. */
+  /** Display or raw model text to search. `allMarkup` preserves the historical behavior. */
   readonly projection?: AutomationTextProjection;
   /** Not supported; `true` is refused. Punctuation-insensitive matching is not implemented. */
   readonly ignorePunct?: boolean;
@@ -136,12 +136,14 @@ export interface AutomationSearchOptions {
 }
 
 /**
- * Which revision text an automation read exposes.
+ * Which text an automation read exposes.
  *
  * `allMarkup` includes pending insertions, deletions, and both sides of replacements. `original`
  * matches Word's Original review view: deletions remain visible and insertions are hidden.
+ * Both are display text and expand saved field results. `model` returns raw model text with
+ * atomic fields represented by `U+FFFC`. Only `model` shares the protocol's offset vocabulary.
  */
-export type AutomationTextProjection = 'allMarkup' | 'original';
+export type AutomationTextProjection = 'allMarkup' | 'original' | 'model';
 
 /** Where a selection lands. `start`/`end` collapse it to one edge of the span. */
 export type AutomationSelectionMode = 'select' | 'start' | 'end';
@@ -172,14 +174,18 @@ export type AutomationOperation =
    * Text of a body or a paragraph.
    *
    * A story reads as its paragraphs joined by a carriage return — one paragraph mark, one
-   * `\r` — which is the separator Word's own text property uses.
+   * `\r` — which is the separator Word's own text property uses. Display projections expand
+   * fields, so clients must not derive model offsets from this text.
    */
   | {
       readonly op: 'getText';
       readonly target: AutomationHandle;
       readonly projection?: AutomationTextProjection;
     }
-  /** Text between two endpoints, with a carriage return at every paragraph mark crossed. */
+  /**
+   * Display text between two endpoints, with a carriage return at each paragraph boundary.
+   * Use the `model` projection when a client needs text in the endpoint offset vocabulary.
+   */
   | {
       readonly op: 'getSpanText';
       readonly span: AutomationSpanRef;

@@ -935,14 +935,20 @@ export function openTreeSession(
 
       findText(query, options) {
         const store = bodyStore();
+        const revision = packageStore.packageRevision;
         const key = `${options?.matchCase === true ? 'c' : ''}${
           options?.wholeWord === true ? 'w' : ''
-        }${options?.limit ?? ''}${'\u0000'}${query}`;
-        if (searchCache && searchCache.revision === store.revision && searchCache.key === key) {
+        }${options?.limit ?? ''}:${options?.stories ?? 'all'}${'\u0000'}${query}`;
+        if (searchCache && searchCache.revision === revision && searchCache.key === key) {
           return searchCache.result;
         }
-        const result = collectTextMatches(store.part, query, options ?? {});
-        searchCache = { revision: store.revision, key, result };
+        const pkg = currentPackage();
+        const result = collectTextMatches(store.part, query, options ?? {}, {
+          headerFooterBySection: resolvedHeaderFooterBySection().resolution,
+          footnotes: resolveNotesPart(pkg, 'footnote') ?? null,
+          endnotes: resolveNotesPart(pkg, 'endnote') ?? null,
+        });
+        searchCache = { revision, key, result };
         return result;
       },
 

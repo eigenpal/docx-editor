@@ -101,6 +101,12 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 import { createAnchorIndex } from './docx-editor-anchors.ts';
+import {
+  enterStoryPosition,
+  leaveScopeForBodyParagraph,
+  searchStoriesForSurface,
+  selectDocumentSearchMatch,
+} from './docx-editor-story-navigation.ts';
 import { fragmentParagraphs } from '../layout/line-segments.ts';
 import {
   classifyCommand,
@@ -1339,26 +1345,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return noteStoryScopeOf(item) ?? { kind: 'body' };
   }
 
-  /**
-   * Leave the open header/footer or note story when the paragraph being navigated to does
-   * not live in it.
-   *
-   * Every "go to this position" API addresses a paragraph, and an open furniture scope makes
-   * that address ambiguous: a body id set while a header is open clamps the caret back into
-   * the story the reader is in, and the surface then refuses each keystroke as
-   * `unknown-paragraph` — the page scrolls to the target and typing goes nowhere. Called
-   * BEFORE the selection is set, so the caret lands in the story that owns it.
-   */
-  function leaveScopeForParagraph(paragraphId: string): void {
-    if (!surface || surface.activeScope().kind === 'body') return;
-    // Only for a BODY target. A paragraph belonging to some other story is not somewhere
-    // leaving this one would help, and in-story navigation must not close the story the
-    // reader opened.
-    if (!surface.session.paragraphIds().includes(paragraphId)) return;
-    surface.exitNote?.();
-    surface.exitHeaderFooter?.();
-  }
-
   /** Word writes `@w:date` to the second; milliseconds group with nothing. */
   const secondsPrecisionNow = (): string => `${new Date().toISOString().slice(0, 19)}Z`;
 
@@ -2064,48 +2050,21 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     getSelectionFormatting: () =>
       selectionFormattingHalfPoints(surface ? snapshotNow().formatting : null),
 
-    // Search reads the canonical tree through the session's memo, so repeated identical
-    // questions (a find panel re-rendering, a next/previous press) cost nothing. The
-    // `truncated` half of the derivation is dropped here because this member's declared
-    // answer is an array; a caller comparing the length against the documented cap learns
-    // the same thing.
     findMatches: (query, options) =>
       surface?.session.findText(query, {
         ...(options?.matchCase !== undefined ? { matchCase: options.matchCase } : {}),
         ...(options?.wholeWord !== undefined ? { wholeWord: options.wholeWord } : {}),
+        stories: searchStoriesForSurface(surface, editingMode),
       }).matches ?? [],
 
-    // Finding is a read and selecting is a write, so this is the only half that moves the
-    // caret. The match already carries the paragraph id and the offsets in the surface's
-    // own vocabulary, so there is nothing to re-derive — and REVEALING is separate from
-    // selecting, because moving the caret does not move the viewport: a match twenty pages
-    // down would otherwise be selected where nobody could see it.
+    // Selection uses the match's model address and then reveals its paragraph.
     selectMatch(match: TextMatch): ExecResult {
       // Same rule as `exec`: a selection aimed into the yield window lands, not refuses.
       openScheduler.flush();
       if (!surface) {
         return { ok: false, code: 'notFound', reason: 'no document is loaded' };
       }
-      if (
-        typeof match?.blockId !== 'string' ||
-        match.blockId.length === 0 ||
-        !Number.isInteger(match.start) ||
-        match.start < 0 ||
-        !Number.isInteger(match.length) ||
-        match.length < 0
-      ) {
-        return { ok: false, code: 'invalidArgs', reason: 'match must carry a blockId and offsets' };
-      }
-      // A hit in the body while a header is open belongs to the body: land the caret in the
-      // story that owns it, or the selection clamps back into the furniture and the reader
-      // types into nothing.
-      leaveScopeForParagraph(match.blockId);
-      surface.setSelection({
-        anchor: { paragraphId: match.blockId, offset: match.start },
-        head: { paragraphId: match.blockId, offset: match.start + match.length },
-      });
-      surface.revealParagraph(match.blockId);
-      return { ok: true, changed: false };
+      return selectDocumentSearchMatch(surface, match);
     },
 
     getSelectedImage: () => snapshotNow().image,
@@ -2309,31 +2268,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // its scope names the NOTE rather than the part. Without this the note's own
       // paragraph id went to a body selection, which clamps it to an unrelated position.
       const note = home === null && item ? noteHomeOf(item) : null;
-      if (home !== null) {
-        const entered = surface.enterHeaderFooter?.({
-          rId: home.rId,
-          kind: home.kind,
-          position: { paragraphId: range.start.paragraphId, offset: range.start.offset },
-        });
-        if (!entered) {
-          return {
-            ok: false,
-            code: 'unsupported',
-            reason: 'the header or footer this change lives in could not be opened',
-          };
-        }
-      } else if (note !== null) {
-        const entered = surface.enterNote?.(note, {
-          paragraphId: range.start.paragraphId,
-          offset: range.start.offset,
-        });
-        if (!entered) {
-          return {
-            ok: false,
-            code: 'unsupported',
-            reason: 'the note this change lives in could not be opened',
-          };
-        }
+      if (home !== null || note !== null) {
+        const target =
+          home !== null
+            ? { kind: 'headerFooter' as const, rId: home.rId, furnitureKind: home.kind }
+            : { kind: 'note' as const, id: note! };
+        const entered = enterStoryPosition(surface, target, range.start);
+        if (!entered.ok) return entered;
       } else {
         // Card to document. The caret may be parked in a furniture or note scope from the
         // PREVIOUS card — leave it first, exactly as the pointer path does, or the body
@@ -2585,7 +2526,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // Revealing a body block is a move OUT of an open header or note: the outline and the
       // search pane both drive this, and leaving the scope on the furniture left the reader
       // looking at the body with every keystroke going to a story off screen.
-      leaveScopeForParagraph(blockId);
+      if (surface) leaveScopeForBodyParagraph(surface, blockId);
       return surface?.revealParagraph(blockId) ?? false;
     },
 

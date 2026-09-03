@@ -12,30 +12,31 @@
 // runs against a SINGLE character at a time for the whole-word test, where there is no
 // backtracking to trigger.
 //
-// OFFSETS ARE `paragraphTextOf`'s VOCABULARY — UTF-16 offsets with tabs and hard breaks
-// counted as one character each — the same offsets the tree ops and the surface selection
-// use. That is what lets `selectMatch` hand a match straight to `setSelection` without
-// re-deriving anything.
+// OFFSETS ARE `paragraphTextOf`'s VOCABULARY — UTF-16 offsets with tabs, hard breaks, and
+// atomic fields counted as one character each. Match text and context use the visible text
+// projection, so a field result can be longer than the editable model range it maps to.
 //
-// WHAT IS SEARCHED: body-story paragraphs (direct children of `w:body`), matching the
-// contract's `TextMatch.paragraphIndex` definition — "ordinal among PARAGRAPHS in the body,
-// skipping tables and other non-paragraph blocks". Table-cell text is therefore not found
-// yet; widening to `allParagraphs` needs the contract's ordinal to be redefined first.
+// WHAT IS SEARCHED: body, furniture, footnotes, then endnotes. Each story uses the shared
+// paragraph walk, which descends into tables, nested tables, and block controls. Text-box
+// stories remain excluded until the surface can place a caret inside them.
 
 import {
   SEARCH_MATCH_LIMIT,
   SEARCH_QUERY_MAX,
-  findOccurrences,
   isSearchableQuery,
   paragraphTextOf,
 } from '@docx-editor.dev/core/store';
+import type { ViewScope } from '../contracts/editor.ts';
 import {
-  contentControlContentOf,
-  isContentControl,
-  walkParagraphInline,
-} from '../store/package/content-control-walk.ts';
-import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
-import { bodyParagraphs } from './tree-binding.ts';
+  headerFooterVariantCanPaint,
+  type HeaderFooterSectionResolution,
+} from '../store/package/hf-references.ts';
+import { formatNoteScopeId, noteIdOf, type NoteKind } from '../store/package/note-nodes.ts';
+import { bodyStoryRoot, storyParagraphs, storyRootsOf } from '../store/package/story-blocks.ts';
+import { walkParagraphInline } from '../store/package/content-control-walk.ts';
+import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import { projectVisibleParagraphText } from '../store/store/text-projection.ts';
+import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 
 export { SEARCH_MATCH_LIMIT, SEARCH_QUERY_MAX };
 
@@ -51,10 +52,12 @@ export interface DocumentSearchOptions {
   readonly wholeWord?: boolean;
   /** Override the default {@link SEARCH_MATCH_LIMIT}. Clamped to it; never raised past it. */
   readonly limit?: number;
+  /** Stories the facade can navigate in its current mode. */
+  readonly stories?: 'all' | 'body';
 }
 
 /**
- * One occurrence of a query in the body story.
+ * One occurrence of a query in an editable document story.
  *
  * Carries the engine's own address (`blockId` + `start`) and the positional one a find UI
  * needs (`paragraphIndex` / `runIndex` / `runOffset`), both derived from the SAME walk —
@@ -69,12 +72,21 @@ export interface DocumentSearchMatch {
   readonly paragraphIndex: number;
   readonly runIndex: number;
   readonly runOffset: number;
+  /** Story containing the match. Omitted for the body. */
+  readonly scope?: ViewScope;
   /** The matched text as it appears in the document, control characters flattened. */
   readonly text: string;
   /** Paragraph text immediately before the match, bounded and flattened. */
   readonly contextBefore: string;
   /** Paragraph text immediately after the match, bounded and flattened. */
   readonly contextAfter: string;
+}
+
+/** Package stories outside the body, supplied without opening their story stores. */
+export interface DocumentSearchSources {
+  readonly headerFooterBySection: readonly HeaderFooterSectionResolution[];
+  readonly footnotes: OoxmlPart | null;
+  readonly endnotes: OoxmlPart | null;
 }
 
 /**
@@ -88,51 +100,81 @@ export interface DocumentSearchResult {
   readonly truncated: boolean;
 }
 
-function isElement(node: OoxmlNode): node is Exclude<OoxmlNode, { kind: 'textValue' }> {
-  return node.kind !== 'textValue';
-}
-
-/**
- * The measurable length of one inline node, in `paragraphTextOf`'s vocabulary: text
- * contributes its characters, a tab and a hard break contribute one each, and properties
- * contribute nothing.
- */
-function inlineLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
-  if (node.kind === 'hyperlink' || isContentControl(node)) {
-    let total = 0;
-    const children =
-      node.kind === 'hyperlink' ? node.children : (contentControlContentOf(node) ?? []);
-    for (const child of children) total += inlineLength(child);
-    return total;
-  }
-  let total = 0;
-  for (const child of node.children) total += inlineLength(child);
-  return total;
-}
-
 /**
  * Where each run starts, in paragraph-text offsets, in document order. Runs nested inside
  * a `w:hyperlink` are flattened in place: a link's runs are runs, and a find UI addressing
  * "the third run" means the third one you would meet reading the paragraph.
  */
-function runStarts(paragraph: OoxmlNode): number[] {
+function runStarts(paragraph: OoxmlParagraphNode): number[] {
   const starts: number[] = [];
-  let offset = 0;
-  if (!isElement(paragraph)) return starts;
+  const offsets = paragraphOffsetIndex(paragraph);
   walkParagraphInline(paragraph.children, 0, (node) => {
-    if (node.kind === 'run') {
-      starts.push(offset);
-      offset += inlineLength(node);
-      return;
-    }
-    // Everything else at paragraph level (properties, bookmarks, unmodelled content)
-    // contributes its own measurable length without being addressable as a run.
-    offset += inlineLength(node);
+    if (node.kind !== 'run') return;
+    starts.push(offsets.spanOf(node)?.start ?? 0);
   });
   return starts;
+}
+
+interface SearchStory {
+  readonly part: OoxmlPart;
+  readonly root: OoxmlNode;
+  readonly scope?: ViewScope;
+}
+
+function bodyStories(part: OoxmlPart): SearchStory[] {
+  const body = bodyStoryRoot(part);
+  return body ? [{ part, root: body }] : [];
+}
+
+function furnitureStories(
+  sections: readonly HeaderFooterSectionResolution[],
+  seen: Set<OoxmlPart>
+): SearchStory[] {
+  const stories: SearchStory[] = [];
+  for (const section of sections) {
+    for (const kind of ['header', 'footer'] as const) {
+      const slots = kind === 'header' ? section.headers : section.footers;
+      for (const [variant, slot] of slots) {
+        if (!headerFooterVariantCanPaint(section, variant)) continue;
+        if (seen.has(slot.part)) continue;
+        seen.add(slot.part);
+        const story = storyRootsOf(slot.part).find((candidate) => candidate.kind === kind);
+        if (story) {
+          stories.push({
+            part: slot.part,
+            root: story.root,
+            scope: { kind: 'headerFooter', rId: slot.rId },
+          });
+        }
+      }
+    }
+  }
+  return stories;
+}
+
+function noteStories(part: OoxmlPart | null, noteKind: NoteKind): SearchStory[] {
+  if (!part) return [];
+  const stories: SearchStory[] = [];
+  for (const story of storyRootsOf(part)) {
+    const noteId = noteIdOf(story.root);
+    if (story.kind !== 'note' || noteId === null) continue;
+    stories.push({
+      part,
+      root: story.root,
+      scope: { kind: 'note', id: formatNoteScopeId(noteKind, noteId) },
+    });
+  }
+  return stories;
+}
+
+function searchStories(part: OoxmlPart, sources?: DocumentSearchSources): SearchStory[] {
+  const stories = bodyStories(part);
+  if (!sources) return stories;
+  const seen = new Set<OoxmlPart>();
+  for (const story of furnitureStories(sources.headerFooterBySection, seen)) stories.push(story);
+  for (const story of noteStories(sources.footnotes, 'footnote')) stories.push(story);
+  for (const story of noteStories(sources.endnotes, 'endnote')) stories.push(story);
+  return stories;
 }
 
 /** The run a paragraph offset falls in, and the offset inside it. */
@@ -141,8 +183,6 @@ function runAddressAt(
   offset: number
 ): { index: number; offset: number } {
   if (starts.length === 0) return { index: 0, offset };
-  // Linear from the end: a paragraph has few runs, and a binary search here would be
-  // more code than the walk it replaces.
   for (let index = starts.length - 1; index >= 0; index -= 1) {
     const start = starts[index]!;
     if (offset >= start) return { index, offset: offset - start };
@@ -156,7 +196,7 @@ function bounded(raw: string, max: number): string {
 }
 
 /**
- * Every occurrence of `query` in the body story, in document order.
+ * Every occurrence of `query` across stories, in navigation order.
  *
  * Matches are NON-OVERLAPPING, which is what a find dialog counts: searching `aa` in
  * `aaaa` finds two, not three. An empty or over-long query finds nothing rather than
@@ -165,7 +205,8 @@ function bounded(raw: string, max: number): string {
 export function collectTextMatches(
   part: OoxmlPart,
   query: string,
-  options: DocumentSearchOptions = {}
+  options: DocumentSearchOptions = {},
+  sources?: DocumentSearchSources
 ): DocumentSearchResult {
   const empty: DocumentSearchResult = { matches: [], truncated: false };
   if (!isSearchableQuery(query)) return empty;
@@ -180,40 +221,49 @@ export function collectTextMatches(
   };
 
   const matches: DocumentSearchMatch[] = [];
-  let paragraphIndex = 0;
+  const searchableSources = options.stories === 'body' ? undefined : sources;
+  for (const story of searchStories(part, searchableSources)) {
+    let paragraphIndex = 0;
+    for (const paragraph of storyParagraphs(story.root)) {
+      if (paragraph.kind !== 'paragraph') continue;
+      const index = paragraphIndex;
+      paragraphIndex += 1;
+      const rawText = paragraphTextOf(story.part, paragraph.id) ?? '';
+      const projected = projectVisibleParagraphText(paragraph, rawText);
+      if (projected.text.length === 0) continue;
 
-  for (const paragraph of bodyParagraphs(part)) {
-    if (!isElement(paragraph)) continue;
-    const index = paragraphIndex;
-    paragraphIndex += 1;
-    const text = paragraphTextOf(part, paragraph.id) ?? '';
-    if (text.length === 0) continue;
-
-    // One global budget, not one per paragraph: the cap is on the whole search.
-    const found = findOccurrences(text, query, limit - matches.length, scan);
-    // Run starts are derived once per paragraph that has a hit, not per paragraph:
-    // most paragraphs in a document do not match, and the walk is the expensive half.
-    let starts: number[] | null = null;
-    for (const occurrence of found.matches) {
-      const end = occurrence.start + occurrence.length;
-      starts ??= runStarts(paragraph);
-      const address = runAddressAt(starts, occurrence.start);
-      matches.push({
-        blockId: paragraph.id,
-        start: occurrence.start,
-        length: occurrence.length,
-        paragraphIndex: index,
-        runIndex: address.index,
-        runOffset: address.offset,
-        text: bounded(text.slice(occurrence.start, end), SEARCH_QUERY_MAX),
-        contextBefore: bounded(
-          text.slice(Math.max(0, occurrence.start - CONTEXT_RADIUS), occurrence.start),
-          CONTEXT_RADIUS
-        ),
-        contextAfter: bounded(text.slice(end, end + CONTEXT_RADIUS), CONTEXT_RADIUS),
-      });
+      // One global budget, not one per paragraph or story.
+      const remaining = limit - matches.length;
+      // Once full, scan for one more occurrence to distinguish an exact total from truncation.
+      const found = projected.findOccurrences(query, Math.max(remaining, 1), scan);
+      if (remaining === 0 && found.matches.length > 0) return { matches, truncated: true };
+      // Run starts are derived once per paragraph that has a hit, not per occurrence.
+      let starts: number[] | null = null;
+      for (const occurrence of found.matches) {
+        const projectedEnd = occurrence.start + occurrence.length;
+        starts ??= runStarts(paragraph);
+        const address = runAddressAt(starts, occurrence.rawStart);
+        matches.push({
+          blockId: paragraph.id,
+          start: occurrence.rawStart,
+          length: occurrence.rawEnd - occurrence.rawStart,
+          paragraphIndex: index,
+          runIndex: address.index,
+          runOffset: address.offset,
+          ...(story.scope ? { scope: story.scope } : {}),
+          text: bounded(projected.text.slice(occurrence.start, projectedEnd), SEARCH_QUERY_MAX),
+          contextBefore: bounded(
+            projected.text.slice(Math.max(0, occurrence.start - CONTEXT_RADIUS), occurrence.start),
+            CONTEXT_RADIUS
+          ),
+          contextAfter: bounded(
+            projected.text.slice(projectedEnd, projectedEnd + CONTEXT_RADIUS),
+            CONTEXT_RADIUS
+          ),
+        });
+      }
+      if (found.truncated) return { matches, truncated: true };
     }
-    if (found.truncated) return { matches, truncated: true };
   }
 
   return { matches, truncated: false };
