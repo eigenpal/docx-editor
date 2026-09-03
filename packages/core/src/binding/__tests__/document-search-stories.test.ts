@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
+import { MAX_NOTES_PER_PART } from '../../store/package/note-nodes.ts';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -114,6 +115,31 @@ function variantFixture(titlePage: boolean, evenAndOddHeaders: boolean): Uint8Ar
   });
 }
 
+function footnoteFixture(notes: string): Uint8Array {
+  return zipSync(
+    {
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}"><w:body>${p('body')}</w:body></w:document>`
+      ),
+      'word/_rels/document.xml.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rFootnotes" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
+      ),
+      'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W}">${notes}</w:footnotes>`),
+    },
+    { level: 0 }
+  );
+}
+
 function open(bytes: Uint8Array = fixture()): TreeDocxSession {
   const result = openTreeSession(bytes);
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
@@ -137,6 +163,40 @@ describe('navigation Find stories', () => {
 
   test('skips separator notes', () => {
     expect(open().findText('separator-only').matches).toEqual([]);
+  });
+
+  test('searches only the first note with a duplicate id', () => {
+    const notes =
+      `<w:footnote w:id="1">${p('duplicate first')}</w:footnote>` +
+      `<w:footnote w:id="1">${p('duplicate second')}</w:footnote>`;
+    const matches = open(footnoteFixture(notes)).findText('duplicate').matches;
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.scope).toEqual({ kind: 'note', id: 'footnote:1' });
+    expect(matches[0]?.contextAfter.trim()).toBe('first');
+  });
+
+  test('skips a nested note element', () => {
+    const notes =
+      `<w:footnote w:id="1">${p('outer note')}` +
+      `<w:footnote w:id="2">${p('nested target')}</w:footnote></w:footnote>`;
+
+    expect(open(footnoteFixture(notes)).findText('nested target').matches).toEqual([]);
+  });
+
+  test('honours the note navigation count cap', () => {
+    const prefix = Array.from(
+      { length: MAX_NOTES_PER_PART - 1 },
+      (_, index) => `<w:footnote w:id="${index + 1}"/>`
+    ).join('');
+    const notes =
+      prefix +
+      `<w:footnote w:id="${MAX_NOTES_PER_PART}">${p('inside cap')}</w:footnote>` +
+      `<w:footnote w:id="${MAX_NOTES_PER_PART + 1}">${p('outside cap')}</w:footnote>`;
+    const session = open(footnoteFixture(notes));
+
+    expect(session.findText('inside cap').matches).toHaveLength(1);
+    expect(session.findText('outside cap').matches).toEqual([]);
   });
 
   test('skips text-box stories until the surface can address them', () => {

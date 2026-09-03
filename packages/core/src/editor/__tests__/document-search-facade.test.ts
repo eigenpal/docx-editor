@@ -97,6 +97,23 @@ describe('document search facade', () => {
     editor.destroy();
   });
 
+  test('selects every note match that search reports', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: storyParityDocx(),
+    });
+    const matches = editor
+      .findMatches('Alpha')
+      .filter((candidate) => candidate.scope?.kind === 'note');
+
+    expect(matches).toHaveLength(2);
+    for (const match of matches) {
+      expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+      expect(editor.getActiveScope()).toEqual(match.scope);
+    }
+    editor.destroy();
+  });
+
   test('leaves an open header when selecting a body match', () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),

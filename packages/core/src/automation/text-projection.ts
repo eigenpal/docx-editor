@@ -23,7 +23,7 @@ export {
   type VisiblePiece,
 } from '../store/store/text-projection.ts';
 
-interface RawSpan {
+export interface RawSpan {
   readonly start: number;
   readonly end: number;
 }
@@ -41,27 +41,43 @@ function clippedIdentityPiece(
   };
 }
 
-function hideFromPiece(piece: VisiblePiece, hidden: readonly RawSpan[]): VisiblePiece[] {
-  const rawLength = piece.rawEnd - piece.rawStart;
-  if (piece.text.length !== rawLength) {
-    // Whole-atom revision wrappers are hidden here. Insertions inside a field result are
-    // removed while its cached result text is built.
-    const covered = hidden.some((span) => span.start < piece.rawEnd && span.end > piece.rawStart);
-    return covered ? [] : [piece];
-  }
-
+/** Remove sorted hidden spans from sorted visible pieces with one forward-only cursor. */
+export function hideInsertionSpansFromPieces(
+  pieces: readonly VisiblePiece[],
+  hidden: readonly RawSpan[]
+): VisiblePiece[] {
   const shown: VisiblePiece[] = [];
-  let cursor = piece.rawStart;
-  for (const span of hidden) {
-    if (span.end <= cursor) continue;
-    if (span.start >= piece.rawEnd) break;
-    const visible = clippedIdentityPiece(piece, cursor, Math.min(span.start, piece.rawEnd));
-    if (visible) shown.push(visible);
-    cursor = Math.max(cursor, span.end);
-    if (cursor >= piece.rawEnd) break;
+  let hiddenIndex = 0;
+  for (const piece of pieces) {
+    while (hiddenIndex < hidden.length && hidden[hiddenIndex]!.end <= piece.rawStart) {
+      hiddenIndex += 1;
+    }
+    const rawLength = piece.rawEnd - piece.rawStart;
+    if (piece.text.length !== rawLength) {
+      // Whole-atom revision wrappers are hidden here. Insertions inside a field result are
+      // removed while its cached result text is built.
+      const span = hidden[hiddenIndex];
+      if (!span || span.start >= piece.rawEnd) shown.push(piece);
+      continue;
+    }
+
+    let rawCursor = piece.rawStart;
+    while (hiddenIndex < hidden.length) {
+      const span = hidden[hiddenIndex]!;
+      if (span.end <= rawCursor) {
+        hiddenIndex += 1;
+        continue;
+      }
+      if (span.start >= piece.rawEnd) break;
+      const visible = clippedIdentityPiece(piece, rawCursor, Math.min(span.start, piece.rawEnd));
+      if (visible) shown.push(visible);
+      rawCursor = Math.max(rawCursor, span.end);
+      if (span.end <= piece.rawEnd) hiddenIndex += 1;
+      if (rawCursor >= piece.rawEnd) break;
+    }
+    const tail = clippedIdentityPiece(piece, rawCursor, piece.rawEnd);
+    if (tail) shown.push(tail);
   }
-  const tail = clippedIdentityPiece(piece, cursor, piece.rawEnd);
-  if (tail) shown.push(tail);
   return shown;
 }
 
@@ -77,10 +93,7 @@ export function projectParagraphText(
 
   const hidden = hiddenInsertionSpans(paragraph);
   if (hidden.length === 0) return projectionFromPieces(base);
-  const pieces: VisiblePiece[] = [];
-  for (const piece of base) {
-    for (const visible of hideFromPiece(piece, hidden)) pieces.push(visible);
-  }
+  const pieces = hideInsertionSpansFromPieces(base, hidden);
   return projectionFromPieces(pieces);
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { bodyStoryRoot, storyParagraphs } from '../../store/package/story-blocks.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
-import type { OoxmlParagraphNode } from '../../store/package/ooxml-tree.ts';
+import { readOoxmlPart, type OoxmlParagraphNode } from '../../store/package/ooxml-tree.ts';
 import {
   MAX_FIELD_NESTING,
   collectFieldRunChildren,
@@ -15,8 +15,15 @@ import {
 import { SEARCH_MATCH_LIMIT } from '../../store/store/text-match.ts';
 import { paragraphTextOf } from '../../store/store/tree-op-apply.ts';
 import { docx } from './support/protocol.ts';
-import { projectParagraphText } from '../text-projection.ts';
+import {
+  hideInsertionSpansFromPieces,
+  projectionFromPieces,
+  projectParagraphText,
+  visibleParagraphPieces,
+  type RawSpan,
+} from '../text-projection.ts';
 
+const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const run = (text: string): string => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
 const begin = '<w:r><w:fldChar w:fldCharType="begin"/></w:r>';
 const separate = '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
@@ -49,6 +56,22 @@ function paragraphOf(inline: string): { paragraph: OoxmlParagraphNode; rawText: 
   const paragraph = storyParagraphs(root)[0];
   if (!paragraph || paragraph.kind !== 'paragraph') throw new Error('paragraph missing');
   return { paragraph, rawText: paragraphTextOf(part, paragraph.id) ?? '' };
+}
+
+function largeParagraphOf(inline: string): { paragraph: OoxmlParagraphNode; rawText: string } {
+  const loaded = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p>${inline}</w:p></w:body></w:document>`,
+    {
+      name: '/word/document.xml',
+      contentType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
+    }
+  );
+  if (!loaded.ok) throw new Error(`fixture did not open: ${loaded.reason}`);
+  const root = bodyStoryRoot(loaded.part);
+  const paragraph = root ? storyParagraphs(root)[0] : undefined;
+  if (!paragraph || paragraph.kind !== 'paragraph') throw new Error('paragraph missing');
+  return { paragraph, rawText: paragraphTextOf(loaded.part, paragraph.id) ?? '' };
 }
 
 describe('projected text offset mapping', () => {
@@ -219,6 +242,34 @@ describe('projected text offset mapping', () => {
 
     expect(projectParagraphText(paragraph, rawText, 'allMarkup').text).toBe('Aold MOVEDZ');
     expect(projectParagraphText(paragraph, rawText, 'original').text).toBe('Aold Z');
+  });
+
+  test('walks thousands of fields and hidden insertions with a forward-only cursor', () => {
+    const count = 2_000;
+    const insertion = '<w:ins w:id="1" w:author="Ada">' + run('I') + '</w:ins>';
+    const { paragraph, rawText } = largeParagraphOf(
+      (field(' PAGE ', run('F')) + insertion).repeat(count)
+    );
+    const base = visibleParagraphPieces(paragraph, rawText, 'original');
+    const spans: RawSpan[] = Array.from({ length: count }, (_, index) => ({
+      start: index * 2 + 1,
+      end: index * 2 + 2,
+    }));
+    const visited: number[] = [];
+    const traced = new Proxy(spans, {
+      get(target, property, receiver) {
+        if (typeof property === 'string') {
+          const index = Number(property);
+          if (Number.isInteger(index) && index >= 0) visited.push(index);
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const merged = hideInsertionSpansFromPieces(base, traced);
+
+    expect(projectParagraphText(paragraph, rawText, 'original').text).toBe('F'.repeat(count));
+    expect(projectionFromPieces(merged).text).toBe('F'.repeat(count));
+    expect(visited.every((value, index) => index === 0 || value >= visited[index - 1]!)).toBe(true);
   });
 
   test('does not spend the field result budget on preceding inline nodes', () => {

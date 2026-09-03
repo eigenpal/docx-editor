@@ -31,7 +31,13 @@ import {
   headerFooterVariantCanPaint,
   type HeaderFooterSectionResolution,
 } from '../store/package/hf-references.ts';
-import { formatNoteScopeId, noteIdOf, type NoteKind } from '../store/package/note-nodes.ts';
+import {
+  formatNoteScopeId,
+  isNormalNote,
+  noteIdOf,
+  resolvableNotesOf,
+  type NoteKind,
+} from '../store/package/note-nodes.ts';
 import { bodyStoryRoot, storyParagraphs, storyRootsOf } from '../store/package/story-blocks.ts';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -155,12 +161,12 @@ function furnitureStories(
 function noteStories(part: OoxmlPart | null, noteKind: NoteKind): SearchStory[] {
   if (!part) return [];
   const stories: SearchStory[] = [];
-  for (const story of storyRootsOf(part)) {
-    const noteId = noteIdOf(story.root);
-    if (story.kind !== 'note' || noteId === null) continue;
+  for (const note of resolvableNotesOf(part.root)) {
+    const noteId = noteIdOf(note);
+    if (!isNormalNote(note) || noteId === null) continue;
     stories.push({
       part,
-      root: story.root,
+      root: note,
       scope: { kind: 'note', id: formatNoteScopeId(noteKind, noteId) },
     });
   }
