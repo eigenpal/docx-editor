@@ -1,6 +1,6 @@
 // Exact shaped glyphs for laid-out spans, using the same policy as measurement.
 
-import { FontResolutionError, fontRequestKey, type ResolvedFont } from '../layout/font-resource.ts';
+import type { ResolvedFont } from '../layout/font-resource.ts';
 import { displayText } from '../layout/run-style.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import { layoutFaceHasSmallCaps, shapeLayoutStyleRun } from '../layout/layout-run-shape.ts';
@@ -11,6 +11,10 @@ import {
   describeAdmittedFontIdentity,
   type ExportAdmittedFontIdentity,
 } from './document-export-font-resolution.ts';
+import {
+  createShapingFontResolutionCache,
+  resolveShapingFontFace,
+} from './export-shaping-font-resolution.ts';
 import { ExportResourceError } from './export-session.ts';
 
 /**
@@ -43,31 +47,6 @@ export function hasExportLaidOutText<T extends object>(
   return typeof (value as Partial<ExportLaidOutTextApi>).shapeLaidOutText === 'function';
 }
 
-function resolveShapingFont(
-  shaping: LayoutShapingOptions,
-  family: string,
-  style: StyleSpanRecord['style'],
-  cache: Map<string, ResolvedFont | FontResolutionError>
-): ResolvedFont | null {
-  if (family.trim().length === 0) return null;
-  const request = {
-    family,
-    weight: style.bold ? 700 : 400,
-    style: style.italic ? ('italic' as const) : ('normal' as const),
-  };
-  const key = fontRequestKey(request);
-  let result = cache.get(key);
-  if (!result) {
-    try {
-      result = shaping.fonts.resolve(request);
-    } catch {
-      return null;
-    }
-    cache.set(key, result);
-  }
-  return result instanceof FontResolutionError ? null : result;
-}
-
 /**
  * Bind one shaping substrate to the exporter-neutral laid-out text API.
  * @internal
@@ -75,14 +54,14 @@ function resolveShapingFont(
 export function bindExportLaidOutText(
   shaping: LayoutShapingOptions
 ): ExportLaidOutTextApi['shapeLaidOutText'] {
-  const resolved = new Map<string, ResolvedFont | FontResolutionError>();
+  const resolved = createShapingFontResolutionCache();
   const smallCapsSupportByFont = new WeakMap<ResolvedFont, boolean>();
   return (span: StyleSpanRecord): ExportLaidOutText | null => {
     const faceStyle = styleForFontSlot(span.style, span.fontSlot);
     const text = displayText(span.text, faceStyle);
     if (text.length === 0) return null;
     const family = faceStyle.fontFamily ?? shaping.defaultFont.family;
-    const font = resolveShapingFont(shaping, family, faceStyle, resolved);
+    const font = resolveShapingFontFace(shaping, resolved, family, faceStyle);
     if (!font) return null;
     try {
       if (

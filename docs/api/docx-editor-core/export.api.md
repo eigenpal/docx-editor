@@ -22,7 +22,6 @@ export interface ExportAdmittedFontApi {
 
 // @public
 export interface ExportAdmittedFontFace extends ExportAdmittedFontIdentity {
-    // (undocumented)
     readonly bytes: Uint8Array;
 }
 

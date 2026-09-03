@@ -5,6 +5,7 @@ import type { FontOriginFailure } from '../layout/font-resolver.ts';
 import {
   FontResolutionError,
   HARD_MAX_FONT_SOURCES,
+  trustedFontBytes,
   type FontRequest,
   type FontSubstitution,
   type ResolvedFont,
@@ -65,8 +66,18 @@ export interface ExportAdmittedFontIdentity {
   readonly substitution: FontSubstitution | null;
 }
 
-/** Session-owned copy of one admitted face used by the session measurer. @public */
+/**
+ * Session-visible admitted face whose bytes are shared with the session shaper and
+ * content-hashed shaping cache. Treat {@link ExportAdmittedFontFace.bytes} as
+ * strictly read-only; in-place mutation can corrupt later shaping after cache
+ * eviction or before the first shape for that face.
+ * @public
+ */
 export interface ExportAdmittedFontFace extends ExportAdmittedFontIdentity {
+  /**
+   * Shared font bytes owned by the session shaper and shaping cache. Not a copy.
+   * Must be treated as read-only.
+   */
   readonly bytes: Uint8Array;
 }
 
@@ -129,10 +140,11 @@ export function describeAdmittedFontIdentity(resolved: ResolvedFont): ExportAdmi
   });
 }
 
+/** Admitted face identity plus the session-owned shared byte buffer. @internal */
 export function snapshotAdmittedFontFace(resolved: ResolvedFont): ExportAdmittedFontFace {
   return Object.freeze({
     ...describeAdmittedFontIdentity(resolved),
-    bytes: resolved.bytes,
+    bytes: trustedFontBytes(resolved),
   });
 }
 

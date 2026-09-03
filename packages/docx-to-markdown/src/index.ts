@@ -24,7 +24,7 @@ import {
   type PreparedLayoutFontConfiguration,
 } from '@docx-editor.dev/core/layout';
 import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
-import { loadDefaultFonts, packagedFonts } from '@docx-editor.dev/fonts';
+import { FONT_ASSET_ROOT, loadDefaultFonts, packagedFonts } from '@docx-editor.dev/fonts';
 import {
   exportMarkdownFrom as translateMarkdown,
   exportMarkdownLayout as translateMarkdownLayout,
@@ -74,8 +74,6 @@ export type {
   SemanticLayout,
   SemanticReviewArtifactOccurrence,
   SemanticReviewArtifactOccurrenceGeometry,
-  SemanticReviewArtifactPageContentRect,
-  SemanticReviewArtifactPageStackRect,
   SemanticReviewArtifactPosition,
   SemanticReviewArtifactRecord,
   SemanticReviewArtifactSource,
@@ -135,16 +133,18 @@ export class DocumentOpenError extends Error {
   }
 }
 
-// Workspace and published sibling packages keep faces in fonts/assets. Bundled Node
-// workers copy those same faces beside the entry as ../assets/.
-const packagedFontRoots = Object.freeze([
-  new URL('../../fonts/assets/', import.meta.url),
-  new URL('../assets/', import.meta.url),
-]);
-const packagedFileFetch = createPackagedFileFetch({
-  trustedRoot: packagedFontRoots,
-  maxBytes: HARD_MAX_FONT_BYTES,
-});
+// FONT_ASSET_ROOT is the directory the fonts package already resolves for each face.
+// Guessing `fonts/assets` from this package breaks pnpm, Yarn PnP, and nested installs:
+// Node reports `import.meta.url` through the real path, and Core compares that prefix
+// before its realpath-aware reader. Browser bundlers rewrite those face URLs to HTTP;
+// HTTP fetches skip the file reader, so this root is Node-only.
+const packagedFileFetch =
+  FONT_ASSET_ROOT.protocol === 'file:'
+    ? createPackagedFileFetch({
+        trustedRoot: new URL('./', FONT_ASSET_ROOT),
+        maxBytes: HARD_MAX_FONT_BYTES,
+      })
+    : fetch;
 
 interface DefaultExportFonts {
   readonly configuration: PreparedLayoutFontConfiguration;

@@ -25,6 +25,27 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
 const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+
+function textboxDrawing(content: string, id = 9): string {
+  return (
+    `<w:drawing xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+    '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
+    'relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
+    '<wp:simplePos x="0" y="0"/>' +
+    '<wp:positionH relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionH>' +
+    '<wp:positionV relativeFrom="page"><wp:posOffset>914400</wp:posOffset></wp:positionV>' +
+    '<wp:extent cx="914400" cy="457200"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
+    `<wp:wrapNone/><wp:docPr id="${id}" name="Review box"/>` +
+    `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
+    '<wps:spPr><a:xfrm><a:ext cx="914400" cy="457200"/></a:xfrm>' +
+    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
+    `<wps:txbx><w:txbxContent>${content}</w:txbxContent></wps:txbx>` +
+    '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing>'
+  );
+}
 
 function pkg(
   body: string,
@@ -96,9 +117,7 @@ function commentsExtra(commentsXml: string): {
 }
 
 function pageStackY(layout: SemanticLayout, pageIndex: number, pageContentY: number): number {
-  const page = layout.pages[pageIndex]!;
-  const originY = page.box.y + (page.contentBox.y - page.box.y);
-  return originY + pageContentY;
+  return layout.pages[pageIndex]!.contentBox.y + pageContentY;
 }
 
 test('anchored comments publish frozen page-content and page-stack geometry', async () => {
@@ -192,6 +211,11 @@ test('multi-page comment occurrences each carry geometry on their own page', asy
     );
     expect(layout.pages.length).toBeGreaterThan(2);
     expect(comment?.occurrences.length).toBeGreaterThan(1);
+    expect(
+      comment?.occurrences.every(
+        ({ source }) => source.start.paragraphId === source.end.paragraphId
+      )
+    ).toBe(true);
     for (const occurrence of comment?.occurrences ?? []) {
       expect(occurrence.geometry).toBeDefined();
       expect(occurrence.geometry!.pageContent.length).toBeGreaterThan(0);
@@ -368,6 +392,8 @@ test('header and footnote review geometry uses story origins in page-content spa
       pointCaret!.y + headerOriginY,
       4
     );
+    expect(pointOccurrence.geometry!.pageContent[0]!.width).toBe(0);
+    expect(pointOccurrence.geometry!.pageStack[0]!.width).toBe(0);
 
     const footnoteY = footnote!.occurrences[0]!.geometry!.pageContent[0]!.y;
     expect(footnoteY).toBeGreaterThanOrEqual(noteOriginY - 0.5);
@@ -444,35 +470,30 @@ test('review geometry walks only pages that carry occurrences', () => {
   expect(Object.isFrozen(enriched[0]?.occurrences[0]?.geometry)).toBe(true);
 });
 
-test('hostile spanning review ranges bind once and keep endpoints after the budget', () => {
-  const paragraphCount = 1_000;
-  const occurrenceCount = 100;
+function bodyOccurrence(
+  paragraphId: string,
+  start: number,
+  end: number
+): SemanticReviewArtifactRecord['occurrences'][number] {
+  return {
+    pageIndex: 0,
+    physicalPageNumber: 1,
+    story: 'body',
+    rootStory: 'body',
+    textboxPath: [],
+    noteScopeId: null,
+    noteAreaKind: null,
+    source: {
+      partName: '/word/document.xml',
+      start: { paragraphId, offset: start },
+      end: { paragraphId, offset: end },
+    },
+  };
+}
+
+test('hostile same-paragraph review ranges stop at the binding cap', () => {
+  const occurrenceCount = MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS + 2;
   const box = { x: 0, y: 0, width: 200, height: 12 };
-  const fragments = Array.from({ length: paragraphCount }, (_, index) => {
-    const paragraphId = `p${index}`;
-    return {
-      kind: 'paragraph' as const,
-      paragraphId,
-      lines: [
-        {
-          id: `line-${paragraphId}`,
-          range: { paragraphId, start: 0, end: 4 },
-          spans: [
-            {
-              range: { paragraphId, start: 0, end: 4 },
-              text: 'word',
-              style: {},
-              box,
-            },
-          ],
-          box,
-          contentX: 0,
-          baseline: 10,
-          leading: 0,
-        },
-      ],
-    };
-  });
   const layout = {
     revision: 0,
     pages: [
@@ -480,54 +501,228 @@ test('hostile spanning review ranges bind once and keep endpoints after the budg
         index: 0,
         box: { x: 0, y: 0, width: 200, height: 200 },
         contentBox: { x: 0, y: 0, width: 200, height: 200 },
-        fragments,
+        fragments: [
+          {
+            kind: 'paragraph' as const,
+            paragraphId: 'p0',
+            lines: [
+              {
+                id: 'line-p0',
+                range: { paragraphId: 'p0', start: 0, end: 4 },
+                spans: [
+                  {
+                    range: { paragraphId: 'p0', start: 0, end: 4 },
+                    text: 'word',
+                    style: {},
+                    box,
+                  },
+                ],
+                box,
+                contentX: 0,
+                baseline: 10,
+                leading: 0,
+              },
+            ],
+          },
+        ],
       },
     ],
   } as unknown as SemanticLayout;
-  const firstParagraph = 'p0';
-  const lastParagraph = `p${paragraphCount - 1}`;
   const artifacts: readonly SemanticReviewArtifactRecord[] = [
     {
       kind: 'comment',
       id: 'hostile',
       author: 'Ada',
       initials: 'A',
-      text: 'Span',
+      text: 'Cap',
       resolved: false,
       replyIds: [],
       orphaned: false,
-      occurrences: Array.from({ length: occurrenceCount }, () => ({
-        pageIndex: 0,
-        physicalPageNumber: 1,
-        story: 'body' as const,
-        rootStory: 'body' as const,
-        textboxPath: [],
-        noteScopeId: null,
-        noteAreaKind: null,
-        source: {
-          partName: '/word/document.xml',
-          start: { paragraphId: firstParagraph, offset: 0 },
-          end: { paragraphId: lastParagraph, offset: 4 },
-        },
-      })),
+      occurrences: Array.from({ length: occurrenceCount }, () => bodyOccurrence('p0', 0, 4)),
     },
   ];
   const recorder = reviewGeometryIndexRecorder();
   recorder.reset();
   const enriched = attachReviewArtifactGeometry(layout, artifacts);
-  const fullExpansions = Math.floor(MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS / paragraphCount);
-  const cartesian = occurrenceCount * paragraphCount;
 
-  expect(recorder.orderBuilds).toBe(1);
-  expect(recorder.spanParagraphVisits).toBe(fullExpansions * paragraphCount);
-  expect(recorder.spanParagraphVisits).toBeLessThan(cartesian);
-  expect(recorder.spanParagraphVisits).toBeLessThanOrEqual(MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS);
-  expect(recorder.bindings).toBeLessThanOrEqual(MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS);
-  expect(recorder.bindings).toBeGreaterThan(recorder.spanParagraphVisits);
+  expect(recorder.bindings).toBe(MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS);
+  expect(enriched[0]?.occurrences[0]?.geometry?.pageContent.length).toBeGreaterThan(0);
+  expect(
+    enriched[0]?.occurrences[MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS - 1]?.geometry
+  ).toBeDefined();
+  expect(
+    enriched[0]?.occurrences[MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS]?.geometry
+  ).toBeUndefined();
+  expect(enriched[0]?.occurrences[occurrenceCount - 1]?.geometry).toBeUndefined();
+});
 
-  expect(enriched[0]?.occurrences[0]?.geometry?.pageContent).toHaveLength(paragraphCount);
-  const leftover = enriched[0]?.occurrences[fullExpansions];
-  expect(leftover?.geometry?.pageContent).toHaveLength(2);
-  expect(enriched[0]?.occurrences[occurrenceCount - 1]?.geometry?.pageContent).toHaveLength(2);
-  expect(Object.isFrozen(leftover?.geometry)).toBe(true);
+test('note-separator review ranges publish geometry in page-content space', async () => {
+  const source = pkg(
+    '<w:p><w:r><w:t>Body</w:t><w:footnoteReference w:id="1"/></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>' +
+      '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720"/>' +
+      '</w:sectPr>',
+    {
+      relationships:
+        `<Relationship Id="rFootnotes" Type="${R}/footnotes" Target="footnotes.xml"/>` +
+        `<Relationship Id="rComments" Type="${R}/comments" Target="comments.xml"/>`,
+      contentTypes:
+        '<Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/>' +
+        '<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml"/>',
+      entries: {
+        'word/footnotes.xml': strToU8(
+          `<w:footnotes xmlns:w="${W}">` +
+            '<w:footnote w:type="separator" w:id="-1"><w:p>' +
+            '<w:commentRangeStart w:id="0"/><w:r><w:t>SEP</w:t></w:r>' +
+            '<w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r>' +
+            '</w:p></w:footnote>' +
+            '<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>' +
+            '<w:footnote w:id="1"><w:p><w:r><w:t>first note</w:t></w:r></w:p></w:footnote>' +
+            '</w:footnotes>'
+        ),
+        'word/comments.xml': strToU8(
+          `<w:comments xmlns:w="${W}"><w:comment w:id="0" w:author="Ada">` +
+            '<w:p><w:r><w:t>Separator review</w:t></w:r></w:p></w:comment></w:comments>'
+        ),
+      },
+    }
+  );
+  const main = source.parts.get(source.mainDocumentPart)!;
+  const opened = openDocumentForExport(
+    liveView(new TreePackageStore(source, normalizeParagraphIdentity(main)))
+  );
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const layout = await opened.session.layout();
+    const comment = layout.reviewArtifacts?.find(
+      (artifact) => artifact.kind === 'comment' && artifact.text === 'Separator review'
+    );
+    expect(comment?.occurrences.length).toBeGreaterThan(0);
+    const occurrence = comment?.occurrences[0];
+    expect(occurrence?.story).toBe('note-separator');
+    expect(occurrence?.geometry?.pageContent.length).toBeGreaterThan(0);
+    expect(occurrence?.geometry?.pageStack.length).toBe(occurrence?.geometry?.pageContent.length);
+
+    const page = layout.pages[occurrence!.pageIndex]!;
+    const separator = page.footnotes?.separator;
+    expect(separator).toBeDefined();
+    const separatorOriginY = separator!.box.y - page.contentBox.y;
+    const rangeY = occurrence!.geometry!.pageContent[0]!.y;
+    expect(rangeY).toBeGreaterThanOrEqual(separatorOriginY - 0.5);
+    expect(rangeY).toBeLessThan(separatorOriginY + separator!.box.height);
+    expect(occurrence!.geometry!.pageContent[0]!.width).toBeGreaterThan(0);
+    for (const [index, rect] of occurrence!.geometry!.pageStack.entries()) {
+      const content = occurrence!.geometry!.pageContent[index]!;
+      expect(rect.y).toBeCloseTo(pageStackY(layout, occurrence!.pageIndex, content.y), 4);
+    }
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+test('textbox review ranges publish geometry in page-content space', async () => {
+  const textbox = textboxDrawing(
+    '<w:p><w:commentRangeStart w:id="0"/>' +
+      '<w:r><w:t>boxed review</w:t></w:r><w:commentRangeEnd w:id="0"/>' +
+      '<w:r><w:commentReference w:id="0"/></w:r></w:p>'
+  );
+  const source = pkg(`<w:p><w:r>${textbox}</w:r></w:p>`, {
+    ...commentsExtra(
+      `<w:comments xmlns:w="${W}"><w:comment w:id="0" w:author="Ada">` +
+        '<w:p><w:r><w:t>Inside a textbox</w:t></w:r></w:p></w:comment></w:comments>'
+    ),
+  });
+  const main = source.parts.get(source.mainDocumentPart)!;
+  const opened = openDocumentForExport(
+    liveView(new TreePackageStore(source, normalizeParagraphIdentity(main)))
+  );
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const layout = await opened.session.layout();
+    const comment = layout.reviewArtifacts?.find(
+      (artifact) => artifact.kind === 'comment' && artifact.text === 'Inside a textbox'
+    );
+    expect(comment?.occurrences).toHaveLength(1);
+    const occurrence = comment?.occurrences[0];
+    expect(occurrence?.story).toBe('textbox');
+    expect(occurrence?.textboxPath).toHaveLength(1);
+    expect(occurrence?.geometry?.pageContent.length).toBeGreaterThan(0);
+    expect(occurrence?.geometry?.pageStack.length).toBe(occurrence?.geometry?.pageContent.length);
+    expect(occurrence!.geometry!.pageContent[0]!.width).toBeGreaterThan(0);
+    expect(occurrence!.geometry!.pageContent[0]!.height).toBeGreaterThan(0);
+    for (const [index, rect] of occurrence!.geometry!.pageStack.entries()) {
+      const content = occurrence!.geometry!.pageContent[index]!;
+      expect(rect.y).toBeCloseTo(pageStackY(layout, occurrence!.pageIndex, content.y), 4);
+      expect(Object.isFrozen(rect)).toBe(true);
+    }
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+test('cross-paragraph review occurrences do not register geometry bindings', () => {
+  const box = { x: 0, y: 0, width: 200, height: 12 };
+  const layout = {
+    revision: 0,
+    pages: [
+      {
+        index: 0,
+        box: { x: 0, y: 0, width: 200, height: 200 },
+        contentBox: { x: 0, y: 0, width: 200, height: 200 },
+        fragments: [
+          {
+            kind: 'paragraph' as const,
+            paragraphId: 'p0',
+            lines: [
+              {
+                id: 'line-p0',
+                range: { paragraphId: 'p0', start: 0, end: 4 },
+                spans: [
+                  {
+                    range: { paragraphId: 'p0', start: 0, end: 4 },
+                    text: 'word',
+                    style: {},
+                    box,
+                  },
+                ],
+                box,
+                contentX: 0,
+                baseline: 10,
+                leading: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  } as unknown as SemanticLayout;
+  const artifacts: readonly SemanticReviewArtifactRecord[] = [
+    {
+      kind: 'comment',
+      id: 'span',
+      author: 'Ada',
+      initials: 'A',
+      text: 'Cross paragraph',
+      resolved: false,
+      replyIds: [],
+      orphaned: false,
+      occurrences: [
+        {
+          ...bodyOccurrence('p0', 0, 4),
+          source: {
+            partName: '/word/document.xml',
+            start: { paragraphId: 'p0', offset: 0 },
+            end: { paragraphId: 'p1', offset: 4 },
+          },
+        },
+      ],
+    },
+  ];
+  const recorder = reviewGeometryIndexRecorder();
+  recorder.reset();
+  const enriched = attachReviewArtifactGeometry(layout, artifacts);
+  expect(recorder.bindings).toBe(0);
+  expect(enriched[0]?.occurrences[0]?.geometry).toBeUndefined();
 });

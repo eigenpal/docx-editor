@@ -1,8 +1,19 @@
 import { expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createPackagedFileFetch, type PackagedFileRead } from '@docx-editor.dev/core/export';
 import { HARD_MAX_FONT_BYTES } from '@docx-editor.dev/core/layout';
+import { FONT_ASSET_MANIFEST, FONT_ASSET_ROOT } from '@docx-editor.dev/fonts';
 
 const TEST_ROOT = new URL('file:///packaged/');
 const TEST_FILE = new URL('file:///packaged/font.woff2');
@@ -20,11 +31,14 @@ function confinedFetch(
   });
 }
 
-test('markdown export pins packaged file reads to workspace and bundle-co-located roots', () => {
+test('markdown export confines packaged file reads to the fonts package asset root', () => {
   const source = readFileSync(join(import.meta.dir, '..', 'src', 'index.ts'), 'utf8');
-  expect(source).toContain("new URL('../../fonts/assets/', import.meta.url)");
-  expect(source).toContain("new URL('../assets/', import.meta.url)");
+  expect(source).toContain('FONT_ASSET_ROOT');
+  expect(source).toContain("new URL('./', FONT_ASSET_ROOT)");
+  expect(source).toContain("FONT_ASSET_ROOT.protocol === 'file:'");
   expect(source).toContain('maxBytes: HARD_MAX_FONT_BYTES');
+  expect(source).not.toContain('../../fonts/assets/');
+  expect(source).not.toContain("new URL('../assets/', import.meta.url)");
   expect(source).not.toMatch(/createPackagedFileFetch\(\s*\)/);
 });
 
@@ -93,13 +107,10 @@ test('packaged file fetch delegates bundler HTTP asset URLs to the host fetch', 
   ]);
 });
 
-test('markdown packaged-font roots admit workspace and bundle-co-located assets only', async () => {
-  const markdownModuleUrl = new URL('../src/index.ts', import.meta.url);
-  const workspaceRoot = new URL('../../fonts/assets/', markdownModuleUrl);
-  const bundledRoot = new URL('../assets/', markdownModuleUrl);
+test('markdown packaged-font root admits fonts-package assets and refuses anything else', async () => {
   const reads: string[] = [];
   const fetcher = createPackagedFileFetch({
-    trustedRoot: [workspaceRoot, bundledRoot],
+    trustedRoot: new URL('./', FONT_ASSET_ROOT),
     maxBytes: HARD_MAX_FONT_BYTES,
     read: async (path) => {
       reads.push(String(path));
@@ -107,12 +118,68 @@ test('markdown packaged-font roots admit workspace and bundle-co-located assets 
     },
   });
 
-  const workspaceFace = new URL('Carlito-Regular.ttf', workspaceRoot);
-  const bundledFace = new URL('Carlito-Regular.ttf', bundledRoot);
-  expect((await fetcher(workspaceFace)).status).toBe(200);
-  expect((await fetcher(bundledFace)).status).toBe(200);
+  const packagedFace = new URL(FONT_ASSET_MANIFEST[0]!.file, FONT_ASSET_ROOT);
+  expect((await fetcher(packagedFace)).status).toBe(200);
   expect((await fetcher(new URL('file:///etc/passwd'))).status).toBe(404);
-  expect((await fetcher(new URL('../secret.ttf', workspaceRoot))).status).toBe(404);
-  expect((await fetcher(new URL('../secret.ttf', bundledRoot))).status).toBe(404);
-  expect(reads).toEqual([workspaceFace.href, bundledFace.href]);
+  expect((await fetcher(new URL('../secret.ttf', FONT_ASSET_ROOT))).status).toBe(404);
+  expect(reads).toEqual([packagedFace.href]);
+});
+
+test('derived packaged-font root admits faces when the fonts package is reached through a symlink', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'markdown-packaged-fonts-'));
+  try {
+    const realFonts = join(tmp, '.pnpm', 'fonts', 'node_modules', '@docx-editor.dev', 'fonts');
+    mkdirSync(join(realFonts, 'assets'), { recursive: true });
+    mkdirSync(join(realFonts, 'dist'), { recursive: true });
+    writeFileSync(join(realFonts, 'assets', 'face.ttf'), 'font');
+
+    const markdownPkg = join(
+      tmp,
+      '.pnpm',
+      'markdown',
+      'node_modules',
+      '@docx-editor.dev',
+      'docx-to-markdown'
+    );
+    mkdirSync(join(markdownPkg, 'dist'), { recursive: true });
+
+    const nestedFontsLink = join(
+      tmp,
+      '.pnpm',
+      'markdown',
+      'node_modules',
+      '@docx-editor.dev',
+      'fonts'
+    );
+    mkdirSync(dirname(nestedFontsLink), { recursive: true });
+    symlinkSync(realFonts, nestedFontsLink);
+
+    const fontsModuleUrl = pathToFileURL(
+      join(realpathSync(nestedFontsLink), 'dist', 'index.js')
+    ).href;
+    const faceUrl = new URL('../assets/face.ttf', fontsModuleUrl);
+    const derivedRoot = new URL('./', faceUrl);
+    const guessedRoot = new URL(
+      '../../fonts/assets/',
+      pathToFileURL(join(markdownPkg, 'dist', 'index.js')).href
+    );
+
+    const derived = createPackagedFileFetch({
+      trustedRoot: derivedRoot,
+      maxBytes: HARD_MAX_FONT_BYTES,
+    });
+    const admitted = await derived(faceUrl);
+    expect(admitted.status).toBe(200);
+    expect(new Uint8Array(await admitted.arrayBuffer())).toEqual(
+      new Uint8Array([102, 111, 110, 116])
+    );
+
+    const guessed = createPackagedFileFetch({
+      trustedRoot: guessedRoot,
+      maxBytes: HARD_MAX_FONT_BYTES,
+    });
+    expect((await guessed(faceUrl)).status).toBe(404);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 });

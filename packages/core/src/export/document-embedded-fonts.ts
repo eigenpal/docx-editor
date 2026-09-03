@@ -5,7 +5,11 @@ import { readEmbeddedFonts } from '../store/package/embedded-fonts.ts';
 import type { OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { resolveRelationship } from '../store/package/relationships.ts';
 import type { HeadlessDocumentView } from '../store/headless-document-view.ts';
-import { defineFontResolver, type FontOrigin } from '../layout/font-resolver.ts';
+import {
+  defineFontResolver,
+  type FontOrigin,
+  type FontOriginCompositionRequest,
+} from '../layout/font-resolver.ts';
 import {
   HARD_MAX_AGGREGATE_FONT_BYTES,
   HARD_MAX_FONT_BYTES,
@@ -41,7 +45,8 @@ export function readDocumentEmbeddedFonts(view: HeadlessDocumentView): readonly 
 
 /**
  * Last-wins-never: explicit origins stay first. This origin maps remaining document faces
- * after earlier origins publish `resolvedFaces`, using the shared embedded mapper budgets.
+ * after earlier origins publish `resolvedFaces`, using the shared embedded mapper budgets
+ * minus bytes those origins already committed.
  */
 export function documentEmbeddedFontOrigin(
   view: HeadlessDocumentView,
@@ -49,13 +54,13 @@ export function documentEmbeddedFontOrigin(
 ): FontOrigin | undefined {
   const embedded = readDocumentEmbeddedFonts(view);
   if (embedded.length === 0) return undefined;
-  return defineFontResolver((request) => {
+  return defineFontResolver((request: FontOriginCompositionRequest) => {
     const shadowedRequests = new Set(
       (request.resolvedFaces ?? []).map((face) => fontRequestKey(face))
     );
     const mapped = embeddedFontSources(embedded, {
       maxFontBytes: HARD_MAX_FONT_BYTES,
-      aggregateBudget: HARD_MAX_AGGREGATE_FONT_BYTES,
+      aggregateBudget: remainingEmbeddedAggregateBudget(request),
       shadowedRequests,
     });
     if (diagnostics) {
@@ -66,4 +71,12 @@ export function documentEmbeddedFontOrigin(
     }
     return { sources: mapped.sources };
   });
+}
+
+function remainingEmbeddedAggregateBudget(request: FontOriginCompositionRequest): number {
+  const committed = request.committedSourceBytes;
+  if (committed === undefined || !Number.isSafeInteger(committed) || committed <= 0) {
+    return HARD_MAX_AGGREGATE_FONT_BYTES;
+  }
+  return Math.max(0, HARD_MAX_AGGREGATE_FONT_BYTES - committed);
 }

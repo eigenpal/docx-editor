@@ -660,33 +660,9 @@ export interface SemanticReviewArtifactOccurrence {
 // @public
 export interface SemanticReviewArtifactOccurrenceGeometry {
     // (undocumented)
-    readonly pageContent: readonly SemanticReviewArtifactPageContentRect[];
+    readonly pageContent: readonly LayoutBox[];
     // (undocumented)
-    readonly pageStack: readonly SemanticReviewArtifactPageStackRect[];
-}
-
-// @public
-export interface SemanticReviewArtifactPageContentRect {
-    // (undocumented)
-    readonly height: number;
-    // (undocumented)
-    readonly width: number;
-    // (undocumented)
-    readonly x: number;
-    // (undocumented)
-    readonly y: number;
-}
-
-// @public
-export interface SemanticReviewArtifactPageStackRect {
-    // (undocumented)
-    readonly height: number;
-    // (undocumented)
-    readonly width: number;
-    // (undocumented)
-    readonly x: number;
-    // (undocumented)
-    readonly y: number;
+    readonly pageStack: readonly LayoutBox[];
 }
 
 // @public

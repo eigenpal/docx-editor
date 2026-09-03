@@ -1,33 +1,34 @@
 // Exporter-neutral laid-out bounds for review artifact occurrences.
+//
+// Engine-produced occurrences are one paragraph. Cross-paragraph source ranges are sliced
+// before this attach pass, so this walk never builds a story-order span index.
 
-import { documentOrder, documentOrderIndex, everyStoryOrder } from '../layout/document-order.ts';
+import { headerFooterAnchoredDrawingOrigin } from '../layout/header-footer-drawing-origin.ts';
+import type { AnchoredDrawingRecord } from '../layout/drawing-layout.ts';
 import { xWithinLine } from '../layout/line-geometry.ts';
-import { lineSegments, segmentOverlap } from '../layout/line-segments.ts';
-import { caretAt } from '../layout/semantic-interaction.ts';
-import type { SemanticPosition } from '../layout/semantic-interaction.ts';
-import { paragraphFragmentsOfBlocks } from '../layout/semantic-records.ts';
-import type { BlockFragmentRecord } from '../layout/semantic-records.ts';
+import { lineSegments } from '../layout/line-segments.ts';
 import type {
   SemanticReviewArtifactOccurrence,
   SemanticReviewArtifactOccurrenceGeometry,
-  SemanticReviewArtifactPageContentRect,
-  SemanticReviewArtifactPageStackRect,
   SemanticReviewArtifactRecord,
 } from '../layout/review-artifact-records.ts';
-import type { PageRecord, SemanticLayout } from '../layout/semantic-records.ts';
+import { pageContentOrigin, storyBoxContentOffset } from '../layout/selection-rects.ts';
+import { caretAt, type SemanticPosition } from '../layout/semantic-interaction.ts';
+import {
+  forEachPageStory,
+  forEachStoryParagraphFragment,
+} from '../layout/semantic-record-queries.ts';
+import type { LayoutBox, PageRecord, SemanticLayout } from '../layout/semantic-records.ts';
 
 /**
  * Cap on paragraph→range index entries for one attach pass.
  *
- * A hostile file can name a comment on every paragraph and then span the whole document.
- * Expanding each span into the index is occurrences × paragraphs. This keeps that product
- * finite; endpoints still register so start and end pages keep geometry.
+ * Each same-paragraph occurrence registers one binding. A hostile file can name a comment on
+ * every laid-out fragment; this keeps that product finite.
  * @internal
  */
 export const MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS = 65_536;
 
-let reviewGeometryOrderBuilds = 0;
-let reviewGeometrySpanParagraphVisits = 0;
 let reviewGeometryBindings = 0;
 
 /**
@@ -35,34 +36,17 @@ let reviewGeometryBindings = 0;
  * @internal
  */
 export function reviewGeometryIndexRecorder(): {
-  readonly orderBuilds: number;
-  readonly spanParagraphVisits: number;
   readonly bindings: number;
   reset(): void;
 } {
   return {
-    get orderBuilds() {
-      return reviewGeometryOrderBuilds;
-    },
-    get spanParagraphVisits() {
-      return reviewGeometrySpanParagraphVisits;
-    },
     get bindings() {
       return reviewGeometryBindings;
     },
     reset() {
-      reviewGeometryOrderBuilds = 0;
-      reviewGeometrySpanParagraphVisits = 0;
       reviewGeometryBindings = 0;
     },
   };
-}
-
-interface StoryOrderTables {
-  readonly body: readonly string[];
-  readonly bodyIndex: ReadonlyMap<string, number>;
-  readonly every: readonly string[];
-  readonly everyIndex: ReadonlyMap<string, number>;
 }
 
 interface IndexedRange {
@@ -70,68 +54,110 @@ interface IndexedRange {
   readonly from: SemanticPosition;
   readonly to: SemanticPosition;
   readonly pageIndex: number;
-  readonly sameParagraph: boolean;
 }
 
-function pageContentOrigin(page: PageRecord): Readonly<{ readonly x: number; readonly y: number }> {
-  return Object.freeze({
-    x: page.box.x + (page.contentBox.x - page.box.x),
-    y: page.box.y + (page.contentBox.y - page.box.y),
-  });
-}
-
-function storyPageContentOffset(
+function storyOriginInPageContent(
   page: PageRecord,
-  storyBox: { readonly x: number; readonly y: number }
-): Readonly<{ readonly x: number; readonly y: number }> {
-  return Object.freeze({
-    x: storyBox.x - page.contentBox.x,
-    y: storyBox.y - page.contentBox.y,
-  });
+  origin: Readonly<{ x: number; y: number }>
+): { readonly x: number; readonly y: number } {
+  return {
+    x: origin.x - page.contentBox.x,
+    y: origin.y - page.contentBox.y,
+  };
 }
 
+function textboxPathsMatch(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((id, index) => id === right[index]);
+}
+
+function rootStoryMatches(
+  occurrence: SemanticReviewArtifactOccurrence,
+  rootStory: SemanticReviewArtifactOccurrence['rootStory'],
+  noteScopeId: string | null
+): boolean {
+  if (occurrence.rootStory !== rootStory) return false;
+  if (rootStory === 'footnote' || rootStory === 'endnote') {
+    return occurrence.noteScopeId === noteScopeId;
+  }
+  return true;
+}
+
+function textboxPageContentOffset(
+  page: PageRecord,
+  occurrence: SemanticReviewArtifactOccurrence
+): { readonly x: number; readonly y: number } | null {
+  if (occurrence.story !== 'textbox' || occurrence.textboxPath.length === 0) return null;
+  let found: { readonly x: number; readonly y: number } | null = null;
+  forEachPageStory(page, (root) => {
+    if (found) return;
+    if (!rootStoryMatches(occurrence, root.story, root.noteScopeId)) return;
+    const rootDrawingOrigin =
+      root.story === 'header' || root.story === 'footer'
+        ? (drawing: AnchoredDrawingRecord) =>
+            headerFooterAnchoredDrawingOrigin(drawing, root.origin, {
+              x: page.box.x,
+              y: page.box.y,
+            })
+        : undefined;
+    forEachStoryParagraphFragment(
+      root.host,
+      (_fragment, context) => {
+        if (found || context.textboxDepth === 0) return;
+        const path = context.textboxPath.map((drawing) => drawing.drawingNodeId);
+        if (!textboxPathsMatch(path, occurrence.textboxPath)) return;
+        found = storyOriginInPageContent(page, context.storyOrigin);
+      },
+      root.origin,
+      rootDrawingOrigin
+    );
+  });
+  return found;
+}
+
+/**
+ * Story origin for an occurrence.
+ *
+ * Keys by `rootStory` and `noteScopeId` because a note-separator is not in the paragraph walk
+ * of `storyContentOffset`. Offset arithmetic stays in {@link storyBoxContentOffset}.
+ */
 function occurrencePageContentOffset(
   page: PageRecord,
   occurrence: SemanticReviewArtifactOccurrence
-): Readonly<{ readonly x: number; readonly y: number }> {
+): { readonly x: number; readonly y: number } {
+  if (occurrence.story === 'textbox') {
+    return textboxPageContentOffset(page, occurrence) ?? { x: 0, y: 0 };
+  }
   switch (occurrence.rootStory) {
     case 'body':
-      return Object.freeze({ x: 0, y: 0 });
+      return { x: 0, y: 0 };
     case 'header':
-      return page.header
-        ? storyPageContentOffset(page, page.header.box)
-        : Object.freeze({ x: 0, y: 0 });
+      return page.header ? storyBoxContentOffset(page, page.header.box) : { x: 0, y: 0 };
     case 'footer':
-      return page.footer
-        ? storyPageContentOffset(page, page.footer.box)
-        : Object.freeze({ x: 0, y: 0 });
+      return page.footer ? storyBoxContentOffset(page, page.footer.box) : { x: 0, y: 0 };
     case 'footnote':
     case 'endnote': {
       const area = occurrence.rootStory === 'footnote' ? page.footnotes : page.endnotes;
       const note = area?.notes.find((entry) => entry.scopeId === occurrence.noteScopeId);
-      return note ? storyPageContentOffset(page, note.box) : Object.freeze({ x: 0, y: 0 });
+      return note ? storyBoxContentOffset(page, note.box) : { x: 0, y: 0 };
     }
     case 'note-separator': {
       const area = occurrence.noteAreaKind === 'endnotes' ? page.endnotes : page.footnotes;
-      return area?.separator
-        ? storyPageContentOffset(page, area.separator.box)
-        : Object.freeze({ x: 0, y: 0 });
+      return area?.separator ? storyBoxContentOffset(page, area.separator.box) : { x: 0, y: 0 };
     }
     default:
-      return Object.freeze({ x: 0, y: 0 });
+      return { x: 0, y: 0 };
   }
 }
 
-function freezeRect<T extends SemanticReviewArtifactPageContentRect>(
-  rect: T
-): SemanticReviewArtifactPageContentRect {
-  return Object.freeze({ ...rect });
+interface IndexedRect extends LayoutBox {
+  readonly pageIndex: number;
 }
 
-function toPageStackRect(
-  page: PageRecord,
-  rect: SemanticReviewArtifactPageContentRect
-): SemanticReviewArtifactPageStackRect {
+function freezeRect(rect: LayoutBox): LayoutBox {
+  return Object.freeze({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+}
+
+function toPageStackRect(page: PageRecord, rect: LayoutBox): LayoutBox {
   const origin = pageContentOrigin(page);
   return Object.freeze({
     x: origin.x + rect.x,
@@ -157,9 +183,13 @@ function pointGeometry(
   const page = layout.pages[caret.pageIndex];
   if (!page) return undefined;
   const origin = occurrencePageContentOffset(page, occurrence);
-  const width = Math.max(1, caret.height * 0.05);
   const pageContent = Object.freeze([
-    freezeRect({ x: caret.x + origin.x, y: caret.y + origin.y, width, height: caret.height }),
+    freezeRect({
+      x: caret.x + origin.x,
+      y: caret.y + origin.y,
+      width: 0,
+      height: caret.height,
+    }),
   ]);
   return Object.freeze({
     pageContent,
@@ -170,20 +200,11 @@ function pointGeometry(
 function geometryOfOccurrence(
   layout: SemanticLayout,
   occurrence: SemanticReviewArtifactOccurrence,
-  rects: readonly {
-    readonly pageIndex: number;
-    readonly x: number;
-    readonly y: number;
-    readonly width: number;
-    readonly height: number;
-  }[]
+  rects: readonly IndexedRect[]
 ): SemanticReviewArtifactOccurrenceGeometry | undefined {
   const onPage = rects.filter((rect) => rect.pageIndex === occurrence.pageIndex);
   if (onPage.length === 0) {
-    const point =
-      occurrence.source.start.paragraphId === occurrence.source.end.paragraphId &&
-      occurrence.source.start.offset === occurrence.source.end.offset;
-    return point ? pointGeometry(layout, occurrence) : undefined;
+    return isPointOccurrence(occurrence) ? pointGeometry(layout, occurrence) : undefined;
   }
   const page = layout.pages[occurrence.pageIndex];
   if (!page) return undefined;
@@ -215,54 +236,14 @@ function sameParagraphOverlap(
   return end > start ? { start, end } : null;
 }
 
-function buildStoryOrderTables(layout: SemanticLayout): StoryOrderTables {
-  reviewGeometryOrderBuilds += 1;
-  const every = everyStoryOrder(layout);
-  return {
-    body: documentOrder(layout),
-    bodyIndex: documentOrderIndex(layout),
-    every,
-    everyIndex: new Map(every.map((paragraphId, at) => [paragraphId, at])),
-  };
-}
-
-function orderTableForRange(
-  tables: StoryOrderTables,
-  from: SemanticPosition,
-  to: SemanticPosition
-): { readonly order: readonly string[]; readonly index: ReadonlyMap<string, number> } {
-  if (tables.bodyIndex.has(from.paragraphId) && tables.bodyIndex.has(to.paragraphId)) {
-    return { order: tables.body, index: tables.bodyIndex };
-  }
-  return { order: tables.every, index: tables.everyIndex };
-}
-
-function orderedEndpoints(
-  from: SemanticPosition,
-  to: SemanticPosition,
-  index: ReadonlyMap<string, number>
-): { readonly from: SemanticPosition; readonly to: SemanticPosition } | null {
-  const fromAt = index.get(from.paragraphId);
-  const toAt = index.get(to.paragraphId);
-  if (fromAt === undefined || toAt === undefined) return null;
-  if (fromAt < toAt || (fromAt === toAt && from.offset <= to.offset)) return { from, to };
-  return { from: to, to: from };
-}
-
 function collectIndexedRangeRects(
   layout: SemanticLayout,
   artifacts: readonly SemanticReviewArtifactRecord[]
-): Map<string, { pageIndex: number; x: number; y: number; width: number; height: number }[]> {
-  const found = new Map<
-    string,
-    { pageIndex: number; x: number; y: number; width: number; height: number }[]
-  >();
+): Map<string, IndexedRect[]> {
+  const found = new Map<string, IndexedRect[]>();
   const byParagraph = new Map<string, IndexedRange[]>();
   const pages = new Set<number>();
   let bindings = 0;
-  let orders: StoryOrderTables | undefined;
-  reviewGeometryOrderBuilds = 0;
-  reviewGeometrySpanParagraphVisits = 0;
   reviewGeometryBindings = 0;
 
   const register = (range: IndexedRange, paragraphId: string): boolean => {
@@ -276,36 +257,10 @@ function collectIndexedRangeRects(
     return true;
   };
 
-  const registerSpan = (
-    range: IndexedRange,
-    order: readonly string[],
-    index: ReadonlyMap<string, number>
-  ): void => {
-    const fromAt = index.get(range.from.paragraphId);
-    const toAt = index.get(range.to.paragraphId);
-    if (fromAt === undefined || toAt === undefined) {
-      register(range, range.from.paragraphId);
-      register(range, range.to.paragraphId);
-      return;
-    }
-    const start = Math.min(fromAt, toAt);
-    const end = Math.max(fromAt, toAt);
-    const remaining = MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS - bindings;
-    if (end - start + 1 > remaining) {
-      register(range, order[start]!);
-      register(range, order[end]!);
-      return;
-    }
-    for (let at = start; at <= end; at += 1) {
-      if (bindings >= MAX_REVIEW_GEOMETRY_PARAGRAPH_BINDINGS) return;
-      reviewGeometrySpanParagraphVisits += 1;
-      if (!register(range, order[at]!)) return;
-    }
-  };
-
   for (const [artifactIndex, artifact] of artifacts.entries()) {
     for (const [occurrenceIndex, occurrence] of artifact.occurrences.entries()) {
       if (isPointOccurrence(occurrence)) continue;
+      if (occurrence.source.start.paragraphId !== occurrence.source.end.paragraphId) continue;
       pages.add(occurrence.pageIndex);
       const key = `${artifactIndex}\0${occurrenceIndex}`;
       const from = {
@@ -316,96 +271,62 @@ function collectIndexedRangeRects(
         paragraphId: occurrence.source.end.paragraphId,
         offset: occurrence.source.end.offset,
       };
-      if (from.paragraphId === to.paragraphId) {
-        const ordered = from.offset <= to.offset ? { from, to } : { from: to, to: from };
-        register(
-          {
-            key,
-            from: ordered.from,
-            to: ordered.to,
-            pageIndex: occurrence.pageIndex,
-            sameParagraph: true,
-          },
-          ordered.from.paragraphId
-        );
-        continue;
-      }
-      orders ??= buildStoryOrderTables(layout);
-      const table = orderTableForRange(orders, from, to);
-      const pair = orderedEndpoints(from, to, table.index);
-      if (!pair) continue;
-      registerSpan(
+      const ordered = from.offset <= to.offset ? { from, to } : { from: to, to: from };
+      register(
         {
           key,
-          from: pair.from,
-          to: pair.to,
+          from: ordered.from,
+          to: ordered.to,
           pageIndex: occurrence.pageIndex,
-          sameParagraph: false,
         },
-        table.order,
-        table.index
+        ordered.from.paragraphId
       );
     }
   }
 
   if (byParagraph.size === 0) return found;
 
-  const take = (
-    blocks: readonly BlockFragmentRecord[],
-    pageIndex: number,
-    offsetX: number,
-    offsetY: number
-  ): void => {
-    for (const fragment of paragraphFragmentsOfBlocks(blocks)) {
-      for (const line of fragment.lines) {
-        for (const segment of lineSegments(line)) {
-          const ranges = byParagraph.get(rangeKey(pageIndex, segment.paragraphId));
-          if (!ranges) continue;
-          for (const range of ranges) {
-            const overlap = range.sameParagraph
-              ? sameParagraphOverlap(segment, range.from, range.to)
-              : segmentOverlap(layout, segment, range.from, range.to);
-            if (!overlap) continue;
-            const startX = xWithinLine(line, overlap.start, undefined, segment);
-            const endX = xWithinLine(line, overlap.end, undefined, segment);
-            const rects = found.get(range.key) ?? [];
-            rects.push({
-              pageIndex,
-              x: Math.min(startX, endX) + offsetX,
-              y: line.box.y + offsetY,
-              width: Math.abs(endX - startX),
-              height: line.box.height,
-            });
-            found.set(range.key, rects);
-          }
-        }
-      }
-    }
-  };
-
   for (const page of layout.pages) {
     if (!pages.has(page.index)) continue;
-    take(page.fragments, page.index, 0, 0);
-    for (const story of [page.header, page.footer]) {
-      if (!story) continue;
-      take(
-        story.fragments,
-        page.index,
-        story.box.x - page.contentBox.x,
-        story.box.y - page.contentBox.y
+    forEachPageStory(page, (root) => {
+      const rootDrawingOrigin =
+        root.story === 'header' || root.story === 'footer'
+          ? (drawing: AnchoredDrawingRecord) =>
+              headerFooterAnchoredDrawingOrigin(drawing, root.origin, {
+                x: page.box.x,
+                y: page.box.y,
+              })
+          : undefined;
+      forEachStoryParagraphFragment(
+        root.host,
+        (fragment, context) => {
+          const offset = storyOriginInPageContent(page, context.storyOrigin);
+          for (const line of fragment.lines) {
+            for (const segment of lineSegments(line)) {
+              const ranges = byParagraph.get(rangeKey(page.index, segment.paragraphId));
+              if (!ranges) continue;
+              for (const range of ranges) {
+                const overlap = sameParagraphOverlap(segment, range.from, range.to);
+                if (!overlap) continue;
+                const startX = xWithinLine(line, overlap.start, undefined, segment);
+                const endX = xWithinLine(line, overlap.end, undefined, segment);
+                const rects = found.get(range.key) ?? [];
+                rects.push({
+                  pageIndex: page.index,
+                  x: Math.min(startX, endX) + offset.x,
+                  y: line.box.y + offset.y,
+                  width: Math.abs(endX - startX),
+                  height: line.box.height,
+                });
+                found.set(range.key, rects);
+              }
+            }
+          }
+        },
+        root.origin,
+        rootDrawingOrigin
       );
-    }
-    for (const area of [page.footnotes, page.endnotes]) {
-      if (!area) continue;
-      for (const note of area.notes) {
-        take(
-          note.fragments,
-          page.index,
-          note.box.x - page.contentBox.x,
-          note.box.y - page.contentBox.y
-        );
-      }
-    }
+    });
   }
   return found;
 }

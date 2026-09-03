@@ -195,8 +195,6 @@ export type {
   SemanticCommentArtifactRecord,
   SemanticReviewArtifactOccurrence,
   SemanticReviewArtifactOccurrenceGeometry,
-  SemanticReviewArtifactPageContentRect,
-  SemanticReviewArtifactPageStackRect,
   SemanticReviewArtifactPosition,
   SemanticReviewArtifactRecord,
   SemanticReviewArtifactSource,

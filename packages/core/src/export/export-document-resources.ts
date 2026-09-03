@@ -2,8 +2,7 @@
 
 import { caretAt } from '../layout/semantic-interaction.ts';
 import type { SemanticLayout } from '../layout/semantic-records.ts';
-import type { PageRecord } from '../layout/semantic-records.ts';
-import { storyContentOffset } from '../layout/selection-rects.ts';
+import { pageContentOrigin, storyContentOffset } from '../layout/selection-rects.ts';
 import {
   buildBookmarkIndex,
   resolveNotesPart,
@@ -60,13 +59,6 @@ function freezeDocumentMetadata(properties: DocumentProperties): ExportDocumentM
     if (value !== undefined) copy[key] = value;
   }
   return Object.freeze(copy);
-}
-
-function pageContentOrigin(page: PageRecord): Readonly<{ readonly x: number; readonly y: number }> {
-  return Object.freeze({
-    x: page.box.x + (page.contentBox.x - page.box.x),
-    y: page.box.y + (page.contentBox.y - page.box.y),
-  });
 }
 
 /** @internal */

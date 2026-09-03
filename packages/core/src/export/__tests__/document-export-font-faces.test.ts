@@ -4,7 +4,7 @@ import { strToU8, zipSync } from 'fflate';
 import { defineFontResolver } from '../../editor/index.ts';
 import { sha256FontBytes } from '../../layout/index.ts';
 import { deobfuscateFont } from '../../store/package/embedded-fonts.ts';
-import { ExportResourceError } from '../export-session.ts';
+import { ExportResourceError, type ExportSemanticLayout } from '../export-session.ts';
 import { openFontBackedDocumentForExport } from '../document-export-shaping.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -51,9 +51,21 @@ function minimalDocx(body: string): Uint8Array {
   });
 }
 
-function docxWithEmbed(family: string, body: string): Uint8Array {
+type EmbedSlot = 'regular' | 'bold' | 'italic' | 'boldItalic';
+
+function docxWithEmbed(
+  family: string,
+  body: string,
+  slots: readonly EmbedSlot[] = ['regular']
+): Uint8Array {
   const obfuscated = deobfuscateFont(fontBytes, GUID)!;
-  return zipSync({
+  const slotMarkup: Record<EmbedSlot, string> = {
+    regular: 'embedRegular',
+    bold: 'embedBold',
+    italic: 'embedItalic',
+    boldItalic: 'embedBoldItalic',
+  };
+  const parts: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(
       `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
         '<Default Extension="odttf" ContentType="application/vnd.openxmlformats-officedocument.obfuscatedFont"/>' +
@@ -67,17 +79,33 @@ function docxWithEmbed(family: string, body: string): Uint8Array {
       `<Relationships xmlns="${REL}"><Relationship Id="rId10" Type="${FT}" Target="fontTable.xml"/></Relationships>`
     ),
     'word/_rels/fontTable.xml.rels': strToU8(
-      `<Relationships xmlns="${REL}"><Relationship Id="rIdFont1" Type="${FONT_REL}" Target="fonts/font1.odttf"/></Relationships>`
+      `<Relationships xmlns="${REL}">` +
+        slots
+          .map(
+            (slot, index) =>
+              `<Relationship Id="rIdFont${index + 1}" Type="${FONT_REL}" Target="fonts/font${index + 1}.odttf"/>`
+          )
+          .join('') +
+        '</Relationships>'
     ),
     'word/fontTable.xml': strToU8(
       `<w:fonts xmlns:w="${W}" xmlns:r="${R}"><w:font w:name="${family}">` +
-        `<w:embedRegular r:id="rIdFont1" w:fontKey="{${GUID}}"/></w:font></w:fonts>`
+        slots
+          .map(
+            (slot, index) =>
+              `<w:${slotMarkup[slot]} r:id="rIdFont${index + 1}" w:fontKey="{${GUID}}"/>`
+          )
+          .join('') +
+        '</w:font></w:fonts>'
     ),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`
     ),
-    'word/fonts/font1.odttf': obfuscated,
-  });
+  };
+  for (let index = 0; index < slots.length; index += 1) {
+    parts[`word/fonts/font${index + 1}.odttf`] = obfuscated;
+  }
+  return zipSync(parts);
 }
 
 const bodyRun = (family: string, text = 'Body') =>
@@ -292,6 +320,68 @@ test('a resolver still wins uncovered faces while embedded fills the rest', asyn
     });
     expect(embedded?.id).toBe('embedded:/word/fonts/font1.odttf#regular');
     expect(explicit?.id).toBe('test:resolver');
+  } finally {
+    opened.session.dispose();
+  }
+});
+
+const compactPage =
+  '<w:sectPr><w:pgSz w:w="12240" w:h="3600"/>' +
+  '<w:pgMar w:top="240" w:right="720" w:bottom="240" w:left="720"/></w:sectPr>';
+
+function wrappingBody(family: string): string {
+  return bodyRun(family, 'measurement '.repeat(48).trim()) + compactPage;
+}
+
+function firstLineWidth(layout: ExportSemanticLayout): number {
+  const fragment = layout.pages[0]?.fragments[0];
+  if (!fragment || fragment.kind !== 'paragraph') {
+    throw new Error('expected a paragraph fragment on the first page');
+  }
+  return fragment.lines[0]!.spans[0]!.box.width;
+}
+
+test('an embedded face changes Node layout measurement and page boundaries', async () => {
+  const body = wrappingBody('Body Face');
+  const withEmbed = await openFontBackedDocumentForExport(docxWithEmbed('Body Face', body), {
+    fonts: [],
+  });
+  const stripped = await openFontBackedDocumentForExport(minimalDocx(body), { fonts: [] });
+  expect(withEmbed.ok).toBe(true);
+  expect(stripped.ok).toBe(true);
+  if (!withEmbed.ok || !stripped.ok) return;
+  try {
+    const embeddedLayout = await withEmbed.session.layout();
+    const strippedLayout = await stripped.session.layout();
+    expect(embeddedLayout.pages.length).toBeGreaterThan(0);
+    expect(strippedLayout.pages.length).toBeGreaterThan(0);
+    const lineDiffers = firstLineWidth(embeddedLayout) !== firstLineWidth(strippedLayout);
+    const pageDiffers = embeddedLayout.pages.length !== strippedLayout.pages.length;
+    expect(lineDiffers || pageDiffers).toBe(true);
+  } finally {
+    withEmbed.session.dispose();
+    stripped.session.dispose();
+  }
+});
+
+test("fontPolicy:'strict' succeeds when the embedded face resolves", async () => {
+  const opened = await openFontBackedDocumentForExport(
+    docxWithEmbed('Calibri', bodyRun('Calibri'), ['regular', 'bold', 'italic', 'boldItalic']),
+    { fonts: [], fontPolicy: 'strict' }
+  );
+  expect(opened.ok).toBe(true);
+  if (!opened.ok) return;
+  try {
+    const face = opened.session.admittedFontFace({
+      family: 'Calibri',
+      weight: 400,
+      style: 'normal',
+    });
+    expect(face?.id).toBe('embedded:/word/fonts/font1.odttf#regular');
+    expect(
+      opened.session.fontResolution.families.every((family) => family.coverage === 'complete')
+    ).toBe(true);
+    expect(opened.session.fontResolution.originFailures).toEqual([]);
   } finally {
     opened.session.dispose();
   }

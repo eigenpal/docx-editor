@@ -1,11 +1,9 @@
 // Process-wide shaped measurement shared by Node exporters.
 
 import {
-  FontResolutionError,
   createFixedMeasurer,
   createHarfBuzzTextShaper,
   createLayoutShapedMeasurer,
-  fontRequestKey,
   HARD_MAX_AGGREGATE_FONT_BYTES,
   initializeHarfBuzz,
   type PreparedLayoutFontConfiguration,
@@ -15,7 +13,11 @@ import {
   type TextShaper,
 } from '../layout/index.ts';
 import { FIXED_MEASURER_FINGERPRINT } from '../layout/fixed-measurer.ts';
-import type { FontRequest, ResolvedFont } from '../layout/font-resource.ts';
+import {
+  FontResolutionError,
+  type FontRequest,
+  type ResolvedFont,
+} from '../layout/font-resource.ts';
 import { LAYOUT_HARFBUZZ_SHAPER_POLICY } from '../layout/layout-shaper-policy.ts';
 import {
   configurationOfPreparedLayoutFonts,
@@ -24,6 +26,10 @@ import {
   sharedShapingFingerprintOfPreparedLayoutFonts,
 } from '../layout/layout-shaping.ts';
 import { bindExportLaidOutText, type ExportLaidOutTextApi } from './export-laid-out-text.ts';
+import {
+  createShapingFontResolutionCache,
+  resolveShapingFontFromStyle,
+} from './export-shaping-font-resolution.ts';
 
 /** Immutable handle over process-wide measurement state reusable by every exporter. @public */
 export interface SharedExportShaping {
@@ -83,27 +89,10 @@ export function acquireProcessWideExportShaper(): Promise<TextShaper> {
 }
 
 function shapedMeasurer(shaping: LayoutShapingOptions): TextMeasurer {
-  const resolved = new Map<string, ReturnType<typeof shaping.fonts.resolve>>();
+  const resolved = createShapingFontResolutionCache();
   return createLayoutShapedMeasurer(shaping, {
     resolveFont(style) {
-      const family = style.fontFamily ?? shaping.defaultFont.family;
-      if (family.trim().length === 0) return null;
-      const request = {
-        family,
-        weight: style.bold ? 700 : 400,
-        style: style.italic ? ('italic' as const) : ('normal' as const),
-      };
-      const key = fontRequestKey(request);
-      let result = resolved.get(key);
-      if (!result) {
-        try {
-          result = shaping.fonts.resolve(request);
-        } catch {
-          return null;
-        }
-        resolved.set(key, result);
-      }
-      return result instanceof FontResolutionError ? null : result;
+      return resolveShapingFontFromStyle(shaping, resolved, style);
     },
     fallback: createFixedMeasurer(),
   });

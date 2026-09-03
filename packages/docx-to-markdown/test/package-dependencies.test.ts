@@ -102,6 +102,20 @@ describe('engine dependency integrity', () => {
     ).not.toContain('docx-to-markdown');
   });
 
+  test('confines packaged fonts through the fonts package asset-root contract', () => {
+    const source = readFileSync(join(import.meta.dir, '..', 'src', 'index.ts'), 'utf8');
+    const fontsIndex = readFileSync(
+      join(repositoryRoot, 'packages', 'fonts', 'src', 'index.ts'),
+      'utf8'
+    );
+    expect(manifest.dependencies?.['@docx-editor.dev/fonts']).toBe(`~${fontsManifest.version}`);
+    expect(source).toContain('FONT_ASSET_ROOT');
+    expect(source).toContain("from '@docx-editor.dev/fonts'");
+    expect(source).not.toContain('../../fonts/assets/');
+    expect(fontsIndex).toContain('export const FONT_ASSET_ROOT');
+    expect(fontsIndex).not.toMatch(/docx-to-markdown|docx-to-pdf/);
+  });
+
   test('documents the current embedded-font parity boundary before private release', () => {
     const readme = readFileSync(join(import.meta.dir, '..', 'README.md'), 'utf8');
     expect(readme).toContain('Document-embedded fonts are admitted after explicit origins');

@@ -16,7 +16,7 @@ import {
   defineFontResolver,
   isFontResolver,
 } from '../font-resolver.ts';
-import type { FontOrigin } from '../font-resolver.ts';
+import type { FontOrigin, FontOriginCompositionRequest } from '../font-resolver.ts';
 import type { FontConfigurationFragment, FontResolutionRequest } from '../font-composition.ts';
 import type { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { prepareLayoutFontConfiguration } from '../../layout/layout-shaping.ts';
@@ -194,6 +194,7 @@ describe('composeFontOrigins', () => {
     // Everything else about the request is untouched.
     expect(seen[0]!.families).toBe(REQUEST.families);
     expect(seen[0]!.defaultFamily).toBe(REQUEST.defaultFamily);
+    expect((seen[0] as FontOriginCompositionRequest).committedSourceBytes).toBe(1);
   });
 
   test('reports FACES, not families: two faces of one family are two entries', async () => {
@@ -307,6 +308,32 @@ describe('composeFontOrigins', () => {
     await composeFontOrigins([empty, record], REQUEST);
 
     expect(seen[0]!.resolvedFaces).toBeUndefined();
+    expect((seen[0] as FontOriginCompositionRequest).committedSourceBytes).toBeUndefined();
+  });
+
+  test('tells later origins the bytes earlier origins already committed', async () => {
+    const seen: FontOriginCompositionRequest[] = [];
+    const first = defineFontResolver(async () => ({
+      sources: [
+        { ...source('Calibri', 'first-a'), bytes: new Uint8Array([1, 2, 3]) },
+        { ...source('Arial', 'first-b'), bytes: new Uint8Array([4, 5]) },
+      ],
+    }));
+    const second = defineFontResolver(async (request: FontOriginCompositionRequest) => {
+      seen.push(request);
+      return { sources: [source('Georgia', 'second')] };
+    });
+    const third = defineFontResolver(async (request: FontOriginCompositionRequest) => {
+      seen.push(request);
+      return undefined;
+    });
+
+    await composeFontOrigins([first, second, third], REQUEST);
+
+    expect(seen[0]!.committedSourceBytes).toBe(5);
+    expect(faceNames(seen[0])).toEqual(['Arial/400/normal', 'Calibri/400/normal']);
+    expect(seen[1]!.committedSourceBytes).toBe(6);
+    expect(seen[1]!.families).toBe(REQUEST.families);
   });
 
   test('an aborting origin never starts a later fallback', async () => {

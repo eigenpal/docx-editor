@@ -426,6 +426,7 @@ function occurrencesOf(
             source: {
               partName: range.partName,
               start: { paragraphId, offset: slice.start },
+              // Same paragraph as start: engine occurrences never span paragraphs.
               end: { paragraphId, offset: slice.end },
             },
           });

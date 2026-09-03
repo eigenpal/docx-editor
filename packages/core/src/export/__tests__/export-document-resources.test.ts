@@ -93,8 +93,7 @@ test('immutable byte export provides frozen metadata and destinations from one l
   expect(destination?.pageIndex).toBe(0);
   expect(destination!.pageContent.height).toBeGreaterThan(0);
   const page = layout.pages[0]!;
-  const originY = page.box.y + (page.contentBox.y - page.box.y);
-  expect(destination!.pageStack.y).toBeCloseTo(originY + destination!.pageContent.y, 4);
+  expect(destination!.pageStack.y).toBeCloseTo(page.contentBox.y + destination!.pageContent.y, 4);
   expect(exportDestinationNamed(layout, 'Missing')).toBeUndefined();
 
   opened.session.dispose();

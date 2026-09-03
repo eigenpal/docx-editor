@@ -146,6 +146,20 @@ const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, e
 /** Bundler-visible asset URL for one packaged face. */
 const assetUrl = (file: string): URL => FONT_ASSET_URLS[file];
 
+const firstPackagedFace = FONT_ASSET_URLS[FONT_ASSET_MANIFEST[0]!.file];
+
+/**
+ * Directory URL of the packaged font files this package serves.
+ *
+ * Headless exporters pass this to Core `createPackagedFileFetch` as `trustedRoot`.
+ * The value comes from the same packaged face URLs the loaders fetch, so the trusted
+ * directory matches Node, Bun, pnpm, Yarn PnP, and nested installs. Browser bundlers
+ * rewrite those face URLs to HTTP; HTTP fetches do not use this directory.
+ *
+ * @public
+ */
+export const FONT_ASSET_ROOT: URL = new URL('./', firstPackagedFace);
+
 /**
  * The families Word applies to a document by DEFAULT, and what
  * {@link LoadDefaultFontsOptions.families} falls back to. Frozen — treat it as a constant

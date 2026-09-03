@@ -203,3 +203,29 @@ test('default packaged file reader stays inside trustedRoot and honors maxBytes'
     rmSync(outside, { recursive: true, force: true });
   }
 });
+
+test('default packaged file reader keeps the logical trustedRoot prefix before realpath', async () => {
+  const realDir = mkdtempSync(join(tmpdir(), 'packaged-file-real-'));
+  const linkParent = mkdtempSync(join(tmpdir(), 'packaged-file-link-'));
+  try {
+    writeFileSync(join(realDir, 'face.ttf'), 'font');
+    const linkedDir = join(linkParent, 'assets');
+    symlinkSync(realDir, linkedDir);
+    const symlinkRoot = new URL(
+      pathToFileURL(linkedDir.endsWith('/') ? linkedDir : `${linkedDir}/`).href
+    );
+    const fetcher = createPackagedFileFetch({ trustedRoot: symlinkRoot, maxBytes: 4 });
+
+    const throughLink = await fetcher(new URL(pathToFileURL(join(linkedDir, 'face.ttf')).href));
+    expect(throughLink.status).toBe(200);
+    expect(new Uint8Array(await throughLink.arrayBuffer())).toEqual(
+      new Uint8Array([102, 111, 110, 116])
+    );
+    expect((await fetcher(new URL(pathToFileURL(join(realDir, 'face.ttf')).href))).status).toBe(
+      404
+    );
+  } finally {
+    rmSync(realDir, { recursive: true, force: true });
+    rmSync(linkParent, { recursive: true, force: true });
+  }
+});
