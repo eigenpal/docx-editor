@@ -1,5 +1,11 @@
 # @docx-editor.dev/nuxt
 
+## 2.15.0
+
+### Patch Changes
+
+- @docx-editor.dev/vue@2.15.0
+
 ## 2.14.1
 
 ### Patch Changes
