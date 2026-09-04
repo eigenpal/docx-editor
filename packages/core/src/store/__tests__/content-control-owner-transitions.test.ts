@@ -34,6 +34,18 @@ function loadNested(properties: string, text = 'old'): OoxmlPart {
   return result.part;
 }
 
+function loadControlInsideOwner(properties: string, text = 'old'): OoxmlPart {
+  const result = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p><w:smartTag>` +
+      `<w:sdt><w:sdtPr>${properties}</w:sdtPr>` +
+      `<w:sdtContent><w:r><w:t>${text}</w:t></w:r></w:sdtContent></w:sdt>` +
+      '</w:smartTag></w:p></w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!result.ok) throw new Error(result.reason);
+  return result.part;
+}
+
 function fragmentParagraph(text: string): OoxmlNode {
   const result = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p>` +
@@ -119,6 +131,38 @@ describe('named owners beat adjacent content-control transitions', () => {
     expect(textUnder(control)).toBe('X');
 
     const temporary = loadNested('<w:temporary/><w:text/>');
+    const temporaryParagraph = firstNamed(temporary.root, 'p')!;
+    const temporaryControl = firstNamed(temporary.root, 'sdt')!;
+    const temporaryOwner = firstNamed(temporary.root, 'smartTag')!;
+    const unwrapped = apply(temporary, {
+      op: 'insertText',
+      paragraphId: temporaryParagraph.id,
+      offset: 1,
+      text: 'X',
+      inside: temporaryOwner.id,
+    });
+    expect(findContentControl(unwrapped, temporaryControl.id)).toBeNull();
+    expect(textUnder(firstNamed(unwrapped.root, 'smartTag')!)).toBe('oXld');
+  });
+
+  test('a wrapper owner receives lifecycle transitions from its landing control', () => {
+    const placeholder = loadControlInsideOwner('<w:showingPlcHdr/><w:text/>', 'Prompt');
+    const placeholderParagraph = firstNamed(placeholder.root, 'p')!;
+    const placeholderControl = firstNamed(placeholder.root, 'sdt')!;
+    const placeholderOwner = firstNamed(placeholder.root, 'smartTag')!;
+    const filled = apply(placeholder, {
+      op: 'insertText',
+      paragraphId: placeholderParagraph.id,
+      offset: 0,
+      text: 'X',
+      inside: placeholderOwner.id,
+    });
+    const control = findContentControl(filled, placeholderControl.id)!;
+    expect(isShowingPlaceholder(control)).toBe(false);
+    expect(textUnder(control)).toBe('X');
+    expect(textUnder(firstNamed(filled.root, 'smartTag')!)).toBe('X');
+
+    const temporary = loadControlInsideOwner('<w:temporary/><w:text/>');
     const temporaryParagraph = firstNamed(temporary.root, 'p')!;
     const temporaryControl = firstNamed(temporary.root, 'sdt')!;
     const temporaryOwner = firstNamed(temporary.root, 'smartTag')!;

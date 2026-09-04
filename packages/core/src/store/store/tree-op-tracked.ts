@@ -25,7 +25,12 @@ import {
   type OoxmlParagraphNode,
   type OoxmlPart,
 } from '../package/ooxml-tree.ts';
-import { isContentRevisionKind, isInlineRunContainer } from '../package/ooxml-shared.ts';
+import {
+  isContentRevisionKind,
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../package/ooxml-shared.ts';
 import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
 import { createNodeIdAllocator, findNode, replaceChildren } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
@@ -40,46 +45,10 @@ import {
 import { insertionAuthor, insideDeletion } from './tree-op-retraction.ts';
 import { sameEditingMoment } from './tree-op-tracked-time.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
+import { build, revisionAttributes } from './tree-op-tracked-builders.ts';
 
 export { sameEditingMoment } from './tree-op-tracked-time.ts';
-
-function attr(localName: string, value: string) {
-  return {
-    kind: 'genericExtension' as const,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    value,
-  };
-}
-
-export function build(
-  id: string,
-  kind: OoxmlElement['kind'],
-  localName: string,
-  attributes: OoxmlElement['attributes'],
-  children: readonly OoxmlNode[]
-): OoxmlElement {
-  return {
-    id,
-    kind,
-    namespaceUri: WML_NAMESPACE_URI,
-    localName,
-    prefix: 'w',
-    namespaceBindings: [],
-    attributes,
-    children,
-  } as OoxmlElement;
-}
-
-/** The `CT_TrackChange` attribute triple, spelled once for every wrapper a tracked edit writes. */
-export function revisionAttributes(id: string, revision: RevisionAttributionInput) {
-  return [
-    attr('id', id),
-    attr('author', revision.author),
-    ...(revision.date === undefined ? [] : [attr('date', revision.date)]),
-  ];
-}
+export { build, revisionAttributes } from './tree-op-tracked-builders.ts';
 
 /** A `w:t`, or the `w:delText` the same characters become once struck. */
 function textNode(mint: () => string, value: string, deleted: boolean): OoxmlNode {
@@ -424,7 +393,12 @@ function applyTrackedInsertion(
       payload.nodes ? [runOf(mint, [...properties, ...payload.nodes(mint)])] : [payload.run!(mint)]
     );
 
-  const rebuild = (nodes: readonly OoxmlNode[], stack: readonly OoxmlNode[]): OoxmlNode[] => {
+  const rebuild = (
+    nodes: readonly OoxmlNode[],
+    stack: readonly OoxmlNode[],
+    containerDepth = 0
+  ): OoxmlNode[] => {
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return nodes.slice();
     const out: OoxmlNode[] = [];
     for (const node of nodes) {
       if (placed) {
@@ -517,7 +491,11 @@ function applyTrackedInsertion(
             offset >= start &&
             offset <= end))
       ) {
-        const rebuilt = rebuild(node.children, [...stack, node]);
+        const rebuilt = rebuild(
+          node.children,
+          [...stack, node],
+          nextInlineContainerDepth(node, containerDepth)
+        );
         // The adopted deletion ends exactly where the container does, so the inner walk
         // comes back unplaced. The replacement still belongs beside the struck words,
         // INSIDE the container that holds them.
@@ -780,7 +758,12 @@ export function applyDeleteTracked(
   const strike = (nodes: readonly OoxmlNode[]): OoxmlNode =>
     build(mint(), 'revisionDelete', 'del', revisionAttributes(revisionId, attribution), nodes);
 
-  const rebuild = (nodes: readonly OoxmlNode[], stack: readonly OoxmlNode[]): OoxmlNode[] => {
+  const rebuild = (
+    nodes: readonly OoxmlNode[],
+    stack: readonly OoxmlNode[],
+    containerDepth = 0
+  ): OoxmlNode[] => {
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return nodes.slice();
     const out: OoxmlNode[] = [];
     for (const node of nodes) {
       const length = offsets.lengthOf(node);
@@ -822,7 +805,11 @@ export function applyDeleteTracked(
           node.kind === 'contentControl' ||
           node.kind === 'contentControlContent')
       ) {
-        const rebuilt = rebuild(node.children, [...stack, node]);
+        const rebuilt = rebuild(
+          node.children,
+          [...stack, node],
+          nextInlineContainerDepth(node, containerDepth)
+        );
         // A wrapper emptied by the removal of our own insertion goes with it; one that
         // still holds content stays, because it is still saying something about that
         // content. A CONTROL is not a wrapper: it is document structure the user placed,

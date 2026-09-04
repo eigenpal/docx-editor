@@ -7,14 +7,13 @@
 // spans of the two pages it rebuilt, not the whole document.
 
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
-import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import { blockStoryContainerChildren, storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
   contentControlContentChildren,
   isContentControl,
 } from '../store/package/content-control-walk.ts';
-import { MAX_INLINE_CONTAINER_DEPTH } from '../store/store/tree-op-segments.ts';
 import {
   contentControlPropertiesOf,
   controlLevelOf,
@@ -179,13 +178,13 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
     containerDepth: number,
     lockStack: readonly ContentControlLock[]
   ): number => {
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return offset;
     let cursor = offset;
     for (const child of nodes) {
       if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
       if (isContentControl(child)) {
         // The paragraph offset authority makes every child reached at the shared cap opaque.
         // Do not advance for content that layout cannot address or paint.
-        if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
         const properties = contentControlPropertiesOf(child);
         const lock = parseContentControlLock(propertyVal(properties, 'lock'));
         const nextStack = [...lockStack, lock];
@@ -211,7 +210,6 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
         continue;
       }
       if (isInlineRunContainer(child)) {
-        if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
         cursor = walkInline(
           child.children,
           paragraphId,

@@ -161,6 +161,44 @@ describe('inline run wrapper projection', () => {
     expect(firstNamed(emptied, 'smartTag').kind).toBe('generic');
   });
 
+  test('deletion sweeps empty runs through generic wrappers but preserves the wrapper', () => {
+    for (const outer of ['hyperlink', 'ins'] as const) {
+      const open =
+        outer === 'hyperlink'
+          ? '<w:hyperlink w:anchor="target">'
+          : '<w:ins w:id="7" w:author="Prior">';
+      const original = load(`<w:p>${open}${wrapper('smartTag', run('x'))}</w:${outer}></w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const outerId = firstNamed(original, outer).id;
+      const smartTagId = firstNamed(original, 'smartTag').id;
+      const emptied = apply(original, {
+        op: 'deleteText',
+        paragraphId,
+        start: 0,
+        end: 1,
+      });
+      const smartTag = findById(emptied.root, smartTagId)!;
+
+      expect(findById(emptied.root, outerId)).toBeNull();
+      expect(smartTag.kind).toBe('generic');
+      expect(runsUnder(smartTag)).toEqual([]);
+    }
+
+    const remaining = load(
+      `<w:p><w:hyperlink w:anchor="target">${wrapper('smartTag', run('xy'))}` +
+        '</w:hyperlink></w:p>'
+    );
+    const kept = apply(remaining, {
+      op: 'deleteText',
+      paragraphId: firstParagraph(remaining).id,
+      start: 0,
+      end: 1,
+    });
+    expect(textUnder(firstNamed(kept, 'smartTag'))).toBe('y');
+    expect(runsUnder(firstNamed(kept, 'smartTag'))).toHaveLength(1);
+    expect(firstNamed(kept, 'hyperlink').kind).toBe('hyperlink');
+  });
+
   const edgeWrappers = [
     { name: 'smartTag', xml: `<w:smartTag>${run('B')}</w:smartTag>` },
     { name: 'hyperlink', xml: `<w:hyperlink w:anchor="target">${run('B')}</w:hyperlink>` },

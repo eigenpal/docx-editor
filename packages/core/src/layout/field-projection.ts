@@ -31,7 +31,7 @@ import {
   type OoxmlProperty,
   type HardBreakKind,
 } from '@docx-editor.dev/core/store';
-import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import {
   allowlistedPageField,
   consumeScanNode,
@@ -105,7 +105,6 @@ import {
 } from './note-projection.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
-  MAX_REVISION_DEPTH,
   NO_REVISIONS,
   isRevisionWrapper,
   revisionAttributionOf,
@@ -124,7 +123,6 @@ import type { SpanLinkRecord } from './semantic-records.ts';
 import {
   contentControlContentChildren,
   isContentControl,
-  MAX_CONTENT_CONTROL_NESTING,
 } from '../store/package/content-control-walk.ts';
 
 // Re-exports so existing layout-local imports stay stable: instruction recognition and
@@ -856,8 +854,8 @@ export function piecesOfParagraph(
    *
    * The complex-field machine spans runs in document order within the paragraph, so descending
    * must not restart it — the walk visits runs in the same order a reader sees them, whatever
-   * their nesting. Content-control nesting shares {@link MAX_CONTENT_CONTROL_NESTING} with
-   * block flattening; field-scan depth stays separate.
+   * their nesting. Every transparent wrapper shares {@link MAX_INLINE_CONTAINER_DEPTH} with
+   * paragraph offsets; field-scan depth stays separate.
    */
   if (!consumeScanNode(budget)) return applyEastAsiaFontSlots(pieces);
   const paragraphScope = emptyNamespaceScope();
@@ -923,8 +921,11 @@ export function piecesOfParagraph(
     child: OoxmlNode,
     depth: number,
     namespaceScope: ReadonlyMap<string, string>,
-    sdtDepth: number
+    containerDepth: number
   ): void => {
+    // Match `segmentsOf`: every transparent container consumes one level, and a child reached
+    // at the cap is opaque. Check before runs and atoms so hidden content cannot reach layout.
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     const equation = projectOmmlEquation(child);
     if (equation) {
       const start = offset++;
@@ -943,14 +944,13 @@ export function piecesOfParagraph(
       return;
     }
     if (isContentControl(child)) {
-      if (sdtDepth >= MAX_CONTENT_CONTROL_NESTING) return;
       if (depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
       for (const inner of contentControlContentChildren(child)) {
-        processInline(inner, depth + 1, namespaceScope, sdtDepth + 1);
+        processInline(inner, depth + 1, namespaceScope, containerDepth + 1);
       }
       return;
     }
-    if (depth > MAX_STORY_FIELD_SCAN_DEPTH || depth >= MAX_REVISION_DEPTH) return;
+    if (depth > MAX_STORY_FIELD_SCAN_DEPTH) return;
     const childScope =
       child.kind !== 'textValue' && 'localName' in child
         ? namespaceScopeForNode(namespaceScope, child)
@@ -960,7 +960,8 @@ export function piecesOfParagraph(
       // link's runs must all carry the same record so paint can group them by identity.
       const previous = currentLink;
       currentLink = projectLink?.(child) ?? undefined;
-      for (const inner of child.children) processInline(inner, depth + 1, childScope, sdtDepth);
+      for (const inner of child.children)
+        processInline(inner, depth + 1, childScope, containerDepth + 1);
       currentLink = previous;
       return;
     }
@@ -970,7 +971,8 @@ export function piecesOfParagraph(
       if (!consumeScanNode(budget)) return;
       const enclosing = revisions;
       revisions = withRevision(enclosing, attribution);
-      for (const inner of child.children) processInline(inner, depth + 1, childScope, sdtDepth);
+      for (const inner of child.children)
+        processInline(inner, depth + 1, childScope, containerDepth + 1);
       revisions = enclosing;
       return;
     }
@@ -978,7 +980,7 @@ export function piecesOfParagraph(
     // The wrapper text participates in layout. Its authored direction waits for the full
     // shaping, atom, and visual-caret pipeline tracked by #714.
     for (const inner of (child as OoxmlElement).children)
-      processInline(inner, depth + 1, childScope, sdtDepth);
+      processInline(inner, depth + 1, childScope, containerDepth + 1);
   };
   // Paragraph root counts as depth 0; run children sit at depth 1.
   for (const child of paragraph.children) processInline(child, 1, paragraphScope, 0);

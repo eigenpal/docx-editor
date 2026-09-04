@@ -20,9 +20,8 @@ import {
   isInstrText,
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
-import { isInlineRunContainer } from '../package/ooxml-shared.ts';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
 import {
-  MAX_CONTENT_CONTROL_NESTING,
   contentControlContentOf,
   inlineContainerOf,
   inlineContainersOf,
@@ -75,7 +74,7 @@ export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode 
  *
  * Inline CONTENT CONTROLS are the same class of wrapper: their `w:sdtContent` runs join the
  * paragraph's offset stream with no break opportunity at the boundary. Nesting is bounded
- * (`MAX_CONTENT_CONTROL_NESTING`); beyond the bound the wrapper is opaque so recursion
+ * (`MAX_INLINE_CONTAINER_DEPTH`); beyond the bound the wrapper is opaque so recursion
  * cannot exhaust the stack.
  *
  * `runId` stays the id of the run the content actually lives in, at whatever depth: the
@@ -365,7 +364,7 @@ function walkParagraph(
       return;
     }
     // Inline content controls: descend into `w:sdtContent` with a nesting bound.
-    if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+    if (isContentControlNode(child)) {
       const content = contentControlContentOf(child);
       if (content) {
         const contentStart = offset;
@@ -386,8 +385,7 @@ function walkParagraph(
   return segments;
 }
 
-/** Matches the layout projection's nesting cap; see `segmentsOf`. */
-export const MAX_INLINE_CONTAINER_DEPTH = 32;
+export { MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
 
 /**
  * The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a container.
@@ -395,12 +393,12 @@ export const MAX_INLINE_CONTAINER_DEPTH = 32;
  * Links, revision wrappers, and inline content controls are all run containers.
  */
 export function runsUnder(child: OoxmlNode, depth = 0): OoxmlNode[] {
-  if (child.kind === 'run') return [child];
   if (child.kind === 'textValue' || depth >= MAX_INLINE_CONTAINER_DEPTH) return [];
+  if (child.kind === 'run') return [child];
   if (isInlineRunContainer(child)) {
     return child.children.flatMap((inner) => runsUnder(inner, depth + 1));
   }
-  if (isContentControlNode(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+  if (isContentControlNode(child)) {
     const content = contentControlContentOf(child);
     if (!content) return [];
     return content.children.flatMap((inner) => runsUnder(inner, depth + 1));

@@ -12,12 +12,12 @@
 // Malformed fields demote too: markers contribute nothing and interior result text remains
 // visible/addressable so content never disappears.
 
+import { contentControlContentChildren, isContentControl } from './content-control-walk.ts';
 import {
-  contentControlContentChildren,
-  isContentControl,
-  MAX_CONTENT_CONTROL_NESTING,
-} from './content-control-walk.ts';
-import { isInlineRunContainer, WML_NAMESPACE_URI } from './ooxml-shared.ts';
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  WML_NAMESPACE_URI,
+} from './ooxml-shared.ts';
 import type {
   OoxmlFldCharNode,
   OoxmlFldSimpleNode,
@@ -485,6 +485,7 @@ export function parsedFieldSpansOf(
   };
 
   const visitInline = (child: OoxmlNode, containerDepth = 0): void => {
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (child.kind === 'fldSimple' || (child.kind === 'generic' && isFldSimple(child))) {
       spans.push({
         kind: 'simple',
@@ -508,14 +509,12 @@ export function parsedFieldSpansOf(
     // in an `w:sdt` was worth one offset to layout and nothing to the store — the same
     // disagreement, in the same direction, as the revision wrappers below.
     if (isContentControl(child)) {
-      if (containerDepth < MAX_CONTENT_CONTROL_NESTING) {
-        for (const inner of contentControlContentChildren(child)) {
-          visitInline(inner, containerDepth + 1);
-        }
+      for (const inner of contentControlContentChildren(child)) {
+        visitInline(inner, containerDepth + 1);
       }
       return;
     }
-    if (isInlineRunContainer(child) && containerDepth < MAX_CONTENT_CONTROL_NESTING) {
+    if (isInlineRunContainer(child)) {
       // Revision wrappers are run containers like `w:hyperlink` is. Not descending made a
       // field whose RESULT is wrapped in `w:del` disagree with itself: the begin/end markers
       // formed an atom worth one offset, but the struck result run was not among the nodes

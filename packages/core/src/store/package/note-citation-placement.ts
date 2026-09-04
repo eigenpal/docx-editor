@@ -4,21 +4,31 @@ import { withFreshIds } from './hf-lifecycle-shell.ts';
 import { isInlineContainerProperty } from './inline-container-properties.ts';
 import { replaceChildren } from './ooxml-edit.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from './ooxml-tree.ts';
-import { isContentRevisionKind, WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import {
+  isContentRevisionKind,
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  WML_NAMESPACE_URI,
+} from './ooxml-shared.ts';
 
 /** The ancestors of `nodeId` below `root`, from outermost through its direct parent. */
 export function ancestorPathHolding(root: OoxmlNode, nodeId: string): readonly OoxmlNode[] | null {
   const path: OoxmlNode[] = [];
-  const visit = (node: OoxmlNode): boolean => {
+  const visit = (node: OoxmlNode, containerDepth: number): boolean => {
     if (node.kind === 'textValue') return false;
+    const counted = isInlineRunContainer(node) || isContentControl(node);
+    if (counted && containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return false;
+    const childDepth = counted ? containerDepth + 1 : containerDepth;
     path.push(node);
     for (const child of node.children) {
-      if (child.id === nodeId || visit(child)) return true;
+      const childCounted = isInlineRunContainer(child) || isContentControl(child);
+      const childAddressable = !childCounted || childDepth < MAX_INLINE_CONTAINER_DEPTH;
+      if ((child.id === nodeId && childAddressable) || visit(child, childDepth)) return true;
     }
     path.pop();
     return false;
   };
-  return visit(root) ? path.slice() : null;
+  return visit(root, 0) ? path.slice() : null;
 }
 
 export interface BoundarySplit {
@@ -75,9 +85,11 @@ export function splitBeforeDescendant(
   node: OoxmlNode,
   nodeId: string,
   nextId: () => string,
-  depth = 0
+  containerDepth = 0
 ): BoundarySplit | null {
-  if (node.kind === 'textValue' || depth >= 32) return null;
+  if (node.kind === 'textValue') return null;
+  const counted = isInlineRunContainer(node) || isContentControl(node);
+  if (counted && containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return null;
   const properties = splitWrapperProperties(node);
   const content = node.children.filter(
     (child) => !properties.some((property) => property.id === child.id)
@@ -89,7 +101,8 @@ export function splitBeforeDescendant(
     headContent = content.slice(0, index);
     tailContent = content.slice(index);
   } else {
-    const holder = content.findIndex((child) => containsNodeId(child, nodeId));
+    const childDepth = counted ? containerDepth + 1 : containerDepth;
+    const holder = content.findIndex((child) => containsNodeId(child, nodeId, childDepth));
     if (holder < 0) return null;
     const head: OoxmlNode[] = content.slice(0, holder);
     const tail: OoxmlNode[] = [];
@@ -99,7 +112,7 @@ export function splitBeforeDescendant(
       // boundary. The control stays whole, with one authored id and one protection scope.
       tail.push(held);
     } else {
-      const nested = splitBeforeDescendant(held, nodeId, nextId, depth + 1);
+      const nested = splitBeforeDescendant(held, nodeId, nextId, childDepth);
       if (!nested) return null;
       if (nested.head) head.push(nested.head);
       if (nested.tail) tail.push(nested.tail);
@@ -120,8 +133,11 @@ export function splitBeforeDescendant(
   return { head: rebuild(headContent, false), tail: rebuild(tailContent, true) };
 }
 
-function containsNodeId(node: OoxmlNode, nodeId: string): boolean {
+function containsNodeId(node: OoxmlNode, nodeId: string, containerDepth: number): boolean {
+  const counted = isInlineRunContainer(node) || isContentControl(node);
+  if (counted && containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return false;
   if (node.id === nodeId) return true;
   if (node.kind === 'textValue') return false;
-  return node.children.some((child) => containsNodeId(child, nodeId));
+  const childDepth = counted ? containerDepth + 1 : containerDepth;
+  return node.children.some((child) => containsNodeId(child, nodeId, childDepth));
 }

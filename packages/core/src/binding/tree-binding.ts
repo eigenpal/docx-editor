@@ -26,11 +26,13 @@ import {
 import {
   contentControlContentOf,
   isContentControl,
-  MAX_CONTENT_CONTROL_NESTING,
 } from '../store/package/content-control-walk.ts';
 import { isInlineContainerProperty } from '../store/package/inline-container-properties.ts';
-import { isContentRevisionKind, isInlineRunContainer } from '../store/package/ooxml-shared.ts';
-import { MAX_INLINE_CONTAINER_DEPTH } from '../store/store/tree-op-segments.ts';
+import {
+  isContentRevisionKind,
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+} from '../store/package/ooxml-shared.ts';
 import { inlineOwnerOf, runPropsOf, treeSchema } from './tree-schema.ts';
 
 /**
@@ -199,7 +201,7 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
         );
         continue;
       }
-      if (isContentControl(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+      if (isContentControl(child)) {
         const content = contentControlContentOf(child);
         if (content) walkEditable(content, depth + 1, inside);
         continue;
@@ -410,7 +412,7 @@ function inlineOwnerAncestors(paragraph: OoxmlNode): ReadonlyMap<string, readonl
         );
         continue;
       }
-      if (isContentControl(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+      if (isContentControl(child)) {
         const content = contentControlContentOf(child);
         if (content) walk(content, ancestors, depth + 1);
       }

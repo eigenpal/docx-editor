@@ -22,7 +22,11 @@ import { relationshipsOf } from '../store/package/package-edit.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
-import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import {
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../store/package/ooxml-shared.ts';
 import { clipboardBase64Of } from './clipboard-html-base64.ts';
 import {
   foldAttribute,
@@ -77,7 +81,6 @@ const ENDNOTES_REL = `${R_NS}/endnotes`;
 const DEFAULT_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_MAX_TOTAL_IMAGE_BYTES = 8 * 1024 * 1024;
 const EMU_PER_PX = 9525;
-const MAX_INLINE_CONTAINER_DEPTH = 32;
 const CLIPBOARD_IMAGE_MIMES: ReadonlyMap<string, string> = new Map([
   ['image/png', 'image/png'],
   ['image/jpeg', 'image/jpeg'],
@@ -524,20 +527,22 @@ function renderDrawing(ctx: RenderContext, drawing: OoxmlElement): string {
  *  Walks EXACTLY what the renderer walks: a fldChar inside a drawing's textbox or
  *  an SDT's properties never reaches renderRun, so counting it would desync the
  *  balance probe from the render pass and blank everything after it. */
-function advanceFieldState(node: OoxmlElement, fields: FieldState): void {
+function advanceFieldState(node: OoxmlElement, fields: FieldState, depth = 0): void {
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+  const childDepth = nextInlineContainerDepth(node, depth);
   for (const child of node.children) {
     if (!isElement(child)) continue;
     if (child.kind === 'drawing') continue;
     if (child.kind === 'contentControl') {
       const content = child.children.find((inner) => inner.kind === 'contentControlContent');
-      if (content && isElement(content)) advanceFieldState(content, fields);
+      if (content && isElement(content)) advanceFieldState(content, fields, childDepth);
       continue;
     }
     if (child.kind === 'fldChar') {
       advanceFieldCharacter(child, fields);
       continue;
     }
-    advanceFieldState(child, fields);
+    advanceFieldState(child, fields, childDepth);
   }
 }
 
@@ -685,16 +690,12 @@ function renderInline(
       // every later paragraph.
       case 'revisionDelete':
       case 'revisionMoveFrom':
-        advanceFieldState(child, fields);
+        advanceFieldState(child, fields, depth);
         break;
       case 'generic':
-        out += renderInline(
-          ctx,
-          child.children,
-          paragraphPPr,
-          fields,
-          isInlineRunContainer(child) ? depth + 1 : depth
-        );
+        if (isInlineRunContainer(child)) {
+          out += renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
+        }
         break;
       default:
         break;

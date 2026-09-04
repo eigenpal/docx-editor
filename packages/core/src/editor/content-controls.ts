@@ -35,8 +35,7 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
-import { MAX_INLINE_CONTAINER_DEPTH } from '../store/store/tree-op-segments.ts';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
@@ -300,8 +299,9 @@ function inlineControlRangesOf(paragraph: OoxmlElement): InlineControlRange[] {
     children: readonly OoxmlNode[],
     offset: number,
     depth: number,
-    sdtDepth: number
+    containerDepth: number
   ): number => {
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return offset;
     let position = offset;
     for (const child of children) {
       if (child.kind === 'paragraphProperties') continue;
@@ -310,16 +310,19 @@ function inlineControlRangesOf(paragraph: OoxmlElement): InlineControlRange[] {
         continue;
       }
       if (isInlineRunContainer(child)) {
-        if (sdtDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
-        position = walk(child.children, position, depth, sdtDepth + 1);
+        position = walk(child.children, position, depth, containerDepth + 1);
         continue;
       }
       if (isContentControlNode(child)) {
         // A control reached at the shared container cap is opaque and contributes zero length.
-        if (sdtDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
         const start = position;
         const nextDepth = depth + 1;
-        position = walk(contentControlContentChildren(child), position, nextDepth, sdtDepth + 1);
+        position = walk(
+          contentControlContentChildren(child),
+          position,
+          nextDepth,
+          containerDepth + 1
+        );
         ranges.push({ control: child, start, end: position, depth: nextDepth });
         continue;
       }

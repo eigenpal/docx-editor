@@ -180,11 +180,17 @@ export function isContentRevisionKind(
   );
 }
 
-const MAX_INLINE_RUN_CONTAINER_SHAPE_DEPTH = 32;
+/** Total transparent-container depth available to every paragraph-inline walk. */
+export const MAX_INLINE_CONTAINER_DEPTH = 32;
+
+/** Depth inherited by a node's children in the shared paragraph-inline address space. */
+export function nextInlineContainerDepth(node: OoxmlNode, depth: number): number {
+  return isInlineRunContainer(node) || node.kind === 'contentControl' ? depth + 1 : depth;
+}
 
 /** Whether a run/block-polymorphic wrapper contains block-level content. */
 function hasBlockContent(node: OoxmlElement, depth = 0): boolean {
-  if (depth >= MAX_INLINE_RUN_CONTAINER_SHAPE_DEPTH) return true;
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return true;
   for (const child of node.children) {
     if (child.kind === 'textValue') continue;
     if (

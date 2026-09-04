@@ -15,6 +15,7 @@ import {
   findNode,
   isContentControl,
   ORIGIN_IDS,
+  paragraphOffsetIndex,
   parentNodeOf,
   parseTocInstruction,
   planTocEntries,
@@ -29,7 +30,6 @@ import {
   type TreeDocOp,
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
-import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
@@ -2030,30 +2030,6 @@ export function mountPaginatedSurface(
       });
   }
 
-  function addressableLength(node: OoxmlNode): number {
-    if (node.kind === 'textValue') return node.value.length;
-    if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-    if (node.kind === 'runProperties') return 0;
-    if (node.kind === 'generic' && !isInlineRunContainer(node)) return 0;
-    const kind = (node as { kind: string }).kind;
-    if (kind === 'contentControl') {
-      let total = 0;
-      for (const child of node.children) {
-        if (child.kind === 'textValue') continue;
-        if (
-          (child as { kind: string }).kind === 'contentControlContent' ||
-          child.localName === 'sdtContent'
-        ) {
-          for (const inner of child.children) total += addressableLength(inner);
-        }
-      }
-      return total;
-    }
-    let total = 0;
-    for (const child of node.children) total += addressableLength(child);
-    return total;
-  }
-
   function contentChildrenOf(control: OoxmlElement): readonly OoxmlNode[] {
     for (const child of control.children) {
       if (child.kind === 'textValue') continue;
@@ -2076,7 +2052,7 @@ export function mountPaginatedSurface(
     const collectParagraphs = (nodes: readonly OoxmlNode[]): void => {
       for (const node of nodes) {
         if (node.kind === 'paragraph') {
-          paragraphs.push({ id: node.id, length: addressableLength(node) });
+          paragraphs.push({ id: node.id, length: paragraphOffsetIndex(node).length });
           continue;
         }
         if (node.kind === 'textValue') continue;
@@ -2104,49 +2080,26 @@ export function mountPaginatedSurface(
     let hostParagraphId: string | null = null;
     let start = 0;
     let end = 0;
-    const scanInline = (nodes: readonly OoxmlNode[], offset: number, paraId: string): boolean => {
-      let cursor = offset;
+    const scanParagraphs = (nodes: readonly OoxmlNode[]): boolean => {
       for (const node of nodes) {
-        if (node.id === controlId) {
-          hostParagraphId = paraId;
-          start = cursor;
-          end = cursor + addressableLength(node);
+        if (node.kind === 'paragraph') {
+          const span = paragraphOffsetIndex(node).spanOf(control);
+          if (!span) continue;
+          hostParagraphId = node.id;
+          start = span.start;
+          end = span.end;
           return true;
         }
         if (node.kind === 'textValue') {
-          cursor += node.value.length;
           continue;
         }
-        const kind = (node as { kind: string }).kind;
-        if (kind === 'contentControl') {
-          const length = addressableLength(node);
-          if (scanInline(contentChildrenOf(node as OoxmlElement), cursor, paraId)) return true;
-          cursor += length;
-          continue;
-        }
-        if (node.kind === 'run' || isInlineRunContainer(node)) {
-          if (scanInline(node.children, cursor, paraId)) return true;
-          cursor += addressableLength(node);
-          continue;
-        }
-        if (node.kind === 'paragraph') {
-          if (scanInline(node.children, 0, node.id)) return true;
-          continue;
-        }
-        if (node.kind === 'tab' || node.kind === 'hardBreak') {
-          cursor += 1;
-          continue;
-        }
-        if (scanInline(node.children, cursor, paraId)) return true;
-        cursor += addressableLength(node);
+        if (scanParagraphs(node.children)) return true;
       }
       return false;
     };
-    scanInline(
+    scanParagraphs(
       (session.partFor(storyScopeOfNodeId(session, controlId, storyScope())) ?? session.part()).root
-        .children,
-      0,
-      ''
+        .children
     );
     if (!hostParagraphId) return false;
     setSelection({

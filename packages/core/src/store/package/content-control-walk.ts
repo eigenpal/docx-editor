@@ -8,7 +8,11 @@
 // `contentControlContent` nodes are the authority once the reader emits them. Both paths
 // share one bound so nesting cannot recurse without limit.
 
-import { isInlineRunContainer, WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import {
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  WML_NAMESPACE_URI,
+} from './ooxml-shared.ts';
 import { blockStoryContainerChildren } from './story-blocks.ts';
 import type {
   OoxmlContentControlContentNode,
@@ -73,8 +77,9 @@ export function contentControlContentOf(node: OoxmlNode): readonly OoxmlNode[] |
 /**
  * Children of every `w:sdtContent` under a control, in document order.
  *
- * Does not recurse into nested controls — callers that flatten blocks or inline runs do that
- * with their own depth counter against {@link MAX_CONTENT_CONTROL_NESTING}.
+ * Does not recurse into nested controls. Block callers use
+ * {@link MAX_CONTENT_CONTROL_NESTING}; paragraph callers use
+ * {@link MAX_INLINE_CONTAINER_DEPTH} across all transparent containers.
  */
 export function contentControlContentChildren(control: OoxmlNode): readonly OoxmlNode[] {
   if (control.kind === 'textValue' || !isContentControl(control)) return [];
@@ -181,6 +186,7 @@ export function walkParagraphInline(
   depth: number,
   visit: (child: OoxmlNode) => void
 ): void {
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
   for (const child of children) {
     if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
     if (child.kind === 'run') {
@@ -188,15 +194,12 @@ export function walkParagraphInline(
       continue;
     }
     if (isInlineRunContainer(child)) {
-      if (depth < MAX_CONTENT_CONTROL_NESTING)
-        walkParagraphInline(child.children, depth + 1, visit);
+      walkParagraphInline(child.children, depth + 1, visit);
       continue;
     }
     if (isContentControl(child)) {
-      if (depth < MAX_CONTENT_CONTROL_NESTING) {
-        const content = contentControlContentOf(child);
-        if (content) walkParagraphInline(content, depth + 1, visit);
-      }
+      const content = contentControlContentOf(child);
+      if (content) walkParagraphInline(content, depth + 1, visit);
       continue;
     }
     visit(child);

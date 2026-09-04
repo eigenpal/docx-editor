@@ -23,16 +23,13 @@ import {
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import {
   fragmentsOfParagraph,
   type SemanticLayout,
   type SemanticPosition,
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
-
-/** Inline `w:sdt` nesting bound — matches `segmentsOf` and formatting walks. */
-const MAX_SDT_NESTING = 32;
 
 function isContentControl(node: OoxmlNode): boolean {
   return node.kind !== 'textValue' && (node as { kind: string }).kind === 'contentControl';
@@ -83,9 +80,10 @@ function isDepthCountedContainer(node: OoxmlNode): boolean {
  */
 function liveTextUnder(node: OoxmlNode, depth = 0): string {
   if (node.kind === 'textValue') return node.value;
-  if (depth >= MAX_SDT_NESTING) return '';
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return '';
   if (node.kind === 'deletedText' || isContentRevisionDeletion(node.kind)) return '';
   if (isInstrText(node) || node.kind === 'runProperties') return '';
+  if (node.kind === 'generic' && !isInlineRunContainer(node)) return '';
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
   const next = isDepthCountedContainer(node) ? depth + 1 : depth;
@@ -105,7 +103,7 @@ function walkInlineChildren(
   depth: number,
   visit: (child: OoxmlNode) => void
 ): void {
-  if (depth >= MAX_SDT_NESTING) return;
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
   for (const child of children) {
     if (child.kind === 'hyperlink') {
       visit(child);

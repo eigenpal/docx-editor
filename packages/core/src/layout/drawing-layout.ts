@@ -30,7 +30,7 @@ import {
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
-import { walkDrawingRunContent } from './drawing-inline-walk.ts';
+import { walkDrawingAtoms, walkDrawingRunContent } from './drawing-inline-walk.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import {
@@ -1053,7 +1053,12 @@ export function anchoredDrawingAtomsInParagraph(
     projection: DrawingProjection;
     revisions: readonly RevisionAttribution[];
   }[] = [];
-  const visit = (node: OoxmlNode, revisions: readonly RevisionAttribution[]): void => {
+  walkDrawingAtoms(paragraph, (node, containers) => {
+    let revisions: readonly RevisionAttribution[] = NO_REVISIONS;
+    for (const container of containers) {
+      const attribution = isRevisionWrapper(container) ? revisionAttributionOf(container) : null;
+      if (attribution) revisions = withRevision(revisions, attribution);
+    }
     if (node.kind === 'drawing') {
       const projection =
         context.projectionForAtom?.(node.id) ??
@@ -1064,15 +1069,8 @@ export function anchoredDrawingAtomsInParagraph(
     if (isRunLevelMcAlternateContent(node)) {
       const projection = context.projectionForAtom?.(node.id) ?? null;
       if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
-      return;
     }
-    if ('children' in node) {
-      const attribution = isRevisionWrapper(node) ? revisionAttributionOf(node) : null;
-      const enclosing = attribution ? withRevision(revisions, attribution) : revisions;
-      for (const child of node.children) visit(child, enclosing);
-    }
-  };
-  for (const child of paragraph.children) visit(child, NO_REVISIONS);
+  });
   return Object.freeze(atoms);
 }
 

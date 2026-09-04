@@ -7,6 +7,7 @@
 import { findNode, parentNodeOf, type OoxmlEditResult } from '../package/ooxml-edit.ts';
 import {
   isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
   readOnOffChild,
   W14_NAMESPACE_URI,
 } from '../package/ooxml-shared.ts';
@@ -53,8 +54,8 @@ const SDT_PR_CHILD_NAMESPACE: Readonly<Record<string, string>> = {
 };
 
 /**
- * Shared nesting budget for transparent content-control walks (layout / binding / ops).
- * Beyond this depth the wrapper is treated as opaque rather than recursed.
+ * Nesting budget for control-only and block-control walks.
+ * Paragraph-inline walks use `MAX_INLINE_CONTAINER_DEPTH` across every transparent container.
  */
 export const MAX_CONTENT_CONTROL_NESTING = 32;
 
@@ -278,6 +279,7 @@ export function inlineContainersOf(
   const path: OoxmlNode[] = [];
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || held !== null) return;
+    if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (node.id === runId) {
       held = path.slice().reverse();
       return;
@@ -289,7 +291,6 @@ export function inlineContainersOf(
       // A content control is a container the same way a link is: typing at its OUTER edge
       // must not join the run inside and grow the control (pro-review-and-custom-nodes 4.6).
       node.kind === 'contentControl';
-    if (counted && depth >= MAX_CONTENT_CONTROL_NESTING) return;
     const nextDepth = counted ? depth + 1 : depth;
     if (counted) path.push(node);
     for (const child of node.children) visit(child, nextDepth);
