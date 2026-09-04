@@ -35,12 +35,27 @@ import {
   type SemanticSelection,
 } from '@docx-editor.dev/core/layout';
 
+/** WordprocessingML, for the demoted controls the reader preserves as generic nodes. */
+const WML = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+
+/**
+ * A content control, typed or DEMOTED.
+ *
+ * A `w:sdt` the reader could not type — properties after `w:sdtContent`, say — is preserved
+ * as a generic node, and the shared offset walk still counts its text. Matching only the
+ * typed kind here reported a link with the right span and an EMPTY label, because the walk
+ * that gathers the text stopped at the wrapper the offsets had already descended.
+ */
 function isContentControl(node: OoxmlNode): boolean {
-  return node.kind !== 'textValue' && (node as { kind: string }).kind === 'contentControl';
+  if (node.kind === 'textValue') return false;
+  if ((node as { kind: string }).kind === 'contentControl') return true;
+  return node.kind === 'generic' && node.localName === 'sdt' && node.namespaceUri === WML;
 }
 
 function isContentControlContent(node: OoxmlNode): boolean {
-  return node.kind !== 'textValue' && (node as { kind: string }).kind === 'contentControlContent';
+  if (node.kind === 'textValue') return false;
+  if ((node as { kind: string }).kind === 'contentControlContent') return true;
+  return node.kind === 'generic' && node.localName === 'sdtContent' && node.namespaceUri === WML;
 }
 
 /**
@@ -82,7 +97,9 @@ function liveTextUnder(node: OoxmlNode, depth = 0): string {
   if (depth >= MAX_INLINE_CONTAINER_DEPTH) return '';
   if (node.kind === 'deletedText' || isContentRevisionDeletion(node.kind)) return '';
   if (isInstrText(node) || node.kind === 'runProperties') return '';
-  if (node.kind === 'generic' && !isInlineRunContainer(node)) return '';
+  // A demoted content control is transparent to the offset walk, so it must be transparent
+  // here too, or the link's label comes back empty for a span the offsets say has text.
+  if (node.kind === 'generic' && !isInlineRunContainer(node) && !isContentControl(node)) return '';
   if (node.kind === 'tab') return '\t';
   if (node.kind === 'hardBreak') return hardBreakText(node);
   const next = nextInlineContainerDepth(node, depth);
