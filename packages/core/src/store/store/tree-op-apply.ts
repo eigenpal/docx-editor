@@ -633,10 +633,13 @@ function applyInsertContent(
   inside?: string,
   bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
-  // A named owner is authoritative. Adjacent placeholder and temporary controls only own an
-  // unscoped caret, or they can consume an edit explicitly addressed to their neighbour.
+  // A named owner is authoritative. Its own nearest enclosing control receives lifecycle
+  // transitions, while a control merely adjacent to that owner does not. Unowned input keeps
+  // the caret-based rule, including the established adjacent placeholder/temporary transition.
   const control =
-    inside === undefined ? contentControlAtCaret(part, paragraph, offset, offset, bias) : null;
+    inside === undefined
+      ? contentControlAtCaret(part, paragraph, offset, offset, bias)
+      : innermostContentControlAround(part, inside);
   if (control && isShowingPlaceholder(control)) {
     return applyPlaceholderReplace(part, control, builders, options);
   }

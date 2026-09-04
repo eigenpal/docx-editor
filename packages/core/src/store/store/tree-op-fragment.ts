@@ -121,6 +121,9 @@ export function validateInsertFragment(
     if (owner && containsNode(paragraph, owner.id) && !isInlineOnlyFragment(op)) {
       return 'fragment-invalid-block';
     }
+    // validateTreeOp already resolved locks and bindings from this named owner's actual
+    // insertion landing. A caret-based check here would instead inspect an adjacent control.
+    return null;
   }
   return rejectContentEdit(part, paragraph as OoxmlParagraphNode, op.offset, op.offset);
 }
