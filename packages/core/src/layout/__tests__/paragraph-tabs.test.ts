@@ -4,14 +4,17 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
+  buildNumberingIndex,
   buildStyleCascadeTable,
   createFixedMeasurer,
+  defaultTabIntervalFromSettings,
   enumerateDocumentSections,
   geometryOfSection,
   layoutHeaderFooterStory,
   layoutSemanticDocument,
   linesOf,
   MAX_TAB_STOPS,
+  paragraphFragmentsOf,
   paragraphTabStops,
 } from '../index.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
@@ -21,7 +24,13 @@ import {
   resolveHeaderFooterPartsBySection,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
-import { cascadedTabStops, nextTabDestination, tabAdvanceWidth } from '../paragraph-tabs.ts';
+import {
+  cascadedTabStops,
+  EMPTY_TAB_STOPS,
+  nextTabDestination,
+  tabAdvanceWidth,
+  withHangingIndentTabStop,
+} from '../paragraph-tabs.ts';
 import { cascadeParagraphFormatting } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -323,5 +332,153 @@ describe('a trailing tab ends its line rather than starting one', () => {
     const lines = linesOf(layout);
     expect(lines).toHaveLength(1);
     expect(lines[0]!.spans.some((span) => span.text === 'RIGHT')).toBe(true);
+  });
+});
+
+describe('a hanging indent is an implicit left tab on the first line', () => {
+  // EP_ZMVZ_MULTI_v4: `w:ind w:left="1701" w:hanging="1701"`, no `w:tabs`, default grid 708 twips.
+  const INDENT_TWIPS = 1701;
+  const INDENT_PT = INDENT_TWIPS / 20;
+  const METRIC_INTERVAL_PT = 708 / 20;
+  const ZMVZ = resolve(import.meta.dir, '../../../../../e2e/fixtures/EP_ZMVZ_MULTI_v4.docx');
+
+  const hang = (inner: string, tabsXml = '') =>
+    `<w:p><w:pPr><w:ind w:left="${INDENT_TWIPS}" w:hanging="${INDENT_TWIPS}"/>${tabsXml}</w:pPr>` +
+    `<w:r>${inner}</w:r></w:p>`;
+
+  const layHang = (body: string, defaultTabStopPt?: number) =>
+    layoutSemanticDocument(load(body), 1, {
+      measurer,
+      styleCascade: elevenPointDefaults(),
+      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+    });
+
+  const afterTab = (line: ReturnType<typeof linesOf>[number], text: string) =>
+    line.spans.find((span) => span.text === text)!;
+
+  test('the helper inserts a left stop at indentLeft and leaves authored stops in front', () => {
+    const earlier = { positionPt: 36, alignment: 'left' as const };
+    const tabs = { stops: [earlier], defaultIntervalPt: 36 };
+    const merged = withHangingIndentTabStop(tabs, INDENT_PT, -INDENT_PT);
+    expect(merged.stops.map((stop) => [stop.alignment, stop.positionPt])).toEqual([
+      ['left', 36],
+      ['left', INDENT_PT],
+    ]);
+    expect(nextTabDestination(merged, 0, 500).positionPt).toBe(36);
+    expect(nextTabDestination(merged, 40, 500).positionPt).toBe(INDENT_PT);
+  });
+
+  test('an explicit stop at the indent keeps its alignment and leader', () => {
+    const authored = {
+      stops: [{ positionPt: INDENT_PT, alignment: 'right' as const, leader: 'dot' as const }],
+      defaultIntervalPt: 36,
+    };
+    expect(withHangingIndentTabStop(authored, INDENT_PT, -INDENT_PT)).toBe(authored);
+    expect(nextTabDestination(authored, 0, 500)).toEqual({
+      positionPt: INDENT_PT,
+      alignment: 'right',
+      leader: 'dot',
+    });
+  });
+
+  test('a caret at the indent continues to the next default stop', () => {
+    const tabs = withHangingIndentTabStop(EMPTY_TAB_STOPS, INDENT_PT, -INDENT_PT);
+    expect(nextTabDestination(tabs, 0, 500).positionPt).toBe(INDENT_PT);
+    expect(nextTabDestination(tabs, INDENT_PT, 500).positionPt).toBe(108);
+  });
+
+  test('the 1701-twip hanging indent sends the value to 85.05pt, not the default grid', () => {
+    const [line] = linesOf(
+      layHang(hang('<w:t>Miesto:</w:t><w:tab/><w:t>VALUE</w:t>'), METRIC_INTERVAL_PT)
+    );
+    expect(afterTab(line!, 'VALUE').box.x).toBeCloseTo(INDENT_PT, 5);
+    expect(afterTab(line!, 'VALUE').box.x).not.toBeCloseTo(METRIC_INTERVAL_PT * 2, 5);
+  });
+
+  test('an earlier explicit stop still wins', () => {
+    const [line] = linesOf(
+      layHang(
+        hang(
+          '<w:t>Hi</w:t><w:tab/><w:t>X</w:t>',
+          '<w:tabs><w:tab w:val="left" w:pos="720"/></w:tabs>'
+        )
+      )
+    );
+    expect(afterTab(line!, 'X').box.x).toBe(36);
+  });
+
+  test('an explicit stop at the indent keeps right alignment and its leader', () => {
+    const [line] = linesOf(
+      layHang(
+        hang(
+          '<w:t>Hi</w:t><w:tab/><w:t>ABCD</w:t>',
+          `<w:tabs><w:tab w:val="right" w:pos="${INDENT_TWIPS}" w:leader="dot"/></w:tabs>`
+        )
+      )
+    );
+    const tab = line!.spans.find((span) => span.text === '\t')!;
+    const value = afterTab(line!, 'ABCD');
+    expect(tab.tabLeader).toBe('dot');
+    expect(value.box.x + value.box.width).toBeCloseTo(INDENT_PT, 5);
+  });
+
+  test('a caret past the hanging indent continues to the next default stop', () => {
+    // 15 glyphs at 6pt = 90pt, which is already past 85.05.
+    const [line] = linesOf(layHang(hang('<w:t>abcdefghijklmno</w:t><w:tab/><w:t>X</w:t>')));
+    expect(afterTab(line!, 'X').box.x).toBe(108);
+  });
+
+  test('a continuation line starts at the indent and is not trapped there', () => {
+    const lines = linesOf(
+      layHang(hang('<w:t>Hi</w:t><w:tab/><w:t>VALUE</w:t><w:br/><w:tab/><w:t>Y</w:t>'))
+    );
+    expect(lines).toHaveLength(2);
+    expect(afterTab(lines[0]!, 'VALUE').box.x).toBeCloseTo(INDENT_PT, 5);
+    expect(lines[1]!.spans[0]!.box.x).toBeCloseTo(INDENT_PT, 5);
+    expect(afterTab(lines[1]!, 'Y').box.x).toBe(108);
+  });
+
+  test('a positional tab still uses its own destination', () => {
+    const fragment = paragraphFragmentsOf(
+      layHang(
+        hang(
+          '<w:t>Hi</w:t><w:ptab w:alignment="right" w:relativeTo="margin" w:leader="dot"/><w:t>7</w:t>'
+        )
+      ).pages[0]!
+    )[0]!;
+    const last = fragment.lines[0]!.spans[fragment.lines[0]!.spans.length - 1]!;
+    expect(last.text).toBe('7');
+    expect(Math.round(last.box.x + last.box.width)).toBe(
+      Math.round(fragment.box.x + fragment.box.width)
+    );
+    expect(last.box.x).not.toBeCloseTo(INDENT_PT, 1);
+  });
+
+  test('EP_ZMVZ_MULTI_v4 sends the Miesto value to the hanging indent', () => {
+    const bytes = new Uint8Array(readFileSync(ZMVZ));
+    const loaded = readOoxmlPackage(bytes);
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const main = loaded.package.parts.get(loaded.package.mainDocumentPart)!;
+    const numbering = loaded.package.parts.get('/word/numbering.xml');
+    const styles = loaded.package.parts.get('/word/styles.xml');
+    const settings = loaded.package.parts.get('/word/settings.xml');
+    const layout = layoutSemanticDocument(main, 1, {
+      measurer,
+      numberingIndex: buildNumberingIndex(numbering?.root ?? null),
+      styleCascade: buildStyleCascadeTable(styles?.root ?? null),
+      defaultTabStopPt: defaultTabIntervalFromSettings(settings?.root),
+    });
+    const fragment = layout.pages
+      .flatMap((page) => paragraphFragmentsOf(page))
+      .find((entry) =>
+        entry.lines.some((line) => line.spans.some((span) => span.text.includes('Miesto')))
+      );
+    expect(fragment).toBeDefined();
+    const line = fragment!.lines[0]!;
+    const tab = line.spans.find((span) => span.text === '\t')!;
+    const value = line.spans[line.spans.indexOf(tab) + 1]!;
+    expect(value.text).toContain('sídlo');
+    expect(value.box.x).toBeCloseTo(INDENT_PT, 2);
   });
 });

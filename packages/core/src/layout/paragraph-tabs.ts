@@ -270,6 +270,48 @@ export interface TabDestination {
 }
 
 /**
+ * Word treats a hanging-indent paragraph's text start as an implicit left tab.
+ *
+ * On the first line, `w:hanging` starts the caret LEFT of `indentLeft`. A typed tab with
+ * no custom stop would otherwise jump to the default grid and miss the indent Word uses as
+ * the value column. `firstLineOffset < 0` is that non-list hanging case: a list item's
+ * first-line shift is never negative, so list suffix tabs keep using the authored stops.
+ *
+ * An authored stop at `indentLeft` keeps its alignment and leader. Destinations stay
+ * strictly ahead of the caret, so a later line that starts AT the indent is not trapped
+ * there. Positional tabs do not consult this list.
+ *
+ * Cache: `indent.left` and `w:hanging` already live in the break key via `w:ind` (and a
+ * list item via `listItem.cacheToken`). This helper derives from those terms only, so it
+ * needs no extra fingerprint.
+ */
+export function withHangingIndentTabStop(
+  tabs: ResolvedTabStops,
+  indentLeft: number,
+  firstLineOffset: number
+): ResolvedTabStops {
+  if (!(firstLineOffset < 0) || !Number.isFinite(indentLeft)) return tabs;
+  for (const stop of tabs.stops) {
+    if (stop.positionPt === indentLeft) return tabs;
+  }
+  const implicit: TabStop = { positionPt: indentLeft, alignment: 'left' };
+  const stops: TabStop[] = [];
+  let inserted = false;
+  for (const stop of tabs.stops) {
+    if (!inserted && implicit.positionPt < stop.positionPt) {
+      stops.push(implicit);
+      inserted = true;
+    }
+    stops.push(stop);
+  }
+  if (!inserted) stops.push(implicit);
+  return {
+    stops: Object.freeze(stops),
+    defaultIntervalPt: tabs.defaultIntervalPt,
+  };
+}
+
+/**
  * Next tab destination strictly past `currentX`, preferring custom stops then the default
  * interval. Destination is clamped to `rightEdge` so stops cannot escape the content box.
  */

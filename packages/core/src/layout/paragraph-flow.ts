@@ -38,6 +38,7 @@ import {
   nextTabDestination,
   tabAdvanceWidth,
   TAB_LEADER_GLYPH,
+  withHangingIndentTabStop,
   type ResolvedTabStops,
   type TabLeader,
 } from './paragraph-tabs.ts';
@@ -633,6 +634,7 @@ export function breakParagraph(
   // The first line starts `firstLineOffset` from the paragraph's left indent — right for
   // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent.
   const firstLineOffset = flow?.firstLineOffset ?? 0;
+  const flowTabStops = withHangingIndentTabStop(tabStops, indentLeft, firstLineOffset);
 
   // Model ranges the caret must step over. Collected during the piece walk rather than derived
   // from the emitted spans, because in the proposed result a deletion produces no span at all
@@ -1469,7 +1471,7 @@ export function breakParagraph(
           : null;
         const destination =
           positional === null
-            ? nextTabDestination(tabStops, currentX, rightEdge)
+            ? nextTabDestination(flowTabStops, currentX, rightEdge)
             : positional.positionPt > currentX
               ? positional
               : {
