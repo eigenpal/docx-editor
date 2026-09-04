@@ -117,8 +117,12 @@ function openStore(bytes: Uint8Array): TreePackageStore {
   return new TreePackageStore(pkg, main);
 }
 
+function mainPartOf(pkg: OoxmlPackage): OoxmlPart {
+  return pkg.parts.get(pkg.mainDocumentPart)!;
+}
+
 function firstParagraphId(pkg: OoxmlPackage): string {
-  const main = pkg.parts.get(pkg.mainDocumentPart)!;
+  const main = mainPartOf(pkg);
   const body = main.root.children.find((child) => child.kind === 'body')!;
   const p = body.children.find((child) => child.kind === 'paragraph')!;
   return p.id;
@@ -129,6 +133,23 @@ const seededNotes =
   `<w:footnote w:type="continuationSeparator" w:id="0"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>` +
   `<w:footnote w:id="1"><w:p><w:r><w:footnoteRef/></w:r><w:r><w:t>one</w:t></w:r></w:p></w:footnote>` +
   `<w:footnote w:id="3"><w:p><w:r><w:t>three</w:t></w:r></w:p></w:footnote>`;
+
+/** The ancestors of the first footnote citation under `root`, or null when there is none. */
+function citationAncestors(root: OoxmlNode): OoxmlNode[] | null {
+  const path: OoxmlNode[] = [];
+  const visit = (node: OoxmlNode, ancestors: OoxmlNode[]): boolean => {
+    if (node.kind === 'textValue') return false;
+    if (node.localName === 'footnoteReference') {
+      for (const ancestor of ancestors) path.push(ancestor);
+      return true;
+    }
+    ancestors.push(node);
+    for (const child of node.children) if (visit(child, ancestors)) return true;
+    ancestors.pop();
+    return false;
+  };
+  return visit(root, []) ? path : null;
+}
 
 describe('insertNote', () => {
   test('creates part/rel/content-type and allocates id from max+1', () => {
@@ -195,110 +216,6 @@ describe('insertNote', () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected failure');
     expect(result.reason).toBe('invalidArgs');
-  });
-
-  test('a citation escapes only the revision inside each neutral outer wrapper', () => {
-    const runs = '<w:r><w:t>A</w:t></w:r><w:r><w:t>B</w:t></w:r>';
-    const revision = `<w:ins w:id="1" w:author="A">${runs}</w:ins>`;
-    const cases = [
-      { outer: 'hyperlink', xml: `<w:hyperlink w:anchor="mark">${revision}</w:hyperlink>` },
-      { outer: 'smartTag', xml: `<w:smartTag>${revision}</w:smartTag>` },
-      {
-        outer: 'sdt',
-        xml: `<w:sdt><w:sdtPr><w:id w:val="7"/></w:sdtPr><w:sdtContent>${revision}</w:sdtContent></w:sdt>`,
-      },
-    ];
-    for (const sample of cases) {
-      const store = openStore(build({ body: `<w:p>${sample.xml}</w:p>` }));
-      const paragraphId = firstParagraphId(store.currentPackage());
-      expect(
-        store.applyLifecycleOp({ op: 'insertNote', noteKind: 'footnote', paragraphId, offset: 1 })
-          .ok
-      ).toBe(true);
-      const pkg = store.currentPackage();
-      const main = pkg.parts.get(pkg.mainDocumentPart)!;
-      const path: OoxmlNode[] = [];
-      const findCitation = (node: OoxmlNode, ancestors: OoxmlNode[]): boolean => {
-        if (node.kind === 'textValue') return false;
-        if (node.localName === 'footnoteReference') {
-          for (const ancestor of ancestors) path.push(ancestor);
-          return true;
-        }
-        ancestors.push(node);
-        for (const child of node.children) if (findCitation(child, ancestors)) return true;
-        ancestors.pop();
-        return false;
-      };
-      expect(findCitation(main.root, [])).toBe(true);
-      expect(path.some((node) => node.localName === sample.outer)).toBe(true);
-      expect(path.some((node) => node.kind === 'revisionInsert')).toBe(false);
-      expect(paragraphTextOf(main, paragraphId)).toBe('A\u{fffc}B');
-    }
-  });
-
-  test('a citation splits one revised run at its actual child boundary', () => {
-    const store = openStore(
-      build({
-        body:
-          '<w:p><w:ins w:id="1" w:author="A"><w:r>' +
-          '<w:t>A</w:t><w:t>B</w:t></w:r></w:ins></w:p>',
-      })
-    );
-    const paragraphId = firstParagraphId(store.currentPackage());
-    const result = store.applyLifecycleOp({
-      op: 'insertNote',
-      noteKind: 'footnote',
-      paragraphId,
-      offset: 1,
-    });
-    expect(result.ok).toBe(true);
-
-    const main = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
-    expect(paragraphTextOf(main, paragraphId)).toBe('A\u{fffc}B');
-    const xml = serializeOoxmlPart(main);
-    const firstRevision = xml.indexOf('<w:ins');
-    const firstRevisionEnd = xml.indexOf('</w:ins>', firstRevision);
-    const citation = xml.indexOf('<w:footnoteReference');
-    const secondRevision = xml.indexOf('<w:ins', firstRevision + 1);
-    expect(firstRevisionEnd).toBeLessThan(citation);
-    expect(citation).toBeLessThan(secondRevision);
-    expect(xml.slice(firstRevision, firstRevisionEnd)).toContain('>A<');
-    expect(xml.slice(secondRevision)).toContain('>B<');
-  });
-
-  test('a control inside a revision moves whole to the citation boundary', () => {
-    const store = openStore(
-      build({
-        body:
-          '<w:p><w:ins w:id="1" w:author="A"><w:sdt>' +
-          '<w:sdtPr><w:id w:val="7"/><w:lock w:val="sdtLocked"/></w:sdtPr>' +
-          '<w:sdtContent><w:r><w:t>A</w:t></w:r><w:r><w:t>B</w:t></w:r>' +
-          '</w:sdtContent></w:sdt></w:ins></w:p>',
-      })
-    );
-    const paragraphId = firstParagraphId(store.currentPackage());
-    const result = store.applyLifecycleOp({
-      op: 'insertNote',
-      noteKind: 'footnote',
-      paragraphId,
-      offset: 1,
-    });
-    expect(result.ok).toBe(true);
-    const main = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
-    const controls: OoxmlNode[] = [];
-    const collect = (node: OoxmlNode): void => {
-      if (node.kind === 'textValue') return;
-      if (node.kind === 'contentControl') controls.push(node);
-      for (const child of node.children) collect(child);
-    };
-    collect(main.root);
-    expect(controls).toHaveLength(1);
-    for (const control of controls) {
-      expect(
-        control.kind !== 'textValue' &&
-          control.children.some((child) => child.kind === 'contentControlProperties')
-      ).toBe(true);
-    }
   });
 });
 

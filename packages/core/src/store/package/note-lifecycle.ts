@@ -42,6 +42,7 @@ import {
 } from './note-nodes.ts';
 import {
   canHoldNoteCitation,
+  citationSplitParent,
   freeRelationshipId,
   withContentTypeOverride,
   withFreshIds,
@@ -997,11 +998,10 @@ function insertNodesAtOffset(
     if (!textParent) return null;
     const run = findNode(part, segment.runId);
     if (!run || run.kind !== 'run') return null;
-    // A run nested inside a link or a revision wrapper cannot host the split — a citation
-    // spliced into somebody's `w:ins` would join their proposal. Refuse; the caller
-    // degrades to a rejection, never to a silently misplaced reference.
-    const runIndex = paragraph.children.findIndex((child) => child.id === run.id);
-    if (runIndex < 0) return null;
+    // Refuse a split the citation must not host; the caller degrades to a rejection, never
+    // to a silently misplaced reference.
+    const splitParent = citationSplitParent(paragraph, run.id);
+    if (!splitParent) return null;
 
     const headRun = {
       ...run,
@@ -1022,10 +1022,10 @@ function insertNodesAtOffset(
     // Remint ids inside head/tail copies so the split halves stay unique.
     const head = withFreshIds(headRun, nextId);
     const tail = withFreshIds(tailRun, nextId);
-    const rebuilt = paragraph.children.flatMap((child) =>
+    const rebuilt = splitParent.children.flatMap((child) =>
       child.id === run.id ? [head, ...nodes, tail] : [child]
     );
-    const replaced = replaceChildren(part, paragraph.id, rebuilt);
+    const replaced = replaceChildren(part, splitParent.id, rebuilt);
     return replaced.ok ? replaced.part : null;
   }
 
