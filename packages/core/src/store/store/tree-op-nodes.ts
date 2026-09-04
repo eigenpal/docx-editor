@@ -268,19 +268,18 @@ export function hasGlossaryPlaceholderRef(control: OoxmlNode): boolean {
 }
 
 /**
- * The innermost inline CONTAINER (hyperlink, field, content control) holding a run, within
- * one paragraph. Null for an ordinary top-level run.
+ * The inline CONTAINERS holding a descendant, innermost first, within one paragraph.
  */
 export function inlineContainersOf(
   paragraph: { readonly children: readonly OoxmlNode[] },
-  runId: string
+  descendantId: string
 ): readonly OoxmlNode[] {
   let held: OoxmlNode[] | null = null;
   const path: OoxmlNode[] = [];
   const visit = (node: OoxmlNode, depth: number): void => {
     if (node.kind === 'textValue' || held !== null) return;
     if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
-    if (node.id === runId) {
+    if (node.id === descendantId) {
       held = path.slice().reverse();
       return;
     }
@@ -300,12 +299,12 @@ export function inlineContainersOf(
   return held ?? [];
 }
 
-/** The innermost inline container holding a run, or null for a direct paragraph run. */
+/** The innermost inline container holding a descendant, or null for a direct child. */
 export function inlineContainerOf(
   paragraph: { readonly children: readonly OoxmlNode[] },
-  runId: string
+  descendantId: string
 ): OoxmlNode | null {
-  return inlineContainersOf(paragraph, runId)[0] ?? null;
+  return inlineContainersOf(paragraph, descendantId)[0] ?? null;
 }
 
 /**

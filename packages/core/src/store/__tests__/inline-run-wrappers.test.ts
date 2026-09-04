@@ -10,7 +10,7 @@ import {
 import { canonicalOoxmlFingerprint, serializeOoxmlPart } from '../package/ooxml-serialize.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { isInlineRunContainer } from '../package/ooxml-shared.ts';
-import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/tree-ops.ts';
+import { applyTreeOp, paragraphTextOf, validateTreeOp, type TreeDocOp } from '../store/tree-ops.ts';
 import { paragraphOffsetIndex, runsUnder, segmentsOf } from '../store/tree-op-segments.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -44,6 +44,26 @@ function firstParagraph(part: OoxmlPart): OoxmlParagraphNode {
   const found = walk(part.root);
   if (!found) throw new Error('no paragraph');
   return found;
+}
+
+function paragraphsOf(part: OoxmlPart): OoxmlParagraphNode[] {
+  const paragraphs: OoxmlParagraphNode[] = [];
+  const walk = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
+    if (node.kind === 'paragraph') {
+      paragraphs.push(node);
+      return;
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(part.root);
+  return paragraphs;
+}
+
+function containsNamed(node: OoxmlNode, localName: string): boolean {
+  if (node.kind === 'textValue') return false;
+  if (node.namespaceUri === W && node.localName === localName) return true;
+  return node.children.some((child) => containsNamed(child, localName));
 }
 
 function firstNamed(part: OoxmlPart, localName: string): Exclude<OoxmlNode, { kind: 'textValue' }> {
@@ -451,6 +471,80 @@ describe('inline run wrapper projection', () => {
     const xml = serializeOoxmlPart(split);
     expect(xml.match(/<w:customXmlPr/g)).toHaveLength(3);
     expect(xml.match(/<w:customXml>/g)).toHaveLength(3);
+  });
+
+  const simpleField = '<w:fldSimple w:instr="PAGE"><w:r><w:t>1</w:t></w:r></w:fldSimple>';
+
+  test('a single split separates a runless field from following wrapper text', () => {
+    const original = load(`<w:p>${wrapper('smartTag', `${simpleField}${run('B')}`)}</w:p>`);
+    const split = apply(original, {
+      op: 'splitParagraph',
+      paragraphId: firstParagraph(original).id,
+      offset: 1,
+    });
+    const paragraphs = paragraphsOf(split);
+
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphTextOf(split, paragraphs[0]!.id)).toBe('\uFFFC');
+    expect(paragraphTextOf(split, paragraphs[1]!.id)).toBe('B');
+    expect(containsNamed(paragraphs[0]!, 'fldSimple')).toBe(true);
+    expect(containsNamed(paragraphs[1]!, 'fldSimple')).toBe(false);
+  });
+
+  test('a many-split distributes a runless field and wrapper text by model offset', () => {
+    const original = load(`<w:p>${wrapper('smartTag', `${simpleField}${run('AB')}`)}</w:p>`);
+    const split = apply(original, {
+      op: 'splitParagraphMany',
+      paragraphId: firstParagraph(original).id,
+      offsets: [1, 2],
+    });
+    const paragraphs = paragraphsOf(split);
+
+    expect(paragraphs).toHaveLength(3);
+    expect(paragraphs.map((paragraph) => paragraphTextOf(split, paragraph.id))).toEqual([
+      '\uFFFC',
+      'A',
+      'B',
+    ]);
+    expect(containsNamed(paragraphs[0]!, 'fldSimple')).toBe(true);
+    expect(containsNamed(paragraphs[1]!, 'fldSimple')).toBe(false);
+    expect(containsNamed(paragraphs[2]!, 'fldSimple')).toBe(false);
+  });
+
+  test('an insertion before a wrapper-leading runless field succeeds outside the wrapper', () => {
+    const original = load(`<w:p>${wrapper('smartTag', `${simpleField}${run('B')}`)}</w:p>`);
+    const paragraphId = firstParagraph(original).id;
+    const wrapperId = firstNamed(original, 'smartTag').id;
+    const result = applyTreeOp(original, { op: 'insertText', paragraphId, offset: 0, text: 'X' });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(paragraphTextOf(result.part, paragraphId)).toBe('X\uFFFCB');
+    expect(containsNamed(findById(result.part.root, wrapperId)!, 'fldSimple')).toBe(true);
+    expect(firstParagraph(result.part).children[0]?.kind).toBe('run');
+  });
+
+  test('a tracked right-biased insertion follows validation into a leading smartTag', () => {
+    const original = load(`<w:p>${wrapper('smartTag', run('B'))}</w:p>`);
+    const paragraphId = firstParagraph(original).id;
+    const wrapperId = firstNamed(original, 'smartTag').id;
+    const op: TreeDocOp = {
+      op: 'insertText',
+      paragraphId,
+      offset: 0,
+      text: 'X',
+      bias: 'right',
+      revision: { author: 'Reviewer' },
+    };
+
+    expect(validateTreeOp(original, op)).toBeNull();
+    const result = applyTreeOp(original, op);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const updatedWrapper = findById(result.part.root, wrapperId)!;
+    expect(paragraphTextOf(result.part, paragraphId)).toBe('XB');
+    expect(textUnder(updatedWrapper)).toBe('XB');
+    expect(containsNamed(updatedWrapper, 'ins')).toBe(true);
   });
 
   test('all four wrappers survive a normalized serialize and reopen round trip', () => {

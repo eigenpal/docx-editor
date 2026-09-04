@@ -37,6 +37,7 @@ import { equivalentNodes } from './ooxml-node-equality.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import {
+  insertionDestination,
   paragraphOffsetIndex,
   trailingInsertionDestination,
   type ParagraphOffsetIndex,
@@ -218,7 +219,8 @@ export function applyInsertTracked(
   offset: number,
   text: string,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
+  options?: { readonly deferValidation?: boolean },
+  bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
   return applyTrackedInsertion(
     part,
@@ -226,7 +228,8 @@ export function applyInsertTracked(
     offset,
     { length: text.length, nodes: (mint) => [textNode(mint, text, false)] },
     revision,
-    options
+    options,
+    bias
   );
 }
 
@@ -318,11 +321,14 @@ function applyTrackedInsertion(
   offset: number,
   payload: TrackedInsertionPayload,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean }
+  options?: { readonly deferValidation?: boolean },
+  bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const offsets = paragraphOffsetIndex(paragraph);
   const trailingDestination = trailingInsertionDestination(paragraph, offset);
+  const rightBiasedDestination =
+    bias === 'right' ? insertionDestination(paragraph, offset, null, bias) : null;
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
     created: [],
@@ -443,6 +449,7 @@ function applyTrackedInsertion(
         insertionAuthor([node]) === revision.author &&
         sameEditingMoment(revisionDateOf(node), revision.date);
       const sharedTrailingOwner = trailingDestination?.path.has(node.id) === true;
+      const rightBiasedOwner = rightBiasedDestination?.path.has(node.id) === true;
       // THE REPLACEMENT FOLLOWS THE DELETION IT REPLACES — into a link or a control, and
       // only when the WHOLE deletion lives there. Replacing a link's display text strikes
       // runs INSIDE the `w:hyperlink`, and the insertion adopting that deletion aims at
@@ -470,7 +477,7 @@ function applyTrackedInsertion(
       if (
         container &&
         ((offset > start && offset < end) ||
-          ((ownInsertion || holdsReplaced || sharedTrailingOwner) &&
+          ((ownInsertion || holdsReplaced || sharedTrailingOwner || rightBiasedOwner) &&
             offset >= start &&
             offset <= end))
       ) {

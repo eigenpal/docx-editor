@@ -16,7 +16,8 @@ import {
   WML_NAMESPACE_URI,
 } from './ooxml-shared.ts';
 import { contentControlContentOf, isContentControl } from './content-control-walk.ts';
-import type { OoxmlNode, OoxmlPart } from './ooxml-tree.ts';
+import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from './ooxml-tree.ts';
+import { paragraphOffsetIndex } from '../store/tree-op-segments.ts';
 
 /** Word's own limit is 40 characters; this is the fail-closed bound, not a fidelity claim. */
 const MAX_BOOKMARK_NAME_LENGTH = 256;
@@ -66,23 +67,15 @@ function attributeValue(node: OoxmlNode, localName: string): string | undefined 
 export function buildBookmarkIndex(part: OoxmlPart): BookmarkIndex {
   const index = new Map<string, BookmarkAnchor>();
 
-  const inlineLength = (node: OoxmlNode): number => {
-    if (node.kind === 'textValue') return node.value.length;
-    if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-    if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
-    let total = 0;
-    for (const child of node.children) total += inlineLength(child);
-    return total;
-  };
-
-  const scanParagraph = (paragraph: OoxmlNode): void => {
-    if (paragraph.kind === 'textValue') return;
-    let offset = 0;
+  const scanParagraph = (paragraph: OoxmlParagraphNode): void => {
+    const offsets = paragraphOffsetIndex(paragraph);
     const walkInline = (child: OoxmlNode, depth: number): void => {
       if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
       if (child.kind === 'bookmarkStart') {
         const name = attributeValue(child, 'name');
+        const span = offsets.spanOf(child);
         if (
+          span !== null &&
           name !== undefined &&
           name.length > 0 &&
           name.length <= MAX_BOOKMARK_NAME_LENGTH &&
@@ -90,14 +83,11 @@ export function buildBookmarkIndex(part: OoxmlPart): BookmarkIndex {
           !index.has(name) &&
           index.size < MAX_BOOKMARKS
         ) {
-          index.set(name, { name, paragraphId: paragraph.id, offset });
+          index.set(name, { name, paragraphId: paragraph.id, offset: span.start });
         }
         return;
       }
-      if (child.kind === 'run') {
-        offset += inlineLength(child);
-        return;
-      }
+      if (child.kind === 'run') return;
       // A link's markers sit at real positions inside it, so the walk descends rather than
       // charging the whole link's width before looking.
       if (isInlineRunContainer(child)) {

@@ -532,6 +532,30 @@ describe('clicking a painted link', () => {
     expect(mounted.editor.surface!.state().selection.head.paragraphId).toBe(PID(2));
   });
 
+  test('an internal link jumps after a wrapped complex field at its model offset', () => {
+    const mounted = mount(
+      '<w:p><w:hyperlink w:anchor="target"><w:r><w:t>Go</w:t></w:r></w:hyperlink></w:p>' +
+        '<w:p><w:smartTag>' +
+        '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+        '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+        '<w:r><w:t>12</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="end"/></w:r>' +
+        '<w:bookmarkStart w:id="1" w:name="target"/>' +
+        '<w:r><w:t>Destination</w:t></w:r>' +
+        '</w:smartTag></w:p>'
+    );
+    expect(mounted.editor.surface!.bookmarks().get('target')?.offset).toBe(1);
+
+    caret(mounted, 0, 1);
+    click(anchorFor(mounted, 'Go'));
+
+    expect(mounted.editor.surface!.state().selection.head).toMatchObject({
+      paragraphId: PID(1),
+      offset: 1,
+    });
+  });
+
   test('a dangling anchor is an inert click: no jump, no popover, no error', () => {
     const mounted = mount(
       `<w:p><w:hyperlink w:anchor="nowhere"><w:r><w:t>Go</w:t></w:r></w:hyperlink></w:p>` +

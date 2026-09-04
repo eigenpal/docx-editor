@@ -58,6 +58,11 @@ export interface Segment {
   readonly formatRunIds?: readonly string[];
 }
 
+/** Node id that locates a segment in paragraph ancestry: its run, or its runless atom. */
+export function segmentAncestryNodeId(segment: Segment): string {
+  return segment.runId || segment.node.id;
+}
+
 export function isParagraph(node: OoxmlNode | null): node is OoxmlParagraphNode {
   return node !== null && node.kind === 'paragraph';
 }
@@ -458,7 +463,7 @@ export function insertionSite(
   if (owner === null && boundary) {
     const boundaryIndex = all.findIndex((segment) => segment === boundary);
     const preceding = boundaryIndex > 0 ? all[boundaryIndex - 1]! : null;
-    const containers = inlineContainersOf(paragraph, boundary.runId);
+    const containers = inlineContainersOf(paragraph, segmentAncestryNodeId(boundary));
     // Default typing at a wrapper edge stays outside, but `bias: 'right'` explicitly asks to
     // join the run that starts there. Resolve its innermost transparent container before the
     // ordinary wrapper-edge escape, so the default rule cannot override the caller's request.
@@ -471,7 +476,8 @@ export function insertionSite(
         : null;
     if (biasedContainer) {
       const biasedBoundary = all.find(
-        (segment) => segment.start === offset && containsNode(biasedContainer, segment.runId)
+        (segment) =>
+          segment.start === offset && containsNode(biasedContainer, segmentAncestryNodeId(segment))
       );
       if (biasedBoundary) return { kind: 'atBoundary', segment: biasedBoundary };
     }
@@ -480,7 +486,9 @@ export function insertionSite(
       const container = containers[index]!;
       if (!isInlineRunContainer(container) || offsets.spanOf(container)?.start !== offset) continue;
       const followsContentInSameWrapper =
-        preceding !== null && preceding.end === offset && containsNode(container, preceding.runId);
+        preceding !== null &&
+        preceding.end === offset &&
+        containsNode(container, segmentAncestryNodeId(preceding));
       if (!followsContentInSameWrapper) outermostWrapper = index;
     }
     const entered = outermostWrapper >= 0 ? containers[outermostWrapper] : null;
@@ -495,7 +503,7 @@ export function insertionSite(
   if (owner === null) {
     const trailing = segments[segments.length - 1];
     if (trailing?.end === offset) {
-      const containers = inlineContainersOf(paragraph, trailing.runId);
+      const containers = inlineContainersOf(paragraph, segmentAncestryNodeId(trailing));
       let outermostWrapper = -1;
       for (let index = 0; index < containers.length; index += 1) {
         if (isInlineRunContainer(containers[index]!)) outermostWrapper = index;
@@ -510,7 +518,9 @@ export function insertionSite(
           ...(index < 0 ? {} : { index: index + 1 }),
         };
       }
-      const direct = paragraph.children.find((child) => child.id === trailing.runId);
+      const direct = paragraph.children.find(
+        (child) => child.id === segmentAncestryNodeId(trailing)
+      );
       if (direct?.kind === 'run') return { kind: 'appendToRun', run: direct };
     }
   }
@@ -551,7 +561,7 @@ export function insertionDestination(
   const site = insertionSite(paragraph, offset, owner, bias);
   const landingNodeId =
     site.kind === 'withinValue' || site.kind === 'atBoundary'
-      ? site.segment.runId
+      ? segmentAncestryNodeId(site.segment)
       : site.kind === 'appendToRun'
         ? site.run.id
         : site.holder.id;
@@ -651,18 +661,18 @@ function idsUnder(node: OoxmlNode, out: Set<string>): void {
 function spanOfControl(
   paragraph: OoxmlParagraphNode,
   segments: readonly Segment[],
-  runId: string
+  segment: Segment
 ): InlineControlSpan | null {
-  const container = inlineContainerOf(paragraph, runId);
+  const container = inlineContainerOf(paragraph, segmentAncestryNodeId(segment));
   if (!container || container.kind !== 'contentControl') return null;
   const ids = new Set<string>();
   idsUnder(container, ids);
   let start = Number.MAX_SAFE_INTEGER;
   let end = -1;
-  for (const segment of segments) {
-    if (!ids.has(segment.runId)) continue;
-    if (segment.start < start) start = segment.start;
-    if (segment.end > end) end = segment.end;
+  for (const candidate of segments) {
+    if (!ids.has(segmentAncestryNodeId(candidate))) continue;
+    if (candidate.start < start) start = candidate.start;
+    if (candidate.end > end) end = candidate.end;
   }
   if (end < 0) return null;
   return { controlId: container.id, start, end };
@@ -682,7 +692,7 @@ export function inlineControlEndingAt(
   const segments = segmentsOf(paragraph);
   const before = [...segments].reverse().find((s) => s.end === offset && s.end > s.start);
   if (!before) return null;
-  const span = spanOfControl(paragraph, segments, before.runId);
+  const span = spanOfControl(paragraph, segments, before);
   return span && span.end === offset ? span : null;
 }
 
@@ -694,7 +704,7 @@ export function inlineControlStartingAt(
   const segments = segmentsOf(paragraph);
   const after = segments.find((s) => s.start === offset && s.end > s.start);
   if (!after) return null;
-  const span = spanOfControl(paragraph, segments, after.runId);
+  const span = spanOfControl(paragraph, segments, after);
   return span && span.start === offset ? span : null;
 }
 

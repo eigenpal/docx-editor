@@ -122,6 +122,7 @@ import {
   isParagraph,
   paragraphLength,
   runsUnder,
+  segmentAncestryNodeId,
   segmentsOf,
   type Segment,
 } from './tree-op-segments.ts';
@@ -405,7 +406,15 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   switch (op.op) {
     case 'insertText':
       if (op.revision) {
-        return applyInsertTracked(part, paragraph, op.offset, op.text, op.revision, options);
+        return applyInsertTracked(
+          part,
+          paragraph,
+          op.offset,
+          op.text,
+          op.revision,
+          options,
+          op.bias
+        );
       }
       return applyInsertContent(
         part,
@@ -2338,11 +2347,16 @@ function splitIdentityOf(
   return { headId: headParaId.toUpperCase(), prefix };
 }
 
-/** The segments of one paragraph child, at any depth — a run's own, or every run in a link. */
+/** Every segment owned by one paragraph child, including atoms that have no run. */
 export function segmentsForChild(child: OoxmlNode, segments: readonly Segment[]): Segment[] {
-  const runIds = new Set(runsUnder(child).map((run) => run.id));
-  if (runIds.size === 0) return [];
-  return segments.filter((segment) => runIds.has(segment.runId));
+  const descendantIds = new Set<string>();
+  const collect = (node: OoxmlNode): void => {
+    descendantIds.add(node.id);
+    if (node.kind === 'textValue') return;
+    for (const inner of node.children) collect(inner);
+  };
+  collect(child);
+  return segments.filter((segment) => descendantIds.has(segmentAncestryNodeId(segment)));
 }
 
 /**
