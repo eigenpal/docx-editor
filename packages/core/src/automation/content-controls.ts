@@ -19,11 +19,13 @@ import {
   type ContentControlProperties,
 } from '../store/package/content-control-nodes.ts';
 import { collectStoryParagraphs } from '../store/package/story-blocks.ts';
-import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlParagraphNode } from '../store/package/ooxml-tree.ts';
 import { contentControlLockAt } from '../store/store/tree-op-content-controls.ts';
+import { paragraphModelTextOf } from '../store/store/paragraph-model-text.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import type { AutomationTextProjection } from './operations.ts';
 import type { AutomationStoryReads } from './reads.ts';
+import { projectParagraphText } from './text-projection.ts';
 
 /**
  * Ceiling on how many controls one scope answers.
@@ -90,6 +92,18 @@ export function contentControlNodeOf(
   return null;
 }
 
+function paragraphContainingControl(
+  reads: AutomationStoryReads,
+  nodeId: string
+): OoxmlParagraphNode | null {
+  for (const paragraphId of reads.paragraphIds) {
+    const paragraph = reads.node(paragraphId);
+    if (!paragraph || paragraph.kind !== 'paragraph') continue;
+    if (contentControlsIn(paragraph).some((entry) => entry.node.id === nodeId)) return paragraph;
+  }
+  return null;
+}
+
 /**
  * The span a control's content covers, in the story's own addressing.
  *
@@ -109,27 +123,39 @@ export function contentControlSpan(
   if (held.length > 0) {
     const first = held[0]!;
     const last = held[held.length - 1]!;
-    const lastText = reads.paragraphText(last);
+    const lastText = reads.rawText(last);
     if (lastText === null || !reads.has(first)) return null;
     return {
       start: { paragraphId: first, offset: 0 },
       end: { paragraphId: last, offset: lastText.length },
     };
   }
-  // Inline: find the paragraph whose children include this control, and ask that paragraph's
-  // own offset index where the control sits.
-  for (const paragraphId of reads.paragraphIds) {
-    const paragraph = reads.node(paragraphId);
-    if (!paragraph || paragraph.kind !== 'paragraph') continue;
-    if (!paragraph.children.some((child) => child.id === node.id)) continue;
-    const span = paragraphOffsetIndex(paragraph).spanOf(node);
-    if (!span) return null;
-    return {
-      start: { paragraphId, offset: span.start },
-      end: { paragraphId, offset: span.end },
-    };
-  }
-  return null;
+  // Inline controls can sit inside links, revisions, or other controls. The bounded shared
+  // control index finds them at any supported depth, while the offset index remains authoritative.
+  const paragraph = paragraphContainingControl(reads, node.id);
+  if (!paragraph) return null;
+  const span = paragraphOffsetIndex(paragraph).spanOf(node);
+  if (!span) return null;
+  return {
+    start: { paragraphId: paragraph.id, offset: span.start },
+    end: { paragraphId: paragraph.id, offset: span.end },
+  };
+}
+
+function inlineContentControlText(
+  reads: AutomationStoryReads,
+  node: OoxmlNode,
+  projection: Exclude<AutomationTextProjection, 'allMarkup'>
+): string | null {
+  const paragraph = paragraphContainingControl(reads, node.id);
+  const content = contentControlContentNodeOf(node);
+  if (!paragraph || !content) return null;
+  const scopedParagraph: OoxmlParagraphNode = {
+    ...paragraph,
+    children: content.children as OoxmlParagraphNode['children'],
+  };
+  const rawText = paragraphModelTextOf(scopedParagraph);
+  return projectParagraphText(scopedParagraph, rawText, projection).text;
 }
 
 /** The text the control encloses, as the document reads it. */
@@ -138,8 +164,12 @@ export function contentControlText(
   node: OoxmlNode,
   projection: AutomationTextProjection = 'allMarkup'
 ): string {
-  // Preserve the existing content-control value semantics for ordinary reads.
+  // Control values keep their established semantics. They omit struck text and paragraph marks.
   if (projection === 'allMarkup') return contentControlTextOf(node);
+  // Project inline content from its own subtree. An enclosing revision changes placement,
+  // but it does not erase the value returned for the control itself.
+  const inlineText = inlineContentControlText(reads, node, projection);
+  if (inlineText !== null) return inlineText;
   const span = contentControlSpan(reads, node);
   if (!span) return '';
   const first = reads.indexOf(span.start.paragraphId);
@@ -149,7 +179,7 @@ export function contentControlText(
   for (let index = first; index <= last; index += 1) {
     const paragraphId = reads.paragraphIds[index]!;
     const projected = reads.projectedText(paragraphId, projection);
-    const raw = reads.paragraphText(paragraphId);
+    const raw = reads.rawText(paragraphId);
     if (!projected || raw === null) return '';
     text.push(
       projected.sliceRaw(

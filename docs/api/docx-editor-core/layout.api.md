@@ -3378,6 +3378,7 @@ export interface SemanticPosition {
 
 // @public
 export interface SemanticReviewArtifactOccurrence {
+    readonly geometry?: SemanticReviewArtifactOccurrenceGeometry;
     // (undocumented)
     readonly noteAreaKind: 'footnotes' | 'endnotes' | null;
     // (undocumented)
@@ -3394,6 +3395,14 @@ export interface SemanticReviewArtifactOccurrence {
     // (undocumented)
     readonly story: SemanticArtifactStoryKind;
     readonly textboxPath: readonly string[];
+}
+
+// @public
+export interface SemanticReviewArtifactOccurrenceGeometry {
+    // (undocumented)
+    readonly pageContent: readonly LayoutBox[];
+    // (undocumented)
+    readonly pageStack: readonly LayoutBox[];
 }
 
 // @public

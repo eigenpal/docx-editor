@@ -2868,19 +2868,15 @@ export interface DocxEditorProps {
     hyperlinkPopup?: boolean;
     // (undocumented)
     i18n?: Translations;
-    // (undocumented)
     locale?: string;
     // (undocumented)
     menu?: boolean | DocxEditorMenuProps;
-    // (undocumented)
     mode?: EditorMode;
-    // (undocumented)
     modules?: readonly EditorModule[];
     // (undocumented)
     navigation?: boolean;
     // (undocumented)
     rulers?: boolean;
-    // (undocumented)
     t?: (key: string, params?: Record<string, string | number>) => string;
     // (undocumented)
     title?: string;
@@ -3039,7 +3035,6 @@ export interface DocxEditorRootListeners {
 
 // @public (undocumented)
 export interface DocxEditorRootProps {
-    // (undocumented)
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;
@@ -3049,11 +3044,8 @@ export interface DocxEditorRootProps {
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     // (undocumented)
     imageDecodePort?: ImageDecodePort;
-    // (undocumented)
     locale?: string;
-    // (undocumented)
     mode?: 'edit' | 'view' | 'suggesting';
-    // (undocumented)
     modules?: readonly EditorModule[];
     // (undocumented)
     onChange?: (change: DocumentChange) => void;
@@ -3063,7 +3055,6 @@ export interface DocxEditorRootProps {
     onReady?: (editor: Editor) => void;
     // (undocumented)
     tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
-    // (undocumented)
     translate?: (key: string, params?: Record<string, string | number>) => string;
     // (undocumented)
     zoom?: number;

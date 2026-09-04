@@ -243,7 +243,7 @@ const ReviewRoot = defineComponent({
       },
       { flush: 'sync' }
     );
-    const configuredAuthor = computed(() => editorRef.value?.getConfiguredAuthor() ?? null);
+    const configuredAuthor = useEditorState(() => editorRef.value?.getConfiguredAuthor() ?? null);
     const authorSlots = computed(() => {
       const slotsMap = new Map<string, number>();
       for (const entry of items.value) {

@@ -5,6 +5,9 @@
 // an object model would otherwise have to guess and get subtly wrong.
 
 import { describe, expect, test } from 'bun:test';
+import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
+import { documentReads } from '../reads.ts';
+import { spanOffsets } from '../spans.ts';
 import {
   cell,
   docx,
@@ -527,6 +530,143 @@ describe('searching a story', () => {
     );
     const response = host.execute({ operations: [{ op: 'getSpanText', span: found[0]! }] });
     expect(textAt(response, 0)).toBe('me');
+  });
+
+  test('maps a cached field result search to its one editable atom', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> DATE \\@ "d MMMM yyyy" </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1 January 2030</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const host = open(
+      docx(
+        `<w:p><w:r><w:t xml:space="preserve">Renewal date: </w:t></w:r>${field}<w:r><w:t xml:space="preserve"> is synthetic.</w:t></w:r></w:p>`
+      )
+    );
+    const { body } = roots(host);
+    const [paragraph] = paragraphsOf(host, body);
+    expect(paragraphTexts(host, body)).toEqual(['Renewal date: 1 January 2030 is synthetic.']);
+    expect(storyText(host, body)).toBe('Renewal date: 1 January 2030 is synthetic.');
+    const found = spansAt(
+      host.execute({
+        operations: [
+          {
+            op: 'search',
+            scope: { body },
+            text: '1 January 2030',
+            options: { matchCase: true },
+          },
+        ],
+      }),
+      0
+    );
+
+    expect(found).toEqual([
+      {
+        start: { paragraph: paragraph!, offset: 'Renewal date: '.length },
+        end: { paragraph: paragraph!, offset: 'Renewal date: '.length + 1 },
+      },
+    ]);
+    expect(textAt(host.execute({ operations: [{ op: 'getSpanText', span: found[0]! }] }), 0)).toBe(
+      '1 January 2030'
+    );
+  });
+
+  test('reports repeated result text once for its one editable atom', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> PAGE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>aa aa</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const host = open(docx(`<w:p>${field}</w:p>`));
+    const { body } = roots(host);
+    const [paragraph] = paragraphsOf(host, body);
+    const found = spansAt(
+      host.execute({ operations: [{ op: 'search', scope: { body }, text: 'aa' }] }),
+      0
+    );
+
+    expect(found).toEqual([
+      {
+        start: { paragraph: paragraph!, offset: 0 },
+        end: { paragraph: paragraph!, offset: 1 },
+      },
+    ]);
+  });
+
+  test('offers raw field text through the model projection', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1 January 2030</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const host = open(docx(`<w:p><w:r><w:t>A</w:t></w:r>${field}<w:r><w:t>Z</w:t></w:r></w:p>`));
+    const { body } = roots(host);
+    const [paragraph] = paragraphsOf(host, body);
+    const response = host.execute({
+      operations: [
+        { op: 'getText', target: body, projection: 'model' },
+        { op: 'getText', target: paragraph!, projection: 'model' },
+        { op: 'getSpanText', span: { paragraph: paragraph! }, projection: 'model' },
+      ],
+    });
+
+    expect([textAt(response, 0), textAt(response, 1), textAt(response, 2)]).toEqual([
+      'A\uFFFCZ',
+      'A\uFFFCZ',
+      'A\uFFFCZ',
+    ]);
+  });
+
+  test('uses raw field offsets when deciding that a paragraph span is whole', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>1 January 2030</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const loaded = readOoxmlPackage(
+      docx(`<w:p><w:r><w:t>A</w:t></w:r>${field}<w:r><w:t>Z</w:t></w:r></w:p>`)
+    );
+    if (!loaded.ok) throw new Error(loaded.reason);
+    const body = documentReads(loaded.package).body;
+    if (!body) throw new Error('body reads missing');
+    const paragraphId = body.paragraphIds[0]!;
+    const point = { story: body.story, paragraphId, index: 0 };
+
+    expect(
+      spanOffsets({ start: { ...point, offset: 0 }, end: { ...point, offset: 3 } }, body)
+    ).toEqual([{ paragraphId, start: 0, end: 3, whole: true }]);
+  });
+
+  test('clips field result matches against raw scope boundaries', () => {
+    const field =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> DATE </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>four</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const host = open(docx(`<w:p><w:r><w:t>A</w:t></w:r>${field}<w:r><w:t>Z</w:t></w:r></w:p>`));
+    const { body } = roots(host);
+    const [paragraph] = paragraphsOf(host, body);
+    const inside = {
+      start: { paragraph: paragraph!, offset: 1 },
+      end: { paragraph: paragraph!, offset: 2 },
+    };
+    const before = {
+      start: { paragraph: paragraph!, offset: 0 },
+      end: { paragraph: paragraph!, offset: 1 },
+    };
+
+    expect(
+      spansAt(host.execute({ operations: [{ op: 'search', scope: inside, text: 'four' }] }), 0)
+    ).toEqual([inside]);
+    expect(
+      spansAt(host.execute({ operations: [{ op: 'search', scope: before, text: 'four' }] }), 0)
+    ).toEqual([]);
   });
 });
 

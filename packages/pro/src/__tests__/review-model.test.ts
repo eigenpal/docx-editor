@@ -76,6 +76,12 @@ const ins = (id: string, inner: string, author = 'QA') =>
   `<w:ins w:id="${id}" w:author="${author}" w:date="D">${inner}</w:ins>`;
 const del = (id: string, inner: string, author = 'Dev') =>
   `<w:del w:id="${id}" w:author="${author}" w:date="D">${inner}</w:del>`;
+const delFld = (id: string, kind: string, author = 'QA') =>
+  `<w:del w:id="${id}" w:author="${author}" w:date="D">` +
+  `<w:r><w:fldChar w:fldCharType="${kind}"/></w:r></w:del>`;
+const insFld = (id: string, kind: string, author = 'QA') =>
+  `<w:ins w:id="${id}" w:author="${author}" w:date="D">` +
+  `<w:r><w:fldChar w:fldCharType="${kind}"/></w:r></w:ins>`;
 const insAt = (id: string, inner: string, date: string, author = 'QA') =>
   `<w:ins w:id="${id}" w:author="${author}" w:date="${date}">${inner}</w:ins>`;
 const delAt = (id: string, inner: string, date: string, author = 'QA') =>
@@ -192,6 +198,85 @@ describe('one decision is one card', () => {
     expect(items[0]!.replacedText).toBe('old');
     expect(items[0]!.text).toBe('new');
     expect(items[0]!.addresses.map((address) => address.id)).toEqual(['33', '34', '35', '36']);
+  });
+
+  // Word wraps every part of a struck field in its own `w:del`: the two `w:fldChar` runs,
+  // the instruction run, and the result text. Four of those five cover no characters and
+  // share the result's start offset, so a grouping keyed by start position kept one and
+  // stranded the rest as blank `Deleted` cards.
+  test('a struck field is one card, however many empty controls it has', () => {
+    const part = story(
+      `<w:p>${run('Pre ')}` +
+        `${delFld('1', 'begin')}` +
+        `<w:del w:id="2" w:author="QA" w:date="D">` +
+        `<w:r><w:delInstrText xml:space="preserve"> FORMTEXT </w:delInstrText></w:r></w:del>` +
+        `${delFld('3', 'separate')}` +
+        `${del('4', delRun('old'), 'QA')}` +
+        `${delFld('5', 'end')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('delete');
+    expect(items[0]!.text).toBe('old');
+    // Every address rides along, so one Accept resolves the whole field.
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['1', '2', '3', '4', '5']);
+  });
+
+  test('an inserted field is one card, and its controls come with it', () => {
+    const part = story(
+      `<w:p>${run('Pre ')}` +
+        `${insFld('1', 'begin')}${ins('2', run('new'), 'QA')}${insFld('3', 'end')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.revisionKind).toBe('insert');
+    expect(items[0]!.text).toBe('new');
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['1', '2', '3']);
+  });
+
+  test('empty controls with nothing between them still make one card', () => {
+    const part = story(
+      `<w:p>${run('Pre ')}${delFld('1', 'begin')}${delFld('2', 'separate')}${delFld('3', 'end')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['1', '2', '3']);
+  });
+
+  // The frontier is what keeps grouping honest: two struck fields in one paragraph are two
+  // decisions, and the untracked text between them says so.
+  test('two struck fields in one paragraph stay two cards', () => {
+    const part = story(
+      `<w:p>${run('A ')}` +
+        `${delFld('1', 'separate')}${del('2', delRun('one'), 'QA')}${delFld('3', 'end')}` +
+        `${run(' B ')}` +
+        `${delFld('4', 'separate')}${del('5', delRun('two'), 'QA')}${delFld('6', 'end')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(2);
+    expect(items.map((item) => item.text)).toEqual(['one', 'two']);
+  });
+
+  // A wrapper is absorbed by the neighbour it belongs to, never by a stranger's edit.
+  test('an empty control by another author stays its own decision', () => {
+    const part = story(
+      `<w:p>${run('Pre ')}${delFld('1', 'separate', 'Dev')}${del('2', delRun('old'), 'QA')}</w:p>`
+    );
+    expect(revisionsOf(collectReviewItems({ storyPart: part }))).toHaveLength(2);
+  });
+
+  // Grouping follows DOCUMENT position, not list position. A revision whose first site sits
+  // somewhere with no offset of its own — inside a drawing or a text box — is listed by a
+  // later range than its place in the list claims, and a sweep that trusted the list split
+  // the run it belonged to.
+  test('grouping follows document position when the item list does not', () => {
+    const part = story(
+      `<w:p><w:r><w:del w:id="5" w:author="QA" w:date="D">${delRun('x')}</w:del></w:r>` +
+        `${del('3', delRun('ab'), 'QA')}${del('5', delRun('cd'), 'QA')}</w:p>`
+    );
+    const items = revisionsOf(collectReviewItems({ storyPart: part }));
+    expect(items).toHaveLength(1);
+    expect(items[0]!.addresses.map((address) => address.id)).toEqual(['3', '5']);
   });
 
   test('card ids are unique, so a list key never collides', () => {

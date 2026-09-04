@@ -1,5 +1,17 @@
 # @docx-editor.dev/fonts
 
+## 2.15.0
+
+### Minor Changes
+
+- 0d81033: Export `FONT_ASSET_ROOT` so hosts can confine packaged-font reads to the fonts package without guessing its install path.
+
+### Patch Changes
+
+- 5284df5: Preserve one literal asset URL per packaged font face in the ESM browser build so Next.js with
+  Turbopack, Vite, and webpack resolve every requested filename instead of collapsing dynamic URLs
+  to one font. Keep the CommonJS build resolving the same packaged files in Node.
+
 ## 2.14.1
 
 ### Patch Changes

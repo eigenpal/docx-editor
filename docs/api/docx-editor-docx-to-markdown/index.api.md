@@ -106,14 +106,62 @@ export interface DrawingTransform {
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
 
 // @public
+export interface ExportDestinationAnchor {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface ExportDestinationGeometry {
+    // (undocumented)
+    readonly anchor: ExportDestinationAnchor;
+    readonly pageContent: Readonly<{
+        readonly height: number;
+        readonly x: number;
+        readonly y: number;
+    }>;
+    // (undocumented)
+    readonly pageIndex: number;
+    readonly pageStack: Readonly<{
+        readonly x: number;
+        readonly y: number;
+    }>;
+}
+
+// @public
+export type ExportDocumentMetadata = Readonly<DocumentProperties>;
+
+// @public
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
+
+// @public
+export interface ExportDroppedEmbeddedFont {
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly reason: 'overLimit' | 'malformed';
+    // (undocumented)
+    readonly request: FontRequest;
+}
 
 // @public
 export interface ExportFontFaceResolution {
     // (undocumented)
+    readonly faceIndex?: number;
+    // (undocumented)
+    readonly hash?: string;
+    // (undocumented)
+    readonly id?: string;
+    readonly identity?: string;
+    // (undocumented)
     readonly sourceFamily: string;
     // (undocumented)
     readonly style: 'normal' | 'italic';
+    readonly substitution?: FontSubstitution | null;
     // (undocumented)
     readonly via: 'direct' | 'substitution';
     // (undocumented)
@@ -134,6 +182,7 @@ export interface ExportFontFamilyResolution {
 export interface ExportFontResolutionReport {
     // (undocumented)
     readonly defaultFamily: string;
+    readonly droppedEmbeddedFonts?: readonly ExportDroppedEmbeddedFont[];
     // (undocumented)
     readonly families: readonly ExportFontFamilyResolution[];
     // (undocumented)
@@ -161,6 +210,10 @@ export class ExportResourceError extends Error {
 // @public
 export interface ExportSemanticLayout extends SemanticLayout {
     // (undocumented)
+    readonly destinations?: readonly ExportDestinationGeometry[];
+    // (undocumented)
+    readonly documentMetadata?: ExportDocumentMetadata;
+    // (undocumented)
     readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
 }
 
@@ -178,6 +231,29 @@ export interface FontOriginFailure {
     readonly cause: unknown;
     readonly originIndex: number;
     readonly originName?: string;
+}
+
+// @public
+export interface FontRequest {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly weight: number;
+}
+
+// @public
+export interface FontSubstitution {
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
+    readonly requested: FontRequest;
+    // (undocumented)
+    readonly resolved: FontRequest;
 }
 
 // @public
@@ -562,6 +638,7 @@ export interface SemanticLayout {
 
 // @public
 export interface SemanticReviewArtifactOccurrence {
+    readonly geometry?: SemanticReviewArtifactOccurrenceGeometry;
     // (undocumented)
     readonly noteAreaKind: 'footnotes' | 'endnotes' | null;
     // (undocumented)
@@ -578,6 +655,14 @@ export interface SemanticReviewArtifactOccurrence {
     // (undocumented)
     readonly story: SemanticArtifactStoryKind;
     readonly textboxPath: readonly string[];
+}
+
+// @public
+export interface SemanticReviewArtifactOccurrenceGeometry {
+    // (undocumented)
+    readonly pageContent: readonly LayoutBox[];
+    // (undocumented)
+    readonly pageStack: readonly LayoutBox[];
 }
 
 // @public

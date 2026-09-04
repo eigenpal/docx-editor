@@ -1,5 +1,7 @@
 // Exporter-neutral review provenance published beside semantic page records.
 
+import type { LayoutBox } from './semantic-records.ts';
+
 /** Published root story containing an artifact occurrence. @public */
 export type SemanticArtifactRootStoryKind =
   | 'body'
@@ -18,11 +20,29 @@ export interface SemanticReviewArtifactPosition {
   readonly offset: number;
 }
 
-/** Package-relative snapshot provenance, not durable public identity. @public */
+/**
+ * Package-relative snapshot provenance, not durable public identity.
+ *
+ * Engine-produced occurrences keep `start.paragraphId === end.paragraphId`. Cross-paragraph
+ * source ranges are sliced into per-paragraph occurrences before geometry attaches.
+ * @public
+ */
 export interface SemanticReviewArtifactSource {
   readonly partName: string;
   readonly start: SemanticReviewArtifactPosition;
   readonly end: SemanticReviewArtifactPosition;
+}
+
+/**
+ * Laid-out bounds for one review occurrence.
+ *
+ * `pageContent` uses the same space as line boxes. `pageStack` uses stacked page coordinates.
+ * A point occurrence publishes `width: 0`.
+ * @public
+ */
+export interface SemanticReviewArtifactOccurrenceGeometry {
+  readonly pageContent: readonly LayoutBox[];
+  readonly pageStack: readonly LayoutBox[];
 }
 
 /** One physical occurrence of a comment or tracked-change source range. @public */
@@ -38,6 +58,8 @@ export interface SemanticReviewArtifactOccurrence {
   /** Replacement-half meaning for tracked-change occurrences; absent for comments. */
   readonly revisionRole?: 'replaced' | 'replacement' | 'neutral';
   readonly source: SemanticReviewArtifactSource;
+  /** Laid-out bounds when this occurrence can be measured; omitted otherwise. */
+  readonly geometry?: SemanticReviewArtifactOccurrenceGeometry;
 }
 
 /** Normalized change; ids are opaque and stable only within the source snapshot. @public */

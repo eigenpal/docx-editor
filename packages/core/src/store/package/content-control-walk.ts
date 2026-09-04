@@ -9,6 +9,7 @@
 // share one bound so nesting cannot recurse without limit.
 
 import {
+  isContentRevisionKind,
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
   WML_NAMESPACE_URI,
@@ -176,15 +177,17 @@ export function walkAllStoryParagraphs(
 }
 
 /**
- * Paragraph-level inline sequence — runs, hyperlinks, and inline content controls in order.
+ * Paragraph-level inline sequence — runs and their bounded containers in document order.
  *
  * `visit` receives each direct `w:r` and any other inline node the caller treats as opaque
- * (bookmarks, drawings, …). Hyperlinks and content controls are descended transparently.
+ * (bookmarks, drawings, …). Hyperlinks and controls are descended transparently. Callers
+ * that address the runs inside tracked revisions can opt into descending those wrappers too.
  */
 export function walkParagraphInline(
   children: readonly OoxmlNode[],
   depth: number,
-  visit: (child: OoxmlNode) => void
+  visit: (child: OoxmlNode) => void,
+  options: { readonly descendRevisions?: boolean } = {}
 ): void {
   if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
   for (const child of children) {
@@ -193,13 +196,20 @@ export function walkParagraphInline(
       visit(child);
       continue;
     }
+    // A revision wrapper is a run container like the rest, but descending it is OPT-IN: a
+    // caller addressing runs inside tracked changes asks for it, and one that does not must
+    // still meet the wrapper as an opaque node.
     if (isInlineRunContainer(child)) {
-      walkParagraphInline(child.children, depth + 1, visit);
+      if (isContentRevisionKind(child.kind) && options.descendRevisions !== true) {
+        visit(child);
+        continue;
+      }
+      walkParagraphInline(child.children, depth + 1, visit, options);
       continue;
     }
     if (isContentControl(child)) {
       const content = contentControlContentOf(child);
-      if (content) walkParagraphInline(content, depth + 1, visit);
+      if (content) walkParagraphInline(content, depth + 1, visit, options);
       continue;
     }
     visit(child);

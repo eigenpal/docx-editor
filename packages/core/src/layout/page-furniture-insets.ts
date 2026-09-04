@@ -11,6 +11,7 @@
 
 import type { HeaderFooterStoryLayout } from './hf-layout.ts';
 import type { HeaderFooterStoryRecord, LayoutBox, SemanticLayout } from './semantic-records.ts';
+import { headerFooterVariantCanPaint } from '../store/package/hf-references.ts';
 
 /** Which header/footer variant a page shows (ECMA-376 §17.10.5). */
 export type HeaderFooterVariantName = 'default' | 'first' | 'even';
@@ -84,8 +85,14 @@ export function headerFooterVariantFor(
   pageIndexStart: number,
   index: number
 ): HeaderFooterVariantName {
-  if (furniture?.titlePage && index === 0) return 'first';
-  if (furniture?.evenAndOddHeaders && (pageIndexStart + index + 1) % 2 === 0) return 'even';
+  if (furniture && headerFooterVariantCanPaint(furniture, 'first') && index === 0) return 'first';
+  if (
+    furniture &&
+    headerFooterVariantCanPaint(furniture, 'even') &&
+    (pageIndexStart + index + 1) % 2 === 0
+  ) {
+    return 'even';
+  }
   return 'default';
 }
 

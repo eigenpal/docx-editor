@@ -28,7 +28,8 @@ import { createParagraphLayoutCache, type ParagraphLayoutCache } from '../layout
 import { flowBlocksInBox } from '../semantic-table-layout.ts';
 import type { PendingLine } from '../paragraph-flow.ts';
 import {
-  hostedListTokenDeps,
+  hostedTextboxContents,
+  hostedStoryFlowDeps,
   layoutTextboxStory,
   MAX_TEXTBOX_STORY_NESTING,
   type TextboxStoryLayout,
@@ -38,6 +39,7 @@ import {
   readOoxmlPackage,
   readOoxmlPart,
   resolveHeaderFooterPartsBySection,
+  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlPart,
 } from '@docx-editor.dev/core/store';
@@ -657,6 +659,15 @@ describe('list markers inside textbox stories', () => {
     expect(boxMarkers(lay(2, '(%1)'))).toEqual(['(1)', '(2)']);
   });
 
+  test('body text boxes do not render without a drawing context', () => {
+    const layout = layoutSemanticDocument(bodyTextboxPart(), 1, {
+      measurer,
+      producer: 'test',
+      numberingIndex: numberingIndexFor('%1.'),
+    });
+    expect(layout.pages[0]!.anchoredDrawings).toBeUndefined();
+  });
+
   /** A one-cell table whose paragraph hosts a text box with a two-item numbered list. */
   function cellTextboxPart(): OoxmlPart {
     return documentPart(
@@ -722,7 +733,7 @@ describe('list markers inside textbox stories', () => {
         cache: createParagraphLayoutCache(),
         producer: 'test',
         nextLineId: (paragraphId, start, lineIndex) => `${paragraphId}-${start}-${lineIndex}`,
-        ...hostedListTokenDeps(numberingIndex, undefined, 'all-markup'),
+        hostedStory: hostedStoryFlowDeps(() => null, numberingIndex, undefined, 'all-markup'),
         onCellBreakKey: (key) => keys.push(key),
       });
       return keys;
@@ -747,8 +758,8 @@ describe('list markers inside textbox stories', () => {
   }
 
   test('the body flow wires hosted list state into cell break keys', () => {
-    // The production wiring, not a hand-built provider: dropping the `hostedListTokenDeps`
-    // spread from the body flow's table deps must fail this test.
+    // The production wiring, not a hand-built provider: dropping the `hostedStory` bundle
+    // from the body flow's table deps must fail this test.
     const part = cellTextboxPart();
     const keysFor = (lvlText: string): string[] => {
       const keys: string[] = [];
@@ -762,6 +773,70 @@ describe('list markers inside textbox stories', () => {
       return hostKeysOnly(keys);
     };
     expectKeysTrackNumbering(keysFor);
+  });
+
+  test('the hosted-story dependency bundle makes the no-numbering state explicit', () => {
+    const layoutTextboxStoryFor = () => null;
+    const hostedStory = hostedStoryFlowDeps(layoutTextboxStoryFor, undefined, undefined);
+    expect(hostedStory.layoutTextboxStoryFor).toBe(layoutTextboxStoryFor);
+    expect(hostedStory.hostedListTokenForParagraph).toBeNull();
+    expect(Object.isFrozen(hostedStory)).toBe(true);
+  });
+
+  test('a truncated table scan seeds only fully visited descendant paragraphs', () => {
+    const generic = (id: string, children: readonly OoxmlNode[] = []): OoxmlNode =>
+      ({
+        id,
+        kind: 'generic',
+        namespaceUri: W,
+        localName: 'probe',
+        namespaceBindings: [],
+        attributes: [],
+        children,
+      }) as OoxmlNode;
+    const observedParagraph = (id: string, children: readonly OoxmlNode[]) => {
+      let childReads = 0;
+      const paragraph = new Proxy(
+        {
+          id,
+          kind: 'paragraph' as const,
+          namespaceUri: W,
+          localName: 'p' as const,
+          namespaceBindings: [],
+          attributes: [],
+          children,
+        },
+        {
+          get(target, property, receiver) {
+            if (property === 'children') childReads += 1;
+            return Reflect.get(target, property, receiver);
+          },
+        }
+      ) as OoxmlNode;
+      return { paragraph, childReads: () => childReads };
+    };
+    const textboxContent = {
+      ...generic('textbox-content'),
+      localName: 'txbxContent',
+    } as OoxmlNode;
+    const complete = observedParagraph('complete', [textboxContent]);
+    const incomplete = observedParagraph(
+      'incomplete',
+      Array.from({ length: 20_050 }, (_, index) => generic(`padding-${index}`))
+    );
+    const table = {
+      ...generic('table', [complete.paragraph, incomplete.paragraph]),
+      kind: 'table',
+      localName: 'tbl',
+    } as OoxmlNode;
+
+    expect(hostedTextboxContents(table).truncated).toBe(true);
+    const completeReads = complete.childReads();
+    const incompleteReads = incomplete.childReads();
+    expect(hostedTextboxContents(complete.paragraph).contents).toEqual([textboxContent]);
+    expect(complete.childReads()).toBe(completeReads);
+    expect(hostedTextboxContents(incomplete.paragraph).truncated).toBe(true);
+    expect(incomplete.childReads()).toBeGreaterThan(incompleteReads);
   });
 
   test('the header/footer drawing branch wires hosted list state into break keys', () => {

@@ -30,7 +30,7 @@ import {
 import type { NumberingIndex } from './numbering-index.ts';
 import type { PendingLine } from './paragraph-flow.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import { flowBlocksInBox } from './semantic-table-layout.ts';
+import { flowBlocksInBox, type HostedStoryFlowDeps } from './semantic-table-layout.ts';
 import type { BlockFragmentRecord, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { textboxStoryBlocks } from './story-roots.ts';
@@ -223,16 +223,77 @@ const NO_HOSTED_CONTENTS: HostedContentsScan = Object.freeze({
  */
 const hostedTextboxContentsByBlock = new WeakMap<OoxmlNode, HostedContentsScan>();
 
-/** Discover text-box stories hosted by one layout block. @internal */
-export function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
-  const cached = hostedTextboxContentsByBlock.get(block);
-  if (cached) return cached;
+/** The allocation-light path for the overwhelmingly common non-table block. */
+function scanHostedTextboxContents(block: OoxmlNode): HostedContentsScan {
   const found: OoxmlNode[] = [];
   let visited = 0;
   let truncated = false;
   const stack: OoxmlNode[] = [block];
   while (stack.length > 0) {
     const node = stack.pop()!;
+    visited += 1;
+    if (visited > MAX_HOSTED_STORY_SCAN_NODES) {
+      truncated = true;
+      break;
+    }
+    if (node.kind !== 'textValue' && node.localName === 'txbxContent') {
+      found.push(node);
+      continue;
+    }
+    if (!('children' in node)) continue;
+    for (let index = node.children.length - 1; index >= 0; index -= 1) {
+      stack.push(node.children[index]!);
+    }
+  }
+  return found.length > 0 || truncated
+    ? Object.freeze({ contents: Object.freeze(found), truncated })
+    : NO_HOSTED_CONTENTS;
+}
+
+/** Discover text-box stories hosted by one layout block. @internal */
+export function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
+  const cached = hostedTextboxContentsByBlock.get(block);
+  if (cached) return cached;
+  // Only a table-level scan is followed by cold scans of many descendant cell paragraphs.
+  // Preserve the raw-node stack for direct paragraph calls instead of paying a frame object
+  // per visited node where there are no descendant paragraph results to seed.
+  if (block.kind !== 'table') {
+    const scan = scanHostedTextboxContents(block);
+    hostedTextboxContentsByBlock.set(block, scan);
+    return scan;
+  }
+  const found: OoxmlNode[] = [];
+  let visited = 0;
+  let truncated = false;
+  interface ParagraphScan {
+    readonly paragraph: OoxmlNode;
+    readonly contents: OoxmlNode[];
+  }
+  type ScanFrame =
+    | {
+        readonly phase: 'enter';
+        readonly node: OoxmlNode;
+        readonly paragraphOwners: readonly ParagraphScan[];
+      }
+    | { readonly phase: 'exit-paragraph'; readonly scan: ParagraphScan };
+  const stack: ScanFrame[] = [{ phase: 'enter', node: block, paragraphOwners: [] }];
+  while (stack.length > 0) {
+    const frame = stack.pop()!;
+    if (frame.phase === 'exit-paragraph') {
+      if (!hostedTextboxContentsByBlock.has(frame.scan.paragraph)) {
+        hostedTextboxContentsByBlock.set(
+          frame.scan.paragraph,
+          frame.scan.contents.length > 0
+            ? Object.freeze({
+                contents: Object.freeze(frame.scan.contents),
+                truncated: false,
+              })
+            : NO_HOSTED_CONTENTS
+        );
+      }
+      continue;
+    }
+    const node = frame.node;
     visited += 1;
     // Defensive, like every other file-derived walk — but a stopped scan can MISS a box, and
     // an unseen box's list state must fail OPEN, not stale. The truncation flag is recorded
@@ -245,11 +306,18 @@ export function hostedTextboxContents(block: OoxmlNode): HostedContentsScan {
     }
     if (node.kind !== 'textValue' && node.localName === 'txbxContent') {
       found.push(node);
+      for (const owner of frame.paragraphOwners) owner.contents.push(node);
       continue;
     }
     if (!('children' in node)) continue;
+    let paragraphOwners = frame.paragraphOwners;
+    if (node.kind === 'paragraph') {
+      const paragraphScan: ParagraphScan = { paragraph: node, contents: [] };
+      paragraphOwners = Object.freeze([...paragraphOwners, paragraphScan]);
+      stack.push({ phase: 'exit-paragraph', scan: paragraphScan });
+    }
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      stack.push(node.children[index]!);
+      stack.push({ phase: 'enter', node: node.children[index]!, paragraphOwners });
     }
   }
   const scan: HostedContentsScan =
@@ -352,23 +420,33 @@ function hostedTextboxListToken(
 }
 
 /**
- * The `hostedListTokenForParagraph` slice of a `TableFlowDeps`, built in ONE place so the
- * lanes that lay hosted stories out (body flow, header/footer stories) cannot drift apart
- * on the (index, cascade, mode) call shape. Empty without numbering DEFINITIONS — not just
- * without an index — so a document with no lists installs no provider and the cell lane
- * pays no per-paragraph call at all; the same emptiness check guards the token function.
+ * Build the structurally coupled hosted-story capability for a table flow lane.
+ *
+ * The layout callback and list-token provider are returned together so a new lane cannot
+ * publish text-box stories while silently reusing stale host breaks after numbering changes.
+ * `null` without numbering definitions preserves the zero-call fast path for box-free cells.
  */
-export function hostedListTokenDeps(
+export function hostedStoryFlowDeps(
+  layoutTextboxStoryFor: HostedStoryFlowDeps['layoutTextboxStoryFor'],
   numberingIndex: NumberingIndex | undefined,
   styleCascade: StyleCascadeTable | undefined,
   displayMode?: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter
-): { readonly hostedListTokenForParagraph?: (paragraph: OoxmlNode) => string } {
-  if (!numberingIndex || numberingIndex.nums.size === 0) return {};
-  return {
-    hostedListTokenForParagraph: (paragraph) =>
-      hostedTextboxListToken(paragraph, numberingIndex, styleCascade, displayMode, authorFilter),
-  };
+): HostedStoryFlowDeps {
+  return Object.freeze({
+    layoutTextboxStoryFor,
+    hostedListTokenForParagraph:
+      !numberingIndex || numberingIndex.nums.size === 0
+        ? null
+        : (paragraph: OoxmlNode) =>
+            hostedTextboxListToken(
+              paragraph,
+              numberingIndex,
+              styleCascade,
+              displayMode,
+              authorFilter
+            ),
+  });
 }
 
 /**

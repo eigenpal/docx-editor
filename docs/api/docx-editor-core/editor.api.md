@@ -854,11 +854,15 @@ export interface DocxEditorInstance extends Editor {
     readonly mountGeneration: number;
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
+    setAuthor(author: string | undefined): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setLocale(locale: string | undefined): void;
+    setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setRevisionStyles(styles: RevisionStyles): void;
+    setTranslate(translate: ((key: string, params?: Record<string, string | number>) => string) | undefined): void;
     showAllReviewAuthors(): void;
     stateVersion(): number;
     readonly surface: PaginatedSurface | null;
@@ -1527,7 +1531,9 @@ export interface PaginatedSurface {
     readonly session: TreeDocxSessionView;
     setActiveScope(scope: ViewScope): boolean;
     setAllRevisionAuthorsVisible(visible: boolean): void;
+    setAuthor(author: string | undefined): void;
     setCellSelection(next: CellSelection | null): void;
+    setDrawingStrings(strings: DrawingPaintStrings): void;
     setEditable(editable: boolean): void;
     // (undocumented)
     setEditingMode(mode: SurfaceEditingMode): void;
@@ -1575,6 +1581,7 @@ export interface PaginatedSurface {
     }): boolean;
     setSelection(next: SemanticSelection): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
+    setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
     showAllRevisionAuthors(): void;
     // (undocumented)

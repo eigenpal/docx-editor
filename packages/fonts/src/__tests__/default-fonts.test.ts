@@ -21,9 +21,11 @@ import {
 import {
   ALL_WORD_DEFAULT_FAMILIES,
   FONT_ASSET_MANIFEST,
+  FONT_ASSET_ROOT,
   WORD_DOCUMENT_DEFAULT_FAMILIES,
   loadDefaultFonts,
 } from '../index.ts';
+import { FONT_ASSET_URLS } from '../manifest.generated.ts';
 
 const assetsDir = new URL('../../assets/', import.meta.url);
 
@@ -211,6 +213,19 @@ describe('loadDefaultFonts', () => {
       expect(manifestSource).toContain(`'../assets/${entry.file}'`);
     }
     expect(manifestSource.match(/new URL\(/g)).toHaveLength(FONT_ASSET_MANIFEST.length);
+  });
+
+  test('FONT_ASSET_ROOT is the shared directory of every packaged face URL', () => {
+    expect(FONT_ASSET_ROOT.protocol).toBe('file:');
+    expect(FONT_ASSET_ROOT.pathname.endsWith('/')).toBe(true);
+    expect(FONT_ASSET_ROOT.href).toBe(
+      new URL('./', FONT_ASSET_URLS[FONT_ASSET_MANIFEST[0]!.file]).href
+    );
+    for (const entry of FONT_ASSET_MANIFEST) {
+      const url = FONT_ASSET_URLS[entry.file];
+      expect(new URL('./', url).href).toBe(FONT_ASSET_ROOT.href);
+      expect(new URL(entry.file, FONT_ASSET_ROOT).href).toBe(url.href);
+    }
   });
 });
 

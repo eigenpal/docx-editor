@@ -69,7 +69,7 @@ function republishAnchoredParagraphsInBlocks(
         cellBox,
         pageClip: deps.pageContentClip(),
         measurer: deps.measurer,
-        ...(deps.layoutTextboxStoryFor ? { layoutTextboxStory: deps.layoutTextboxStoryFor } : {}),
+        ...(deps.hostedStory ? { layoutTextboxStory: deps.hostedStory.layoutTextboxStoryFor } : {}),
         ...(deps.displayMode ? { displayMode: deps.displayMode } : {}),
       })
     );

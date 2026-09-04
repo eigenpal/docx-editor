@@ -6,10 +6,13 @@
 // does, and which then changed where every following line broke, so a document's line and page
 // count drifted from Word's.
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
+import { resetGraphemeBoundary, setGraphemeBoundary } from '../grapheme.ts';
+import * as oversizedWordBreak from '../oversized-word-break.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
 import { createFixedMeasurer } from '../semantic-layout.ts';
+import { squareWrapZone } from './float-over-table-harness.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 /** 6pt per character, so a 60pt measure holds exactly ten. */
@@ -87,6 +90,35 @@ describe('a word split across runs stays whole', () => {
     expect(lines.join('')).toBe('bbbbbbbbbbcccccccccc');
   });
 
+  test('a continuing run uses the next float passage before chopping', () => {
+    const zone = squareWrapZone({
+      anchorParagraphId: 'earlier-paragraph',
+      top: 0,
+      height: 100,
+      left: 18,
+      width: 24,
+      contentWidth: 60,
+    });
+    const lines = breakParagraph(
+      paragraph(`<w:p>${run('aa')}${run('bbb')}</w:p>`),
+      'p',
+      0,
+      60,
+      measurer,
+      undefined,
+      null,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      { pageExclusionZones: [zone], paragraphStartY: 0, contentLeft: 0, contentRight: 60 }
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]!.spans.map((span) => span.text).join('')).toBe('aabbb');
+    expect(lines[0]!.spans[1]!.box.x).toBe(42);
+  });
+
   test('a tab in its own run is a break opportunity for the text after it', () => {
     // A tab's advance is measured to reach its stop FROM WHERE THE TAB SITS, so a tab must
     // never be carried onto another line as part of a word: the carried copy keeps the
@@ -159,5 +191,111 @@ describe('a word wider than the measure breaks at the margin', () => {
 
   test('a word that follows text on the line wraps first, then chops', () => {
     expect(linesOf(`<w:p>${run('aaa cccccccccccc')}</w:p>`)).toEqual(['aaa ', 'cccccccccc', 'cc']);
+  });
+
+  test('a tracked insertion extending a run-spanning word reflows within the measure', () => {
+    const body =
+      `<w:p>${run('xxxx ')}${run('aaaaa')}` +
+      `<w:ins w:id="1" w:author="A" w:date="D">${run('bbbbbbbbbb')}</w:ins></w:p>`;
+
+    expect(linesOf(body)).toEqual(['xxxx ', 'aaaaabbbbb', 'bbbbb']);
+  });
+
+  test('a word keeps filling lines through runs after its inserted part was chopped', () => {
+    const body =
+      `<w:p>${run('xxxx ')}${run('aaaaa')}` +
+      `<w:ins w:id="1" w:author="A" w:date="D">${run('bbbbbbbbbbbb')}</w:ins>` +
+      `${run('ccccc')}</w:p>`;
+
+    expect(linesOf(body)).toEqual(['xxxx ', 'aaaaabbbbb', 'bbbbbbbccc', 'cc']);
+  });
+
+  test('a nine-character prefix leaves the final character on the next line', () => {
+    const body =
+      `<w:p>${run('xxxx ')}${run('a')}` +
+      `<w:ins w:id="1" w:author="A" w:date="D">${run('bbbbbbbbbb')}</w:ins></w:p>`;
+
+    expect(linesOf(body)).toEqual(['xxxx ', 'abbbbbbbbb', 'b']);
+  });
+
+  test('oversized-word splits preserve graphemes and UTF-16 model ranges', () => {
+    const lines = breakParagraph(
+      paragraph(`<w:p>${run('aa😀bb')}</w:p>`),
+      'p',
+      0,
+      18,
+      measurer,
+      undefined,
+      null
+    );
+
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+      'aa',
+      '😀b',
+      'b',
+    ]);
+    expect(
+      lines.map((line) => line.spans.map((span) => [span.range.start, span.range.end]))
+    ).toEqual([[[0, 2]], [[2, 5]], [[5, 6]]]);
+  });
+
+  test('a grapheme wider than the measure overflows whole instead of splitting UTF-16', () => {
+    const lines = breakParagraph(
+      paragraph(`<w:p>${run('😀a')}</w:p>`),
+      'p',
+      0,
+      6,
+      measurer,
+      undefined,
+      null
+    );
+
+    expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual(['😀', 'a']);
+    expect(
+      lines.map((line) => line.spans.map((span) => [span.range.start, span.range.end]))
+    ).toEqual([[[0, 2]], [[2, 3]]]);
+  });
+});
+
+describe('oversized-word chop cost', () => {
+  test('fitting candidates stay off the grapheme-chop path', () => {
+    const chop = spyOn(oversizedWordBreak, 'chopOversizedWord');
+    try {
+      linesOf(`<w:p>${run('word '.repeat(100))}</w:p>`, 100_000);
+      expect(chop).toHaveBeenCalledTimes(0);
+
+      linesOf(`<w:p>${run('a'.repeat(20))}</w:p>`);
+      expect(chop).toHaveBeenCalledTimes(1);
+    } finally {
+      chop.mockRestore();
+    }
+  });
+
+  test('a defensive fitting helper call returns before grapheme segmentation', () => {
+    setGraphemeBoundary({
+      segment: () => {
+        throw new Error('fitting text must not be segmented');
+      },
+    });
+    try {
+      expect(
+        oversizedWordBreak.chopOversizedWord('word', 7, 24, {
+          remainingLineWidth: () => 24,
+          lineHasText: () => false,
+          measureText: () => {
+            throw new Error('fitting text must not be remeasured');
+          },
+          appendPrefix: () => {
+            throw new Error('fitting text must not be split');
+          },
+          closeLine: () => {
+            throw new Error('fitting text must not close a line');
+          },
+          overflowTolerancePt: 0.001,
+        })
+      ).toEqual({ text: 'word', modelStart: 7, width: 24, brokeLine: false });
+    } finally {
+      resetGraphemeBoundary();
+    }
   });
 });

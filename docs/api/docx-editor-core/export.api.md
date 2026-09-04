@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export function acquireSharedExportShaping(prepared: PreparedLayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<SharedExportShaping>;
+export function acquireSharedExportShaping(prepared: PreparedLayoutFontConfiguration, instrumentation?: LayoutShapingInstrumentation): Promise<SharedExportShapingCapabilities>;
 
 // @public
 export function createNodeImageDecodePort(options?: {
@@ -13,14 +13,100 @@ export function createNodeImageDecodePort(options?: {
 }): ImageDecodePort;
 
 // @public
+export function createPackagedFileFetch(options: PackagedFileFetchOptions): typeof fetch;
+
+// @public
+export interface ExportAdmittedFontApi {
+    admittedFontFace(request: FontRequest): ExportAdmittedFontFace | null;
+}
+
+// @public
+export interface ExportAdmittedFontFace extends ExportAdmittedFontIdentity {
+    readonly bytes: Uint8Array;
+}
+
+// @public
+export interface ExportAdmittedFontIdentity {
+    // (undocumented)
+    readonly byteLength: number;
+    // (undocumented)
+    readonly faceIndex: number;
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly hash: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly identity: string;
+    // (undocumented)
+    readonly request: FontRequest;
+    // (undocumented)
+    readonly substitution: FontSubstitution | null;
+}
+
+// @public
+export interface ExportDestinationAnchor {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly offset: number;
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
+export interface ExportDestinationGeometry {
+    // (undocumented)
+    readonly anchor: ExportDestinationAnchor;
+    readonly pageContent: Readonly<{
+        readonly height: number;
+        readonly x: number;
+        readonly y: number;
+    }>;
+    // (undocumented)
+    readonly pageIndex: number;
+    readonly pageStack: Readonly<{
+        readonly x: number;
+        readonly y: number;
+    }>;
+}
+
+// @public
+export function exportDestinationNamed(layout: {
+    readonly destinations?: readonly ExportDestinationGeometry[];
+}, name: string): ExportDestinationGeometry | undefined;
+
+// @public
+export type ExportDocumentMetadata = Readonly<DocumentProperties>;
+
+// @public
 export type ExportDocumentSource = Uint8Array | HeadlessDocumentView;
+
+// @public
+export interface ExportDroppedEmbeddedFont {
+    // (undocumented)
+    readonly partName: string;
+    // (undocumented)
+    readonly reason: 'overLimit' | 'malformed';
+    // (undocumented)
+    readonly request: FontRequest;
+}
 
 // @public
 export interface ExportFontFaceResolution {
     // (undocumented)
+    readonly faceIndex?: number;
+    // (undocumented)
+    readonly hash?: string;
+    // (undocumented)
+    readonly id?: string;
+    readonly identity?: string;
+    // (undocumented)
     readonly sourceFamily: string;
     // (undocumented)
     readonly style: 'normal' | 'italic';
+    readonly substitution?: FontSubstitution | null;
     // (undocumented)
     readonly via: 'direct' | 'substitution';
     // (undocumented)
@@ -41,12 +127,28 @@ export interface ExportFontFamilyResolution {
 export interface ExportFontResolutionReport {
     // (undocumented)
     readonly defaultFamily: string;
+    readonly droppedEmbeddedFonts?: readonly ExportDroppedEmbeddedFont[];
     // (undocumented)
     readonly families: readonly ExportFontFamilyResolution[];
     // (undocumented)
     readonly originFailures: readonly FontOriginFailure[];
     // (undocumented)
     readonly requestedFamilies: readonly string[];
+}
+
+// @public
+export interface ExportLaidOutText {
+    // (undocumented)
+    readonly fixedPointScale: number;
+    // (undocumented)
+    readonly font: ExportAdmittedFontIdentity;
+    // (undocumented)
+    readonly run: ShapedRun;
+}
+
+// @public
+export interface ExportLaidOutTextApi {
+    shapeLaidOutText(span: StyleSpanRecord): ExportLaidOutText | null;
 }
 
 // @public
@@ -59,6 +161,10 @@ export class ExportResourceError extends Error {
 // @public
 export interface ExportSemanticLayout extends SemanticLayout {
     // (undocumented)
+    readonly destinations?: readonly ExportDestinationGeometry[];
+    // (undocumented)
+    readonly documentMetadata?: ExportDocumentMetadata;
+    // (undocumented)
     readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
 }
 
@@ -68,6 +174,10 @@ export interface ExportSession {
     layout(): Promise<ExportSemanticLayout>;
     layoutFor(displayMode: RevisionDisplayMode): Promise<ExportSemanticLayout>;
     validatedImageBytes(drawing: InlineDrawingRecord | AnchoredDrawingRecord): Uint8Array | null;
+}
+
+// @public
+export interface FontBackedExportCapabilities extends FontBackedExportSession, ExportAdmittedFontApi, ExportLaidOutTextApi {
 }
 
 // @public
@@ -85,6 +195,38 @@ export interface FontOriginFailure {
     readonly originIndex: number;
     readonly originName?: string;
 }
+
+// @public
+export interface FontRequest {
+    // (undocumented)
+    readonly family: string;
+    // (undocumented)
+    readonly style: 'normal' | 'italic';
+    // (undocumented)
+    readonly weight: number;
+}
+
+// @public
+export interface FontSubstitution {
+    // (undocumented)
+    readonly lineMetrics?: {
+        readonly baselineEm: number;
+        readonly heightEm: number;
+    };
+    // (undocumented)
+    readonly requested: FontRequest;
+    // (undocumented)
+    readonly resolved: FontRequest;
+}
+
+// @public
+export function hasExportAdmittedFont<T extends object>(value: T): value is T & ExportAdmittedFontApi;
+
+// @public
+export function hasExportLaidOutText<T extends object>(value: T): value is T & ExportLaidOutTextApi;
+
+// @public
+export function hasFontBackedExportCapabilities<T extends object>(value: T): value is T & ExportAdmittedFontApi & ExportLaidOutTextApi;
 
 // @public
 export const MAX_SHARED_EXPORT_SHAPING_CONFIGURATIONS = 32;
@@ -129,10 +271,28 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<OpenDocumen
 // @public
 export type OpenFontBackedDocumentForExportResult = {
     readonly ok: true;
-    readonly session: FontBackedExportSession;
+    readonly session: FontBackedExportCapabilities;
 } | Exclude<OpenDocumentForExportResult, {
     readonly ok: true;
 }>;
+
+// @public
+export interface PackagedFileFetchOptions {
+    // (undocumented)
+    readonly maxBytes: number;
+    // (undocumented)
+    readonly networkFetch?: typeof fetch;
+    // (undocumented)
+    readonly read?: PackagedFileRead;
+    // (undocumented)
+    readonly trustedRoot: string | URL | readonly (string | URL)[];
+}
+
+// @public
+export type PackagedFileRead = (path: string | URL, options: {
+    readonly maxBytes: number;
+    readonly signal?: AbortSignal;
+}) => Promise<Uint8Array>;
 
 // @public
 export type PreservedImageConverter = (bytes: Uint8Array, mime: PreservedImageMime, limits: ImageResourceLimits,
@@ -147,6 +307,9 @@ export interface SharedExportShaping {
     readonly extensionFingerprint: string;
     readonly producer: string;
 }
+
+// @public
+export type SharedExportShapingCapabilities = SharedExportShaping & ExportLaidOutTextApi;
 
 // (No @packageDocumentation comment for this package)
 

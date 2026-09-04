@@ -32,9 +32,15 @@ import type { SemanticReviewArtifactRecord } from '../layout/review-artifact-rec
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from '../layout/revision-projection.ts';
 import {
+  attachExportDocumentResources,
+  type ExportDestinationGeometry,
+  type ExportDocumentMetadata,
+} from './export-document-resources.ts';
+import {
   createNodeImageDecodePort,
   type PreservedImageConverter,
 } from './node-image-decode-port.ts';
+import { attachReviewArtifactGeometry } from './review-artifact-geometry.ts';
 import { projectReviewArtifacts } from './review-artifact-projection.ts';
 import { publishImmutableSemanticLayout } from './semantic-layout-publication.ts';
 
@@ -88,6 +94,8 @@ export interface OpenDocumentForExportOptions {
  */
 export interface ExportSemanticLayout extends SemanticLayout {
   readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
+  readonly documentMetadata?: ExportDocumentMetadata;
+  readonly destinations?: readonly ExportDestinationGeometry[];
 }
 
 /** Bounded failure from a headless export session. @public */
@@ -152,7 +160,7 @@ function normalizedLayoutFailure(error: unknown): ExportResourceError {
 }
 
 /**
- * A single semantic-layout substrate reusable by Markdown, PDF, and later exporters. Pagination
+ * A single semantic-layout substrate reusable by Markdown and later exporters. Pagination
  * fidelity is determined by the session's measurer; core's default is deterministic, not
  * font-accurate.
  * @public
@@ -533,11 +541,16 @@ export function openDocumentForExport(
           state.sessions.delete(mode);
           state.furniture.delete(mode);
         }
-        const reviewArtifacts = projectReviewArtifacts(layout, pkg);
+        const projected = projectReviewArtifacts(layout, pkg);
+        const reviewArtifacts =
+          projected.length === 0
+            ? EMPTY_REVIEW_ARTIFACTS
+            : Object.freeze(attachReviewArtifactGeometry(layout, projected));
+        const resources = attachExportDocumentResources(state.view, layout);
         const enrichedLayout: ExportSemanticLayout = {
           ...layout,
-          reviewArtifacts:
-            reviewArtifacts.length === 0 ? EMPTY_REVIEW_ARTIFACTS : Object.freeze(reviewArtifacts),
+          ...resources,
+          reviewArtifacts,
         };
         const published = publishImmutableSemanticLayout(enrichedLayout);
         state.completed.set(mode, { revision, pkg, internal: layout, published });

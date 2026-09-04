@@ -194,6 +194,7 @@ export type {
   SemanticArtifactStoryKind,
   SemanticCommentArtifactRecord,
   SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactOccurrenceGeometry,
   SemanticReviewArtifactPosition,
   SemanticReviewArtifactRecord,
   SemanticReviewArtifactSource,

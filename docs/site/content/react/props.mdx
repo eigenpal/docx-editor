@@ -14,17 +14,18 @@ For all signatures, see the [React API reference](/docs/2.x/api/react).
 Use `document` for the document source.
 Use `fonts` to supply font metrics for measurement.
 
-| Prop       | Type                                                             | Description                                                                     |
-| ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `document` | `DocumentSource`                                                 | DOCX bytes, `'blank'`, or an existing `DocumentHandle`.                         |
-| `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination.                       |
-| `author`   | `string`                                                         | Author for comments, tracked changes, and other authored commands.              |
-| `locale`   | `string`                                                         | Document locale passed to the editor engine.                                    |
-| `mode`     | `'edit' \| 'view' \| 'suggesting'`                               | Initial editing mode. The default is `'edit'`. Remount the editor to change it. |
-| `zoom`     | `number`                                                         | Fixed display scale. Changes apply without a remount.                           |
-| `zoomMode` | `ZoomMode \| 'auto'`                                             | Scale source. The default `'auto'` fits the page width.                         |
+| Prop       | Type                                                             | Description                                                                                                       |
+| ---------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `document` | `DocumentSource`                                                 | DOCX bytes, `'blank'`, or an existing `DocumentHandle`.                                                           |
+| `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination.                                                         |
+| `author`   | `string`                                                         | Author for later comments, replies, and tracked changes. Changes apply without a remount.                         |
+| `locale`   | `string`                                                         | Engine locale for engine-generated content, such as the table of contents title. Changes apply without a remount. |
+| `mode`     | `'edit' \| 'view' \| 'suggesting'`                               | Host editing mode. Changes apply without a remount.                                                               |
+| `zoom`     | `number`                                                         | Fixed display scale. Changes apply without a remount.                                                             |
+| `zoomMode` | `ZoomMode \| 'auto'`                                             | Scale source. The default `'auto'` fits the page width.                                                           |
 
 The editor colors tracked changes by author.
+Changing `author` preserves the editor instance and all existing revisions.
 Mount `<DocxEditor.AuthorStyle />` to override one author's style.
 Mount `<DocxEditor.ColorByChangeType />` to color changes by type.
 These settings do not have equivalent props.
@@ -49,9 +50,9 @@ comments, and custom nodes.
 | --------- | ------------------------- | ------------------------------------------------------------- |
 | `modules` | `readonly EditorModule[]` | Capability modules that the editor loads during construction. |
 
-Keep the array identity stable.
-A new array causes the editor to rebuild.
-Define the array outside your component or memoize it:
+The editor reads `modules` only during construction.
+A later array change has no effect.
+To change modules, remount the editor with a different React `key`:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
@@ -59,7 +60,7 @@ import { reviewModule } from '@docx-editor.dev/pro/react';
 
 const MODULES = [reviewModule()];
 
-<DocxEditor document={bytes} modules={MODULES} author="Jess Lin" />;
+<DocxEditor key={moduleSet} document={bytes} modules={MODULES} author="Jess Lin" />;
 ```
 
 Without a module, the editor preserves revisions and comments during save.
@@ -84,8 +85,8 @@ These props control the packaged frame around the document.
 | `hyperlinkPopup`                             | `boolean`                               | Shows or hides the packaged hyperlink popover.                                  |
 | `contextMenu`                                | `boolean \| DocxEditorContextMenuProps` | Shows, hides, or configures the packaged context menu.                          |
 | `children`                                   | `DocxEditorChildren`                    | Renders extra chrome inside the viewport after the document pages.              |
-| `t`                                          | `(key, params?) => string`              | Resolves chrome labels and interpolation parameters.                            |
-| `i18n`                                       | `Translations`                          | Sets the chrome language for this editor.                                       |
+| `t`                                          | `(key, params?) => string`              | Resolves live chrome and drawing labels.                                        |
+| `i18n`                                       | `Translations`                          | Sets live chrome and drawing labels for this editor.                            |
 
 ## Dark mode
 

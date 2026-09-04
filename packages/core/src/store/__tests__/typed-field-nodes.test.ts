@@ -433,6 +433,23 @@ describe('malformed demotion (fail-open)', () => {
     expect(pieces.every((p) => !p.projected)).toBe(true);
   });
 
+  test('nested field result stays inside the outer field atom', () => {
+    const part = parse(
+      '<w:p><w:r><w:t>A</w:t></w:r>' +
+        '<w:r><w:fldChar w:fldCharType="begin"/><w:instrText>IF</w:instrText>' +
+        '<w:fldChar w:fldCharType="separate"/><w:t>outer </w:t>' +
+        '<w:fldChar w:fldCharType="begin"/><w:instrText>DATE</w:instrText>' +
+        '<w:fldChar w:fldCharType="separate"/><w:t>inner</w:t>' +
+        '<w:fldChar w:fldCharType="end"/><w:t> tail</w:t>' +
+        '<w:fldChar w:fldCharType="end"/></w:r>' +
+        '<w:r><w:t>Z</w:t></w:r></w:p>'
+    );
+    const paragraph = paragraphOf(part);
+
+    expect(atomicFieldSpansOf(paragraph)).toHaveLength(1);
+    expect(paragraphTextOf(part, paragraph.id)).toBe(`A${FIELD_ATOM_CHAR}Z`);
+  });
+
   test('begin without separate still keeps following run text', () => {
     const part = parse(
       `<w:p><w:r><w:fldChar w:fldCharType="begin"/><w:instrText>PAGE</w:instrText>` +

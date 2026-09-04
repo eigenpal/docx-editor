@@ -7,7 +7,12 @@
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
 import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
-import type { BlockFragmentRecord, SemanticLayout, TextMeasurer } from './semantic-records.ts';
+import type {
+  BlockFragmentRecord,
+  PageRecord,
+  SemanticLayout,
+  TextMeasurer,
+} from './semantic-records.ts';
 import { documentOrderIndex } from './document-order.ts';
 import { orderPositions } from './semantic-interaction.ts';
 import type { SemanticPosition, SemanticSelection, SelectionRect } from './semantic-interaction.ts';
@@ -240,6 +245,32 @@ export function keyedRangeRects(
 }
 
 /**
+ * Page-content origin in stacked page coordinates.
+ *
+ * `contentBox` already lives in page-stack space. Destinations and review geometry add
+ * page-content rects to this origin; they must not reconstruct it from `page.box`.
+ */
+export function pageContentOrigin(page: PageRecord): { readonly x: number; readonly y: number } {
+  return { x: page.contentBox.x, y: page.contentBox.y };
+}
+
+/**
+ * Offset from a story box into page-content coordinates.
+ *
+ * Header, footer, and note fragments are relative to their own box. Subtract `contentBox`
+ * here so destination caret math and review geometry cannot drift apart.
+ */
+export function storyBoxContentOffset(
+  page: PageRecord,
+  storyBox: { readonly x: number; readonly y: number }
+): { readonly x: number; readonly y: number } {
+  return {
+    x: storyBox.x - page.contentBox.x,
+    y: storyBox.y - page.contentBox.y,
+  };
+}
+
+/**
  * Content-box offset for a story-relative position.
  *
  * Body fragments are already in page-content space. Header, footer and note fragments are
@@ -257,25 +288,16 @@ export function storyContentOffset(
   const inBlocks = (blocks: readonly BlockFragmentRecord[]): boolean =>
     paragraphFragmentsOfBlocks(blocks).some((fragment) => fragment.paragraphId === paragraphId);
   if (page.header && inBlocks(page.header.fragments)) {
-    return {
-      x: page.header.box.x - page.contentBox.x,
-      y: page.header.box.y - page.contentBox.y,
-    };
+    return storyBoxContentOffset(page, page.header.box);
   }
   if (page.footer && inBlocks(page.footer.fragments)) {
-    return {
-      x: page.footer.box.x - page.contentBox.x,
-      y: page.footer.box.y - page.contentBox.y,
-    };
+    return storyBoxContentOffset(page, page.footer.box);
   }
   for (const area of [page.footnotes, page.endnotes]) {
     if (!area) continue;
     for (const note of area.notes) {
       if (!inBlocks(note.fragments)) continue;
-      return {
-        x: note.box.x - page.contentBox.x,
-        y: note.box.y - page.contentBox.y,
-      };
+      return storyBoxContentOffset(page, note.box);
     }
   }
   return { x: 0, y: 0 };
@@ -394,22 +416,14 @@ export function presenceRangeRects(
     take(page.fragments, page.index, 0, 0);
     for (const story of [page.header, page.footer]) {
       if (!story) continue;
-      take(
-        story.fragments,
-        page.index,
-        story.box.x - page.contentBox.x,
-        story.box.y - page.contentBox.y
-      );
+      const origin = storyBoxContentOffset(page, story.box);
+      take(story.fragments, page.index, origin.x, origin.y);
     }
     for (const area of [page.footnotes, page.endnotes]) {
       if (!area) continue;
       for (const note of area.notes) {
-        take(
-          note.fragments,
-          page.index,
-          note.box.x - page.contentBox.x,
-          note.box.y - page.contentBox.y
-        );
+        const origin = storyBoxContentOffset(page, note.box);
+        take(note.fragments, page.index, origin.x, origin.y);
       }
     }
   }

@@ -72,6 +72,9 @@ export interface DefaultFontSubstitution {
 export const FONT_ASSET_MANIFEST: readonly FontAssetManifestEntry[];
 
 // @public
+export const FONT_ASSET_ROOT: URL;
+
+// @public
 export interface FontAssetManifestEntry {
     readonly byteLength: number;
     readonly file: string;

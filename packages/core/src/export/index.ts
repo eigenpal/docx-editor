@@ -25,14 +25,41 @@ export {
   MAX_SHARED_EXPORT_SHAPING_CONFIGURATIONS,
   acquireSharedExportShaping,
   type SharedExportShaping,
+  type SharedExportShapingCapabilities,
 } from './shared-export-shaping.ts';
 export {
+  hasFontBackedExportCapabilities,
   openFontBackedDocumentForExport,
-  type ExportFontFaceResolution,
-  type ExportFontFamilyResolution,
-  type ExportFontResolutionReport,
+  type FontBackedExportCapabilities,
   type FontBackedExportSession,
   type OpenFontBackedDocumentForExportOptions,
   type OpenFontBackedDocumentForExportResult,
 } from './document-export-shaping.ts';
+export {
+  hasExportAdmittedFont,
+  type ExportAdmittedFontApi,
+  type ExportAdmittedFontFace,
+  type ExportAdmittedFontIdentity,
+  type ExportFontFaceResolution,
+  type ExportFontFamilyResolution,
+  type ExportFontResolutionReport,
+  type ExportDroppedEmbeddedFont,
+} from './document-export-font-resolution.ts';
+export {
+  hasExportLaidOutText,
+  type ExportLaidOutText,
+  type ExportLaidOutTextApi,
+} from './export-laid-out-text.ts';
+export {
+  exportDestinationNamed,
+  type ExportDestinationAnchor,
+  type ExportDestinationGeometry,
+  type ExportDocumentMetadata,
+} from './export-document-resources.ts';
+export {
+  createPackagedFileFetch,
+  type PackagedFileFetchOptions,
+  type PackagedFileRead,
+} from './packaged-file-fetch.ts';
 export type { FontOrigin, FontOriginFailure } from '../editor/font-resolver.ts';
+export type { FontRequest, FontSubstitution } from '../layout/font-resource.ts';

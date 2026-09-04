@@ -12,10 +12,16 @@
 // Malformed fields demote too: markers contribute nothing and interior result text remains
 // visible/addressable so content never disappears.
 
-import { contentControlContentChildren, isContentControl } from './content-control-walk.ts';
+import {
+  contentControlContentChildren,
+  isContentControl,
+  MAX_CONTENT_CONTROL_NESTING,
+} from './content-control-walk.ts';
+import { hardBreakText } from './hard-break.ts';
 import {
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
   WML_NAMESPACE_URI,
 } from './ooxml-shared.ts';
 import type {
@@ -413,9 +419,77 @@ export interface ParsedFieldSpan extends AtomicFieldSpan {
   readonly addressing: 'atomic' | 'editable-result';
 }
 
-interface RunChildRef {
+/** One field-machine entry from the shared paragraph-inline flatten. @internal */
+export interface FieldRunChildRef {
   readonly runId: string;
   readonly node: OoxmlNode;
+  readonly hiddenInOriginal: boolean;
+}
+
+/** Text contributed by one supported field-result inline node. @internal */
+export function fieldResultInlineTextOf(node: OoxmlNode): string {
+  if (node.kind === 'textValue') return node.value;
+  if (node.kind === 'tab') return '\t';
+  if (node.kind === 'hardBreak') return hardBreakText(node);
+  if (node.kind !== 'text' && node.kind !== 'deletedText') return '';
+  let text = '';
+  for (const child of node.children) if (child.kind === 'textValue') text += child.value;
+  return text;
+}
+
+/**
+ * Flatten the inline nodes one field machine sees. Only content controls spend nesting depth.
+ * @internal
+ */
+export function collectFieldRunChildren(
+  container: OoxmlNode,
+  entries: FieldRunChildRef[],
+  budget?: { left: number }
+): boolean {
+  let complete = true;
+  const visit = (child: OoxmlNode, sdtDepth: number, hiddenInOriginal: boolean): void => {
+    if (!complete) return;
+    if (sdtDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
+    if (budget && budget.left-- <= 0) {
+      complete = false;
+      return;
+    }
+    const hidden =
+      hiddenInOriginal || child.kind === 'revisionInsert' || child.kind === 'revisionMoveTo';
+    if (isFldSimple(child)) {
+      entries.push({ runId: '', node: child, hiddenInOriginal: hidden });
+      return;
+    }
+    if (child.kind === 'run') {
+      for (const node of child.children) {
+        if (node.kind === 'runProperties') continue;
+        if (budget && budget.left-- <= 0) {
+          complete = false;
+          return;
+        }
+        entries.push({ runId: child.id, node, hiddenInOriginal: hidden });
+      }
+      return;
+    }
+    if (isContentControl(child)) {
+      if (sdtDepth >= MAX_CONTENT_CONTROL_NESTING) return;
+      for (const inner of contentControlContentChildren(child)) visit(inner, sdtDepth + 1, hidden);
+      return;
+    }
+    if (child.kind === 'textValue') return;
+    // Every transparent run container descends: a link, a revision wrapper, and the generic
+    // wrappers (`w:smartTag`, `w:customXml`, `w:dir`, `w:bdo`) all hold ordinary run content,
+    // and a field inside one is an ordinary field. Depth follows the shared authority so this
+    // walk and `segmentsOf` agree about what is addressable.
+    if (isInlineRunContainer(child)) {
+      const depth = nextInlineContainerDepth(child, sdtDepth);
+      for (const inner of child.children) visit(inner, depth, hidden);
+    }
+  };
+  if (container.kind !== 'textValue') {
+    for (const child of container.children) visit(child, 0, false);
+  }
+  return complete;
 }
 
 const MERGEFORMAT_SUFFIX = /\s*\\\*\s*MERGEFORMAT\s*$/i;
@@ -432,6 +506,9 @@ const MERGEFORMAT_SUFFIX = /\s*\\\*\s*MERGEFORMAT\s*$/i;
  * caps on purpose.
  */
 export const MAX_FIELD_INSTRUCTION_CHARS = 4096;
+
+/** Maximum supported nesting for complex fields inside one paragraph. */
+export const MAX_FIELD_NESTING = 4;
 
 /** Whether a bounded instruction denotes Word's editable legacy text-form input. */
 export function isEditableFormTextInstruction(
@@ -461,13 +538,13 @@ export function parsedFieldSpansOf(
   paragraph: OoxmlParagraphNode,
   options?: { readonly maxNesting?: number; readonly maxInstructionChars?: number }
 ): readonly ParsedFieldSpan[] {
-  const maxNesting = options?.maxNesting ?? 4;
+  const maxNesting = options?.maxNesting ?? MAX_FIELD_NESTING;
   const maxInstructionChars = options?.maxInstructionChars ?? MAX_FIELD_INSTRUCTION_CHARS;
   const spans: ParsedFieldSpan[] = [];
 
   // Flatten run children in document order for the complex-field machine.
   // Hyperlink is a run container: fields inside a link are ordinary paragraph text.
-  const flat: RunChildRef[] = [];
+  const flat: FieldRunChildRef[] = [];
   /** Child `w:r` ids inside a `fldSimple` — those runs own displayed result formatting. */
   const formatRunIdsOfSimple = (simple: OoxmlNode): readonly string[] => {
     if (simple.kind === 'textValue') return [];
@@ -484,9 +561,10 @@ export function parsedFieldSpansOf(
     return ids;
   };
 
-  const visitInline = (child: OoxmlNode, containerDepth = 0): void => {
-    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
-    if (child.kind === 'fldSimple' || (child.kind === 'generic' && isFldSimple(child))) {
+  collectFieldRunChildren(paragraph, flat);
+  for (const entry of flat) {
+    const child = entry.node;
+    if (isFldSimple(child)) {
       spans.push({
         kind: 'simple',
         node: child,
@@ -495,37 +573,8 @@ export function parsedFieldSpansOf(
         formatRunIds: formatRunIdsOfSimple(child),
         addressing: 'atomic',
       });
-      return;
     }
-    if (child.kind === 'run') {
-      for (const grand of child.children) {
-        if (grand.kind === 'runProperties') continue;
-        flat.push({ runId: child.id, node: grand });
-      }
-      return;
-    }
-    // An inline content control flattens into the paragraph's run stream, so a field inside
-    // one is an ordinary field. Layout descends here and this walk did not, so a `w:fldSimple`
-    // in an `w:sdt` was worth one offset to layout and nothing to the store — the same
-    // disagreement, in the same direction, as the revision wrappers below.
-    if (isContentControl(child)) {
-      for (const inner of contentControlContentChildren(child)) {
-        visitInline(inner, containerDepth + 1);
-      }
-      return;
-    }
-    if (isInlineRunContainer(child)) {
-      // Revision wrappers are run containers like `w:hyperlink` is. Not descending made a
-      // field whose RESULT is wrapped in `w:del` disagree with itself: the begin/end markers
-      // formed an atom worth one offset, but the struck result run was not among the nodes
-      // that atom swallowed, so the paragraph counted its characters a SECOND time as
-      // ordinary text. Layout folds them into the atom, the store did not, and every offset
-      // after the field was out by the length of the deleted words — the caret painted in one
-      // place and typing landed elsewhere.
-      for (const inner of child.children) visitInline(inner, containerDepth + 1);
-    }
-  };
-  for (const child of paragraph.children) visitInline(child);
+  }
 
   let i = 0;
   while (i < flat.length) {
@@ -621,7 +670,10 @@ export function parsedFieldSpansOf(
       // Interior content: instruction-phase run content is chrome (skipped for addressing);
       // result-phase measurable content is part of the atomic unit (removed on delete).
       if (nesting >= 1) {
-        if (phase === 'result' && nesting === 1) {
+        if (phase === 'result') {
+          // Include nested result content. Layout buffers nested results inside the outer
+          // field and commits one atom only when the outer field ends. Only outer-result
+          // runs own formatting, so `formatRunIds` remains gated on `nesting === 1` below.
           if (
             node.kind === 'text' ||
             // `w:delText` is result content that a tracked deletion struck — still the field's
@@ -635,7 +687,7 @@ export function parsedFieldSpansOf(
             node.kind === 'textValue'
           ) {
             removeIds.push(node.id);
-            if (entry.runId && !seenFormatRuns.has(entry.runId)) {
+            if (nesting === 1 && entry.runId && !seenFormatRuns.has(entry.runId)) {
               seenFormatRuns.add(entry.runId);
               resultFormatRunIds.push(entry.runId);
             }

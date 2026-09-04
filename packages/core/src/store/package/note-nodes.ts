@@ -349,10 +349,35 @@ export function notesOf(root: OoxmlNode): readonly OoxmlNoteNode[] {
   return notes;
 }
 
+interface ResolvableNoteIndex {
+  readonly notes: readonly OoxmlNoteNode[];
+  readonly byId: ReadonlyMap<number, OoxmlNoteNode>;
+}
+
+const resolvableNoteIndexes = new WeakMap<OoxmlNode, ResolvableNoteIndex>();
+
+function resolvableNoteIndexOf(root: OoxmlNode): ResolvableNoteIndex {
+  const cached = resolvableNoteIndexes.get(root);
+  if (cached) return cached;
+  const resolved: OoxmlNoteNode[] = [];
+  const byId = new Map<number, OoxmlNoteNode>();
+  for (const note of notesOf(root)) {
+    const id = noteIdOf(note);
+    if (id === null || byId.has(id)) continue;
+    byId.set(id, note);
+    resolved.push(note);
+  }
+  const index = { notes: Object.freeze(resolved), byId };
+  resolvableNoteIndexes.set(root, index);
+  return index;
+}
+
+/** Direct, bounded note bodies that note navigation can resolve, with the first id winning. */
+export function resolvableNotesOf(root: OoxmlNode): readonly OoxmlNoteNode[] {
+  return resolvableNoteIndexOf(root).notes;
+}
+
 /** Find a typed note by id inside a notes-part root. */
 export function findNoteById(root: OoxmlNode, noteId: number): OoxmlNoteNode | undefined {
-  for (const note of notesOf(root)) {
-    if (noteIdOf(note) === noteId) return note;
-  }
-  return undefined;
+  return resolvableNoteIndexOf(root).byId.get(noteId);
 }

@@ -6,6 +6,7 @@
  */
 import {
   acquireSharedExportShaping,
+  createPackagedFileFetch,
   ExportResourceError,
   openFontBackedDocumentForExport,
   openDocumentForExport as openCoreDocumentForExport,
@@ -23,7 +24,7 @@ import {
   type PreparedLayoutFontConfiguration,
 } from '@docx-editor.dev/core/layout';
 import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
-import { loadDefaultFonts, packagedFonts } from '@docx-editor.dev/fonts';
+import { FONT_ASSET_ROOT, loadDefaultFonts, packagedFonts } from '@docx-editor.dev/fonts';
 import {
   exportMarkdownFrom as translateMarkdown,
   exportMarkdownLayout as translateMarkdownLayout,
@@ -36,7 +37,6 @@ import type {
   OpenMarkdownDocumentForExportOptions,
 } from './markdown-types.ts';
 import { createSuccessfulValueCache, provisionWithExportDeadline } from './export-deadline.ts';
-import { createPackagedFileFetch } from './packaged-file-fetch.ts';
 
 export { ExportResourceError } from '@docx-editor.dev/core/export';
 export {
@@ -48,7 +48,11 @@ export {
 export { createFontSource, defineFontResolver } from '@docx-editor.dev/core/editor';
 
 export type {
+  ExportDestinationAnchor,
+  ExportDestinationGeometry,
+  ExportDocumentMetadata,
   ExportDocumentSource,
+  ExportDroppedEmbeddedFont,
   ExportFontFaceResolution,
   ExportFontFamilyResolution,
   ExportFontResolutionReport,
@@ -61,12 +65,15 @@ export type {
 } from '@docx-editor.dev/core/export';
 export type {
   AnchoredDrawingLayoutFallback,
+  FontRequest,
+  FontSubstitution,
   SemanticArtifactRootStoryKind,
   SemanticArtifactStoryKind,
   SemanticCommentArtifactRecord,
   SemanticDrawingVisit,
   SemanticLayout,
   SemanticReviewArtifactOccurrence,
+  SemanticReviewArtifactOccurrenceGeometry,
   SemanticReviewArtifactPosition,
   SemanticReviewArtifactRecord,
   SemanticReviewArtifactSource,
@@ -126,7 +133,18 @@ export class DocumentOpenError extends Error {
   }
 }
 
-const packagedFileFetch = createPackagedFileFetch();
+// FONT_ASSET_ROOT is the directory the fonts package already resolves for each face.
+// Guessing `fonts/assets` from this package breaks pnpm, Yarn PnP, and nested installs:
+// Node reports `import.meta.url` through the real path, and Core compares that prefix
+// before its realpath-aware reader. Browser bundlers rewrite those face URLs to HTTP;
+// HTTP fetches skip the file reader, so this root is Node-only.
+const packagedFileFetch =
+  FONT_ASSET_ROOT.protocol === 'file:'
+    ? createPackagedFileFetch({
+        trustedRoot: new URL('./', FONT_ASSET_ROOT),
+        maxBytes: HARD_MAX_FONT_BYTES,
+      })
+    : fetch;
 
 interface DefaultExportFonts {
   readonly configuration: PreparedLayoutFontConfiguration;

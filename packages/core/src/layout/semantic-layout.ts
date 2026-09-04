@@ -201,7 +201,7 @@ import {
 import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { replaceLayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
-import { hostedListTokenDeps, layoutTextboxStory } from './textbox-story-layout.ts';
+import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import {
   layoutBlocksWithColumnBalance,
   type BlockLayoutOptions as ColumnBalanceBlockLayoutOptions,
@@ -1079,14 +1079,41 @@ function layoutBlocksPass(
   // disagree about which context minted a key — including a caller that supplies tokens
   // while toggling the context, which a fallback-only namespace could not separate.
   const hasInlineDrawingContext = options.inlineDrawingLayout !== undefined;
-  // ONE provider for every fold of this flow — the prepass block fold and the cell-lane
-  // deps below hand `hostedTextboxListToken` the same (index, cascade, mode) tuple.
-  const hostedListDeps = hostedListTokenDeps(
-    options.numberingIndex,
-    styleCascade,
-    displayMode,
-    authorFilter
-  );
+  // Body textbox stories flow without a page-field context: body PAGE projection stays
+  // deferred, so a PAGE field inside a body text box contributes only its cached result,
+  // consistent with direct body fields today.
+  const layoutTextboxStoryForBody = (
+    projection: import('../store/package/drawing-projection.ts').DrawingProjection
+  ) =>
+    layoutTextboxStory(projection, {
+      measurer,
+      producer,
+      cache,
+      styleCascade,
+      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      ...(displayMode ? { displayMode } : {}),
+      ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
+      ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
+      ...(options.projectLink ? { projectLink: options.projectLink } : {}),
+      ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+      ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
+      inlineDrawingLayout: options.inlineDrawingLayout,
+      drawingTokenForParagraph: options.drawingTokenForParagraph,
+      projectionTokenForParagraph: options.projectionTokenForParagraph,
+      projectionTokenForTable: options.projectionTokenForTable,
+    });
+  // ONE capability for every hosted-story fold of this flow. The prepass block fold and
+  // the cell lane below therefore cannot drift to different numbering inputs, and a future
+  // lane cannot publish hosted stories without carrying the invalidation provider too.
+  const hostedStory = hasInlineDrawingContext
+    ? hostedStoryFlowDeps(
+        layoutTextboxStoryForBody,
+        options.numberingIndex,
+        styleCascade,
+        displayMode,
+        authorFilter
+      )
+    : undefined;
   const prepareBlock = (block: OoxmlElement, availableWidth: number): PreparedBlock => {
     // The RAW token, compared by the memo below so a table's kilobyte aggregate keeps its
     // identity fast path; the context joins only when a key is actually built. `||`, not
@@ -1119,7 +1146,7 @@ function layoutBlocksPass(
     // The list state of any text-box story this block hosts, for the same reason the drawing
     // token aggregates hosted-story atoms: a box's markers come from `numbering.xml`, and a
     // numbering edit moves nothing else in this block's key.
-    const hostedListToken = hostedListDeps.hostedListTokenForParagraph?.(block) ?? '';
+    const hostedListToken = hostedStory?.hostedListTokenForParagraph?.(block) ?? '';
     // Length-framed pair: both sides embed file-influenced marker text (and the table
     // aggregate itself contains NULs), so no separator join stays injective.
     const ownListToken =
@@ -1681,30 +1708,6 @@ function layoutBlocksPass(
     carryDeferredToNextPage();
   };
 
-  // Body textbox stories flow without a page-field context: body PAGE projection stays
-  // deferred, so a PAGE field inside a body text box contributes only its cached result,
-  // consistent with direct body fields today.
-  const layoutTextboxStoryForBody = (
-    projection: import('../store/package/drawing-projection.ts').DrawingProjection
-  ) =>
-    layoutTextboxStory(projection, {
-      measurer,
-      producer,
-      cache,
-      styleCascade,
-      ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-      ...(displayMode ? { displayMode } : {}),
-      ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
-      ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
-      ...(options.projectLink ? { projectLink: options.projectLink } : {}),
-      ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
-      ...(options.numberingIndex ? { numberingIndex: options.numberingIndex } : {}),
-      inlineDrawingLayout: options.inlineDrawingLayout,
-      drawingTokenForParagraph: options.drawingTokenForParagraph,
-      projectionTokenForParagraph: options.projectionTokenForParagraph,
-      projectionTokenForTable: options.projectionTokenForTable,
-    });
-
   // Table layout shares the flow's line count, paragraph cache, and precomputed list items
   // (counters already advanced in document order, including cell paragraphs).
   // Border ownership intervals and vMerge cell visits are budgeted once per pass so nested
@@ -1750,11 +1753,7 @@ function layoutBlocksPass(
       ? {
           anchorFrameBase,
           pageContentClip,
-          layoutTextboxStoryFor: layoutTextboxStoryForBody,
-          // The CELL lane folds only where stories can render (`layoutTextboxStoryFor`
-          // above). The body block fold in `prepareBlock` stays ungated on purpose: it
-          // predates this gate and fails open — extra invalidation, never a stale reuse.
-          ...hostedListDeps,
+          hostedStory,
           publishAnchoredDrawings: collectAnchoredDrawings,
           collectAnchoredDrawings,
           columnBoxForParagraph: anchorColumnBox,
@@ -2626,7 +2625,8 @@ function layoutBlocksPass(
             pageClip: pageContentClip(),
             measurer,
             sourceOrderOf,
-            layoutTextboxStory: layoutTextboxStoryForBody,
+            // The drawing-context guard above is the same predicate that creates this bundle.
+            layoutTextboxStory: hostedStory!.layoutTextboxStoryFor,
             displayMode,
             ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
           })

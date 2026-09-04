@@ -6,8 +6,7 @@
 // validation live in sibling tree-op-* modules; tree-ops.ts re-exports the public surface.
 /* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
-import { hardBreakAttributes, hardBreakText } from '../package/hard-break.ts';
-import { fieldAtomText } from '../package/field-nodes.ts';
+import { hardBreakAttributes } from '../package/hard-break.ts';
 import {
   isContentRevisionKind,
   isInlineRunContainer,
@@ -52,6 +51,7 @@ import {
   ownProposedMark,
   withPropertyChangeRecord,
 } from './tree-op-tracked-properties.ts';
+import { paragraphModelTextOf } from './paragraph-model-text.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import {
   isValidParaId,
@@ -3465,23 +3465,5 @@ export function splitRunsAt(
 export function paragraphTextOf(part: OoxmlPart, paragraphId: string): string | null {
   const paragraph = findNode(part, paragraphId);
   if (!isParagraph(paragraph)) return null;
-  let text = '';
-  for (const segment of segmentsOf(paragraph)) {
-    if (segment.removeNodeIds && segment.removeNodeIds.length > 0) {
-      text += fieldAtomText();
-      continue;
-    }
-    if (segment.node.kind === 'textValue') text += segment.node.value;
-    else if (segment.node.kind === 'tab') text += '\t';
-    else if (segment.node.kind === 'hardBreak') text += hardBreakText(segment.node);
-    else if (
-      segment.node.kind === 'fldChar' ||
-      segment.node.kind === 'fldSimple' ||
-      (segment.node.kind === 'generic' &&
-        (segment.node.localName === 'fldChar' || segment.node.localName === 'fldSimple'))
-    ) {
-      text += fieldAtomText();
-    }
-  }
-  return text;
+  return paragraphModelTextOf(paragraph);
 }

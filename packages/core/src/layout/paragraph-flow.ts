@@ -78,6 +78,7 @@ import {
 } from './drawing-exclusion.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
+import { chopOversizedWord } from './oversized-word-break.ts';
 
 /**
  * How far past the line's right edge a span may reach before it counts as overflow.
@@ -1549,8 +1550,7 @@ export function breakParagraph(
         wordStartEnd = line.end;
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
-      // Word hangs trailing fill spaces at the line edge: they occupy the remaining band
-      // (and keep their underline) but never open continuation lines of their own.
+      // Trailing fill spaces occupy the remaining band but never open continuation lines.
       const lineEndWhitespace =
         isCollapsibleLineEndWhitespace(candidate) && placeableSuffixes[pieceIndex]![boundary] !== 1;
       if (lineEndWhitespace) {
@@ -1560,12 +1560,18 @@ export function breakParagraph(
         line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
         (line.spans.length > 0 || line.drawings.length > 0)
       ) {
-        if (opensWord || wordStartSpan <= 0) {
+        if (!opensWord && wordStartSpan === 0) {
+          // Prefer a later float passage; otherwise fill this one's remainder in the chop below.
+          tryAdvanceToNextPassage();
+        } else if (opensWord || wordStartSpan < 0) {
           if (tryAdvanceToNextPassage() && line.width + width <= lineAvailable() + 0.001) {
             // carry on in the next horizontal passage on this line
           } else {
             closeLine();
             if (!ensurePlacementWidth(width)) continue;
+            wordStartSpan = 0;
+            wordStartWidth = 0;
+            wordStartEnd = line.end;
           }
         } else {
           // Mid-word overflow: carry the whole word to the next line rather than splitting it
@@ -1603,59 +1609,56 @@ export function breakParagraph(
       ) {
         if (!ensurePlacementWidth(width)) continue;
       }
-      // A word wider than an EMPTY line has no boundary to wrap at, and Word breaks it at
-      // the margin rather than letting it run past the right edge — or, in a table cell,
-      // into the neighbouring cell. The longest fitting prefix closes each full line and
-      // the tail falls through to ordinary placement. Layout-owned pieces stay whole:
-      // every span they emit publishes the piece's model range, so cutting one would
-      // publish the same range twice; `measureText` pieces reserve a width their sliced
-      // text does not measure to.
+      // Layout-owned and measureText pieces have ranges or widths that cannot be sliced.
       let remaining = candidate;
       let remainingStart = piece.start + consumed;
       let remainingWidth = width;
-      if (!layoutOwned && piece.measureText === undefined) {
-        while (
-          line.spans.length === 0 &&
-          remaining.length > 1 &&
-          remainingWidth > lineAvailable()
-        ) {
-          let low = 1;
-          let high = remaining.length - 1;
-          let fitLength = 1;
-          while (low <= high) {
-            const mid = (low + high) >> 1;
-            const midWidth = measurer.measure(
-              displayText(remaining.slice(0, mid), faceStyle),
-              faceStyle
-            );
-            if (midWidth <= lineAvailable()) {
-              fitLength = mid;
-              low = mid + 1;
-            } else {
-              high = mid - 1;
-            }
-          }
-          const prefix = remaining.slice(0, fitLength);
-          const prefixWidth = measurer.measure(displayText(prefix, faceStyle), faceStyle);
-          line.spans.push({
-            range: { paragraphId, start: remainingStart, end: remainingStart + fitLength },
-            text: prefix,
-            props: piece.props,
-            style: piece.style,
-            box: { x: lineOrigin() + line.width, y: 0, width: prefixWidth, height: metrics.height },
-            ...(piece.link ? { link: piece.link } : {}),
-            ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
-            ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
-            ...revisionsOf(piece),
-          });
-          line.width += prefixWidth;
-          line.height = Math.max(line.height, metrics.height);
-          line.baseline = Math.max(line.baseline, metrics.baseline);
-          line.end = remainingStart + fitLength;
-          closeLine();
-          remaining = remaining.slice(fitLength);
-          remainingStart += fitLength;
-          remainingWidth = measurer.measure(displayText(remaining, faceStyle), faceStyle);
+      const canChopWord = !layoutOwned && piece.measureText === undefined;
+      if (
+        canChopWord &&
+        (line.spans.length === 0 || (!opensWord && wordStartSpan === 0)) &&
+        width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
+      ) {
+        const chopped = chopOversizedWord(candidate, remainingStart, width, {
+          remainingLineWidth,
+          lineHasText: () => line.spans.length > 0,
+          measureText: (text) => measurer.measure(displayText(text, faceStyle), faceStyle),
+          appendPrefix: (prefix) => {
+            line.spans.push({
+              range: {
+                paragraphId,
+                start: prefix.modelStart,
+                end: prefix.modelStart + prefix.text.length,
+              },
+              text: prefix.text,
+              props: piece.props,
+              style: piece.style,
+              box: {
+                x: lineOrigin() + line.width,
+                y: 0,
+                width: prefix.width,
+                height: metrics.height,
+              },
+              ...(piece.link ? { link: piece.link } : {}),
+              ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+              ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
+              ...revisionsOf(piece),
+            });
+            line.width += prefix.width;
+            line.height = Math.max(line.height, metrics.height);
+            line.baseline = Math.max(line.baseline, metrics.baseline);
+            line.end = prefix.modelStart + prefix.text.length;
+          },
+          closeLine,
+          overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
+        });
+        remaining = chopped.text;
+        remainingStart = chopped.modelStart;
+        remainingWidth = chopped.width;
+        if (chopped.brokeLine) {
+          wordStartSpan = 0;
+          wordStartWidth = 0;
+          wordStartEnd = line.end;
         }
       }
       line.spans.push({

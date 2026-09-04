@@ -52,8 +52,11 @@ const requestedFiles = requestedUrls
 assert.equal(fragment.failures.length, 0, 'CJS build must load every packaged face in Node');
 assert.equal(fragment.sources.length, assetFiles.length);
 assert.deepEqual(requestedFiles, assetFiles);
+const expectedRoot = new URL('./', pathToFileURL(join(assetsDir, assetFiles[0])).href);
+assert.equal(new URL('./', cjs.FONT_ASSET_ROOT).href, expectedRoot.href);
 for (const url of requestedUrls) {
   assert.equal(new URL(url).protocol, pathToFileURL(assetsDir).protocol);
+  assert.equal(new URL('./', url).href, expectedRoot.href);
 }
 
 console.log(

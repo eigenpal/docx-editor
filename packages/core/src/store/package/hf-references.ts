@@ -75,6 +75,16 @@ export interface HeaderFooterSectionResolution {
   readonly titlePage: boolean;
 }
 
+/** Whether a section can paint one authored furniture variant. @internal */
+export function headerFooterVariantCanPaint(
+  section: { readonly evenAndOddHeaders: boolean; readonly titlePage: boolean },
+  variant: HeaderFooterVariant
+): boolean {
+  if (variant === 'first') return section.titlePage;
+  if (variant === 'even') return section.evenAndOddHeaders;
+  return true;
+}
+
 const EMPTY: HeaderFooterParts = Object.freeze({
   headers: new Map(),
   footers: new Map(),

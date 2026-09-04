@@ -185,8 +185,7 @@ export interface DocxEditorProps {
    * Omitting it mounts NO document, which is not the same as an empty one. */
   document?: DocumentSource;
   /**
-   * The mode the editor opens in, matching the toolbar's three-state pill. Applied at
-   * mount only — not reactive; remount to change.
+   * The host mode, matching the toolbar's three-state pill. Changes apply without a remount.
    *
    * Defaults to `'edit'`: the packaged editor opens every document ready to type, even
    * one whose `w:trackRevisions` asks for tracked changes. Pass `'suggesting'` (needs
@@ -205,11 +204,15 @@ export interface DocxEditorProps {
    * `{ type: 'fixed' }` opts out.
    */
   zoomMode?: ZoomMode | 'auto';
+  /**
+   * Engine locale for engine-generated content, such as the table of contents title.
+   * Changes apply without a remount.
+   */
   locale?: string;
   author?: string;
   /**
-   * Capability modules to register (`@docx-editor.dev/pro`'s review module,
-   * custom nodes). Applied at mount only, like `mode`.
+   * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes).
+   * Applied at mount only.
    */
   modules?: readonly EditorModule[];
   /**

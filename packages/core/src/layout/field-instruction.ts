@@ -17,7 +17,11 @@ import {
   isInstrText as isInstrTextHelper,
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
-import { isDeletedInstrText, MAX_FIELD_INSTRUCTION_CHARS } from '../store/package/field-nodes.ts';
+import {
+  isDeletedInstrText,
+  MAX_FIELD_INSTRUCTION_CHARS,
+  MAX_FIELD_NESTING,
+} from '../store/package/field-nodes.ts';
 
 /**
  * Caps hostile instruction blobs and nesting depth (fail closed → inert).
@@ -27,8 +31,7 @@ import { isDeletedInstrText, MAX_FIELD_INSTRUCTION_CHARS } from '../store/packag
  * the `w:fldSimple` lane (`MAX_HYPERLINK_INSTRUCTION_CHARS`): a long `HYPERLINK` URL parses
  * identically as a complex field and as a simple field.
  */
-export { MAX_FIELD_INSTRUCTION_CHARS };
-export const MAX_FIELD_NESTING = 4;
+export { MAX_FIELD_INSTRUCTION_CHARS, MAX_FIELD_NESTING };
 
 /**
  * Caps for furniture field-presence scans and paragraph projection walks. Attacker-controlled

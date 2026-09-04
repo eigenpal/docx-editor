@@ -45,7 +45,7 @@ import { flowBlocksInBox } from './semantic-table-layout.ts';
 import { forEachStoryDrawing, forEachStoryParagraphFragment } from './semantic-record-queries.ts';
 import { withResolvedListItems, type ResolvedListItem } from './list-resolve.ts';
 import type { NumberingIndex } from './numbering-index.ts';
-import { hostedListTokenDeps, layoutTextboxStory } from './textbox-story-layout.ts';
+import { hostedStoryFlowDeps, layoutTextboxStory } from './textbox-story-layout.ts';
 import type {
   BlockFragmentRecord,
   HeaderFooterStoryRecord,
@@ -259,14 +259,6 @@ export function layoutHeaderFooterStory(
   ).listItems;
   // Content identity is of the authored part, not of a page-field projection.
   const contentKey = headerFooterContentKey(part);
-  // ONE provider for the whole story layout — every reflow pass and page-field projection
-  // reuses it, the body lane's own rule ("ONE provider for every fold of this flow").
-  const hostedListDeps = hostedListTokenDeps(
-    inputs?.numberingIndex,
-    styleCascade,
-    displayMode,
-    revisionAuthorFilter
-  );
   let baseline: HeaderFooterStoryLayout | undefined;
 
   const layoutOnce = (ctx: HeaderFooterLayoutPageContext | undefined): HeaderFooterStoryLayout => {
@@ -344,6 +336,50 @@ export function layoutHeaderFooterStory(
       });
     };
 
+    // Textbox stories flow with the SAME page-field context as the host story, so a PAGE
+    // field inside an anchored footer text box evaluates per page like a direct footer
+    // field. The context token already keys this cache entry.
+    const layoutTextboxStoryFor = (
+      projection: import('../store/package/drawing-projection.ts').DrawingProjection
+    ) =>
+      layoutTextboxStory(projection, {
+        measurer,
+        producer:
+          producer +
+          token +
+          (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+          (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
+        cache,
+        styleCascade,
+        ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
+        ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+        displayMode,
+        ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
+        ...(documentProperties ? { documentProperties } : {}),
+        ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
+        ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
+        inlineDrawingLayout,
+        ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
+        ...(inputs?.projectionTokenForParagraph
+          ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
+          : {}),
+        ...(inputs?.projectionTokenForTable
+          ? { projectionTokenForTable: inputs.projectionTokenForTable }
+          : {}),
+        ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
+      });
+    // ONE capability for the whole projected story — every exclusion reflow pass uses the
+    // same layout callback and list-token provider, structurally paired for table-cell flow.
+    const hostedStory = inlineDrawingLayout
+      ? hostedStoryFlowDeps(
+          layoutTextboxStoryFor,
+          inputs?.numberingIndex,
+          styleCascade,
+          displayMode,
+          revisionAuthorFilter
+        )
+      : undefined;
+
     let exclusionZones: readonly ExclusionZone[] = Object.freeze([]);
     let flow!: { readonly blocks: BlockFragmentRecord[]; readonly bottom: number };
 
@@ -363,9 +399,7 @@ export function layoutHeaderFooterStory(
           nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
           styleCascade,
           ...(listItems ? { listItems } : {}),
-          // Only this branch lays hosted stories out (`layoutTextboxStoryFor` below), so
-          // only this branch folds their list state into the cell-lane break keys.
-          ...hostedListDeps,
+          hostedStory,
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
           displayMode,
@@ -392,36 +426,6 @@ export function layoutHeaderFooterStory(
                 })
               : pageClipRegion(frame);
           },
-          // Textbox stories flow with the SAME page-field context as the host story, so a
-          // PAGE field inside an anchored footer text box evaluates per page like a direct
-          // footer field. The context token already keys this cache entry.
-          layoutTextboxStoryFor: (projection) =>
-            layoutTextboxStory(projection, {
-              measurer,
-              producer:
-                producer +
-                token +
-                (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
-                (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
-              cache,
-              styleCascade,
-              ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
-              ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
-              displayMode,
-              ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
-              ...(documentProperties ? { documentProperties } : {}),
-              ...(inputs?.projectLink ? { projectLink: inputs.projectLink } : {}),
-              ...(inputs?.projectFieldLink ? { projectFieldLink: inputs.projectFieldLink } : {}),
-              inlineDrawingLayout,
-              ...(drawingTokenForParagraph ? { drawingTokenForParagraph } : {}),
-              ...(inputs?.projectionTokenForParagraph
-                ? { projectionTokenForParagraph: inputs.projectionTokenForParagraph }
-                : {}),
-              ...(inputs?.projectionTokenForTable
-                ? { projectionTokenForTable: inputs.projectionTokenForTable }
-                : {}),
-              ...(inputs?.numberingIndex ? { numberingIndex: inputs.numberingIndex } : {}),
-            }),
           collectAnchoredDrawings: (drawings) => {
             pendingAnchoredDrawings.push(...drawings);
           },

@@ -1,11 +1,9 @@
 // Process-wide shaped measurement shared by Node exporters.
 
 import {
-  FontResolutionError,
   createFixedMeasurer,
   createHarfBuzzTextShaper,
   createLayoutShapedMeasurer,
-  fontRequestKey,
   HARD_MAX_AGGREGATE_FONT_BYTES,
   initializeHarfBuzz,
   type PreparedLayoutFontConfiguration,
@@ -15,7 +13,11 @@ import {
   type TextShaper,
 } from '../layout/index.ts';
 import { FIXED_MEASURER_FINGERPRINT } from '../layout/fixed-measurer.ts';
-import type { FontRequest, ResolvedFont } from '../layout/font-resource.ts';
+import {
+  FontResolutionError,
+  type FontRequest,
+  type ResolvedFont,
+} from '../layout/font-resource.ts';
 import { LAYOUT_HARFBUZZ_SHAPER_POLICY } from '../layout/layout-shaper-policy.ts';
 import {
   configurationOfPreparedLayoutFonts,
@@ -23,6 +25,11 @@ import {
   isPreparedLayoutFontConfiguration,
   sharedShapingFingerprintOfPreparedLayoutFonts,
 } from '../layout/layout-shaping.ts';
+import { bindExportLaidOutText, type ExportLaidOutTextApi } from './export-laid-out-text.ts';
+import {
+  createShapingFontResolutionCache,
+  resolveShapingFontFromStyle,
+} from './export-shaping-font-resolution.ts';
 
 /** Immutable handle over process-wide measurement state reusable by every exporter. @public */
 export interface SharedExportShaping {
@@ -34,13 +41,17 @@ export interface SharedExportShaping {
   readonly extensionFingerprint: string;
 }
 
+/** Core-produced shared shaping with exact laid-out text. @public */
+export type SharedExportShapingCapabilities = SharedExportShaping & ExportLaidOutTextApi;
+
 /** Session-owned shaping plus the exact admitted face lookup used by its measurer. @internal */
-export interface SessionExportShaping extends SharedExportShaping {
+export interface SessionExportShaping extends SharedExportShaping, ExportLaidOutTextApi {
   resolveFont(request: FontRequest): ResolvedFont | FontResolutionError;
 }
 
 interface SharedExportShapingSubstrate {
   createMeasurer(): TextMeasurer;
+  readonly shapeLaidOutText: ExportLaidOutTextApi['shapeLaidOutText'];
   readonly shapingHash: string;
   readonly producerVersion: number;
 }
@@ -48,7 +59,7 @@ interface SharedExportShapingSubstrate {
 const sharedShaping = new Map<string, Promise<SharedExportShapingSubstrate>>();
 const sharedShapingViews = new WeakMap<
   PreparedLayoutFontConfiguration,
-  Promise<SharedExportShaping>
+  Promise<SharedExportShapingCapabilities>
 >();
 let retainedOrReservedFontBytes = 0;
 let processWideExportShaper: Promise<TextShaper> | undefined;
@@ -78,27 +89,10 @@ export function acquireProcessWideExportShaper(): Promise<TextShaper> {
 }
 
 function shapedMeasurer(shaping: LayoutShapingOptions): TextMeasurer {
-  const resolved = new Map<string, ReturnType<typeof shaping.fonts.resolve>>();
+  const resolved = createShapingFontResolutionCache();
   return createLayoutShapedMeasurer(shaping, {
     resolveFont(style) {
-      const family = style.fontFamily ?? shaping.defaultFont.family;
-      if (family.trim().length === 0) return null;
-      const request = {
-        family,
-        weight: style.bold ? 700 : 400,
-        style: style.italic ? ('italic' as const) : ('normal' as const),
-      };
-      const key = fontRequestKey(request);
-      let result = resolved.get(key);
-      if (!result) {
-        try {
-          result = shaping.fonts.resolve(request);
-        } catch {
-          return null;
-        }
-        resolved.set(key, result);
-      }
-      return result instanceof FontResolutionError ? null : result;
+      return resolveShapingFontFromStyle(shaping, resolved, style);
     },
     fallback: createFixedMeasurer(),
   });
@@ -129,6 +123,7 @@ export async function createSessionExportShaping(
   return Object.freeze({
     createMeasurer: () => shapedMeasurer(shaping),
     resolveFont: (request: FontRequest) => shaping.fonts.resolve(request),
+    shapeLaidOutText: bindExportLaidOutText(shaping),
     producer: [
       'node-export-session',
       prepared.fingerprint,
@@ -151,7 +146,7 @@ export async function createSessionExportShaping(
 export function acquireSharedExportShaping(
   prepared: PreparedLayoutFontConfiguration,
   instrumentation?: LayoutShapingInstrumentation
-): Promise<SharedExportShaping> {
+): Promise<SharedExportShapingCapabilities> {
   if (!isPreparedLayoutFontConfiguration(prepared)) {
     return Promise.reject(new TypeError('Shared exporter shaping requires a prepared font handle'));
   }
@@ -200,6 +195,7 @@ export function acquireSharedExportShaping(
       }
       return Object.freeze({
         createMeasurer: () => shapedMeasurer(shaping),
+        shapeLaidOutText: bindExportLaidOutText(shaping),
         shapingHash: shaping.operation.shapingHash,
         producerVersion: shaping.operation.producerVersion,
       });
@@ -214,9 +210,10 @@ export function acquireSharedExportShaping(
   // hidden immutable native substrate is deduplicated by content.
   const extensionFingerprint = prepared.fingerprint;
   const pending = substrate.then(
-    (shared): SharedExportShaping =>
+    (shared): SharedExportShapingCapabilities =>
       Object.freeze({
         createMeasurer: shared.createMeasurer,
+        shapeLaidOutText: shared.shapeLaidOutText,
         producer: [
           'node-export',
           extensionFingerprint,

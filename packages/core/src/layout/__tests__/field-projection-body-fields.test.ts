@@ -8,6 +8,7 @@ import { describe, expect, test } from 'bun:test';
 import { createFixedMeasurer } from '../index.ts';
 import { piecesOfParagraph } from '../field-projection.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
+import { projectParagraphText } from '../../automation/text-projection.ts';
 import { runPropertyEdits } from '../../editor/surface-formatting.ts';
 import {
   FIELD_ATOM_CHAR,
@@ -96,6 +97,82 @@ describe('inert body field atom projection', () => {
       }
     });
   }
+
+  test('nested result content occupies the same outer atom in store and layout', () => {
+    const nested = complexField('DATE', '<w:r><w:t>inner</w:t></w:r>');
+    const part = parse(
+      '<w:p><w:r><w:t>A</w:t></w:r>' +
+        complexField('IF', `<w:r><w:t>outer </w:t></w:r>${nested}<w:r><w:t> tail</w:t></w:r>`) +
+        '<w:r><w:t>Z</w:t></w:r></w:p>'
+    );
+    const paragraph = paragraphOf(part);
+    const model = paragraphTextOf(part, paragraph.id)!;
+    const pieces = piecesOfParagraph(paragraph);
+
+    expect(model).toBe(`A${FIELD_ATOM_CHAR}Z`);
+    expect(pieces.at(-1)?.end).toBe(model.length);
+    expect(pieces.filter((piece) => piece.projected)).toEqual([
+      expect.objectContaining({ start: 1, end: 2 }),
+    ]);
+  });
+
+  test('deep simple-field cached text agrees across store, projection, and layout', () => {
+    let nested = '<w:r><w:t>deep</w:t></w:r>';
+    for (let depth = 0; depth < 6; depth += 1) {
+      nested = `<w:fldSimple w:instr=" IF ">${nested}</w:fldSimple>`;
+    }
+    const part = parse(`<w:p>${nested}</w:p>`);
+    const paragraph = paragraphOf(part);
+    const model = paragraphTextOf(part, paragraph.id)!;
+
+    expect(model).toBe(FIELD_ATOM_CHAR);
+    expect(projectParagraphText(paragraph, model, 'allMarkup').text).toBe('deep');
+    expect(
+      piecesOfParagraph(paragraph)
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('deep');
+  });
+
+  test('an unmatched begin in a simple cache fails open everywhere', () => {
+    const malformed =
+      '<w:fldSimple w:instr=" IF "><w:r><w:t>A</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:t>B</w:t></w:r></w:fldSimple>';
+    const part = parse(`<w:p>${malformed}</w:p>`);
+    const paragraph = paragraphOf(part);
+    const model = paragraphTextOf(part, paragraph.id)!;
+
+    expect(model).toBe(FIELD_ATOM_CHAR);
+    expect(projectParagraphText(paragraph, model, 'allMarkup').text).toBe('AB');
+    expect(
+      piecesOfParagraph(paragraph)
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('AB');
+  });
+
+  test('an unmatched begin in a complex result demotes to visible text everywhere', () => {
+    const malformed =
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:instrText> IF </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+      '<w:r><w:t>A</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+      '<w:r><w:t>B</w:t></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+    const part = parse(`<w:p>${malformed}</w:p>`);
+    const paragraph = paragraphOf(part);
+    const model = paragraphTextOf(part, paragraph.id)!;
+
+    expect(model).toBe('AB');
+    expect(projectParagraphText(paragraph, model, 'allMarkup').text).toBe('AB');
+    expect(
+      piecesOfParagraph(paragraph)
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('AB');
+  });
 });
 
 describe('field format ownership', () => {

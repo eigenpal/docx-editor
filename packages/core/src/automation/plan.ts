@@ -414,7 +414,7 @@ function anchorForSection(
 /** Whether both ends of a range still name a paragraph and an offset inside it. */
 function placeable(range: ResolvedRange, reads: AutomationStoryReads): boolean {
   for (const point of [range.start, range.end]) {
-    const text = reads.paragraphText(point.paragraphId);
+    const text = reads.rawText(point.paragraphId);
     if (text === null || point.offset > text.length) return false;
   }
   return true;
@@ -611,8 +611,8 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       readonly end: { paragraphId: string; offset: number };
     }
   ): AutomationSpan | null => {
-    const startText = reads.paragraphText(range.start.paragraphId);
-    const endText = reads.paragraphText(range.end.paragraphId);
+    const startText = reads.rawText(range.start.paragraphId);
+    const endText = reads.rawText(range.end.paragraphId);
     if (startText === null || endText === null) return null;
     const start: ResolvedPoint = {
       story: reads.story,
@@ -719,7 +719,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     span === null ? null : packageReads.story(span.start.story);
 
   const isTextProjection = (value: unknown): value is AutomationTextProjection | undefined =>
-    value === undefined || value === 'allMarkup' || value === 'original';
+    value === undefined || value === 'allMarkup' || value === 'original' || value === 'model';
 
   const searchScope = (
     reads: AutomationStoryReads,
@@ -833,7 +833,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (conflict) return conflict;
       }
       const last = range.end.paragraphId;
-      const headLength = (reads.paragraphText(first) ?? '').length;
+      const headLength = (reads.rawText(first) ?? '').length;
       if (range.start.offset < headLength)
         ops.push({
           op: 'deleteText',
@@ -932,7 +932,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     const target = kept[0] as string;
 
     for (const paragraphId of kept) {
-      const length = (reads.paragraphText(paragraphId) ?? '').length;
+      const length = (reads.rawText(paragraphId) ?? '').length;
       if (length > 0) ops.push({ op: 'deleteText', paragraphId, start: 0, end: length });
     }
     for (const block of removed) {
@@ -1028,7 +1028,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
     const anchorSlot = plan.slotById.get(anchor.paragraphId);
     if (!anchorSlot) return refuse('invalid-handle', 'that paragraph is not in the body');
-    const anchorLength = (reads.paragraphText(anchor.paragraphId) ?? '').length;
+    const anchorLength = (reads.rawText(anchor.paragraphId) ?? '').length;
     const ops: TreeDocOp[] = [];
     // One paragraph becomes two by splitting one: `splitParagraph` leaves the HEAD on the
     // original node and puts the TAIL on a new one. So "after" writes the new text at the end
@@ -1085,7 +1085,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
     const slot = plan.slotById.get(paragraph.paragraphId);
     if (!slot) return refuse('invalid-handle', 'that paragraph is not in the body');
-    const text = reads.paragraphText(paragraph.paragraphId) ?? '';
+    const text = reads.rawText(paragraph.paragraphId) ?? '';
     const occurrences = delimiterOccurrences(text, delimiters);
 
     const ops: TreeDocOp[] = [];
@@ -1140,7 +1140,7 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       parts.forEach((part, index) => {
         const id = part.id;
         if (id === null) return;
-        const piece = after?.paragraphText(id) ?? pieces[index] ?? '';
+        const piece = after?.rawText(id) ?? pieces[index] ?? '';
         const [from, to] = trimSpacing ? trimmed(piece, 0, piece.length) : [0, piece.length];
         const handle = handles.paragraph(id, reads.story);
         spans.push({

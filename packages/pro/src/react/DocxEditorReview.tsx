@@ -43,6 +43,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import type {
@@ -471,10 +472,11 @@ function ReviewRoot({
   const items = useMemo(() => {
     return filter ? review.items.filter((entry) => filter(entry)) : review.items;
   }, [review.items, filter]);
-  // Word's rule: a colour per author by ORDER OF FIRST APPEARANCE. A hash of the name is
-  // stable but collides, and two reviewers drawn in one colour tells the reader the wrong
-  // thing about who proposed what.
-  const configuredAuthor = editor?.getConfiguredAuthor() ?? null;
+  const configuredAuthor = useSyncExternalStore(
+    useCallback((notify) => editor?.on('selectionChange', notify) ?? (() => {}), [editor]),
+    () => editor?.getConfiguredAuthor() ?? null,
+    () => null
+  );
   const authorSlots = useMemo(() => {
     const slots = new Map<string, number>();
     for (const entry of items) {

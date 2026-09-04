@@ -105,7 +105,7 @@ export function resolveEndpoint(
   const paragraph = resolveParagraphHandle(endpoint.paragraph, handles, reads);
   if (!paragraph.ok) return paragraph;
   const story = reads.story(paragraph.value.story);
-  const length = (story?.paragraphText(paragraph.value.paragraphId) ?? '').length;
+  const length = (story?.rawText(paragraph.value.paragraphId) ?? '').length;
   const { offset } = endpoint;
   if (!Number.isInteger(offset) || offset < 0 || offset > length)
     return fail('invalid-offset', `offset ${String(offset)} outside 0..${String(length)}`);
@@ -124,7 +124,7 @@ export function resolvePoint(
     if (!paragraph.ok) return paragraph;
     if (point.at === 'start') return paragraph;
     const story = reads.story(paragraph.value.story);
-    const length = (story?.paragraphText(paragraph.value.paragraphId) ?? '').length;
+    const length = (story?.rawText(paragraph.value.paragraphId) ?? '').length;
     return ok({ ...paragraph.value, offset: length });
   }
   const story = storyOfHandle(point.body, 'body', handles, reads);
@@ -139,7 +139,7 @@ export function resolvePoint(
     story: story.value.story,
     paragraphId,
     index,
-    offset: (story.value.paragraphText(paragraphId) ?? '').length,
+    offset: (story.value.rawText(paragraphId) ?? '').length,
   });
 }
 
@@ -160,7 +160,7 @@ function wholeStory(reads: AutomationStoryReads): ResolvedSpan {
       story: reads.story,
       paragraphId: lastId,
       index: lastIndex,
-      offset: (reads.paragraphText(lastId) ?? '').length,
+      offset: (reads.rawText(lastId) ?? '').length,
     },
   };
 }
@@ -180,7 +180,7 @@ export function resolveSpanRef(
     const paragraph = resolveParagraphHandle(span.paragraph, handles, reads);
     if (!paragraph.ok) return paragraph;
     const story = reads.story(paragraph.value.story);
-    const length = (story?.paragraphText(paragraph.value.paragraphId) ?? '').length;
+    const length = (story?.rawText(paragraph.value.paragraphId) ?? '').length;
     return ok({ start: paragraph.value, end: { ...paragraph.value, offset: length } });
   }
   const start = resolvePoint(span.start, handles, reads);
@@ -269,7 +269,7 @@ export function spanOffsets(
   const ids = spanParagraphIds(span, reads);
   const last = ids.length - 1;
   return ids.map((paragraphId, position) => {
-    const length = (reads.paragraphText(paragraphId) ?? '').length;
+    const length = (reads.rawText(paragraphId) ?? '').length;
     const start = position === 0 ? span.start.offset : 0;
     const end = position === last ? span.end.offset : length;
     return { paragraphId, start, end, whole: start === 0 && end === length };
@@ -279,9 +279,8 @@ export function spanOffsets(
 /**
  * The text a span covers, with a paragraph mark at every paragraph boundary it crosses.
  *
- * The mark count is what makes this text usable as an offset vocabulary: a span over three
- * paragraphs reads two marks, so a caller counting characters counts the same positions the
- * engine writes at.
+ * This is display text. Field atoms can expand beyond their model length. Paragraph marks still
+ * preserve visible story boundaries, but callers must use raw reads for model offset math.
  */
 export function spanText(
   span: ResolvedSpan,
@@ -302,7 +301,7 @@ export function spanText(
     .map((id, position) => {
       const projected = reads.projectedText(id, projection);
       if (!projected) return '';
-      const rawLength = (reads.paragraphText(id) ?? '').length;
+      const rawLength = (reads.rawText(id) ?? '').length;
       if (position === 0) return projected.sliceRaw(span.start.offset, rawLength);
       if (position === ids.length - 1) return projected.sliceRaw(0, span.end.offset);
       return projected.text;

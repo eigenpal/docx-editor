@@ -188,6 +188,25 @@ export type FontOrigin =
   | Promise<FontConfiguration | FontConfigurationFragment | undefined>
   | undefined;
 
+/**
+ * Internal request {@link composeFontOriginsInternal} hands each origin.
+ *
+ * Extends the public resolution request with bounded bytes earlier origins already
+ * committed. `committedSourceBytes` is absent, not zero, when nothing is committed yet.
+ * A resolver that ignores it still composes correctly; the document-embedded origin
+ * subtracts it from the shared aggregate ceiling before admission so overflow reports as
+ * `droppedEmbeddedFonts` and is never hashed.
+ *
+ * Extra fields stay optional so a public {@link FontResolutionRequest} or fonts-package
+ * `FontOriginRequest` literal remains assignable.
+ *
+ * @internal
+ */
+export interface FontOriginCompositionRequest extends FontResolutionRequest {
+  /** Bytes earlier origins in this composition already committed. Absent when none. */
+  readonly committedSourceBytes?: number;
+}
+
 /** One font origin that could not contribute a valid fragment. @public */
 export interface FontOriginFailure {
   /** Zero-based position in the first-wins origin list. */
@@ -341,11 +360,7 @@ async function composeFontOriginsInternal(
       } else if (typeof origin === 'function') {
         const outcome = await awaitObservedOrigin(
           Promise.resolve(
-            origin({
-              ...request,
-              defaultFamily,
-              ...(covered.length > 0 ? { resolvedFaces: covered } : {}),
-            })
+            origin(fontOriginRequest(request, defaultFamily, covered, committedSourceBytes))
           ).then(
             (value) => ({ ok: true as const, value }),
             (cause) => ({ ok: false as const, cause })
@@ -742,6 +757,28 @@ function validateOriginAnswer(
     ownedBytes: aggregateBytes,
     dropped: Object.freeze(droppedFaces),
     releaseOwnedBytes: releaseReservation,
+  };
+}
+
+function boundCommittedSourceBytes(value: number): number {
+  if (!Number.isSafeInteger(value) || value <= 0) return 0;
+  return value > HARD_MAX_AGGREGATE_FONT_BYTES ? HARD_MAX_AGGREGATE_FONT_BYTES : value;
+}
+
+/** Strip any inbound committed-byte field and publish this composition's own total. */
+function fontOriginRequest(
+  request: FontResolutionRequest,
+  defaultFamily: string,
+  covered: readonly FontFaceRequest[],
+  committedSourceBytes: number
+): FontOriginCompositionRequest {
+  const { committedSourceBytes: _inbound, ...rest } = request as FontOriginCompositionRequest;
+  const boundedCommitted = boundCommittedSourceBytes(committedSourceBytes);
+  return {
+    ...rest,
+    defaultFamily,
+    ...(covered.length > 0 ? { resolvedFaces: covered } : {}),
+    ...(boundedCommitted > 0 ? { committedSourceBytes: boundedCommitted } : {}),
   };
 }
 

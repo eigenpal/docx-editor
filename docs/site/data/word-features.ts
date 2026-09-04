@@ -838,7 +838,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Insert, edit, and remove a link with Ctrl+K, Cmd+K, or the toolbar. Targets are allowlisted: http, https, mailto, tel, and ftp. Any other target renders inert and still round-trips. A HYPERLINK field, complex or w:fldSimple, is a live link too: its target passes the same allowlist, and the link panel shows it read-only. Links in footnote and endnote text work the same way. Opening a document never requests a link target, because activation needs an explicit gesture.',
+      'Insert, edit, and remove a link with Ctrl+K, Cmd+K, or the toolbar. Targets are allowlisted: http, https, mailto, tel, and ftp. Any other target renders inert and still round-trips. A HYPERLINK field, complex or w:fldSimple, is a live link too: its target passes the same allowlist, and the link panel shows it read-only. Links in footnote and endnote text work the same way. Links in headers, footers, and anchored text boxes resolve through their own part. You can edit or remove header and footer links with Ctrl+K while editing their story. Secondary-story anchors remain inert and do not open. Opening a document never requests a link target, because activation needs an explicit gesture.',
   },
   {
     id: 'fields.bookmarks',
@@ -1035,7 +1035,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Searches the body story. Text in headers, footers and notes is not matched.',
+    notes: 'Searches headers, footers, footnotes, endnotes, table cells, and saved field results.',
   },
   {
     id: 'collab.clipboard',

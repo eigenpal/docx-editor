@@ -20,20 +20,19 @@ import type { TextMeasurer } from './semantic-records.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { OperationSnapshot } from './resolved-cache.ts';
 import {
-  createShapingEnvironment,
-  type FixedPointRoundingMode,
-  type NormalizationPolicy,
-  type ShapedRun,
-  type ShapingEnvironmentInput,
-  type TextShaper,
-  type VersionedShapingLibrary,
+  layoutFaceHasSmallCaps,
+  layoutRunHalfPointsOf,
+  shapeLayoutStyleRun,
+  type LayoutShapingEnvironment,
+} from './layout-run-shape.ts';
+import type {
+  FixedPointRoundingMode,
+  NormalizationPolicy,
+  TextShaper,
+  VersionedShapingLibrary,
 } from './shaped-run.ts';
 
-/** Fingerprinted, operation-wide portion of every shaping call. @public */
-export type LayoutShapingEnvironment = Omit<
-  ShapingEnvironmentInput,
-  'font' | 'direction' | 'fallbackOrder'
->;
+export type { LayoutShapingEnvironment } from './layout-run-shape.ts';
 
 /**
  * A fully resolved shaping bundle: fonts, shaper, and the environment they were admitted
@@ -123,18 +122,6 @@ const MAX_LINE_GAP_FACE_BOXES = 0.5;
  */
 const MAX_FACE_BOX_EM = 4;
 
-/**
- * The alphabet a face is asked the `smcp` question with, once per face.
- *
- * The question has to be about the FACE and never about the text being measured. Every caret
- * edge on a line is `measureDisplayText(span.text.slice(0, offset), …)` through this same
- * entry point, so a span and each of its prefixes must resolve to the same measurement
- * source. A per-text answer cannot do that: a prefix holds a subset of the span's characters,
- * so a span that misses coverage while its prefix has it takes the fallback while the prefix
- * takes the shaped path, and the caret lands wherever the two disagree.
- */
-const SMALL_CAPS_PROBE_ALPHABET = 'abcdefghijklmnopqrstuvwxyz';
-
 // One measurer belongs to one editor/export session, but a large document can still ask it to
 // measure hundreds of thousands of distinct line-break prefixes. Keeping every prefix made the
 // measurement cache larger than the published layout it accelerated. A fixed-size clock keeps
@@ -144,22 +131,6 @@ const MAX_CACHED_SHAPED_WIDTHS = 4_096;
 /** Super and subscript draw at three quarters, so they measure at three quarters. */
 const sizeFactorOf = (style: ResolvedRunStyle): number =>
   style.verticalAlign === 'baseline' ? 1 : 0.75;
-
-/**
- * Half-points, which is the unit the shaper takes and OOXML stores.
- *
- * The BASE size, never the super/subscript size: the shaper asserts an integer, and rounding
- * `11pt × 0.75 × 2 = 16.5` up to 17 half-points measured superscript 3% wider than paint
- * draws it — every span after one on the line sat left of its glyphs, and the caret landed
- * mid-glyph. Advances are unhinted and scale linearly, so callers shape at the base size and
- * multiply by {@link sizeFactorOf}, which is exactly the factor paint applies.
- */
-function halfPointsOf(style: ResolvedRunStyle): number {
-  const halfPoints = Math.round(style.fontSizePt * 2);
-  // A zero-sized run would shape to nothing and make a line of no height; the smallest size
-  // Word records is half a point.
-  return Math.max(1, halfPoints);
-}
 
 /**
  * A {@link TextMeasurer} that measures through the shaper rather than through a canvas.
@@ -253,85 +224,25 @@ export function createShapedMeasurer(
     return byText;
   };
 
-  const shape = (text: string, font: ResolvedFont, style: ResolvedRunStyle): ShapedRun =>
-    shaper.shape({
-      text,
-      fontSizeHalfPoints: halfPointsOf(style),
-      // The semantic paragraph lane is left-to-right; bidi resolution is its own task, and
-      // claiming a level here would be asserting an analysis that has not run.
-      bidiLevel: 0,
-      environment: createShapingEnvironment({
-        ...baseEnvironment,
-        font,
-        direction: 'ltr',
-        // `w:smallCaps` selects the font's small-cap glyphs. Paint uses the matching CSS
-        // feature, so shaping must reserve those glyph advances instead of lowercase advances.
-        features: style.smallCaps
-          ? { ...baseEnvironment.features, smcp: 1 }
-          : baseEnvironment.features,
-        fallbackOrder: [],
-      } satisfies ShapingEnvironmentInput),
-    });
-
-  /**
-   * Does this FACE carry small-cap glyphs? Asked once per face, never per text.
-   *
-   * All of {@link SMALL_CAPS_PROBE_ALPHABET} or none: a face that substitutes only part of it
-   * would shape some characters as small caps and leave the rest as lowercase, while paint
-   * asks the browser to synthesize the ones the face cannot draw. That is the fallback's job,
-   * and taking it for the whole face keeps every measurement of one span on one side of the
-   * decision. Glyph ids do not depend on point size, so the first caller's size may settle it.
-   *
-   * The probe is LATIN lowercase, so a face carrying `smcp` for Latin alone answers yes and a
-   * mixed-script small-caps run shapes its Greek or Cyrillic lowercase at plain advances while
-   * paint synthesizes small caps for them. A span and its prefixes still come from one source,
-   * which is what the caret needs; the absolute width of that span is still a fraction out.
-   * Widening the probe to every script a face might cover is the fix for the width, and it is
-   * not this one.
-   */
-  const faceHasSmallCaps = (font: ResolvedFont, style: ResolvedRunStyle): boolean => {
-    const cached = smallCapsSupportByFont.get(font);
-    if (cached !== undefined) return cached;
-    let supported = true;
-    try {
-      for (const character of SMALL_CAPS_PROBE_ALPHABET) {
-        const featured = shape(character, font, { ...style, smallCaps: true });
-        const plain = shape(character, font, { ...style, smallCaps: false });
-        const substituted =
-          featured.glyphs.length !== plain.glyphs.length ||
-          featured.glyphs.some((glyph, index) => glyph.id !== plain.glyphs[index]?.id);
-        if (!substituted) {
-          // A face with no `smcp` at all answers on the first letter, the common case.
-          supported = false;
-          break;
-        }
-      }
-    } catch {
-      // A face whose shaping refuses the probe cannot answer yes, and the answer is CACHED:
-      // hit-testing measures once per caret prefix, and re-throwing 52 times per prefix
-      // turned one hostile face into the cost of the whole line.
-      supported = false;
-    }
-    smallCapsSupportByFont.set(font, supported);
-    return supported;
-  };
-
   return {
     measure(text, style) {
       if (text.length === 0) return 0;
       const font = resolveFontCached(style);
       if (!font) return fallback.measure(text, style);
 
-      const byText = widthsFor(font, halfPointsOf(style), style.smallCaps);
+      const byText = widthsFor(font, layoutRunHalfPointsOf(style), style.smallCaps);
       let advance = byText.get(text);
       if (advance === undefined) {
         let total = 0;
         try {
           // Per FACE, so this span and every prefix of it answer the same way.
-          if (style.smallCaps && !faceHasSmallCaps(font, style)) {
+          if (
+            style.smallCaps &&
+            !layoutFaceHasSmallCaps(shaper, baseEnvironment, font, style, smallCapsSupportByFont)
+          ) {
             return fallback.measure(text, style);
           }
-          const shaped = shape(text, font, style);
+          const shaped = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, text);
           for (const glyph of shaped.glyphs) total += glyph.advanceX;
         } catch {
           // Shaping refuses malformed or oversized input by design. Falling back keeps a
@@ -359,7 +270,7 @@ export function createShapedMeasurer(
         bySize = new Map();
         linesByFont.set(font, bySize);
       }
-      const halfPoints = halfPointsOf(style);
+      const halfPoints = layoutRunHalfPointsOf(style);
       const cached = bySize.get(halfPoints);
       if (cached) {
         return factor === 1
@@ -380,7 +291,7 @@ export function createShapedMeasurer(
         try {
           // Vertical metrics are a property of the FACE, not of the text, so any string
           // yields them; a single space is the cheapest to shape.
-          const shaped = shape(' ', font, style);
+          const shaped = shapeLayoutStyleRun(shaper, baseEnvironment, font, style, ' ');
           const ascent = shaped.metrics.ascent / baseEnvironment.fixedPointScale;
           const descent = shaped.metrics.descent / baseEnvironment.fixedPointScale;
           // Word's single-spaced line box is ascent + descent + lineGap, and the leading sits

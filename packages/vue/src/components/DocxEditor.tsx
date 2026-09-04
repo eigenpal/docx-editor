@@ -276,14 +276,18 @@ const DocxEditorFrame = defineComponent({
     );
 
     const isDark = computed(() => resolveIsDark(props.colorMode, systemDark.value));
-    const { t: catalogT } = useTranslation();
-    const translate = (key: string, params?: Record<string, string | number>) =>
-      props.t ? props.t(key, params) : catalogT(key as TranslationKey, params);
+    const translation = useTranslation();
+    const translate = computed(() => {
+      const custom = props.t;
+      const catalogT = translation.t;
+      return (key: string, params?: Record<string, string | number>) =>
+        custom ? custom(key, params) : catalogT(key as TranslationKey, params);
+    });
 
     const tableInteractionLabel = (key: 'table.insertRowBelow' | 'table.insertColumnRight') =>
-      translate(key);
+      translate.value(key);
 
-    provide(PageNumberTranslationContext, translate);
+    provide(PageNumberTranslationContext, (key) => translate.value(key));
 
     const handleRef = shallowRef<DocxEditorRef | null>(null);
     expose({
@@ -312,6 +316,7 @@ const DocxEditorFrame = defineComponent({
     });
 
     return () => {
+      const t = translate.value;
       const viewportClass =
         chrome.value && isDark.value ? 'dark' : chrome.value ? undefined : props.class;
       const viewport = h(
@@ -331,7 +336,7 @@ const DocxEditorFrame = defineComponent({
             contextMenu.value === false
               ? null
               : h(DocxEditorContextMenu, {
-                  t: translate,
+                  t,
                   ...(typeof contextMenu.value === 'object' ? contextMenu.value : {}),
                 }),
             h(DocxEditorContentControl),
@@ -361,9 +366,9 @@ const DocxEditorFrame = defineComponent({
                   h('div', { style: TITLE_BLOCK_STYLE }, [
                     hostTitleChange.value !== undefined
                       ? h('input', {
-                          'aria-label': translate('titleBar.documentNameAriaLabel'),
+                          'aria-label': t('titleBar.documentNameAriaLabel'),
                           value: props.title ?? '',
-                          placeholder: translate('titleBar.untitled'),
+                          placeholder: t('titleBar.untitled'),
                           style: TITLE_INPUT_STYLE,
                           onInput: (event: Event) => {
                             const value = (event.target as HTMLInputElement).value;
@@ -374,11 +379,11 @@ const DocxEditorFrame = defineComponent({
                       : h(
                           'span',
                           { style: { minWidth: 0, padding: '2px 6px' } },
-                          props.title ?? translate('titleBar.untitled')
+                          props.title ?? t('titleBar.untitled')
                         ),
                     menu.value !== false
                       ? h(DocxEditorMenu, {
-                          t: translate,
+                          t,
                           ...(props.title !== undefined ? { fileName: props.title } : {}),
                           ...(hostOpen.value !== undefined ? { openHandler: hostOpen.value } : {}),
                           ...(hostSave.value !== undefined ? { saveHandler: hostSave.value } : {}),
@@ -388,16 +393,16 @@ const DocxEditorFrame = defineComponent({
                   ]),
                   slots.titleBarRight?.(),
                 ]),
-                h('div', { style: TOOLBAR_ROW_STYLE }, [h(DocxEditorToolbar, { t: translate })]),
+                h('div', { style: TOOLBAR_ROW_STYLE }, [h(DocxEditorToolbar, { t })]),
               ]),
               rulers.value
                 ? h('div', { style: RULER_ROW_STYLE, 'data-testid': 'docx-editor-ruler-row' }, [
                     h(DocxEditorHorizontalRuler),
                   ])
                 : null,
-              h(DocxEditorFontNotice, { t: translate }),
+              h(DocxEditorFontNotice, { t }),
               h('div', { style: WORKSPACE_STYLE }, [
-                navigation.value ? h(DocxEditorNavigation, { t: translate }) : null,
+                navigation.value ? h(DocxEditorNavigation, { t }) : null,
                 viewport,
                 h(DocxEditorPageNumber),
                 h(DocxEditorLoading, { overlay: true }),
@@ -413,7 +418,7 @@ const DocxEditorFrame = defineComponent({
           ...(props.fonts ? { fonts: props.fonts } : {}),
           ...(props.author !== undefined ? { author: props.author } : {}),
           ...(props.locale !== undefined ? { locale: props.locale } : {}),
-          translate,
+          translate: t,
           ...(props.mode !== undefined ? { mode: props.mode } : { mode: 'edit' }),
           ...(props.modules !== undefined ? { modules: props.modules } : {}),
           ...(props.zoom !== undefined ? { zoom: props.zoom } : {}),
@@ -469,9 +474,9 @@ const DocxEditorImpl = defineComponent({
         api.value?.snapshot(options) ?? createDocxEditorRefApi(() => null).snapshot(options),
     } satisfies DocxEditorRef);
 
-    const { i18n, ...frameProps } = props;
-    return () =>
-      h(LocaleProvider, i18n !== undefined ? { i18n } : {}, {
+    return () => {
+      const { i18n, ...frameProps } = props;
+      return h(LocaleProvider, i18n !== undefined ? { i18n } : {}, {
         default: () =>
           h(
             DocxEditorFrame,
@@ -515,6 +520,7 @@ const DocxEditorImpl = defineComponent({
             }
           ),
       });
+    };
   },
 });
 
