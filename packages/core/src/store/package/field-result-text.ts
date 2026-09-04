@@ -23,6 +23,19 @@ import type { OoxmlNode, OoxmlParagraphNode } from './ooxml-tree.ts';
 /** Review view applied to cached field-result content. */
 export type FieldResultTextView = 'allMarkup' | 'original';
 
+/** One visible interval contributed by a result run. @internal */
+export interface FieldResultRunBoundary {
+  readonly runId: string;
+  readonly start: number;
+  readonly end: number;
+}
+
+/** Visible cached result text and its result-run intervals. @internal */
+export interface FieldResultProjection {
+  readonly text: string;
+  readonly runs: readonly FieldResultRunBoundary[];
+}
+
 interface FieldState {
   readonly beginId: string;
   separated: boolean;
@@ -40,7 +53,7 @@ interface ActiveComplexField {
   readonly states: FieldState[];
   readonly markers: FieldMarkerPlan;
   readonly endId: string;
-  readonly out: string[];
+  readonly result: MutableFieldResult;
   readonly chars: CharacterBudget;
   nodesLeft: number;
   overflow: boolean;
@@ -62,11 +75,63 @@ interface CharacterBudget {
   left: number;
 }
 
-function appendResultText(out: string[], text: string, budget: CharacterBudget): boolean {
+interface MutableFieldResult {
+  readonly out: string[];
+  readonly runs: FieldResultRunBoundary[];
+  length: number;
+}
+
+function emptyFieldResult(): MutableFieldResult {
+  return { out: [], runs: [], length: 0 };
+}
+
+function appendRunBoundary(
+  result: MutableFieldResult,
+  runId: string,
+  start: number,
+  end: number
+): void {
+  if (runId.length === 0 || start === end) return;
+  const previous = result.runs[result.runs.length - 1];
+  if (previous?.runId === runId && previous.end === start) {
+    result.runs[result.runs.length - 1] = { runId, start: previous.start, end };
+    return;
+  }
+  result.runs.push({ runId, start, end });
+}
+
+function appendResultText(
+  result: MutableFieldResult,
+  text: string,
+  runId: string,
+  budget: CharacterBudget
+): boolean {
   if (text.length > budget.left) return false;
   budget.left -= text.length;
-  if (text.length > 0) out.push(text);
+  if (text.length > 0) {
+    const start = result.length;
+    result.out.push(text);
+    result.length += text.length;
+    appendRunBoundary(result, runId, start, result.length);
+  }
   return true;
+}
+
+function appendNestedResult(result: MutableFieldResult, nested: FieldResultProjection): void {
+  const start = result.length;
+  if (nested.text.length > 0) result.out.push(nested.text);
+  result.length += nested.text.length;
+  for (const run of nested.runs) {
+    appendRunBoundary(result, run.runId, start + run.start, start + run.end);
+  }
+}
+
+function finishFieldResult(result: MutableFieldResult): FieldResultProjection {
+  return { text: result.out.join(''), runs: result.runs };
+}
+
+function placeholderResult(): FieldResultProjection {
+  return { text: FIELD_ATOM_CHAR, runs: [] };
 }
 
 function statesAreVisible(states: readonly FieldState[]): boolean {
@@ -135,11 +200,11 @@ function plainFieldResultText(
   view: FieldResultTextView,
   budget: { left: number },
   chars: CharacterBudget
-): string | null {
+): FieldResultProjection | null {
   const initial: FieldRunChildRef[] = [];
   if (!collectFieldRunChildren(node, initial, budget)) return null;
   const pending = initial.reverse();
-  const out: string[] = [];
+  const result = emptyFieldResult();
   while (pending.length > 0) {
     const entry = pending.pop()!;
     if (view === 'original' && entry.hiddenInOriginal) continue;
@@ -151,9 +216,9 @@ function plainFieldResultText(
     }
     if (isInstrText(entry.node)) continue;
     const text = fieldResultInlineTextOf(entry.node);
-    if (!appendResultText(out, text, chars)) return null;
+    if (!appendResultText(result, text, entry.runId, chars)) return null;
   }
-  return out.join('');
+  return finishFieldResult(result);
 }
 
 function scanSimpleEntries(
@@ -162,8 +227,8 @@ function scanSimpleEntries(
   budget: { left: number },
   chars: CharacterBudget,
   depth: number
-): string | null {
-  const out: string[] = [];
+): FieldResultProjection | null {
+  const result = emptyFieldResult();
   const states: FieldState[] = [];
   const markers = fieldMarkerPlan(entries);
   for (const entry of entries) {
@@ -179,13 +244,13 @@ function scanSimpleEntries(
           : simpleFieldResultText(node, view, budget, chars, depth + 1);
       if (nested === null) return null;
       // The recursive scan already charged every character to this field's shared budget.
-      if (nested.length > 0) out.push(nested);
+      appendNestedResult(result, nested);
       continue;
     }
     const text = fieldResultInlineTextOf(node);
-    if (!appendResultText(out, text, chars)) return null;
+    if (!appendResultText(result, text, entry.runId, chars)) return null;
   }
-  return out.join('');
+  return finishFieldResult(result);
 }
 
 function simpleFieldResultText(
@@ -194,7 +259,7 @@ function simpleFieldResultText(
   budget: { left: number },
   chars: CharacterBudget,
   depth: number
-): string | null {
+): FieldResultProjection | null {
   const entries: FieldRunChildRef[] = [];
   if (!collectFieldRunChildren(node, entries, budget)) return null;
   return scanSimpleEntries(entries, view, budget, chars, depth);
@@ -240,17 +305,17 @@ function consumeComplexEntry(
     return false;
   }
   const text = fieldResultInlineTextOf(node);
-  if (!appendResultText(active.out, text, active.chars)) active.overflow = true;
+  if (!appendResultText(active.result, text, entry.runId, active.chars)) active.overflow = true;
   return false;
 }
 
-/** Visible cached results for all supplied atomic spans, from one paragraph scan. */
-export function fieldResultTextsOf(
+/** Visible cached result projections for all supplied atomic spans, from one paragraph scan. */
+export function fieldResultProjectionsOf(
   paragraph: OoxmlParagraphNode,
   spans: readonly AtomicFieldSpan[],
   view: FieldResultTextView = 'allMarkup'
-): ReadonlyMap<string, string> {
-  const results = new Map<string, string>();
+): ReadonlyMap<string, FieldResultProjection> {
+  const results = new Map<string, FieldResultProjection>();
   const complexByBegin = new Map<string, AtomicFieldSpan>();
   const simpleByNode = new Map<string, AtomicFieldSpan>();
   for (const span of spans) {
@@ -272,7 +337,7 @@ export function fieldResultTextsOf(
       const budget = { left: MAX_FIELD_RESULT_NODES };
       const chars = { left: MAX_FIELD_RESULT_CHARS };
       const text = simpleFieldResultText(simple.node, view, budget, chars, 0);
-      results.set(simple.node.id, text ?? FIELD_ATOM_CHAR);
+      results.set(simple.node.id, text ?? placeholderResult());
     }
 
     if (active === null) {
@@ -290,7 +355,7 @@ export function fieldResultTextsOf(
       }
       const endEntry = entries[endIndex];
       if (!endEntry) {
-        results.set(complex.node.id, FIELD_ATOM_CHAR);
+        results.set(complex.node.id, placeholderResult());
         continue;
       }
       active = {
@@ -299,7 +364,7 @@ export function fieldResultTextsOf(
         states: [{ beginId: complex.node.id, separated: false }],
         markers: fieldMarkerPlan(entries, entryIndex + 1, endIndex, complex.node.id),
         endId: endEntry.node.id,
-        out: [],
+        result: emptyFieldResult(),
         chars: { left: MAX_FIELD_RESULT_CHARS },
         nodesLeft: MAX_FIELD_RESULT_NODES,
         overflow: false,
@@ -307,10 +372,25 @@ export function fieldResultTextsOf(
     }
 
     if (consumeComplexEntry(active, entry, view)) {
-      results.set(active.span.node.id, active.overflow ? FIELD_ATOM_CHAR : active.out.join(''));
+      results.set(
+        active.span.node.id,
+        active.overflow ? placeholderResult() : finishFieldResult(active.result)
+      );
       active = null;
     }
   }
-  if (active !== null) results.set(active.span.node.id, FIELD_ATOM_CHAR);
+  if (active !== null) results.set(active.span.node.id, placeholderResult());
+  return results;
+}
+
+/** Visible cached results for all supplied atomic spans, from one paragraph scan. */
+export function fieldResultTextsOf(
+  paragraph: OoxmlParagraphNode,
+  spans: readonly AtomicFieldSpan[],
+  view: FieldResultTextView = 'allMarkup'
+): ReadonlyMap<string, string> {
+  const projections = fieldResultProjectionsOf(paragraph, spans, view);
+  const results = new Map<string, string>();
+  for (const [nodeId, projection] of projections) results.set(nodeId, projection.text);
   return results;
 }

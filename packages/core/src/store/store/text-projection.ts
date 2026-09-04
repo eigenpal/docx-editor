@@ -4,7 +4,11 @@
 // result. Every visible range maps back to one editable model range.
 
 import { atomicFieldSpansOf, FIELD_ATOM_CHAR } from '../package/field-nodes.ts';
-import { fieldResultTextsOf, type FieldResultTextView } from '../package/field-result-text.ts';
+import {
+  fieldResultProjectionsOf,
+  type FieldResultRunBoundary,
+  type FieldResultTextView,
+} from '../package/field-result-text.ts';
 import type { OoxmlParagraphNode } from '../package/ooxml-tree.ts';
 import {
   foldCase,
@@ -20,6 +24,8 @@ export interface VisiblePiece {
   readonly text: string;
   readonly rawStart: number;
   readonly rawEnd: number;
+  /** Result-run intervals for a simple-field expansion. */
+  readonly resultRuns?: readonly FieldResultRunBoundary[];
 }
 
 /** One paragraph projection with lossless links to model offsets. */
@@ -37,6 +43,11 @@ export interface ProjectedParagraphText {
   } | null;
   /** Read a model range through this projection. */
   sliceRaw(start: number, end: number): string;
+  /** Resolve a displayed offset inside a simple field to its visible result run. */
+  resultRunAddressAt(projectedOffset: number): {
+    readonly runId: string;
+    readonly offset: number;
+  } | null;
   /** Find distinct editable ranges in the displayed text. */
   findOccurrences(
     query: string,
@@ -68,14 +79,26 @@ function positionedPieces(pieces: readonly VisiblePiece[]): PositionedPiece[] {
   let projected = 0;
   for (const piece of pieces) {
     const projectedEnd = projected + piece.text.length;
-    result.push({
-      text: piece.text,
-      rawStart: piece.rawStart,
-      rawEnd: piece.rawEnd,
-      projectedStart: projected,
-      projectedEnd,
-      expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
-    });
+    if (piece.resultRuns) {
+      result.push({
+        text: piece.text,
+        rawStart: piece.rawStart,
+        rawEnd: piece.rawEnd,
+        resultRuns: piece.resultRuns,
+        projectedStart: projected,
+        projectedEnd,
+        expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
+      });
+    } else {
+      result.push({
+        text: piece.text,
+        rawStart: piece.rawStart,
+        rawEnd: piece.rawEnd,
+        projectedStart: projected,
+        projectedEnd,
+        expansion: piece.text.length !== piece.rawEnd - piece.rawStart,
+      });
+    }
     projected = projectedEnd;
   }
   return result;
@@ -143,6 +166,22 @@ export function projectionFromPieces(pieces: readonly VisiblePiece[]): Projected
       }
       return value;
     },
+    resultRunAddressAt(projectedOffset) {
+      const piece = positioned.find(
+        (candidate) =>
+          candidate.resultRuns !== undefined &&
+          projectedOffset >= candidate.projectedStart &&
+          projectedOffset < candidate.projectedEnd
+      );
+      if (!piece?.resultRuns) return null;
+      const localOffset = projectedOffset - piece.projectedStart;
+      for (const run of piece.resultRuns) {
+        if (localOffset >= run.start && localOffset < run.end) {
+          return { runId: run.runId, offset: localOffset - run.start };
+        }
+      }
+      return null;
+    },
     findOccurrences(query, limit, options = {}) {
       const matches: ProjectedTextOccurrence[] = [];
       if (limit <= 0 || !isSearchableQuery(query) || text.length === 0) {
@@ -206,7 +245,7 @@ export function visibleParagraphPieces(
 
   const spans = atomicFieldSpansOf(paragraph);
   const segments = segmentsOfWithFieldSpans(paragraph, spans);
-  const results = fieldResultTextsOf(paragraph, spans, view);
+  const results = fieldResultProjectionsOf(paragraph, spans, view);
   const spansByNodeId = new Map<string, (typeof spans)[number]>();
   for (const span of spans) spansByNodeId.set(span.node.id, span);
   const pieces: VisiblePiece[] = [];
@@ -221,13 +260,23 @@ export function visibleParagraphPieces(
         rawEnd: segment.start,
       });
     }
-    pieces.push({
-      // Nested simple fields keep the store segment order here. This does not endorse Word's
-      // visible ordering; changing it would change the model offset authority.
-      text: results.get(span.node.id) ?? FIELD_ATOM_CHAR,
-      rawStart: segment.start,
-      rawEnd: segment.end,
-    });
+    const result = results.get(span.node.id);
+    // Nested simple fields keep the store segment order here. This does not endorse Word's
+    // visible ordering; changing it would change the model offset authority.
+    if (span.kind === 'simple' && result) {
+      pieces.push({
+        text: result.text,
+        rawStart: segment.start,
+        rawEnd: segment.end,
+        resultRuns: result.runs,
+      });
+    } else {
+      pieces.push({
+        text: result?.text ?? FIELD_ATOM_CHAR,
+        rawStart: segment.start,
+        rawEnd: segment.end,
+      });
+    }
     rawStart = segment.end;
   }
   if (rawStart < rawText.length) {

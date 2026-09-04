@@ -113,8 +113,13 @@ export interface DocumentSearchResult {
  * contributes no run, and its empty result cannot start a match. A complex field keeps its
  * existing run sequence; its atom starts in the begin run.
  */
-function runStarts(paragraph: OoxmlParagraphNode): number[] {
-  const starts: number[] = [];
+interface RunStart {
+  readonly id: string;
+  readonly start: number;
+}
+
+function runStarts(paragraph: OoxmlParagraphNode): RunStart[] {
+  const starts: RunStart[] = [];
   const offsets = paragraphOffsetIndex(paragraph);
   const simpleResultRuns = new Map<string, readonly string[]>();
   for (const segment of offsets.segments) {
@@ -124,13 +129,13 @@ function runStarts(paragraph: OoxmlParagraphNode): number[] {
   }
   walkParagraphInline(paragraph.children, 0, (node) => {
     if (node.kind === 'run') {
-      starts.push(offsets.spanOf(node)?.start ?? 0);
+      starts.push({ id: node.id, start: offsets.spanOf(node)?.start ?? 0 });
       return;
     }
     if (!isFldSimple(node)) return;
     for (const runId of simpleResultRuns.get(node.id) ?? []) {
       const span = offsets.spanOf(runId);
-      if (span) starts.push(span.start);
+      if (span) starts.push({ id: runId, start: span.start });
     }
   });
   return starts;
@@ -152,8 +157,8 @@ function furnitureStories(
   seen: Set<OoxmlPart>
 ): SearchStory[] {
   const stories: SearchStory[] = [];
-  for (const section of sections) {
-    for (const kind of ['header', 'footer'] as const) {
+  for (const kind of ['header', 'footer'] as const) {
+    for (const section of sections) {
       const slots = kind === 'header' ? section.headers : section.footers;
       for (const [variant, slot] of slots) {
         if (!headerFooterVariantCanPaint(section, variant)) continue;
@@ -200,15 +205,24 @@ function searchStories(part: OoxmlPart, sources?: DocumentSearchSources): Search
 
 /** The run a paragraph offset falls in, and the offset inside it. */
 function runAddressAt(
-  starts: readonly number[],
+  starts: readonly RunStart[],
   offset: number
 ): { index: number; offset: number } {
   if (starts.length === 0) return { index: 0, offset };
   for (let index = starts.length - 1; index >= 0; index -= 1) {
-    const start = starts[index]!;
+    const start = starts[index]!.start;
     if (offset >= start) return { index, offset: offset - start };
   }
   return { index: 0, offset };
+}
+
+function resultRunAddressAt(
+  starts: readonly RunStart[],
+  runId: string,
+  offset: number
+): { index: number; offset: number } | null {
+  const index = starts.findIndex((run) => run.id === runId);
+  return index < 0 ? null : { index, offset };
 }
 
 /** Bound and flatten one file-derived string on its way out of this module. */
@@ -259,11 +273,17 @@ export function collectTextMatches(
       const found = projected.findOccurrences(query, Math.max(remaining, 1), scan);
       if (remaining === 0 && found.matches.length > 0) return { matches, truncated: true };
       // Run starts are derived once per paragraph that has a hit, not per occurrence.
-      let starts: number[] | null = null;
+      let starts: RunStart[] | null = null;
       for (const occurrence of found.matches) {
         const projectedEnd = occurrence.start + occurrence.length;
         starts ??= runStarts(paragraph);
-        const address = runAddressAt(starts, occurrence.rawStart);
+        // Simple-field expansions retain their visible result-run boundaries. Complex-field
+        // results remain one editable atom, so their address names the field's begin run.
+        const resultRun = projected.resultRunAddressAt(occurrence.start);
+        const address = resultRun
+          ? (resultRunAddressAt(starts, resultRun.runId, resultRun.offset) ??
+            runAddressAt(starts, occurrence.rawStart))
+          : runAddressAt(starts, occurrence.rawStart);
         matches.push({
           blockId: paragraph.id,
           start: occurrence.rawStart,

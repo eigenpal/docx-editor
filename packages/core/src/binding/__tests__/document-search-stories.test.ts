@@ -140,6 +140,61 @@ function footnoteFixture(notes: string): Uint8Array {
   );
 }
 
+function twoSectionFurnitureFixture(): Uint8Array {
+  const firstSection =
+    '<w:headerReference w:type="default" r:id="rH1"/>' +
+    '<w:footerReference w:type="default" r:id="rF1"/>';
+  const secondSection =
+    '<w:headerReference w:type="default" r:id="rH2"/>' +
+    '<w:footerReference w:type="default" r:id="rF2"/>';
+  const body =
+    `<w:p><w:pPr><w:sectPr>${firstSection}</w:sectPr></w:pPr>` +
+    '<w:r><w:t>section one</w:t></w:r></w:p>' +
+    p('section two') +
+    `<w:sectPr>${secondSection}</w:sectPr>`;
+  const overrides = ['header1', 'header2', 'footer1', 'footer2']
+    .map((name) => {
+      const kind = name.startsWith('header') ? 'header' : 'footer';
+      return (
+        `<Override PartName="/word/${name}.xml" ` +
+        `ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${kind}+xml"/>`
+      );
+    })
+    .join('');
+  const relationships = [
+    ['rH1', 'header', 'header1.xml'],
+    ['rH2', 'header', 'header2.xml'],
+    ['rF1', 'footer', 'footer1.xml'],
+    ['rF2', 'footer', 'footer2.xml'],
+  ]
+    .map(
+      ([id, kind, target]) => `<Relationship Id="${id}" Type="${R}/${kind}" Target="${target}"/>`
+    )
+    .join('');
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}">` +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        overrides +
+        '</Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${body}</w:body></w:document>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}">${relationships}</Relationships>`
+    ),
+    'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('story h1')}</w:hdr>`),
+    'word/header2.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('story h2')}</w:hdr>`),
+    'word/footer1.xml': strToU8(`<w:ftr xmlns:w="${W}">${p('story f1')}</w:ftr>`),
+    'word/footer2.xml': strToU8(`<w:ftr xmlns:w="${W}">${p('story f2')}</w:ftr>`),
+  });
+}
+
 function open(bytes: Uint8Array = fixture()): TreeDocxSession {
   const result = openTreeSession(bytes);
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
@@ -158,6 +213,18 @@ describe('navigation Find stories', () => {
       { kind: 'headerFooter', rId: 'rFooter' },
       { kind: 'note', id: 'footnote:1' },
       { kind: 'note', id: 'endnote:2' },
+    ]);
+  });
+
+  test('searches every section header before every section footer', () => {
+    const matches = open(twoSectionFurnitureFixture()).findText('story').matches;
+
+    expect(matches.map((match) => match.contextAfter.trim())).toEqual(['h1', 'h2', 'f1', 'f2']);
+    expect(matches.map((match) => match.scope)).toEqual([
+      { kind: 'headerFooter', rId: 'rH1' },
+      { kind: 'headerFooter', rId: 'rH2' },
+      { kind: 'headerFooter', rId: 'rF1' },
+      { kind: 'headerFooter', rId: 'rF2' },
     ]);
   });
 

@@ -219,6 +219,24 @@ describe('collectTextMatches', () => {
     });
   });
 
+  test('addresses visible offsets inside each simple-field result run', () => {
+    const simple = `<w:fldSimple w:instr=" PAGE ">${run('abc')}${run('def')}</w:fldSimple>`;
+    const body = para(run('A'), simple, run('Z'));
+
+    expect(search(body, 'def').matches[0]).toMatchObject({
+      runIndex: 2,
+      runOffset: 0,
+    });
+    expect(search(body, 'cd').matches[0]).toMatchObject({
+      runIndex: 1,
+      runOffset: 2,
+    });
+    expect(search(body, 'Aab').matches[0]).toMatchObject({
+      runIndex: 0,
+      runOffset: 0,
+    });
+  });
+
   test('orders hyperlink, simple-field, and plain result runs together', () => {
     const simple = `<w:fldSimple w:instr=" PAGE ">${run('field')}</w:fldSimple>`;
     const body = para(
@@ -251,7 +269,7 @@ describe('collectTextMatches', () => {
     expect(result.matches[0]).toMatchObject({ start: 2, length: 1, text: '7' });
   });
 
-  test('uses model run spans for matches around an atomic field', () => {
+  test('keeps the complex-field atom addressed at its begin run', () => {
     const body = para(run('A'), complexField(' PAGE ', '12'), run('B'));
     const after = search(body, 'B').matches[0];
     const fieldResult = search(body, '12').matches[0];
