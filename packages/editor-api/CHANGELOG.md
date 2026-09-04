@@ -1,5 +1,7 @@
 # @docx-editor.dev/editor-api
 
+## 2.15.1
+
 ## 2.15.0
 
 ### Patch Changes
