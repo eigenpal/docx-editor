@@ -215,13 +215,13 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     };
   }
 
-  /** Innermost inline wrapper or content control that fully owns the selected range. */
+  /** Innermost stable inline wrapper or content control that owns the replacement point. */
   function replacementInlineOwner(): string | undefined {
     const selection = deps.selection();
     if (selection.anchor.paragraphId !== selection.head.paragraphId) return undefined;
     const start = Math.min(selection.anchor.offset, selection.head.offset);
     const end = Math.max(selection.anchor.offset, selection.head.offset);
-    if (start === end) return undefined;
+    const collapsed = start === end;
     const part = partOfNodeId(session, selection.anchor.paragraphId) ?? session.part();
     const paragraph = findNode(part, selection.anchor.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') return undefined;
@@ -229,20 +229,30 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     const first = offsets.segments.find((segment) => segment.start <= start && segment.end > start);
     if (!first) return undefined;
     let stableContainer: string | undefined;
+    let genericContainer: string | undefined;
     let lifecycleControlSeen = false;
     for (const owner of inlineContainersOf(paragraph, first.runId)) {
       const span = offsets.spanOf(owner);
-      if (!span || start < span.start || end > span.end) continue;
+      if (!span) continue;
+      const ownsReplacement = collapsed
+        ? span.start < start && start < span.end
+        : span.start <= start && end <= span.end;
+      if (!ownsReplacement) continue;
       // A full-range deletion sweeps hyperlinks and revision wrappers. Revisions are never
       // replacement owners, and naming a swept hyperlink would make the following insertion
-      // address a missing node. Generic wrappers and ordinary controls survive empty.
+      // address a missing node. Generic wrappers and ordinary controls survive empty. A
+      // collapsed caret deletes nothing, but only a point strictly inside a wrapper owns it.
       const survivesDeletion =
+        collapsed ||
         start > span.start ||
         end < span.end ||
         owner.kind === 'contentControl' ||
         owner.kind === 'generic';
       if (!survivesDeletion) continue;
-      if (owner.kind === 'generic' && isInlineRunContainer(owner)) return owner.id;
+      if (owner.kind === 'generic' && isInlineRunContainer(owner)) {
+        genericContainer ??= owner.id;
+        continue;
+      }
       if (owner.kind === 'contentControl') {
         if (isTemporaryControl(owner) || isShowingPlaceholder(owner)) {
           lifecycleControlSeen = true;
@@ -253,8 +263,10 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
       }
       stableContainer ??= owner.id;
     }
-    // A non-generic container outside a lifecycle control cannot stand in for that control.
-    return lifecycleControlSeen ? undefined : stableContainer;
+    // Inspect the WHOLE chain before choosing the nearest neutral wrapper. An owned insert
+    // skips lifecycle transitions, so any temporary or placeholder control on the path must
+    // veto ownership and let the established unscoped transition run.
+    return lifecycleControlSeen ? undefined : (genericContainer ?? stableContainer);
   }
 
   function rangeDeletionPlan(): RangeDeletionPlan {

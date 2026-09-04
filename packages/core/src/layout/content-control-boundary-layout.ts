@@ -14,6 +14,7 @@ import {
   contentControlContentChildren,
   isContentControl,
 } from '../store/package/content-control-walk.ts';
+import { MAX_INLINE_CONTAINER_DEPTH } from '../store/store/tree-op-segments.ts';
 import {
   contentControlPropertiesOf,
   controlLevelOf,
@@ -182,10 +183,9 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
     for (const child of nodes) {
       if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
       if (isContentControl(child)) {
-        if (containerDepth >= MAX_SDT_NESTING) {
-          cursor += addressableInlineLength(child);
-          continue;
-        }
+        // The paragraph offset authority makes every child reached at the shared cap opaque.
+        // Do not advance for content that layout cannot address or paint.
+        if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
         const properties = contentControlPropertiesOf(child);
         const lock = parseContentControlLock(propertyVal(properties, 'lock'));
         const nextStack = [...lockStack, lock];
@@ -211,7 +211,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
         continue;
       }
       if (isInlineRunContainer(child)) {
-        if (containerDepth >= MAX_SDT_NESTING) continue;
+        if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
         cursor = walkInline(
           child.children,
           paragraphId,

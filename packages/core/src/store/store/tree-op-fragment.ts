@@ -101,7 +101,11 @@ export function validateInsertFragment(
     return 'offset-out-of-range';
   }
   if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
-  if (indivisibleAt(paragraph, op.offset)) return 'indivisible-content';
+  // An owned inline splice can divide its wrapper recursively. The unowned split path
+  // cannot, so it keeps the ordinary indivisible-container refusal.
+  if (op.inside === undefined && indivisibleAt(paragraph, op.offset)) {
+    return 'indivisible-content';
+  }
   if (!Array.isArray(op.blocks) || op.blocks.length === 0) return 'fragment-invalid-block';
   if (op.blocks.length > MAX_FRAGMENT_INSERT_BLOCKS) return 'fragment-resource-budget';
   const budget = { nodes: 0 };

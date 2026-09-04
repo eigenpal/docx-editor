@@ -11,7 +11,7 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 import { describe, expect, test, afterEach } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
-import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
+import { serializeOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { fragmentFromHtml, wrapInteropHtml } from '../clipboard-fragment-codec.ts';
 import { clipboardPasteLandsContent } from '../clipboard-file-lane.ts';
 import { mountPaginatedSurface } from '../paginated-surface.ts';
@@ -38,6 +38,24 @@ function copyRichFlavours(): { text: string; html: string | null } {
   putCaret(source.surface, 0);
   source.surface.selectAll();
   return source.surface.copyFlavours();
+}
+
+function textUnder(node: OoxmlNode, localName: string): string | null {
+  if (node.kind === 'textValue') return null;
+  if (node.localName === localName) {
+    const collect = (child: OoxmlNode): string => {
+      if (child.kind === 'textValue') return child.value;
+      let text = '';
+      for (const inner of child.children) text += collect(inner);
+      return text;
+    };
+    return collect(node);
+  }
+  for (const child of node.children) {
+    const found = textUnder(child, localName);
+    if (found !== null) return found;
+  }
+  return null;
 }
 
 function imageOnlyDocx(): Uint8Array {
@@ -320,6 +338,68 @@ describe('rich paste', () => {
 
     source.surface.destroy();
     target.surface.destroy();
+  });
+
+  test('a collapsed rich paste preserves formatting strictly inside a smartTag', () => {
+    const source = mount(
+      '<w:p><w:r><w:t>Y</w:t></w:r>' +
+        '<w:r><w:rPr><w:b/></w:rPr><w:t>X</w:t></w:r>' +
+        '<w:r><w:t>Z</w:t></w:r></w:p>'
+    );
+    const sourceId = source.surface.session.paragraphIds()[0]!;
+    source.surface.setSelection({
+      anchor: { paragraphId: sourceId, offset: 1 },
+      head: { paragraphId: sourceId, offset: 2 },
+    });
+    const flavours = source.surface.copyFlavours();
+    const target = mount('<w:p><w:smartTag><w:r><w:t>AB</w:t></w:r></w:smartTag></w:p>');
+    putCaret(target.surface, 1);
+
+    expect(target.surface.pasteRich(flavours.text, flavours.html)).toBe(true);
+    expect(target.surface.session.bodyText()).toBe('AXB');
+    expect(textUnder(target.surface.session.part().root, 'smartTag')).toBe('AXB');
+    const markup = serializeOoxmlPart(target.surface.session.part());
+    const wrapped = markup.slice(markup.indexOf('<w:smartTag'), markup.indexOf('</w:smartTag>'));
+    expect(wrapped).toContain('<w:b/>');
+
+    source.surface.destroy();
+    target.surface.destroy();
+  });
+
+  test('collapsed rich and plain pastes own only strict smartTag interiors', () => {
+    const source = mount(
+      '<w:p><w:r><w:t>Y</w:t></w:r>' +
+        '<w:r><w:rPr><w:b/></w:rPr><w:t>X</w:t></w:r>' +
+        '<w:r><w:t>Z</w:t></w:r></w:p>'
+    );
+    const sourceId = source.surface.session.paragraphIds()[0]!;
+    source.surface.setSelection({
+      anchor: { paragraphId: sourceId, offset: 1 },
+      head: { paragraphId: sourceId, offset: 2 },
+    });
+    const flavours = source.surface.copyFlavours();
+    const cases = [
+      { offset: 0, body: 'XAB', wrapped: 'AB' },
+      { offset: 1, body: 'AXB', wrapped: 'AXB' },
+      { offset: 2, body: 'ABX', wrapped: 'AB' },
+    ] as const;
+
+    for (const paste of ['rich', 'plain'] as const) {
+      for (const sample of cases) {
+        const target = mount('<w:p><w:smartTag><w:r><w:t>AB</w:t></w:r></w:smartTag></w:p>');
+        putCaret(target.surface, sample.offset);
+        const landed =
+          paste === 'rich'
+            ? target.surface.pasteRich(flavours.text, flavours.html)
+            : target.surface.pasteRich('X', null);
+
+        expect(landed).toBe(true);
+        expect(target.surface.session.bodyText()).toBe(sample.body);
+        expect(textUnder(target.surface.session.part().root, 'smartTag')).toBe(sample.wrapped);
+        target.surface.destroy();
+      }
+    }
+    source.surface.destroy();
   });
 
   test('the embedded fragment lands structure and formatting, one undo unit', () => {

@@ -193,7 +193,7 @@ describe('Editor find', () => {
     expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
   });
 
-  test('a smartTag remains the replacement owner inside a placeholder control', () => {
+  test('a placeholder control above a smartTag clears before typing continues', () => {
     const editor = mount(
       '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>' +
         '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
@@ -203,6 +203,40 @@ describe('Editor find', () => {
     expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
     editor.surface!.type('X');
 
+    expect(editor.surface!.session.bodyText()).toBe('X');
+    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('showingPlcHdr');
+    editor.surface!.type('Y');
+    expect(editor.surface!.session.bodyText()).toBe('XY');
+  });
+
+  test('a temporary control above a smartTag unwraps before replacement', () => {
+    const editor = mount(
+      '<w:p><w:sdt><w:sdtPr><w:temporary/></w:sdtPr><w:sdtContent>' +
+        '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
+        '</w:sdtContent></w:sdt></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(editor.surface!.session.bodyText()).toBe('X');
+    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('<w:sdt');
+    editor.surface!.type('Y');
+    expect(editor.surface!.session.bodyText()).toBe('XY');
+  });
+
+  test('a smartTag remains the replacement owner inside an ordinary control', () => {
+    const editor = mount(
+      '<w:p><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr><w:sdtContent>' +
+        '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
+        '</w:sdtContent></w:sdt></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+
+    expect(editor.surface!.state().lastRejection).toBeNull();
     expect(editor.surface!.session.bodyText()).toBe('X');
     expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
   });
