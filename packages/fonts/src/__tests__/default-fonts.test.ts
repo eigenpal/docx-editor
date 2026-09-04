@@ -233,43 +233,63 @@ describe('loadDefaultFonts', () => {
   // so importing this package took down the whole client bundle with
   // "URL constructor: /_next/static/media/Caladea-Bold.<hash>.ttf is not a valid URL"
   // instead of degrading font loading.
-  test('the asset root survives every shape a bundler leaves a face entry in', () => {
+  const REWRITTEN = '/_next/static/media/Caladea-Bold.d6e01b80.ttf';
+
+  test('a URL entry keeps its own directory, file: included', () => {
+    // Node, Bun, and Vite leave the expression alone. `file:` is the right answer here:
+    // it is the directory headless exporters confine their reads to.
     const packagedRoot = new URL('../../assets/', import.meta.url);
+    const root = resolvePackagedAssetRoot(new URL('Caladea-Bold.ttf', packagedRoot));
+    expect(root.href).toBe(packagedRoot.href);
+    expect(root.protocol).toBe('file:');
+  });
 
-    // Node, Bun, Vite: the expression stays a real URL.
-    expect(resolvePackagedAssetRoot(new URL('Caladea-Bold.ttf', packagedRoot)).href).toBe(
-      packagedRoot.href
+  test('a bundler-rewritten entry resolves against the page origin', () => {
+    // The arm that runs in a real webpack or Turbopack browser bundle. `origin` is a
+    // parameter precisely so this is reachable: the suite's own `location` is
+    // `about:blank`, and Node has none at all.
+    expect(resolvePackagedAssetRoot(REWRITTEN, 'https://site.example/docs/').href).toBe(
+      'https://site.example/_next/static/media/'
     );
-
-    // A bundler that emits an absolute URL string resolves the same way.
     expect(
       resolvePackagedAssetRoot('https://cdn.example/static/Caladea-Bold.abc123.ttf').href
     ).toBe('https://cdn.example/static/');
+  });
 
-    // webpack and Turbopack emit a RELATIVE path string. This is the shape that threw.
-    const rewritten = '/_next/static/media/Caladea-Bold.d6e01b80.ttf';
-    expect(() => resolvePackagedAssetRoot(rewritten)).not.toThrow();
+  test('a bundler-rewritten entry never resolves to a file: directory', () => {
+    // A `file:` document origin is real: an Electron renderer, a static export opened
+    // from disk, Capacitor. The bundler moved the faces, so that directory does not hold
+    // them, and `createPackagedFileFetch` REJECTS a broad filesystem root by throwing.
+    // An asset path at the root would otherwise yield `file:///` and crash
+    // `@docx-editor.dev/docx-to-markdown` at module scope, reintroducing exactly the
+    // uncatchable failure this module exists to prevent.
+    for (const origin of ['file:///Users/x/out/index.html', 'file:///out/index.html']) {
+      expect(resolvePackagedAssetRoot(REWRITTEN, origin).protocol).not.toBe('file:');
+      expect(resolvePackagedAssetRoot('/Caladea-Bold.d6e01b80.ttf', origin).protocol).not.toBe(
+        'file:'
+      );
+    }
+  });
 
-    const fallback = resolvePackagedAssetRoot(rewritten);
-    expect(fallback.pathname.endsWith('/')).toBe(true);
-    // Never a `file:` guess. Reaching this branch means a bundler moved the faces, so a
-    // made-up local directory would widen the `trustedRoot` confinement it feeds.
-    expect(fallback.protocol).not.toBe('file:');
-
-    // This suite runs under happy-dom, whose `location.href` is `about:blank`. That is
-    // also what a sandboxed or srcdoc iframe reports, and it cannot base a URL, so this
-    // case covers an unusable origin rather than a missing one. Asserting it keeps the
-    // coverage deliberate: if the preload ever supplies a real origin, this line fails
-    // instead of the branch quietly going untested.
-    expect(() => new URL(rewritten, globalThis.location?.href)).toThrow();
-    expect(fallback.href).toBe('https://bundled.invalid/_next/static/media/');
+  test('a bundler-rewritten entry survives an origin that cannot base a URL', () => {
+    // `about:blank` and `about:srcdoc` are what a sandboxed or srcdoc iframe reports.
+    // This is also the suite's own origin under happy-dom.
+    for (const origin of ['about:blank', 'about:srcdoc', '', undefined]) {
+      expect(() => resolvePackagedAssetRoot(REWRITTEN, origin)).not.toThrow();
+      expect(resolvePackagedAssetRoot(REWRITTEN, origin).href).toBe(
+        'https://bundled.invalid/_next/static/media/'
+      );
+    }
+    expect(() => new URL(REWRITTEN, globalThis.location?.href)).toThrow();
   });
 
   test('no packaged face href is built by reading .href off a bundler string', () => {
     // `.href` on the string webpack and Turbopack emit is undefined, which renders as
     // the literal `url(undefined)` in a FontFace source and silently loses the face.
+    // `assetHref` is the only sanctioned reader; it narrows the union first.
     const moduleSource = readFileSync(new URL('../index.ts', import.meta.url), 'utf8');
     expect(moduleSource).not.toContain('assetUrl(file).href');
+    expect(moduleSource).not.toMatch(/assetUrl\([^)]*\)\.href/);
   });
 });
 

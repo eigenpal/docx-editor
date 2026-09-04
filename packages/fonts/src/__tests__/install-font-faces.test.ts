@@ -120,7 +120,10 @@ describe('installDefaultFontFaces', () => {
       'string',
     ]);
     for (const entry of capture.registered) {
-      expect(String(entry.source)).toMatch(/^url\(.*Carlito-.*\)$/);
+      // QUOTED. An unquoted CSS `url()` token forbids characters the URL parser leaves
+      // alone, `(` and `)` among them, so a checkout under a path like `My (Docs)` built
+      // a token that failed to parse and silently dropped the face.
+      expect(String(entry.source)).toMatch(/^url\("[^"]*Carlito-[^"]*"\)$/);
     }
   });
 

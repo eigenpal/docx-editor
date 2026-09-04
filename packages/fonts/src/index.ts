@@ -163,6 +163,16 @@ const assetHref = (file: string): string => {
 };
 
 /**
+ * A `FontFace` source naming one packaged face.
+ *
+ * The href is QUOTED. An unquoted CSS `url()` token forbids characters the URL parser
+ * leaves alone, `(` and `)` among them, so a checkout under a path like `My (Docs)`
+ * produced a token that failed to parse and silently dropped the face.
+ */
+const assetFontFaceSource = (file: string): string =>
+  `url("${assetHref(file).replace(/[\\"]/g, '\\$&').replace(/\n/g, '\\A ')}")`;
+
+/**
  * Directory URL of the packaged font files this package serves.
  *
  * Headless exporters pass this to Core `createPackagedFileFetch` as `trustedRoot`.
@@ -398,7 +408,7 @@ export async function installDefaultFontFaces(
             // That request is the one `fetcher` cannot intercept.
             const source: string | ArrayBuffer = bytes
               ? (bytes.slice().buffer as ArrayBuffer)
-              : `url(${assetHref(file)})`;
+              : assetFontFaceSource(file);
             const fontFace = new FontFace(family, source, {
               weight: String(face.weight),
               style: face.style,

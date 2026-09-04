@@ -75,6 +75,11 @@ for (const url of requestedUrls) {
 // So: rewrite the built ESM exactly the way those bundlers do, then import it.
 const bundlerScratch = mkdtempSync(join(tmpdir(), 'docx-fonts-bundler-'));
 try {
+  // `dist/*.js` is ESM, and a directory with no `package.json` is CommonJS to Node.
+  // Without this the import fails with "Cannot use import statement outside a module" on
+  // any Node before 22.7, which reads as a broken check rather than a broken package.
+  writeFileSync(join(bundlerScratch, 'package.json'), '{"type":"module"}\n');
+
   const rewritten = [];
   for (const file of readdirSync(distDir).filter((name) => name.endsWith('.js'))) {
     const source = readFileSync(join(distDir, file), 'utf8').replace(
