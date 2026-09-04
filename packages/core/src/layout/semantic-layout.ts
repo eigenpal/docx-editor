@@ -52,6 +52,8 @@ import {
 import {
   appliedSpaceBefore,
   paragraphBorderExtentPt,
+  paragraphBorderHorizontalBox,
+  paragraphBorderSideOuterExtentPt,
   paragraphBorderStrokeWidthPt,
   collapsedSpaceBefore,
   paragraphBreaksBefore,
@@ -1883,6 +1885,7 @@ function layoutBlocksPass(
         lineSpacing: entry.lineSpacing,
         equationCacheToken: producer,
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
+        alignment: entry.alignment,
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),
@@ -2374,41 +2377,37 @@ function layoutBlocksPass(
       let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
       let contentTop = linesTop;
       let contentBottom = linesBottom;
-      // THE FOUR EDGES ARE ONE BOX. The side rules sit outside the text column by their own
-      // `w:space`, so a top rule drawn only across the column stops short of them and the
-      // frame reads as two horizontal rules with two detached vertical bars beside it —
-      // which is what a callout looked like. Word closes the rectangle, so the horizontal
-      // rules span from the left rule's outer edge to the right rule's.
+      // THE FOUR EDGES ARE ONE BOX when sides exist: horizontals meet the side outer edges.
+      // A horizontal-only rule extends by its own space+stroke on each open side.
       // Stroke thickness uses the inflated compound band for `double`/etc. so thin authored
       // doubles still publish a box paint can draw as two lines (shared with table borders).
+      const textLeft = regionX + indent.left;
+      const textRight = textLeft + available;
       const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
       const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
       const boxLeft = borders.left
-        ? regionX + indent.left - borders.left.spacePt - leftStroke
-        : regionX + indent.left;
+        ? textLeft - paragraphBorderSideOuterExtentPt(borders.left)
+        : textLeft;
       const boxRight = borders.right
-        ? regionX + indent.left + available + borders.right.spacePt + rightStroke
-        : regionX + indent.left + available;
+        ? textRight + paragraphBorderSideOuterExtentPt(borders.right)
+        : textRight;
       const boxWidth = Math.max(boxRight - boxLeft, 0);
       if (fragmentTopExtent > 0 && topEdge) {
         const topStroke = paragraphBorderStrokeWidthPt(topEdge);
         const ruleY = linesTop - topEdge.spacePt - topStroke;
+        const horizontal = paragraphBorderHorizontalBox(textLeft, textRight, borders, topEdge);
         strokes.push({
           side: 'top',
           edge: topEdge,
-          box: { x: boxLeft, y: ruleY, width: boxWidth, height: topStroke },
+          box: { x: horizontal.x, y: ruleY, width: horizontal.width, height: topStroke },
         });
         contentTop = ruleY;
       }
       if (isLast && closingEdge) {
         const closeStroke = paragraphBorderStrokeWidthPt(closingEdge);
         const ruleY = linesBottom + closingEdge.spacePt;
-        const box = {
-          x: boxLeft,
-          y: ruleY,
-          width: boxWidth,
-          height: closeStroke,
-        };
+        const horizontal = paragraphBorderHorizontalBox(textLeft, textRight, borders, closingEdge);
+        const box = { x: horizontal.x, y: ruleY, width: horizontal.width, height: closeStroke };
         strokes.push({ side: continuesBelow ? 'between' : 'bottom', edge: closingEdge, box });
         // `bottomBorder` stays the BOTTOM rule alone: a `between` rule closing a grouped
         // paragraph is a different edge, and a consumer reading it as the box's bottom would
@@ -2428,7 +2427,7 @@ function layoutBlocksPass(
           side: 'left',
           edge: borders.left,
           box: {
-            x: regionX + indent.left - borders.left.spacePt - leftStroke,
+            x: boxLeft,
             y: sideTop,
             width: leftStroke,
             height: sideHeight,
@@ -2440,7 +2439,7 @@ function layoutBlocksPass(
           side: 'right',
           edge: borders.right,
           box: {
-            x: regionX + indent.left + available + borders.right.spacePt,
+            x: boxRight - rightStroke,
             y: sideTop,
             width: rightStroke,
             height: sideHeight,

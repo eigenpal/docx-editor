@@ -15,6 +15,7 @@ import {
   type ParagraphFragmentRecord,
   type SemanticLayout,
 } from '../semantic-records.ts';
+import { PARAGRAPH_BORDER_SIDE_GUTTER_PT } from '../paragraph-style.ts';
 import { paintSemanticLayout } from '../../output/semantic-paint.ts';
 import { buildNumberingIndex } from '../numbering-index.ts';
 import { resolveStoryListItems } from '../list-resolve.ts';
@@ -124,9 +125,9 @@ describe('a boxed cell paragraph publishes the whole frame, not just the underli
 
     // Word draws the side rules OUTSIDE the text column and never re-breaks the lines,
     // so inside a cell they hang into the cell margin exactly as they hang into the
-    // page margin in the body.
-    expect(left.box.x + left.box.width).toBe(line.box.x - 4);
-    expect(right.box.x).toBe(line.box.x + line.box.width + 4);
+    // page margin in the body. The inner edge includes the side gutter.
+    expect(left.box.x + left.box.width).toBe(line.box.x - 4 - PARAGRAPH_BORDER_SIDE_GUTTER_PT);
+    expect(right.box.x).toBe(line.box.x + line.box.width + 4 + PARAGRAPH_BORDER_SIDE_GUTTER_PT);
 
     // And the frame CLOSES, exactly as it does in body flow — one document must not paint
     // the same callout two ways depending on whether it sits in a cell.
@@ -180,6 +181,93 @@ describe('a boxed cell paragraph publishes the whole frame, not just the underli
     expect(fragment.box.height).toBe(
       cellParagraphs(lay(oneCellTable(paragraph('changed'))))[0]!.box.height
     );
+  });
+
+  test('a bottom-only cell rule extends by space plus stroke on each open side', () => {
+    const fragment = cellParagraphs(
+      lay(
+        oneCellTable(
+          paragraph('note', '<w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1"/></w:pBdr>')
+        )
+      )
+    )[0]!;
+    const line = fragment.lines[0]!;
+    const bottom = stroke(fragment, 'bottom');
+    expect(bottom.box.x).toBe(line.box.x - 1.5);
+    expect(bottom.box.width).toBe(line.box.width + 3);
+  });
+
+  test('a top-only cell rule extends by space plus stroke on each open side', () => {
+    const fragment = cellParagraphs(
+      lay(
+        oneCellTable(
+          paragraph('note', '<w:pBdr><w:top w:val="single" w:sz="8" w:space="4"/></w:pBdr>')
+        )
+      )
+    )[0]!;
+    const line = fragment.lines[0]!;
+    const top = stroke(fragment, 'top');
+    expect(top.box.x).toBe(line.box.x - 5);
+    expect(top.box.width).toBe(line.box.width + 10);
+  });
+
+  test('a between-only cell rule extends at the interior boundary', () => {
+    const pBdr = '<w:pBdr><w:between w:val="single" w:sz="4" w:space="1"/></w:pBdr>';
+    const fragments = cellParagraphs(
+      lay(oneCellTable(paragraph('first', pBdr) + paragraph('second', pBdr)))
+    );
+    expect(sides(fragments[0]!)).toEqual(['between']);
+    expect(sides(fragments[1]!)).toEqual([]);
+    const line = fragments[0]!.lines[0]!;
+    const between = stroke(fragments[0]!, 'between');
+    expect(between.box.x).toBe(line.box.x - 1.5);
+    expect(between.box.width).toBe(line.box.width + 3);
+  });
+
+  test('mixed top and bottom spaces in a cell keep independent widths', () => {
+    const fragment = cellParagraphs(
+      lay(
+        oneCellTable(
+          paragraph(
+            'note',
+            '<w:pBdr>' +
+              '<w:top w:val="single" w:sz="4" w:space="1"/>' +
+              '<w:bottom w:val="single" w:sz="8" w:space="4"/>' +
+              '</w:pBdr>'
+          )
+        )
+      )
+    )[0]!;
+    const line = fragment.lines[0]!;
+    expect(stroke(fragment, 'top').box.x).toBe(line.box.x - 1.5);
+    expect(stroke(fragment, 'top').box.width).toBe(line.box.width + 3);
+    expect(stroke(fragment, 'bottom').box.x).toBe(line.box.x - 5);
+    expect(stroke(fragment, 'bottom').box.width).toBe(line.box.width + 10);
+  });
+
+  test('a boxed cell paragraph uses each side space plus the gutter', () => {
+    const fragment = cellParagraphs(
+      lay(
+        oneCellTable(
+          paragraph(
+            'note',
+            '<w:pBdr>' +
+              '<w:top w:val="single" w:sz="4" w:space="1"/>' +
+              '<w:left w:val="single" w:sz="8" w:space="4"/>' +
+              '<w:bottom w:val="single" w:sz="4" w:space="8"/>' +
+              '<w:right w:val="single" w:sz="8" w:space="8"/>' +
+              '</w:pBdr>'
+          )
+        )
+      )
+    )[0]!;
+    const line = fragment.lines[0]!;
+    expect(stroke(fragment, 'left').box.x).toBe(line.box.x - 6.5);
+    expect(stroke(fragment, 'right').box.x + stroke(fragment, 'right').box.width).toBe(
+      line.box.x + line.box.width + 10.5
+    );
+    expect(stroke(fragment, 'top').box.width).toBe(line.box.width + 17);
+    expect(stroke(fragment, 'bottom').box.width).toBe(line.box.width + 17);
   });
 
   test('an unbordered cell paragraph publishes no strokes at all', () => {
@@ -502,9 +590,12 @@ describe('a shaded box in a cell is filled across the frame', () => {
     const left = stroke(fragment, 'left');
     const right = stroke(fragment, 'right');
     const box = fragment.shadingBox!;
+    const line = fragment.lines[0]!;
     expect(fragment.shading).toBe('E8F0FE');
     expect(box.x).toBe(left.box.x);
     expect(box.x + box.width).toBe(right.box.x + right.box.width);
+    expect(box.x).toBe(line.box.x - 4 - PARAGRAPH_BORDER_SIDE_GUTTER_PT - 1);
+    expect(box.width).toBe(line.box.width + 2 * (4 + PARAGRAPH_BORDER_SIDE_GUTTER_PT + 1));
     expect(box.y).toBe(top.box.y);
     expect(box.y + box.height).toBe(bottom.box.y + bottom.box.height);
   });

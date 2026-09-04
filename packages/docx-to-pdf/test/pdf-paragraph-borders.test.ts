@@ -186,7 +186,7 @@ async function planThenAbortAfterTimers(
 
 describe('PDF paragraph border paint', () => {
   test('paints the EP_ZMVZ_MULTI_v4 page-1 subtitle bottom rule from the published box', () => {
-    const bottomBox = { x: 0, y: 30.2727, width: 415.65, height: 0.5 };
+    const bottomBox = { x: -1.5, y: 30.2727, width: 418.65, height: 0.5 };
     const subtitle = paragraph(
       'subtitle',
       'spolocnosti',
@@ -209,14 +209,14 @@ describe('PDF paragraph border paint', () => {
   });
 
   test('paints the EP_ZMVZ_MULTI_v4 page-1 three-paragraph box without a duplicate closing edge', () => {
-    const top = { x: -4.5, y: 603.5, width: 424.65, height: 0.5 };
-    const firstLeft = { x: -4.5, y: 603.5, width: 0.5, height: 15.5 };
-    const firstRight = { x: 419.65, y: 603.5, width: 0.5, height: 15.5 };
-    const midLeft = { x: -4.5, y: 619, width: 0.5, height: 14 };
-    const midRight = { x: 419.65, y: 619, width: 0.5, height: 14 };
-    const bottom = { x: -4.5, y: 662, width: 424.65, height: 0.5 };
-    const lastLeft = { x: -4.5, y: 633, width: 0.5, height: 29.5 };
-    const lastRight = { x: 419.65, y: 633, width: 0.5, height: 29.5 };
+    const top = { x: -6, y: 603.5, width: 427.65, height: 0.5 };
+    const firstLeft = { x: -6, y: 603.5, width: 0.5, height: 15.5 };
+    const firstRight = { x: 421.15, y: 603.5, width: 0.5, height: 15.5 };
+    const midLeft = { x: -6, y: 619, width: 0.5, height: 14 };
+    const midRight = { x: 421.15, y: 619, width: 0.5, height: 14 };
+    const bottom = { x: -6, y: 662, width: 427.65, height: 0.5 };
+    const lastLeft = { x: -6, y: 633, width: 0.5, height: 29.5 };
+    const lastRight = { x: 421.15, y: 633, width: 0.5, height: 29.5 };
     const sideEdge = Object.freeze({ val: 'single', color: null, widthPt: 0.5, spacePt: 4 });
     const first = paragraph(
       'box-top',

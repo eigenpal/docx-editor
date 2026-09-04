@@ -329,18 +329,21 @@ describe('paragraph alignment moves the published span boxes (w:jc)', () => {
   });
 
   test('the LAST line of a justified paragraph is never stretched', () => {
-    // Two lines: the first is justified, the second is set flush left like Word does.
-    const words = Array.from({ length: 14 }, (_, index) => `w${index}`).join(' ');
-    const body = paragraph(words, '<w:jc w:val="both"/>');
+    // Short words plus one unbreakable token: shrink cannot keep the long word, so line 1
+    // still has slack to stretch. The last line stays flush left.
+    const body = paragraph('aa bb cc ' + 'W'.repeat(40) + ' tail', '<w:jc w:val="both"/>');
     const lines = linesOf(lay(load(body), geometry));
     expect(lines.length).toBeGreaterThan(1);
     const last = lines[lines.length - 1]!;
     expect(last.spans[0]!.box.x).toBe(0);
-    // Justified earlier lines gain space between words, so a later span sits past where the
-    // unjustified cumulative advance would have put it.
     const first = lines[0]!;
-    const secondSpan = first.spans[1]!;
-    expect(secondSpan.box.x).toBeGreaterThan(first.spans[0]!.box.width);
+    const afterSpace = first.spans.findIndex(
+      (span, index) => index > 0 && first.spans[index - 1]!.text.endsWith(' ')
+    );
+    expect(afterSpace).toBeGreaterThan(0);
+    const previous = first.spans[afterSpace - 1]!;
+    const next = first.spans[afterSpace]!;
+    expect(next.box.x).toBeGreaterThan(previous.box.x + previous.box.width + 0.25);
   });
 
   test('justification stretches only after expandable spaces, not every span boundary', () => {

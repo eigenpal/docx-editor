@@ -36,3 +36,19 @@ export function prepareTextPaintHost(
   element.append(glyph);
   return glyph;
 }
+
+export function setFlushSpaceWidth(
+  element: HTMLElement,
+  span: StyleSpanRecord,
+  hasNext: boolean,
+  scale: number
+): void {
+  if (
+    hasNext &&
+    span.text.endsWith(' ') &&
+    span.lineEndWhitespace !== true &&
+    span.style.horizontalScalePercent === 100
+  ) {
+    element.style.width = `${span.box.width * scale}px`;
+  }
+}

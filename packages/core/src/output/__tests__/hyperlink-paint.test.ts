@@ -264,7 +264,7 @@ describe('each HYPERLINK field is its own anchor', () => {
     // The stretch lives inside the span's box AND its anchor. A link's last span absorbing
     // the gap would widen the <a> hit target across blank slack, so a click there would
     // follow the link. That boundary keeps the margin; gaps INSIDE the link still stretch.
-    const words = Array.from({ length: 16 }, (_, index) => `w${index}`).join(' ');
+    const words = `aa bb cc ${'Z'.repeat(40)} tail`;
     const body =
       '<w:p><w:pPr><w:jc w:val="both"/></w:pPr>' +
       '<w:hyperlink r:id="rId9"><w:r><w:t xml:space="preserve">link text </w:t></w:r></w:hyperlink>' +

@@ -61,6 +61,8 @@ import {
 import {
   collapsedSpaceBefore,
   paragraphBorderExtentPt,
+  paragraphBorderHorizontalBox,
+  paragraphBorderSideOuterExtentPt,
   paragraphBorderStrokeWidthPt,
 } from './paragraph-style.ts';
 import { tabStopsFingerprint, withDefaultTabInterval } from './paragraph-tabs.ts';
@@ -563,6 +565,7 @@ function placeCellParagraph(
       lineSpacing,
       equationCacheToken: deps.producer,
       firstLineOffset,
+      alignment,
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),
@@ -751,25 +754,25 @@ function placeCellParagraph(
   let bottomBorderRecord: ParagraphBottomBorderRecord | undefined;
   let contentTop = linesTop;
   let contentBottom = linesBottom;
-  // THE FOUR EDGES ARE ONE BOX — the same rule the body flow follows, and it has to be the
-  // same here or one document paints the identical callout two ways depending on whether it
-  // sits in a table cell or a header. The side rules stand outside the text column by their
-  // own `w:space`, so horizontals drawn only across the column leave the frame open.
-  // Stroke thickness uses the inflated compound band for `double`/etc. (shared with body).
+  // Same horizontal-box rule as body flow. Compound stroke is shared.
+  const textRight = fragmentX + available;
   const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
   const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
-  const boxLeft = borders.left ? fragmentX - borders.left.spacePt - leftStroke : fragmentX;
+  const boxLeft = borders.left
+    ? fragmentX - paragraphBorderSideOuterExtentPt(borders.left)
+    : fragmentX;
   const boxRight = borders.right
-    ? fragmentX + available + borders.right.spacePt + rightStroke
-    : fragmentX + available;
+    ? textRight + paragraphBorderSideOuterExtentPt(borders.right)
+    : textRight;
   const boxWidth = Math.max(boxRight - boxLeft, 0);
   if (topExtent > 0 && topEdge) {
     const topStroke = paragraphBorderStrokeWidthPt(topEdge);
     const ruleY = linesTop - topEdge.spacePt - topStroke;
+    const horizontal = paragraphBorderHorizontalBox(fragmentX, textRight, borders, topEdge);
     strokes.push({
       side: 'top',
       edge: topEdge,
-      box: { x: boxLeft, y: ruleY, width: boxWidth, height: topStroke },
+      box: { x: horizontal.x, y: ruleY, width: horizontal.width, height: topStroke },
     });
     contentTop = ruleY;
   }
@@ -780,12 +783,8 @@ function placeCellParagraph(
   if (complete && includeBottomBorder && closingEdge && !collapseHeight) {
     const closeStroke = paragraphBorderStrokeWidthPt(closingEdge);
     const ruleY = linesBottom + closingEdge.spacePt;
-    const box = {
-      x: boxLeft,
-      y: ruleY,
-      width: boxWidth,
-      height: closeStroke,
-    };
+    const horizontal = paragraphBorderHorizontalBox(fragmentX, textRight, borders, closingEdge);
+    const box = { x: horizontal.x, y: ruleY, width: horizontal.width, height: closeStroke };
     // `bottomBorder` stays the BOTTOM rule alone: a `between` rule closing a grouped
     // paragraph is a different edge, and a consumer reading it as the box's bottom would
     // draw the block's frame at every interior boundary.
@@ -808,7 +807,7 @@ function placeCellParagraph(
       side: 'left',
       edge: borders.left,
       box: {
-        x: fragmentX - borders.left.spacePt - leftStroke,
+        x: boxLeft,
         y: sideTop,
         width: leftStroke,
         height: sideHeight,
@@ -820,7 +819,7 @@ function placeCellParagraph(
       side: 'right',
       edge: borders.right,
       box: {
-        x: fragmentX + available + borders.right.spacePt,
+        x: boxRight - rightStroke,
         y: sideTop,
         width: rightStroke,
         height: sideHeight,

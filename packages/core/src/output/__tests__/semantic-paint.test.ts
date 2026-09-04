@@ -105,7 +105,7 @@ describe('the painter is a non-authoritative consumer', () => {
     // selection into one block per word. Layout only justifies ordinary spaces — the NBSPs
     // here must not stretch. Enough words that the paragraph wraps: the first line is
     // justified, the last is not.
-    const words = Array.from({ length: 20 }, (_, index) => `w${index}`).join(' ');
+    const words = `aa bb cc ${'Z'.repeat(40)} tail`;
     const body =
       `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
       `<w:r><w:t xml:space="preserve">qu id </w:t></w:r>` +
@@ -162,7 +162,7 @@ describe('the painter is a non-authoritative consumer', () => {
   test('a justify gap after a span holding an NBSP falls back to the margin', () => {
     // Every engine's `word-spacing` expands NBSP too, which would shift painted glyphs off
     // their published boxes — such a span keeps the margin on its neighbour instead.
-    const words = Array.from({ length: 20 }, (_, index) => `w${index}`).join(' ');
+    const words = `aa bb cc ${'Z'.repeat(40)} tail`;
     const body =
       `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
       `<w:r><w:t xml:space="preserve">a b ${words}</w:t></w:r>` +

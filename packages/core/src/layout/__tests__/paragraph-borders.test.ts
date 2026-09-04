@@ -11,7 +11,11 @@ import { readOoxmlPart, type OoxmlPart } from '@docx-editor.dev/core/store';
 import {
   MAX_BORDER_SPACE_PT,
   MAX_BORDER_WIDTH_PT,
+  PARAGRAPH_BORDER_SIDE_GUTTER_PT,
   cascadedParagraphBorders,
+  paragraphBorderHorizontalBox,
+  paragraphBorderSideOuterExtentPt,
+  paragraphBorderStrokeWidthPt,
   paragraphBorders,
   paragraphBordersFingerprint,
 } from '../paragraph-style.ts';
@@ -218,10 +222,10 @@ describe('a box publishes four strokes around the unchanged text column', () => 
     expect(top.box.y + top.box.height).toBe(line.box.y - 4);
     expect(bottom.box.y).toBe(line.box.y + line.box.height + 4);
 
-    // Word draws the side rules beyond the text and never re-breaks the lines for them, so
-    // the left rule ends 4pt left of the text and the right one starts 4pt right of it.
-    expect(left.box.x + left.box.width).toBe(line.box.x - 4);
-    expect(right.box.x).toBe(line.box.x + line.box.width + 4);
+    // Word draws the side rules beyond the text and never re-breaks the lines for them.
+    // The inner edge sits `space` plus the side gutter away from the column.
+    expect(left.box.x + left.box.width).toBe(line.box.x - 4 - PARAGRAPH_BORDER_SIDE_GUTTER_PT);
+    expect(right.box.x).toBe(line.box.x + line.box.width + 4 + PARAGRAPH_BORDER_SIDE_GUTTER_PT);
 
     // THE FOUR EDGES CLOSE. The horizontals reach the side rules rather than stopping at
     // the text column, or the frame paints as two rules with two detached bars beside it —
@@ -297,6 +301,209 @@ describe('a box publishes four strokes around the unchanged text column', () => 
     expect(bar.box.height).toBe(line.box.height);
     // A bar is beside the text, not above or below it: no flow height of its own.
     expect(fragment.box.height).toBe(paragraphsOf(lay(paragraph('changed')))[0]!.box.height);
+  });
+});
+
+describe('a horizontal-only rule extends by its own space plus stroke', () => {
+  const edge = (
+    sz: string,
+    space: string
+  ): { val: string; color: null; widthPt: number; spacePt: number } => {
+    const widthPt = Number(sz) / 8;
+    const spacePt = Number(space);
+    return { val: 'single', color: null, widthPt, spacePt };
+  };
+
+  test('the helper extends a lone horizontal by spacePt plus stroke on each side', () => {
+    // Confirmed Word fill on EP_ZMVZ_MULTI_v4 page 1: bottom sz=4 space=1, column
+    // 89.85+415.65. Expected box is x=88.35 width=418.65.
+    const bottom = edge('4', '1');
+    expect(paragraphBorderStrokeWidthPt(bottom)).toBe(0.5);
+    expect(paragraphBorderHorizontalBox(89.85, 505.5, {}, bottom)).toEqual({
+      x: 88.35,
+      width: 418.65,
+    });
+  });
+
+  test('top-only, bottom-only, and between-only each use that edge', () => {
+    const top = edge('8', '4');
+    const bottom = edge('4', '1');
+    const between = edge('16', '2');
+    expect(paragraphBorderHorizontalBox(0, 180, { top }, top)).toEqual({ x: -5, width: 190 });
+    expect(paragraphBorderHorizontalBox(0, 180, { bottom }, bottom)).toEqual({
+      x: -1.5,
+      width: 183,
+    });
+    expect(paragraphBorderHorizontalBox(0, 180, { between }, between)).toEqual({
+      x: -4,
+      width: 188,
+    });
+  });
+
+  test('mixed top and bottom spaces keep independent widths', () => {
+    const top = edge('4', '1');
+    const bottom = edge('8', '4');
+    const borders = { top, bottom };
+    expect(paragraphBorderHorizontalBox(0, 180, borders, top)).toEqual({ x: -1.5, width: 183 });
+    expect(paragraphBorderHorizontalBox(0, 180, borders, bottom)).toEqual({ x: -5, width: 190 });
+  });
+
+  test('a closed box matches the side outer edges, including mixed side spaces', () => {
+    const left = edge('8', '4');
+    const right = edge('8', '8');
+    const top = edge('4', '1');
+    const bottom = edge('4', '1');
+    const boxed = { top, left, bottom, right };
+    expect(paragraphBorderSideOuterExtentPt(left)).toBe(4 + PARAGRAPH_BORDER_SIDE_GUTTER_PT + 1);
+    expect(paragraphBorderSideOuterExtentPt(right)).toBe(8 + PARAGRAPH_BORDER_SIDE_GUTTER_PT + 1);
+    expect(paragraphBorderHorizontalBox(0, 180, boxed, top)).toEqual({ x: -6.5, width: 197 });
+    expect(paragraphBorderHorizontalBox(0, 180, boxed, bottom)).toEqual({ x: -6.5, width: 197 });
+    // Horizontal space/size does not move a closed box.
+    expect(paragraphBorderHorizontalBox(0, 180, boxed, edge('24', '12'))).toEqual({
+      x: -6.5,
+      width: 197,
+    });
+    // EP_ZMVZ page-1 resolution box: side space=4 stroke=0.5 → Core 83.85 / 427.65.
+    // Word's 0.24pt exporter reports 84.0 / 427.2 after quantization.
+    const side = edge('4', '4');
+    expect(paragraphBorderSideOuterExtentPt(side)).toBe(6);
+    expect(
+      paragraphBorderHorizontalBox(89.85, 505.5, { top, left: side, bottom, right: side }, top)
+    ).toEqual({ x: 83.85, width: 427.65 });
+  });
+
+  test('an open side still uses the horizontal extent when only one side exists', () => {
+    const left = edge('8', '4');
+    const bottom = edge('4', '1');
+    expect(paragraphBorderHorizontalBox(0, 180, { left, bottom }, bottom)).toEqual({
+      x: -6.5,
+      width: 188,
+    });
+  });
+
+  test('layout publishes the bottom-only extension around the text column', () => {
+    const fragment = paragraphsOf(
+      lay(paragraph('x', '<w:pBdr><w:bottom w:val="single" w:sz="4" w:space="1"/></w:pBdr>'), SMALL)
+    )[0]!;
+    const line = fragment.lines[0]!;
+    const bottom = stroke(fragment, 'bottom');
+    expect(bottom.box.x).toBe(line.box.x - 1.5);
+    expect(bottom.box.width).toBe(line.box.width + 3);
+    expect(bottom.box.height).toBe(0.5);
+  });
+
+  test('layout publishes the top-only extension around the text column', () => {
+    const fragment = paragraphsOf(
+      lay(paragraph('x', '<w:pBdr><w:top w:val="single" w:sz="8" w:space="4"/></w:pBdr>'), SMALL)
+    )[0]!;
+    const line = fragment.lines[0]!;
+    const top = stroke(fragment, 'top');
+    expect(top.box.x).toBe(line.box.x - 5);
+    expect(top.box.width).toBe(line.box.width + 10);
+  });
+
+  test('layout publishes a between-only rule at the interior boundary', () => {
+    const pBdr = '<w:pBdr><w:between w:val="single" w:sz="4" w:space="1"/></w:pBdr>';
+    const [first, last] = paragraphsOf(lay(paragraph('one', pBdr) + paragraph('two', pBdr), SMALL));
+    expect(sides(first!)).toEqual(['between']);
+    expect(sides(last!)).toEqual([]);
+    const line = first!.lines[0]!;
+    const between = stroke(first!, 'between');
+    expect(between.box.x).toBe(line.box.x - 1.5);
+    expect(between.box.width).toBe(line.box.width + 3);
+  });
+
+  test('layout keeps mixed top and bottom spaces independent', () => {
+    const fragment = paragraphsOf(
+      lay(
+        paragraph(
+          'x',
+          '<w:pBdr>' +
+            '<w:top w:val="single" w:sz="4" w:space="1"/>' +
+            '<w:bottom w:val="single" w:sz="8" w:space="4"/>' +
+            '</w:pBdr>'
+        ),
+        SMALL
+      )
+    )[0]!;
+    const line = fragment.lines[0]!;
+    const top = stroke(fragment, 'top');
+    const bottom = stroke(fragment, 'bottom');
+    expect(top.box.x).toBe(line.box.x - 1.5);
+    expect(top.box.width).toBe(line.box.width + 3);
+    expect(bottom.box.x).toBe(line.box.x - 5);
+    expect(bottom.box.width).toBe(line.box.width + 10);
+  });
+
+  test('layout still closes a full box on the side outer edges', () => {
+    const fragment = paragraphsOf(lay(paragraph('boxed', BOX), SMALL))[0]!;
+    const line = fragment.lines[0]!;
+    const top = stroke(fragment, 'top');
+    const left = stroke(fragment, 'left');
+    const right = stroke(fragment, 'right');
+    expect(top.box.x).toBe(left.box.x);
+    expect(top.box.x + top.box.width).toBe(right.box.x + right.box.width);
+    expect(left.box.x).toBe(line.box.x - 4 - PARAGRAPH_BORDER_SIDE_GUTTER_PT - 1);
+    expect(right.box.x + right.box.width).toBe(
+      line.box.x + line.box.width + 4 + PARAGRAPH_BORDER_SIDE_GUTTER_PT + 1
+    );
+  });
+
+  test('layout uses each side space plus the gutter, not the horizontal space', () => {
+    const fragment = paragraphsOf(
+      lay(
+        paragraph(
+          'x',
+          '<w:pBdr>' +
+            '<w:top w:val="single" w:sz="4" w:space="1"/>' +
+            '<w:left w:val="single" w:sz="8" w:space="4"/>' +
+            '<w:bottom w:val="single" w:sz="4" w:space="8"/>' +
+            '<w:right w:val="single" w:sz="8" w:space="8"/>' +
+            '</w:pBdr>'
+        ),
+        SMALL
+      )
+    )[0]!;
+    const line = fragment.lines[0]!;
+    expect(stroke(fragment, 'left').box.x).toBe(line.box.x - 6.5);
+    expect(stroke(fragment, 'right').box.x + stroke(fragment, 'right').box.width).toBe(
+      line.box.x + line.box.width + 10.5
+    );
+    expect(stroke(fragment, 'top').box).toMatchObject({
+      x: line.box.x - 6.5,
+      width: line.box.width + 17,
+    });
+    expect(stroke(fragment, 'bottom').box).toMatchObject({
+      x: line.box.x - 6.5,
+      width: line.box.width + 17,
+    });
+  });
+
+  test('a closed box on the EP_ZMVZ column publishes 83.85 / 427.65', () => {
+    const page: PageGeometry = {
+      width: 595.35,
+      height: 841.9,
+      margin: { top: 70.85, right: 89.85, bottom: 70.85, left: 89.85 },
+    };
+    const fragment = paragraphsOf(
+      lay(
+        paragraph(
+          'x',
+          '<w:pBdr>' +
+            '<w:top w:val="single" w:sz="4" w:space="1"/>' +
+            '<w:left w:val="single" w:sz="4" w:space="4"/>' +
+            '<w:bottom w:val="single" w:sz="4" w:space="1"/>' +
+            '<w:right w:val="single" w:sz="4" w:space="4"/>' +
+            '</w:pBdr>'
+        ),
+        page
+      )
+    )[0]!;
+    const top = stroke(fragment, 'top');
+    expect(top.box.x).toBe(-6);
+    expect(top.box.width).toBe(427.65);
+    expect(stroke(fragment, 'left').box.x).toBe(-6);
+    expect(stroke(fragment, 'right').box.x + stroke(fragment, 'right').box.width).toBe(421.65);
   });
 });
 
@@ -527,8 +734,11 @@ describe('a shaded box is filled across the frame, not just the text band', () =
 
     expect(fragment.shading).toBe('E8F0FE');
     const box = fragment.shadingBox!;
+    const line = fragment.lines[0]!;
     expect(box.x).toBe(left.box.x);
     expect(box.x + box.width).toBe(right.box.x + right.box.width);
+    expect(box.x).toBe(line.box.x - 4 - PARAGRAPH_BORDER_SIDE_GUTTER_PT - 1);
+    expect(box.width).toBe(line.box.width + 2 * (4 + PARAGRAPH_BORDER_SIDE_GUTTER_PT + 1));
     expect(box.y).toBe(top.box.y);
     expect(box.y + box.height).toBe(bottom.box.y + bottom.box.height);
   });

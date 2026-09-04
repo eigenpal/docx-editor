@@ -151,7 +151,9 @@ describe('two paragraphs of images on one line', () => {
     // numerically inside a first-half span hole (here: a proposed deletion). Matching the
     // offset without the paragraph zeroed the first half's justify gap, and every span
     // after it painted a step too far left.
-    const tail = Array.from({ length: 18 }, (_, index) => `w${index}`).join(' ');
+    // Short words plus one unbreakable token: shrink cannot keep the long word, so the
+    // join line still has slack to stretch between the first half's words.
+    const tail = `w0 w1 w2 ${'Z'.repeat(40)} tail`;
     const xml =
       `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
       `xmlns:pic="${PIC}" xmlns:r="${R}"><w:body>` +

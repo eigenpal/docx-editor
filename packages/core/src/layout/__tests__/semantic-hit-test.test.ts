@@ -645,11 +645,11 @@ describe('the caret sits at a glyph edge', () => {
   });
 
   test('after a justified space the caret sits with the next word, not inside the gap', () => {
-    // Wide column + short words so the first line is justified and layout leaves slack
-    // only after expandable spaces (the paint `word-spacing` slots).
-    const words = Array.from({ length: 12 }, (_, index) => `w${index}`).join(' ');
+    // Short words plus one unbreakable token: shrink cannot keep the long word, so line 1
+    // still has slack. Layout leaves that slack only after expandable spaces.
     const layout = lay(
-      `<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:t>${words}</w:t></w:r></w:p>`,
+      `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
+        `<w:r><w:t>aa bb cc ${'W'.repeat(40)} tail</w:t></w:r></w:p>`,
       proportional
     );
     const line = paragraphFragmentsOf(layout.pages[0]!)[0]!.lines[0]!;

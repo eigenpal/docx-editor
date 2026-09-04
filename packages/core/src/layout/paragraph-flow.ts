@@ -50,13 +50,12 @@ import {
 import {
   DEFAULT_RUN_STYLE,
   displayText,
-  measureDisplayText,
   resolveRunStyle,
   type ResolvedRunStyle,
   type ThemeFonts,
 } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
-import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
+import type { LayoutBox, TextMeasurer } from './semantic-records.ts';
 import {
   buildInlineDrawingRecord,
   inlineDrawingVerticalLayout,
@@ -79,18 +78,16 @@ import {
 } from './drawing-exclusion.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
+import {
+  OVERFLOW_TOLERANCE_PT,
+  candidateNeedsWrap,
+  expandableShrinkBudget,
+  expandableSpaceCapacity,
+  visibleCandidateWidth,
+  type Alignment,
+} from './paragraph-justify.ts';
 
-/**
- * How far past the line's right edge a span may reach before it counts as overflow.
- *
- * A right/centre/decimal tab computes its advance in ABSOLUTE x — `destination - currentX -
- * segmentWidth` — while wrapping is decided in line-local width. Converting between the two
- * subtracts and re-adds the paragraph origin, so a segment the tab placed to end EXACTLY at
- * the edge lands a fraction of an ulp beyond it. Without a tolerance that hairline decides a
- * line break, and a right-aligned tab is built to reach the edge exactly. A thousandth of a
- * point is far below one device pixel, so nothing a reader could see wraps because of this.
- */
-const OVERFLOW_TOLERANCE_PT = 0.001;
+export { OVERFLOW_TOLERANCE_PT, alignSpans, type Alignment } from './paragraph-justify.ts';
 
 /**
  * Per-paragraph geometry the BREAK depends on, beyond width.
@@ -102,6 +99,11 @@ export interface ParagraphFlowOptions {
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
   readonly firstLineOffset?: number;
+  /**
+   * Cascaded `w:jc`. Wrap uses this so a style-only justify still shrinks. Absent, the
+   * paragraph node's own properties are read.
+   */
+  readonly alignment?: Alignment;
   /** Re-break only the unplaced suffix when an unequal-width column follows. */
   readonly startOffset?: number;
   /**
@@ -452,8 +454,6 @@ export function paragraphIndent(props: readonly OoxmlProperty[]): {
 }
 
 /** Horizontal alignment of a paragraph (`w:jc`, ECMA-376 §17.3.1.13). */
-export type Alignment = 'left' | 'center' | 'right' | 'both';
-
 export function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
   let alignment: Alignment = 'left';
   for (const property of props) {
@@ -477,123 +477,6 @@ export function paragraphAlignment(props: readonly OoxmlProperty[]): Alignment {
     }
   }
   return alignment;
-}
-
-/**
- * True when this span's trailing U+0020 is an inter-word slot Word can stretch.
- *
- * Paint reapplies justification as CSS `word-spacing` on those same spaces. Inserting layout
- * slack at every style-span boundary (tabs, run splits mid-phrase) put gaps where paint has
- * none and shifted every later span — caret mid-word drifted by a multiple of the step while
- * the highlight (DOM) stayed on the glyphs.
- */
-function endsWithExpandableSpace(text: string): boolean {
-  return text.endsWith(' ');
-}
-
-/**
- * Shift a line's spans to satisfy the paragraph alignment.
- *
- * Layout is the only geometry authority: hit testing and the caret read published span boxes
- * and measure intra-span prefixes on demand. Paint starts the line at `LineRecord.contentX` —
- * the first span's x whenever there is one — and flows inline, so justification slack must
- * land on the same inter-word spaces `word-spacing` expands, not on every style-span boundary.
- *
- * A line with NO spans returns unchanged; its alignment is published as `contentX` by the
- * callers, which is the only place an empty paragraph's caret x can come from.
- */
-export function alignSpans(
-  spans: readonly StyleSpanRecord[],
-  measurer: TextMeasurer,
-  indentLeft: number,
-  available: number,
-  alignment: Alignment,
-  isLastLine: boolean,
-  lineUsedWidth?: number
-): readonly StyleSpanRecord[] {
-  if (spans.length === 0) return spans;
-  if (alignment === 'left') return spans;
-
-  let trailingEnd = spans.length;
-  while (
-    trailingEnd > 0 &&
-    spans[trailingEnd - 1]!.box.width === 0 &&
-    (spans[trailingEnd - 1]!.text === '\n' || spans[trailingEnd - 1]!.text === PAGE_BREAK_CHAR)
-  ) {
-    trailingEnd -= 1;
-  }
-  let trailingStart = trailingEnd;
-  while (trailingStart > 0 && spans[trailingStart - 1]!.lineEndWhitespace) {
-    trailingStart -= 1;
-  }
-  const lastContentSpan = spans[trailingEnd - 1];
-  const spansReachLineEnd =
-    lineUsedWidth !== undefined &&
-    lastContentSpan !== undefined &&
-    Math.abs(lastContentSpan.box.x + lastContentSpan.box.width - indentLeft - lineUsedWidth) <=
-      OVERFLOW_TOLERANCE_PT;
-  if (
-    trailingStart < trailingEnd &&
-    spansReachLineEnd &&
-    (alignment === 'center' || alignment === 'right')
-  ) {
-    const used = spans[trailingStart]!.box.x - indentLeft;
-    const slack = available - used;
-    if (slack <= 0) return spans;
-    const offset = alignment === 'center' ? slack / 2 : slack;
-    const clipsAtMargin = (lineUsedWidth ?? 0) >= available - OVERFLOW_TOLERANCE_PT;
-    let fillX = spans[trailingStart]!.box.x + offset;
-    return spans.map((span, index) => {
-      if (index < trailingStart) return { ...span, box: { ...span.box, x: span.box.x + offset } };
-      if (!clipsAtMargin) return { ...span, box: { ...span.box, x: span.box.x + offset } };
-      const width = Math.min(span.box.width, Math.max(0, indentLeft + available - fillX));
-      const aligned = { ...span, box: { ...span.box, x: fillX, width } };
-      fillX += width;
-      return aligned;
-    });
-  }
-
-  // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
-  // is what Word does and what stops a line ending in a space from looking misaligned.
-  const last = spans[spans.length - 1]!;
-  const visible = last.text.replace(/\s+$/, '');
-  // `box.width` was reserved from the DRAWN text, so the visible part has to be measured the
-  // same way: the difference is what the trailing whitespace measures, and mixing a drawn
-  // total with a source-measured visible part reports nearly the whole span as whitespace.
-  // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
-  // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
-  // over-stretches the line.
-  const trailing =
-    visible === last.text
-      ? 0
-      : last.box.width -
-        measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
-  const used = lineUsedWidth ?? last.box.x - indentLeft + last.box.width - trailing;
-  const slack = available - used;
-  if (slack <= 0) return spans;
-
-  // The last line of a justified paragraph is set flush left, never stretched.
-  if (alignment === 'both') {
-    if (isLastLine) return spans;
-    // Only boundaries after an expandable space receive slack — the same slots paint stretches
-    // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
-    // run splits and drifted every later caret by N×step.
-    const gapBefore: number[] = [];
-    for (let index = 1; index < spans.length; index += 1) {
-      if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
-    }
-    if (gapBefore.length === 0) return spans;
-    const step = slack / gapBefore.length;
-    const gapSet = new Set(gapBefore);
-    let shift = 0;
-    return spans.map((span, index) => {
-      if (gapSet.has(index)) shift += step;
-      return shift === 0 ? span : { ...span, box: { ...span.box, x: span.box.x + shift } };
-    });
-  }
-
-  const offset = alignment === 'center' ? slack / 2 : slack;
-  return spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + offset } }));
 }
 
 /** Shift inline drawing boxes for paragraph alignment the same way {@link alignSpans} does. */
@@ -635,6 +518,11 @@ export function breakParagraph(
   // `w:firstLine`, left (negative) for `w:hanging`. Every later line starts at the indent.
   const firstLineOffset = flow?.firstLineOffset ?? 0;
   const flowTabStops = withHangingIndentTabStop(tabStops, indentLeft, firstLineOffset);
+  const directPPr =
+    paragraph.kind === 'textValue'
+      ? undefined
+      : paragraph.children.find((child) => child.kind === 'paragraphProperties');
+  const alignment = flow?.alignment ?? paragraphAlignment(propertiesOf(directPPr));
 
   // Model ranges the caret must step over. Collected during the piece walk rather than derived
   // from the emitted spans, because in the proposed result a deletion produces no span at all
@@ -769,12 +657,15 @@ export function breakParagraph(
     let probeLineIndex = 0;
     const probeLineOffset = (): number => (probeLineIndex === 0 ? firstLineOffset : 0);
     const probeLineAvail = (): number => Math.max(1, available - probeLineOffset());
+    let probeShrinkBudget = 0;
     const closeProbeLine = (nextStart: number): void => {
       probeLineStart = nextStart;
       probeWidth = 0;
+      probeShrinkBudget = 0;
       probeLineIndex += 1;
     };
-    for (const piece of pieces) {
+    for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
+      const piece = pieces[pieceIndex]!;
       const equation = equationLayoutOf(piece);
       if (equation) {
         const width = equation.geometry.box.width;
@@ -801,10 +692,22 @@ export function breakParagraph(
         const style = styleForFontSlot(piece.style, piece.fontSlot);
         const width = measurer.measure(candidate, style);
         const modelStart = piece.start + consumed;
-        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(modelStart);
+        const visibleWidth = visibleCandidateWidth(candidate, width, style, measurer);
+        if (
+          probeWidth > 0 &&
+          candidateNeedsWrap({
+            lineWidth: probeWidth,
+            visibleWidth,
+            available: probeLineAvail(),
+            allowShrink: alignment === 'both' && placeableSuffixes[pieceIndex]![boundary] === 1,
+            shrinkBudget: probeShrinkBudget,
+          })
+        )
+          closeProbeLine(modelStart);
         if (sameParagraphAnchorStarts.includes(modelStart)) out.set(modelStart, probeLineStart);
         if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
         probeWidth += width;
+        probeShrinkBudget += expandableSpaceCapacity(candidate, width, style, measurer);
         consumed = boundary;
       }
     }
@@ -1558,46 +1461,54 @@ export function breakParagraph(
       if (lineEndWhitespace) {
         width = Math.min(width, Math.max(0, lineAvailable() - line.width));
       }
-      if (
-        line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
-        (line.spans.length > 0 || line.drawings.length > 0)
-      ) {
-        if (opensWord || wordStartSpan <= 0) {
-          if (tryAdvanceToNextPassage() && line.width + width <= lineAvailable() + 0.001) {
+      const visibleWidth = lineEndWhitespace
+        ? 0
+        : visibleCandidateWidth(candidate, width, faceStyle, measurer);
+      const hasLineContent = line.spans.length > 0 || line.drawings.length > 0;
+      if (hasLineContent && (opensWord || wordStartSpan <= 0)) {
+        const wrapInput = () => ({
+          lineWidth: line.width,
+          visibleWidth,
+          available: lineAvailable(),
+          allowShrink: alignment === 'both' && placeableSuffixes[pieceIndex]![boundary] === 1,
+          shrinkBudget: expandableShrinkBudget(line.spans, measurer),
+        });
+        if (candidateNeedsWrap(wrapInput())) {
+          if (tryAdvanceToNextPassage() && !candidateNeedsWrap(wrapInput())) {
             // carry on in the next horizontal passage on this line
           } else {
             closeLine();
             if (!ensurePlacementWidth(width)) continue;
           }
-        } else {
-          // Mid-word overflow: carry the whole word to the next line rather than splitting it
-          // at a run boundary. The spans already placed for it are lifted off this line, the
-          // line is closed without them, and they are re-laid at the new origin.
-          const carried = line.spans.splice(wordStartSpan);
-          line.width = wordStartWidth;
-          line.end = wordStartEnd;
-          line.height = 0;
-          line.baseline = 0;
-          for (const span of line.spans) {
-            const spanMetrics = measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot));
-            line.height = Math.max(line.height, spanMetrics.height);
-            line.baseline = Math.max(line.baseline, spanMetrics.baseline);
-          }
-          closeLine();
-          for (const span of carried) {
-            const spanMetrics = measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot));
-            line.spans.push({
-              ...span,
-              box: { ...span.box, x: lineOrigin() + line.width },
-            });
-            line.width += span.box.width;
-            line.height = Math.max(line.height, spanMetrics.height);
-            line.baseline = Math.max(line.baseline, spanMetrics.baseline);
-            line.end = span.range.end;
-          }
-          wordStartSpan = 0;
-          wordStartWidth = 0;
         }
+      } else if (hasLineContent && line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT) {
+        // Mid-word overflow: carry the whole word to the next line rather than splitting it
+        // at a run boundary. The spans already placed for it are lifted off this line, the
+        // line is closed without them, and they are re-laid at the new origin.
+        const carried = line.spans.splice(wordStartSpan);
+        line.width = wordStartWidth;
+        line.end = wordStartEnd;
+        line.height = 0;
+        line.baseline = 0;
+        for (const span of line.spans) {
+          const spanMetrics = measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot));
+          line.height = Math.max(line.height, spanMetrics.height);
+          line.baseline = Math.max(line.baseline, spanMetrics.baseline);
+        }
+        closeLine();
+        for (const span of carried) {
+          const spanMetrics = measurer.lineMetrics(styleForFontSlot(span.style, span.fontSlot));
+          line.spans.push({
+            ...span,
+            box: { ...span.box, x: lineOrigin() + line.width },
+          });
+          line.width += span.box.width;
+          line.height = Math.max(line.height, spanMetrics.height);
+          line.baseline = Math.max(line.baseline, spanMetrics.baseline);
+          line.end = span.range.end;
+        }
+        wordStartSpan = 0;
+        wordStartWidth = 0;
       } else if (
         line.spans.length === 0 &&
         line.drawings.length === 0 &&

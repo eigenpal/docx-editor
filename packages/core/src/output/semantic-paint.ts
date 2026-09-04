@@ -70,7 +70,7 @@ import {
   type PaintImageUrlPort,
 } from './semantic-paint-drawings.ts';
 import { mountEquationGeometry } from './semantic-paint-equation.ts';
-import { prepareTextPaintHost } from './semantic-paint-line-end-whitespace.ts';
+import { prepareTextPaintHost, setFlushSpaceWidth } from './semantic-paint-line-end-whitespace.ts';
 
 /**
  * When a field's result is drawn on its grey block, following Word's own View option.
@@ -1466,6 +1466,7 @@ function paintLine(
     const gapAfter = interSpanGapBefore(line, spanIndex + 1, rankOf);
     previousSpanAbsorbedGap = gapAfter > 0 && next !== undefined && absorbsFollowingGap(span, next);
     if (previousSpanAbsorbedGap) painted.style.wordSpacing = `${gapAfter * scale}px`;
+    else setFlushSpaceWidth(painted, span, next !== undefined, scale);
     pendingGap = gapAfter;
     const link = span.link;
     if (!link) {

@@ -48,6 +48,17 @@ export const MAX_BORDER_WIDTH_PT = 12;
 export const MAX_BORDER_SPACE_PT = 3168;
 
 /**
+ * Extra inset Word adds outside a paragraph LEFT/RIGHT border, in points.
+ *
+ * Controlled Word PDF exports matched
+ * `side.spacePt + PARAGRAPH_BORDER_SIDE_GUTTER_PT + sideStroke` on every
+ * side-space and side-width variant. The gutter is side-only: it does not
+ * change vertical `w:space`, and a horizontal-only top/bottom/between rule
+ * still uses {@link paragraphBorderExtentPt} on each open side.
+ */
+export const PARAGRAPH_BORDER_SIDE_GUTTER_PT = 1.5;
+
+/**
  * A paragraph's resolved space before and after, in points.
  *
  * Already collapsed against `w:contextualSpacing`, so adjacent same-style paragraphs that suppress
@@ -489,6 +500,42 @@ export function paragraphBorderStrokeWidthPt(edge: ParagraphBorderEdge): number 
 export function paragraphBorderExtentPt(edge: ParagraphBorderEdge | undefined): number {
   if (!edge) return 0;
   return edge.spacePt + paragraphBorderStrokeWidthPt(edge);
+}
+
+/**
+ * Horizontal outer extent of one left or right paragraph border, in points.
+ *
+ * Word places the side rule `w:space` from the text, then adds
+ * {@link PARAGRAPH_BORDER_SIDE_GUTTER_PT} before the stroke. Horizontal
+ * edge space and size do not change this number.
+ */
+export function paragraphBorderSideOuterExtentPt(edge: ParagraphBorderEdge): number {
+  return edge.spacePt + PARAGRAPH_BORDER_SIDE_GUTTER_PT + paragraphBorderStrokeWidthPt(edge);
+}
+
+/**
+ * Published x/width of one top, bottom, or between paragraph-border stroke.
+ *
+ * A side rule owns that side of a closed box: the horizontal meets the side's
+ * outer edge, including {@link paragraphBorderSideOuterExtentPt}, so the
+ * corners share one rectangle. When that side is absent, the horizontal
+ * extends by its own {@link paragraphBorderExtentPt} — Word's `w:space` plus
+ * stroke — and does not take the side gutter.
+ */
+export function paragraphBorderHorizontalBox(
+  textLeft: number,
+  textRight: number,
+  borders: ParagraphBorders,
+  edge: ParagraphBorderEdge
+): { readonly x: number; readonly width: number } {
+  const leftExtent = borders.left
+    ? paragraphBorderSideOuterExtentPt(borders.left)
+    : paragraphBorderExtentPt(edge);
+  const rightExtent = borders.right
+    ? paragraphBorderSideOuterExtentPt(borders.right)
+    : paragraphBorderExtentPt(edge);
+  const x = textLeft - leftExtent;
+  return { x, width: Math.max(textRight + rightExtent - x, 0) };
 }
 
 /** Vertical extent a bottom border adds below the last line (gap + rule). */

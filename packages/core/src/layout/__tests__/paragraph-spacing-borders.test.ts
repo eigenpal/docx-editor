@@ -282,7 +282,9 @@ describe('comprehensive fixture: bottom border rule and vertical spacing', () =>
     // Rule sits below the empty line by `space`.
     expect(empty.bottomBorder!.box.y).toBe(empty.lines[0]!.box.y + 14 + 2);
     expect(empty.bottomBorder!.box.height).toBe(2);
-    expect(empty.bottomBorder!.box.width).toBe(empty.box.width);
+    const horizontalExtent = empty.bottomBorder!.edge.spacePt + empty.bottomBorder!.box.height;
+    expect(empty.bottomBorder!.box.x).toBe(empty.box.x - horizontalExtent);
+    expect(empty.bottomBorder!.box.width).toBe(empty.box.width + 2 * horizontalExtent);
     // Fragment height covers before remainder + line + border extent + after.
     expect(empty.box.height).toBe(empty.spacing.before + 14 + 2 + 2 + empty.spacing.after);
   });
