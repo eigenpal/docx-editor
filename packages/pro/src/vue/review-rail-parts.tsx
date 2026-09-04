@@ -18,6 +18,7 @@ import {
   type VNode,
 } from 'vue';
 import { Slot } from '@docx-editor.dev/vue';
+import { placeReviewBalloonInViewport } from '../review/balloon-geometry.ts';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
   MARKER_STEP,
@@ -322,7 +323,7 @@ export const ReviewBalloon = markPart(
         const openAt = (element: HTMLElement, structuralSite: boolean): void => {
           const railRect = railEl.getBoundingClientRect();
           const rect = element.getBoundingClientRect();
-          const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
+          const placement = placeReviewBalloonInViewport(rect, railRect, scroller);
           const start = Number(element.dataset.start);
           const end = Number(element.dataset.end);
           anchor.value = {
@@ -340,10 +341,10 @@ export const ReviewBalloon = markPart(
               : {}),
             ...(Number.isFinite(start) ? { start } : {}),
             ...(Number.isFinite(end) ? { end } : {}),
-            left: rect.left - railRect.left,
+            left: placement.left,
             top: rect.top - railRect.top,
             bottom: rect.bottom - railRect.top,
-            above: rect.bottom + 220 > viewportBottom,
+            above: placement.above,
           };
           instance?.proxy?.$forceUpdate();
         };

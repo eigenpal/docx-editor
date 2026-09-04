@@ -65,6 +65,7 @@ import {
   type ReviewAuthorInfo,
   type ToolbarTranslate,
 } from '@docx-editor.dev/react';
+import { placeReviewBalloonInViewport } from '../review/balloon-geometry';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition';
 import {
   COMPACT_CARD_WIDTH,
@@ -1224,7 +1225,7 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
     const open = (element: HTMLElement, structuralSite: boolean): void => {
       const railRect = rail.getBoundingClientRect();
       const rect = element.getBoundingClientRect();
-      const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
+      const placement = placeReviewBalloonInViewport(rect, railRect, scroller);
       const start = Number(element.dataset.start);
       const end = Number(element.dataset.end);
       setAnchor({
@@ -1242,12 +1243,11 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
           : {}),
         ...(Number.isFinite(start) ? { start } : {}),
         ...(Number.isFinite(end) ? { end } : {}),
-        left: rect.left - railRect.left,
+        left: placement.left,
         top: rect.top - railRect.top,
         bottom: rect.bottom - railRect.top,
-        // Opens upward when there is no room below — a change on the last visible line
-        // would otherwise push its balloon under the fold.
-        above: rect.bottom + 220 > viewportBottom,
+        // Opens on the side with enough room, or the roomier side in a short editor.
+        above: placement.above,
       });
     };
 
