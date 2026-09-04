@@ -6,8 +6,14 @@
 // geometry memoizes per page object — a typing pass that reuses 675 of 677 pages walks the
 // spans of the two pages it rebuilt, not the whole document.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import type {
+  OoxmlElement,
+  OoxmlNode,
+  OoxmlParagraphNode,
+  OoxmlPart,
+} from '@docx-editor.dev/core/store';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
+import { paragraphInlineLengthOf } from '../store/store/tree-op-segments.ts';
 import { blockStoryContainerChildren, storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
@@ -38,23 +44,6 @@ import {
 import { contentControlContextToken } from './content-control-context-token.ts';
 
 export { contentControlContextToken };
-
-/** Addressable UTF-16 length of an inline node — mirrors the store / layout offset model. */
-function addressableInlineLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties' || node.kind === 'paragraphProperties') return 0;
-  if (node.kind === 'generic' && !isInlineRunContainer(node)) return 0;
-  if (isContentControl(node)) {
-    let total = 0;
-    for (const inner of contentControlContentChildren(node))
-      total += addressableInlineLength(inner);
-    return total;
-  }
-  let total = 0;
-  for (const child of node.children) total += addressableInlineLength(child);
-  return total;
-}
 
 export interface CollectedControl {
   readonly control: OoxmlElement;
@@ -172,7 +161,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
 
   const walkInline = (
     nodes: readonly OoxmlNode[],
-    paragraphId: string,
+    paragraph: OoxmlParagraphNode,
     offset: number,
     depth: number,
     containerDepth: number,
@@ -191,7 +180,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
         const start = cursor;
         const end = walkInline(
           contentControlContentChildren(child),
-          paragraphId,
+          paragraph,
           cursor,
           depth + 1,
           containerDepth + 1,
@@ -202,7 +191,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
           nestingDepth: depth,
           lockStack: nextStack,
           level: 'inline',
-          paragraphId,
+          paragraphId: paragraph.id,
           range: { start, end },
           blockIds: [],
         });
@@ -212,7 +201,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
       if (isInlineRunContainer(child)) {
         cursor = walkInline(
           child.children,
-          paragraphId,
+          paragraph,
           cursor,
           depth,
           containerDepth + 1,
@@ -220,7 +209,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
         );
         continue;
       }
-      cursor += addressableInlineLength(child);
+      cursor += paragraphInlineLengthOf(paragraph, child);
     }
     return cursor;
   };
@@ -234,7 +223,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
     for (const child of nodes) {
       if (child.kind === 'textValue') continue;
       if (child.kind === 'paragraph') {
-        walkInline(child.children, child.id, 0, depth, 0, lockStack);
+        walkInline(child.children, child, 0, depth, 0, lockStack);
         continue;
       }
       if (child.kind === 'table') {

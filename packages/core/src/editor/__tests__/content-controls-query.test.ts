@@ -400,6 +400,18 @@ describe('contentControlSummaryOf (typed-shaped nodes)', () => {
     expect(editor.query({ type: 'contentControlAt' })).toMatchObject({ tag: 'visible' });
   });
 
+  test('contentControlAt ignores a misplaced wrapper inside a run', () => {
+    const editor = mount(
+      pMixed(
+        '<w:r><w:t>A</w:t><w:smartTag><w:r><w:t>hidden</w:t></w:r></w:smartTag>' +
+          '<w:t>B</w:t></w:r>' +
+          inlineSdt('<w:tag w:val="visible"/>', run('shown'))
+      )
+    );
+    caretAt(editor.surface!, 2);
+    expect(editor.query({ type: 'contentControlAt' })).toMatchObject({ tag: 'visible' });
+  });
+
   test('maps typed contentControlProperties to summary fields', () => {
     const control = element('contentControl', 'sdt', [
       element('contentControlProperties', 'sdtPr', [

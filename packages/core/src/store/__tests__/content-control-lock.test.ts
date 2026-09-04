@@ -93,12 +93,62 @@ function textUnder(node: OoxmlNode): string {
   return node.children.map(textUnder).join('');
 }
 
+function allNamed(node: OoxmlNode, localName: string): OoxmlNode[] {
+  if (node.kind === 'textValue') return [];
+  const found = node.localName === localName ? [node] : [];
+  return found.concat(node.children.flatMap((child) => allNamed(child, localName)));
+}
+
 const PARAGRAPH = '/word/document.xml#0.0.0';
 
 const TABLE_WITH = (inner: string) =>
   `<w:tbl><w:tr><w:tc><w:p>${inner}</w:p><w:p/></w:tc></w:tr></w:tbl>`;
 
 describe('ST_Lock content edits', () => {
+  const insertInlineControl = (paragraphId: string): TreeDocOp => ({
+    op: 'insertInlineContentControl',
+    paragraphId,
+    offset: 2,
+    tag: 'new',
+    text: 'X',
+  });
+
+  const inlineControlAtOffset = (properties: string): OoxmlPart =>
+    load(
+      '<w:p><w:r><w:t>A</w:t></w:r><w:sdt><w:sdtPr>' +
+        properties +
+        '</w:sdtPr><w:sdtContent><w:r><w:t>BC</w:t></w:r></w:sdtContent></w:sdt>' +
+        '<w:r><w:t>D</w:t></w:r></w:p>'
+    );
+
+  test('inserting an inline control cannot split a content-locked control', () => {
+    const part = inlineControlAtOffset('<w:lock w:val="sdtContentLocked"/>');
+    expect(reject(part, insertInlineControl(firstOfKind(part, 'paragraph')))).toBe('locked');
+  });
+
+  test('inserting an inline control cannot split a data-bound control', () => {
+    const part = inlineControlAtOffset(
+      '<w:dataBinding w:xpath="/a" w:storeItemID="{G}" w:prefixMappings=""/>'
+    );
+    expect(reject(part, insertInlineControl(firstOfKind(part, 'paragraph')))).toBe('bound');
+  });
+
+  test('inserting an inline control splits an ordinary enclosing control', () => {
+    const part = inlineControlAtOffset('<w:tag w:val="old"/>');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, insertInlineControl(paragraphId));
+    expect(paragraphTextOf(next, paragraphId)).toBe('ABXCD');
+    expect(allNamed(next.root, 'sdt').map(textUnder)).toEqual(['B', 'X', 'C']);
+  });
+
+  test('inserting an inline control outside existing controls is unchanged', () => {
+    const part = load('<w:p><w:r><w:t>ABCD</w:t></w:r></w:p>');
+    const paragraphId = firstOfKind(part, 'paragraph');
+    const next = apply(part, insertInlineControl(paragraphId));
+    expect(paragraphTextOf(next, paragraphId)).toBe('ABXCD');
+    expect(allNamed(next.root, 'sdt').map(textUnder)).toEqual(['X']);
+  });
+
   const wrapperUnderControl = (properties: string): OoxmlPart =>
     load(
       `<w:sdt><w:sdtPr>${properties}</w:sdtPr><w:sdtContent><w:p>` +

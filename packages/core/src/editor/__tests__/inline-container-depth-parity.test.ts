@@ -2,6 +2,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { treeToDoc } from '../../binding/tree-binding.ts';
+import { collectedControlIndexOf } from '../../layout/content-control-boundary-layout.ts';
 import { piecesOfParagraph } from '../../layout/field-projection.ts';
 import {
   readOoxmlPart,
@@ -124,5 +125,33 @@ describe('inline container depth parity', () => {
       ).toBe('');
       expect(treeToDoc(opaque.part).textContent).toBe('');
     }
+  });
+
+  test('a misplaced run wrapper stays opaque before a visible control', () => {
+    const loaded = loadedParagraph(
+      '<w:r><w:t>A</w:t><w:smartTag><w:r><w:t>hidden</w:t></w:r></w:smartTag>' +
+        '<w:t>B</w:t></w:r>' +
+        inlineControl('visible', 'shown')
+    );
+    const control = descendants(loaded.paragraph).find((node) => node.kind === 'contentControl');
+    if (!control) throw new Error('content control is missing');
+
+    const text = paragraphTextOf(loaded.part, loaded.paragraph.id);
+    const layoutText = piecesOfParagraph(loaded.paragraph)
+      .map((piece) => piece.text)
+      .join('');
+    const span = paragraphOffsetIndex(loaded.paragraph).spanOf(control);
+    const collected = collectedControlIndexOf(loaded.part).controls.find(
+      (entry) => entry.control.id === control.id
+    );
+
+    expect(text).toBe('ABshown');
+    expect(layoutText).toBe(text);
+    expect(treeToDoc(loaded.part).textContent).toBe(text);
+    expect(span).toEqual({ start: 2, end: 7 });
+    expect(collected?.range).toEqual(span);
+    expect(inlineContentControlsAt(loaded.paragraph, 2).map((entry) => entry.tag)).toEqual([
+      'visible',
+    ]);
   });
 });

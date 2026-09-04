@@ -164,6 +164,11 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
   return index;
 }
 
+/** Addressable length of one node, read from the paragraph offset authority. */
+export function paragraphInlineLengthOf(paragraph: OoxmlParagraphNode, node: OoxmlNode): number {
+  return paragraphOffsetIndex(paragraph).lengthOf(node);
+}
+
 /** Build an offset index without populating the interactive paragraph memo. @internal */
 export function transientParagraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOffsetIndex {
   return buildParagraphOffsetIndex(paragraph);

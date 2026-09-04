@@ -36,6 +36,7 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
+import { paragraphInlineLengthOf } from '../store/store/tree-op-segments.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
@@ -61,32 +62,6 @@ type ContentControlLike = OoxmlContentControlNode | OoxmlGenericElementNode;
 /** Shared walk predicate — WML namespace required for generic `sdt` fallback. */
 function isContentControlNode(node: OoxmlNode): node is ContentControlLike {
   return isContentControl(node);
-}
-
-function elementChildren(node: OoxmlNode): readonly OoxmlNode[] {
-  return node.kind === 'textValue' ? [] : node.children;
-}
-
-/**
- * Characters one inline node contributes to paragraph UTF-16 offsets.
- *
- * Mirrors the store segment model and the layout inline projection: text counts code units,
- * `w:tab` and `w:br` count one, properties and unmodelled generic nodes count nothing, and
- * inline controls flatten transparently through their `w:sdtContent`.
- */
-function addressableLength(node: OoxmlNode): number {
-  if (node.kind === 'textValue') return node.value.length;
-  if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-  if (node.kind === 'runProperties') return 0;
-  if (node.kind === 'generic' && !isInlineRunContainer(node)) return 0;
-  if (isContentControlNode(node)) {
-    let total = 0;
-    for (const inner of contentControlContentChildren(node)) total += addressableLength(inner);
-    return total;
-  }
-  let total = 0;
-  for (const child of elementChildren(node)) total += addressableLength(child);
-  return total;
 }
 
 function propertiesOf(control: OoxmlElement): OoxmlElement | undefined {
@@ -294,6 +269,7 @@ type InlineControlRange = {
  */
 function inlineControlRangesOf(paragraph: OoxmlElement): InlineControlRange[] {
   const ranges: InlineControlRange[] = [];
+  if (paragraph.kind !== 'paragraph') return ranges;
 
   const walk = (
     children: readonly OoxmlNode[],
@@ -306,7 +282,7 @@ function inlineControlRangesOf(paragraph: OoxmlElement): InlineControlRange[] {
     for (const child of children) {
       if (child.kind === 'paragraphProperties') continue;
       if (child.kind === 'run') {
-        position += addressableLength(child);
+        position += paragraphInlineLengthOf(paragraph, child);
         continue;
       }
       if (isInlineRunContainer(child)) {
@@ -326,7 +302,7 @@ function inlineControlRangesOf(paragraph: OoxmlElement): InlineControlRange[] {
         ranges.push({ control: child, start, end: position, depth: nextDepth });
         continue;
       }
-      position += addressableLength(child);
+      position += paragraphInlineLengthOf(paragraph, child);
     }
     return position;
   };

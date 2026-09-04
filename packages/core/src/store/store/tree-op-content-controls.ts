@@ -220,7 +220,11 @@ export interface TreeOpTarget {
   /** UTF-16 offsets inside the node this op addresses. Absent means the node itself. */
   readonly range?: OffsetSpan;
   /** The applier's point-placement rule, when this target inserts content. */
-  readonly point?: 'run-content' | 'paragraph-sibling' | 'container-marker';
+  readonly point?:
+    | 'run-content'
+    | 'paragraph-sibling'
+    | 'inline-control-split'
+    | 'container-marker';
   /** Boundary affinity for run-content insertion. */
   readonly bias?: 'left' | 'right';
   /**
@@ -256,6 +260,12 @@ const siblingAt = (nodeId: string, offset: number): TreeOpReach => ({
   targets: [
     { nodeId, range: { start: offset, end: offset }, writes: true, point: 'paragraph-sibling' },
   ],
+});
+
+/** A new inline control splits each existing inline control that strictly contains the caret. */
+const splittingControlAt = (nodeId: string, offset: number): TreeOpReach => ({
+  kind: 'nodes',
+  targets: [{ nodeId, range: { start: offset, end: offset }, point: 'inline-control-split' }],
 });
 
 /** A point that writes nothing into the run it names — a marker, or a split. */
@@ -336,7 +346,7 @@ const TREE_OP_REACH: {
   // like the range shape, and a caret at a control's EDGE lands outside that control, which is
   // exactly where the applier puts it.
   insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
-  insertInlineContentControl: (op) => siblingAt(op.paragraphId, op.offset),
+  insertInlineContentControl: (op) => splittingControlAt(op.paragraphId, op.offset),
   insertFragment: (op) => siblingAt(op.paragraphId, op.offset),
   // A split at a control's edge moves the whole control to one side of the break and changes
   // nothing it holds, so neither edge is inside. A split WITHIN it is, and the range says so.
@@ -638,6 +648,36 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
   const unprotected: string[] = [];
   for (const target of reach.targets) {
     const targetNode = findNode(part, target.nodeId);
+    if (
+      targetNode?.kind === 'paragraph' &&
+      target.point === 'inline-control-split' &&
+      target.range !== undefined
+    ) {
+      const enclosing = enclosingContentControls(part, targetNode.id);
+      for (let index = 0; index < enclosing.length; index += 1) {
+        touches.push({
+          control: enclosing[index]!,
+          locks: locksOf(enclosing.slice(0, index + 1)),
+          removed: false,
+          discarded: false,
+        });
+      }
+      const inherited = locksOf(enclosing);
+      const offsets = paragraphOffsetIndex(targetNode);
+      for (const entry of contentControlsIn(targetNode)) {
+        const span = offsets.spanOf(entry.node);
+        if (!span || target.range.start <= span.start || target.range.start >= span.end) continue;
+        touches.push({
+          control: entry.node,
+          locks: inherited.concat(locksOf(entry.ancestors.concat(entry.node))),
+          removed: false,
+          discarded: false,
+        });
+      }
+      // Adding a control is document structure, not a permitted form-field value edit.
+      unprotected.push(targetNode.id);
+      continue;
+    }
     if (
       targetNode?.kind === 'paragraph' &&
       (target.point === 'run-content' || target.point === 'paragraph-sibling') &&
