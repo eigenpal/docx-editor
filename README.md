@@ -42,10 +42,11 @@ packages through their normal build tool.
 | [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by the adapter.                                                                                                                                   | [Docs](https://www.docx-editor.dev/docs/2.x/i18n)         |
 | [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts)           | Open-licensed substitutes for common Word fonts, with local and on-demand resolvers.                                                                                                       | [Docs](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
 | `@docx-editor.dev/docx-to-markdown`                                                        | Private workspace package for server-first DOCX to Markdown conversion using the shared semantic layout engine, packaged fonts, and HarfBuzz.                                              | Internal preview                                          |
+| `@docx-editor.dev/docx-to-pdf`                                                             | Private workspace package for server-first DOCX to PDF conversion using the shared semantic layout engine. Licensed under the EigenPal Pro License.                                        | Internal                                                  |
 | [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, real-time collaboration, and custom nodes.                                                                                                                      | [Docs](https://www.docx-editor.dev/docs/2.x/pro)          |
 | [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page.                                                        | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api)   |
 
-`@docx-editor.dev/editor-api` and `@docx-editor.dev/pro` are licensed under the EigenPal Pro License ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
+`@docx-editor.dev/docx-to-pdf`, `@docx-editor.dev/editor-api`, and `@docx-editor.dev/pro` are licensed under the EigenPal Pro License ([docx-to-pdf](packages/docx-to-pdf/LICENSE.md), [editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
 > **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
 
@@ -166,7 +167,13 @@ bun run i18n:status      # check translation coverage
 
 ## License
 
-This repository is licensed under [Apache 2.0](LICENSE), except `packages/editor-api/` and `packages/pro/`, which are licensed under the EigenPal Pro License ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)); you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
+This repository is licensed under [Apache 2.0](LICENSE), except
+`packages/editor-api/`, `packages/pro/`, and `packages/docx-to-pdf/`.
+Those packages use the EigenPal Pro License
+([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md),
+and [docx-to-pdf](packages/docx-to-pdf/LICENSE.md)).
+You can compare and buy license and support levels on the
+[pricing page](https://www.docx-editor.dev/pricing).
 
 ## Commercial support
 

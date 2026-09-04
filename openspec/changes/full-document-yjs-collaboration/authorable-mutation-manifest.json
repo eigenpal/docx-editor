@@ -1486,6 +1486,11 @@
       "name": "document-navigation-pane",
       "role": "independent",
       "notes": "Navigation chrome. No new mutation kind."
+    },
+    {
+      "name": "docx-to-pdf-export",
+      "role": "independent",
+      "notes": "Exporter package. No new TreeDocOp kind."
     }
   ],
   "remainingAmbiguity": [

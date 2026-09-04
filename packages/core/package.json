@@ -119,13 +119,9 @@
     "utif2": "4.1.0"
   },
   "peerDependencies": {
-    "pdf-lib": "^1.17.1",
     "yjs": "^13.6.0"
   },
   "peerDependenciesMeta": {
-    "pdf-lib": {
-      "optional": true
-    },
     "yjs": {
       "optional": true
     }
