@@ -4949,7 +4949,9 @@ export const W15_NAMESPACE_URI = "http://schemas.microsoft.com/office/word/2012/
 export function walkAllStoryParagraphs(children: readonly OoxmlNode[], sdtDepth: number, visit: (paragraph: OoxmlElement) => void): void;
 
 // @public
-export function walkParagraphInline(children: readonly OoxmlNode[], depth: number, visit: (child: OoxmlNode) => void): void;
+export function walkParagraphInline(children: readonly OoxmlNode[], depth: number, visit: (child: OoxmlNode) => void, options?: {
+    readonly descendRevisions?: boolean;
+}): void;
 
 // @public
 export function walkStoryBlocks(children: readonly OoxmlNode[], depth: number, visit: (block: OoxmlElement) => void): void;
