@@ -45,8 +45,10 @@ content geometry, line breaks, headers, footers, tables, drawings, and revision 
 
 The exporter SHALL paint page backgrounds, borders, fills, text, equations, inline drawings,
 anchored drawings, headers, footers, and overlays in a deterministic order derived from semantic
-records. In the private first slice, only page boxes, body/header/footer text spans, list markers,
-links, and named destinations are painted; other record kinds emit diagnostics and remain deferred.
+records. In the private first slice, page boxes, body/header/footer text spans, list markers,
+published paragraph and cell shading fills, published paragraph borders, insert/delete revision
+presentation, links, and named destinations are painted; other record kinds emit diagnostics and
+remain deferred.
 
 #### Scenario: Overlapping content
 
@@ -57,7 +59,72 @@ links, and named destinations are painted; other record kinds emit diagnostics a
 
 - **WHEN** Core lays out text inside table cells
 - **THEN** the first slice paints the cell text spans at semantic geometry and records a bounded
-  `table` diagnostic for unsupported table structure and decoration
+  `table` diagnostic for unsupported table structure and borders
+
+#### Scenario: Published paragraph or cell shading
+
+- **WHEN** Core publishes paragraph `shadingBox` geometry or cell shading with a usable box
+- **THEN** the exporter paints a fill rectangle behind the text in document order
+
+#### Scenario: Published solid paragraph borders
+
+- **WHEN** Core publishes paragraph `borders` or a fallback `bottomBorder` with a usable edge box
+  whose `val` is `single` or `thick`
+- **THEN** the exporter paints each published edge box at the story origin, treats `auto` colour as
+  black, and does not record `unsupported:paragraph-border`
+
+#### Scenario: Approximated paragraph border variants
+
+- **WHEN** Core publishes a dashed, dotted, double, or art paragraph border
+- **THEN** the exporter paints a solid rule in the published edge box and records a bounded
+  `paragraph-border` approximation diagnostic that names the authored `val` and side
+
+#### Scenario: Grouped paragraph box without a duplicate closing edge
+
+- **WHEN** a fragment publishes the closing edge in `borders` and also carries `bottomBorder`
+- **THEN** the exporter paints that closing edge once
+
+#### Scenario: Published paragraph borders inside nested hosts
+
+- **WHEN** Core publishes paragraph borders inside a table cell, header, footer, or nested textbox
+- **THEN** the exporter paints each edge at the host story origin plus the published box
+
+#### Scenario: Published shading inside a textbox story
+
+- **WHEN** Core publishes paragraph or table-cell shading inside a bounded textbox story
+- **THEN** the exporter paints each fill once at the absolute textbox origin before the story text
+  and stops descent at the nested textbox walk ceiling
+
+#### Scenario: Foreground textbox shading over body text
+
+- **WHEN** a page contains body text and a foreground (`behindDocument: false`) textbox with
+  published shading
+- **THEN** the exporter paints that textbox's fills and text after the body story so body glyphs do
+  not cover the textbox shading
+
+#### Scenario: Behind-document textbox under body text
+
+- **WHEN** a page contains body text and a behind-document textbox with published shading
+- **THEN** the exporter paints that textbox's fills and text before the body story so body glyphs
+  cover the behind-document layer
+
+#### Scenario: Light text without a painted fill
+
+- **WHEN** painted text has insufficient contrast against the painted background because a
+  published fill was omitted
+- **THEN** the exporter records a bounded `unreadable-without-fill` diagnostic for that span
+
+#### Scenario: All-markup insertion and deletion
+
+- **WHEN** Core publishes insert and delete attributions on visible spans in `all-markup`
+- **THEN** the exporter applies Core revision presentation so inserted and deleted text are not
+  identical, or records a bounded diagnostic when that presentation cannot be encoded
+
+#### Scenario: Unpainted review artifacts
+
+- **WHEN** the export layout contains comments or ranged or point review artifacts
+- **THEN** the exporter records a bounded diagnostic for each artifact that is not painted as a
+  PDF annotation
 
 ### Requirement: Exact text placement
 
@@ -96,23 +163,22 @@ text placement is not complete in the private first slice.
 
 - **WHEN** a painted span would use a PDF built-in font and its text is not WinAnsi-representable
 - **THEN** the writer omits the span, records a `standard-font-encoding` unsupported diagnostic with
-  the page index and requested family, and strict export refuses the document
+  the page index, the selected PDF built-in font, and the requested family, and strict export refuses
+  the document
 
 #### Scenario: TTC or OTC collection container
 
-- **WHEN** Core admits a TTC or OTC collection container with any `faceIndex`
-- **THEN** the writer refuses embedding because a verifiable collection face selector is
-  unavailable, records a `font-embedding-permission` unsupported diagnostic, falls back to a PDF
-  built-in font for painting only when the span text is WinAnsi-representable, and strict export
-  refuses the document
+- **WHEN** Core admits a TTC or OTC collection container with a valid `faceIndex`
+- **THEN** the writer selects that collection face, checks the selected face OS/2 `fsType`,
+  registers the selected PostScript name with PDFKit, and paints with the same face cmap
 
-#### Scenario: Nonzero TTC or OTC faceIndex
+#### Scenario: Malformed or out-of-range collection face
 
-- **WHEN** Core admits a collection container with a non-zero `faceIndex`
-- **THEN** the writer refuses embedding because a verifiable collection face selector is
-  unavailable, records a `font-embedding-permission` unsupported diagnostic, falls back to a PDF
-  built-in font for painting only when the span text is WinAnsi-representable, and strict export
-  refuses the document
+- **WHEN** Core admits a collection container that is truncated, has an unsupported TTC version,
+  exceeds the face-count cap, or whose `faceIndex` is out of range
+- **THEN** the writer refuses embedding, records a `font-embedding-permission` unsupported
+  diagnostic, falls back to a PDF built-in font for painting only when the span text is
+  WinAnsi-representable, and strict export refuses the document
 
 ### Requirement: Embedded and subset fonts
 
@@ -142,19 +208,35 @@ PDFKit/fontkit, and Core glyph positions remain unencoded.
   before admission
 - **THEN** the PDF writer never receives those bytes and does not embed the face
 
-#### Scenario: Restricted or no-subsetting OS/2 fsType
+#### Scenario: Restricted, no-subsetting, or bitmap-only OS/2 fsType
 
-- **WHEN** an admitted face's sfnt OS/2 `fsType` forbids embedding or forbids subsetting
+- **WHEN** an admitted face's sfnt OS/2 `fsType` forbids embedding, forbids subsetting, or permits
+  bitmap embedding only
 - **THEN** the PDF writer refuses embedding, records a `font-embedding-permission` unsupported
   diagnostic, falls back to a PDF built-in font for painting only when the span text is
   WinAnsi-representable, and strict export refuses the document
 
-#### Scenario: Nonzero TTC or OTC faceIndex
+#### Scenario: Embedded face missing cmap coverage
 
-- **WHEN** Core admits a collection container with a non-zero `faceIndex`
-- **THEN** the writer refuses embedding because a verifiable collection face selector is
-  unavailable, records a `font-embedding-permission` unsupported diagnostic, falls back to a PDF
-  built-in font for painting, and strict export refuses the document
+- **WHEN** the PDF-layer embedding gate accepts an admitted face and the span text contains a
+  Unicode scalar that the selected face cmap does not cover, including Arabic, Indic, CJK, emoji, or
+  a combining mark
+- **THEN** the writer omits the span, does not paint `.notdef` glyphs, records a
+  `font-cmap-coverage` unsupported diagnostic that identifies the missing cmap coverage, and strict
+  export refuses the document. Variation selectors and ZWJ/ZWNJ do not fail coverage by themselves.
+
+#### Scenario: Selected collection face
+
+- **WHEN** Core admits a collection container with a valid `faceIndex`
+- **THEN** the writer embeds that selected face through PDFKit using the derived PostScript
+  selector, including a non-zero `faceIndex`, and cmap coverage uses the same face
+
+#### Scenario: Nonzero faceIndex on a standalone sfnt
+
+- **WHEN** Core admits standalone TTF or OTF bytes with a non-zero `faceIndex`
+- **THEN** the writer refuses embedding, records a `font-embedding-permission` unsupported
+  diagnostic, falls back to a PDF built-in font for painting only when the span text is
+  WinAnsi-representable, and strict export refuses the document
 
 #### Scenario: Admitted-face aliases share one byte resource
 
@@ -220,8 +302,68 @@ execution time. It SHALL observe caller cancellation throughout generation.
 
 #### Scenario: Cancellation
 
-- **WHEN** the caller aborts during layout or PDF encoding
+- **WHEN** the caller aborts during layout, page planning, or PDF encoding
 - **THEN** generation stops promptly and returns no partial successful result
+
+#### Scenario: Cancellation during one-page span planning
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks many spans on one page
+- **THEN** generation stops during span planning without collecting every span visit first, and returns no partial successful result
+
+#### Scenario: Cancellation during paragraph-order preparation
+
+- **WHEN** the caller aborts with a timer-based signal while the planner prepares paragraph order on one page
+- **THEN** generation stops during order preparation without building the complete order map in one turn, including when few unique paragraph ids repeat across many scanned lines on a cold cache, and returns no partial successful result
+
+#### Scenario: Cancellation during warm paragraph-order cache replay
+
+- **WHEN** the caller aborts while replaying a warm `everyStoryOrder` cache with many unique paragraph ids
+- **THEN** generation stops during order preparation without replaying every cached id in one turn, and returns no partial successful result
+
+#### Scenario: Cancellation during empty or skipped paint-host visits
+
+- **WHEN** the caller aborts with a timer-based signal while the planner visits many empty or skipped paint hosts on one page
+- **THEN** generation stops during host visits without waiting for a paint command, and returns no partial successful result
+
+#### Scenario: Cancellation during fill traversal
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks many published fills on one page
+- **THEN** generation stops during fill traversal and returns no partial successful result
+
+#### Scenario: Cancellation during paragraph-border traversal
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks many published paragraph borders on one page
+- **THEN** generation stops during border traversal and returns no partial successful result
+
+#### Scenario: Cancellation during nested bordered-cell traversal
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks a deeply nested bordered cell on one page
+- **THEN** generation stops during border traversal without scanning the nested subtree before the first yield, and returns no partial successful result
+
+#### Scenario: Cancellation during nested shaded-cell fill traversal
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks a deeply nested shaded cell on one page
+- **THEN** generation stops during fill traversal without scanning the nested subtree before the first yield, and returns no partial successful result
+
+#### Scenario: Cancellation during named-destination planning
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks many named destinations on one page
+- **THEN** generation stops during destination planning and returns no partial successful result
+
+#### Scenario: Cancellation during list-marker traversal
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks many list markers on one page
+- **THEN** generation stops during marker traversal and returns no partial successful result
+
+#### Scenario: Cancellation during review-artifact diagnostics
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks many review artifacts on one page
+- **THEN** generation stops during review diagnostics and returns no partial successful result
+
+#### Scenario: Cancellation during one-page unsupported diagnostic traversal
+
+- **WHEN** the caller aborts with a timer-based signal while the planner walks a nested unsupported tree on one page
+- **THEN** generation stops during unsupported diagnostic traversal without walking the whole page in one turn, and returns no partial successful result
 
 ### Requirement: Structured fidelity report
 

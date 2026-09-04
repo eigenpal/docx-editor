@@ -12,6 +12,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { exportPdf, PdfDocumentOpenError } from '../src/index.ts';
 
 const FIXTURES = resolve(import.meta.dir, '../../../e2e/fixtures');
@@ -71,6 +72,22 @@ function pdfLatin1(bytes: Uint8Array): string {
  * repository worker pool. The ceiling is about hanging, not load.
  */
 const CORPUS_SWEEP_TIMEOUT_MS = 180_000;
+const EXTRACTION_SWEEP_TIMEOUT_MS = 60_000;
+
+async function extractPdfText(bytes: Uint8Array): Promise<string> {
+  const document = await getDocument({ data: bytes.slice() }).promise;
+  try {
+    const text: string[] = [];
+    for (let index = 1; index <= document.numPages; index += 1) {
+      const page = await document.getPage(index);
+      const content = await page.getTextContent();
+      text.push(...content.items.map((item) => ('str' in item ? item.str : '')));
+    }
+    return text.join('');
+  } finally {
+    document.cleanup();
+  }
+}
 
 describe('exportPdf fixture sweep', () => {
   test(
@@ -127,4 +144,33 @@ describe('exportPdf fixture sweep', () => {
       expect(fixtures.has(fixture)).toBe(true);
     }
   });
+
+  test(
+    'extracts representative Latin fixtures and records uncovered-script diagnostics',
+    async () => {
+      const styled = await exportPdf(fixtureBytes('styled-sample.docx'));
+      expect(await extractPdfText(styled.bytes)).toContain('styles.xml');
+
+      const editable = await exportPdf(fixtureBytes('editable-sample.docx'));
+      expect(await extractPdfText(editable.bytes)).toContain('Edit me');
+
+      const links = await exportPdf(fixtureBytes('hyperlink-demo.docx'));
+      expect(await extractPdfText(links.bytes)).toContain('Open Example');
+
+      const shaped = await exportPdf(fixtureBytes('harfbuzz-text-fidelity.docx'));
+      const extracted = await extractPdfText(shaped.bytes);
+      expect(extracted).toContain('Wrapping line 01');
+      expect(extracted).not.toContain('سلام');
+      expect(
+        shaped.diagnostics.some((diagnostic) => diagnostic.feature === 'standard-font-encoding')
+      ).toBe(true);
+      expect(
+        shaped.diagnostics.some((diagnostic) => diagnostic.feature === 'shaped-glyph-run')
+      ).toBe(true);
+
+      const rtl = await exportPdf(fixtureBytes('rtl-table-bidivisual.docx'));
+      expect(rtl.diagnostics.some((diagnostic) => diagnostic.feature === 'table')).toBe(true);
+    },
+    EXTRACTION_SWEEP_TIMEOUT_MS
+  );
 });

@@ -941,10 +941,22 @@ export function listFirstLineOffset(
   if (item.suffix === 'space') {
     return markerEnd + measurer.measure(' ', item.markerStyle) - textLeft;
   }
+  // A paragraph style can contribute a tab stop outside a narrower table cell. The generic
+  // tab resolver clamps that stop to the cell edge, which leaves no text slot and makes the
+  // breaker place one overflowing glyph beside the marker. A suffix tab must have a
+  // destination INSIDE the text box. Ignore only edge/outside stops; an authored stop that is
+  // still inside remains valid regardless of the marker and paragraph text faces.
+  const suffixTabs =
+    Number.isFinite(rightEdge) && tabStops.stops.length > 0
+      ? {
+          ...tabStops,
+          stops: tabStops.stops.filter((stop) => stop.positionPt < rightEdge),
+        }
+      : tabStops;
   // `tab`: the implied stop is the paragraph indent itself; only an overflowing marker has
   // to look further along the paragraph's own stops.
   if (markerEnd <= textLeft) return 0;
-  return nextTabDestination(tabStops, markerEnd, rightEdge).positionPt - textLeft;
+  return nextTabDestination(suffixTabs, markerEnd, rightEdge).positionPt - textLeft;
 }
 
 /**

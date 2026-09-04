@@ -38,6 +38,14 @@ Core's font-backed export session publishes the same records other exporters use
 - Physical page boxes sized from Core pagination.
 - Body, header, and footer text spans and list markers at semantic geometry, including table cell
   text flow.
+- Published paragraph and table-cell shading fills when Core publishes usable geometry, including
+  fills inside bounded textbox stories. Each story paints as a coherent layer, with behind-document
+  textboxes before body content and in-front textboxes after it.
+- Published paragraph borders at Core edge boxes, including body, table-cell, header/footer, and
+  nested textbox hosts. Solid single rules paint exactly. Dashed, dotted, double, and art variants
+  paint as a solid approximation with a bounded diagnostic.
+- Insertion and deletion markup via Core revision presentation (underline vs strike, kind colours)
+  when PDF text commands can encode it.
 - Sanitized external and internal link annotations over span boxes.
 - Named internal destinations from Core-published geometry.
 - Bounded document metadata in the PDF information dictionary.
@@ -47,13 +55,21 @@ Core's font-backed export session publishes the same records other exporters use
 ### Fidelity boundary
 
 `exportPdf` preserves admitted-face aliases while sharing one bounded byte copy per resource
-identity. When Core admits a matching standalone sfnt face and the PDF layer accepts its OS/2
-`fsType`, the PDFKit writer registers the exact admitted bytes. The PDF layer refuses every TTC/OTC
-collection container (`ttcf`), including `faceIndex` 0, because a verifiable collection face selector
-is unavailable. It also parses admitted sfnt OS/2 `fsType` and refuses restricted-license embedding
-(`0x0002`) and no-subsetting faces (`0x0100`) because PDFKit has no safe full-font embedding mode.
-Refused spans fall back to PDF built-in fonts only when the span text is WinAnsi-representable.
-Otherwise the writer omits the span and records a `standard-font-encoding` unsupported diagnostic.
+identity. When Core admits a matching face and the PDF layer accepts its OS/2 `fsType` and
+`faceIndex`, the PDFKit writer registers the exact admitted bytes. Admitted family matching is
+case-insensitive after trim and keeps spaces, hyphens, and underscores. For a TTC/OTC collection,
+the writer parses the collection header with a face-count cap, selects the SFNT directory at
+`faceIndex`, checks that face's OS/2 `fsType`, and passes the selected PostScript name to PDFKit.
+Malformed collections and out-of-range indices are refused. Standalone TTF/OTF faces still require
+`faceIndex` 0. The writer also refuses restricted-license embedding (`0x0002`), no-subsetting faces
+(`0x0100`), and bitmap-only embedding (`0x0200`) because this writer embeds outlines. Before
+painting, it inspects the selected face cmap through the declared `fontkit` dependency. If any
+visible Unicode scalar is uncovered, the writer omits the span and records a `font-cmap-coverage`
+unsupported diagnostic instead of painting `.notdef` glyphs. Variation selectors and ZWJ/ZWNJ do
+not fail that check by themselves. Refused spans fall back to PDF built-in fonts only when the span
+text is WinAnsi-representable. Otherwise the writer omits the span and records a
+`standard-font-encoding` unsupported diagnostic that names the selected built-in font and the
+requested family.
 
 PDFKit still reshapes Unicode through fontkit and does not encode Core HarfBuzz glyph IDs or
 positions. Every painted text span records a truthful `shaped-glyph-run` approximation diagnostic,
@@ -63,10 +79,12 @@ whether the span used embedded bytes or a built-in font. Non-exact built-in fall
 Core still enforces admission-time permissions: `availability: 'forbidden'` faces and
 document-embedded faces dropped as `overLimit` or `malformed` never reach the writer.
 
-Exact HarfBuzz glyph placement, table structure and decoration, images, equations, inline and
-anchored drawings, paragraph decoration, tab leaders, note areas, and reusable export sessions
-remain deferred. The planner emits bounded diagnostics instead of silently omitting unsupported
-records.
+Exact HarfBuzz glyph placement, table structure and borders, images, equations, inline and
+anchored drawings, tab leaders, note areas, comment balloons, review-range
+annotations, and reusable export sessions remain deferred. The planner emits bounded diagnostics
+instead of silently omitting unsupported records. Default `all-markup` never paints proposed and
+deleted text identically without a diagnostic: insert/delete presentation is applied when feasible,
+and remaining revision, comment, and review-artifact records emit precise unsupported entries.
 
 ```ts
 import { exportPdf } from '@docx-editor.dev/docx-to-pdf';

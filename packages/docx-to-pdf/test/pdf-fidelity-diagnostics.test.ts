@@ -12,7 +12,7 @@ import {
 import { HARD_MAX_FIDELITY_DIAGNOSTICS } from '../src/pdf-paint-bounds.ts';
 
 describe('fidelity diagnostic collector', () => {
-  test('aggregates repeated table diagnostics on the same page', () => {
+  test('aggregates repeated table diagnostics on the same page and record', () => {
     const collector = createFidelityDiagnosticCollector();
     collector.push(
       pdfUnsupportedDiagnostic({
@@ -28,7 +28,7 @@ describe('fidelity diagnostic collector', () => {
         feature: 'table',
         pageIndex: 0,
         recordKind: 'tableFragment',
-        recordId: 'tbl-2',
+        recordId: 'tbl-1',
         reason: 'Table painting is not encoded in the PDF paint slice yet',
       })
     );
@@ -38,8 +38,38 @@ describe('fidelity diagnostic collector', () => {
         feature: 'table',
         pageIndex: 0,
         recordKind: 'tableFragment',
+        recordId: 'tbl-1',
         reason: 'Table painting is not encoded in the PDF paint slice yet (2 occurrences)',
       }),
+    ]);
+  });
+
+  test('does not merge restricted embedding and TTC refusals', () => {
+    const collector = createFidelityDiagnosticCollector();
+    collector.push(
+      pdfUnsupportedDiagnostic({
+        feature: 'font-embedding-permission',
+        pageIndex: 0,
+        recordKind: 'textSpan',
+        recordId: 'RestrictedFace',
+        reason: 'OS/2 fsType forbids embedding (restricted license 0x0002)',
+      })
+    );
+    collector.push(
+      pdfUnsupportedDiagnostic({
+        feature: 'font-embedding-permission',
+        pageIndex: 0,
+        recordKind: 'textSpan',
+        recordId: 'CollectionFace',
+        reason: 'TTC/OTC collection containers cannot select a verifiable face',
+      })
+    );
+
+    const snapshot = collector.snapshot();
+    expect(snapshot).toHaveLength(2);
+    expect(snapshot.map((entry) => entry.recordId).sort()).toEqual([
+      'CollectionFace',
+      'RestrictedFace',
     ]);
   });
 

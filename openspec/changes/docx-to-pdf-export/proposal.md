@@ -16,22 +16,31 @@ readiness.
 - Add a one-shot `exportPdf` API for PDF generation from DOCX bytes.
 - Encode the private first slice boundary exactly:
   - **In scope:** physical page boxes; body, header, and footer text spans and list markers at
-    Core semantic geometry (including table cell text flow); sanitized external and internal link
-    annotations; named internal destinations; bounded document metadata; structured fidelity
-    diagnostics; strict refusal when visible approximations or unsupported records exist.
+    Core semantic geometry (including table cell text flow); published paragraph and cell shading
+    fills; published paragraph borders at Core edge boxes; insert/delete revision presentation when
+    PDF text commands can encode it; sanitized
+    external and internal link annotations; named internal destinations; bounded document metadata;
+    structured fidelity diagnostics; strict refusal when visible approximations or unsupported
+    records exist.
   - **Font behavior in this slice:** `exportPdf` preserves admitted-face aliases while sharing one
     bounded byte copy per resource identity. When Core admits a matching face and the PDF layer
     accepts its sfnt OS/2 `fsType` and `faceIndex`, the PDFKit writer registers the exact admitted
     bytes; otherwise it falls back to PDF built-in fonts when WinAnsi can represent the span text.
-    Every TTC/OTC collection container is refused because a verifiable collection selector is
-    unavailable. WinAnsi-unsafe fallback text is omitted and records a `standard-font-encoding`
-    diagnostic. PDFKit still reshapes Unicode through fontkit and does not encode Core HarfBuzz
-    glyph IDs. Every painted text span records a truthful `shaped-glyph-run` approximation
-    diagnostic; non-exact built-in fallback also records `standard-font-substitution`.
-  - **Deferred:** exact HarfBuzz glyph placement; table structure and decoration (cell text still
-    paints with a `table` diagnostic); images; equations; inline and anchored drawings; paragraph
-    fills, borders, shading, and tab leaders; footnote and endnote areas; reusable export
-    sessions.
+    TTC/OTC collections are accepted when the writer can parse the collection header, select the
+    `faceIndex` SFNT directory, verify that face's OS/2 `fsType`, and pass the selected PostScript
+    name to PDFKit. Malformed collections and out-of-range indices are refused. Restricted,
+    no-subsetting, and bitmap-only OS/2 `fsType` faces are refused.
+    Embedded spans with missing cmap coverage are omitted and record `font-cmap-coverage`.
+    WinAnsi-unsafe fallback text is omitted and records a `standard-font-encoding` diagnostic that
+    names the selected built-in font and requested family. PDFKit still reshapes Unicode through
+    fontkit and does not encode Core HarfBuzz glyph IDs. Every painted text span records a truthful
+    `shaped-glyph-run` approximation diagnostic; non-exact built-in fallback also records
+    `standard-font-substitution`.
+  - **Deferred:** exact HarfBuzz glyph placement; table structure and borders (cell text and
+    published cell shading still paint with a `table` diagnostic); images; equations; inline and
+    anchored drawings; tab leaders and note areas; comment balloons and
+    review-range PDF annotations; reusable export sessions. Default `all-markup` does not paint
+    proposed and deleted text identically without a diagnostic.
 - Remove Core's unused `pdf-lib` optional peer now that PDF export lives in
   `@docx-editor.dev/docx-to-pdf`.
 - Return bounded typed failures and a structured result with PDF bytes, page count, font evidence,

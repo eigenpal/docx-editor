@@ -285,19 +285,19 @@ describe('one-shot exportPdf', () => {
     expect(oneShot).toContain('createFidelityDiagnosticCollector()');
     expect(oneShot).toContain('admittedFonts(opened.session)');
     expect(oneShot).not.toContain('shapeLaidOutText(');
-    expect(oneShot).toContain('planPdfPaintFromLayout(layout, { signal: options.signal })');
+    expect(oneShot).toContain('planPdfPaintFromLayoutAsync(layout, { signal: options.signal })');
     expect(oneShot).toContain('writePdfPaintPlanToBytes(planned.plan');
     expect(oneShot).not.toMatch(/\.\.\.written\.diagnostics/);
     expect(oneShot).not.toMatch(/\.\.\.planned\.diagnostics/);
     expect(
-      oneShot.indexOf('planPdfPaintFromLayout(layout, { signal: options.signal })')
+      oneShot.indexOf('planPdfPaintFromLayoutAsync(layout, { signal: options.signal })')
     ).toBeLessThan(oneShot.indexOf('opened.session.dispose()'));
     expect(oneShot.indexOf('writePdfPaintPlanToBytes(planned.plan')).toBeLessThan(
       oneShot.indexOf('opened.session.dispose()')
     );
     expect(oneShot).toContain('admittedFonts(opened.session)');
     expect(oneShot.indexOf('try {')).toBeLessThan(
-      oneShot.indexOf('planPdfPaintFromLayout(layout, { signal: options.signal })')
+      oneShot.indexOf('planPdfPaintFromLayoutAsync(layout, { signal: options.signal })')
     );
     expect(oneShot).toMatch(/\} finally \{\s*opened\.session\.dispose\(\);/);
   });

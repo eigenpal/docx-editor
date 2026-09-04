@@ -60,6 +60,29 @@ function attributeValue(node: OoxmlNode, localName: string): string | undefined 
  */
 export function buildBookmarkIndex(part: OoxmlPart): BookmarkIndex {
   const index = new Map<string, BookmarkAnchor>();
+  const claimedNames = new Set<string>();
+
+  const bookmarkName = (node: OoxmlNode): string | undefined => {
+    const name = attributeValue(node, 'name');
+    if (
+      name === undefined ||
+      name.length === 0 ||
+      name.length > MAX_BOOKMARK_NAME_LENGTH ||
+      name === GO_BACK
+    ) {
+      return undefined;
+    }
+    return name;
+  };
+
+  const claimBookmarkName = (node: OoxmlNode): string | undefined => {
+    const name = bookmarkName(node);
+    if (name === undefined || claimedNames.has(name) || claimedNames.size >= MAX_BOOKMARKS) {
+      return undefined;
+    }
+    claimedNames.add(name);
+    return name;
+  };
 
   const inlineLength = (node: OoxmlNode): number => {
     if (node.kind === 'textValue') return node.value.length;
@@ -75,15 +98,8 @@ export function buildBookmarkIndex(part: OoxmlPart): BookmarkIndex {
     let offset = 0;
     const walkInline = (child: OoxmlNode): void => {
       if (child.kind === 'bookmarkStart') {
-        const name = attributeValue(child, 'name');
-        if (
-          name !== undefined &&
-          name.length > 0 &&
-          name.length <= MAX_BOOKMARK_NAME_LENGTH &&
-          name !== GO_BACK &&
-          !index.has(name) &&
-          index.size < MAX_BOOKMARKS
-        ) {
+        const name = claimBookmarkName(child);
+        if (name !== undefined) {
           index.set(name, { name, paragraphId: paragraph.id, offset });
         }
         return;
@@ -101,14 +117,34 @@ export function buildBookmarkIndex(part: OoxmlPart): BookmarkIndex {
     for (const child of paragraph.children) walkInline(child);
   };
 
-  const walk = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue' || index.size >= MAX_BOOKMARKS) return;
+  const walkContainer = (node: OoxmlNode): void => {
+    if (node.kind === 'textValue') return;
     if (node.kind === 'paragraph') {
       scanParagraph(node);
       return;
     }
-    for (const child of node.children) walk(child);
+    const pendingBlockNames: string[] = [];
+    for (const child of node.children) {
+      if (child.kind === 'bookmarkStart') {
+        const name = claimBookmarkName(child);
+        if (name !== undefined) pendingBlockNames.push(name);
+      } else if (child.kind === 'paragraph') {
+        for (const name of pendingBlockNames) {
+          index.set(name, { name, paragraphId: child.id, offset: 0 });
+        }
+        pendingBlockNames.length = 0;
+        scanParagraph(child);
+      } else {
+        // A block start only addresses a following paragraph in THIS direct sibling sequence.
+        // It cannot enter a nested table/SDT or jump over that container to a later sibling.
+        pendingBlockNames.length = 0;
+        walkContainer(child);
+      }
+      // Once the bounded claim set is full, only this container's earlier pending starts can
+      // still resolve. Descendants and later siblings cannot add an eligible name.
+      if (claimedNames.size >= MAX_BOOKMARKS && pendingBlockNames.length === 0) return;
+    }
   };
-  walk(part.root);
+  walkContainer(part.root);
   return index;
 }

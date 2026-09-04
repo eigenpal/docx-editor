@@ -25,6 +25,15 @@ the export contract and PDF fidelity are validated.
 - Physical page boxes sized from Core pagination.
 - Body, header, and footer text spans and list markers at semantic geometry, including text that
   flows inside table cells.
+- Published paragraph and table-cell shading fills when Core publishes usable `shadingBox` or cell
+  geometry. Light text that remains unreadable because a fill was omitted records
+  `unreadable-without-fill`.
+- Published paragraph border edges at Core geometry. Solid `single`/`thick` rules paint exactly.
+  Dashed, dotted, double, and art variants paint as a solid rule in the published box and record a
+  bounded approximation.
+- Insertion and deletion presentation from Core revision attribution (underline vs strike and kind
+  colours) when PDF text commands can encode it. Comments, format-only revisions, and ranged or
+  point review artifacts emit diagnostics when they are not painted.
 - Sanitized external and internal link annotations over span boxes.
 - Named internal destinations from Core-published geometry.
 - Bounded document metadata in the PDF information dictionary.
@@ -34,9 +43,11 @@ the export contract and PDF fidelity are validated.
 **Deferred in this slice:**
 
 - Exact HarfBuzz glyph placement.
-- Table structure and decoration (cell text still paints; a `table` diagnostic records the gap).
+- Table structure and borders (cell text and published cell shading still paint; a `table`
+  diagnostic records the remaining gap).
 - Images, equations, inline and anchored drawings.
-- Paragraph fills, borders, shading, tab leaders, and note areas.
+- Tab leaders and note areas.
+- Comment balloons and review-range PDF annotations.
 - Reusable export sessions over Core's export session.
 
 ### Current text fidelity boundary
@@ -53,14 +64,17 @@ PDFKit integration limits text fidelity even when the writer embeds exact Core-a
 - When no admitted face matches, or embedding is refused, the writer maps semantic styles to PDF
   built-in fonts only when the span text is WinAnsi-representable. Non-exact built-in matches also
   record a `standard-font-substitution` approximation. WinAnsi-unsafe fallback text is omitted and
-  records a `standard-font-encoding` unsupported diagnostic.
+  records a `standard-font-encoding` unsupported diagnostic that names the selected built-in font
+  and the requested family. Embedded spans whose cmap does not cover every Unicode scalar in the
+  text are omitted and record `font-cmap-coverage`.
 - PDFKit's public text API cannot accept an external HarfBuzz glyph run or encode Core glyph IDs or
   positions. Every painted text span therefore records a truthful `shaped-glyph-run` approximation,
   whether the span used embedded bytes or a built-in font. Strict export refuses documents that paint
   text until a writer path encodes Core glyph positions.
 - Validated image bytes must still be copied before session disposal. EMF, WMF, and TIFF also
   require a host converter. Image embedding remains deferred.
-- Review occurrences expose source ranges but no page rectangles for PDF annotations.
+- Review occurrences may publish source ranges and geometry. This slice does not emit PDF
+  review annotations; comments and ranged or point artifacts record bounded diagnostics.
 - Core no longer declares the unused `pdf-lib` optional peer. PDF export lives in
   `@docx-editor.dev/docx-to-pdf` with PDFKit instead.
 
@@ -75,17 +89,28 @@ Embedding permission is enforced at Core admission and again at the PDF layer:
   and never admit bytes. Explicit caller and packaged origins take first-wins precedence over
   document-embedded faces for the same `(family, weight, style)` request.
 - Before `registerFont`, the PDF writer parses each admitted sfnt OS/2 `fsType` table. It refuses
-  embedding when bit 1 (`0x0002`, restricted license embedding) or bit 8 (`0x0100`, no subsetting)
-  is set. No-subsetting faces are refused because PDFKit has no safe full-font embedding mode.
-  Refused spans emit a `font-embedding-permission` unsupported diagnostic and fall back to PDF
-  built-in fonts for painting.
+  embedding when bit 1 (`0x0002`, restricted license embedding), bit 8 (`0x0100`, no subsetting), or
+  bit 9 (`0x0200`, bitmap embedding only) is set. No-subsetting faces are refused because PDFKit has
+  no safe full-font embedding mode. Bitmap-only faces are refused because this writer embeds
+  outlines. Refused spans emit a `font-embedding-permission` unsupported diagnostic and fall back to
+  PDF built-in fonts for painting.
+- Admitted family matching is case-insensitive after trim and preserves spaces, hyphens, and
+  underscores. The first matching admitted origin wins.
+- Before painting an embedded span, the writer inspects cmap coverage with the declared `fontkit`
+  dependency, the same major line PDFKit uses. It checks the span's Unicode scalars as written and
+  does not NFC-compose first. Variation selectors and ZWJ/ZWNJ stay as shaping controls and do not
+  fail coverage by themselves. If any other scalar is missing, the writer omits the span and records
+  a `font-cmap-coverage` unsupported diagnostic instead of painting `.notdef` glyphs.
 - Core validates collection containers with `faceIndex` and publishes the full collection bytes plus
   the index Core measured (`identity` is `hash#faceIndex`). Document-embedded parts map with
   `faceIndex: 0` because each embedded part is a single face.
-- When Core admits a collection container with any `faceIndex`, the PDF writer refuses embedding
-  because a verifiable collection face selector is unavailable. PDFKit exposes a collection family
-  selector, but Core does not yet publish the selected face name needed to prove `faceIndex`
-  selection, so embedding would not be verifiable.
+- When Core admits a TTC/OTC collection, the PDF writer parses the collection header with a
+  face-count cap, resolves the selected SFNT directory from `faceIndex`, and applies the OS/2
+  `fsType` checks to that directory. It then opens the same face through fontkit, derives a unique
+  PostScript name, and passes that selector to PDFKit `registerFont`. Cmap coverage uses the
+  selected face. Malformed collections, unsupported versions, and out-of-range indices refuse
+  embedding with a precise `font-embedding-permission` diagnostic. Standalone TTF/OTF faces still
+  require `faceIndex` 0.
 
 ## Goals / Non-Goals
 
@@ -161,7 +186,24 @@ directly and do not round values before writing.
 
 A page planner converts semantic records into immutable paint commands. A PDF writer encodes those
 commands. This split enables exact command tests without parsing binary PDFs and writer integration
-tests with text extraction and geometry inspection.
+tests with text extraction and geometry inspection. The async planner walks published story layers
+in Core paint order: behind-document textbox hosts, then the owning story, then in-front textbox
+hosts. Each host emits its fills, then published paragraph border edges, then its text and list
+markers. `iterateSemanticPaintHosts` is
+the exporter-neutral walk; `iterateSemanticFillHosts` keeps document/graph order. Origins and the
+nested-textbox depth ceiling match the span walk. `iterateSemanticParagraphOrder` yields
+checkpoints so one `.next()` call cannot build the complete order map. On a cold cache this
+includes duplicate line and segment scans when few paragraph ids repeat. A warm
+`everyStoryOrder` cache performs no line or segment scan; its work is proportional to cached
+unique ids, and the order generator already checkpoints those yielded ids. Empty and skipped
+paint hosts still count as visits, so footnote, endnote, and empty textbox hosts yield every 256
+hosts. Unsupported-page diagnostics count visited pages, blocks, lines, drawings, borders, and
+note structures. Fill walks record nested cell backing during the block walk and do not scan a
+shaded cell subtree before yielding. Border walks use the same nested cell and textbox origins and
+yield per published edge. Review diagnostics, named destinations, paragraph-order
+preparation, unsupported-page diagnostics, fills, paragraph borders, and each story layer yield every 256 visits. A
+one-page document that is large in any of those passes can observe timer-based cancellation
+without collecting every visit first.
 
 The command vocabulary starts with page, save/restore, clip, fill, stroke, text span, image, link,
 and destination operations. New semantic features require explicit commands or diagnostics.
@@ -208,9 +250,9 @@ assertions.
   `shaped-glyph-run` approximation until Core glyph positions are encoded.
 - **Font subsets remap glyph identifiers** → Preserve visual identity through a deterministic
   source-glyph-to-subset-CID map and generate an explicit ToUnicode map.
-- **Nonzero TTC/OTC faceIndex is not verifiable yet** → Refuse every TTC/OTC collection container
-  and record `font-embedding-permission` until Core exposes the selected collection face name and
-  the writer can prove `faceIndex` selection.
+- **TTC/OTC face selection must stay bounded** → Parse the collection header with a face-count cap,
+  apply `fsType` to the selected directory, and require a unique fontkit PostScript name before
+  PDFKit registration. Refuse malformed collections instead of guessing.
 - **Node and browser compression differ** → Scope initial deterministic guarantees to Node and
   disable compression for future cross-runtime byte comparisons.
 - **Large fonts or images exhaust memory** → Reuse Core limits, subset fonts, stream writer output,
@@ -228,8 +270,8 @@ assertions.
 2. Prove page creation, geometry transforms, simple Latin text, fills, strokes, and deterministic
    output through the writer spike.
 3. Prove validated raster images and sanitized external and internal links.
-4. Encode Core HarfBuzz glyph positions in the writer port; add verifiable TTC/OTC collection face
-   selection when Core publishes the selected face name.
+4. Encode Core HarfBuzz glyph positions in the writer port; collection face selection already
+   derives a unique PostScript name from the admitted `faceIndex`.
 5. Expand table decoration, metadata, and destination coverage.
 6. Add a reusable export session, expand fixture coverage, remove the private flag, add a release
    changeset, and publish.

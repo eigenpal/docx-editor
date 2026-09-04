@@ -14,19 +14,29 @@ import type {
   HeaderFooterStoryRecord,
   PageRecord,
   ParagraphFragmentRecord,
-  SemanticLayout,
   StyleSpanRecord,
 } from '@docx-editor.dev/core/layout';
 import {
   baselineShiftPtOf,
   exportSourceRangeOf,
-  forEachSemanticSpan,
-  forEachSemanticStory,
-  forEachStoryParagraphFragment,
+  iterateSemanticFillHostSpans,
+  iterateSemanticPaintHosts,
+  iterateSemanticParagraphOrder,
+  paragraphFragmentsOfBlocks,
   styleForFontSlot,
+  type SemanticFillHostVisit,
   type SemanticRootStoryKind,
 } from '@docx-editor.dev/core/layout';
 import { coreBoxToPdfRect, coreYToPdfY } from './pdf-coordinates.ts';
+import {
+  createPdfFillBacking,
+  paintedFillForParagraph,
+  pdfTextForeground,
+  unreadableWithoutFillDiagnostic,
+  visitBlocksForPublishedFills,
+  type PdfFillBacking,
+} from './pdf-fill-contrast.ts';
+import { visitBlocksForPublishedBorders } from './pdf-paragraph-borders.ts';
 import {
   createFidelityDiagnosticCollector,
   pdfApproximationDiagnostic,
@@ -50,6 +60,11 @@ import {
   pdfTextSpan,
 } from './pdf-paint-types.ts';
 import {
+  applyPdfRevisionPresentation,
+  pdfRevisionPresentationDiagnostics,
+  pdfRevisionPresentationOf,
+} from './pdf-revision-presentation.ts';
+import {
   pdfDisplayText,
   pdfRunStyleApproximations,
   pdfTextStyleFromResolvedRunStyle,
@@ -63,7 +78,6 @@ export interface PdfPagePlanResult {
   readonly pageCount: number;
 }
 
-const TEXT_STORY_KINDS = new Set<PdfFidelityStoryKind>(['body', 'header', 'footer']);
 const ROOT_TEXT_STORY_KINDS = new Set<SemanticRootStoryKind>(['body', 'header', 'footer']);
 const PLANNER_ABORT_BATCH_SIZE = 256;
 const DESTINATION_CARET_WIDTH_PT = 1;
@@ -81,6 +95,21 @@ interface CommandTally {
 function throwIfAborted(signal: AbortSignal | undefined, message: string): void {
   if (!signal?.aborted) return;
   throw new ExportResourceError('aborted', message, { cause: signal.reason });
+}
+
+/**
+ * Yield one timer-phase turn so AbortSignal timeouts can run.
+ *
+ * The declared Node engine (`^20.16.0 || >=22.3.0`) also has `setImmediate`,
+ * but that callback runs in the check phase after timers. A yield there can
+ * finish a span batch before `setTimeout` / `AbortSignal.timeout` abort runs.
+ * `setTimeout(0)` stays on the same queue as those timer aborts and does not
+ * require `setImmediate`.
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, 0);
+  });
 }
 
 function pushBoundedCommand(
@@ -261,51 +290,6 @@ function destinationRect(page: PageRecord, destination: ExportDestinationGeometr
   );
 }
 
-function appendNamedDestinations(
-  layout: ExportSemanticLayout,
-  pageCommands: Map<number, PdfPaintCommand[]>,
-  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
-  tally: CommandTally,
-  signal: AbortSignal | undefined
-): void {
-  const destinations = layout.destinations;
-  if (!destinations) return;
-  for (let index = 0; index < destinations.length; index += 1) {
-    if (index > 0 && index % PLANNER_ABORT_BATCH_SIZE === 0) {
-      throwIfAborted(signal, 'PDF page planning was aborted');
-    }
-    const destination = destinations[index]!;
-    const page = layout.pages[destination.pageIndex];
-    const pageList = pageCommands.get(destination.pageIndex);
-    if (!page || !pageList) {
-      diagnostics.push(
-        pdfUnsupportedDiagnostic({
-          feature: 'internal-destination',
-          pageIndex: destination.pageIndex,
-          recordKind: 'destination',
-          recordId: destination.anchor.name,
-          reason: `Named destination "${destination.anchor.name}" does not resolve to an exported page`,
-        })
-      );
-      continue;
-    }
-    const rect = destinationRect(page, destination);
-    if (!rect) {
-      diagnostics.push(
-        pdfUnsupportedDiagnostic({
-          feature: 'internal-destination',
-          pageIndex: destination.pageIndex,
-          recordKind: 'destination',
-          recordId: destination.anchor.name,
-          reason: `Named destination "${destination.anchor.name}" has no usable caret geometry`,
-        })
-      );
-      continue;
-    }
-    pushBoundedCommand(pageList, pdfDestination(destination.anchor.name, rect), tally);
-  }
-}
-
 function appendSpanLinkCommands(
   layout: ExportSemanticLayout,
   page: PageRecord,
@@ -345,6 +329,7 @@ function appendSpanLinkCommands(
 function appendSpanCommands(
   layout: ExportSemanticLayout,
   page: PageRecord,
+  storyKind: PdfFidelityStoryKind,
   storyOrigin: Readonly<{ readonly x: number; readonly y: number }>,
   lineY: number,
   lineBaseline: number,
@@ -357,7 +342,8 @@ function appendSpanCommands(
   }>,
   commands: PdfPaintCommand[],
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
-  tally: CommandTally
+  tally: CommandTally,
+  backing: PdfFillBacking
 ): void {
   if (!shouldPaintSpan(span)) {
     if (span.equation) {
@@ -403,17 +389,40 @@ function appendSpanCommands(
     lineBaseline,
     baselineShiftPtOf(faceStyle)
   );
+  const presentation = pdfRevisionPresentationOf(span.revisions);
+  let textStyle = pdfTextStyleFromResolvedRunStyle(span.style, span.fontSlot);
+  if (presentation) {
+    textStyle = applyPdfRevisionPresentation(textStyle, presentation);
+  }
+  for (const diagnostic of pdfRevisionPresentationDiagnostics({
+    pageIndex: page.index,
+    paragraphId: span.range.paragraphId,
+    revisions: span.revisions,
+    props: span.props,
+    presentation,
+  })) {
+    diagnostics.push(diagnostic);
+  }
   pushBoundedCommand(
     commands,
-    pdfTextSpan(
-      rect,
-      baseline,
-      pdfDisplayText(span.text, span.style),
-      pdfTextStyleFromResolvedRunStyle(span.style, span.fontSlot)
-    ),
+    pdfTextSpan(rect, baseline, pdfDisplayText(span.text, span.style), textStyle),
     tally
   );
   recordRunStyleApproximations(page, span.range.paragraphId, span.style, diagnostics);
+  const omittedFill = span.style.shading
+    ? `#${span.style.shading}`
+    : span.style.highlight
+      ? `highlight:${span.style.highlight}`
+      : null;
+  const unreadable = unreadableWithoutFillDiagnostic({
+    pageIndex: page.index,
+    paragraphId: span.range.paragraphId,
+    story: storyKind,
+    foreground: pdfTextForeground(textStyle.color),
+    paintedBackground: paintedFillForParagraph(backing, span.range.paragraphId),
+    omittedFill,
+  });
+  if (unreadable) diagnostics.push(unreadable);
 
   appendSpanLinkCommands(layout, page, span, rect, commands, diagnostics, tally);
 }
@@ -455,94 +464,87 @@ function recordDrawingDiagnostics(
   );
 }
 
-function recordNoteAreaDiagnostics(
+function* visitNoteAreaUnsupported(
   page: PageRecord,
+  kind: 'footnotes' | 'endnotes',
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void }
-): void {
-  if (page.footnotes) {
-    diagnostics.push(
-      pdfUnsupportedDiagnostic({
-        feature: 'footnotes',
-        pageIndex: page.index,
-        recordKind: 'noteArea',
-        recordId: page.footnotes.kind,
-        story: 'footnote',
-        reason: 'Footnote areas are not encoded in the PDF paint slice yet',
-      })
-    );
-  }
-  if (page.endnotes) {
-    diagnostics.push(
-      pdfUnsupportedDiagnostic({
-        feature: 'endnotes',
-        pageIndex: page.index,
-        recordKind: 'noteArea',
-        recordId: page.endnotes.kind,
-        story: 'endnote',
-        reason: 'Endnote areas are not encoded in the PDF paint slice yet',
-      })
-    );
-  }
+): Generator<void> {
+  const area = page[kind];
+  if (!area) return;
+  diagnostics.push(
+    pdfUnsupportedDiagnostic({
+      feature: kind,
+      pageIndex: page.index,
+      recordKind: 'noteArea',
+      recordId: area.kind,
+      story: kind === 'footnotes' ? 'footnote' : 'endnote',
+      reason:
+        kind === 'footnotes'
+          ? 'Footnote areas are not encoded in the PDF paint slice yet'
+          : 'Endnote areas are not encoded in the PDF paint slice yet',
+    })
+  );
+  yield;
+  if (area.separator) yield;
+  for (let index = 0; index < area.notes.length; index += 1) yield;
 }
 
-function visitBlocksForUnsupported(
+function* visitBlocksForUnsupported(
   page: PageRecord,
   blocks: readonly BlockFragmentRecord[],
   story: PdfFidelityStoryKind | null,
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void }
-): void {
+): Generator<void> {
   for (const block of blocks) {
     if (block.kind === 'table') {
       recordTableDiagnostics(page, block, story, diagnostics);
+      yield;
       for (const row of block.rows) {
+        if (row.cells.length === 0) {
+          yield;
+          continue;
+        }
         for (const cell of row.cells) {
-          visitBlocksForUnsupported(page, cell.blocks, story, diagnostics);
+          yield;
+          yield* visitBlocksForUnsupported(page, cell.blocks, story, diagnostics);
         }
       }
       continue;
     }
+    yield;
     for (const line of block.lines) {
       if (line.drawings?.length) {
         for (const drawing of line.drawings) {
           recordDrawingDiagnostics(page, 'inlineDrawing', drawing.paragraphId, story, diagnostics);
+          yield;
         }
       }
+      yield;
     }
-    if (block.shading) {
+    if (block.markRevisions && block.markRevisions.length > 0) {
       diagnostics.push(
         pdfUnsupportedDiagnostic({
-          feature: 'paragraph-shading',
+          feature: 'revision-paragraph-mark',
           pageIndex: page.index,
           recordKind: 'paragraphFragment',
           recordId: block.id,
           story,
-          reason: 'Paragraph shading fills are not encoded in the PDF paint slice yet',
+          reason: 'Tracked paragraph marks are not painted in the PDF slice',
         })
       );
-    }
-    if (block.borders?.length || block.bottomBorder) {
-      diagnostics.push(
-        pdfUnsupportedDiagnostic({
-          feature: 'paragraph-border',
-          pageIndex: page.index,
-          recordKind: 'paragraphFragment',
-          recordId: block.id,
-          story,
-          reason: 'Paragraph borders are not encoded in the PDF paint slice yet',
-        })
-      );
+      yield;
     }
   }
 }
 
-function visitHeaderFooterUnsupported(
+function* visitHeaderFooterUnsupported(
   page: PageRecord,
   story: HeaderFooterStoryRecord | undefined,
   storyKind: 'header' | 'footer',
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void }
-): void {
+): Generator<void> {
   if (!story) return;
-  visitBlocksForUnsupported(page, story.fragments, storyKind, diagnostics);
+  yield* visitBlocksForUnsupported(page, story.fragments, storyKind, diagnostics);
   if (story.anchoredDrawings?.length) {
     for (const drawing of story.anchoredDrawings) {
       recordDrawingDiagnostics(
@@ -552,17 +554,19 @@ function visitHeaderFooterUnsupported(
         storyKind,
         diagnostics
       );
+      yield;
     }
   }
 }
 
-function visitPageUnsupported(
+function* visitPageUnsupported(
   page: PageRecord,
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void }
-): void {
-  visitBlocksForUnsupported(page, page.fragments, 'body', diagnostics);
-  visitHeaderFooterUnsupported(page, page.header, 'header', diagnostics);
-  visitHeaderFooterUnsupported(page, page.footer, 'footer', diagnostics);
+): Generator<void> {
+  yield;
+  yield* visitBlocksForUnsupported(page, page.fragments, 'body', diagnostics);
+  yield* visitHeaderFooterUnsupported(page, page.header, 'header', diagnostics);
+  yield* visitHeaderFooterUnsupported(page, page.footer, 'footer', diagnostics);
   if (page.anchoredDrawings?.length) {
     for (const drawing of page.anchoredDrawings) {
       recordDrawingDiagnostics(
@@ -572,6 +576,7 @@ function visitPageUnsupported(
         'body',
         diagnostics
       );
+      yield;
     }
   }
   if (page.columnSeparators?.length) {
@@ -585,8 +590,292 @@ function visitPageUnsupported(
         reason: 'Column separator rules are not encoded in the PDF paint slice yet',
       })
     );
+    yield;
   }
-  recordNoteAreaDiagnostics(page, diagnostics);
+  yield* visitNoteAreaUnsupported(page, 'footnotes', diagnostics);
+  yield* visitNoteAreaUnsupported(page, 'endnotes', diagnostics);
+}
+
+function* planPageDiagnostics(
+  layout: ExportSemanticLayout,
+  pageCommands: Map<number, PdfPaintCommand[]>,
+  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
+  tally: CommandTally
+): Generator<void> {
+  for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
+    const page = layout.pages[pageIndex]!;
+    const pageList: PdfPaintCommand[] = [];
+    pushBoundedCommand(pageList, pdfBeginPage(page.index, page.box.width, page.box.height), tally);
+    pageCommands.set(page.index, pageList);
+    yield* visitPageUnsupported(page, diagnostics);
+  }
+}
+
+function reviewArtifactReason(
+  kind: 'comment' | 'tracked-change',
+  id: string,
+  change: string | undefined,
+  point: boolean
+): string {
+  if (kind === 'comment') {
+    return `Comment ${id} is not painted; PDF has no comment balloon or range highlight`;
+  }
+  const role = change ?? 'tracked-change';
+  if (point) {
+    return `Point review artifact ${id} (${role}) is not painted as a PDF annotation`;
+  }
+  return `Ranged review artifact ${id} (${role}) is not painted as a PDF annotation`;
+}
+
+function* recordReviewArtifactDiagnostics(
+  layout: ExportSemanticLayout,
+  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void }
+): Generator<void> {
+  const artifacts = layout.reviewArtifacts;
+  if (!artifacts || artifacts.length === 0) return;
+  for (const artifact of artifacts) {
+    if (artifact.occurrences.length === 0) {
+      diagnostics.push(
+        pdfUnsupportedDiagnostic({
+          feature: artifact.kind === 'comment' ? 'comment' : 'review-artifact',
+          pageIndex: 0,
+          recordKind: artifact.kind,
+          recordId: artifact.id,
+          reason: reviewArtifactReason(
+            artifact.kind,
+            artifact.id,
+            artifact.kind === 'tracked-change' ? artifact.change : undefined,
+            false
+          ),
+        })
+      );
+      yield;
+      continue;
+    }
+    for (const occurrence of artifact.occurrences) {
+      const boxes = occurrence.geometry?.pageContent ?? [];
+      const point = boxes.length === 0 || boxes.some((box) => box.width === 0 && box.height >= 0);
+      const story = occurrence.story === 'textbox' ? 'textbox' : occurrence.rootStory;
+      diagnostics.push(
+        pdfUnsupportedDiagnostic({
+          feature: artifact.kind === 'comment' ? 'comment' : 'review-artifact',
+          pageIndex: occurrence.pageIndex,
+          recordKind: artifact.kind,
+          recordId: artifact.id,
+          story,
+          reason: reviewArtifactReason(
+            artifact.kind,
+            artifact.id,
+            artifact.kind === 'tracked-change' ? artifact.change : undefined,
+            point
+          ),
+        })
+      );
+      yield;
+    }
+  }
+}
+
+function* appendNamedDestinations(
+  layout: ExportSemanticLayout,
+  pageCommands: Map<number, PdfPaintCommand[]>,
+  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
+  tally: CommandTally
+): Generator<void> {
+  const destinations = layout.destinations;
+  if (!destinations) return;
+  for (let index = 0; index < destinations.length; index += 1) {
+    const destination = destinations[index]!;
+    const page = layout.pages[destination.pageIndex];
+    const pageList = pageCommands.get(destination.pageIndex);
+    if (!page || !pageList) {
+      diagnostics.push(
+        pdfUnsupportedDiagnostic({
+          feature: 'internal-destination',
+          pageIndex: destination.pageIndex,
+          recordKind: 'destination',
+          recordId: destination.anchor.name,
+          reason: `Named destination "${destination.anchor.name}" does not resolve to an exported page`,
+        })
+      );
+      yield;
+      continue;
+    }
+    const rect = destinationRect(page, destination);
+    if (!rect) {
+      diagnostics.push(
+        pdfUnsupportedDiagnostic({
+          feature: 'internal-destination',
+          pageIndex: destination.pageIndex,
+          recordKind: 'destination',
+          recordId: destination.anchor.name,
+          reason: `Named destination "${destination.anchor.name}" has no usable caret geometry`,
+        })
+      );
+      yield;
+      continue;
+    }
+    pushBoundedCommand(pageList, pdfDestination(destination.anchor.name, rect), tally);
+    yield;
+  }
+}
+
+function* appendPaintHostLayer(
+  layout: ExportSemanticLayout,
+  host: SemanticFillHostVisit,
+  paragraphOrder: ReadonlyMap<string, number>,
+  pageCommands: Map<number, PdfPaintCommand[]>,
+  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
+  tally: CommandTally,
+  backing: PdfFillBacking
+): Generator<void> {
+  yield;
+  if (!ROOT_TEXT_STORY_KINDS.has(host.rootStory)) return;
+  const commands = pageCommands.get(host.page.index);
+  if (!commands) return;
+  const storyKind: PdfFidelityStoryKind = host.textboxDepth === 0 ? host.rootStory : 'textbox';
+  yield* visitBlocksForPublishedFills(
+    host.page,
+    host.storyOrigin,
+    host.fragments,
+    storyKind,
+    backing,
+    (absolute) => pageRelativeBox(host.page, absolute),
+    (command) => {
+      pushBoundedCommand(commands, command, tally);
+    },
+    diagnostics
+  );
+  yield* visitBlocksForPublishedBorders(
+    host.page,
+    host.storyOrigin,
+    host.fragments,
+    storyKind,
+    (absolute) => pageRelativeBox(host.page, absolute),
+    (command) => {
+      pushBoundedCommand(commands, command, tally);
+    },
+    diagnostics
+  );
+  for (const visit of iterateSemanticFillHostSpans(host, paragraphOrder)) {
+    if (exportSourceRangeOf(visit.span) === null && visit.span.text.length === 0) {
+      yield;
+      continue;
+    }
+    appendSpanCommands(
+      layout,
+      visit.page,
+      storyKind,
+      visit.storyOrigin,
+      visit.line.box.y,
+      visit.line.baseline,
+      visit.span,
+      visit.absoluteBox,
+      commands,
+      diagnostics,
+      tally,
+      backing
+    );
+    yield;
+  }
+  for (const fragment of paragraphFragmentsOfBlocks(host.fragments, true)) {
+    appendParagraphMarkerCommands(
+      host.page,
+      host.storyOrigin,
+      fragment,
+      commands,
+      diagnostics,
+      tally
+    );
+    yield;
+  }
+}
+
+function* drainBatched(steps: Generator<void>, signal: AbortSignal | undefined): Generator<void> {
+  let visits = 0;
+  for (const _ of steps) {
+    visits += 1;
+    if (visits % PLANNER_ABORT_BATCH_SIZE === 0) {
+      throwIfAborted(signal, 'PDF page planning was aborted');
+      yield;
+    }
+  }
+}
+
+function finishPaintPlan(
+  layout: ExportSemanticLayout,
+  pageCommands: Map<number, PdfPaintCommand[]>,
+  diagnostics: ReturnType<typeof createFidelityDiagnosticCollector>
+): PdfPagePlanResult {
+  const commands: PdfPaintCommand[] = [];
+  for (const page of layout.pages) {
+    const planned = pageCommands.get(page.index);
+    if (planned) appendPaintCommands(commands, planned);
+  }
+  validateCommandCount(commands.length);
+  return Object.freeze({
+    plan: createPdfPaintPlan(commands, pdfMetadataFromLayout(layout)),
+    diagnostics: diagnostics.snapshot(),
+    pageCount: layout.pages.length,
+  });
+}
+
+function* planPdfPaintSteps(
+  layout: ExportSemanticLayout,
+  signal: AbortSignal | undefined
+): Generator<void, PdfPagePlanResult> {
+  throwIfAborted(signal, 'PDF page planning was aborted');
+  validatePageCount(layout.pages.length);
+  const diagnostics = createFidelityDiagnosticCollector();
+  const pageCommands = new Map<number, PdfPaintCommand[]>();
+  const tally: CommandTally = { count: 0 };
+  const backing = createPdfFillBacking();
+
+  yield* drainBatched(planPageDiagnostics(layout, pageCommands, diagnostics, tally), signal);
+
+  yield* drainBatched(recordReviewArtifactDiagnostics(layout, diagnostics), signal);
+  yield* drainBatched(appendNamedDestinations(layout, pageCommands, diagnostics, tally), signal);
+
+  const orderWalk = iterateSemanticParagraphOrder(layout);
+  let orderStep = orderWalk.next();
+  while (!orderStep.done) {
+    throwIfAborted(signal, 'PDF page planning was aborted');
+    yield;
+    orderStep = orderWalk.next();
+  }
+  const paragraphOrder = orderStep.value;
+
+  let layerVisits = 0;
+  for (const host of iterateSemanticPaintHosts(layout)) {
+    for (const _ of appendPaintHostLayer(
+      layout,
+      host,
+      paragraphOrder,
+      pageCommands,
+      diagnostics,
+      tally,
+      backing
+    )) {
+      layerVisits += 1;
+      if (layerVisits % PLANNER_ABORT_BATCH_SIZE === 0) {
+        throwIfAborted(signal, 'PDF page planning was aborted');
+        yield;
+      }
+    }
+  }
+
+  return finishPaintPlan(layout, pageCommands, diagnostics);
+}
+
+function consumePlanSync(
+  layout: ExportSemanticLayout,
+  signal: AbortSignal | undefined
+): PdfPagePlanResult {
+  const steps = planPdfPaintSteps(layout, signal);
+  while (true) {
+    const step = steps.next();
+    if (step.done) return step.value;
+  }
 }
 
 /** Plans immutable PDF paint commands from one export layout snapshot. @public */
@@ -594,80 +883,27 @@ export function planPdfPaintFromLayout(
   layout: ExportSemanticLayout,
   options: PdfPagePlanOptions = {}
 ): PdfPagePlanResult {
-  throwIfAborted(options.signal, 'PDF page planning was aborted');
-  validatePageCount(layout.pages.length);
-  const commands: PdfPaintCommand[] = [];
-  const diagnostics = createFidelityDiagnosticCollector();
-  const pageCommands = new Map<number, PdfPaintCommand[]>();
-  const tally: CommandTally = { count: 0 };
+  return consumePlanSync(layout, options.signal);
+}
 
-  for (const page of layout.pages) {
+/**
+ * Async planner used by `exportPdf`. Yields between bounded batches so timer-based
+ * AbortSignal aborts can run during planning.
+ *
+ * @public
+ */
+export async function planPdfPaintFromLayoutAsync(
+  layout: ExportSemanticLayout,
+  options: PdfPagePlanOptions = {}
+): Promise<PdfPagePlanResult> {
+  throwIfAborted(options.signal, 'PDF page planning was aborted');
+  await yieldToEventLoop();
+  throwIfAborted(options.signal, 'PDF page planning was aborted');
+  const steps = planPdfPaintSteps(layout, options.signal);
+  while (true) {
+    const step = steps.next();
+    if (step.done) return step.value;
+    await yieldToEventLoop();
     throwIfAborted(options.signal, 'PDF page planning was aborted');
-    const pageList: PdfPaintCommand[] = [];
-    pushBoundedCommand(pageList, pdfBeginPage(page.index, page.box.width, page.box.height), tally);
-    pageCommands.set(page.index, pageList);
-    visitPageUnsupported(page, diagnostics);
   }
-
-  appendNamedDestinations(layout, pageCommands, diagnostics, tally, options.signal);
-  throwIfAborted(options.signal, 'PDF page planning was aborted');
-
-  let spanVisits = 0;
-  forEachSemanticSpan(layout as SemanticLayout, (visit) => {
-    spanVisits += 1;
-    if (spanVisits % PLANNER_ABORT_BATCH_SIZE === 0) {
-      throwIfAborted(options.signal, 'PDF page planning was aborted');
-    }
-    const storyKind = visit.rootStory as PdfFidelityStoryKind;
-    if (!TEXT_STORY_KINDS.has(storyKind)) return;
-    if (exportSourceRangeOf(visit.span) === null && visit.span.text.length === 0) return;
-
-    const pageCommandsForVisit = pageCommands.get(visit.page.index);
-    if (!pageCommandsForVisit) return;
-
-    appendSpanCommands(
-      layout,
-      visit.page,
-      visit.storyOrigin,
-      visit.line.box.y,
-      visit.line.baseline,
-      visit.span,
-      visit.absoluteBox,
-      pageCommandsForVisit,
-      diagnostics,
-      tally
-    );
-  });
-
-  forEachSemanticStory(layout as SemanticLayout, (storyVisit) => {
-    if (!ROOT_TEXT_STORY_KINDS.has(storyVisit.story)) return;
-    const pageCommandsForStory = pageCommands.get(storyVisit.page.index);
-    if (!pageCommandsForStory) return;
-    forEachStoryParagraphFragment(
-      storyVisit.host,
-      (fragment, context) => {
-        appendParagraphMarkerCommands(
-          storyVisit.page,
-          context.storyOrigin,
-          fragment,
-          pageCommandsForStory,
-          diagnostics,
-          tally
-        );
-      },
-      storyVisit.origin
-    );
-  });
-
-  for (const page of layout.pages) {
-    const planned = pageCommands.get(page.index);
-    if (planned) appendPaintCommands(commands, planned);
-  }
-  validateCommandCount(commands.length);
-
-  return Object.freeze({
-    plan: createPdfPaintPlan(commands, pdfMetadataFromLayout(layout)),
-    diagnostics: diagnostics.snapshot(),
-    pageCount: layout.pages.length,
-  });
 }

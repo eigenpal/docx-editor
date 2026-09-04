@@ -10,5 +10,7 @@ export default defineConfig({
   treeshake: true,
   minify: true,
   metafile: true,
-  external: [/^@docx-editor\.dev\/core(?:\/|$)/, '@docx-editor.dev/fonts', 'pdfkit'],
+  // Keep pdfkit and fontkit out of the bundle so notices stay empty of their
+  // MIT text and consumers resolve one copy through the package manager.
+  external: [/^@docx-editor\.dev\/core(?:\/|$)/, '@docx-editor.dev/fonts', 'pdfkit', 'fontkit'],
 });

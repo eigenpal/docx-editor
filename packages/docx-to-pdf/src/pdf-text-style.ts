@@ -101,6 +101,30 @@ export function pdfRunStyleApproximations(
       })
     );
   }
+  if (style.underline && style.underline.variant !== 'single') {
+    approximations.push(
+      Object.freeze({
+        feature: 'underline-variant',
+        reason: `Underline variant "${style.underline.variant}" is not encoded; PDF paints a single solid underline`,
+      })
+    );
+  }
+  if (style.underline?.color) {
+    approximations.push(
+      Object.freeze({
+        feature: 'underline-color',
+        reason: `Underline colour ${style.underline.color} is not encoded; PDF paints the underline in the text colour`,
+      })
+    );
+  }
+  if (style.kerningMinPt !== 0) {
+    approximations.push(
+      Object.freeze({
+        feature: 'kerning',
+        reason: `Kerning threshold kerningMinPt=${style.kerningMinPt} is not encoded in the PDF text command`,
+      })
+    );
+  }
   return approximations;
 }
 

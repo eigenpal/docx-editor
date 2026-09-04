@@ -90,8 +90,13 @@ describe('engine dependency integrity', () => {
     expect(coreManifest.peerDependencies?.['pdf-lib']).toBeUndefined();
   });
 
-  test('declares pdfkit as a runtime dependency and keeps it out of the public barrel', () => {
+  test('declares pdfkit and fontkit as runtime dependencies and keeps them out of the public barrel', () => {
     expect(manifest.dependencies?.pdfkit).toMatch(/^\^0\.20\./);
+    expect(manifest.dependencies?.fontkit).toMatch(/^\^2\./);
+    const tsupSource = readFileSync(join(packageRoot, 'tsup.config.ts'), 'utf8');
+    expect(tsupSource).toMatch(/['"]pdfkit['"]/);
+    expect(tsupSource).toMatch(/['"]fontkit['"]/);
+    expect(tsupSource).toContain('external:');
     const indexSource = readFileSync(join(packageRoot, 'src', 'index.ts'), 'utf8');
     expect(indexSource).toContain('HARD_MAX_FIDELITY_DIAGNOSTICS');
     expect(indexSource).toContain('HARD_MAX_OUTPUT_BYTES');
@@ -103,6 +108,7 @@ describe('engine dependency integrity', () => {
     expect(indexSource).not.toContain('planPdfPaintFromLayout');
     expect(indexSource).not.toContain('writePdfPaintPlanToBytes');
     expect(indexSource).not.toContain('PdfKitPaintWriter');
+    expect(indexSource).not.toContain('fontkit');
   });
 });
 

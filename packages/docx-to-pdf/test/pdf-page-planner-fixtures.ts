@@ -69,11 +69,17 @@ export function paragraph(
       baselineOffset: number;
     }[];
     lineMode?: 'default' | 'empty' | 'none';
+    revisions?: StyleSpanRecord['revisions'];
+    shading?: string;
+    shadingBox?: { x: number; y: number; width: number; height: number };
+    borders?: ParagraphFragmentRecord['borders'];
+    bottomBorder?: ParagraphFragmentRecord['bottomBorder'];
   } = {}
 ): ParagraphFragmentRecord {
   const styleSpan = Object.freeze({
     ...span(id, text, spanBox, options.style, options.link),
     ...(options.equation ? { equation: Object.freeze(options.equation) } : {}),
+    ...(options.revisions ? { revisions: Object.freeze([...options.revisions]) } : {}),
   }) as StyleSpanRecord;
   const lineMode = options.lineMode ?? 'default';
   const lines =
@@ -107,6 +113,10 @@ export function paragraph(
     lines,
     box: Object.freeze(options.fragmentBox ?? lineBox),
     ...(options.marker ? { marker: options.marker } : {}),
+    ...(options.shading ? { shading: options.shading } : {}),
+    ...(options.shadingBox ? { shadingBox: Object.freeze(options.shadingBox) } : {}),
+    ...(options.borders ? { borders: Object.freeze([...options.borders]) } : {}),
+    ...(options.bottomBorder ? { bottomBorder: Object.freeze(options.bottomBorder) } : {}),
   }) as ParagraphFragmentRecord;
 }
 
@@ -120,6 +130,8 @@ export function page(
     footer?: HeaderFooterStoryRecord;
     contentBox?: { x: number; y: number; width: number; height: number };
     footnotes?: PageRecord['footnotes'];
+    endnotes?: PageRecord['endnotes'];
+    anchoredDrawings?: PageRecord['anchoredDrawings'];
   } = {}
 ): PageRecord {
   const contentBox = Object.freeze(
@@ -134,17 +146,23 @@ export function page(
     ...(options.header ? { header: options.header } : {}),
     ...(options.footer ? { footer: options.footer } : {}),
     ...(options.footnotes ? { footnotes: options.footnotes } : {}),
+    ...(options.endnotes ? { endnotes: options.endnotes } : {}),
+    ...(options.anchoredDrawings
+      ? { anchoredDrawings: Object.freeze(options.anchoredDrawings) }
+      : {}),
   }) as PageRecord;
 }
 
 export function layout(
   pages: readonly PageRecord[],
-  extra: Partial<Pick<ExportSemanticLayout, 'documentMetadata' | 'destinations'>> = {}
+  extra: Partial<
+    Pick<ExportSemanticLayout, 'documentMetadata' | 'destinations' | 'reviewArtifacts'>
+  > = {}
 ): ExportSemanticLayout {
   return Object.freeze({
     revision: 1,
     displayMode: 'all-markup',
-    reviewArtifacts: Object.freeze([]),
+    reviewArtifacts: Object.freeze([...(extra.reviewArtifacts ?? [])]),
     pages: Object.freeze([...pages]),
     ...(extra.documentMetadata ? { documentMetadata: extra.documentMetadata } : {}),
     ...(extra.destinations ? { destinations: extra.destinations } : {}),

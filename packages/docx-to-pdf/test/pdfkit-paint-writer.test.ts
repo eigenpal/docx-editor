@@ -57,6 +57,9 @@ const sampleStyle = resolvedStyle('Arial');
 const admittedFontBytes = new Uint8Array(
   readFileSync(fileURLToPath(new URL(FONT_ASSET_MANIFEST[0]!.file, FONT_ASSET_ROOT)))
 );
+const carlitoFontBytes = new Uint8Array(
+  readFileSync(fileURLToPath(new URL('Carlito-Regular.ttf', FONT_ASSET_ROOT)))
+);
 const unicodeFontBytes = new Uint8Array(
   readFileSync(fileURLToPath(import.meta.resolve('dejavu-fonts-ttf/ttf/DejaVuSans.ttf')))
 );
@@ -69,6 +72,16 @@ const admittedFont = Object.freeze({
   hash: 'sha256:test',
   faceIndex: 0,
   bytes: admittedFontBytes,
+});
+const carlitoFont = Object.freeze({
+  ...admittedFont,
+  id: 'test:carlito-font',
+  identity: 'sha256:carlito#0',
+  family: 'Carlito',
+  request: Object.freeze({ family: 'Carlito', weight: 400 as const, style: 'normal' as const }),
+  byteLength: carlitoFontBytes.byteLength,
+  hash: 'sha256:carlito',
+  bytes: carlitoFontBytes,
 });
 const unicodeFont = Object.freeze({
   ...admittedFont,
@@ -220,7 +233,8 @@ describe('PdfKit paint writer', () => {
         feature: 'standard-font-encoding',
         pageIndex: 0,
         recordId: 'Arial',
-        reason: 'Text cannot be encoded with PDF built-in font WinAnsiEncoding for "Arial"',
+        reason:
+          'Text cannot be encoded with PDF built-in font Helvetica (WinAnsiEncoding) for requested family "Arial"',
       })
     );
     expect(result.diagnostics).not.toContainEqual(
@@ -252,7 +266,7 @@ describe('PdfKit paint writer', () => {
     const result = await writePdfPaintPlanToBytes(
       createPdfPaintPlan([
         pdfBeginPage(0, 612, 792),
-        pdfTextSpan({ x: 72, y: 680, width: 100, height: 12 }, 688, 'Привет 世界', style),
+        pdfTextSpan({ x: 72, y: 680, width: 100, height: 12 }, 688, 'Zażółć', style),
       ]),
       { admittedFonts: [admittedFont] }
     );
@@ -266,9 +280,22 @@ describe('PdfKit paint writer', () => {
     ]);
   });
 
-  test('refuses OS/2 no-embedding and no-subsetting faces before registration', async () => {
+  test('refuses OS/2 no-embedding, no-subsetting, and bitmap-only faces before registration', async () => {
     const offset = os2FsTypeOffset(admittedFontBytes);
-    for (const fsType of [0x0002, 0x0100]) {
+    const cases = [
+      { fsType: 0x0002, reason: 'The OS/2 fsType forbids font embedding' },
+      {
+        fsType: 0x0100,
+        reason:
+          'The OS/2 fsType forbids subsetting, and PDFKit has no safe full-font embedding mode',
+      },
+      {
+        fsType: 0x0200,
+        reason:
+          'The OS/2 fsType permits bitmap embedding only, and this writer embeds outline data',
+      },
+    ] as const;
+    for (const { fsType, reason } of cases) {
       const bytes = admittedFontBytes.slice();
       bytes[offset + 8] = fsType >> 8;
       bytes[offset + 9] = fsType & 0xff;
@@ -287,9 +314,271 @@ describe('PdfKit paint writer', () => {
 
       expect(pdfLatin1(result.bytes)).not.toContain('/FontFile2');
       expect(result.diagnostics).toContainEqual(
-        expect.objectContaining({ kind: 'unsupported', feature: 'font-embedding-permission' })
+        expect.objectContaining({
+          kind: 'unsupported',
+          feature: 'font-embedding-permission',
+          reason,
+        })
       );
     }
+  });
+
+  test('matches admitted families case-insensitively after trim without stripping separators', async () => {
+    const hyphen = Object.freeze({
+      ...carlitoFont,
+      identity: 'sha256:hyphen#0',
+      family: 'A-B',
+      request: Object.freeze({ family: 'A-B', weight: 400 as const, style: 'normal' as const }),
+    });
+    const compact = Object.freeze({
+      ...unicodeFont,
+      identity: 'sha256:compact#0',
+      family: 'AB',
+      request: Object.freeze({ family: 'AB', weight: 400 as const, style: 'normal' as const }),
+    });
+    const firstOrigin = Object.freeze({
+      ...carlitoFont,
+      identity: 'sha256:first-origin#0',
+      family: 'Test Font',
+      request: Object.freeze({
+        family: 'Test Font',
+        weight: 400 as const,
+        style: 'normal' as const,
+      }),
+    });
+    const secondOrigin = Object.freeze({
+      ...unicodeFont,
+      identity: 'sha256:second-origin#0',
+      family: 'test font',
+      request: Object.freeze({
+        family: 'test font',
+        weight: 400 as const,
+        style: 'normal' as const,
+      }),
+    });
+    const compactMatch = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 680, width: 40, height: 12 }, 688, '😀', resolvedStyle('AB')),
+      ]),
+      { admittedFonts: [hyphen, compact] }
+    );
+    const hyphenMatch = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 680, width: 40, height: 12 }, 688, '😀', resolvedStyle('A-B')),
+      ]),
+      { admittedFonts: [hyphen, compact] }
+    );
+    const originOrder = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan(
+          { x: 72, y: 680, width: 40, height: 12 },
+          688,
+          'Hello',
+          resolvedStyle('  TEST FONT  ')
+        ),
+      ]),
+      { admittedFonts: [firstOrigin, secondOrigin] }
+    );
+
+    expect(await extractPdfText(compactMatch.bytes)).toContain('😀');
+    expect(compactMatch.diagnostics).toContainEqual(
+      expect.objectContaining({ feature: 'shaped-glyph-run', recordId: compact.identity })
+    );
+    expect(await extractPdfText(hyphenMatch.bytes)).toBe('');
+    expect(hyphenMatch.diagnostics).toContainEqual(
+      expect.objectContaining({
+        kind: 'unsupported',
+        feature: 'font-cmap-coverage',
+        recordId: hyphen.identity,
+        reason: expect.stringContaining('U+1F600'),
+      })
+    );
+    expect(originOrder.diagnostics).toContainEqual(
+      expect.objectContaining({ feature: 'shaped-glyph-run', recordId: firstOrigin.identity })
+    );
+    expect(originOrder.diagnostics).not.toContainEqual(
+      expect.objectContaining({ recordId: secondOrigin.identity })
+    );
+  });
+
+  test('omits uncovered Arabic, Indic, CJK, emoji, and combining marks instead of painting .notdef', async () => {
+    const cases = [
+      { name: 'Arabic', text: 'مرحبا', scalar: 'U+0645' },
+      { name: 'Indic', text: 'नमस्ते', scalar: 'U+0928' },
+      { name: 'CJK', text: '你好', scalar: 'U+4F60' },
+      { name: 'emoji', text: 'A 😀 B', scalar: 'U+1F600' },
+      { name: 'combining mark', text: 'e\u0301 cafe\u0301', scalar: 'U+0301' },
+    ] as const;
+    for (const { text, scalar } of cases) {
+      const result = await writePdfPaintPlanToBytes(
+        createPdfPaintPlan([
+          pdfBeginPage(0, 612, 792),
+          pdfTextSpan(
+            { x: 72, y: 680, width: 200, height: 12 },
+            688,
+            text,
+            resolvedStyle('Carlito')
+          ),
+        ]),
+        { admittedFonts: [carlitoFont] }
+      );
+
+      expect(pdfLatin1(result.bytes)).not.toContain('/FontFile2');
+      expect(await extractPdfText(result.bytes)).toBe('');
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({
+          kind: 'unsupported',
+          feature: 'font-cmap-coverage',
+          recordId: carlitoFont.identity,
+          reason: expect.stringContaining(scalar),
+        })
+      );
+      expect(result.diagnostics).not.toContainEqual(
+        expect.objectContaining({ feature: 'shaped-glyph-run' })
+      );
+    }
+  });
+
+  test('does not NFC-mask combining marks that the admitted cmap lacks', async () => {
+    const composed = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 680, width: 40, height: 12 }, 688, 'é', resolvedStyle('Carlito')),
+      ]),
+      { admittedFonts: [carlitoFont] }
+    );
+    const decomposed = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan(
+          { x: 72, y: 680, width: 40, height: 12 },
+          688,
+          'e\u0301',
+          resolvedStyle('Carlito')
+        ),
+      ]),
+      { admittedFonts: [carlitoFont] }
+    );
+
+    expect(await extractPdfText(composed.bytes)).toContain('é');
+    expect(composed.diagnostics).not.toContainEqual(
+      expect.objectContaining({ feature: 'font-cmap-coverage' })
+    );
+    expect(await extractPdfText(decomposed.bytes)).toBe('');
+    expect(decomposed.diagnostics).toContainEqual(
+      expect.objectContaining({
+        kind: 'unsupported',
+        feature: 'font-cmap-coverage',
+        reason: expect.stringContaining('U+0301'),
+      })
+    );
+  });
+
+  test('does not reject variation-selector or ZWJ controls when visible scalars are covered', async () => {
+    const variation = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan(
+          { x: 72, y: 680, width: 40, height: 12 },
+          688,
+          'A\uFE0F',
+          resolvedStyle('Test Font')
+        ),
+      ]),
+      { admittedFonts: [admittedFont] }
+    );
+    const zwj = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan(
+          { x: 72, y: 680, width: 40, height: 12 },
+          688,
+          'A\u200DB',
+          resolvedStyle('Test Font')
+        ),
+      ]),
+      { admittedFonts: [admittedFont] }
+    );
+    const uncoveredWithSelector = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan(
+          { x: 72, y: 680, width: 40, height: 12 },
+          688,
+          '😀\uFE0F',
+          resolvedStyle('Carlito')
+        ),
+      ]),
+      { admittedFonts: [carlitoFont] }
+    );
+
+    expect(await extractPdfText(variation.bytes)).toContain('A');
+    expect(variation.diagnostics).not.toContainEqual(
+      expect.objectContaining({ feature: 'font-cmap-coverage' })
+    );
+    const zwjText = await extractPdfText(zwj.bytes);
+    expect(zwjText).toContain('A');
+    expect(zwjText).toContain('B');
+    expect(zwj.diagnostics).not.toContainEqual(
+      expect.objectContaining({ feature: 'font-cmap-coverage' })
+    );
+    expect(await extractPdfText(uncoveredWithSelector.bytes)).toBe('');
+    expect(uncoveredWithSelector.diagnostics).toContainEqual(
+      expect.objectContaining({
+        kind: 'unsupported',
+        feature: 'font-cmap-coverage',
+        reason: expect.stringContaining('U+1F600'),
+      })
+    );
+    expect(uncoveredWithSelector.diagnostics).not.toContainEqual(
+      expect.objectContaining({ reason: expect.stringContaining('U+FE0F') })
+    );
+  });
+
+  test('names the selected built-in font and requested family in encoding diagnostics', async () => {
+    const times = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan(
+          { x: 72, y: 680, width: 80, height: 12 },
+          688,
+          'Привет',
+          resolvedStyle('Times New Roman')
+        ),
+      ])
+    );
+    const courier = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 680, width: 80, height: 12 }, 688, '你好', {
+          ...resolvedStyle('Courier New'),
+          fontWeight: 'bold',
+          italic: true,
+        }),
+      ])
+    );
+
+    expect(times.diagnostics).toContainEqual(
+      expect.objectContaining({
+        kind: 'unsupported',
+        feature: 'standard-font-encoding',
+        recordId: 'Times New Roman',
+        reason:
+          'Text cannot be encoded with PDF built-in font Times-Roman (WinAnsiEncoding) for requested family "Times New Roman"',
+      })
+    );
+    expect(courier.diagnostics).toContainEqual(
+      expect.objectContaining({
+        kind: 'unsupported',
+        feature: 'standard-font-encoding',
+        recordId: 'Courier New',
+        reason:
+          'Text cannot be encoded with PDF built-in font Courier-BoldOblique (WinAnsiEncoding) for requested family "Courier New"',
+      })
+    );
   });
 
   test('keeps aliases for one admitted resource embedded and registered once', async () => {
@@ -323,70 +612,6 @@ describe('PdfKit paint writer', () => {
     expect(pdfLatin1(result.bytes).match(/\/FontFile2/g) ?? []).toHaveLength(1);
     expect(result.diagnostics).not.toContainEqual(
       expect.objectContaining({ feature: 'standard-font-substitution', recordId: 'Alias Font' })
-    );
-  });
-
-  test('refuses a nonzero collection faceIndex without selecting a face by guesswork', async () => {
-    const collection = new Uint8Array(admittedFontBytes.byteLength + 16);
-    collection.set([0x74, 0x74, 0x63, 0x66, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 16]);
-    collection.set(admittedFontBytes, 16);
-    const result = await writePdfPaintPlanToBytes(
-      createPdfPaintPlan([
-        pdfBeginPage(0, 612, 792),
-        pdfTextSpan(
-          { x: 72, y: 680, width: 100, height: 12 },
-          688,
-          'Face',
-          resolvedStyle('Test Font')
-        ),
-      ]),
-      {
-        admittedFonts: [
-          { ...admittedFont, bytes: collection, faceIndex: 1, identity: 'sha256:test#1' },
-        ],
-      }
-    );
-
-    expect(pdfLatin1(result.bytes)).not.toContain('/FontFile2');
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        feature: 'font-embedding-permission',
-        reason:
-          'PDFKit exposes a collection family selector, but Core does not expose the selected face name needed to prove faceIndex selection',
-      })
-    );
-  });
-
-  test('refuses a faceIndex-zero TTC collection without parsing its header as sfnt', async () => {
-    const collection = new Uint8Array(admittedFontBytes.byteLength + 16);
-    collection.set([0x74, 0x74, 0x63, 0x66, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 16]);
-    collection.set(admittedFontBytes, 16);
-    const result = await writePdfPaintPlanToBytes(
-      createPdfPaintPlan([
-        pdfBeginPage(0, 612, 792),
-        pdfTextSpan(
-          { x: 72, y: 680, width: 100, height: 12 },
-          688,
-          'Face',
-          resolvedStyle('Test Font')
-        ),
-      ]),
-      {
-        admittedFonts: [{ ...admittedFont, bytes: collection, faceIndex: 0 }],
-      }
-    );
-
-    expect(pdfLatin1(result.bytes)).not.toContain('/FontFile2');
-    expect(result.diagnostics).toContainEqual(
-      expect.objectContaining({
-        kind: 'unsupported',
-        feature: 'font-embedding-permission',
-        reason:
-          'PDFKit exposes a collection family selector, but Core does not expose the selected face name needed to prove faceIndex selection',
-      })
-    );
-    expect(result.diagnostics).not.toContainEqual(
-      expect.objectContaining({ reason: expect.stringContaining('OS/2 fsType forbids') })
     );
   });
 

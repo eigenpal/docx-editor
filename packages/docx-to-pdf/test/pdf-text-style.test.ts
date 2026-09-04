@@ -59,6 +59,8 @@ describe('pdfRunStyleApproximations', () => {
         horizontalScalePercent: 80,
         highlight: 'yellow',
         shading: 'AABBCC',
+        underline: Object.freeze({ variant: 'wave', color: 'FF0000' }),
+        kerningMinPt: 11,
       })
     ).map((entry) => entry.feature);
     expect(features).toEqual([
@@ -67,7 +69,18 @@ describe('pdfRunStyleApproximations', () => {
       'horizontal-scale',
       'highlight',
       'shading',
+      'underline-variant',
+      'underline-color',
+      'kerning',
     ]);
+  });
+
+  test('does not approximate a single underline that follows the text colour', () => {
+    expect(
+      pdfRunStyleApproximations(
+        style({ underline: Object.freeze({ variant: 'single', color: null }) })
+      )
+    ).toEqual([]);
   });
 
   test('omits small-caps when caps already supplies display casing', () => {

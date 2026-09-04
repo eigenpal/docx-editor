@@ -10,7 +10,7 @@ import {
   resolveStoryListItems,
   type ResolvedListItem,
 } from '../list-resolve.ts';
-import { paragraphFragmentsOf } from '../semantic-records.ts';
+import { paragraphFragmentsOf, type TextMeasurer } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -185,5 +185,50 @@ describe('a marker wider than its hanging slot', () => {
     const fragment = paragraphFragmentsOf(layout.pages[0]!)[0]!;
     // 1200tw = 60pt, the first stop past the 54pt marker end.
     expect(fragment.lines[0]!.spans[0]!.box.x).toBe(60);
+  });
+
+  test('a suffix tab at the cell edge falls back to the default interval', () => {
+    const { item } = itemOf(listParagraph('Cell text', '1'), flat('tab'));
+    const tabStops = {
+      stops: [{ positionPt: 100, alignment: 'right' as const }],
+      defaultIntervalPt: 36,
+    };
+    // The 100pt style stop leaves no text room in a 100pt cell. The default 36pt stop does.
+    expect(listFirstLineOffset(item, measurer, tabStops, 100)).toBe(36);
+  });
+
+  test('a valid near-edge stop is independent of different marker and text faces', () => {
+    const fontAwareMeasurer: TextMeasurer = {
+      measure: (text, style) =>
+        text.length *
+        (style.fontFamily === 'Marker Face' ? 4 : style.fontFamily === 'Text Face' ? 20 : 6),
+      lineMetrics: () => ({ height: 14, baseline: 11 }),
+    };
+    const numberingXml = `
+      <w:abstractNum w:abstractNumId="1">
+        <w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/>
+          <w:lvlText w:val="(%1)"/><w:lvlJc w:val="left"/>
+          <w:pPr><w:ind w:left="0" w:hanging="0"/></w:pPr>
+          <w:rPr><w:rFonts w:ascii="Marker Face"/></w:rPr>
+        </w:lvl>
+      </w:abstractNum>
+      <w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num>
+    `;
+    const part = document(
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>' +
+        '<w:tabs><w:tab w:val="right" w:pos="1900"/></w:tabs></w:pPr>' +
+        '<w:r><w:rPr><w:rFonts w:ascii="Text Face"/></w:rPr><w:t>AB</w:t></w:r></w:p>'
+    );
+    const layout = layoutSemanticDocument(part, 1, {
+      measurer: fontAwareMeasurer,
+      numberingIndex: numbering(numberingXml),
+      geometry: { width: 140, height: 200, margin: { top: 20, right: 20, bottom: 20, left: 20 } },
+    });
+    const fragment = paragraphFragmentsOf(layout.pages[0]!)[0]!;
+
+    expect(fragment.marker?.style.fontFamily).toBe('Marker Face');
+    expect(fragment.lines[0]!.spans[0]!.style.fontFamily).toBe('Text Face');
+    // The 95pt stop is inside the 100pt text box. Text metrics do not invalidate it.
+    expect(fragment.lines[0]!.spans[0]!.box.x).toBe(95);
   });
 });

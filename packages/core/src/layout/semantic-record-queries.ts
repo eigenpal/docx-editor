@@ -242,26 +242,25 @@ void TRAVERSED_PAGE_STORY_FIELDS;
 void NOTE_AREA_FIELD_ROLES;
 void TRAVERSED_NOTE_AREA_STORY_FIELDS;
 
-function forEachNoteAreaStory(
+function* iterateNoteAreaStories(
   page: PageRecord,
   area: NoteAreaRecord,
-  storyKind: 'footnote' | 'endnote',
-  visit: (story: SemanticStoryVisit) => void
-): void {
+  storyKind: 'footnote' | 'endnote'
+): Generator<SemanticStoryVisit> {
   const noteAreaKind =
     area.kind ?? (storyKind === 'footnote' ? ('footnotes' as const) : ('endnotes' as const));
   for (const field of NOTE_AREA_STORY_FIELDS) {
     switch (field) {
       case 'separator':
         if (area.separator) {
-          visit({
+          yield {
             page,
             story: 'note-separator',
             host: area.separator,
             ...storyGeometry(area.separator.box),
             noteScopeId: null,
             noteAreaKind,
-          });
+          };
         }
         break;
       case 'notes':
@@ -271,24 +270,24 @@ function forEachNoteAreaStory(
           // is absent or inconsistent.
           switch (storyKind) {
             case 'footnote':
-              visit({
+              yield {
                 page,
                 story: 'footnote',
                 host: note,
                 ...storyGeometry(note.box),
                 noteScopeId: note.scopeId,
                 noteAreaKind,
-              });
+              };
               break;
             case 'endnote':
-              visit({
+              yield {
                 page,
                 story: 'endnote',
                 host: note,
                 ...storyGeometry(note.box),
                 noteScopeId: note.scopeId,
                 noteAreaKind,
-              });
+              };
               break;
             default:
               storyKind satisfies never;
@@ -301,55 +300,52 @@ function forEachNoteAreaStory(
   }
 }
 
-/** Visit all root stories on one page through the single exhaustive story authority. @internal */
-export function forEachPageStory(
-  page: PageRecord,
-  visit: (story: SemanticStoryVisit) => void
-): void {
+/** Yield all root stories on one page through the single exhaustive story authority. @internal */
+export function* iteratePageStories(page: PageRecord): Generator<SemanticStoryVisit> {
   for (const field of PAGE_STORY_FIELDS) {
     switch (field) {
       case 'fragments':
-        visit({
+        yield {
           page,
           story: 'body',
           host: page,
           ...storyGeometry(page.contentBox),
           noteScopeId: null,
           noteAreaKind: null,
-        });
+        };
         break;
       case 'anchoredDrawings':
         // Anchors are body-story content already reached through the page host above.
         break;
       case 'header':
         if (page.header) {
-          visit({
+          yield {
             page,
             story: 'header',
             host: page.header,
             ...storyGeometry(page.header.box),
             noteScopeId: null,
             noteAreaKind: null,
-          });
+          };
         }
         break;
       case 'footer':
         if (page.footer) {
-          visit({
+          yield {
             page,
             story: 'footer',
             host: page.footer,
             ...storyGeometry(page.footer.box),
             noteScopeId: null,
             noteAreaKind: null,
-          });
+          };
         }
         break;
       case 'footnotes':
-        if (page.footnotes) forEachNoteAreaStory(page, page.footnotes, 'footnote', visit);
+        if (page.footnotes) yield* iterateNoteAreaStories(page, page.footnotes, 'footnote');
         break;
       case 'endnotes':
-        if (page.endnotes) forEachNoteAreaStory(page, page.endnotes, 'endnote', visit);
+        if (page.endnotes) yield* iterateNoteAreaStories(page, page.endnotes, 'endnote');
         break;
       default:
         field satisfies never;
@@ -357,12 +353,25 @@ export function forEachPageStory(
   }
 }
 
+/** Visit all root stories on one page through the single exhaustive story authority. @internal */
+export function forEachPageStory(
+  page: PageRecord,
+  visit: (story: SemanticStoryVisit) => void
+): void {
+  for (const story of iteratePageStories(page)) visit(story);
+}
+
+/** Yield every root story in a semantic layout, preserving page/story order. @internal */
+export function* iterateSemanticStories(layout: SemanticLayout): Generator<SemanticStoryVisit> {
+  for (const page of layout.pages) yield* iteratePageStories(page);
+}
+
 /** Visit every root story in a semantic layout, preserving page/story order. @public */
 export function forEachSemanticStory(
   layout: SemanticLayout,
   visit: (story: SemanticStoryVisit) => void
 ): void {
-  for (const page of layout.pages) forEachPageStory(page, visit);
+  for (const story of iterateSemanticStories(layout)) visit(story);
 }
 
 /** Location of one paragraph fragment within a recursively painted story graph. @public */
@@ -392,8 +401,9 @@ export interface StoryDrawingContext extends StoryParagraphFragmentContext {
  * records deeper than the ceiling cannot be built, so the bound is defensive, not policy.
  * Layout builds these records and a cycle should be impossible — which is the reason to
  * bound the walk rather than to trust it, since the cost of the bound is nothing.
+ * @public
  */
-const MAX_STORY_DRAWING_WALK_DEPTH = 16;
+export const MAX_STORY_DRAWING_WALK_DEPTH = 16;
 const ZERO_STORY_ORIGIN = Object.freeze({ x: 0, y: 0 });
 
 function textboxStoryOrigin(
@@ -571,6 +581,222 @@ export function forEachSemanticDrawing(
   });
 }
 
+function* iterateStoryParagraphFragmentsAtDepth(
+  inner: StoryDrawingHost,
+  depth: number,
+  textboxPath: readonly AnchoredDrawingRecord[],
+  storyOrigin: Readonly<{ x: number; y: number }>,
+  rootDrawingOrigin?: RootDrawingOrigin
+): Generator<readonly [ParagraphFragmentRecord, StoryParagraphFragmentContext]> {
+  if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
+  for (const fragment of paragraphFragmentsOfBlocks(inner.fragments, true)) {
+    yield [
+      fragment,
+      {
+        storyOrigin,
+        textboxDepth: depth,
+        textboxOwner: textboxPath[textboxPath.length - 1] ?? null,
+        textboxPath,
+      },
+    ];
+  }
+  for (const drawing of inner.anchoredDrawings ?? []) {
+    // A text box is a story of its own, nested in the drawing that anchors it.
+    if (drawing.textboxStory) {
+      yield* iterateStoryParagraphFragmentsAtDepth(
+        drawing.textboxStory,
+        depth + 1,
+        Object.freeze([...textboxPath, drawing]),
+        textboxStoryOrigin(
+          storyOrigin,
+          drawing,
+          depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
+        ),
+        rootDrawingOrigin
+      );
+    }
+  }
+}
+
+/**
+ * Resumable sibling of {@link forEachStoryParagraphFragment}.
+ * Yields one published fragment at a time and does not collect the walk.
+ * @internal
+ */
+export function* iterateStoryParagraphFragments(
+  story: StoryDrawingHost,
+  rootOrigin: Readonly<{ x: number; y: number }> = ZERO_STORY_ORIGIN,
+  rootDrawingOrigin?: RootDrawingOrigin
+): Generator<readonly [ParagraphFragmentRecord, StoryParagraphFragmentContext]> {
+  yield* iterateStoryParagraphFragmentsAtDepth(
+    story,
+    0,
+    Object.freeze([]),
+    rootOrigin,
+    rootDrawingOrigin
+  );
+}
+
+/** One published story graph that can carry paragraph and table-cell fills. @public */
+export interface SemanticFillHostVisit {
+  readonly page: PageRecord;
+  readonly story: SemanticStoryKind;
+  readonly rootStory: SemanticRootStoryKind;
+  /** Precise root host and absolute origin for story-relative geometry. */
+  readonly root: SemanticStoryVisit;
+  readonly storyOrigin: Readonly<{ x: number; y: number }>;
+  readonly fragments: readonly BlockFragmentRecord[];
+  readonly textboxDepth: number;
+  readonly textboxOwner: AnchoredDrawingRecord | null;
+  readonly textboxPath: readonly AnchoredDrawingRecord[];
+  /**
+   * True when this host is a textbox whose owner paints behind the parent story text.
+   * Always false for the root story itself.
+   */
+  readonly behindDocument: boolean;
+}
+
+function fillHostVisit(
+  inner: StoryDrawingHost,
+  depth: number,
+  textboxPath: readonly AnchoredDrawingRecord[],
+  storyOrigin: Readonly<{ x: number; y: number }>,
+  root: SemanticStoryVisit
+): SemanticFillHostVisit {
+  const owner = textboxPath[textboxPath.length - 1] ?? null;
+  return {
+    page: root.page,
+    story: depth === 0 ? root.story : 'textbox',
+    rootStory: root.story,
+    root,
+    storyOrigin,
+    fragments: inner.fragments,
+    textboxDepth: depth,
+    textboxOwner: owner,
+    textboxPath,
+    behindDocument: owner?.behindDocument === true,
+  };
+}
+
+function* iterateNestedFillHosts(
+  inner: StoryDrawingHost,
+  depth: number,
+  textboxPath: readonly AnchoredDrawingRecord[],
+  storyOrigin: Readonly<{ x: number; y: number }>,
+  root: SemanticStoryVisit,
+  rootDrawingOrigin: RootDrawingOrigin | undefined,
+  paintOrder: boolean,
+  behind: boolean | null
+): Generator<SemanticFillHostVisit> {
+  for (const drawing of inner.anchoredDrawings ?? []) {
+    if (!drawing.textboxStory) continue;
+    if (behind !== null && drawing.behindDocument !== behind) continue;
+    yield* iterateFillHostsAtDepth(
+      drawing.textboxStory,
+      depth + 1,
+      Object.freeze([...textboxPath, drawing]),
+      textboxStoryOrigin(
+        storyOrigin,
+        drawing,
+        depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
+      ),
+      root,
+      rootDrawingOrigin,
+      paintOrder
+    );
+  }
+}
+
+function* iterateFillHostsAtDepth(
+  inner: StoryDrawingHost,
+  depth: number,
+  textboxPath: readonly AnchoredDrawingRecord[],
+  storyOrigin: Readonly<{ x: number; y: number }>,
+  root: SemanticStoryVisit,
+  rootDrawingOrigin: RootDrawingOrigin | undefined,
+  paintOrder: boolean
+): Generator<SemanticFillHostVisit> {
+  if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
+  if (paintOrder) {
+    yield* iterateNestedFillHosts(
+      inner,
+      depth,
+      textboxPath,
+      storyOrigin,
+      root,
+      rootDrawingOrigin,
+      paintOrder,
+      true
+    );
+  }
+  yield fillHostVisit(inner, depth, textboxPath, storyOrigin, root);
+  yield* iterateNestedFillHosts(
+    inner,
+    depth,
+    textboxPath,
+    storyOrigin,
+    root,
+    rootDrawingOrigin,
+    paintOrder,
+    paintOrder ? false : null
+  );
+}
+
+function* iterateFillHostsForLayout(
+  layout: SemanticLayout,
+  paintOrder: boolean
+): Generator<SemanticFillHostVisit> {
+  for (const root of iterateSemanticStories(layout)) {
+    const { page, story: rootStory, host } = root;
+    const rootDrawingOrigin: RootDrawingOrigin | undefined =
+      rootStory === 'header' || rootStory === 'footer'
+        ? (drawing) =>
+            headerFooterAnchoredDrawingOrigin(drawing, root.origin, {
+              x: page.box.x,
+              y: page.box.y,
+            })
+        : undefined;
+    yield* iterateFillHostsAtDepth(
+      host,
+      0,
+      Object.freeze([]),
+      root.origin,
+      root,
+      rootDrawingOrigin,
+      paintOrder
+    );
+  }
+}
+
+/**
+ * Yield each root story and every bounded nested textbox story that can carry fills.
+ *
+ * Enumeration is document/graph order: the owning story, then nested textboxes in drawing
+ * array order. Origins match {@link iterateStoryParagraphFragments}. Depth follows
+ * {@link MAX_STORY_DRAWING_WALK_DEPTH}. Renderers that must stack behind-document layers
+ * use {@link iterateSemanticPaintHosts}.
+ * @public
+ */
+export function* iterateSemanticFillHosts(
+  layout: SemanticLayout
+): Generator<SemanticFillHostVisit> {
+  yield* iterateFillHostsForLayout(layout, false);
+}
+
+/**
+ * Yield each root story and nested textbox fill host in paint order.
+ *
+ * Behind-document nested textboxes precede their owning story. In-front textboxes follow it.
+ * Document drawing order is preserved inside each stacking band. Origins, depth, and the
+ * walk ceiling match {@link iterateSemanticFillHosts}.
+ * @public
+ */
+export function* iterateSemanticPaintHosts(
+  layout: SemanticLayout
+): Generator<SemanticFillHostVisit> {
+  yield* iterateFillHostsForLayout(layout, true);
+}
+
 /**
  * Visit every paragraph fragment one story paints — its own (table interiors flattened,
  * header repeats included) and the fragments inside each anchored drawing's text-box story,
@@ -580,6 +806,7 @@ export function forEachSemanticDrawing(
  * consumers that read per-paragraph published fields (list markers) rather than drawings.
  * The furniture list-marker token walks with this; a fragment it misses leaves a reused
  * page showing a stale marker.
+ * @public
  */
 export function forEachStoryParagraphFragment(
   story: StoryDrawingHost,
@@ -587,38 +814,13 @@ export function forEachStoryParagraphFragment(
   rootOrigin: Readonly<{ x: number; y: number }> = ZERO_STORY_ORIGIN,
   rootDrawingOrigin?: RootDrawingOrigin
 ): void {
-  const visitStory = (
-    inner: StoryDrawingHost,
-    depth: number,
-    textboxPath: readonly AnchoredDrawingRecord[],
-    storyOrigin: Readonly<{ x: number; y: number }>
-  ): void => {
-    if (depth > MAX_STORY_DRAWING_WALK_DEPTH) return;
-    for (const fragment of paragraphFragmentsOfBlocks(inner.fragments, true)) {
-      visit(fragment, {
-        storyOrigin,
-        textboxDepth: depth,
-        textboxOwner: textboxPath[textboxPath.length - 1] ?? null,
-        textboxPath,
-      });
-    }
-    for (const drawing of inner.anchoredDrawings ?? []) {
-      // A text box is a story of its own, nested in the drawing that anchors it.
-      if (drawing.textboxStory) {
-        visitStory(
-          drawing.textboxStory,
-          depth + 1,
-          Object.freeze([...textboxPath, drawing]),
-          textboxStoryOrigin(
-            storyOrigin,
-            drawing,
-            depth === 0 ? rootDrawingOrigin?.(drawing) : undefined
-          )
-        );
-      }
-    }
-  };
-  visitStory(story, 0, Object.freeze([]), rootOrigin);
+  for (const [fragment, context] of iterateStoryParagraphFragments(
+    story,
+    rootOrigin,
+    rootDrawingOrigin
+  )) {
+    visit(fragment, context);
+  }
 }
 
 /** Every fragment belonging to one paragraph, in order, across page boundaries. */

@@ -525,7 +525,7 @@ describe('planPdfPaintFromLayout', () => {
     });
   });
 
-  test('aggregates repeated tables on the same page into one diagnostic', () => {
+  test('keeps separate table diagnostics when record ids differ', () => {
     const table = (id: string) =>
       Object.freeze({
         kind: 'table',
@@ -544,12 +544,15 @@ describe('planPdfPaintFromLayout', () => {
         }),
       ])
     );
-    expect(result.diagnostics).toHaveLength(1);
-    expect(result.diagnostics[0]).toMatchObject({
-      feature: 'table',
-      reason:
-        'Table structure and decoration are unsupported; cell text remains painted (2 occurrences)',
-    });
+    expect(result.diagnostics).toHaveLength(2);
+    expect(result.diagnostics.map((entry) => entry.recordId).sort()).toEqual(['tbl-1', 'tbl-2']);
+    expect(
+      result.diagnostics.every((entry) =>
+        entry.reason.includes(
+          'Table structure and decoration are unsupported; cell text remains painted'
+        )
+      )
+    ).toBe(true);
   });
 
   test('paints table cell text while diagnosing missing table structure', () => {

@@ -3,8 +3,15 @@ Copyright (c) 2026 EigenPal, Inc. All rights reserved.
 Licensed under the EigenPal Pro Evaluation License 1.0 — see packages/docx-to-pdf/LICENSE.md.
 Production use requires a commercial agreement: licensing@eigenpal.com
 */
+import type { FontkitFont } from 'fontkit';
 import PDFDocument from 'pdfkit';
 import { ExportResourceError } from '@docx-editor.dev/core/export';
+import {
+  embeddedFaceCmap,
+  fontEmbeddingDecision,
+  type EmbeddedCmapCache,
+  type FontEmbeddingDecision,
+} from './pdf-font-embedding.ts';
 import {
   createFidelityDiagnosticCollector,
   pdfApproximationDiagnostic,
@@ -61,96 +68,13 @@ interface ResolvedEmbeddedFont {
   readonly key: string;
 }
 
-type FontEmbeddingDecision =
-  | { readonly kind: 'embed' }
-  | { readonly kind: 'refuse'; readonly reason: string };
-
-function readUint16(bytes: Uint8Array, offset: number): number | null {
-  if (offset < 0 || offset > bytes.byteLength - 2) return null;
-  return (bytes[offset]! << 8) | bytes[offset + 1]!;
-}
-
-function readUint32(bytes: Uint8Array, offset: number): number | null {
-  if (offset < 0 || offset > bytes.byteLength - 4) return null;
-  return (
-    (bytes[offset]! * 0x1000000 +
-      (bytes[offset + 1]! << 16) +
-      (bytes[offset + 2]! << 8) +
-      bytes[offset + 3]!) >>>
-    0
-  );
-}
-
-function isFontCollection(bytes: Uint8Array): boolean {
-  return (
-    bytes.byteLength >= 4 &&
-    String.fromCharCode(bytes[0]!, bytes[1]!, bytes[2]!, bytes[3]!) === 'ttcf'
-  );
-}
-
-function fontEmbeddingDecision(font: PdfAdmittedFont): FontEmbeddingDecision {
-  const { bytes, faceIndex } = font;
-  if (isFontCollection(bytes)) {
-    return {
-      kind: 'refuse',
-      reason:
-        'PDFKit exposes a collection family selector, but Core does not expose the selected face name needed to prove faceIndex selection',
-    };
-  }
-  if (faceIndex !== 0) {
-    return {
-      kind: 'refuse',
-      reason: 'A nonzero faceIndex requires a TrueType collection resource',
-    };
-  }
-
-  const base = 0;
-  const tableCount = readUint16(bytes, base + 4);
-  if (tableCount === null || tableCount > 4096) {
-    return { kind: 'refuse', reason: 'The admitted font has no bounded SFNT table directory' };
-  }
-  const directoryEnd = base + 12 + tableCount * 16;
-  if (!Number.isSafeInteger(directoryEnd) || directoryEnd > bytes.byteLength) {
-    return { kind: 'refuse', reason: 'The admitted font has a truncated SFNT table directory' };
-  }
-  for (let index = 0; index < tableCount; index += 1) {
-    const record = base + 12 + index * 16;
-    const tag = String.fromCharCode(
-      bytes[record]!,
-      bytes[record + 1]!,
-      bytes[record + 2]!,
-      bytes[record + 3]!
-    );
-    if (tag !== 'OS/2') continue;
-    const offset = readUint32(bytes, record + 8);
-    const length = readUint32(bytes, record + 12);
-    if (
-      offset === null ||
-      length === null ||
-      offset > bytes.byteLength ||
-      length > bytes.byteLength - offset ||
-      length < 10
-    ) {
-      return { kind: 'refuse', reason: 'The admitted font has an invalid OS/2 table range' };
-    }
-    const fsType = readUint16(bytes, offset + 8);
-    if (fsType === null) {
-      return { kind: 'refuse', reason: 'The admitted font has a truncated OS/2 fsType value' };
-    }
-    if ((fsType & 0x0002) !== 0) {
-      return { kind: 'refuse', reason: 'The OS/2 fsType forbids font embedding' };
-    }
-    if ((fsType & 0x0100) !== 0) {
-      return {
-        kind: 'refuse',
-        reason:
-          'The OS/2 fsType forbids subsetting, and PDFKit has no safe full-font embedding mode',
-      };
-    }
-    return { kind: 'embed' };
-  }
-  return { kind: 'embed' };
-}
+const MAX_REPORTED_MISSING_SCALARS = 8;
+const VARIATION_SELECTOR_START = 0xfe00;
+const VARIATION_SELECTOR_END = 0xfe0f;
+const VARIATION_SELECTOR_SUPPLEMENT_START = 0xe0100;
+const VARIATION_SELECTOR_SUPPLEMENT_END = 0xe01ef;
+const ZERO_WIDTH_NON_JOINER = 0x200c;
+const ZERO_WIDTH_JOINER = 0x200d;
 
 function pdfRectToPdfKit(rect: PdfRect, pageHeight: number): PdfKitRect {
   return Object.freeze({
@@ -170,6 +94,47 @@ function fontToken(family: string | null): string {
     .trim()
     .toLowerCase()
     .replace(/[\s_-]+/g, '');
+}
+
+function admittedFamilyKey(family: string | null | undefined): string {
+  return (family ?? '').trim().toLowerCase();
+}
+
+function formatUnicodeScalar(scalar: number): string {
+  return `U+${scalar.toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
+function isInvisibleShapingControl(scalar: number): boolean {
+  return (
+    scalar === ZERO_WIDTH_JOINER ||
+    scalar === ZERO_WIDTH_NON_JOINER ||
+    (scalar >= VARIATION_SELECTOR_START && scalar <= VARIATION_SELECTOR_END) ||
+    (scalar >= VARIATION_SELECTOR_SUPPLEMENT_START && scalar <= VARIATION_SELECTOR_SUPPLEMENT_END)
+  );
+}
+
+function missingCmapScalars(text: string, cmap: FontkitFont): number[] {
+  const missing: number[] = [];
+  const seen = new Set<number>();
+  for (const char of text) {
+    const scalar = char.codePointAt(0)!;
+    if (seen.has(scalar) || isInvisibleShapingControl(scalar)) continue;
+    seen.add(scalar);
+    if (!cmap.hasGlyphForCodePoint(scalar)) missing.push(scalar);
+  }
+  return missing;
+}
+
+function cmapCoverageReason(missing: readonly number[] | 'unreadable'): string {
+  if (missing === 'unreadable') {
+    return 'The selected embedded face has no inspectable cmap for Unicode coverage';
+  }
+  const shown = missing.slice(0, MAX_REPORTED_MISSING_SCALARS).map(formatUnicodeScalar);
+  const extra = missing.length - shown.length;
+  const list = shown.join(', ');
+  const more = extra > 0 ? `, and ${extra} more` : '';
+  const noun = missing.length === 1 ? 'scalar' : 'scalars';
+  return `The selected embedded face is missing cmap coverage for Unicode ${noun} ${list}${more}`;
 }
 
 function variantName(base: StandardFontBase, bold: boolean, italic: boolean): string {
@@ -238,7 +203,8 @@ function fontRequestMatches(
   font: PdfAdmittedFont
 ): boolean {
   return (
-    fontToken(font.request.family) === fontToken(style.fontFamily ?? defaultFontFamily ?? null) &&
+    admittedFamilyKey(font.request.family) ===
+      admittedFamilyKey(style.fontFamily ?? defaultFontFamily ?? null) &&
     font.request.weight === (style.fontWeight === 'bold' ? 700 : 400) &&
     font.request.style === (style.italic ? 'italic' : 'normal')
   );
@@ -438,7 +404,8 @@ function paintCommand(
   diagnostics: { push(diagnostic: ReturnType<typeof pdfUnsupportedDiagnostic>): void },
   admittedFonts: readonly PdfAdmittedFont[],
   defaultFontFamily: string | undefined,
-  registeredFonts: Map<string, FontEmbeddingDecision>
+  registeredFonts: Map<string, FontEmbeddingDecision>,
+  cmapCache: EmbeddedCmapCache
 ): { height: number; index: number; open: boolean; pageCountDelta: number } {
   switch (command.kind) {
     case 'beginPage': {
@@ -495,8 +462,6 @@ function paintCommand(
       if (embedded && decision && !registeredFonts.has(embedded.font.identity)) {
         registeredFonts.set(embedded.font.identity, decision);
       }
-      const useEmbedded = embedded !== null && decision?.kind === 'embed';
-      const mapped = useEmbedded ? null : resolveStandardFont(style);
       if (embedded && decision?.kind === 'refuse') {
         diagnostics.push(
           pdfUnsupportedDiagnostic({
@@ -508,6 +473,25 @@ function paintCommand(
           })
         );
       }
+      const useEmbedded = embedded !== null && decision?.kind === 'embed';
+      if (useEmbedded && embedded && decision.kind === 'embed') {
+        const cmap = embeddedFaceCmap(embedded.font, decision.collectionSelector, cmapCache);
+        const missing =
+          cmap === 'unreadable' ? 'unreadable' : missingCmapScalars(command.text, cmap);
+        if (missing === 'unreadable' || missing.length > 0) {
+          diagnostics.push(
+            pdfUnsupportedDiagnostic({
+              feature: 'font-cmap-coverage',
+              pageIndex: page.index,
+              recordKind: 'textSpan',
+              recordId: embedded.font.identity,
+              reason: cmapCoverageReason(missing),
+            })
+          );
+          return { ...page, pageCountDelta: 0 };
+        }
+      }
+      const mapped = useEmbedded ? null : resolveStandardFont(style);
       if (!useEmbedded && !isWinAnsiRepresentable(command.text)) {
         diagnostics.push(
           pdfUnsupportedDiagnostic({
@@ -515,19 +499,27 @@ function paintCommand(
             pageIndex: page.index,
             recordKind: 'textSpan',
             recordId: mapped!.recordId,
-            reason: `Text cannot be encoded with PDF built-in font WinAnsiEncoding for "${mapped!.requested}"`,
+            reason: `Text cannot be encoded with PDF built-in font ${mapped!.pdfkitName} (WinAnsiEncoding) for requested family "${mapped!.requested}"`,
           })
         );
         return { ...page, pageCountDelta: 0 };
       }
       // Command baseline already includes Core baseline shift; do not apply style.baselineShiftPt again.
       const y = baselineToPdfKitY(command.baseline, page.height);
-      if (useEmbedded) {
-        if (!registeredFonts.has(embedded!.key)) {
-          doc.registerFont(embedded!.key, Buffer.from(embedded!.font.bytes));
-          registeredFonts.set(embedded!.key, { kind: 'embed' });
+      if (useEmbedded && embedded && decision.kind === 'embed') {
+        if (!registeredFonts.has(embedded.key)) {
+          if (decision.collectionSelector) {
+            doc.registerFont(
+              embedded.key,
+              Buffer.from(embedded.font.bytes),
+              decision.collectionSelector
+            );
+          } else {
+            doc.registerFont(embedded.key, Buffer.from(embedded.font.bytes));
+          }
+          registeredFonts.set(embedded.key, decision);
         }
-        doc.font(embedded!.key);
+        doc.font(embedded.key);
       } else {
         doc.font(mapped!.pdfkitName);
       }
@@ -614,6 +606,7 @@ export class PdfKitPaintWriter implements PdfPaintWriterPort {
     let pageCount = 0;
     let page = { height: 0, index: 0, open: false };
     const registeredFonts = new Map<string, FontEmbeddingDecision>();
+    const cmapCache: EmbeddedCmapCache = new Map();
 
     const doc = new PDFDocument({
       autoFirstPage: false,
@@ -640,7 +633,8 @@ export class PdfKitPaintWriter implements PdfPaintWriterPort {
           diagnostics,
           options.admittedFonts ?? [],
           options.defaultFontFamily,
-          registeredFonts
+          registeredFonts,
+          cmapCache
         );
         pageCount += next.pageCountDelta;
         page = { height: next.height, index: next.index, open: next.open };

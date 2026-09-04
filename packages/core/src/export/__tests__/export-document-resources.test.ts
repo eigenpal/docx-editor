@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
+import { readFileSync } from 'node:fs';
 import { caretAt } from '../../layout/semantic-interaction.ts';
 import { openDocumentForExport } from '../export-session.ts';
 import { exportDestinationNamed } from '../export-document-resources.ts';
@@ -95,6 +96,64 @@ test('immutable byte export provides frozen metadata and destinations from one l
   const page = layout.pages[0]!;
   expect(destination!.pageStack.y).toBeCloseTo(page.contentBox.y + destination!.pageContent.y, 4);
   expect(exportDestinationNamed(layout, 'Missing')).toBeUndefined();
+
+  opened.session.dispose();
+});
+
+test('block-level bookmark resolves to the following paragraph at offset zero', async () => {
+  const bytes = new Uint8Array(
+    readFileSync(new URL('../../../../../e2e/fixtures/block-level-bookmark.docx', import.meta.url))
+  );
+  const opened = openDocumentForExport(bytes);
+  if (!opened.ok) throw new Error(String(opened.reason));
+  const layout = await opened.session.layout();
+
+  const destination = exportDestinationNamed(layout, 'PaymentTerms');
+  expect(destination).toBeDefined();
+  expect(destination?.anchor.offset).toBe(0);
+  expect(destination?.pageIndex).toBe(0);
+  expect(destination?.pageContent.height).toBeGreaterThan(0);
+  expect(destination?.pageContent.y).toBeGreaterThan(0);
+
+  opened.session.dispose();
+});
+
+test('unresolved terminal block bookmark publishes no destination geometry', async () => {
+  const opened = openDocumentForExport(
+    docxBytes(
+      '<w:p><w:r><w:t>Before</w:t></w:r></w:p>' +
+        '<w:bookmarkStart w:id="1" w:name="NoFollowingParagraph"/>'
+    )
+  );
+  if (!opened.ok) throw new Error(String(opened.reason));
+  const layout = await opened.session.layout();
+
+  expect(exportDestinationNamed(layout, 'NoFollowingParagraph')).toBeUndefined();
+  expect(layout.destinations).toEqual([]);
+
+  opened.session.dispose();
+});
+
+test('block bookmark does not escape its table cell container', async () => {
+  const opened = openDocumentForExport(
+    docxBytes(
+      '<w:bookmarkStart w:id="1" w:name="CrossContainer"/>' +
+        '<w:tbl><w:tr>' +
+        '<w:tc><w:p><w:r><w:t>First cell</w:t></w:r></w:p>' +
+        '<w:bookmarkStart w:id="2" w:name="CrossCell"/></w:tc>' +
+        '<w:tc><w:p><w:r><w:t>Second cell</w:t></w:r></w:p></w:tc>' +
+        '</w:tr></w:tbl>' +
+        '<w:bookmarkStart w:id="3" w:name="BodySibling"/>' +
+        '<w:p><w:r><w:t>Body target</w:t></w:r></w:p>'
+    )
+  );
+  if (!opened.ok) throw new Error(String(opened.reason));
+  const layout = await opened.session.layout();
+
+  expect(exportDestinationNamed(layout, 'CrossCell')).toBeUndefined();
+  expect(exportDestinationNamed(layout, 'CrossContainer')).toBeUndefined();
+  expect(exportDestinationNamed(layout, 'BodySibling')?.anchor.offset).toBe(0);
+  expect(layout.destinations).toHaveLength(1);
 
   opened.session.dispose();
 });

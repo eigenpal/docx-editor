@@ -23,7 +23,7 @@ import type {
   PdfFontsSource,
 } from './pdf-export-types.ts';
 import { PdfDocumentOpenError, PdfFidelityError } from './pdf-export-types.ts';
-import { planPdfPaintFromLayout } from './pdf-page-planner.ts';
+import { planPdfPaintFromLayoutAsync } from './pdf-page-planner.ts';
 import { writePdfPaintPlanToBytes } from './pdfkit-paint-writer.ts';
 import { HARD_MAX_OUTPUT_BYTES, validateOutputByteLimit } from './pdf-paint-bounds.ts';
 import type { PdfAdmittedFont } from './pdf-paint-writer-port.ts';
@@ -131,7 +131,7 @@ export async function exportPdf(
     throwIfAborted(options.signal, 'Export was aborted before layout');
     const layout = await opened.session.layout();
     throwIfAborted(options.signal, 'Export was aborted before PDF encoding');
-    const planned = planPdfPaintFromLayout(layout, { signal: options.signal });
+    const planned = await planPdfPaintFromLayoutAsync(layout, { signal: options.signal });
     const diagnostics = createFidelityDiagnosticCollector();
     absorbDiagnostics(diagnostics, planned.diagnostics);
     const written = await writePdfPaintPlanToBytes(planned.plan, {

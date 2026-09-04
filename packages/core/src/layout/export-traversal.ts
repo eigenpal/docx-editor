@@ -10,22 +10,29 @@ import type {
 } from './semantic-records.ts';
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import { headerFooterAnchoredDrawingOrigin } from './header-footer-drawing-origin.ts';
-import { everyStoryOrder } from './document-order.ts';
+import { iterateEveryStoryOrderScans } from './document-order.ts';
 import { lineSegments } from './line-segments.ts';
 import {
-  forEachSemanticStory,
-  forEachStoryParagraphFragment,
+  iterateSemanticStories,
+  iterateStoryParagraphFragments,
+  paragraphFragmentsOfBlocks,
+  type SemanticFillHostVisit,
   type SemanticRootStoryKind,
   type SemanticStoryKind,
   type SemanticStoryVisit,
+  type StoryParagraphFragmentContext,
 } from './semantic-record-queries.ts';
 
 export {
   forEachSemanticDrawing,
   forEachSemanticStory,
   forEachStoryParagraphFragment,
+  iterateSemanticFillHosts,
+  iterateSemanticPaintHosts,
+  MAX_STORY_DRAWING_WALK_DEPTH,
   type SemanticDrawingVisit,
   type SemanticDrawingLayer,
+  type SemanticFillHostVisit,
   type SemanticRootStoryKind,
   type SemanticStoryKind,
   type SemanticStoryVisit,
@@ -73,12 +80,56 @@ export function exportSourceRangeOf(span: StyleSpanRecord): SourceRange | null {
   return span.projected === true ? null : span.range;
 }
 
-function visitStory(
+function* iterateParagraphFragmentSpans(
   root: SemanticStoryVisit,
-  paragraphOrder: ReadonlyMap<string, number>,
-  visitor: (visit: SemanticSpanVisit) => void
-): void {
-  const { page, story, host, noteScopeId, noteAreaKind } = root;
+  fragment: ParagraphFragmentRecord,
+  context: StoryParagraphFragmentContext,
+  paragraphOrder: ReadonlyMap<string, number>
+): Generator<SemanticSpanVisit> {
+  const { page, story, noteScopeId, noteAreaKind } = root;
+  const { textboxDepth, textboxOwner, textboxPath, storyOrigin } = context;
+  const visitStoryKind = textboxDepth === 0 ? story : 'textbox';
+  for (const line of fragment.lines) {
+    const segments = [...lineSegments(line)].sort(
+      (left, right) =>
+        (paragraphOrder.get(left.paragraphId) ?? Number.MAX_SAFE_INTEGER) -
+        (paragraphOrder.get(right.paragraphId) ?? Number.MAX_SAFE_INTEGER)
+    );
+    for (const segment of segments) {
+      for (const span of segment.spans) {
+        yield {
+          page,
+          story: visitStoryKind,
+          rootStory: story,
+          root,
+          storyOrigin,
+          absoluteBox: Object.freeze({
+            x: storyOrigin.x + span.box.x,
+            y: storyOrigin.y + span.box.y,
+            width: span.box.width,
+            height: span.box.height,
+          }),
+          noteScopeId,
+          noteAreaKind,
+          textboxDepth,
+          textboxOwner,
+          textboxPath,
+          paragraph: fragment,
+          paragraphId: segment.paragraphId,
+          line,
+          span,
+          sourceRange: exportSourceRangeOf(span),
+        };
+      }
+    }
+  }
+}
+
+function* iterateStorySpans(
+  root: SemanticStoryVisit,
+  paragraphOrder: ReadonlyMap<string, number>
+): Generator<SemanticSpanVisit> {
+  const { page, story, host } = root;
   const rootDrawingOrigin =
     story === 'header' || story === 'footer'
       ? (drawing: AnchoredDrawingRecord) =>
@@ -87,49 +138,107 @@ function visitStory(
             y: page.box.y,
           })
       : undefined;
-  forEachStoryParagraphFragment(
+  for (const [block, textboxContext] of iterateStoryParagraphFragments(
     host,
-    (block, textboxContext) => {
-      const { textboxDepth, textboxOwner, textboxPath, storyOrigin } = textboxContext;
-      const visitStoryKind = textboxDepth === 0 ? story : 'textbox';
-      for (const line of block.lines) {
-        const segments = [...lineSegments(line)].sort(
-          (left, right) =>
-            (paragraphOrder.get(left.paragraphId) ?? Number.MAX_SAFE_INTEGER) -
-            (paragraphOrder.get(right.paragraphId) ?? Number.MAX_SAFE_INTEGER)
-        );
-        for (const segment of segments) {
-          for (const span of segment.spans) {
-            visitor({
-              page,
-              story: visitStoryKind,
-              rootStory: story,
-              root,
-              storyOrigin,
-              absoluteBox: Object.freeze({
-                x: storyOrigin.x + span.box.x,
-                y: storyOrigin.y + span.box.y,
-                width: span.box.width,
-                height: span.box.height,
-              }),
-              noteScopeId,
-              noteAreaKind,
-              textboxDepth,
-              textboxOwner,
-              textboxPath,
-              paragraph: block,
-              paragraphId: segment.paragraphId,
-              line,
-              span,
-              sourceRange: exportSourceRangeOf(span),
-            });
-          }
-        }
-      }
-    },
     root.origin,
     rootDrawingOrigin
-  );
+  )) {
+    yield* iterateParagraphFragmentSpans(root, block, textboxContext, paragraphOrder);
+  }
+}
+
+/**
+ * Yield spans that belong to one fill host, without descending into nested textboxes.
+ *
+ * Nested textbox spans are visited when that nested host is walked. Mixed-line segments
+ * sort with the same paragraph-order map {@link iterateSemanticSpans} uses.
+ * @public
+ */
+export function* iterateSemanticFillHostSpans(
+  host: SemanticFillHostVisit,
+  paragraphOrder: ReadonlyMap<string, number>
+): Generator<SemanticSpanVisit> {
+  const context: StoryParagraphFragmentContext = {
+    storyOrigin: host.storyOrigin,
+    textboxDepth: host.textboxDepth,
+    textboxOwner: host.textboxOwner,
+    textboxPath: host.textboxPath,
+  };
+  for (const fragment of paragraphFragmentsOfBlocks(host.fragments, true)) {
+    yield* iterateParagraphFragmentSpans(host.root, fragment, context, paragraphOrder);
+  }
+}
+
+/** Cooperative pause during paragraph-order preparation. @public */
+export interface SemanticTraversalCheckpoint {
+  readonly kind: 'checkpoint';
+}
+
+const SEMANTIC_TRAVERSAL_CHECKPOINT: SemanticTraversalCheckpoint = Object.freeze({
+  kind: 'checkpoint',
+});
+
+/** Number of scanned paragraph-order lines and segments between checkpoints. @public */
+export const SEMANTIC_TRAVERSAL_CHECKPOINT_BATCH = 256;
+
+/** True when a span walk item is a cooperative checkpoint rather than a visit. @public */
+export function isSemanticTraversalCheckpoint(
+  value: SemanticSpanVisit | SemanticTraversalCheckpoint
+): value is SemanticTraversalCheckpoint {
+  return 'kind' in value && value.kind === 'checkpoint';
+}
+
+/**
+ * Build the paragraph-order map used to sort mixed-line segments.
+ *
+ * Yields {@link SemanticTraversalCheckpoint} after every
+ * {@link SEMANTIC_TRAVERSAL_CHECKPOINT_BATCH} steps so one `.next()` cannot
+ * allocate the complete map. A cold cache counts scanned lines and segments,
+ * including duplicate ids. A warm {@link everyStoryOrder} cache performs no
+ * line or segment scan; this generator checkpoints the cached unique ids.
+ * The generator's return value is the finished map.
+ * @public
+ */
+export function* iterateSemanticParagraphOrder(
+  layout: SemanticLayout
+): Generator<SemanticTraversalCheckpoint, ReadonlyMap<string, number>> {
+  const paragraphOrder = new Map<string, number>();
+  let prepared = 0;
+  for (const step of iterateEveryStoryOrderScans(layout)) {
+    if (step !== null && !paragraphOrder.has(step)) {
+      paragraphOrder.set(step, paragraphOrder.size);
+    }
+    prepared += 1;
+    if (prepared % SEMANTIC_TRAVERSAL_CHECKPOINT_BATCH === 0) {
+      yield SEMANTIC_TRAVERSAL_CHECKPOINT;
+    }
+  }
+  return paragraphOrder;
+}
+
+/**
+ * Yield every published span in page/story order without consulting the source package.
+ *
+ * Resumable: the walk pauses between visits and does not collect them into an array.
+ * Paragraph order is prepared incrementally and yields {@link SemanticTraversalCheckpoint}
+ * after every {@link SEMANTIC_TRAVERSAL_CHECKPOINT_BATCH} scanned lines and segments so
+ * one `.next()` cannot build the complete map. {@link forEachSemanticSpan} skips
+ * checkpoints and preserves the published span order.
+ * @public
+ */
+export function* iterateSemanticSpans(
+  layout: SemanticLayout
+): Generator<SemanticSpanVisit | SemanticTraversalCheckpoint> {
+  const orderWalk = iterateSemanticParagraphOrder(layout);
+  let orderStep = orderWalk.next();
+  while (!orderStep.done) {
+    yield orderStep.value;
+    orderStep = orderWalk.next();
+  }
+  const paragraphOrder = orderStep.value;
+  for (const story of iterateSemanticStories(layout)) {
+    yield* iterateStorySpans(story, paragraphOrder);
+  }
 }
 
 /**
@@ -140,8 +249,8 @@ export function forEachSemanticSpan(
   layout: SemanticLayout,
   visitor: (visit: SemanticSpanVisit) => void
 ): void {
-  const paragraphOrder = new Map(
-    everyStoryOrder(layout).map((paragraphId, index) => [paragraphId, index])
-  );
-  forEachSemanticStory(layout, (story) => visitStory(story, paragraphOrder, visitor));
+  for (const item of iterateSemanticSpans(layout)) {
+    if (isSemanticTraversalCheckpoint(item)) continue;
+    visitor(item);
+  }
 }

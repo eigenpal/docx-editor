@@ -83,19 +83,14 @@ export function pdfApproximationDiagnostic(input: {
 }
 
 function aggregateKey(diagnostic: PdfFidelityDiagnostic): string {
-  if (diagnostic.feature === 'standard-font-substitution') {
-    return [
-      diagnostic.kind,
-      diagnostic.feature,
-      String(diagnostic.pageIndex),
-      diagnostic.recordId ?? '',
-    ].join('\u001f');
-  }
   return [
     diagnostic.kind,
     diagnostic.feature,
     String(diagnostic.pageIndex),
     diagnostic.recordKind,
+    diagnostic.recordId ?? '',
+    diagnostic.story ?? '',
+    diagnostic.reason,
   ].join('\u001f');
 }
 

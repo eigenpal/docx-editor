@@ -1508,6 +1508,9 @@ export function isIntlWordSegmenterAvailable(): boolean;
 // @public
 export function isMarkerOnlySeparatorNote(note: OoxmlNode, displayMode?: RevisionDisplayMode, revisionAuthorFilter?: RevisionAuthorFilter): boolean;
 
+// @public
+export function isSemanticTraversalCheckpoint(value: SemanticSpanVisit | SemanticTraversalCheckpoint): value is SemanticTraversalCheckpoint;
+
 // @public (undocumented)
 export function isValidStyleId(raw: string | undefined): raw is string;
 
@@ -1516,6 +1519,21 @@ export function isWholeGraphemeHorizontalBoundary(run: ShapedRun, utf16Offset: n
 
 // @public
 export function itemizeScriptFontSlots(text: string, paragraphOffset: number, embedding: BidiEmbeddingLevels): readonly ScriptItem[];
+
+// @public
+export function iterateSemanticFillHosts(layout: SemanticLayout): Generator<SemanticFillHostVisit>;
+
+// @public
+export function iterateSemanticFillHostSpans(host: SemanticFillHostVisit, paragraphOrder: ReadonlyMap<string, number>): Generator<SemanticSpanVisit>;
+
+// @public
+export function iterateSemanticPaintHosts(layout: SemanticLayout): Generator<SemanticFillHostVisit>;
+
+// @public
+export function iterateSemanticParagraphOrder(layout: SemanticLayout): Generator<SemanticTraversalCheckpoint, ReadonlyMap<string, number>>;
+
+// @public
+export function iterateSemanticSpans(layout: SemanticLayout): Generator<SemanticSpanVisit | SemanticTraversalCheckpoint>;
 
 // @public
 export interface KeyedRange {
@@ -1895,6 +1913,9 @@ export const MAX_PARAGRAPH_SPACING_PT: number;
 
 // @public
 export const MAX_SDT_NESTING = 32;
+
+// @public
+export const MAX_STORY_DRAWING_WALK_DEPTH = 16;
 
 // @public
 export const MAX_STYLE_BASED_ON_DEPTH = 32;
@@ -3232,6 +3253,9 @@ order: readonly string[],
 measurer?: TextMeasurer): SelectionRect[];
 
 // @public
+export const SEMANTIC_TRAVERSAL_CHECKPOINT_BATCH = 256;
+
+// @public
 export type SemanticArtifactRootStoryKind = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'note-separator';
 
 // @public
@@ -3284,6 +3308,31 @@ export interface SemanticDrawingVisit extends StoryDrawingContext {
     readonly root: SemanticStoryVisit;
     readonly rootStory: SemanticRootStoryKind;
     readonly story: SemanticStoryKind;
+}
+
+// @public
+export interface SemanticFillHostVisit {
+    readonly behindDocument: boolean;
+    // (undocumented)
+    readonly fragments: readonly BlockFragmentRecord[];
+    // (undocumented)
+    readonly page: PageRecord;
+    readonly root: SemanticStoryVisit;
+    // (undocumented)
+    readonly rootStory: SemanticRootStoryKind;
+    // (undocumented)
+    readonly story: SemanticStoryKind;
+    // (undocumented)
+    readonly storyOrigin: Readonly<{
+        x: number;
+        y: number;
+    }>;
+    // (undocumented)
+    readonly textboxDepth: number;
+    // (undocumented)
+    readonly textboxOwner: AnchoredDrawingRecord | null;
+    // (undocumented)
+    readonly textboxPath: readonly AnchoredDrawingRecord[];
 }
 
 // @public
@@ -3594,6 +3643,12 @@ export interface SemanticTrackedChangeArtifactRecord {
     readonly replyIds: readonly string[];
     // (undocumented)
     readonly text: string;
+}
+
+// @public
+export interface SemanticTraversalCheckpoint {
+    // (undocumented)
+    readonly kind: 'checkpoint';
 }
 
 // @public
