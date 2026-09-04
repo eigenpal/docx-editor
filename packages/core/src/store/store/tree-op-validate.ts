@@ -57,6 +57,7 @@ import { isDrawingTreeDocOp, validateDrawingOp } from './tree-op-drawings.ts';
 import { validateInsertFragment } from './tree-op-fragment.ts';
 import {
   indivisibleAt,
+  isAddressableInlineOwner,
   isParagraph,
   paragraphLength,
   paragraphOffsetIndex,
@@ -214,6 +215,9 @@ function namedOwnerRefusal(
   }
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || !isParagraph(paragraph)) return null;
+  if (holds(paragraph, inside) && !isAddressableInlineOwner(paragraph, inside)) {
+    return 'not-a-content-control';
+  }
   const span = holds(owner, paragraphId)
     ? { start: 0, end: paragraphLength(paragraph) }
     : holds(paragraph, inside)

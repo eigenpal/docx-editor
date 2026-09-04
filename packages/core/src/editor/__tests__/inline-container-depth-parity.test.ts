@@ -3,10 +3,15 @@
 import { describe, expect, test } from 'bun:test';
 import { treeToDoc } from '../../binding/tree-binding.ts';
 import { piecesOfParagraph } from '../../layout/field-projection.ts';
-import { readOoxmlPart, type OoxmlParagraphNode } from '../../store/package/ooxml-tree.ts';
+import {
+  readOoxmlPart,
+  type OoxmlNode,
+  type OoxmlParagraphNode,
+  type OoxmlPart,
+} from '../../store/package/ooxml-tree.ts';
 import { MAX_INLINE_CONTAINER_DEPTH } from '../../store/package/ooxml-shared.ts';
 import { paragraphOffsetIndex } from '../../store/store/tree-op-segments.ts';
-import { paragraphTextOf } from '../../store/store/tree-ops.ts';
+import { applyTreeOp, paragraphTextOf, validateTreeOp } from '../../store/store/tree-ops.ts';
 import { inlineContentControlsAt } from '../content-controls.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -28,6 +33,39 @@ function inlineControl(label: string, text: string): string {
     `<w:sdt><w:sdtPr><w:tag w:val="${label}"/></w:sdtPr>` +
     `<w:sdtContent><w:r><w:t>${text}</w:t></w:r></w:sdtContent></w:sdt>`
   );
+}
+
+function nestedOwner(count: number, owner: 'bdo' | 'control'): string {
+  let content =
+    owner === 'bdo'
+      ? '<w:bdo><w:r><w:t>A</w:t></w:r></w:bdo>'
+      : '<w:sdt><w:sdtPr><w:tag w:val="target"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>A</w:t></w:r></w:sdtContent></w:sdt>';
+  for (let depth = 1; depth < count; depth += 1) {
+    content =
+      depth % 2 === 0
+        ? `<w:smartTag>${content}</w:smartTag>`
+        : '<w:sdt><w:sdtPr/><w:sdtContent>' + content + '</w:sdtContent></w:sdt>';
+  }
+  return content;
+}
+
+function loadedParagraph(xml: string): { part: OoxmlPart; paragraph: OoxmlParagraphNode } {
+  const result = readOoxmlPart(
+    `<w:document xmlns:w="${W}"><w:body><w:p>${xml}</w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!result.ok) throw new Error(result.reason);
+  const paragraph = result.part.root.children
+    .flatMap((child) => (child.kind === 'textValue' ? [] : child.children))
+    .find((child): child is OoxmlParagraphNode => child.kind === 'paragraph');
+  if (!paragraph) throw new Error('paragraph is missing');
+  return { part: result.part, paragraph };
+}
+
+function descendants(node: OoxmlNode): OoxmlNode[] {
+  if (node.kind === 'textValue') return [node];
+  return [node, ...node.children.flatMap(descendants)];
 }
 
 describe('inline container depth parity', () => {
@@ -62,5 +100,57 @@ describe('inline container depth parity', () => {
     ).toBe(true);
     expect(inlineContentControlsAt(paragraph, 1).length).toBeGreaterThan(0);
     expect(inlineContentControlsAt(paragraph, 4).map((control) => control.tag)).toEqual(['later']);
+  });
+
+  test('named owners stop at the shared addressability boundary', () => {
+    const addressable = loadedParagraph(nestedOwner(MAX_INLINE_CONTAINER_DEPTH - 1, 'bdo'));
+    const addressableOwner = descendants(addressable.paragraph).find(
+      (node) => node.kind === 'generic' && node.localName === 'bdo'
+    );
+    if (!addressableOwner) throw new Error('addressable owner is missing');
+    const op = {
+      op: 'insertText' as const,
+      paragraphId: addressable.paragraph.id,
+      offset: 1,
+      text: 'X',
+      inside: addressableOwner.id,
+    };
+    expect(validateTreeOp(addressable.part, op)).toBeNull();
+    const inserted = applyTreeOp(addressable.part, op);
+    if (!inserted.ok) throw new Error(inserted.reason);
+    const insertedParagraph = descendants(inserted.part.root).find(
+      (node): node is OoxmlParagraphNode => node.kind === 'paragraph'
+    );
+    if (!insertedParagraph) throw new Error('inserted paragraph is missing');
+    expect(paragraphTextOf(inserted.part, insertedParagraph.id)).toBe('AX');
+    expect(
+      piecesOfParagraph(insertedParagraph)
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('AX');
+
+    for (const ownerKind of ['bdo', 'control'] as const) {
+      const opaque = loadedParagraph(nestedOwner(MAX_INLINE_CONTAINER_DEPTH, ownerKind));
+      const owner =
+        ownerKind === 'bdo'
+          ? descendants(opaque.paragraph).find(
+              (node) => node.kind === 'generic' && node.localName === 'bdo'
+            )
+          : descendants(opaque.paragraph)
+              .filter((node) => node.kind === 'contentControl')
+              .at(-1);
+      if (!owner) throw new Error(`${ownerKind} owner is missing`);
+      const opaqueOp = {
+        op: 'insertText' as const,
+        paragraphId: opaque.paragraph.id,
+        offset: 0,
+        text: 'X',
+        inside: owner.id,
+      };
+      expect(validateTreeOp(opaque.part, opaqueOp)).toBe('not-a-content-control');
+      const refused = applyTreeOp(opaque.part, opaqueOp);
+      expect(refused.ok).toBe(false);
+      if (!refused.ok) expect(refused.reason).toBe('not-a-content-control');
+    }
   });
 });

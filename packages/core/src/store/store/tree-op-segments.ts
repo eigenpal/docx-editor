@@ -20,7 +20,11 @@ import {
   isInstrText,
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
-import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
+import {
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../package/ooxml-shared.ts';
 import {
   contentControlContentOf,
   inlineContainerOf,
@@ -162,6 +166,32 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
   const index = buildParagraphOffsetIndex(paragraph);
   offsetIndexCache.set(paragraph, index);
   return index;
+}
+
+/** Whether a named inline owner can expose children in the paragraph offset space. */
+export function isAddressableInlineOwner(paragraph: OoxmlParagraphNode, ownerId: string): boolean {
+  let addressable = false;
+  const visit = (node: OoxmlNode, depth: number): void => {
+    if (node.kind === 'textValue' || addressable || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
+    const container = isInlineRunContainer(node) || isContentControlNode(node);
+    const nextDepth = container ? nextInlineContainerDepth(node, depth) : depth;
+    if (node.id === ownerId) {
+      // The last admitted container is itself visible to the walk, but its children are opaque.
+      // A named insertion must reach the owner's children, or it creates invisible content.
+      addressable = container && nextDepth < MAX_INLINE_CONTAINER_DEPTH;
+      return;
+    }
+    if (isInlineRunContainer(node)) {
+      for (const child of node.children) visit(child, nextDepth);
+      return;
+    }
+    if (isContentControlNode(node)) {
+      const content = contentControlContentOf(node);
+      if (content) for (const child of content.children) visit(child, nextDepth);
+    }
+  };
+  for (const child of paragraph.children) visit(child, 0);
+  return addressable;
 }
 
 /** Build an offset index without populating the interactive paragraph memo. @internal */
