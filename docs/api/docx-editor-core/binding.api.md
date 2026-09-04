@@ -104,7 +104,7 @@ export interface TreeApplyResult {
 }
 
 // @public
-export type TreeBindingRejection = 'paragraph-count-unexplained' | 'paragraph-reordered' | 'unknown-paragraph-id' | 'unknown-content-moved' | 'inline-owner-mismatch' | 'unsupported-node' | 'split-not-clean' | 'join-not-clean';
+export type TreeBindingRejection = 'paragraph-count-unexplained' | 'paragraph-reordered' | 'unknown-paragraph-id' | 'unknown-content-moved' | 'unsupported-node' | 'split-not-clean' | 'join-not-clean';
 
 // @public
 export interface TreeDocxSession extends TreeDocxSessionView {
@@ -206,7 +206,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
 }
 
 // @public
-export const treeSchema: Schema<'doc' | 'paragraph' | 'text' | 'tab' | 'hardBreak' | 'pageBreak' | 'unknownInline', 'runProps' | 'inlineOwner'>;
+export const treeSchema: Schema<'doc' | 'paragraph' | 'text' | 'tab' | 'hardBreak' | 'pageBreak' | 'unknownInline', 'runProps'>;
 
 // @public
 export type TreeSessionRejection = OoxmlPackageRejection | 'no-main-document-tree';

@@ -266,7 +266,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   // Typing into a prompt REPLACES it. The transition belongs here rather than beside the
   // caret: an automation call and a paste insert text too, and a prompt that survived them
   // would leave the typed characters appended to "Click here to enter text.".
-  if (op.op === 'insertText' && !op.revision && op.inside === undefined) {
+  if (op.op === 'insertText' && !op.revision) {
     const prompt = placeholderControlForInsertion(part, op.paragraphId, op.offset);
     if (prompt) {
       const emptied = clearPlaceholder(part, prompt.control.id, options);
@@ -405,15 +405,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   switch (op.op) {
     case 'insertText':
       if (op.revision) {
-        return applyInsertTracked(
-          part,
-          paragraph,
-          op.offset,
-          op.text,
-          op.revision,
-          options,
-          op.inside
-        );
+        return applyInsertTracked(part, paragraph, op.offset, op.text, op.revision, options);
       }
       return applyInsertContent(
         part,
@@ -431,17 +423,9 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
       // would let suggesting mode insert a different element than edit mode for the same key.
       const element = RUN_ELEMENT_INSERTS[op.op];
       if (op.revision) {
-        return applyInsertTrackedElement(
-          part,
-          paragraph,
-          op.offset,
-          element,
-          op.revision,
-          options,
-          op.inside
-        );
+        return applyInsertTrackedElement(part, paragraph, op.offset, element, op.revision, options);
       }
-      return applyInsertContent(part, paragraph, op.offset, [element], options, op.inside);
+      return applyInsertContent(part, paragraph, op.offset, [element], options);
     }
     case 'setListLevel':
       return applySetListLevel(part, paragraph, op.level, options, nextId);
@@ -635,23 +619,7 @@ function applyInsertContent(
   inside?: string,
   bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
-  // A named owner narrows the offset to that control's OWN characters. Without it the trailing
-  // edge resolves to the run after the control, which is beside the field rather than in it.
-  const found = inside === undefined ? null : findNode(part, inside);
-  if (inside !== undefined && (found === null || found.kind === 'textValue')) {
-    return { ok: false, reason: 'unknown-content-control' };
-  }
-  const owner = found?.kind === 'textValue' ? null : found;
-  // ONE resolution of where this lands, shared with the validation that refuses it. Two copies
-  // of this rule is how a lock came to be resolved against a different place than the write.
-  const destination = insertionDestination(paragraph, offset, owner);
-  const site = destination.site;
-  // Owned input takes lifecycle state from its actual landing. This finds either a control
-  // enclosing the owner or one nested inside it, without selecting an adjacent control.
-  const control =
-    inside === undefined
-      ? contentControlAtCaret(part, paragraph, offset, offset, bias)
-      : innermostContentControlAround(part, destination.landingNodeId);
+  const control = contentControlAtCaret(part, paragraph, offset, offset, bias);
   if (control && isShowingPlaceholder(control)) {
     return applyPlaceholderReplace(part, control, builders, options);
   }
@@ -666,6 +634,16 @@ function applyInsertContent(
     dependencyKeys: TEXT_DEPS,
     impact: 'text-local',
   };
+  // A named owner narrows the offset to that control's OWN characters. Without it the trailing
+  // edge resolves to the run after the control, which is beside the field rather than in it.
+  const found = inside === undefined ? null : findNode(part, inside);
+  if (inside !== undefined && (found === null || found.kind === 'textValue')) {
+    return { ok: false, reason: 'unknown-content-control' };
+  }
+  const owner = found?.kind === 'textValue' ? null : found;
+  // ONE resolution of where this lands, shared with the validation that refuses it. Two copies
+  // of this rule is how a lock came to be resolved against a different place than the write.
+  const site = insertionDestination(paragraph, offset, owner, bias).site;
 
   let inserted: TreeOpResult;
   // Inside a text value: split it and place the new content between the halves.
@@ -704,13 +682,36 @@ function applyInsertContent(
     return finishContentEdit(inserted, control, options);
   }
 
-  if (inside !== undefined && site.kind === 'appendToRun') {
+  if (inside !== undefined) {
+    if (site.kind === 'atBoundary') {
+      const run = findNode(part, site.segment.runId);
+      if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
+      const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
+      inserted = fromEdit(
+        insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
+        effect
+      );
+      return finishContentEdit(inserted, control, options);
+    }
+    if (site.kind === 'appendToRun') {
+      inserted = fromEdit(
+        insertChildren(
+          part,
+          site.run.id,
+          site.run.children.length,
+          nodes,
+          deferOptions(options, control)
+        ),
+        effect
+      );
+      return finishContentEdit(inserted, control, options);
+    }
     inserted = fromEdit(
       insertChildren(
         part,
-        site.run.id,
-        site.run.children.length,
-        nodes,
+        site.holder.id,
+        site.holder.children.length,
+        [runElement(nextId, nodes)],
         deferOptions(options, control)
       ),
       effect
@@ -730,20 +731,6 @@ function applyInsertContent(
       effect
     );
     return finishContentEdit(inserted, control, options);
-  }
-
-  if (inside !== undefined) {
-    if (site.kind === 'atBoundary') {
-      const run = findNode(part, site.segment.runId);
-      if (!run || run.kind !== 'run') return { ok: false, reason: 'tree-invariant' };
-      const index = run.children.findIndex((child) => contains(child, site.segment.node.id));
-      inserted = fromEdit(
-        insertChildren(part, run.id, Math.max(0, index), nodes, deferOptions(options, control)),
-        effect
-      );
-      return finishContentEdit(inserted, control, options);
-    }
-    return { ok: false, reason: 'tree-invariant' };
   }
 
   // AT A BOUNDARY, THE RUN TO THE LEFT WINS.

@@ -4655,13 +4655,7 @@ export function mountPaginatedSurface(
       const pendingOps = consumePendingFormatOps(target.paragraphId, target.offset, text.length);
       const insertOps: TreeDocOp[] = [
         ...plan.ops,
-        {
-          op: 'insertText',
-          paragraphId: target.paragraphId,
-          offset: target.offset,
-          text,
-          ...(plan.replaceInside === undefined ? {} : { inside: plan.replaceInside }),
-        },
+        { op: 'insertText', paragraphId: target.paragraphId, offset: target.offset, text },
       ];
       const redoMark = {
         paragraphId: target.paragraphId,

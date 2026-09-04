@@ -20,11 +20,7 @@ import {
   isInstrText,
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
-import {
-  isInlineRunContainer,
-  MAX_INLINE_CONTAINER_DEPTH,
-  nextInlineContainerDepth,
-} from '../package/ooxml-shared.ts';
+import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
 import {
   contentControlContentOf,
   inlineContainerOf,
@@ -166,32 +162,6 @@ export function paragraphOffsetIndex(paragraph: OoxmlParagraphNode): ParagraphOf
   const index = buildParagraphOffsetIndex(paragraph);
   offsetIndexCache.set(paragraph, index);
   return index;
-}
-
-/** Whether a named inline owner can expose children in the paragraph offset space. */
-export function isAddressableInlineOwner(paragraph: OoxmlParagraphNode, ownerId: string): boolean {
-  let addressable = false;
-  const visit = (node: OoxmlNode, depth: number): void => {
-    if (node.kind === 'textValue' || addressable || depth >= MAX_INLINE_CONTAINER_DEPTH) return;
-    const container = isInlineRunContainer(node) || isContentControlNode(node);
-    const nextDepth = container ? nextInlineContainerDepth(node, depth) : depth;
-    if (node.id === ownerId) {
-      // The last admitted container is itself visible to the walk, but its children are opaque.
-      // A named insertion must reach the owner's children, or it creates invisible content.
-      addressable = container && nextDepth < MAX_INLINE_CONTAINER_DEPTH;
-      return;
-    }
-    if (isInlineRunContainer(node)) {
-      for (const child of node.children) visit(child, nextDepth);
-      return;
-    }
-    if (isContentControlNode(node)) {
-      const content = contentControlContentOf(node);
-      if (content) for (const child of content.children) visit(child, nextDepth);
-    }
-  };
-  for (const child of paragraph.children) visit(child, 0);
-  return addressable;
 }
 
 /** Build an offset index without populating the interactive paragraph memo. @internal */
@@ -459,14 +429,15 @@ export type InsertionSite =
 /**
  * Resolve {@link InsertionSite} for an offset, optionally narrowed to one owner's own content.
  *
- * `owner` is the neutral inline container a caller NAMED as the destination. Narrowing to it
- * makes a container's trailing edge mean "the end of this owner" rather than "the run after
- * it". Without one, an outer run-wrapper edge receives a sibling run.
+ * `owner` is the content control a caller NAMED as the destination. Narrowing to it makes a
+ * control's trailing edge mean "the end of the field" rather than "the run after it". Without
+ * one, an outer run-wrapper edge receives a sibling run.
  */
 export function insertionSite(
   paragraph: OoxmlParagraphNode,
   offset: number,
-  owner: OoxmlNode | null
+  owner: OoxmlNode | null,
+  bias: 'left' | 'right' = 'left'
 ): InsertionSite {
   const offsets = paragraphOffsetIndex(paragraph);
   const all = offsets.segments;
@@ -492,7 +463,9 @@ export function insertionSite(
       if (!followsContentInSameWrapper) outermostWrapper = index;
     }
     const entered = outermostWrapper >= 0 ? containers[outermostWrapper] : null;
-    if (entered) {
+    // Hyperlink display-text replacement has always used right bias to keep the link alive.
+    // Generic wrappers do not inherit this exception: their unowned leading edge stays outside.
+    if (entered && !(bias === 'right' && entered.kind === 'hyperlink')) {
       const holder = directParentOf(paragraph, entered.id) ?? paragraph;
       const index = holder.children.findIndex((child) => child.id === entered.id);
       return index < 0 ? { kind: 'newRun', holder } : { kind: 'newRun', holder, index };
@@ -553,9 +526,10 @@ export interface InsertionDestination {
 export function insertionDestination(
   paragraph: OoxmlParagraphNode,
   offset: number,
-  owner: OoxmlNode | null
+  owner: OoxmlNode | null,
+  bias: 'left' | 'right' = 'left'
 ): InsertionDestination {
-  const site = insertionSite(paragraph, offset, owner);
+  const site = insertionSite(paragraph, offset, owner, bias);
   const landingNodeId =
     site.kind === 'withinValue' || site.kind === 'atBoundary'
       ? site.segment.runId
@@ -598,9 +572,10 @@ function contentHolder(control: OoxmlElement): OoxmlElement {
 export function insertionLandingNodeId(
   paragraph: OoxmlParagraphNode,
   offset: number,
-  owner: OoxmlNode | null
+  owner: OoxmlNode | null,
+  bias: 'left' | 'right' = 'left'
 ): string {
-  return insertionDestination(paragraph, offset, owner).landingNodeId;
+  return insertionDestination(paragraph, offset, owner, bias).landingNodeId;
 }
 
 export interface TrailingInsertionDestination {

@@ -28,9 +28,7 @@ import {
   findNode,
   inlineControlEndingAt,
   inlineControlStartingAt,
-  paragraphOffsetIndex,
   parentNodeOf,
-  type OoxmlNode,
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
@@ -45,10 +43,6 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
-import {
-  inlineContainersOf,
-  survivingReplacementInlineOwners,
-} from '../store/store/tree-op-nodes.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
@@ -196,7 +190,6 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // every reader below sees either a non-empty author or undefined, never a blank.
     const author = trackedAuthor?.trim() || undefined;
     const plan = rangeDeletionPlan();
-    const replaceInside = replacementInlineOwner();
     // A GETTER, so delete-only lanes — Backspace, Delete, proposeDeletion — never pay for a
     // landing they do not read. Replacing lanes read it once, before the ops apply, which is
     // the only window where the pre-edit layout it consults is the right oracle. The
@@ -206,52 +199,11 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     let landing: SemanticPosition | null = null;
     return {
       ...plan,
-      ...(replaceInside === undefined ? {} : { replaceInside }),
       get replaceAt(): SemanticPosition {
         landing ??= replacementTarget(plan, author, rectangle);
         return landing;
       },
     };
-  }
-
-  /** Innermost stable inline wrapper or content control that owns the replacement point. */
-  function replacementInlineOwner(): string | undefined {
-    const selection = deps.selection();
-    if (selection.anchor.paragraphId !== selection.head.paragraphId) return undefined;
-    const start = Math.min(selection.anchor.offset, selection.head.offset);
-    const end = Math.max(selection.anchor.offset, selection.head.offset);
-    const collapsed = start === end;
-    const part = partOfNodeId(session, selection.anchor.paragraphId) ?? session.part();
-    const paragraph = findNode(part, selection.anchor.paragraphId);
-    if (!paragraph || paragraph.kind !== 'paragraph') return undefined;
-    const offsets = paragraphOffsetIndex(paragraph);
-    const first = offsets.segments.find((segment) => segment.start <= start && segment.end > start);
-    if (!first) return undefined;
-    const enclosing: OoxmlNode[] = [];
-    for (const owner of inlineContainersOf(paragraph, first.runId)) {
-      const span = offsets.spanOf(owner);
-      if (!span) continue;
-      const ownsReplacement = collapsed
-        ? span.start < start && start < span.end
-        : span.start <= start && end <= span.end;
-      if (ownsReplacement) enclosing.push(owner);
-    }
-    const owners = survivingReplacementInlineOwners(enclosing, (owner) => {
-      const span = offsets.spanOf(owner);
-      if (!span) return false;
-      // A full-range deletion sweeps hyperlinks and revision wrappers. Revisions are never
-      // replacement owners, and naming a swept hyperlink would make the following insertion
-      // address a missing node. Generic wrappers and ordinary controls survive empty. A
-      // collapsed caret deletes nothing, but only a point strictly inside a wrapper owns it.
-      return (
-        collapsed ||
-        start > span.start ||
-        end < span.end ||
-        owner.kind === 'contentControl' ||
-        owner.kind === 'generic'
-      );
-    });
-    return owners[0]?.id;
   }
 
   function rangeDeletionPlan(): RangeDeletionPlan {

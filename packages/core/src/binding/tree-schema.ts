@@ -40,7 +40,7 @@ export interface ParagraphAttrs {
  */
 export const treeSchema: Schema<
   'doc' | 'paragraph' | 'text' | 'tab' | 'hardBreak' | 'pageBreak' | 'unknownInline',
-  'runProps' | 'inlineOwner'
+  'runProps'
 > = new Schema({
   nodes: {
     doc: { content: 'paragraph+' },
@@ -179,21 +179,6 @@ export const treeSchema: Schema<
         },
       ],
     },
-
-    /** Structural owner of flattened inline content; it has no visual style. */
-    inlineOwner: {
-      attrs: { nodeId: { default: null } },
-      excludes: 'inlineOwner',
-      inclusive: false,
-      toDOM: (mark) => ['span', { 'data-inline-owner': String(mark.attrs.nodeId ?? '') }, 0],
-      parseDOM: [
-        {
-          tag: 'span[data-inline-owner]',
-          getAttrs: (dom: HTMLElement | string) =>
-            typeof dom === 'string' ? false : { nodeId: dom.getAttribute('data-inline-owner') },
-        },
-      ],
-    },
   },
 });
 
@@ -244,15 +229,4 @@ export function runPropsOf(node: PMNode): readonly OoxmlProperty[] {
     if (mark.type.name === 'runProps') return (mark.attrs.props as OoxmlProperty[]) ?? [];
   }
   return [];
-}
-
-/** The preserving inline wrapper carried by a projected token, if one owns it. */
-export function inlineOwnerOf(node: PMNode): string | undefined {
-  for (const mark of node.marks) {
-    if (mark.type.name !== 'inlineOwner') continue;
-    return typeof mark.attrs.nodeId === 'string' && mark.attrs.nodeId.length > 0
-      ? mark.attrs.nodeId
-      : undefined;
-  }
-  return undefined;
 }

@@ -1,8 +1,7 @@
 // Serializes a clipboard fragment package — the miniature WordprocessingML OPC zip the copy
 // lane produces — into the visible half of the `text/html` flavour. Structure comes from the
 // canonical tree (headings, real lists, tables, anchors); formatting comes from a small
-// self-contained cascade over the FRAGMENT's own styles part, emitted as inline CSS so Word
-// and Google Docs need no stylesheet.
+// cascade over the FRAGMENT's styles part, emitted as inline CSS for external editors.
 //
 // Security posture: the fragment is read through the bounded `readOoxmlPackage` trust
 // boundary, and this writer is a pure string builder — no DOM APIs, no insertion sinks.
@@ -22,6 +21,7 @@ import { relationshipsOf } from '../store/package/package-edit.ts';
 import { resolveInternalTarget } from '../store/package/opc-names.ts';
 import type { RelationshipRecord } from '../store/package/relationships.ts';
 import { attributeValueOf } from '../store/store/tree-op-nodes.ts';
+import { contentControlContentOf } from '../store/package/content-control-walk.ts';
 import {
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
@@ -695,6 +695,9 @@ function renderInline(
       case 'generic':
         if (isInlineRunContainer(child)) {
           out += renderInline(ctx, child.children, paragraphPPr, fields, depth + 1);
+        } else {
+          const content = contentControlContentOf(child);
+          if (content) out += renderInline(ctx, content, paragraphPPr, fields, depth + 1);
         }
         break;
       default:

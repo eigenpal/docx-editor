@@ -443,33 +443,6 @@ describe('replacing a selection that spans paragraphs, in suggesting mode', () =
     });
   });
 
-  for (const replacement of [
-    {
-      name: 'text',
-      apply: (surface: PaginatedSurface) => surface.type('X'),
-      markup: '<w:t>X</w:t>',
-    },
-    { name: 'tab', apply: (surface: PaginatedSurface) => surface.insertTab(), markup: '<w:tab/>' },
-    {
-      name: 'line break',
-      apply: (surface: PaginatedSurface) => surface.insertLineBreak(),
-      markup: '<w:br/>',
-    },
-  ]) {
-    test(`a tracked ${replacement.name} replacement stays inside its smart tag`, () => {
-      withSurface('<w:p><w:smartTag><w:r><w:t>old</w:t></w:r></w:smartTag></w:p>', (surface) => {
-        selectIn(surface, 0, 0, 3);
-        replacement.apply(surface);
-        expect(surface.state().lastRejection).toBeNull();
-        const xml = serializeOoxmlPart(surface.session.part());
-        const wrapped = xml.slice(xml.indexOf('<w:smartTag'), xml.indexOf('</w:smartTag>'));
-        expect(wrapped).toContain('<w:del');
-        expect(wrapped).toContain('<w:ins');
-        expect(wrapped).toContain(replacement.markup);
-      });
-    });
-  }
-
   test('rejecting the proposal removes the tab', () => {
     withSurface(plainParagraph('Alpha one'), (surface) => {
       caretTo(surface, 0, 'Alpha'.length);

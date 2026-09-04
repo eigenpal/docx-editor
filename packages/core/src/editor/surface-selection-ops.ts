@@ -184,8 +184,6 @@ export interface RangeDeletionPlan {
    * never sets it. Replacing lanes read `replaceAt ?? collapseTo`.
    */
   readonly replaceAt?: SemanticPosition;
-  /** Inline wrapper or content control that owns the replacement after deletion. */
-  readonly replaceInside?: string;
 }
 
 type TreeOp = Parameters<TreeDocxSessionView['applyTreeOps']>[0][number];

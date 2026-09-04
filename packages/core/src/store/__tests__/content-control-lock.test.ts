@@ -114,7 +114,6 @@ describe('ST_Lock content edits', () => {
         paragraphId,
         offset: 2,
         text: 'X',
-        inside: firstNamed(part, 'smartTag').id,
       },
       { op: 'deleteText', paragraphId, start: 1, end: 3 },
       {
@@ -127,12 +126,12 @@ describe('ST_Lock content edits', () => {
     ];
   };
 
-  test('an inline wrapper owner inherits its enclosing content lock', () => {
+  test('an inline wrapper edit inherits its enclosing content lock', () => {
     const part = wrapperUnderControl('<w:lock w:val="sdtContentLocked"/>');
     expect(wrapperOps(part).map((op) => reject(part, op))).toEqual(['locked', 'locked', 'locked']);
   });
 
-  test('an inline wrapper owner inherits its enclosing data binding', () => {
+  test('an inline wrapper edit inherits its enclosing data binding', () => {
     const part = wrapperUnderControl('<w:dataBinding w:xpath="/a" w:storeItemID="{G}"/>');
     expect(wrapperOps(part).map((op) => reject(part, op))).toEqual(['bound', 'bound', 'bound']);
   });

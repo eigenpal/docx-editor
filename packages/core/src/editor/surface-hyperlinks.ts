@@ -515,8 +515,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
               existing.paragraphId,
               existing.start,
               existing.end,
-              input.text,
-              existing.id
+              input.text
             );
             if (!replaced) return false;
             ops.push({ op: 'setHyperlinkTarget', linkId: existing.id, ...target }, ...replaced);
@@ -704,27 +703,19 @@ function suggestReplaceOps(
  * shifted right by the inserted length — is deleted after. The link is never empty at any
  * point, so nothing sweeps it away.
  *
- * `inside` keeps an existing link replacement inside the link. Boundary bias is insufficient:
- * unowned edits at either wrapper edge deliberately create a sibling run.
+ * `bias: 'right'` is what keeps the insert INSIDE the link. A boundary insert otherwise joins
+ * the run to its LEFT (Word's typing rule, see `applyInsertContent`), which at a link's start
+ * is whatever plain text precedes it. This caller is not typing — it is rewriting the link's
+ * own display text, so it names the run it means.
  */
 function replaceTextOps(
   paragraphId: string,
   start: number,
   end: number,
-  text: string,
-  inside?: string
+  text: string
 ): TreeDocOp[] | null {
   if (text.length === 0) return null;
-  const ops: TreeDocOp[] = [
-    {
-      op: 'insertText',
-      paragraphId,
-      offset: start,
-      text,
-      bias: 'right',
-      ...(inside === undefined ? {} : { inside }),
-    },
-  ];
+  const ops: TreeDocOp[] = [{ op: 'insertText', paragraphId, offset: start, text, bias: 'right' }];
   if (end > start) {
     ops.push({
       op: 'deleteText',

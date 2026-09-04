@@ -36,11 +36,7 @@ import {
   replaceNode,
   type EditOptions,
 } from '../package/ooxml-edit.ts';
-import {
-  W14_NAMESPACE_URI,
-  WML_NAMESPACE_URI,
-  isInlineRunContainer,
-} from '../package/ooxml-shared.ts';
+import { W14_NAMESPACE_URI, WML_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import {
@@ -225,6 +221,8 @@ export interface TreeOpTarget {
   readonly range?: OffsetSpan;
   /** The applier's point-placement rule, when this target inserts content. */
   readonly point?: 'run-content' | 'paragraph-sibling' | 'container-marker';
+  /** Boundary affinity for run-content insertion. */
+  readonly bias?: 'left' | 'right';
   /**
    * The range is a point at which content is WRITTEN, so the leading edge is inside.
    *
@@ -241,9 +239,15 @@ export interface TreeOpTarget {
 }
 
 /** A point at which content is written: the leading edge of a control belongs to the control. */
-const writingAt = (nodeId: string, offset: number): TreeOpReach => ({
+const writingAt = (
+  nodeId: string,
+  offset: number,
+  bias: 'left' | 'right' = 'left'
+): TreeOpReach => ({
   kind: 'nodes',
-  targets: [{ nodeId, range: { start: offset, end: offset }, writes: true, point: 'run-content' }],
+  targets: [
+    { nodeId, range: { start: offset, end: offset }, writes: true, point: 'run-content', bias },
+  ],
 });
 
 /** A structural inline sibling that the applier always places directly in the paragraph. */
@@ -253,15 +257,6 @@ const siblingAt = (nodeId: string, offset: number): TreeOpReach => ({
     { nodeId, range: { start: offset, end: offset }, writes: true, point: 'paragraph-sibling' },
   ],
 });
-
-const writingInside = (
-  paragraphId: string,
-  offset: number,
-  inside: string | undefined
-): TreeOpReach =>
-  inside === undefined
-    ? writingAt(paragraphId, offset)
-    : { kind: 'control', controlId: inside, intent: 'value', at: { paragraphId, offset } };
 
 /** A point that writes nothing into the run it names — a marker, or a split. */
 const beside = (nodeId: string, offset: number): TreeOpReach => ({
@@ -312,11 +307,19 @@ const TREE_OP_REACH: {
 } = {
   // A caller that NAMES the control it is writing into has said where the text goes, so that is
   // the control the refusals are resolved against — the offset no longer decides.
-  insertText: (op) => writingInside(op.paragraphId, op.offset, op.inside),
+  insertText: (op) =>
+    op.inside === undefined
+      ? writingAt(op.paragraphId, op.offset, op.bias)
+      : {
+          kind: 'control',
+          controlId: op.inside,
+          intent: 'value',
+          at: { paragraphId: op.paragraphId, offset: op.offset },
+        },
   deleteText: (op) => over(op.paragraphId, op.start, op.end),
-  insertTab: (op) => writingInside(op.paragraphId, op.offset, op.inside),
-  insertHardBreak: (op) => writingInside(op.paragraphId, op.offset, op.inside),
-  insertPageBreak: (op) => writingInside(op.paragraphId, op.offset, op.inside),
+  insertTab: (op) => writingAt(op.paragraphId, op.offset),
+  insertHardBreak: (op) => writingAt(op.paragraphId, op.offset),
+  insertPageBreak: (op) => writingAt(op.paragraphId, op.offset),
   insertPageField: (op) => writingAt(op.paragraphId, op.offset),
   // Plain anchors sit beside text. A tracked note uses the tracked run-content applier.
   insertCommentMarker: (op) => beside(op.paragraphId, op.offset),
@@ -334,10 +337,7 @@ const TREE_OP_REACH: {
   // exactly where the applier puts it.
   insertContentControl: (op) => over(op.paragraphId, op.start, op.end),
   insertInlineContentControl: (op) => siblingAt(op.paragraphId, op.offset),
-  insertFragment: (op) =>
-    op.inside === undefined
-      ? siblingAt(op.paragraphId, op.offset)
-      : writingInside(op.paragraphId, op.offset, op.inside),
+  insertFragment: (op) => siblingAt(op.paragraphId, op.offset),
   // A split at a control's edge moves the whole control to one side of the break and changes
   // nothing it holds, so neither edge is inside. A split WITHIN it is, and the range says so.
   splitParagraph: (op) => beside(op.paragraphId, op.offset),
@@ -592,33 +592,14 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
   if (reach.kind === 'control') {
     const chain = enclosingContentControls(part, reach.controlId);
     const own = chain[chain.length - 1];
-    const owner = findNode(part, reach.controlId);
-    const namesControl = own?.id === reach.controlId && own.kind === 'contentControl';
-    const namesInlineOwner = owner !== null && isInlineRunContainer(owner);
     // A NAME THAT IS NOT A CONTROL BUYS NOTHING. Being addressed at a control is what forms
     // protection exempts, so a reach that says so and cannot produce the control is the shape a
     // forged one has — resolving it to "nothing touched, nothing unprotected" would let any node
     // in a protected document be written to by claiming to be a field. Validation refuses these
     // too; this is the half that runs before it, at the package gate.
-    if (!namesControl && !namesInlineOwner) {
+    if (!own || own.id !== reach.controlId || own.kind !== 'contentControl') {
       return { touches: [], unprotected: [part.root.id] };
     }
-    if (namesInlineOwner) {
-      const line =
-        reach.intent === 'value' && reach.at !== undefined
-          ? mergedLine(chain, landingControls(part, reach.at, owner))
-          : chain;
-      return {
-        touches: line.map((control, index) => ({
-          control,
-          locks: locksOf(line.slice(0, index + 1)),
-          removed: false,
-          discarded: false,
-        })),
-        unprotected: line.length > 0 ? [] : [reach.controlId],
-      };
-    }
-    if (!own) return { touches: [], unprotected: [part.root.id] };
     // EVERY CONTROL BETWEEN THE PART ROOT AND WHERE THE WRITE LANDS. For a positioned value
     // write that is the named control's ancestors, the control itself, AND any control nested
     // inside it that the content would go into. The ancestors matter for the same reason: a
@@ -665,7 +646,7 @@ function resolveReach(part: OoxmlPart, reach: TreeOpReach): ResolvedReach {
     ) {
       const landing =
         target.point === 'run-content'
-          ? insertionLandingNodeId(targetNode, target.range.start, null)
+          ? insertionLandingNodeId(targetNode, target.range.start, null, target.bias)
           : targetNode.id;
       const controls = enclosingContentControls(part, landing);
       for (let index = 0; index < controls.length; index += 1) {

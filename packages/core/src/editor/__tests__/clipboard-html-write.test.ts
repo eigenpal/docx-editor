@@ -153,13 +153,14 @@ describe('interopHtmlFromFragment', () => {
           '<w:p><w:r><w:t>before </w:t></w:r>' +
           '<w:smartTag><w:r><w:t>smart</w:t></w:r></w:smartTag>' +
           '<w:customXml><w:r><w:t>custom</w:t></w:r></w:customXml>' +
+          '<w:sdt><w:sdtContent><w:r><w:t>demoted</w:t></w:r></w:sdtContent><w:sdtPr/></w:sdt>' +
           '<w:dir><w:r><w:t>dir</w:t></w:r></w:dir>' +
           '<w:bdo><w:r><w:t>bdo</w:t></w:r></w:bdo>' +
           '<w:r><w:t> after</w:t></w:r></w:p>',
       })
     );
 
-    expect(html).toContain('before smartcustomdirbdo after');
+    expect(html).toContain('before smartcustomdemoteddirbdo after');
   });
 
   test('an RTL run exports its complex-script font', () => {

@@ -23,12 +23,9 @@ import {
   type EditOptions,
 } from '../package/ooxml-edit.ts';
 import { mintParaId, mintedParagraphIdentityAttributes, usedParaIds } from '../package/para-id.ts';
-import { W14_NAMESPACE_URI, isInlineRunContainer } from '../package/ooxml-shared.ts';
-import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
+import { W14_NAMESPACE_URI } from '../package/ooxml-shared.ts';
 import {
   cloneWithNewIds,
-  contentControlContentOf,
-  isContentControlNode,
   paragraphPropertiesNodeOf,
   parentOf,
   TEXT_DEPS,
@@ -37,11 +34,10 @@ import {
   indivisibleAt,
   isParagraph,
   paragraphLength,
-  paragraphOffsetIndex,
   splitsSurrogate,
 } from './tree-op-segments.ts';
 import { rejectContentEdit } from './tree-op-validate-controls.ts';
-import { applyTreeOp, distributeInline, segmentsForChild } from './tree-op-apply.ts';
+import { applyTreeOp } from './tree-op-apply.ts';
 import type { TreeDocOp, TreeOpEffect, TreeOpRejection, TreeOpResult } from './tree-op-types.ts';
 import { recordSetNamespaceBinding } from '../package/canonical-primitive-capture.ts';
 
@@ -53,18 +49,6 @@ export const MAX_FRAGMENT_DEPTH = 64;
 export const MAX_FRAGMENT_NODES = 500_000;
 
 const INSERTABLE_BLOCK_KINDS = new Set(['paragraph', 'table', 'contentControl']);
-
-function isInlineOnlyFragment(op: InsertFragmentOp): boolean {
-  return (
-    op.blocks.length === 1 && op.blocks[0]?.kind === 'paragraph' && op.lastMarkCovered !== true
-  );
-}
-
-function containsNode(root: OoxmlNode, nodeId: string): boolean {
-  if (root.id === nodeId) return true;
-  if (root.kind === 'textValue') return false;
-  return root.children.some((child) => containsNode(child, nodeId));
-}
 
 function fragmentShape(
   node: OoxmlNode,
@@ -101,11 +85,7 @@ export function validateInsertFragment(
     return 'offset-out-of-range';
   }
   if (splitsSurrogate(paragraph, op.offset)) return 'splits-surrogate-pair';
-  // An owned inline splice can divide its wrapper recursively. The unowned split path
-  // cannot, so it keeps the ordinary indivisible-container refusal.
-  if (op.inside === undefined && indivisibleAt(paragraph, op.offset)) {
-    return 'indivisible-content';
-  }
+  if (indivisibleAt(paragraph, op.offset)) return 'indivisible-content';
   if (!Array.isArray(op.blocks) || op.blocks.length === 0) return 'fragment-invalid-block';
   if (op.blocks.length > MAX_FRAGMENT_INSERT_BLOCKS) return 'fragment-resource-budget';
   const budget = { nodes: 0 };
@@ -115,15 +95,6 @@ export function validateInsertFragment(
     }
     const refused = fragmentShape(block, 1, budget);
     if (refused) return refused;
-  }
-  if (op.inside !== undefined) {
-    const owner = findNode(part, op.inside);
-    if (owner && containsNode(paragraph, owner.id) && !isInlineOnlyFragment(op)) {
-      return 'fragment-invalid-block';
-    }
-    // validateTreeOp already resolved locks and bindings from this named owner's actual
-    // insertion landing. A caret-based check here would instead inspect an adjacent control.
-    return null;
   }
   return rejectContentEdit(part, paragraph as OoxmlParagraphNode, op.offset, op.offset);
 }
@@ -253,78 +224,6 @@ function rebuiltParagraph(
   return pPr ? [pPr, ...inline] : inline;
 }
 
-/** The inline sequence a named owner exposes for a rich fragment splice. */
-function inlineOwnerHolder(paragraph: OoxmlParagraphNode, owner: OoxmlNode): OoxmlElement | null {
-  if (containsNode(owner, paragraph.id)) return paragraph;
-  if (isContentControlNode(owner)) return contentControlContentOf(owner) ?? null;
-  if (owner.kind !== 'textValue' && isInlineRunContainer(owner)) return owner;
-  return null;
-}
-
-/** Insert one open-paragraph fragment inside its named inline owner. */
-function applyOwnedInlineFragment(
-  part: OoxmlPart,
-  paragraph: OoxmlParagraphNode,
-  owner: OoxmlNode,
-  offset: number,
-  fragment: OoxmlParagraphNode,
-  nextId: () => string,
-  options?: EditOptions
-): TreeOpResult {
-  const holder = inlineOwnerHolder(paragraph, owner);
-  if (!holder) return { ok: false, reason: 'not-a-content-control' };
-  const index = paragraphOffsetIndex(paragraph);
-  const ownerSpan = containsNode(owner, paragraph.id)
-    ? { start: 0, end: index.length }
-    : index.spanOf(owner);
-  if (!ownerSpan || offset < ownerSpan.start || offset > ownerSpan.end) {
-    return { ok: false, reason: 'offset-out-of-range' };
-  }
-
-  const before: OoxmlNode[] = [];
-  const after: OoxmlNode[] = [];
-  let cursor = ownerSpan.start;
-  for (const child of holder.children) {
-    if (holder.id === owner.id && isInlineContainerProperty(owner, child)) {
-      before.push(child);
-      continue;
-    }
-    const childSegments = segmentsForChild(child, index.segments);
-    if (childSegments.length === 0) {
-      (cursor < offset ? before : after).push(child);
-      continue;
-    }
-    const start = childSegments[0]!.start;
-    const end = childSegments[childSegments.length - 1]!.end;
-    cursor = end;
-    if (end <= offset) {
-      before.push(child);
-      continue;
-    }
-    if (start >= offset) {
-      after.push(child);
-      continue;
-    }
-    const divided = distributeInline(child, [offset], 2, index.segments, nextId);
-    for (const node of divided[0]!) before.push(node);
-    for (const node of divided[1]!) after.push(node);
-  }
-  const children = before.concat(inlineChildrenOf(fragment), after);
-  const replaced = replaceChildren(part, holder.id, children, options);
-  if (!replaced.ok) return { ok: false, reason: 'tree-invariant' };
-  return {
-    ok: true,
-    part: replaced.part,
-    effect: {
-      dirty: [paragraph.id],
-      created: [],
-      deleted: [],
-      dependencyKeys: TEXT_DEPS,
-      impact: 'flow-structural',
-    },
-  };
-}
-
 export function applyInsertFragment(
   hostPart: OoxmlPart,
   op: InsertFragmentOp,
@@ -362,17 +261,6 @@ export function applyInsertFragment(
   const last = blocks[blocks.length - 1]!;
   const inlineOnly =
     blocks.length === 1 && first.kind === 'paragraph' && op.lastMarkCovered !== true;
-
-  if (op.inside !== undefined) {
-    const owner = findNode(part, op.inside);
-    if (!owner) return { ok: false, reason: 'unknown-content-control' };
-    if (containsNode(host, owner.id)) {
-      if (!inlineOnly || first.kind !== 'paragraph') {
-        return { ok: false, reason: 'fragment-invalid-block' };
-      }
-      return applyOwnedInlineFragment(part, host, owner, op.offset, first, nextId, options);
-    }
-  }
 
   if (inlineOnly) {
     // Pure inline splice: split, append the fragment's inline content to the head, join.

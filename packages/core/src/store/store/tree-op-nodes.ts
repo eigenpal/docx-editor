@@ -252,36 +252,6 @@ export function isTemporaryControl(control: OoxmlNode): boolean {
 }
 
 /**
- * Durable replacement owners from one innermost-first container chain.
- *
- * Revisions are never explicit owners. Lifecycle controls veto the full chain because an
- * unscoped insertion must perform their transition. Callers decide whether each otherwise
- * valid owner survives their planned deletion.
- */
-export function survivingReplacementInlineOwners(
-  containers: readonly OoxmlNode[],
-  survivesDeletion: (owner: OoxmlNode) => boolean
-): readonly OoxmlNode[] {
-  for (const container of containers) {
-    if (
-      isContentControlNode(container) &&
-      (isTemporaryControl(container) || isShowingPlaceholder(container))
-    ) {
-      return [];
-    }
-  }
-  const owners: OoxmlNode[] = [];
-  for (const container of containers) {
-    const valid =
-      container.kind === 'contentControl' ||
-      container.kind === 'hyperlink' ||
-      (container.kind === 'generic' && isInlineRunContainer(container));
-    if (valid && survivesDeletion(container)) owners.push(container);
-  }
-  return owners;
-}
-
-/**
  * `w:placeholder/w:docPart` names a glossary entry. This lane preserves the reference and
  * never resolves the glossary, so emptying cannot restore a durable prompt from it.
  */

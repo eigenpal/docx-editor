@@ -10,15 +10,13 @@ import {
 import { canonicalOoxmlFingerprint, serializeOoxmlPart } from '../package/ooxml-serialize.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { isInlineRunContainer } from '../package/ooxml-shared.ts';
-import { applyTreeOp, paragraphTextOf, validateTreeOp, type TreeDocOp } from '../store/tree-ops.ts';
+import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/tree-ops.ts';
 import { paragraphOffsetIndex, runsUnder, segmentsOf } from '../store/tree-op-segments.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WRAPPERS = ['smartTag', 'customXml', 'dir', 'bdo'] as const;
 
 const run = (text: string): string => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
-const deletedRun = (text: string): string =>
-  `<w:r><w:delText xml:space="preserve">${text}</w:delText></w:r>`;
 
 function wrapper(name: (typeof WRAPPERS)[number], content: string): string {
   return `<w:${name}>${content}</w:${name}>`;
@@ -131,15 +129,13 @@ describe('inline run wrapper projection', () => {
   test('typing, deleting, and formatting stay inside a smartTag', () => {
     const original = load(`<w:p>${wrapper('smartTag', run('word'))}${run(' after')}</w:p>`);
     const paragraphId = firstParagraph(original).id;
-    const smartTagId = firstNamed(original, 'smartTag').id;
     const typed = apply(original, {
       op: 'insertText',
       paragraphId,
-      offset: 0,
+      offset: 2,
       text: 'X',
-      inside: smartTagId,
     });
-    expect(textUnder(firstNamed(typed, 'smartTag'))).toBe('Xword');
+    expect(textUnder(firstNamed(typed, 'smartTag'))).toBe('woXrd');
 
     const formatted = apply(typed, {
       op: 'setRunProperties',
@@ -335,135 +331,6 @@ describe('inline run wrapper projection', () => {
       expect(textUnder(firstNamed(next, sample.owner))).toBe('AXB');
     });
   }
-
-  test('an inside-named trailing insertion stays in its smartTag', () => {
-    const original = load(`<w:p>${wrapper('smartTag', run('B'))}</w:p>`);
-    const paragraphId = firstParagraph(original).id;
-    const smartTag = firstNamed(original, 'smartTag');
-    const next = apply(original, {
-      op: 'insertText',
-      paragraphId,
-      offset: 1,
-      text: 'X',
-      inside: smartTag.id,
-    });
-    expect(textUnder(firstNamed(next, 'smartTag'))).toBe('BX');
-    expect(firstParagraph(next).children).toHaveLength(1);
-  });
-
-  test('revision wrappers are not explicit insertion owners', () => {
-    const revisions = [
-      { name: 'del', text: 'delText' },
-      { name: 'moveFrom', text: 'delText' },
-      { name: 'ins', text: 't' },
-      { name: 'moveTo', text: 't' },
-    ] as const;
-    for (const revision of revisions) {
-      const original = load(
-        `<w:p><w:${revision.name} w:id="7" w:author="Prior">` +
-          `<w:r><w:${revision.text}>B</w:${revision.text}></w:r>` +
-          `</w:${revision.name}></w:p>`
-      );
-      const paragraphId = firstParagraph(original).id;
-      expect(
-        validateTreeOp(original, {
-          op: 'insertText',
-          paragraphId,
-          offset: 1,
-          text: 'X',
-          inside: firstNamed(original, revision.name).id,
-        })
-      ).toBe('not-a-content-control');
-    }
-  });
-
-  test('owners under deletion revisions are refused at boundary and interior offsets', () => {
-    const samples = [
-      {
-        revision: 'del',
-        owner: 'hyperlink',
-        xml:
-          '<w:del w:id="7" w:author="Prior"><w:hyperlink w:anchor="target">' +
-          `${deletedRun('ABC')}</w:hyperlink></w:del>`,
-      },
-      {
-        revision: 'moveFrom',
-        owner: 'smartTag',
-        xml:
-          '<w:moveFrom w:id="7" w:author="Prior">' +
-          `${wrapper('smartTag', deletedRun('ABC'))}</w:moveFrom>`,
-      },
-    ] as const;
-    for (const sample of samples) {
-      const original = load(`<w:p>${sample.xml}</w:p>`);
-      const paragraphId = firstParagraph(original).id;
-      const inside = firstNamed(original, sample.owner).id;
-      for (const offset of [0, 1, 3]) {
-        expect(
-          validateTreeOp(original, {
-            op: 'insertText',
-            paragraphId,
-            offset,
-            text: 'X',
-            inside,
-          })
-        ).toBe('not-a-content-control');
-      }
-    }
-  });
-
-  test('owners under insertion revisions stay nested and survive acceptance', () => {
-    for (const revision of ['ins', 'moveTo'] as const) {
-      const original = load(
-        `<w:p><w:${revision} w:id="7" w:author="Prior">` +
-          `${wrapper('smartTag', run('AB'))}</w:${revision}></w:p>`
-      );
-      const paragraphId = firstParagraph(original).id;
-      const owner = firstNamed(original, 'smartTag');
-      const revisionId = firstNamed(original, revision).id;
-      const inserted = apply(original, {
-        op: 'insertText',
-        paragraphId,
-        offset: 1,
-        text: 'X',
-        inside: owner.id,
-      });
-      expect(textUnder(findById(inserted.root, owner.id)!)).toBe('AXB');
-      expect(textUnder(findById(inserted.root, revisionId)!)).toBe('AXB');
-
-      const accepted = apply(inserted, {
-        op: 'acceptRevision',
-        revision: { id: '7', author: 'Prior' },
-        localName: revision,
-      });
-      expect(findById(accepted.root, revisionId)).toBeNull();
-      expect(textUnder(findById(accepted.root, owner.id)!)).toBe('AXB');
-    }
-  });
-
-  test('neutral wrappers, hyperlinks, and controls remain explicit insertion owners', () => {
-    const owners = [
-      { name: 'smartTag', xml: wrapper('smartTag', run('B')) },
-      { name: 'hyperlink', xml: `<w:hyperlink w:anchor="target">${run('B')}</w:hyperlink>` },
-      {
-        name: 'sdt',
-        xml: `<w:sdt><w:sdtPr/><w:sdtContent>${run('B')}</w:sdtContent></w:sdt>`,
-      },
-    ] as const;
-    for (const owner of owners) {
-      const original = load(`<w:p>${owner.xml}</w:p>`);
-      const paragraphId = firstParagraph(original).id;
-      expect(
-        validateTreeOp(original, {
-          op: 'insertText',
-          paragraphId,
-          offset: 1,
-          text: 'X',
-          inside: firstNamed(original, owner.name).id,
-        })
-      ).toBeNull();
-    }
-  });
 
   test('an unowned tracked insertion still creates its own revision', () => {
     const original = load(`<w:p><w:ins w:id="7" w:author="Prior">${run('B')}</w:ins></w:p>`);

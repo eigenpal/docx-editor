@@ -140,7 +140,6 @@ export interface OoxmlProperty {
 }
 
 import type { RevisionAddress, RevisionAttributionInput } from './tree-op-revision-attribution.ts';
-import type { InlineUnitInsertOp } from './tree-op-inline-unit-types.ts';
 export {
   invalidRevisionAttribution,
   type RevisionAddress,
@@ -203,13 +202,13 @@ export type TreeDocOp =
        */
       readonly revision?: RevisionAttributionInput;
       /**
-       * When set, the text belongs INSIDE this neutral inline owner, whatever sits at the offset.
+       * When set, the text belongs INSIDE this content control, whatever sits at the offset.
        *
        * A boundary offset is owned by the run that starts there, which at a control's trailing
        * edge is the run after the control — so an offset alone cannot say "append to this field",
        * the way it cannot say which run of a field result to format (see `targetRunIds`). A
-       * A caller can name a content control, hyperlink, smartTag, customXml, dir, or bdo. Revision
-       * wrappers are not owners. An unnamed op gets the plain offset rule used by a keystroke.
+       * caller that names the control gets the text in the control; one that does not gets the
+       * plain offset rule, which is what a keystroke beside a field means.
        */
       readonly inside?: string;
       /**
@@ -295,7 +294,27 @@ export type TreeDocOp =
       /** Internal shared-notes scope. When present, this must be the canonical id of a note root. */
       readonly scopeRootId?: string;
     }
-  | InlineUnitInsertOp
+  | {
+      readonly op: 'insertTab';
+      readonly paragraphId: string;
+      readonly offset: number;
+      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
+      readonly revision?: RevisionAttributionInput;
+    }
+  | {
+      readonly op: 'insertHardBreak';
+      readonly paragraphId: string;
+      readonly offset: number;
+      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
+      readonly revision?: RevisionAttributionInput;
+    }
+  | {
+      readonly op: 'insertPageBreak';
+      readonly paragraphId: string;
+      readonly offset: number;
+      /** Write this as a TRACKED insertion, on the same terms as `insertText`. */
+      readonly revision?: RevisionAttributionInput;
+    }
   | {
       /**
        * Insert an allowlisted page-number complex field at a UTF-16 offset.
@@ -919,8 +938,6 @@ export type TreeDocOp =
       readonly paragraphId: string;
       readonly offset: number;
       readonly blocks: readonly OoxmlNode[];
-      /** Inline wrapper or content control that receives an inline-only fragment. */
-      readonly inside?: string;
       /** True when the fragment's last paragraph mark travelled (its paragraph stays whole). */
       readonly lastMarkCovered?: boolean;
     }

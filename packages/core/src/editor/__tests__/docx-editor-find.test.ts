@@ -16,7 +16,6 @@ import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import type { OoxmlNode } from '../../store/package/ooxml-tree.ts';
-import { serializeOoxmlPart } from '../../store/package/ooxml-serialize.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -78,7 +77,7 @@ describe('Editor find', () => {
     expect([selection.anchor.offset, selection.head.offset]).toEqual([4, 11]);
   });
 
-  test('selectMatch and typing replace an entire smartTag inside that wrapper', () => {
+  test('selectMatch finds wrapper text and typing at an interior caret stays inside', () => {
     const editor = mount(
       '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
         '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
@@ -91,191 +90,17 @@ describe('Editor find', () => {
       anchor: { paragraphId: match.blockId, offset: 7 },
       head: { paragraphId: match.blockId, offset: 13 },
     });
+    editor.surface!.setSelection({
+      anchor: { paragraphId: match.blockId, offset: 10 },
+      head: { paragraphId: match.blockId, offset: 10 },
+    });
     editor.surface!.type('X');
-    expect(editor.surface!.session.bodyText()).toBe('before X after');
+    expect(editor.surface!.session.bodyText()).toBe('before neeXdle after');
     expect(editor.surface!.state().lastRejection).toBeNull();
-    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
+    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('neeXdle');
   });
 
-  test('typing over an entire hyperlink removes the swept owner and commits', () => {
-    const editor = mount(
-      '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
-        '<w:hyperlink w:anchor="target"><w:r><w:t>needle</w:t></w:r></w:hyperlink>' +
-        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-
-    expect(editor.surface!.session.bodyText()).toBe('before X after');
-    expect(editor.surface!.state().lastRejection).toBeNull();
-    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('<w:hyperlink');
-  });
-
-  test('typing over part of a hyperlink keeps the hyperlink', () => {
-    const editor = mount(
-      '<w:p><w:hyperlink w:anchor="target"><w:r><w:t>needle</w:t></w:r></w:hyperlink></w:p>'
-    );
-    const match = editor.findMatches('eed')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-
-    expect(editor.surface!.session.bodyText()).toBe('nXle');
-    expect(editor.surface!.state().lastRejection).toBeNull();
-    expect(textUnder(editor.surface!.session.part().root, 'hyperlink')).toBe('nXle');
-  });
-
-  test('a replacement spanning a nested wrapper stays in its outer smartTag', () => {
-    const editor = mount(
-      '<w:p><w:smartTag><w:customXml><w:r><w:t>need</w:t></w:r></w:customXml>' +
-        '<w:r><w:t>le</w:t></w:r></w:smartTag><w:r><w:t> after</w:t></w:r></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-    expect(editor.surface!.session.bodyText()).toBe('X after');
-    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
-  });
-
-  test('a replacement spanning a smartTag stays in its inline content control', () => {
-    const editor = mount(
-      '<w:p><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr><w:sdtContent>' +
-        '<w:smartTag><w:r><w:t>need</w:t></w:r></w:smartTag>' +
-        '<w:r><w:t>le</w:t></w:r></w:sdtContent></w:sdt>' +
-        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-    expect(editor.surface!.session.bodyText()).toBe('X after');
-    expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
-  });
-
-  test('replacement inside a temporary control unwraps before inserting', () => {
-    const editor = mount(
-      '<w:p><w:sdt><w:sdtPr><w:temporary/></w:sdtPr><w:sdtContent>' +
-        '<w:r><w:t>needle</w:t></w:r></w:sdtContent></w:sdt></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-
-    expect(editor.surface!.session.bodyText()).toBe('X');
-    expect(editor.surface!.state().lastRejection).toBeNull();
-    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('<w:sdt');
-  });
-
-  test('replacement inside a placeholder clears it before typing continues', () => {
-    const editor = mount(
-      '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>' +
-        '<w:r><w:t>needle</w:t></w:r></w:sdtContent></w:sdt></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-    expect(editor.surface!.session.bodyText()).toBe('X');
-    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('showingPlcHdr');
-
-    editor.surface!.type('Y');
-    expect(editor.surface!.session.bodyText()).toBe('XY');
-  });
-
-  test('replacement directly inside an ordinary inline control stays inside it', () => {
-    const editor = mount(
-      '<w:p><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr><w:sdtContent>' +
-        '<w:r><w:t>needle</w:t></w:r></w:sdtContent></w:sdt></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-
-    expect(editor.surface!.session.bodyText()).toBe('X');
-    expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
-  });
-
-  test('an inline control inside a smartTag owns its complete replacement', () => {
-    const editor = mount(
-      '<w:p><w:smartTag><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>needle</w:t></w:r></w:sdtContent></w:sdt>' +
-        '</w:smartTag></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-
-    expect(editor.surface!.state().lastRejection).toBeNull();
-    expect(editor.surface!.session.bodyText()).toBe('X');
-    expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
-    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
-    expect(serializeOoxmlPart(editor.surface!.session.part())).toContain('<w:tag w:val="field"/>');
-  });
-
-  test('a placeholder control above a smartTag clears before typing continues', () => {
-    const editor = mount(
-      '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>' +
-        '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
-        '</w:sdtContent></w:sdt></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-
-    expect(editor.surface!.session.bodyText()).toBe('X');
-    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('showingPlcHdr');
-    editor.surface!.type('Y');
-    expect(editor.surface!.session.bodyText()).toBe('XY');
-  });
-
-  test('a temporary control above a smartTag unwraps before replacement', () => {
-    const editor = mount(
-      '<w:p><w:sdt><w:sdtPr><w:temporary/></w:sdtPr><w:sdtContent>' +
-        '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
-        '</w:sdtContent></w:sdt></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-
-    expect(editor.surface!.state().lastRejection).toBeNull();
-    expect(editor.surface!.session.bodyText()).toBe('X');
-    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('<w:sdt');
-    editor.surface!.type('Y');
-    expect(editor.surface!.session.bodyText()).toBe('XY');
-  });
-
-  test('a smartTag remains the replacement owner inside an ordinary control', () => {
-    const editor = mount(
-      '<w:p><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr><w:sdtContent>' +
-        '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
-        '</w:sdtContent></w:sdt></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.type('X');
-
-    expect(editor.surface!.state().lastRejection).toBeNull();
-    expect(editor.surface!.session.bodyText()).toBe('X');
-    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
-  });
-
-  test('a tab replacing all smartTag text stays inside the wrapper', () => {
-    const editor = mount(
-      '<w:p><w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
-        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
-    );
-    const match = editor.findMatches('needle')[0]!;
-    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    editor.surface!.insertTab();
-    expect(editor.surface!.session.bodyText()).toBe('\t after');
-    const xml = serializeOoxmlPart(editor.surface!.session.part());
-    const wrapperStart = xml.indexOf('<w:smartTag');
-    const wrapperEnd = xml.indexOf('</w:smartTag>');
-    const tab = xml.indexOf('<w:tab/>');
-    expect(tab).toBeGreaterThan(wrapperStart);
-    expect(tab).toBeLessThan(wrapperEnd);
-  });
-
-  test('smartTag boundary typing agrees with the binding owner rule', () => {
+  test('smartTag boundary typing follows the shared insertion-site rule', () => {
     const insertAt = (offset: number): DocxEditorInstance => {
       const editor = mount(
         '<w:p><w:r><w:t>A</w:t></w:r><w:smartTag><w:r><w:t>BC</w:t></w:r></w:smartTag>' +

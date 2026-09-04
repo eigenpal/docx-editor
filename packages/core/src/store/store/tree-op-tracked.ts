@@ -32,12 +32,11 @@ import {
   nextInlineContainerDepth,
 } from '../package/ooxml-shared.ts';
 import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
-import { createNodeIdAllocator, findNode, replaceChildren } from '../package/ooxml-edit.ts';
+import { createNodeIdAllocator, replaceChildren } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import {
-  insertionDestination,
   paragraphOffsetIndex,
   trailingInsertionDestination,
   type ParagraphOffsetIndex,
@@ -219,8 +218,7 @@ export function applyInsertTracked(
   offset: number,
   text: string,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean },
-  inside?: string
+  options?: { readonly deferValidation?: boolean }
 ): TreeOpResult {
   return applyTrackedInsertion(
     part,
@@ -228,8 +226,7 @@ export function applyInsertTracked(
     offset,
     { length: text.length, nodes: (mint) => [textNode(mint, text, false)] },
     revision,
-    options,
-    inside
+    options
   );
 }
 
@@ -247,8 +244,7 @@ export function applyInsertTrackedElement(
   offset: number,
   element: (mint: () => string) => OoxmlNode,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean },
-  inside?: string
+  options?: { readonly deferValidation?: boolean }
 ): TreeOpResult {
   return applyInsertTrackedElements(
     part,
@@ -257,8 +253,7 @@ export function applyInsertTrackedElement(
     (mint) => [element(mint)],
     1,
     revision,
-    options,
-    inside
+    options
   );
 }
 
@@ -278,8 +273,7 @@ export function applyInsertTrackedElements(
   elements: (mint: () => string) => readonly OoxmlNode[],
   length: number,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean },
-  inside?: string
+  options?: { readonly deferValidation?: boolean }
 ): TreeOpResult {
   return applyTrackedInsertion(
     part,
@@ -287,8 +281,7 @@ export function applyInsertTrackedElements(
     offset,
     { length, nodes: elements },
     revision,
-    options,
-    inside
+    options
   );
 }
 
@@ -325,20 +318,11 @@ function applyTrackedInsertion(
   offset: number,
   payload: TrackedInsertionPayload,
   revision: RevisionAttributionInput,
-  options?: { readonly deferValidation?: boolean },
-  inside?: string
+  options?: { readonly deferValidation?: boolean }
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const offsets = paragraphOffsetIndex(paragraph);
-  const owner = inside === undefined ? null : findNode(part, inside);
-  if (inside !== undefined && (!owner || owner.kind === 'textValue')) {
-    return { ok: false, reason: 'unknown-content-control' };
-  }
-  // Validation gets its landing node from this resolver. The tracked rebuild follows the
-  // resolver's complete path, including controls and neutral wrappers above the named owner.
-  const namedDestination = owner ? insertionDestination(paragraph, offset, owner) : null;
-  const trailingDestination =
-    inside === undefined ? trailingInsertionDestination(paragraph, offset) : null;
+  const trailingDestination = trailingInsertionDestination(paragraph, offset);
   const effect: TreeOpEffect = {
     dirty: [paragraph.id],
     created: [],
@@ -441,7 +425,7 @@ function applyTrackedInsertion(
         continue;
       }
 
-      // Descend inside a container. At a boundary, only an explicit or shared owner keeps it.
+      // Descend inside a container. At a boundary, only an existing or shared container keeps it.
       // Never descend into a deletion: it requires `w:delText`, and accepting it would also
       // take the new insertion.
       const container =
@@ -458,7 +442,6 @@ function applyTrackedInsertion(
         container &&
         insertionAuthor([node]) === revision.author &&
         sameEditingMoment(revisionDateOf(node), revision.date);
-      const namedPath = namedDestination?.path.has(node.id) === true;
       const sharedTrailingOwner = trailingDestination?.path.has(node.id) === true;
       // THE REPLACEMENT FOLLOWS THE DELETION IT REPLACES — into a link or a control, and
       // only when the WHOLE deletion lives there. Replacing a link's display text strikes
@@ -487,7 +470,7 @@ function applyTrackedInsertion(
       if (
         container &&
         ((offset > start && offset < end) ||
-          ((namedPath || ownInsertion || holdsReplaced || sharedTrailingOwner) &&
+          ((ownInsertion || holdsReplaced || sharedTrailingOwner) &&
             offset >= start &&
             offset <= end))
       ) {
@@ -501,9 +484,7 @@ function applyTrackedInsertion(
         // INSIDE the container that holds them.
         if (
           !placed &&
-          ((namedPath && node.id === namedDestination?.landingNodeId) ||
-            holdsReplaced ||
-            (sharedTrailingOwner && node.id === trailingDestination?.holderId)) &&
+          (holdsReplaced || (sharedTrailingOwner && node.id === trailingDestination?.holderId)) &&
           offset === cursor.offset
         ) {
           rebuilt.push(wrap([]));

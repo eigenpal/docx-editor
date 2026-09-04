@@ -11,7 +11,6 @@ import {
   contentControlsIn,
   paragraphOffsetIndex,
   readOoxmlPackage,
-  type OoxmlNode,
   type OoxmlPackage,
   type OoxmlParagraphNode,
 } from '../index.ts';
@@ -261,39 +260,6 @@ describe('forms protection over an inline field', () => {
       const paragraph = firstParagraph(store.part.root as never);
       expect(paragraphOffsetIndex(paragraph).spanOf(originalControl)?.end).toBe(3);
       expect(paragraphOffsetIndex(paragraph).length).toBeGreaterThan(3);
-    }
-  });
-
-  test('named tracked and untracked terminal insertions follow the complete owner path', () => {
-    const body =
-      '<w:p><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr><w:sdtContent>' +
-      '<w:smartTag><w:r><w:t>B</w:t></w:r></w:smartTag>' +
-      '</w:sdtContent></w:sdt></w:p><w:sectPr/>';
-    for (const tracked of [false, true]) {
-      for (const ownerName of ['sdt', 'smartTag'] as const) {
-        const pkg = build(body, FORMS);
-        const main = pkg.parts.get(pkg.mainDocumentPart)!;
-        const settings = pkg.parts.get('/word/settings.xml')!;
-        const owner =
-          ownerName === 'sdt'
-            ? contentControlsIn(main.root)[0]!.node
-            : firstNamed(main.root, 'smartTag');
-        const op: TreeDocOp = {
-          op: 'insertText',
-          paragraphId: paragraphIds(pkg)[0]!,
-          offset: 1,
-          text: 'X',
-          inside: owner.id,
-          ...(tracked ? { revision: { author: 'Reviewer' } } : {}),
-        };
-        expect(formsProtectionRefusal(main, settings, op)).toBeNull();
-        const store = new TreeDocumentStore(pkg, pkg.mainDocumentPart);
-        const result = store.transact((ctx) => ctx.apply(op));
-        expect(result.ok).toBe(true);
-        const updated = nodeWithId(store.part.root, owner.id);
-        expect(textUnder(updated)).toBe('BX');
-        expect(firstNamedOrNull(updated, 'ins') !== null).toBe(tracked);
-      }
     }
   });
 
@@ -550,51 +516,4 @@ function findControlId(node: { kind: string; id: string; children: readonly neve
     if (found) return found;
   }
   return '';
-}
-
-function firstNamed(node: OoxmlNode, localName: string): OoxmlNode {
-  if (node.kind !== 'textValue' && node.localName === localName) return node;
-  if (node.kind !== 'textValue') {
-    for (const child of node.children) {
-      const found = firstNamedOrNull(child, localName);
-      if (found) return found;
-    }
-  }
-  throw new Error(`no ${localName}`);
-}
-
-function firstNamedOrNull(node: OoxmlNode, localName: string): OoxmlNode | null {
-  if (node.kind !== 'textValue' && node.localName === localName) return node;
-  if (node.kind === 'textValue') return null;
-  for (const child of node.children) {
-    const found = firstNamedOrNull(child, localName);
-    if (found) return found;
-  }
-  return null;
-}
-
-function nodeWithId(node: OoxmlNode, id: string): OoxmlNode {
-  if (node.id === id) return node;
-  if (node.kind !== 'textValue') {
-    for (const child of node.children) {
-      const found = nodeWithIdOrNull(child, id);
-      if (found) return found;
-    }
-  }
-  throw new Error(`no node ${id}`);
-}
-
-function nodeWithIdOrNull(node: OoxmlNode, id: string): OoxmlNode | null {
-  if (node.id === id) return node;
-  if (node.kind === 'textValue') return null;
-  for (const child of node.children) {
-    const found = nodeWithIdOrNull(child, id);
-    if (found) return found;
-  }
-  return null;
-}
-
-function textUnder(node: OoxmlNode): string {
-  if (node.kind === 'textValue') return node.value;
-  return node.children.map(textUnder).join('');
 }

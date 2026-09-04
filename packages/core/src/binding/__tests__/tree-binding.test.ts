@@ -11,7 +11,6 @@ import {
 import { treeSchema } from '../tree-schema.ts';
 import { bodyParagraphs, docToTreeOps, reconcileDoc, treeToDoc } from '../tree-binding.ts';
 import { paragraphTextOf, ORIGIN_IDS } from '@docx-editor.dev/core/store';
-import { MAX_INLINE_CONTAINER_DEPTH } from '../../store/store/tree-op-segments.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -43,14 +42,6 @@ function firstNamed(part: OoxmlPart, localName: string): OoxmlNode {
 function textUnder(node: OoxmlNode): string {
   if (node.kind === 'textValue') return node.value;
   return node.children.map(textUnder).join('');
-}
-
-function nestedControls(count: number, content: string): string {
-  let nested = content;
-  for (let depth = 0; depth < count; depth += 1) {
-    nested = `<w:sdt><w:sdtPr/><w:sdtContent>${nested}</w:sdtContent></w:sdt>`;
-  }
-  return nested;
 }
 
 const SIMPLE = '<w:p><w:r><w:t>Hello world</w:t></w:r></w:p>';
@@ -132,8 +123,6 @@ describe('projection (task 6.1)', () => {
     paragraph.forEach((child) => kinds.push(child.isText ? 'text' : child.type.name));
     expect(kinds).toEqual(['text']);
     expect(paragraph.textContent).toBe('inside');
-    const owner = paragraph.child(0).marks.find((mark) => mark.type.name === 'inlineOwner');
-    expect(owner?.attrs.nodeId).toBe(firstNamed(part, 'smartTag').id);
   });
 
   test('an empty body still projects an editable paragraph', () => {
@@ -180,117 +169,6 @@ describe('reverse mapping (task 6.2)', () => {
       { op: 'insertText', paragraphId: id, offset: 6, text: 'there' },
     ]);
     expect(paragraphTextOf(commit(part, doc), id)).toBe('Hello there');
-  });
-
-  test('replace-all keeps text inside each flattened generic wrapper', () => {
-    for (const localName of ['smartTag', 'customXml']) {
-      const part = load(`<w:p><w:${localName}><w:r><w:t>old</w:t></w:r></w:${localName}></w:p>`);
-      const id = bodyParagraphs(part)[0]!.id;
-      const projected = treeToDoc(part);
-      const inside = firstNamed(part, localName).id;
-      const state = EditorState.create({ doc: projected });
-      const doc = state.apply(state.tr.insertText('new', 1, 4)).doc;
-      const mapped = docToTreeOps(part, doc);
-      if (!mapped.ok) throw new Error(mapped.reason);
-      expect(mapped.ops).toEqual([
-        { op: 'deleteText', paragraphId: id, start: 0, end: 3 },
-        { op: 'insertText', paragraphId: id, offset: 0, text: 'new', inside },
-      ]);
-      expect(textUnder(firstNamed(commit(part, doc), localName))).toBe('new');
-    }
-  });
-
-  test('replace-all prefers a durable control nested inside a smartTag', () => {
-    const part = load(
-      '<w:p><w:smartTag><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>old</w:t></w:r></w:sdtContent></w:sdt>' +
-        '</w:smartTag></w:p>'
-    );
-    const paragraphId = bodyParagraphs(part)[0]!.id;
-    const control = firstNamed(part, 'sdt').id;
-    const projected = treeToDoc(part);
-    const mark = projected
-      .child(0)
-      .child(0)
-      .marks.find((candidate) => candidate.type.name === 'inlineOwner');
-    expect(mark?.attrs.nodeId).toBe(control);
-
-    const state = EditorState.create({ doc: projected });
-    const edited = state.apply(state.tr.insertText('new', 1, 4)).doc;
-    const mapped = docToTreeOps(part, edited);
-    if (!mapped.ok) throw new Error(mapped.reason);
-    expect(mapped.ops).toEqual([
-      { op: 'deleteText', paragraphId, start: 0, end: 3 },
-      { op: 'insertText', paragraphId, offset: 0, text: 'new', inside: control },
-    ]);
-    const next = commit(part, edited);
-    expect(textUnder(firstNamed(next, 'sdtContent'))).toBe('new');
-    expect(firstNamed(next, 'tag')).toBeDefined();
-  });
-
-  test('replace-all without its preserving owner is refused', () => {
-    const part = load(
-      '<w:p><w:smartTag><w:r><w:t>old</w:t></w:r></w:smartTag>' +
-        '<w:r><w:t> plain</w:t></w:r></w:p>'
-    );
-    const id = bodyParagraphs(part)[0]!.id;
-    const doc = treeSchema.node('doc', null, [
-      treeSchema.node('paragraph', { nodeId: id, props: [] }, [treeSchema.text('new')]),
-    ]);
-    const mapped = docToTreeOps(part, doc);
-    expect(mapped.ok).toBe(false);
-    if (!mapped.ok) expect(mapped.reason).toBe('inline-owner-mismatch');
-  });
-
-  test('replacement across a nested wrapper uses the common outer owner', () => {
-    const part = load(
-      '<w:p><w:smartTag><w:customXml><w:r><w:t>nested</w:t></w:r></w:customXml>' +
-        '<w:r><w:t>sibling</w:t></w:r></w:smartTag></w:p>'
-    );
-    const id = bodyParagraphs(part)[0]!.id;
-    const state = EditorState.create({ doc: treeToDoc(part) });
-    const doc = state.apply(state.tr.insertText('new', 1, 14)).doc;
-    const mapped = docToTreeOps(part, doc);
-    if (!mapped.ok) throw new Error(mapped.reason);
-    const outer = firstNamed(part, 'smartTag').id;
-    expect(mapped.ops).toEqual([
-      { op: 'deleteText', paragraphId: id, start: 0, end: 13 },
-      { op: 'insertText', paragraphId: id, offset: 0, text: 'new', inside: outer },
-    ]);
-    const next = commit(part, doc);
-    expect(textUnder(firstNamed(next, 'smartTag'))).toBe('new');
-  });
-
-  test('non-inclusive owners keep edge typing outside and interior typing inside', () => {
-    const part = load(
-      '<w:p><w:r><w:t>A</w:t></w:r><w:smartTag><w:r><w:t>BC</w:t></w:r></w:smartTag>' +
-        '<w:r><w:t>D</w:t></w:r></w:p>'
-    );
-    const paragraphId = bodyParagraphs(part)[0]!.id;
-    const owner = firstNamed(part, 'smartTag').id;
-    const insert = (position: number) => {
-      const state = EditorState.create({ doc: treeToDoc(part) });
-      const doc = state.apply(state.tr.insertText('X', position)).doc;
-      return { mapped: docToTreeOps(part, doc), next: commit(part, doc) };
-    };
-    const leading = insert(2);
-    expect(leading.mapped).toEqual({
-      ok: true,
-      ops: [{ op: 'insertText', paragraphId, offset: 1, text: 'X' }],
-    });
-    expect(textUnder(firstNamed(leading.next, 'smartTag'))).toBe('BC');
-    const interior = insert(3);
-    expect(interior.mapped).toEqual({
-      ok: true,
-      ops: [{ op: 'insertText', paragraphId, offset: 2, text: 'X', inside: owner }],
-    });
-    expect(textUnder(firstNamed(interior.next, 'smartTag'))).toBe('BXC');
-    const trailing = insert(4);
-    expect(trailing.mapped).toEqual({
-      ok: true,
-      ops: [{ op: 'insertText', paragraphId, offset: 3, text: 'X' }],
-    });
-    expect(textUnder(firstNamed(trailing.next, 'smartTag'))).toBe('BC');
   });
 
   test('a terminal wrapper edge round-trips an unowned insertion outside', () => {
@@ -353,41 +231,6 @@ describe('reverse mapping (task 6.2)', () => {
     const pastLimitId = bodyParagraphs(pastLimit)[0]!.id;
     expect(paragraphTextOf(pastLimit, pastLimitId)).toBe('');
     expect(treeToDoc(pastLimit).textContent).toBe('');
-  });
-
-  test('owner ancestry counts content controls as one container level', () => {
-    const wrapped = '<w:smartTag><w:r><w:t>old</w:t></w:r></w:smartTag>';
-    for (const count of [16, MAX_INLINE_CONTAINER_DEPTH - 2]) {
-      const part = load(`<w:p>${nestedControls(count, wrapped)}</w:p>`);
-      const paragraphId = bodyParagraphs(part)[0]!.id;
-      const owner = firstNamed(part, 'smartTag').id;
-      const projected = treeToDoc(part);
-      expect(projected.textContent).toBe('old');
-      const state = EditorState.create({ doc: projected });
-      const edited = state.apply(state.tr.insertText('new', 1, 4)).doc;
-      const mapped = docToTreeOps(part, edited);
-      if (!mapped.ok) throw new Error(mapped.reason);
-      expect(mapped.ops).toEqual([
-        { op: 'deleteText', paragraphId, start: 0, end: 3 },
-        { op: 'insertText', paragraphId, offset: 0, text: 'new', inside: owner },
-      ]);
-      expect(textUnder(firstNamed(commit(part, edited), 'smartTag'))).toBe('new');
-    }
-
-    const capped = load(`<w:p>${nestedControls(MAX_INLINE_CONTAINER_DEPTH - 1, wrapped)}</w:p>`);
-    const cappedParagraph = bodyParagraphs(capped)[0]!;
-    expect(paragraphTextOf(capped, cappedParagraph.id)).toBe('');
-    expect(treeToDoc(capped).textContent).toBe('');
-    const hiddenOwner = firstNamed(capped, 'smartTag').id;
-    const forged = treeSchema.node('doc', null, [
-      treeSchema.node('paragraph', { nodeId: cappedParagraph.id, props: [] }, [
-        treeSchema.text('new', [treeSchema.marks.inlineOwner.create({ nodeId: hiddenOwner })]),
-      ]),
-    ]);
-    expect(docToTreeOps(capped, forged)).toMatchObject({
-      ok: false,
-      reason: 'inline-owner-mismatch',
-    });
   });
 
   test('a typed tab and hard break map to content-token ops, not characters', () => {
