@@ -1076,20 +1076,21 @@ function insertNodesAtOffset(
         const inserted = insertChildren(part, paragraph.id, index, nodes);
         return inserted.ok ? inserted.part : null;
       }
-      // A citation at an interior boundary can join only a revision-neutral container.
-      const path = ancestorPathHolding(top, anchorId);
-      const parent = path?.at(-1) ?? null;
-      if (path) {
+      // Split from the segment child because a shared run id would change the requested offset.
+      const precisePath = ancestorPathHolding(top, boundary.node.id);
+      if (precisePath) {
         const placed = placeOutsideOutermostRevision(
           part,
           paragraph,
-          path,
-          anchorId,
+          precisePath,
+          boundary.node.id,
           nodes,
           nextId
         );
         if (placed !== undefined) return placed;
       }
+      const path = ancestorPathHolding(top, anchorId);
+      const parent = path?.at(-1) ?? null;
       if (canHoldNoteCitation(parent, path ?? [])) {
         const at = parent.children.findIndex((child) => child.id === anchorId);
         const inserted = insertChildren(part, parent.id, Math.max(0, at), nodes);

@@ -57,6 +57,7 @@ export function placeOutsideOutermostRevision(
 /** Property children that must appear in both copies of a split lossless wrapper. */
 function splitWrapperProperties(node: OoxmlNode): readonly OoxmlNode[] {
   if (node.kind === 'textValue') return [];
+  if (node.kind === 'run') return node.children.filter((child) => child.kind === 'runProperties');
   return node.children.filter((child) => isInlineContainerProperty(node, child));
 }
 

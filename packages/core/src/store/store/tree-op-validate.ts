@@ -11,7 +11,7 @@ import { OFFICE_MATH_NAMESPACE_URI, parseLinearMath } from '../package/omml-equa
 import { isValidXmlText } from '../package/sinks.ts';
 import { isDangerousKey } from '../package/safe-record.ts';
 import { isAuthorableDataBinding } from '../package/custom-node-payloads.ts';
-import { isInlineRunContainer } from '../package/ooxml-shared.ts';
+import { isContentRevisionKind, isInlineRunContainer } from '../package/ooxml-shared.ts';
 import { validateDeleteBlock } from './tree-op-blocks.ts';
 import {
   deleteBlockTouchesContentRestriction,
@@ -190,9 +190,9 @@ function validateHyperlinkTarget(op: {
 /**
  * Whether the inline owner an insertion names is one it could actually be writing into.
  *
- * Three things have to hold. The name must resolve to a typed content control or inline run
- * container. The owner and paragraph must be on one ancestor line. The offset must fall in the
- * span that owner covers in the paragraph.
+ * Three things have to hold. The name must resolve to a typed content control or neutral inline
+ * run container. The owner and paragraph must be on one ancestor line. The offset must fall in
+ * the span that owner covers in the paragraph. Revision wrappers are never neutral destinations.
  *
  * A block control covers a paragraph it holds. An inline owner covers its own offsets.
  */
@@ -205,7 +205,10 @@ function namedOwnerRefusal(
   if (typeof inside !== 'string' || inside.length === 0) return 'invalidArgs';
   const owner = findNode(part, inside);
   if (!owner) return 'unknown-content-control';
-  if (owner.kind !== 'contentControl' && !isInlineRunContainer(owner)) {
+  if (
+    owner.kind !== 'contentControl' &&
+    (!isInlineRunContainer(owner) || isContentRevisionKind(owner.kind))
+  ) {
     return 'not-a-content-control';
   }
   const paragraph = findNode(part, paragraphId);

@@ -10,7 +10,7 @@ import {
 import { canonicalOoxmlFingerprint, serializeOoxmlPart } from '../package/ooxml-serialize.ts';
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { isInlineRunContainer } from '../package/ooxml-shared.ts';
-import { applyTreeOp, paragraphTextOf, type TreeDocOp } from '../store/tree-ops.ts';
+import { applyTreeOp, paragraphTextOf, validateTreeOp, type TreeDocOp } from '../store/tree-ops.ts';
 import { paragraphOffsetIndex, runsUnder, segmentsOf } from '../store/tree-op-segments.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -262,6 +262,40 @@ describe('inline run wrapper projection', () => {
     );
   }
 
+  const internalBoundaries = [
+    {
+      name: 'hyperlink',
+      xml: `<w:hyperlink w:anchor="target">${run('A')}${run('B')}</w:hyperlink>`,
+      owner: 'hyperlink',
+    },
+    {
+      name: 'smartTag',
+      xml: wrapper('smartTag', `${run('A')}${run('B')}`),
+      owner: 'smartTag',
+    },
+    {
+      name: 'nested smartTag/customXml',
+      xml: wrapper('smartTag', wrapper('customXml', `${run('A')}${run('B')}`)),
+      owner: 'customXml',
+    },
+  ] as const;
+
+  for (const sample of internalBoundaries) {
+    test(`an internal run boundary stays inside ${sample.name}`, () => {
+      const original = load(`<w:p>${sample.xml}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const next = apply(original, {
+        op: 'insertText',
+        paragraphId,
+        offset: 1,
+        text: 'X',
+      });
+
+      expect(paragraphTextOf(next, paragraphId)).toBe('AXB');
+      expect(textUnder(firstNamed(next, sample.owner))).toBe('AXB');
+    });
+  }
+
   test('an inside-named trailing insertion stays in its smartTag', () => {
     const original = load(`<w:p>${wrapper('smartTag', run('B'))}</w:p>`);
     const paragraphId = firstParagraph(original).id;
@@ -275,6 +309,73 @@ describe('inline run wrapper projection', () => {
     });
     expect(textUnder(firstNamed(next, 'smartTag'))).toBe('BX');
     expect(firstParagraph(next).children).toHaveLength(1);
+  });
+
+  test('revision wrappers are not explicit insertion owners', () => {
+    const revisions = [
+      { name: 'del', text: 'delText' },
+      { name: 'moveFrom', text: 'delText' },
+      { name: 'ins', text: 't' },
+      { name: 'moveTo', text: 't' },
+    ] as const;
+    for (const revision of revisions) {
+      const original = load(
+        `<w:p><w:${revision.name} w:id="7" w:author="Prior">` +
+          `<w:r><w:${revision.text}>B</w:${revision.text}></w:r>` +
+          `</w:${revision.name}></w:p>`
+      );
+      const paragraphId = firstParagraph(original).id;
+      expect(
+        validateTreeOp(original, {
+          op: 'insertText',
+          paragraphId,
+          offset: 1,
+          text: 'X',
+          inside: firstNamed(original, revision.name).id,
+        })
+      ).toBe('not-a-content-control');
+    }
+  });
+
+  test('neutral wrappers, hyperlinks, and controls remain explicit insertion owners', () => {
+    const owners = [
+      { name: 'smartTag', xml: wrapper('smartTag', run('B')) },
+      { name: 'hyperlink', xml: `<w:hyperlink w:anchor="target">${run('B')}</w:hyperlink>` },
+      {
+        name: 'sdt',
+        xml: `<w:sdt><w:sdtPr/><w:sdtContent>${run('B')}</w:sdtContent></w:sdt>`,
+      },
+    ] as const;
+    for (const owner of owners) {
+      const original = load(`<w:p>${owner.xml}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      expect(
+        validateTreeOp(original, {
+          op: 'insertText',
+          paragraphId,
+          offset: 1,
+          text: 'X',
+          inside: firstNamed(original, owner.name).id,
+        })
+      ).toBeNull();
+    }
+  });
+
+  test('an unowned tracked insertion still creates its own revision', () => {
+    const original = load(`<w:p><w:ins w:id="7" w:author="Prior">${run('B')}</w:ins></w:p>`);
+    const paragraphId = firstParagraph(original).id;
+    const priorId = firstNamed(original, 'ins').id;
+    const next = apply(original, {
+      op: 'insertText',
+      paragraphId,
+      offset: 1,
+      text: 'X',
+      revision: { author: 'New' },
+    });
+
+    expect(paragraphTextOf(next, paragraphId)).toBe('BX');
+    expect(textUnder(findById(next.root, priorId)!)).toBe('B');
+    expect(serializeOoxmlPart(next).match(/<w:ins/g)).toHaveLength(2);
   });
 
   test('comment range markers land inside a smartTag', () => {

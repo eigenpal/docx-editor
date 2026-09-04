@@ -236,6 +236,36 @@ describe('insertNote', () => {
     }
   });
 
+  test('a citation splits one revised run at its actual child boundary', () => {
+    const store = openStore(
+      build({
+        body:
+          '<w:p><w:ins w:id="1" w:author="A"><w:r>' +
+          '<w:t>A</w:t><w:t>B</w:t></w:r></w:ins></w:p>',
+      })
+    );
+    const paragraphId = firstParagraphId(store.currentPackage());
+    const result = store.applyLifecycleOp({
+      op: 'insertNote',
+      noteKind: 'footnote',
+      paragraphId,
+      offset: 1,
+    });
+    expect(result.ok).toBe(true);
+
+    const main = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
+    expect(paragraphTextOf(main, paragraphId)).toBe('A\u{fffc}B');
+    const xml = serializeOoxmlPart(main);
+    const firstRevision = xml.indexOf('<w:ins');
+    const firstRevisionEnd = xml.indexOf('</w:ins>', firstRevision);
+    const citation = xml.indexOf('<w:footnoteReference');
+    const secondRevision = xml.indexOf('<w:ins', firstRevision + 1);
+    expect(firstRevisionEnd).toBeLessThan(citation);
+    expect(citation).toBeLessThan(secondRevision);
+    expect(xml.slice(firstRevision, firstRevisionEnd)).toContain('>A<');
+    expect(xml.slice(secondRevision)).toContain('>B<');
+  });
+
   test('a control inside a revision moves whole to the citation boundary', () => {
     const store = openStore(
       build({

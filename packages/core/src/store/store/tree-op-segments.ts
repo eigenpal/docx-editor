@@ -431,16 +431,17 @@ export type InsertionSite =
 /**
  * Resolve {@link InsertionSite} for an offset, optionally narrowed to one owner's own content.
  *
- * `owner` is the content control a caller NAMED as the destination. Narrowing to it is what
- * makes a control's trailing edge mean "the end of the field" rather than "the run after it".
- * Without one, a trailing run wrapper is left and a sibling run receives the insertion.
+ * `owner` is the neutral inline container a caller NAMED as the destination. Narrowing to it
+ * makes a container's trailing edge mean "the end of this owner" rather than "the run after
+ * it". Without one, an outer run-wrapper edge receives a sibling run.
  */
 export function insertionSite(
   paragraph: OoxmlParagraphNode,
   offset: number,
   owner: OoxmlNode | null
 ): InsertionSite {
-  const all = segmentsOf(paragraph);
+  const offsets = paragraphOffsetIndex(paragraph);
+  const all = offsets.segments;
   const segments =
     owner === null ? all : all.filter((segment) => containsNode(owner, segment.node.id));
 
@@ -451,10 +452,16 @@ export function insertionSite(
   }
   const boundary = segments.find((segment) => segment.start === offset);
   if (owner === null && boundary) {
+    const boundaryIndex = all.findIndex((segment) => segment === boundary);
+    const preceding = boundaryIndex > 0 ? all[boundaryIndex - 1]! : null;
     const containers = inlineContainersOf(paragraph, boundary.runId);
     let outermostWrapper = -1;
     for (let index = 0; index < containers.length; index += 1) {
-      if (isInlineRunContainer(containers[index]!)) outermostWrapper = index;
+      const container = containers[index]!;
+      if (!isInlineRunContainer(container) || offsets.spanOf(container)?.start !== offset) continue;
+      const followsContentInSameWrapper =
+        preceding !== null && preceding.end === offset && containsNode(container, preceding.runId);
+      if (!followsContentInSameWrapper) outermostWrapper = index;
     }
     const entered = outermostWrapper >= 0 ? containers[outermostWrapper] : null;
     if (entered) {

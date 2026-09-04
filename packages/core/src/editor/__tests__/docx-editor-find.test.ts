@@ -78,7 +78,7 @@ describe('Editor find', () => {
     expect([selection.anchor.offset, selection.head.offset]).toEqual([4, 11]);
   });
 
-  test('selectMatch and typing address text inside a smartTag', () => {
+  test('selectMatch and typing replace an entire smartTag inside that wrapper', () => {
     const editor = mount(
       '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
         '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
@@ -93,7 +93,36 @@ describe('Editor find', () => {
     });
     editor.surface!.type('X');
     expect(editor.surface!.session.bodyText()).toBe('before X after');
+    expect(editor.surface!.state().lastRejection).toBeNull();
     expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
+  });
+
+  test('typing over an entire hyperlink removes the swept owner and commits', () => {
+    const editor = mount(
+      '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
+        '<w:hyperlink w:anchor="target"><w:r><w:t>needle</w:t></w:r></w:hyperlink>' +
+        '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+
+    expect(editor.surface!.session.bodyText()).toBe('before X after');
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('<w:hyperlink');
+  });
+
+  test('typing over part of a hyperlink keeps the hyperlink', () => {
+    const editor = mount(
+      '<w:p><w:hyperlink w:anchor="target"><w:r><w:t>needle</w:t></w:r></w:hyperlink></w:p>'
+    );
+    const match = editor.findMatches('eed')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+
+    expect(editor.surface!.session.bodyText()).toBe('nXle');
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(textUnder(editor.surface!.session.part().root, 'hyperlink')).toBe('nXle');
   });
 
   test('a replacement spanning a nested wrapper stays in its outer smartTag', () => {

@@ -233,6 +233,15 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     for (const owner of inlineContainersOf(paragraph, first.runId)) {
       const span = offsets.spanOf(owner);
       if (!span || start < span.start || end > span.end) continue;
+      // A full-range deletion sweeps hyperlinks and revision wrappers. Revisions are never
+      // replacement owners, and naming a swept hyperlink would make the following insertion
+      // address a missing node. Generic wrappers and ordinary controls survive empty.
+      const survivesDeletion =
+        start > span.start ||
+        end < span.end ||
+        owner.kind === 'contentControl' ||
+        owner.kind === 'generic';
+      if (!survivesDeletion) continue;
       if (owner.kind === 'generic' && isInlineRunContainer(owner)) return owner.id;
       if (owner.kind === 'contentControl') {
         if (isTemporaryControl(owner) || isShowingPlaceholder(owner)) {
