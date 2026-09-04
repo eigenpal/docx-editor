@@ -40,6 +40,7 @@ function fixture(): Uint8Array {
     `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" ` +
     `xmlns:a="${A}" xmlns:wps="${WPS}"><w:body>` +
     p('needle body') +
+    '<w:p><w:r><w:footnoteReference w:id="1"/><w:endnoteReference w:id="2"/></w:r></w:p>' +
     `<w:p>${textbox('needle textbox')}<w:pPr>${section}</w:pPr></w:p>` +
     section +
     '</w:body></w:document>';
@@ -115,7 +116,8 @@ function variantFixture(titlePage: boolean, evenAndOddHeaders: boolean): Uint8Ar
   });
 }
 
-function footnoteFixture(notes: string): Uint8Array {
+function footnoteFixture(notes: string, referenceIds: readonly number[] = [1]): Uint8Array {
+  const references = referenceIds.map((id) => `<w:footnoteReference w:id="${id}"/>`).join('');
   return zipSync(
     {
       '[Content_Types].xml': strToU8(
@@ -129,7 +131,8 @@ function footnoteFixture(notes: string): Uint8Array {
         `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
       ),
       'word/document.xml': strToU8(
-        `<w:document xmlns:w="${W}"><w:body>${p('body')}</w:body></w:document>`
+        `<w:document xmlns:w="${W}"><w:body>${p('body')}` +
+          `<w:p><w:r>${references}</w:r></w:p></w:body></w:document>`
       ),
       'word/_rels/document.xml.rels': strToU8(
         `<Relationships xmlns="${REL}"><Relationship Id="rFootnotes" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
@@ -251,6 +254,17 @@ describe('navigation Find stories', () => {
     expect(open(footnoteFixture(notes)).findText('nested target').matches).toEqual([]);
   });
 
+  test('searches referenced notes and skips orphan notes', () => {
+    const notes =
+      `<w:footnote w:id="1">${p('note target referenced')}</w:footnote>` +
+      `<w:footnote w:id="2">${p('note target orphan')}</w:footnote>`;
+    const matches = open(footnoteFixture(notes, [1])).findText('note target').matches;
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.scope).toEqual({ kind: 'note', id: 'footnote:1' });
+    expect(matches[0]?.contextAfter.trim()).toBe('referenced');
+  });
+
   test('honours the note navigation count cap', () => {
     const prefix = Array.from(
       { length: MAX_NOTES_PER_PART - 1 },
@@ -260,7 +274,7 @@ describe('navigation Find stories', () => {
       prefix +
       `<w:footnote w:id="${MAX_NOTES_PER_PART}">${p('inside cap')}</w:footnote>` +
       `<w:footnote w:id="${MAX_NOTES_PER_PART + 1}">${p('outside cap')}</w:footnote>`;
-    const session = open(footnoteFixture(notes));
+    const session = open(footnoteFixture(notes, [MAX_NOTES_PER_PART, MAX_NOTES_PER_PART + 1]));
 
     expect(session.findText('inside cap').matches).toHaveLength(1);
     expect(session.findText('outside cap').matches).toEqual([]);

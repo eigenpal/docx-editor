@@ -8,7 +8,7 @@
 // `contentControlContent` nodes are the authority once the reader emits them. Both paths
 // share one bound so nesting cannot recurse without limit.
 
-import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { isContentRevisionKind, WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type {
   OoxmlContentControlContentNode,
   OoxmlContentControlNode,
@@ -167,15 +167,17 @@ export function walkAllStoryParagraphs(
 }
 
 /**
- * Paragraph-level inline sequence — runs, hyperlinks, and inline content controls in order.
+ * Paragraph-level inline sequence — runs and their bounded containers in document order.
  *
  * `visit` receives each direct `w:r` and any other inline node the caller treats as opaque
- * (bookmarks, drawings, …). Hyperlinks and content controls are descended transparently.
+ * (bookmarks, drawings, …). Hyperlinks and controls are descended transparently. Callers
+ * that address the runs inside tracked revisions can opt into descending those wrappers too.
  */
 export function walkParagraphInline(
   children: readonly OoxmlNode[],
   depth: number,
-  visit: (child: OoxmlNode) => void
+  visit: (child: OoxmlNode) => void,
+  options: { readonly descendRevisions?: boolean } = {}
 ): void {
   for (const child of children) {
     if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
@@ -183,15 +185,18 @@ export function walkParagraphInline(
       visit(child);
       continue;
     }
-    if (child.kind === 'hyperlink') {
+    if (
+      child.kind === 'hyperlink' ||
+      (options.descendRevisions === true && isContentRevisionKind(child.kind))
+    ) {
       if (depth < MAX_CONTENT_CONTROL_NESTING)
-        walkParagraphInline(child.children, depth + 1, visit);
+        walkParagraphInline(child.children, depth + 1, visit, options);
       continue;
     }
     if (isContentControl(child)) {
       if (depth < MAX_CONTENT_CONTROL_NESTING) {
         const content = contentControlContentOf(child);
-        if (content) walkParagraphInline(content, depth + 1, visit);
+        if (content) walkParagraphInline(content, depth + 1, visit, options);
       }
       continue;
     }

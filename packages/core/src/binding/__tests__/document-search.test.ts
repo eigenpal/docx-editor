@@ -237,6 +237,29 @@ describe('collectTextMatches', () => {
     });
   });
 
+  test('addresses revision-wrapped fields and every later run', () => {
+    const simple = `<w:fldSimple w:instr=" PAGE ">${run('field')}</w:fldSimple>`;
+    const body = para(
+      run('before'),
+      `<w:ins w:id="1" w:author="Ada">${simple}</w:ins>`,
+      run('after')
+    );
+
+    expect(search(body, 'field').matches[0]).toMatchObject({ runIndex: 1, runOffset: 0 });
+    expect(search(body, 'after').matches[0]).toMatchObject({ runIndex: 2, runOffset: 0 });
+  });
+
+  test('addresses a run inside a tracked deletion', () => {
+    const body = para(
+      run('before'),
+      `<w:del w:id="1" w:author="Ada"><w:r><w:delText>gone</w:delText></w:r></w:del>`,
+      run('after')
+    );
+
+    expect(search(body, 'gone').matches[0]).toMatchObject({ runIndex: 1, runOffset: 0 });
+    expect(search(body, 'after').matches[0]).toMatchObject({ runIndex: 2, runOffset: 0 });
+  });
+
   test('orders hyperlink, simple-field, and plain result runs together', () => {
     const simple = `<w:fldSimple w:instr=" PAGE ">${run('field')}</w:fldSimple>`;
     const body = para(

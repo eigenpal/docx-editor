@@ -54,6 +54,7 @@ import {
   relationshipTargetIn,
   normalizeParagraphIdentity,
   paragraphTextOf,
+  collectNoteReferences,
   collectRevisionSites,
   type BookmarkIndex,
   type EmbeddedFont,
@@ -943,10 +944,18 @@ export function openTreeSession(
           return searchCache.result;
         }
         const pkg = currentPackage();
+        const referencedNoteIds = {
+          footnote: new Set<number>(),
+          endnote: new Set<number>(),
+        };
+        for (const reference of collectNoteReferences(store.part)) {
+          referencedNoteIds[reference.noteKind].add(reference.noteId);
+        }
         const result = collectTextMatches(store.part, query, options ?? {}, {
           headerFooterBySection: resolvedHeaderFooterBySection().resolution,
           footnotes: resolveNotesPart(pkg, 'footnote') ?? null,
           endnotes: resolveNotesPart(pkg, 'endnote') ?? null,
+          referencedNoteIds,
         });
         searchCache = { revision, key, result };
         return result;

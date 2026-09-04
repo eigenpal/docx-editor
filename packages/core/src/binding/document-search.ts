@@ -94,6 +94,11 @@ export interface DocumentSearchSources {
   readonly headerFooterBySection: readonly HeaderFooterSectionResolution[];
   readonly footnotes: OoxmlPart | null;
   readonly endnotes: OoxmlPart | null;
+  /** Normal note ids with a body reference that the surface can place. */
+  readonly referencedNoteIds: {
+    readonly footnote: ReadonlySet<number>;
+    readonly endnote: ReadonlySet<number>;
+  };
 }
 
 /**
@@ -127,17 +132,22 @@ function runStarts(paragraph: OoxmlParagraphNode): RunStart[] {
       simpleResultRuns.set(segment.node.id, segment.formatRunIds ?? []);
     }
   }
-  walkParagraphInline(paragraph.children, 0, (node) => {
-    if (node.kind === 'run') {
-      starts.push({ id: node.id, start: offsets.spanOf(node)?.start ?? 0 });
-      return;
-    }
-    if (!isFldSimple(node)) return;
-    for (const runId of simpleResultRuns.get(node.id) ?? []) {
-      const span = offsets.spanOf(runId);
-      if (span) starts.push({ id: runId, start: span.start });
-    }
-  });
+  walkParagraphInline(
+    paragraph.children,
+    0,
+    (node) => {
+      if (node.kind === 'run') {
+        starts.push({ id: node.id, start: offsets.spanOf(node)?.start ?? 0 });
+        return;
+      }
+      if (!isFldSimple(node)) return;
+      for (const runId of simpleResultRuns.get(node.id) ?? []) {
+        const span = offsets.spanOf(runId);
+        if (span) starts.push({ id: runId, start: span.start });
+      }
+    },
+    { descendRevisions: true }
+  );
   return starts;
 }
 
@@ -178,12 +188,16 @@ function furnitureStories(
   return stories;
 }
 
-function noteStories(part: OoxmlPart | null, noteKind: NoteKind): SearchStory[] {
+function noteStories(
+  part: OoxmlPart | null,
+  noteKind: NoteKind,
+  referencedIds: ReadonlySet<number>
+): SearchStory[] {
   if (!part) return [];
   const stories: SearchStory[] = [];
   for (const note of resolvableNotesOf(part.root)) {
     const noteId = noteIdOf(note);
-    if (!isNormalNote(note) || noteId === null) continue;
+    if (!isNormalNote(note) || noteId === null || !referencedIds.has(noteId)) continue;
     stories.push({
       part,
       root: note,
@@ -198,8 +212,16 @@ function searchStories(part: OoxmlPart, sources?: DocumentSearchSources): Search
   if (!sources) return stories;
   const seen = new Set<OoxmlPart>();
   for (const story of furnitureStories(sources.headerFooterBySection, seen)) stories.push(story);
-  for (const story of noteStories(sources.footnotes, 'footnote')) stories.push(story);
-  for (const story of noteStories(sources.endnotes, 'endnote')) stories.push(story);
+  for (const story of noteStories(
+    sources.footnotes,
+    'footnote',
+    sources.referencedNoteIds.footnote
+  )) {
+    stories.push(story);
+  }
+  for (const story of noteStories(sources.endnotes, 'endnote', sources.referencedNoteIds.endnote)) {
+    stories.push(story);
+  }
   return stories;
 }
 

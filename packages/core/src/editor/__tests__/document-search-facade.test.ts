@@ -98,8 +98,16 @@ describe('document search facade', () => {
   });
 
   test('selects every note match that search reports', () => {
+    const scroller = document.createElement('div');
+    scroller.className = 'docx-editor__scroll-container';
+    const container = document.createElement('div');
+    scroller.append(container);
+    document.body.append(scroller);
+    Object.defineProperty(scroller, 'clientHeight', { value: 600, configurable: true });
+    Object.defineProperty(scroller, 'scrollHeight', { value: 100_000, configurable: true });
+    scroller.scrollTo = (() => {}) as HTMLElement['scrollTo'];
     const editor = createDocxEditor({
-      container: document.createElement('div'),
+      container,
       document: storyParityDocx(),
     });
     const matches = editor
@@ -110,8 +118,10 @@ describe('document search facade', () => {
     for (const match of matches) {
       expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
       expect(editor.getActiveScope()).toEqual(match.scope);
+      expect(editor.surface?.revealParagraph(match.blockId)).toBe(true);
     }
     editor.destroy();
+    scroller.remove();
   });
 
   test('leaves an open header when selecting a body match', () => {
