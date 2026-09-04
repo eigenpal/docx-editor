@@ -54,6 +54,14 @@ function docx(body: string, rels = '', stylesXml = ''): Uint8Array {
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const PID = (index: number) => `/word/document.xml#0.0.${index}`;
 
+function nestedSmartTags(inner: string, count: number): string {
+  let nested = inner;
+  for (let index = 0; index < count; index += 1) {
+    nested = `<w:smartTag>${nested}</w:smartTag>`;
+  }
+  return nested;
+}
+
 /**
  * A mounted editor and ITS OWN container.
  *
@@ -435,6 +443,39 @@ describe('editing a hyperlink through the editor', () => {
     const link = reopened.surface!.hyperlinks.linksInCaretParagraph()[0];
     expect(link?.href).toBe('https://example.com');
     expect(reopened.surface!.session.bodyText()).toBe('Visit example today');
+  });
+
+  test('a hyperlink at the container cap is not reported or activated', () => {
+    const target = 'https://example.com/deep';
+    const relationship = `<Relationship Id="rId9" Type="${R}/hyperlink" Target="${target}" TargetMode="External"/>`;
+    const link = '<w:hyperlink r:id="rId9"><w:r><w:t>Hidden</w:t></w:r></w:hyperlink>';
+    const mounted = mount(`<w:p>${nestedSmartTags(link, 31)}</w:p>`, relationship);
+    caret(mounted, 0, 0);
+
+    expect(mounted.editor.surface!.session.bodyText()).toBe('');
+    expect(mounted.editor.surface!.hyperlinks.linksInCaretParagraph()).toEqual([]);
+    expect(mounted.editor.surface!.hyperlinks.linkAtCaret()).toBeNull();
+    expect(mounted.editor.query({ type: 'hyperlinkAt' })).toBeNull();
+    expect(mounted.container.querySelector('a.docx-hyperlink')).toBeNull();
+  });
+
+  test('a hyperlink below the container cap reports its span and activates', () => {
+    const target = 'https://example.com/deep';
+    const relationship = `<Relationship Id="rId9" Type="${R}/hyperlink" Target="${target}" TargetMode="External"/>`;
+    const link = '<w:hyperlink r:id="rId9"><w:r><w:t>Visible</w:t></w:r></w:hyperlink>';
+    const mounted = mount(`<w:p>${nestedSmartTags(link, 30)}</w:p>`, relationship);
+    const activations: string[] = [];
+    mounted.editor.setHyperlinkChrome({
+      onPopover: (activation) => activations.push(activation.link.href ?? ''),
+    });
+    caret(mounted, 0, 0);
+
+    expect(mounted.editor.surface!.hyperlinks.linksInCaretParagraph()).toMatchObject([
+      { start: 0, end: 7, text: 'Visible', href: target },
+    ]);
+    expect(mounted.editor.surface!.hyperlinks.linkAtCaret()?.href).toBe(target);
+    click(anchorFor(mounted, 'Visible'));
+    expect(activations).toEqual([target]);
   });
 });
 
