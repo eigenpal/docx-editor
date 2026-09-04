@@ -271,6 +271,53 @@ describe('reverse mapping (task 6.2)', () => {
     expect(textUnder(firstNamed(next, 'smartTag'))).toBe('BC');
   });
 
+  test('leading wrapper edges round-trip unowned insertions outside', () => {
+    const initial = load('<w:p><w:smartTag><w:r><w:t>BC</w:t></w:r></w:smartTag></w:p>');
+    const initialState = EditorState.create({ doc: treeToDoc(initial) });
+    const initialNext = commit(initial, initialState.apply(initialState.tr.insertText('X', 1)).doc);
+    expect(paragraphTextOf(initialNext, bodyParagraphs(initialNext)[0]!.id)).toBe('XBC');
+    expect(textUnder(firstNamed(initialNext, 'smartTag'))).toBe('BC');
+
+    const adjacent = load(
+      '<w:p><w:smartTag><w:r><w:t>A</w:t></w:r></w:smartTag>' +
+        '<w:customXml><w:r><w:t>B</w:t></w:r></w:customXml></w:p>'
+    );
+    const adjacentState = EditorState.create({ doc: treeToDoc(adjacent) });
+    const adjacentNext = commit(
+      adjacent,
+      adjacentState.apply(adjacentState.tr.insertText('X', 2)).doc
+    );
+    expect(paragraphTextOf(adjacentNext, bodyParagraphs(adjacentNext)[0]!.id)).toBe('AXB');
+    expect(textUnder(firstNamed(adjacentNext, 'smartTag'))).toBe('A');
+    expect(textUnder(firstNamed(adjacentNext, 'customXml'))).toBe('B');
+  });
+
+  test('projection and offsets share the inline-wrapper nesting cutoff', () => {
+    let nested = '<w:smartTag><w:r><w:t>hidden</w:t></w:r></w:smartTag>';
+    nested = `<w:smartTag><w:r><w:t>open</w:t></w:r>${nested}</w:smartTag>`;
+    for (let depth = 2; depth < 32; depth += 1) nested = `<w:smartTag>${nested}</w:smartTag>`;
+    const atLimit = load(`<w:p>${nested}</w:p>`);
+    const paragraphId = bodyParagraphs(atLimit)[0]!.id;
+    const projected = treeToDoc(atLimit);
+
+    expect(paragraphTextOf(atLimit, paragraphId)).toBe('open');
+    expect(projected.textContent).toBe('open');
+
+    const state = EditorState.create({ doc: projected });
+    const edited = state.apply(state.tr.insertText('X', 3)).doc;
+    const next = commit(atLimit, edited);
+    expect(paragraphTextOf(next, paragraphId)).toBe('opXen');
+
+    let tooDeep = '<w:r><w:t>hidden</w:t></w:r>';
+    for (let depth = 0; depth < 33; depth += 1) {
+      tooDeep = `<w:smartTag>${tooDeep}</w:smartTag>`;
+    }
+    const pastLimit = load(`<w:p>${tooDeep}</w:p>`);
+    const pastLimitId = bodyParagraphs(pastLimit)[0]!.id;
+    expect(paragraphTextOf(pastLimit, pastLimitId)).toBe('');
+    expect(treeToDoc(pastLimit).textContent).toBe('');
+  });
+
   test('a typed tab and hard break map to content-token ops, not characters', () => {
     const part = load('<w:p><w:r><w:t>ab</w:t></w:r></w:p>');
     const id = bodyParagraphs(part)[0]!.id;

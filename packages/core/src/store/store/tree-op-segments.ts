@@ -387,7 +387,7 @@ function walkParagraph(
 }
 
 /** Matches the layout projection's nesting cap; see `segmentsOf`. */
-const MAX_INLINE_CONTAINER_DEPTH = 32;
+export const MAX_INLINE_CONTAINER_DEPTH = 32;
 
 /**
  * The runs a paragraph child owns, at any depth — a `w:r`, or every run inside a container.
@@ -450,6 +450,19 @@ export function insertionSite(
     return { kind: 'withinValue', segment };
   }
   const boundary = segments.find((segment) => segment.start === offset);
+  if (owner === null && boundary) {
+    const containers = inlineContainersOf(paragraph, boundary.runId);
+    let outermostWrapper = -1;
+    for (let index = 0; index < containers.length; index += 1) {
+      if (isInlineRunContainer(containers[index]!)) outermostWrapper = index;
+    }
+    const entered = outermostWrapper >= 0 ? containers[outermostWrapper] : null;
+    if (entered) {
+      const holder = directParentOf(paragraph, entered.id) ?? paragraph;
+      const index = holder.children.findIndex((child) => child.id === entered.id);
+      return index < 0 ? { kind: 'newRun', holder } : { kind: 'newRun', holder, index };
+    }
+  }
   if (boundary) return { kind: 'atBoundary', segment: boundary };
 
   if (owner === null) {

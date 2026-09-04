@@ -205,10 +205,7 @@ function namedOwnerRefusal(
   if (typeof inside !== 'string' || inside.length === 0) return 'invalidArgs';
   const owner = findNode(part, inside);
   if (!owner) return 'unknown-content-control';
-  if (
-    owner.kind !== 'contentControl' &&
-    (owner.kind !== 'generic' || !isInlineRunContainer(owner))
-  ) {
+  if (owner.kind !== 'contentControl' && !isInlineRunContainer(owner)) {
     return 'not-a-content-control';
   }
   const paragraph = findNode(part, paragraphId);

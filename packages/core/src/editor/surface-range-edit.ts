@@ -45,7 +45,11 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
-import { inlineContainersOf } from '../store/store/tree-op-nodes.ts';
+import {
+  inlineContainersOf,
+  isShowingPlaceholder,
+  isTemporaryControl,
+} from '../store/store/tree-op-nodes.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
@@ -224,17 +228,24 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     const offsets = paragraphOffsetIndex(paragraph);
     const first = offsets.segments.find((segment) => segment.start <= start && segment.end > start);
     if (!first) return undefined;
+    let stableContainer: string | undefined;
+    let lifecycleControlSeen = false;
     for (const owner of inlineContainersOf(paragraph, first.runId)) {
-      if (
-        owner.kind !== 'contentControl' &&
-        (owner.kind !== 'generic' || !isInlineRunContainer(owner))
-      ) {
+      const span = offsets.spanOf(owner);
+      if (!span || start < span.start || end > span.end) continue;
+      if (owner.kind === 'generic' && isInlineRunContainer(owner)) return owner.id;
+      if (owner.kind === 'contentControl') {
+        if (isTemporaryControl(owner) || isShowingPlaceholder(owner)) {
+          lifecycleControlSeen = true;
+          continue;
+        }
+      } else if (owner.kind !== 'hyperlink') {
         continue;
       }
-      const span = offsets.spanOf(owner);
-      if (span && start >= span.start && end <= span.end) return owner.id;
+      stableContainer ??= owner.id;
     }
-    return undefined;
+    // A non-generic container outside a lifecycle control cannot stand in for that control.
+    return lifecycleControlSeen ? undefined : stableContainer;
   }
 
   function rangeDeletionPlan(): RangeDeletionPlan {

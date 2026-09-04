@@ -122,6 +122,62 @@ describe('Editor find', () => {
     expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
   });
 
+  test('replacement inside a temporary control unwraps before inserting', () => {
+    const editor = mount(
+      '<w:p><w:sdt><w:sdtPr><w:temporary/></w:sdtPr><w:sdtContent>' +
+        '<w:r><w:t>needle</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+
+    expect(editor.surface!.session.bodyText()).toBe('X');
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('<w:sdt');
+  });
+
+  test('replacement inside a placeholder clears it before typing continues', () => {
+    const editor = mount(
+      '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>' +
+        '<w:r><w:t>needle</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+    expect(editor.surface!.session.bodyText()).toBe('X');
+    expect(serializeOoxmlPart(editor.surface!.session.part())).not.toContain('showingPlcHdr');
+
+    editor.surface!.type('Y');
+    expect(editor.surface!.session.bodyText()).toBe('XY');
+  });
+
+  test('replacement directly inside an ordinary inline control stays inside it', () => {
+    const editor = mount(
+      '<w:p><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr><w:sdtContent>' +
+        '<w:r><w:t>needle</w:t></w:r></w:sdtContent></w:sdt></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+
+    expect(editor.surface!.session.bodyText()).toBe('X');
+    expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
+  });
+
+  test('a smartTag remains the replacement owner inside a placeholder control', () => {
+    const editor = mount(
+      '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>' +
+        '<w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
+        '</w:sdtContent></w:sdt></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+
+    expect(editor.surface!.session.bodyText()).toBe('X');
+    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
+  });
+
   test('a tab replacing all smartTag text stays inside the wrapper', () => {
     const editor = mount(
       '<w:p><w:smartTag><w:r><w:t>needle</w:t></w:r></w:smartTag>' +
@@ -172,6 +228,30 @@ describe('Editor find', () => {
     terminal.surface!.type('X');
     expect(terminal.surface!.session.bodyText()).toBe('BCX');
     expect(textUnder(terminal.surface!.session.part().root, 'smartTag')).toBe('BC');
+
+    const initial = mount('<w:p><w:smartTag><w:r><w:t>BC</w:t></w:r></w:smartTag></w:p>');
+    const initialId = initial.surface!.session.paragraphIds()[0]!;
+    initial.surface!.setSelection({
+      anchor: { paragraphId: initialId, offset: 0 },
+      head: { paragraphId: initialId, offset: 0 },
+    });
+    initial.surface!.type('X');
+    expect(initial.surface!.session.bodyText()).toBe('XBC');
+    expect(textUnder(initial.surface!.session.part().root, 'smartTag')).toBe('BC');
+
+    const adjacent = mount(
+      '<w:p><w:smartTag><w:r><w:t>A</w:t></w:r></w:smartTag>' +
+        '<w:customXml><w:r><w:t>B</w:t></w:r></w:customXml></w:p>'
+    );
+    const adjacentId = adjacent.surface!.session.paragraphIds()[0]!;
+    adjacent.surface!.setSelection({
+      anchor: { paragraphId: adjacentId, offset: 1 },
+      head: { paragraphId: adjacentId, offset: 1 },
+    });
+    adjacent.surface!.type('X');
+    expect(adjacent.surface!.session.bodyText()).toBe('AXB');
+    expect(textUnder(adjacent.surface!.session.part().root, 'smartTag')).toBe('A');
+    expect(textUnder(adjacent.surface!.session.part().root, 'customXml')).toBe('B');
   });
 
   test('findMatches narrows on matchCase and wholeWord', () => {

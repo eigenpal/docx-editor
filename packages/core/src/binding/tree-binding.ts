@@ -30,6 +30,7 @@ import {
 } from '../store/package/content-control-walk.ts';
 import { isInlineContainerProperty } from '../store/package/inline-container-properties.ts';
 import { isContentRevisionKind, isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import { MAX_INLINE_CONTAINER_DEPTH } from '../store/store/tree-op-segments.ts';
 import { inlineOwnerOf, runPropsOf, treeSchema } from './tree-schema.ts';
 
 /**
@@ -184,10 +185,12 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
   const walkEditable = (children: readonly OoxmlNode[], depth: number, inside?: string): void => {
     for (const child of children) {
       if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
+      // Match the paragraph-offset walk exactly: children AT the cap are not addressable.
+      if (depth >= MAX_INLINE_CONTAINER_DEPTH) continue;
       if (
         isInlineRunContainer(child) &&
         !isContentRevisionKind(child.kind) &&
-        depth < MAX_CONTENT_CONTROL_NESTING
+        depth < MAX_INLINE_CONTAINER_DEPTH
       ) {
         walkEditable(
           child.children.filter((grand) => !isInlineContainerProperty(child, grand)),

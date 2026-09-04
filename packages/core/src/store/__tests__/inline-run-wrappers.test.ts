@@ -129,11 +129,13 @@ describe('inline run wrapper projection', () => {
   test('typing, deleting, and formatting stay inside a smartTag', () => {
     const original = load(`<w:p>${wrapper('smartTag', run('word'))}${run(' after')}</w:p>`);
     const paragraphId = firstParagraph(original).id;
+    const smartTagId = firstNamed(original, 'smartTag').id;
     const typed = apply(original, {
       op: 'insertText',
       paragraphId,
       offset: 0,
       text: 'X',
+      inside: smartTagId,
     });
     expect(textUnder(firstNamed(typed, 'smartTag'))).toBe('Xword');
 
@@ -169,10 +171,10 @@ describe('inline run wrapper projection', () => {
     {
       name: 'text',
       model: 'X',
-      op: (paragraphId: string, tracked: boolean): TreeDocOp => ({
+      op: (paragraphId: string, tracked: boolean, offset = 1): TreeDocOp => ({
         op: 'insertText',
         paragraphId,
-        offset: 1,
+        offset,
         text: 'X',
         ...(tracked ? { revision: { author: 'New' } } : {}),
       }),
@@ -180,20 +182,20 @@ describe('inline run wrapper projection', () => {
     {
       name: 'tab',
       model: '\t',
-      op: (paragraphId: string, tracked: boolean): TreeDocOp => ({
+      op: (paragraphId: string, tracked: boolean, offset = 1): TreeDocOp => ({
         op: 'insertTab',
         paragraphId,
-        offset: 1,
+        offset,
         ...(tracked ? { revision: { author: 'New' } } : {}),
       }),
     },
     {
       name: 'hard break',
       model: '\n',
-      op: (paragraphId: string, tracked: boolean): TreeDocOp => ({
+      op: (paragraphId: string, tracked: boolean, offset = 1): TreeDocOp => ({
         op: 'insertHardBreak',
         paragraphId,
-        offset: 1,
+        offset,
         ...(tracked ? { revision: { author: 'New' } } : {}),
       }),
     },
@@ -219,6 +221,45 @@ describe('inline run wrapper projection', () => {
         }
       );
     }
+  }
+
+  for (const insertion of edgeInsertions) {
+    test.each([false, true])(
+      `unowned ${insertion.name} stays outside a paragraph-initial smartTag (tracked=%s)`,
+      (tracked) => {
+        const original = load(`<w:p>${wrapper('smartTag', run('B'))}</w:p>`);
+        const paragraphId = firstParagraph(original).id;
+        const wrapperId = firstNamed(original, 'smartTag').id;
+        const next = apply(original, insertion.op(paragraphId, tracked, 0));
+        const paragraph = firstParagraph(next);
+        const wrapperIndex = paragraph.children.findIndex((child) => child.id === wrapperId);
+
+        expect(paragraphTextOf(next, paragraphId)).toBe(`${insertion.model}B`);
+        expect(textUnder(findById(next.root, wrapperId)!)).toBe('B');
+        expect(wrapperIndex).toBeGreaterThan(0);
+      }
+    );
+
+    test.each([false, true])(
+      `unowned ${insertion.name} stays between adjacent wrappers (tracked=%s)`,
+      (tracked) => {
+        const original = load(
+          `<w:p>${wrapper('smartTag', run('A'))}${wrapper('customXml', run('B'))}</w:p>`
+        );
+        const paragraphId = firstParagraph(original).id;
+        const leftId = firstNamed(original, 'smartTag').id;
+        const rightId = firstNamed(original, 'customXml').id;
+        const next = apply(original, insertion.op(paragraphId, tracked, 1));
+        const paragraph = firstParagraph(next);
+        const leftIndex = paragraph.children.findIndex((child) => child.id === leftId);
+        const rightIndex = paragraph.children.findIndex((child) => child.id === rightId);
+
+        expect(paragraphTextOf(next, paragraphId)).toBe(`A${insertion.model}B`);
+        expect(textUnder(findById(next.root, leftId)!)).toBe('A');
+        expect(textUnder(findById(next.root, rightId)!)).toBe('B');
+        expect(rightIndex).toBeGreaterThan(leftIndex + 1);
+      }
+    );
   }
 
   test('an inside-named trailing insertion stays in its smartTag', () => {

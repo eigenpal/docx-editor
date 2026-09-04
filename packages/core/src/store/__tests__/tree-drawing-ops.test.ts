@@ -521,6 +521,70 @@ describe('inserts drawing', () => {
     );
   }
 
+  test.each([false, true])(
+    'places a leading drawing before a paragraph-initial smartTag (tracked=%s)',
+    (tracked) => {
+      const host = parse(
+        `<w:document xmlns:w="${W}"><w:body><w:p>` +
+          '<w:smartTag><w:r><w:t>B</w:t></w:r></w:smartTag>' +
+          '</w:p></w:body></w:document>'
+      );
+      const paragraphId = paragraphIdOf(host);
+      const wrapperId = firstNamed(host, 'smartTag').id;
+      const op: TreeDocOp = {
+        op: 'insertDrawing',
+        paragraphId,
+        offset: 0,
+        drawing: drawingOf(parse(inlinePictureDrawing())),
+        ...(tracked ? { revision: { author: 'Reviewer' } } : {}),
+      };
+      expect(validateTreeOp(host, op)).toBeNull();
+      const next = apply(host, op);
+      const paragraph = findById(next.root, paragraphId)!;
+      if (paragraph.kind === 'textValue') throw new Error('paragraph became text');
+      const wrapperIndex = paragraph.children.findIndex((child) => child.id === wrapperId);
+
+      expect(paragraphTextOf(next, paragraphId)).toBe(`\uFFFCB`);
+      expect(hasDescendant(findById(next.root, wrapperId)!, 'drawing')).toBe(false);
+      expect(wrapperIndex).toBeGreaterThan(0);
+      expect(hasDescendant(paragraph.children[wrapperIndex - 1]!, 'drawing')).toBe(true);
+    }
+  );
+
+  test.each([false, true])(
+    'places a boundary drawing between adjacent wrappers (tracked=%s)',
+    (tracked) => {
+      const host = parse(
+        `<w:document xmlns:w="${W}"><w:body><w:p>` +
+          '<w:smartTag><w:r><w:t>A</w:t></w:r></w:smartTag>' +
+          '<w:customXml><w:r><w:t>B</w:t></w:r></w:customXml>' +
+          '</w:p></w:body></w:document>'
+      );
+      const paragraphId = paragraphIdOf(host);
+      const leftId = firstNamed(host, 'smartTag').id;
+      const rightId = firstNamed(host, 'customXml').id;
+      const op: TreeDocOp = {
+        op: 'insertDrawing',
+        paragraphId,
+        offset: 1,
+        drawing: drawingOf(parse(inlinePictureDrawing())),
+        ...(tracked ? { revision: { author: 'Reviewer' } } : {}),
+      };
+      expect(validateTreeOp(host, op)).toBeNull();
+      const next = apply(host, op);
+      const paragraph = findById(next.root, paragraphId)!;
+      if (paragraph.kind === 'textValue') throw new Error('paragraph became text');
+      const leftIndex = paragraph.children.findIndex((child) => child.id === leftId);
+      const rightIndex = paragraph.children.findIndex((child) => child.id === rightId);
+
+      expect(paragraphTextOf(next, paragraphId)).toBe(`A\uFFFCB`);
+      expect(hasDescendant(findById(next.root, leftId)!, 'drawing')).toBe(false);
+      expect(hasDescendant(findById(next.root, rightId)!, 'drawing')).toBe(false);
+      expect(rightIndex).toBeGreaterThan(leftIndex + 1);
+      expect(hasDescendant(paragraph.children[leftIndex + 1]!, 'drawing')).toBe(true);
+    }
+  );
+
   test('validation and apply place a trailing drawing outside a nested locked control', () => {
     const host = parse(
       `<w:document xmlns:w="${W}"><w:body><w:p><w:smartTag>` +
