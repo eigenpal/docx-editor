@@ -1485,6 +1485,7 @@ export type FragmentMergeResult = {
 export interface FragmentPasteInput {
     readonly actorId?: string;
     readonly fragmentBytes: Uint8Array;
+    readonly inside?: string;
     // (undocumented)
     readonly lastMarkCovered: boolean;
     // (undocumented)
@@ -4176,22 +4177,7 @@ export type TreeDocOp = {
 } | {
     readonly op: 'rejectAllRevisions';
     readonly scopeRootId?: string;
-} | {
-    readonly offset: number;
-    readonly op: 'insertTab';
-    readonly paragraphId: string;
-    readonly revision?: RevisionAttributionInput;
-} | {
-    readonly offset: number;
-    readonly op: 'insertHardBreak';
-    readonly paragraphId: string;
-    readonly revision?: RevisionAttributionInput;
-} | {
-    readonly offset: number;
-    readonly op: 'insertPageBreak';
-    readonly paragraphId: string;
-    readonly revision?: RevisionAttributionInput;
-} | {
+} | InlineUnitInsertOp | {
     readonly field: 'PAGE' | 'NUMPAGES' | 'SECTIONPAGES' | 'PAGE_X_OF_Y';
     readonly offset: number;
     readonly op: 'insertPageField';
@@ -4465,6 +4451,7 @@ export type TreeDocOp = {
     readonly sectionIndex?: number;
 } | {
     readonly blocks: readonly OoxmlNode[];
+    readonly inside?: string;
     readonly lastMarkCovered?: boolean;
     readonly offset: number;
     readonly op: 'insertFragment';

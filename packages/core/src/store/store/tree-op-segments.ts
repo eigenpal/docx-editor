@@ -494,6 +494,41 @@ export function insertionSite(
   return { kind: 'newRun', holder };
 }
 
+export interface InsertionDestination {
+  readonly site: InsertionSite;
+  readonly landingNodeId: string;
+  /** Every node from the paragraph through the landing node, including both endpoints. */
+  readonly path: ReadonlySet<string>;
+}
+
+/** Resolve one insertion site and its complete paragraph-local ancestor path. */
+export function insertionDestination(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  owner: OoxmlNode | null
+): InsertionDestination {
+  const site = insertionSite(paragraph, offset, owner);
+  const landingNodeId =
+    site.kind === 'withinValue' || site.kind === 'atBoundary'
+      ? site.segment.runId
+      : site.kind === 'appendToRun'
+        ? site.run.id
+        : site.holder.id;
+  const path = new Set<string>();
+  const collect = (node: OoxmlNode): boolean => {
+    if (node.id === landingNodeId) {
+      path.add(node.id);
+      return true;
+    }
+    if (node.kind === 'textValue') return false;
+    const holds = node.children.some(collect);
+    if (holds) path.add(node.id);
+    return holds;
+  };
+  collect(paragraph);
+  return { site, landingNodeId, path };
+}
+
 /** Where a run goes inside a control: its content element, or the control itself. */
 function contentHolder(control: OoxmlElement): OoxmlElement {
   for (const child of control.children) {
@@ -517,10 +552,7 @@ export function insertionLandingNodeId(
   offset: number,
   owner: OoxmlNode | null
 ): string {
-  const site = insertionSite(paragraph, offset, owner);
-  if (site.kind === 'withinValue' || site.kind === 'atBoundary') return site.segment.runId;
-  if (site.kind === 'appendToRun') return site.run.id;
-  return site.holder.id;
+  return insertionDestination(paragraph, offset, owner).landingNodeId;
 }
 
 export interface TrailingInsertionDestination {
@@ -533,21 +565,9 @@ export function trailingInsertionDestination(
   paragraph: OoxmlParagraphNode,
   offset: number
 ): TrailingInsertionDestination | null {
-  const site = insertionSite(paragraph, offset, null);
-  if (site.kind !== 'newRun') return null;
-  const path = new Set<string>();
-  const collect = (node: OoxmlNode): boolean => {
-    if (node.id === site.holder.id) {
-      path.add(node.id);
-      return true;
-    }
-    if (node.kind === 'textValue') return false;
-    const holds = node.children.some(collect);
-    if (holds) path.add(node.id);
-    return holds;
-  };
-  collect(paragraph);
-  return { holderId: site.holder.id, path };
+  const destination = insertionDestination(paragraph, offset, null);
+  if (destination.site.kind !== 'newRun') return null;
+  return { holderId: destination.site.holder.id, path: destination.path };
 }
 
 function containsNode(node: OoxmlNode, id: string): boolean {

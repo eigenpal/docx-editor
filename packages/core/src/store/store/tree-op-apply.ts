@@ -264,7 +264,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   // Typing into a prompt REPLACES it. The transition belongs here rather than beside the
   // caret: an automation call and a paste insert text too, and a prompt that survived them
   // would leave the typed characters appended to "Click here to enter text.".
-  if (op.op === 'insertText' && !op.revision) {
+  if (op.op === 'insertText' && !op.revision && op.inside === undefined) {
     const prompt = placeholderControlForInsertion(part, op.paragraphId, op.offset);
     if (prompt) {
       const emptied = clearPlaceholder(part, prompt.control.id, options);
@@ -633,7 +633,10 @@ function applyInsertContent(
   inside?: string,
   bias: 'left' | 'right' = 'left'
 ): TreeOpResult {
-  const control = contentControlAtCaret(part, paragraph, offset, offset, bias);
+  // A named owner is authoritative. Adjacent placeholder and temporary controls only own an
+  // unscoped caret, or they can consume an edit explicitly addressed to their neighbour.
+  const control =
+    inside === undefined ? contentControlAtCaret(part, paragraph, offset, offset, bias) : null;
   if (control && isShowingPlaceholder(control)) {
     return applyPlaceholderReplace(part, control, builders, options);
   }

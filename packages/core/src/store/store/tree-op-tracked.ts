@@ -17,14 +17,6 @@
 //   - deleting your own pending insertion REMOVES it, because there is nothing to propose to
 //     anyone else — the text never existed for them;
 //   - deleting inside an existing `w:del` does nothing, since it is already gone.
-//
-// EVERY length here comes from `paragraphOffsetIndex`, which is `segmentsOf`'s own walk. This
-// module used to carry a private `lengthOf` that summed text characters, and it disagreed with
-// the authority on three things: a note reference and an atomic field measure ONE unit each and
-// it gave them none, and a field's `w:instrText` measures nothing and it counted its
-// characters. In any paragraph holding a footnote, an endnote or a field, that put a tracked
-// insert at the wrong offset, refused an insert at the true paragraph end as out of range, and
-// struck one character too many while leaving the reference standing.
 
 import {
   WML_NAMESPACE_URI,
@@ -35,11 +27,12 @@ import {
 } from '../package/ooxml-tree.ts';
 import { isContentRevisionKind, isInlineRunContainer } from '../package/ooxml-shared.ts';
 import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
-import { createNodeIdAllocator, replaceChildren } from '../package/ooxml-edit.ts';
+import { createNodeIdAllocator, findNode, replaceChildren } from '../package/ooxml-edit.ts';
 import { equivalentNodes } from './ooxml-node-equality.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
 import {
+  insertionDestination,
   paragraphOffsetIndex,
   trailingInsertionDestination,
   type ParagraphOffsetIndex,
@@ -368,6 +361,13 @@ function applyTrackedInsertion(
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const offsets = paragraphOffsetIndex(paragraph);
+  const owner = inside === undefined ? null : findNode(part, inside);
+  if (inside !== undefined && (!owner || owner.kind === 'textValue')) {
+    return { ok: false, reason: 'unknown-content-control' };
+  }
+  // Validation gets its landing node from this resolver. The tracked rebuild follows the
+  // resolver's complete path, including controls and neutral wrappers above the named owner.
+  const namedDestination = owner ? insertionDestination(paragraph, offset, owner) : null;
   const trailingDestination =
     inside === undefined ? trailingInsertionDestination(paragraph, offset) : null;
   const effect: TreeOpEffect = {
@@ -484,7 +484,7 @@ function applyTrackedInsertion(
         container &&
         insertionAuthor([node]) === revision.author &&
         sameEditingMoment(revisionDateOf(node), revision.date);
-      const namedOwner = inside !== undefined && node.id === inside && isInlineRunContainer(node);
+      const namedPath = namedDestination?.path.has(node.id) === true;
       const sharedTrailingOwner = trailingDestination?.path.has(node.id) === true;
       // THE REPLACEMENT FOLLOWS THE DELETION IT REPLACES — into a link or a control, and
       // only when the WHOLE deletion lives there. Replacing a link's display text strikes
@@ -513,7 +513,7 @@ function applyTrackedInsertion(
       if (
         container &&
         ((offset > start && offset < end) ||
-          ((namedOwner || ownInsertion || holdsReplaced || sharedTrailingOwner) &&
+          ((namedPath || ownInsertion || holdsReplaced || sharedTrailingOwner) &&
             offset >= start &&
             offset <= end))
       ) {
@@ -523,7 +523,7 @@ function applyTrackedInsertion(
         // INSIDE the container that holds them.
         if (
           !placed &&
-          (namedOwner ||
+          ((namedPath && node.id === namedDestination?.landingNodeId) ||
             holdsReplaced ||
             (sharedTrailingOwner && node.id === trailingDestination?.holderId)) &&
           offset === cursor.offset
