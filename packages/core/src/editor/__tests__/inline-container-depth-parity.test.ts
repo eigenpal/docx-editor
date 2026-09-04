@@ -50,6 +50,15 @@ function nestedOwner(count: number, owner: 'bdo' | 'control'): string {
   return content;
 }
 
+function demotedControlsAround(count: number, content: string): string {
+  let nested = content;
+  for (let depth = 0; depth < count; depth += 1) {
+    // Properties after content make each `w:sdt` canonical but generic.
+    nested = `<w:sdt><w:sdtContent>${nested}</w:sdtContent><w:sdtPr/></w:sdt>`;
+  }
+  return nested;
+}
+
 function loadedParagraph(xml: string): { part: OoxmlPart; paragraph: OoxmlParagraphNode } {
   const result = readOoxmlPart(
     `<w:document xmlns:w="${W}"><w:body><w:p>${xml}</w:p></w:body></w:document>`,
@@ -151,6 +160,64 @@ describe('inline container depth parity', () => {
       const refused = applyTreeOp(opaque.part, opaqueOp);
       expect(refused.ok).toBe(false);
       if (!refused.ok) expect(refused.reason).toBe('not-a-content-control');
+    }
+  });
+
+  test('demoted content controls consume the shared container budget', () => {
+    const wrapper = '<w:bdo><w:r><w:t>A</w:t></w:r></w:bdo>';
+    const addressable = loadedParagraph(
+      demotedControlsAround(MAX_INLINE_CONTAINER_DEPTH - 2, wrapper)
+    );
+    const addressableOwner = descendants(addressable.paragraph).find(
+      (node) => node.kind === 'generic' && node.localName === 'bdo'
+    );
+    if (!addressableOwner) throw new Error('addressable demoted owner is missing');
+    expect(
+      descendants(addressable.paragraph).filter(
+        (node) => node.kind === 'generic' && node.localName === 'sdt'
+      )
+    ).toHaveLength(MAX_INLINE_CONTAINER_DEPTH - 2);
+    const inserted = applyTreeOp(addressable.part, {
+      op: 'insertText',
+      paragraphId: addressable.paragraph.id,
+      offset: 1,
+      text: 'X',
+      inside: addressableOwner.id,
+    });
+    if (!inserted.ok) throw new Error(inserted.reason);
+    const insertedParagraph = descendants(inserted.part.root).find(
+      (node): node is OoxmlParagraphNode => node.kind === 'paragraph'
+    );
+    if (!insertedParagraph) throw new Error('inserted demoted paragraph is missing');
+    expect(paragraphTextOf(inserted.part, insertedParagraph.id)).toBe('AX');
+    expect(
+      piecesOfParagraph(insertedParagraph)
+        .map((piece) => piece.text)
+        .join('')
+    ).toBe('AX');
+
+    for (const count of [MAX_INLINE_CONTAINER_DEPTH - 1, MAX_INLINE_CONTAINER_DEPTH]) {
+      const opaque = loadedParagraph(demotedControlsAround(count, wrapper));
+      const owner = descendants(opaque.paragraph).find(
+        (node) => node.kind === 'generic' && node.localName === 'bdo'
+      );
+      if (!owner) throw new Error('opaque demoted owner is missing');
+      expect(paragraphTextOf(opaque.part, opaque.paragraph.id)).toBe('');
+      expect(
+        piecesOfParagraph(opaque.paragraph)
+          .map((piece) => piece.text)
+          .join('')
+      ).toBe('');
+      expect(treeToDoc(opaque.part).textContent).toBe('');
+      expect(
+        validateTreeOp(opaque.part, {
+          op: 'insertText',
+          paragraphId: opaque.paragraph.id,
+          offset: 0,
+          text: 'X',
+          inside: owner.id,
+        })
+      ).toBe('not-a-content-control');
     }
   });
 });

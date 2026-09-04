@@ -185,7 +185,12 @@ export const MAX_INLINE_CONTAINER_DEPTH = 32;
 
 /** Depth inherited by a node's children in the shared paragraph-inline address space. */
 export function nextInlineContainerDepth(node: OoxmlNode, depth: number): number {
-  return isInlineRunContainer(node) || node.kind === 'contentControl' ? depth + 1 : depth;
+  const contentControl =
+    node.kind === 'contentControl' ||
+    (node.kind === 'generic' &&
+      node.namespaceUri === WML_NAMESPACE_URI &&
+      node.localName === 'sdt');
+  return isInlineRunContainer(node) || contentControl ? depth + 1 : depth;
 }
 
 /** Whether a run/block-polymorphic wrapper contains block-level content. */

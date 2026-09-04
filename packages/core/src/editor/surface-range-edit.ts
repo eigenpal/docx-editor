@@ -30,10 +30,10 @@ import {
   inlineControlStartingAt,
   paragraphOffsetIndex,
   parentNodeOf,
+  type OoxmlNode,
   type StoryScope,
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
-import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
 import {
   paragraphTextFromLayout,
   paragraphsInCells,
@@ -47,8 +47,7 @@ import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
 import {
   inlineContainersOf,
-  isShowingPlaceholder,
-  isTemporaryControl,
+  survivingReplacementInlineOwners,
 } from '../store/store/tree-op-nodes.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { partOfNodeId } from './surface-scope.ts';
@@ -228,45 +227,31 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     const offsets = paragraphOffsetIndex(paragraph);
     const first = offsets.segments.find((segment) => segment.start <= start && segment.end > start);
     if (!first) return undefined;
-    let stableContainer: string | undefined;
-    let genericContainer: string | undefined;
-    let lifecycleControlSeen = false;
+    const enclosing: OoxmlNode[] = [];
     for (const owner of inlineContainersOf(paragraph, first.runId)) {
       const span = offsets.spanOf(owner);
       if (!span) continue;
       const ownsReplacement = collapsed
         ? span.start < start && start < span.end
         : span.start <= start && end <= span.end;
-      if (!ownsReplacement) continue;
+      if (ownsReplacement) enclosing.push(owner);
+    }
+    const owners = survivingReplacementInlineOwners(enclosing, (owner) => {
+      const span = offsets.spanOf(owner);
+      if (!span) return false;
       // A full-range deletion sweeps hyperlinks and revision wrappers. Revisions are never
       // replacement owners, and naming a swept hyperlink would make the following insertion
       // address a missing node. Generic wrappers and ordinary controls survive empty. A
       // collapsed caret deletes nothing, but only a point strictly inside a wrapper owns it.
-      const survivesDeletion =
+      return (
         collapsed ||
         start > span.start ||
         end < span.end ||
         owner.kind === 'contentControl' ||
-        owner.kind === 'generic';
-      if (!survivesDeletion) continue;
-      if (owner.kind === 'generic' && isInlineRunContainer(owner)) {
-        genericContainer ??= owner.id;
-        continue;
-      }
-      if (owner.kind === 'contentControl') {
-        if (isTemporaryControl(owner) || isShowingPlaceholder(owner)) {
-          lifecycleControlSeen = true;
-          continue;
-        }
-      } else if (owner.kind !== 'hyperlink') {
-        continue;
-      }
-      stableContainer ??= owner.id;
-    }
-    // Inspect the WHOLE chain before choosing the nearest neutral wrapper. An owned insert
-    // skips lifecycle transitions, so any temporary or placeholder control on the path must
-    // veto ownership and let the established unscoped transition run.
-    return lifecycleControlSeen ? undefined : (genericContainer ?? stableContainer);
+        owner.kind === 'generic'
+      );
+    });
+    return owners[0]?.id;
   }
 
   function rangeDeletionPlan(): RangeDeletionPlan {

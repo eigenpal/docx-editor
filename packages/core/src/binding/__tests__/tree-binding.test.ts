@@ -200,6 +200,34 @@ describe('reverse mapping (task 6.2)', () => {
     }
   });
 
+  test('replace-all prefers a durable control nested inside a smartTag', () => {
+    const part = load(
+      '<w:p><w:smartTag><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>old</w:t></w:r></w:sdtContent></w:sdt>' +
+        '</w:smartTag></w:p>'
+    );
+    const paragraphId = bodyParagraphs(part)[0]!.id;
+    const control = firstNamed(part, 'sdt').id;
+    const projected = treeToDoc(part);
+    const mark = projected
+      .child(0)
+      .child(0)
+      .marks.find((candidate) => candidate.type.name === 'inlineOwner');
+    expect(mark?.attrs.nodeId).toBe(control);
+
+    const state = EditorState.create({ doc: projected });
+    const edited = state.apply(state.tr.insertText('new', 1, 4)).doc;
+    const mapped = docToTreeOps(part, edited);
+    if (!mapped.ok) throw new Error(mapped.reason);
+    expect(mapped.ops).toEqual([
+      { op: 'deleteText', paragraphId, start: 0, end: 3 },
+      { op: 'insertText', paragraphId, offset: 0, text: 'new', inside: control },
+    ]);
+    const next = commit(part, edited);
+    expect(textUnder(firstNamed(next, 'sdtContent'))).toBe('new');
+    expect(firstNamed(next, 'tag')).toBeDefined();
+  });
+
   test('replace-all without its preserving owner is refused', () => {
     const part = load(
       '<w:p><w:smartTag><w:r><w:t>old</w:t></w:r></w:smartTag>' +

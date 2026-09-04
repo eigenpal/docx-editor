@@ -32,7 +32,9 @@ import {
   isContentRevisionKind,
   isInlineRunContainer,
   MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
 } from '../store/package/ooxml-shared.ts';
+import { survivingReplacementInlineOwners } from '../store/store/tree-op-nodes.ts';
 import { inlineOwnerOf, runPropsOf, treeSchema } from './tree-schema.ts';
 
 /**
@@ -184,7 +186,11 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
     // Paragraph-level unknown content keeps a position in the inline sequence.
     tokens.push({ kind: 'unknown', nodeId: child.id, label: unknownLabel(child) });
   };
-  const walkEditable = (children: readonly OoxmlNode[], depth: number, inside?: string): void => {
+  const walkEditable = (
+    children: readonly OoxmlNode[],
+    depth: number,
+    containers: readonly OoxmlNode[] = []
+  ): void => {
     for (const child of children) {
       if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
       // Match the paragraph-offset walk exactly: children AT the cap are not addressable.
@@ -196,22 +202,33 @@ function tokensOfParagraph(paragraph: OoxmlNode): Token[] {
       ) {
         walkEditable(
           child.children.filter((grand) => !isInlineContainerProperty(child, grand)),
-          depth + 1,
-          child.kind === 'generic' ? child.id : inside
+          nextInlineContainerDepth(child, depth),
+          [child, ...containers]
         );
         continue;
       }
       if (isContentControl(child)) {
         const content = contentControlContentOf(child);
-        if (content) walkEditable(content, depth + 1, inside);
+        if (content) {
+          walkEditable(content, nextInlineContainerDepth(child, depth), [child, ...containers]);
+        }
         continue;
       }
-      visit(child, inside);
+      const owner = durableProjectedOwners(containers)[0];
+      visit(child, owner?.id);
     }
   };
   // Revisions stay opaque here. The reverse PM binding must preserve their authored identity.
   walkEditable(paragraph.children, 0);
   return tokens;
+}
+
+/** Owners that remain after their projected content becomes empty. */
+function durableProjectedOwners(containers: readonly OoxmlNode[]): readonly OoxmlNode[] {
+  return survivingReplacementInlineOwners(
+    containers,
+    (owner) => owner.kind === 'contentControl' || owner.kind === 'generic'
+  );
 }
 
 /** Body paragraphs of a part, in document order. */
@@ -390,31 +407,44 @@ function soleOwner(owners: readonly (string | undefined)[]): string | undefined 
   return first;
 }
 
-/** Generic wrapper owner and its generic wrapper ancestors, innermost first. */
+/** Durable owner and its durable ancestors, innermost first. */
 function inlineOwnerAncestors(paragraph: OoxmlNode): ReadonlyMap<string, readonly string[]> {
   const out = new Map<string, readonly string[]>();
   const walk = (
     children: readonly OoxmlNode[],
-    ancestors: readonly string[],
+    containers: readonly OoxmlNode[],
     depth: number
   ): void => {
     for (const child of children) {
       if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
       if (depth >= MAX_INLINE_CONTAINER_DEPTH) continue;
       if (isInlineRunContainer(child) && !isContentRevisionKind(child.kind)) {
-        const owns = child.kind === 'generic';
-        const next = owns ? [child.id, ...ancestors] : ancestors;
-        if (owns) out.set(child.id, next);
+        const next = [child, ...containers];
+        const owners = durableProjectedOwners(next);
+        if (owners[0]?.id === child.id)
+          out.set(
+            child.id,
+            owners.map((owner) => owner.id)
+          );
         walk(
           child.children.filter((grand) => !isInlineContainerProperty(child, grand)),
           next,
-          depth + 1
+          nextInlineContainerDepth(child, depth)
         );
         continue;
       }
       if (isContentControl(child)) {
         const content = contentControlContentOf(child);
-        if (content) walk(content, ancestors, depth + 1);
+        if (content) {
+          const next = [child, ...containers];
+          const owners = durableProjectedOwners(next);
+          if (owners[0]?.id === child.id)
+            out.set(
+              child.id,
+              owners.map((owner) => owner.id)
+            );
+          walk(content, next, nextInlineContainerDepth(child, depth));
+        }
       }
     }
   };

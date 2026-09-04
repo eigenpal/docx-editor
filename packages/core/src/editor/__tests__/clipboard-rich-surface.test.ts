@@ -340,6 +340,40 @@ describe('rich paste', () => {
     target.surface.destroy();
   });
 
+  test('a control inside a smartTag owns its complete rich replacement', () => {
+    const source = mount('<w:p><w:r><w:rPr><w:b/></w:rPr><w:t>rich</w:t></w:r></w:p>');
+    const sourceId = source.surface.session.paragraphIds()[0]!;
+    source.surface.setSelection({
+      anchor: { paragraphId: sourceId, offset: 0 },
+      head: { paragraphId: sourceId, offset: 4 },
+    });
+    const flavours = source.surface.copyFlavours();
+
+    const target = mount(
+      '<w:p><w:smartTag><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>old</w:t></w:r></w:sdtContent></w:sdt>' +
+        '</w:smartTag></w:p>'
+    );
+    const targetId = target.surface.session.paragraphIds()[0]!;
+    target.surface.setSelection({
+      anchor: { paragraphId: targetId, offset: 0 },
+      head: { paragraphId: targetId, offset: 3 },
+    });
+    expect(target.surface.pasteRich(flavours.text, flavours.html)).toBe(true);
+    expect(target.surface.session.bodyText()).toBe('rich');
+    expect(textUnder(target.surface.session.part().root, 'sdtContent')).toBe('rich');
+
+    const markup = serializeOoxmlPart(target.surface.session.part());
+    const contentStart = markup.indexOf('<w:sdtContent');
+    const contentEnd = markup.indexOf('</w:sdtContent>');
+    expect(markup).toContain('<w:tag w:val="field"/>');
+    expect(markup.indexOf('<w:b/>')).toBeGreaterThan(contentStart);
+    expect(markup.indexOf('<w:b/>')).toBeLessThan(contentEnd);
+
+    source.surface.destroy();
+    target.surface.destroy();
+  });
+
   test('a collapsed rich paste preserves formatting strictly inside a smartTag', () => {
     const source = mount(
       '<w:p><w:r><w:t>Y</w:t></w:r>' +

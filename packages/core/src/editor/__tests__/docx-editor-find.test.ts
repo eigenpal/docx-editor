@@ -193,6 +193,23 @@ describe('Editor find', () => {
     expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
   });
 
+  test('an inline control inside a smartTag owns its complete replacement', () => {
+    const editor = mount(
+      '<w:p><w:smartTag><w:sdt><w:sdtPr><w:tag w:val="field"/></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>needle</w:t></w:r></w:sdtContent></w:sdt>' +
+        '</w:smartTag></w:p>'
+    );
+    const match = editor.findMatches('needle')[0]!;
+    expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
+    editor.surface!.type('X');
+
+    expect(editor.surface!.state().lastRejection).toBeNull();
+    expect(editor.surface!.session.bodyText()).toBe('X');
+    expect(textUnder(editor.surface!.session.part().root, 'sdtContent')).toBe('X');
+    expect(textUnder(editor.surface!.session.part().root, 'smartTag')).toBe('X');
+    expect(serializeOoxmlPart(editor.surface!.session.part())).toContain('<w:tag w:val="field"/>');
+  });
+
   test('a placeholder control above a smartTag clears before typing continues', () => {
     const editor = mount(
       '<w:p><w:sdt><w:sdtPr><w:showingPlcHdr/><w:text/></w:sdtPr><w:sdtContent>' +
