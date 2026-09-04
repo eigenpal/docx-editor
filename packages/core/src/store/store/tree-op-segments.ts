@@ -459,6 +459,22 @@ export function insertionSite(
     const boundaryIndex = all.findIndex((segment) => segment === boundary);
     const preceding = boundaryIndex > 0 ? all[boundaryIndex - 1]! : null;
     const containers = inlineContainersOf(paragraph, boundary.runId);
+    // A hyperlink display-text replacement explicitly asks for the innermost hyperlink that
+    // starts here. Resolve that target before the ordinary wrapper-edge escape, so an enclosing
+    // neutral or revision wrapper cannot hide it by also starting at this offset.
+    const biasedHyperlink =
+      bias === 'right'
+        ? containers.find(
+            (container) =>
+              container.kind === 'hyperlink' && offsets.spanOf(container)?.start === offset
+          )
+        : null;
+    if (biasedHyperlink) {
+      const biasedBoundary = all.find(
+        (segment) => segment.start === offset && containsNode(biasedHyperlink, segment.runId)
+      );
+      if (biasedBoundary) return { kind: 'atBoundary', segment: biasedBoundary };
+    }
     let outermostWrapper = -1;
     for (let index = 0; index < containers.length; index += 1) {
       const container = containers[index]!;
@@ -468,9 +484,7 @@ export function insertionSite(
       if (!followsContentInSameWrapper) outermostWrapper = index;
     }
     const entered = outermostWrapper >= 0 ? containers[outermostWrapper] : null;
-    // Hyperlink display-text replacement has always used right bias to keep the link alive.
-    // Generic wrappers do not inherit this exception: their unowned leading edge stays outside.
-    if (entered && !(bias === 'right' && entered.kind === 'hyperlink')) {
+    if (entered) {
       const holder = directParentOf(paragraph, entered.id) ?? paragraph;
       const index = holder.children.findIndex((child) => child.id === entered.id);
       return index < 0 ? { kind: 'newRun', holder } : { kind: 'newRun', holder, index };

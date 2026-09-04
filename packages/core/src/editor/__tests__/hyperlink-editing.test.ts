@@ -254,6 +254,46 @@ describe('editing a hyperlink through the editor', () => {
     expect(mounted.editor.surface!.session.bodyText()).toBe('Visit our site today');
   });
 
+  const enclosingLinkCases = [
+    { name: 'smartTag', wrap: (inner: string) => `<w:smartTag>${inner}</w:smartTag>` },
+    { name: 'customXml', wrap: (inner: string) => `<w:customXml>${inner}</w:customXml>` },
+    {
+      name: 'w:ins',
+      wrap: (inner: string) =>
+        `<w:ins w:id="7" w:author="Prior" w:date="2020-01-01T00:00:00Z">${inner}</w:ins>`,
+    },
+  ] as const;
+
+  test.each(enclosingLinkCases)(
+    'right-biased display replacement stays in a hyperlink inside $name',
+    ({ wrap }) => {
+      const target = 'https://example.com/original';
+      const hyperlink = '<w:hyperlink r:id="rId9"><w:r><w:t>Docs</w:t></w:r></w:hyperlink>';
+      const mounted = mount(
+        `<w:p>${wrap(hyperlink)}<w:r><w:t> tail</w:t></w:r></w:p>`,
+        `<Relationship Id="rId9" Type="${R}/hyperlink" Target="${target}" TargetMode="External"/>`
+      );
+      const before = mounted.editor.surface!.hyperlinks.linksInCaretParagraph()[0]!;
+      caret(mounted, 0, 2);
+
+      expect(
+        mounted.editor.surface!.hyperlinks.applyHyperlink({ url: target, text: 'Guide' })
+      ).toBe(true);
+
+      const links = mounted.editor.surface!.hyperlinks.linksInCaretParagraph();
+      expect(links).toHaveLength(1);
+      expect(links[0]!.id).toBe(before.id);
+      expect(links[0]!.text).toBe('Guide');
+      expect(links[0]!.href).toBe(target);
+      expect(mounted.editor.surface!.session.bodyText()).toBe('Guide tail');
+      expect(
+        mounted.editor
+          .surface!.session.currentPackage()
+          .externalTargets.some((entry) => entry.id === 'rId9' && entry.rawTarget === target)
+      ).toBe(true);
+    }
+  );
+
   test('deleting a link’s whole text keeps the bookmarks that were inside it', () => {
     // Removing the emptied `w:hyperlink` took its subtree with it, so an anchor other links
     // point at disappeared — while the identical marker written OUTSIDE a link survives the

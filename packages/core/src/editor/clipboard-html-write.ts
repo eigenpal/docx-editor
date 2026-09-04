@@ -535,7 +535,7 @@ function advanceFieldState(node: OoxmlElement, fields: FieldState, depth = 0): v
     if (child.kind === 'drawing') continue;
     if (child.kind === 'contentControl') {
       const content = child.children.find((inner) => inner.kind === 'contentControlContent');
-      if (content && isElement(content)) advanceFieldState(content, fields, childDepth);
+      if (content && isElement(content)) advanceFieldState(content, fields, childDepth + 1);
       continue;
     }
     if (child.kind === 'fldChar') {

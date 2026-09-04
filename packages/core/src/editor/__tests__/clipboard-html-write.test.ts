@@ -6,6 +6,7 @@
 
 import { describe, expect, test } from 'bun:test';
 import { writeZip, strToU8 } from '../../store/package/zip.ts';
+import { MAX_INLINE_CONTAINER_DEPTH } from '../../store/package/ooxml-shared.ts';
 import { interopHtmlFromFragment } from '../clipboard-html-write.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -524,6 +525,26 @@ describe('interopHtmlFromFragment', () => {
     expect(html).toContain('7');
     expect(html).toContain('2026');
     expect(html).not.toContain('DATE');
+  });
+
+  test('the deleted-field probe charges nested content-control depth', () => {
+    let deletedSeparate = '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
+    for (let depth = 1; depth < MAX_INLINE_CONTAINER_DEPTH; depth += 1) {
+      deletedSeparate = `<w:sdt><w:sdtContent>${deletedSeparate}</w:sdtContent></w:sdt>`;
+    }
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r>' +
+          `<w:del w:id="1" w:author="a">${deletedSeparate}</w:del>` +
+          '<w:r><w:t>INSTRUCTION</w:t></w:r>' +
+          '<w:r><w:fldChar w:fldCharType="separate"/><w:t>RESULT</w:t></w:r>' +
+          '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>',
+      })
+    );
+
+    expect(html).not.toContain('INSTRUCTION');
+    expect(html).toContain('RESULT');
   });
 
   test('paragraph flow controls, tabs, shading, and borders become Word-compatible CSS', () => {
