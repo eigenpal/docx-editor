@@ -203,6 +203,45 @@ describe('collectTextMatches', () => {
     expect(result.truncated).toBe(false);
   });
 
+  test('addresses a simple field result run and the following plain run', () => {
+    const simple = `<w:fldSimple w:instr=" PAGE ">${run('7')}</w:fldSimple>`;
+    const body = para(run('A'), simple, run('Z'));
+
+    expect(search(body, '7').matches[0]).toMatchObject({
+      start: 1,
+      runIndex: 1,
+      runOffset: 0,
+    });
+    expect(search(body, 'Z').matches[0]).toMatchObject({
+      start: 2,
+      runIndex: 2,
+      runOffset: 0,
+    });
+  });
+
+  test('orders hyperlink, simple-field, and plain result runs together', () => {
+    const simple = `<w:fldSimple w:instr=" PAGE ">${run('field')}</w:fldSimple>`;
+    const body = para(
+      run('before'),
+      `<w:hyperlink r:id="rId9">${run('link-one')}${run('link-two')}</w:hyperlink>`,
+      simple,
+      run('after')
+    );
+
+    expect(
+      ['before', 'link-one', 'link-two', 'field', 'after'].map((query) => {
+        const match = search(body, query).matches[0];
+        return [match?.runIndex, match?.runOffset];
+      })
+    ).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, 0],
+      [3, 0],
+      [4, 0],
+    ]);
+  });
+
   test('keeps store segment order for a nested simple field without endorsing visible order', () => {
     const simple = `<w:fldSimple w:instr=" PAGE ">${run('7')}</w:fldSimple>`;
     const outer = complexFieldMarkup(' IF ', run('x') + simple + run('y'));

@@ -38,6 +38,7 @@ import {
   resolvableNotesOf,
   type NoteKind,
 } from '../store/package/note-nodes.ts';
+import { isFldSimple } from '../store/package/field-nodes.ts';
 import { bodyStoryRoot, storyParagraphs, storyRootsOf } from '../store/package/story-blocks.ts';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
@@ -107,16 +108,30 @@ export interface DocumentSearchResult {
 }
 
 /**
- * Where each run starts, in paragraph-text offsets, in document order. Runs nested inside
- * a `w:hyperlink` are flattened in place: a link's runs are runs, and a find UI addressing
- * "the third run" means the third one you would meet reading the paragraph.
+ * Where each run starts, in paragraph-text offsets, in document order. Hyperlink runs and
+ * `w:fldSimple` result runs are flattened where a reader meets them. An empty simple field
+ * contributes no run, and its empty result cannot start a match. A complex field keeps its
+ * existing run sequence; its atom starts in the begin run.
  */
 function runStarts(paragraph: OoxmlParagraphNode): number[] {
   const starts: number[] = [];
   const offsets = paragraphOffsetIndex(paragraph);
+  const simpleResultRuns = new Map<string, readonly string[]>();
+  for (const segment of offsets.segments) {
+    if (isFldSimple(segment.node)) {
+      simpleResultRuns.set(segment.node.id, segment.formatRunIds ?? []);
+    }
+  }
   walkParagraphInline(paragraph.children, 0, (node) => {
-    if (node.kind !== 'run') return;
-    starts.push(offsets.spanOf(node)?.start ?? 0);
+    if (node.kind === 'run') {
+      starts.push(offsets.spanOf(node)?.start ?? 0);
+      return;
+    }
+    if (!isFldSimple(node)) return;
+    for (const runId of simpleResultRuns.get(node.id) ?? []) {
+      const span = offsets.spanOf(runId);
+      if (span) starts.push(span.start);
+    }
   });
   return starts;
 }

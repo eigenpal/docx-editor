@@ -346,7 +346,14 @@ function walkParagraph(
     }
     if (isFldSimple(child)) {
       const atom = atomByBeginId.get(child.id);
-      if (atom) emitAtom(atom);
+      if (atom) {
+        emitAtom(atom);
+        // A simple field is one model atom, but its result runs remain public run addresses.
+        // Give every result run the atom span without changing the paragraph offset space.
+        if (spans !== null) {
+          for (const runId of atom.formatRunIds) spans.set(runId, { start, end: offset });
+        }
+      }
       record(child, start);
       return;
     }
