@@ -459,19 +459,19 @@ export function insertionSite(
     const boundaryIndex = all.findIndex((segment) => segment === boundary);
     const preceding = boundaryIndex > 0 ? all[boundaryIndex - 1]! : null;
     const containers = inlineContainersOf(paragraph, boundary.runId);
-    // A hyperlink display-text replacement explicitly asks for the innermost hyperlink that
-    // starts here. Resolve that target before the ordinary wrapper-edge escape, so an enclosing
-    // neutral or revision wrapper cannot hide it by also starting at this offset.
-    const biasedHyperlink =
+    // Default typing at a wrapper edge stays outside, but `bias: 'right'` explicitly asks to
+    // join the run that starts there. Resolve its innermost transparent container before the
+    // ordinary wrapper-edge escape, so the default rule cannot override the caller's request.
+    const biasedContainer =
       bias === 'right'
         ? containers.find(
             (container) =>
-              container.kind === 'hyperlink' && offsets.spanOf(container)?.start === offset
+              isInlineRunContainer(container) && offsets.spanOf(container)?.start === offset
           )
         : null;
-    if (biasedHyperlink) {
+    if (biasedContainer) {
       const biasedBoundary = all.find(
-        (segment) => segment.start === offset && containsNode(biasedHyperlink, segment.runId)
+        (segment) => segment.start === offset && containsNode(biasedContainer, segment.runId)
       );
       if (biasedBoundary) return { kind: 'atBoundary', segment: biasedBoundary };
     }

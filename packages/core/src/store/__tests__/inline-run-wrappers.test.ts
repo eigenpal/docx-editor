@@ -298,6 +298,50 @@ describe('inline run wrapper projection', () => {
     );
   }
 
+  const neutralBiasWrappers = ['smartTag', 'customXml', 'dir', 'bdo'] as const;
+
+  test.each(neutralBiasWrappers)(
+    'bias right joins the run at a paragraph-initial %s edge',
+    (name) => {
+      const original = load(`<w:p>${wrapper(name, run('B'))}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const wrapperId = firstNamed(original, name).id;
+      const runId = firstNamed(original, 'r').id;
+      const next = apply(original, {
+        op: 'insertText',
+        paragraphId,
+        offset: 0,
+        text: 'X',
+        bias: 'right',
+      });
+
+      expect(paragraphTextOf(next, paragraphId)).toBe('XB');
+      expect(textUnder(findById(next.root, wrapperId)!)).toBe('XB');
+      expect(textUnder(findById(next.root, runId)!)).toBe('XB');
+    }
+  );
+
+  test.each(neutralBiasWrappers)(
+    'default bias stays outside a paragraph-initial %s edge',
+    (name) => {
+      const original = load(`<w:p>${wrapper(name, run('B'))}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const wrapperId = firstNamed(original, name).id;
+      const next = apply(original, {
+        op: 'insertText',
+        paragraphId,
+        offset: 0,
+        text: 'X',
+      });
+      const paragraph = firstParagraph(next);
+      const wrapperIndex = paragraph.children.findIndex((child) => child.id === wrapperId);
+
+      expect(paragraphTextOf(next, paragraphId)).toBe('XB');
+      expect(textUnder(findById(next.root, wrapperId)!)).toBe('B');
+      expect(wrapperIndex).toBeGreaterThan(0);
+    }
+  );
+
   const internalBoundaries = [
     {
       name: 'hyperlink',
