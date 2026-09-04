@@ -6,7 +6,7 @@
 // Application lives in tree-op-apply.ts; public entry is tree-ops.ts.
 
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { findNode } from '../package/ooxml-edit.ts';
+import { findNode, parentNodeOf } from '../package/ooxml-edit.ts';
 import { OFFICE_MATH_NAMESPACE_URI, parseLinearMath } from '../package/omml-equation.ts';
 import { isValidXmlText } from '../package/sinks.ts';
 import { isDangerousKey } from '../package/safe-record.ts';
@@ -190,9 +190,10 @@ function validateHyperlinkTarget(op: {
 /**
  * Whether the inline owner an insertion names is one it could actually be writing into.
  *
- * Three things have to hold. The name must resolve to a typed content control or neutral inline
+ * Four things have to hold. The name must resolve to a typed content control or neutral inline
  * run container. The owner and paragraph must be on one ancestor line. The offset must fall in
- * the span that owner covers in the paragraph. Revision wrappers are never neutral destinations.
+ * the span that owner covers in the paragraph. Its local path cannot cross a deletion revision.
+ * Revision wrappers are never neutral destinations.
  *
  * A block control covers a paragraph it holds. An inline owner covers its own offsets.
  */
@@ -219,6 +220,17 @@ function namedOwnerRefusal(
       ? paragraphOffsetIndex(paragraph).spanOf(owner)
       : null;
   if (!span) return 'unknown-content-control';
+  if (holds(paragraph, inside)) {
+    let ancestor = parentNodeOf(part, owner.id);
+    while (ancestor && ancestor.id !== paragraph.id) {
+      // Deleted and moved-from content disappears when its revision is accepted. Insertion
+      // revisions stay eligible because they contain live text and acceptance only unwraps them.
+      if (ancestor.kind === 'revisionDelete' || ancestor.kind === 'revisionMoveFrom') {
+        return 'not-a-content-control';
+      }
+      ancestor = parentNodeOf(part, ancestor.id);
+    }
+  }
   if (!Number.isInteger(offset) || offset < span.start || offset > span.end) {
     return 'offset-out-of-range';
   }

@@ -391,14 +391,32 @@ function soleOwner(owners: readonly (string | undefined)[]): string | undefined 
 /** Generic wrapper owner and its generic wrapper ancestors, innermost first. */
 function inlineOwnerAncestors(paragraph: OoxmlNode): ReadonlyMap<string, readonly string[]> {
   const out = new Map<string, readonly string[]>();
-  const walk = (node: OoxmlNode, ancestors: readonly string[], depth: number): void => {
-    if (node.kind === 'textValue' || depth >= MAX_CONTENT_CONTROL_NESTING) return;
-    const owns = node.kind === 'generic' && isInlineRunContainer(node);
-    const next = owns ? [node.id, ...ancestors] : ancestors;
-    if (owns) out.set(node.id, next);
-    for (const child of node.children) walk(child, next, depth + 1);
+  const walk = (
+    children: readonly OoxmlNode[],
+    ancestors: readonly string[],
+    depth: number
+  ): void => {
+    for (const child of children) {
+      if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
+      if (depth >= MAX_INLINE_CONTAINER_DEPTH) continue;
+      if (isInlineRunContainer(child) && !isContentRevisionKind(child.kind)) {
+        const owns = child.kind === 'generic';
+        const next = owns ? [child.id, ...ancestors] : ancestors;
+        if (owns) out.set(child.id, next);
+        walk(
+          child.children.filter((grand) => !isInlineContainerProperty(child, grand)),
+          next,
+          depth + 1
+        );
+        continue;
+      }
+      if (isContentControl(child) && depth < MAX_CONTENT_CONTROL_NESTING) {
+        const content = contentControlContentOf(child);
+        if (content) walk(content, ancestors, depth + 1);
+      }
+    }
   };
-  walk(paragraph, [], 0);
+  if (paragraph.kind !== 'textValue') walk(paragraph.children, [], 0);
   return out;
 }
 

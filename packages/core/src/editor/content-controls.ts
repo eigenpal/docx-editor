@@ -36,6 +36,7 @@ import {
   type TreeDocOp,
 } from '@docx-editor.dev/core/store';
 import { isInlineRunContainer } from '../store/package/ooxml-shared.ts';
+import { MAX_INLINE_CONTAINER_DEPTH } from '../store/store/tree-op-segments.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '../binding/tree-session.ts';
 import type { ParagraphAnchorIndex } from '../binding/paragraph-anchors.ts';
 import { isDocAnchor, resolveDocAnchor } from './anchor-resolution.ts';
@@ -55,9 +56,6 @@ import { selectionMarkOf } from './surface-selection-ops.ts';
 
 const W14_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordml';
 const W15_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2012/wordml';
-
-/** Nested inline control depth bound — matches layout `MAX_SDT_NESTING`. */
-const MAX_SDT_NESTING = 32;
 
 type ContentControlLike = OoxmlContentControlNode | OoxmlGenericElementNode;
 
@@ -312,11 +310,13 @@ function inlineControlRangesOf(paragraph: OoxmlElement): InlineControlRange[] {
         continue;
       }
       if (isInlineRunContainer(child)) {
-        if (sdtDepth >= MAX_SDT_NESTING) continue;
+        if (sdtDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
         position = walk(child.children, position, depth, sdtDepth + 1);
         continue;
       }
-      if (isContentControlNode(child) && sdtDepth < MAX_SDT_NESTING) {
+      if (isContentControlNode(child)) {
+        // A control reached at the shared container cap is opaque and contributes zero length.
+        if (sdtDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
         const start = position;
         const nextDepth = depth + 1;
         position = walk(contentControlContentChildren(child), position, nextDepth, sdtDepth + 1);

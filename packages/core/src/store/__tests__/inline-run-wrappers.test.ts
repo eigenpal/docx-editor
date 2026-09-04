@@ -17,6 +17,8 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WRAPPERS = ['smartTag', 'customXml', 'dir', 'bdo'] as const;
 
 const run = (text: string): string => `<w:r><w:t xml:space="preserve">${text}</w:t></w:r>`;
+const deletedRun = (text: string): string =>
+  `<w:r><w:delText xml:space="preserve">${text}</w:delText></w:r>`;
 
 function wrapper(name: (typeof WRAPPERS)[number], content: string): string {
   return `<w:${name}>${content}</w:${name}>`;
@@ -334,6 +336,70 @@ describe('inline run wrapper projection', () => {
           inside: firstNamed(original, revision.name).id,
         })
       ).toBe('not-a-content-control');
+    }
+  });
+
+  test('owners under deletion revisions are refused at boundary and interior offsets', () => {
+    const samples = [
+      {
+        revision: 'del',
+        owner: 'hyperlink',
+        xml:
+          '<w:del w:id="7" w:author="Prior"><w:hyperlink w:anchor="target">' +
+          `${deletedRun('ABC')}</w:hyperlink></w:del>`,
+      },
+      {
+        revision: 'moveFrom',
+        owner: 'smartTag',
+        xml:
+          '<w:moveFrom w:id="7" w:author="Prior">' +
+          `${wrapper('smartTag', deletedRun('ABC'))}</w:moveFrom>`,
+      },
+    ] as const;
+    for (const sample of samples) {
+      const original = load(`<w:p>${sample.xml}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const inside = firstNamed(original, sample.owner).id;
+      for (const offset of [0, 1, 3]) {
+        expect(
+          validateTreeOp(original, {
+            op: 'insertText',
+            paragraphId,
+            offset,
+            text: 'X',
+            inside,
+          })
+        ).toBe('not-a-content-control');
+      }
+    }
+  });
+
+  test('owners under insertion revisions stay nested and survive acceptance', () => {
+    for (const revision of ['ins', 'moveTo'] as const) {
+      const original = load(
+        `<w:p><w:${revision} w:id="7" w:author="Prior">` +
+          `${wrapper('smartTag', run('AB'))}</w:${revision}></w:p>`
+      );
+      const paragraphId = firstParagraph(original).id;
+      const owner = firstNamed(original, 'smartTag');
+      const revisionId = firstNamed(original, revision).id;
+      const inserted = apply(original, {
+        op: 'insertText',
+        paragraphId,
+        offset: 1,
+        text: 'X',
+        inside: owner.id,
+      });
+      expect(textUnder(findById(inserted.root, owner.id)!)).toBe('AXB');
+      expect(textUnder(findById(inserted.root, revisionId)!)).toBe('AXB');
+
+      const accepted = apply(inserted, {
+        op: 'acceptRevision',
+        revision: { id: '7', author: 'Prior' },
+        localName: revision,
+      });
+      expect(findById(accepted.root, revisionId)).toBeNull();
+      expect(textUnder(findById(accepted.root, owner.id)!)).toBe('AXB');
     }
   });
 
