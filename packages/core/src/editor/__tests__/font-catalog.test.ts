@@ -87,6 +87,11 @@ describe('availableFontFamilies', () => {
     expect(catalog).toEqual(['Calibri', 'Georgia']);
   });
 
+  test('the default face is offered even when the document names it only in a symbol', () => {
+    // The catalog's whole reason to exist is that a picker is never a dead control.
+    expect(availableFontFamilies(undefined, [], ['Calibri'])).toEqual(['Calibri']);
+  });
+
   test('a face the document also declares stays offered, symbol use or not', () => {
     const catalog = availableFontFamilies(
       { sources: [source('MS Gothic')] },

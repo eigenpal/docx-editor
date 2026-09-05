@@ -28,6 +28,9 @@ export { configuredDefaultFontFamily, type FontCatalogConfiguration };
  */
 const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
 
+/** Empty hold-back set, for the entries no filter may remove. */
+const NOTHING_HELD_BACK: ReadonlySet<string> = new Set();
+
 /**
  * Every family a font picker can offer: the configured catalog (default face,
  * substitution Word-names, host-registered source families) merged with the document's
@@ -49,14 +52,17 @@ export function availableFontFamilies(
   const symbolOnly = new Set(
     symbolFonts.map((family) => family.toLowerCase()).filter((fold) => !declared.has(fold))
   );
-  const add = (family: string | undefined): void => {
+  const offer = (family: string | undefined, heldBack: ReadonlySet<string>): void => {
     if (family === undefined || !FONT_NAME.test(family)) return;
     const fold = family.toLowerCase();
-    if (symbolOnly.has(fold) || byFold.has(fold)) return;
+    if (heldBack.has(fold) || byFold.has(fold)) return;
     byFold.set(fold, family);
   };
+  const add = (family: string | undefined): void => offer(family, symbolOnly);
 
-  add(configuredDefaultFontFamily(configuration));
+  // The default face is the catalog's floor — this module exists so a picker is never a
+  // dead control — so it is offered even when the document happens to name it in a `w:sym`.
+  offer(configuredDefaultFontFamily(configuration), NOTHING_HELD_BACK);
   const substitutions = configuration?.substitutions ?? [];
   const standIns = new Set(substitutions.map((entry) => entry.to.family.toLowerCase()));
   for (const entry of substitutions) add(entry.from.family);

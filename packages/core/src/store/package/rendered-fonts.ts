@@ -139,9 +139,14 @@ function addFamily(families: Map<string, string>, family: string | null): void {
  * symbol face in this answer through the back door. It is ONE glyph whose code point
  * `layout/symbol-encoding.ts` resolves to a real Unicode character wherever it can, so the
  * fallback stack draws the character the author meant, and a notice naming the face would
- * report a fidelity loss the reader cannot see. The faces a resolver should try for a
- * symbol are collected separately (`collectSymbolFontFamilies`, and the export lane's own
- * walk).
+ * report a fidelity loss the reader cannot see.
+ *
+ * A code point that table cannot map does paint as a tofu box without the authored face —
+ * but the answer to that is supplying the face, not a notice. This module's contract is
+ * text rendering in the wrong face, and the notice can only name families a font
+ * configuration could cover. So the faces a resolver should TRY for a symbol are collected
+ * separately (`collectSymbolFontFamilies`, and the export lane's own walk), and the editor
+ * asks for them.
  *
  * A `w:sym` with no usable `@w:font` is the other case: nothing overrides the run, so the
  * glyph really does paint in the run's face, and the run counts like any other.
