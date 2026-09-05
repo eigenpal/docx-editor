@@ -33,7 +33,7 @@ import {
   type RevisionDisplayMode,
 } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
-import { cjkChopCutAllowedAt, wordBoundaries, wordOpensAt } from './cjk-line-break.ts';
+import { cjkChopCutAllowedAt, lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
 import {
   EMPTY_TAB_STOPS,
   nextTabDestination,
@@ -78,6 +78,7 @@ import {
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { createEquationLayouter } from './equation-layout.ts';
+import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
 
@@ -729,91 +730,14 @@ export function breakParagraph(
     ...wrapAnchorStarts,
   ];
 
-  const anchorLineStartByOffset = (() => {
-    const out = new Map<number, number>();
-    if (sameParagraphAnchorStarts.length === 0) return out;
-    let probeLineStart = 0;
-    let probeWidth = 0;
-    let probeLineIndex = 0;
-    // Mirrors the placement loop's word state — the same open decision (`wordOpensAt`)
-    // and the same mid-word carry — so the probe's predicted line starts cannot diverge
-    // from real placement on a kinsoku line. A veto-less probe put the predicted start
-    // one character off whenever a closing mark wrapped down with its carrier, and
-    // `zoneApplies` then keyed off the wrong line.
-    let probeLastEmitted = '';
-    let probeWordStart = 0;
-    let probeWordStartWidth = -1;
-    const probeLineOffset = (): number => (probeLineIndex === 0 ? firstLineOffset : 0);
-    const probeLineAvail = (): number => Math.max(1, available - probeLineOffset());
-    const closeProbeLine = (nextStart: number): void => {
-      probeLineStart = nextStart;
-      probeWidth = 0;
-      probeLineIndex += 1;
-    };
-    for (const piece of pieces) {
-      const equation = equationLayoutOf(piece);
-      if (equation) {
-        const width = equation.geometry.box.width;
-        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
-        if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
-        probeWidth += width;
-        probeLastEmitted = '';
-        probeWordStartWidth = -1;
-        continue;
-      }
-      if (piece.inlineDrawing) {
-        const width = measureInlineDrawing(piece.inlineDrawing.projection).totalWidth;
-        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) closeProbeLine(piece.start);
-        if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
-        probeWidth += width;
-        probeLastEmitted = '';
-        probeWordStartWidth = -1;
-        continue;
-      }
-      if (piece.text === '\n' || piece.text === PAGE_BREAK_CHAR) {
-        closeProbeLine(piece.end);
-        continue;
-      }
-      const probePieceLayoutOwned =
-        Boolean(piece.projected) ||
-        Boolean(piece.positionalTab) ||
-        piece.end - piece.start !== piece.text.length;
-      let consumed = 0;
-      for (const boundary of wordBoundaries(piece.text, !probePieceLayoutOwned)) {
-        const candidate = piece.text.slice(consumed, boundary);
-        if (candidate.length === 0) continue;
-        const style = styleForFontSlot(piece.style, piece.fontSlot);
-        const width = measurer.measure(candidate, style);
-        const modelStart = piece.start + consumed;
-        const opens = wordOpensAt(probeLastEmitted, candidate, consumed > 0);
-        if (opens) {
-          probeWordStart = modelStart;
-          probeWordStartWidth = probeWidth;
-        }
-        if (probeWidth > 0 && probeWidth + width > probeLineAvail()) {
-          if (opens || probeWordStartWidth <= 0) {
-            closeProbeLine(modelStart);
-          } else {
-            // Mid-word overflow: placement carries the whole word down, so the next
-            // probe line starts at the word start, not at this candidate.
-            const carried = probeWidth - probeWordStartWidth;
-            closeProbeLine(probeWordStart);
-            probeWidth = carried;
-          }
-          probeWordStartWidth = 0;
-        }
-        if (sameParagraphAnchorStarts.includes(modelStart)) out.set(modelStart, probeLineStart);
-        if (sameParagraphAnchorStarts.includes(piece.start)) out.set(piece.start, probeLineStart);
-        probeWidth += width;
-        probeLastEmitted = candidate;
-        consumed = boundary;
-      }
-    }
-    for (const anchorStart of sameParagraphAnchorStarts) {
-      if (!out.has(anchorStart)) out.set(anchorStart, probeLineStart);
-    }
-    return out;
-  })();
+  const anchorLineStartByOffset = anchorLineStartsByModelOffset({
+    pieces,
+    measurer,
+    available,
+    firstLineOffset,
+    anchorStarts: sameParagraphAnchorStarts,
+    equationLayoutOf,
+  });
 
   for (const start of wrapAnchorStarts) {
     const lineStart = anchorLineStartByOffset.get(start);
@@ -1540,8 +1464,9 @@ export function breakParagraph(
       const measureSource = piece.measureText ?? candidate;
       let width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
       // A candidate may open a line only at a real break opportunity — the shared
-      // decision in `wordOpensAt`, which the anchor-line probe above consumes too.
-      const opensWord = wordOpensAt(lastEmitted, candidate, consumed > 0);
+      // decision in `lineOpenDecisionAt`, which the anchor-line probe above consumes too.
+      const openDecision = lineOpenDecisionAt(lastEmitted, candidate, consumed > 0);
+      const opensWord = openDecision === 'opens';
       if (opensWord) {
         wordStartSpan = line.spans.length;
         wordStartWidth = line.width;
@@ -1558,7 +1483,14 @@ export function breakParagraph(
         line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
         (line.spans.length > 0 || line.drawings.length > 0)
       ) {
-        if (!opensWord && wordStartSpan === 0) {
+        if (openDecision === 'forbidden' && wordStartSpan <= 0) {
+          // The group starts this line and a rule forbids opening before it: a kinsoku seam,
+          // or one inside a grapheme cluster split across pieces. There is nothing to carry
+          // down, and chopping is the very break the rule forbids, so it is pushed out past
+          // the measure — Word's kinsoku push-out, and what the chop below reaches by itself
+          // when no accepted cut is left. `wordBoundaries` already cut at the next legal seam
+          // inside the piece, so what overflows is one protected group, not the clause.
+        } else if (!opensWord && wordStartSpan === 0) {
           // Prefer a later float passage; otherwise fill this one's remainder in the chop below.
           tryAdvanceToNextPassage();
         } else if (opensWord || wordStartSpan < 0) {
@@ -1614,7 +1546,8 @@ export function breakParagraph(
       const canChopWord = !layoutOwned && piece.measureText === undefined;
       if (
         canChopWord &&
-        (line.spans.length === 0 || (!opensWord && wordStartSpan === 0)) &&
+        (line.spans.length === 0 ||
+          (!opensWord && wordStartSpan === 0 && openDecision !== 'forbidden')) &&
         width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
       ) {
         const chopped = chopOversizedWord(candidate, remainingStart, width, {

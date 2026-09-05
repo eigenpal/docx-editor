@@ -24,6 +24,9 @@
 //   (`w:jc` set to `both`, the Normal-style default in Chinese and Japanese templates)
 //   paints ragged-right on kinsoku-shortened lines where Word distributes
 //   inter-character slack.
+// - A protected group that starts its line and does not fit is PUSHED OUT past the measure,
+//   Word's 追い出し. Word can also compress inter-character space to pull the offender back
+//   in (追い込み); that needs justification slack this layer does not distribute.
 // - Hangul, JIS kinsoku levels and other tailorings are out of scope.
 
 import { segmentGraphemes } from './grapheme.ts';
@@ -231,8 +234,36 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
 }
 
 /**
+ * Whether a cluster boundary exists between two adjacent code points, memoized by the pair.
+ *
+ * Only reached at a piece seam whose neighbours are at or above the ideographic range, so
+ * Latin placement never pays for it.
+ */
+const clusterBreakCache = new Map<number, boolean>();
+function clusterBreaksBetween(before: number, after: number): boolean {
+  const key = before * 0x110000 + after;
+  const cached = clusterBreakCache.get(key);
+  if (cached !== undefined) return cached;
+  let count = 0;
+  for (const _segment of segmentGraphemes(String.fromCodePoint(before, after))) count += 1;
+  const breaks = count > 1;
+  clusterBreakCache.set(key, breaks);
+  return breaks;
+}
+
+/** Why a candidate may or may not open a line. */
+export type LineOpenDecision =
+  /** A real break opportunity: the line may end before this candidate. */
+  | 'opens'
+  /** No opportunity here — mid-word, as a Latin word split across runs is. */
+  | 'continues'
+  /** An opportunity a rule forbids: a kinsoku seam, or one inside a grapheme cluster. */
+  | 'forbidden';
+
+/**
  * Whether a candidate may OPEN a line — the decision the placement loop and the
- * anchor-line probe must share, or their predicted line starts diverge.
+ * anchor-line probe must share, or their predicted line starts diverge — and, when it may
+ * not, WHY.
  *
  * A candidate is a break opportunity at any `wordBoundaries` cut inside its piece
  * (`afterIntraPieceCut`). The FIRST candidate of a piece continues whatever the previous
@@ -245,12 +276,18 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
  * otherwise create one. A tab outranks the veto: a tab is a hard break opportunity whose
  * following text must be able to open a line, or an overflow takes the mid-word carry
  * path and re-lays the tab with a stale advance that no longer reaches its stop.
+ *
+ * `continues` and `forbidden` are both "may not open", and the caller must tell them
+ * apart. A Latin word wider than its line has no legal cut of its own, so it is CHOPPED at
+ * the margin; a kinsoku group has no legal cut either, but chopping it is exactly the break
+ * the rule forbids, so it is pushed out past the measure instead — the same answer
+ * `chopOversizedWord` reaches when no accepted cut is left.
  */
-export function wordOpensAt(
+export function lineOpenDecisionAt(
   lastEmitted: string,
   candidate: string,
   afterIntraPieceCut: boolean
-): boolean {
+): LineOpenDecision {
   const opportunity =
     afterIntraPieceCut ||
     lastEmitted === '' ||
@@ -263,13 +300,26 @@ export function wordOpensAt(
   // text — no decode, no set lookups. (A surrogate unit is above the threshold.)
   const lastUnit = lastEmitted.length === 0 ? 0 : lastEmitted.charCodeAt(lastEmitted.length - 1);
   if (lastUnit < FIRST_IDEOGRAPHIC_UNIT && candidate.charCodeAt(0) < FIRST_IDEOGRAPHIC_UNIT) {
-    return opportunity;
+    return opportunity ? 'opens' : 'continues';
   }
-  if (lastUnit === 0x09) return true;
+  if (lastUnit === 0x09) return 'opens';
   const previous = lastCodePointOf(lastEmitted);
   const first = candidate.codePointAt(0)!;
-  return (
-    (opportunity || (previous !== undefined && cjkBreakAllowedBetween(previous, first))) &&
-    cjkCutAllowedBetween(previous, first)
-  );
+  // A grapheme cluster SPLIT ACROSS PIECES has no single text for `wordBoundaries` to
+  // segment, so the two code points around the seam are segmented on their own: NFD kana
+  // (か in one run, U+3099 in the next) would otherwise orphan its voicing mark, the
+  // combining marks being inside the ideographic ranges and outside the kinsoku sets.
+  if (previous !== undefined && !clusterBreaksBetween(previous, first)) return 'forbidden';
+  if (!cjkCutAllowedBetween(previous, first)) return 'forbidden';
+  if (opportunity) return 'opens';
+  return previous !== undefined && cjkBreakAllowedBetween(previous, first) ? 'opens' : 'continues';
+}
+
+/** `lineOpenDecisionAt` for callers that need only the yes/no. */
+export function wordOpensAt(
+  lastEmitted: string,
+  candidate: string,
+  afterIntraPieceCut: boolean
+): boolean {
+  return lineOpenDecisionAt(lastEmitted, candidate, afterIntraPieceCut) === 'opens';
 }

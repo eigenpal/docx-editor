@@ -189,6 +189,44 @@ describe('kinsoku beside tabs and inside the chop', () => {
     }
   });
 
+  test('a protected group split across runs never breaks at the run seam', () => {
+    // The group is unbreakable and starts the line, so there is nothing to carry down and
+    // nothing legal to chop: it is pushed out past the measure, which is what the same text
+    // in ONE run already did. Before this, the overflow branch closed the line at the seam
+    // and the veto never applied — a line opened on 、 and one ended on （.
+    for (const width of [7, 13]) {
+      // A no-break-before character behind the seam.
+      expect(linesOf(`<w:p>${run('月')}${run('、盈')}</w:p>`, width)).toEqual(['月、', '盈']);
+      // A no-break-after character in front of it.
+      expect(linesOf(`<w:p>${run('（')}${run('以来')}</w:p>`, width)).toEqual(['（以', '来']);
+      // The half-width prolonged-sound mark, reachable only since the range covers ｰ.
+      expect(linesOf(`<w:p>${run('ア')}${run('ｰ月')}</w:p>`, width)).toEqual(['アｰ', '月']);
+    }
+  });
+
+  test('a grapheme cluster split across runs never orphans its combining mark', () => {
+    // U+3099 is inside the ideographic ranges and outside both kinsoku sets, so the seam
+    // reads as an ordinary ideographic break opportunity. `wordBoundaries` filters cuts
+    // through `segmentGraphemes`, but a cluster split across pieces has no single text to
+    // segment: the two code points around the seam are segmented on their own.
+    for (const width of [7, 13]) {
+      const lines = linesOf(`<w:p>${run('か')}${run('\u3099月')}</w:p>`, width);
+      expect(lines.join('')).toBe('か\u3099月');
+      for (const line of lines) expect(line.charCodeAt(0)).not.toBe(0x3099);
+    }
+  });
+
+  test('a Latin word split across runs still chops at the margin', () => {
+    // The other reason a candidate cannot open a line. A word wider than its line has no
+    // legal cut of its own and IS chopped; only a group a rule protects is pushed out.
+    expect(linesOf(`<w:p>${run('01234')}${run('56789ABCDE')}</w:p>`, 25)).toEqual([
+      '0123',
+      '4567',
+      '89AB',
+      'CDE',
+    ]);
+  });
+
   test('the chop never cuts inside a surrogate pair', () => {
     const text = '𠀋𠀌𠀍𠀎';
     const lines = linesOf(`<w:p>${run(text)}</w:p>`, 13);
