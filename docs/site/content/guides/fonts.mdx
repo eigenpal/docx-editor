@@ -62,6 +62,11 @@ compatible face. It excludes metric-compatible substitutions.
 The notice also excludes font declarations that rendered text does not use. The
 font picker can still list those declared families.
 
+The notice excludes symbol faces too, such as the MS Gothic face a Word checkbox
+names in `w:sym`. A symbol run paints one character, and the editor resolves it
+to its Unicode equivalent wherever one exists, so any face can draw it. The font
+picker doesn't offer symbol faces either.
+
 ## Load Word-compatible defaults
 
 The optional `@docx-editor.dev/fonts` package provides open-licensed substitutes.
@@ -432,6 +437,12 @@ const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolved
 
 The request carries `families`, the names that document declares, and `defaultFamily`,
 the face a run naming no font resolves to. Both count as declared.
+
+`families` ends with the symbol faces the document names in `w:sym`, after the
+declared ones. Supply those to paint a symbol in the authored face: the editor
+maps a private-use character to its Unicode equivalent where one exists, and
+keeps the original character otherwise. A face you supply for a symbol stays out
+of the font picker.
 
 `resolvedFaces` lists the faces earlier origins in the same composition can already
 paint. It reports faces rather than families, and only faces backed by bytes, so

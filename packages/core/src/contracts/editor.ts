@@ -1652,15 +1652,15 @@ export interface EditorSnapshot {
    */
   readonly lastRejection?: string | null;
   /**
-   * Document font families that are NOT AVAILABLE: declared by the document, but with no
-   * byte source admitted for them, no configured redirect to an admitted face, nothing
-   * embedded in the file, and nothing the platform could resolve. Chrome shows a
-   * compatibility notice from this the way Word does.
+   * Document font families that are NOT AVAILABLE: declared by the document, but with no byte
+   * source admitted, no redirect to an admitted face, nothing embedded, and nothing the platform
+   * could resolve. Chrome shows a compatibility notice from this the way Word does.
    *
-   * A family the app deliberately answers with a metric-compatible stand-in — Word's
-   * Times New Roman with Liberation Serif, say — is AVAILABLE and stays out of the list.
-   * The glyph outlines differ; the advance widths do not, so wrap and pagination land
-   * where Word puts them and there is nothing for a fidelity notice to report.
+   * A family the app answers with a metric-compatible stand-in — Word's Times New Roman
+   * with Liberation Serif — is AVAILABLE and stays out: the outlines differ, the advance
+   * widths do not, so wrap and pagination land where Word puts them. The face a `w:sym`
+   * names (MS Gothic for a checkbox, Wingdings for a bullet) stays out too, because it
+   * paints one code point rather than text, and has no metric twin an app could supply.
    *
    * Optional and additive like `canUndo`: absent means the implementation has not derived
    * it; empty means every family resolved (or no document is loaded).

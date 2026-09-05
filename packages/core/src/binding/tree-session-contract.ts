@@ -193,6 +193,15 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
    */
   renderedFontFamilies(): readonly string[];
   /**
+   * Font families named by a `w:sym/@w:font`, over the same roots
+   * {@link TreeDocxSessionView.documentFonts} reads. Memoized per package revision.
+   *
+   * Separate from both other answers on purpose: a symbol face is not one a picker should
+   * offer and not one the substitution notice should report, but a font resolver has to
+   * hear about it, or an app cannot supply the face a private-use glyph needs.
+   */
+  symbolFontFamilies(): readonly string[];
+  /**
    * Whether the document puts any literal character on a page, over the same roots
    * {@link TreeDocxSessionView.documentFonts} reads. Memoized per package revision.
    *

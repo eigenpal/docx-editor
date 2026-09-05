@@ -129,13 +129,24 @@ function addFamily(families: Map<string, string>, family: string | null): void {
 
 /**
  * Run children that paint a glyph in the RUN's face without carrying text: note reference
- * marks, symbol runs (their `w:font` face is a pre-existing `collectDocumentFonts` gap,
- * but the run's own `w:rFonts`/`w:rStyle` still resolve the surrounding face), tabs
- * (leader dots measure in the run face) and hyphens. `w:br` paints nothing;
+ * marks, tabs (leader dots measure in the run face) and hyphens. `w:br` paints nothing;
  * `w:instrText` is never painted — the field RESULT runs are.
+ *
+ * `w:sym` is NOT one of them when it names a face of its own. `layout/symbol-run.ts`
+ * overrides the run's `rFonts` with `w:sym/@w:font`, so the run's own face draws nothing
+ * there — and Word writes that face on the run as well (a checkbox content control is
+ * `w:rFonts ascii="MS Gothic"` beside `w:sym w:font="MS Gothic"`), which would put a
+ * symbol face in this answer through the back door. It is ONE glyph whose code point
+ * `layout/symbol-encoding.ts` resolves to a real Unicode character wherever it can, so the
+ * fallback stack draws the character the author meant, and a notice naming the face would
+ * report a fidelity loss the reader cannot see. The faces a resolver should try for a
+ * symbol are collected separately (`collectSymbolFontFamilies`, and the export lane's own
+ * walk).
+ *
+ * A `w:sym` with no usable `@w:font` is the other case: nothing overrides the run, so the
+ * glyph really does paint in the run's face, and the run counts like any other.
  */
 const GLYPH_MARKS: ReadonlySet<string> = new Set([
-  'sym',
   'tab',
   'noBreakHyphen',
   'softHyphen',
@@ -146,15 +157,19 @@ const GLYPH_MARKS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Whether a `w:r` puts a glyph on the page: a non-empty `w:t`, a `w:delText` (tracked
- * deletions render in markup view — over-reporting in final view, never hiding), or a
- * glyph mark element.
+ * Whether a `w:r` puts a glyph on the page IN ITS OWN FACE: a non-empty `w:t`, a
+ * `w:delText` (tracked deletions render in markup view — over-reporting in final view,
+ * never hiding), a glyph mark element, or a `w:sym` that names no face of its own.
  */
 function runRendersGlyphs(run: OoxmlElement, projectedGlyphIds?: ReadonlySet<string>): boolean {
   if (projectedGlyphIds?.has(run.id)) return true;
   for (const child of run.children as readonly OoxmlNode[]) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (GLYPH_MARKS.has(child.localName)) return true;
+    if (child.localName === 'sym') {
+      if (validFontFamily(attributeValue(child, 'font')) === null) return true;
+      continue;
+    }
     if (child.localName !== 't' && child.localName !== 'delText') continue;
     for (const grand of child.children as readonly OoxmlNode[]) {
       if (!isElement(grand) && grand.value.length > 0) return true;
@@ -230,12 +245,6 @@ function applyRun(
     addFamily(summary.families, familyFromRFonts(rFonts, themeFonts));
     if (runHasEastAsianText(run)) {
       addFamily(summary.families, eastAsiaFamilyFromRFonts(rFonts, themeFonts));
-    }
-  }
-  for (const child of run.children as readonly OoxmlNode[]) {
-    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName === 'sym') {
-      addFamily(summary.families, validFontFamily(attributeValue(child, 'font')));
     }
   }
   const rStyle = rPr ? childElement(rPr, 'rStyle') : undefined;

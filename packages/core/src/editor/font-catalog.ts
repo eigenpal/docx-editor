@@ -11,6 +11,11 @@
 // Substitution TARGETS are deliberately excluded: `Carlito` exists to render "Calibri",
 // and listing both would offer the same metrics twice under two names — the stand-in is
 // an implementation face, not a choice.
+//
+// Symbol faces are excluded for the same kind of reason. The editor asks a resolver for the
+// face a `w:sym` names, so an app can supply the Wingdings a private-use glyph needs — and a
+// face that arrives that way must not become a text choice, or the picker offers to set a
+// paragraph in dingbats.
 
 import { configuredDefaultFontFamily, type FontCatalogConfiguration } from './font-composition.ts';
 
@@ -33,13 +38,22 @@ const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
  */
 export function availableFontFamilies(
   configuration: FontCatalogConfiguration | undefined,
-  documentFonts: readonly string[]
+  documentFonts: readonly string[],
+  /** Faces the document uses only through a `w:sym`; never offered as a text choice. */
+  symbolFonts: readonly string[] = []
 ): readonly string[] {
   const byFold = new Map<string, string>();
+  // A family the document ALSO declares through `w:rFonts` is a text face that happens to
+  // draw a symbol too, so only the symbol-only names are held back.
+  const declared = new Set(documentFonts.map((family) => family.toLowerCase()));
+  const symbolOnly = new Set(
+    symbolFonts.map((family) => family.toLowerCase()).filter((fold) => !declared.has(fold))
+  );
   const add = (family: string | undefined): void => {
     if (family === undefined || !FONT_NAME.test(family)) return;
     const fold = family.toLowerCase();
-    if (!byFold.has(fold)) byFold.set(fold, family);
+    if (symbolOnly.has(fold) || byFold.has(fold)) return;
+    byFold.set(fold, family);
   };
 
   add(configuredDefaultFontFamily(configuration));

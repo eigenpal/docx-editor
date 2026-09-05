@@ -1,7 +1,11 @@
 // The font compatibility notice's detection: which document families render substituted.
 
 import { describe, expect, test } from 'bun:test';
-import { createLocalFontProbe, detectFontSubstitutions } from '../font-availability.ts';
+import {
+  createLocalFontProbe,
+  detectFontSubstitutions,
+  fontResolverFamilies,
+} from '../font-availability.ts';
 
 /** A canvas-like context where only `widths`-listed families change the measurement. */
 function fakeContext(resolvedFamilies: readonly string[]) {
@@ -89,5 +93,28 @@ describe('detectFontSubstitutions', () => {
         (family) => family === 'Carlito'
       )
     ).toEqual([]);
+  });
+});
+
+describe('fontResolverFamilies', () => {
+  test('declared families come first, symbol faces after, with no duplicate', () => {
+    expect(fontResolverFamilies(['Garamond', 'MS Gothic'], ['Wingdings', 'ms gothic'], 64)).toEqual(
+      ['Garamond', 'MS Gothic', 'Wingdings']
+    );
+  });
+
+  test('a document that fills the bound with declared families still asks for its symbols', () => {
+    // Without the reservation a template naming `cap` faces crowds every symbol face out,
+    // so an app could never supply the face a private-use glyph needs.
+    const declared = Array.from({ length: 64 }, (_, index) => `Face ${index}`);
+    const families = fontResolverFamilies(declared, ['Wingdings'], 64);
+    expect(families).toHaveLength(64);
+    expect(families.at(-1)).toBe('Wingdings');
+    expect(families[0]).toBe('Face 0');
+  });
+
+  test('the bound is never exceeded, however many symbol faces a file names', () => {
+    const symbols = Array.from({ length: 20 }, (_, index) => `Symbol ${index}`);
+    expect(fontResolverFamilies(['Garamond'], symbols, 4)).toHaveLength(4);
   });
 });

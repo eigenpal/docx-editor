@@ -201,6 +201,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     // (undocumented)
     subscribe(onChange: (change: TreeModelChange) => void): () => void;
     sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
+    symbolFontFamilies(): readonly string[];
     trackingSettings(): DocumentTrackingSettings;
     undo(): SelectionMark | null;
 }

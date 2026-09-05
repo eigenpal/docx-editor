@@ -74,6 +74,39 @@ export function createLocalFontProbe(
 }
 
 /**
+ * Symbol faces a document may claim from the resolver bound, whatever else it declares.
+ *
+ * Appending symbol faces after the declared list alone would let a template naming `cap`
+ * families crowd every one of them out, so an app could never supply the face a private-use
+ * glyph needs. Small on purpose: a file uses one or two symbol fonts, and the reservation
+ * comes out of the declared families' share.
+ */
+const RESERVED_SYMBOL_FAMILIES = 4;
+
+/**
+ * The families one font-resolver call may ask for, in priority order and capped.
+ *
+ * Declared families first, symbol faces after them. Both are genuinely wanted — a symbol
+ * face is the only thing that can paint an unmapped private-use glyph — but a face carrying
+ * one dingbat must not spend the bound ahead of the face a page of text renders in.
+ */
+export function fontResolverFamilies(
+  declared: readonly string[],
+  symbols: readonly string[],
+  cap: number
+): readonly string[] {
+  const seen = new Set(declared.map((family) => family.toLowerCase()));
+  const wanted: string[] = [];
+  for (const family of symbols) {
+    if (seen.has(family.toLowerCase())) continue;
+    seen.add(family.toLowerCase());
+    wanted.push(family);
+  }
+  const reserved = Math.min(wanted.length, RESERVED_SYMBOL_FAMILIES);
+  return [...declared.slice(0, Math.max(cap - reserved, 0)), ...wanted].slice(0, cap);
+}
+
+/**
  * The document families that will render in a face with DIFFERENT metrics: not covered by
  * an embedded or app-supplied face, not resolvable by the platform, and with no
  * metric-compatible twin in the surface fallback stack either. Order follows `families`

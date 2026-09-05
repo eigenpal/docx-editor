@@ -160,6 +160,90 @@ function subtreeFontsOf(
 }
 
 /**
+ * Every valid family a `w:sym/@w:font` names, deduplicated and sorted like
+ * {@link collectDocumentFonts}, and validated at the same boundary for the same reason.
+ *
+ * Kept apart from the font catalog because the two answer different questions. A symbol
+ * face is not a family a PICKER should offer: applying it to a selection would set the
+ * text of a run in a face carrying dingbats. It IS a family a font resolver must hear
+ * about — `layout/symbol-run.ts` keeps an unmapped private-use code point in the authored
+ * face, which paints as a tofu box in any other, and an app that owns those bytes can only
+ * supply them if it is told the document wants them.
+ */
+export function collectSymbolFontFamilies(roots: readonly OoxmlElement[]): readonly string[] {
+  const byFold = new Map<string, string>();
+  for (const root of roots) {
+    // The root element is never a `w:sym`; its children carry the memo, exactly as in
+    // `collectDocumentFonts`.
+    for (const child of root.children) {
+      if (!isElement(child)) continue;
+      for (const [fold, family] of subtreeSymbolFontsOf(child)) {
+        if (!byFold.has(fold)) byFold.set(fold, family);
+      }
+    }
+  }
+  const fonts = [...byFold.values()];
+  fonts.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return fonts;
+}
+
+/**
+ * Per-subtree memo, for the reason {@link collectDocumentFonts} has one: this is a public
+ * session answer, and a derivation that re-walks every story per revision becomes a
+ * per-keystroke cost the moment any chrome reads it in a selector. No theme in the key —
+ * `w:sym/@w:font` is a literal family name, never a theme slot.
+ */
+const subtreeSymbolFontsMemos = new WeakMap<OoxmlElement, ReadonlyMap<string, string>>();
+
+/**
+ * Shared by every subtree that names no symbol face, which in a real document is nearly all
+ * of them: a per-block empty `Map` retained for the life of the tree is pure overhead.
+ */
+const NO_SYMBOL_FONTS: ReadonlyMap<string, string> = new Map();
+
+function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): ReadonlyMap<string, string> {
+  const cached = subtreeSymbolFontsMemos.get(subtree);
+  if (cached) return cached;
+  const remember = (byFold: Map<string, string>): ReadonlyMap<string, string> => {
+    const answer = byFold.size === 0 ? NO_SYMBOL_FONTS : byFold;
+    subtreeSymbolFontsMemos.set(subtree, answer);
+    return answer;
+  };
+  const byFold = new Map<string, string>();
+  // The compose branch never inspects the node itself, so a `w:sym` wide enough to take it
+  // would lose its own face — the same self-check `subtreeFontsOf` makes for `w:rFonts`.
+  // `w:sym` is a generic node, so a hand-built package can give it children.
+  if (
+    subtree.children.length >= COMPOSE_CHILD_THRESHOLD &&
+    depth < MAX_COMPOSE_DEPTH &&
+    subtree.localName !== 'sym'
+  ) {
+    for (const child of subtree.children) {
+      if (!isElement(child)) continue;
+      for (const [fold, family] of subtreeSymbolFontsOf(child, depth + 1)) {
+        if (!byFold.has(fold)) byFold.set(fold, family);
+      }
+    }
+    return remember(byFold);
+  }
+  // Iterative and depth-safe like its sibling, and children push in reverse for the same
+  // reason: first-seen casing has to mean the first occurrence a reader would see.
+  const stack: OoxmlNode[] = [subtree];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    if (!isElement(node)) continue;
+    if (node.localName === 'sym' && node.namespaceUri === WML_NAMESPACE_URI) {
+      const family = attributeValue(node, 'font');
+      if (family && FONT_NAME.test(family) && !byFold.has(family.toLowerCase())) {
+        byFold.set(family.toLowerCase(), family);
+      }
+    }
+    for (let i = node.children.length - 1; i >= 0; i -= 1) stack.push(node.children[i]!);
+  }
+  return remember(byFold);
+}
+
+/**
  * Whether any of `roots` actually puts CHARACTERS on a page.
  *
  * `collectDocumentFonts` answers what the document DECLARES, which is what a font picker

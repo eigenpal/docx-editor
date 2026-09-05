@@ -75,4 +75,24 @@ describe('availableFontFamilies', () => {
     const catalog = availableFontFamilies(undefined, ['Georgia', 'x'.repeat(65), 'bad;name']);
     expect(catalog).toEqual(['Calibri', 'Georgia']);
   });
+
+  test('a symbol-only face is not offered, even once a resolver supplies it', () => {
+    // The editor asks the resolver for the face a `w:sym` names, so an app CAN answer it —
+    // and a face that arrives that way must not become a text choice.
+    const catalog = availableFontFamilies(
+      { sources: [source('Wingdings')] },
+      ['Georgia'],
+      ['Wingdings']
+    );
+    expect(catalog).toEqual(['Calibri', 'Georgia']);
+  });
+
+  test('a face the document also declares stays offered, symbol use or not', () => {
+    const catalog = availableFontFamilies(
+      { sources: [source('MS Gothic')] },
+      ['MS Gothic'],
+      ['MS Gothic']
+    );
+    expect(catalog).toEqual(['Calibri', 'MS Gothic']);
+  });
 });
