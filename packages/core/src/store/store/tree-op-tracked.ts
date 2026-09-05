@@ -555,6 +555,22 @@ function applyTrackedInsertion(
         continue;
       }
 
+      // A right bias names the container the caller wants the words in, and a run ENDING at
+      // this offset is not it: taking the insertion here would leave the text outside the
+      // requested wrapper, which validation had already resolved as the destination. Walk on
+      // and let that container claim it.
+      if (
+        node.kind === 'run' &&
+        offset === end &&
+        offset !== start &&
+        rightBiasedDestination !== null &&
+        !rightBiasedDestination.path.has(node.id)
+      ) {
+        cursor.offset = end;
+        out.push(node);
+        continue;
+      }
+
       if (node.kind === 'run' && offset >= start && offset <= end) {
         const own = insertionAuthor([...stack, node]);
         // Inside our OWN pending insertion: extend it. A second `w:ins` nested in the first

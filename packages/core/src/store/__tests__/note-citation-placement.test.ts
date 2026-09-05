@@ -229,6 +229,52 @@ describe('note citation placement in nested containers', () => {
     expect(xml.slice(secondRevision)).toContain('>B<');
   });
 
+  test('a citation at a control leading edge inside a revision splits the revision', () => {
+    // The control stays whole and the citation lands beside it, which IS the requested
+    // offset: prefix text `A` occupies 0..1, so offset 1 is the control's own start.
+    const store = openStore(
+      build({
+        body:
+          '<w:p><w:ins w:id="1" w:author="A"><w:r><w:t>A</w:t></w:r><w:sdt>' +
+          '<w:sdtPr><w:id w:val="7"/></w:sdtPr>' +
+          '<w:sdtContent><w:r><w:t>B</w:t></w:r></w:sdtContent></w:sdt></w:ins></w:p>',
+      })
+    );
+    const paragraphId = firstParagraphId(store.currentPackage());
+    expect(
+      store.applyLifecycleOp({ op: 'insertNote', noteKind: 'footnote', paragraphId, offset: 1 }).ok
+    ).toBe(true);
+    const main = mainPartOf(store.currentPackage());
+    expect(paragraphTextOf(main, paragraphId)).toBe('A\u{fffc}B');
+    // One control, still whole, and the citation is outside the revision.
+    const path = citationAncestors(main.root);
+    expect(path?.some((node) => node.kind === 'revisionInsert')).toBe(false);
+  });
+
+  test('a citation at a control leading edge stays outside its content', () => {
+    // The control is inside a smart tag, after wrapper text. The citation belongs beside the
+    // control, not in its `w:sdtContent` — a data-bound or locked control must not be touched
+    // at a position that is outside it anyway.
+    const store = openStore(
+      build({
+        body:
+          '<w:p><w:smartTag><w:r><w:t>A</w:t></w:r><w:sdt>' +
+          '<w:sdtPr><w:id w:val="7"/><w:lock w:val="contentLocked"/></w:sdtPr>' +
+          '<w:sdtContent><w:r><w:t>B</w:t></w:r></w:sdtContent></w:sdt></w:smartTag></w:p>',
+      })
+    );
+    const paragraphId = firstParagraphId(store.currentPackage());
+    expect(
+      store.applyLifecycleOp({ op: 'insertNote', noteKind: 'footnote', paragraphId, offset: 1 }).ok
+    ).toBe(true);
+    const main = mainPartOf(store.currentPackage());
+    expect(paragraphTextOf(main, paragraphId)).toBe('A\u{fffc}B');
+    const path = citationAncestors(main.root);
+    // Inside the smart tag, outside the control.
+    expect(path?.some((node) => node.localName === 'smartTag')).toBe(true);
+    expect(path?.some((node) => node.kind === 'contentControlContent')).toBe(false);
+  });
+
   test('a citation inside a control under a revision is refused, never moved', () => {
     // The control is atomic: cloning it would duplicate its authored id and its lock. The
     // citation cannot go inside it and cannot go beside it without attaching the note to

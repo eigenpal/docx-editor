@@ -342,6 +342,55 @@ describe('inline run wrapper projection', () => {
   );
 
   test.each(neutralBiasWrappers)(
+    'an unowned insert before a %s inherits the left run formatting',
+    (name) => {
+      // The minted run sits right after `A`, so the left run still wins its formatting; a
+      // bare run would come out unformatted next to the text it continues.
+      const bold = '<w:r><w:rPr><w:b/></w:rPr><w:t>A</w:t></w:r>';
+      const original = load(`<w:p>${bold}${wrapper(name, run('B'))}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const next = apply(original, { op: 'insertText', paragraphId, offset: 1, text: 'X' });
+
+      expect(paragraphTextOf(next, paragraphId)).toBe('AXB');
+      const typed: OoxmlNode[] = [];
+      const collect = (node: OoxmlNode): void => {
+        if (node.kind === 'textValue') return;
+        if (node.localName === 'r' && textUnder(node) === 'X') typed.push(node);
+        for (const child of node.children) collect(child);
+      };
+      collect(firstParagraph(next));
+      expect(typed).toHaveLength(1);
+      expect(
+        typed[0]!.kind !== 'textValue' &&
+          typed[0]!.children.some((child) => child.kind === 'runProperties')
+      ).toBe(true);
+    }
+  );
+
+  test.each(neutralBiasWrappers)(
+    'a TRACKED right-biased insert reaches a %s after a preceding run',
+    (name) => {
+      // The offset is both the end of `A` and the start of the wrapper. Validation resolves
+      // the wrapper as the destination, so the tracked insertion must land there too, not in
+      // the run on the left.
+      const original = load(`<w:p>${run('A')}${wrapper(name, run('B'))}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const wrapperId = firstNamed(original, name).id;
+      const next = apply(original, {
+        op: 'insertText',
+        paragraphId,
+        offset: 1,
+        text: 'X',
+        bias: 'right',
+        revision: { author: 'Ada', date: '2026-09-05T00:00:00Z' },
+      });
+
+      expect(paragraphTextOf(next, paragraphId)).toBe('AXB');
+      expect(textUnder(findById(next.root, wrapperId)!)).toBe('XB');
+    }
+  );
+
+  test.each(neutralBiasWrappers)(
     'default bias stays outside a paragraph-initial %s edge',
     (name) => {
       const original = load(`<w:p>${wrapper(name, run('B'))}</w:p>`);

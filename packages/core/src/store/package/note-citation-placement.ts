@@ -63,6 +63,29 @@ export function ancestorPathHolding(root: OoxmlNode, nodeId: string): readonly O
   return visit(root, 0) ? path.slice() : null;
 }
 
+/**
+ * Where a citation goes when a content control's own span starts at the requested offset.
+ *
+ * Beside the control, never inside it. Entering `w:sdtContent` would mutate a control the
+ * caller never named, and a data-bound or locked one must not be touched at all — while the
+ * position beside it is the very offset that was asked for.
+ */
+export function citationBesideControlAt(
+  paragraph: OoxmlParagraphNode,
+  anchorId: string,
+  startsHere: (node: OoxmlNode) => boolean
+): { readonly holder: OoxmlNode; readonly index: number } | null {
+  const path = ancestorPathHolding(paragraph, anchorId);
+  if (!path) return null;
+  const control = path.find((node) => isContentControl(node) && startsHere(node));
+  if (!control) return null;
+  const holderPath = ancestorPathHolding(paragraph, control.id);
+  const holder = holderPath?.at(-1) ?? paragraph;
+  if (holder.kind === 'textValue') return null;
+  const index = holder.children.findIndex((child) => child.id === control.id);
+  return index < 0 ? null : { holder, index };
+}
+
 export interface BoundarySplit {
   readonly head: OoxmlNode | null;
   readonly tail: OoxmlNode | null;
@@ -75,14 +98,16 @@ export function placeOutsideOutermostRevision(
   path: readonly OoxmlNode[],
   anchorId: string,
   citations: readonly OoxmlNode[],
-  nextId: () => string
+  nextId: () => string,
+  /** Whether the requested boundary is this container's own first position. */
+  atLeadingEdge: (node: OoxmlNode) => boolean = () => false
 ): OoxmlPart | null | undefined {
   const revisionIndex = path.findIndex((ancestor) => isContentRevisionKind(ancestor.kind));
   if (revisionIndex < 0) return undefined;
   const revision = path[revisionIndex]!;
   const parent = revisionIndex === 0 ? paragraph : path[revisionIndex - 1]!;
   if (parent.kind === 'textValue') return null;
-  const split = splitBeforeDescendant(revision, anchorId, nextId);
+  const split = splitBeforeDescendant(revision, anchorId, nextId, 0, atLeadingEdge);
   if (!split || (!split.head && !split.tail)) return null;
   const children = parent.children.flatMap((child) => {
     if (child.id !== revision.id) return [child];
@@ -117,7 +142,8 @@ export function splitBeforeDescendant(
   node: OoxmlNode,
   nodeId: string,
   nextId: () => string,
-  containerDepth = 0
+  containerDepth = 0,
+  atLeadingEdge: (node: OoxmlNode) => boolean = () => false
 ): BoundarySplit | null {
   if (node.kind === 'textValue') return null;
   const counted = isInlineRunContainer(node) || isContentControl(node);
@@ -141,14 +167,13 @@ export function splitBeforeDescendant(
     const held = content[holder]!;
     if (isContentControl(held)) {
       // A control is atomic: cloning it would duplicate its authored id and its protection
-      // scope. So the citation can only go BESIDE it. When the requested boundary is the
-      // control's own leading edge that is the same place; anywhere inside it is not, and
-      // moving the citation there would silently attach the note to different text. Refuse
-      // and let the caller reject, rather than write a position nobody asked for.
-      if (held.id !== nodeId) return null;
+      // scope, so the citation can only go BESIDE it. At the control's own leading edge that
+      // is the position that was asked for. Anywhere inside it is not, and moving the citation
+      // there would silently attach the note to different text, so refuse instead.
+      if (!atLeadingEdge(held)) return null;
       tail.push(held);
     } else {
-      const nested = splitBeforeDescendant(held, nodeId, nextId, childDepth);
+      const nested = splitBeforeDescendant(held, nodeId, nextId, childDepth, atLeadingEdge);
       if (!nested) return null;
       if (nested.head) head.push(nested.head);
       if (nested.tail) tail.push(nested.tail);

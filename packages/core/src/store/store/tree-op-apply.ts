@@ -7,6 +7,7 @@
 /* eslint-disable max-lines -- pre-existing size; furniture lifecycle only adds union narrowing */
 
 import { hardBreakAttributes } from '../package/hard-break.ts';
+import { withFreshIds } from '../package/hf-lifecycle-shell.ts';
 import {
   isContentRevisionKind,
   isInlineRunContainer,
@@ -729,12 +730,23 @@ function applyInsertContent(
   }
 
   if (site.kind === 'newRun') {
+    // The left run still wins its formatting. A minted run at a wrapper's leading edge sits
+    // right after the preceding run, so typing there inherits that run's properties exactly
+    // as it does at an ordinary boundary; a bare run came out unformatted instead.
+    const leftSegment = findLast(segments, (segment) => segment.end === offset);
+    const leftRun = leftSegment ? findNode(part, leftSegment.runId) : null;
+    const inheritedProperties =
+      leftRun && leftRun.kind === 'run'
+        ? leftRun.children
+            .filter((child) => child.kind === 'runProperties')
+            .map((child) => withFreshIds(child, nextId))
+        : [];
     inserted = fromEdit(
       insertChildren(
         part,
         site.holder.id,
         site.index ?? site.holder.children.length,
-        [runElement(nextId, nodes)],
+        [runElement(nextId, [...inheritedProperties, ...nodes])],
         deferOptions(options, control)
       ),
       effect

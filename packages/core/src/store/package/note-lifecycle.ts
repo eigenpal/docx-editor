@@ -51,6 +51,7 @@ import {
 import { writeDocumentNoteProperties, writeSectionNoteProperties } from './note-lifecycle-props.ts';
 import {
   ancestorPathHolding,
+  citationBesideControlAt,
   placeOutsideOutermostRevision,
   splitRunAroundText,
 } from './note-citation-placement.ts';
@@ -1078,9 +1079,21 @@ function insertNodesAtOffset(
           precisePath,
           boundary.node.id,
           nodes,
-          nextId
+          nextId,
+          // A control is atomic, so the citation may only sit beside it — which is the
+          // requested position exactly when the control's own span starts at this offset.
+          (node) => offsets.spanOf(node)?.start === offset
         );
         if (placed !== undefined) return placed;
+      }
+      const beside = citationBesideControlAt(
+        paragraph,
+        anchorId,
+        (node) => offsets.spanOf(node)?.start === offset
+      );
+      if (beside) {
+        const inserted = insertChildren(part, beside.holder.id, beside.index, nodes);
+        return inserted.ok ? inserted.part : null;
       }
       const path = ancestorPathHolding(top, anchorId);
       const parent = path?.at(-1) ?? null;
