@@ -17,7 +17,8 @@ import {
   drawingAccessibility,
   isRunLevelMcAlternateContent,
 } from '../store/package/drawing-projection.ts';
-import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import type { OoxmlNode, OoxmlParagraphNode } from '../store/package/ooxml-tree.ts';
+import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
@@ -1077,22 +1078,15 @@ export function anchoredDrawingAtomsInParagraph(
 export function drawingModelOffsetsInParagraph(paragraph: OoxmlNode): ReadonlyMap<string, number> {
   const offsets = new Map<string, number>();
   if (paragraph.kind !== 'paragraph') return offsets;
-  let offset = 0;
-  const visitRunContent = (node: OoxmlNode): void => {
-    if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
-      offsets.set(node.id, offset);
-      offset += 1;
-      return;
-    }
-    if (node.kind === 'textValue') {
-      offset += node.value.length;
-      return;
-    }
-    if ('children' in node) {
-      for (const child of node.children) visitRunContent(child);
-    }
-  };
-  walkDrawingRunContent(paragraph, visitRunContent);
+  // Offsets come from the paragraph offset index — THE authority — not a private counter.
+  // Counting only text and drawings put a drawing after a `w:br` at the break's offset, so
+  // the anchor attached to the wrong line: every modeled atom occupies its own unit.
+  const index = paragraphOffsetIndex(paragraph as OoxmlParagraphNode);
+  walkDrawingRunContent(paragraph, (node) => {
+    if (node.kind !== 'drawing' && !isRunLevelMcAlternateContent(node)) return;
+    const span = index.spanOf(node);
+    if (span) offsets.set(node.id, span.start);
+  });
   return offsets;
 }
 

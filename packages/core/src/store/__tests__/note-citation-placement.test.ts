@@ -229,7 +229,10 @@ describe('note citation placement in nested containers', () => {
     expect(xml.slice(secondRevision)).toContain('>B<');
   });
 
-  test('a control inside a revision moves whole to the citation boundary', () => {
+  test('a citation inside a control under a revision is refused, never moved', () => {
+    // The control is atomic: cloning it would duplicate its authored id and its lock. The
+    // citation cannot go inside it and cannot go beside it without attaching the note to
+    // different text, so the write is refused rather than silently relocated.
     const store = openStore(
       build({
         body:
@@ -240,27 +243,11 @@ describe('note citation placement in nested containers', () => {
       })
     );
     const paragraphId = firstParagraphId(store.currentPackage());
-    const result = store.applyLifecycleOp({
-      op: 'insertNote',
-      noteKind: 'footnote',
-      paragraphId,
-      offset: 1,
-    });
-    expect(result.ok).toBe(true);
-    const main = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
-    const controls: OoxmlNode[] = [];
-    const collect = (node: OoxmlNode): void => {
-      if (node.kind === 'textValue') return;
-      if (node.kind === 'contentControl') controls.push(node);
-      for (const child of node.children) collect(child);
-    };
-    collect(main.root);
-    expect(controls).toHaveLength(1);
-    for (const control of controls) {
-      expect(
-        control.kind !== 'textValue' &&
-          control.children.some((child) => child.kind === 'contentControlProperties')
-      ).toBe(true);
-    }
+    const before = paragraphTextOf(mainPartOf(store.currentPackage()), paragraphId);
+    expect(
+      store.applyLifecycleOp({ op: 'insertNote', noteKind: 'footnote', paragraphId, offset: 1 }).ok
+    ).toBe(false);
+    // The document is untouched: no citation, no duplicated control.
+    expect(paragraphTextOf(mainPartOf(store.currentPackage()), paragraphId)).toBe(before);
   });
 });

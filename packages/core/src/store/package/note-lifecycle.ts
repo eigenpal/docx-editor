@@ -49,7 +49,11 @@ import {
   withNotesRelationship,
 } from './note-lifecycle-shell.ts';
 import { writeDocumentNoteProperties, writeSectionNoteProperties } from './note-lifecycle-props.ts';
-import { ancestorPathHolding, placeOutsideOutermostRevision } from './note-citation-placement.ts';
+import {
+  ancestorPathHolding,
+  placeOutsideOutermostRevision,
+  splitRunAroundText,
+} from './note-citation-placement.ts';
 import {
   isLegalEndnotePosition,
   isLegalFootnotePosition,
@@ -1003,27 +1007,16 @@ function insertNodesAtOffset(
     const splitParent = citationSplitParent(paragraph, run.id);
     if (!splitParent) return null;
 
-    const headRun = {
-      ...run,
-      id: nextId(),
-      children: run.children.flatMap((child) =>
-        child.id === textParent.id ? [textElement(nextId, value.slice(0, local))] : [child]
-      ),
-    } as OoxmlNode;
-    const tailRun = {
-      ...run,
-      id: nextId(),
-      children: run.children.flatMap((child) =>
-        child.id === textParent.id
-          ? [textElement(nextId, value.slice(local))]
-          : [cloneShallow(child, nextId)]
-      ),
-    } as OoxmlNode;
-    // Remint ids inside head/tail copies so the split halves stay unique.
-    const head = withFreshIds(headRun, nextId);
-    const tail = withFreshIds(tailRun, nextId);
+    const halves = splitRunAroundText(
+      run,
+      textParent.id,
+      textElement(nextId, value.slice(0, local)),
+      textElement(nextId, value.slice(local)),
+      nextId
+    );
+    if (!halves?.head || !halves.tail) return null;
     const rebuilt = splitParent.children.flatMap((child) =>
-      child.id === run.id ? [head, ...nodes, tail] : [child]
+      child.id === run.id ? [halves.head!, ...nodes, halves.tail!] : [child]
     );
     const replaced = replaceChildren(part, splitParent.id, rebuilt);
     return replaced.ok ? replaced.part : null;
@@ -1102,15 +1095,6 @@ function insertNodesAtOffset(
 
   const inserted = insertChildren(part, paragraph.id, paragraph.children.length, nodes);
   return inserted.ok ? inserted.part : null;
-}
-
-function cloneShallow(node: OoxmlNode, nextId: () => string): OoxmlNode {
-  if (node.kind === 'textValue') return { ...node, id: nextId() };
-  return {
-    ...node,
-    id: nextId(),
-    children: node.children.map((child) => cloneShallow(child, nextId)),
-  } as OoxmlNode;
 }
 
 function textElement(nextId: () => string, text: string): OoxmlNode {

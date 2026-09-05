@@ -11,6 +11,38 @@ import {
   WML_NAMESPACE_URI,
 } from './ooxml-shared.ts';
 
+/**
+ * One run split into the halves that sit either side of a citation, or null when its content
+ * does not hold `textParentId`.
+ *
+ * Content splits AROUND the target child; only run properties belong to both halves. Copying
+ * every other child into both duplicated a run's siblings and reordered them — splitting
+ * `<w:r><w:t>Word</w:t><w:t>X</w:t></w:r>` at offset 2 read back `WoX￼rdX`.
+ */
+export function splitRunAroundText(
+  run: OoxmlNode,
+  textParentId: string,
+  headText: OoxmlNode,
+  tailText: OoxmlNode,
+  nextId: () => string
+): BoundarySplit | null {
+  if (run.kind !== 'run') return null;
+  const properties = run.children.filter((child) => child.kind === 'runProperties');
+  const content = run.children.filter((child) => child.kind !== 'runProperties');
+  const at = content.findIndex((child) => child.id === textParentId);
+  if (at < 0) return null;
+  const build = (children: readonly OoxmlNode[]): OoxmlNode =>
+    withFreshIds({ ...run, id: nextId(), children } as OoxmlNode, nextId);
+  return {
+    head: build([...properties, ...content.slice(0, at), headText]),
+    tail: build([
+      ...properties.map((child) => withFreshIds(child, nextId)),
+      tailText,
+      ...content.slice(at + 1),
+    ]),
+  };
+}
+
 /** The ancestors of `nodeId` below `root`, from outermost through its direct parent. */
 export function ancestorPathHolding(root: OoxmlNode, nodeId: string): readonly OoxmlNode[] | null {
   const path: OoxmlNode[] = [];
@@ -108,8 +140,12 @@ export function splitBeforeDescendant(
     const tail: OoxmlNode[] = [];
     const held = content[holder]!;
     if (isContentControl(held)) {
-      // A citation that must escape an enclosing revision moves to the nearest control
-      // boundary. The control stays whole, with one authored id and one protection scope.
+      // A control is atomic: cloning it would duplicate its authored id and its protection
+      // scope. So the citation can only go BESIDE it. When the requested boundary is the
+      // control's own leading edge that is the same place; anywhere inside it is not, and
+      // moving the citation there would silently attach the note to different text. Refuse
+      // and let the caller reject, rather than write a position nobody asked for.
+      if (held.id !== nodeId) return null;
       tail.push(held);
     } else {
       const nested = splitBeforeDescendant(held, nodeId, nextId, childDepth);
