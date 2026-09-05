@@ -122,6 +122,14 @@ describe('fontResolverFamilies', () => {
     expect(families[0]).toBe('Garamond');
   });
 
+  test('a symbol face the cut would drop is still asked for, declared or not', () => {
+    // Word writes the symbol face on the run as well, so a checkbox face is usually
+    // declared too — and `documentFonts()` sorts by code point, which puts Wingdings past
+    // the cut in any long list.
+    const declared = [...Array.from({ length: 70 }, (_, index) => `Face ${index}`), 'Wingdings'];
+    expect(fontResolverFamilies(declared, ['Wingdings'], 64)).toContain('Wingdings');
+  });
+
   test('room left over after the reservation still goes to the remaining symbol faces', () => {
     const symbols = Array.from({ length: 10 }, (_, index) => `Symbol ${index}`);
     expect(fontResolverFamilies(['Garamond'], symbols, 64)).toHaveLength(11);

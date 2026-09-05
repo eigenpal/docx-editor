@@ -28,12 +28,7 @@
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { DocumentThemeFonts } from './theme-font-scheme.ts';
-import {
-  eastAsiaFamilyFromRFonts,
-  familyFromRFonts,
-  validFontFamily,
-  validStyleId,
-} from './run-defaults.ts';
+import { eastAsiaFamilyFromRFonts, familyFromRFonts, validStyleId } from './run-defaults.ts';
 
 /** `basedOn` walk cap, matching `run-defaults`. */
 const CHAIN_CAP = 16;
@@ -162,21 +157,31 @@ const GLYPH_MARKS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The face a `w:sym` overrides the run with, or null when it names none and the glyph
- * paints in the run's own face.
- *
- * Read exactly as `layout/symbol-run.ts` reads it — the WML namespace or none, since
- * unprefixed attributes on WML elements are common in authored packages. A looser match
- * would drop a run this module must report: layout would keep the run's `rFonts` while
- * this answer decided a symbol face had replaced it.
+ * `layout/symbol-run.ts`'s `MAX_SYMBOL_FONT_LENGTH`, kept by value: the store lane does not
+ * import layout, and this question is about what layout will DO, not what a name may be.
  */
-function symbolFontOf(sym: OoxmlElement): string | null {
+const MAX_SYMBOL_FONT_LENGTH = 128;
+
+/**
+ * Whether a `w:sym` replaces the run's face with one of its own.
+ *
+ * Answered by layout's rule, not this module's name validation. `symbolRunStyle` overrides
+ * `rFonts` whenever `@w:font` is present and within its length bound — a vertical-writing
+ * `@MS Gothic`, a name too long for a CSS sink, any of them. Asking `validFontFamily` here
+ * instead would answer "no override" for a name layout does apply, and the run's own face
+ * would enter this answer for a glyph that never paints in it.
+ *
+ * The attribute is read the way `symbol-run.ts` reads it — the WML namespace or none, since
+ * unprefixed attributes on WML elements are common in authored packages — so a
+ * foreign-namespaced `font`, which layout ignores, does not count as an override either.
+ */
+function symbolOverridesRunFace(sym: OoxmlElement): boolean {
   for (const attribute of sym.attributes) {
     if (attribute.localName !== 'font') continue;
     if (attribute.namespaceUri !== WML_NAMESPACE_URI && attribute.namespaceUri !== '') continue;
-    return validFontFamily(attribute.value);
+    return attribute.value.length > 0 && attribute.value.length <= MAX_SYMBOL_FONT_LENGTH;
   }
-  return null;
+  return false;
 }
 
 /**
@@ -190,7 +195,7 @@ function runRendersGlyphs(run: OoxmlElement, projectedGlyphIds?: ReadonlySet<str
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (GLYPH_MARKS.has(child.localName)) return true;
     if (child.localName === 'sym') {
-      if (symbolFontOf(child) === null) return true;
+      if (!symbolOverridesRunFace(child)) return true;
       continue;
     }
     if (child.localName !== 't' && child.localName !== 'delText') continue;

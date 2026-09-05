@@ -155,6 +155,29 @@ describe('collectRenderedFontFamilies', () => {
     );
     expect(runFaced.renderedFontFamilies()).toEqual(['Garamond']);
 
+    // Layout applies any `@w:font` within its length bound, including a name no CSS sink
+    // would take — Word's vertical-writing `@` prefix is the everyday one. The override is
+    // real, so the run's own face still paints nothing.
+    const verticalWriting = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="MS Gothic"/></w:rPr>' +
+          '<w:sym w:font="@MS Gothic" w:char="2612"/></w:r></w:p>',
+      })
+    );
+    expect(verticalWriting.renderedFontFamilies()).toEqual([]);
+
+    // A `font` in a foreign namespace is one layout ignores, so the run keeps its own face
+    // and this answer must keep reporting it.
+    const foreignNamespace = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym xmlns:x="urn:x" x:font="Wingdings" w:char="2612"/></w:r></w:p>',
+      })
+    );
+    expect(foreignNamespace.renderedFontFamilies()).toEqual(['Garamond']);
+
     // A face named BOTH by a symbol and by rendered text stays reported.
     const alsoText = open(
       docx({

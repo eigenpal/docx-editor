@@ -95,18 +95,27 @@ export function fontResolverFamilies(
   symbols: readonly string[],
   cap: number
 ): readonly string[] {
-  const seen = new Set(declared.map((family) => family.toLowerCase()));
+  const seen = new Set<string>();
   const wanted: string[] = [];
   for (const family of symbols) {
-    if (seen.has(family.toLowerCase())) continue;
-    seen.add(family.toLowerCase());
+    const fold = family.toLowerCase();
+    if (seen.has(fold)) continue;
+    seen.add(fold);
     wanted.push(family);
   }
   // A FLOOR, not a ceiling: it only decides how much of the declared list steps aside, and
   // never more than half the bound, so a small `cap` cannot invert the priority. Whatever
   // room is left over still goes to the remaining symbol faces.
   const reserved = Math.min(wanted.length, RESERVED_SYMBOL_FAMILIES, Math.floor(cap / 2));
-  return [...declared.slice(0, Math.max(cap - reserved, 0)), ...wanted].slice(0, cap);
+  const head = declared.slice(0, Math.max(cap - reserved, 0));
+  // Deduplicate against the families that SURVIVED the cut, not the whole declared list.
+  // Word writes a symbol face on the run too, so a checkbox face is usually declared as
+  // well — and `documentFonts()` sorts by code point, which puts Symbol, Webdings and
+  // Wingdings near the end of a long list. Folding them against a name the cut already
+  // dropped would spend the reservation on nothing.
+  const kept = new Set(head.map((family) => family.toLowerCase()));
+  const tail = wanted.filter((family) => !kept.has(family.toLowerCase()));
+  return [...head, ...tail].slice(0, cap);
 }
 
 /**

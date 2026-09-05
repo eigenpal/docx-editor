@@ -182,6 +182,19 @@ function attributeValue(node: OoxmlElement, localName: string): string | undefin
 }
 
 /**
+ * The same read `layout/symbol-run.ts` makes: the WML namespace, or none — unprefixed
+ * attributes on WML elements are common in authored packages. Use it wherever the answer
+ * decides what LAYOUT will do, so a foreign-namespaced attribute cannot say otherwise.
+ */
+function wmlAttributeValue(node: OoxmlElement, localName: string): string | undefined {
+  return node.attributes.find(
+    (attribute) =>
+      attribute.localName === localName &&
+      (attribute.namespaceUri === WML_NAMESPACE_URI || attribute.namespaceUri === '')
+  )?.value;
+}
+
+/**
  * Open immutable DOCX bytes with document-aware, session-owned font shaping.
  *
  * This is the composition root exporters should use. It parses before requesting fonts, applies
@@ -759,7 +772,10 @@ function layoutSynthesizedFontFamilies(roots: readonly OoxmlElement[]): readonly
       const node = stack.pop()!;
       if (node.namespaceUri === OMML_NAMESPACE_URI) add(EQUATION_FONT_FAMILY);
       if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'sym') {
-        add(attributeValue(node, 'font') ?? null);
+        // The WML namespace or none, the way `layout/symbol-run.ts` reads it. A
+        // foreign-namespaced `font` is a face layout never applies, and the request is
+        // capped — so admitting one could evict a face the document really renders in.
+        add(wmlAttributeValue(node, 'font') ?? null);
       }
       if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldSimple') {
         const instruction = attributeValue(node, 'instr');
