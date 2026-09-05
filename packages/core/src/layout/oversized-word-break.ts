@@ -24,8 +24,8 @@ export interface OversizedWordRemainder extends OversizedWordPrefix {
 /**
  * Move a grapheme-safe cut to one `cutAllowedAt` also accepts: shorter first, so the line
  * stays inside its measure; longer only when no shorter cut is left, pushing the offending
- * character out with its carrier. A text with no accepted cut at all (。。。) keeps the
- * measured one, so the chop always makes progress.
+ * character out with its carrier. If no cut is accepted, return the whole remainder;
+ * ordinary placement keeps it pending until the next piece's boundary is known.
  */
 function acceptedCut(
   text: string,
@@ -41,7 +41,7 @@ function acceptedCut(
   for (let candidate = fitTo + 1; candidate <= graphemes.length; candidate += 1) {
     if (cutAllowedAt(text, graphemes[candidate - 1]!.utf16To)) return candidate;
   }
-  return fitTo;
+  return graphemes.length;
 }
 
 export function chopOversizedWord(
@@ -112,6 +112,9 @@ export function chopOversizedWord(
     // by one UTF-16 code unit (which could split a surrogate pair or combining sequence).
     if (fitTo === graphemeFrom) fitTo += 1;
     fitTo = acceptedCut(text, graphemes, graphemeFrom, fitTo, options.cutAllowedAt);
+    // The final group may continue in the next run. Keep it on the pending line;
+    // only the caller can decide whether the next piece permits a line break.
+    if (fitTo === graphemes.length) break;
 
     const utf16To = graphemes[fitTo - 1]!.utf16To;
     const prefixText = text.slice(utf16From, utf16To);

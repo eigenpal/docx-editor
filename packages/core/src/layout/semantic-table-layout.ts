@@ -44,6 +44,7 @@ import {
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
 import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
+import { resolveCjkTypography } from './cjk-typography.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
 import {
@@ -561,6 +562,7 @@ function placeCellParagraph(
       : undefined,
     {
       lineSpacing,
+      typography: resolveCjkTypography(props, deps.styleCascade?.typography),
       equationCacheToken: deps.producer,
       firstLineOffset,
       // A cell's own content box is the column a positional tab measures against.

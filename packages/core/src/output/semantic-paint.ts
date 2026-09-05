@@ -1567,7 +1567,7 @@ function interSpanGapBefore(
   if (drawingOccupiesGap) return 0;
   const gap =
     current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
-  return gap > 0.25 ? gap : 0;
+  return gap > 0.001 ? gap : 0;
 }
 
 /**

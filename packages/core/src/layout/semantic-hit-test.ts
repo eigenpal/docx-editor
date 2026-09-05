@@ -23,6 +23,8 @@
 
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
+import { isCjk } from './cjk-paragraph-breaks.ts';
+import { lastCodePointOf } from './cjk-line-break.ts';
 import { lineSegments, type LineSegment } from './line-segments.ts';
 import { baselineShiftPtOf, measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
@@ -1080,9 +1082,10 @@ export function caretBoxOnLine(
       // gap. That gap is what paint draws as `word-spacing`; sitting on the upstream end
       // lands inside the stretched space. With no gap (unjustified, or a mere run split
       // after a space), keep upstream affinity so typing continues the preceding run.
-      if (next && next.range.start === offset && span.text.endsWith(' ')) {
-        const gap = next.box.x - (span.box.x + span.box.width);
-        if (gap > 0.25) {
+      if (next && next.range.start === offset) {
+        const cjk = isCjk(lastCodePointOf(span.text) ?? 0) || isCjk(next.text.codePointAt(0) ?? 0);
+        const gap = next.box.x - (span.box.x + span.box.width) - (next.wrapAdvanceBefore ?? 0);
+        if ((span.text.endsWith(' ') && gap > 0.25) || (cjk && gap > 0.001)) {
           chosen = next;
           break;
         }

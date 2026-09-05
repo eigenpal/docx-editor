@@ -34,6 +34,7 @@ import {
   withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
+import { resolveCjkTypography } from './cjk-typography.ts';
 import {
   alignSpans,
   alignDrawings,
@@ -1881,6 +1882,7 @@ function layoutBlocksPass(
         : undefined,
       {
         lineSpacing: entry.lineSpacing,
+        typography: resolveCjkTypography(entry.props, styleCascade?.typography),
         equationCacheToken: producer,
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
         startOffset,

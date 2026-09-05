@@ -215,6 +215,19 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Justified East Asian lines distribute inter-character spacing. The last line stays left-aligned. Tabs and float passages retain their reserved positions.',
+  },
+  {
+    id: 'paragraphs.east-asian-typography',
+    name: 'East Asian typography',
+    category: 'paragraphs',
+    editing: 'preserved',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Protects graphemes, punctuation, and full-width number groups across run boundaries. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression uses deterministic punctuation and kana advance reductions; font-specific optical compression and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
   },
   {
     id: 'paragraphs.spacing',

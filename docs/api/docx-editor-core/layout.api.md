@@ -139,7 +139,7 @@ export function buildNumberingIndex(root: OoxmlElement | null | undefined): Numb
 export function buildPageRefIndex(allRefs: readonly PageRefHit[]): PageRefIndex;
 
 // @public
-export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null, themeFonts?: ThemeFonts): StyleCascadeTable;
+export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null, themeFonts?: ThemeFonts, settingsRoot?: OoxmlElement | null): StyleCascadeTable;
 
 // @public
 export type CacheLookup<V> = {
@@ -335,6 +335,14 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
 
 // @public
 export type CellVerticalAlign = 'top' | 'center' | 'bottom';
+
+// @public
+export interface CjkTypographySettings {
+    readonly after: Readonly<Record<string, string>>;
+    readonly before: Readonly<Record<string, string>>;
+    readonly compression: 'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
+    readonly strict: boolean;
+}
 
 // @public
 export function clampListValue(value: number): number;
@@ -3910,6 +3918,8 @@ export interface StyleCascadeTable {
     // (undocumented)
     readonly styles: ReadonlyMap<string, StyleDefinition>;
     readonly themeFonts: ThemeFonts;
+    // (undocumented)
+    readonly typography?: CjkTypographySettings;
 }
 
 // @public (undocumented)
