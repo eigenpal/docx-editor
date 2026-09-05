@@ -113,8 +113,17 @@ describe('fontResolverFamilies', () => {
     expect(families[0]).toBe('Face 0');
   });
 
-  test('the bound is never exceeded, however many symbol faces a file names', () => {
+  test('the bound is never exceeded, and symbol faces never take it whole', () => {
+    // The reservation is a floor on what steps aside, so a tight bound still leads with the
+    // face the text renders in.
     const symbols = Array.from({ length: 20 }, (_, index) => `Symbol ${index}`);
-    expect(fontResolverFamilies(['Garamond'], symbols, 4)).toHaveLength(4);
+    const families = fontResolverFamilies(['Garamond'], symbols, 4);
+    expect(families).toHaveLength(4);
+    expect(families[0]).toBe('Garamond');
+  });
+
+  test('room left over after the reservation still goes to the remaining symbol faces', () => {
+    const symbols = Array.from({ length: 10 }, (_, index) => `Symbol ${index}`);
+    expect(fontResolverFamilies(['Garamond'], symbols, 64)).toHaveLength(11);
   });
 });

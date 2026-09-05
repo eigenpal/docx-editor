@@ -76,28 +76,13 @@ describe('availableFontFamilies', () => {
     expect(catalog).toEqual(['Calibri', 'Georgia']);
   });
 
-  test('a symbol-only face is not offered, even once a resolver supplies it', () => {
-    // The editor asks the resolver for the face a `w:sym` names, so an app CAN answer it —
-    // and a face that arrives that way must not become a text choice.
-    const catalog = availableFontFamilies(
-      { sources: [source('Wingdings')] },
-      ['Georgia'],
-      ['Wingdings']
-    );
-    expect(catalog).toEqual(['Calibri', 'Georgia']);
-  });
-
-  test('the default face is offered even when the document names it only in a symbol', () => {
-    // The catalog's whole reason to exist is that a picker is never a dead control.
-    expect(availableFontFamilies(undefined, [], ['Calibri'])).toEqual(['Calibri']);
-  });
-
-  test('a face the document also declares stays offered, symbol use or not', () => {
-    const catalog = availableFontFamilies(
-      { sources: [source('MS Gothic')] },
-      ['MS Gothic'],
-      ['MS Gothic']
-    );
-    expect(catalog).toEqual(['Calibri', 'MS Gothic']);
+  test('a face supplied for a symbol is offerable, like every other honoured family', () => {
+    // The editor asks the resolver for the face a `w:sym` names. Once an app answers, the
+    // editor can honour that family for text too, which is the only question this catalog
+    // asks — Word lists installed symbol fonts in its own picker for the same reason. A
+    // symbol face nothing supplied never reaches here: `collectDocumentFonts` reads
+    // `w:rFonts` declarations, and a `w:sym` face is not one.
+    const catalog = availableFontFamilies({ sources: [source('Wingdings')] }, ['Georgia']);
+    expect(catalog).toEqual(['Calibri', 'Georgia', 'Wingdings']);
   });
 });

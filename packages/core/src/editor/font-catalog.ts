@@ -12,10 +12,12 @@
 // and listing both would offer the same metrics twice under two names — the stand-in is
 // an implementation face, not a choice.
 //
-// Symbol faces are excluded for the same kind of reason. The editor asks a resolver for the
-// face a `w:sym` names, so an app can supply the Wingdings a private-use glyph needs — and a
-// face that arrives that way must not become a text choice, or the picker offers to set a
-// paragraph in dingbats.
+// Symbol faces are NOT excluded, deliberately. The editor asks a resolver for the face a
+// `w:sym` names, so an app can supply the Wingdings a private-use glyph needs — and once it
+// has, the editor can honour that family for text as well, which is the only question this
+// catalog answers. Word lists installed symbol fonts in its own picker for the same reason.
+// What keeps a symbol face out of a picker in practice is that nothing supplied it:
+// `collectDocumentFonts` reads `w:rFonts` declarations, and a `w:sym` face is not one.
 
 import { configuredDefaultFontFamily, type FontCatalogConfiguration } from './font-composition.ts';
 
@@ -28,9 +30,6 @@ export { configuredDefaultFontFamily, type FontCatalogConfiguration };
  */
 const FONT_NAME = /^[\p{L}\p{N}\p{M} \-.+_]{1,64}$/u;
 
-/** Empty hold-back set, for the entries no filter may remove. */
-const NOTHING_HELD_BACK: ReadonlySet<string> = new Set();
-
 /**
  * Every family a font picker can offer: the configured catalog (default face,
  * substitution Word-names, host-registered source families) merged with the document's
@@ -41,28 +40,16 @@ const NOTHING_HELD_BACK: ReadonlySet<string> = new Set();
  */
 export function availableFontFamilies(
   configuration: FontCatalogConfiguration | undefined,
-  documentFonts: readonly string[],
-  /** Faces the document uses only through a `w:sym`; never offered as a text choice. */
-  symbolFonts: readonly string[] = []
+  documentFonts: readonly string[]
 ): readonly string[] {
   const byFold = new Map<string, string>();
-  // A family the document ALSO declares through `w:rFonts` is a text face that happens to
-  // draw a symbol too, so only the symbol-only names are held back.
-  const declared = new Set(documentFonts.map((family) => family.toLowerCase()));
-  const symbolOnly = new Set(
-    symbolFonts.map((family) => family.toLowerCase()).filter((fold) => !declared.has(fold))
-  );
-  const offer = (family: string | undefined, heldBack: ReadonlySet<string>): void => {
+  const add = (family: string | undefined): void => {
     if (family === undefined || !FONT_NAME.test(family)) return;
     const fold = family.toLowerCase();
-    if (heldBack.has(fold) || byFold.has(fold)) return;
-    byFold.set(fold, family);
+    if (!byFold.has(fold)) byFold.set(fold, family);
   };
-  const add = (family: string | undefined): void => offer(family, symbolOnly);
 
-  // The default face is the catalog's floor — this module exists so a picker is never a
-  // dead control — so it is offered even when the document happens to name it in a `w:sym`.
-  offer(configuredDefaultFontFamily(configuration), NOTHING_HELD_BACK);
+  add(configuredDefaultFontFamily(configuration));
   const substitutions = configuration?.substitutions ?? [];
   const standIns = new Set(substitutions.map((entry) => entry.to.family.toLowerCase()));
   for (const entry of substitutions) add(entry.from.family);

@@ -65,7 +65,8 @@ font picker can still list those declared families.
 The notice excludes symbol faces too, such as the MS Gothic face a Word checkbox
 names in `w:sym`. A symbol run paints one character, and the editor resolves it
 to its Unicode equivalent wherever one exists, so any face can draw it. The font
-picker doesn't offer symbol faces either.
+picker doesn't list a symbol face either, unless your font configuration supplies
+it: the picker offers the families the editor can honor.
 
 ## Load Word-compatible defaults
 
@@ -441,8 +442,8 @@ the face a run naming no font resolves to. Both count as declared.
 `families` ends with the symbol faces the document names in `w:sym`, after the
 declared ones. Supply those to paint a symbol in the authored face: the editor
 maps a private-use character to its Unicode equivalent where one exists, and
-keeps the original character otherwise. A face you supply for a symbol stays out
-of the font picker.
+keeps the original character otherwise. A face you supply this way becomes
+offerable in the font picker, like any other family you supply.
 
 `resolvedFaces` lists the faces earlier origins in the same composition can already
 paint. It reports faces rather than families, and only faces backed by bytes, so

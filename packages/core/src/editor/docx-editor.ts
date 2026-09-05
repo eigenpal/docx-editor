@@ -2008,15 +2008,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // The picker's list: the configured catalog is offerable with no document at all,
     // and the document's declared families join it once one is mounted.
     getAvailableFonts: () =>
-      availableFontFamilies(
-        fontConfiguration(),
-        surface?.session.documentFonts() ?? [],
-        // Only for the on-demand form: those sources answer the request this editor made,
-        // which now includes symbol faces, and a face supplied for a `w:sym` is not a text
-        // choice. A STATIC catalog is the app's own deliberate offer — if it lists MS
-        // Gothic, the picker offers MS Gothic, whatever the open document uses it for.
-        typeof config.fonts === 'function' ? (surface?.session.symbolFontFamilies() ?? []) : []
-      ),
+      availableFontFamilies(fontConfiguration(), surface?.session.documentFonts() ?? []),
     getDocumentThemeColors: () => surface?.session.documentThemeColors() ?? [],
     getOutline: () => surface?.session.documentOutline() ?? [],
     getComments: () => [],

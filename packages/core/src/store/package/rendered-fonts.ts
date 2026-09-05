@@ -162,6 +162,24 @@ const GLYPH_MARKS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The face a `w:sym` overrides the run with, or null when it names none and the glyph
+ * paints in the run's own face.
+ *
+ * Read exactly as `layout/symbol-run.ts` reads it — the WML namespace or none, since
+ * unprefixed attributes on WML elements are common in authored packages. A looser match
+ * would drop a run this module must report: layout would keep the run's `rFonts` while
+ * this answer decided a symbol face had replaced it.
+ */
+function symbolFontOf(sym: OoxmlElement): string | null {
+  for (const attribute of sym.attributes) {
+    if (attribute.localName !== 'font') continue;
+    if (attribute.namespaceUri !== WML_NAMESPACE_URI && attribute.namespaceUri !== '') continue;
+    return validFontFamily(attribute.value);
+  }
+  return null;
+}
+
+/**
  * Whether a `w:r` puts a glyph on the page IN ITS OWN FACE: a non-empty `w:t`, a
  * `w:delText` (tracked deletions render in markup view — over-reporting in final view,
  * never hiding), a glyph mark element, or a `w:sym` that names no face of its own.
@@ -172,7 +190,7 @@ function runRendersGlyphs(run: OoxmlElement, projectedGlyphIds?: ReadonlySet<str
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (GLYPH_MARKS.has(child.localName)) return true;
     if (child.localName === 'sym') {
-      if (validFontFamily(attributeValue(child, 'font')) === null) return true;
+      if (symbolFontOf(child) === null) return true;
       continue;
     }
     if (child.localName !== 't' && child.localName !== 'delText') continue;

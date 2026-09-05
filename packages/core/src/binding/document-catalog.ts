@@ -163,12 +163,12 @@ function subtreeFontsOf(
  * Every valid family a `w:sym/@w:font` names, deduplicated and sorted like
  * {@link collectDocumentFonts}, and validated at the same boundary for the same reason.
  *
- * Kept apart from the font catalog because the two answer different questions. A symbol
- * face is not a family a PICKER should offer: applying it to a selection would set the
- * text of a run in a face carrying dingbats. It IS a family a font resolver must hear
- * about — `layout/symbol-run.ts` keeps an unmapped private-use code point in the authored
- * face, which paints as a tofu box in any other, and an app that owns those bytes can only
- * supply them if it is told the document wants them.
+ * Kept apart from the font catalog because the two answer different questions.
+ * `collectDocumentFonts` answers what the document DECLARES — `w:rFonts` — and a `w:sym`
+ * face is not a declaration; it is the face ONE glyph is drawn from. A font resolver still
+ * has to hear about it: `layout/symbol-run.ts` keeps an unmapped private-use code point in
+ * the authored face, which paints as a tofu box in any other, and an app that owns those
+ * bytes can only supply them if it is told the document wants them.
  */
 export function collectSymbolFontFamilies(roots: readonly OoxmlElement[]): readonly string[] {
   const byFold = new Map<string, string>();
@@ -233,7 +233,13 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): ReadonlyMap<str
     const node = stack.pop()!;
     if (!isElement(node)) continue;
     if (node.localName === 'sym' && node.namespaceUri === WML_NAMESPACE_URI) {
-      const family = attributeValue(node, 'font');
+      // The WML namespace or none, matching how `layout/symbol-run.ts` reads it: a face
+      // layout will not use is a face no resolver should be asked for.
+      const family = node.attributes.find(
+        (attribute) =>
+          attribute.localName === 'font' &&
+          (attribute.namespaceUri === WML_NAMESPACE_URI || attribute.namespaceUri === '')
+      )?.value;
       if (family && FONT_NAME.test(family) && !byFold.has(family.toLowerCase())) {
         byFold.set(family.toLowerCase(), family);
       }

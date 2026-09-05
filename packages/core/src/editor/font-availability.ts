@@ -102,7 +102,10 @@ export function fontResolverFamilies(
     seen.add(family.toLowerCase());
     wanted.push(family);
   }
-  const reserved = Math.min(wanted.length, RESERVED_SYMBOL_FAMILIES);
+  // A FLOOR, not a ceiling: it only decides how much of the declared list steps aside, and
+  // never more than half the bound, so a small `cap` cannot invert the priority. Whatever
+  // room is left over still goes to the remaining symbol faces.
+  const reserved = Math.min(wanted.length, RESERVED_SYMBOL_FAMILIES, Math.floor(cap / 2));
   return [...declared.slice(0, Math.max(cap - reserved, 0)), ...wanted].slice(0, cap);
 }
 
