@@ -23,8 +23,8 @@ npm install @docx-editor.dev/vue @docx-editor.dev/core     # Vue
 
 See the [React](#react) or [Vue](#vue) quick start below.
 
-Node users need `^20.16.0 || >=22.3.0`. Browser applications can use the
-packages through their normal build tool.
+For Node.js, use `^20.16.0 || >=22.3.0`. Browser applications can use the
+packages with their build tool.
 
 <p align="center">
   <a href="https://docx-editor.dev/editor">
@@ -34,20 +34,20 @@ packages through their normal build tool.
 
 ## Packages
 
-| Package                                                                                    | Description                                                                                                                                                                                | Docs                                                      |
-| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
-| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | <img src="https://cdn.simpleicons.org/react/61DAFB" width="20" align="middle" /> &nbsp; React adapter. Root component, provider primitives, shared hooks, and compound chrome.             | [Docs](https://www.docx-editor.dev/docs/2.x/react)        |
-| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | <img src="https://cdn.simpleicons.org/vuedotjs/4FC08D" width="20" align="middle" /> &nbsp; Vue 3 adapter. Root component, composition primitives, shared composables, and compound chrome. | [Docs](https://www.docx-editor.dev/docs/2.x/vue)          |
-| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | Framework-agnostic engine: OOXML read/write, canonical document tree, layout, paint. Depend on this if you fork an adapter.                                                                | [Docs](https://www.docx-editor.dev/docs/2.x/core)         |
-| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Shared locale strings and types consumed by the adapter.                                                                                                                                   | [Docs](https://www.docx-editor.dev/docs/2.x/i18n)         |
-| [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts)           | Open-licensed substitutes for common Word fonts, with local and on-demand resolvers.                                                                                                       | [Docs](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
-| `@docx-editor.dev/docx-to-markdown`                                                        | Private workspace package for server-first DOCX to Markdown conversion using the shared semantic layout engine, packaged fonts, and HarfBuzz.                                              | Internal preview                                          |
-| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, real-time collaboration, and custom nodes.                                                                                                                      | [Docs](https://www.docx-editor.dev/docs/2.x/pro)          |
-| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible editing API: a batching object model that edits a document from a server, or an editor already open in a page.                                                        | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api)   |
+| Package                                                                                    | Description                                                 | Docs                                                      |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------- | --------------------------------------------------------- |
+| [`@docx-editor.dev/react`](https://www.npmjs.com/package/@docx-editor.dev/react)           | React editor components and hooks.                          | [Docs](https://www.docx-editor.dev/docs/2.x/react)        |
+| [`@docx-editor.dev/vue`](https://www.npmjs.com/package/@docx-editor.dev/vue)               | Vue 3 editor components and composables.                    | [Docs](https://www.docx-editor.dev/docs/2.x/vue)          |
+| [`@docx-editor.dev/core`](https://www.npmjs.com/package/@docx-editor.dev/core)             | DOCX parsing, editing, and rendering.                       | [Docs](https://www.docx-editor.dev/docs/2.x/core)         |
+| [`@docx-editor.dev/i18n`](https://www.npmjs.com/package/@docx-editor.dev/i18n)             | Translations and locale types.                              | [Docs](https://www.docx-editor.dev/docs/2.x/i18n)         |
+| [`@docx-editor.dev/fonts`](https://www.npmjs.com/package/@docx-editor.dev/fonts)           | Open-licensed substitutes for Word fonts.                   | [Docs](https://www.docx-editor.dev/docs/2.x/guides/fonts) |
+| `@docx-editor.dev/docx-to-markdown`                                                        | Convert DOCX to Markdown.                                   | Private preview                                           |
+| [`@docx-editor.dev/pro`](https://www.npmjs.com/package/@docx-editor.dev/pro)               | Tracked changes, comments, collaboration, and custom nodes. | [Docs](https://www.docx-editor.dev/docs/2.x/pro)          |
+| [`@docx-editor.dev/editor-api`](https://www.npmjs.com/package/@docx-editor.dev/editor-api) | Office.js-compatible API for browser and server editing.    | [Docs](https://www.docx-editor.dev/docs/2.x/editor-api)   |
 
 `@docx-editor.dev/editor-api` and `@docx-editor.dev/pro` are licensed under the EigenPal Pro License ([editor-api](packages/editor-api/LICENSE.md), [pro](packages/pro/LICENSE.md)), and you can compare and buy license and support levels on the [pricing page](https://www.docx-editor.dev/pricing).
 
-> **Forking the adapter?** Keep your fork thin. Depend on `@docx-editor.dev/core` directly so parser, serializer, and rendering fixes land in your build automatically, without backporting each upstream change by hand.
+If you fork an adapter, depend on `@docx-editor.dev/core` to receive engine fixes.
 
 ## React
 
@@ -126,13 +126,13 @@ See [Fonts and measurement](https://www.docx-editor.dev/docs/2.x/guides/fonts).
 
 ```bash
 bun install
-bun run dev        # localhost:5173
-bun run dev:markdown # DOCX → paginated Markdown demo on localhost:5177
+bun run dev          # localhost:5173
+bun run dev:markdown # Markdown demo: localhost:5177
 bun run build
 bun run typecheck
 ```
 
-A live preview of `main` is auto-deployed at **[latest.docx-editor.dev](https://latest.docx-editor.dev/)** — useful for trying out changes before they ship to npm.
+Try unreleased changes in the [preview of `main`](https://latest.docx-editor.dev/).
 
 Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration)
 

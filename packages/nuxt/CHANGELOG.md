@@ -2,13 +2,13 @@
 
 ## 2.15.1
 
-### Patch Changes
+### Patch changes
 
 - @docx-editor.dev/vue@2.15.1
 
 ## 2.15.0
 
-### Patch Changes
+### Patch changes
 
 - @docx-editor.dev/vue@2.15.0
 

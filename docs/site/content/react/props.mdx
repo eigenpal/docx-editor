@@ -14,15 +14,15 @@ For all signatures, see the [React API reference](/docs/2.x/api/react).
 Use `document` for the document source.
 Use `fonts` to supply font metrics for measurement.
 
-| Prop       | Type                                                             | Description                                                                                                       |
-| ---------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `document` | `DocumentSource`                                                 | DOCX bytes, `'blank'`, or an existing `DocumentHandle`.                                                           |
-| `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination.                                                         |
-| `author`   | `string`                                                         | Author for later comments, replies, and tracked changes. Changes apply without a remount.                         |
-| `locale`   | `string`                                                         | Engine locale for engine-generated content, such as the table of contents title. Changes apply without a remount. |
-| `mode`     | `'edit' \| 'view' \| 'suggesting'`                               | Host editing mode. Changes apply without a remount.                                                               |
-| `zoom`     | `number`                                                         | Fixed display scale. Changes apply without a remount.                                                             |
-| `zoomMode` | `ZoomMode \| 'auto'`                                             | Scale source. The default `'auto'` fits the page width.                                                           |
+| Prop       | Type                                                             | Description                                                                                   |
+| ---------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `document` | `DocumentSource`                                                 | DOCX bytes, `'blank'`, or an existing `DocumentHandle`.                                       |
+| `fonts`    | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Font bytes or a resolver for text shaping and pagination.                                     |
+| `author`   | `string`                                                         | Author for later comments, replies, and tracked changes. Changes apply without a remount.     |
+| `locale`   | `string`                                                         | Locale for generated content, such as the table of contents title. Updates without a remount. |
+| `mode`     | `'edit' \| 'view' \| 'suggesting'`                               | Editing mode. Changes apply without a remount.                                                |
+| `zoom`     | `number`                                                         | Fixed display scale. Changes apply without a remount.                                         |
+| `zoomMode` | `ZoomMode \| 'auto'`                                             | Scale source. The default `'auto'` fits the page width.                                       |
 
 The editor colors tracked changes by author.
 Changing `author` preserves the editor instance and all existing revisions.

@@ -50,7 +50,7 @@ layout pass, and the paint step directly.
 | `./store`                     | The canonical tree and its transactional store.                                              |
 | `./layout`                    | The DOM-free layout pass.                                                                    |
 | `./output`                    | Serialization.                                                                               |
-| `./export`                    | Reusable, DOM-free semantic layout sessions for Markdown, PDF, and future exporters.         |
+| `./export`                    | Document layout sessions for exporters. No DOM required.                                     |
 | `./automation`                | The object model behind `@docx-editor.dev/editor-api`.                                       |
 | `./collaboration`             | Provider-neutral collaboration session contracts.                                            |
 | `./collaboration/replication` | Replication helpers for collaboration providers.                                             |
@@ -70,17 +70,14 @@ Nodes are typed where layout needs them and generic everywhere else, preserving 
 verbatim. Content the engine does not model is carried rather than dropped, so a document full
 of unknown extensions still opens, edits, and saves.
 
-Export sessions use the editor's reader-safe revision view by default: `all-markup` keeps both
-halves of pending tracked changes visible. Pass `displayMode: 'proposed'` or
-`displayMode: 'original'` explicitly when the exporter should present a resolved view instead.
+Export sessions default to `all-markup`, which shows inserted and deleted text.
+Use `displayMode: 'proposed'` for the accepted view or `displayMode: 'original'` for the rejected view.
 
-### Building a physical-page exporter
+### Build a paginated exporter
 
-Use the document-aware font composition root for Markdown, PDF, or any exporter whose page breaks
-matter. `openDocumentForExport(bytes)` without a measurer intentionally uses deterministic
-fixed-width approximation. `openFontBackedDocumentForExport` discovers the document's actual run,
-style, header, footer, note, field, symbol, and equation families, then binds the resolved shaping
-snapshot to the layout session.
+For exports that need accurate page breaks, use `openFontBackedDocumentForExport`. It resolves
+the fonts used throughout the document before layout. Without a measurer,
+`openDocumentForExport(bytes)` uses a fixed-width approximation.
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -105,11 +102,8 @@ try {
 }
 ```
 
-Keep font retrieval, substitution, cancellation, diagnostics, and memory ownership in this Core
-lane. Format adapters should consume the resulting semantic pages; Markdown binds Core source
-artifacts to string offsets, while PDF can bind the same artifacts to page rectangles. For a live
-`HeadlessDocumentView`, pass the revision-stable measurer already used by its editor rather than
-starting asynchronous document-specific font resolution against mutable state.
+Let Core manage fonts, resources, and layout. Build your output from the returned pages.
+For a live `HeadlessDocumentView`, pass the editor's revision-stable measurer.
 
 ## Fidelity
 
