@@ -195,7 +195,8 @@ export function nextInlineContainerDepth(node: OoxmlNode, depth: number): number
 
 /** Whether a run/block-polymorphic wrapper contains block-level content. */
 function hasBlockContent(node: OoxmlElement, depth = 0): boolean {
-  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return true;
+  // Exhaustion hides deeper content; it is not evidence of block-level children.
+  if (depth >= MAX_INLINE_CONTAINER_DEPTH) return false;
   for (const child of node.children) {
     if (child.kind === 'textValue') continue;
     if (

@@ -155,3 +155,33 @@ describe('inline container depth parity', () => {
     ]);
   });
 });
+
+test.each([
+  MAX_INLINE_CONTAINER_DEPTH - 2,
+  MAX_INLINE_CONTAINER_DEPTH - 1,
+  MAX_INLINE_CONTAINER_DEPTH,
+  MAX_INLINE_CONTAINER_DEPTH + 1,
+])('customXml depth %s keeps shallow content addressable', (count) => {
+  let nested = '<w:r><w:t>deep</w:t></w:r>';
+  for (let depth = 0; depth < count; depth += 1) nested = `<w:customXml>${nested}</w:customXml>`;
+  const loaded = loadedParagraph(
+    `<w:customXml><w:r><w:t>Visible</w:t></w:r>${nested}${inlineControl('shallow', 'control')}</w:customXml>`
+  );
+  const expected = 'Visible' + (count + 1 < MAX_INLINE_CONTAINER_DEPTH ? 'deep' : '') + 'control';
+  expect(paragraphTextOf(loaded.part, loaded.paragraph.id)).toBe(expected);
+  expect(
+    piecesOfParagraph(loaded.paragraph)
+      .map((piece) => piece.text)
+      .join('')
+  ).toBe(expected);
+  expect(treeToDoc(loaded.part).textContent).toBe(expected);
+  expect(paragraphOffsetIndex(loaded.paragraph).length).toBe(expected.length);
+  const controlStart = expected.indexOf('control');
+  expect(
+    inlineContentControlsAt(loaded.paragraph, controlStart).map((control) => control.tag)
+  ).toEqual(['shallow']);
+  expect(collectedControlIndexOf(loaded.part).controls[0]?.range).toEqual({
+    start: controlStart,
+    end: expected.length,
+  });
+});

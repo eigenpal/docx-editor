@@ -13,7 +13,7 @@ import type {
   OoxmlPart,
 } from '@docx-editor.dev/core/store';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
-import { paragraphInlineLengthOf } from '../store/store/tree-op-segments.ts';
+import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
 import { blockStoryContainerChildren, storyRootsOf } from '../store/package/story-blocks.ts';
 import {
   MAX_CONTENT_CONTROL_NESTING as MAX_SDT_NESTING,
@@ -162,26 +162,24 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
   const walkInline = (
     nodes: readonly OoxmlNode[],
     paragraph: OoxmlParagraphNode,
-    offset: number,
     depth: number,
     containerDepth: number,
     lockStack: readonly ContentControlLock[]
-  ): number => {
-    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return offset;
-    let cursor = offset;
+  ): void => {
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) return;
     for (const child of nodes) {
       if (child.kind === 'textValue' || child.kind === 'paragraphProperties') continue;
       if (isContentControl(child)) {
-        // The paragraph offset authority makes every child reached at the shared cap opaque.
-        // Do not advance for content that layout cannot address or paint.
+        // Resolve spans only for actual controls. Ordinary paragraphs must not retain
+        // a complete offset index merely because the document's controls are queried.
+        const range = paragraphOffsetIndex(paragraph).spanOf(child);
+        if (!range) continue;
         const properties = contentControlPropertiesOf(child);
         const lock = parseContentControlLock(propertyVal(properties, 'lock'));
         const nextStack = [...lockStack, lock];
-        const start = cursor;
-        const end = walkInline(
+        walkInline(
           contentControlContentChildren(child),
           paragraph,
-          cursor,
           depth + 1,
           containerDepth + 1,
           nextStack
@@ -192,26 +190,15 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
           lockStack: nextStack,
           level: 'inline',
           paragraphId: paragraph.id,
-          range: { start, end },
+          range,
           blockIds: [],
         });
-        cursor = end;
         continue;
       }
       if (isInlineRunContainer(child)) {
-        cursor = walkInline(
-          child.children,
-          paragraph,
-          cursor,
-          depth,
-          containerDepth + 1,
-          lockStack
-        );
-        continue;
+        walkInline(child.children, paragraph, depth, containerDepth + 1, lockStack);
       }
-      cursor += paragraphInlineLengthOf(paragraph, child);
     }
-    return cursor;
   };
 
   const walkBlocks = (
@@ -223,7 +210,7 @@ function collectControlLists(part: OoxmlPart): readonly (readonly CollectedContr
     for (const child of nodes) {
       if (child.kind === 'textValue') continue;
       if (child.kind === 'paragraph') {
-        walkInline(child.children, child, 0, depth, 0, lockStack);
+        walkInline(child.children, child, depth, 0, lockStack);
         continue;
       }
       if (child.kind === 'table') {

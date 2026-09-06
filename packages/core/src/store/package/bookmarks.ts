@@ -68,12 +68,13 @@ export function buildBookmarkIndex(part: OoxmlPart): BookmarkIndex {
   const index = new Map<string, BookmarkAnchor>();
 
   const scanParagraph = (paragraph: OoxmlParagraphNode): void => {
-    const offsets = paragraphOffsetIndex(paragraph);
+    // Paragraphs without bookmark starts need no retained offset index.
+    let offsets: ReturnType<typeof paragraphOffsetIndex> | undefined;
     const walkInline = (child: OoxmlNode, depth: number): void => {
       if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
       if (child.kind === 'bookmarkStart') {
         const name = attributeValue(child, 'name');
-        const span = offsets.spanOf(child);
+        const span = (offsets ??= paragraphOffsetIndex(paragraph)).spanOf(child);
         if (
           span !== null &&
           name !== undefined &&
