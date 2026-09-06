@@ -13,7 +13,10 @@ import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { eastAsiaRunsOfSegments, type FontSlot } from './script-itemization.ts';
-import { hasEastAsiaSymbolHint } from './east-asia-symbol-hint.ts';
+import {
+  hasEastAsiaSymbolHint,
+  hasTimesNewRomanEastAsiaException,
+} from './east-asia-symbol-hint.ts';
 import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
@@ -451,8 +454,8 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
     segments.push(piece.text);
     // Leave the special Times New Roman East Asian fallback to existing resolution.
     hintedSegments.push(
-      piece.style.fontFamilyEastAsia?.toLowerCase() !== 'times new roman' &&
-        hasEastAsiaSymbolHint(piece.props)
+      hasEastAsiaSymbolHint(piece.props) &&
+        !hasTimesNewRomanEastAsiaException(piece.props, piece.style.fontFamilyEastAsia)
     );
   }
   const ranges = eastAsiaRunsOfSegments(segments, hintedSegments);

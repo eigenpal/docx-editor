@@ -1,8 +1,14 @@
 import { expect, test } from 'bun:test';
-import { hasEastAsiaSymbolHint, isEastAsiaHintSymbol } from '../east-asia-symbol-hint.ts';
+import {
+  hasEastAsiaSymbolHint,
+  hasTimesNewRomanEastAsiaException,
+  isEastAsiaHintSymbol,
+} from '../east-asia-symbol-hint.ts';
 import { applyEastAsiaFontSlots, type FieldAwarePiece } from '../field-pieces.ts';
 import { resolveRunStyle } from '../run-style.ts';
-import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { eastAsiaRunsOfSegments } from '../script-itemization.ts';
+import { createFixedMeasurer, layoutSemanticDocument, linesOf } from '../index.ts';
+import { readOoxmlPart, type OoxmlProperty } from '@docx-editor.dev/core/store';
 
 const fonts: OoxmlProperty = {
   localName: 'rFonts',
@@ -18,13 +24,76 @@ function piece(text: string, props: OoxmlProperty[] = [fonts], projected = false
     ...(projected ? { projected: true } : {}),
   };
 }
-test('the Latin-1 hint table accepts exactly the unconditional symbols, not accented letters', () => {
-  const expected = [
+test('the hint table accepts exactly the unconditional symbols, not accented letters', () => {
+  const latin1 = [
     0xa1, 0xa4, 0xa7, 0xa8, 0xaa, 0xad, 0xaf, 0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb6, 0xb7, 0xb8, 0xb9,
     0xba, 0xbc, 0xbd, 0xbe, 0xbf, 0xd7, 0xf7,
   ];
-  for (let code = 0; code <= 0x2ff; code++)
-    expect(isEastAsiaHintSymbol(code)).toBe(expected.includes(code));
+  const inTable = (code: number) =>
+    latin1.includes(code) || (code >= 0x2b0 && code <= 0x36f) || (code >= 0x2000 && code <= 0x27bf);
+  for (let code = 0; code <= 0x2fff; code++) expect(isEastAsiaHintSymbol(code)).toBe(inTable(code));
+  // Private use and the Latin presentation forms, up to the first Hebrew ligature.
+  expect(isEastAsiaHintSymbol(0xe000)).toBe(true);
+  expect(isEastAsiaHintSymbol(0xf8ff)).toBe(true);
+  expect(isEastAsiaHintSymbol(0xfb00)).toBe(true);
+  expect(isEastAsiaHintSymbol(0xfb1c)).toBe(true);
+  expect(isEastAsiaHintSymbol(0xfb1d)).toBe(false);
+  expect(isEastAsiaHintSymbol(0xdfff)).toBe(false);
+  expect(isEastAsiaHintSymbol(0xf900)).toBe(false);
+  // CJK radicals are strong East Asian text without any hint, so the table leaves them out.
+  expect(eastAsiaRunsOfSegments(['⺀'], [false])).toEqual([{ segment: 0, from: 0, to: 1 }]);
+});
+test('hinted quotes, dashes and enclosed digits resolve the East Asian slot in layout', () => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const spansOf = (text: string, hint: string) => {
+    const parsed = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:rPr>` +
+        `<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="SimSun"${hint}/>` +
+        `</w:rPr><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const layout = layoutSemanticDocument(parsed.part, 1, { measurer: createFixedMeasurer(6, 14) });
+    return linesOf(layout).flatMap((line) => line.spans);
+  };
+  for (const text of ['“”', '——', '①', '·']) {
+    const hinted = spansOf(text, ' w:hint="eastAsia"');
+    expect(hinted.map((span) => span.text)).toEqual([text]);
+    expect(hinted[0]!.fontSlot).toBe('eastAsia');
+    expect(hinted[0]!.style.fontFamily).toBe('Arial');
+    const unhinted = spansOf(text, '');
+    expect(unhinted[0]!.fontSlot).toBeUndefined();
+  }
+});
+test('the Times New Roman exception needs matching ascii and hAnsi faces', () => {
+  const timesNewRoman = (ascii: string, hAnsi: string): OoxmlProperty[] => [
+    {
+      localName: 'rFonts',
+      attributes: { ascii, hAnsi, eastAsia: 'Times New Roman', hint: 'eastAsia' },
+    },
+  ];
+  const distinct = piece('·', timesNewRoman('Arial', 'Calibri'));
+  expect(applyEastAsiaFontSlots([distinct])[0]!.fontSlot).toBe('eastAsia');
+  const same = piece('·', timesNewRoman('Arial', 'Arial'));
+  expect(applyEastAsiaFontSlots([same])[0]).toBe(same);
+  expect(
+    hasTimesNewRomanEastAsiaException(timesNewRoman('Arial', 'Calibri'), 'Times New Roman')
+  ).toBe(false);
+  expect(
+    hasTimesNewRomanEastAsiaException(timesNewRoman('Arial', 'Arial'), 'Times New Roman')
+  ).toBe(true);
+  // The face compared is the resolved one; a distinct East Asian face never triggers it.
+  expect(hasTimesNewRomanEastAsiaException(timesNewRoman('Arial', 'Arial'), 'SimSun')).toBe(false);
+  // Last specified value wins per attribute across the cascade, like the hint itself.
+  expect(
+    hasTimesNewRomanEastAsiaException(
+      [
+        ...timesNewRoman('Arial', 'Arial'),
+        { localName: 'rFonts', attributes: { hAnsi: 'Calibri' } },
+      ],
+      'Times New Roman'
+    )
+  ).toBe(false);
 });
 test('hinted middle dots keep their East Asian face without changing ASCII or offsets', () => {
   const input = piece('·   · 1×2÷3 20°C'),
