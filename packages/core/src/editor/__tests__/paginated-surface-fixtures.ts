@@ -37,7 +37,7 @@ export function docx(body: string): Uint8Array {
 }
 
 /** A one-paragraph document whose settings part asks for tracked changes. */
-export function trackedDocx(): Uint8Array {
+export function trackedDocx(settings = '<w:trackRevisions/>'): Uint8Array {
   const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
   return zipSync({
     '[Content_Types].xml': strToU8(
@@ -51,7 +51,7 @@ export function trackedDocx(): Uint8Array {
     'word/_rels/document.xml.rels': strToU8(
       `<Relationships xmlns="${REL}"><Relationship Id="rIdSettings" Type="${R}/settings" Target="settings.xml"/></Relationships>`
     ),
-    'word/settings.xml': strToU8(`<w:settings xmlns:w="${W}"><w:trackRevisions/></w:settings>`),
+    'word/settings.xml': strToU8(`<w:settings xmlns:w="${W}">${settings}</w:settings>`),
     'word/document.xml': strToU8(
       `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>tracked</w:t></w:r></w:p></w:body></w:document>`
     ),

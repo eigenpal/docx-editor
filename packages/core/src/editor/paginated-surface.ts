@@ -514,6 +514,7 @@ export function mountPaginatedSurface(
   /** Sibling of `selection`: rectangle of table cells, or null for ordinary text. */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
+  const AUTHOR_WRITE_REFUSAL = 'suggesting needs an author before it can propose a change';
   /** Show-all content-control boundary chrome — surface furniture, never a layout input. */
   let showAllContentControls = false;
   /** Form-fill Tab navigation between editable controls. */
@@ -3026,15 +3027,10 @@ export function mountPaginatedSurface(
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
-    // SUGGESTING with no author cannot write `CT_TrackChange`, and the fallback of writing
-    // an untracked edit is only tolerable when nothing is destroyed. A deletion in that
-    // state removes text the reviewer was promised they could get back.
-    // EVERY edit, not just the destructive ones. Letting insertions through wrote permanent
-    // changes to someone else's document while the pill said Suggesting and the review pane
-    // stayed empty — half the keyboard proposing and half editing outright.
-    if (editingMode === 'suggest' && !author?.trim() && edits) {
-      return 'suggesting needs an author before it can propose a change';
-    }
+    // SUGGESTING with no author cannot write `CT_TrackChange`, and EVERY edit is refused,
+    // not only the destructive ones: an untracked deletion removes text the reviewer was
+    // promised back, and untracked insertions under a Suggesting pill edited outright.
+    if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
     // Deleting a note is a package-level removal with no tracked form: the reference and
     // the body go outright, with no `w:del` and no card, while every insertion around it
     // is a proposal. Striking the reference (Backspace over it) IS the tracked deletion —
@@ -5359,6 +5355,10 @@ export function mountPaginatedSurface(
       if (author === nextAuthor) return;
       flushTypeBuffer();
       author = nextAuthor;
+      if (nextAuthor?.trim() && lastRejection === AUTHOR_WRITE_REFUSAL) {
+        lastRejection = null;
+        options.onChange?.(currentState());
+      }
     },
     setDrawingStrings: (strings) => {
       if (drawingStrings === strings) return;

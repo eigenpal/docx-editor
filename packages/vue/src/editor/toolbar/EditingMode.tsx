@@ -1,9 +1,14 @@
-import { computed, defineComponent, ref, watch } from 'vue';
+import { computed, defineComponent, ref, shallowRef, watch } from 'vue';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { runToolbarCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import {
+  runToolbarCommand,
+  toolbarCommandState,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
+import { useEditorEvent } from '../useEditorEvent';
 import { useEditorState } from '../useEditorState';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
@@ -13,6 +18,10 @@ const selectMode = (snapshot: EditorSnapshot): DocumentEditingMode =>
   snapshot.editingMode ?? 'editing';
 // Keyboard travel skips a refused item; see the React twin.
 const MENU_ITEMS = '[role="menuitemradio"]:not([disabled])';
+
+type ItemReasons = readonly (string | null)[];
+const sameReasons = (a: ItemReasons, b: ItemReasons): boolean =>
+  a.length === b.length && a.every((reason, index) => reason === b[index]);
 const selectLoading = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
 
@@ -47,6 +56,17 @@ const MODE_OPTIONS: readonly ModeOption[] = [
   },
 ];
 
+const NO_REASONS: ItemReasons = Object.freeze(MODE_OPTIONS.map(() => null));
+
+/** Each item's refusal from the engine, or null where its mode can be entered. */
+function itemReasonsOf(editor: DocxEditorInstance | null): ItemReasons {
+  if (!editor) return NO_REASONS;
+  return MODE_OPTIONS.map((option) => {
+    const probe = editor.can({ type: 'setEditingMode', mode: option.mode });
+    return probe.ok ? null : probe.reason;
+  });
+}
+
 const CHECK_PATH = 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z';
 
 function glyph(path: string) {
@@ -74,6 +94,16 @@ export const ToolbarEditingMode = defineComponent({
     const editorRef = useDocxEditor();
     const mode = useEditorState(selectMode);
     const loading = useEditorState(selectLoading);
+    // The per-item refusals, live — from the store EVENTS, not a snapshot slice: the author
+    // is not in the snapshot, so a slice would never re-run for it. See the React twin.
+    const itemReasons = shallowRef<ItemReasons>(itemReasonsOf(editorRef.value));
+    const refreshItemReasons = () => {
+      const next = itemReasonsOf(editorRef.value);
+      if (!sameReasons(itemReasons.value, next)) itemReasons.value = next;
+    };
+    watch(() => editorRef.value, refreshItemReasons);
+    useEditorEvent('change', refreshItemReasons);
+    useEditorEvent('selectionChange', refreshItemReasons);
     const label = useToolbarLabel();
     const { t } = useTranslation();
     const open = ref(false);
@@ -85,7 +115,10 @@ export const ToolbarEditingMode = defineComponent({
       (isOpen) => {
         if (!isOpen) return;
         const items = menuRef.value?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS);
-        const checked = menuRef.value?.querySelector<HTMLButtonElement>('[aria-checked="true"]');
+        // Only an ENABLED checked item; see the React twin.
+        const checked = menuRef.value?.querySelector<HTMLButtonElement>(
+          `${MENU_ITEMS}[aria-checked="true"]`
+        );
         (checked ?? items?.[0] ?? undefined)?.focus();
       },
       { flush: 'post' }
@@ -175,10 +208,8 @@ export const ToolbarEditingMode = defineComponent({
               data-testid="editing-mode-menu"
               onKeydown={onMenuKeyDown}
             >
-              {MODE_OPTIONS.map((option) => {
-                // Each item asks the engine for ITS mode; see the React twin.
-                const probe = editorRef.value?.can({ type: 'setEditingMode', mode: option.mode });
-                const reason = probe && !probe.ok ? localizeDisabledReason(probe.reason, t) : null;
+              {MODE_OPTIONS.map((option, index) => {
+                const reason = localizeDisabledReason(itemReasons.value[index] ?? null, t);
                 return (
                   <button
                     key={option.mode}

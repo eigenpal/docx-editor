@@ -112,6 +112,39 @@ describe('the editing-mode pill without an author', () => {
     expect(document.activeElement).toBe(item(view, 'viewing'));
   });
 
+  test('focus lands on an enabled item when the current mode is the refused one', () => {
+    const { view, editor } = mountToolbar('Grace Hopper');
+    act(() => {
+      editor().setEditingMode('suggesting');
+    });
+    act(() => {
+      editor().setAuthor(undefined);
+    });
+    act(() => {
+      view.container
+        .querySelector<HTMLButtonElement>('[data-testid="editing-mode-trigger"]')!
+        .click();
+    });
+    expect(item(view, 'suggesting').disabled).toBe(true);
+    expect(document.activeElement).toBe(item(view, 'editing'));
+  });
+
+  test('an author arriving while the menu is open enables the Suggesting item', async () => {
+    const { view, editor } = mountToolbar();
+    act(() => {
+      view.container
+        .querySelector<HTMLButtonElement>('[data-testid="editing-mode-trigger"]')!
+        .click();
+    });
+    expect(item(view, 'suggesting').disabled).toBe(true);
+    // The store notification is deferred, like every other slice's.
+    await act(async () => {
+      editor().setAuthor('Grace Hopper');
+    });
+    expect(item(view, 'suggesting').disabled).toBe(false);
+    expect(item(view, 'suggesting').title).toBe('');
+  });
+
   test('an author arriving enables the Suggesting item', () => {
     const { view, editor } = mountToolbar();
     act(() => {

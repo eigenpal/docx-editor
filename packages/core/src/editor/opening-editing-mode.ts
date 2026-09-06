@@ -132,9 +132,11 @@ export interface SuggestingConfigurationReporter {
  * The refusal already reaches the host as an `ExecResult` and as the published
  * `lastRejection`; this is for the host that reads neither, like an `onReady` that calls
  * `setEditingMode('suggesting')` and drops the result. It goes out through the editor's
- * `error` event, the channel every other engine-raised error uses, and falls back to the
- * console only when nobody listens — a host that reports errors in its own UI does not
- * need library noise it cannot switch off (the `reportFontError` precedent).
+ * `error` event, the channel every other engine-raised error uses, AND once on the console.
+ * Not gated on a listener the way `reportFontError` is: the adapters subscribe to `error`
+ * themselves, only to re-render, so a listener count cannot tell a host from an adapter
+ * and the gate would silence exactly the React and Vue hosts #692 came from. One line per
+ * editor for a developer's configuration mistake is the level of noise a prop warning has.
  *
  * DEFERRED by a task, not raised inline. The adapters build the instance from first-render
  * props and apply a later `author` from an effect, and StrictMode builds, destroys and
@@ -145,8 +147,6 @@ export interface SuggestingConfigurationReporter {
 export function createSuggestingConfigurationReporter(input: {
   /** True while the author is still missing and the editor is still alive. */
   readonly stillMissing: () => boolean;
-  /** True when a host handler is subscribed to the editor's `error` event. */
-  readonly hasListener: () => boolean;
   readonly emit: (error: EditorError) => void;
   readonly log?: (message: string) => void;
 }): SuggestingConfigurationReporter {
@@ -164,7 +164,7 @@ export function createSuggestingConfigurationReporter(input: {
           `${SUGGESTING_AUTHOR_REASON}. Edits are not tracked until an author is set ` +
           '(the author option at construction, setAuthor(), or the adapter author prop).';
         input.emit(editorError('suggestingNeedsAuthor', message));
-        if (!input.hasListener()) log(`[@docx-editor.dev/core] ${message}`);
+        log(`[@docx-editor.dev/core] ${message}`);
       }, 0);
     },
     dispose() {

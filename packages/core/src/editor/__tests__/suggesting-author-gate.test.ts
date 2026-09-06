@@ -85,10 +85,8 @@ describe('the decision helpers', () => {
     const emitted: EditorError[] = [];
     const lines: string[] = [];
     let missing = true;
-    let listening = false;
     const reporter = createSuggestingConfigurationReporter({
       stillMissing: () => missing,
-      hasListener: () => listening,
       emit: (error) => emitted.push(error),
       log: (message) => lines.push(message),
     });
@@ -104,7 +102,7 @@ describe('the decision helpers', () => {
     await afterReport();
     expect(emitted).toEqual([]);
 
-    // Still missing when the task runs: raised once, on the console when nobody listens.
+    // Still missing when the task runs: raised once, on the event AND the console.
     missing = true;
     reporter.report(SUGGESTING_AUTHOR_REASON);
     reporter.report(SUGGESTING_AUTHOR_REASON);
@@ -119,30 +117,16 @@ describe('the decision helpers', () => {
     await afterReport();
     expect(emitted).toHaveLength(1);
 
-    // With a listener the console stays quiet.
-    const heard = createSuggestingConfigurationReporter({
-      stillMissing: () => true,
-      hasListener: () => true,
-      emit: (error) => emitted.push(error),
-      log: (message) => lines.push(message),
-    });
-    listening = true;
-    heard.report(SUGGESTING_AUTHOR_REASON);
-    await afterReport();
-    expect(emitted).toHaveLength(2);
-    expect(lines).toHaveLength(1);
-
     // Disposed before the task runs: nothing.
     const disposed = createSuggestingConfigurationReporter({
       stillMissing: () => true,
-      hasListener: () => false,
       emit: (error) => emitted.push(error),
       log: (message) => lines.push(message),
     });
     disposed.report(SUGGESTING_AUTHOR_REASON);
     disposed.dispose();
     await afterReport();
-    expect(emitted).toHaveLength(2);
+    expect(emitted).toHaveLength(1);
   });
 });
 
@@ -196,25 +180,20 @@ describe('setEditingMode(suggesting) without an author', () => {
     expect(errors).toEqual([]);
   });
 
-  test('is raised once through the error channel; the console only when nobody listens', async () => {
+  test('is raised once through the error event and once on the console', async () => {
     const editor = mount({});
+    const heard: EditorError[] = [];
+    editor.on('error', (error) => heard.push(error));
     editor.can({ type: 'setEditingMode', mode: 'suggesting' });
     await afterReport();
     expect(errors).toEqual([]);
     editor.setEditingMode('suggesting');
     editor.setEditingMode('suggesting');
     await afterReport();
-    expect(errors).toHaveLength(1);
-    expect(errors[0]).toContain(SUGGESTING_AUTHOR_REASON);
-
-    const heard: EditorError[] = [];
-    const listening = mount({});
-    listening.on('error', (error) => heard.push(error));
-    listening.setEditingMode('suggesting');
-    await afterReport();
     expect(heard).toHaveLength(1);
     expect(heard[0]!.code).toBe('suggestingNeedsAuthor');
     expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain(SUGGESTING_AUTHOR_REASON);
   });
 
   test('a whitespace author is no author', () => {
@@ -343,8 +322,35 @@ describe('a reader-chosen suggesting whose author leaves', () => {
     await afterReport();
     expect(errors).toHaveLength(1);
     editor.setAuthor('Grace Hopper');
-    // The surface's own refusal stands until its next accepted write clears it.
+    // The surface retires the refusal that named the missing author.
+    expect(editor.snapshot().lastRejection).toBeNull();
     expect(editor.exec({ type: 'insertText', text: 'x' })).toEqual({ ok: true, changed: true });
+  });
+
+  test('the published reason survives a reload while the author is still missing', () => {
+    const editor = mount({ author: 'Grace Hopper' });
+    expect(editor.setEditingMode('suggesting').ok).toBe(true);
+    editor.setAuthor('');
+    editor.load(docx(paragraph('next')));
+    expect(editor.getEditingMode()).toBe('suggesting');
+    expect(editor.snapshot().lastRejection).toBe(SUGGESTING_AUTHOR_REASON);
+  });
+});
+
+describe('a document protected to tracked changes only', () => {
+  const PROTECTED =
+    '<w:trackRevisions/><w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>';
+
+  test('keeps suggesting when the author leaves, rather than writing untracked', () => {
+    const editor = mount({ author: 'Grace Hopper', document: trackedDocx(PROTECTED) });
+    expect(editor.getEditingMode()).toBe('suggesting');
+    editor.setAuthor(undefined);
+    expect(editor.getEditingMode()).toBe('suggesting');
+    expect(editor.snapshot().lastRejection).toContain('author');
+    editor.exec({ type: 'insertText', text: 'x' });
+    expect(editor.surface!.session.bodyText()).toBe('tracked');
+    editor.setAuthor('Grace Hopper');
+    expect(editor.getEditingMode()).toBe('suggesting');
     expect(editor.snapshot().lastRejection).toBeNull();
   });
 });

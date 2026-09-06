@@ -318,10 +318,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const suggestingGuards = () => ({ reviewEnabled, hasAuthor: Boolean(author) });
   /** A runtime `setEditingMode('suggesting')` refused for the author alone, waiting for one. */
   let pendingSuggestingRequest = false;
-  // Raises the configuration error once, from a later task (`destroyed`/`handlers` exist by then).
+  // Raises the configuration error once, from a later task (`destroyed` exists by then).
   const suggestingReporter = createSuggestingConfigurationReporter({
     stillMissing: () => !destroyed && author === undefined,
-    hasListener: () => handlers.error.size > 0,
     emit: (error) => emitError(error),
   });
   // The HOST's opening mode, when `config.mode` is explicit — precedence and reasons live
@@ -1638,13 +1637,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   /**
-   * The rejection standing for the current state: the document's, else the runtime request
-   * still waiting for an author, else the host's — unless the reader has chosen a mode
-   * since, which moots the host's. Re-derived on every mount and every host change, so a
-   * previous document's rejection does not outlive it.
+   * The rejection standing for the current state: the document's, else a suggesting that
+   * has lost its author, else the runtime request waiting for one, else the host's unless
+   * the reader chose since. Re-derived on every mount, so it never outlives its document.
    */
   function standingRejection(documentRejection: string | null): string | null {
     if (documentRejection !== null) return documentRejection;
+    if (editingMode === 'suggesting' && author === undefined) return SUGGESTING_AUTHOR_REASON;
     if (pendingSuggestingRequest) return SUGGESTING_AUTHOR_REASON;
     return readerChoseMode ? null : hostConfig.openingModeDecision(suggestingGuards()).rejection;
   }
@@ -1666,18 +1665,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       hostConfig.mode() === 'view' ? 'viewing' : (hostDecision.mode ?? 'editing');
     const documentDecision = documentTrackingDecision(next, false);
     if (documentDecision.mode !== null) next = documentDecision.mode;
+    // A mode the document's protection refuses (editing, under tracked-changes-only) is not
+    // entered: the author leaving keeps the tracked mode, refusing writes, rather than
+    // landing an untracked edit in a protected document.
+    if (documentEditingModeRestriction(documentTracking(), next) !== null) next = editingMode;
+    if (next !== editingMode) applyEditingMode(next);
     facadeRejection = standingRejection(documentDecision.rejection);
     suggestingReporter.report(hostDecision.rejection);
-    if (next !== editingMode) applyEditingMode(next);
     bump();
     emitSelectionChange();
   }
 
   /** Why `setEditingMode(mode)` is refused right now, or null: ONE ladder for `can` and `exec`. */
   function editingModeRefusal(mode: DocumentEditingMode): CommandRefusal | null {
-    // A document opened with `mode: 'view'` is read-only for the session. Letting the
-    // control move off Viewing put "Editing" on the pill of a document where every
-    // command was still refused.
+    // A document opened with `mode: 'view'` is read-only for the session; the pill stays.
     if (hostConfig.mode() === 'view' && mode !== 'viewing') {
       return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
     }
@@ -2214,21 +2215,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       author = normalized;
       surface?.setAuthor(author);
       // The author is suggesting's one runtime precondition, so a change re-decides the
-      // mode: an arrival completes the refused runtime request, else the host's and the
-      // document's requests are re-read unless the reader chose since. A reader-chosen
-      // suggesting with the author gone stays (an untracked fallback destroys text), says why.
+      // mode: an arrival completes the refused runtime request (applied directly — `exec`
+      // would flush a deferred open), else the host's and the document's requests are
+      // re-read unless the reader chose since. A reader-chosen suggesting with the author
+      // gone stays (an untracked fallback destroys text) and says why.
       if (author !== undefined && pendingSuggestingRequest) {
-        editor.exec({ type: 'setEditingMode', mode: 'suggesting' });
-        return;
-      }
-      if (!readerChoseMode) {
+        pendingSuggestingRequest = false;
+        readerChoseMode = true;
+        applyEditingMode('suggesting');
+      } else if (!readerChoseMode) {
         applyHostModeDecision();
         return;
       }
-      if (editingMode === 'suggesting') {
-        facadeRejection = author === undefined ? SUGGESTING_AUTHOR_REASON : null;
-        suggestingReporter.report(facadeRejection);
-      }
+      facadeRejection = standingRejection(null);
+      suggestingReporter.report(facadeRejection);
       bump();
       emitSelectionChange();
     },
