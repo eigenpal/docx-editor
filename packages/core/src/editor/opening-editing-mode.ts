@@ -215,3 +215,30 @@ export function documentEditingModeRestriction(
     reason: 'this document permits editing only as tracked changes',
   };
 }
+
+/** Resolve live host intent against the document whose surface is being edited. */
+export function resolveHostEditingMode(
+  requested: 'edit' | 'view' | 'suggesting' | undefined,
+  guards: OpeningModeGuards,
+  tracking: DocumentTrackingSettings,
+  currentMode: DocumentEditingMode,
+  fallback: DocumentEditingMode
+): { mode: DocumentEditingMode; rejection: string | null; configurationRejection: string | null } {
+  const host = resolveOpeningEditingMode(requested, guards);
+  let mode: DocumentEditingMode = requested === 'view' ? 'viewing' : (host.mode ?? fallback);
+  const document = documentTrackingAdoption({
+    ...guards,
+    ...tracking,
+    viewOnly: requested === 'view',
+    hostChoseMode: requested !== undefined,
+    readerChoseMode: false,
+    currentMode: mode,
+  });
+  if (document.mode !== null) mode = document.mode;
+  const restriction = documentEditingModeRestriction(tracking, mode);
+  return {
+    mode: restriction === null ? mode : currentMode,
+    rejection: document.rejection ?? restriction?.reason ?? null,
+    configurationRejection: host.rejection,
+  };
+}

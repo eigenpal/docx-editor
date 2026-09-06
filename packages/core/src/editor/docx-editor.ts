@@ -213,6 +213,7 @@ import {
   documentEditingModeRestriction,
   documentTrackingAdoption,
   PRO_REVIEW_REASON,
+  resolveHostEditingMode,
   SUGGESTING_AUTHOR_REASON,
   suggestingModeRefusal,
 } from './opening-editing-mode.ts';
@@ -318,14 +319,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const suggestingGuards = () => ({ reviewEnabled, hasAuthor: Boolean(author) });
   /** A runtime `setEditingMode('suggesting')` refused for the author alone, waiting for one. */
   let pendingSuggestingRequest = false;
+  let pendingHostModeFallback: DocumentEditingMode | null = null;
   // Raises the configuration error once, from a later task (`destroyed` exists by then).
   const suggestingReporter = createSuggestingConfigurationReporter({
     stillMissing: () =>
-      !destroyed &&
-      author === undefined &&
-      (editingMode === 'suggesting' ||
-        pendingSuggestingRequest ||
-        (!readerChoseMode && hostConfig.mode() === 'suggesting')),
+      !destroyed && author === undefined && standingRejection(null) === SUGGESTING_AUTHOR_REASON,
     emit: (error) => emitError(error),
   });
   // The HOST's opening mode, when `config.mode` is explicit — precedence and reasons live
@@ -608,7 +606,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // Keep the loading page centred and its comments control inactive until the review
     // model exists. Once open completes, show the pane only when the model found content.
     reviewPaneOpen = reviewEnabled && surface.session.reviewItems().length > 0;
-    adoptDocumentTracking();
+    publishSignal.adopt(surface);
+    if (pendingHostModeFallback !== null) applyHostModeDecision(pendingHostModeFallback, false);
+    else adoptDocumentTracking();
     sweepCustomNodePayloadsOnOpen(surface, modules);
     mountGeneration += 1;
     // A surface is rebuilt on load and on the font remount, and it comes up editable. The
@@ -627,7 +627,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (reviewActivationExclusions !== null) {
       surface.setReviewActivationExclusions(reviewActivationExclusions);
     }
-    publishSignal.adopt(surface);
     // `result.surface`, not the reassignable `surface`: this subscription is THIS session's.
     unsubscribeSession = result.surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
@@ -1636,6 +1635,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   function applyEditingMode(next: DocumentEditingMode): void {
+    pendingHostModeFallback = null;
     editingMode = next;
     surface?.setEditingMode(
       next === 'suggesting' ? 'suggest' : next === 'viewing' ? 'view' : 'edit'
@@ -1643,11 +1643,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface?.setEditable(next !== 'viewing');
   }
 
-  /**
-   * The rejection standing for the current state: the document's, else a suggesting that
-   * has lost its author, else the runtime request waiting for one, else the host's unless
-   * the reader chose since. Re-derived on every mount, so it never outlives its document.
-   */
+  /** Re-derive document, active-mode, pending-request, then host refusals on each mount. */
   function standingRejection(documentRejection: string | null): string | null {
     if (documentRejection !== null) return documentRejection;
     if (editingMode === 'suggesting' && author === undefined) return SUGGESTING_AUTHOR_REASON;
@@ -1662,23 +1658,27 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     applyEditingMode('suggesting');
   }
 
-  /**
-   * Resolve host/document requests, preserving the fallback when neither requests a mode.
-   */
-  function applyHostModeDecision(fallback: DocumentEditingMode = 'editing'): void {
-    const hostDecision = hostConfig.openingModeDecision(suggestingGuards());
-    let next: DocumentEditingMode =
-      hostConfig.mode() === 'view' ? 'viewing' : (hostDecision.mode ?? fallback);
-    const documentDecision = documentTrackingDecision(next, false);
-    if (documentDecision.mode !== null) next = documentDecision.mode;
-    // Keep protection intact and publish why the requested mode cannot be entered.
-    const restriction = documentEditingModeRestriction(documentTracking(), next);
-    if (restriction !== null) next = editingMode;
-    if (next !== editingMode) applyEditingMode(next);
-    facadeRejection = standingRejection(documentDecision.rejection ?? restriction?.reason ?? null);
-    suggestingReporter.report(hostDecision.rejection);
-    bump();
-    emitSelectionChange();
+  /** A deferred open must resolve host intent against the incoming document, not the old one. */
+  function applyHostModeDecision(fallback: DocumentEditingMode = 'editing', publish = true): void {
+    if (openScheduler.isScheduled()) {
+      pendingHostModeFallback = fallback;
+      return;
+    }
+    pendingHostModeFallback = null;
+    const decision = resolveHostEditingMode(
+      hostConfig.mode(),
+      suggestingGuards(),
+      documentTracking(),
+      editingMode,
+      fallback
+    );
+    if (decision.mode !== editingMode) applyEditingMode(decision.mode);
+    facadeRejection = standingRejection(decision.rejection);
+    suggestingReporter.report(decision.configurationRejection);
+    if (publish) {
+      bump();
+      emitSelectionChange();
+    }
   }
 
   /** Why `setEditingMode(mode)` is refused right now, or null: ONE ladder for `can` and `exec`. */
@@ -2219,14 +2219,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (author === normalized) return;
       author = normalized;
       surface?.setAuthor(author);
-      // Complete a waiting request without flushing a deferred open. Preserve an adopted
-      // document mode across author changes; only an explicit host mode requests a fallback.
+      // Preserve pending host intent and adopted document modes across author-only changes.
       if (author !== undefined && pendingSuggestingRequest) {
         pendingSuggestingRequest = false;
         readerChoseMode = true;
         applyEditingMode('suggesting');
       } else if (!readerChoseMode) {
-        applyHostModeDecision(hostConfig.mode() === undefined ? editingMode : 'editing');
+        const fallback = pendingHostModeFallback ?? editingMode;
+        applyHostModeDecision(hostConfig.mode() === undefined ? fallback : 'editing');
         return;
       }
       facadeRejection = standingRejection(null);
