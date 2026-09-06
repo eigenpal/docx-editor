@@ -145,13 +145,21 @@ export const FONT_ASSET_MANIFEST: readonly FontAssetManifestEntry[] = [
 ];
 
 /**
- * Bundler-visible URL for every packaged face. Each `new URL` argument is deliberately
+ * Bundler-visible location of every packaged face. Each `new URL` argument is deliberately
  * a literal so Vite, webpack, and Turbopack emit the matching asset instead of collapsing
  * a dynamic template to one arbitrary file.
  *
+ * The value type is `URL | string`, not `URL`, because that is what the expression
+ * actually evaluates to once a bundler has seen it. Node, Bun, and Vite leave a `URL`.
+ * webpack and Turbopack replace the whole expression with a bare path STRING for the
+ * asset they emitted (`/_next/static/media/Caladea-Bold.d6e01b80.ttf`). Typing it as
+ * `URL` reads as a promise this package cannot keep, and let a single-argument `URL`
+ * construction over a relative string ship that threw at module scope in every browser
+ * build.
+ *
  * @internal
  */
-export const FONT_ASSET_URLS: Readonly<Record<string, URL>> = {
+export const FONT_ASSET_URLS: Readonly<Record<string, URL | string>> = {
   'Caladea-Bold.ttf': new URL('../assets/Caladea-Bold.ttf', import.meta.url),
   'Caladea-BoldItalic.ttf': new URL('../assets/Caladea-BoldItalic.ttf', import.meta.url),
   'Caladea-Italic.ttf': new URL('../assets/Caladea-Italic.ttf', import.meta.url),

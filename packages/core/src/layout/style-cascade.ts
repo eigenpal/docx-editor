@@ -21,6 +21,7 @@ import {
   type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
+import { cjkTypographyFromSettings, type CjkTypographySettings } from './cjk-typography.ts';
 import {
   indentTwips,
   paragraphAlignment,
@@ -75,6 +76,7 @@ export const MAX_STYLE_DEFINITIONS = 4096;
  * styles part are never reused under another.
  */
 export interface StyleCascadeTable {
+  readonly typography?: CjkTypographySettings;
   /**
    * Bounded fingerprint folded into layout cache producers so a different styles part cannot
    * reuse breaks measured under another cascade. Computed once per table (FNV-1a hex).
@@ -389,14 +391,17 @@ export function tableCellStyleFormatting(
  */
 export function buildStyleCascadeTable(
   stylesRoot: OoxmlElement | null,
-  themeFonts: ThemeFonts = NO_THEME_FONTS
+  themeFonts: ThemeFonts = NO_THEME_FONTS,
+  settingsRoot: OoxmlElement | null = null
 ): StyleCascadeTable {
+  const typography = cjkTypographyFromSettings(settingsRoot);
   const styles = new Map<string, StyleDefinition>();
   if (!stylesRoot) {
     return {
       // Still keyed on the theme: a document with no styles part can carry a theme, and
       // its runs resolve `+Body` through it.
-      cacheToken: stableHash({ empty: true, theme: themeFonts }),
+      cacheToken: stableHash({ empty: true, theme: themeFonts, typography }),
+      typography,
       docDefaultsRun: [],
       docDefaultsParagraph: [],
       docDefaultsParagraphNode: undefined,
@@ -436,6 +441,7 @@ export function buildStyleCascadeTable(
 
   // Canonical material hashed once — never embed the full styles dump in paragraph keys.
   const cacheToken = stableHash({
+    typography,
     dR: propertiesFingerprint(defaults.run),
     dP: propertiesFingerprint(defaults.paragraph),
     defP: defaultParagraphStyleId,
@@ -462,6 +468,7 @@ export function buildStyleCascadeTable(
 
   return {
     cacheToken,
+    typography,
     docDefaultsRun: defaults.run,
     docDefaultsParagraph: defaults.paragraph,
     docDefaultsParagraphNode: defaults.paragraphNode,

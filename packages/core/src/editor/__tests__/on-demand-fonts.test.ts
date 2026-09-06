@@ -74,6 +74,41 @@ describe('on-demand font resolution', () => {
     editor.destroy();
   });
 
+  test('the resolver also hears the face a w:sym names, after the declared families', async () => {
+    // `layout/symbol-run.ts` keeps an unmapped private-use code point in the authored face,
+    // which paints as a tofu box in any other. An app can only supply Wingdings if it is
+    // told the file wants it. The document still DECLARES only Garamond: a symbol face is
+    // not an `w:rFonts` declaration, and the notice reports neither.
+    const seen: FontResolutionRequest[] = [];
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(
+        '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond" w:hAnsi="Garamond"/></w:rPr>' +
+          '<w:sym w:font="Wingdings" w:char="F0A8"/><w:t>bullet</w:t></w:r></w:p>'
+      ),
+      fonts: (request) => {
+        seen.push(request);
+        // Answer it, the way an app that owns Wingdings would.
+        return {
+          sources: [
+            {
+              request: { family: 'Wingdings', weight: 400, style: 'normal' as const },
+              id: 'on-demand-wingdings',
+              bytes: regularBytes,
+              hash: sha256FontBytes(regularBytes),
+              faceIndex: 0,
+            },
+          ],
+        };
+      },
+    });
+    await fontsSettled(editor);
+    expect(seen[0]!.families).toEqual(['Garamond', 'Wingdings']);
+    expect(editor.snapshot().fontSubstitutions).not.toContain('Wingdings');
+    expect(editor.getDocumentFonts()).toEqual(['Garamond']);
+    editor.destroy();
+  });
+
   test('resolving to nothing is a normal answer: fixed measurer, no error', async () => {
     const errors: EditorFontError[] = [];
     const editor = createDocxEditor({

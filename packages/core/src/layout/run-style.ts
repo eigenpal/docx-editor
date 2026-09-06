@@ -13,6 +13,7 @@
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
 import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
 import { resolveOoxmlShadingFill } from './ooxml-shading.ts';
+import { resolveTextOutline } from './run-text-outline.ts';
 // One reading of `CT_OnOff` for the whole lane. The style cascade combines toggle levels with
 // it and this resolver reads the combined result with it, so the two cannot drift apart.
 import { styleToggleIsOn as toggle } from './style-toggles.ts';
@@ -51,6 +52,8 @@ export interface ResolvedRunStyle {
   /** RRGGBB, or null for the inherited/automatic colour. */
   readonly color: string | null;
   readonly bold: boolean;
+  /** Opaque solid `w14:textOutline`, in points; paint only, never a font-weight change. */
+  readonly textOutline?: { readonly widthPt: number; readonly color: string };
   readonly italic: boolean;
   readonly underline: ResolvedUnderline | null;
   readonly strike: boolean;
@@ -213,6 +216,9 @@ export function resolveRunStyle(
       case 'b':
         style.bold = toggle(property);
         break;
+      case 'textOutline':
+        style.textOutline = resolveTextOutline(property);
+        break;
       case 'i':
         style.italic = toggle(property);
         break;
@@ -345,6 +351,8 @@ export function runStylesEqual(a: ResolvedRunStyle, b: ResolvedRunStyle): boolea
     a.fontFamilyEastAsia === b.fontFamilyEastAsia &&
     a.fontSizePt === b.fontSizePt &&
     a.color === b.color &&
+    a.textOutline?.widthPt === b.textOutline?.widthPt &&
+    a.textOutline?.color === b.textOutline?.color &&
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.strike === b.strike &&

@@ -81,7 +81,12 @@ describe('explicit tracked-change commands', () => {
       const deletionId = /<w:del\b[^>]*w:id="([^"]+)"/.exec(xml)?.[1];
       const insertionId = /<w:ins\b[^>]*w:id="([^"]+)"/.exec(xml)?.[1];
       expect(deletionId).toBeDefined();
-      expect(insertionId).toBe(deletionId);
+      // One decision, two elements: as Word writes it, the deletion first and each half under
+      // its own id (#691). The review lane pairs them on adjacency into one card — see
+      // `store/__tests__/tracked-replacement.test.ts`.
+      expect(insertionId).toBeDefined();
+      expect(insertionId).not.toBe(deletionId);
+      expect(xml.indexOf('<w:del ')).toBeLessThan(xml.indexOf('<w:ins '));
       expect(xml).toContain('<w:delText>bc</w:delText>');
       expect(xml).toContain('<w:t>XY</w:t>');
     } finally {

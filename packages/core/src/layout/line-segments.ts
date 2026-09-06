@@ -131,12 +131,20 @@ export function segmentOverlap(
   layout: SemanticLayout,
   segment: LineSegment,
   from: SemanticPosition,
-  to: SemanticPosition
+  to: SemanticPosition,
+  index: ReadonlyMap<string, number> = documentOrderIndex(layout)
 ): { start: number; end: number } | null {
-  const index = documentOrderIndex(layout);
-  const lineParagraph = index.get(segment.paragraphId) ?? -1;
-  const fromParagraph = index.get(from.paragraphId) ?? -1;
-  const toParagraph = index.get(to.paragraphId) ?? -1;
+  if (from.paragraphId === to.paragraphId) {
+    if (segment.paragraphId !== from.paragraphId) return null;
+    const start = Math.max(segment.start, from.offset),
+      end = Math.min(segment.end, to.offset);
+    return end > start ? { start, end } : null;
+  }
+  const lineParagraph = index.get(segment.paragraphId);
+  const fromParagraph = index.get(from.paragraphId);
+  const toParagraph = index.get(to.paragraphId);
+  if (lineParagraph === undefined || fromParagraph === undefined || toParagraph === undefined)
+    return null;
   if (lineParagraph < fromParagraph || lineParagraph > toParagraph) return null;
 
   const start =

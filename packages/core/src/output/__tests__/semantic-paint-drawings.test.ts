@@ -81,6 +81,7 @@ function inlinePictureXml(
     readonly flipV?: boolean;
     readonly lum?: string;
     readonly grayscale?: boolean;
+    readonly bilevel?: string;
     readonly preset?: string;
   } = {}
 ): string {
@@ -94,6 +95,7 @@ function inlinePictureXml(
   const flipV = options.flipV ? ' flipV="1"' : '';
   const lum = options.lum ?? '';
   const grayscale = options.grayscale ? '<a:grayscl/>' : '';
+  const bilevel = options.bilevel === undefined ? '' : `<a:biLevel thresh="${options.bilevel}"/>`;
   const preset = options.preset ?? 'rect';
   return (
     `<w:document xmlns:w="${WML_NAMESPACE_URI}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}">` +
@@ -104,7 +106,7 @@ function inlinePictureXml(
     '<wp:cNvGraphicFramePr/>' +
     `<a:graphic><a:graphicData uri="${PIC_URI}">` +
     '<pic:pic><pic:nvPicPr><pic:cNvPr id="1" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
-    `<pic:blipFill><a:blip r:embed="rId14">${grayscale}${lum}</a:blip><a:srcRect ${srcRect}/>` +
+    `<pic:blipFill><a:blip r:embed="rId14">${bilevel}${grayscale}${lum}</a:blip><a:srcRect ${srcRect}/>` +
     `<a:stretch/></pic:blipFill>` +
     `<pic:spPr><a:xfrm${rot}${flipH}${flipV}><a:off x="0" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm>` +
     `<a:prstGeom prst="${preset}"><a:avLst/></a:prstGeom></pic:spPr>` +
@@ -321,6 +323,75 @@ describe('paints validated raster records', () => {
     expect(second.dataset.revisionKind).toBeUndefined();
     expect(second.dataset.revisionId).toBeUndefined();
     expect(second.dataset.reviewAuthor).toBeUndefined();
+  });
+
+  test('validates bilevel thresholds and paints a bounded alpha-preserving filter', () => {
+    for (const value of ['0', '25000', '50000', '100000']) {
+      const record = readyRecordFromXml(inlinePictureXml({ bilevel: value }));
+      expect(record.effects.bilevel).toBe(Number(value) / 100_000);
+      const painted = paintRecord(record, fakeUrlPort().port);
+      expect(painted.querySelector('filter')?.getAttribute('color-interpolation-filters')).toBe(
+        'sRGB'
+      );
+      expect(painted.querySelectorAll('feFuncA')).toHaveLength(0);
+      expect(painted.querySelectorAll('feComponentTransfer')).toHaveLength(1);
+      const table = painted
+        .querySelector('feFuncR')!
+        .getAttribute('tableValues')!
+        .split(' ')
+        .map(Number);
+      expect(table).toHaveLength(256);
+      expect(
+        table.every((v, index) => v === (index / 255 >= Number(value) / 100_000 ? 1 : 0))
+      ).toBe(true);
+    }
+    for (const value of ['', '-1', '100001', 'NaN', 'Infinity', '0.5', 'url(x)']) {
+      const record = readyRecordFromXml(inlinePictureXml({ bilevel: value }));
+      expect(record.effects.bilevel).toBeUndefined();
+      expect(paintRecord(record, fakeUrlPort().port).querySelector('filter')).toBeNull();
+    }
+  });
+
+  test('changing or removing bilevel invalidates a retained paint frame', () => {
+    const { port } = fakeUrlPort();
+    const registry = drawingUrlRegistryFor(document.createElement('div'), port);
+    const ctx = { scale: 1, strings: DEFAULT_DRAWING_PAINT_STRINGS, imageUrlPort: port };
+    const firstRecord = readyRecordFromXml(
+      inlinePictureXml({
+        bilevel: '50000',
+        grayscale: true,
+        lum: '<a:lum bright="-30000" contrast="66000"/>',
+      })
+    );
+    const first = paintDrawingRecord(document, firstRecord, ctx, registry)!;
+    const id = first.querySelector('filter')!.id;
+    expect(paintDrawingRecord(document, firstRecord, ctx, registry)).toBe(first);
+    expect(first.querySelector('filter')!.id).toBe(id);
+    const second = paintDrawingRecord(
+      document,
+      readyRecordFromXml(inlinePictureXml({ bilevel: '75000' })),
+      ctx,
+      registry
+    )!;
+    expect(second).toBe(first);
+    expect(second.querySelector('filter')!.id).not.toBe(id);
+    expect(
+      second
+        .querySelector('feFuncR')!
+        .getAttribute('tableValues')!
+        .split(' ')
+        .filter((v) => v === '1')
+    ).toHaveLength(64);
+    const third = paintDrawingRecord(
+      document,
+      readyRecordFromXml(inlinePictureXml()),
+      ctx,
+      registry
+    )!;
+    expect(third).toBe(first);
+    expect(third.querySelector('filter')).toBeNull();
+    expect(third.querySelector<HTMLElement>('.docx-drawing-image-frame')!.style.filter).toBe('');
+    registry.revokeAll();
   });
 });
 

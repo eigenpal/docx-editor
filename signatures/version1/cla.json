@@ -227,6 +227,12 @@
       "id": 1250043,
       "signed_at": "2026-08-27T18:50:34Z",
       "pull_request_no": 539
+    },
+    {
+      "name": "KanJieTeam",
+      "id": 325109917,
+      "signed_at": "2026-09-05T01:27:14Z",
+      "pull_request_no": 732
     }
   ]
 }

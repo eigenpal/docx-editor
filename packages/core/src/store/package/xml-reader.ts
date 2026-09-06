@@ -7,6 +7,7 @@
 
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { isValidXmlText } from './sinks.ts';
+import { DEFAULT_LIMITS, HARD_CEILINGS } from '../runtime/limits.ts';
 
 /**
  * One parsed XML node, preserving significant order, whitespace and raw lexical values.
@@ -49,7 +50,10 @@ export type XmlRejection =
 export const MAX_XML_DEPTH = 256;
 const MAX_DEPTH = MAX_XML_DEPTH;
 export const XML_HARD_MAX_BYTES = 64 * 1024 * 1024;
-export const XML_HARD_MAX_ELEMENTS = 1_000_000;
+// Share the engine's resource policy instead of imposing a second, smaller ceiling.
+// These are defensive budgets, not a guarantee that every document fits the host's memory.
+export const XML_DEFAULT_MAX_ELEMENTS = DEFAULT_LIMITS.maxElementCount;
+export const XML_HARD_MAX_ELEMENTS = HARD_CEILINGS.maxElementCount;
 
 /**
  * Decode ONLY the five predefined XML entities and numeric character references.
@@ -285,6 +289,7 @@ function preflightDepth(xml: string): XmlRejection | undefined {
 /** Per-part caps on size, element count and depth. Clamped into the hard ceilings. */
 export interface XmlLimits {
   readonly maxBytes: number;
+  /** Element budget; may raise or lower the engine default, up to its hard ceiling. */
   readonly maxElements?: number;
 }
 
@@ -319,7 +324,10 @@ export function readXml(
   )
     return { ok: false, reason: 'invalid-limits' };
   const maxBytes = Math.min(limits.maxBytes, XML_HARD_MAX_BYTES);
-  const maxElements = Math.min(limits.maxElements ?? XML_HARD_MAX_ELEMENTS, XML_HARD_MAX_ELEMENTS);
+  const maxElements = Math.min(
+    limits.maxElements ?? XML_DEFAULT_MAX_ELEMENTS,
+    XML_HARD_MAX_ELEMENTS
+  );
   if (exceedsUtf8Bytes(xml, maxBytes)) return { ok: false, reason: 'too-large' };
   const forbidden = preflightForbiddenXml(xml);
   if (forbidden) return { ok: false, reason: forbidden };

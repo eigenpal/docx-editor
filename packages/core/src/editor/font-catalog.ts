@@ -11,6 +11,15 @@
 // Substitution TARGETS are deliberately excluded: `Carlito` exists to render "Calibri",
 // and listing both would offer the same metrics twice under two names — the stand-in is
 // an implementation face, not a choice.
+//
+// Symbol faces are NOT excluded, deliberately. The editor asks a resolver for the face a
+// `w:sym` names, so an app can supply the Wingdings a private-use glyph needs — and once it
+// has, the editor can honour that family for text as well, which is the only question the
+// CONFIGURED half of this catalog answers. Word lists installed symbol fonts in its own
+// picker for the same reason. A symbol face also reaches the DOCUMENT half whenever the
+// file declares it in a `w:rFonts`, which Word's checkbox markup does (and which
+// `applySetContentControlValue` mints when a user ticks one), supplied or not: the document
+// half is a catalog of what the file names, and has always offered names nothing can paint.
 
 import { configuredDefaultFontFamily, type FontCatalogConfiguration } from './font-composition.ts';
 

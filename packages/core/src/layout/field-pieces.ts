@@ -13,6 +13,7 @@ import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { eastAsiaRunsOfSegments, type FontSlot } from './script-itemization.ts';
+import { hasEastAsiaSymbolHint } from './east-asia-symbol-hint.ts';
 import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
@@ -440,6 +441,7 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
   /** Indices of the pieces whose text joins the classification, in paragraph order. */
   const streamed: number[] = [];
   const segments: string[] = [];
+  const hintedSegments: boolean[] = [];
   for (let index = 0; index < pieces.length; index += 1) {
     const piece = pieces[index]!;
     if (piece.positionalTab || piece.breakKind || piece.inlineDrawing) continue;
@@ -447,8 +449,13 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
     if (piece.text.length === 0) continue;
     streamed.push(index);
     segments.push(piece.text);
+    // Leave the special Times New Roman East Asian fallback to existing resolution.
+    hintedSegments.push(
+      piece.style.fontFamilyEastAsia?.toLowerCase() !== 'times new roman' &&
+        hasEastAsiaSymbolHint(piece.props)
+    );
   }
-  const ranges = eastAsiaRunsOfSegments(segments);
+  const ranges = eastAsiaRunsOfSegments(segments, hintedSegments);
   if (ranges.length === 0) return pieces;
 
   const rangesBySegment = new Map<number, { from: number; to: number }[]>();

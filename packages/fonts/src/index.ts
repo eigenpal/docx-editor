@@ -63,6 +63,7 @@
 
 import { FACES, FAMILY_PLANS, planFaceFile, planLineBox } from './family-plans.ts';
 import type { WordDefaultFamily } from './family-plans.ts';
+import { resolvePackagedAssetRoot } from './asset-root.ts';
 import { FONT_ASSET_MANIFEST, FONT_ASSET_URLS } from './manifest.generated.ts';
 
 export type { WordDefaultFamily } from './family-plans.ts';
@@ -143,22 +144,54 @@ export interface LoadDefaultFontsOptions {
 
 const manifestByFile = new Map(FONT_ASSET_MANIFEST.map((entry) => [entry.file, entry]));
 
-/** Bundler-visible asset URL for one packaged face. */
-const assetUrl = (file: string): URL => FONT_ASSET_URLS[file];
+/**
+ * Bundler-visible asset location for one packaged face.
+ *
+ * The return type is `URL | string` because bundlers disagree, and the disagreement is
+ * not observable from this file. Node, Bun, and Vite leave the `new URL(literal,
+ * import.meta.url)` expression as a real `URL`. webpack and Turbopack replace the whole
+ * expression with a bare path STRING for the asset they emitted, such as
+ * `/_next/static/media/Caladea-Bold.d6e01b80.ttf`. Anything that needs a `URL` here has
+ * to cope with both; see {@link assetHref} and {@link FONT_ASSET_ROOT}.
+ */
+const assetUrl = (file: string): URL | string => FONT_ASSET_URLS[file]!;
 
-const firstPackagedFace = FONT_ASSET_URLS[FONT_ASSET_MANIFEST[0]!.file];
+/** Absolute-or-relative href for one packaged face, whatever shape the bundler left. */
+const assetHref = (file: string): string => {
+  const value = assetUrl(file);
+  return typeof value === 'string' ? value : value.href;
+};
+
+/**
+ * A `FontFace` source naming one packaged face.
+ *
+ * The href is QUOTED. An unquoted CSS `url()` token forbids characters the URL parser
+ * leaves alone, `(` and `)` among them, so a checkout under a path like `My (Docs)`
+ * produced a token that failed to parse and silently dropped the face.
+ */
+const assetFontFaceSource = (file: string): string =>
+  `url("${assetHref(file).replace(/[\\"]/g, '\\$&').replace(/\n/g, '\\A ')}")`;
 
 /**
  * Directory URL of the packaged font files this package serves.
  *
  * Headless exporters pass this to Core `createPackagedFileFetch` as `trustedRoot`.
  * The value comes from the same packaged face URLs the loaders fetch, so the trusted
- * directory matches Node, Bun, pnpm, Yarn PnP, and nested installs. Browser bundlers
- * rewrite those face URLs to HTTP; HTTP fetches do not use this directory.
+ * directory matches Node, Bun, pnpm, Yarn PnP, and nested installs.
+ *
+ * In a browser bundle this resolves to an HTTP URL rather than a `file:` one. That is
+ * why every consumer gates on `FONT_ASSET_ROOT.protocol === 'file:'`: HTTP fetches do
+ * not use a trusted directory, and confining them to one would be meaningless.
+ *
+ * Deriving this MUST NOT throw. It runs at module scope, so a throw here is
+ * uncatchable and takes down the whole bundle that imported this package rather than
+ * degrading font loading.
  *
  * @public
  */
-export const FONT_ASSET_ROOT: URL = new URL('./', firstPackagedFace);
+export const FONT_ASSET_ROOT: URL = resolvePackagedAssetRoot(
+  assetUrl(FONT_ASSET_MANIFEST[0]!.file)
+);
 
 /**
  * The families Word applies to a document by DEFAULT, and what
@@ -375,7 +408,7 @@ export async function installDefaultFontFaces(
             // That request is the one `fetcher` cannot intercept.
             const source: string | ArrayBuffer = bytes
               ? (bytes.slice().buffer as ArrayBuffer)
-              : `url(${assetUrl(file).href})`;
+              : assetFontFaceSource(file);
             const fontFace = new FontFace(family, source, {
               weight: String(face.weight),
               style: face.style,

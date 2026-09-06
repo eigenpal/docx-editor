@@ -5,6 +5,8 @@
 import { findDirectKind, isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
+import { projectLineArrowheads } from './drawing-line-arrowheads.ts';
+import { readShapePathPolygons } from './drawing-vector-paths.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement, type OoxmlNode } from './ooxml-tree.ts';
 
 const WPS_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
@@ -12,11 +14,9 @@ const WPG_NAMESPACE_URI = 'http://schemas.microsoft.com/office/word/2010/wordpro
 const WPS_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const WPG_GRAPHIC_DATA_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 const SHAPE_HEX_RE = /^[0-9A-Fa-f]{6}$/;
-const MAX_VECTOR_SHAPE_SUBPATHS = 64;
 const MAX_VECTOR_SHAPE_POINTS = 1024;
 const MAX_GROUP_SHAPE_CHILDREN = 128;
 const ELLIPSE_POINTS = 32;
-const CUBIC_BEZIER_SEGMENTS = 8;
 
 export type ShapeSchemeColorResolver = (scheme: string) => string | null;
 export type ShapeStyleMatrixResolver = (
@@ -59,7 +59,7 @@ function schemaFlagIsUnset(value: string | undefined): boolean {
  * The complement of {@link schemaFlagIsUnset}: an `xsd:boolean` that legally reads true.
  *
  * A value is neither set nor unset when it is schema-invalid, and the two callers want
- * opposite things there. A flag the engine cannot HONOUR (a flipped vector shape) refuses
+ * opposite things there. A flag the engine cannot HONOUR (a flipped vector group) refuses
  * through `schemaFlagIsUnset`, because painting it unflipped would be a wrong render. A flag
  * the engine can honour (a flipped picture) reads through here and treats anything invalid
  * as unset, because refusing would drop the picture entirely — a worse outcome than a
@@ -157,6 +157,10 @@ export interface VectorShapeProjection {
 
 export interface VectorShapeComponent {
   readonly subpathsEmu: readonly (readonly Readonly<{ x: number; y: number }>[])[];
+  /** Authored close commands; omitted by older consumers means closed polygons. */
+  readonly subpathsClosed?: readonly boolean[];
+  /** Filled line-end polygons in the same projected coordinate space. */
+  readonly arrowheadsEmu?: readonly (readonly Readonly<{ x: number; y: number }>[])[];
   readonly fillHex: string | null;
   readonly fillAlpha: number;
   readonly strokeHex: string | null;
@@ -478,86 +482,6 @@ function readStyleReference(
   };
 }
 
-/** Polygon subpaths of one `a:path` — move/line/close verbs only; anything else refuses. */
-function readShapePathPolygons(
-  path: OoxmlElement,
-  scaleX: number,
-  scaleY: number,
-  sink: { x: number; y: number }[][],
-  pointBudget: { remaining: number }
-): boolean {
-  let current: { x: number; y: number }[] | null = null;
-  for (const verb of path.children) {
-    if (!isElement(verb)) continue;
-    if (verb.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) return false;
-    if (verb.localName === 'close') {
-      current = null;
-      continue;
-    }
-    if (verb.localName === 'cubicBezTo') {
-      if (current === null || pointBudget.remaining < CUBIC_BEZIER_SEGMENTS) return false;
-      const controls = verb.children.filter(isElement);
-      if (
-        controls.length !== 3 ||
-        controls.some(
-          (point) => point.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI || point.localName !== 'pt'
-        )
-      ) {
-        return false;
-      }
-      const parsed = controls.map((point) => {
-        const x = parseEmu(schemaAttributeValue(point.attributes, 'x'), false);
-        const y = parseEmu(schemaAttributeValue(point.attributes, 'y'), false);
-        return x === null || y === null ? null : { x: x * scaleX, y: y * scaleY };
-      });
-      if (parsed.some((point) => point === null)) return false;
-      const start = current[current.length - 1]!;
-      const control1 = parsed[0]!;
-      const control2 = parsed[1]!;
-      const end = parsed[2]!;
-      for (let index = 1; index <= CUBIC_BEZIER_SEGMENTS; index += 1) {
-        const t = index / CUBIC_BEZIER_SEGMENTS;
-        const inverse = 1 - t;
-        current.push({
-          x:
-            inverse ** 3 * start.x +
-            3 * inverse ** 2 * t * control1.x +
-            3 * inverse * t ** 2 * control2.x +
-            t ** 3 * end.x,
-          y:
-            inverse ** 3 * start.y +
-            3 * inverse ** 2 * t * control1.y +
-            3 * inverse * t ** 2 * control2.y +
-            t ** 3 * end.y,
-        });
-      }
-      pointBudget.remaining -= CUBIC_BEZIER_SEGMENTS;
-      continue;
-    }
-    if (verb.localName !== 'moveTo' && verb.localName !== 'lnTo') return false;
-    const pt = findDirectChild(verb.children, {
-      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
-      localName: 'pt',
-    });
-    if (!pt) return false;
-    const x = parseEmu(schemaAttributeValue(pt.attributes, 'x'), false);
-    const y = parseEmu(schemaAttributeValue(pt.attributes, 'y'), false);
-    if (x === null || y === null) return false;
-    const scaled = { x: x * scaleX, y: y * scaleY };
-    if (!Number.isFinite(scaled.x) || !Number.isFinite(scaled.y)) return false;
-    if (pointBudget.remaining <= 0) return false;
-    pointBudget.remaining -= 1;
-    if (verb.localName === 'moveTo' || current === null) {
-      if (sink.length >= MAX_VECTOR_SHAPE_SUBPATHS) return false;
-      current = [scaled];
-      sink.push(current);
-    } else {
-      current.push(scaled);
-    }
-  }
-  return true;
-}
-
 function findGraphicData(anchor: OoxmlElement): OoxmlElement | null {
   // Non-picture graphic payloads demote to generic nodes even under a typed
   // `drawingGraphic`, so the generic lookup is always in play here.
@@ -611,8 +535,10 @@ function projectWspComponent(
   });
   if (xfrm) {
     if (!schemaAngleIsZero(schemaAttributeValue(xfrm.attributes, 'rot'))) return null;
-    if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipH'))) return null;
-    if (!schemaFlagIsUnset(schemaAttributeValue(xfrm.attributes, 'flipV'))) return null;
+    for (const name of ['flipH', 'flipV']) {
+      const value = schemaAttributeValue(xfrm.attributes, name);
+      if (!schemaFlagIsUnset(value) && !schemaFlagIsSet(value)) return null;
+    }
   }
 
   const authoredFill = directFill(spPr, resolveSchemeColor);
@@ -640,6 +566,7 @@ function projectWspComponent(
   if (fill === null && stroke === null) return null;
 
   const subpaths: { x: number; y: number }[][] = [];
+  const closed: boolean[] = [];
   const custGeom = findDirectChild(spPr.children, {
     namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
     localName: 'custGeom',
@@ -659,7 +586,14 @@ function projectWspComponent(
       const pathH = parseEmu(schemaAttributeValue(child.attributes, 'h')) ?? extent.cy;
       if (pathW <= 0 || pathH <= 0) return null;
       if (
-        !readShapePathPolygons(child, extent.cx / pathW, extent.cy / pathH, subpaths, pointBudget)
+        !readShapePathPolygons(
+          child,
+          extent.cx / pathW,
+          extent.cy / pathH,
+          subpaths,
+          pointBudget,
+          closed
+        )
       ) {
         return null;
       }
@@ -670,7 +604,15 @@ function projectWspComponent(
       localName: 'prstGeom',
     });
     const preset = prstGeom ? schemaAttributeValue(prstGeom.attributes, 'prst') : undefined;
-    if (preset === 'rect') {
+    if (preset === 'line' || preset === 'straightConnector1') {
+      if (pointBudget.remaining < 2) return null;
+      subpaths.push([
+        { x: 0, y: 0 },
+        { x: extent.cx, y: extent.cy },
+      ]);
+      closed.push(false);
+      pointBudget.remaining -= 2;
+    } else if (preset === 'rect') {
       if (pointBudget.remaining < 4) return null;
       subpaths.push([
         { x: 0, y: 0 },
@@ -679,6 +621,7 @@ function projectWspComponent(
         { x: 0, y: extent.cy },
       ]);
       pointBudget.remaining -= 4;
+      closed.push(true);
     } else if (preset === 'ellipse' && pointBudget.remaining >= ELLIPSE_POINTS) {
       const ellipse: { x: number; y: number }[] = [];
       for (let index = 0; index < ELLIPSE_POINTS; index += 1) {
@@ -690,14 +633,31 @@ function projectWspComponent(
       }
       pointBudget.remaining -= ELLIPSE_POINTS;
       subpaths.push(ellipse);
+      closed.push(true);
     } else {
       return null;
     }
   }
-  const polygons = subpaths.filter((points) => points.length >= 3);
+  const polygons = subpaths.filter(
+    (points) => points.length >= 3 || (points.length === 2 && stroke !== null)
+  );
   if (polygons.length === 0) return null;
+  const subpathsClosed = subpaths.flatMap((points, index) =>
+    polygons.includes(points) ? [closed[index]!] : []
+  );
+  const arrowheads = projectLineArrowheads(polygons, subpathsClosed, ln, strokeWidthEmu);
+  if (arrowheads === null || arrowheads.length * 3 > pointBudget.remaining) return null;
+  pointBudget.remaining -= arrowheads.length * 3;
+  const flipH = xfrm !== null && schemaFlagIsSet(schemaAttributeValue(xfrm.attributes, 'flipH'));
+  const flipV = xfrm !== null && schemaFlagIsSet(schemaAttributeValue(xfrm.attributes, 'flipV'));
+  const flip = (point: Readonly<{ x: number; y: number }>) => ({
+    x: flipH ? extent.cx - point.x : point.x,
+    y: flipV ? extent.cy - point.y : point.y,
+  });
   return {
-    subpathsEmu: polygons,
+    subpathsEmu: polygons.map((points) => points.map(flip)),
+    subpathsClosed,
+    ...(arrowheads.length ? { arrowheadsEmu: arrowheads.map((points) => points.map(flip)) } : {}),
     fillHex: fill?.hex ?? null,
     fillAlpha: fill?.alpha ?? 1,
     strokeHex: stroke?.hex ?? null,
@@ -721,6 +681,16 @@ function transformComponent(
       }))
     ),
     strokeWidthEmu: component.strokeWidthEmu * ((Math.abs(scaleX) + Math.abs(scaleY)) / 2),
+    ...(component.arrowheadsEmu
+      ? {
+          arrowheadsEmu: component.arrowheadsEmu.map((path) =>
+            path.map((point) => ({
+              x: offset.x + point.x * scaleX,
+              y: offset.y + point.y * scaleY,
+            }))
+          ),
+        }
+      : {}),
   };
 }
 

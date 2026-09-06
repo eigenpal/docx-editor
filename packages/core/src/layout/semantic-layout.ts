@@ -34,6 +34,7 @@ import {
   withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
+import { resolveCjkTypography } from './cjk-typography.ts';
 import {
   alignSpans,
   alignDrawings,
@@ -91,6 +92,7 @@ import {
   type TableFlowDeps,
 } from './semantic-table-layout.ts';
 import { paginateTableInFlow, type TableFlowCursor } from './table-flow-pagination.ts';
+import * as terminalTables from './terminal-table-anchor.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { paragraphMergeGroupOf, storyBlocks } from './story-roots.ts';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
@@ -549,6 +551,7 @@ export interface SectionPrepass {
    */
   readonly refToken: string;
   readonly flowKeys: string[];
+  readonly terminalTextTables: terminalTables.TerminalTextTableGroup | undefined;
 }
 
 /**
@@ -1333,6 +1336,22 @@ function layoutBlocksPass(
   function buildSectionPrepass(): SectionPrepass {
     const prepared = bodies.map((block) => prepareBlock(block, contentWidth));
     const keys = prepared.map((entry) => entry.key);
+    const terminalTextTables = terminalTables.terminalTextTableGroup(
+      prepared,
+      contentWidth,
+      styleCascade,
+      displayMode,
+      authorFilter
+    );
+    // The anchor can change without changing any table. Resume before the whole
+    // group when typing into it, undoing, or changing another table in the group.
+    const terminalFlowKeys = terminalTextTables
+      ? keys.map((key, index) =>
+          index >= terminalTextTables.start && index <= terminalTextTables.anchorIndex
+            ? framedTokenJoin([key, terminalTextTables.token])
+            : key
+        )
+      : keys;
     const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
     const markerTexts = prepared.map((entry) =>
       entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
@@ -1361,7 +1380,7 @@ function layoutBlocksPass(
     // FLOW keys — what incremental resume compares. The composition, its fold order and
     // the argument for that order live with the folds in `pagination-keeps.ts`, where the
     // order is testable.
-    const flow = composeFlowKeys(keys, {
+    const flow = composeFlowKeys(terminalFlowKeys, {
       contextualSpacingAt: (index) => contextualSpacings[index]!,
       styleIdAt: (index) => styleIds[index] ?? null,
       borderGroupKeyAt: (index) => borderGroupKeys[index]!,
@@ -1393,12 +1412,14 @@ function layoutBlocksPass(
       tocToken,
       refToken: refFields?.valuesToken ?? '',
       flowKeys: flow,
+      terminalTextTables,
     };
   }
   if (session && drawingEpoch !== null && projectionEpoch !== null && !prepassValid) {
     session.prepass = prepass;
   }
-  const { prepared, keys, paragraphDocumentOrder, keepsNext, flowKeys } = prepass;
+  const { prepared, keys, paragraphDocumentOrder, keepsNext, flowKeys, terminalTextTables } =
+    prepass;
   /** Retain the whole document's live keys — block keys plus recorded table-cell keys. */
   const publishRetainedKeys = (): void => {
     // `false` is the orchestrator saying this pass skips the sweep; a standalone pass asks
@@ -1516,6 +1537,8 @@ function layoutBlocksPass(
   const anchorPageDeferCounts = new Map<string, number>();
   const pendingFloatIds = new Set<string>();
   const floatSignals: tableFloat.PositionedTableAnchorSignal[] = [];
+  const terminalTextTableIds = new Set<string>();
+  let terminalTextTableBottom = 0;
   // A continuous section resumes the previous section's column rather than opening a
   // sheet, so its first block starts at that column's used height and its first paragraph
   // is NOT at a page top — page-top space-before suppression must not apply to it, and the
@@ -1881,6 +1904,7 @@ function layoutBlocksPass(
         : undefined,
       {
         lineSpacing: entry.lineSpacing,
+        typography: resolveCjkTypography(entry.props, styleCascade?.typography),
         equationCacheToken: producer,
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
         startOffset,
@@ -2151,6 +2175,51 @@ function layoutBlocksPass(
     placed += 1;
 
     if (entry.kind === 'table') {
+      if (terminalTextTableIds.has(entry.table.id)) continue;
+      if (
+        terminalTextTables?.start === index &&
+        columns.count === 1 &&
+        pendingFloatIds.size === 0 &&
+        !pageFragments.some(tableFloat.isOutOfFlowTableFragment) &&
+        !options.drawingExclusionZonesByPage?.get(pages.length)?.length
+      ) {
+        const anchor = prepared[terminalTextTables.anchorIndex]!;
+        if (
+          anchor.kind === 'paragraph' &&
+          anchor.spacing.before === 0 &&
+          anchor.spacing.after === 0 &&
+          previousSpaceAfter === 0
+        ) {
+          const anchorLines = breakBlock(anchor, terminalTextTables.anchorIndex);
+          if (anchorLines.length === 1 && anchorLines[0]!.spans.length === 0) {
+            collectingCellBreakKeys = [];
+            try {
+              const placed = terminalTables.placeTerminalTextTables(terminalTextTables, {
+                cursorY,
+                anchorHeight: anchor.spacing.before + anchor.spacing.after + anchorLines[0]!.height,
+                contentWidth,
+                contentHeight: contentHeight(),
+                frames: anchorFrames(),
+                deps: tableDeps,
+                styleCascade,
+                displayMode,
+                authorFilter,
+              });
+              if (placed) {
+                for (const fragment of placed.fragments) pageFragments.push(fragment);
+                for (const table of terminalTextTables.tables) {
+                  terminalTextTableIds.add(table.id);
+                  registerTableCellBreakKeys(table, collectingCellBreakKeys);
+                }
+                terminalTextTableBottom = placed.bottom;
+                continue;
+              }
+            } finally {
+              collectingCellBreakKeys = null;
+            }
+          }
+        }
+      }
       if (positionedTableIds.has(entry.table.id)) {
         pendingFloatIds.add(entry.table.id);
         continue;
@@ -2837,7 +2906,8 @@ function layoutBlocksPass(
 
   // Captured BEFORE the terminal flush, which zeroes the cursor. A converged pass stopped
   // early and never walked the tail, so its end state is the one the previous pass stored.
-  const endCursorY = converged && session ? session.endCursorY : cursorY;
+  const endCursorY =
+    converged && session ? session.endCursorY : Math.max(cursorY, terminalTextTableBottom);
   const endSpaceAfter = converged && session ? session.endSpaceAfter : previousSpaceAfter;
   // The terminal flush closes the page the flow was still filling. When it does NOT run,
   // the last page was already closed by a page break and the cursor sits at the top of a

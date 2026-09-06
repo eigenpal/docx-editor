@@ -515,7 +515,7 @@ export function insertionSite(
     }
   }
   if (owner === null && boundary && bias === 'left') {
-    const preceding = all.findLast((segment) => segment.end === offset);
+    const preceding = [...all].reverse().find((segment) => segment.end === offset);
     if (preceding && preceding.removeNodeIds === undefined) {
       const exited = inlineContainersOf(paragraph, segmentAncestryNodeId(preceding))
         .filter(

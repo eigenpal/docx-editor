@@ -55,6 +55,7 @@ import type {
 } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
+import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
 
 /**
  * Distinct PAGE-dependent contexts retained before LRU eviction.
@@ -500,6 +501,7 @@ export function layoutHeaderFooterStory(
       });
     }
 
+    flow = positionLegacyFooterPageFrame(part, flow, contentWidth, hfPageContext);
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
       part,

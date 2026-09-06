@@ -484,14 +484,13 @@ describe('wps vector shape projection', () => {
     }
   });
 
-  // `flipH`/`flipV` are `xsd:boolean`. The engine cannot paint a flip, so a set flag refuses
-  // the shape — and a spelling the schema does not allow must refuse too, not fall through
-  // to "unset" and paint the shape the wrong way round.
+  // `flipH`/`flipV` are `xsd:boolean`. Shapes now honor legal flips, while group-level
+  // transforms remain narrower. Invalid spellings refuse instead of painting unflipped.
   //
   // Four call sites read a flip: `flipH` and `flipV` on a shape's own `a:xfrm`, and the same
   // pair on a group's `wpg:grpSpPr/a:xfrm`. The group pair is the lane this file exists for,
   // so every spelling runs against all four.
-  test('an unset flip paints and any other spelling refuses, at all four sites', () => {
+  test('legal shape flips paint; group flips and schema-invalid spellings still refuse', () => {
     const spellings = [
       // Legal `xsd:boolean` false, including the forms the fixed `whiteSpace="collapse"`
       // facet makes valid. The XML reader does not trim, so the helper has to.
@@ -500,7 +499,7 @@ describe('wps vector shape projection', () => {
       ['false', true],
       [' 0 ', true],
       ['\nfalse\n', true],
-      // Legal true — the engine cannot paint a flip, so it refuses.
+      // Legal true — supported for shapes, but still refused at group level below.
       ['1', false],
       ['true', false],
       [' 1 ', false],
@@ -552,7 +551,11 @@ describe('wps vector shape projection', () => {
           }).values(),
         ][0]?.vectorShape;
         const label = `${site.name}=${JSON.stringify(value)}`;
-        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(`${label}: ${paints}`);
+        const supportedShapeFlip =
+          site.name.startsWith('shape ') && ['1', 'true'].includes(value?.trim() ?? '');
+        expect(`${label}: ${shape !== null && shape !== undefined}`).toBe(
+          `${label}: ${paints || supportedShapeFlip}`
+        );
       }
     }
   });
@@ -778,7 +781,7 @@ describe('wps vector shape projection', () => {
           resolveSchemeColor: () => '4472C4',
         }).values(),
       ][0]!.vectorShape
-    ).toBeNull();
+    ).not.toBeNull();
 
     const withMetadata = parsePart(
       `<w:p><w:r>${drawing.replace('<wpg:wgp>', '<wpg:wgp><wpg:cNvPr id="1"/>')}</w:r></w:p>`
