@@ -153,11 +153,7 @@ test('does not overlay meaningful, left-aligned or field-bearing anchor content'
 
 test('accepts the switches Word writes after PAGE without moving the frame', () => {
   const plain = layoutHeaderFooterStory(partOf(), 400, measurer, 'plain');
-  for (const instruction of [
-    ' PAGE \\* MERGEFORMAT ',
-    'PAGE \\* roman \\* MERGEFORMAT',
-    ' page ',
-  ]) {
+  for (const instruction of [' PAGE \\* MERGEFORMAT ', ' PAGE \\# "0" ', ' page ']) {
     const story = layoutHeaderFooterStory(
       partOf(body.replace(' PAGE ', instruction)),
       400,
@@ -171,6 +167,33 @@ test('accepts the switches Word writes after PAGE without moving the frame', () 
     expect(first.box).toEqual(plain.fragments[0]!.box);
     expect(second.box.y).toBe(0);
     expect(story.flowHeight).toBeCloseTo(plain.flowHeight, 4);
+  }
+});
+
+test('an instruction split across instrText runs still takes the frame lane', () => {
+  const split = body.replace(
+    '<w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>',
+    '<w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:instrText>\\* MERGEFORMAT</w:instrText></w:r>'
+  );
+  expect(split).not.toBe(body);
+  const [first, second] = layoutHeaderFooterStory(partOf(split), 400, measurer, 'split').fragments;
+  if (first?.kind !== 'paragraph' || second?.kind !== 'paragraph')
+    throw new Error('paragraphs required');
+  expect(first.alignment).toBe('center');
+  expect(second.box.y).toBe(0);
+});
+
+test('switches the page-field projection does not evaluate stay in ordinary flow', () => {
+  // The lane must never claim a field whose value the page context will not refresh; the
+  // cached text would then repeat on every page.
+  for (const instruction of ['PAGE \\* roman \\* MERGEFORMAT', ' PAGE \\* Arabic ']) {
+    const story = layoutHeaderFooterStory(
+      partOf(body.replace(' PAGE ', instruction)),
+      400,
+      measurer,
+      'unevaluated'
+    );
+    expect(story.fragments[1]!.box.y).toBeGreaterThan(0);
   }
 });
 

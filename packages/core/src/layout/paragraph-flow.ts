@@ -1,7 +1,7 @@
 // Paragraph measuring and breaking, shared between the body flow and table cells.
 //
-// Extracted from `semantic-layout.ts` unchanged so a cell paragraph breaks exactly like a
-// body paragraph: same pieces, same word boundaries, same cache discipline. The BREAK is
+// Extracted from `semantic-layout.ts` so a cell paragraph breaks exactly like a body
+// paragraph: same pieces, same word boundaries, same cache discipline. The BREAK is
 // position-independent — span x offsets are relative to the paragraph origin — which is
 // what lets one cached break serve the same content at any x (body or any cell).
 

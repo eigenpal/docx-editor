@@ -251,8 +251,8 @@ const COORDINATE_BITS = new Uint32Array(COORDINATE_SCRATCH.buffer);
 export function vectorShapeLayoutToken(
   vector: NonNullable<DrawingProjection['vectorShape']>
 ): string {
-  let hashA = 0x811c_9dc5;
-  let hashB = 0x1000_0193;
+  HASH_SCRATCH[0] = 0x811c_9dc5;
+  HASH_SCRATCH[1] = 0x1000_0193;
   const scalars: string[] = [];
   for (const component of vector.components) {
     scalars.push(
@@ -263,33 +263,23 @@ export function vectorShapeLayoutToken(
       String(component.strokeWidthEmu),
       String(component.subpathsEmu.length)
     );
-    component.subpathsEmu.forEach((subpath, index) => {
+    const subpaths = component.subpathsEmu;
+    for (let index = 0; index < subpaths.length; index += 1) {
+      const subpath = subpaths[index]!;
       // An omitted close flag paints closed, exactly like `true`; only `false` leaves the
       // path open, so that is the one value that must separate two otherwise equal shapes.
       scalars.push(String(subpath.length), component.subpathsClosed?.[index] === false ? '0' : '1');
-      for (const point of subpath) {
-        COORDINATE_SCRATCH[0] = point.x;
-        hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
-        hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
-        COORDINATE_SCRATCH[0] = point.y;
-        hashA = Math.imul(hashA ^ COORDINATE_BITS[1]!, 0x0100_0193);
-        hashB = Math.imul(hashB ^ COORDINATE_BITS[0]!, 0x0100_01b3);
-      }
-    });
+      foldPointsInto(subpath, HASH_SCRATCH);
+    }
     // Line-end triangles are generated geometry the painter fills separately, so a changed
     // `a:headEnd`/`a:tailEnd` moves nothing in the subpath stream. Their vertices join the
     // same accumulators, framed by their counts, so the token cannot reuse a stale record.
-    const arrowheads = component.arrowheadsEmu ?? [];
-    scalars.push(String(arrowheads.length));
-    for (const arrowhead of arrowheads) {
-      scalars.push(String(arrowhead.length));
-      for (const point of arrowhead) {
-        COORDINATE_SCRATCH[0] = point.x;
-        hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
-        hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
-        COORDINATE_SCRATCH[0] = point.y;
-        hashA = Math.imul(hashA ^ COORDINATE_BITS[1]!, 0x0100_0193);
-        hashB = Math.imul(hashB ^ COORDINATE_BITS[0]!, 0x0100_01b3);
+    const arrowheads = component.arrowheadsEmu;
+    scalars.push(String(arrowheads?.length ?? 0));
+    if (arrowheads) {
+      for (const arrowhead of arrowheads) {
+        scalars.push(String(arrowhead.length));
+        foldPointsInto(arrowhead, HASH_SCRATCH);
       }
     }
   }
@@ -298,9 +288,32 @@ export function vectorShapeLayoutToken(
     String(vector.extentEmu.cy),
     String(vector.components.length),
     scalars.join(','),
-    (hashA >>> 0).toString(36),
-    (hashB >>> 0).toString(36),
+    HASH_SCRATCH[0]!.toString(36),
+    HASH_SCRATCH[1]!.toString(36),
   ].join(';');
+}
+
+/** The two FNV-1a accumulators {@link vectorShapeLayoutToken} folds every point stream into. */
+const HASH_SCRATCH = new Uint32Array(2);
+
+type VectorPoints = NonNullable<
+  DrawingProjection['vectorShape']
+>['components'][number]['subpathsEmu'][number];
+
+/** One fold shared by subpaths and line ends, so both hash the same way. */
+function foldPointsInto(points: VectorPoints, hash: Uint32Array): void {
+  let hashA = hash[0]!;
+  let hashB = hash[1]!;
+  for (const point of points) {
+    COORDINATE_SCRATCH[0] = point.x;
+    hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
+    hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
+    COORDINATE_SCRATCH[0] = point.y;
+    hashA = Math.imul(hashA ^ COORDINATE_BITS[1]!, 0x0100_0193);
+    hashB = Math.imul(hashB ^ COORDINATE_BITS[0]!, 0x0100_01b3);
+  }
+  hash[0] = hashA;
+  hash[1] = hashB;
 }
 
 function drawingProjectionLayoutToken(projection: DrawingProjection): string {

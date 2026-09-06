@@ -29,12 +29,27 @@ test('the hint table accepts exactly the unconditional symbols, not accented let
     0xa1, 0xa4, 0xa7, 0xa8, 0xaa, 0xad, 0xaf, 0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb6, 0xb7, 0xb8, 0xb9,
     0xba, 0xbc, 0xbd, 0xbe, 0xbf, 0xd7, 0xf7,
   ];
+  // Combining marks and format characters stay with their base character, so a grapheme
+  // cluster is never split across two faces.
+  const excluded = (code: number) =>
+    (code >= 0x300 && code <= 0x36f) ||
+    (code >= 0x200b && code <= 0x200f) ||
+    (code >= 0x2028 && code <= 0x202f) ||
+    (code >= 0x2060 && code <= 0x206f) ||
+    (code >= 0x20d0 && code <= 0x20ff);
   const inTable = (code: number) =>
-    latin1.includes(code) || (code >= 0x2b0 && code <= 0x36f) || (code >= 0x2000 && code <= 0x27bf);
+    !excluded(code) &&
+    (latin1.includes(code) ||
+      (code >= 0x2b0 && code <= 0x36f) ||
+      (code >= 0x2000 && code <= 0x27bf));
   for (let code = 0; code <= 0x2fff; code++) expect(isEastAsiaHintSymbol(code)).toBe(inTable(code));
-  // Private use and the Latin presentation forms, up to the first Hebrew ligature.
-  expect(isEastAsiaHintSymbol(0xe000)).toBe(true);
-  expect(isEastAsiaHintSymbol(0xf8ff)).toBe(true);
+  expect(isEastAsiaHintSymbol(0x301)).toBe(false);
+  expect(isEastAsiaHintSymbol(0x200d)).toBe(false);
+  // The private use area belongs to symbol fonts, never to the East Asian face.
+  expect(isEastAsiaHintSymbol(0xe000)).toBe(false);
+  expect(isEastAsiaHintSymbol(0xf0fc)).toBe(false);
+  expect(isEastAsiaHintSymbol(0xf8ff)).toBe(false);
+  // Latin presentation forms, up to the first Hebrew ligature.
   expect(isEastAsiaHintSymbol(0xfb00)).toBe(true);
   expect(isEastAsiaHintSymbol(0xfb1c)).toBe(true);
   expect(isEastAsiaHintSymbol(0xfb1d)).toBe(false);
@@ -167,4 +182,50 @@ test('a hint without a distinct East Asian face leaves the original piece untouc
     },
   ]);
   expect(applyEastAsiaFontSlots([fallback])[0]).toBe(fallback);
+});
+test('the Times New Roman exception falls back to ignoring the hint when faces cannot compare', () => {
+  const rFonts = (attributes: Record<string, string>): OoxmlProperty => ({
+    localName: 'rFonts',
+    attributes,
+  });
+  const theme = rFonts({ asciiTheme: 'minorHAnsi', hAnsiTheme: 'minorHAnsi' });
+  const override = rFonts({ hAnsi: 'Calibri', eastAsia: 'Times New Roman', hint: 'eastAsia' });
+  // One theme slot beside one explicit name: Word compares resolved faces, this reader
+  // cannot, so it keeps the exception (hint ignored), which was the behavior before.
+  expect(hasTimesNewRomanEastAsiaException([theme, override], 'Times New Roman')).toBe(true);
+  expect(applyEastAsiaFontSlots([piece('·', [theme, override])])[0]!.fontSlot).toBeUndefined();
+  // Two theme slots compare by slot name; explicit names compare case-insensitively.
+  expect(hasTimesNewRomanEastAsiaException([theme], 'Times New Roman')).toBe(true);
+  expect(
+    hasTimesNewRomanEastAsiaException(
+      [rFonts({ asciiTheme: 'majorHAnsi', hAnsiTheme: 'minorHAnsi' })],
+      'Times New Roman'
+    )
+  ).toBe(false);
+  expect(
+    hasTimesNewRomanEastAsiaException(
+      [rFonts({ ascii: 'arial', hAnsi: 'Arial' })],
+      'Times New Roman'
+    )
+  ).toBe(true);
+  // A face left unspecified cannot be compared either.
+  expect(hasTimesNewRomanEastAsiaException([rFonts({ ascii: 'Arial' })], 'Times New Roman')).toBe(
+    true
+  );
+});
+test('symbol-encoded faces keep their glyphs under the hint', () => {
+  const wingdings = piece('✔', [
+    {
+      localName: 'rFonts',
+      attributes: { ascii: 'Wingdings', hAnsi: 'Wingdings', eastAsia: 'SimSun', hint: 'eastAsia' },
+    },
+  ]);
+  expect(wingdings.style.fontFamily).toBe('Wingdings');
+  expect(applyEastAsiaFontSlots([wingdings])[0]).toBe(wingdings);
+});
+test('combining marks and joiners stay with their base character under the hint', () => {
+  const nfd = piece('cafe\u0301 a\u{1F468}\u200D\u{1F469}b');
+  const out = applyEastAsiaFontSlots([nfd]);
+  expect(out).toHaveLength(1);
+  expect(out[0]).toBe(nfd);
 });

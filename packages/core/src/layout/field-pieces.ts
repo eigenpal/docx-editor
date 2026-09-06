@@ -25,6 +25,7 @@ import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { PageRefFieldProjection, RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
+import { isSymbolEncodedFamily } from './symbol-encoding.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
@@ -452,9 +453,12 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
     if (piece.text.length === 0) continue;
     streamed.push(index);
     segments.push(piece.text);
-    // Leave the special Times New Roman East Asian fallback to existing resolution.
+    // Leave the special Times New Roman East Asian fallback to existing resolution, and never
+    // move a symbol-encoded face (Wingdings, Symbol, a `w:sym` piece): its glyphs live in
+    // the symbol font, and the East Asian face would paint them as notdef boxes.
     hintedSegments.push(
       hasEastAsiaSymbolHint(piece.props) &&
+        !isSymbolEncodedFamily(piece.style.fontFamily) &&
         !hasTimesNewRomanEastAsiaException(piece.props, piece.style.fontFamilyEastAsia)
     );
   }

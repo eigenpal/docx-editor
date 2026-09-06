@@ -4,6 +4,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
+import { matchAllowlistedPageField } from './field-instruction.ts';
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
@@ -24,11 +25,14 @@ function one(node: OoxmlElement, name: string): OoxmlElement | undefined {
   return matches.length === 1 && isW(matches[0]!, name) ? matches[0] : undefined;
 }
 /**
- * A PAGE instruction, tolerant of the switches Word writes after it (`PAGE \* MERGEFORMAT`,
- * `PAGE \* roman`). The switches only format the result; the frame never depends on it.
+ * A PAGE instruction the live page-field projection evaluates: bare `PAGE`, with the
+ * `\* MERGEFORMAT` Word appends, or a `\#` numeric picture. It is the same allowlist
+ * `hf-layout.ts` uses to compute the value, so the frame lanes never claim a field whose
+ * result the page context will not refresh (`\* roman`, `\* Arabic` and every other switch
+ * stay in ordinary flow with their cached text).
  */
 export function isPageInstruction(instruction: string): boolean {
-  return /^page(?:\s+\\\*\s*[a-z]{1,32})*$/i.test(instruction.trim());
+  return matchAllowlistedPageField(instruction)?.kind === 'PAGE';
 }
 function twips(value: string | undefined): number | undefined {
   if (value === undefined || !/^\d{1,5}$/.test(value)) return undefined;

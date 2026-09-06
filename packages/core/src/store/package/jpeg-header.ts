@@ -4,10 +4,14 @@ const MAX_MARKERS = 4096;
 const MAX_PADDING_BYTES = 4096;
 const MAX_EXIF_ENTRIES = 4096;
 
-/** Whether an APP1 payload opens with the `Exif\0\0` signature. */
+/**
+ * Whether an APP1 payload opens with the `Exif\0\0` signature AND carries a body. Decoders
+ * skip a bare six-byte stub and read the next Exif block, so a stub must not count as the
+ * first one here either.
+ */
 function hasExifSignature(bytes: Uint8Array, start: number, end: number): boolean {
   return (
-    end - start >= 6 &&
+    end - start > 6 &&
     bytes[start] === 0x45 &&
     bytes[start + 1] === 0x78 &&
     bytes[start + 2] === 0x69 &&

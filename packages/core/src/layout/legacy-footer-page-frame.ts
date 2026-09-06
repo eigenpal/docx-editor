@@ -75,8 +75,12 @@ function containsOnlyPageField(paragraph: OoxmlElement): boolean {
           state = 2;
         else if (state === 2 && kind === 'end') state = 3;
         else return false;
-      } else if (isW(node, 'instrText') && state === 1 && instruction === null) {
-        instruction = text(node)?.trim() ?? null;
+      } else if (isW(node, 'instrText') && state === 1) {
+        // Word may split one instruction across runs (` PAGE ` + `\* MERGEFORMAT`); the
+        // fixed-width lane and the field projection concatenate them, so this lane must too.
+        const value = text(node);
+        if (value === null) return false;
+        instruction = (instruction ?? '') + value;
       } else if (isW(node, 't') && state === 2) {
         const value = text(node);
         if (value === null || !/^\d*$/.test(value)) return false;
@@ -206,6 +210,7 @@ export function positionLegacyFooterPageFrame<
     lines: [
       {
         ...line,
+        box: { ...line.box, x: left + dx, width: right - left },
         contentX: line.contentX + dx,
         spans: line.spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + dx } })),
       },

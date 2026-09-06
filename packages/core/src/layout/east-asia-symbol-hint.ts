@@ -23,8 +23,11 @@ export function hasEastAsiaSymbolHint(properties: readonly OoxmlProperty[]): boo
  *
  * `eastAsiaFace` is the run's RESOLVED East Asian face, so a theme slot that resolves to
  * Times New Roman counts. The Latin faces are read from the same cascaded properties as
- * {@link hasEastAsiaSymbolHint}, last specified value per attribute winning, with a theme
- * attribute standing in for the explicit name beside it (§17.3.2.26).
+ * {@link hasEastAsiaSymbolHint}, last specified value per attribute winning (§17.3.2.26).
+ * Word compares resolved faces. This reader has no theme resolver, so it compares explicit
+ * names case-insensitively, treats two theme slots by slot name, and falls back to the
+ * exception (hint ignored, the pre-widening behavior) whenever the two sides cannot be
+ * compared: one theme slot beside one explicit name, or a face left unspecified.
  */
 export function hasTimesNewRomanEastAsiaException(
   properties: readonly OoxmlProperty[],
@@ -33,15 +36,28 @@ export function hasTimesNewRomanEastAsiaException(
   if (eastAsiaFace?.toLowerCase() !== 'times new roman') return false;
   let ascii: string | undefined;
   let hAnsi: string | undefined;
+  let asciiIsTheme = false;
+  let hAnsiIsTheme = false;
   for (const property of properties) {
     if (property.localName !== 'rFonts') continue;
     const attributes = property.attributes;
-    const nextAscii = attributes?.asciiTheme ?? attributes?.ascii;
-    const nextHAnsi = attributes?.hAnsiTheme ?? attributes?.hAnsi;
-    if (nextAscii !== undefined) ascii = nextAscii;
-    if (nextHAnsi !== undefined) hAnsi = nextHAnsi;
+    if (attributes?.asciiTheme !== undefined) {
+      ascii = attributes.asciiTheme;
+      asciiIsTheme = true;
+    } else if (attributes?.ascii !== undefined) {
+      ascii = attributes.ascii;
+      asciiIsTheme = false;
+    }
+    if (attributes?.hAnsiTheme !== undefined) {
+      hAnsi = attributes.hAnsiTheme;
+      hAnsiIsTheme = true;
+    } else if (attributes?.hAnsi !== undefined) {
+      hAnsi = attributes.hAnsi;
+      hAnsiIsTheme = false;
+    }
   }
-  return ascii === hAnsi;
+  if (ascii === undefined || hAnsi === undefined || asciiIsTheme !== hAnsiIsTheme) return true;
+  return ascii.toLowerCase() === hAnsi.toLowerCase();
 }
 
 /**
@@ -52,6 +68,13 @@ export function hasTimesNewRomanEastAsiaException(
  * accented letters are deliberately excluded, and so are Greek and Cyrillic. The CJK
  * radicals at U+2E80-U+2EFF are in the same table but already classify as strong East
  * Asian text without a hint, so they are not repeated here.
+ *
+ * Two parts of the table are left out on purpose. Combining marks and format characters
+ * (U+0300-U+036F, U+200B-U+200F, U+2028-U+202F, U+2060-U+206F, U+20D0-U+20FF) must stay in
+ * the font of the base character they attach to: slicing them into their own span splits a
+ * grapheme cluster across two faces. The Private Use Area (U+E000-U+F8FF) is where symbol
+ * fonts (Wingdings, Symbol) keep their glyphs, and those runs are already routed by
+ * `symbol-run.ts`; sending them to the East Asian face paints notdef boxes.
  */
 export function isEastAsiaHintSymbol(codePoint: number): boolean {
   return (
@@ -66,12 +89,15 @@ export function isEastAsiaHintSymbol(codePoint: number): boolean {
     (codePoint >= 0xbc && codePoint <= 0xbf) ||
     codePoint === 0xd7 ||
     codePoint === 0xf7 ||
-    // Spacing modifier letters and combining diacritical marks.
-    (codePoint >= 0x2b0 && codePoint <= 0x36f) ||
-    // General punctuation through Dingbats: quotes, dashes, arrows, enclosed alphanumerics.
-    (codePoint >= 0x2000 && codePoint <= 0x27bf) ||
-    // Private use area.
-    (codePoint >= 0xe000 && codePoint <= 0xf8ff) ||
+    // Spacing modifier letters (not the combining marks that follow them).
+    (codePoint >= 0x2b0 && codePoint <= 0x2ff) ||
+    // General punctuation through Dingbats, minus format characters and combining marks:
+    // quotes, dashes, arrows, enclosed alphanumerics, box drawing, geometric shapes.
+    (codePoint >= 0x2000 && codePoint <= 0x200a) ||
+    (codePoint >= 0x2010 && codePoint <= 0x2027) ||
+    (codePoint >= 0x2030 && codePoint <= 0x205f) ||
+    (codePoint >= 0x2070 && codePoint <= 0x20cf) ||
+    (codePoint >= 0x2100 && codePoint <= 0x27bf) ||
     // Alphabetic presentation forms up to, not including, the Hebrew ligatures.
     (codePoint >= 0xfb00 && codePoint <= 0xfb1c)
   );

@@ -30,6 +30,41 @@ test('decode asks createImageBitmap for EXIF-oriented pixels', async () => {
   expect(closed).toBe(1);
 });
 
+test('an engine that rejects the orientation option is retried without it', async () => {
+  const calls: unknown[][] = [];
+  let closed = 0;
+  const port = tryCreateBrowserImageDecodePort(
+    fakeDocument(async (...args) => {
+      calls.push(args);
+      if (args.length > 1) {
+        const error = new Error('not a valid enumeration value');
+        error.name = 'TypeError';
+        throw error;
+      }
+      return { width: 40, height: 20, close: () => (closed += 1) };
+    })
+  )!;
+  const result = await port.decode(Uint8Array.of(0xff, 0xd8, 0xff, 0xd9), 'image/jpeg', LIMITS);
+  expect(result).toEqual({ pixelWidth: 40, pixelHeight: 20, dpiX: 96, dpiY: 96 });
+  expect(calls).toHaveLength(2);
+  expect(calls[1]).toHaveLength(1);
+  expect(closed).toBe(1);
+});
+
+test('a decode failure that is not the option rejection is not retried', async () => {
+  let calls = 0;
+  const port = tryCreateBrowserImageDecodePort(
+    fakeDocument(async () => {
+      calls += 1;
+      throw new Error('The source image could not be decoded.');
+    })
+  )!;
+  await expect(port.decode(Uint8Array.of(0xff, 0xd8), 'image/jpeg', LIMITS)).rejects.toThrow(
+    'could not be decoded'
+  );
+  expect(calls).toBe(1);
+});
+
 test('a bitmap past the pixel cap is refused and still closed', async () => {
   let closed = 0;
   const port = tryCreateBrowserImageDecodePort(

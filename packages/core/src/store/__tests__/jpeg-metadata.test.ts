@@ -113,6 +113,12 @@ describe('JPEG metadata before the frame header', () => {
     expect(
       validateJpegHeader(jpeg([segment(0xe1, exif(6)), segment(0xe1, exif(1)), frame()]))
     ).toEqual(portrait);
+    // A bare six-byte `Exif\0\0` stub is skipped by decoders, which read the next block.
+    expect(
+      validateJpegHeader(
+        jpeg([segment(0xe1, strToU8('Exif\0\0')), segment(0xe1, exif(6)), frame()])
+      )
+    ).toEqual(portrait);
   });
 
   test('rejects invalid marker lengths, truncated frames, and zero dimensions', () => {
