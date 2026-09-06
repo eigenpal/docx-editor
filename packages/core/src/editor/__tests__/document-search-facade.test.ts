@@ -21,15 +21,15 @@ const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 
-function textbox(text: string): string {
+function textbox(text: string, id = 7, topOffsetEmu = 0): string {
   return (
     `<w:r><w:drawing xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
     '<wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" relativeHeight="1" ' +
     'behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1"><wp:simplePos x="0" y="0"/>' +
     '<wp:positionH relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
-    '<wp:positionV relativeFrom="page"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+    `<wp:positionV relativeFrom="page"><wp:posOffset>${topOffsetEmu}</wp:posOffset></wp:positionV>` +
     '<wp:extent cx="914400" cy="457200"/><wp:effectExtent l="0" t="0" r="0" b="0"/>' +
-    '<wp:wrapNone/><wp:docPr id="7" name="Find text box"/>' +
+    `<wp:wrapNone/><wp:docPr id="${id}" name="Find text box ${id}"/>` +
     `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
     '<wps:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
     `<wps:txbx><w:txbxContent><w:p><w:r><w:t>${text}</w:t></w:r></w:p>` +
@@ -48,7 +48,11 @@ function wrappedTextbox(text: string): string {
   );
 }
 
-function textboxDocx(inHeader = false, includeBodyFrame = !inHeader): Uint8Array {
+function textboxDocx(
+  inHeader = false,
+  includeBodyFrame = !inHeader,
+  headerTopOffsetEmu = 0
+): Uint8Array {
   const headerReference = inHeader
     ? '<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/></w:sectPr>'
     : '';
@@ -77,7 +81,7 @@ function textboxDocx(inHeader = false, includeBodyFrame = !inHeader): Uint8Array
       `<Relationships xmlns="${REL}"><Relationship Id="rHeader" Type="${DOC_REL}/header" Target="header1.xml"/></Relationships>`
     );
     files['word/header1.xml'] = strToU8(
-      `<w:hdr xmlns:w="${W}"><w:p>${textbox('boxed needle')}</w:p></w:hdr>`
+      `<w:hdr xmlns:w="${W}"><w:p>${textbox('boxed needle', 7, headerTopOffsetEmu)}</w:p></w:hdr>`
     );
   }
   return zipSync(files);
@@ -115,7 +119,8 @@ describe('document search facade', () => {
     });
     if (!editor.surface) throw new Error('surface did not open');
     const match = editor.findMatches('needle')[0];
-    if (!match?.drawingNodeId || !match.hostParagraphId) throw new Error('frame match missing');
+    const frame = match?.scope?.kind === 'frame' ? match.scope : null;
+    if (!match || !frame) throw new Error('frame match missing');
     let revealed: string | null = null;
     const revealParagraph = editor.surface.revealParagraph.bind(editor.surface);
     editor.surface.revealParagraph = (paragraphId, options) => {
@@ -124,19 +129,19 @@ describe('document search facade', () => {
     };
 
     expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    expect(revealed).toBe(match.hostParagraphId);
+    expect(revealed).toBe(frame.hostParagraphId);
     expect(editor.surface.state().selection).toEqual({
-      anchor: { paragraphId: match.hostParagraphId, offset: 0 },
-      head: { paragraphId: match.hostParagraphId, offset: 0 },
+      anchor: { paragraphId: frame.hostParagraphId, offset: 0 },
+      head: { paragraphId: frame.hostParagraphId, offset: 0 },
     });
     expect(editor.surface.drawingSelectionIntent()).toEqual({
       kind: 'pointer',
-      drawingNodeId: match.drawingNodeId,
+      drawingNodeId: frame.drawingNodeId,
     });
     expect(
-      findDrawingOverlayFrameInLayout(editor.surface.layout(), match.drawingNodeId)
+      findDrawingOverlayFrameInLayout(editor.surface.layout(), frame.drawingNodeId)
     ).not.toBeNull();
-    expect(resolveSelectedDrawingRecord(editor.surface)?.drawingNodeId).toBe(match.drawingNodeId);
+    expect(resolveSelectedDrawingRecord(editor.surface)?.drawingNodeId).toBe(frame.drawingNodeId);
 
     expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
     expect(editor.findMatches('boxed needle')[0]?.blockId).toBe(match.blockId);
@@ -150,7 +155,8 @@ describe('document search facade', () => {
     });
     if (!editor.surface) throw new Error('surface did not open');
     const match = editor.findMatches('needle')[0];
-    if (!match?.drawingNodeId || !match.hostParagraphId) throw new Error('frame match missing');
+    const frame = match?.scope?.kind === 'frame' ? match.scope : null;
+    if (!match || !frame) throw new Error('frame match missing');
 
     expect(match.scope).toMatchObject({
       kind: 'frame',
@@ -160,9 +166,61 @@ describe('document search facade', () => {
     expect(editor.getActiveScope()).toEqual({ kind: 'headerFooter', rId: 'rHeader' });
     expect(editor.surface.drawingSelectionIntent()).toEqual({
       kind: 'pointer',
-      drawingNodeId: match.drawingNodeId,
+      drawingNodeId: frame.drawingNodeId,
     });
-    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(match.drawingNodeId);
+    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(frame.drawingNodeId);
+    editor.destroy();
+  });
+
+  test('selects the second of two text boxes anchored to one paragraph', () => {
+    // Both anchors sit in the same paragraph at adjacent offsets, so resolving the drawing by
+    // offset alone answers with the first one and the second can never be addressed.
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(`<w:p>${textbox('alpha needle', 7)}${textbox('beta needle', 8)}</w:p>`),
+    });
+    if (!editor.surface) throw new Error('surface did not open');
+    const [alpha, beta] = editor.findMatches('needle');
+    const first = alpha?.scope?.kind === 'frame' ? alpha.scope : null;
+    const second = beta?.scope?.kind === 'frame' ? beta.scope : null;
+    if (!alpha || !beta || !first || !second) throw new Error('two frame matches missing');
+
+    expect(first.drawingNodeId).not.toBe(second.drawingNodeId);
+    expect(editor.selectMatch(beta)).toEqual({ ok: true, changed: false });
+    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(second.drawingNodeId);
+    expect(editor.selectMatch(alpha)).toEqual({ ok: true, changed: false });
+    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(first.drawingNodeId);
+    editor.destroy();
+  });
+
+  test('leaves the header closed when its text box has no painted frame', () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: textboxDocx(true, false, 12_000_000),
+    });
+    if (!editor.surface) throw new Error('surface did not open');
+    const match = editor.findMatches('needle')[0];
+    if (!match) throw new Error('frame match missing');
+    const before = editor.surface.state().selection;
+
+    expect(editor.selectMatch(match)).toEqual({
+      ok: false,
+      code: 'unsupported',
+      reason: 'the text box drawing could not be selected',
+    });
+    expect(editor.getActiveScope()).toEqual({ kind: 'body' });
+    expect(editor.surface.state().selection).toEqual(before);
+    editor.destroy();
+  });
+
+  test('does not report a match inside an inline text box, which paints no story', () => {
+    const inline = textbox('inline needle').replace(/wp:anchor/g, 'wp:inline');
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: docx(`<w:p><w:r><w:t>body needle</w:t></w:r></w:p><w:p>${inline}</w:p>`),
+    });
+
+    expect(editor.findMatches('needle').map((match) => match.scope?.kind)).toEqual([undefined]);
     editor.destroy();
   });
 
@@ -173,13 +231,13 @@ describe('document search facade', () => {
       mode: 'view',
     });
     const match = editor.findMatches('needle')[0];
-    if (!match) throw new Error('frame match missing');
+    const frame = match?.scope?.kind === 'frame' ? match.scope : null;
+    if (!match || !frame) throw new Error('frame match missing');
 
-    expect(match.scope?.kind).toBe('frame');
-    expect(match.scope?.kind === 'frame' ? match.scope.owner : undefined).toBeUndefined();
+    expect(frame.owner).toBeUndefined();
     expect(editor.findMatches('needle')).toHaveLength(1);
     expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    expect(resolveSelectedDrawingRecord(editor.surface)?.drawingNodeId).toBe(match.drawingNodeId);
+    expect(resolveSelectedDrawingRecord(editor.surface)?.drawingNodeId).toBe(frame.drawingNodeId);
     editor.destroy();
   });
 

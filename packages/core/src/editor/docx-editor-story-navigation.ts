@@ -3,6 +3,7 @@
 import type { DocumentEditingMode, ExecResult, TextMatch, ViewScope } from '../contracts/editor.ts';
 import type { SemanticPosition } from '../layout/semantic-interaction.ts';
 import type { PaginatedSurface } from './paginated-surface-contract.ts';
+import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 
 type ScopedStory =
   | {
@@ -75,11 +76,14 @@ export function selectDocumentSearchMatch(surface: PaginatedSurface, match: Text
     return { ok: false, code: 'invalidArgs', reason: 'match must carry a blockId and offsets' };
   }
   if (match.scope?.kind === 'frame') {
+    const { drawingNodeId, hostParagraphId } = match.scope;
+    // The types make an id-less frame scope unrepresentable, but a host calls this from
+    // JavaScript, where they are whatever it passed.
     if (
-      typeof match.drawingNodeId !== 'string' ||
-      match.drawingNodeId.length === 0 ||
-      typeof match.hostParagraphId !== 'string' ||
-      match.hostParagraphId.length === 0
+      typeof drawingNodeId !== 'string' ||
+      drawingNodeId.length === 0 ||
+      typeof hostParagraphId !== 'string' ||
+      hostParagraphId.length === 0
     ) {
       return {
         ok: false,
@@ -87,20 +91,31 @@ export function selectDocumentSearchMatch(surface: PaginatedSurface, match: Text
         reason: 'a frame match must carry drawing and host paragraph ids',
       };
     }
+    // Resolve BEFORE opening anything. A text box can be enumerated and still have no painted
+    // frame — clipped to nothing, or positioned off the page — and entering a header only to
+    // fail would leave the reader in a story they never asked to open, caret moved.
+    const unselectable: ExecResult = {
+      ok: false,
+      code: 'unsupported',
+      reason: 'the text box drawing could not be selected',
+    };
+    if (!drawingSelectionPosition(surface.layout(), drawingNodeId, hostParagraphId)) {
+      return unselectable;
+    }
     const owner = match.scope.owner;
     if (owner) {
       const entered = enterStoryPosition(surface, owner, {
-        paragraphId: match.hostParagraphId,
+        paragraphId: hostParagraphId,
         offset: 0,
       });
       if (!entered.ok) return entered;
     } else {
-      leaveScopeForBodyParagraph(surface, match.hostParagraphId);
+      leaveScopeForBodyParagraph(surface, hostParagraphId);
     }
-    surface.revealParagraph(match.hostParagraphId);
-    return surface.selectDrawing?.(match.drawingNodeId, match.hostParagraphId)
+    surface.revealParagraph(hostParagraphId);
+    return surface.selectDrawing(drawingNodeId, hostParagraphId)
       ? { ok: true, changed: false }
-      : { ok: false, code: 'unsupported', reason: 'the text box drawing could not be selected' };
+      : unselectable;
   }
   const position = { paragraphId: match.blockId, offset: match.start };
   if (isScopedStory(match.scope)) {

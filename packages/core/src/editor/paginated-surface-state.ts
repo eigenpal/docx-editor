@@ -18,14 +18,6 @@ import type { CollaborationStatus } from '../collaboration/index.ts';
 import type { CellSelection, SemanticSelection } from '@docx-editor.dev/core/layout';
 
 /**
- * How an edit is written.
- *
- * `'suggest'` is the one that changes what the ops MEAN: the same keystroke becomes a `w:ins`
- * and the same Backspace becomes a `w:del` over the words it would have removed. `'view'`
- * refuses edits outright.
- */
-
-/**
  * What the selection is currently formatted as.
  *
  * A value is present only when EVERY span in the selection agrees on it: a selection running
@@ -175,13 +167,3 @@ export interface PaginatedSurfaceState {
   /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
   readonly perf: PaginatedSurfacePerf;
 }
-
-/**
- * Where the section after an inserted break begins — Word's Layout > Breaks menu.
- *
- * The two the engine paginates. `evenPage` / `oddPage` are readable in a file but not
- * offered here, because layout does not skip the blank sheet they need yet, and a menu
- * entry that silently behaves like `nextPage` is the lie this vocabulary exists to avoid.
- *
- * @public
- */

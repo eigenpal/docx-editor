@@ -1452,10 +1452,6 @@ export interface TextMatch {
   readonly runOffset: number;
   /** Story containing the match. Absence means the body. */
   readonly scope?: ViewScope;
-  /** Drawing that hosts a frame match. Omitted for ordinary story matches. */
-  readonly drawingNodeId?: string;
-  /** Paragraph that anchors the drawing for a frame match. Omitted for other matches. */
-  readonly hostParagraphId?: string;
   /** The matched text as it appears in the document. */
   readonly text: string;
   /**

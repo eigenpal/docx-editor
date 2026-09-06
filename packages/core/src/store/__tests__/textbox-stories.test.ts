@@ -36,6 +36,13 @@ function textbox(content: string, id: number): string {
   );
 }
 
+/** The same box with one anchor detail rewritten, to cover what layout refuses to paint. */
+function textboxWith(content: string, id: number, from: string, to: string): string {
+  const markup = textbox(content, id);
+  if (!markup.includes(from)) throw new Error(`anchor markup has no ${from}`);
+  return markup.replace(from, to);
+}
+
 function wrappedTextbox(content: string, id: number): string {
   const run = textbox(content, id);
   const drawing = run.slice('<w:r>'.length, -'</w:r>'.length);
@@ -162,6 +169,18 @@ describe('textboxStoriesInPart', () => {
       'nested table',
       'control',
     ]);
+  });
+
+  test('skips a hidden box, which layout never paints', () => {
+    const hidden = textboxWith(paragraph('boxed'), 1, 'name="Box 1"', 'name="Box 1" hidden="1"');
+
+    expect(textboxStoriesInPart(documentPart(`<w:p>${hidden}</w:p>`))).toEqual([]);
+  });
+
+  test('skips a zero-sized box, which no overlay can resolve', () => {
+    const flat = textboxWith(paragraph('boxed'), 1, 'cx="914400" cy="457200"', 'cx="0" cy="0"');
+
+    expect(textboxStoriesInPart(documentPart(`<w:p>${flat}</w:p>`))).toEqual([]);
   });
 
   test('stops before a drawing beyond the XML depth bound', () => {

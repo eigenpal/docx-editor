@@ -3,6 +3,7 @@
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { MAX_NOTES_PER_PART, resolvableNotesOf } from '../../store/package/note-nodes.ts';
+import { paragraphTextOf } from '../../store/store/tree-op-apply.ts';
 import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import {
   expandSelectableTextboxStories,
@@ -22,7 +23,7 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-function textbox(text: string): string {
+function textbox(text: string, story = p(text)): string {
   return (
     '<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
     'relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
@@ -34,7 +35,7 @@ function textbox(text: string): string {
     `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
     '<wps:spPr><a:xfrm><a:ext cx="914400" cy="457200"/></a:xfrm>' +
     '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
-    `<wps:txbx><w:txbxContent>${p(text)}</w:txbxContent></wps:txbx>` +
+    `<wps:txbx><w:txbxContent>${story}</w:txbxContent></wps:txbx>` +
     '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>'
   );
 }
@@ -151,6 +152,28 @@ function footnoteFixture(notes: string, referenceIds: readonly number[] = [1]): 
       'word/footnotes.xml': strToU8(
         `<w:footnotes xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
           `xmlns:wps="${WPS}">${notes}</w:footnotes>`
+      ),
+    },
+    { level: 0 }
+  );
+}
+
+/** A body-only package, for questions that need no furniture or notes. */
+function bodyFixture(body: string): Uint8Array {
+  return zipSync(
+    {
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+          `xmlns:wps="${WPS}"><w:body>${body}</w:body></w:document>`
       ),
     },
     { level: 0 }
@@ -305,13 +328,30 @@ describe('navigation Find stories', () => {
     const matches = session.findText('needle').matches;
     const frame = matches[1]!;
 
-    expect(frame.scope).toEqual({ kind: 'frame', id: root?.root.id });
-    expect(frame.drawingNodeId).toBe(root?.drawingNodeId);
-    expect(frame.hostParagraphId).toBe(root?.hostParagraphId);
+    expect(frame.scope).toEqual({
+      kind: 'frame',
+      id: root?.root.id ?? '',
+      drawingNodeId: root?.drawingNodeId ?? '',
+      hostParagraphId: root?.hostParagraphId ?? '',
+    });
     expect(frame.text).toBe('needle');
   });
 
-  test('indexes thousands of note text boxes once and looks up each note once', () => {
+  test('reports frame offsets in the shared paragraph vocabulary', () => {
+    // A tab and a break each occupy one unit of paragraph text, so a frame match that
+    // computed its own offsets instead of using the shared index would land short here.
+    const story =
+      '<w:p><w:r><w:tab/><w:br/><w:t xml:space="preserve">before needle</w:t></w:r></w:p>';
+    const session = open(bodyFixture(`<w:p>${textbox('', story)}</w:p>`));
+    const match = session.findText('needle').matches.find((hit) => hit.scope?.kind === 'frame');
+    if (!match) throw new Error('frame match missing');
+    const raw = paragraphTextOf(session.part(), match.blockId);
+
+    expect(raw).toBe('\t\nbefore needle');
+    expect(raw.slice(match.start, match.start + match.length)).toBe('needle');
+  });
+
+  test('charges thousands of notes nothing, because a note owns no selectable frame', () => {
     const count = 2_000;
     const notes = Array.from(
       { length: count },
@@ -331,7 +371,7 @@ describe('navigation Find stories', () => {
     const work: TextboxStoryExpansionWork = { indexBuilds: 0, hostLookups: 0, indexedFrames: 0 };
 
     expect(expandSelectableTextboxStories(stories, work)).toEqual(stories);
-    expect(work).toEqual({ indexBuilds: 1, hostLookups: count, indexedFrames: count });
+    expect(work).toEqual({ indexBuilds: 0, hostLookups: 0, indexedFrames: 0 });
   });
 
   test('indexes and expands a very large frame list without varargs', () => {

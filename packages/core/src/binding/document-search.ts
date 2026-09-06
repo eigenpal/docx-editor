@@ -18,7 +18,8 @@
 //
 // WHAT IS SEARCHED: body, furniture, footnotes, then endnotes. Each story uses the shared
 // paragraph walk, which descends into tables, nested tables, and block controls. Selectable
-// body and furniture text boxes follow their owners. Note-owned text boxes remain excluded.
+// body and furniture text boxes follow their owners: ANCHORED ones only, because layout paints
+// no story for an inline box. Note-owned text boxes remain excluded.
 
 import {
   SEARCH_MATCH_LIMIT,
@@ -82,10 +83,6 @@ export interface DocumentSearchMatch {
   readonly runOffset: number;
   /** Story containing the match. Omitted for the body. */
   readonly scope?: ViewScope;
-  /** Drawing that hosts a frame match. */
-  readonly drawingNodeId?: string;
-  /** Paragraph that anchors the drawing for a frame match. */
-  readonly hostParagraphId?: string;
   /** The matched text as it appears in the document, control characters flattened. */
   readonly text: string;
   /** Paragraph text immediately before the match, bounded and flattened. */
@@ -318,8 +315,6 @@ export function collectTextMatches(
           runIndex: address.index,
           runOffset: address.offset,
           ...(story.scope ? { scope: story.scope } : {}),
-          ...(story.drawingNodeId ? { drawingNodeId: story.drawingNodeId } : {}),
-          ...(story.hostParagraphId ? { hostParagraphId: story.hostParagraphId } : {}),
           text: bounded(projected.text.slice(occurrence.start, projectedEnd), SEARCH_QUERY_MAX),
           contextBefore: bounded(
             projected.text.slice(Math.max(0, occurrence.start - CONTEXT_RADIUS), occurrence.start),

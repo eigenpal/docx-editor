@@ -10,8 +10,6 @@ export interface SearchStory {
   readonly part: OoxmlPart;
   readonly root: OoxmlNode;
   readonly scope?: ViewScope;
-  readonly drawingNodeId?: string;
-  readonly hostParagraphId?: string;
 }
 
 /** Work counters used by the linear-complexity regression test. */
@@ -62,6 +60,7 @@ function framesInStory(
  * Add selectable body and furniture text-box stories after their owning story.
  *
  * Note text boxes remain excluded until note drawing layout and overlay lookup support them.
+ * The enumeration itself lists only boxes layout can paint and an overlay can resolve.
  */
 export function expandSelectableTextboxStories(
   stories: readonly SearchStory[],
@@ -72,14 +71,14 @@ export function expandSelectableTextboxStories(
   const indexes = new Map<OoxmlPart, FrameIndex>();
   for (const story of stories) {
     expanded.push(story);
+    // A note owns no selectable frame, so it earns neither the index nor the paragraph walk.
+    if (story.scope?.kind === 'note') continue;
     let index = indexes.get(story.part);
     if (!index) {
       index = indexFramesByHost(story.part, work, textboxStoriesOf);
       indexes.set(story.part, index);
     }
-    const frames = framesInStory(story, index, work);
-    if (story.scope?.kind === 'note') continue;
-    for (const frame of frames) {
+    for (const frame of framesInStory(story, index, work)) {
       const owner = story.scope;
       expanded.push({
         part: story.part,
@@ -87,10 +86,10 @@ export function expandSelectableTextboxStories(
         scope: {
           kind: 'frame',
           id: frame.root.id,
+          drawingNodeId: frame.drawingNodeId,
+          hostParagraphId: frame.hostParagraphId,
           ...(owner?.kind === 'headerFooter' ? { owner } : {}),
         },
-        drawingNodeId: frame.drawingNodeId,
-        hostParagraphId: frame.hostParagraphId,
       });
     }
   }

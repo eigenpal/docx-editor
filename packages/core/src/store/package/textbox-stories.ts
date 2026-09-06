@@ -2,6 +2,7 @@
 
 import { MAX_XML_DEPTH, schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import {
+  anchorHidesDrawing,
   emptyNamespaceScope,
   isMcAlternateContent,
   namespaceScopeForNode,
@@ -47,22 +48,29 @@ function compatibleDirectChild(
   );
 }
 
-/** Read only the direct WPS path that holds a drawing's text-box story. */
+/**
+ * Read only the direct WPS path that holds a drawing's text-box story.
+ *
+ * ANCHORED only. Layout carries a text-box story on an anchored drawing record alone, so an
+ * inline box paints as a placeholder with its text nowhere on the page. Listing one would
+ * report a match the reader cannot see.
+ */
 function textboxContentOf(drawing: OoxmlDrawingNode): OoxmlElement | null {
   let anchor: OoxmlElement | null = null;
   for (const child of drawing.children) {
     if (!isElement(child)) continue;
     if (
-      child.kind === 'inlineDrawing' ||
       child.kind === 'anchoredDrawing' ||
-      (child.namespaceUri === WP_NAMESPACE_URI &&
-        (child.localName === 'inline' || child.localName === 'anchor'))
+      (child.namespaceUri === WP_NAMESPACE_URI && child.localName === 'anchor')
     ) {
       anchor = child;
       break;
     }
   }
   if (!anchor) return null;
+  // Selection is the point of this list, so a drawing layout never paints has no story to
+  // offer: the match would be reported and then refuse to select.
+  if (anchorHidesDrawing(anchor, true)) return null;
   const graphic = compatibleDirectChild(
     anchor,
     'drawingGraphic',

@@ -1039,6 +1039,8 @@ export type EditorScope = {
     id: string;
     kind: 'note';
 } | {
+    drawingNodeId: string;
+    hostParagraphId: string;
     id: string;
     kind: 'frame';
     owner?: {
@@ -2011,8 +2013,6 @@ export interface TextMatch {
     // (undocumented)
     readonly contextAfter?: string;
     readonly contextBefore?: string;
-    readonly drawingNodeId?: string;
-    readonly hostParagraphId?: string;
     // (undocumented)
     readonly length: number;
     readonly paragraphIndex: number;

@@ -15,9 +15,18 @@ export type EditorScope =
    */
   | { kind: 'note'; id: string }
   | {
-      /** A text box or floating frame with its own content. */
+      /**
+       * A text box or floating frame with its own content.
+       *
+       * Addressing one takes the drawing that hosts it as well as the story root: a frame is
+       * reached THROUGH its drawing, and nothing can reveal or select it from `id` alone.
+       */
       kind: 'frame';
       id: string;
+      /** The drawing that hosts this frame. */
+      drawingNodeId: string;
+      /** The paragraph that anchors that drawing. */
+      hostParagraphId: string;
       /** Furniture or note story that owns this frame. Absence means the body story. */
       owner?: { kind: 'headerFooter'; rId: string } | { kind: 'note'; id: string };
     }

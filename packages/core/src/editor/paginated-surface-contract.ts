@@ -193,6 +193,15 @@ export type {
   PaginatedSurfaceState,
 } from './paginated-surface-state.ts';
 
+/**
+ * Where the section after an inserted break begins — Word's Layout > Breaks menu.
+ *
+ * The two the engine paginates. `evenPage` / `oddPage` are readable in a file but not
+ * offered here, because layout does not skip the blank sheet they need yet, and a menu
+ * entry that silently behaves like `nextPage` is the lie this vocabulary exists to avoid.
+ *
+ * @public
+ */
 export type SectionBreakInsertType = 'nextPage' | 'continuous';
 
 /**
@@ -380,8 +389,13 @@ export interface PaginatedSurface {
   revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
   /** Set the selection directly, for a host driving the surface programmatically. */
   setSelection(next: SemanticSelection): void;
-  /** Select one painted drawing at its host paragraph, as a pointer press would. */
-  selectDrawing?(drawingNodeId: string, hostParagraphId: string): boolean;
+  /**
+   * Select one painted drawing at its host paragraph, as a pointer press would.
+   *
+   * False when the layout paints no such drawing on that paragraph, in which case nothing
+   * moves: the caller decides what to do rather than being left mid-way.
+   */
+  selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
   /**
    * Select a rectangle of table cells, or clear one with null.
    *

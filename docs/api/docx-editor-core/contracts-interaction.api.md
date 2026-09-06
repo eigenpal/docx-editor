@@ -21,6 +21,8 @@ export type EditorScope = {
     id: string;
     kind: 'note';
 } | {
+    drawingNodeId: string;
+    hostParagraphId: string;
     id: string;
     kind: 'frame';
     owner?: {

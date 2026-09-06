@@ -44,6 +44,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
+import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
 import {
@@ -750,28 +751,6 @@ function readDistances(
   });
 }
 
-function readEffectExtentFromNode(
-  node: OoxmlElement | null,
-  compatibilityMode: boolean
-): Readonly<{ top: number; right: number; bottom: number; left: number }> | null {
-  if (!node) return null;
-  const effect =
-    findDirectKind(node.children, 'drawingEffectExtent') ??
-    (compatibilityMode
-      ? findDirectChild(node.children, {
-          namespaceUri: WP_NAMESPACE_URI,
-          localName: 'effectExtent',
-        })
-      : null);
-  if (!effect) return null;
-  return Object.freeze({
-    left: parseEmu(schemaAttributeValue(effect.attributes, 'l'), false) ?? 0,
-    top: parseEmu(schemaAttributeValue(effect.attributes, 't'), false) ?? 0,
-    right: parseEmu(schemaAttributeValue(effect.attributes, 'r'), false) ?? 0,
-    bottom: parseEmu(schemaAttributeValue(effect.attributes, 'b'), false) ?? 0,
-  });
-}
-
 function readEffectExtent(
   anchor: OoxmlElement,
   wrapElement: OoxmlElement | null,
@@ -785,22 +764,6 @@ function readEffectExtent(
   const fromAnchor = readEffectExtentFromNode(anchor, compatibilityMode);
   if (fromAnchor) return fromAnchor;
   return EMPTY_EDGES;
-}
-
-function readExtent(
-  anchor: OoxmlElement,
-  compatibilityMode: boolean
-): Readonly<{ cx: number; cy: number }> | null {
-  const extent =
-    findDirectKind(anchor.children, 'drawingExtent') ??
-    (compatibilityMode
-      ? findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'extent' })
-      : null);
-  if (!extent) return null;
-  const cx = parseEmu(schemaAttributeValue(extent.attributes, 'cx'));
-  const cy = parseEmu(schemaAttributeValue(extent.attributes, 'cy'));
-  if (cx === null || cy === null) return null;
-  return Object.freeze({ cx, cy });
 }
 
 function readPositionAxis<H extends string>(
@@ -1074,6 +1037,20 @@ function readDocPrMetadata(
       schemaAttributeValue(anchor.attributes, 'hidden') === '1',
     hyperlinkHref,
   });
+}
+
+/**
+ * Whether an anchor's own metadata keeps its drawing off the page.
+ *
+ * Layout skips a hidden drawing outright, and hit testing rejects a zero-sized one, so a
+ * derivation that lists drawings for SELECTION must apply the same two rules. Without them it
+ * reports a drawing that no page paints and no overlay can resolve. A missing `wp:extent`
+ * demotes the drawing to generic at read time, so it never reaches here.
+ */
+export function anchorHidesDrawing(anchor: OoxmlElement, compatibilityMode: boolean): boolean {
+  if (readDocPrMetadata(anchor, compatibilityMode).hidden) return true;
+  const extent = readExtent(anchor, compatibilityMode);
+  return extent !== null && (extent.cx <= 0 || extent.cy <= 0);
 }
 
 function parseLumPercent(value: string | undefined): number | null {

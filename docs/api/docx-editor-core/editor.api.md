@@ -1526,7 +1526,7 @@ export interface PaginatedSurface {
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
-    selectDrawing?(drawingNodeId: string, hostParagraphId: string): boolean;
+    selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
     selectedText(): string;
     // (undocumented)
     readonly session: TreeDocxSessionView;
@@ -1914,7 +1914,7 @@ export type SectionAnchor =
     readonly kind: 'unaddressable';
 };
 
-// @public (undocumented)
+// @public
 export type SectionBreakInsertType = 'nextPage' | 'continuous';
 
 // @public
