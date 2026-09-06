@@ -13,11 +13,13 @@ import { documentOrder, documentOrderIndex } from './document-order.ts';
 export { documentOrder, everyStoryOrder } from './document-order.ts';
 export { selectionRects, keyedRangeRects, type KeyedRange } from './selection-rects.ts';
 import { xWithinLine } from './line-geometry.ts';
+import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { lineSegmentFor, lineSegments, segmentOverlap, type LineSegment } from './line-segments.ts';
 import type {
   BlockFragmentRecord,
   ContentControlBoundaryRecord,
   LineRecord,
+  LayoutBox,
   SemanticLayout,
   StyleSpanRecord,
   TextMeasurer,
@@ -42,7 +44,13 @@ import {
   paragraphLinesIndex,
 } from './paragraph-lines.ts';
 import { wordBoundary } from './semantic-word-navigation.ts';
-import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
+import {
+  laterLineOwns,
+  laterLineWithDrawingAt,
+  isNonNavigableInterior,
+  endsWithLineBreak,
+  isDrawingOnlySegment,
+} from './semantic-caret-line.ts';
 import { bottomToTopCaretInLayout } from './table-cell-text-direction.ts';
 
 export { wordBoundary } from './semantic-word-navigation.ts';
@@ -86,96 +94,6 @@ export interface SelectionRect {
   readonly height: number;
 }
 
-/**
- * Whether a LATER line of the same paragraph starts at this offset, and so owns it.
- *
- * Asked across the whole paragraph rather than the current fragment: a paragraph split by a
- * page boundary continues on the next page, and the line that owns the position may live in
- * a different fragment. `caretAt` resolves against the same paragraph-wide index, so both
- * lanes answer with the same line. When nothing later claims it — a layout that produced no
- * line after the break — the break's own line keeps the stop rather than losing the position.
- */
-function laterLineOwns(layout: SemanticLayout, line: LineRecord, offset: number): boolean {
-  const lines = paragraphLinesIndex(layout).get(line.range.paragraphId) ?? [];
-  let seen = false;
-  for (const placed of lines) {
-    if (placed.line === line) {
-      seen = true;
-      continue;
-    }
-    if (seen && placed.line.range.start === offset) return true;
-  }
-  return false;
-}
-
-/** The continuation line when a soft wrap opens on an inline drawing atom. */
-function laterLineWithDrawingAt(
-  layout: SemanticLayout,
-  paragraphId: string,
-  offset: number
-): LineRecord | null {
-  for (const { line } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
-    if (line.range.start !== offset) continue;
-    if (line.drawings?.some((drawing) => drawing.start === offset)) return line;
-  }
-  return null;
-}
-
-/**
- * True when `offset` sits strictly inside a span that is not a 1:1 model↔paint mapping
- * (projected PAGE digits, leaders) — those interiors are not navigable caret stops.
- * Tabs keep a 1:1 `\t` range; their wide box is still only two stops (before/after).
- */
-function isNonNavigableInterior(line: LineRecord, offset: number, segment?: LineSegment): boolean {
-  for (const span of segment ? segment.spans : line.spans) {
-    if (offset <= span.range.start || offset >= span.range.end) continue;
-    if (span.projected) return true;
-    if (span.text.length !== span.range.end - span.range.start) return true;
-  }
-  return false;
-}
-
-/**
- * Whether an authored break is what ended this line.
- *
- * The break OCCUPIES a model offset and is published as a zero-width span, so a line that a
- * Shift+Enter terminated carries it as its last span. That is the one case where a position
- * shared by two lines is not ambiguous — see `caretAt`.
- *
- * A PAGE break counts for exactly the same reason, and leaving it out was worse than the
- * hard-break case rather than milder: the line it opens is on the NEXT PAGE, so reporting
- * the end of the line the break closed put the caret on a different page from the text that
- * would be typed at it. Click below the last line, type, and the letters appear a page
- * later. A column break already arrives here as `\n` — only `w:type="page"` projects its
- * own character.
- */
-function endsWithLineBreak(line: {
-  readonly spans: readonly { readonly text: string }[];
-}): boolean {
-  const last = line.spans[line.spans.length - 1]?.text;
-  return last === '\n' || last === PAGE_BREAK_CHAR;
-}
-
-/**
- * Whether this paragraph's slice of the line is ONE inline drawing and nothing else — a
- * picture too wide to share its line, painted as a block in text clothing.
- *
- * That is the other case where the position shared by two lines is not ambiguous, and it is
- * the hard-break case wearing an image: the drawing is what ended the line, so the caret at
- * the offset after it belongs before the text that follows. Painting it at the picture's
- * right edge instead meant a click before that text resolved the right offset but drew the
- * caret a full picture away — the caret looked stuck beside the following words, and there
- * was no click that showed one at the text's start.
- */
-function isDrawingOnlySegment(line: LineRecord, segment: LineSegment): boolean {
-  if (segment.end - segment.start !== 1) return false;
-  if (!line.drawings?.some((drawing) => drawing.start === segment.start)) return false;
-  for (const span of segment.spans) {
-    if (span.range.end > span.range.start) return false;
-  }
-  return true;
-}
-
 function pushLineCaretStops(
   stops: CaretGeometry[],
   layout: SemanticLayout,
@@ -183,11 +101,21 @@ function pushLineCaretStops(
   pageIndex: number,
   fragmentStart: number,
   measurer?: TextMeasurer,
-  only?: string
+  only?: string,
+  clipBox?: LayoutBox
 ): void {
   for (const segment of lineSegments(line)) {
     if (only !== undefined && segment.paragraphId !== only) continue;
-    pushSegmentCaretStops(stops, layout, line, segment, pageIndex, fragmentStart, measurer);
+    pushSegmentCaretStops(
+      stops,
+      layout,
+      line,
+      segment,
+      pageIndex,
+      fragmentStart,
+      measurer,
+      clipBox
+    );
   }
 }
 
@@ -198,7 +126,8 @@ function pushSegmentCaretStops(
   segment: LineSegment,
   pageIndex: number,
   fragmentStart: number,
-  measurer?: TextMeasurer
+  measurer?: TextMeasurer,
+  clipBox?: LayoutBox
 ): void {
   const mixed = lineSegments(line).length > 1;
   // Paragraph-wide, not this line's own slices: a deletion that wraps is clipped per line,
@@ -242,12 +171,22 @@ function pushSegmentCaretStops(
     // at invisible positions. Derived from the spans rather than from the mode, so the rule
     // holds in any mode that suppresses them.
     if (insideDeletedContent(deleted, offset) && !painted(offset)) continue;
+    const visible = clipParagraphBox(
+      {
+        x: xWithinLine(line, offset, measurer, segment),
+        y: line.box.y,
+        width: 0,
+        height: line.box.height,
+      },
+      clipBox
+    );
+    if (!visible) continue;
     stops.push(
       bottomToTopCaretInLayout(layout, {
         position: { paragraphId: segment.paragraphId, offset },
-        x: xWithinLine(line, offset, measurer, segment),
-        y: line.box.y,
-        height: line.box.height,
+        x: visible.x,
+        y: visible.y,
+        height: visible.height,
         lineId: line.id,
         pageIndex,
       })
@@ -265,7 +204,16 @@ function visitParagraphFragments(
   for (const block of blocks) {
     if (block.kind === 'paragraph') {
       for (const line of block.lines) {
-        pushLineCaretStops(stops, layout, line, pageIndex, block.range.start, measurer);
+        pushLineCaretStops(
+          stops,
+          layout,
+          line,
+          pageIndex,
+          block.range.start,
+          measurer,
+          undefined,
+          block.clipToBox ? block.box : undefined
+        );
       }
       continue;
     }
@@ -292,7 +240,16 @@ export function caretStops(layout: SemanticLayout, measurer?: TextMeasurer): Car
   for (const page of layout.pages) {
     for (const fragment of paragraphFragmentsOf(page)) {
       for (const line of fragment.lines) {
-        pushLineCaretStops(stops, layout, line, page.index, fragment.range.start, measurer);
+        pushLineCaretStops(
+          stops,
+          layout,
+          line,
+          page.index,
+          fragment.range.start,
+          measurer,
+          undefined,
+          fragment.clipToBox ? fragment.box : undefined
+        );
       }
     }
   }
@@ -317,7 +274,16 @@ function mergedLineCaretStops(
   });
   if (!found || lineSegments(found.line).length < 2) return null;
   const stops: CaretGeometry[] = [];
-  pushLineCaretStops(stops, layout, found.line, found.pageIndex, 0, measurer);
+  pushLineCaretStops(
+    stops,
+    layout,
+    found.line,
+    found.pageIndex,
+    0,
+    measurer,
+    undefined,
+    found.clipBox
+  );
   return indexCaretStops(stops);
 }
 
@@ -328,8 +294,8 @@ function paragraphCaretStops(
 ): IndexedCaretStops<CaretGeometry> {
   return paragraphCaretStopCache.get(layout, paragraphId, measurer, () => {
     const stops: CaretGeometry[] = [];
-    for (const { line, pageIndex } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
-      pushLineCaretStops(stops, layout, line, pageIndex, 0, measurer, paragraphId);
+    for (const { line, pageIndex, clipBox } of paragraphLinesIndex(layout).get(paragraphId) ?? []) {
+      pushLineCaretStops(stops, layout, line, pageIndex, 0, measurer, paragraphId, clipBox);
     }
     return indexCaretStops(stops);
   });
@@ -388,13 +354,14 @@ function headerRepeatLinesOnPage(
   layout: SemanticLayout,
   pageIndex: number,
   paragraphId: string
-): { line: LineRecord; pageIndex: number }[] {
+): { line: LineRecord; pageIndex: number; clipBox?: LayoutBox }[] {
   const page = layout.pages[pageIndex];
   if (!page) return [];
-  const found: { line: LineRecord; pageIndex: number }[] = [];
+  const found: { line: LineRecord; pageIndex: number; clipBox?: LayoutBox }[] = [];
   for (const fragment of paragraphFragmentsOf(page, true)) {
     if (fragment.paragraphId !== paragraphId) continue;
-    for (const line of fragment.lines) found.push({ line, pageIndex });
+    for (const line of fragment.lines)
+      found.push({ line, pageIndex, ...(fragment.clipToBox ? { clipBox: fragment.box } : {}) });
   }
   return found;
 }
@@ -427,8 +394,8 @@ export function caretAt(
   // just opened — not a break's width to the right of the last glyph on the line above,
   // which is what a Shift+Enter looked like. Soft wraps stay on the first match, where the
   // offset is genuinely shared and the end of the visual line is the conventional answer.
-  let afterBreak: { line: LineRecord; pageIndex: number } | null = null;
-  for (const { line, pageIndex } of ordered) {
+  let afterBreak: { line: LineRecord; pageIndex: number; clipBox?: LayoutBox } | null = null;
+  for (const { line, pageIndex, clipBox } of ordered) {
     // The part of the line this paragraph owns. On a merged line that is half of it, and the
     // other half counts its offsets in a different paragraph entirely.
     const segment = lineSegmentFor(line, position.paragraphId);
@@ -444,7 +411,7 @@ export function caretAt(
       // keeps a caret placed rather than lost if no such line was laid out — for the
       // drawing-only line, that fallback is exactly the picture-ends-its-paragraph case,
       // where the right edge of the picture IS the answer.
-      afterBreak ??= { line, pageIndex };
+      afterBreak ??= { line, pageIndex, clipBox };
       continue;
     }
     if (
@@ -454,7 +421,11 @@ export function caretAt(
     ) {
       continue;
     }
-    const box = caretBoxOnLine(line, position.offset, options.measurer, segment);
+    const box = clipParagraphBox(
+      { ...caretBoxOnLine(line, position.offset, options.measurer, segment), width: 0 },
+      clipBox
+    );
+    if (!box) continue;
     return bottomToTopCaretInLayout(layout, {
       position,
       x: box.x,
@@ -465,12 +436,19 @@ export function caretAt(
     });
   }
   if (afterBreak) {
-    const box = caretBoxOnLine(
-      afterBreak.line,
-      position.offset,
-      options.measurer,
-      lineSegmentFor(afterBreak.line, position.paragraphId)
+    const box = clipParagraphBox(
+      {
+        ...caretBoxOnLine(
+          afterBreak.line,
+          position.offset,
+          options.measurer,
+          lineSegmentFor(afterBreak.line, position.paragraphId)
+        ),
+        width: 0,
+      },
+      afterBreak.clipBox
     );
+    if (!box) return null;
     return bottomToTopCaretInLayout(layout, {
       position,
       x: box.x,
@@ -542,7 +520,7 @@ export function contentControlsInLayout(
  */
 const orderIndexes = new WeakMap<readonly string[], Map<string, number>>();
 
-function positionIn(order: readonly string[], paragraphId: string): number {
+function indexPositions(order: readonly string[]): ReadonlyMap<string, number> {
   let index = orderIndexes.get(order);
   if (!index) {
     index = new Map();
@@ -551,7 +529,11 @@ function positionIn(order: readonly string[], paragraphId: string): number {
     });
     orderIndexes.set(order, index);
   }
-  return index.get(paragraphId) ?? -1;
+  return index;
+}
+
+function positionIn(order: readonly string[], paragraphId: string): number {
+  return indexPositions(order).get(paragraphId) ?? -1;
 }
 
 /**
@@ -970,7 +952,13 @@ export function spansInSelection(
     for (const { line } of lines.get(order[at]!) ?? []) {
       const segment = lineSegmentFor(line, order[at]!);
       if (!segment) continue;
-      const overlap = segmentOverlap(layout, segment, ordered.from, ordered.to);
+      const overlap = segmentOverlap(
+        layout,
+        segment,
+        ordered.from,
+        ordered.to,
+        indexPositions(order)
+      );
       if (!overlap) continue;
       for (const span of segment.spans) {
         if (span.range.end > overlap.start && span.range.start < overlap.end) spans.push(span);

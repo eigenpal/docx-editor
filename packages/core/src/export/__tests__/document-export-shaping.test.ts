@@ -214,9 +214,10 @@ test('the public export opener requests run, style, story, symbol, and equation 
   const opened = await openFontBackedDocumentForExport(fontCatalogDocx(), { fonts: resolver });
   expect(opened.ok).toBe(true);
   if (!opened.ok) return;
+  // 'Symbol Face' comes from a `w:sym/@w:font`, so it ranks with the other synthesized
+  // glyph faces — the SYMBOL fields below it — rather than with the faces text renders in.
   expect(request?.families).toEqual([
     'Body Face',
-    'Symbol Face',
     'CJK Face',
     'Box Text',
     'Field Face',
@@ -225,6 +226,7 @@ test('the public export opener requests run, style, story, symbol, and equation 
     'Soft Cache Marker',
     'Soft Cache Face',
     'Checkbox Marker',
+    'Symbol Face',
     'Cambria Math',
     'Box Marker Face',
     'Marker Face',

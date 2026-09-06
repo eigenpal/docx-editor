@@ -215,6 +215,19 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Justified East Asian lines distribute inter-character spacing. The last line stays left-aligned. Tabs and float passages retain their reserved positions.',
+  },
+  {
+    id: 'paragraphs.east-asian-typography',
+    name: 'East Asian typography',
+    category: 'paragraphs',
+    editing: 'preserved',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Protects graphemes, punctuation, and full-width number groups across run boundaries. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression uses deterministic punctuation and kana advance reductions; font-specific optical compression and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
   },
   {
     id: 'paragraphs.spacing',
@@ -287,11 +300,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Drop caps & text frames (framePr)',
     category: 'paragraphs',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Parsed and round-tripped; text flows inline rather than as a drop cap or positioned frame.',
+      'A centered, auto-sized PAGE footer frame can overlay an empty or centered middle-dot anchor without adding a footer line. Supported single-line fixed-width PAGE frames use their page-relative horizontal position and clip overflow above an empty anchor or a second PAGE paragraph. All fields and paragraphs survive save. Frames that need text wrapping, unsupported positions, and drop caps stay in ordinary flow.',
   },
   {
     id: 'paragraphs.hyphenation',
@@ -443,7 +456,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box. It uses tblpY or tblpYSpec against the selected vertical anchor. Page-anchored and margin-anchored tables do not advance body flow. Text does not wrap beside them yet.',
+      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box. It uses tblpY or tblpYSpec against the selected vertical anchor. Page-anchored and margin-anchored tables do not advance body flow. Simple text-anchored tables can share a terminal empty paragraph without adding a blank page when the complete group fits the same content box. Other text-anchored tables remain in flow. Text does not wrap beside them yet.',
   },
   {
     id: 'tables.text-direction',
@@ -468,7 +481,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. Both adapters ship insert and overlay authoring: the Insert menu, toolbar, properties dialog, and keyboard resize through the shared engine commands. An inserted image keeps its natural size when it fits and scales down proportionally to its cell, column, or page content box when it does not.',
+      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. JPEG validation accepts large metadata segments and accounts for EXIF-oriented intrinsic dimensions without rewriting the photo. Both adapters ship insert and overlay authoring: the Insert menu, toolbar, properties dialog, and keyboard resize through the shared engine commands. An inserted image keeps its natural size when it fits and scales down proportionally to its cell, column, or page content box when it does not.',
   },
   {
     id: 'images.anchored',
@@ -480,7 +493,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. Both share setImageWrapType and toolbarCommandState.',
+      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays can paint beyond their anchor cells. Page-relative images clip to the physical sheet rather than a shortened continuous-section band. Both share setImageWrapType and toolbarCommandState.',
   },
   {
     id: 'images.bmp-webp',
@@ -1089,7 +1102,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'A batching object model shaped after a documented subset of the Word JavaScript API. The server entry works over bytes, and the browser entry works over an open editor. It ships no model integration, tool catalog, or MCP transport.',
+      'A batching object model shaped after a documented subset of the Word JavaScript API. The server entry works over bytes and reports exceeded resource limits with typed errors. The browser entry works over an open editor. It ships no model integration, tool catalog, or MCP transport.',
     docsLink: '/docs/2.x/editor-api',
   },
 ];

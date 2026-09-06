@@ -4,6 +4,8 @@
 // projection-only — every authored branch stays in the tree on save.
 
 import { sanitizeHref } from './sinks.ts';
+import { readBlipEffects } from './drawing-image-effects.ts';
+import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
 import {
@@ -215,7 +217,12 @@ export interface DrawingProjection {
   readonly vectorShape: VectorShapeProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
   readonly locks: DrawingLocks;
-  readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
+  readonly effects: Readonly<{
+    grayscale: boolean;
+    brightness: number;
+    contrast: number;
+    bilevel?: number;
+  }>;
   readonly compatibilityBranchNodeId: string | null;
   readonly diagnostics: readonly DrawingDiagnostic[];
 }
@@ -1053,36 +1060,6 @@ export function anchorHidesDrawing(anchor: OoxmlElement, compatibilityMode: bool
   return extent !== null && (extent.cx <= 0 || extent.cy <= 0);
 }
 
-function parseLumPercent(value: string | undefined): number | null {
-  if (value === undefined || !/^-?\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) return null;
-  return parsed / 1000;
-}
-
-function readBlipEffects(
-  blip: OoxmlElement
-): Readonly<{ grayscale: boolean; brightness: number; contrast: number }> {
-  let grayscale = false;
-  let brightness = 0;
-  let contrast = 0;
-  for (const child of blip.children) {
-    if (!isElement(child) || child.kind !== 'generic') continue;
-    if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) continue;
-    if (child.localName === 'grayscl') {
-      grayscale = true;
-      continue;
-    }
-    if (child.localName === 'lum') {
-      const bright = parseLumPercent(schemaAttributeValue(child.attributes, 'bright'));
-      const contrastRaw = parseLumPercent(schemaAttributeValue(child.attributes, 'contrast'));
-      if (bright !== null) brightness = bright;
-      if (contrastRaw !== null) contrast = contrastRaw;
-    }
-  }
-  return Object.freeze({ grayscale, brightness, contrast });
-}
-
 function projectPicture(
   anchor: OoxmlElement,
   state: WalkState,
@@ -1092,7 +1069,12 @@ function projectPicture(
 ): {
   readonly picture: PictureProjection | null;
   readonly relationshipId: string | null;
-  readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
+  readonly effects: Readonly<{
+    grayscale: boolean;
+    brightness: number;
+    contrast: number;
+    bilevel?: number;
+  }>;
   readonly diagnostic: DrawingDiagnostic | null;
 } {
   if (!visitNode(state, ctx.limits)) {
@@ -1267,16 +1249,7 @@ function freezeDrawingProjection(projection: DrawingProjection): DrawingProjecti
           // `components` is required and non-empty: paint iterates it, so a conditional
           // spread that ever took the empty branch would strip the field and throw.
           components: Object.freeze(
-            projection.vectorShape.components.map((component) =>
-              Object.freeze({
-                ...component,
-                subpathsEmu: Object.freeze(
-                  component.subpathsEmu.map((points) =>
-                    Object.freeze(points.map((point) => Object.freeze({ ...point })))
-                  )
-                ),
-              })
-            )
+            projection.vectorShape.components.map(freezeVectorShapeComponent)
           ),
         })
       : null,

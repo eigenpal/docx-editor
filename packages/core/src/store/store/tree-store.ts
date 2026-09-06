@@ -24,6 +24,31 @@ import { ORIGIN_IDS } from '../registry/frozen-ids.ts';
 import { formsProtectionRefusal } from './tree-op-content-controls.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { PROPERTY_CHANGE_WRAPPER_OF_OP } from './tree-op-tracked-properties.ts';
+import type { TransactionRevisionIds } from '../package/ooxml-edit.ts';
+
+/**
+ * The ops whose tracked appliers write a revision wrapper. They get the transaction's
+ * bookkeeping — the shared counter, and the record of what it has written, which is what
+ * tells a replacement's insertion from a keystroke after Backspace.
+ */
+const TRACKED_WRAPPER_OPS: ReadonlySet<string> = new Set([
+  'insertText',
+  'insertTab',
+  'insertHardBreak',
+  'insertPageBreak',
+  'insertPageField',
+  'insertDrawing',
+  'deleteText',
+]);
+
+/**
+ * Of those, the ones whose content comes from the CALLER and can carry revision ids in with
+ * it: an anchored text box holds `w:txbxContent` paragraphs that may already be revised. They
+ * still get the record — they write a wrapper, and the next op has to know it — but the
+ * counter is dropped around them, so nothing after them draws from a walk taken before the
+ * content arrived.
+ */
+const IMPORTS_REVISION_IDS: ReadonlySet<string> = new Set(['insertDrawing']);
 import { applyTreeOp, type ImpactClass, type TreeDocOp, type TreeOpRejection } from './tree-ops.ts';
 
 /** A selection the caller wants restored when an entry is undone or redone. */
@@ -458,8 +483,46 @@ export class TreeDocumentStore {
      * including `applyPackage`. Those ops MINT ids and never import one, so an id taken before
      * the first of them is still free when the last lands. A paste carries its own revision
      * ids, so an id that survived one would be an address the document had just started using.
+     * The id itself comes from the per-part minter below, which every tracked lane shares.
      */
     const revisionIdOfGroup = new Map<string, { id: string | null }>();
+    /**
+     * ONE `nextRevisionId` walk per part per transaction, shared by every tracked lane. The
+     * property groups above and the text ops below draw from the same counter, so an id a
+     * `w:rPrChange` took is never handed to the `w:ins` written next — two counters, each
+     * walking the part for itself, did exactly that once one of them cached its walk. What it
+     * hands out is remembered, which is the other half of `TransactionRevisionIds`.
+     */
+    const revisionIdsOfPart = new Map<
+      string,
+      { mint: (() => string) | null; readonly written: Set<string> }
+    >();
+    /**
+     * The bookkeeping for one part, bound to the part AS IT STANDS FOR THIS OP.
+     *
+     * The counter is memoized in the map, the closure over it is not: an applier is handed a
+     * new part after every op, and a walk that captured the first one it ever saw re-walked
+     * that stale snapshot whenever the counter was dropped — handing back an id the same
+     * transaction had already used, which is the very collision this is here to prevent.
+     */
+    const revisionIdsFor = (part: OoxmlPart): TransactionRevisionIds => {
+      let held = revisionIdsOfPart.get(part.name);
+      if (!held) {
+        held = { mint: null, written: new Set<string>() };
+        revisionIdsOfPart.set(part.name, held);
+      }
+      const state = held;
+      return {
+        // The walk itself is LAZY: an untracked transaction never pays for one.
+        mint: (): string => (state.mint ??= nextRevisionId(part))(),
+        wrote: (key: string): void => void state.written.add(key),
+        wroteUnder: (key: string): boolean => state.written.has(key),
+      };
+    };
+    /** Drop the counters; the next mint walks the part it is given. The record stays. */
+    const resetRevisionCounters = (): void => {
+      for (const held of revisionIdsOfPart.values()) held.mint = null;
+    };
     const sharedRevisionIds = (op: TreeDocOp, part: OoxmlPart): (() => string) | null => {
       const wrapper = PROPERTY_CHANGE_WRAPPER_OF_OP.get(op.op);
       if (wrapper === undefined) {
@@ -473,12 +536,27 @@ export class TreeDocumentStore {
         revisionIdOfGroup.set(key, group);
       }
       // Taken LAZILY on the first record actually written, so an untracked format — the
-      // common case — never pays the walk at all. AGAINST THIS OP'S OWN PART, not the one
-      // that happened to open the group: an op that records nothing (a run inside this
-      // author's own `w:ins`) opens it against a part that does not yet hold the other
-      // wrapper's id, and minting from that snapshot later handed both wrappers one address.
+      // common case — never pays the walk at all.
       const held = group;
-      return (): string => (held.id ??= nextRevisionId(part)());
+      return (): string => (held.id ??= revisionIdsFor(part).mint());
+    };
+
+    /**
+     * The tracked TEXT ops' bookkeeping. The COUNTER is dropped, like the property group, the
+     * moment anything else runs (`applyPackage` included): a paste re-mints the ids it carries
+     * against the part as it stands, and a walk taken before it would hand out an id the paste
+     * just used. What this transaction WROTE survives all of it — a record of the past cannot
+     * go stale, and the replacement rule reads it after ops that mint nothing.
+     */
+    const trackedRevisionIdsFor = (
+      op: TreeDocOp,
+      part: OoxmlPart
+    ): TransactionRevisionIds | null => {
+      const writes = TRACKED_WRAPPER_OPS.has(op.op);
+      // A property op keeps the counter: its group takes one id and imports none.
+      if (!writes && PROPERTY_CHANGE_WRAPPER_OF_OP.get(op.op) !== undefined) return null;
+      if (!writes || IMPORTS_REVISION_IDS.has(op.op)) resetRevisionCounters();
+      return writes ? revisionIdsFor(part) : null;
     };
 
     const applyToPart = (partName: string, op: TreeDocOp): boolean => {
@@ -505,14 +583,21 @@ export class TreeDocumentStore {
       // commit can observe the intermediate parts. Op-level input validation still runs
       // inside `applyTreeOp` before any tree work.
       const revisionIds = sharedRevisionIds(op, target);
+      const trackedRevisionIds = trackedRevisionIdsFor(op, target);
       const result = applyTreeOp(target, op, {
         deferValidation: true,
         ...(revisionIds ? { revisionIds } : {}),
+        ...(trackedRevisionIds ? { trackedRevisionIds } : {}),
       });
       if (!result.ok) {
         failure = { reason: result.reason, ...(result.detail ? { detail: result.detail } : {}) };
         return false;
       }
+      // AFTER an importing op, not only before it: the op writes a wrapper of its own, so it
+      // re-establishes the counter while it runs — against the part as it stood before its
+      // own content arrived. Left standing, the next op would mint from a walk that never saw
+      // the ids that came in with it.
+      if (IMPORTS_REVISION_IDS.has(op.op)) resetRevisionCounters();
       working = withPart(working, result.part);
       const identityNoOp =
         result.part === target &&
@@ -549,6 +634,7 @@ export class TreeDocumentStore {
         // its own revision ids. The shared id is taken from the part it first saw, so it goes
         // here for the same reason a non-property op drops it.
         revisionIdOfGroup.clear();
+        resetRevisionCounters();
         const next = edit(working);
         if (next === working) return true;
         for (const [name, part] of next.parts) {

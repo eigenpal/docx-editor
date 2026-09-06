@@ -23,6 +23,8 @@
 
 import { PAGE_BREAK_CHAR } from '../store/package/hard-break.ts';
 import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
+import { isCjk } from './cjk-paragraph-breaks.ts';
+import { lastCodePointOf } from './cjk-line-break.ts';
 import { lineSegments, type LineSegment } from './line-segments.ts';
 import { baselineShiftPtOf, measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
@@ -42,6 +44,7 @@ import type {
 } from './semantic-records.ts';
 import type { InlineDrawingRecord, AnchoredDrawingRecord } from './drawing-layout.ts';
 import { pointInDrawingClip } from './drawing-wrap.ts';
+import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { bottomToTopCaretInLayout, pointInBottomToTopCell } from './table-cell-text-direction.ts';
 
 /** A point in the coordinate space named by the function taking it. */
@@ -562,6 +565,7 @@ function resolveParagraph(
   cell: TableCellAddress | null,
   insideBox: boolean
 ): SemanticHit | null {
+  if (fragment.clipToBox && !insideBox) return null;
   const line = lineAtY(fragment.lines, point.y);
   if (!line) return null;
   const resolved = offsetOnLine(line, point.x, point.y, context);
@@ -576,13 +580,18 @@ function resolveParagraph(
   const offset = Math.min(Math.max(resolved.offset, segment.start), segment.end);
   const position: SemanticPosition = { paragraphId: segment.paragraphId, offset };
   const box = caretBoxOnLine(line, offset, context.measurer, segment);
+  const caretBox = clipParagraphBox(
+    { ...box, x: resolved.x, width: 0 },
+    fragment.clipToBox ? fragment.box : undefined
+  );
+  if (!caretBox) return null;
   return {
     position,
     caret: {
       position,
-      x: resolved.x,
-      y: box.y,
-      height: box.height,
+      x: caretBox.x,
+      y: caretBox.y,
+      height: caretBox.height,
       lineId: line.id,
       pageIndex: context.pageIndex,
     },
@@ -1080,9 +1089,10 @@ export function caretBoxOnLine(
       // gap. That gap is what paint draws as `word-spacing`; sitting on the upstream end
       // lands inside the stretched space. With no gap (unjustified, or a mere run split
       // after a space), keep upstream affinity so typing continues the preceding run.
-      if (next && next.range.start === offset && span.text.endsWith(' ')) {
-        const gap = next.box.x - (span.box.x + span.box.width);
-        if (gap > 0.25) {
+      if (next && next.range.start === offset) {
+        const cjk = isCjk(lastCodePointOf(span.text) ?? 0) || isCjk(next.text.codePointAt(0) ?? 0);
+        const gap = next.box.x - (span.box.x + span.box.width) - (next.wrapAdvanceBefore ?? 0);
+        if ((span.text.endsWith(' ') && gap > 0.25) || (cjk && gap > 0.001)) {
           chosen = next;
           break;
         }

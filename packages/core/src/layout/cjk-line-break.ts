@@ -8,28 +8,14 @@
 // opportunity on BOTH sides instead, subject to the kinsoku prohibitions: a line must not
 // START with a closing character (。，、」…) and must not END with an opening one (「（…).
 //
-// Scope is deliberately the ideographic classes only — Han, Kana (half-width forms
-// included), CJK symbols and punctuation, compatibility ideographs, and the full-width
-// forms. A break between an ideograph and Latin/digit text (UAX #14 allows one) is NOT
-// introduced, so every existing Latin break decision stays byte-identical and "1." stays
-// glued to the 甲 that follows it. Named cuts, so the follow-ups stay discoverable:
-//
-// - Full-width digits and letters sit inside the ideographic ranges, so a figure group
-//   such as ０．５ can split across lines where Word keeps it together.
-// - The kinsoku sets carry the ideographic-class subset only. Word's East Asian tables
-//   also veto ASCII and Latin-1 punctuation (!%,.:;?°′″℃) at a line start, but only in
-//   East Asian context — honouring that needs script itemization these boundaries do not
-//   see, and vetoing unconditionally changes pure-Latin wrapping.
-// - Justification still stretches only trailing spaces. A justified CJK paragraph
-//   (`w:jc` set to `both`, the Normal-style default in Chinese and Japanese templates)
-//   paints ragged-right on kinsoku-shortened lines where Word distributes
-//   inter-character slack.
-// - A protected group that starts its line and does not fit is PUSHED OUT past the measure,
-//   Word's 追い出し. Word can also compress inter-character space to pull the offender back
-//   in (追い込み); that needs justification slack this layer does not distribute.
-// - Hangul, JIS kinsoku levels and other tailorings are out of scope.
+// These helpers retain the inexpensive Latin fallback and conservative ideographic
+// character tables. Production East Asian flow uses cjk-paragraph-breaks.ts: one
+// paragraph-wide analysis protects graphemes and numeric groups across every run seam,
+// handles mixed-script boundaries, and consumes the OOXML language/settings policy.
+// cjk-spacing.ts owns compression and hanging punctuation; cjk-justify.ts distributes
+// line slack as published geometry. Layout-owned field results remain atomic.
 
-import { segmentGraphemes } from './grapheme.ts';
+import { graphemeBoundaryEpoch, segmentGraphemes } from './grapheme.ts';
 
 /**
  * Whether the code point takes ideographic line breaking — a break opportunity on both
@@ -38,7 +24,7 @@ import { segmentGraphemes } from './grapheme.ts';
  * Ranges: CJK radicals/Kangxi through symbols-and-punctuation and Kana (U+2E80–U+312F),
  * strokes/Katakana-ext through the unified block (U+31C0–U+9FFF), compatibility ideographs
  * (U+F900–U+FAFF), vertical/compat forms (U+FE30–U+FE4F), full-width forms and half-width
- * Katakana (U+FF01–U+FF9F), and the supplementary ideographic planes (U+20000–U+3134F).
+ * Katakana (U+FF01–U+FF9F), and supplementary ideographs (U+20000–U+323AF).
  */
 export function isIdeographicForLineBreak(codePoint: number): boolean {
   return (
@@ -47,7 +33,7 @@ export function isIdeographicForLineBreak(codePoint: number): boolean {
     (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
     (codePoint >= 0xfe30 && codePoint <= 0xfe4f) ||
     (codePoint >= 0xff01 && codePoint <= 0xff9f) ||
-    (codePoint >= 0x20000 && codePoint <= 0x3134f)
+    (codePoint >= 0x20000 && codePoint <= 0x323af)
   );
 }
 
@@ -240,7 +226,13 @@ export function cjkChopCutAllowedAt(text: string, index: number): boolean {
  * Latin placement never pays for it.
  */
 const clusterBreakCache = new Map<number, boolean>();
+let clusterBreakEpoch = -1;
 function clusterBreaksBetween(before: number, after: number): boolean {
+  const epoch = graphemeBoundaryEpoch();
+  if (clusterBreakEpoch !== epoch || clusterBreakCache.size >= 2048) {
+    clusterBreakCache.clear();
+    clusterBreakEpoch = epoch;
+  }
   const key = before * 0x110000 + after;
   const cached = clusterBreakCache.get(key);
   if (cached !== undefined) return cached;

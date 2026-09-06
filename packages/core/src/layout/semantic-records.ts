@@ -342,6 +342,8 @@ export interface ParagraphFragmentRecord {
   readonly paragraphId: string;
   /** 0 for the first fragment of the paragraph, 1 for its continuation, and so on. */
   readonly fragmentIndex: number;
+  /** A fixed text frame clips its painted ink to this fragment's box; source ranges remain intact. */
+  readonly clipToBox?: true;
   readonly range: SourceRange;
   readonly props: readonly OoxmlProperty[];
   /** Resolved paragraph style after the style/default cascade, or null when none applies. */

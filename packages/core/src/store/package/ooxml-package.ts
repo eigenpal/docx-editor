@@ -181,7 +181,12 @@ export type OoxmlPackageRejection =
 /** A loaded package, or a typed refusal. Never throws. */
 export type OoxmlPackageResult =
   | { readonly ok: true; readonly package: OoxmlPackage }
-  | { readonly ok: false; readonly reason: OoxmlPackageRejection; readonly detail?: string };
+  | {
+      readonly ok: false;
+      readonly reason: OoxmlPackageRejection;
+      readonly detail?: string;
+      readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
+    };
 
 function isElement(node: XmlNode): node is Extract<XmlNode, { type: 'element' }> {
   return node.type === 'element';
@@ -302,20 +307,18 @@ function relsOwner(relsPartName: string): string | null {
   return `${dir}/${base}`;
 }
 
-function readContentTypes(xml: string, limits?: XmlLimits): ContentTypeIndex | null {
-  const parsed = readXml(xml, limits);
-  if (!parsed.ok) return null;
+function readContentTypes(nodes: readonly XmlNode[]): ContentTypeIndex | null {
   const defaults: DefaultRecord[] = [];
   const overrides: OverrideRecord[] = [];
   let order = 0;
   const emptyScope = new Map<string, string>();
-  for (const element of collectContentTypeElements(parsed.nodes, 'Default', emptyScope)) {
+  for (const element of collectContentTypeElements(nodes, 'Default', emptyScope)) {
     const extension = unqualifiedXmlAttribute(element, 'Extension');
     const contentType = unqualifiedXmlAttribute(element, 'ContentType');
     if (extension === undefined || contentType === undefined) continue;
     defaults.push({ extension, contentType, order: order++ });
   }
-  for (const element of collectContentTypeElements(parsed.nodes, 'Override', emptyScope)) {
+  for (const element of collectContentTypeElements(nodes, 'Override', emptyScope)) {
     const partName = unqualifiedXmlAttribute(element, 'PartName');
     const contentType = unqualifiedXmlAttribute(element, 'ContentType');
     if (partName === undefined || contentType === undefined) continue;
@@ -365,13 +368,31 @@ export function readOoxmlPackage(
 ): OoxmlPackageResult {
   packageReadCount += 1;
   const zip = readZip(bytes, limits.zip ?? DEFAULT_ZIP_LIMITS);
-  if (!zip.ok) return { ok: false, reason: zip.reason, detail: zip.detail };
+  if (!zip.ok)
+    return {
+      ok: false,
+      reason: zip.reason,
+      detail: zip.detail,
+      ...(zip.limit === undefined ? {} : { limit: zip.limit }),
+    };
 
   const contentTypeBytes = zip.entries.get(CONTENT_TYPES_PART);
   if (!contentTypeBytes) return { ok: false, reason: 'no-content-types' };
   const decodedContentTypes = decodeXmlBytes(contentTypeBytes, limits.xml);
   if (!decodedContentTypes.ok) return { ok: false, reason: decodedContentTypes.reason };
-  const contentTypes = readContentTypes(decodedContentTypes.xml, limits.xml);
+  const parsedContentTypes = readXml(decodedContentTypes.xml, limits.xml);
+  if (!parsedContentTypes.ok) {
+    // Preserve the existing malformed-content-types refusal, but retain resource failures.
+    const reason = parsedContentTypes.reason;
+    return {
+      ok: false,
+      reason:
+        reason === 'too-large' || reason === 'too-many-elements' || reason === 'too-deep'
+          ? reason
+          : 'bad-content-types',
+    };
+  }
+  const contentTypes = readContentTypes(parsedContentTypes.nodes);
   if (!contentTypes) return { ok: false, reason: 'bad-content-types' };
 
   const maxRelationships = limits.maxRelationships ?? DEFAULT_OOXML_PACKAGE_LIMITS.maxRelationships;

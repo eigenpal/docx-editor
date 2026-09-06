@@ -279,11 +279,7 @@ export interface HyperlinkOpsDeps {
    * an unattributed edit — a link Accept/Reject could not act on — into a document whose
    * author believed everything they did was a proposal.
    */
-  readonly suggestReplacementOffset?: (
-    paragraphId: string,
-    start: number,
-    end: number
-  ) => number | null;
+  readonly replacementLanding?: (paragraphId: string, start: number, end: number) => number | null;
   /**
    * Where an insertion aimed at `offset` actually lands, in EVERY mode: past the deletion
    * the caret rests in. Both insert appliers relocate beside a `w:del` rather than into
@@ -446,7 +442,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
         // both land inside the link because the range is strictly inside it.
         if (input.text !== undefined && input.text !== existing.text) {
           if (input.text.length === 0) return false;
-          const landing = deps.suggestReplacementOffset?.(
+          const landing = deps.replacementLanding?.(
             existing.paragraphId,
             existing.start,
             existing.end
@@ -561,7 +557,7 @@ export function createHyperlinkOps(deps: HyperlinkOpsDeps): HyperlinkOps {
         ops.push({ op: 'insertText', paragraphId, offset: start, text: display });
         end = start + display.length;
       } else {
-        const landing = deps.suggestReplacementOffset?.(paragraphId, start, end);
+        const landing = deps.replacementLanding?.(paragraphId, start, end);
         if (landing !== null && landing !== undefined) {
           // SUGGESTING proposes the link as a replacement, because a bare wrap of somebody
           // else's words is an edit no review card can carry. The selection is struck in
@@ -677,7 +673,7 @@ function withinLink(
  * The suggesting-mode lowering of "replace `[start, end)` with `text`", spelled ONCE.
  *
  * Strike first — the struck words stay in place, as every suggested deletion does — then
- * land the copy at the landing `suggestReplacementOffset` computed, where the tracked-insert
+ * land the copy at the landing `replacementLanding` computed, where the tracked-insert
  * core adopts the fresh deletion and follows it into the link that holds it. The reverse
  * order put the copy at the range start, which the core places beside a link's boundary.
  */

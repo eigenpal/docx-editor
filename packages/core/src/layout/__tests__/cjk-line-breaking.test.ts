@@ -18,6 +18,8 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
 
 function paragraph(body: string): OoxmlNode {
+  // These tests exercise kinsoku carry, independently of default hanging punctuation.
+  body = body.replace('<w:p>', '<w:p><w:pPr><w:overflowPunct w:val="0"/></w:pPr>');
   const result = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
     name: '/word/document.xml',
     contentType: 'app/xml',

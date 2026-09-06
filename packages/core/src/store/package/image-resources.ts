@@ -18,6 +18,7 @@ import {
 import { projectDrawingsInPackage, type DrawingProjection } from './drawing-projection.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { readPngPhysicalDensity } from './png-physical-density.ts';
+import { validateJpegHeader as readJpegHeader } from './jpeg-header.ts';
 import {
   IMAGE_RESOURCE_HARD_CEILINGS,
   resolveImageResourceLimits,
@@ -142,7 +143,6 @@ export interface ImageResourceLookup {
 
 const PNG_SIGNATURE = Object.freeze([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 const DEFAULT_DPI = 96;
-const MAX_JPEG_MARKER_SCAN = 65_536;
 /** Maximum prefix inspected for SVG root detection (exported for bounded-scan tests). */
 export const MAX_SVG_SNIFF_BYTES = 512;
 /** Maximum prefix inspected for the SVG root element's sizing attributes. */
@@ -386,46 +386,9 @@ export function validateGifHeader(bytes: Uint8Array): ValidatedRasterHeader | nu
   return { pixelWidth, pixelHeight };
 }
 
-function isJpegSofMarker(marker: number): boolean {
-  return (
-    (marker >= 0xc0 && marker <= 0xc3) ||
-    (marker >= 0xc5 && marker <= 0xc7) ||
-    (marker >= 0xc9 && marker <= 0xcb) ||
-    (marker >= 0xcd && marker <= 0xcf)
-  );
-}
-
 /** Bounded JPEG marker scan through the first supported SOF marker. */
 export function validateJpegHeader(bytes: Uint8Array): ValidatedRasterHeader | null {
-  if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
-  let offset = 2;
-  const scanLimit = Math.min(bytes.length, MAX_JPEG_MARKER_SCAN);
-  while (offset + 1 < scanLimit) {
-    if (bytes[offset] !== 0xff) return null;
-    let marker = bytes[offset + 1]!;
-    offset += 2;
-    while (marker === 0xff && offset < scanLimit) {
-      marker = bytes[offset]!;
-      offset += 1;
-    }
-    if (marker === 0xd8) continue;
-    if (marker === 0xd9) return null;
-    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
-    if (offset + 1 >= scanLimit) return null;
-    const segmentLength = (bytes[offset]! << 8) | bytes[offset + 1]!;
-    if (segmentLength < 2) return null;
-    const segmentEnd = offset + segmentLength;
-    if (segmentEnd > scanLimit) return null;
-    if (isJpegSofMarker(marker)) {
-      if (segmentLength < 7 || offset + 6 >= scanLimit) return null;
-      const pixelHeight = (bytes[offset + 3]! << 8) | bytes[offset + 4]!;
-      const pixelWidth = (bytes[offset + 5]! << 8) | bytes[offset + 6]!;
-      if (pixelWidth === 0 || pixelHeight === 0) return null;
-      return { pixelWidth, pixelHeight };
-    }
-    offset = segmentEnd;
-  }
-  return null;
+  return readJpegHeader(bytes);
 }
 
 /** `BITMAPCOREHEADER` is 12 bytes and 16-bit; every later DIB header is 40 or more and 32-bit. */

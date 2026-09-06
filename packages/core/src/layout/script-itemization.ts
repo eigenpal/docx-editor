@@ -1,6 +1,7 @@
 import type { BidiEmbeddingLevels } from './bidi.ts';
 import type { TextDirection } from './shaped-run.ts';
 import { withFontFamily, type ResolvedRunStyle } from './run-style.ts';
+import { isEastAsiaHintSymbol } from './east-asia-symbol-hint.ts';
 
 /**
  * Which `w:rFonts` slot a character resolves its face through.
@@ -314,7 +315,10 @@ const pureAscii = (text: string): boolean => {
  * whose docDefaults author an East Asian face pay two compares per character, not a
  * classifier call.
  */
-export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly SegmentSlotRange[] {
+export function eastAsiaRunsOfSegments(
+  segments: readonly string[],
+  hintedSegments: readonly boolean[] = []
+): readonly SegmentSlotRange[] {
   const out: SegmentSlotRange[] = [];
   const addEastAsia = (segment: number, from: number, to: number): void => {
     const previous = out.at(-1);
@@ -350,7 +354,10 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
     for (let from = 0; from < text.length; ) {
       const codePoint = text.codePointAt(from)!;
       const to = from + (codePoint > 0xffff ? 2 : 1);
-      const slotClass = slotClassOf(codePoint);
+      const slotClass =
+        hintedSegments[segment] && isEastAsiaHintSymbol(codePoint)
+          ? 'eastAsia'
+          : slotClassOf(codePoint);
       if (slotClass === 'common') {
         if (precedingStrong === null) {
           pending.push({ segment, from, to, ascii: codePoint <= 0x7f });

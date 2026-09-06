@@ -1,9 +1,4 @@
-// Paragraph measuring and breaking, shared between the body flow and table cells.
-//
-// Extracted from `semantic-layout.ts` unchanged so a cell paragraph breaks exactly like a
-// body paragraph: same pieces, same word boundaries, same cache discipline. The BREAK is
-// position-independent — span x offsets are relative to the paragraph origin — which is
-// what lets one cached break serve the same content at any x (body or any cell).
+// Shared body/cell line breaking. Paragraph-relative spans keep cached breaks position-independent.
 
 import {
   PAGE_BREAK_CHAR,
@@ -34,6 +29,10 @@ import {
 } from './revision-projection.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import { cjkChopCutAllowedAt, lineOpenDecisionAt, wordBoundaries } from './cjk-line-break.ts';
+import { cjkParagraphBreaks } from './cjk-paragraph-breaks.ts';
+import { justifyCjkSpans } from './cjk-justify.ts';
+import { compressCjkPieces, canHangCjkPunctuation } from './cjk-spacing.ts';
+import { resolveCjkTypography, type CjkParagraphTypography } from './cjk-typography.ts';
 import {
   EMPTY_TAB_STOPS,
   nextTabDestination,
@@ -101,6 +100,7 @@ const OVERFLOW_TOLERANCE_PT = 0.001;
  * cache key — a paragraph re-broken at a different line spacing is a different break.
  */
 export interface ParagraphFlowOptions {
+  readonly typography?: CjkParagraphTypography;
   readonly lineSpacing?: ParagraphLineSpacing;
   /** First-line offset from the paragraph indent: `w:firstLine` right, `w:hanging` left. */
   readonly firstLineOffset?: number;
@@ -545,6 +545,8 @@ export function alignSpans(
   // The last line of a justified paragraph is set flush left, never stretched.
   if (alignment === 'both') {
     if (isLastLine) return spans;
+    const justified = justifyCjkSpans(spans, measurer, slack);
+    if (justified) return justified;
     // Only boundaries after an expandable space receive slack — the same slots paint stretches
     // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
     // run splits and drifted every later caret by N×step.
@@ -627,7 +629,7 @@ export function breakParagraph(
     flow?.revisionAuthorFilter
   );
   const startOffset = Math.max(0, flow?.startOffset ?? 0);
-  const pieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
+  const visiblePieces = allPieces.flatMap((piece): FieldAwarePiece[] => {
     if (piece.end <= startOffset) return [];
     if (piece.start >= startOffset) return [piece];
     const trim = startOffset - piece.start;
@@ -639,7 +641,18 @@ export function breakParagraph(
       },
     ];
   });
+  const typography =
+    flow?.typography ??
+    resolveCjkTypography(
+      propertiesOf(
+        'children' in paragraph
+          ? paragraph.children.find((child) => child.kind === 'paragraphProperties')
+          : undefined
+      )
+    );
+  const pieces = compressCjkPieces(visiblePieces, typography, measurer);
   const placeableSuffixes = placeableContentSuffixes(pieces);
+  const cjkBreaks = cjkParagraphBreaks(pieces, typography);
   const layoutEquation = createEquationLayouter(measurer, flow?.equationCacheToken);
   const equationLayoutOf = (piece: FieldAwarePiece) =>
     piece.equation ? layoutEquation(piece.equation, piece.style) : null;
@@ -731,6 +744,8 @@ export function breakParagraph(
   ];
 
   const anchorLineStartByOffset = anchorLineStartsByModelOffset({
+    typography,
+    cjkBreaks,
     pieces,
     measurer,
     available,
@@ -1371,7 +1386,8 @@ export function breakParagraph(
       Boolean(piece.positionalTab) ||
       piece.end - piece.start !== piece.text.length;
     let consumed = 0;
-    for (const boundary of wordBoundaries(piece.text, !layoutOwned)) {
+    for (const boundary of cjkBreaks?.boundaries(piece) ??
+      wordBoundaries(piece.text, !layoutOwned)) {
       const candidate = piece.text.slice(consumed, boundary);
       if (candidate.length === 0) continue;
       const spanRange = layoutOwned
@@ -1465,7 +1481,9 @@ export function breakParagraph(
       let width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
       // A candidate may open a line only at a real break opportunity — the shared
       // decision in `lineOpenDecisionAt`, which the anchor-line probe above consumes too.
-      const openDecision = lineOpenDecisionAt(lastEmitted, candidate, consumed > 0);
+      const openDecision =
+        cjkBreaks?.decision(piece, consumed) ??
+        lineOpenDecisionAt(lastEmitted, candidate, consumed > 0);
       const opensWord = openDecision === 'opens';
       if (opensWord) {
         wordStartSpan = line.spans.length;
@@ -1473,13 +1491,21 @@ export function breakParagraph(
         wordStartEnd = line.end;
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
-      // Trailing fill spaces occupy the remaining band but never open continuation lines.
+      // Hang overflowing space runs on this line, preserving text/ranges and authored leading spaces.
       const lineEndWhitespace =
-        isCollapsibleLineEndWhitespace(candidate) && placeableSuffixes[pieceIndex]![boundary] !== 1;
+        isCollapsibleLineEndWhitespace(candidate) &&
+        (placeableSuffixes[pieceIndex]![boundary] !== 1 ||
+          (!layoutOwned &&
+            line.spans.length > 0 &&
+            line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT));
       if (lineEndWhitespace) {
         width = Math.min(width, Math.max(0, lineAvailable() - line.width));
       }
+      const hangs =
+        typography.overflowPunctuation &&
+        canHangCjkPunctuation(candidate, piece, lineAvailable() - line.width, width, measurer);
       if (
+        !hangs &&
         line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT &&
         (line.spans.length > 0 || line.drawings.length > 0)
       ) {
@@ -1546,6 +1572,7 @@ export function breakParagraph(
       const canChopWord = !layoutOwned && piece.measureText === undefined;
       if (
         canChopWord &&
+        !hangs &&
         (line.spans.length === 0 ||
           (!opensWord && wordStartSpan === 0 && openDecision !== 'forbidden')) &&
         width > remainingLineWidth() + OVERFLOW_TOLERANCE_PT
@@ -1584,7 +1611,9 @@ export function breakParagraph(
           overflowTolerancePt: OVERFLOW_TOLERANCE_PT,
           // The measured fit knows nothing about kinsoku: at a one-character measure
           // 天。地。人。 chopped every other line onto a leading 。.
-          cutAllowedAt: cjkChopCutAllowedAt,
+          cutAllowedAt: cjkBreaks
+            ? (_text, index) => cjkBreaks.cutAllowed(piece, consumed, index)
+            : cjkChopCutAllowedAt,
         });
         remaining = chopped.text;
         remainingStart = chopped.modelStart;
@@ -1595,8 +1624,8 @@ export function breakParagraph(
           wordStartEnd = line.end;
         }
       }
-      // A kinsoku push-out can consume the whole candidate (天。 at a one-character measure):
-      // the chop emitted it as one overflowing line and left nothing for this placement.
+      // The chop leaves its final protected group pending, including oversized groups
+      // whose next run may start with another closing character or combining mark.
       if (remaining.length > 0) {
         line.spans.push({
           range: layoutOwned

@@ -9,6 +9,7 @@ import type {
   ValidatedImageBytesHandle,
 } from '../store/package/image-resources.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
+import { applyDrawingBilevelFilter } from './drawing-bilevel-filter.ts';
 import type { DrawingPoint } from '../layout/drawing-geometry.ts';
 import { cssTransformForDrawingImage } from '../layout/drawing-geometry.ts';
 import type {
@@ -367,6 +368,7 @@ function readyImagePaintSignature(
     content.height,
     cssClipPathFromPolygon(drawing.geometry.clipPolygon ?? [], paint) ?? '',
     filterStyleOf(drawing) ?? '',
+    drawing.effects.bilevel ?? '',
     imagePaintTransformStyle(drawing) ?? '',
     crop.width,
     crop.height,
@@ -495,6 +497,7 @@ function paintReadyImage(
   transformStage.append(cropViewport);
   inner.append(transformStage);
   outer.replaceChildren(inner);
+  applyDrawingBilevelFilter(document, outer, inner, drawing.effects.bilevel);
 
   if (drawing.hyperlinkHref && !ctx.inertLinks) {
     outer.dataset.docxDrawingLink = drawing.drawingNodeId;
@@ -555,8 +558,8 @@ function paintVectorShape(
     const path = document.createElementNS(SVG_NAMESPACE, 'path');
     const d = component.subpathsEmu
       .map(
-        (points) =>
-          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}Z`
+        (points, index) =>
+          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}${component.subpathsClosed?.[index] === false ? '' : 'Z'}`
       )
       .join('');
     path.setAttribute('d', d);
@@ -574,6 +577,22 @@ function paintVectorShape(
       }
     }
     svg.append(path);
+    if (component.strokeHex !== null) {
+      for (const points of component.arrowheadsEmu ?? []) {
+        const arrow = document.createElementNS(SVG_NAMESPACE, 'path');
+        arrow.setAttribute(
+          'd',
+          `M${points.map((point) => `${finiteStyle(point.x)} ${finiteStyle(point.y)}`).join('L')}Z`
+        );
+        arrow.setAttribute('fill', `#${component.strokeHex}`);
+        arrow.setAttribute(
+          'fill-opacity',
+          finiteStyle(Math.max(0, Math.min(1, component.strokeAlpha)))
+        );
+        arrow.setAttribute('data-docx-line-end', 'triangle');
+        svg.append(arrow);
+      }
+    }
   }
   frame.append(svg);
   outer.append(frame);

@@ -19,6 +19,16 @@ npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 `@docx-editor.dev/core` is a peer dependency: the engine holds identity-keyed state, so your
 project must resolve exactly one copy of it, shared with any editor adapter you install.
 
+`DocxEditor.createServer` rejects with error code `ResourceLimitExceeded` when opening exceeds a resource cap.
+Catch `DocxEditorError` and inspect its `limit` field, such as `xml.maxElements` or `zip.maxRatio`.
+The XML reader uses the engine's default budget of 10,000,000 elements per part.
+Set `limits.xml.maxElements` to lower that budget for untrusted input or raise it for larger documents,
+up to the engine ceiling of 50,000,000. Set `limits.xml.maxBytes` alongside it.
+The 64 MiB per-part byte ceiling and 256-level depth ceiling still apply.
+These budgets do not guarantee that a document fits in the host's memory.
+Counts and byte budgets must be finite nonnegative integers; compression ratios may be fractional.
+Malformed input and invalid budget options reject with `InvalidArgument`.
+
 ## Choose a host
 
 | `DocumentCapabilities` field | Server runtime | Browser runtime |

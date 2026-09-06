@@ -191,6 +191,7 @@ import {
   coveredFontFamiliesOf,
   createLocalFontProbe,
   detectFontSubstitutions,
+  fontResolverFamilies,
 } from './font-availability.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
@@ -751,7 +752,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         typeof configured === 'function'
           ? normalizeFontResolverResult(
               await configured({
-                families: mounted.session.documentFonts().slice(0, MAX_RESOLVER_FAMILIES),
+                families: fontResolverFamilies(
+                  mounted.session.documentFonts(),
+                  mounted.session.symbolFontFamilies(),
+                  MAX_RESOLVER_FAMILIES
+                ),
                 defaultFamily: configuredDefaultFontFamily(fontConfiguration()),
               })
             )

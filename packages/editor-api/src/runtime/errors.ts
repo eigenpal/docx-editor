@@ -43,6 +43,8 @@ export type DocxEditorErrorCode =
   | 'ObjectInUse'
   /** An argument or load option this API does not accept. */
   | 'InvalidArgument'
+  /** Opening the document exceeded a bounded reader resource limit. */
+  | 'ResourceLimitExceeded'
   /** The collection has no such item — `getFirst()` on an empty one. */
   | 'ItemNotFound'
   /** The host cannot do this at all — a capability it reports false. */
@@ -93,6 +95,7 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
     'the object still belongs to a run that has not finished. Await that run before passing the ' +
     'object to another one.',
   InvalidArgument: 'the argument is not one this API accepts.',
+  ResourceLimitExceeded: 'the document exceeds a supported resource limit.',
   ItemNotFound: 'the collection has no such item.',
   NotSupported: 'this document host does not support that operation.',
   NotImplemented: 'this version does not implement that yet.',
@@ -114,6 +117,17 @@ const MESSAGES: Readonly<Record<DocxEditorErrorCode, string>> = Object.freeze({
 export interface DocxEditorErrorInit {
   /** Which refusal this is. The stable thing to branch on. */
   readonly code: DocxEditorErrorCode;
+  /** The resource limit exceeded while opening a document. */
+  readonly limit?:
+    | 'zip.maxEntries'
+    | 'zip.maxTotalBytes'
+    | 'zip.maxRatio'
+    | 'xml.maxBytes'
+    | 'xml.maxElements'
+    | 'xml.maxDepth'
+    | 'maxXmlParts'
+    | 'maxRelationships';
+
   /**
    * The consumer-facing path of the object or property involved — `document.body.text`, not a
    * handle. Omitted when there is nothing to name.
@@ -154,6 +168,8 @@ export interface DocxEditorErrorInit {
 export class DocxEditorError extends Error {
   /** Which refusal this is. Stable across versions; the thing to branch on. */
   readonly code: DocxEditorErrorCode;
+  /** For `ResourceLimitExceeded`: the resource limit that prevented opening. */
+  readonly limit?: DocxEditorErrorInit['limit'];
   /** Consumer-facing path of the object or property involved, when there is one to name. */
   readonly target?: string;
   /** For `StaleDocument`: the revision the context had read at. */
@@ -166,6 +182,7 @@ export class DocxEditorError extends Error {
     super(message);
     this.name = 'DocxEditorError';
     this.code = init.code;
+    if (init.limit !== undefined) this.limit = init.limit;
     if (init.target !== undefined) this.target = init.target;
     if (init.expectedRevision !== undefined) this.expectedRevision = init.expectedRevision;
     if (init.actualRevision !== undefined) this.actualRevision = init.actualRevision;

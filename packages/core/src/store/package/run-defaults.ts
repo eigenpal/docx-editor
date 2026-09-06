@@ -101,6 +101,20 @@ export function validFontFamily(raw: string | undefined): string | null {
   return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
 }
 
+/**
+ * The family a symbol-bearing attribute (`w:sym/@w:font`, a SYMBOL field's `\f`) names, for
+ * anyone that has to ASK a font resolver for the face.
+ *
+ * The same bound as {@link validFontFamily}, deliberately, including for Word's
+ * vertical-writing prefix (`@MS Gothic`). Layout will apply that name to the run, but the
+ * measurer and the paint sink both re-validate against this shape and fall back when it
+ * fails — so bytes supplied under the stripped family would never reach the glyph, and
+ * asking for them would spend a slot of a capped request on nothing.
+ */
+export function symbolFontFamily(raw: string | undefined): string | null {
+  return validFontFamily(raw);
+}
+
 /** What one `w:rPr` container contributes: validated family and size, or nulls. */
 function rPrDefaults(
   rPr: OoxmlElement | undefined,

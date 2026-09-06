@@ -1,7 +1,7 @@
 // Document-aware font resolution shared by every headless exporter.
 
 import { collectRenderedFontFamilyCandidates } from '../store/package/rendered-fonts.ts';
-import { validFontFamily } from '../store/package/run-defaults.ts';
+import { symbolFontFamily, validFontFamily } from '../store/package/run-defaults.ts';
 import {
   MAX_RESOLVER_FAMILIES,
   WORD_DEFAULT_FONT,
@@ -179,6 +179,19 @@ function createDocumentFontByteLease(onChange?: (activeBytes: number) => void): 
 
 function attributeValue(node: OoxmlElement, localName: string): string | undefined {
   return node.attributes.find((attribute) => attribute.localName === localName)?.value;
+}
+
+/**
+ * The same read `layout/symbol-run.ts` makes: the WML namespace, or none — unprefixed
+ * attributes on WML elements are common in authored packages. Use it wherever the answer
+ * decides what LAYOUT will do, so a foreign-namespaced attribute cannot say otherwise.
+ */
+function wmlAttributeValue(node: OoxmlElement, localName: string): string | undefined {
+  return node.attributes.find(
+    (attribute) =>
+      attribute.localName === localName &&
+      (attribute.namespaceUri === WML_NAMESPACE_URI || attribute.namespaceUri === '')
+  )?.value;
 }
 
 /**
@@ -736,7 +749,15 @@ function revisionWrapperVisibility(node: OoxmlElement): number {
   return ALL_REVISION_VIEWS;
 }
 
-/** Faces selected by layout semantics rather than a glyph-bearing run's `w:rFonts`. */
+/**
+ * Faces selected by layout semantics rather than a glyph-bearing run's `w:rFonts`.
+ *
+ * `w:sym/@w:font` belongs here rather than in the store's rendered-family derivation: a
+ * symbol run paints one synthesized glyph, exactly like the `{ SYMBOL 183 \\f "Wingdings" }`
+ * field two lines below it, and an unmapped private-use code point paints as a tofu box in
+ * any face but the authored one — so an exporter that can load it should ask for it. The
+ * editor's substitution notice deliberately does not; see `store/package/rendered-fonts.ts`.
+ */
 function layoutSynthesizedFontFamilies(roots: readonly OoxmlElement[]): readonly string[] {
   const byFold = new Map<string, string>();
   const add = (candidate: string | null): void => {
@@ -750,6 +771,14 @@ function layoutSynthesizedFontFamilies(roots: readonly OoxmlElement[]): readonly
     while (stack.length > 0) {
       const node = stack.pop()!;
       if (node.namespaceUri === OMML_NAMESPACE_URI) add(EQUATION_FONT_FAMILY);
+      if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'sym') {
+        // The WML namespace or none, the way `layout/symbol-run.ts` reads it. A
+        // foreign-namespaced `font` is a face layout never applies, and the request is
+        // capped — so admitting one could evict a face the document really renders in.
+        // `symbolFontFamily` is the same rule the editor's own symbol-face collection
+        // applies, so both ask for exactly the faces a sink could paint with.
+        add(symbolFontFamily(wmlAttributeValue(node, 'font')));
+      }
       if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldSimple') {
         const instruction = attributeValue(node, 'instr');
         add(parseSymbolInstruction(instruction ?? '')?.font ?? null);
