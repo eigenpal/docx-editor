@@ -4,14 +4,10 @@ const MAX_MARKERS = 4096;
 const MAX_PADDING_BYTES = 4096;
 const MAX_EXIF_ENTRIES = 4096;
 
-/**
- * Whether an APP1 payload opens with the `Exif\0\0` signature AND carries a body. Decoders
- * skip a bare six-byte stub and read the next Exif block, so a stub must not count as the
- * first one here either.
- */
+/** Whether an APP1 payload opens with the `Exif\0\0` signature. */
 function hasExifSignature(bytes: Uint8Array, start: number, end: number): boolean {
   return (
-    end - start > 6 &&
+    end - start >= 6 &&
     bytes[start] === 0x45 &&
     bytes[start + 1] === 0x78 &&
     bytes[start + 2] === 0x69 &&
@@ -54,7 +50,6 @@ export function validateJpegHeader(
   let offset = 2;
   let padding = 0;
   let orientation: number | null = null;
-  let exifSeen = false;
   for (let markers = 0; markers < MAX_MARKERS && offset + 1 < bytes.length; markers += 1) {
     if (bytes[offset++] !== 0xff) return null;
     while (bytes[offset] === 0xff) {
@@ -70,10 +65,11 @@ export function validateJpegHeader(
     const length = (bytes[offset]! << 8) | bytes[offset + 1]!;
     const end = offset + length;
     if (length < 2 || end > bytes.length) return null;
-    // Browser decoders honour only the FIRST Exif-signed APP1, whatever it carries. A later
-    // one that names an orientation must not swap the extent the decoder will not swap.
-    if (marker === 0xe1 && !exifSeen && hasExifSignature(bytes, offset + 2, end)) {
-      exifSeen = true;
+    // Decoders (Skia, Blink, WebKit) walk every APP1 and take the first that yields an
+    // orientation: a block with no 0x0112 tag, a bare `Exif\0\0` stub, or a non-Exif APP1
+    // (XMP) is skipped and the next block is read. Mirror that so the extent reported here
+    // is the extent the bitmap will have.
+    if (marker === 0xe1 && orientation === null && hasExifSignature(bytes, offset + 2, end)) {
       orientation = exifOrientation(bytes, offset + 2, end);
     }
     const isFrame =

@@ -4,7 +4,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
-import { matchAllowlistedPageField } from './field-instruction.ts';
+import { allowlistedPageField } from './field-instruction.ts';
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
@@ -31,8 +31,8 @@ function one(node: OoxmlElement, name: string): OoxmlElement | undefined {
  * result the page context will not refresh (`\* roman`, `\* Arabic` and every other switch
  * stay in ordinary flow with their cached text).
  */
-export function isPageInstruction(instruction: string): boolean {
-  return matchAllowlistedPageField(instruction)?.kind === 'PAGE';
+function isPageInstruction(instruction: string): boolean {
+  return allowlistedPageField(instruction) === 'PAGE';
 }
 function twips(value: string | undefined): number | undefined {
   if (value === undefined || !/^\d{1,5}$/.test(value)) return undefined;

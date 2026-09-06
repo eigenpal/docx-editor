@@ -32,7 +32,8 @@ export function tryCreateBrowserImageDecodePort(ownerDocument: Document): ImageD
       // `validateJpegHeader` reports the extent AFTER EXIF orientation; the bitmap must be
       // oriented the same way or the two disagree on portrait photos. An engine whose
       // `ImageOrientation` enum predates `from-image` rejects the dictionary with a
-      // TypeError; there the option-less call already orients from the image, so retry.
+      // TypeError; retry without it and take whatever orientation that engine applies,
+      // which is the same result the port produced before the option existed.
       let bitmap: ImageBitmap;
       try {
         bitmap = await view.createImageBitmap!(blob, { imageOrientation: 'from-image' });

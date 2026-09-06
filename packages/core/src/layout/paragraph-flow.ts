@@ -502,6 +502,11 @@ export function alignSpans(
     trailingStart -= 1;
   }
   const lastContentSpan = spans[trailingEnd - 1];
+  // Clipped whitespace runs hang past the content: with two of them the last one is a
+  // zero-width span AT the measure, so last-span arithmetic reports no slack at all. The
+  // content ends where the first hanging span starts, whatever hangs after it.
+  const hangingStart =
+    trailingStart < spans.length ? spans[trailingStart]!.box.x - indentLeft : undefined;
   const spansReachLineEnd =
     lineUsedWidth !== undefined &&
     lastContentSpan !== undefined &&
@@ -512,8 +517,7 @@ export function alignSpans(
     spansReachLineEnd &&
     (alignment === 'center' || alignment === 'right')
   ) {
-    const used = spans[trailingStart]!.box.x - indentLeft;
-    const slack = available - used;
+    const slack = available - hangingStart!;
     if (slack <= 0) return spans;
     const offset = alignment === 'center' ? slack / 2 : slack;
     const clipsAtMargin = (lineUsedWidth ?? 0) >= available - OVERFLOW_TOLERANCE_PT;
@@ -531,26 +535,22 @@ export function alignSpans(
   // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
   // is what Word does and what stops a line ending in a space from looking misaligned.
   const last = spans[spans.length - 1]!;
-  const visible = last.text.replace(/\s+$/, '');
   // `box.width` was reserved from the DRAWN text, so the visible part has to be measured the
   // same way: the difference is what the trailing whitespace measures, and mixing a drawn
   // total with a source-measured visible part reports nearly the whole span as whitespace.
   // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
   // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
-  // over-stretches the line.
-  const trailing =
-    visible === last.text
-      ? 0
-      : last.box.width -
-        measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
-  // Clipped whitespace runs hang past the content: with two of them the last one is a
-  // zero-width span AT the measure, so the last-span arithmetic reports no slack at all.
-  // The content ends where the first hanging span starts, whatever hangs after it.
-  const used =
-    lineUsedWidth ??
-    (trailingStart < spans.length
-      ? spans[trailingStart]!.box.x - indentLeft
-      : last.box.x - indentLeft + last.box.width - trailing);
+  // over-stretches the line. Measured only on that path.
+  const contentEndWithoutTrailingWhitespace = (): number => {
+    const visible = last.text.replace(/\s+$/, '');
+    const trailing =
+      visible === last.text
+        ? 0
+        : last.box.width -
+          measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
+    return last.box.x - indentLeft + last.box.width - trailing;
+  };
+  const used = lineUsedWidth ?? hangingStart ?? contentEndWithoutTrailingWhitespace();
   const slack = available - used;
   if (slack <= 0) return spans;
 

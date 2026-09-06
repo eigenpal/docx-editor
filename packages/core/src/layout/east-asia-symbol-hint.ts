@@ -1,4 +1,6 @@
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { themeFontFamilyOf } from '../store/package/theme-font-scheme.ts';
+import type { ThemeFonts } from './run-style.ts';
 
 /** Last specified hint wins across the already-cascaded run properties. */
 export function hasEastAsiaSymbolHint(properties: readonly OoxmlProperty[]): boolean {
@@ -17,47 +19,55 @@ export function hasEastAsiaSymbolHint(properties: readonly OoxmlProperty[]): boo
   return hint === 'eastAsia' && !cs && !rtl;
 }
 
+/** One Latin face slot as authored: a theme token or an explicit name, last specified wins. */
+interface LatinFace {
+  readonly value: string;
+  readonly theme: boolean;
+}
+
+/** The resolved family for comparison, or the theme token itself when nothing resolves it. */
+function comparableFace(face: LatinFace, themeFonts: ThemeFonts | undefined): string {
+  if (!face.theme) return face.value.toLowerCase();
+  const resolved = themeFonts ? themeFontFamilyOf(face.value, themeFonts) : null;
+  // Without a resolver, `minorAscii` and `minorHAnsi` (and the major pair) still name the
+  // same theme face, so the token compares by the face it stands for.
+  return (resolved ?? face.value.replace(/Ascii$/, 'HAnsi')).toLowerCase();
+}
+
 /**
  * MS-OI29500 2.1.88: Word ignores `hint="eastAsia"` when the East Asian face is Times New
  * Roman AND the ascii and hAnsi faces are the same.
  *
  * `eastAsiaFace` is the run's RESOLVED East Asian face, so a theme slot that resolves to
  * Times New Roman counts. The Latin faces are read from the same cascaded properties as
- * {@link hasEastAsiaSymbolHint}, last specified value per attribute winning (§17.3.2.26).
- * Word compares resolved faces. This reader has no theme resolver, so it compares explicit
- * names case-insensitively, treats two theme slots by slot name, and falls back to the
- * exception (hint ignored, the pre-widening behavior) whenever the two sides cannot be
- * compared: one theme slot beside one explicit name, or a face left unspecified.
+ * {@link hasEastAsiaSymbolHint}, last specified value per attribute winning (§17.3.2.26),
+ * and compared as resolved faces through `themeFonts`, the way Word compares them. When a
+ * theme token cannot be resolved against an explicit name, or a face is left unspecified,
+ * the comparison falls back to the exception (hint ignored), which is the conservative
+ * pre-widening behavior.
  */
 export function hasTimesNewRomanEastAsiaException(
   properties: readonly OoxmlProperty[],
-  eastAsiaFace: string | null
+  eastAsiaFace: string | null,
+  themeFonts?: ThemeFonts
 ): boolean {
   if (eastAsiaFace?.toLowerCase() !== 'times new roman') return false;
-  let ascii: string | undefined;
-  let hAnsi: string | undefined;
-  let asciiIsTheme = false;
-  let hAnsiIsTheme = false;
+  let ascii: LatinFace | undefined;
+  let hAnsi: LatinFace | undefined;
   for (const property of properties) {
     if (property.localName !== 'rFonts') continue;
     const attributes = property.attributes;
-    if (attributes?.asciiTheme !== undefined) {
-      ascii = attributes.asciiTheme;
-      asciiIsTheme = true;
-    } else if (attributes?.ascii !== undefined) {
-      ascii = attributes.ascii;
-      asciiIsTheme = false;
-    }
-    if (attributes?.hAnsiTheme !== undefined) {
-      hAnsi = attributes.hAnsiTheme;
-      hAnsiIsTheme = true;
-    } else if (attributes?.hAnsi !== undefined) {
-      hAnsi = attributes.hAnsi;
-      hAnsiIsTheme = false;
-    }
+    if (attributes?.asciiTheme !== undefined) ascii = { value: attributes.asciiTheme, theme: true };
+    else if (attributes?.ascii !== undefined) ascii = { value: attributes.ascii, theme: false };
+    if (attributes?.hAnsiTheme !== undefined) hAnsi = { value: attributes.hAnsiTheme, theme: true };
+    else if (attributes?.hAnsi !== undefined) hAnsi = { value: attributes.hAnsi, theme: false };
   }
-  if (ascii === undefined || hAnsi === undefined || asciiIsTheme !== hAnsiIsTheme) return true;
-  return ascii.toLowerCase() === hAnsi.toLowerCase();
+  if (ascii === undefined || hAnsi === undefined) return true;
+  if (ascii.theme !== hAnsi.theme) {
+    const themed = ascii.theme ? ascii : hAnsi;
+    if (!themeFonts || themeFontFamilyOf(themed.value, themeFonts) === null) return true;
+  }
+  return comparableFace(ascii, themeFonts) === comparableFace(hAnsi, themeFonts);
 }
 
 /**

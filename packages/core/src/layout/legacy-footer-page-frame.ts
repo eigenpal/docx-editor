@@ -5,7 +5,8 @@ import {
   type OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
-import { isPageInstruction, positionFixedFooterPageFrame } from './legacy-footer-fixed-frame.ts';
+import { allowlistedPageField } from './field-instruction.ts';
+import { positionFixedFooterPageFrame } from './legacy-footer-fixed-frame.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 const isElement = (node: OoxmlNode): node is OoxmlElement => node.kind !== 'textValue';
@@ -70,7 +71,7 @@ function containsOnlyPageField(paragraph: OoxmlElement): boolean {
           state === 1 &&
           kind === 'separate' &&
           instruction !== null &&
-          isPageInstruction(instruction)
+          allowlistedPageField(instruction) === 'PAGE'
         )
           state = 2;
         else if (state === 2 && kind === 'end') state = 3;
@@ -87,7 +88,7 @@ function containsOnlyPageField(paragraph: OoxmlElement): boolean {
       } else return false;
     }
   }
-  return state === 3 && instruction !== null && isPageInstruction(instruction);
+  return state === 3 && instruction !== null && allowlistedPageField(instruction) === 'PAGE';
 }
 
 function framePair(

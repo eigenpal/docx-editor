@@ -354,10 +354,15 @@ export function eastAsiaRunsOfSegments(
     for (let from = 0; from < text.length; ) {
       const codePoint = text.codePointAt(from)!;
       const to = from + (codePoint > 0xffff ? 2 : 1);
-      const slotClass =
-        hintedSegments[segment] && isEastAsiaHintSymbol(codePoint)
-          ? 'eastAsia'
-          : slotClassOf(codePoint);
+      // A hinted symbol takes the East Asian face for itself only. It is not strong text:
+      // it neither resolves the Common units before it nor pulls the Common units after it,
+      // so the hint on one run never reaches the `©` or NBSP of an unhinted neighbour.
+      if (hintedSegments[segment] && isEastAsiaHintSymbol(codePoint)) {
+        addEastAsia(segment, from, to);
+        from = to;
+        continue;
+      }
+      const slotClass = slotClassOf(codePoint);
       if (slotClass === 'common') {
         if (precedingStrong === null) {
           pending.push({ segment, from, to, ascii: codePoint <= 0x7f });

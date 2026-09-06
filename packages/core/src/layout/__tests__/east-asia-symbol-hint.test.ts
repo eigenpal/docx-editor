@@ -190,12 +190,29 @@ test('the Times New Roman exception falls back to ignoring the hint when faces c
   });
   const theme = rFonts({ asciiTheme: 'minorHAnsi', hAnsiTheme: 'minorHAnsi' });
   const override = rFonts({ hAnsi: 'Calibri', eastAsia: 'Times New Roman', hint: 'eastAsia' });
-  // One theme slot beside one explicit name: Word compares resolved faces, this reader
-  // cannot, so it keeps the exception (hint ignored), which was the behavior before.
+  // One theme slot beside one explicit name and no resolver: Word compares resolved faces,
+  // this reader cannot, so it keeps the exception (hint ignored), the behavior before.
   expect(hasTimesNewRomanEastAsiaException([theme, override], 'Times New Roman')).toBe(true);
   expect(applyEastAsiaFontSlots([piece('·', [theme, override])])[0]!.fontSlot).toBeUndefined();
-  // Two theme slots compare by slot name; explicit names compare case-insensitively.
+  // With the document's theme fonts the token resolves and the faces compare as Word does.
+  const calibri = { major: 'Cambria', minor: 'Calibri' };
+  expect(hasTimesNewRomanEastAsiaException([theme, override], 'Times New Roman', calibri)).toBe(
+    true
+  );
+  const arial = rFonts({ ascii: 'Arial', eastAsia: 'Times New Roman', hint: 'eastAsia' });
+  expect(hasTimesNewRomanEastAsiaException([theme, arial], 'Times New Roman', calibri)).toBe(false);
+  expect(applyEastAsiaFontSlots([piece('·', [theme, arial])], calibri)[0]!.fontSlot).toBe(
+    'eastAsia'
+  );
+  // Two theme tokens compare by the face they stand for: the ascii and hAnsi tokens of one
+  // theme face are the same face, and a resolver is not needed to know that.
   expect(hasTimesNewRomanEastAsiaException([theme], 'Times New Roman')).toBe(true);
+  expect(
+    hasTimesNewRomanEastAsiaException(
+      [rFonts({ asciiTheme: 'minorAscii', hAnsiTheme: 'minorHAnsi' })],
+      'Times New Roman'
+    )
+  ).toBe(true);
   expect(
     hasTimesNewRomanEastAsiaException(
       [rFonts({ asciiTheme: 'majorHAnsi', hAnsiTheme: 'minorHAnsi' })],
@@ -212,6 +229,20 @@ test('the Times New Roman exception falls back to ignoring the hint when faces c
   expect(hasTimesNewRomanEastAsiaException([rFonts({ ascii: 'Arial' })], 'Times New Roman')).toBe(
     true
   );
+});
+test('a hinted symbol never lends East Asian strength to an unhinted neighbour', () => {
+  // The trademark sign takes the East Asian face under the hint, but the NBSP and © of the
+  // next, unhinted run stay in their own face: a hinted symbol is not strong text.
+  expect(eastAsiaRunsOfSegments(['Word™', ' © next'], [true, false])).toEqual([
+    { segment: 0, from: 4, to: 5 },
+  ]);
+  expect(eastAsiaRunsOfSegments(['© ', '— x'], [false, true])).toEqual([
+    { segment: 1, from: 0, to: 1 },
+  ]);
+  // Inside one hinted run, a Common character beside a hinted symbol keeps its face too.
+  expect(eastAsiaRunsOfSegments(['·©'], [true])).toEqual([{ segment: 0, from: 0, to: 1 }]);
+  // Real East Asian text still resolves the Common characters around it, as before.
+  expect(eastAsiaRunsOfSegments(['中©'], [false])).toEqual([{ segment: 0, from: 0, to: 2 }]);
 });
 test('symbol-encoded faces keep their glyphs under the hint', () => {
   const wingdings = piece('✔', [
