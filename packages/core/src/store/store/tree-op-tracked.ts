@@ -44,10 +44,15 @@ import {
   type ParagraphOffsetIndex,
 } from './tree-op-segments.ts';
 import { insertionAuthor } from './tree-op-retraction.ts';
-import { adjacentDeletion, deletionId, replacedEnd, revisionKey, sameEditingMoment } from './tree-op-tracked-adjacency.ts';
+import {
+  adjacentDeletion,
+  deletionId,
+  replacedEnd,
+  revisionKey,
+  sameEditingMoment,
+} from './tree-op-tracked-adjacency.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 import { build, revisionAttributes } from './tree-op-tracked-builders.ts';
-
 
 export { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
 export { build, revisionAttributes } from './tree-op-tracked-builders.ts';
@@ -105,7 +110,6 @@ export function copy(mint: () => string, node: OoxmlNode): OoxmlNode {
     children: node.children.map((child) => copy(mint, child)),
   } as OoxmlNode;
 }
-
 
 /** How many deletion wrappers with this `@w:id` live under the node, itself included. */
 function deletionWrappersWithId(node: OoxmlNode, id: string): number {
@@ -214,7 +218,6 @@ export function applyInsertTracked(
   revision: RevisionAttributionInput,
   options?: EditOptions,
   bias: 'left' | 'right' = 'left'
-
 ): TreeOpResult {
   return applyTrackedInsertion(
     part,
@@ -317,7 +320,6 @@ function applyTrackedInsertion(
   revision: RevisionAttributionInput,
   options?: EditOptions,
   bias: 'left' | 'right' = 'left'
-
 ): TreeOpResult {
   const mint = createNodeIdAllocator(part);
   const offsets = paragraphOffsetIndex(paragraph);
@@ -745,9 +747,6 @@ export function childrenOf(node: OoxmlNode): readonly OoxmlNode[] {
 }
 
 /**
-  options?: EditOptions,
-  bias: 'left' | 'right' = 'left'
-
  * Fold adjacent revision wrappers that are the same revision into one.
  *
  * Striking a character at a time leaves `<w:del id=0/><w:del id=0/><w:del id=0/>` — one

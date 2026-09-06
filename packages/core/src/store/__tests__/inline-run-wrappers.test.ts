@@ -626,6 +626,17 @@ describe('inline run wrapper projection', () => {
 
 describe('inline wrapper review regressions', () => {
   for (const name of WRAPPERS) {
+    test(`${name} cannot be named as an insertion owner`, () => {
+      const original = load(`<w:p>${wrapper(name, run('AB'))}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const inside = firstNamed(original, name).id;
+      const ops: TreeDocOp[] = [{ op: 'insertText', paragraphId, offset: 1, text: 'X', inside }];
+      for (const op of ops) {
+        expect(validateTreeOp(original, op)).toBe('not-a-content-control');
+        expect(applyTreeOp(original, op).ok).toBe(false);
+      }
+    });
+
     test.each(['', '<w:lock w:val="contentLocked"/>'])(
       `${name} preserves control edge deletion (%s)`,
       (lock) => {
@@ -646,22 +657,27 @@ describe('inline wrapper review regressions', () => {
       }
     );
 
-    test(`${name} retracts with its author's insertion`, () => {
-      const original = load(
-        `<w:p><w:ins w:id="7" w:author="A">${wrapper(name, run('word'))}</w:ins></w:p>`
-      );
-      const paragraphId = firstParagraph(original).id;
-      const next = apply(original, {
-        op: 'deleteText',
-        paragraphId,
-        start: 0,
-        end: 4,
-        revision: { author: 'A' },
-      });
-      expect(paragraphTextOf(next, paragraphId)).toBe('');
-      expect(containsNamed(next.root, 'ins')).toBe(false);
-      expect(containsNamed(next.root, name)).toBe(false);
-    });
+    test.each([false, true])(
+      `${name} retracts with its author's insertion (properties=%s)`,
+      (properties) => {
+        const metadata =
+          properties && (name === 'smartTag' || name === 'customXml') ? `<w:${name}Pr/>` : '';
+        const original = load(
+          `<w:p><w:ins w:id="7" w:author="A">${wrapper(name, metadata + run('word'))}</w:ins></w:p>`
+        );
+        const paragraphId = firstParagraph(original).id;
+        const next = apply(original, {
+          op: 'deleteText',
+          paragraphId,
+          start: 0,
+          end: 4,
+          revision: { author: 'A' },
+        });
+        expect(paragraphTextOf(next, paragraphId)).toBe('');
+        expect(containsNamed(next.root, 'ins')).toBe(false);
+        expect(containsNamed(next.root, name)).toBe(false);
+      }
+    );
 
     test.each(['hyperlink', 'sdt'])(`${name} exit inherits left formatting within %s`, (owner) => {
       const bold = '<w:r><w:rPr><w:b/></w:rPr><w:t>A</w:t></w:r>';
@@ -683,3 +699,26 @@ describe('inline wrapper review regressions', () => {
     });
   }
 });
+
+test.each(['hyperlink', ...WRAPPERS])(
+  'new boundary runs escape a deletion containing %s',
+  (name) => {
+    const deleted = (value: string) => `<w:r><w:delText>${value}</w:delText></w:r>`;
+    const part = load(
+      `<w:p><w:del w:id="7" w:author="Prior">${deleted('A')}<w:${name}>${deleted('B')}</w:${name}></w:del></w:p>`
+    );
+    const paragraphId = firstParagraph(part).id;
+    for (const op of [
+      { op: 'insertText', paragraphId, offset: 1, text: 'X' },
+      { op: 'insertTab', paragraphId, offset: 1 },
+      { op: 'insertHardBreak', paragraphId, offset: 1 },
+    ] satisfies TreeDocOp[]) {
+      const next = apply(part, op);
+      expect(textUnder(firstNamed(next, 'del'))).toBe('AB');
+      const accepted = apply(next, { op: 'acceptAllRevisions' });
+      expect(paragraphTextOf(accepted, paragraphId)).toBe(
+        op.op === 'insertText' ? 'X' : op.op === 'insertTab' ? '\t' : '\n'
+      );
+    }
+  }
+);

@@ -21,7 +21,11 @@ import {
   type AtomicFieldSpan,
 } from '../package/field-nodes.ts';
 import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
-import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
+import {
+  isContentRevisionKind,
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+} from '../package/ooxml-shared.ts';
 import {
   contentControlContentOf,
   inlineContainersOf,
@@ -460,6 +464,29 @@ export type InsertionSite =
  * one, an outer run-wrapper edge receives a sibling run.
  */
 export function insertionSite(
+  paragraph: OoxmlParagraphNode,
+  offset: number,
+  owner: OoxmlNode | null,
+  bias: 'left' | 'right' = 'left'
+): InsertionSite {
+  const site = rawInsertionSite(paragraph, offset, owner, bias);
+  if (owner !== null || site.kind !== 'newRun') return site;
+  const ancestors = [site.holder, ...inlineContainersOf(paragraph, site.holder.id)];
+  if (
+    !ancestors.some((node) => node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom')
+  ) {
+    return site;
+  }
+  // A newly minted run must survive accepting the deletion. Escape the outermost
+  // revision, using the same destination for protection checks and application.
+  const revision = ancestors.filter((node) => isContentRevisionKind(node.kind)).at(-1)!;
+  const holder = directParentOf(paragraph, revision.id) ?? paragraph;
+  const index = holder.children.findIndex((child) => child.id === revision.id);
+  const span = paragraphOffsetIndex(paragraph).spanOf(revision);
+  return { kind: 'newRun', holder, index: index + (span && offset > span.start ? 1 : 0) };
+}
+
+function rawInsertionSite(
   paragraph: OoxmlParagraphNode,
   offset: number,
   owner: OoxmlNode | null,

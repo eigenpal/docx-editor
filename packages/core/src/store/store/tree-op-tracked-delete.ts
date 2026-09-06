@@ -4,7 +4,12 @@
 // wrapper-merging and adjacency rules both lanes share. The dependency runs one way: this
 // module imports the builders; nothing here is imported back.
 
-import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH, nextInlineContainerDepth } from '../package/ooxml-shared.ts';
+import {
+  isInlineRunContainer,
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+} from '../package/ooxml-shared.ts';
+import { isInlineContainerProperty } from '../package/inline-container-properties.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../package/ooxml-tree.ts';
 import { createNodeIdAllocator, replaceChildren, type EditOptions } from '../package/ooxml-edit.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
@@ -166,7 +171,7 @@ export function applyDeleteTracked(
           (node.kind === 'generic' &&
             isInlineRunContainer(node) &&
             insertionAuthor(stack) !== revision.author);
-        if (rebuilt.length > 0 || structural) {
+        if (structural || rebuilt.some((child) => !isInlineContainerProperty(node, child))) {
           out.push({ ...node, children: rebuilt } as OoxmlNode);
         }
         continue;
