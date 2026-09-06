@@ -28,12 +28,16 @@
  * through `suggestingModeRefusal`. Entering suggesting without an author used to succeed
  * and then refuse every keystroke: the pill read Suggesting, the document took focus, and
  * typing changed nothing. A missing author is a host configuration error, so the request
- * is refused with the reason, and `createSuggestingConfigurationReporter` says so once on
- * the console for the host that never reads the result.
+ * is refused with the reason, and `createSuggestingConfigurationReporter` raises it once
+ * through the editor's error channel for the host that never reads the result.
  */
 
-import type { DocumentEditingMode, ExecResult } from '../contracts/editor.ts';
+import type { DocumentEditingMode, EditorError, ExecResult } from '../contracts/editor.ts';
 import type { DocumentTrackingSettings } from '../store/package/tracking-settings.ts';
+import { editorError } from './docx-editor-support.ts';
+
+/** A refused command, as `can` and `exec` both answer it. */
+export type CommandRefusal = Extract<ExecResult, { ok: false }>;
 
 /**
  * The refusal every review write gets when no review module is registered.
@@ -106,9 +110,7 @@ export function resolveOpeningEditingMode(
  * toolbar's disabled reason, the command's refusal and the published rejection are the
  * same sentence. The module comes first: without one there is no author to miss.
  */
-export function suggestingModeRefusal(
-  guards: OpeningModeGuards
-): Extract<ExecResult, { ok: false }> | null {
+export function suggestingModeRefusal(guards: OpeningModeGuards): CommandRefusal | null {
   if (!guards.reviewEnabled) return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
   if (!guards.hasAuthor) {
     return { ok: false, code: 'invalidArgs', reason: SUGGESTING_AUTHOR_REASON };
@@ -116,35 +118,59 @@ export function suggestingModeRefusal(
   return null;
 }
 
-/**
- * True when `rejection` is one that a configured author lifts: a host or document request
- * for suggesting that opened in editing only because nobody could be attributed.
- */
-export function isAuthorRejection(rejection: string | null): boolean {
-  return rejection === SUGGESTING_AUTHOR_REASON || rejection === DOCUMENT_TRACKING_AUTHOR_REASON;
+/** The once-per-editor report of the suggesting-without-author configuration error. */
+export interface SuggestingConfigurationReporter {
+  /** Raise the error for `rejection` when it is the author one; every other reason is ignored. */
+  report(rejection: string | null): void;
+  /** Drop a report still waiting; the editor is going away. */
+  dispose(): void;
 }
 
 /**
- * A once-per-editor console report of the suggesting-without-author configuration error.
+ * Raise the suggesting-without-author configuration error once per editor.
  *
  * The refusal already reaches the host as an `ExecResult` and as the published
  * `lastRejection`; this is for the host that reads neither, like an `onReady` that calls
- * `setEditingMode('suggesting')` and drops the result. Only the HOST's own request is
- * reported: a document that asks for tracking through `w:trackRevisions` is the file's
- * wish, not the host's configuration, and stays a published rejection alone.
+ * `setEditingMode('suggesting')` and drops the result. It goes out through the editor's
+ * `error` event, the channel every other engine-raised error uses, and falls back to the
+ * console only when nobody listens — a host that reports errors in its own UI does not
+ * need library noise it cannot switch off (the `reportFontError` precedent).
+ *
+ * DEFERRED by a task, not raised inline. The adapters build the instance from first-render
+ * props and apply a later `author` from an effect, and StrictMode builds, destroys and
+ * rebuilds the instance before either; a report raised at construction would name a
+ * misconfiguration those hosts fix a moment later. `stillMissing` is asked when the task
+ * runs, so an author that arrived or an editor that was destroyed in between raises nothing.
  */
-export function createSuggestingConfigurationReporter(
-  log: (message: string) => void = (message) => console.error(message)
-): (rejection: string | null) => void {
+export function createSuggestingConfigurationReporter(input: {
+  /** True while the author is still missing and the editor is still alive. */
+  readonly stillMissing: () => boolean;
+  /** True when a host handler is subscribed to the editor's `error` event. */
+  readonly hasListener: () => boolean;
+  readonly emit: (error: EditorError) => void;
+  readonly log?: (message: string) => void;
+}): SuggestingConfigurationReporter {
   let reported = false;
-  return (rejection) => {
-    if (rejection !== SUGGESTING_AUTHOR_REASON || reported) return;
-    reported = true;
-    log(
-      `[@docx-editor.dev/core] ${SUGGESTING_AUTHOR_REASON}. ` +
-        'The document stays in editing mode and edits are not tracked until an author is set ' +
-        '(the author option at construction, setAuthor(), or the adapter author prop).'
-    );
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  const log = input.log ?? ((message: string) => console.error(message));
+  return {
+    report(rejection) {
+      if (rejection !== SUGGESTING_AUTHOR_REASON || reported || pending !== null) return;
+      pending = setTimeout(() => {
+        pending = null;
+        if (!input.stillMissing()) return;
+        reported = true;
+        const message =
+          `${SUGGESTING_AUTHOR_REASON}. Edits are not tracked until an author is set ` +
+          '(the author option at construction, setAuthor(), or the adapter author prop).';
+        input.emit(editorError('suggestingNeedsAuthor', message));
+        if (!input.hasListener()) log(`[@docx-editor.dev/core] ${message}`);
+      }, 0);
+    },
+    dispose() {
+      if (pending !== null) clearTimeout(pending);
+      pending = null;
+    },
   };
 }
 
@@ -181,7 +207,7 @@ export function documentTrackingAdoption(
 export function documentEditingModeRestriction(
   tracking: DocumentTrackingSettings,
   next: DocumentEditingMode
-): ExecResult | null {
+): CommandRefusal | null {
   if (next !== 'editing' || !tracking.restrictedToTrackedChanges) return null;
   return {
     ok: false,

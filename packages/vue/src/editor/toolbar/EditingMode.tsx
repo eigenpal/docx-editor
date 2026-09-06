@@ -11,6 +11,8 @@ import type { ToolbarSlotPartComponent } from './parts';
 
 const selectMode = (snapshot: EditorSnapshot): DocumentEditingMode =>
   snapshot.editingMode ?? 'editing';
+// Keyboard travel skips a refused item; see the React twin.
+const MENU_ITEMS = '[role="menuitemradio"]:not([disabled])';
 const selectLoading = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
 
@@ -82,7 +84,7 @@ export const ToolbarEditingMode = defineComponent({
       open,
       (isOpen) => {
         if (!isOpen) return;
-        const items = menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
+        const items = menuRef.value?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS);
         const checked = menuRef.value?.querySelector<HTMLButtonElement>('[aria-checked="true"]');
         (checked ?? items?.[0] ?? undefined)?.focus();
       },
@@ -110,9 +112,7 @@ export const ToolbarEditingMode = defineComponent({
     });
 
     const onMenuKeyDown = (event: KeyboardEvent) => {
-      const items = [
-        ...(menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []),
-      ];
+      const items = [...(menuRef.value?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS) ?? [])];
       const at = items.indexOf(document.activeElement as HTMLButtonElement);
       const move = (to: number) => {
         event.preventDefault();
@@ -175,27 +175,34 @@ export const ToolbarEditingMode = defineComponent({
               data-testid="editing-mode-menu"
               onKeydown={onMenuKeyDown}
             >
-              {MODE_OPTIONS.map((option) => (
-                <button
-                  key={option.mode}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={option.mode === mode.value}
-                  class="docx-toolbar__mode-item"
-                  data-testid={`editing-mode-${option.mode}`}
-                  onMousedown={guardToolbarMousedown}
-                  onClick={() => choose(option.mode)}
-                >
-                  {glyph(option.path)}
-                  <span class="docx-toolbar__mode-text">
-                    <span class="docx-toolbar__mode-label">{label(option.labelKey)}</span>
-                    <span class="docx-toolbar__mode-hint">{label(option.hintKey)}</span>
-                  </span>
-                  <span class="docx-toolbar__mode-check" aria-hidden="true">
-                    {option.mode === mode.value ? glyph(CHECK_PATH) : null}
-                  </span>
-                </button>
-              ))}
+              {MODE_OPTIONS.map((option) => {
+                // Each item asks the engine for ITS mode; see the React twin.
+                const probe = editorRef.value?.can({ type: 'setEditingMode', mode: option.mode });
+                const reason = probe && !probe.ok ? localizeDisabledReason(probe.reason, t) : null;
+                return (
+                  <button
+                    key={option.mode}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={option.mode === mode.value}
+                    class="docx-toolbar__mode-item"
+                    data-testid={`editing-mode-${option.mode}`}
+                    disabled={reason !== null}
+                    {...(reason ? { title: reason } : {})}
+                    onMousedown={guardToolbarMousedown}
+                    onClick={() => choose(option.mode)}
+                  >
+                    {glyph(option.path)}
+                    <span class="docx-toolbar__mode-text">
+                      <span class="docx-toolbar__mode-label">{label(option.labelKey)}</span>
+                      <span class="docx-toolbar__mode-hint">{label(option.hintKey)}</span>
+                    </span>
+                    <span class="docx-toolbar__mode-check" aria-hidden="true">
+                      {option.mode === mode.value ? glyph(CHECK_PATH) : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>

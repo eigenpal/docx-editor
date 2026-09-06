@@ -21,6 +21,9 @@ import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 
 const selectMode = (snapshot: EditorSnapshot): DocumentEditingMode =>
   snapshot.editingMode ?? 'editing';
+// Keyboard travel skips a refused item: `focus()` on a disabled button is a no-op, and a
+// no-op arrow reads as a stuck menu.
+const MENU_ITEMS = '[role="menuitemradio"]:not([disabled])';
 const selectLoading = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
 
@@ -88,15 +91,13 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
   // two marks disagreeing about the current mode reads as the menu being wrong.
   useEffect(() => {
     if (!open) return;
-    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
+    const items = menuRef.current?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS);
     const checked = menuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]');
     (checked ?? items?.[0] ?? undefined)?.focus();
   }, [open]);
 
   const onMenuKeyDown = useCallback((event: React.KeyboardEvent): void => {
-    const items = [
-      ...(menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []),
-    ];
+    const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS) ?? [])];
     const at = items.indexOf(document.activeElement as HTMLButtonElement);
     const move = (to: number): void => {
       event.preventDefault();
@@ -190,27 +191,36 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
           data-testid="editing-mode-menu"
           onKeyDown={onMenuKeyDown}
         >
-          {MODE_OPTIONS.map((option) => (
-            <button
-              key={option.mode}
-              type="button"
-              role="menuitemradio"
-              aria-checked={option.mode === mode}
-              className="docx-toolbar__mode-item"
-              data-testid={`editing-mode-${option.mode}`}
-              onMouseDown={guardToolbarMousedown}
-              onClick={() => choose(option.mode)}
-            >
-              {glyph(option.path)}
-              <span className="docx-toolbar__mode-text">
-                <span className="docx-toolbar__mode-label">{label(option.labelKey)}</span>
-                <span className="docx-toolbar__mode-hint">{label(option.hintKey)}</span>
-              </span>
-              <span className="docx-toolbar__mode-check" aria-hidden="true">
-                {option.mode === mode ? glyph(CHECK_PATH) : null}
-              </span>
-            </button>
-          ))}
+          {MODE_OPTIONS.map((option) => {
+            // Each item asks the engine for ITS mode: the pill is live while any mode can be
+            // entered, and the one that cannot — suggesting with no review module, or with
+            // no author — says why on the item, not the whole control.
+            const probe = editor?.can({ type: 'setEditingMode', mode: option.mode });
+            const reason = probe && !probe.ok ? localizeDisabledReason(probe.reason, t) : null;
+            return (
+              <button
+                key={option.mode}
+                type="button"
+                role="menuitemradio"
+                aria-checked={option.mode === mode}
+                className="docx-toolbar__mode-item"
+                data-testid={`editing-mode-${option.mode}`}
+                disabled={reason !== null}
+                {...(reason ? { title: reason } : {})}
+                onMouseDown={guardToolbarMousedown}
+                onClick={() => choose(option.mode)}
+              >
+                {glyph(option.path)}
+                <span className="docx-toolbar__mode-text">
+                  <span className="docx-toolbar__mode-label">{label(option.labelKey)}</span>
+                  <span className="docx-toolbar__mode-hint">{label(option.hintKey)}</span>
+                </span>
+                <span className="docx-toolbar__mode-check" aria-hidden="true">
+                  {option.mode === mode ? glyph(CHECK_PATH) : null}
+                </span>
+              </button>
+            );
+          })}
         </div>
       ) : null}
     </div>

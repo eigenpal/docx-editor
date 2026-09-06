@@ -17,6 +17,10 @@ export const DISABLED_REASON_KEYS: Readonly<Record<string, TranslationKey>> = Ob
   'no document is loaded': 'disabledReason.noDocument',
   'no document is open': 'disabledReason.noDocument',
   'the document has no review authors': 'disabledReason.noReviewAuthors',
+  // Keyed on `SUGGESTING_AUTHOR_REASON` in the engine's opening-editing-mode lane; the two
+  // must stay the same sentence or the Suggesting menu item explains itself in English only.
+  'suggesting mode needs an author; configure author before enabling it':
+    'disabledReason.suggestingNeedsAuthor',
   'no content control at the selection': 'disabledReason.noContentControl',
   // Keyed on `NO_COPIED_FORMATTING` in the engine's format-painter lane; the two must stay
   // the same sentence or the refusal reaches every locale in English.

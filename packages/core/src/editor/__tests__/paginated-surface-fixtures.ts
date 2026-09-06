@@ -36,6 +36,28 @@ export function docx(body: string): Uint8Array {
   });
 }
 
+/** A one-paragraph document whose settings part asks for tracked changes. */
+export function trackedDocx(): Uint8Array {
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  return zipSync({
+    '[Content_Types].xml': strToU8(
+      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>'
+    ),
+    '_rels/.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`
+    ),
+    'word/_rels/document.xml.rels': strToU8(
+      `<Relationships xmlns="${REL}"><Relationship Id="rIdSettings" Type="${R}/settings" Target="settings.xml"/></Relationships>`
+    ),
+    'word/settings.xml': strToU8(`<w:settings xmlns:w="${W}"><w:trackRevisions/></w:settings>`),
+    'word/document.xml': strToU8(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>tracked</w:t></w:r></w:p></w:body></w:document>`
+    ),
+  });
+}
+
 export const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
 /**
