@@ -5048,7 +5048,6 @@ export const XML_NAMESPACE_URI = "http://www.w3.org/XML/1998/namespace";
 export interface XmlLimits {
     // (undocumented)
     readonly maxBytes: number;
-    // (undocumented)
     readonly maxElements?: number;
 }
 

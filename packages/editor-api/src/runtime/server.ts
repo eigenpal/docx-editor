@@ -59,11 +59,14 @@ export interface DocumentZipLimits {
 export interface DocumentXmlLimits {
   /** Most bytes any one XML part may be. */
   readonly maxBytes: number;
-  /** Most elements any one XML part may contain. */
+  /**
+   * Most elements any one XML part may contain. Defaults to the engine budget
+   * (10,000,000); callers may raise it up to the engine ceiling (50,000,000).
+   */
   readonly maxElements?: number;
 }
 
-/** Optional tighter limits applied while opening untrusted DOCX bytes. */
+/** Resource budgets applied while opening DOCX bytes, subject to engine ceilings. */
 export interface DocumentLimits {
   /** Archive-level caps. */
   readonly zip?: DocumentZipLimits;
@@ -95,10 +98,11 @@ export interface CreateServerOptions {
    */
   readonly modules?: readonly EditorModule[];
   /**
-   * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.
+   * Budgets for the bounded reader — archive size, part count, and XML elements.
    *
-   * Exposed because a server opening documents it did not author is exactly where a caller may
-   * want smaller limits than the defaults. Omitted means the engine's own defaults.
+   * Omitted means the engine defaults. Lower budgets for untrusted input, or raise
+   * `xml.maxElements` for larger documents when the host has sufficient memory.
+   * Engine ceilings still apply.
    */
   readonly limits?: DocumentLimits;
   /**

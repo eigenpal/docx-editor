@@ -21,8 +21,12 @@ project must resolve exactly one copy of it, shared with any editor adapter you 
 
 `DocxEditor.createServer` rejects with error code `ResourceLimitExceeded` when opening exceeds a resource cap.
 Catch `DocxEditorError` and inspect its `limit` field, such as `xml.maxElements` or `zip.maxRatio`.
-Each XML part supports up to 2,000,000 elements, 64 MiB, and 256 nesting levels.
-The `limits` option can set tighter budgets. Malformed input rejects with `InvalidArgument`.
+The XML reader uses the engine's default budget of 10,000,000 elements per part.
+Set `limits.xml.maxElements` to lower that budget for untrusted input or raise it for larger documents,
+up to the engine ceiling of 50,000,000. Set `limits.xml.maxBytes` alongside it.
+The 64 MiB per-part byte ceiling and 256-level depth ceiling still apply.
+These budgets do not guarantee that a document fits in the host's memory.
+Malformed input rejects with `InvalidArgument`.
 
 ## Choose a host
 
