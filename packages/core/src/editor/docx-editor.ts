@@ -320,7 +320,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let pendingSuggestingRequest = false;
   // Raises the configuration error once, from a later task (`destroyed` exists by then).
   const suggestingReporter = createSuggestingConfigurationReporter({
-    stillMissing: () => !destroyed && author === undefined,
+    stillMissing: () =>
+      !destroyed &&
+      author === undefined &&
+      (editingMode === 'suggesting' ||
+        pendingSuggestingRequest ||
+        (!readerChoseMode && hostConfig.mode() === 'suggesting')),
     emit: (error) => emitError(error),
   });
   // The HOST's opening mode, when `config.mode` is explicit — precedence and reasons live
@@ -431,6 +436,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
   let stateVersion = 0;
   let cachedSnapshot: EditorSnapshot | null = null;
+  let cachedAuthor: string | undefined;
   /** The caret the cached snapshot was derived for — see `snapshotNow`. */
   let cachedCaret: ReturnType<PaginatedSurface['state']>['selection'] | null = null;
   /** The document revision the cached snapshot was derived for — see `snapshotNow`. */
@@ -1115,11 +1121,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       hiddenReviewAuthors: reviewAuthorVisibility.hiddenAuthorList,
       collaborationStatus: state?.collaborationStatus ?? 'inactive',
       editingMode,
-      // The facade's own refusal wins while it stands: the surface never saw the request.
-      // A document that ASKS for tracked changes and cannot get them — no author configured
-      // — is refused before any keystroke reaches the surface, so there is nothing in the
-      // surface state to report it. Cleared the moment the surface refuses anything itself.
-      lastRejection: state?.lastRejection ?? facadeRejection,
+      // A standing configuration refusal must not be hidden by an older surface refusal.
+      lastRejection: facadeRejection ?? state?.lastRejection ?? null,
       fontSubstitutions: deriveFontSubstitutions(),
       // Reference-stable from the surface, and a shared frozen constant when there is no
       // surface — the snapshot cache below compares this field with `===`.
@@ -1135,6 +1138,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function snapshotNow(): EditorSnapshot {
     if (cachedSnapshot && cachedVersion === stateVersion) return cachedSnapshot;
     const previous = cachedSnapshot;
+    const authorUnmoved = author === cachedAuthor;
+    cachedAuthor = author;
     const caret = surface?.state().selection ?? null;
     const caretUnmoved = selectionsMatch(caret, cachedCaret);
     cachedCaret = caret;
@@ -1181,7 +1186,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // canRedo all equal at an unmoved caret. Toggling a bullet OFF (a second press) left
       // the button pressed, and one Increase Indent that reached the deepest level a
       // definition declares left the button live for a press that could only be refused.
-      if (snapshotsEqual(next, previous) && caretUnmoved && documentUnmoved) next = previous;
+      if (snapshotsEqual(next, previous) && caretUnmoved && documentUnmoved && authorUnmoved) {
+        next = previous;
+      }
     }
     cachedSnapshot = deepFreezeValue(next);
     cachedVersion = stateVersion;
@@ -1656,21 +1663,19 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   /**
-   * Re-decide the mode from the host's standing choice and the document's request, as if
-   * the editor were opening now: `setMode`, and `setAuthor` while the reader has not chosen.
+   * Resolve host/document requests, preserving the fallback when neither requests a mode.
    */
-  function applyHostModeDecision(): void {
+  function applyHostModeDecision(fallback: DocumentEditingMode = 'editing'): void {
     const hostDecision = hostConfig.openingModeDecision(suggestingGuards());
     let next: DocumentEditingMode =
-      hostConfig.mode() === 'view' ? 'viewing' : (hostDecision.mode ?? 'editing');
+      hostConfig.mode() === 'view' ? 'viewing' : (hostDecision.mode ?? fallback);
     const documentDecision = documentTrackingDecision(next, false);
     if (documentDecision.mode !== null) next = documentDecision.mode;
-    // A mode the document's protection refuses (editing, under tracked-changes-only) is not
-    // entered: the author leaving keeps the tracked mode, refusing writes, rather than
-    // landing an untracked edit in a protected document.
-    if (documentEditingModeRestriction(documentTracking(), next) !== null) next = editingMode;
+    // Keep protection intact and publish why the requested mode cannot be entered.
+    const restriction = documentEditingModeRestriction(documentTracking(), next);
+    if (restriction !== null) next = editingMode;
     if (next !== editingMode) applyEditingMode(next);
-    facadeRejection = standingRejection(documentDecision.rejection);
+    facadeRejection = standingRejection(documentDecision.rejection ?? restriction?.reason ?? null);
     suggestingReporter.report(hostDecision.rejection);
     bump();
     emitSelectionChange();
@@ -2214,17 +2219,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (author === normalized) return;
       author = normalized;
       surface?.setAuthor(author);
-      // The author is suggesting's one runtime precondition, so a change re-decides the
-      // mode: an arrival completes the refused runtime request (applied directly — `exec`
-      // would flush a deferred open), else the host's and the document's requests are
-      // re-read unless the reader chose since. A reader-chosen suggesting with the author
-      // gone stays (an untracked fallback destroys text) and says why.
+      // Complete a waiting request without flushing a deferred open. Preserve an adopted
+      // document mode across author changes; only an explicit host mode requests a fallback.
       if (author !== undefined && pendingSuggestingRequest) {
         pendingSuggestingRequest = false;
         readerChoseMode = true;
         applyEditingMode('suggesting');
       } else if (!readerChoseMode) {
-        applyHostModeDecision();
+        applyHostModeDecision(hostConfig.mode() === undefined ? editingMode : 'editing');
         return;
       }
       facadeRejection = standingRejection(null);

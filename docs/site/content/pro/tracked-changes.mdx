@@ -38,8 +38,8 @@ enable suggesting without one, the editor refuses the request instead of
 accepting focus and ignoring keystrokes:
 
 - `setEditingMode('suggesting')` returns `{ ok: false, code: 'invalidArgs' }`
-  with the reason. `can` reports the same reason, so the **Suggesting** item in
-  the toolbar's mode menu is disabled with it. The other modes stay available.
+  with the reason. `can` reports the same reason. The toolbar disables the
+  **Suggesting** item and shows the reason. Other permitted modes stay available.
 - A `mode="suggesting"` prop without an `author` opens in editing mode.
 - Each case publishes the reason as `lastRejection` in the editor state.
 - The editor raises the configuration error once per instance through the
@@ -48,10 +48,14 @@ accepting focus and ignoring keystrokes:
 
 Set the author at mount, or later with `setAuthor` or the `author` prop. When
 the author arrives, the pending request enters suggesting mode, unless the
-reader has already chosen a mode. If the author is removed while a
-host-requested suggesting mode is active, the editor returns to editing mode and
-publishes the reason. A mode the reader chose stays in suggesting, refuses edits,
-and publishes the reason until the author returns.
+reader has already chosen a mode. Calls to `setEditingMode` count as reader
+choices, including calls from `onReady`.
+
+If you remove the author while `mode="suggesting"` is active, the editor
+returns to editing mode and publishes the reason, unless document protection
+forbids editing. Suggesting adopted from a document or chosen through
+`setEditingMode` stays active, refuses edits, and publishes the reason until
+the author returns.
 
 This example switches between editing and suggesting:
 

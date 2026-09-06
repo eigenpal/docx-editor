@@ -17,6 +17,7 @@ import type { DocxEditorInstance } from '@docx-editor.dev/core/editor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot.tsx';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport.tsx';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent.tsx';
+import { useEditorCommand } from '../src/editor/useEditorCommand.ts';
 import { DocxEditorToolbar } from '../src/editor/toolbar/index.ts';
 import { testReviewModule } from './review-test-module.ts';
 
@@ -44,6 +45,11 @@ afterEach(() => {
   cleanup();
 });
 
+function SuggestingCommandProbe() {
+  const state = useEditorCommand({ type: 'setEditingMode', mode: 'suggesting' });
+  return <button data-testid="suggesting-command" disabled={!state.isEnabled} />;
+}
+
 function mountToolbar(author?: string): {
   view: ReturnType<typeof render>;
   editor: () => DocxEditorInstance;
@@ -59,6 +65,7 @@ function mountToolbar(author?: string): {
       }}
     >
       <DocxEditorToolbar />
+      <SuggestingCommandProbe />
       <DocxEditorViewport>
         <DocxEditorContent />
       </DocxEditorViewport>
@@ -78,49 +85,49 @@ function item(view: ReturnType<typeof render>, mode: string): HTMLButtonElement 
 }
 
 describe('the editing-mode pill without an author', () => {
-  test('stays live, refuses only the Suggesting item, and still reaches Viewing', () => {
+  test('stays live, refuses only the Suggesting item, and still reaches Viewing', async () => {
     const { view, editor } = mountToolbar();
     const trigger = view.container.querySelector<HTMLButtonElement>(
       '[data-testid="editing-mode-trigger"]'
     )!;
     expect(trigger.disabled).toBe(false);
-    act(() => {
+    await act(async () => {
       trigger.click();
     });
     expect(item(view, 'suggesting').disabled).toBe(true);
     expect(item(view, 'suggesting').title).toBe(en.disabledReason.suggestingNeedsAuthor);
     expect(item(view, 'viewing').disabled).toBe(false);
     expect(item(view, 'viewing').title).toBe('');
-    act(() => {
+    await act(async () => {
       item(view, 'viewing').click();
     });
     expect(editor().getEditingMode()).toBe('viewing');
   });
 
-  test('keyboard travel skips the refused item', () => {
+  test('keyboard travel skips the refused item', async () => {
     const { view } = mountToolbar();
-    act(() => {
+    await act(async () => {
       view.container
         .querySelector<HTMLButtonElement>('[data-testid="editing-mode-trigger"]')!
         .click();
     });
     const menu = view.container.querySelector<HTMLElement>('[data-testid="editing-mode-menu"]')!;
     expect(document.activeElement).toBe(item(view, 'editing'));
-    act(() => {
+    await act(async () => {
       fireEvent.keyDown(menu, { key: 'ArrowDown' });
     });
     expect(document.activeElement).toBe(item(view, 'viewing'));
   });
 
-  test('focus lands on an enabled item when the current mode is the refused one', () => {
+  test('focus lands on an enabled item when the current mode is the refused one', async () => {
     const { view, editor } = mountToolbar('Grace Hopper');
-    act(() => {
+    await act(async () => {
       editor().setEditingMode('suggesting');
     });
-    act(() => {
+    await act(async () => {
       editor().setAuthor(undefined);
     });
-    act(() => {
+    await act(async () => {
       view.container
         .querySelector<HTMLButtonElement>('[data-testid="editing-mode-trigger"]')!
         .click();
@@ -131,7 +138,7 @@ describe('the editing-mode pill without an author', () => {
 
   test('an author arriving while the menu is open enables the Suggesting item', async () => {
     const { view, editor } = mountToolbar();
-    act(() => {
+    await act(async () => {
       view.container
         .querySelector<HTMLButtonElement>('[data-testid="editing-mode-trigger"]')!
         .click();
@@ -145,18 +152,33 @@ describe('the editing-mode pill without an author', () => {
     expect(item(view, 'suggesting').title).toBe('');
   });
 
-  test('an author arriving enables the Suggesting item', () => {
+  test('shared command hooks update when only the author changes', async () => {
     const { view, editor } = mountToolbar();
-    act(() => {
+    const probe = () =>
+      view.container.querySelector<HTMLButtonElement>('[data-testid="suggesting-command"]')!;
+    expect(probe().disabled).toBe(true);
+    await act(async () => {
+      editor().setAuthor('Ada');
+    });
+    expect(probe().disabled).toBe(false);
+    await act(async () => {
+      editor().setAuthor(undefined);
+    });
+    expect(probe().disabled).toBe(true);
+  });
+
+  test('an author arriving enables the Suggesting item', async () => {
+    const { view, editor } = mountToolbar();
+    await act(async () => {
       editor().setAuthor('Grace Hopper');
     });
-    act(() => {
+    await act(async () => {
       view.container
         .querySelector<HTMLButtonElement>('[data-testid="editing-mode-trigger"]')!
         .click();
     });
     expect(item(view, 'suggesting').disabled).toBe(false);
-    act(() => {
+    await act(async () => {
       item(view, 'suggesting').click();
     });
     expect(editor().getEditingMode()).toBe('suggesting');

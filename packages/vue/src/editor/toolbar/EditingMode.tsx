@@ -1,4 +1,4 @@
-import { computed, defineComponent, ref, shallowRef, watch } from 'vue';
+import { computed, defineComponent, ref, watch } from 'vue';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   runToolbarCommand,
@@ -8,7 +8,6 @@ import {
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
-import { useEditorEvent } from '../useEditorEvent';
 import { useEditorState } from '../useEditorState';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
@@ -94,16 +93,8 @@ export const ToolbarEditingMode = defineComponent({
     const editorRef = useDocxEditor();
     const mode = useEditorState(selectMode);
     const loading = useEditorState(selectLoading);
-    // The per-item refusals, live — from the store EVENTS, not a snapshot slice: the author
-    // is not in the snapshot, so a slice would never re-run for it. See the React twin.
-    const itemReasons = shallowRef<ItemReasons>(itemReasonsOf(editorRef.value));
-    const refreshItemReasons = () => {
-      const next = itemReasonsOf(editorRef.value);
-      if (!sameReasons(itemReasons.value, next)) itemReasons.value = next;
-    };
-    watch(() => editorRef.value, refreshItemReasons);
-    useEditorEvent('change', refreshItemReasons);
-    useEditorEvent('selectionChange', refreshItemReasons);
+    // The provider coalesces events and re-runs this selector even when the snapshot holds.
+    const itemReasons = useEditorState(() => itemReasonsOf(editorRef.value), sameReasons);
     const label = useToolbarLabel();
     const { t } = useTranslation();
     const open = ref(false);

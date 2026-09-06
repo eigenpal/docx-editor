@@ -3,6 +3,7 @@
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
+import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import {
   openTreeSession,
   type TreeApplyResult,
@@ -3027,9 +3028,7 @@ export function mountPaginatedSurface(
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
-    // SUGGESTING with no author cannot write `CT_TrackChange`, and EVERY edit is refused,
-    // not only the destructive ones: an untracked deletion removes text the reviewer was
-    // promised back, and untracked insertions under a Suggesting pill edited outright.
+    // Without an author, refuse every suggested edit instead of writing untracked changes.
     if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
     // Deleting a note is a package-level removal with no tracked form: the reference and
     // the body go outright, with no `w:del` and no card, while every insertion around it
@@ -5355,7 +5354,7 @@ export function mountPaginatedSurface(
       if (author === nextAuthor) return;
       flushTypeBuffer();
       author = nextAuthor;
-      if (nextAuthor?.trim() && lastRejection === AUTHOR_WRITE_REFUSAL) {
+      if (nextAuthor?.trim() && isMissingAuthorRefusal(lastRejection)) {
         lastRejection = null;
         options.onChange?.(currentState());
       }

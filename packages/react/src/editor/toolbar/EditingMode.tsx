@@ -9,7 +9,7 @@
 // deleting writes `w:del` over the words it would have removed, and both arrive in the review
 // pane as proposals. Viewing is the permission one: every command is refused while it is on.
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
 import {
   runToolbarCommand,
@@ -19,7 +19,7 @@ import {
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
-import { deferredNotifier, useEditorState } from '../useEditorState';
+import { useEditorState } from '../useEditorState';
 import { useToolbarLabel } from './toolbar-context';
 import { chromeControlForSlot, guardToolbarMousedown } from './ToolbarButton';
 
@@ -76,36 +76,6 @@ function itemReasonsOf(editor: DocxEditorInstance | null): ItemReasons {
     const probe = editor.can({ type: 'setEditingMode', mode: option.mode });
     return probe.ok ? null : probe.reason;
   });
-}
-
-/**
- * The per-item refusals, live. Each item asks the engine for ITS mode: the pill is live
- * while any mode can be entered, and the one that cannot — suggesting with no review
- * module, or no author — says why on the item. NOT a `useEditorState` slice: the author is
- * not in the snapshot, so `snapshot()` keeps its identity when only the author moved and a
- * selector would never re-run. The store events still fire, so this subscribes to them and
- * keeps the previous array while the answers hold, which is what lets React bail out.
- */
-function useItemReasons(editor: DocxEditorInstance | null): ItemReasons {
-  const store = useMemo(() => {
-    let last = itemReasonsOf(editor);
-    return {
-      subscribe(onStoreChange: () => void): () => void {
-        if (!editor) return () => {};
-        const notify = deferredNotifier(onStoreChange);
-        const offs = [editor.on('change', notify), editor.on('selectionChange', notify)];
-        return () => {
-          for (const off of offs) off();
-        };
-      },
-      read(): ItemReasons {
-        const next = itemReasonsOf(editor);
-        if (!sameReasons(last, next)) last = next;
-        return last;
-      },
-    };
-  }, [editor]);
-  return useSyncExternalStore(store.subscribe, store.read, () => NO_REASONS);
 }
 
 const CHECK_PATH = 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z';
@@ -201,7 +171,7 @@ export function ToolbarEditingMode({ className, hidden }: ToolbarEditingModeProp
   // ONE source for enabled state, the same one every other control uses.
   const state = toolbarCommandState(editor, 'review.editingMode');
   const disabledReason = localizeDisabledReason(state.disabledReason, t);
-  const itemReasons = useItemReasons(editor);
+  const itemReasons = useEditorState(() => itemReasonsOf(editor), sameReasons);
 
   const current = useMemo(
     () => MODE_OPTIONS.find((option) => option.mode === mode) ?? MODE_OPTIONS[0]!,

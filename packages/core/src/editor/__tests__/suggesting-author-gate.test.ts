@@ -2,6 +2,7 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { serializeOoxmlPart } from '../../store/index.ts';
 import type { EditorError } from '../../contracts/editor.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import {
@@ -384,5 +385,76 @@ describe('a document that asks for tracking with no author', () => {
     const editor = mount({ document: trackedDocx(), mode: 'edit' });
     editor.setAuthor('Grace Hopper');
     expect(editor.getEditingMode()).toBe('editing');
+  });
+});
+
+describe('author configuration transitions', () => {
+  test('a withdrawn request does not raise a delayed configuration error', async () => {
+    const host = mount({ mode: 'suggesting' });
+    host.setMode('edit');
+    const reader = mount({});
+    reader.setEditingMode('suggesting');
+    reader.setEditingMode('viewing');
+    await afterReport();
+    expect(errors).toEqual([]);
+    // Withdrawing a request does not consume the later error report.
+    host.setMode('suggesting');
+    await afterReport();
+    expect(errors).toHaveLength(1);
+  });
+
+  test('a refused suggesting request takes precedence over an older surface refusal', () => {
+    const editor = mount({});
+    editor.setEditingMode('viewing');
+    editor.surface!.undo();
+    expect(editor.snapshot().lastRejection).toContain('viewing');
+    editor.setEditingMode('suggesting');
+    expect(editor.snapshot().lastRejection).toBe(SUGGESTING_AUTHOR_REASON);
+    editor.setAuthor('Ada');
+    expect(editor.snapshot().lastRejection).toBeNull();
+  });
+
+  test('an author arriving clears a refused explicit proposal', () => {
+    const editor = mount({});
+    editor.exec({ type: 'proposeInsertion', text: 'x' });
+    expect(editor.snapshot().lastRejection).toContain('author');
+    editor.setAuthor('Ada');
+    expect(editor.snapshot().lastRejection).toBeNull();
+  });
+
+  test('removing the author preserves document-adopted tracking and refuses untracked edits', () => {
+    const editor = mount({ author: 'Ada', document: trackedDocx() });
+    editor.setAuthor(undefined);
+    expect(editor.getEditingMode()).toBe('suggesting');
+    expect(editor.snapshot().lastRejection).toContain('author');
+    editor.exec({ type: 'insertText', text: 'x' });
+    expect(editor.surface!.session.bodyText()).toBe('tracked');
+    editor.setAuthor('Grace');
+    expect(editor.getEditingMode()).toBe('suggesting');
+    expect(editor.snapshot().lastRejection).toBeNull();
+  });
+
+  test('renaming an author preserves adopted tracking after loading a plain document', () => {
+    const editor = mount({ author: 'Ada', document: trackedDocx() });
+    editor.load(docx(paragraph('next')));
+    expect(editor.getEditingMode()).toBe('suggesting');
+    editor.setAuthor('Grace');
+    expect(editor.getEditingMode()).toBe('suggesting');
+    editor.exec({ type: 'insertText', text: 'x' });
+    expect(serializeOoxmlPart(editor.surface!.session.part())).toMatch(
+      /<w:ins\b[^>]*w:author="Grace"[^>]*>.*?<w:t>x<\/w:t>.*?<\/w:ins>/
+    );
+  });
+
+  test('a protected document explains why the host cannot leave viewing without review support', () => {
+    const editor = mount({
+      review: false,
+      document: trackedDocx('<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>'),
+    });
+    editor.setMode('view');
+    editor.setMode('edit');
+    expect(editor.getEditingMode()).toBe('viewing');
+    expect(editor.snapshot().lastRejection).toContain('tracked changes');
+    expect(editor.exec({ type: 'insertText', text: 'x' }).ok).toBe(false);
   });
 });
