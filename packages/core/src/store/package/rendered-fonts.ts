@@ -161,8 +161,12 @@ const GLYPH_MARKS: ReadonlySet<string> = new Set([
 /**
  * `layout/symbol-run.ts`'s `MAX_SYMBOL_FONT_LENGTH`, kept by value: the store lane does not
  * import layout, and this question is about what layout will DO, not what a name may be.
+ *
+ * Exported so a test can pin the two together. A silent drift would make a name in the gap
+ * an override to one lane and not the other, and the run's real face would then be wrongly
+ * kept in this answer or wrongly dropped from it, with nothing failing.
  */
-const MAX_SYMBOL_FONT_LENGTH = 128;
+export const MAX_SYMBOL_FONT_LENGTH = 128;
 
 /**
  * Whether a `w:sym` replaces the run's face with one of its own.
