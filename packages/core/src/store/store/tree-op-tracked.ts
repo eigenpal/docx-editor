@@ -822,7 +822,9 @@ export function applyDeleteTracked(
         const structural =
           node.kind === 'contentControl' ||
           node.kind === 'contentControlContent' ||
-          (node.kind === 'generic' && isInlineRunContainer(node));
+          (node.kind === 'generic' &&
+            isInlineRunContainer(node) &&
+            insertionAuthor(stack) !== revision.author);
         if (rebuilt.length > 0 || structural) {
           out.push({ ...node, children: rebuilt } as OoxmlNode);
         }

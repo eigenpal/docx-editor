@@ -24,7 +24,6 @@ import { atomicNoteSpansOf, isNoteAtomNode } from '../package/note-nodes.ts';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../package/ooxml-shared.ts';
 import {
   contentControlContentOf,
-  inlineContainerOf,
   inlineContainersOf,
   isContentControlNode,
 } from './tree-op-nodes.ts';
@@ -515,6 +514,29 @@ export function insertionSite(
       return index < 0 ? { kind: 'newRun', holder } : { kind: 'newRun', holder, index };
     }
   }
+  if (owner === null && boundary && bias === 'left') {
+    const preceding = all.findLast((segment) => segment.end === offset);
+    if (preceding && preceding.removeNodeIds === undefined) {
+      const exited = inlineContainersOf(paragraph, segmentAncestryNodeId(preceding))
+        .filter(
+          (container) =>
+            container.kind === 'generic' &&
+            isInlineRunContainer(container) &&
+            offsets.spanOf(container)?.end === offset &&
+            !containsNode(container, segmentAncestryNodeId(boundary))
+        )
+        .at(-1);
+      if (exited) {
+        const holder = directParentOf(paragraph, exited.id) ?? paragraph;
+        // Both runs must remain in the same enclosing owner. Leaving a hyperlink or
+        // control keeps that owner's established boundary behavior.
+        if (containsNode(holder, segmentAncestryNodeId(boundary))) {
+          const index = holder.children.findIndex((child) => child.id === exited.id);
+          return { kind: 'newRun', holder, index: index + 1 };
+        }
+      }
+    }
+  }
   if (boundary) return { kind: 'atBoundary', segment: boundary };
 
   if (owner === null) {
@@ -680,8 +702,10 @@ function spanOfControl(
   segments: readonly Segment[],
   segment: Segment
 ): InlineControlSpan | null {
-  const container = inlineContainerOf(paragraph, segmentAncestryNodeId(segment));
-  if (!container || container.kind !== 'contentControl') return null;
+  const container = inlineContainersOf(paragraph, segmentAncestryNodeId(segment)).find(
+    (ancestor) => ancestor.kind === 'contentControl'
+  );
+  if (!container) return null;
   const ids = new Set<string>();
   idsUnder(container, ids);
   let start = Number.MAX_SAFE_INTEGER;

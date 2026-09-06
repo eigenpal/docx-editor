@@ -11,7 +11,13 @@ import { canonicalOoxmlFingerprint, serializeOoxmlPart } from '../package/ooxml-
 import { diffSemanticDigests, semanticDigest } from '../package/ooxml-digest.ts';
 import { isInlineRunContainer } from '../package/ooxml-shared.ts';
 import { applyTreeOp, paragraphTextOf, validateTreeOp, type TreeDocOp } from '../store/tree-ops.ts';
-import { paragraphOffsetIndex, runsUnder, segmentsOf } from '../store/tree-op-segments.ts';
+import {
+  inlineControlEndingAt,
+  inlineControlStartingAt,
+  paragraphOffsetIndex,
+  runsUnder,
+  segmentsOf,
+} from '../store/tree-op-segments.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WRAPPERS = ['smartTag', 'customXml', 'dir', 'bdo'] as const;
@@ -616,4 +622,64 @@ describe('inline run wrapper projection', () => {
     const paragraph = firstParagraph(reopened.part);
     expect(paragraphTextOf(reopened.part, paragraph.id)).toBe('smartTagcustomXmldirbdo');
   });
+});
+
+describe('inline wrapper review regressions', () => {
+  for (const name of WRAPPERS) {
+    test.each(['', '<w:lock w:val="contentLocked"/>'])(
+      `${name} preserves control edge deletion (%s)`,
+      (lock) => {
+        const original = load(
+          `<w:p>${run('L')}<w:sdt><w:sdtPr><w:text/>${lock}</w:sdtPr><w:sdtContent>${wrapper(name, run('chip'))}</w:sdtContent></w:sdt>${run('R')}</w:p>`
+        );
+        const paragraph = firstParagraph(original);
+        const control = firstNamed(original, 'sdt');
+        const span = { controlId: control.id, start: 1, end: 5 };
+        expect(inlineControlStartingAt(paragraph, 1)).toEqual(span);
+        expect(inlineControlEndingAt(paragraph, 5)).toEqual(span);
+        const next = apply(original, {
+          op: 'removeContentControl',
+          controlId: control.id,
+          keepContent: false,
+        });
+        expect(paragraphTextOf(next, paragraph.id)).toBe('LR');
+      }
+    );
+
+    test(`${name} retracts with its author's insertion`, () => {
+      const original = load(
+        `<w:p><w:ins w:id="7" w:author="A">${wrapper(name, run('word'))}</w:ins></w:p>`
+      );
+      const paragraphId = firstParagraph(original).id;
+      const next = apply(original, {
+        op: 'deleteText',
+        paragraphId,
+        start: 0,
+        end: 4,
+        revision: { author: 'A' },
+      });
+      expect(paragraphTextOf(next, paragraphId)).toBe('');
+      expect(containsNamed(next.root, 'ins')).toBe(false);
+      expect(containsNamed(next.root, name)).toBe(false);
+    });
+
+    test.each(['hyperlink', 'sdt'])(`${name} exit inherits left formatting within %s`, (owner) => {
+      const bold = '<w:r><w:rPr><w:b/></w:rPr><w:t>A</w:t></w:r>';
+      const content = wrapper(name, bold) + run('B');
+      const xml =
+        owner === 'sdt'
+          ? `<w:sdt><w:sdtPr><w:text/></w:sdtPr><w:sdtContent>${content}</w:sdtContent></w:sdt>`
+          : `<w:hyperlink w:anchor="target">${content}</w:hyperlink>`;
+      const original = load(`<w:p>${xml}</w:p>`);
+      const paragraphId = firstParagraph(original).id;
+      const next = apply(original, { op: 'insertText', paragraphId, offset: 1, text: 'X' });
+      expect(paragraphTextOf(next, paragraphId)).toBe('AXB');
+      expect(textUnder(firstNamed(next, name))).toBe('A');
+      const holder = firstNamed(next, owner === 'sdt' ? 'sdtContent' : 'hyperlink');
+      const inserted = holder.children[1]!;
+      expect(inserted.kind).toBe('run');
+      expect(textUnder(inserted)).toBe('X');
+      expect(containsNamed(inserted, 'b')).toBe(true);
+    });
+  }
 });
