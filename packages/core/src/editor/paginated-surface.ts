@@ -30,6 +30,7 @@ import {
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
   createLayoutScheduler,
@@ -40,7 +41,6 @@ import {
   keyedRangeRects,
   formatPageNumber,
   emptyTocPlaceholderParagraphIds,
-  findDrawingOverlayFrameInLayout,
   paragraphFragmentsOf,
   paragraphFragmentsOfBlocks,
   reviewItemKey,
@@ -5100,9 +5100,9 @@ export function mountPaginatedSurface(
 
     selectDrawing(drawingNodeId, hostParagraphId) {
       flushLayout();
-      const found = findDrawingOverlayFrameInLayout(currentLayout, drawingNodeId);
-      if (!found || found.record.paragraphId !== hostParagraphId) return false;
-      const next = collapsedAt({ paragraphId: hostParagraphId, offset: found.record.start });
+      const at = drawingSelectionPosition(currentLayout, drawingNodeId, hostParagraphId);
+      if (!at) return false;
+      const next = collapsedAt(at);
       setDrawingIntent({ kind: 'pointer', drawingNodeId }, selectionsEqual(next, selection));
       setSelection(next);
       return resolveSelectedDrawingRecord(surface)?.drawingNodeId === drawingNodeId;

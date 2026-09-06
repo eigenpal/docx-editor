@@ -1914,7 +1914,7 @@ export type SectionAnchor =
     readonly kind: 'unaddressable';
 };
 
-// @public
+// @public (undocumented)
 export type SectionBreakInsertType = 'nextPage' | 'continuous';
 
 // @public
