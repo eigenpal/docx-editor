@@ -6,6 +6,8 @@ import {
 } from '../../store/package/ooxml-tree.ts';
 import { createFixedMeasurer } from '../fixed-measurer.ts';
 import { layoutHeaderFooterStory } from '../hf-layout.ts';
+import { hitTestFragments } from '../semantic-hit-test.ts';
+import type { SemanticLayout } from '../semantic-records.ts';
 
 const frame =
   '<w:framePr w:wrap="around" w:vAnchor="text" w:hAnchor="margin" w:xAlign="center" w:y="1"/>';
@@ -23,6 +25,28 @@ function partOf(content = body, header = false) {
   });
   if (!parsed.ok) throw new Error(parsed.reason);
   return parsed.part;
+}
+
+function documentOf(story: ReturnType<typeof layoutHeaderFooterStory>): SemanticLayout {
+  return {
+    revision: 0,
+    pages: [
+      {
+        index: 0,
+        box: { x: 0, y: 0, width: 544, height: 792 },
+        contentBox: { x: 72, y: 72, width: 400, height: 648 },
+        fragments: [],
+        footer: {
+          kind: 'footer',
+          variant: 'default',
+          partName: story.partName,
+          part: story.part,
+          box: { x: 72, y: 730, width: 400, height: story.flowHeight },
+          fragments: story.fragments,
+        },
+      },
+    ],
+  } as SemanticLayout;
 }
 
 test('centers the legacy PAGE frame without charging its empty anchor paragraph twice', () => {
@@ -67,6 +91,7 @@ test('leaves other frame structures in ordinary flow', () => {
     body.replace('w:y="1"', 'w:y="200"'),
     body.replace('w:y="1"', 'w:y="1" w:w="200"'),
     body.replace(' PAGE ', ' NUMPAGES '),
+    body.replace(' PAGE ', ' PAGEREF anchor '),
     body.replace('</w:pPr></w:p>', '</w:pPr><w:r><w:t>not empty</w:t></w:r></w:p>'),
     body.replace('<w:t>1</w:t>', '<w:t>Page 1</w:t>'),
     body.replace(frame, frame + '<w:spacing w:after="200"/>'),
@@ -124,4 +149,68 @@ test('does not overlay meaningful, left-aligned or field-bearing anchor content'
   expect(
     layoutHeaderFooterStory(partOf(fieldAnchor), 400, measurer, 'field-anchor').fragments[1]!.box.y
   ).toBeGreaterThan(0);
+});
+
+test('accepts the switches Word writes after PAGE without moving the frame', () => {
+  const plain = layoutHeaderFooterStory(partOf(), 400, measurer, 'plain');
+  for (const instruction of [
+    ' PAGE \\* MERGEFORMAT ',
+    'PAGE \\* roman \\* MERGEFORMAT',
+    ' page ',
+  ]) {
+    const story = layoutHeaderFooterStory(
+      partOf(body.replace(' PAGE ', instruction)),
+      400,
+      measurer,
+      'switch'
+    );
+    const [first, second] = story.fragments;
+    if (first?.kind !== 'paragraph' || second?.kind !== 'paragraph')
+      throw new Error('paragraphs required');
+    expect(first.alignment).toBe('center');
+    expect(first.box).toEqual(plain.fragments[0]!.box);
+    expect(second.box.y).toBe(0);
+    expect(story.flowHeight).toBeCloseTo(plain.flowHeight, 4);
+  }
+});
+
+test('the frame box is its ink, so clicks beside it reach the anchor paragraph', () => {
+  const story = layoutHeaderFooterStory(partOf(), 400, measurer, 'hit');
+  for (const pageNumber of [1, 123]) {
+    const projected = story.withPageContext({ pageNumber, pageCount: 200, sectionPageCount: 200 });
+    const [framed, anchor] = projected.fragments;
+    if (framed?.kind !== 'paragraph' || anchor?.kind !== 'paragraph')
+      throw new Error('paragraphs required');
+    const spans = framed.lines[0]!.spans;
+    const ink = spans.reduce((sum, span) => sum + span.box.width, 0);
+    expect(framed.box.width).toBeCloseTo(ink, 4);
+    expect(framed.box.x).toBeCloseTo(spans[0]!.box.x, 4);
+    expect(framed.box.x + framed.box.width / 2).toBeCloseTo(200, 4);
+    expect(anchor.box).toMatchObject({ x: 0, width: 400 });
+    const model = documentOf(projected);
+    const inside = hitTestFragments(model, 0, projected.fragments, { x: 200, y: 3 });
+    expect(inside?.position.paragraphId).toBe(framed.paragraphId);
+    for (const x of [20, framed.box.x - 1, framed.box.x + framed.box.width + 1, 380]) {
+      const beside = hitTestFragments(model, 0, projected.fragments, { x, y: 3 });
+      expect(beside?.position.paragraphId).toBe(anchor.paragraphId);
+    }
+  }
+});
+
+test('clicks on the middle-dot decoration reach the anchor paragraph', () => {
+  const decorated = body.replace(
+    '</w:pPr></w:p>',
+    '<w:jc w:val="center"/></w:pPr><w:r><w:t xml:space="preserve">·   ·</w:t></w:r></w:p>'
+  );
+  const story = layoutHeaderFooterStory(partOf(decorated), 400, measurer, 'dots');
+  const [framed, anchor] = story.fragments;
+  if (framed?.kind !== 'paragraph' || anchor?.kind !== 'paragraph')
+    throw new Error('paragraphs required');
+  const dot = anchor.lines[0]!.spans[0]!;
+  expect(dot.box.x).toBeLessThan(framed.box.x);
+  const model = documentOf(story);
+  const onDot = hitTestFragments(model, 0, story.fragments, { x: dot.box.x + 1, y: 3 });
+  expect(onDot?.position).toEqual({ paragraphId: anchor.paragraphId, offset: 0 });
+  const onPage = hitTestFragments(model, 0, story.fragments, { x: 200, y: 3 });
+  expect(onPage?.position.paragraphId).toBe(framed.paragraphId);
 });

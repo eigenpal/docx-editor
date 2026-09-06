@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': minor
+'@docx-editor.dev/core': patch
 ---
 
-Project the optional DrawingML bilevel threshold and paint black/white picture colour mode with a bounded SVG filter. Preserve image alpha and original media, and invalidate retained image paint when the threshold changes or is removed.
+Render the DrawingML bilevel picture color mode.

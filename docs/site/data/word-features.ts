@@ -493,7 +493,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays can paint beyond their anchor cells. Page-relative images clip to the physical sheet rather than a shortened continuous-section band. Both share setImageWrapType and toolbarCommandState.',
+      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays are not cropped by their anchor cell. Both share setImageWrapType and toolbarCommandState.',
   },
   {
     id: 'images.bmp-webp',

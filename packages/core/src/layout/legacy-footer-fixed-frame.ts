@@ -23,6 +23,13 @@ function one(node: OoxmlElement, name: string): OoxmlElement | undefined {
   const matches = elements(node).filter((child) => child.localName === name);
   return matches.length === 1 && isW(matches[0]!, name) ? matches[0] : undefined;
 }
+/**
+ * A PAGE instruction, tolerant of the switches Word writes after it (`PAGE \* MERGEFORMAT`,
+ * `PAGE \* roman`). The switches only format the result; the frame never depends on it.
+ */
+export function isPageInstruction(instruction: string): boolean {
+  return /^page(?:\s+\\\*\s*[a-z]{1,32})*$/i.test(instruction.trim());
+}
 function twips(value: string | undefined): number | undefined {
   if (value === undefined || !/^\d{1,5}$/.test(value)) return undefined;
   const pt = Number(value) / 20;
@@ -55,7 +62,7 @@ function pageText(paragraph: OoxmlElement, leadingTab: boolean): string | undefi
       if (isW(node, 'fldChar') && !node.children.length) {
         const type = attr(node, 'fldCharType');
         if (state === 0 && type === 'begin') state = 1;
-        else if (state === 1 && type === 'separate' && instruction.trim() === 'PAGE') state = 2;
+        else if (state === 1 && type === 'separate' && isPageInstruction(instruction)) state = 2;
         else if (state === 2 && type === 'end') state = 3;
         else return undefined;
         continue;
@@ -71,7 +78,7 @@ function pageText(paragraph: OoxmlElement, leadingTab: boolean): string | undefi
     }
   }
   return state === 3 &&
-    instruction.trim() === 'PAGE' &&
+    isPageInstruction(instruction) &&
     tabs === Number(leadingTab) &&
     ((!prefix && !suffix) || (prefix === '- ' && suffix === ' -'))
     ? prefix + suffix

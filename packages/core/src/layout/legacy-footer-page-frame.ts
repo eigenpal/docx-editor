@@ -5,7 +5,7 @@ import {
   type OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
-import { positionFixedFooterPageFrame } from './legacy-footer-fixed-frame.ts';
+import { isPageInstruction, positionFixedFooterPageFrame } from './legacy-footer-fixed-frame.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
 const isElement = (node: OoxmlNode): node is OoxmlElement => node.kind !== 'textValue';
@@ -66,7 +66,13 @@ function containsOnlyPageField(paragraph: OoxmlElement): boolean {
       if (isW(node, 'fldChar') && node.children.length === 0) {
         const kind = attr(node, 'fldCharType');
         if (state === 0 && kind === 'begin') state = 1;
-        else if (state === 1 && kind === 'separate' && instruction === 'PAGE') state = 2;
+        else if (
+          state === 1 &&
+          kind === 'separate' &&
+          instruction !== null &&
+          isPageInstruction(instruction)
+        )
+          state = 2;
         else if (state === 2 && kind === 'end') state = 3;
         else return false;
       } else if (isW(node, 'instrText') && state === 1 && instruction === null) {
@@ -77,7 +83,7 @@ function containsOnlyPageField(paragraph: OoxmlElement): boolean {
       } else return false;
     }
   }
-  return state === 3 && instruction === 'PAGE';
+  return state === 3 && instruction !== null && isPageInstruction(instruction);
 }
 
 function framePair(
@@ -190,9 +196,13 @@ export function positionLegacyFooterPageFrame<
   const last = line.spans.at(-1);
   const right = last ? last.box.x + last.box.width : left;
   const dx = (contentWidth - (right - left)) / 2 - left;
+  // The frame is auto-sized, so its box is the ink it holds, not the story width. Hit testing
+  // is containment-first, and a full-width box here would claim every click in the band and
+  // leave the anchor paragraph (and its decoration) unreachable by mouse.
   const centered: ParagraphFragmentRecord = {
     ...framed,
     alignment: 'center',
+    box: { ...framed.box, x: left + dx, width: right - left },
     lines: [
       {
         ...line,

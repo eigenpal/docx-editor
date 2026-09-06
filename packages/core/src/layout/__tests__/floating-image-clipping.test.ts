@@ -62,7 +62,7 @@ test('square wrapping retains cell clipping', () => {
 });
 
 test('layoutInCell=false still permits overflow', () => {
-  const drawing = inCell('<wp:wrapNone/>', false, false);
+  const drawing = inCell('<wp:wrapSquare wrapText="bothSides"/>', false, false);
   expect(drawing.layoutInCell).toBe(false);
   expect(drawing.paintBounds.width).toBeCloseTo(drawing.width, 4);
 });
