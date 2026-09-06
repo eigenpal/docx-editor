@@ -7,6 +7,7 @@ import {
 import { applyEastAsiaFontSlots, type FieldAwarePiece } from '../field-pieces.ts';
 import { resolveRunStyle } from '../run-style.ts';
 import { eastAsiaRunsOfSegments } from '../script-itemization.ts';
+import { symbolRunStyle } from '../symbol-run.ts';
 import { createFixedMeasurer, layoutSemanticDocument, linesOf } from '../index.ts';
 import { readOoxmlPart, type OoxmlProperty } from '@docx-editor.dev/core/store';
 
@@ -213,12 +214,17 @@ test('the Times New Roman exception falls back to ignoring the hint when faces c
       'Times New Roman'
     )
   ).toBe(true);
+  // Two different tokens compare only through a resolver; unresolved, the exception stays.
+  const majorMinor = [rFonts({ asciiTheme: 'majorHAnsi', hAnsiTheme: 'minorHAnsi' })];
+  expect(hasTimesNewRomanEastAsiaException(majorMinor, 'Times New Roman')).toBe(true);
+  expect(hasTimesNewRomanEastAsiaException(majorMinor, 'Times New Roman', calibri)).toBe(false);
   expect(
     hasTimesNewRomanEastAsiaException(
-      [rFonts({ asciiTheme: 'majorHAnsi', hAnsiTheme: 'minorHAnsi' })],
-      'Times New Roman'
+      [rFonts({ asciiTheme: 'minorHAnsi', hAnsiTheme: 'minorEastAsia' })],
+      'Times New Roman',
+      calibri
     )
-  ).toBe(false);
+  ).toBe(true);
   expect(
     hasTimesNewRomanEastAsiaException(
       [rFonts({ ascii: 'arial', hAnsi: 'Arial' })],
@@ -243,6 +249,23 @@ test('a hinted symbol never lends East Asian strength to an unhinted neighbour',
   expect(eastAsiaRunsOfSegments(['·©'], [true])).toEqual([{ segment: 0, from: 0, to: 1 }]);
   // Real East Asian text still resolves the Common characters around it, as before.
   expect(eastAsiaRunsOfSegments(['中©'], [false])).toEqual([{ segment: 0, from: 0, to: 2 }]);
+  // Leading Common text resolved by later strong text, with a hinted symbol in between,
+  // still comes back in document order as one merged range.
+  expect(eastAsiaRunsOfSegments(['（—中'], [true])).toEqual([{ segment: 0, from: 0, to: 3 }]);
+  const pieces = applyEastAsiaFontSlots([piece('（—中')]);
+  expect(pieces.map((item) => item.text).join('')).toBe('（—中');
+  expect(pieces.map((item) => [item.start, item.end])).toEqual([[0, 3]]);
+  // A combining mark or variation selector stays on the hinted symbol it decorates.
+  expect(eastAsiaRunsOfSegments(['°́'], [true])).toEqual([{ segment: 0, from: 0, to: 2 }]);
+  expect(eastAsiaRunsOfSegments(['✔️'], [true])).toEqual([{ segment: 0, from: 0, to: 2 }]);
+  expect(applyEastAsiaFontSlots([piece('✔️')]).map((item) => item.text)).toEqual(['✔️']);
+});
+test('a w:sym glyph keeps the font it names under an inherited hint', () => {
+  const glyph = { text: '✓', font: 'Segoe UI Symbol', unicode: true };
+  const { props, style } = symbolRunStyle([fonts], glyph);
+  const sym: FieldAwarePiece = { text: '✓', props, style, start: 0, end: 1 };
+  expect(style.fontFamily).toBe('Segoe UI Symbol');
+  expect(applyEastAsiaFontSlots([sym])[0]).toBe(sym);
 });
 test('symbol-encoded faces keep their glyphs under the hint', () => {
   const wingdings = piece('✔', [

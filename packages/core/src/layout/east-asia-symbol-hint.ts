@@ -25,13 +25,17 @@ interface LatinFace {
   readonly theme: boolean;
 }
 
-/** The resolved family for comparison, or the theme token itself when nothing resolves it. */
-function comparableFace(face: LatinFace, themeFonts: ThemeFonts | undefined): string {
+/** The resolved family for comparison, or null when a theme token cannot be resolved. */
+function comparableFace(face: LatinFace, themeFonts: ThemeFonts | undefined): string | null {
   if (!face.theme) return face.value.toLowerCase();
   const resolved = themeFonts ? themeFontFamilyOf(face.value, themeFonts) : null;
-  // Without a resolver, `minorAscii` and `minorHAnsi` (and the major pair) still name the
-  // same theme face, so the token compares by the face it stands for.
-  return (resolved ?? face.value.replace(/Ascii$/, 'HAnsi')).toLowerCase();
+  return resolved?.toLowerCase() ?? null;
+}
+
+/** `minorAscii` and `minorHAnsi` (and the major pair) name one theme face by two tokens. */
+function sameThemeToken(a: string, b: string): boolean {
+  const canonical = (token: string) => token.replace(/Ascii$/, 'HAnsi').toLowerCase();
+  return canonical(a) === canonical(b);
 }
 
 /**
@@ -63,11 +67,12 @@ export function hasTimesNewRomanEastAsiaException(
     else if (attributes?.hAnsi !== undefined) hAnsi = { value: attributes.hAnsi, theme: false };
   }
   if (ascii === undefined || hAnsi === undefined) return true;
-  if (ascii.theme !== hAnsi.theme) {
-    const themed = ascii.theme ? ascii : hAnsi;
-    if (!themeFonts || themeFontFamilyOf(themed.value, themeFonts) === null) return true;
-  }
-  return comparableFace(ascii, themeFonts) === comparableFace(hAnsi, themeFonts);
+  if (ascii.theme && hAnsi.theme && sameThemeToken(ascii.value, hAnsi.value)) return true;
+  const asciiFace = comparableFace(ascii, themeFonts);
+  const hAnsiFace = comparableFace(hAnsi, themeFonts);
+  // A token nothing resolves cannot be compared with anything; keep the exception.
+  if (asciiFace === null || hAnsiFace === null) return true;
+  return asciiFace === hAnsiFace;
 }
 
 /**

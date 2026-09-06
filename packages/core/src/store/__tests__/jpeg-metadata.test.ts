@@ -102,8 +102,9 @@ describe('JPEG metadata before the frame header', () => {
   });
 
   test('takes the first APP1 that yields an orientation, as decoders do', () => {
-    // The first Exif block carries one entry that is not 0x0112, so it declares no
-    // orientation; decoders keep scanning and rotate by the second block.
+    // Regression guard for existing behavior: the first Exif block carries one entry that
+    // is not 0x0112, so it declares no orientation; decoders (Skia, Blink, WebKit) keep
+    // scanning and rotate by the second block, and so does this reader.
     const unoriented = exif(6);
     new DataView(unoriented.buffer).setUint16(16, 0x11a, true);
     expect(

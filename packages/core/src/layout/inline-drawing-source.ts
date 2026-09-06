@@ -296,12 +296,18 @@ export function vectorShapeLayoutToken(
 /** The two FNV-1a accumulators {@link vectorShapeLayoutToken} folds every point stream into. */
 const HASH_SCRATCH = new Uint32Array(2);
 
-type VectorPoints = NonNullable<
-  DrawingProjection['vectorShape']
->['components'][number]['subpathsEmu'][number];
+type EmuPoints = readonly Readonly<{ x: number; y: number }>[];
 
-/** One fold shared by subpaths and line ends, so both hash the same way. */
-function foldPointsInto(points: VectorPoints, hash: Uint32Array): void {
+/** A standalone digest of one point list, for the wrap polygon. */
+function pointsDigest(points: EmuPoints): string {
+  HASH_SCRATCH[0] = 0x811c_9dc5;
+  HASH_SCRATCH[1] = 0x1000_0193;
+  foldPointsInto(points, HASH_SCRATCH);
+  return `${HASH_SCRATCH[0]!.toString(36)}:${HASH_SCRATCH[1]!.toString(36)}`;
+}
+
+/** One fold shared by subpaths, line ends and wrap polygons, so all hash the same way. */
+function foldPointsInto(points: EmuPoints, hash: Uint32Array): void {
   let hashA = hash[0]!;
   let hashB = hash[1]!;
   for (const point of points) {
@@ -341,6 +347,8 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
     anchor?.simplePos ? 'sp' : 'pv',
     anchor ? String(anchor.relativeHeight) : '',
     anchor ? (anchor.layoutInCell ? '1' : '0') : '',
+    anchor ? (anchor.allowOverlap ? '1' : '0') : '',
+    anchor ? (anchor.behindDocument ? '1' : '0') : '',
     picture
       ? framedTokenJoin([
           String(picture.crop.left),
@@ -368,7 +376,9 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(wrap.distancesEmu.right),
           String(wrap.distancesEmu.bottom),
           String(wrap.distancesEmu.left),
+          // The vertex count alone let a moved vertex reuse the old exclusion polygon.
           String(wrap.polygon.length),
+          pointsDigest(wrap.polygon),
         ])
       : '',
     position

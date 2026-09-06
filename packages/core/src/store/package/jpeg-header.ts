@@ -4,22 +4,17 @@ const MAX_MARKERS = 4096;
 const MAX_PADDING_BYTES = 4096;
 const MAX_EXIF_ENTRIES = 4096;
 
-/** Whether an APP1 payload opens with the `Exif\0\0` signature. */
-function hasExifSignature(bytes: Uint8Array, start: number, end: number): boolean {
-  return (
-    end - start >= 6 &&
-    bytes[start] === 0x45 &&
-    bytes[start + 1] === 0x78 &&
-    bytes[start + 2] === 0x69 &&
-    bytes[start + 3] === 0x66 &&
-    bytes[start + 4] === 0 &&
-    bytes[start + 5] === 0
-  );
-}
-
-/** Orientation from one Exif-signed APP1 payload, or null when it declares none. */
 function exifOrientation(bytes: Uint8Array, start: number, end: number): number | null {
-  if (end - start < 14) return null;
+  if (
+    end - start < 14 ||
+    bytes[start] !== 0x45 ||
+    bytes[start + 1] !== 0x78 ||
+    bytes[start + 2] !== 0x69 ||
+    bytes[start + 3] !== 0x66 ||
+    bytes[start + 4] !== 0 ||
+    bytes[start + 5] !== 0
+  )
+    return null;
   const tiff = start + 6;
   const little = bytes[tiff] === 0x49 && bytes[tiff + 1] === 0x49;
   if (!little && !(bytes[tiff] === 0x4d && bytes[tiff + 1] === 0x4d)) return null;
@@ -65,11 +60,7 @@ export function validateJpegHeader(
     const length = (bytes[offset]! << 8) | bytes[offset + 1]!;
     const end = offset + length;
     if (length < 2 || end > bytes.length) return null;
-    // Decoders (Skia, Blink, WebKit) walk every APP1 and take the first that yields an
-    // orientation: a block with no 0x0112 tag, a bare `Exif\0\0` stub, or a non-Exif APP1
-    // (XMP) is skipped and the next block is read. Mirror that so the extent reported here
-    // is the extent the bitmap will have.
-    if (marker === 0xe1 && orientation === null && hasExifSignature(bytes, offset + 2, end)) {
+    if (marker === 0xe1 && orientation === null) {
       orientation = exifOrientation(bytes, offset + 2, end);
     }
     const isFrame =

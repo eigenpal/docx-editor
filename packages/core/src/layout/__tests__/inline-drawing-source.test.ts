@@ -12,6 +12,7 @@ import {
   drawingAtomIdentities,
   drawingTokenForTableBlock,
   drawingTokenForTableBlockMemo,
+  drawingProjectionLayoutToken,
   vectorShapeLayoutToken,
 } from '../inline-drawing-source.ts';
 
@@ -378,6 +379,35 @@ describe('vector shape layout token', () => {
     expect(vectorShapeLayoutToken(project({}))).toBe(vectorShapeLayoutToken(open));
     expect(vectorShapeLayoutToken(closed)).not.toBe(vectorShapeLayoutToken(open));
     expect(vectorShapeLayoutToken(arrow)).not.toBe(vectorShapeLayoutToken(open));
+  });
+
+  test('a moved wrap polygon vertex or a flipped anchor flag separates the drawing token', () => {
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const project = (options: { vertexX?: number; allowOverlap?: boolean; behind?: boolean }) => {
+      const xml =
+        `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p><w:r><w:drawing>` +
+        `<wp:anchor simplePos="0" behindDoc="${options.behind ? 1 : 0}" layoutInCell="1" allowOverlap="${options.allowOverlap === false ? 0 : 1}" locked="0" relativeHeight="1">` +
+        '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+        '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+        '<wp:extent cx="1270000" cy="635000"/><wp:wrapTight wrapText="bothSides"><wp:wrapPolygon edited="0">' +
+        `<wp:start x="0" y="0"/><wp:lineTo x="${options.vertexX ?? 21600}" y="0"/><wp:lineTo x="21600" y="21600"/><wp:lineTo x="0" y="21600"/><wp:lineTo x="0" y="0"/>` +
+        '</wp:wrapPolygon></wp:wrapTight><wp:docPr id="1" name="p"/>' +
+        `<a:graphic><a:graphicData uri="${PIC}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="p"/><pic:cNvPicPr/></pic:nvPicPr>` +
+        '<pic:blipFill><a:blip r:embed="rId9"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic>' +
+        '</wp:anchor></w:drawing></w:r></w:p></w:body></w:document>';
+      const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
+      if (!parsed.ok) throw new Error(parsed.reason);
+      const projections = [...indexInlineDrawingProjectionsInPart(parsed.part).values()];
+      expect(projections).toHaveLength(1);
+      return projections[0]!;
+    };
+    const base = drawingProjectionLayoutToken(project({}));
+    expect(drawingProjectionLayoutToken(project({}))).toBe(base);
+    expect(drawingProjectionLayoutToken(project({ vertexX: 10000 }))).not.toBe(base);
+    expect(drawingProjectionLayoutToken(project({ allowOverlap: false }))).not.toBe(base);
+    expect(drawingProjectionLayoutToken(project({ behind: true }))).not.toBe(base);
   });
 
   test('the token stays small for a shape at the point budget', () => {

@@ -26,10 +26,10 @@ function one(node: OoxmlElement, name: string): OoxmlElement | undefined {
 }
 /**
  * A PAGE instruction the live page-field projection evaluates: bare `PAGE`, with the
- * `\* MERGEFORMAT` Word appends, or a `\#` numeric picture. It is the same allowlist
- * `hf-layout.ts` uses to compute the value, so the frame lanes never claim a field whose
- * result the page context will not refresh (`\* roman`, `\* Arabic` and every other switch
- * stay in ordinary flow with their cached text).
+ * `\* MERGEFORMAT` Word appends, or a `\#` numeric picture. It is the allowlist
+ * `field-instruction.ts` evaluates the projected value through, so the frame lanes never
+ * claim a field whose result the page context will not refresh (`\* roman`, `\* Arabic`
+ * and every other switch stay in ordinary flow with their cached text).
  */
 function isPageInstruction(instruction: string): boolean {
   return allowlistedPageField(instruction) === 'PAGE';
