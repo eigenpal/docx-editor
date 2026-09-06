@@ -103,16 +103,18 @@ export function fontResolverFamilies(
     seen.add(fold);
     wanted.push(family);
   }
+  // Only the symbol faces the declared list would not carry anyway need reserving. Word
+  // writes a symbol face on the run too, so a checkbox face is usually declared as well —
+  // and `documentFonts()` sorts by code point, which puts Symbol, Webdings and Wingdings
+  // near the end of a long list. One that lands inside the bound costs nothing; one that
+  // lands past it is the case the reservation exists for.
+  const withinBound = new Set(declared.slice(0, cap).map((family) => family.toLowerCase()));
+  const unreachable = wanted.filter((family) => !withinBound.has(family.toLowerCase()));
   // A FLOOR, not a ceiling: it only decides how much of the declared list steps aside, and
   // never more than half the bound, so a small `cap` cannot invert the priority. Whatever
   // room is left over still goes to the remaining symbol faces.
-  const reserved = Math.min(wanted.length, RESERVED_SYMBOL_FAMILIES, Math.floor(cap / 2));
+  const reserved = Math.min(unreachable.length, RESERVED_SYMBOL_FAMILIES, Math.floor(cap / 2));
   const head = declared.slice(0, Math.max(cap - reserved, 0));
-  // Deduplicate against the families that SURVIVED the cut, not the whole declared list.
-  // Word writes a symbol face on the run too, so a checkbox face is usually declared as
-  // well — and `documentFonts()` sorts by code point, which puts Symbol, Webdings and
-  // Wingdings near the end of a long list. Folding them against a name the cut already
-  // dropped would spend the reservation on nothing.
   const kept = new Set(head.map((family) => family.toLowerCase()));
   const tail = wanted.filter((family) => !kept.has(family.toLowerCase()));
   return [...head, ...tail].slice(0, cap);

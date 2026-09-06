@@ -130,6 +130,13 @@ describe('fontResolverFamilies', () => {
     expect(fontResolverFamilies(declared, ['Wingdings'], 64)).toContain('Wingdings');
   });
 
+  test('a symbol face the bound already carries costs the declared list nothing', () => {
+    const declared = ['MS Gothic', ...Array.from({ length: 63 }, (_, index) => `Face ${index}`)];
+    const families = fontResolverFamilies(declared, ['MS Gothic'], 64);
+    expect(families).toHaveLength(64);
+    expect(families.at(-1)).toBe('Face 62');
+  });
+
   test('room left over after the reservation still goes to the remaining symbol faces', () => {
     const symbols = Array.from({ length: 10 }, (_, index) => `Symbol ${index}`);
     expect(fontResolverFamilies(['Garamond'], symbols, 64)).toHaveLength(11);

@@ -14,10 +14,12 @@
 //
 // Symbol faces are NOT excluded, deliberately. The editor asks a resolver for the face a
 // `w:sym` names, so an app can supply the Wingdings a private-use glyph needs — and once it
-// has, the editor can honour that family for text as well, which is the only question this
-// catalog answers. Word lists installed symbol fonts in its own picker for the same reason.
-// What keeps a symbol face out of a picker in practice is that nothing supplied it:
-// `collectDocumentFonts` reads `w:rFonts` declarations, and a `w:sym` face is not one.
+// has, the editor can honour that family for text as well, which is the only question the
+// CONFIGURED half of this catalog answers. Word lists installed symbol fonts in its own
+// picker for the same reason. A symbol face also reaches the DOCUMENT half whenever the
+// file declares it in a `w:rFonts`, which Word's checkbox markup does (and which
+// `applySetContentControlValue` mints when a user ticks one), supplied or not: the document
+// half is a catalog of what the file names, and has always offered names nothing can paint.
 
 import { configuredDefaultFontFamily, type FontCatalogConfiguration } from './font-composition.ts';
 

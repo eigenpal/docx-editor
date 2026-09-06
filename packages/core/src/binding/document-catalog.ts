@@ -235,11 +235,17 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): ReadonlyMap<str
     if (node.localName === 'sym' && node.namespaceUri === WML_NAMESPACE_URI) {
       // The WML namespace or none, matching how `layout/symbol-run.ts` reads it: a face
       // layout will not use is a face no resolver should be asked for.
-      const family = node.attributes.find(
+      const authored = node.attributes.find(
         (attribute) =>
           attribute.localName === 'font' &&
           (attribute.namespaceUri === WML_NAMESPACE_URI || attribute.namespaceUri === '')
       )?.value;
+      // Word writes the vertical form of a family as the same name behind an `@`
+      // (`@MS Gothic`). The bytes are the family's, so ask for the family: the prefix is a
+      // writing mode, and `FONT_NAME` — which every name leaving this module passes, because
+      // a CSS sink receives it — would otherwise reject the name and leave the face
+      // unsuppliable for a glyph that needs it.
+      const family = authored?.startsWith('@') ? authored.slice(1) : authored;
       if (family && FONT_NAME.test(family) && !byFold.has(family.toLowerCase())) {
         byFold.set(family.toLowerCase(), family);
       }

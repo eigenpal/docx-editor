@@ -64,9 +64,12 @@ font picker can still list those declared families.
 
 The notice excludes symbol faces too, such as the MS Gothic face a Word checkbox
 names in `w:sym`. A symbol run paints one character, and the editor resolves it
-to its Unicode equivalent wherever one exists, so any face can draw it. The font
-picker doesn't list a symbol face either, unless your font configuration supplies
-it: the picker offers the families the editor can honor.
+to its Unicode equivalent wherever one exists, so any face can draw it.
+
+The font picker is a separate list. It offers the families your configuration
+supplies and the families the document declares in `w:rFonts`, so a symbol face
+appears there when the file declares it as a run font, which Word's checkbox
+markup does.
 
 ## Load Word-compatible defaults
 

@@ -166,6 +166,9 @@ describe('collectRenderedFontFamilies', () => {
       })
     );
     expect(verticalWriting.renderedFontFamilies()).toEqual([]);
+    // The `@` is a writing mode, not a family, so the resolver is asked for the family —
+    // otherwise the notice is silent about a face nothing can supply.
+    expect(verticalWriting.symbolFontFamilies()).toEqual(['MS Gothic']);
 
     // A `font` in a foreign namespace is one layout ignores, so the run keeps its own face
     // and this answer must keep reporting it.
