@@ -1235,6 +1235,7 @@ export type ServerAutomationHostResult = {
     readonly ok: true;
 } | {
     readonly detail?: string;
+    readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
     readonly ok: false;
     readonly reason: ServerAutomationHostRejection;
 };

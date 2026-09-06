@@ -2890,6 +2890,7 @@ export type OoxmlPackageResult = {
     readonly package: OoxmlPackage;
 } | {
     readonly detail?: string;
+    readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
     readonly ok: false;
     readonly reason: OoxmlPackageRejection;
 };
@@ -5091,6 +5092,7 @@ export type ZipReadResult = {
     readonly ok: true;
 } | {
     readonly detail?: string;
+    readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
     readonly ok: false;
     readonly reason: ZipRejection;
 };

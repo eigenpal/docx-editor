@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   readXml,
+  XML_HARD_MAX_ELEMENTS,
   findElement,
   childElements,
   textContent,
@@ -31,6 +32,12 @@ describe('trust boundary rejections', () => {
       ok: false,
       reason: 'too-many-elements',
     });
+  });
+  test('cannot raise the hard element ceiling with an override', () => {
+    const xml = '<x>' + '<a/>'.repeat(XML_HARD_MAX_ELEMENTS) + '</x>';
+    expect(
+      readXml(xml, { maxBytes: xml.length, maxElements: XML_HARD_MAX_ELEMENTS + 1 })
+    ).toMatchObject({ ok: false, reason: 'too-many-elements' });
   });
   test('counts elements before parser allocation and before full XML validation', () => {
     expect(readXml('<x><a/><b/><unclosed', { maxBytes: 100, maxElements: 2 })).toMatchObject({

@@ -49,7 +49,9 @@ export type XmlRejection =
 export const MAX_XML_DEPTH = 256;
 const MAX_DEPTH = MAX_XML_DEPTH;
 export const XML_HARD_MAX_BYTES = 64 * 1024 * 1024;
-export const XML_HARD_MAX_ELEMENTS = 1_000_000;
+// Allows large formatted documents (including 101,322 paragraphs in issue #693),
+// while retaining a finite pre-parse allocation guard.
+export const XML_HARD_MAX_ELEMENTS = 2_000_000;
 
 /**
  * Decode ONLY the five predefined XML entities and numeric character references.

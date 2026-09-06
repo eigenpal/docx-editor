@@ -19,6 +19,11 @@ npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 `@docx-editor.dev/core` is a peer dependency: the engine holds identity-keyed state, so your
 project must resolve exactly one copy of it, shared with any editor adapter you install.
 
+`DocxEditor.createServer` rejects with error code `ResourceLimitExceeded` when opening exceeds a resource cap.
+Catch `DocxEditorError` and inspect its `limit` field, such as `xml.maxElements` or `zip.maxRatio`.
+Each XML part supports up to 2,000,000 elements, 64 MiB, and 256 nesting levels.
+The `limits` option can set tighter budgets. Malformed input rejects with `InvalidArgument`.
+
 ## Choose a host
 
 | `DocumentCapabilities` field | Server runtime | Browser runtime |

@@ -80,6 +80,7 @@ export type ServerAutomationHostResult =
   | {
       readonly ok: false;
       readonly reason: ServerAutomationHostRejection;
+      readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
       readonly detail?: string;
     };
 
@@ -120,6 +121,7 @@ export function createServerAutomationHost(
     return {
       ok: false,
       reason: loaded.reason,
+      ...(loaded.limit === undefined ? {} : { limit: loaded.limit }),
       ...(loaded.detail ? { detail: loaded.detail } : {}),
     };
   }
