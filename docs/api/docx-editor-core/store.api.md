@@ -4014,6 +4014,16 @@ export type TabStopWrite = ParagraphTabStop;
 export type TargetMode = 'Internal' | 'External';
 
 // @public
+export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[];
+
+// @public
+export interface TextboxStoryRoot {
+    readonly drawingNodeId: string;
+    readonly hostParagraphId: string;
+    readonly root: OoxmlElement;
+}
+
+// @public
 export function textContent(node: Extract<XmlNode, {
     type: 'element';
 }>): string;

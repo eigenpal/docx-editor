@@ -13,7 +13,10 @@ import type { HardBreakKind } from '@docx-editor.dev/core/store';
 import type { LegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { InlineDrawingLayoutInput } from './drawing-layout.ts';
 import { eastAsiaRunsOfSegments, type FontSlot } from './script-itemization.ts';
-import { hasEastAsiaSymbolHint } from './east-asia-symbol-hint.ts';
+import {
+  hasEastAsiaSymbolHint,
+  hasTimesNewRomanEastAsiaException,
+} from './east-asia-symbol-hint.ts';
 import type { ButtonFieldSpec } from './field-button.ts';
 import type { DocPropertyField } from './field-doc-property.ts';
 import type { FormFieldKind } from './field-form.ts';
@@ -22,8 +25,9 @@ import type { AutonumFieldSpec } from './field-autonum.ts';
 import type { HyperlinkFieldSpec } from './field-link.ts';
 import type { PageRefFieldProjection, RefFieldSpec } from './field-ref.ts';
 import type { SymbolFieldSpec } from './field-symbol.ts';
+import { isSymbolEncodedFamily } from './symbol-encoding.ts';
 import type { RevisionAttribution } from './revision-projection.ts';
-import type { ResolvedRunStyle } from './run-style.ts';
+import type { ResolvedRunStyle, ThemeFonts } from './run-style.ts';
 import type { SpanLinkRecord } from './semantic-records.ts';
 import type { OmmlEquationProjection } from '@docx-editor.dev/core/store';
 
@@ -424,7 +428,10 @@ function fontSlotSlice(
  * The style objects are untouched: a piece carries the run's real resolution and the slot
  * beside it, and the face is derived at the measurer/paint boundary via `styleForFontSlot`.
  */
-export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePiece[] {
+export function applyEastAsiaFontSlots(
+  pieces: FieldAwarePiece[],
+  themeFonts?: ThemeFonts
+): FieldAwarePiece[] {
   // Nothing to resolve unless some run authors a DISTINCT East Asian face. This is the
   // cheap common-case exit for Latin-defaulted documents; documents whose docDefaults
   // author one for every run instead lean on the pure-ASCII prescan inside
@@ -449,10 +456,13 @@ export function applyEastAsiaFontSlots(pieces: FieldAwarePiece[]): FieldAwarePie
     if (piece.text.length === 0) continue;
     streamed.push(index);
     segments.push(piece.text);
-    // Leave the special Times New Roman East Asian fallback to existing resolution.
+    // Leave the special Times New Roman East Asian fallback to existing resolution, and never
+    // move a symbol-encoded face (Wingdings, Symbol, a `w:sym` piece): its glyphs live in
+    // the symbol font, and the East Asian face would paint them as notdef boxes.
     hintedSegments.push(
-      piece.style.fontFamilyEastAsia?.toLowerCase() !== 'times new roman' &&
-        hasEastAsiaSymbolHint(piece.props)
+      hasEastAsiaSymbolHint(piece.props) &&
+        !isSymbolEncodedFamily(piece.style.fontFamily) &&
+        !hasTimesNewRomanEastAsiaException(piece.props, piece.style.fontFamilyEastAsia, themeFonts)
     );
   }
   const ranges = eastAsiaRunsOfSegments(segments, hintedSegments);

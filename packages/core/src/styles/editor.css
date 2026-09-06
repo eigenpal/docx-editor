@@ -1214,6 +1214,8 @@ a.docx-hyperlink:focus-visible {
   position: absolute;
   max-width: none;
   max-height: none;
+  /* The resource extent is the EXIF-oriented one; the pixels must be too. */
+  image-orientation: from-image;
 }
 
 .docx-editor.dark .docx-drawing-placeholder-card,

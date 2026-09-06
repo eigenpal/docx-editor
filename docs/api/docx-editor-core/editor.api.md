@@ -1527,6 +1527,7 @@ export interface PaginatedSurface {
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
+    selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
     selectedText(): string;
     // (undocumented)
     readonly session: TreeDocxSessionView;

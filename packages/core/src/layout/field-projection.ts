@@ -857,7 +857,7 @@ export function piecesOfParagraph(
    * their nesting. Every transparent wrapper shares {@link MAX_INLINE_CONTAINER_DEPTH} with
    * paragraph offsets; field-scan depth stays separate.
    */
-  if (!consumeScanNode(budget)) return applyEastAsiaFontSlots(pieces);
+  if (!consumeScanNode(budget)) return applyEastAsiaFontSlots(pieces, themeFonts);
   const paragraphScope = emptyNamespaceScope();
 
   /**
@@ -989,5 +989,5 @@ export function piecesOfParagraph(
 
   // Slot resolution is a paragraph-wide question (Common characters inherit across run
   // boundaries), so it runs after the walk, over the assembled pieces.
-  return applyEastAsiaFontSlots(pieces);
+  return applyEastAsiaFontSlots(pieces, themeFonts);
 }

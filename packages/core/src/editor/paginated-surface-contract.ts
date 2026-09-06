@@ -1,14 +1,7 @@
 // The paginated surface's public contract owns the types a host programs against.
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
-import type { IndentFormatting } from '../contracts/types.ts';
-import type {
-  ParagraphDisagreements,
-  ParagraphFlags,
-  SurfaceParagraphFormat,
-  ParagraphPropertyEdit,
-  ParagraphTabStop,
-} from './paragraph-format-contract.ts';
+import type { SurfaceParagraphFormat, ParagraphPropertyEdit } from './paragraph-format-contract.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type {
@@ -19,7 +12,6 @@ import type {
 } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
-import type { CollaborationStatus } from '../collaboration/index.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
 import type { EquationOps } from './surface-equations.ts';
 import type { SurfaceNavigation } from './surface-navigation.ts';
@@ -67,155 +59,19 @@ import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
 
 export type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
 
-/**
- * What the selection is currently formatted as.
- *
- * A value is present only when EVERY span in the selection agrees on it: a selection running
- * from 11pt into 14pt has no font size, and a toolbar should show a blank rather than pick
- * one of the two and imply the whole selection is that.
- */
-export interface SurfaceFormatting {
-  readonly bold: boolean;
-  readonly italic: boolean;
-  readonly underline: boolean;
-  readonly strikethrough: boolean;
-  readonly superscript: boolean;
-  readonly subscript: boolean;
-  readonly fontFamily: string | null;
-  /** Half-points, the unit OOXML stores and the picker expects. */
-  readonly fontSizeHalfPoints: number | null;
-  readonly color: string | null;
-  readonly highlight: string | null;
-  readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
-  readonly styleId: string | null;
-  /**
-   * `w:spacing`'s line rule and its value: LINES for `multiple`, points for the other two
-   * (`w:line` is 240ths of a line under `auto` and twentieths of a point otherwise).
-   * Null when the selection's paragraphs disagree, or state no line spacing at all.
-   */
-  readonly lineSpacing: {
-    readonly rule: 'multiple' | 'exact' | 'atLeast';
-    readonly value: number;
-  } | null;
-  /** `w:spacing/@w:before` and `@w:after` in points, null when the selection disagrees. */
-  readonly spaceBeforePt: number | null;
-  readonly spaceAfterPt: number | null;
-  /**
-   * Effective indent at the selection, in twips, or null with no selection or inside a
-   * table.
-   *
-   * The one field here that does NOT go null on disagreement: the values are the FIRST
-   * touched paragraph's and `mixed` reports the disagreement per field, because a ruler
-   * must draw its handles somewhere and Word draws them at the first selected paragraph.
-   */
-  readonly indent: IndentFormatting | null;
-  /**
-   * The paragraph flags the Paragraph dialog shows as checkboxes, or null when the
-   * selection's paragraphs disagree about that one.
-   *
-   * `contextualSpacing` is "Don't add space between paragraphs of the same style"; the
-   * other four are its Pagination block. Each is read from the cascade, so a flag a STYLE
-   * sets reads as on — which is what a checkbox has to show.
-   */
-  readonly paragraphFlags: ParagraphFlags;
-  /**
-   * The paragraph's resolved custom tab stops, cascade included, or null when the selection
-   * disagrees or nothing is loaded. Positions in TWIPS, like every other measurement a
-   * control writes back.
-   */
-  readonly tabStops: readonly ParagraphTabStop[] | null;
-  /**
-   * Which of the paragraph-level reads above are `null` because the selection DISAGREES,
-   * as opposed to because nothing states them. See {@link ParagraphDisagreements}.
-   */
-  readonly disagrees: ParagraphDisagreements;
-}
+import type {
+  DrawingSelectionIntent,
+  PaginatedSurfaceState,
+  RevealOptions,
+  SurfaceFormatting,
+} from './paginated-surface-state.ts';
 
-/** How a reveal places its target in the viewport. */
-export interface RevealOptions {
-  /**
-   * `'start'` puts the target near the top (a heading the user jumped to), `'center'`
-   * centres it, `'nearest'` scrolls only when it is out of view — and only far enough to
-   * clear the edge, which parks the target flush against it. `'centerIfNeeded'` is the one
-   * a jump-to-next-thing control wants: silent while the target is already on screen, and
-   * centred when it has to move, so the reader lands looking AT the thing rather than at
-   * the bottom line of the window. Default `'start'`.
-   */
-  readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
-  /** Padding above the target, in CSS pixels. Default 24. */
-  readonly offsetPx?: number;
-  readonly behavior?: ScrollBehavior;
-}
-
-/**
- * How the current selection came to address a drawing — see
- * {@link PaginatedSurface.drawingSelectionIntent}.
- */
-export type DrawingSelectionIntent =
-  | { readonly kind: 'none' }
-  | { readonly kind: 'pointer'; readonly drawingNodeId: string }
-  | { readonly kind: 'programmatic' };
-
-/**
- * Everything observable about the surface right now, as one immutable value.
- *
- * `revision` is the change token: it moves whenever anything else here does, which is what lets
- * `snapshot()` hand back the same reference until state actually changes.
- */
-export interface PaginatedSurfaceState {
-  readonly revision: number;
-  readonly pageCount: number;
-  readonly selection: SemanticSelection;
-  /**
-   * The rectangle of table cells a drag across cells selected, or null.
-   *
-   * `selection` always holds the equivalent TEXT range, so a reader that does not care about
-   * rectangles needs no branch. This is for the ones that do — the highlight, and table
-   * commands that act on cells rather than characters.
-   */
-  readonly cellSelection: CellSelection | null;
-  readonly canUndo: boolean;
-  readonly canRedo: boolean;
-  /**
-   * Lifecycle of the attached replica, or `'inactive'` when no collaboration
-   * module is registered on this surface.
-   */
-  readonly collaborationStatus: CollaborationStatus | 'inactive';
-  readonly lastRejection: string | null;
-  /**
-   * The typing format armed at the caret (Word's stored marks), or null.
-   *
-   * NOT document state — nothing is written until the next characters are typed — but it
-   * IS observable state: `formatting()` reports it, so a host that reflects the toolbar
-   * has to learn when it moves. Reference-stable while unchanged, so a host can compare
-   * it to decide whether to re-derive. See `toggleRunProperty` for the lane itself.
-   */
-  readonly pendingFormat: readonly { readonly localName: string }[] | null;
-  /**
-   * Content-control chrome and form-fill mode.
-   *
-   * Surface-owned (not document bytes). Updates report through the same `onChange` path as
-   * selection moves — hosts must not maintain a parallel channel.
-   */
-  readonly contentControls: ContentControlSurfaceState;
-  /**
-   * The TOC the last right-click landed on, or null.
-   *
-   * A right-click deliberately does not move the caret, and a TOC refuses the caret
-   * entirely, so `selection` can never say which table of contents the user is pointing at.
-   * This is how a host's context menu learns it. Surface chrome, not document state.
-   */
-  readonly contextTocId: string | null;
-  /**
-   * Format painter arming, and the level of what it holds.
-   *
-   * Surface chrome, not document bytes — the lane `contentControls` above sits in, reported
-   * through the same `onChange` so a toolbar's pressed state has exactly one source.
-   */
-  readonly formatPainter: FormatPainterSurfaceState;
-  /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
-  readonly perf: PaginatedSurfacePerf;
-}
+export type {
+  SurfaceFormatting,
+  RevealOptions,
+  DrawingSelectionIntent,
+  PaginatedSurfaceState,
+} from './paginated-surface-state.ts';
 
 /**
  * Where the section after an inserted break begins — Word's Layout > Breaks menu.
@@ -413,6 +269,13 @@ export interface PaginatedSurface {
   revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
   /** Set the selection directly, for a host driving the surface programmatically. */
   setSelection(next: SemanticSelection): void;
+  /**
+   * Select one painted drawing at its host paragraph, as a pointer press would.
+   *
+   * False when the layout paints no such drawing on that paragraph, in which case nothing
+   * moves: the caller decides what to do rather than being left mid-way.
+   */
+  selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
   /**
    * Select a rectangle of table cells, or clear one with null.
    *

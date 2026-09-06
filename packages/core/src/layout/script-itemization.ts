@@ -331,6 +331,8 @@ export function eastAsiaRunsOfSegments(
 
   /** Strongly classified text seen so far, or null while only Common text has streamed by. */
   let precedingStrong: Exclude<SlotClass, 'common'> | null = null;
+  // A w:t boundary does not end the preceding symbol's combining sequence.
+  let extendsHintedSymbol = false;
   /** Leading Common units waiting for the FOLLOWING strong item; `ascii` blocks eastAsia. */
   const pending: { segment: number; from: number; to: number; ascii: boolean }[] = [];
   const resolvePending = (strong: Exclude<SlotClass, 'common'>): void => {
@@ -343,6 +345,7 @@ export function eastAsiaRunsOfSegments(
   for (let segment = 0; segment < segments.length; segment += 1) {
     const text = segments[segment]!;
     if (pureAscii(text)) {
+      if (text.length > 0) extendsHintedSymbol = false;
       // Never eastAsia, so only the strong/Common distinction matters: any alphanumeric
       // is a strong Latin item; pure punctuation and whitespace stay transparent.
       if (/[0-9A-Za-z]/.test(text)) {
@@ -354,10 +357,27 @@ export function eastAsiaRunsOfSegments(
     for (let from = 0; from < text.length; ) {
       const codePoint = text.codePointAt(from)!;
       const to = from + (codePoint > 0xffff ? 2 : 1);
-      const slotClass =
-        hintedSegments[segment] && isEastAsiaHintSymbol(codePoint)
-          ? 'eastAsia'
-          : slotClassOf(codePoint);
+      // The hint changes this character's face, not its underlying script strength.
+      // Common symbols remain transparent; Greek and Cyrillic still stop surrounding
+      // Common characters from inheriting a preceding or following Han character.
+      // Combining marks and variation selectors retain their hinted base's face across
+      // segment boundaries without changing the preceding strong classification.
+      const hinted = hintedSegments[segment] && isEastAsiaHintSymbol(codePoint);
+      if (hinted || (extendsHintedSymbol && isClusterExtender(codePoint))) {
+        if (hinted) {
+          const underlyingClass = slotClassOf(codePoint);
+          if (underlyingClass !== 'common') {
+            resolvePending(underlyingClass);
+            precedingStrong = underlyingClass;
+          }
+        }
+        addEastAsia(segment, from, to);
+        extendsHintedSymbol = true;
+        from = to;
+        continue;
+      }
+      extendsHintedSymbol = false;
+      const slotClass = slotClassOf(codePoint);
       if (slotClass === 'common') {
         if (precedingStrong === null) {
           pending.push({ segment, from, to, ascii: codePoint <= 0x7f });
@@ -374,5 +394,38 @@ export function eastAsiaRunsOfSegments(
   }
   // A sequence of nothing but Common text has no strong item to inherit from on either
   // side; it stays in the base slots, exactly as it did before slot resolution existed.
-  return out;
+  //
+  // Leading Common units resolve only once the strong item AFTER them arrives, and a hinted
+  // symbol between the two is emitted first, so the list can be out of document order.
+  // The consumer slices pieces with a monotonic cursor, so order and merge here.
+  if (out.length < 2) return out;
+  out.sort((a, b) => a.segment - b.segment || a.from - b.from);
+  const merged: { segment: number; from: number; to: number }[] = [out[0]!];
+  for (let index = 1; index < out.length; index += 1) {
+    const range = out[index]!;
+    const previous = merged[merged.length - 1]!;
+    if (previous.segment === range.segment && range.from <= previous.to) {
+      if (range.to > previous.to) merged[merged.length - 1] = { ...previous, to: range.to };
+    } else {
+      merged.push(range);
+    }
+  }
+  return merged;
+}
+
+/**
+ * A code point that extends the grapheme cluster of the base before it: combining marks
+ * and variation selectors. Kept deliberately narrow (no ZWJ sequences), because the only
+ * job here is to keep a mark on the face of the symbol it decorates.
+ */
+function isClusterExtender(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x300 && codePoint <= 0x36f) ||
+    (codePoint >= 0x1ab0 && codePoint <= 0x1aff) ||
+    (codePoint >= 0x1dc0 && codePoint <= 0x1dff) ||
+    (codePoint >= 0x20d0 && codePoint <= 0x20ff) ||
+    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
+    (codePoint >= 0xfe20 && codePoint <= 0xfe2f) ||
+    (codePoint >= 0xe0100 && codePoint <= 0xe01ef)
+  );
 }

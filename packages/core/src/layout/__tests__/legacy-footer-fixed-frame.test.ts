@@ -144,6 +144,28 @@ test('supports fully contained fields and independent valid anchor decoration', 
   expect(paragraphs(layout(differentDecoration))[0]!.clipToBox).toBe(true);
 });
 
+test('accepts the switches Word writes after PAGE in a fixed frame', () => {
+  const plain = paragraphs(layout())[0]!;
+  for (const instruction of [' PAGE \\* MERGEFORMAT ', ' PAGE \\# "0" ', ' page ']) {
+    const [framed, anchor] = paragraphs(layout(body.replaceAll(' PAGE ', instruction)));
+    expect(framed!.clipToBox).toBe(true);
+    expect(framed!.box).toEqual(plain.box);
+    expect(anchor!.box.y).toBe(0);
+  }
+  // Switches the page-field projection does not evaluate stay in ordinary flow with their
+  // cached text: the frame lane must never claim a field whose value it cannot refresh.
+  for (const instruction of [
+    ' PAGEREF anchor ',
+    'PAGE \\* roman \\* MERGEFORMAT',
+    ' PAGE \\* Arabic ',
+    ' PAGE MERGEFORMAT ',
+  ]) {
+    expect(
+      paragraphs(layout(body.replaceAll(' PAGE ', instruction)))[0]!.clipToBox
+    ).toBeUndefined();
+  }
+});
+
 test('an empty anchor retains its line and clips the fixed frame without deleting its PAGE field', () => {
   const split = body.indexOf('</w:p>') + 6;
   const empty = body.slice(0, split) + body.slice(split).replace(decorated, '');

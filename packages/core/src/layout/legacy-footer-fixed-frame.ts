@@ -4,6 +4,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
+import { allowlistedPageField } from './field-instruction.ts';
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
@@ -22,6 +23,16 @@ const attr = (node: OoxmlElement, name: string): string | undefined => {
 function one(node: OoxmlElement, name: string): OoxmlElement | undefined {
   const matches = elements(node).filter((child) => child.localName === name);
   return matches.length === 1 && isW(matches[0]!, name) ? matches[0] : undefined;
+}
+/**
+ * A PAGE instruction the live page-field projection evaluates: bare `PAGE`, with the
+ * `\* MERGEFORMAT` Word appends, or a `\#` numeric picture. It is the allowlist
+ * `field-instruction.ts` evaluates the projected value through, so the frame lanes never
+ * claim a field whose result the page context will not refresh (`\* roman`, `\* Arabic`
+ * and every other switch stay in ordinary flow with their cached text).
+ */
+function isPageInstruction(instruction: string): boolean {
+  return allowlistedPageField(instruction) === 'PAGE';
 }
 function twips(value: string | undefined): number | undefined {
   if (value === undefined || !/^\d{1,5}$/.test(value)) return undefined;
@@ -55,7 +66,7 @@ function pageText(paragraph: OoxmlElement, leadingTab: boolean): string | undefi
       if (isW(node, 'fldChar') && !node.children.length) {
         const type = attr(node, 'fldCharType');
         if (state === 0 && type === 'begin') state = 1;
-        else if (state === 1 && type === 'separate' && instruction.trim() === 'PAGE') state = 2;
+        else if (state === 1 && type === 'separate' && isPageInstruction(instruction)) state = 2;
         else if (state === 2 && type === 'end') state = 3;
         else return undefined;
         continue;
@@ -71,7 +82,7 @@ function pageText(paragraph: OoxmlElement, leadingTab: boolean): string | undefi
     }
   }
   return state === 3 &&
-    instruction.trim() === 'PAGE' &&
+    isPageInstruction(instruction) &&
     tabs === Number(leadingTab) &&
     ((!prefix && !suffix) || (prefix === '- ' && suffix === ' -'))
     ? prefix + suffix

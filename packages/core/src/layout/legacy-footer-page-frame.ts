@@ -5,6 +5,7 @@ import {
   type OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
+import { allowlistedPageField } from './field-instruction.ts';
 import { positionFixedFooterPageFrame } from './legacy-footer-fixed-frame.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
@@ -66,18 +67,28 @@ function containsOnlyPageField(paragraph: OoxmlElement): boolean {
       if (isW(node, 'fldChar') && node.children.length === 0) {
         const kind = attr(node, 'fldCharType');
         if (state === 0 && kind === 'begin') state = 1;
-        else if (state === 1 && kind === 'separate' && instruction === 'PAGE') state = 2;
+        else if (
+          state === 1 &&
+          kind === 'separate' &&
+          instruction !== null &&
+          allowlistedPageField(instruction) === 'PAGE'
+        )
+          state = 2;
         else if (state === 2 && kind === 'end') state = 3;
         else return false;
-      } else if (isW(node, 'instrText') && state === 1 && instruction === null) {
-        instruction = text(node)?.trim() ?? null;
+      } else if (isW(node, 'instrText') && state === 1) {
+        // Word may split one instruction across runs (` PAGE ` + `\* MERGEFORMAT`); the
+        // fixed-width lane and the field projection concatenate them, so this lane must too.
+        const value = text(node);
+        if (value === null) return false;
+        instruction = (instruction ?? '') + value;
       } else if (isW(node, 't') && state === 2) {
         const value = text(node);
         if (value === null || !/^\d*$/.test(value)) return false;
       } else return false;
     }
   }
-  return state === 3 && instruction === 'PAGE';
+  return state === 3 && instruction !== null && allowlistedPageField(instruction) === 'PAGE';
 }
 
 function framePair(
@@ -190,12 +201,17 @@ export function positionLegacyFooterPageFrame<
   const last = line.spans.at(-1);
   const right = last ? last.box.x + last.box.width : left;
   const dx = (contentWidth - (right - left)) / 2 - left;
+  // The frame is auto-sized, so its box is the ink it holds, not the story width. Hit testing
+  // is containment-first, and a full-width box here would claim every click in the band and
+  // leave the anchor paragraph (and its decoration) unreachable by mouse.
   const centered: ParagraphFragmentRecord = {
     ...framed,
     alignment: 'center',
+    box: { ...framed.box, x: left + dx, width: right - left },
     lines: [
       {
         ...line,
+        box: { ...line.box, x: left + dx, width: right - left },
         contentX: line.contentX + dx,
         spans: line.spans.map((span) => ({ ...span, box: { ...span.box, x: span.box.x + dx } })),
       },

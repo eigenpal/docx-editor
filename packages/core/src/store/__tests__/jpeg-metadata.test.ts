@@ -101,6 +101,27 @@ describe('JPEG metadata before the frame header', () => {
     ).toEqual(portrait);
   });
 
+  test('takes the first APP1 that yields an orientation, as decoders do', () => {
+    // Regression guard for existing behavior: the first Exif block carries one entry that
+    // is not 0x0112, so it declares no orientation; decoders (Skia, Blink, WebKit) keep
+    // scanning and rotate by the second block, and so does this reader.
+    const unoriented = exif(6);
+    new DataView(unoriented.buffer).setUint16(16, 0x11a, true);
+    expect(
+      validateJpegHeader(jpeg([segment(0xe1, unoriented), segment(0xe1, exif(6)), frame()]))
+    ).toEqual(portrait);
+    // An orientation the first Exif block DOES carry wins over a later one.
+    expect(
+      validateJpegHeader(jpeg([segment(0xe1, exif(6)), segment(0xe1, exif(1)), frame()]))
+    ).toEqual(portrait);
+    // A bare six-byte `Exif\0\0` stub yields nothing and the next block is read.
+    expect(
+      validateJpegHeader(
+        jpeg([segment(0xe1, strToU8('Exif\0\0')), segment(0xe1, exif(6)), frame()])
+      )
+    ).toEqual(portrait);
+  });
+
   test('rejects invalid marker lengths, truncated frames, and zero dimensions', () => {
     const zero = frame();
     zero[8] = 0;

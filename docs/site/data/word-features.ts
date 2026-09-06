@@ -227,7 +227,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Protects graphemes, punctuation, and full-width number groups across run boundaries. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression uses deterministic punctuation and kana advance reductions; font-specific optical compression and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
+      'Protects graphemes, punctuation, and full-width number groups across run boundaries. East Asian font hints cover supported punctuation, symbols, Greek, and Cyrillic ranges while preserving explicit symbol fonts. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression uses deterministic punctuation and kana advance reductions; font-specific optical compression and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
   },
   {
     id: 'paragraphs.spacing',
@@ -493,7 +493,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays can paint beyond their anchor cells. Page-relative images clip to the physical sheet rather than a shortened continuous-section band. Both share setImageWrapType and toolbarCommandState.',
+      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays are not cropped by their anchor cell. Both share setImageWrapType and toolbarCommandState.',
   },
   {
     id: 'images.bmp-webp',
@@ -1048,7 +1048,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Searches headers, footers, footnotes, endnotes, table cells, and saved field results.',
+    notes:
+      'Searches headers, footers, footnotes, endnotes, body, header, and footer text boxes, table cells, and saved field results. Only anchored text boxes are searched, because an inline one paints no story. Note-owned text boxes are excluded until their drawings are selectable. A text-box match selects the text box instead of placing the caret inside it.',
   },
   {
     id: 'collab.clipboard',

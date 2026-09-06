@@ -1,4 +1,9 @@
-// Shared body/cell line breaking. Paragraph-relative spans keep cached breaks position-independent.
+// Paragraph measuring and breaking, shared between the body flow and table cells.
+//
+// Extracted from `semantic-layout.ts` so a cell paragraph breaks exactly like a body
+// paragraph: same pieces, same word boundaries, same cache discipline. The BREAK is
+// position-independent — span x offsets are relative to the paragraph origin — which is
+// what lets one cached break serve the same content at any x (body or any cell).
 
 import {
   PAGE_BREAK_CHAR,
@@ -497,6 +502,11 @@ export function alignSpans(
     trailingStart -= 1;
   }
   const lastContentSpan = spans[trailingEnd - 1];
+  // Clipped whitespace runs hang past the content: with two of them the last one is a
+  // zero-width span AT the measure, so last-span arithmetic reports no slack at all. The
+  // content ends where the first hanging span starts, whatever hangs after it.
+  const hangingStart =
+    trailingStart < spans.length ? spans[trailingStart]!.box.x - indentLeft : undefined;
   const spansReachLineEnd =
     lineUsedWidth !== undefined &&
     lastContentSpan !== undefined &&
@@ -507,8 +517,7 @@ export function alignSpans(
     spansReachLineEnd &&
     (alignment === 'center' || alignment === 'right')
   ) {
-    const used = spans[trailingStart]!.box.x - indentLeft;
-    const slack = available - used;
+    const slack = available - hangingStart!;
     if (slack <= 0) return spans;
     const offset = alignment === 'center' ? slack / 2 : slack;
     const clipsAtMargin = (lineUsedWidth ?? 0) >= available - OVERFLOW_TOLERANCE_PT;
@@ -526,19 +535,22 @@ export function alignSpans(
   // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
   // is what Word does and what stops a line ending in a space from looking misaligned.
   const last = spans[spans.length - 1]!;
-  const visible = last.text.replace(/\s+$/, '');
   // `box.width` was reserved from the DRAWN text, so the visible part has to be measured the
   // same way: the difference is what the trailing whitespace measures, and mixing a drawn
   // total with a source-measured visible part reports nearly the whole span as whitespace.
   // Centre and right pass `lineUsedWidth` and never read this; the path that does is a
   // JUSTIFIED non-last line, where an over-reported `trailing` inflates `slack` and
-  // over-stretches the line.
-  const trailing =
-    visible === last.text
-      ? 0
-      : last.box.width -
-        measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
-  const used = lineUsedWidth ?? last.box.x - indentLeft + last.box.width - trailing;
+  // over-stretches the line. Measured only on that path.
+  const contentEndWithoutTrailingWhitespace = (): number => {
+    const visible = last.text.replace(/\s+$/, '');
+    const trailing =
+      visible === last.text
+        ? 0
+        : last.box.width -
+          measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
+    return last.box.x - indentLeft + last.box.width - trailing;
+  };
+  const used = lineUsedWidth ?? hangingStart ?? contentEndWithoutTrailingWhitespace();
   const slack = available - used;
   if (slack <= 0) return spans;
 
@@ -549,9 +561,10 @@ export function alignSpans(
     if (justified) return justified;
     // Only boundaries after an expandable space receive slack — the same slots paint stretches
     // with `word-spacing`. A uniform step across every span pair invented gaps before tabs and
-    // run splits and drifted every later caret by N×step.
+    // run splits and drifted every later caret by N×step. Hanging whitespace runs are not
+    // slots either: a boundary between two of them took a share of the slack from the words.
     const gapBefore: number[] = [];
-    for (let index = 1; index < spans.length; index += 1) {
+    for (let index = 1; index < trailingStart; index += 1) {
       if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
     }
     if (gapBefore.length === 0) return spans;
@@ -1496,7 +1509,7 @@ export function breakParagraph(
         isCollapsibleLineEndWhitespace(candidate) &&
         (placeableSuffixes[pieceIndex]![boundary] !== 1 ||
           (!layoutOwned &&
-            line.spans.length > 0 &&
+            (line.spans.length > 0 || line.drawings.length > 0) &&
             line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT));
       if (lineEndWhitespace) {
         width = Math.min(width, Math.max(0, lineAvailable() - line.width));

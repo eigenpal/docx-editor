@@ -551,6 +551,11 @@ function paintVectorShape(
   svg.setAttribute('width', '100%');
   svg.setAttribute('height', '100%');
   svg.style.display = 'block';
+  // A non-root `<svg>` clips to its viewport by default. Line-end triangles can extend past
+  // the authored extent; Word records that overhang in `wp:effectExtent`, which layout folds
+  // into `paintBounds`, so the clip belongs to the outer box alone. A file with no effect
+  // extent still clips at the extent, which is what Word shows for it too.
+  svg.style.overflow = 'visible';
 
   // `components` is the paint authority and is always non-empty; the top-level `fillHex`
   // and `strokeHex` describe a one-component shape only.
