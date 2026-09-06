@@ -9,6 +9,8 @@ import type { ImageResourceState } from '../../store/package/image-resources.ts'
 import type { InlineDrawingLayoutContext } from '../drawing-layout.ts';
 import { createFixedMeasurer, layoutSemanticDocument, linesOf } from '../index.ts';
 import { spanOffsetX } from '../semantic-hit-test.ts';
+import { anchorLineStartsByModelOffset } from '../anchor-line-probe.ts';
+import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
@@ -136,5 +138,56 @@ describe('justified lines ending in clipped space runs', () => {
     // The last line stays flush left.
     expect(one[1]!.spans[0]!.box.x).toBe(0);
     expect(two[1]!.spans[0]!.box.x).toBe(0);
+  });
+});
+
+describe('same-run trailing spaces at a soft-wrap margin', () => {
+  test('keeps the word when only its same-run separator overflows', () => {
+    const lines = layout(run('XY AB CD'), 55);
+    expect(texts(lines)).toEqual(['XY AB ', 'CD']);
+    const fill = lines[0]!.spans.at(-1)!;
+    expect(fill.text).toBe(' ');
+    expect(fill.lineEndWhitespace).toBe(true);
+    expect(fill.box).toMatchObject({ x: 50, width: 5 });
+    expect(fill.range).toMatchObject({ start: 5, end: 6 });
+    expect(spanOffsetX(fill, 6, measurer)).toBe(55);
+  });
+  test('aligns the visible word and preserves a margin caret for the clipped fill', () => {
+    for (const [alignment, end] of [
+      ['center', 52.5],
+      ['right', 55],
+      ['both', 55],
+    ] as const) {
+      const lines = layout(run('XY AB CD'), 55, `<w:pPr><w:jc w:val="${alignment}"/></w:pPr>`);
+      expect(texts(lines)).toEqual(['XY AB ', 'CD']);
+      const word = lines[0]!.spans.find((span) => span.text === 'AB')!;
+      expect(word.box.x + word.box.width).toBe(end);
+      expect(word.lineEndWhitespace).toBeUndefined();
+      expect(spanOffsetX(word, word.range.end, measurer)).toBe(end);
+    }
+  });
+
+  test('keeps exact-fit words, repeated separators and drawing-led words on their line', () => {
+    expect(texts(layout(run('XY AB CD'), 50))).toEqual(['XY AB ', 'CD']);
+    expect(texts(layout(run('XY AB   CD'), 55))).toEqual(['XY AB   ', 'CD']);
+    expect(texts(layout(picture(30) + run('AB CD'), 55))).toEqual(['AB ', 'CD']);
+    expect(texts(layout(run('AB CD'), 25))).toEqual(['AB ', 'CD']);
+    expect(texts(layout(run('XY AB CD'), 60))).toEqual(['XY AB ', 'CD']);
+    expect(texts(layout(run('XY AB CD'), 45))).toEqual(['XY ', 'AB ', 'CD']);
+  });
+  test('predicts the same anchor line after a clipped same-run separator', () => {
+    const text = 'XY AB CD';
+    const starts = anchorLineStartsByModelOffset({
+      pieces: [{ text, start: 0, end: text.length, props: [], style: DEFAULT_RUN_STYLE }],
+      measurer,
+      available: 55,
+      firstLineOffset: 0,
+      anchorStarts: [3, 6],
+      equationLayoutOf: () => null,
+    });
+    const lines = layout(run(text), 55);
+    expect(starts.get(3)).toBe(lines[0]!.range.start);
+    expect(starts.get(6)).toBe(lines[1]!.range.start);
+    expect(starts.get(6)).toBe(6);
   });
 });

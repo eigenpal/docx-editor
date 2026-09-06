@@ -13,6 +13,7 @@ import {
 import { caretAt } from '../semantic-interaction.ts';
 import { pagesToMaterialize } from '../viewport.ts';
 import { isOutOfFlowTableFragment } from '../table-float-position.ts';
+import { createParagraphLayoutCache, tableCellBreakKeysOf } from '../layout-cache.ts';
 import type {
   ParagraphFragmentRecord,
   SemanticLayout,
@@ -183,7 +184,7 @@ describe('terminal empty text-table anchors', () => {
     );
   });
 
-  test('declines invalid positions, horizontal overflow, and paragraph spacing', () => {
+  test('declines invalid positions and horizontal overflow', () => {
     const anchors = [
       fixture(table().replace(/<w:tblpPr[^>]+\/>/, '<w:tblpPr/>')),
       fixture(table().replace(/<w:tblpPr[^>]+\/>/, '<w:tblpPr w:horzAnchor="margin"/>')),
@@ -193,16 +194,99 @@ describe('terminal empty text-table anchors', () => {
       fixture(table(230, 'w:topFromText="120"')),
       fixture(table(230, 'w:bottomFromText="720"')),
       fixture(table().replace('w:tblpXSpec="center"', 'w:tblpX="9000"')),
-      fixture(table(), p(31.2).replace('w:lineRule="exact"', 'w:lineRule="exact" w:before="120"')),
-      part(
-        p(595.2, 'Lead').replace('w:lineRule="exact"', 'w:lineRule="exact" w:after="120"') +
-          table() +
-          p(31.2) +
-          section()
-      ),
     ];
     for (const source of anchors)
       expect(tablesOf(render(source)).some(isOutOfFlowTableFragment)).toBe(false);
+  });
+
+  test('accepts Word bookmarks, proofing boundaries and formatting-only empty runs', () => {
+    for (const content of [
+      '<w:bookmarkStart w:id="0" w:name="_GoBack"/><w:bookmarkEnd w:id="0"/>',
+      '<w:proofErr w:type="spellStart"/><w:proofErr w:type="spellEnd"/>',
+      '<w:r><w:rPr><w:b/></w:rPr></w:r>',
+    ]) {
+      const source = fixture(table(), p(31.2).replace('</w:p>', content + '</w:p>'));
+      const original = serializeOoxmlPart(source);
+      const layout = render(source);
+      expect(layout.pages).toHaveLength(1);
+      expect(tablesOf(layout).every(isOutOfFlowTableFragment)).toBe(true);
+      expect(serializeOoxmlPart(source)).toBe(original);
+    }
+    for (const content of [
+      '<w:r><w:t> </w:t></w:r>',
+      '<w:r><w:tab/></w:r>',
+      '<w:r><w:rPr><w:vanish/></w:rPr></w:r>',
+    ]) {
+      const source = fixture(table(), p(31.2).replace('</w:p>', content + '</w:p>'));
+      expect(tablesOf(render(source)).some(isOutOfFlowTableFragment)).toBe(false);
+    }
+  });
+
+  test('collapses lead and anchor spacing while retaining one page', () => {
+    for (const [after, before] of [
+      [120, 0],
+      [0, 120],
+      [120, 240],
+    ]) {
+      const source = part(
+        p(595.2, 'Lead').replace('w:lineRule="exact"', `w:lineRule="exact" w:after="${after}"`) +
+          table() +
+          p(31.2).replace(
+            'w:lineRule="exact"',
+            `w:lineRule="exact" w:before="${before}" w:after="400"`
+          ) +
+          section()
+      );
+      const layout = render(source);
+      expect(layout.pages).toHaveLength(1);
+      const anchor = paragraphsOf(layout).at(-1)!;
+      const floating = tablesOf(layout)[0]!;
+      expect(isOutOfFlowTableFragment(floating)).toBe(true);
+      expect(anchor.lines[0]!.box.y).toBeCloseTo(595.2 + Math.max(after!, before!) / 20, 3);
+      expect(floating.box.y).toBeCloseTo(anchor.lines[0]!.box.y + 11.5, 3);
+    }
+  });
+
+  test('recomputes the terminal group across spacing and bookmark edits with a warm cache', () => {
+    const initial = fixture();
+    const bookmarked = replaceAnchor(
+      initial,
+      bodyOf(
+        fixture(
+          table(),
+          p(31.2).replace(
+            '</w:p>',
+            '<w:bookmarkStart w:id="0" w:name="_GoBack"/><w:bookmarkEnd w:id="0"/></w:p>'
+          )
+        )
+      ).children.at(-2) as OoxmlElement
+    );
+    const spaced = replaceAnchor(
+      bookmarked,
+      bodyOf(
+        fixture(table(), p(31.2).replace('w:lineRule="exact"', 'w:lineRule="exact" w:before="120"'))
+      ).children.at(-2) as OoxmlElement
+    );
+    const session = createLayoutSession();
+    const cache =
+      createParagraphLayoutCache<readonly import('../paragraph-flow.ts').PendingLine[]>();
+    for (const [revision, source] of [initial, bookmarked, spaced, initial].entries()) {
+      const warm = layoutSemanticDocument(source, revision, { measurer, session, cache });
+      const cold = layoutSemanticDocument(source, revision, { measurer });
+      expect(warm.pages).toEqual(cold.pages);
+      expect(warm.pages).toHaveLength(1);
+    }
+  });
+
+  test('retains each table cell cache only under its own table', () => {
+    const source = fixture(table(230) + table(1700), p(31.2), 400);
+    render(source, { cache: createParagraphLayoutCache() });
+    const [first, second] = bodyOf(source).children.filter((node) => node.kind === 'table');
+    const firstKeys = new Set(tableCellBreakKeysOf(first!)!);
+    const secondKeys = new Set(tableCellBreakKeysOf(second!)!);
+    expect(firstKeys.size).toBeGreaterThan(0);
+    expect(secondKeys.size).toBeGreaterThan(0);
+    expect([...firstKeys].some((key) => secondKeys.has(key))).toBe(false);
   });
 
   test('declines the whole group if any table or anchor exceeds the available band', () => {

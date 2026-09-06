@@ -1343,15 +1343,6 @@ function layoutBlocksPass(
       displayMode,
       authorFilter
     );
-    // The anchor can change without changing any table. Resume before the whole
-    // group when typing into it, undoing, or changing another table in the group.
-    const terminalFlowKeys = terminalTextTables
-      ? keys.map((key, index) =>
-          index >= terminalTextTables.start && index <= terminalTextTables.anchorIndex
-            ? framedTokenJoin([key, terminalTextTables.token])
-            : key
-        )
-      : keys;
     const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
     const markerTexts = prepared.map((entry) =>
       entry.kind === 'paragraph' ? listItems?.get(entry.paragraph.id)?.markerText : undefined
@@ -1380,7 +1371,8 @@ function layoutBlocksPass(
     // FLOW keys — what incremental resume compares. The composition, its fold order and
     // the argument for that order live with the folds in `pagination-keeps.ts`, where the
     // order is testable.
-    const flow = composeFlowKeys(terminalFlowKeys, {
+    const flow = composeFlowKeys(keys, {
+      terminalTableGroup: terminalTextTables,
       contextualSpacingAt: (index) => contextualSpacings[index]!,
       styleIdAt: (index) => styleIds[index] ?? null,
       borderGroupKeyAt: (index) => borderGroupKeys[index]!,
@@ -1537,6 +1529,7 @@ function layoutBlocksPass(
   const anchorPageDeferCounts = new Map<string, number>();
   const pendingFloatIds = new Set<string>();
   const floatSignals: tableFloat.PositionedTableAnchorSignal[] = [];
+  // Pass-local: the shared flow token prevents checkpoint resume inside this group.
   const terminalTextTableIds = new Set<string>();
   let terminalTextTableBottom = 0;
   // A continuous section resumes the previous section's column rather than opening a
@@ -2184,38 +2177,31 @@ function layoutBlocksPass(
         !options.drawingExclusionZonesByPage?.get(pages.length)?.length
       ) {
         const anchor = prepared[terminalTextTables.anchorIndex]!;
-        if (
-          anchor.kind === 'paragraph' &&
-          anchor.spacing.before === 0 &&
-          anchor.spacing.after === 0 &&
-          previousSpaceAfter === 0
-        ) {
+        if (anchor.kind === 'paragraph') {
           const anchorLines = breakBlock(anchor, terminalTextTables.anchorIndex);
           if (anchorLines.length === 1 && anchorLines[0]!.spans.length === 0) {
-            collectingCellBreakKeys = [];
-            try {
-              const placed = terminalTables.placeTerminalTextTables(terminalTextTables, {
-                cursorY,
-                anchorHeight: anchor.spacing.before + anchor.spacing.after + anchorLines[0]!.height,
-                contentWidth,
-                contentHeight: contentHeight(),
-                frames: anchorFrames(),
-                deps: tableDeps,
-                styleCascade,
-                displayMode,
-                authorFilter,
-              });
-              if (placed) {
-                for (const fragment of placed.fragments) pageFragments.push(fragment);
-                for (const table of terminalTextTables.tables) {
-                  terminalTextTableIds.add(table.id);
-                  registerTableCellBreakKeys(table, collectingCellBreakKeys);
-                }
-                terminalTextTableBottom = placed.bottom;
-                continue;
+            // The cursor already includes the lead paragraph's after-spacing. Use the
+            // same collapsed gap as anchor placement; after-spacing never decides fit.
+            const before = collapsedSpaceBefore(anchor.spacing.before, previousSpaceAfter);
+            const placed = terminalTables.placeTerminalTextTables(terminalTextTables, {
+              cursorY: cursorY + before,
+              anchorHeight: anchorLines[0]!.height,
+              contentWidth,
+              contentHeight: contentHeight(),
+              frames: anchorFrames(),
+              deps: tableDeps,
+              styleCascade,
+              displayMode,
+              authorFilter,
+            });
+            if (placed) {
+              for (const fragment of placed.fragments) pageFragments.push(fragment);
+              for (const [memberIndex, table] of terminalTextTables.tables.entries()) {
+                terminalTextTableIds.add(table.id);
+                registerTableCellBreakKeys(table, placed.cellBreakKeys[memberIndex]!);
               }
-            } finally {
-              collectingCellBreakKeys = null;
+              terminalTextTableBottom = placed.bottom;
+              continue;
             }
           }
         }

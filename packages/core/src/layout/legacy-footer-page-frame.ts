@@ -5,7 +5,7 @@ import {
   type OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
-import { allowlistedPageField } from './field-instruction.ts';
+import { readLegacyPageField } from './legacy-footer-page-field.ts';
 import { positionFixedFooterPageFrame } from './legacy-footer-fixed-frame.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
@@ -56,45 +56,9 @@ function text(node: OoxmlElement): string | null {
   return value;
 }
 
-function containsOnlyPageField(paragraph: OoxmlElement): boolean {
-  let state = 0;
-  let instruction: string | null = null;
-  for (const run of elements(paragraph)) {
-    if (isW(run, 'pPr')) continue;
-    if (!isW(run, 'r')) return false;
-    for (const node of elements(run)) {
-      if (isW(node, 'rPr')) continue;
-      if (isW(node, 'fldChar') && node.children.length === 0) {
-        const kind = attr(node, 'fldCharType');
-        if (state === 0 && kind === 'begin') state = 1;
-        else if (
-          state === 1 &&
-          kind === 'separate' &&
-          instruction !== null &&
-          allowlistedPageField(instruction) === 'PAGE'
-        )
-          state = 2;
-        else if (state === 2 && kind === 'end') state = 3;
-        else return false;
-      } else if (isW(node, 'instrText') && state === 1) {
-        // Word may split one instruction across runs (` PAGE ` + `\* MERGEFORMAT`); the
-        // fixed-width lane and the field projection concatenate them, so this lane must too.
-        const value = text(node);
-        if (value === null) return false;
-        instruction = (instruction ?? '') + value;
-      } else if (isW(node, 't') && state === 2) {
-        const value = text(node);
-        if (value === null || !/^\d*$/.test(value)) return false;
-      } else return false;
-    }
-  }
-  return state === 3 && instruction !== null && allowlistedPageField(instruction) === 'PAGE';
-}
-
 function framePair(
   part: OoxmlPart
 ): { first: string; empty: string; y: number; decoration: string } | null {
-  if (!isW(part.root, 'ftr') || !bounded(part)) return null;
   const paragraphs = elements(part.root);
   if (paragraphs.length !== 2 || paragraphs.some((node) => node.kind !== 'paragraph')) return null;
   const [first, empty] = paragraphs as [OoxmlElement, OoxmlElement];
@@ -150,7 +114,7 @@ function framePair(
   )
     return null;
   const y = attr(frame, 'y') ?? '0';
-  if (!['0', '1'].includes(y) || !containsOnlyPageField(first)) return null;
+  if (!['0', '1'].includes(y) || readLegacyPageField(first) !== '') return null;
   return { first: first.id, empty: empty.id, y: Number(y) / 20, decoration };
 }
 
@@ -177,8 +141,9 @@ export function positionLegacyFooterPageFrame<
   contentWidth: number,
   pageGeometry?: { readonly marginLeft: number; readonly pageWidth: number }
 ): T {
+  if (!isW(part.root, 'ftr') || !bounded(part)) return flow;
   const pair = framePair(part);
-  if (!pair) return bounded(part) ? positionFixedFooterPageFrame(part, flow, pageGeometry) : flow;
+  if (!pair) return positionFixedFooterPageFrame(part, flow, pageGeometry);
   if (flow.blocks.length !== 2) return flow;
   const [first, empty] = flow.blocks;
   if (

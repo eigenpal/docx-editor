@@ -4,7 +4,7 @@
 // projection-only — every authored branch stays in the tree on save.
 
 import { sanitizeHref } from './sinks.ts';
-import { readBlipEffects } from './drawing-image-effects.ts';
+import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
@@ -217,12 +217,7 @@ export interface DrawingProjection {
   readonly vectorShape: VectorShapeProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
   readonly locks: DrawingLocks;
-  readonly effects: Readonly<{
-    grayscale: boolean;
-    brightness: number;
-    contrast: number;
-    bilevel?: number;
-  }>;
+  readonly effects: DrawingImageEffects;
   readonly compatibilityBranchNodeId: string | null;
   readonly diagnostics: readonly DrawingDiagnostic[];
 }
@@ -1069,12 +1064,7 @@ function projectPicture(
 ): {
   readonly picture: PictureProjection | null;
   readonly relationshipId: string | null;
-  readonly effects: Readonly<{
-    grayscale: boolean;
-    brightness: number;
-    contrast: number;
-    bilevel?: number;
-  }>;
+  readonly effects: DrawingImageEffects;
   readonly diagnostic: DrawingDiagnostic | null;
 } {
   if (!visitNode(state, ctx.limits)) {

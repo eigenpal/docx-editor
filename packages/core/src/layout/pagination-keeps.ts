@@ -24,6 +24,7 @@
 // a table it cannot fit beside.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { framedTokenJoin } from './layout-cache.ts';
 
 /**
  * How many blocks one `w:keepNext` chain may bind together before layout gives up.
@@ -386,6 +387,12 @@ export function keepNextFlowKeys(keys: string[], keepsNext: (index: number) => b
 
 /** The per-block answers {@link composeFlowKeys} folds over the break-cache keys. */
 export interface FlowKeyFoldInputs {
+  /** Shared token forces resume before every member of a terminal floating-table group. */
+  readonly terminalTableGroup?: {
+    readonly start: number;
+    readonly anchorIndex: number;
+    readonly token: string;
+  };
   readonly contextualSpacingAt: (index: number) => boolean;
   /** `null` for a block that can never match a neighbour — a table, or an unstyled paragraph. */
   readonly styleIdAt: (index: number) => string | null;
@@ -418,7 +425,15 @@ export interface FlowKeyFoldInputs {
  * `pagination-keeps.test.ts`.
  */
 export function composeFlowKeys(keys: string[], at: FlowKeyFoldInputs): string[] {
-  let flow = contextualSpacingFlowKeys(keys, at.contextualSpacingAt, at.styleIdAt);
+  const group = at.terminalTableGroup;
+  const grouped = group
+    ? keys.map((key, index) =>
+        index >= group.start && index <= group.anchorIndex
+          ? framedTokenJoin([key, group.token])
+          : key
+      )
+    : keys;
+  let flow = contextualSpacingFlowKeys(grouped, at.contextualSpacingAt, at.styleIdAt);
   flow = borderGroupFlowKeys(flow, at.borderGroupKeyAt);
   if (at.tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => at.tocVerdicts[index]!);
   flow = listMarkerFlowKeys(flow, at.markerTextAt);

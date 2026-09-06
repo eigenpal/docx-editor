@@ -3,6 +3,7 @@
 // DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
+import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
 import type {
   DrawingAccessibility,
   DrawingHorizontalReferenceFrame,
@@ -65,7 +66,7 @@ const EMPTY_CROP: SourceCrop = Object.freeze({ left: 0, top: 0, right: 0, bottom
 
 function drawingPaintFields(projection: DrawingProjection): {
   readonly hyperlinkHref: string | null;
-  readonly effects: DrawingProjection['effects'];
+  readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   readonly placeholderGraphicKind: string | null;
@@ -317,7 +318,7 @@ export interface InlineDrawingRecord {
   readonly accessibility: DrawingAccessibility;
   /** Sanitized external hyperlink projection; inert until an explicit gesture activates it. */
   readonly hyperlinkHref: string | null;
-  readonly effects: DrawingProjection['effects'];
+  readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   /** Fixed non-picture graphic kind for refusal labels (`chart`, `group`, …); null for pictures. */

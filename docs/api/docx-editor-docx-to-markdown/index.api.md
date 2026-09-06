@@ -366,7 +366,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly drawingNodeId: string;
     // (undocumented)
-    readonly effects: DrawingProjection['effects'];
+    readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
     // (undocumented)

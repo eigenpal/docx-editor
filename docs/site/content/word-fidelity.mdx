@@ -55,7 +55,8 @@ The matrix reports three separate support axes.
 
 A text-anchored table can share a terminal empty paragraph without shrinking that paragraph.
 This applies to simple tables that fit with the anchor inside one content box.
-Explicit page breaks, paragraph spacing, complex tables, and anchors with text retain their existing layout.
+Bookmarks, proofing markers, formatting-only runs, and paragraph spacing are supported in this case.
+Explicit page breaks, complex tables, and anchors with text retain their existing layout.
 Text wrapping beside floating tables is not supported.
 
 ### Images and drawings
@@ -95,6 +96,10 @@ often affect document evaluation.
 
 ## Rendering and pagination
 
+The editor renders opaque solid Word 2010 text outlines with explicit RGB colors.
+Other text effects remain preserved; the text-effects matrix lists the rendering limits.
+PDF export does not paint these outlines.
+
 The editor calculates document layout without browser flow layout. It uses
 document fonts, themes, section geometry, margins, and Word units.
 
@@ -109,7 +114,7 @@ together across formatting changes. Justified lines distribute inter-character
 spacing through the same geometry used for paint and caret placement.
 
 East Asian font hints select the document's East Asian face for supported punctuation,
-symbols, Greek, and Cyrillic ranges. Combining marks keep the selected slot across text runs.
+symbols, Greek, and Cyrillic ranges. Combining marks and joined emoji keep their base character's slot across text runs.
 Explicit symbol fonts retain their selected face.
 
 Existing document settings control kinsoku, Japanese strict rules, custom

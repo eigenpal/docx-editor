@@ -778,6 +778,18 @@ export interface DrawingGeometry {
 // @public (undocumented)
 export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMargin' | 'leftMargin' | 'margin' | 'outsideMargin' | 'page' | 'rightMargin';
 
+// @public
+export interface DrawingImageEffects {
+    // (undocumented)
+    readonly bilevel?: number;
+    // (undocumented)
+    readonly brightness: number;
+    // (undocumented)
+    readonly contrast: number;
+    // (undocumented)
+    readonly grayscale: boolean;
+}
+
 // @public (undocumented)
 export interface DrawingInsets {
     // (undocumented)
@@ -1447,7 +1459,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly drawingNodeId: string;
     // (undocumented)
-    readonly effects: DrawingProjection['effects'];
+    readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
     // (undocumented)

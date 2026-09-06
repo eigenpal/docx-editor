@@ -1,11 +1,11 @@
+import { parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 import { isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 
 const MAX_VECTOR_SHAPE_SUBPATHS = 64;
 const CUBIC_BEZIER_SEGMENTS = 8;
-const readCoordinate = (value: string | undefined): number | null =>
-  value !== undefined && /^-?\d{1,15}$/.test(value) ? Number(value) : null;
+const readCoordinate = (value: string | undefined): number | null => parseEmu(value, false);
 
 /** Polygon subpaths of one `a:path` — move/line/close verbs only; anything else refuses. */
 export function readShapePathPolygons(
@@ -66,13 +66,11 @@ export function readShapePathPolygons(
       continue;
     }
     if (verb.localName !== 'moveTo' && verb.localName !== 'lnTo') return false;
-    const pt = verb.children.find(
-      (node) =>
-        node.kind === 'generic' &&
-        node.namespaceUri === DRAWINGML_MAIN_NAMESPACE_URI &&
-        node.localName === 'pt'
-    );
-    if (!pt || !isElement(pt)) return false;
+    const pt = findDirectChild(verb.children, {
+      namespaceUri: DRAWINGML_MAIN_NAMESPACE_URI,
+      localName: 'pt',
+    });
+    if (!pt) return false;
     const x = readCoordinate(schemaAttributeValue(pt.attributes, 'x'));
     const y = readCoordinate(schemaAttributeValue(pt.attributes, 'y'));
     if (x === null || y === null) return false;

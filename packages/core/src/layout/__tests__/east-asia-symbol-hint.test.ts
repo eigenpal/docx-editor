@@ -8,6 +8,7 @@ import { applyEastAsiaFontSlots, type FieldAwarePiece } from '../field-pieces.ts
 import { resolveRunStyle } from '../run-style.ts';
 import { eastAsiaRunsOfSegments } from '../script-itemization.ts';
 import { symbolRunStyle } from '../symbol-run.ts';
+import { intlGraphemeBoundary, resetGraphemeBoundary, setGraphemeBoundary } from '../grapheme.ts';
 import { createFixedMeasurer, layoutSemanticDocument, linesOf } from '../index.ts';
 import { readOoxmlPart, type OoxmlProperty } from '@docx-editor.dev/core/store';
 
@@ -358,5 +359,67 @@ test('hinted strong text retains its base strength around Common characters and 
     expect(eastAsiaRunsOfSegments(['中' + strong + '\u0301©'], [true])).toEqual([
       { segment: 0, from: 0, to: 3 },
     ]);
+  }
+});
+
+test('font hints select whole emoji and combining clusters in layout', () => {
+  const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  for (const [text, expectedSlot] of [
+    ['❤️‍🔥', 'eastAsia'],
+    ['👩‍⚕️', undefined],
+    ['a\u0483', undefined],
+    ['Ԁ\u0483', undefined],
+  ] as const) {
+    const parsed = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:rPr>` +
+        `<w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="SimSun" w:hint="eastAsia"/>` +
+        `</w:rPr><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'app/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const spans = linesOf(
+      layoutSemanticDocument(parsed.part, 1, { measurer: createFixedMeasurer(6, 14) })
+    ).flatMap((line) => line.spans);
+    expect(spans.map((span) => span.text)).toEqual([text]);
+    expect(spans[0]!.fontSlot).toBe(expectedSlot);
+  }
+});
+
+test('the cluster base owns its hint across text segments without lending script strength', () => {
+  expect(eastAsiaRunsOfSegments(['❤️', '‍', '🔥', '©x'], [true])).toEqual([
+    { segment: 0, from: 0, to: 2 },
+    { segment: 1, from: 0, to: 1 },
+    { segment: 2, from: 0, to: 2 },
+  ]);
+  expect(eastAsiaRunsOfSegments(['👩', '‍⚕️'], [false, true])).toEqual([]);
+  expect(eastAsiaRunsOfSegments(['a', '\u0483'], [false, true])).toEqual([]);
+  expect(eastAsiaRunsOfSegments(['❤️', '‍🔥'], [false, true])).toEqual([]);
+  expect(eastAsiaRunsOfSegments(['（', '❤️‍🔥', '中'], [false, true])).toEqual([
+    { segment: 0, from: 0, to: 1 },
+    { segment: 1, from: 0, to: 5 },
+    { segment: 2, from: 0, to: 1 },
+  ]);
+});
+
+test('hinted cluster segmentation runs once and skips ordinary paragraphs', () => {
+  const calls: string[] = [];
+  setGraphemeBoundary({
+    segment(text) {
+      calls.push(text);
+      return intlGraphemeBoundary.segment(text);
+    },
+  });
+  try {
+    eastAsiaRunsOfSegments(['ASCII only'], [true]);
+    eastAsiaRunsOfSegments(['中❤️‍🔥'], [false]);
+    expect(calls).toHaveLength(0);
+    const segments = Array.from({ length: 1000 }, () => '❤️‍🔥');
+    eastAsiaRunsOfSegments(
+      segments,
+      segments.map(() => true)
+    );
+    expect(calls).toEqual([segments.join('')]);
+  } finally {
+    resetGraphemeBoundary();
   }
 });

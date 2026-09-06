@@ -83,7 +83,7 @@ import {
 } from './drawing-exclusion.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
-import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
+import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
 
 /**
@@ -284,7 +284,8 @@ function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uint8Array
       for (let cursor = piece.text.length - 1; cursor >= 0; cursor -= 1) {
         const ch = piece.text[cursor]!;
         if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
-        else if (ch !== '\t' && !isCollapsibleLineEndWhitespace(ch)) suffix[cursor] = 1;
+        else if (ch !== '\t' && !lineEndSpaces.isCollapsibleLineEndWhitespace(ch))
+          suffix[cursor] = 1;
         else suffix[cursor] = suffix[cursor + 1]!;
       }
     }
@@ -1504,9 +1505,20 @@ export function breakParagraph(
         wordStartEnd = line.end;
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
+      const clippedWordEnd =
+        !layoutOwned && piece.measureText === undefined
+          ? lineEndSpaces.clipWordEnd(
+              candidate,
+              width,
+              lineAvailable() - line.width,
+              (text) => measurer.measure(displayText(text, faceStyle), faceStyle),
+              OVERFLOW_TOLERANCE_PT
+            )
+          : undefined;
+      width = clippedWordEnd?.width ?? width;
       // Hang overflowing space runs on this line, preserving text/ranges and authored leading spaces.
       const lineEndWhitespace =
-        isCollapsibleLineEndWhitespace(candidate) &&
+        lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) &&
         (placeableSuffixes[pieceIndex]![boundary] !== 1 ||
           (!layoutOwned &&
             (line.spans.length > 0 || line.drawings.length > 0) &&
@@ -1640,7 +1652,7 @@ export function breakParagraph(
       // The chop leaves its final protected group pending, including oversized groups
       // whose next run may start with another closing character or combining mark.
       if (remaining.length > 0) {
-        line.spans.push({
+        const span: StyleSpanRecord = {
           range: layoutOwned
             ? spanRange
             : { paragraphId, start: remainingStart, end: piece.start + boundary },
@@ -1659,7 +1671,8 @@ export function breakParagraph(
           ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
           ...(lineEndWhitespace ? { lineEndWhitespace: true as const } : {}),
           ...revisionsOf(piece),
-        });
+        };
+        lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;
         line.height = Math.max(line.height, metrics.height);
         line.baseline = Math.max(line.baseline, metrics.baseline);

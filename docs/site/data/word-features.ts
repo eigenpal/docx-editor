@@ -166,11 +166,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Text effects (outline, shadow, emboss, emphasis mark)',
     category: 'text',
     editing: 'none',
-    rendering: 'full',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'w:outline, w:shadow, w:emboss, w:imprint, and w:em render and round-trip. You cannot set them from the toolbar. w14 glow and gradient text fill are not supported.',
+      'Opaque solid w14:textOutline with an explicit RGB color renders. Theme-colored, transparent, gradient, dashed, compound, and inset outlines do not render. Legacy outline, shadow, emboss, imprint, and emphasis marks are preserved but do not render. Text effects have no toolbar controls.',
   },
   {
     id: 'text.hidden',
@@ -456,7 +456,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box. It uses tblpY or tblpYSpec against the selected vertical anchor. Page-anchored and margin-anchored tables do not advance body flow. Simple text-anchored tables can share a terminal empty paragraph without adding a blank page when the complete group fits the same content box. Other text-anchored tables remain in flow. Text does not wrap beside them yet.',
+      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box. It uses tblpY or tblpYSpec against the selected vertical anchor. Page-anchored and margin-anchored tables do not advance body flow. Simple text-anchored tables can share a terminal empty paragraph without adding a blank page when the complete group fits the same content box, including paragraph spacing and inert bookmark or formatting markup. Other text-anchored tables remain in flow. Text does not wrap beside them yet.',
   },
   {
     id: 'tables.text-direction',
@@ -599,7 +599,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Transparency, brightness, contrast, and grayscale project where supported. Authored adjustment markup is preserved on save.',
+      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. PDF export does not apply these adjustments.',
   },
   {
     id: 'images.effects',

@@ -17,6 +17,7 @@ import type { TableFragmentRecord } from './semantic-records.ts';
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const MAX_TERMINAL_TABLES = 32;
 const MAX_TABLE_NODES = 10000;
+const MAX_ANCHOR_NODES = 10000;
 type Block =
   | { readonly kind: 'table'; readonly table: OoxmlElement; readonly key: string }
   | {
@@ -38,7 +39,16 @@ export interface TerminalTextTableGroup {
 /** Raw content cannot disappear merely because the current revision view hides it. */
 function emptyAnchor(block: Block): boolean {
   if (block.kind !== 'paragraph' || block.listItem || block.shading) return false;
-  if (block.paragraph.children.some((node) => node.kind !== 'paragraphProperties')) return false;
+  if (
+    block.paragraph.children.some((node) => {
+      if (node.kind === 'paragraphProperties') return false;
+      if (node.kind === 'textValue' || node.namespaceUri !== W) return true;
+      if (['bookmarkStart', 'bookmarkEnd', 'proofErr'].includes(node.localName))
+        return node.children.length !== 0;
+      return node.kind !== 'run' || node.children.some((child) => child.kind !== 'runProperties');
+    })
+  )
+    return false;
   if (
     block.props.some((prop) =>
       ['framePr', 'numPr', 'pBdr', 'shd', 'pageBreakBefore'].includes(prop.localName)
@@ -49,7 +59,7 @@ function emptyAnchor(block: Block): boolean {
   let visits = 0;
   while (pending.length) {
     const node = pending.pop()!;
-    if (++visits > MAX_TABLE_NODES || node.namespaceUri !== W) return false;
+    if (++visits > MAX_ANCHOR_NODES || node.namespaceUri !== W) return false;
     if (
       [
         'ins',
@@ -63,7 +73,7 @@ function emptyAnchor(block: Block): boolean {
       ].includes(node.localName)
     )
       return false;
-    if (visits + pending.length + node.children.length > MAX_TABLE_NODES) return false;
+    if (visits + pending.length + node.children.length > MAX_ANCHOR_NODES) return false;
     for (const child of node.children) {
       if (child.kind === 'textValue') return false;
       pending.push(child);
@@ -197,6 +207,7 @@ export function terminalTextTableGroup(
 export interface TerminalTablePlacement {
   readonly fragments: readonly TableFragmentRecord[];
   readonly bottom: number;
+  readonly cellBreakKeys: readonly (readonly string[])[];
 }
 
 /** Decline the whole group unless its table/anchor union fits this content rectangle. */
@@ -236,6 +247,7 @@ export function placeTerminalTextTables(
   let probeLine = 0;
   const probeDeps: TableFlowDeps = {
     ...stripAnchorSinksForProbe(input.deps),
+    onCellBreakKey: undefined,
     borderOwnershipBudget: createTableBorderOwnershipBudget(),
     vMergeResolveBudget: createTableVMergeResolveBudget(),
     nextLineId: () => `terminal-table-probe-${probeLine++}`,
@@ -251,6 +263,7 @@ export function placeTerminalTextTables(
       width <= 0 ||
       left < 0 ||
       left + width > contentWidth + 0.001 ||
+      // Upward offsets need collision checks against preceding paragraph text.
       top < cursorY ||
       top > contentHeight
     )
@@ -279,18 +292,16 @@ export function placeTerminalTextTables(
     bottom = Math.max(bottom, probe.bottom);
     placements.push({ left, top, right: left + width, bottom: probe.bottom });
   }
+  const cellBreakKeys: string[][] = [];
   const fragments = structures.map((structure, index) => {
+    const keys: string[] = [];
+    cellBreakKeys.push(keys);
     const { left, top } = placements[index]!;
-    const placed = layoutTableFragment(
-      structure!,
-      left,
-      top,
-      0,
-      group.tables[index]!.id,
-      0,
-      input.deps
-    );
+    const placed = layoutTableFragment(structure!, left, top, 0, group.tables[index]!.id, 0, {
+      ...input.deps,
+      onCellBreakKey: (key) => keys.push(key),
+    });
     return { ...placed.fragment, outOfFlow: true as const };
   });
-  return { fragments, bottom };
+  return { fragments, bottom, cellBreakKeys };
 }

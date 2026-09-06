@@ -1139,6 +1139,18 @@ export interface DocumentViewSettings {
 }
 
 // @public
+export interface DrawingImageEffects {
+    // (undocumented)
+    readonly bilevel?: number;
+    // (undocumented)
+    readonly brightness: number;
+    // (undocumented)
+    readonly contrast: number;
+    // (undocumented)
+    readonly grayscale: boolean;
+}
+
+// @public
 export type DrawingKind = 'inline' | 'anchored';
 
 // @public

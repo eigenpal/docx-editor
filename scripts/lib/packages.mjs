@@ -251,7 +251,7 @@ export const PACKAGES = [
           'DrawingClipFallback',
           'DrawingInsets',
           'DrawingPoint',
-          'DrawingProjection',
+          'DrawingImageEffects',
           'FontOrigin',
           'HeaderFooterParts',
           'HeaderFooterSectionResolution',

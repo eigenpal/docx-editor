@@ -543,3 +543,4 @@ export {
   type CustomNodeExportRequest,
   type CustomNodeExportResult,
 } from './custom-node-export.ts';
+export type { DrawingImageEffects } from './drawing-image-effects.ts';

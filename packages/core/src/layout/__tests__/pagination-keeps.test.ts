@@ -557,6 +557,20 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
     expect(composeFlowKeys(keys, none)).toBe(keys);
   });
 
+  test('a terminal table group folds before keep-next and changes all member keys', () => {
+    const keys = ['lead', 'table', 'anchor'];
+    const fold = (token: string) =>
+      composeFlowKeys(keys, {
+        ...none,
+        terminalTableGroup: { start: 1, anchorIndex: 2, token },
+        keepsNextAt: (index) => index === 0,
+      });
+    const before = fold('empty');
+    const after = fold('bookmarked');
+    expect(before[0]).toBe(`lead~kn~${before[1]}`);
+    for (let index = 0; index < keys.length; index++) expect(after[index]).not.toBe(before[index]);
+  });
+
   test('a keep-next chain head carries its successor POST-fold — every other fold first', () => {
     // Block 0 keeps with block 1; block 1 carries a marker, a contextual verdict and a
     // border-group verdict. The head must splice block 1's FINISHED key: run keepNext
