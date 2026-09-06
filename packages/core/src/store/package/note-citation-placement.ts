@@ -2,7 +2,7 @@
 
 import { withFreshIds } from './hf-lifecycle-shell.ts';
 import { isInlineContainerProperty } from './inline-container-properties.ts';
-import { replaceChildren } from './ooxml-edit.ts';
+import { insertChildren, replaceChildren } from './ooxml-edit.ts';
 import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from './ooxml-tree.ts';
 import {
   isContentRevisionKind,
@@ -201,4 +201,36 @@ function containsNodeId(node: OoxmlNode, nodeId: string, containerDepth: number)
   if (node.kind === 'textValue') return false;
   const childDepth = counted ? containerDepth + 1 : containerDepth;
   return node.children.some((child) => containsNodeId(child, nodeId, childDepth));
+}
+
+/** Insert before a segment child, splitting its run without moving the citation's offset. */
+export function placeCitationAtRunBoundary(
+  part: OoxmlPart,
+  holder: OoxmlNode,
+  runId: string,
+  segmentId: string,
+  citations: readonly OoxmlNode[],
+  nextId: () => string
+): OoxmlPart | null {
+  if (holder.kind === 'textValue') return null;
+  const index = holder.children.findIndex((child) => child.id === runId);
+  if (index < 0) return null;
+  const run = holder.children[index]!;
+  if (run.kind !== 'run') {
+    const inserted = insertChildren(part, holder.id, index, citations);
+    return inserted.ok ? inserted.part : null;
+  }
+  const split = splitBeforeDescendant(run, segmentId, nextId);
+  if (!split) return null;
+  const replacement: OoxmlNode[] = [];
+  if (split.head) replacement.push(split.head);
+  for (const citation of citations) replacement.push(citation);
+  if (split.tail) replacement.push(split.tail);
+  const children = [
+    ...holder.children.slice(0, index),
+    ...replacement,
+    ...holder.children.slice(index + 1),
+  ];
+  const replaced = replaceChildren(part, holder.id, children);
+  return replaced.ok ? replaced.part : null;
 }

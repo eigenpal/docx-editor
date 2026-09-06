@@ -297,3 +297,29 @@ describe('note citation placement in nested containers', () => {
     expect(paragraphTextOf(mainPartOf(store.currentPackage()), paragraphId)).toBe(before);
   });
 });
+
+for (const wrapper of ['', 'hyperlink', 'smartTag', 'customXml', 'dir', 'bdo']) {
+  test.each([
+    ['<w:t>CD</w:t>', 'CD'],
+    ['<w:tab/><w:t>CD</w:t>', '\tCD'],
+    ['<w:br/><w:t>CD</w:t>', '\nCD'],
+  ])(`a citation splits a ${wrapper || 'direct'} run at a child boundary (%s)`, (tail, text) => {
+    const run = `<w:r><w:rPr><w:b/></w:rPr><w:t>AB</w:t>${tail}</w:r>`;
+    const content = wrapper ? `<w:${wrapper}>${run}</w:${wrapper}>` : run;
+    const store = openStore(build({ body: `<w:p>${content}</w:p>` }));
+    const paragraphId = firstParagraphId(store.currentPackage());
+    const result = store.applyLifecycleOp({
+      op: 'insertNote',
+      noteKind: 'footnote',
+      paragraphId,
+      offset: 2,
+    });
+    expect(result.ok).toBe(true);
+    const main = store.currentPackage().parts.get(store.currentPackage().mainDocumentPart)!;
+    expect(paragraphTextOf(main, paragraphId)).toBe(`AB\u{fffc}${text}`);
+    const xml = serializeOoxmlPart(main);
+    expect(xml.match(/<w:b\s*\/>/g)).toHaveLength(2);
+    expect(xml.indexOf('>AB<')).toBeLessThan(xml.indexOf('<w:footnoteReference'));
+    expect(xml.indexOf('<w:footnoteReference')).toBeLessThan(xml.indexOf('>CD<'));
+  });
+}

@@ -53,6 +53,7 @@ import {
   ancestorPathHolding,
   citationBesideControlAt,
   placeOutsideOutermostRevision,
+  placeCitationAtRunBoundary,
   splitRunAroundText,
 } from './note-citation-placement.ts';
 import {
@@ -1046,8 +1047,7 @@ function insertNodesAtOffset(
     const anchorId = boundary.runId || boundary.node.id;
     const direct = paragraph.children.findIndex((child) => child.id === anchorId);
     if (direct >= 0) {
-      const inserted = insertChildren(part, paragraph.id, direct, nodes);
-      return inserted.ok ? inserted.part : null;
+      return placeCitationAtRunBoundary(part, paragraph, anchorId, boundary.node.id, nodes, nextId);
     }
     const index = topChildIndexOf(paragraph, anchorId);
     if (index >= 0) {
@@ -1098,9 +1098,7 @@ function insertNodesAtOffset(
       const path = ancestorPathHolding(top, anchorId);
       const parent = path?.at(-1) ?? null;
       if (canHoldNoteCitation(parent, path ?? [])) {
-        const at = parent.children.findIndex((child) => child.id === anchorId);
-        const inserted = insertChildren(part, parent.id, Math.max(0, at), nodes);
-        return inserted.ok ? inserted.part : null;
+        return placeCitationAtRunBoundary(part, parent, anchorId, boundary.node.id, nodes, nextId);
       }
       return null;
     }
