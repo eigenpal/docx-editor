@@ -722,3 +722,23 @@ test.each(['hyperlink', ...WRAPPERS])(
     }
   }
 );
+
+test.each(WRAPPERS)('runless atom boundaries inside %s accept insertions', (name) => {
+  const math =
+    '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:r><m:t>x</m:t></m:r></m:oMath>';
+  const original = load(`<w:p>${wrapper(name, math + math)}</w:p>`);
+  const paragraphId = firstParagraph(original).id;
+  expect(paragraphTextOf(original, paragraphId)).toBe('\u{fffc}\u{fffc}');
+  for (const op of [
+    { op: 'insertText', paragraphId, offset: 1, text: 'X' },
+    { op: 'insertTab', paragraphId, offset: 1 },
+    { op: 'insertHardBreak', paragraphId, offset: 1 },
+  ] satisfies TreeDocOp[]) {
+    expect(validateTreeOp(original, op)).toBeNull();
+    const next = apply(original, op);
+    const inserted = op.op === 'insertText' ? 'X' : op.op === 'insertTab' ? '\t' : '\n';
+    expect(paragraphTextOf(next, paragraphId)).toBe(`\u{fffc}${inserted}\u{fffc}`);
+    const holder = firstNamed(next, name);
+    expect(holder.children.map((node) => node.kind)).toEqual(['generic', 'run', 'generic']);
+  }
+});

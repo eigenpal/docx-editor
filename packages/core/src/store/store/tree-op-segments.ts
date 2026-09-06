@@ -564,6 +564,15 @@ function rawInsertionSite(
       }
     }
   }
+  if (owner === null && boundary?.removeNodeIds) {
+    const holder = directParentOf(paragraph, boundary.node.id);
+    // Runless atoms are siblings of runs inside transparent wrappers too. Resolve
+    // the actual holder so the applier never mistakes the atom id for a run id.
+    if (holder && isInlineRunContainer(holder)) {
+      const index = holder.children.findIndex((child) => child.id === boundary.node.id);
+      if (index >= 0) return { kind: 'newRun', holder, index };
+    }
+  }
   if (boundary) return { kind: 'atBoundary', segment: boundary };
 
   if (owner === null) {
