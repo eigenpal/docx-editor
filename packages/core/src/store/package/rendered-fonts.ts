@@ -22,8 +22,10 @@
 //   evaluating `w:tblLook` — a first-row face usually does render.
 // - Only paragraphs, runs and tables that contain a GLYPH-BEARING run count — literal
 //   `w:t`/`w:delText` text or a mark element the run's face paints (`w:footnoteRef`,
-//   `w:sym`, `w:tab`, …). An empty paragraph's mark metrics do move layout, but the
-//   notice's contract is "text renders in the wrong face".
+//   `w:tab`, …). An empty paragraph's mark metrics do move layout, but the notice's
+//   contract is "text renders in the wrong face". A `w:sym` naming a face of its own is
+//   the one mark that does NOT count, because layout paints it in that face instead of the
+//   run's — see `GLYPH_MARKS` below.
 
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';

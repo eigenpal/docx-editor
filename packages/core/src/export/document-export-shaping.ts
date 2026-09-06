@@ -1,7 +1,7 @@
 // Document-aware font resolution shared by every headless exporter.
 
 import { collectRenderedFontFamilyCandidates } from '../store/package/rendered-fonts.ts';
-import { validFontFamily } from '../store/package/run-defaults.ts';
+import { symbolFontFamily, validFontFamily } from '../store/package/run-defaults.ts';
 import {
   MAX_RESOLVER_FAMILIES,
   WORD_DEFAULT_FONT,
@@ -775,7 +775,9 @@ function layoutSynthesizedFontFamilies(roots: readonly OoxmlElement[]): readonly
         // The WML namespace or none, the way `layout/symbol-run.ts` reads it. A
         // foreign-namespaced `font` is a face layout never applies, and the request is
         // capped — so admitting one could evict a face the document really renders in.
-        add(wmlAttributeValue(node, 'font') ?? null);
+        // `symbolFontFamily` also resolves Word's vertical-writing `@` prefix, the same
+        // rule the editor's own symbol-face collection applies.
+        add(symbolFontFamily(wmlAttributeValue(node, 'font')));
       }
       if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldSimple') {
         const instruction = attributeValue(node, 'instr');

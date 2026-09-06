@@ -137,6 +137,16 @@ describe('fontResolverFamilies', () => {
     expect(families.at(-1)).toBe('Face 62');
   });
 
+  test('reserving for one symbol face never evicts another into its slot', () => {
+    // The head cut can push a symbol face that WAS inside the bound out of it, and that
+    // face must not then spend the slot reserved for the one that never fitted.
+    const declared = [...Array.from({ length: 63 }, (_, index) => `Face ${index}`), 'MS Gothic'];
+    const families = fontResolverFamilies(declared, ['MS Gothic', 'Wingdings'], 64);
+    expect(families).toContain('MS Gothic');
+    expect(families).toContain('Wingdings');
+    expect(families).toHaveLength(64);
+  });
+
   test('room left over after the reservation still goes to the remaining symbol faces', () => {
     const symbols = Array.from({ length: 10 }, (_, index) => `Symbol ${index}`);
     expect(fontResolverFamilies(['Garamond'], symbols, 64)).toHaveLength(11);

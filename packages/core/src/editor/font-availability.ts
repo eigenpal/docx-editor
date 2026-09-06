@@ -103,19 +103,28 @@ export function fontResolverFamilies(
     seen.add(fold);
     wanted.push(family);
   }
+  const keptFolds = (size: number): ReadonlySet<string> =>
+    new Set(declared.slice(0, Math.max(size, 0)).map((family) => family.toLowerCase()));
   // Only the symbol faces the declared list would not carry anyway need reserving. Word
   // writes a symbol face on the run too, so a checkbox face is usually declared as well —
   // and `documentFonts()` sorts by code point, which puts Symbol, Webdings and Wingdings
   // near the end of a long list. One that lands inside the bound costs nothing; one that
   // lands past it is the case the reservation exists for.
-  const withinBound = new Set(declared.slice(0, cap).map((family) => family.toLowerCase()));
-  const unreachable = wanted.filter((family) => !withinBound.has(family.toLowerCase()));
-  // A FLOOR, not a ceiling: it only decides how much of the declared list steps aside, and
-  // never more than half the bound, so a small `cap` cannot invert the priority. Whatever
-  // room is left over still goes to the remaining symbol faces.
-  const reserved = Math.min(unreachable.length, RESERVED_SYMBOL_FAMILIES, Math.floor(cap / 2));
+  //
+  // Run to a fixed point, because reserving a slot shortens the declared head, which can
+  // evict a symbol face that WAS inside the bound and so need one more. Each pass either
+  // raises the count or is the last, and `RESERVED_SYMBOL_FAMILIES` bounds it. The floor is
+  // never more than half the bound, so a small `cap` cannot invert the priority.
+  let reserved = 0;
+  for (let pass = 0; pass <= RESERVED_SYMBOL_FAMILIES; pass += 1) {
+    const kept = keptFolds(cap - reserved);
+    const unreachable = wanted.filter((family) => !kept.has(family.toLowerCase())).length;
+    const next = Math.min(unreachable, RESERVED_SYMBOL_FAMILIES, Math.floor(cap / 2));
+    if (next === reserved) break;
+    reserved = next;
+  }
   const head = declared.slice(0, Math.max(cap - reserved, 0));
-  const kept = new Set(head.map((family) => family.toLowerCase()));
+  const kept = keptFolds(cap - reserved);
   const tail = wanted.filter((family) => !kept.has(family.toLowerCase()));
   return [...head, ...tail].slice(0, cap);
 }

@@ -101,6 +101,20 @@ export function validFontFamily(raw: string | undefined): string | null {
   return raw !== undefined && FONT_NAME.test(raw) ? raw : null;
 }
 
+/**
+ * The family a symbol-bearing attribute (`w:sym/@w:font`, a SYMBOL field's `\f`) names, for
+ * anyone that has to ASK for the face rather than decide what layout does with it.
+ *
+ * Word writes the vertical form of a family as the same name behind an `@` — `@MS Gothic`.
+ * The bytes are the family's, so the prefix comes off before validation: it is a writing
+ * mode, and `FONT_NAME` would otherwise reject the name and leave the face unsuppliable for
+ * a glyph that needs it.
+ */
+export function symbolFontFamily(raw: string | undefined): string | null {
+  if (raw === undefined) return null;
+  return validFontFamily(raw.startsWith('@') ? raw.slice(1) : raw);
+}
+
 /** What one `w:rPr` container contributes: validated family and size, or nulls. */
 function rPrDefaults(
   rPr: OoxmlElement | undefined,
