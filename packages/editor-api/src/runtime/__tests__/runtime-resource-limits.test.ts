@@ -77,6 +77,30 @@ describe('server resource limits', () => {
     ).rejects.toMatchObject({ code: 'ResourceLimitExceeded', limit: 'xml.maxDepth' });
   });
 
+  test.each<DocumentLimits>([
+    { zip: { maxEntries: -1, maxTotalBytes: 100_000 } },
+    { zip: { maxEntries: 10, maxTotalBytes: -1 } },
+    { zip: { maxEntries: 10, maxTotalBytes: 100_000, maxRatio: -1 } },
+    { maxXmlParts: -1 },
+    { maxRelationships: -1 },
+    { zip: { maxEntries: Infinity, maxTotalBytes: 100_000 } },
+    { zip: { maxEntries: 10, maxTotalBytes: 100_000, maxRatio: NaN } },
+    { maxRelationships: NaN },
+    { maxXmlParts: 0.5 },
+  ])('rejects invalid caller budgets as arguments: %j', async (limits) => {
+    await expect(DocxEditor.createServer(docx(p('text')), { limits })).rejects.toMatchObject({
+      code: 'InvalidArgument',
+      target: 'createServer',
+    });
+  });
+
+  test('accepts fractional compression-ratio budgets', async () => {
+    const runtime = await DocxEditor.createServer(docx(p('text')), {
+      limits: { zip: { maxEntries: 10, maxTotalBytes: 100_000, maxRatio: 200.5 } },
+    });
+    runtime.dispose();
+  });
+
   test('keeps malformed input and invalid limit configuration as InvalidArgument', async () => {
     for (const [bytes, limits] of [
       [new Uint8Array([1, 2, 3]), undefined],

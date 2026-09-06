@@ -121,10 +121,30 @@ export interface CreateServerOptions {
   readonly revisionTextView?: RevisionTextView;
 }
 
+/** Invalid caller budgets are argument errors, not document resource refusals. */
+function validateDocumentLimits(limits: DocumentLimits | undefined): void {
+  const counts = [
+    limits?.zip?.maxEntries,
+    limits?.zip?.maxTotalBytes,
+    limits?.xml?.maxBytes,
+    limits?.xml?.maxElements,
+    limits?.maxXmlParts,
+    limits?.maxRelationships,
+  ];
+  const ratio = limits?.zip?.maxRatio;
+  if (
+    counts.some((value) => value !== undefined && (!Number.isInteger(value) || value < 0)) ||
+    (ratio !== undefined && (!Number.isFinite(ratio) || ratio < 0))
+  ) {
+    fail({ code: 'InvalidArgument', target: 'createServer' });
+  }
+}
+
 export async function createServer(
   bytes: Uint8Array,
   options: CreateServerOptions = {}
 ): Promise<DocxEditorServerRuntime> {
+  validateDocumentLimits(options.limits);
   const collaborationModel = collaborationModelOf(options.modules);
   const opened = createServerAutomationHost(bytes, {
     ...(options.limits === undefined ? {} : { limits: options.limits }),

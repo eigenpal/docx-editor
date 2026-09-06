@@ -26,7 +26,8 @@ Set `limits.xml.maxElements` to lower that budget for untrusted input or raise i
 up to the engine ceiling of 50,000,000. Set `limits.xml.maxBytes` alongside it.
 The 64 MiB per-part byte ceiling and 256-level depth ceiling still apply.
 These budgets do not guarantee that a document fits in the host's memory.
-Malformed input rejects with `InvalidArgument`.
+Counts and byte budgets must be finite nonnegative integers; compression ratios may be fractional.
+Malformed input and invalid budget options reject with `InvalidArgument`.
 
 ## Choose a host
 
