@@ -1019,6 +1019,16 @@ export function deleteCommentThread(pkg: OoxmlPackage, commentId: string, owner?
 // @public
 export function deletePackageComments(packageStore: TreePackageStore, comments: readonly PackageCommentDelete[], scope?: StoryScope, noteId?: number): boolean;
 
+// @public (undocumented)
+export type DeleteTextOp = {
+    readonly end: number;
+    readonly op: 'deleteText';
+    readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
+    readonly start: number;
+    readonly textFormFieldId?: string;
+};
+
 // @public
 export function deobfuscateFont(bytes: Uint8Array, fontKey: string): Uint8Array | null;
 
@@ -1901,6 +1911,18 @@ dataOwnerPartName?: string): CustomNodeWriteResult;
 
 // @public
 export function insertPackageCustomNode(packageStore: TreePackageStore, write: InsertCustomNodeWrite, scope?: StoryScope): CustomNodeWriteResult;
+
+// @public (undocumented)
+export type InsertTextOp = {
+    readonly bias?: 'left' | 'right';
+    readonly inside?: string;
+    readonly offset: number;
+    readonly op: 'insertText';
+    readonly paragraphId: string;
+    readonly revision?: RevisionAttributionInput;
+    readonly text: string;
+    readonly textFormFieldId?: string;
+};
 
 // @public
 export function instrTextValue(node: OoxmlNode): string;
@@ -3903,6 +3925,18 @@ export type SetCommentResolvedResult = {
 export function setPackageCommentResolved(packageStore: TreePackageStore, commentId: string, resolved: boolean): SetCommentResolvedResult;
 
 // @public
+export interface SetTextFormFieldDefaultOp {
+    // (undocumented)
+    readonly fieldNodeId: string;
+    // (undocumented)
+    readonly op: 'setTextFormFieldDefault';
+    // (undocumented)
+    readonly paragraphId: string;
+    // (undocumented)
+    readonly text: string;
+}
+
+// @public
 export function settingsPartOf(pkg: OoxmlPackage): OoxmlPart | null;
 
 // @public
@@ -4177,21 +4211,7 @@ export type TreeDocOp = {
     }[];
     readonly instruction: string;
     readonly op: 'insertToc';
-} | {
-    readonly bias?: 'left' | 'right';
-    readonly inside?: string;
-    readonly offset: number;
-    readonly op: 'insertText';
-    readonly paragraphId: string;
-    readonly revision?: RevisionAttributionInput;
-    readonly text: string;
-} | {
-    readonly end: number;
-    readonly op: 'deleteText';
-    readonly paragraphId: string;
-    readonly revision?: RevisionAttributionInput;
-    readonly start: number;
-} | {
+} | InsertTextOp | DeleteTextOp | {
     readonly kind: 'ins' | 'del';
     readonly op: 'setParagraphMarkRevision';
     readonly paragraphId: string;

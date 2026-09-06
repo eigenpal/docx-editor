@@ -197,3 +197,6 @@ export type { ImageResourceState, SupportedImageMime } from '../package/image-re
 export { textFormFieldsOf, type TextFormFieldRange } from './text-form-fields.ts';
 
 export { formsProtectionEnabled, sectionProtectsForms } from './tree-op-content-controls.ts';
+
+export type { InsertTextOp, DeleteTextOp } from './text-edit-op-types.ts';
+export type { SetTextFormFieldDefaultOp } from './text-form-fields.ts';
