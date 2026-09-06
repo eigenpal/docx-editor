@@ -331,6 +331,8 @@ export function eastAsiaRunsOfSegments(
 
   /** Strongly classified text seen so far, or null while only Common text has streamed by. */
   let precedingStrong: Exclude<SlotClass, 'common'> | null = null;
+  // A w:t boundary does not end the preceding symbol's combining sequence.
+  let extendsHintedSymbol = false;
   /** Leading Common units waiting for the FOLLOWING strong item; `ascii` blocks eastAsia. */
   const pending: { segment: number; from: number; to: number; ascii: boolean }[] = [];
   const resolvePending = (strong: Exclude<SlotClass, 'common'>): void => {
@@ -343,6 +345,7 @@ export function eastAsiaRunsOfSegments(
   for (let segment = 0; segment < segments.length; segment += 1) {
     const text = segments[segment]!;
     if (pureAscii(text)) {
+      if (text.length > 0) extendsHintedSymbol = false;
       // Never eastAsia, so only the strong/Common distinction matters: any alphanumeric
       // is a strong Latin item; pure punctuation and whitespace stay transparent.
       if (/[0-9A-Za-z]/.test(text)) {
@@ -354,22 +357,26 @@ export function eastAsiaRunsOfSegments(
     for (let from = 0; from < text.length; ) {
       const codePoint = text.codePointAt(from)!;
       const to = from + (codePoint > 0xffff ? 2 : 1);
-      // A hinted symbol takes the East Asian face for itself only. It is not strong text:
-      // it neither resolves the Common units before it nor pulls the Common units after it,
-      // so the hint on one run never reaches the `©` or NBSP of an unhinted neighbour. The
-      // marks that extend its grapheme cluster (a combining accent, an emoji variation
-      // selector) do travel with it: a cluster is shaped as one unit or not at all.
-      if (hintedSegments[segment] && isEastAsiaHintSymbol(codePoint)) {
-        let clusterEnd = to;
-        while (clusterEnd < text.length) {
-          const next = text.codePointAt(clusterEnd)!;
-          if (!isClusterExtender(next)) break;
-          clusterEnd += next > 0xffff ? 2 : 1;
+      // The hint changes this character's face, not its underlying script strength.
+      // Common symbols remain transparent; Greek and Cyrillic still stop surrounding
+      // Common characters from inheriting a preceding or following Han character.
+      // Combining marks and variation selectors retain their hinted base's face across
+      // segment boundaries without changing the preceding strong classification.
+      const hinted = hintedSegments[segment] && isEastAsiaHintSymbol(codePoint);
+      if (hinted || (extendsHintedSymbol && isClusterExtender(codePoint))) {
+        if (hinted) {
+          const underlyingClass = slotClassOf(codePoint);
+          if (underlyingClass !== 'common') {
+            resolvePending(underlyingClass);
+            precedingStrong = underlyingClass;
+          }
         }
-        addEastAsia(segment, from, clusterEnd);
-        from = clusterEnd;
+        addEastAsia(segment, from, to);
+        extendsHintedSymbol = true;
+        from = to;
         continue;
       }
+      extendsHintedSymbol = false;
       const slotClass = slotClassOf(codePoint);
       if (slotClass === 'common') {
         if (precedingStrong === null) {

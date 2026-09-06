@@ -227,7 +227,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Protects graphemes, punctuation, and full-width number groups across run boundaries. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression uses deterministic punctuation and kana advance reductions; font-specific optical compression and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
+      'Protects graphemes, punctuation, and full-width number groups across run boundaries. East Asian font hints cover supported punctuation, symbols, Greek, and Cyrillic ranges while preserving explicit symbol fonts. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression uses deterministic punctuation and kana advance reductions; font-specific optical compression and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
   },
   {
     id: 'paragraphs.spacing',

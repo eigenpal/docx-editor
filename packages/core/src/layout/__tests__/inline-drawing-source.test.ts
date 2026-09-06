@@ -510,3 +510,141 @@ test('a theme-part swap refuses the slot even though the document part is identi
 
   expect(fill()).toBe('79C9B1');
 });
+
+// Tree edits retain the package resource substrate. The slot must still replace projections
+// when drawing spacing, textbox properties, or hosted text changes.
+describe('drawing slot invalidation after tree edits', () => {
+  const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+  const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const owner = '/word/document.xml';
+
+  for (const edit of [
+    'distance',
+    'inset',
+    'anchor',
+    'text',
+    'title',
+    'lock',
+    'brightness',
+    'fill',
+    'diagnostic',
+  ] as const) {
+    test(`refreshes the retained projection after a ${edit} edit`, () => {
+      const isPicture = edit === 'brightness' || edit === 'fill';
+      const hasTextbox = !isPicture && edit !== 'diagnostic';
+      const graphic =
+        edit === 'diagnostic'
+          ? '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"/></a:graphicData></a:graphic>'
+          : isPicture
+            ? `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+              '<pic:nvPicPr><pic:cNvPr id="1" name="picture"/><pic:cNvPicPr/></pic:nvPicPr>' +
+              `<pic:blipFill><a:blip xmlns:r="${R}" r:embed="rIdImage"><a:lum bright="0" contrast="0"/></a:blip><a:stretch/></pic:blipFill>` +
+              '<pic:spPr/></pic:pic></a:graphicData></a:graphic>'
+            : `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:spPr>` +
+              '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm>' +
+              '<a:prstGeom prst="rect"/><a:noFill/></wps:spPr>' +
+              '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Before</w:t></w:r></w:p></w:txbxContent></wps:txbx>' +
+              '<wps:bodyPr lIns="91440" anchor="t"/></wps:wsp></a:graphicData></a:graphic>';
+      const loaded = readOoxmlPackage(
+        zipSync({
+          '[Content_Types].xml': strToU8(
+            `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+              `<Override PartName="${owner}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+          ),
+          '_rels/.rels': strToU8(
+            `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+          ),
+          'word/document.xml': strToU8(
+            `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}"><w:body><w:p><w:r><w:drawing>` +
+              '<wp:inline distL="0"><wp:extent cx="1270000" cy="635000"/><wp:docPr id="1" name="box" title="Before"/>' +
+              '<wp:cNvGraphicFramePr><a:graphicFrameLocks noResize="0"/></wp:cNvGraphicFramePr>' +
+              graphic +
+              '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>'
+          ),
+        })
+      );
+      if (!loaded.ok) throw new Error(loaded.reason);
+      let pkg = loaded.package;
+      let revision = 0;
+      const session = {
+        packageRevision: () => revision,
+        currentPackage: () => pkg,
+        part: () => pkg.parts.get(owner)!,
+      };
+      const resourceLookup: ImageResourceLookup = {
+        resolveEmbedded: async () => ({ kind: 'missing' }),
+        resolveLinked: () => ({ kind: 'missing' }),
+        resolveForProjection: async () => ({ kind: 'missing' }),
+        liveReferenceCount: () => 0,
+        dispose: () => {},
+      };
+      const bundle = createInlineDrawingLayoutBundle({
+        session,
+        decodePort: {
+          decode: async () => {
+            throw new Error('unused');
+          },
+        },
+        resourceLookup,
+        onResourcesChanged: () => {},
+      });
+      const atomId = [...drawingAtomIdentities(session.part())!.keys()][0]!;
+      const before = bundle.bodyContext.projectionForAtom!(atomId)!;
+      if (hasTextbox) expect(before.textboxStory).not.toBeNull();
+      const beforeToken = drawingProjectionLayoutToken(before);
+      const change = (node: OoxmlNode): OoxmlNode => {
+        if (node.kind === 'textValue') {
+          return edit === 'text' && node.value === 'Before' ? { ...node, value: 'After' } : node;
+        }
+        if (edit === 'diagnostic' && node.localName === 'graphic')
+          return { ...node, kind: 'generic', localName: 'unsupportedGraphic' } as OoxmlNode;
+        if (edit === 'fill' && node.localName === 'stretch')
+          return { ...node, kind: 'pictureTile', localName: 'tile' } as OoxmlNode;
+        const attributes = node.attributes.map((attr) => {
+          const value =
+            edit === 'distance' && node.localName === 'inline' && attr.localName === 'distL'
+              ? '127000'
+              : edit === 'inset' && node.localName === 'bodyPr' && attr.localName === 'lIns'
+                ? '127000'
+                : edit === 'anchor' && node.localName === 'bodyPr' && attr.localName === 'anchor'
+                  ? 'b'
+                  : edit === 'title' && node.localName === 'docPr' && attr.localName === 'title'
+                    ? 'After'
+                    : edit === 'lock' &&
+                        node.localName === 'graphicFrameLocks' &&
+                        attr.localName === 'noResize'
+                      ? '1'
+                      : edit === 'brightness' &&
+                          node.localName === 'lum' &&
+                          attr.localName === 'bright'
+                        ? '50000'
+                        : attr.value;
+          return value === attr.value ? attr : { ...attr, value };
+        });
+        const children = node.children.map(change);
+        if (
+          attributes.every((attr, index) => attr === node.attributes[index]) &&
+          children.every((child, index) => child === node.children[index])
+        )
+          return node;
+        return { ...node, attributes, children } as OoxmlNode;
+      };
+      const part = session.part();
+      const nextPart = { ...part, root: change(part.root) as typeof part.root };
+      pkg = { ...pkg, parts: new Map(pkg.parts).set(owner, nextPart) };
+      revision += 1;
+      bundle.sync(session);
+      const after = bundle.bodyContext.projectionForAtom!(atomId)!;
+      const expected = indexInlineDrawingProjectionsInPart(nextPart).get(atomId)!;
+      expect(after).toEqual(expected);
+      expect(drawingProjectionLayoutToken(after)).not.toBe(beforeToken);
+      // Property edits preserve the content root; their own token fields must invalidate.
+      if (edit !== 'text' && hasTextbox)
+        expect(after.textboxStory!.content).toBe(before.textboxStory!.content);
+      bundle.dispose();
+    });
+  }
+});

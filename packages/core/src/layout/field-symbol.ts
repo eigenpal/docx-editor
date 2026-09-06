@@ -172,7 +172,12 @@ export function symbolFieldGlyph(
 ): SymbolFieldGlyph | null {
   const overrides: OoxmlProperty[] = [];
   if (spec.font) {
-    overrides.push({ localName: 'rFonts', attributes: { ascii: spec.font, hAnsi: spec.font } });
+    // Like w:sym, the explicit face also owns the East Asian slot: neighboring Han can
+    // select that slot even after the inherited hint is reset.
+    overrides.push({
+      localName: 'rFonts',
+      attributes: { ascii: spec.font, hAnsi: spec.font, eastAsia: spec.font, hint: 'default' },
+    });
   }
   if (spec.sizePt !== null) {
     overrides.push({ localName: 'sz', attributes: { val: String(spec.sizePt * 2) } });

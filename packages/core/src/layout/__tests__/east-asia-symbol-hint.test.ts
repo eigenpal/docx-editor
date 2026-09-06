@@ -42,6 +42,8 @@ test('the hint table accepts exactly the unconditional symbols, not accented let
     !excluded(code) &&
     (latin1.includes(code) ||
       (code >= 0x2b0 && code <= 0x36f) ||
+      (code >= 0x370 && code <= 0x3cf) ||
+      (code >= 0x400 && code <= 0x4ff) ||
       (code >= 0x2000 && code <= 0x27bf));
   for (let code = 0; code <= 0x2fff; code++) expect(isEastAsiaHintSymbol(code)).toBe(inTable(code));
   expect(isEastAsiaHintSymbol(0x301)).toBe(false);
@@ -282,4 +284,79 @@ test('combining marks and joiners stay with their base character under the hint'
   const out = applyEastAsiaFontSlots([nfd]);
   expect(out).toHaveLength(1);
   expect(out[0]).toBe(nfd);
+});
+
+test('hinted symbols retain combining marks across text segments', () => {
+  for (const hints of [
+    [true, true],
+    [true, false],
+  ]) {
+    expect(eastAsiaRunsOfSegments(['°', '\u0301x'], hints)).toEqual([
+      { segment: 0, from: 0, to: 1 },
+      { segment: 1, from: 0, to: 1 },
+    ]);
+  }
+  expect(eastAsiaRunsOfSegments(['✔', '', '\uFE0F', '\u0301© x'], [true])).toEqual([
+    { segment: 0, from: 0, to: 1 },
+    { segment: 2, from: 0, to: 1 },
+    { segment: 3, from: 0, to: 1 },
+  ]);
+  // ASCII terminates the combining sequence, including the fast path for pure ASCII segments.
+  expect(eastAsiaRunsOfSegments(['°', ' ', '\u0301x'], [true])).toEqual([
+    { segment: 0, from: 0, to: 1 },
+  ]);
+});
+test('the Times New Roman exception compares explicit fallback faces for unresolved themes', () => {
+  const props: OoxmlProperty[] = [
+    {
+      localName: 'rFonts',
+      attributes: {
+        asciiTheme: 'minorAscii',
+        ascii: 'Arial',
+        hAnsiTheme: 'minorHAnsi',
+        hAnsi: 'Calibri',
+        eastAsia: 'Times New Roman',
+        hint: 'eastAsia',
+      },
+    },
+  ];
+  expect(resolveRunStyle(props).fontFamily).toBe('Arial');
+  expect(hasTimesNewRomanEastAsiaException(props, 'Times New Roman')).toBe(false);
+  expect(applyEastAsiaFontSlots([piece('°', props)])[0]!.fontSlot).toBe('eastAsia');
+  expect(
+    hasTimesNewRomanEastAsiaException(props, 'Times New Roman', {
+      major: null,
+      minor: null,
+    })
+  ).toBe(false);
+  expect(
+    hasTimesNewRomanEastAsiaException(props, 'Times New Roman', {
+      major: 'Cambria',
+      minor: 'Calibri',
+    })
+  ).toBe(true);
+});
+test('the unconditional Greek and Cyrillic hint ranges use the East Asian face', () => {
+  const text = 'ΑΩαωАЯая';
+  expect(eastAsiaRunsOfSegments([text], [true])).toEqual([
+    { segment: 0, from: 0, to: text.length },
+  ]);
+  expect(eastAsiaRunsOfSegments([text])).toEqual([]);
+  expect(eastAsiaRunsOfSegments(['\u03d0\u0500'], [true])).toEqual([]);
+});
+
+test('hinted strong text retains its base strength around Common characters and Han', () => {
+  for (const strong of ['α', 'я', 'ﬀ', '×']) {
+    expect(eastAsiaRunsOfSegments(['中', strong, '©'], [false, true, false])).toEqual([
+      { segment: 0, from: 0, to: 1 },
+      { segment: 1, from: 0, to: 1 },
+    ]);
+    expect(eastAsiaRunsOfSegments(['©', strong, '中'], [false, true, false])).toEqual([
+      { segment: 1, from: 0, to: 1 },
+      { segment: 2, from: 0, to: 1 },
+    ]);
+    expect(eastAsiaRunsOfSegments(['中' + strong + '\u0301©'], [true])).toEqual([
+      { segment: 0, from: 0, to: 3 },
+    ]);
+  }
 });

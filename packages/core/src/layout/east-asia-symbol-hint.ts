@@ -19,25 +19,6 @@ export function hasEastAsiaSymbolHint(properties: readonly OoxmlProperty[]): boo
   return hint === 'eastAsia' && !cs && !rtl;
 }
 
-/** One Latin face slot as authored: a theme token or an explicit name, last specified wins. */
-interface LatinFace {
-  readonly value: string;
-  readonly theme: boolean;
-}
-
-/** The resolved family for comparison, or null when a theme token cannot be resolved. */
-function comparableFace(face: LatinFace, themeFonts: ThemeFonts | undefined): string | null {
-  if (!face.theme) return face.value.toLowerCase();
-  const resolved = themeFonts ? themeFontFamilyOf(face.value, themeFonts) : null;
-  return resolved?.toLowerCase() ?? null;
-}
-
-/** `minorAscii` and `minorHAnsi` (and the major pair) name one theme face by two tokens. */
-function sameThemeToken(a: string, b: string): boolean {
-  const canonical = (token: string) => token.replace(/Ascii$/, 'HAnsi').toLowerCase();
-  return canonical(a) === canonical(b);
-}
-
 /**
  * MS-OI29500 2.1.88: Word ignores `hint="eastAsia"` when the East Asian face is Times New
  * Roman AND the ascii and hAnsi faces are the same.
@@ -46,7 +27,7 @@ function sameThemeToken(a: string, b: string): boolean {
  * Times New Roman counts. The Latin faces are read from the same cascaded properties as
  * {@link hasEastAsiaSymbolHint}, last specified value per attribute winning (§17.3.2.26),
  * and compared as resolved faces through `themeFonts`, the way Word compares them. When a
- * theme token cannot be resolved against an explicit name, or a face is left unspecified,
+ * theme token has no resolved or explicit fallback face, or a face is left unspecified,
  * the comparison falls back to the exception (hint ignored), which is the conservative
  * pre-widening behavior.
  */
@@ -56,23 +37,23 @@ export function hasTimesNewRomanEastAsiaException(
   themeFonts?: ThemeFonts
 ): boolean {
   if (eastAsiaFace?.toLowerCase() !== 'times new roman') return false;
-  let ascii: LatinFace | undefined;
-  let hAnsi: LatinFace | undefined;
+  let ascii: string | null | undefined;
+  let hAnsi: string | null | undefined;
+  const face = (token: string | undefined, explicit: string | undefined): string | null =>
+    ((themeFonts ? themeFontFamilyOf(token, themeFonts) : null) ?? explicit)?.toLowerCase() ?? null;
   for (const property of properties) {
     if (property.localName !== 'rFonts') continue;
     const attributes = property.attributes;
-    if (attributes?.asciiTheme !== undefined) ascii = { value: attributes.asciiTheme, theme: true };
-    else if (attributes?.ascii !== undefined) ascii = { value: attributes.ascii, theme: false };
-    if (attributes?.hAnsiTheme !== undefined) hAnsi = { value: attributes.hAnsiTheme, theme: true };
-    else if (attributes?.hAnsi !== undefined) hAnsi = { value: attributes.hAnsi, theme: false };
+    if (attributes?.asciiTheme !== undefined || attributes?.ascii !== undefined) {
+      ascii = face(attributes.asciiTheme, attributes.ascii);
+    }
+    if (attributes?.hAnsiTheme !== undefined || attributes?.hAnsi !== undefined) {
+      hAnsi = face(attributes.hAnsiTheme, attributes.hAnsi);
+    }
   }
-  if (ascii === undefined || hAnsi === undefined) return true;
-  if (ascii.theme && hAnsi.theme && sameThemeToken(ascii.value, hAnsi.value)) return true;
-  const asciiFace = comparableFace(ascii, themeFonts);
-  const hAnsiFace = comparableFace(hAnsi, themeFonts);
-  // A token nothing resolves cannot be compared with anything; keep the exception.
-  if (asciiFace === null || hAnsiFace === null) return true;
-  return asciiFace === hAnsiFace;
+  // Missing faces and unresolved tokens cannot establish a difference.
+  if (ascii == null || hAnsi == null) return true;
+  return ascii === hAnsi;
 }
 
 /**
@@ -80,8 +61,8 @@ export function hasTimesNewRomanEastAsiaException(
  * unconditionally under `hint="eastAsia"`.
  *
  * Latin-1 keeps only the symbol exceptions; ASCII and the language/charset-dependent
- * accented letters are deliberately excluded, and so are Greek and Cyrillic. The CJK
- * radicals at U+2E80-U+2EFF are in the same table but already classify as strong East
+ * accented letters are deliberately excluded. Greek and Cyrillic use the exact table
+ * ranges. The CJK radicals at U+2E80-U+2EFF are in the same table but already classify as strong East
  * Asian text without a hint, so they are not repeated here.
  *
  * Two parts of the table are left out on purpose. Combining marks and format characters
@@ -106,6 +87,8 @@ export function isEastAsiaHintSymbol(codePoint: number): boolean {
     codePoint === 0xf7 ||
     // Spacing modifier letters (not the combining marks that follow them).
     (codePoint >= 0x2b0 && codePoint <= 0x2ff) ||
+    (codePoint >= 0x370 && codePoint <= 0x3cf) ||
+    (codePoint >= 0x400 && codePoint <= 0x4ff) ||
     // General punctuation through Dingbats, minus format characters and combining marks:
     // quotes, dashes, arrows, enclosed alphanumerics, box drawing, geometric shapes.
     (codePoint >= 0x2000 && codePoint <= 0x200a) ||

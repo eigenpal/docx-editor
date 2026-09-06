@@ -322,6 +322,32 @@ function foldPointsInto(points: EmuPoints, hash: Uint32Array): void {
   hash[1] = hashB;
 }
 
+// A story root is immutable. Identity detects text and formatting edits without walking
+// the entire hosted story each time a drawing token is requested.
+const textboxContentIdentities = new WeakMap<OoxmlNode, number>();
+let textboxContentIdentityCounter = 0;
+
+function textboxLayoutToken(story: NonNullable<DrawingProjection['textboxStory']>): string {
+  let identity = textboxContentIdentities.get(story.content);
+  if (identity === undefined) {
+    identity = ++textboxContentIdentityCounter;
+    textboxContentIdentities.set(story.content, identity);
+  }
+  return framedTokenJoin([
+    String(identity),
+    story.contentNodeId,
+    String(story.insetsEmu.top),
+    String(story.insetsEmu.right),
+    String(story.insetsEmu.bottom),
+    String(story.insetsEmu.left),
+    story.verticalAnchor,
+    story.autofit,
+    story.fillHex ?? '',
+    story.strokeHex ?? '',
+    String(story.strokeWidthEmu),
+  ]);
+}
+
 function drawingProjectionLayoutToken(projection: DrawingProjection): string {
   const position = projection.position;
   const anchor = projection.anchor;
@@ -332,32 +358,70 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
   // are verbatim file values, so a printable field separator would let two different
   // picture references serialize to one token — and `isCompatibleWith` compares
   // projections by this token alone when the resource substrate is unchanged.
-  return framedTokenJoin([
-    projection.drawingNodeId,
-    projection.ownerPartName,
-    projection.kind,
-    projection.hidden ? '1' : '0',
-    String(projection.extentEmu.cx),
-    String(projection.extentEmu.cy),
-    String(projection.effectExtentEmu.top),
-    String(projection.effectExtentEmu.right),
-    String(projection.effectExtentEmu.bottom),
-    String(projection.effectExtentEmu.left),
-    projection.compatibilityBranchNodeId ?? '',
-    anchor?.simplePos ? 'sp' : 'pv',
-    anchor ? String(anchor.relativeHeight) : '',
-    anchor ? (anchor.layoutInCell ? '1' : '0') : '',
-    anchor ? (anchor.allowOverlap ? '1' : '0') : '',
-    anchor ? (anchor.behindDocument ? '1' : '0') : '',
-    picture
+  // This also validates retained projections used by paint and drawing controls. Every
+  // top-level field needs a token decision, including diagnostics used for placeholders.
+  const fields = {
+    drawingNodeId: projection.drawingNodeId,
+    ownerPartName: projection.ownerPartName,
+    kind: projection.kind,
+    diagnostics: framedTokenJoin(
+      projection.diagnostics.map((diagnostic) =>
+        framedTokenJoin([diagnostic.code, diagnostic.nodeId, diagnostic.detail ?? ''])
+      )
+    ),
+    relationshipId: projection.relationshipId ?? '',
+    docPrId: String(projection.docPrId ?? ''),
+    name: projection.name,
+    title: projection.title,
+    description: projection.description,
+    hyperlinkHref: projection.hyperlinkHref ?? '',
+    hidden: String(projection.hidden),
+    extentEmu: framedTokenJoin([String(projection.extentEmu.cx), String(projection.extentEmu.cy)]),
+    effectExtentEmu: framedTokenJoin([
+      String(projection.effectExtentEmu.top),
+      String(projection.effectExtentEmu.right),
+      String(projection.effectExtentEmu.bottom),
+      String(projection.effectExtentEmu.left),
+    ]),
+    inlineDistancesEmu: framedTokenJoin([
+      String(projection.inlineDistancesEmu.top),
+      String(projection.inlineDistancesEmu.right),
+      String(projection.inlineDistancesEmu.bottom),
+      String(projection.inlineDistancesEmu.left),
+    ]),
+    wrap: projection.wrap,
+    textboxStory: projection.textboxStory ? textboxLayoutToken(projection.textboxStory) : '',
+    compatibilityBranchNodeId: projection.compatibilityBranchNodeId ?? '',
+    anchor: anchor
+      ? framedTokenJoin([
+          String(anchor.simplePos),
+          String(anchor.relativeHeight),
+          String(anchor.layoutInCell),
+          String(anchor.allowOverlap),
+          String(anchor.behindDocument),
+        ])
+      : '',
+    locks: framedTokenJoin([
+      String(projection.locks.select),
+      String(projection.locks.move),
+      String(projection.locks.resize),
+      String(projection.locks.changeAspect),
+    ]),
+    effects: framedTokenJoin([
+      String(projection.effects.grayscale),
+      String(projection.effects.brightness),
+      String(projection.effects.contrast),
+      String(projection.effects.bilevel ?? ''),
+    ]),
+    picture: picture
       ? framedTokenJoin([
           String(picture.crop.left),
           String(picture.crop.top),
           String(picture.crop.right),
           String(picture.crop.bottom),
           String(picture.transform.rotationDegrees),
-          picture.transform.flipHorizontal ? '1' : '0',
-          picture.transform.flipVertical ? '1' : '0',
+          String(picture.transform.flipHorizontal),
+          String(picture.transform.flipVertical),
           String(picture.transform.offsetEmu.x),
           String(picture.transform.offsetEmu.y),
           String(picture.transform.extentEmu.cx),
@@ -365,10 +429,11 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           picture.embeddedRelationshipId ?? '',
           picture.linkedRelationshipId ?? '',
           picture.presetGeometry ?? '',
+          picture.fillMode,
         ])
       : '',
-    vector ? vectorShapeLayoutToken(vector) : '',
-    wrap
+    vectorShape: vector ? vectorShapeLayoutToken(vector) : '',
+    wrapGeometry: wrap
       ? framedTokenJoin([
           wrap.element,
           wrap.textSide,
@@ -376,12 +441,11 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(wrap.distancesEmu.right),
           String(wrap.distancesEmu.bottom),
           String(wrap.distancesEmu.left),
-          // The vertex count alone let a moved vertex reuse the old exclusion polygon.
           String(wrap.polygon.length),
           pointsDigest(wrap.polygon),
         ])
       : '',
-    position
+    position: position
       ? framedTokenJoin([
           position.horizontal.relativeFrom,
           position.horizontal.align ?? '',
@@ -393,7 +457,8 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(position.simplePosition.yEmu),
         ])
       : '',
-  ]);
+  } satisfies Record<keyof DrawingProjection, string>;
+  return framedTokenJoin(Object.values(fields));
 }
 
 // Length-framed where a field embeds file text (resource keys carry relationship ids and
