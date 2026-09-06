@@ -208,9 +208,12 @@ import {
 import { surfaceScroller } from './surface-pages.ts';
 import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import {
+  createSuggestingConfigurationReporter,
   documentEditingModeRestriction,
   documentTrackingAdoption,
+  isAuthorRejection,
   PRO_REVIEW_REASON,
+  suggestingModeRefusal,
 } from './opening-editing-mode.ts';
 import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
@@ -310,14 +313,16 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** A refusal this facade made before the surface could see the request; see `snapshot`. */
   let facadeRejection: string | null = null;
 
+  /** Suggesting's preconditions, read live: `author` moves through `setAuthor`. */
+  const suggestingGuards = () => ({ reviewEnabled, hasAuthor: Boolean(author) });
+  /** Says once, on the console, that the host enabled suggesting without an author. */
+  const reportSuggestingConfiguration = createSuggestingConfigurationReporter();
   // The HOST's opening mode, when `config.mode` is explicit — precedence and reasons live
   // in `opening-editing-mode.ts`. Applied before the first mount reads `editingMode`.
-  const openingModeDecision = hostConfig.openingModeDecision({
-    reviewEnabled,
-    hasAuthor: Boolean(author),
-  });
+  const openingModeDecision = hostConfig.openingModeDecision(suggestingGuards());
   if (openingModeDecision.mode !== null) editingMode = openingModeDecision.mode;
   if (openingModeDecision.rejection !== null) facadeRejection = openingModeDecision.rejection;
+  reportSuggestingConfiguration(openingModeDecision.rejection);
 
   let surface: PaginatedSurface | null = null;
   // The facade's copy of the host's remote-caret label host: registered before attach,
@@ -1607,9 +1612,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function documentTrackingDecision(currentMode = editingMode, readerChoice = readerChoseMode) {
     const tracking = documentTracking();
     return documentTrackingAdoption({
+      ...suggestingGuards(),
       viewOnly: hostConfig.mode() === 'view',
-      reviewEnabled,
-      hasAuthor: Boolean(author),
       hostChoseMode: hostConfig.mode() !== undefined,
       readerChoseMode: readerChoice,
       currentMode,
@@ -1631,6 +1635,24 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (decision.rejection !== null) facadeRejection = decision.rejection;
     if (decision.mode !== 'suggesting') return;
     applyEditingMode('suggesting');
+  }
+
+  /**
+   * Re-decide the mode from the host's standing choice and the document's request, as if
+   * the editor were opening now: `setMode` after a host change, and `setAuthor` when an
+   * author arrives for a request that was refused for want of one.
+   */
+  function applyHostModeDecision(): void {
+    const hostDecision = hostConfig.openingModeDecision(suggestingGuards());
+    let next: DocumentEditingMode =
+      hostConfig.mode() === 'view' ? 'viewing' : (hostDecision.mode ?? 'editing');
+    const documentDecision = documentTrackingDecision(next, false);
+    if (documentDecision.mode !== null) next = documentDecision.mode;
+    facadeRejection = documentDecision.rejection ?? hostDecision.rejection;
+    reportSuggestingConfiguration(hostDecision.rejection);
+    applyEditingMode(next);
+    bump();
+    emitSelectionChange();
   }
 
   function dateOfItem(item: ReviewItem): string | undefined {
@@ -1811,8 +1833,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (hostConfig.mode() === 'view' && command.mode !== 'viewing') {
           return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
         }
-        if (command.mode === 'suggesting' && !reviewEnabled) {
-          return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+        // Refused, not entered-then-mute: suggesting with nobody to attribute a proposal to
+        // would take focus and refuse every keystroke. A host configuration error, said so.
+        const suggestingRefusal =
+          command.mode === 'suggesting' ? suggestingModeRefusal(suggestingGuards()) : null;
+        if (suggestingRefusal !== null) {
+          reportSuggestingConfiguration(suggestingRefusal.reason);
+          return suggestingRefusal;
         }
         const restriction = documentEditingModeRestriction(documentTracking(), command.mode);
         if (restriction) return restriction;
@@ -1897,9 +1924,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
           return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
         }
         if (command.type === 'setEditingMode') {
-          if (command.mode === 'suggesting' && !reviewEnabled) {
-            return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-          }
+          const suggestingRefusal =
+            command.mode === 'suggesting' ? suggestingModeRefusal(suggestingGuards()) : null;
+          if (suggestingRefusal !== null) return suggestingRefusal;
           const restriction = documentEditingModeRestriction(documentTracking(), command.mode);
           if (restriction) return restriction;
         }
@@ -2168,24 +2195,20 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (author === normalized) return;
       author = normalized;
       surface?.setAuthor(author);
+      // An author arriving lifts the one refusal it caused: a host `mode: 'suggesting'` or
+      // a document's `w:trackRevisions` that opened in editing for want of someone to
+      // attribute proposals to enters suggesting now — unless the reader chose since.
+      if (author !== undefined && !readerChoseMode && isAuthorRejection(facadeRejection)) {
+        applyHostModeDecision();
+        return;
+      }
       bump();
       emitSelectionChange();
     },
     setMode(nextMode) {
       if (!hostConfig.setMode(nextMode)) return;
       readerChoseMode = false;
-      const hostDecision = hostConfig.openingModeDecision({
-        reviewEnabled,
-        hasAuthor: Boolean(author),
-      });
-      let next: DocumentEditingMode =
-        nextMode === 'view' ? 'viewing' : (hostDecision.mode ?? 'editing');
-      const documentDecision = documentTrackingDecision(next, false);
-      if (documentDecision.mode !== null) next = documentDecision.mode;
-      facadeRejection = documentDecision.rejection ?? hostDecision.rejection;
-      applyEditingMode(next);
-      bump();
-      emitSelectionChange();
+      applyHostModeDecision();
     },
     setTranslate(nextTranslate) {
       const drawingStrings = hostConfig.setTranslate(nextTranslate);

@@ -23,6 +23,13 @@
  * exactly as `can(setEditingMode: 'suggesting')` reports. With a module but no author,
  * the editor opens editing and the REASON is published (`rejection`) rather than the
  * request being dropped in silence.
+ *
+ * The same two preconditions gate the RUNTIME request, `setEditingMode('suggesting')`,
+ * through `suggestingModeRefusal`. Entering suggesting without an author used to succeed
+ * and then refuse every keystroke: the pill read Suggesting, the document took focus, and
+ * typing changed nothing. A missing author is a host configuration error, so the request
+ * is refused with the reason, and `createSuggestingConfigurationReporter` says so once on
+ * the console for the host that never reads the result.
  */
 
 import type { DocumentEditingMode, ExecResult } from '../contracts/editor.ts';
@@ -43,6 +50,20 @@ export const PRO_REVIEW_REASON =
  */
 export const PRO_COLLABORATION_REASON =
   'realtime collaboration requires the pro collaboration module (@docx-editor.dev/pro)';
+
+/**
+ * The refusal a HOST request for suggesting gets when no author is configured.
+ *
+ * One sentence for one configuration error, whether the host asked at construction
+ * (`config.mode`), through `setMode`, or through `setEditingMode`: a proposal has to be
+ * attributed to someone, and `author` is where the host says who.
+ */
+export const SUGGESTING_AUTHOR_REASON =
+  'suggesting mode needs an author; configure author before enabling it';
+
+/** The published reason when the DOCUMENT asks for tracking and no author is configured. */
+const DOCUMENT_TRACKING_AUTHOR_REASON =
+  'this document asks for tracked changes, but no author is configured';
 
 /** What a decision asks the facade to do: adopt a mode, publish a refusal, or neither. */
 export interface OpeningModeDecision {
@@ -72,11 +93,59 @@ export function resolveOpeningEditingMode(
 ): OpeningModeDecision {
   if (requested === undefined || requested === 'view') return NO_DECISION;
   if (requested === 'edit') return { mode: 'editing', rejection: null };
-  if (!guards.reviewEnabled) return { mode: null, rejection: PRO_REVIEW_REASON };
-  if (!guards.hasAuthor) {
-    return { mode: null, rejection: 'suggesting mode was requested, but no author is configured' };
-  }
+  const refusal = suggestingModeRefusal(guards);
+  if (refusal !== null) return { mode: null, rejection: refusal.reason };
   return { mode: 'suggesting', rejection: null };
+}
+
+/**
+ * Why a request to enter suggesting is refused right now, or null when it can be entered.
+ *
+ * ONE statement of suggesting's preconditions, asked by `can` and `exec` for
+ * `setEditingMode('suggesting')` and by the construction-time decision above, so the
+ * toolbar's disabled reason, the command's refusal and the published rejection are the
+ * same sentence. The module comes first: without one there is no author to miss.
+ */
+export function suggestingModeRefusal(
+  guards: OpeningModeGuards
+): Extract<ExecResult, { ok: false }> | null {
+  if (!guards.reviewEnabled) return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
+  if (!guards.hasAuthor) {
+    return { ok: false, code: 'invalidArgs', reason: SUGGESTING_AUTHOR_REASON };
+  }
+  return null;
+}
+
+/**
+ * True when `rejection` is one that a configured author lifts: a host or document request
+ * for suggesting that opened in editing only because nobody could be attributed.
+ */
+export function isAuthorRejection(rejection: string | null): boolean {
+  return rejection === SUGGESTING_AUTHOR_REASON || rejection === DOCUMENT_TRACKING_AUTHOR_REASON;
+}
+
+/**
+ * A once-per-editor console report of the suggesting-without-author configuration error.
+ *
+ * The refusal already reaches the host as an `ExecResult` and as the published
+ * `lastRejection`; this is for the host that reads neither, like an `onReady` that calls
+ * `setEditingMode('suggesting')` and drops the result. Only the HOST's own request is
+ * reported: a document that asks for tracking through `w:trackRevisions` is the file's
+ * wish, not the host's configuration, and stays a published rejection alone.
+ */
+export function createSuggestingConfigurationReporter(
+  log: (message: string) => void = (message) => console.error(message)
+): (rejection: string | null) => void {
+  let reported = false;
+  return (rejection) => {
+    if (rejection !== SUGGESTING_AUTHOR_REASON || reported) return;
+    reported = true;
+    log(
+      `[@docx-editor.dev/core] ${SUGGESTING_AUTHOR_REASON}. ` +
+        'The document stays in editing mode and edits are not tracked until an author is set ' +
+        '(the author option at construction, setAuthor(), or the adapter author prop).'
+    );
+  };
 }
 
 /**
@@ -104,12 +173,7 @@ export function documentTrackingAdoption(
   const asks = input.trackRevisions && !input.hostChoseMode;
   if (!asks && !input.restrictedToTrackedChanges) return NO_DECISION;
   if (!input.reviewEnabled) return NO_DECISION;
-  if (!input.hasAuthor) {
-    return {
-      mode: null,
-      rejection: 'this document asks for tracked changes, but no author is configured',
-    };
-  }
+  if (!input.hasAuthor) return { mode: null, rejection: DOCUMENT_TRACKING_AUTHOR_REASON };
   return { mode: 'suggesting', rejection: null };
 }
 
