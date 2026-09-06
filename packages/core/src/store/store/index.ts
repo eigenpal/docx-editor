@@ -193,3 +193,7 @@ export {
   type SourceCrop,
 } from '../package/drawing-projection.ts';
 export type { ImageResourceState, SupportedImageMime } from '../package/image-resources.ts';
+
+export { textFormFieldsOf, type TextFormFieldRange } from './text-form-fields.ts';
+
+export { formsProtectionEnabled, sectionProtectsForms } from './tree-op-content-controls.ts';

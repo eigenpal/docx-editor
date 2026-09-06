@@ -1,3 +1,5 @@
+import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
+import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
 // Painted pages are the editable surface; seams live in sibling surface-*.ts modules.
 
@@ -2894,6 +2896,7 @@ export function mountPaginatedSurface(
    * silently write an untracked edit in suggesting mode — the failure nobody notices until
    * the document has already lost the proposal.
    */
+  let textFormInteraction: ReturnType<typeof createTextFormFieldInteraction> | null = null;
   function applyOps(
     ops: readonly TreeDocOp[],
     selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
@@ -2912,7 +2915,9 @@ export function mountPaginatedSurface(
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
     // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
     // header, a footer or a note is applied to that story rather than to the body.
-    const attributed = trackedOps(ops);
+    const attributed = trackedOps(
+      checkSelection && textFormInteraction ? textFormInteraction.annotate(ops) : ops
+    );
     const result = applyJournaledOps(attributed, selectionBefore, selectionAfter, scope);
     if (result.committed && attributed.some(isTrackedEdit)) {
       runtimeOptions.onTrackedChange?.();
@@ -5723,6 +5728,7 @@ export function mountPaginatedSurface(
       container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
       viewportObserver?.disconnect();
       observedScroller = null;
+      textFormInteraction?.destroy();
       pointer?.destroy();
       tableInteraction.destroy();
       navigation.destroy();
@@ -5880,6 +5886,26 @@ export function mountPaginatedSurface(
    * the DOM guessed.
    */
   let pointer: PointerController | null = null;
+  textFormInteraction = createTextFormFieldInteraction({
+    pagesLayer,
+    container,
+    part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
+    protected: (paragraphId = selection.head.paragraphId) =>
+      formsProtectionEnabled(session.settingsRoot()) &&
+      sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
+    selection: () => selection,
+    select: (next) => setSelection(next),
+    editable: () => editingMode === 'edit',
+    apply: (op) => {
+      let applied = false;
+      commit(() => {
+        const result = applyOps([op]);
+        applied = result.committed;
+        return result;
+      });
+      return applied;
+    },
+  });
   const dispatchKeyDown = createKeyDownHandler(
     surface,
     options.onRequestHyperlink ? { onRequestHyperlink: options.onRequestHyperlink } : {}
@@ -5888,7 +5914,7 @@ export function mountPaginatedSurface(
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.
     if (!event.defaultPrevented) selectionSync.adoptBeforeInput();
-    dispatchKeyDown(event);
+    if (!textFormInteraction?.keydown(event)) dispatchKeyDown(event);
   };
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface);
   const dispatchBeforeInput = createBeforeInputHandler(surface, {
@@ -6041,6 +6067,7 @@ export function mountPaginatedSurface(
 
   pointer = createPointerController(
     {
+      onTextFormDoubleClick: (event) => textFormInteraction?.doubleClick(event) ?? false,
       pagesLayer,
       container,
       scale: () => scale,

@@ -1,3 +1,11 @@
+import { enforcesFormsProtection, sectionProtectsForms } from './forms-protection.ts';
+export {
+  enforcesFormsProtection,
+  formsProtectionEnabled,
+  sectionProtectsForms,
+} from './forms-protection.ts';
+import { protectedTextFormEditRefusal } from './tree-op-field-results.ts';
+import { textFormFieldForEdit } from './text-form-fields.ts';
 // Writing content controls: values, metadata, insertion, removal — and the locks that refuse.
 //
 // EVERY refusal in this module is a STORE refusal. A widget that greys a button out is a
@@ -508,6 +516,7 @@ const TREE_OP_REACH: {
   // Page numbers rewrite runs in the result paragraphs the op names, and nothing else.
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   // A field-result refresh rewrites result runs in the paragraphs the op names, nothing else.
+  setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
   refreshFieldResults: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   replaceStoryBlocks: (op) => ({
     kind: 'nodes',
@@ -1044,37 +1053,6 @@ export function contentControlBindingRefusal(
 // ---------------------------------------------------------------------------
 
 /**
- * Whether `settings.xml` enforces `w:documentProtection w:edit="forms"` (§17.15.1.29).
- *
- * Enforcement is a separate attribute from the mode: Word stores the mode a document was last
- * protected with even after the protection is lifted, so a file with `w:enforcement="0"` is an
- * ordinary editable document and treating it as protected would lock users out of their own
- * text.
- */
-export function enforcesFormsProtection(settings: OoxmlPart | null | undefined): boolean {
-  if (!settings) return false;
-  for (const child of settings.root.children) {
-    if (child.kind === 'textValue') continue;
-    if (child.namespaceUri !== WML_NAMESPACE_URI || child.localName !== 'documentProtection') {
-      continue;
-    }
-    const attribute = (name: string): string | undefined =>
-      child.attributes.find(
-        (entry) => entry.localName === name && entry.namespaceUri === WML_NAMESPACE_URI
-      )?.value;
-    if (attribute('edit') !== 'forms') return false;
-    return isTrue(attribute('enforcement'));
-  }
-  return false;
-}
-
-/** `ST_OnOff`: absent means on for a flag element, and "0"/"false"/"off" always means off. */
-function isTrue(value: string | undefined): boolean {
-  if (value === undefined) return true;
-  return value !== '0' && value !== 'false' && value !== 'off';
-}
-
-/**
  * Whether forms protection reaches a node, i.e. it is not inside a control and not in a
  * section that switched form protection off (`w:sectPr/w:formProt`, §17.6.7).
  *
@@ -1084,9 +1062,19 @@ function isTrue(value: string | undefined): boolean {
 export function formsProtectionRefusal(
   part: OoxmlPart,
   settings: OoxmlPart | null | undefined,
-  op: TreeDocOp
+  op: TreeDocOp,
+  preferredFieldId?: string
 ): TreeOpRejection | null {
   if (!enforcesFormsProtection(settings)) return null;
+  const textField = textFormFieldForEdit(part, op, preferredFieldId);
+  if (
+    (op.op === 'insertText' || op.op === 'deleteText') &&
+    op.textFormFieldId !== undefined &&
+    !textField
+  )
+    return 'invalidArgs';
+  if (textField && 'paragraphId' in op && sectionProtectsForms(part, op.paragraphId))
+    return protectedTextFormEditRefusal(part, op, textField);
   const reach = treeOpReach(op);
   if (reach.kind === 'none') return null;
   for (const node of resolveReach(part, reach).unprotected) {
@@ -1096,50 +1084,6 @@ export function formsProtectionRefusal(
     return 'locked';
   }
   return null;
-}
-
-/**
- * Whether the section owning a node still has form protection on.
- *
- * `w:formProt` is per-section, so a protected document may carry an unprotected section. The
- * owning section is the first `w:sectPr` at or after the node in body order, which is how a
- * section's extent is expressed in the body at all.
- */
-function sectionProtectsForms(part: OoxmlPart, nodeId: string): boolean {
-  let seenTarget = false;
-  let answer = true;
-  const walk = (node: OoxmlNode): boolean => {
-    if (node.kind === 'textValue') return false;
-    if (node.id === nodeId) seenTarget = true;
-    if (
-      seenTarget &&
-      node.namespaceUri === WML_NAMESPACE_URI &&
-      node.localName === 'sectPr' &&
-      node.id !== nodeId
-    ) {
-      const formProt = node.children.find(
-        (child) =>
-          child.kind !== 'textValue' &&
-          child.namespaceUri === WML_NAMESPACE_URI &&
-          child.localName === 'formProt'
-      );
-      // No `w:formProt` on the section leaves the document's own protection in force.
-      if (formProt && formProt.kind !== 'textValue') {
-        answer = isTrue(
-          formProt.attributes.find(
-            (entry) => entry.localName === 'val' && entry.namespaceUri === WML_NAMESPACE_URI
-          )?.value
-        );
-      }
-      return true;
-    }
-    for (const child of node.children) {
-      if (walk(child)) return true;
-    }
-    return false;
-  };
-  walk(part.root);
-  return answer;
 }
 
 // ---------------------------------------------------------------------------

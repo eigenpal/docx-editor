@@ -1,3 +1,5 @@
+import { applyTextFormFieldDefault } from './tree-op-field-results.ts';
+import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
 // Op application over the canonical tree (tree-ops seam).
 //
 // This module owns turning a VALIDATED op into a new part plus its structural effect.
@@ -308,6 +310,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
   if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
+  if (op.op === 'setTextFormFieldDefault') return applyTextFormFieldDefault(part, op, options);
   if (op.op === 'refreshFieldResults') return applyRefreshFieldResults(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);
   if (op.op === 'setHyperlinkTarget') return applySetHyperlinkTarget(part, op, options);
@@ -1146,6 +1149,16 @@ function applyDeleteText(
   };
   let current = part;
   const nextId = createNodeIdAllocator(part);
+
+  const fieldsRemoved = removeCoveredTextFormDefinitions(
+    current,
+    paragraph,
+    start,
+    end,
+    editOptions
+  );
+  if (!fieldsRemoved.ok) return fieldsRemoved;
+  current = fieldsRemoved.part;
 
   // Highest offset first, so earlier segment positions stay valid as edits apply.
   for (const segment of [...segments].reverse()) {

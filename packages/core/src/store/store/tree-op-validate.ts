@@ -1,3 +1,6 @@
+import { textFormFieldForEdit } from './text-form-fields.ts';
+import { coveredTextFormDefinitionRefusal } from './text-form-field-deletion.ts';
+import { validateTextFormFieldDefault } from './tree-op-field-results.ts';
 // Pre-application validation for tree ops (tree-ops seam).
 //
 // `validateTreeOp` runs BEFORE any tree work so a rejected op leaves the tree, revision
@@ -201,7 +204,7 @@ function validateHyperlinkTarget(op: {
  * covers the whole of a paragraph it holds, an inline one covers its own offsets, and "any offset
  * in an enclosed paragraph is fine" was a rule only one of them was ever checked against.
  */
-function namedOwnerRefusal(
+export function namedOwnerRefusal(
   part: OoxmlPart,
   paragraphId: string,
   offset: number,
@@ -228,6 +231,12 @@ function namedOwnerRefusal(
 /** Structural validation, run before any tree work so a rejection changes nothing. */
 export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection | null {
   if (!TREE_DOC_OP_KINDS.includes(op.op)) return 'unknown-op';
+  if (
+    (op.op === 'insertText' || op.op === 'deleteText') &&
+    op.textFormFieldId !== undefined &&
+    !textFormFieldForEdit(part, op)
+  )
+    return 'invalidArgs';
   if (isDrawingTreeDocOp(op)) {
     const drawingRefusal = validateDrawingOp(part, op);
     if (drawingRefusal) return drawingRefusal;
@@ -380,6 +389,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   if (op.op === 'rewriteTocPageNumbers') {
     return validateRewriteTocPageNumbers(part, op);
   }
+  if (op.op === 'setTextFormFieldDefault') return validateTextFormFieldDefault(part, op);
   if (op.op === 'refreshFieldResults') {
     return validateRefreshFieldResults(part, op);
   }
@@ -761,6 +771,10 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
         return 'splits-surrogate-pair';
       }
       if (rangePartiallyOverlapsDrawing(paragraph, op.start, op.end)) return 'invalid-range';
+      if (!op.revision) {
+        const refusal = coveredTextFormDefinitionRefusal(part, paragraph, op.start, op.end);
+        if (refusal) return refusal;
+      }
       return rejectContentEdit(part, paragraph, op.start, op.end);
     }
     case 'setRunProperties': {
