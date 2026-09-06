@@ -124,6 +124,9 @@ test('semantic painter leaves an open path open and fills its separate arrowhead
   expect(arrow.getAttribute('fill')).toBe('#FF0000');
   expect(element.querySelectorAll('path')).toHaveLength(2);
   expect(element.querySelector('image')).toBeNull();
+  // The triangle's wings reach past the authored extent; the outer box at `paintBounds`
+  // is the only clip, so the svg itself must not cut them off.
+  expect(element.querySelector('svg')!.style.overflow).toBe('visible');
 });
 
 test('generated arrowhead vertices count against the existing per-drawing point budget', () => {

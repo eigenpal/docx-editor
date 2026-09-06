@@ -6,6 +6,7 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { zipSync, strToU8 } from 'fflate';
+import { indexInlineDrawingProjectionsInPart } from '../../store/package/drawing-projection.ts';
 import {
   createInlineDrawingLayoutBundle,
   drawingAtomIdentities,
@@ -255,16 +256,21 @@ describe('vector shape layout token', () => {
       readonly extraComponent: boolean;
       readonly splitSubpaths: boolean;
       readonly splitAt: number;
+      readonly open: boolean;
+      readonly arrowheads: readonly (readonly Readonly<{ x: number; y: number }>[])[];
     }> = {}
   ) => {
     const points = overrides.points ?? [point(0, 0), point(100, 0), point(100, 50.5)];
+    const subpathsEmu =
+      overrides.splitAt !== undefined
+        ? [points.slice(0, overrides.splitAt), points.slice(overrides.splitAt)]
+        : overrides.splitSubpaths
+          ? [points.slice(0, 1), points.slice(1)]
+          : [points];
     const component = {
-      subpathsEmu:
-        overrides.splitAt !== undefined
-          ? [points.slice(0, overrides.splitAt), points.slice(overrides.splitAt)]
-          : overrides.splitSubpaths
-            ? [points.slice(0, 1), points.slice(1)]
-            : [points],
+      subpathsEmu,
+      ...(overrides.open ? { subpathsClosed: subpathsEmu.map(() => false) } : {}),
+      ...(overrides.arrowheads ? { arrowheadsEmu: overrides.arrowheads } : {}),
       fillHex: overrides.fillHex === undefined ? '4472C4' : overrides.fillHex,
       fillAlpha: overrides.fillAlpha ?? 1,
       strokeHex: overrides.strokeHex ?? null,
@@ -313,12 +319,65 @@ describe('vector shape layout token', () => {
       'a stroke width': shape({ strokeWidthEmu: 12_700 }),
       'a different extent': shape({ cx: 1001 }),
       'a second component': shape({ extraComponent: true }),
+      'an open subpath': shape({ open: true }),
+      'a line-end triangle': shape({ arrowheads: [[point(0, 0), point(5, 5), point(-5, 5)]] }),
     };
     for (const [label, changed] of Object.entries(differences)) {
       expect(`${label} collides: ${vectorShapeLayoutToken(changed) === baseline}`).toBe(
         `${label} collides: false`
       );
     }
+  });
+
+  test('line-end triangles separate by count and by vertex', () => {
+    const one = shape({ arrowheads: [[point(0, 0), point(5, 5), point(-5, 5)]] });
+    const moved = shape({ arrowheads: [[point(0, 0), point(5, 5), point(-5, 5.5)]] });
+    const two = shape({
+      arrowheads: [
+        [point(0, 0), point(5, 5), point(-5, 5)],
+        [point(100, 50.5), point(95, 45), point(105, 45)],
+      ],
+    });
+    expect(vectorShapeLayoutToken(one)).toBe(vectorShapeLayoutToken(one));
+    expect(vectorShapeLayoutToken(moved)).not.toBe(vectorShapeLayoutToken(one));
+    expect(vectorShapeLayoutToken(two)).not.toBe(vectorShapeLayoutToken(one));
+  });
+
+  // Projected from markup rather than hand-built: `a:close` and `a:tailEnd` move no vertex
+  // of the authored path, so only the close flags and the generated triangle can tell the
+  // shapes apart. A token blind to either reuses a stale record across the edit.
+  test('projections that differ only by a close command or a line end differ', () => {
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+    const project = (options: { close?: boolean; tailEnd?: boolean }) => {
+      const xml =
+        `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}"><w:body><w:p><w:r>` +
+        '<w:drawing><wp:inline><wp:extent cx="1270000" cy="635000"/><wp:docPr id="1" name="c"/>' +
+        `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:spPr>` +
+        '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm>' +
+        '<a:custGeom><a:pathLst><a:path w="1000" h="1000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo>' +
+        '<a:lnTo><a:pt x="1000" y="1000"/></a:lnTo><a:lnTo><a:pt x="0" y="1000"/></a:lnTo>' +
+        `${options.close ? '<a:close/>' : ''}</a:path></a:pathLst></a:custGeom>` +
+        '<a:noFill/><a:ln w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>' +
+        `${options.tailEnd ? '<a:tailEnd type="triangle"/>' : ''}</a:ln>` +
+        '</wps:spPr></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing>' +
+        '</w:r></w:p></w:body></w:document>';
+      const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
+      if (!parsed.ok) throw new Error(parsed.reason);
+      const projections = [...indexInlineDrawingProjectionsInPart(parsed.part).values()];
+      expect(projections).toHaveLength(1);
+      const vector = projections[0]!.vectorShape;
+      if (!vector) throw new Error('expected a vector shape projection');
+      return vector;
+    };
+    const open = project({});
+    const closed = project({ close: true });
+    const arrow = project({ tailEnd: true });
+    expect(closed.components[0]!.subpathsEmu).toEqual(open.components[0]!.subpathsEmu);
+    expect(arrow.components[0]!.subpathsEmu).toEqual(open.components[0]!.subpathsEmu);
+    expect(vectorShapeLayoutToken(project({}))).toBe(vectorShapeLayoutToken(open));
+    expect(vectorShapeLayoutToken(closed)).not.toBe(vectorShapeLayoutToken(open));
+    expect(vectorShapeLayoutToken(arrow)).not.toBe(vectorShapeLayoutToken(open));
   });
 
   test('the token stays small for a shape at the point budget', () => {

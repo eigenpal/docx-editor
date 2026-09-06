@@ -263,9 +263,27 @@ export function vectorShapeLayoutToken(
       String(component.strokeWidthEmu),
       String(component.subpathsEmu.length)
     );
-    for (const subpath of component.subpathsEmu) {
-      scalars.push(String(subpath.length));
+    component.subpathsEmu.forEach((subpath, index) => {
+      // An omitted close flag paints closed, exactly like `true`; only `false` leaves the
+      // path open, so that is the one value that must separate two otherwise equal shapes.
+      scalars.push(String(subpath.length), component.subpathsClosed?.[index] === false ? '0' : '1');
       for (const point of subpath) {
+        COORDINATE_SCRATCH[0] = point.x;
+        hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
+        hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
+        COORDINATE_SCRATCH[0] = point.y;
+        hashA = Math.imul(hashA ^ COORDINATE_BITS[1]!, 0x0100_0193);
+        hashB = Math.imul(hashB ^ COORDINATE_BITS[0]!, 0x0100_01b3);
+      }
+    });
+    // Line-end triangles are generated geometry the painter fills separately, so a changed
+    // `a:headEnd`/`a:tailEnd` moves nothing in the subpath stream. Their vertices join the
+    // same accumulators, framed by their counts, so the token cannot reuse a stale record.
+    const arrowheads = component.arrowheadsEmu ?? [];
+    scalars.push(String(arrowheads.length));
+    for (const arrowhead of arrowheads) {
+      scalars.push(String(arrowhead.length));
+      for (const point of arrowhead) {
         COORDINATE_SCRATCH[0] = point.x;
         hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
         hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
