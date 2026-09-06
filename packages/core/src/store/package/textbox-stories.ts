@@ -29,7 +29,7 @@ const WPS_GRAPHIC_DATA_URI = WPS_NAMESPACE_URI;
 export interface TextboxStoryRoot {
   /** The `w:txbxContent` story root. */
   readonly root: OoxmlElement;
-  /** Canonical node id of the drawing that owns the story. */
+  /** Layout atom id used to select the drawing, including an MC wrapper when present. */
   readonly drawingNodeId: string;
   /** Canonical node id of the paragraph that anchors the drawing. */
   readonly hostParagraphId: string;
@@ -124,19 +124,22 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
     const paragraphId = frame.node.kind === 'paragraph' ? frame.node.id : frame.paragraphId;
     let drawing: OoxmlDrawingNode | null = frame.node.kind === 'drawing' ? frame.node : null;
+    let layoutAtomId = drawing?.id ?? null;
     if (!drawing && isMcAlternateContent(frame.node)) {
-      drawing = resolveRunLevelMcAtom(
+      const resolved = resolveRunLevelMcAtom(
         frame.node,
         scope,
         DEFAULT_SUPPORTED_MC_REQUIRES,
         DEFAULT_DRAWING_PROJECTION_LIMITS
-      ).drawing;
+      );
+      drawing = resolved.drawing;
+      layoutAtomId = drawing ? resolved.segmentNode.id : null;
     }
     if (drawing) {
       const root = paragraphId ? textboxContentOf(drawing) : null;
-      if (root && paragraphId) {
+      if (root && paragraphId && layoutAtomId) {
         stories.push(
-          Object.freeze({ root, drawingNodeId: drawing.id, hostParagraphId: paragraphId })
+          Object.freeze({ root, drawingNodeId: layoutAtomId, hostParagraphId: paragraphId })
         );
       }
       continue;

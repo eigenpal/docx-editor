@@ -1036,7 +1036,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Searches headers, footers, footnotes, endnotes, text boxes, table cells, and saved field results. A text-box match selects the text box instead of placing the caret inside it.',
+      'Searches headers, footers, footnotes, endnotes, body, header, and footer text boxes, table cells, and saved field results. Note-owned text boxes are excluded until their drawings are selectable. A text-box match selects the text box instead of placing the caret inside it.',
   },
   {
     id: 'collab.clipboard',

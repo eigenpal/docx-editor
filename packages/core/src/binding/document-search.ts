@@ -17,8 +17,8 @@
 // projection, so a field result can be longer than the editable model range it maps to.
 //
 // WHAT IS SEARCHED: body, furniture, footnotes, then endnotes. Each story uses the shared
-// paragraph walk, which descends into tables, nested tables, and block controls. Text-box
-// stories follow the owning story; navigation selects their anchoring drawing, not their text.
+// paragraph walk, which descends into tables, nested tables, and block controls. Selectable
+// body and furniture text boxes follow their owners. Note-owned text boxes remain excluded.
 
 import {
   SEARCH_MATCH_LIMIT,
@@ -40,11 +40,11 @@ import {
 } from '../store/package/note-nodes.ts';
 import { isFldSimple } from '../store/package/field-nodes.ts';
 import { bodyStoryRoot, storyParagraphs, storyRootsOf } from '../store/package/story-blocks.ts';
-import { textboxStoriesInPart } from '../store/package/textbox-stories.ts';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
-import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { projectVisibleParagraphText } from '../store/store/text-projection.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import { expandSelectableTextboxStories, type SearchStory } from './document-search-frames.ts';
 
 export { SEARCH_MATCH_LIMIT, SEARCH_QUERY_MAX };
 
@@ -156,14 +156,6 @@ function runStarts(paragraph: OoxmlParagraphNode): RunStart[] {
   return starts;
 }
 
-interface SearchStory {
-  readonly part: OoxmlPart;
-  readonly root: OoxmlNode;
-  readonly scope?: ViewScope;
-  readonly drawingNodeId?: string;
-  readonly hostParagraphId?: string;
-}
-
 function bodyStories(part: OoxmlPart): SearchStory[] {
   const body = bodyStoryRoot(part);
   return body ? [{ part, root: body }] : [];
@@ -234,27 +226,7 @@ function searchStories(part: OoxmlPart, sources?: DocumentSearchSources): Search
       stories.push(story);
     }
   }
-  const expanded: SearchStory[] = [];
-  for (const story of stories) {
-    expanded.push(story);
-    const hostParagraphIds = new Set(storyParagraphs(story.root).map((node) => node.id));
-    for (const frame of textboxStoriesInPart(story.part)) {
-      if (!hostParagraphIds.has(frame.hostParagraphId)) continue;
-      const owner = story.scope;
-      expanded.push({
-        part: story.part,
-        root: frame.root,
-        scope: {
-          kind: 'frame',
-          id: frame.root.id,
-          ...(owner?.kind === 'headerFooter' || owner?.kind === 'note' ? { owner } : {}),
-        },
-        drawingNodeId: frame.drawingNodeId,
-        hostParagraphId: frame.hostParagraphId,
-      });
-    }
-  }
-  return expanded;
+  return expandSelectableTextboxStories(stories);
 }
 
 /** The run a paragraph offset falls in, and the offset inside it. */

@@ -2,9 +2,15 @@
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
-import { MAX_NOTES_PER_PART } from '../../store/package/note-nodes.ts';
-import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
+import { MAX_NOTES_PER_PART, resolvableNotesOf } from '../../store/package/note-nodes.ts';
+import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import {
+  expandSelectableTextboxStories,
+  type SearchStory,
+  type TextboxStoryExpansionWork,
+} from '../document-search-frames.ts';
 import { textboxStoriesInPart } from '../../store/package/textbox-stories.ts';
+import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -142,7 +148,10 @@ function footnoteFixture(notes: string, referenceIds: readonly number[] = [1]): 
       'word/_rels/document.xml.rels': strToU8(
         `<Relationships xmlns="${REL}"><Relationship Id="rFootnotes" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
       ),
-      'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W}">${notes}</w:footnotes>`),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+          `xmlns:wps="${WPS}">${notes}</w:footnotes>`
+      ),
     },
     { level: 0 }
   );
@@ -300,6 +309,39 @@ describe('navigation Find stories', () => {
     expect(frame.drawingNodeId).toBe(root?.drawingNodeId);
     expect(frame.hostParagraphId).toBe(root?.hostParagraphId);
     expect(frame.text).toBe('needle');
+  });
+
+  test('indexes thousands of note text boxes once and looks up each note once', () => {
+    const count = 2_000;
+    const notes = Array.from(
+      { length: count },
+      (_, index) => `<w:footnote w:id="${index + 1}"><w:p>${textbox('boxed')}</w:p></w:footnote>`
+    ).join('');
+    const parsed = readOoxmlPart(
+      `<w:footnotes xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+        `xmlns:wps="${WPS}">${notes}</w:footnotes>`,
+      { name: '/word/footnotes.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const stories: SearchStory[] = resolvableNotesOf(parsed.part.root).map((root, index) => ({
+      part: parsed.part,
+      root,
+      scope: { kind: 'note', id: `footnote:${index + 1}` },
+    }));
+    const work: TextboxStoryExpansionWork = { indexBuilds: 0, hostLookups: 0, indexedFrames: 0 };
+
+    expect(expandSelectableTextboxStories(stories, work)).toEqual(stories);
+    expect(work).toEqual({ indexBuilds: 1, hostLookups: count, indexedFrames: count });
+  });
+
+  test('excludes a text box owned by a footnote', () => {
+    const notes =
+      `<w:footnote w:id="1">${p('ordinary note')}` +
+      `<w:p>${textbox('note boxed needle')}</w:p></w:footnote>`;
+    const session = open(footnoteFixture(notes));
+
+    expect(session.findText('ordinary note').matches).toHaveLength(1);
+    expect(session.findText('note boxed needle').matches).toEqual([]);
   });
 
   test.each([

@@ -6,6 +6,7 @@ import {
   readOoxmlPart,
   storyParagraphs,
   textboxStoriesInPart,
+  type OoxmlElement,
   type OoxmlNode,
   type OoxmlPart,
 } from '../index.ts';
@@ -15,6 +16,7 @@ const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 
 const paragraph = (text: string): string => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
@@ -34,6 +36,29 @@ function textbox(content: string, id: number): string {
   );
 }
 
+function wrappedTextbox(content: string, id: number): string {
+  const run = textbox(content, id);
+  const drawing = run.slice('<w:r>'.length, -'</w:r>'.length);
+  return (
+    `<w:r><mc:AlternateContent><mc:Choice Requires="wps">${drawing}</mc:Choice>` +
+    '<mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent></w:r>'
+  );
+}
+
+function elementNamed(
+  root: OoxmlNode,
+  namespaceUri: string,
+  localName: string
+): OoxmlElement | null {
+  if (root.kind === 'textValue') return null;
+  if (root.namespaceUri === namespaceUri && root.localName === localName) return root;
+  for (const child of root.children) {
+    const found = elementNamed(child, namespaceUri, localName);
+    if (found) return found;
+  }
+  return null;
+}
+
 function parse(root: string, name = '/word/document.xml'): OoxmlPart {
   const result = readOoxmlPart(root, { name, contentType: 'application/xml' });
   if (!result.ok) throw new Error(result.reason);
@@ -42,7 +67,8 @@ function parse(root: string, name = '/word/document.xml'): OoxmlPart {
 
 function documentPart(body: string): OoxmlPart {
   return parse(
-    `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+    `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}" ` +
+      `xmlns:mc="${MC}">` +
       `<w:body>${body}</w:body></w:document>`
   );
 }
@@ -86,6 +112,18 @@ describe('textboxStoriesInPart', () => {
     expect(stories[0]!.drawingNodeId).not.toBe(stories[1]!.drawingNodeId);
     expect(stories[0]!.hostParagraphId).not.toBe(stories[1]!.hostParagraphId);
     expect(textboxStoriesInPart(part)).toBe(stories);
+  });
+
+  test('uses the layout atom id for a drawing inside mc:AlternateContent', () => {
+    const part = documentPart(`<w:p>${wrappedTextbox(paragraph('wrapped'), 5)}</w:p>`);
+    const wrapper = elementNamed(part.root, MC, 'AlternateContent');
+    const drawing = elementNamed(part.root, W, 'drawing');
+    const [story] = textboxStoriesInPart(part);
+
+    expect(wrapper).toBeDefined();
+    expect(drawing).toBeDefined();
+    expect(story?.drawingNodeId).toBe(wrapper?.id);
+    expect(story?.drawingNodeId).not.toBe(drawing?.id);
   });
 
   test('lists a header text box and exposes table and block-control paragraphs', () => {

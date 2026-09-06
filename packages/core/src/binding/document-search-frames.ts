@@ -1,0 +1,90 @@
+// Text-box story expansion for navigation Find, indexed once per owning package part.
+
+import type { ViewScope } from '../contracts/editor.ts';
+import { storyParagraphs } from '../store/package/story-blocks.ts';
+import { textboxStoriesInPart, type TextboxStoryRoot } from '../store/package/textbox-stories.ts';
+import type { OoxmlNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+
+/** One root searched by navigation Find. Internal to the binding lane. */
+export interface SearchStory {
+  readonly part: OoxmlPart;
+  readonly root: OoxmlNode;
+  readonly scope?: ViewScope;
+  readonly drawingNodeId?: string;
+  readonly hostParagraphId?: string;
+}
+
+/** Work counters used by the linear-complexity regression test. */
+export interface TextboxStoryExpansionWork {
+  indexBuilds: number;
+  hostLookups: number;
+  indexedFrames: number;
+}
+
+type FrameIndex = ReadonlyMap<string, readonly TextboxStoryRoot[]>;
+
+function indexFramesByHost(part: OoxmlPart, work?: TextboxStoryExpansionWork): FrameIndex {
+  const mutable = new Map<string, TextboxStoryRoot[]>();
+  const frames = textboxStoriesInPart(part);
+  for (const frame of frames) {
+    const atHost = mutable.get(frame.hostParagraphId);
+    if (atHost) atHost.push(frame);
+    else mutable.set(frame.hostParagraphId, [frame]);
+  }
+  if (work) {
+    work.indexBuilds += 1;
+    work.indexedFrames += frames.length;
+  }
+  return mutable;
+}
+
+function framesInStory(
+  story: SearchStory,
+  index: FrameIndex,
+  work?: TextboxStoryExpansionWork
+): readonly TextboxStoryRoot[] {
+  const frames: TextboxStoryRoot[] = [];
+  for (const paragraph of storyParagraphs(story.root)) {
+    if (work) work.hostLookups += 1;
+    frames.push(...(index.get(paragraph.id) ?? []));
+  }
+  return frames;
+}
+
+/**
+ * Add selectable body and furniture text-box stories after their owning story.
+ *
+ * Note text boxes remain excluded until note drawing layout and overlay lookup support them.
+ */
+export function expandSelectableTextboxStories(
+  stories: readonly SearchStory[],
+  work?: TextboxStoryExpansionWork
+): SearchStory[] {
+  const expanded: SearchStory[] = [];
+  const indexes = new Map<OoxmlPart, FrameIndex>();
+  for (const story of stories) {
+    expanded.push(story);
+    let index = indexes.get(story.part);
+    if (!index) {
+      index = indexFramesByHost(story.part, work);
+      indexes.set(story.part, index);
+    }
+    const frames = framesInStory(story, index, work);
+    if (story.scope?.kind === 'note') continue;
+    for (const frame of frames) {
+      const owner = story.scope;
+      expanded.push({
+        part: story.part,
+        root: frame.root,
+        scope: {
+          kind: 'frame',
+          id: frame.root.id,
+          ...(owner?.kind === 'headerFooter' ? { owner } : {}),
+        },
+        drawingNodeId: frame.drawingNodeId,
+        hostParagraphId: frame.hostParagraphId,
+      });
+    }
+  }
+  return expanded;
+}

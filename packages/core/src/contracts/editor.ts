@@ -450,10 +450,11 @@ export interface Editor {
   } | null;
 
   /**
-   * Find across body, headers, footers, footnotes, endnotes, and their text boxes.
+   * Find across body, headers, footers, footnotes, endnotes, and selectable text boxes.
    *
    * The search narrows to the body and its selectable text boxes when other stories cannot open.
    * This includes viewing mode and surfaces without header, footer, or note entry methods.
+   * Text boxes in footnotes and endnotes remain excluded until their drawings are selectable.
    */
   findMatches(
     query: string,

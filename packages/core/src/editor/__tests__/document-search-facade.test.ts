@@ -3,8 +3,12 @@ if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
+import { findDrawingOverlayFrameInLayout } from '../../layout/semantic-hit-test.ts';
 import { createDocxEditor } from '../docx-editor.ts';
-import { selectedDrawingOverlayTargetOf } from '../docx-editor-images.ts';
+import {
+  resolveSelectedDrawingRecord,
+  selectedDrawingOverlayTargetOf,
+} from '../docx-editor-images.ts';
 import { FOOTNOTE_SCOPE_ID, HEADER_R_ID, storyParityDocx } from './story-parity-fixture.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -15,6 +19,7 @@ const DOC_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relations
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
 
 function textbox(text: string): string {
   return (
@@ -33,13 +38,23 @@ function textbox(text: string): string {
   );
 }
 
+function wrappedTextbox(text: string): string {
+  const run = textbox(text);
+  const drawing = run.slice('<w:r>'.length, -'</w:r>'.length);
+  return (
+    `<w:r><mc:AlternateContent xmlns:mc="${MC}" xmlns:wps="${WPS}">` +
+    `<mc:Choice Requires="wps">${drawing}</mc:Choice>` +
+    '<mc:Fallback><w:pict/></mc:Fallback></mc:AlternateContent></w:r>'
+  );
+}
+
 function textboxDocx(inHeader = false, includeBodyFrame = !inHeader): Uint8Array {
   const headerReference = inHeader
     ? '<w:sectPr><w:headerReference w:type="default" r:id="rHeader"/></w:sectPr>'
     : '';
   const body =
     '<w:p><w:r><w:t>body</w:t></w:r></w:p>' +
-    (includeBodyFrame ? `<w:p>${textbox('boxed needle')}</w:p>` : '') +
+    (includeBodyFrame ? `<w:p>${wrappedTextbox('boxed needle')}</w:p>` : '') +
     headerReference;
   const files: Record<string, Uint8Array> = {
     '[Content_Types].xml': strToU8(
@@ -93,7 +108,7 @@ function storyParityDocxWithBodyTable(): Uint8Array {
 }
 
 describe('document search facade', () => {
-  test('selects a body text-box drawing without selecting its story text', () => {
+  test('selects a wrapped body text-box drawing without selecting its story text', () => {
     const editor = createDocxEditor({
       container: document.createElement('div'),
       document: textboxDocx(),
@@ -118,7 +133,10 @@ describe('document search facade', () => {
       kind: 'pointer',
       drawingNodeId: match.drawingNodeId,
     });
-    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(match.drawingNodeId);
+    expect(
+      findDrawingOverlayFrameInLayout(editor.surface.layout(), match.drawingNodeId)
+    ).not.toBeNull();
+    expect(resolveSelectedDrawingRecord(editor.surface)?.drawingNodeId).toBe(match.drawingNodeId);
 
     expect(editor.exec({ type: 'insertText', text: 'X' }).ok).toBe(true);
     expect(editor.findMatches('boxed needle')[0]?.blockId).toBe(match.blockId);
@@ -161,7 +179,7 @@ describe('document search facade', () => {
     expect(match.scope?.kind === 'frame' ? match.scope.owner : undefined).toBeUndefined();
     expect(editor.findMatches('needle')).toHaveLength(1);
     expect(editor.selectMatch(match)).toEqual({ ok: true, changed: false });
-    expect(selectedDrawingOverlayTargetOf(editor.surface)?.id).toBe(match.drawingNodeId);
+    expect(resolveSelectedDrawingRecord(editor.surface)?.drawingNodeId).toBe(match.drawingNodeId);
     editor.destroy();
   });
 

@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Search text-box stories and select their anchoring drawings during Find navigation. Fixes #711
+Search body, header, and footer text-box stories during Find navigation. Fixes #711
