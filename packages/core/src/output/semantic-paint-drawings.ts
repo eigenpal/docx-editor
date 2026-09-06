@@ -551,6 +551,10 @@ function paintVectorShape(
   svg.setAttribute('width', '100%');
   svg.setAttribute('height', '100%');
   svg.style.display = 'block';
+  // A non-root `<svg>` clips to its viewport by default. Line-end triangles are generated
+  // past the authored extent, and layout already widens `paintBounds` by the effect extent
+  // for them, so the clip belongs to the outer box alone.
+  svg.style.overflow = 'visible';
 
   // `components` is the paint authority and is always non-empty; the top-level `fillHex`
   // and `strokeHex` describe a one-component shape only.
