@@ -130,6 +130,12 @@ export function cjkParagraphBreaks(
       decisions.set(at, 'opens');
       continue;
     }
+    // Glue is independent of language and kinsoku. Neither character wrapping
+    // nor emergency chopping may separate a non-breaking character's neighbours.
+    if (/[\u00a0\u202f\u2060\ufeff]/u.test(left.text + right.text)) {
+      decisions.set(at, 'forbidden');
+      continue;
+    }
     let forbidden = false;
     if (policy.kinsoku) {
       const language =

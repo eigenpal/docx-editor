@@ -6,6 +6,7 @@ import { cjkTypographyFromSettings, resolveCjkTypography } from '../cjk-typograp
 import { buildStyleCascadeTable, resolveParagraphLayoutInputs } from '../style-cascade.ts';
 import { anchorLineStartsByModelOffset } from '../anchor-line-probe.ts';
 import { cjkParagraphBreaks } from '../cjk-paragraph-breaks.ts';
+import { compressCjkPieces } from '../cjk-spacing.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import type { FieldAwarePiece } from '../field-projection.ts';
 
@@ -92,6 +93,21 @@ describe('CJK follow-up: protected groups across every run seam', () => {
 });
 
 describe('CJK follow-up: mixed text and figure groups', () => {
+  test('non-breaking glue survives every run seam and paragraph wrapping policy', () => {
+    for (const glue of ['\u00a0', '\u202f', '\u2060', '\ufeff']) {
+      const text = `甲乙A${glue}B丙`;
+      for (const pPr of ['', '<w:kinsoku w:val="0"/>', '<w:wordWrap w:val="0"/>']) {
+        const expected = textLines([text], 24, pPr);
+        expect(expected.some((line) => line.includes(`A${glue}B`))).toBe(true);
+        for (let split = 1; split < text.length; split++) {
+          expect(textLines([text.slice(0, split), text.slice(split)], 24, pPr)).toEqual(expected);
+        }
+        // Even an undersized measure cannot split either side of explicit glue.
+        expect(textLines([`天${glue}地`], 7, pPr)).toEqual([`天${glue}地`]);
+      }
+    }
+    expect(textLines(['甲乙A B丙'], 24)).not.toEqual(textLines(['甲乙A\u00a0B丙'], 24));
+  });
   test('full-width decimal and alphabetic groups move together', () => {
     expect(textLines(['天地０.５日'], 24)).toEqual(['天地', '０.５日']);
     expect(textLines(['天地０．５日'], 24)).toEqual(['天地', '０．５日']);
@@ -201,6 +217,52 @@ describe('CJK follow-up: document and paragraph policy', () => {
         '<w:characterSpacingControl w:val="compressPunctuationAndJapaneseKana"/>'
       )[0]!.width
     ).toBe(10.5);
+  });
+  test('compression preserves grapheme geometry across every formatting seam', () => {
+    const settings = '<w:characterSpacingControl w:val="compressPunctuationAndJapaneseKana"/>';
+    for (const text of ['か\u3099天地', 'カ\u309a天地', '「か\u3099」天地。']) {
+      for (const width of [7, 17, 24, 60]) {
+        const expected = layout([text], width, '', '', settings);
+        for (let split = 1; split < text.length; split++) {
+          const actual = layout([text.slice(0, split), text.slice(split)], width, '', '', settings);
+          expect(actual.map((line) => line.spans.map((span) => span.text).join(''))).toEqual(
+            expected.map((line) => line.spans.map((span) => span.text).join(''))
+          );
+          expect(actual.map((line) => line.width)).toEqual(expected.map((line) => line.width));
+          const spans = actual.flatMap((line) => line.spans);
+          expect(spans.map((span) => span.text).join('')).toBe(text);
+          let end = 0;
+          for (const span of spans) {
+            expect(span.range.start).toBe(end);
+            end = span.range.end;
+          }
+          expect(end).toBe(text.length);
+        }
+      }
+    }
+    expect(textLines(['か\u3099天地'], 17, '', '', settings)).toEqual(['か\u3099天', '地']);
+  });
+  test('compression leaves projected atoms and source properties unchanged', () => {
+    const style = Object.freeze({ ...DEFAULT_RUN_STYLE, fontSizePt: 11 });
+    const pieces: FieldAwarePiece[] = [
+      { text: 'か', start: 0, end: 1, style, props: [] },
+      { text: '', start: 1, end: 1, style, props: [], projected: true },
+      { text: '\u3099', start: 1, end: 2, style, props: [] },
+      { text: '。', start: 2, end: 3, style, props: [], projected: true },
+    ];
+    pieces.forEach(Object.freeze);
+    const settings = cjkTypographyFromSettings(
+      root(
+        `<w:settings xmlns:w="${W}"><w:characterSpacingControl w:val="compressPunctuationAndJapaneseKana"/></w:settings>`
+      )
+    );
+    const result = compressCjkPieces(pieces, resolveCjkTypography([], settings), measurer);
+    expect(result[0]!.style.characterSpacingPt).toBe(-0.75);
+    expect(result[1]).toBe(pieces[1]!);
+    expect(result[2]).toBe(pieces[2]!);
+    expect(result[3]).toBe(pieces[3]!);
+    expect(style.characterSpacingPt).toBe(0);
+    expect(result[0]!.props).toBe(pieces[0]!.props);
   });
 });
 

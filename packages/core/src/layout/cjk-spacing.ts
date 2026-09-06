@@ -11,6 +11,75 @@ const FULLWIDTH_PUNCTUATION =
   /^[、。〈〉《》「」『』【】〔〕〖〗〘〙〚〛！（），．：；？［］｛｝]$/u;
 const KANA = /^[\u3041-\u3096\u30a1-\u30fa][\u3099\u309a]?$/u;
 
+const compressible = (piece: FieldAwarePiece): boolean =>
+  !piece.projected &&
+  piece.measureText === undefined &&
+  !piece.positionalTab &&
+  !piece.equation &&
+  !piece.inlineDrawing &&
+  piece.end - piece.start === piece.text.length;
+
+interface CompressionSlice {
+  readonly from: number;
+  readonly to: number;
+  readonly reduction: number;
+}
+
+function compressionSlices(
+  pieces: readonly FieldAwarePiece[],
+  includeKana: boolean,
+  measurer: TextMeasurer
+): ReadonlyMap<FieldAwarePiece, readonly CompressionSlice[]> {
+  const starts: number[] = [];
+  let length = 0;
+  const text = pieces
+    .map((piece) => {
+      starts.push(length);
+      const visible = compressible(piece) ? piece.text : '\ufffc';
+      length += visible.length;
+      return visible;
+    })
+    .join('');
+  const slices = new Map<FieldAwarePiece, CompressionSlice[]>();
+  let pieceIndex = 0;
+  for (const cluster of segmentGraphemes(text)) {
+    const fraction = FULLWIDTH_PUNCTUATION.test(cluster.text)
+      ? 0.5
+      : includeKana && KANA.test(cluster.text)
+        ? 0.125
+        : 0;
+    if (!fraction) continue;
+    while (pieceIndex + 1 < pieces.length && starts[pieceIndex + 1]! <= cluster.utf16From)
+      pieceIndex++;
+    const base = pieces[pieceIndex]!;
+    // Measure the complete cluster with its base character's font. Apply the
+    // same per-unit reduction to every fragment, including split combining marks.
+    const advance = measureDisplayText(
+      cluster.text,
+      styleForFontSlot(base.style, base.fontSlot),
+      measurer
+    );
+    const reduction = Math.max(0, advance * fraction) / cluster.text.length;
+    for (
+      let index = pieceIndex;
+      index < pieces.length && starts[index]! < cluster.utf16To;
+      index++
+    ) {
+      const piece = pieces[index]!;
+      const from = Math.max(0, cluster.utf16From - starts[index]!);
+      const to = Math.min(piece.text.length, cluster.utf16To - starts[index]!);
+      if (from === to) continue;
+      let list = slices.get(piece);
+      if (!list) {
+        list = [];
+        slices.set(piece, list);
+      }
+      list.push({ from, to, reduction });
+    }
+  }
+  return slices;
+}
+
 export function compressCjkPieces(
   pieces: readonly FieldAwarePiece[],
   policy: CjkParagraphTypography,
@@ -20,39 +89,29 @@ export function compressCjkPieces(
   if (!compression || compression === 'doNotCompress') return pieces;
   const result: FieldAwarePiece[] = [];
   const derived = new WeakMap<ResolvedRunStyle, Map<number, ResolvedRunStyle>>();
+  const slices = compressionSlices(
+    pieces,
+    compression === 'compressPunctuationAndJapaneseKana',
+    measurer
+  );
   for (const piece of pieces) {
-    if (
-      piece.projected ||
-      piece.measureText !== undefined ||
-      piece.positionalTab ||
-      piece.equation ||
-      piece.inlineDrawing ||
-      piece.end - piece.start !== piece.text.length
-    ) {
+    const compressedSlices = slices.get(piece);
+    if (!compressedSlices) {
       result.push(piece);
       continue;
     }
-    const style = styleForFontSlot(piece.style, piece.fontSlot);
     let from = 0;
-    for (const cluster of segmentGraphemes(piece.text)) {
-      const fraction = FULLWIDTH_PUNCTUATION.test(cluster.text)
-        ? 0.5
-        : compression === 'compressPunctuationAndJapaneseKana' && KANA.test(cluster.text)
-          ? 0.125
-          : 0;
-      if (!fraction) continue;
-      if (cluster.utf16From > from)
+    for (const slice of compressedSlices) {
+      if (slice.from > from)
         result.push({
           ...piece,
-          text: piece.text.slice(from, cluster.utf16From),
+          text: piece.text.slice(from, slice.from),
           start: piece.start + from,
-          end: piece.start + cluster.utf16From,
+          end: piece.start + slice.from,
         });
       // Compress whitespace, never horizontally scale the glyph. The same letter
       // spacing reaches measurement, paint, caret edges, and export.
-      const advance = measureDisplayText(cluster.text, style, measurer);
-      const spacing =
-        piece.style.characterSpacingPt - Math.max(0, advance * fraction) / cluster.text.length;
+      const spacing = piece.style.characterSpacingPt - slice.reduction;
       let bySpacing = derived.get(piece.style);
       if (!bySpacing) {
         bySpacing = new Map();
@@ -65,12 +124,12 @@ export function compressCjkPieces(
       }
       result.push({
         ...piece,
-        text: cluster.text,
-        start: piece.start + cluster.utf16From,
-        end: piece.start + cluster.utf16To,
+        text: piece.text.slice(slice.from, slice.to),
+        start: piece.start + slice.from,
+        end: piece.start + slice.to,
         style: compressed,
       });
-      from = cluster.utf16To;
+      from = slice.to;
     }
     if (from === 0) result.push(piece);
     else if (from < piece.text.length)
