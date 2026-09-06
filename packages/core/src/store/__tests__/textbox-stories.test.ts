@@ -45,6 +45,15 @@ function wrappedTextbox(content: string, id: number): string {
   );
 }
 
+function wrapperWithInactiveTextbox(content: string, id: number): string {
+  const run = textbox(content, id);
+  const drawing = run.slice('<w:r>'.length, -'</w:r>'.length);
+  return (
+    '<w:r><mc:AlternateContent><mc:Choice Requires="wps"><w:pict/></mc:Choice>' +
+    `<mc:Fallback>${drawing}</mc:Fallback></mc:AlternateContent></w:r>`
+  );
+}
+
 function elementNamed(
   root: OoxmlNode,
   namespaceUri: string,
@@ -118,12 +127,20 @@ describe('textboxStoriesInPart', () => {
     const part = documentPart(`<w:p>${wrappedTextbox(paragraph('wrapped'), 5)}</w:p>`);
     const wrapper = elementNamed(part.root, MC, 'AlternateContent');
     const drawing = elementNamed(part.root, W, 'drawing');
-    const [story] = textboxStoriesInPart(part);
+    const stories = textboxStoriesInPart(part);
+    const [story] = stories;
 
+    expect(stories).toHaveLength(1);
     expect(wrapper).toBeDefined();
     expect(drawing).toBeDefined();
     expect(story?.drawingNodeId).toBe(wrapper?.id);
     expect(story?.drawingNodeId).not.toBe(drawing?.id);
+  });
+
+  test('does not descend into inactive mc:AlternateContent branches', () => {
+    const part = documentPart(`<w:p>${wrapperWithInactiveTextbox(paragraph('inactive'), 6)}</w:p>`);
+
+    expect(textboxStoriesInPart(part)).toEqual([]);
   });
 
   test('lists a header text box and exposes table and block-control paragraphs', () => {

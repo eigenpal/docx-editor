@@ -101,6 +101,18 @@ interface WalkFrame {
 
 const textboxStoriesCache = new WeakMap<OoxmlElement, readonly TextboxStoryRoot[]>();
 
+function appendTextboxStory(
+  stories: TextboxStoryRoot[],
+  drawing: OoxmlDrawingNode,
+  drawingNodeId: string,
+  hostParagraphId: string | null
+): void {
+  if (!hostParagraphId) return;
+  const root = textboxContentOf(drawing);
+  if (!root) return;
+  stories.push(Object.freeze({ root, drawingNodeId, hostParagraphId }));
+}
+
 /**
  * List the text-box stories in one part, in document order.
  *
@@ -123,25 +135,21 @@ export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot
     if (frame.depth > MAX_XML_DEPTH) continue;
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
     const paragraphId = frame.node.kind === 'paragraph' ? frame.node.id : frame.paragraphId;
-    let drawing: OoxmlDrawingNode | null = frame.node.kind === 'drawing' ? frame.node : null;
-    let layoutAtomId = drawing?.id ?? null;
-    if (!drawing && isMcAlternateContent(frame.node)) {
+    if (frame.node.kind === 'drawing') {
+      appendTextboxStory(stories, frame.node, frame.node.id, paragraphId);
+      continue;
+    }
+    if (isMcAlternateContent(frame.node)) {
       const resolved = resolveRunLevelMcAtom(
         frame.node,
         scope,
         DEFAULT_SUPPORTED_MC_REQUIRES,
         DEFAULT_DRAWING_PROJECTION_LIMITS
       );
-      drawing = resolved.drawing;
-      layoutAtomId = drawing ? resolved.segmentNode.id : null;
-    }
-    if (drawing) {
-      const root = paragraphId ? textboxContentOf(drawing) : null;
-      if (root && paragraphId && layoutAtomId) {
-        stories.push(
-          Object.freeze({ root, drawingNodeId: layoutAtomId, hostParagraphId: paragraphId })
-        );
+      if (resolved.drawing) {
+        appendTextboxStory(stories, resolved.drawing, resolved.segmentNode.id, paragraphId);
       }
+      // Layout treats the wrapper as one atom, even when its selected branch is unsupported.
       continue;
     }
     if (frame.depth >= MAX_XML_DEPTH) continue;

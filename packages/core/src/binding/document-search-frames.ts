@@ -22,10 +22,15 @@ export interface TextboxStoryExpansionWork {
 }
 
 type FrameIndex = ReadonlyMap<string, readonly TextboxStoryRoot[]>;
+type TextboxStoriesOf = (part: OoxmlPart) => readonly TextboxStoryRoot[];
 
-function indexFramesByHost(part: OoxmlPart, work?: TextboxStoryExpansionWork): FrameIndex {
+function indexFramesByHost(
+  part: OoxmlPart,
+  work: TextboxStoryExpansionWork | undefined,
+  textboxStoriesOf: TextboxStoriesOf
+): FrameIndex {
   const mutable = new Map<string, TextboxStoryRoot[]>();
-  const frames = textboxStoriesInPart(part);
+  const frames = textboxStoriesOf(part);
   for (const frame of frames) {
     const atHost = mutable.get(frame.hostParagraphId);
     if (atHost) atHost.push(frame);
@@ -46,7 +51,9 @@ function framesInStory(
   const frames: TextboxStoryRoot[] = [];
   for (const paragraph of storyParagraphs(story.root)) {
     if (work) work.hostLookups += 1;
-    frames.push(...(index.get(paragraph.id) ?? []));
+    const atHost = index.get(paragraph.id);
+    if (!atHost) continue;
+    for (const frame of atHost) frames.push(frame);
   }
   return frames;
 }
@@ -58,7 +65,8 @@ function framesInStory(
  */
 export function expandSelectableTextboxStories(
   stories: readonly SearchStory[],
-  work?: TextboxStoryExpansionWork
+  work?: TextboxStoryExpansionWork,
+  textboxStoriesOf: TextboxStoriesOf = textboxStoriesInPart
 ): SearchStory[] {
   const expanded: SearchStory[] = [];
   const indexes = new Map<OoxmlPart, FrameIndex>();
@@ -66,7 +74,7 @@ export function expandSelectableTextboxStories(
     expanded.push(story);
     let index = indexes.get(story.part);
     if (!index) {
-      index = indexFramesByHost(story.part, work);
+      index = indexFramesByHost(story.part, work, textboxStoriesOf);
       indexes.set(story.part, index);
     }
     const frames = framesInStory(story, index, work);
