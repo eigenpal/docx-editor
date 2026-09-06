@@ -1052,10 +1052,12 @@ export function drawingModelOffsetsInParagraph(paragraph: OoxmlNode): ReadonlyMa
   // Offsets come from the paragraph offset index — THE authority — not a private counter.
   // Counting only text and drawings put a drawing after a `w:br` at the break's offset, so
   // the anchor attached to the wrong line: every modeled atom occupies its own unit.
-  const index = paragraphOffsetIndex(paragraph as OoxmlParagraphNode);
+  // Text-only paragraphs need no drawing offsets. Keeping their full indexes alive
+  // inflated large export layouts past the constrained Node heap.
+  let index: ReturnType<typeof paragraphOffsetIndex> | undefined;
   walkDrawingRunContent(paragraph, (node) => {
     if (node.kind !== 'drawing' && !isRunLevelMcAlternateContent(node)) return;
-    const span = index.spanOf(node);
+    const span = (index ??= paragraphOffsetIndex(paragraph as OoxmlParagraphNode)).spanOf(node);
     if (span) offsets.set(node.id, span.start);
   });
   return offsets;
