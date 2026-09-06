@@ -775,8 +775,8 @@ function layoutSynthesizedFontFamilies(roots: readonly OoxmlElement[]): readonly
         // The WML namespace or none, the way `layout/symbol-run.ts` reads it. A
         // foreign-namespaced `font` is a face layout never applies, and the request is
         // capped — so admitting one could evict a face the document really renders in.
-        // `symbolFontFamily` also resolves Word's vertical-writing `@` prefix, the same
-        // rule the editor's own symbol-face collection applies.
+        // `symbolFontFamily` is the same rule the editor's own symbol-face collection
+        // applies, so both ask for exactly the faces a sink could paint with.
         add(symbolFontFamily(wmlAttributeValue(node, 'font')));
       }
       if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldSimple') {

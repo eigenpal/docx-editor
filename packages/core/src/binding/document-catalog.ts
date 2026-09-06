@@ -241,8 +241,9 @@ function subtreeSymbolFontsOf(subtree: OoxmlElement, depth = 0): ReadonlyMap<str
           attribute.localName === 'font' &&
           (attribute.namespaceUri === WML_NAMESPACE_URI || attribute.namespaceUri === '')
       )?.value;
-      // `symbolFontFamily` applies the same bound `FONT_NAME` does here, plus Word's
-      // vertical-writing `@` prefix — one rule, shared with the export lane's own walk.
+      // One rule for every caller that asks a resolver for a symbol face, shared with the
+      // export lane's own walk: a name no measurer or paint sink would take is a face
+      // nothing could supply, so it is not asked for.
       const family = symbolFontFamily(authored);
       if (family !== null && !byFold.has(family.toLowerCase())) {
         byFold.set(family.toLowerCase(), family);
