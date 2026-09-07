@@ -40,9 +40,9 @@ const result = await exportMarkdown(docxBytes, {
   resourceTimeoutMs: 30_000,
 });
 
-console.log(result.markdown); // Full document, without repeating headers or footers.
+console.log(result.markdown); // Full document body.
 
-// Page fields selected in this demo. All fields are returned by the API.
+// Selected page fields. The API returns all fields.
 for (const page of result.pages) {
 ${selectedFields}
 }`;

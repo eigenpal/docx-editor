@@ -33,15 +33,11 @@ export function DeveloperView({
     <section className="md-developer-view" aria-labelledby="developer-view-title">
       <header className="md-developer-view__header">
         <strong id="developer-view-title">Convert with one function call</strong>
-        <span>Read a DOCX. Call exportMarkdown(). Use the full document or individual pages.</span>
       </header>
       <div className="md-install-command">
         <code>npm install @docx-editor.dev/docx-to-markdown @docx-editor.dev/fonts</code>
       </div>
-      <p className="md-code-note">
-        This Node.js example follows your preview settings. Google Fonts supplies additional fonts
-        for pagination, as in this demo.
-      </p>
+      <p className="md-code-note">Example follows your preview settings.</p>
       <div className="md-developer-tabs" role="group" aria-label="Developer reference">
         <button
           type="button"
