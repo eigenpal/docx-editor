@@ -580,7 +580,8 @@ function layoutBlocksPass(
         contentWidthForReflow,
         options.styleCascade,
         options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
-        options.revisionAuthorFilter
+        options.revisionAuthorFilter,
+        options.compatibilityMode
       )) &&
     options.drawingExclusionPass === undefined &&
     !options.drawingExclusionConverged
@@ -817,7 +818,8 @@ function layoutBlocksPass(
     defaultTabStopPt,
     displayMode,
     authorFilter,
-    options.bodyPageNumberFormat
+    options.bodyPageNumberFormat,
+    options.compatibilityMode
   );
 
   // Prepass and incremental keys use the first region. Placement re-prepares a block when it
@@ -963,6 +965,7 @@ function layoutBlocksPass(
       cache,
       styleCascade,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      compatibilityMode: options.compatibilityMode,
       ...(displayMode ? { displayMode } : {}),
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
       ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
@@ -1227,7 +1230,8 @@ function layoutBlocksPass(
       contentWidth,
       styleCascade,
       displayMode,
-      authorFilter
+      authorFilter,
+      options.compatibilityMode
     );
     const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
     const markerTexts = prepared.map((entry) =>
@@ -1284,7 +1288,8 @@ function layoutBlocksPass(
         contentWidth,
         styleCascade,
         displayMode,
-        authorFilter
+        authorFilter,
+        options.compatibilityMode
       ),
       keepsNext,
       markerTexts,
@@ -1395,7 +1400,8 @@ function layoutBlocksPass(
     contentWidth,
     styleCascade,
     displayMode,
-    authorFilter
+    authorFilter,
+    options.compatibilityMode
   );
   const positionedTableIds = new Set(positionedTables.map(({ table }) => table.id));
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
@@ -1649,6 +1655,7 @@ function layoutBlocksPass(
     styleCascade,
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+    compatibilityMode: options.compatibilityMode,
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
@@ -1971,6 +1978,7 @@ function layoutBlocksPass(
       displayMode,
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
       deps: tableDeps,
+      compatibilityMode: options.compatibilityMode,
       shiftAnchor: (paragraphId, dy) =>
         shiftAnchoredDrawingRecords(pendingAnchoredDrawings, paragraphId, dy),
       // A sink, not the array: completing a page replaces `pageFragments`, and a reference

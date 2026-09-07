@@ -78,6 +78,7 @@ export interface TableFlowCursor {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  readonly compatibilityMode?: number;
   readonly deps: TableFlowDeps;
   /**
    * Moves an anchored drawing already published by a placed row, when finalize shifts the
@@ -140,7 +141,8 @@ export function paginateTableInFlow(
     0,
     styleCascade,
     displayMode,
-    revisionAuthorFilter
+    revisionAuthorFilter,
+    flow.compatibilityMode
   );
   if (!structure || structure.rows.length === 0) return { outOfFlow: false };
   const outOfFlow =

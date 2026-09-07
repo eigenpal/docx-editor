@@ -199,7 +199,11 @@ export function finalizeTableRows(
       if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
         const insets =
           occurrenceInsets?.get(row)?.get(cell.id) ??
-          contentInsets(authored.margins, authored.borders);
+          contentInsets(
+            authored.margins,
+            authored.borders,
+            authored.legacyContentAlignment === true && structure.cellSpacingPt === 0
+          );
         // Content was placed relative to the first row; measure current content band.
         let contentTop = Number.POSITIVE_INFINITY;
         let contentBottom = Number.NEGATIVE_INFINITY;

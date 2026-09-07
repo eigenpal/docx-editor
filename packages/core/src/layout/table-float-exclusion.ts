@@ -19,11 +19,20 @@ export function hasFloatingTables(
   width: number,
   styles: StyleCascadeTable | undefined,
   mode: RevisionDisplayMode,
-  authors: RevisionAuthorFilter | undefined
+  authors: RevisionAuthorFilter | undefined,
+  compatibilityMode?: number
 ): boolean {
   return blocks.some((block) => {
     if (block.kind !== 'table') return false;
-    const float = readTableStructure(block, width, 0, styles, mode, authors)?.float;
+    const float = readTableStructure(
+      block,
+      width,
+      0,
+      styles,
+      mode,
+      authors,
+      compatibilityMode
+    )?.float;
     return float !== undefined && float.ySpec !== 'inline';
   });
 }
@@ -108,7 +117,8 @@ export function floatingTableBand(table: OoxmlElement, width: number, deps: Tabl
     0,
     deps.styleCascade,
     deps.displayMode,
-    deps.revisionAuthorFilter
+    deps.revisionAuthorFilter,
+    deps.compatibilityMode
   );
   if (!structure?.float || structure.float.vertAnchor !== 'text') return 0;
   // Text-frame alignments need their own admission math; retain the existing row-flow path.
@@ -188,7 +198,8 @@ export function clearEarlierText(
     0,
     deps.styleCascade,
     deps.displayMode,
-    deps.revisionAuthorFilter
+    deps.revisionAuthorFilter,
+    deps.compatibilityMode
   );
   const float = structure?.float;
   if (!structure || !float || float.vertAnchor !== 'text' || float.ySpec) return anchorY;

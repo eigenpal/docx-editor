@@ -380,6 +380,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes: 'Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. The same settings apply in body, header, footer, text-box, and note stories. Other table layouts keep their existing geometry.',
   },
   {
     id: 'tables.rows-columns',

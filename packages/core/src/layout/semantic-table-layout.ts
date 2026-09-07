@@ -117,51 +117,7 @@ export {
   MAX_BORDER_OWNERSHIP_INTERVALS,
 } from './table-borders.ts';
 
-/** Walk top-level prepared blocks and table cell paragraphs in document order. */
-export function paragraphDocumentOrderOf(
-  prepared: readonly {
-    readonly kind: 'paragraph' | 'table';
-    readonly paragraph?: OoxmlElement;
-    readonly table?: OoxmlElement;
-  }[],
-  contentWidth: number,
-  styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
-): ReadonlyMap<string, number> {
-  const order = new Map<string, number>();
-  let index = 0;
-  const walkTable = (table: OoxmlElement): void => {
-    const structure = readTableStructure(
-      table,
-      contentWidth,
-      0,
-      styleCascade,
-      displayMode,
-      authorFilter
-    );
-    if (!structure) return;
-    for (const row of structure.rows) {
-      for (const cell of row.cells) {
-        for (const block of cell.blocks) {
-          if (block.localName === 'p') {
-            order.set(block.id, index++);
-          } else if (block.localName === 'tbl') {
-            walkTable(block);
-          }
-        }
-      }
-    }
-  };
-  for (const block of prepared) {
-    if (block.kind === 'paragraph' && block.paragraph) {
-      order.set(block.paragraph.id, index++);
-    } else if (block.kind === 'table' && block.table) {
-      walkTable(block.table);
-    }
-  }
-  return order;
-}
+export { paragraphDocumentOrderOf } from './paragraph-document-order.ts';
 
 export {
   createTableVMergeResolveBudget,
@@ -239,6 +195,9 @@ export interface TableFlowDeps {
    * paragraph tabs on the same document-wide grid as a body paragraph.
    */
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
+  /** Story boxes start their first table at traversal depth one. */
+  readonly tableNestingOffset?: 1;
   /**
    * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
    * table cell is an ordinary link; without this it would paint its text and be dead.
@@ -1317,7 +1276,12 @@ export function layoutRowFragmentBounded(
     const cellX = slotX + inset;
     const cellW = Math.max(slotW - 2 * inset, MIN_CELL_BOX_PT);
     const insets =
-      deps.cellContentInsets?.get(cell.id) ?? contentInsets(cell.margins, cell.borders);
+      deps.cellContentInsets?.get(cell.id) ??
+      contentInsets(
+        cell.margins,
+        cell.borders,
+        cell.legacyContentAlignment === true && cellSpacingPt === 0
+      );
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
     // A detached head answers to the page and to its own SPAN, and to nothing about this
@@ -1652,10 +1616,11 @@ function emitNestedTable(
   const structure = readTableStructure(
     table,
     containerWidth,
-    depth,
+    depth - (deps.tableNestingOffset ?? 0),
     deps.styleCascade,
     deps.displayMode,
-    deps.revisionAuthorFilter
+    deps.revisionAuthorFilter,
+    deps.compatibilityMode
   );
   if (!structure || structure.rows.length === 0) return null;
   const nestedDeferred: DeferredRowAnchor[] = [];

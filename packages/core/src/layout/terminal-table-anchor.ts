@@ -173,7 +173,8 @@ export function terminalTextTableGroup(
   contentWidth: number,
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode,
-  authorFilter: RevisionAuthorFilter | undefined
+  authorFilter: RevisionAuthorFilter | undefined,
+  compatibilityMode?: number
 ): TerminalTextTableGroup | undefined {
   const anchorIndex = blocks.length - 1;
   const anchor = blocks[anchorIndex];
@@ -191,7 +192,8 @@ export function terminalTextTableGroup(
       0,
       styleCascade,
       displayMode,
-      authorFilter
+      authorFilter,
+      compatibilityMode
     );
     const float = structure?.float;
     if (!float || float.vertAnchor !== 'text' || float.ySpec) return undefined;
@@ -239,7 +241,8 @@ export function placeTerminalTextTables(
       0,
       input.styleCascade,
       input.displayMode,
-      input.authorFilter
+      input.authorFilter,
+      input.deps.compatibilityMode
     )
   );
   const placements: { left: number; top: number; right: number; bottom: number }[] = [];

@@ -209,6 +209,7 @@ export interface NotesLayoutInput {
   /** `numbering.xml`, so a `w:numPr` paragraph inside a note resolves a marker. */
   readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /**
@@ -678,6 +679,7 @@ function layoutOpts(input: NotesLayoutInput, noteMarks?: NoteMarkContext): Layou
     styleCascade: input.styleCascade,
     numberingIndex: input.numberingIndex,
     defaultTabStopPt: input.defaultTabStopPt,
+    compatibilityMode: input.compatibilityMode,
     revisionAuthorFilter: input.revisionAuthorFilter,
     projectLink: input.projectLink,
     projectLinkForPart: input.projectLinkForPart,

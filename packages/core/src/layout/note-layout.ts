@@ -148,6 +148,7 @@ export interface LayoutNoteStoryOptions {
    */
   readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /**
@@ -305,6 +306,8 @@ export function layoutNoteStory(
       : {}),
     ...(options.refFields ? { refFields: options.refFields } : {}),
     displayMode,
+    compatibilityMode: options.compatibilityMode,
+    tableNestingOffset: 1,
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),

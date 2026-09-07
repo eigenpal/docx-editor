@@ -60,7 +60,8 @@ export function positionedTableAnchors(
   contentWidth: number,
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode,
-  authorFilter: RevisionAuthorFilter | undefined
+  authorFilter: RevisionAuthorFilter | undefined,
+  compatibilityMode?: number
 ): PositionedTableAnchor[] {
   const result: PositionedTableAnchor[] = [];
   let nextParagraphId: string | undefined;
@@ -80,7 +81,8 @@ export function positionedTableAnchors(
       0,
       styleCascade,
       displayMode,
-      authorFilter
+      authorFilter,
+      compatibilityMode
     )?.float;
     if (!float || float.ySpec === 'inline') continue;
     if (!nextParagraphId) continue;
