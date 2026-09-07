@@ -1,3 +1,4 @@
+import * as sectionPrep from './section-preparation.ts';
 import {
   readParagraphFrame,
   positionedFrameBottom,
@@ -354,6 +355,8 @@ function tocIdsToken(ids: TocIdSets): string {
  * input it derives from is unchanged. Stored through the session's opaque `prepass` slot.
  */
 export interface SectionPrepass {
+  /** Frame admission depends on column policy and probe-disabled paragraph IDs. */
+  readonly framePolicy: string;
   readonly bodies: readonly OoxmlElement[];
   readonly producer: string;
   readonly contentWidth: number;
@@ -1202,9 +1205,11 @@ function layoutBlocksPass(
     options.projectionTokenForParagraph !== undefined && options.projectionEpoch === undefined
       ? null
       : (options.projectionEpoch ?? '');
+  const framePolicy = sectionPrep.framePolicy(columns.count, options.disabledParagraphFrameIds);
   const prepassMemo = session?.prepass as SectionPrepass | null | undefined;
-  const prepassValid =
+  const prepassInputsValid =
     prepassMemo != null &&
+    prepassMemo.framePolicy === framePolicy &&
     drawingEpoch !== null &&
     projectionEpoch !== null &&
     prepassMemo.drawingEpoch === drawingEpoch &&
@@ -1215,12 +1220,22 @@ function layoutBlocksPass(
     prepassMemo.listItems === listItems &&
     prepassMemo.numberingIndex === options.numberingIndex &&
     prepassMemo.tocToken === tocToken &&
-    prepassMemo.refToken === (refFields?.valuesToken ?? '') &&
+    prepassMemo.refToken === (refFields?.valuesToken ?? '');
+  const prepassValid =
+    prepassInputsValid &&
     prepassMemo.bodies.length === bodies.length &&
     prepassMemo.bodies.every((block, index) => block === bodies[index]);
   const prepass: SectionPrepass = prepassValid ? prepassMemo : buildSectionPrepass();
   function buildSectionPrepass(): SectionPrepass {
-    const prepared = bodies.map((block) => prepareBlock(block, contentWidth));
+    // Frame admission can vary during wrap probes without moving resource epochs.
+    // Keep those passes on the full preparation path.
+    const reusable =
+      prepassInputsValid && columns.count === 1 && !options.disabledParagraphFrameIds
+        ? prepassMemo
+        : null;
+    const prepared = sectionPrep.prepareSectionBlocks(bodies, reusable, (block) =>
+      prepareBlock(block, contentWidth)
+    );
     const keys = prepared.map((entry) => entry.key);
     const terminalTextTables = terminalTables.terminalTextTableGroup(
       prepared,
@@ -1269,6 +1284,7 @@ function layoutBlocksPass(
     });
 
     return {
+      framePolicy,
       bodies,
       producer,
       contentWidth,
@@ -1279,13 +1295,16 @@ function layoutBlocksPass(
       projectionEpoch: projectionEpoch ?? '',
       prepared,
       keys,
-      paragraphDocumentOrder: paragraphDocumentOrderOf(
-        prepared,
-        contentWidth,
-        styleCascade,
-        displayMode,
-        authorFilter
-      ),
+      paragraphDocumentOrder:
+        reusable && sectionPrep.sameSectionParagraphOrder(reusable.bodies, bodies)
+          ? reusable.paragraphDocumentOrder
+          : paragraphDocumentOrderOf(
+              prepared,
+              contentWidth,
+              styleCascade,
+              displayMode,
+              authorFilter
+            ),
       keepsNext,
       markerTexts,
       tocToken,
