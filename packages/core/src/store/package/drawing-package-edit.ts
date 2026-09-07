@@ -210,10 +210,15 @@ function partPresent(pkg: OoxmlPackage, partName: string): boolean {
   return false;
 }
 
-function storagePartName(canonical: string, pkg: OoxmlPackage): string {
-  for (const name of [...pkg.partBytes.keys(), ...pkg.parts.keys()]) {
-    if (name.startsWith('/')) return canonical;
+function usesAbsolutePartNames(pkg: OoxmlPackage): boolean {
+  for (const map of [pkg.partBytes, pkg.parts]) {
+    for (const name of map.keys()) if (name.startsWith('/')) return true;
   }
+  return false;
+}
+
+function storagePartName(canonical: string, pkg: OoxmlPackage): string {
+  if (usesAbsolutePartNames(pkg)) return canonical;
   return canonical.startsWith('/') ? canonical.slice(1) : canonical;
 }
 
@@ -499,18 +504,16 @@ export function withBinaryParts(
   const withBytes = runWithoutJournalCapture(() => {
     const partBytes = new Map(pkg.partBytes);
     const parts = new Map(pkg.parts);
+    const absoluteNames = usesAbsolutePartNames(pkg);
+    const replacedKeys = new Set<string>();
     for (const addition of additions) {
       const normalized = normalizePartName(addition.partName);
       if (!normalized.ok) continue;
-      const storedName = storagePartName(normalized.partName, pkg);
+      const storedName = absoluteNames ? normalized.partName : normalized.partName.slice(1);
       const copied = snapshotPartBytes(addition.bytes);
       partBytes.set(storedName, copied);
       const storedKey = canonicalPartKey(storedName);
-      if (storedKey !== null) {
-        for (const name of [...parts.keys()]) {
-          if (canonicalPartKey(name) === storedKey) parts.delete(name);
-        }
-      }
+      if (storedKey !== null) replacedKeys.add(storedKey);
       overrides.push([normalized.partName, addition.contentType]);
       if (capture) {
         recorded.push({
@@ -520,6 +523,10 @@ export function withBinaryParts(
           mediaType: addition.contentType,
         });
       }
+    }
+    for (const name of parts.keys()) {
+      const key = canonicalPartKey(name);
+      if (key !== null && replacedKeys.has(key)) parts.delete(name);
     }
     return Object.freeze({ ...pkg, partBytes, parts });
   });
