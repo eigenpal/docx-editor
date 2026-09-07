@@ -53,6 +53,8 @@ export interface DocxEditorProps {
    * Changes apply without a remount.
    */
   locale?: string;
+  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
+  dateInputOrder?: 'mdy' | 'dmy';
   author?: string;
   /** Construction-time capability modules. Later array changes need a remount. */
   modules?: readonly EditorModule[];

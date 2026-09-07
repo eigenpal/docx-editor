@@ -469,6 +469,8 @@ export interface CommentThreadState {
 // @public
 export interface CommitTextFormFieldOp {
     // (undocumented)
+    readonly dateInputOrder?: DateInputOrder;
+    // (undocumented)
     readonly fieldNodeId: string;
     // (undocumented)
     readonly op: 'commitTextFormField';
@@ -975,6 +977,9 @@ export const DATASTORE_NAMESPACE_URI = "http://schemas.openxmlformats.org/office
 
 // @public
 export function datastoreItemIdFor(seed: string): string;
+
+// @public
+export type DateInputOrder = 'mdy' | 'dmy';
 
 // @public
 export function deepParagraphOrderOfPart(part: OoxmlPart): ReadonlyMap<string, number>;
@@ -3948,6 +3953,8 @@ export function setPackageCommentResolved(packageStore: TreePackageStore, commen
 
 // @public
 export interface SetTextFormFieldDefaultOp {
+    // (undocumented)
+    readonly dateInputOrder?: DateInputOrder;
     // (undocumented)
     readonly fieldNodeId: string;
     // (undocumented)

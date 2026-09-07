@@ -1,3 +1,9 @@
+import {
+  parseTextFormDate as parseDate,
+  textFormMonths as months,
+  type DateInputOrder,
+} from './text-form-date-format.ts';
+import { normalizeTextFormNumber, truncateTextFormNumber } from './text-form-number-input.ts';
 import { textFormFixedDecimal } from './text-form-number-format.ts';
 import type { TextFormFieldRange } from './text-form-fields.ts';
 
@@ -41,52 +47,12 @@ export function validTextFormOptions(options: TextFormFieldOptions): boolean {
   );
 }
 
-const months = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-function parseDate(
-  text: string,
-  format: string
-): { year: number; month: number; day: number } | null {
-  let year: number, month: number, day: number;
-  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
-  const numeric = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text);
-  const named = /^(?:(\d{1,2}) ([A-Za-z]+)|([A-Za-z]+) (\d{1,2}),) (\d{4})$/.exec(text);
-  if (iso) [year, month, day] = [Number(iso[1]), Number(iso[2]), Number(iso[3])];
-  else if (numeric) {
-    year = Number(numeric[3]);
-    [month, day] = format.startsWith('d')
-      ? [Number(numeric[2]), Number(numeric[1])]
-      : [Number(numeric[1]), Number(numeric[2])];
-  } else if (named) {
-    year = Number(named[5]);
-    day = Number(named[1] ?? named[4]);
-    month =
-      months.findIndex((name) => name.toLowerCase() === (named[2] ?? named[3])!.toLowerCase()) + 1;
-  } else return null;
-  if (year < 100 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return null;
-  const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCMonth() === month - 1 && date.getUTCDate() === day
-    ? { year, month, day }
-    : null;
-}
-
 /** Bounded, deterministic formatting. Null refuses unsupported options or invalid complete input. */
 export function formatTextFormValue(
   text: string,
   options: Pick<TextFormFieldRange, 'type' | 'format'>,
-  intent: 'default' | 'fill' = 'default'
+  intent: 'default' | 'fill' = 'default',
+  dateInputOrder: DateInputOrder = 'mdy'
 ): string | null {
   if (!Object.hasOwn(TEXT_FORM_FORMATS, options.type)) return null;
   if (
@@ -111,12 +77,13 @@ export function formatTextFormValue(
   if (options.type === 'number') {
     // Word extracts digits from mixed text when leaving a numeric form field.
     // Default-value validation is separate from the protected filling gesture.
-    const input = intent === 'fill' ? text.trim().replace(/[A-Za-z]/g, '') || '0' : text.trim();
+    const input = intent === 'fill' ? normalizeTextFormNumber(text) : text.trim();
+    if (input === null) return null;
     if (!/^[+-]?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)%?$/.test(input)) return null;
     let number = Number(input.replaceAll(',', '').replaceAll('%', ''));
     if (input.endsWith('%')) number /= 100;
     if (!Number.isFinite(number)) return null;
-    if (!options.format) return intent === 'fill' ? input : text;
+    if (!options.format) return intent === 'fill' ? truncateTextFormNumber(input) : text;
     const percent = options.format.endsWith('%');
     if (percent) number *= 100;
     if (!Number.isFinite(number) || Math.abs(number) >= 1e21) return null;
@@ -134,7 +101,7 @@ export function formatTextFormValue(
     }
     return result + (percent ? '%' : '');
   }
-  const date = parseDate(text.trim(), options.format);
+  const date = parseDate(text.trim(), dateInputOrder);
   if (!date) return null;
   if (!options.format) return text;
   return options.format.replace(
@@ -200,7 +167,7 @@ export function textFormInputLength(
     }
   }
   if (field.type === 'date' && /[A-Za-z]/.test(previous)) {
-    const date = parseDate(text.trim(), field.format);
+    const date = parseDate(text.trim());
     if (date) input = `${date.month}/${date.day}/${date.year}`;
   }
   return [...input].length;

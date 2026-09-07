@@ -23,6 +23,8 @@ import type { PaginatedSurfaceState, SurfaceEditingMode } from './paginated-surf
  * on a server, or leave it off in a browser to get the canvas measurer.
  */
 export interface PaginatedSurfaceOptions {
+  /** Slash-date input order. Defaults to month/day independently of output formatting. */
+  readonly dateInputOrder?: 'mdy' | 'dmy';
   /**
    * The collaboration module's replica for this surface's session. Absent,
    * the surface does not attach, and local store history remains the undo

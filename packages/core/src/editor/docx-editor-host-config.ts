@@ -43,6 +43,8 @@ export interface DocxEditorHostConfigState {
   setMode(mode: HostEditingMode | undefined): boolean;
   drawingStrings(): DrawingPaintStrings;
   setTranslate(translate: EditorTranslate | undefined): DrawingPaintStrings | null;
+  dateInputOrder(): 'mdy' | 'dmy';
+  setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
   tocLabels(): TocLabels;
   setLocale(locale: string | undefined): TocLabels | null;
 }
@@ -52,6 +54,7 @@ export function createDocxEditorHostConfigState(initial: {
   readonly mode?: HostEditingMode;
   readonly translate?: EditorTranslate;
   readonly locale?: string;
+  readonly dateInputOrder?: 'mdy' | 'dmy';
 }): DocxEditorHostConfigState {
   let mode = initial.mode;
   let translate = initial.translate;
@@ -59,6 +62,7 @@ export function createDocxEditorHostConfigState(initial: {
     ? drawingPaintStringsFromTranslate(translate)
     : DEFAULT_DRAWING_PAINT_STRINGS;
   let locale = localeState(initial.locale);
+  let dateInputOrder: 'mdy' | 'dmy' = initial.dateInputOrder === 'dmy' ? 'dmy' : 'mdy';
 
   return {
     mode: () => mode,
@@ -86,12 +90,51 @@ export function createDocxEditorHostConfigState(initial: {
       drawingStrings = nextDrawingStrings;
       return drawingStrings;
     },
+    dateInputOrder: () => dateInputOrder,
+    setDateInputOrder: (order) => {
+      dateInputOrder = order === 'dmy' ? 'dmy' : 'mdy';
+    },
     tocLabels: () => locale.labels,
     setLocale(next) {
       const resolved = localeState(next);
       if (locale.code === resolved.code) return null;
       locale = resolved;
       return locale.labels;
+    },
+  };
+}
+
+/** Live host preferences update the mounted surface and survive subsequent loads. */
+export function liveHostConfigSetters(
+  state: DocxEditorHostConfigState,
+  host: {
+    surface(): {
+      setDrawingStrings(strings: DrawingPaintStrings): void;
+      setTocLabels(labels: TocLabels): void;
+      setDateInputOrder(order: 'mdy' | 'dmy'): void;
+    } | null;
+    bump(): void;
+    emitSelectionChange(): void;
+  }
+) {
+  return {
+    setTranslate(next: EditorTranslate | undefined) {
+      const strings = state.setTranslate(next);
+      if (strings === null) return;
+      host.surface()?.setDrawingStrings(strings);
+      host.bump();
+      host.emitSelectionChange();
+    },
+    setLocale(next: string | undefined) {
+      const labels = state.setLocale(next);
+      if (labels === null) return;
+      host.surface()?.setTocLabels(labels);
+      host.bump();
+      host.emitSelectionChange();
+    },
+    setDateInputOrder(order: 'mdy' | 'dmy' | undefined) {
+      state.setDateInputOrder(order);
+      host.surface()?.setDateInputOrder(state.dateInputOrder());
     },
   };
 }

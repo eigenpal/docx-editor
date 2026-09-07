@@ -6650,14 +6650,8 @@ a.docx-hyperlink:focus-visible {
   overflow: hidden;
   clip-path: inset(50%);
 }
-.docx-editor [data-text-form-selection='whole'] {
-  outline: 2px solid var(--doc-primary);
-  outline-offset: 1px;
-}
-.docx-editor [data-text-form-selection='caret'] {
-  outline: 1px dashed var(--doc-border);
-  outline-offset: 1px;
-}
+/* Field results can span many word boxes. Native selection and field shading
+   provide feedback without outlining each separately painted word. */
 
 .docx-text-form-status[data-field-error] {
   position: fixed;

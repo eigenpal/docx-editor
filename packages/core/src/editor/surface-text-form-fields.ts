@@ -1,4 +1,8 @@
-import { supportsTextFormField } from '../store/store/text-form-field-options.ts';
+import {
+  supportsTextFormField,
+  formatTextFormValue,
+} from '../store/store/text-form-field-options.ts';
+import { textFormFieldInvalidDialog } from './text-form-field-invalid-dialog.ts';
 import { textFormFieldDialog } from './text-form-field-dialog.ts';
 import { createT, en } from '@docx-editor.dev/i18n';
 import {
@@ -13,6 +17,7 @@ import {
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 
 interface Host {
+  dateInputOrder?(): 'mdy' | 'dmy';
   readonly pagesLayer: HTMLElement;
   readonly container: HTMLElement;
   part(): OoxmlPart;
@@ -80,6 +85,7 @@ export function createTextFormFieldInteraction(host: Host): {
           host.protected(paragraphId) ||
           !host.apply({
             op: 'setTextFormFieldDefault',
+            dateInputOrder: host.dateInputOrder?.() ?? 'mdy',
             paragraphId,
             fieldNodeId: field.fieldNodeId,
             text,
@@ -311,7 +317,7 @@ export function createTextFormFieldInteraction(host: Host): {
         delete status.dataset.fieldError;
         return value;
       };
-      if (committing) return null;
+      if (committing || dialog?.getAttribute('role') === 'alertdialog') return null;
       if (!host.editable()) return next;
       const hit = selectionField();
       if (
@@ -331,10 +337,24 @@ export function createTextFormFieldInteraction(host: Host): {
       )
         return accept(next);
       const baseline = dirtyBaseline.get(field.fieldNodeId);
-      if (baseline === undefined || baseline === rawValue(paragraphId, field)) return accept(next);
+      const current = rawValue(paragraphId, field);
+      const formatted = formatTextFormValue(
+        current,
+        field,
+        'fill',
+        host.dateInputOrder?.() ?? 'mdy'
+      );
+      if (
+        formatted === current ||
+        (formatted === null && (baseline === undefined || baseline === current))
+      ) {
+        dirtyBaseline.delete(field.fieldNodeId);
+        return accept(next);
+      }
       committing = true;
       const applied = host.apply({
         op: 'commitTextFormField',
+        dateInputOrder: host.dateInputOrder?.() ?? 'mdy',
         paragraphId,
         fieldNodeId: field.fieldNodeId,
       });
@@ -344,6 +364,66 @@ export function createTextFormFieldInteraction(host: Host): {
         status.setAttribute('role', 'alert');
         status.dataset.fieldError = 'true';
         status.textContent = t('textFormField.invalidValue');
+        if (formatted === null && (field.type === 'number' || field.type === 'date')) {
+          dialog = textFormFieldInvalidDialog(host.container, field.type, () => {
+            dialog?.remove();
+            dialog = null;
+            const selected = host.selection();
+            const restoreFocus = (): void => {
+              host.pagesLayer.focus({ preventScroll: true });
+              host.select(selected);
+            };
+            const paragraph = findNode(host.part(), paragraphId);
+            const latest =
+              paragraph?.kind === 'paragraph'
+                ? textFormFieldsOf(paragraph).find(
+                    (value) => value.fieldNodeId === field.fieldNodeId
+                  )
+                : null;
+            // Do not discard a concurrent replacement, or bypass a new protection state.
+            if (
+              !latest ||
+              !host.editable() ||
+              !host.protected(paragraphId) ||
+              rawValue(paragraphId, latest) !== current ||
+              !latest.enabled ||
+              !supportsTextFormField(latest) ||
+              latest.type !== field.type ||
+              latest.format !== field.format ||
+              formatTextFormValue(current, latest, 'fill', host.dateInputOrder?.() ?? 'mdy') !==
+                null
+            ) {
+              restoreFocus();
+              return;
+            }
+            committing = true;
+            try {
+              if (
+                host.apply({
+                  op: 'deleteText',
+                  paragraphId,
+                  start: latest.start,
+                  end: latest.end,
+                  textFormFieldId: latest.fieldNodeId,
+                })
+              ) {
+                dirtyBaseline.delete(latest.fieldNodeId);
+                delete status.dataset.fieldError;
+                host.pagesLayer.focus({ preventScroll: true });
+                const point = { paragraphId, offset: latest.start };
+                // Bypass exit validation only for restoring the same, now empty, field.
+                committing = false;
+                host.select({ anchor: point, head: point });
+                active = { paragraphId, fieldNodeId: latest.fieldNodeId };
+              } else {
+                committing = false;
+                restoreFocus();
+              }
+            } finally {
+              committing = false;
+            }
+          });
+        }
         return null;
       }
       dirtyBaseline.delete(field.fieldNodeId);

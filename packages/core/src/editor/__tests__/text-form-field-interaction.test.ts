@@ -47,7 +47,11 @@ function setup(
   pagesLayer.append(span);
   container.append(pagesLayer);
   document.body.append(container);
+  let dateInputOrder: 'mdy' | 'dmy' = 'mdy';
+  let commits = 0;
+  let rejectDelete = false;
   const interaction = createTextFormFieldInteraction({
+    dateInputOrder: () => dateInputOrder,
     container,
     pagesLayer,
     part: () => part,
@@ -59,6 +63,8 @@ function setup(
     },
     editable: () => true,
     apply(op) {
+      if (rejectDelete && op.op === 'deleteText') return false;
+      if (op.op === 'commitTextFormField') commits++;
       const field = protectedForm ? textFormFieldForEdit(part, op) : null;
       const result = field ? applyProtectedTextFormEdit(part, op, field) : applyTreeOp(part, op);
       if (result.ok) part = result.part;
@@ -69,6 +75,14 @@ function setup(
     container,
     span,
     interaction,
+    commits: () => commits,
+    pagesLayer,
+    rejectDelete: () => {
+      rejectDelete = true;
+    },
+    setDateOrder: (order: 'mdy' | 'dmy') => {
+      dateInputOrder = order;
+    },
     selection: () => selection,
     part: () => part,
     configure(
@@ -292,3 +306,56 @@ test('keyboard movement transfers dirty field ownership to the next field', () =
     host.cleanup();
   }
 });
+
+test('leaving an untouched date applies input order without a no-op history commit', () => {
+  const host = setup(true);
+  try {
+    host.configure({ type: 'date', format: 'MM/dd/yyyy', maxLength: 0, enabled: true }, '1/2/2030');
+    host.setDateOrder('dmy');
+    host.select(0);
+    host.select(20);
+    const paragraphId = host.selection().head.paragraphId;
+    expect(paragraphTextOf(host.part(), paragraphId)).toBe('02/01/2030 and Sample');
+    expect(host.commits()).toBe(1);
+    host.select(0);
+    host.select(20);
+    expect(paragraphTextOf(host.part(), paragraphId)).toBe('01/02/2030 and Sample');
+    expect(host.commits()).toBe(2);
+    host.configure(
+      { type: 'date', format: 'yyyy-MM-dd', maxLength: 0, enabled: true },
+      '2030-02-01'
+    );
+    host.select(0);
+    host.select(20);
+    expect(host.commits()).toBe(2);
+  } finally {
+    host.cleanup();
+  }
+});
+
+for (const scenario of ['changed type', 'refused deletion'] as const) {
+  test(`invalid fill acknowledgement preserves content after ${scenario}`, () => {
+    const host = setup(true);
+    try {
+      host.pagesLayer.tabIndex = 0;
+      host.configure({ type: 'number', format: '0.00', maxLength: 0, enabled: true }, '1');
+      const paragraphId = host.selection().head.paragraphId;
+      host.select(0);
+      host.type({ op: 'insertText', paragraphId, offset: 0, text: '--' });
+      host.select(20);
+      const alert = host.container.querySelector<HTMLDialogElement>('[role="alertdialog"]')!;
+      expect(alert.open).toBe(true);
+      if (scenario === 'changed type')
+        host.configure({ type: 'regular', format: '', maxLength: 0, enabled: true }, '--1.00');
+      else host.rejectDelete();
+      const before = paragraphTextOf(host.part(), paragraphId);
+      alert.querySelector('button')!.click();
+      expect(paragraphTextOf(host.part(), paragraphId)).toBe(before);
+      expect(host.container.querySelector('dialog')).toBeNull();
+      expect(document.activeElement).toBe(host.pagesLayer);
+      expect(host.selection().head).toEqual({ paragraphId, offset: 0 });
+    } finally {
+      host.cleanup();
+    }
+  });
+}

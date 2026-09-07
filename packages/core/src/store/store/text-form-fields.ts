@@ -1,3 +1,4 @@
+import type { DateInputOrder } from './text-form-date-format.ts';
 import { supportsTextFormField } from './text-form-field-options.ts';
 import type { TextFormFieldOptions } from './text-form-field-options.ts';
 import { findNode } from '../package/ooxml-edit.ts';
@@ -135,6 +136,7 @@ export function textFormFieldForEdit(
 /** Options edit for an existing legacy text form. */
 export interface SetTextFormFieldDefaultOp {
   readonly op: 'setTextFormFieldDefault';
+  readonly dateInputOrder?: DateInputOrder;
   readonly paragraphId: string;
   readonly fieldNodeId: string;
   readonly text: string;
@@ -144,6 +146,7 @@ export interface SetTextFormFieldDefaultOp {
 /** Validate and format the existing result when a user finishes filling a field. */
 export interface CommitTextFormFieldOp {
   readonly op: 'commitTextFormField';
+  readonly dateInputOrder?: DateInputOrder;
   readonly paragraphId: string;
   readonly fieldNodeId: string;
 }

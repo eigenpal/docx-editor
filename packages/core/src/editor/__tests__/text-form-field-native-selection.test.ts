@@ -55,6 +55,13 @@ test('repaint honors protected field exit validation', () => {
     expect(container.querySelector('[data-field-error]')?.textContent).toContain(
       'valid field value'
     );
+    const alert = container.querySelector<HTMLDialogElement>('[role="alertdialog"]')!;
+    expect(alert.open).toBe(true);
+    alert.querySelector('button')!.click();
+    expect(paragraphTextOf(surface.session.part(), ids[0]!)).toBe('');
+    expect(surface.state().selection.head).toEqual({ paragraphId: ids[0]!, offset: 0 });
+    surface.undo();
+    expect(paragraphTextOf(surface.session.part(), ids[0]!)).toBe('1.2.3');
   } finally {
     surface.destroy();
     container.remove();

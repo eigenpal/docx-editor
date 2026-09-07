@@ -57,6 +57,22 @@
       </div>
 
       <div class="demo-header__right">
+        <label class="demo-date-order"
+          >Date input
+          <select
+            aria-label="Date input order"
+            :value="dateInputOrder"
+            @change="
+              emit(
+                'update:dateInputOrder',
+                ($event.target as HTMLSelectElement).value as 'mdy' | 'dmy'
+              )
+            "
+          >
+            <option value="mdy">Month/day</option>
+            <option value="dmy">Day/month</option>
+          </select>
+        </label>
         <ThemeToggle :value="colorMode" @update:value="emit('update:colorMode', $event)" />
         <button
           type="button"
@@ -123,6 +139,7 @@ import { DEMO_PRIMARY_BUTTON, DEMO_SECONDARY_BUTTON, keepCaret } from './demoBut
 
 const props = defineProps<{
   title: string;
+  dateInputOrder: 'mdy' | 'dmy';
   colorMode: 'light' | 'dark';
   showAdapterSwitcher: boolean;
 }>();
@@ -130,6 +147,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:title': [value: string];
   'update:colorMode': [value: 'light' | 'dark'];
+  'update:dateInputOrder': [value: 'mdy' | 'dmy'];
   insertCitation: [at: EditorCaret | null];
 }>();
 

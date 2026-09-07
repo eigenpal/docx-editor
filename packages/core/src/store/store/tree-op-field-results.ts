@@ -1,3 +1,4 @@
+import { validDateInputOrder } from './text-form-date-format.ts';
 import {
   validTextFormOptions,
   formatTextFormValue,
@@ -535,6 +536,7 @@ export function validateTextFormFieldDefault(
   part: OoxmlPart,
   op: Extract<TreeDocOp, { op: 'setTextFormFieldDefault' }>
 ): TreeOpRejection | null {
+  if (!validDateInputOrder(op.dateInputOrder)) return 'invalidArgs';
   if (typeof op.text !== 'string' || !isValidXmlText(op.text) || /[\r\n\t]/.test(op.text))
     return 'invalidArgs';
   if (op.options !== undefined && !validTextFormOptions(op.options)) return 'invalidArgs';
@@ -547,7 +549,7 @@ export function validateTextFormFieldDefault(
   const config = op.options ?? field;
   if (
     (config.maxLength > 0 && [...op.text].length > config.maxLength) ||
-    formatTextFormValue(op.text, config) === null
+    formatTextFormValue(op.text, config, 'default', op.dateInputOrder) === null
   )
     return 'invalidArgs';
   return locatePlainFields(paragraph, true).some(
@@ -567,7 +569,7 @@ export function applyTextFormFieldDefault(
   const p = findNode(part, op.paragraphId)!;
   if (p.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
   const config = op.options ?? textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId)!;
-  const text = formatTextFormValue(op.text, config)!;
+  const text = formatTextFormValue(op.text, config, 'default', op.dateInputOrder)!;
   const result = applyFieldResults(
     part,
     { op: 'refreshFieldResults', updates: [{ ...op, text }] },
@@ -801,12 +803,14 @@ export function validateCommitTextFormField(
   part: OoxmlPart,
   op: Extract<TreeDocOp, { op: 'commitTextFormField' }>
 ): TreeOpRejection | null {
+  if (!validDateInputOrder(op.dateInputOrder)) return 'invalidArgs';
   const p = findNode(part, op.paragraphId);
   if (!p || p.kind !== 'paragraph') return 'unknown-paragraph';
   const field = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId);
   const located = locatePlainFields(p, true).find((f) => f.fieldNodeId === op.fieldNodeId);
   if (!field || !field.enabled || !located?.rewritable) return 'invalidArgs';
-  if (formatTextFormValue(located.cachedText, field, 'fill') === null) return 'invalidArgs';
+  if (formatTextFormValue(located.cachedText, field, 'fill', op.dateInputOrder) === null)
+    return 'invalidArgs';
   return fieldResultUpdateRefusal(part, op.fieldNodeId);
 }
 
@@ -821,7 +825,7 @@ export function applyCommitTextFormField(
   if (p.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
   const field = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId)!;
   const located = locatePlainFields(p, true).find((f) => f.fieldNodeId === op.fieldNodeId)!;
-  const text = formatTextFormValue(located.cachedText, field, 'fill')!;
+  const text = formatTextFormValue(located.cachedText, field, 'fill', op.dateInputOrder)!;
   return applyFieldResults(
     part,
     {

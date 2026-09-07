@@ -112,8 +112,8 @@ The same options dialog appears in React and Vue.
 Set the default value, type, maximum length, format, and **Fill-in enabled**.
 A maximum length of zero means unlimited. The dialog supports regular text,
 number, and date inputs with the formats in its list.
-A solid outline marks a whole selected field; a dashed outline marks a caret
-inside its text.
+The native selection highlight marks a whole selected field. A caret marks an
+insertion point inside its text. Field shading and accessible status provide context.
 
 In a document protected for forms, typing changes the result and keeps the
 field definition and default. Press Tab or Shift+Tab to select another enabled
@@ -123,17 +123,31 @@ The default-text dialog and protected filling accept plain text results.
 They refuse results with nested fields, revision markup, or other structure.
 Protected filling enforces maximum length and skips disabled fields.
 Pasting into a limited field keeps the prefix that fits its remaining capacity.
-When you leave an edited field, the editor validates and formats its result.
-The default value stays unchanged. An invalid number or date keeps the selection
-in the field so you can correct it.
+When you leave a field, the editor validates and formats its result.
+The default value stays unchanged. An invalid number or date opens an alert.
+Acknowledge the alert to clear the invalid result and enter another value in the same field.
+Undo restores the cleared input. If the field changes while the alert is open,
+the editor checks its current value and protection before clearing it.
 
-When you leave an edited numeric field, the editor removes ASCII letters before
-validation. For example, `a1b2c3` becomes `123`, and `abc` becomes zero.
-The selected numeric format then applies. Default-value editing uses strict numeric validation.
+When you leave a numeric field, the editor converts supported mixed input before
+formatting. For example, `a1b2c3` becomes `123`, and `abc` becomes zero.
+It accepts dollar signs, grouping commas, spaces, and accounting parentheses.
+An empty numeric output format truncates fractional digits. Default-value editing
+uses strict numeric validation.
 
-Full numeric and date conversion parity with Word is not established.
-Numeric dates use the selected format to determine day and month order.
-Input-date parsing and conversion can differ from Word.
+Set `dateInputOrder="dmy"` or `dateInputOrder="mdy"` on the React or Vue editor
+or root component. This setting controls ambiguous slash-date input independently
+of the output format. The default is `mdy`. The demos expose a **Date input** selector.
+Choose the order used by your operating system's short-date setting when comparing Word.
+Browsers cannot read a custom operating-system short-date override from its language alone.
+
+For example, with `dmy`, entering `1/2/2030` means February 1, even when the output
+format is `MM/dd/yyyy`. Unambiguous `12/31/2030` and `31/12/2030` both mean December 31.
+Two-digit years 00–29 mean 2000–2029; 30–99 mean 1930–1999.
+ISO dates and full English month names are also supported.
+
+Full parity across Word locales and all input grammars is not established.
+Unsupported syntax remains refused rather than guessed.
 
 Computed text input types and format pictures outside the dialog's list remain
 preserved. They do not accept protected filling. Checkbox and dropdown interactions

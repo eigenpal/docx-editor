@@ -371,6 +371,8 @@ function EditorChrome({
   onTitleChange,
   colorMode,
   onColorModeChange,
+  dateInputOrder,
+  onDateInputOrderChange,
   onInsertCitation,
   showAdapterSwitcher,
   collaborating,
@@ -378,6 +380,8 @@ function EditorChrome({
 }: {
   title: string;
   onTitleChange: (next: string) => void;
+  dateInputOrder: 'mdy' | 'dmy';
+  onDateInputOrderChange: (order: 'mdy' | 'dmy') => void;
   colorMode: 'light' | 'dark';
   onColorModeChange: (next: 'light' | 'dark') => void;
   onInsertCitation: (at: EditorCaret | null) => void;
@@ -514,6 +518,17 @@ function EditorChrome({
         </div>
 
         <div className="demo-header__right">
+          <label className="demo-date-order">
+            Date input
+            <select
+              aria-label="Date input order"
+              value={dateInputOrder}
+              onChange={(event) => onDateInputOrderChange(event.target.value as 'mdy' | 'dmy')}
+            >
+              <option value="mdy">Month/day</option>
+              <option value="dmy">Day/month</option>
+            </select>
+          </label>
           <ThemeToggle value={colorMode} onChange={onColorModeChange} />
           <DemoHeaderButton
             variant="primary"
@@ -589,6 +604,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
   const showAdapterSwitcher =
     Boolean(import.meta.env.DEV) || import.meta.env.VITE_ENABLE_FRAMEWORK_SWITCHER === 'true';
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+  const [dateInputOrder, setDateInputOrder] = useState<'mdy' | 'dmy'>('mdy');
   // Named after the document it opens with, and after whichever file is opened later.
   const [title, setTitle] = useState(
     () =>
@@ -669,6 +685,7 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
           // The demo always opens ready to type: without an explicit mode, a document
           // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
           mode="edit"
+          dateInputOrder={dateInputOrder}
           modules={collaboration.modules}
           {...(fonts ? { fonts } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}
@@ -676,6 +693,8 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
           <EditorChrome
             title={title}
             onTitleChange={setTitle}
+            dateInputOrder={dateInputOrder}
+            onDateInputOrderChange={setDateInputOrder}
             colorMode={colorMode}
             onColorModeChange={setColorMode}
             onInsertCitation={(at) => setCitationForm({ mode: 'insert', at })}

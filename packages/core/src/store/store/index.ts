@@ -203,3 +203,5 @@ export type { SetTextFormFieldDefaultOp } from './text-form-fields.ts';
 
 export { type TextFormFieldOptions, type TextFormFieldType } from './text-form-field-options.ts';
 export type { CommitTextFormFieldOp } from './text-form-fields.ts';
+
+export type { DateInputOrder } from './text-form-date-format.ts';

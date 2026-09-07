@@ -57,6 +57,8 @@ export interface DocxEditorRootProps {
    * Changes apply without a remount.
    */
   locale?: string;
+  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
+  dateInputOrder?: 'mdy' | 'dmy';
   /** Live drawing labels. Defaults to the active locale catalog. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /** Construction-time capability modules. Later array changes need a remount. */
@@ -203,6 +205,7 @@ export function useDocxEditorRootOwner(
       ...(p.fonts ? { fonts: p.fonts } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
+      ...(p.dateInputOrder !== undefined ? { dateInputOrder: p.dateInputOrder } : {}),
       translate: translateResolver.value,
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(revisionStyleRegistry.current() !== undefined
@@ -327,6 +330,12 @@ export function useDocxEditorRootOwner(
     { flush: 'post' }
   );
 
+  watch(
+    () => [editorRef.value, toValue(props).dateInputOrder] as const,
+    ([editor, order]) => {
+      editor?.setDateInputOrder(order);
+    }
+  );
   watch(
     () => [editorRef.value, toValue(props).locale] as const,
     ([editor, locale]) => {

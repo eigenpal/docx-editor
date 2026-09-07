@@ -2899,6 +2899,7 @@ export function mountPaginatedSurface(
    * silently write an untracked edit in suggesting mode — the failure nobody notices until
    * the document has already lost the proposal.
    */
+  let dateInputOrder: 'mdy' | 'dmy' = options.dateInputOrder === 'dmy' ? 'dmy' : 'mdy';
   let textFormInteraction: ReturnType<typeof createTextFormFieldInteraction> | null = null;
   function applyOps(
     ops: readonly TreeDocOp[],
@@ -5350,6 +5351,9 @@ export function mountPaginatedSurface(
       flushPendingInputAndLayout();
       render(false);
     },
+    setDateInputOrder: (order) => {
+      dateInputOrder = order === 'dmy' ? 'dmy' : 'mdy';
+    },
     setTocLabels: (labels) => {
       tocLabels = labels;
     },
@@ -5909,6 +5913,7 @@ export function mountPaginatedSurface(
    */
   let pointer: PointerController | null = null;
   textFormInteraction = createTextFormFieldInteraction({
+    dateInputOrder: () => dateInputOrder,
     pagesLayer,
     container,
     part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),

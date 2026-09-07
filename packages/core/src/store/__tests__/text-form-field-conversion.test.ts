@@ -61,3 +61,45 @@ test('malformed numeric punctuation remains an invalid field exit', () => {
   expect(applyTreeOp(part, op).ok).toBe(false);
   expect(paragraphTextOf(part, paragraph.id)).toBe('1.2.3');
 });
+
+for (const [input, format, expected] of [
+  ['-12.5', '0.00', '-12.50'],
+  ['$1,234.50', '0.00', '1234.50'],
+  ['(12.5)', '0.00', '-12.50'],
+  ['1e3', '0.00', '13.00'],
+  ['abc 12', '0.00', '12.00'],
+  ['1 2', '0.00', '12.00'],
+  ['1#2', '0.00', '12.00'],
+  ['1-2', '0.00', '-12.00'],
+  ['1,2', '0.00', '12.00'],
+  ['12%', '0.00%', '12.00%'],
+  ['0012.50', '', '12'],
+  ['12.9', '', '12'],
+  ['-12.9', '', '-12'],
+  ['1250%', '', '12'],
+]) {
+  test(`Word numeric conversion: ${input} with ${format || 'empty picture'}`, () => {
+    const { part, paragraph, field } = numberField(input!, format!);
+    const op = {
+      op: 'commitTextFormField',
+      paragraphId: paragraph.id,
+      fieldNodeId: field.fieldNodeId,
+    } as const;
+    expect(validateTreeOp(part, op)).toBeNull();
+    const applied = applyTreeOp(part, op);
+    expect(applied.ok).toBe(true);
+    if (applied.ok) expect(paragraphTextOf(applied.part, paragraph.id)).toBe(expected!);
+  });
+}
+
+test('repeated minus signs fail without mutating the field', () => {
+  const { part, paragraph, field } = numberField('--12', '0.00');
+  const op = {
+    op: 'commitTextFormField',
+    paragraphId: paragraph.id,
+    fieldNodeId: field.fieldNodeId,
+  } as const;
+  expect(validateTreeOp(part, op)).toBe('invalidArgs');
+  expect(applyTreeOp(part, op).ok).toBe(false);
+  expect(paragraphTextOf(part, paragraph.id)).toBe('--12');
+});
