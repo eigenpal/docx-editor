@@ -23,6 +23,7 @@
 // document around it did.
 
 import type { OoxmlNode, OoxmlProperty } from '@docx-editor.dev/core/store';
+import { registerParagraphCacheDiagnostics } from './paragraph-cache-diagnostics.ts';
 import { sha256FontBytes } from '../store/package/sha256.ts';
 
 /** A fingerprint over one paragraph's layout inputs. */
@@ -614,8 +615,13 @@ export function createParagraphLayoutCache<T>(
   let hits = 0;
   let misses = 0;
   let evictions = 0;
+  let softLimitEvictions = 0;
+  let hardLimitEvictions = 0;
+  let staleEvictions = 0;
+  let releasedEntries = 0;
+  let clearedEntries = 0;
 
-  return {
+  const cache: ParagraphLayoutCache<T> = {
     retainAcrossPasses,
     keyFor(inputs) {
       return paragraphLayoutKeyInScope(inputs, keyMemoScope);
@@ -643,13 +649,15 @@ export function createParagraphLayoutCache<T>(
         // after it is too, so the soft cap yields rather than thrash — up to the hard
         // ceiling, past which memory wins over reuse.
         if (oldest.value[1].generation >= generation && entries.size <= hardMaxEntries) break;
+        if (entries.size > hardMaxEntries) hardLimitEvictions += 1;
+        else softLimitEvictions += 1;
         entries.delete(oldest.value[0]);
         evictions += 1;
       }
     },
 
     release(key) {
-      if (!retainAcrossPasses) entries.delete(key);
+      if (!retainAcrossPasses && entries.delete(key)) releasedEntries += 1;
     },
 
     retentionPassDue() {
@@ -667,11 +675,13 @@ export function createParagraphLayoutCache<T>(
         if (generation - entry.generation > RETAIN_GENERATION_TTL) {
           entries.delete(key);
           evictions += 1;
+          staleEvictions += 1;
         }
       }
     },
 
     clear() {
+      clearedEntries += entries.size;
       entries.clear();
       // Reset both weak live-editor memos and strong one-shot memos. For byte exports this is
       // the phase boundary before review projection/publication, not merely cache housekeeping.
@@ -682,4 +692,28 @@ export function createParagraphLayoutCache<T>(
       return { hits, misses, evictions, size: entries.size };
     },
   };
+  registerParagraphCacheDiagnostics(cache, {
+    snapshot() {
+      let keyTextBytes = 0;
+      for (const key of entries.keys()) keyTextBytes += key.length * 2;
+      return {
+        hits,
+        misses,
+        evictions,
+        size: entries.size,
+        softLimit: maxEntries,
+        hardLimit: hardMaxEntries,
+        keyTextBytes,
+        softLimitEvictions,
+        hardLimitEvictions,
+        staleEvictions,
+        releasedEntries,
+        clearedEntries,
+      };
+    },
+    visit(consume) {
+      for (const entry of entries.values()) consume(entry.value);
+    },
+  });
+  return cache;
 }
