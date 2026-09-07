@@ -127,8 +127,11 @@ When you leave an edited field, the editor validates and formats its result.
 The default value stays unchanged. An invalid number or date keeps the selection
 in the field so you can correct it.
 
-Numeric and date conversion do not exactly match Word. Word can extract digits
-from mixed text in a formatted numeric field; the editor rejects that input.
+When you leave an edited numeric field, the editor removes ASCII letters before
+validation. For example, `a1b2c3` becomes `123`, and `abc` becomes zero.
+The selected numeric format then applies. Default-value editing uses strict numeric validation.
+
+Full numeric and date conversion parity with Word is not established.
 Numeric dates use the selected format to determine day and month order.
 Input-date parsing and conversion can differ from Word.
 

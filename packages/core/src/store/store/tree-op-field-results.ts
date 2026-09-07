@@ -806,7 +806,7 @@ export function validateCommitTextFormField(
   const field = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId);
   const located = locatePlainFields(p, true).find((f) => f.fieldNodeId === op.fieldNodeId);
   if (!field || !field.enabled || !located?.rewritable) return 'invalidArgs';
-  if (formatTextFormValue(located.cachedText, field) === null) return 'invalidArgs';
+  if (formatTextFormValue(located.cachedText, field, 'fill') === null) return 'invalidArgs';
   return fieldResultUpdateRefusal(part, op.fieldNodeId);
 }
 
@@ -821,7 +821,7 @@ export function applyCommitTextFormField(
   if (p.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
   const field = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId)!;
   const located = locatePlainFields(p, true).find((f) => f.fieldNodeId === op.fieldNodeId)!;
-  const text = formatTextFormValue(located.cachedText, field)!;
+  const text = formatTextFormValue(located.cachedText, field, 'fill')!;
   return applyFieldResults(
     part,
     {

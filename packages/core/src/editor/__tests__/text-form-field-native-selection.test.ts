@@ -34,8 +34,8 @@ test('repaint honors protected field exit validation', () => {
     const ids = surface.session.paragraphIds();
     const first = { paragraphId: ids[0]!, offset: 1 };
     surface.setSelection({ anchor: first, head: first });
-    surface.type('X');
-    expect(paragraphTextOf(surface.session.part(), ids[0]!)).toBe('1X');
+    surface.type('.2.3');
+    expect(paragraphTextOf(surface.session.part(), ids[0]!)).toBe('1.2.3');
     const second = { paragraphId: ids[1]!, offset: 2 };
     surface.setSelection({ anchor: second, head: second });
     expect(surface.state().selection.head.paragraphId).toBe(ids[0]!);

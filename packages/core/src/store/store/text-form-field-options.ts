@@ -85,7 +85,8 @@ function parseDate(
 /** Bounded, deterministic formatting. Null refuses unsupported options or invalid complete input. */
 export function formatTextFormValue(
   text: string,
-  options: Pick<TextFormFieldRange, 'type' | 'format'>
+  options: Pick<TextFormFieldRange, 'type' | 'format'>,
+  intent: 'default' | 'fill' = 'default'
 ): string | null {
   if (!Object.hasOwn(TEXT_FORM_FORMATS, options.type)) return null;
   if (
@@ -108,12 +109,14 @@ export function formatTextFormValue(
     return text;
   }
   if (options.type === 'number') {
-    const input = text.trim();
+    // Word extracts digits from mixed text when leaving a numeric form field.
+    // Default-value validation is separate from the protected filling gesture.
+    const input = intent === 'fill' ? text.trim().replace(/[A-Za-z]/g, '') || '0' : text.trim();
     if (!/^[+-]?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)%?$/.test(input)) return null;
     let number = Number(input.replaceAll(',', '').replaceAll('%', ''));
     if (input.endsWith('%')) number /= 100;
     if (!Number.isFinite(number)) return null;
-    if (!options.format) return text;
+    if (!options.format) return intent === 'fill' ? input : text;
     const percent = options.format.endsWith('%');
     if (percent) number *= 100;
     if (!Number.isFinite(number) || Math.abs(number) >= 1e21) return null;

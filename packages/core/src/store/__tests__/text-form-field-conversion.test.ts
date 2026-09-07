@@ -1,0 +1,63 @@
+import { expect, test } from 'bun:test';
+import {
+  applyTreeOp,
+  paragraphTextOf,
+  readOoxmlPart,
+  textFormFieldsOf,
+  validateTreeOp,
+  type OoxmlParagraphNode,
+} from '../index.ts';
+
+function numberField(value: string, format: string) {
+  const opened = readOoxmlPart(
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="NumberInput"/><w:textInput><w:type w:val="number"/><w:default w:val="7"/><w:format w:val="${format}"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>${value}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p></w:body></w:document>`,
+    { name: '/word/document.xml', contentType: 'application/xml' }
+  );
+  if (!opened.ok) throw new Error(opened.reason);
+  const body = opened.part.root.children[0]!;
+  if (body.kind === 'textValue') throw new Error('body');
+  const paragraph = body.children[0] as OoxmlParagraphNode;
+  const field = textFormFieldsOf(paragraph)[0]!;
+  return { part: opened.part, paragraph, field };
+}
+
+for (const [input, expected] of [
+  ['abc', '0'],
+  ['xyz', '0'],
+  ['12abc', '12'],
+  ['abc12', '12'],
+  ['a1b2c3', '123'],
+]) {
+  for (const format of ['', '0.00']) {
+    test(`numeric field exit converts ${input} with ${format || 'no picture'} like Word`, () => {
+      const { part, paragraph, field } = numberField(input!, format);
+      const op = {
+        op: 'commitTextFormField',
+        paragraphId: paragraph.id,
+        fieldNodeId: field.fieldNodeId,
+      } as const;
+      expect(validateTreeOp(part, op)).toBeNull();
+      const applied = applyTreeOp(part, op);
+      expect(applied.ok).toBe(true);
+      if (!applied.ok) return;
+      expect(paragraphTextOf(applied.part, paragraph.id)).toBe(expected + (format ? '.00' : ''));
+      const nextBody = applied.part.root.children[0]!;
+      if (nextBody.kind === 'textValue') throw new Error('body');
+      const nextField = textFormFieldsOf(nextBody.children[0] as OoxmlParagraphNode)[0]!;
+      expect(nextField.fieldNodeId).toBe(field.fieldNodeId);
+      expect(nextField.defaultText).toBe('7');
+    });
+  }
+}
+
+test('malformed numeric punctuation remains an invalid field exit', () => {
+  const { part, paragraph, field } = numberField('1.2.3', '0.00');
+  const op = {
+    op: 'commitTextFormField',
+    paragraphId: paragraph.id,
+    fieldNodeId: field.fieldNodeId,
+  } as const;
+  expect(validateTreeOp(part, op)).toBe('invalidArgs');
+  expect(applyTreeOp(part, op).ok).toBe(false);
+  expect(paragraphTextOf(part, paragraph.id)).toBe('1.2.3');
+});
