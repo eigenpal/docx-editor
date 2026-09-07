@@ -14,7 +14,7 @@
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, setSystemTime, test } from 'bun:test';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { createBrowserAutomationHost } from '../automation-host.ts';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
@@ -589,50 +589,56 @@ describe('a scripted write obeys the editing mode', () => {
   });
 
   test('a zero-width replaceSpan writes exactly where an insert at the same point writes', () => {
-    // It strikes nothing, so it replaces nothing, and the landing rule has no words to put it
-    // after. Asking anyway carried it past a whole chain of struck text it never named.
-    const paragraph =
-      '<w:p><w:r><w:t>AA</w:t></w:r>' +
-      '<w:del w:id="7" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
-      '<w:r><w:delText>BB</w:delText></w:r></w:del>' +
-      '<w:bookmarkStart w:id="1" w:name="m"/>' +
-      '<w:del w:id="7" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
-      '<w:r><w:delText>CC</w:delText></w:r></w:del>' +
-      '<w:bookmarkEnd w:id="1"/><w:r><w:t>DD</w:t></w:r></w:p>';
+    // Both documents must receive the same revision timestamp even across a wall-clock second.
+    setSystemTime(new Date('2026-09-06T12:00:00Z'));
+    try {
+      // It strikes nothing, so it replaces nothing, and the landing rule has no words to put it
+      // after. Asking anyway carried it past a whole chain of struck text it never named.
+      const paragraph =
+        '<w:p><w:r><w:t>AA</w:t></w:r>' +
+        '<w:del w:id="7" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
+        '<w:r><w:delText>BB</w:delText></w:r></w:del>' +
+        '<w:bookmarkStart w:id="1" w:name="m"/>' +
+        '<w:del w:id="7" w:author="Ada" w:date="2026-09-04T00:00:00Z">' +
+        '<w:r><w:delText>CC</w:delText></w:r></w:del>' +
+        '<w:bookmarkEnd w:id="1"/><w:r><w:t>DD</w:t></w:r></w:p>';
 
-    const replaced = mount({ author: 'Ada', bytes: bodyDocx(paragraph) });
-    replaced.editor.surface!.setEditingMode('suggest');
-    const target = paragraphsOf(replaced.host)[0]!;
-    expect(
-      replaced.host.execute({
-        operations: [
-          {
-            op: 'replaceSpan',
-            span: {
-              start: { paragraph: target, offset: 3 },
-              end: { paragraph: target, offset: 3 },
+      const replaced = mount({ author: 'Ada', bytes: bodyDocx(paragraph) });
+      replaced.editor.surface!.setEditingMode('suggest');
+      const target = paragraphsOf(replaced.host)[0]!;
+      expect(
+        replaced.host.execute({
+          operations: [
+            {
+              op: 'replaceSpan',
+              span: {
+                start: { paragraph: target, offset: 3 },
+                end: { paragraph: target, offset: 3 },
+              },
+              text: 'X',
             },
-            text: 'X',
-          },
-        ],
-      }).ok
-    ).toBe(true);
+          ],
+        }).ok
+      ).toBe(true);
 
-    const inserted = mount({ author: 'Ada', bytes: bodyDocx(paragraph) });
-    inserted.editor.surface!.setEditingMode('suggest');
-    expect(
-      inserted.host.execute({
-        operations: [
-          {
-            op: 'insertText',
-            at: { paragraph: paragraphsOf(inserted.host)[0]!, offset: 3 },
-            text: 'X',
-          },
-        ],
-      }).ok
-    ).toBe(true);
+      const inserted = mount({ author: 'Ada', bytes: bodyDocx(paragraph) });
+      inserted.editor.surface!.setEditingMode('suggest');
+      expect(
+        inserted.host.execute({
+          operations: [
+            {
+              op: 'insertText',
+              at: { paragraph: paragraphsOf(inserted.host)[0]!, offset: 3 },
+              text: 'X',
+            },
+          ],
+        }).ok
+      ).toBe(true);
 
-    expect(savedDocumentXml(replaced.host)).toBe(savedDocumentXml(inserted.host));
+      expect(savedDocumentXml(replaced.host)).toBe(savedDocumentXml(inserted.host));
+    } finally {
+      setSystemTime();
+    }
   });
 
   test('a batch settles buffered typing before it plans, and refuses a stale expectation', () => {
