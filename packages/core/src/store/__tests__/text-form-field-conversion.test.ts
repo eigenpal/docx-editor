@@ -3,6 +3,7 @@ import {
   applyTreeOp,
   paragraphTextOf,
   readOoxmlPart,
+  serializeOoxmlPart,
   textFormFieldsOf,
   validateTreeOp,
   type OoxmlParagraphNode,
@@ -102,4 +103,47 @@ test('repeated minus signs fail without mutating the field', () => {
   expect(validateTreeOp(part, op)).toBe('invalidArgs');
   expect(applyTreeOp(part, op).ok).toBe(false);
   expect(paragraphTextOf(part, paragraph.id)).toBe('--12');
+});
+
+for (const input of ['abc 12', 'abc12']) {
+  test(`formatted numeric default converts ${input} and survives serialization`, () => {
+    const { part, paragraph, field } = numberField('7', '0.00');
+    const op = {
+      op: 'setTextFormFieldDefault',
+      paragraphId: paragraph.id,
+      fieldNodeId: field.fieldNodeId,
+      text: input,
+    } as const;
+    expect(validateTreeOp(part, op)).toBeNull();
+    const applied = applyTreeOp(part, op);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    expect(paragraphTextOf(applied.part, paragraph.id)).toBe('12.00');
+    const xml = serializeOoxmlPart(applied.part);
+    const reopened = readOoxmlPart(xml, {
+      name: '/word/document.xml',
+      contentType: 'application/xml',
+    });
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    const body = reopened.part.root.children[0]!;
+    if (body.kind === 'textValue') throw new Error('body');
+    const nextParagraph = body.children[0] as OoxmlParagraphNode;
+    expect(paragraphTextOf(reopened.part, nextParagraph.id)).toBe('12.00');
+    expect(textFormFieldsOf(nextParagraph)).toHaveLength(1);
+    expect(textFormFieldsOf(nextParagraph)[0]!.format).toBe('0.00');
+  });
+}
+
+test('formatted numeric default still refuses malformed punctuation atomically', () => {
+  const { part, paragraph, field } = numberField('7', '0.00');
+  const op = {
+    op: 'setTextFormFieldDefault',
+    paragraphId: paragraph.id,
+    fieldNodeId: field.fieldNodeId,
+    text: '1.2.3',
+  } as const;
+  expect(validateTreeOp(part, op)).toBe('invalidArgs');
+  expect(applyTreeOp(part, op).ok).toBe(false);
+  expect(paragraphTextOf(part, paragraph.id)).toBe('7');
 });

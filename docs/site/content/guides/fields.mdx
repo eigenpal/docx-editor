@@ -132,8 +132,9 @@ the editor checks its current value and protection before clearing it.
 When you leave a numeric field, the editor converts supported mixed input before
 formatting. For example, `a1b2c3` becomes `123`, and `abc` becomes zero.
 It accepts dollar signs, grouping commas, spaces, and accounting parentheses.
-An empty numeric output format truncates fractional digits. Default-value editing
-uses strict numeric validation.
+An empty numeric output format truncates fractional digits during filling.
+Formatted numeric defaults use the same conversion: `abc 12` with `0.00` becomes `12.00`.
+Default-value editing without a numeric format retains strict validation.
 
 Set `dateInputOrder="dmy"` or `dateInputOrder="mdy"` on the React or Vue editor
 or root component. This setting controls ambiguous slash-date input independently

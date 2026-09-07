@@ -75,9 +75,9 @@ export function formatTextFormValue(
     return text;
   }
   if (options.type === 'number') {
-    // Word extracts digits from mixed text when leaving a numeric form field.
-    // Default-value validation is separate from the protected filling gesture.
-    const input = intent === 'fill' ? normalizeTextFormNumber(text) : text.trim();
+    // Word also converts mixed text in formatted numeric defaults.
+    // Empty-picture defaults retain their existing strict validation.
+    const input = intent === 'fill' || options.format ? normalizeTextFormNumber(text) : text.trim();
     if (input === null) return null;
     if (!/^[+-]?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)%?$/.test(input)) return null;
     let number = Number(input.replaceAll(',', '').replaceAll('%', ''));
