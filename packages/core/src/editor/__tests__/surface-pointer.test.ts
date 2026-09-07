@@ -891,3 +891,20 @@ test('engine pointer double click opens legacy text form options', () => {
     mounted.container.remove();
   }
 });
+
+test('engine pointer release selects an unprotected field without a DOM click event', () => {
+  const mounted = mount(
+    '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="InputA"/><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'
+  );
+  try {
+    const field = mounted.pages.querySelector<HTMLElement>('[data-field-atom="form"]')!;
+    field.dispatchEvent(pointer('pointerdown', 3.4, 5.4));
+    document.dispatchEvent(pointer('pointerup', 3.4, 5.4));
+    const selection = mounted.surface.state().selection;
+    expect([selection.anchor.offset, selection.head.offset]).toEqual([0, 6]);
+    expect(document.getSelection()!.toString()).toBe('Sample');
+  } finally {
+    mounted.surface.destroy();
+    mounted.container.remove();
+  }
+});
