@@ -28,6 +28,8 @@ import { computeDrawingGeometry } from '../../layout/drawing-geometry.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../../layout/semantic-layout.ts';
 import { paintSemanticLayout } from '../semantic-paint.ts';
 import {
+  collectUsedDrawingElementKeys,
+  collectUsedDrawingResourceKeys,
   DEFAULT_DRAWING_PAINT_STRINGS,
   detachDrawingUrlRegistry,
   drawingUrlRegistryFor,
@@ -789,5 +791,96 @@ describe('ready drawings with unavailable bytes', () => {
     expect(element?.classList.contains('docx-drawing-placeholder')).toBe(true);
     detachDrawingUrlRegistry(host);
     host.remove();
+  });
+});
+
+describe('drawing membership belongs to the immutable layout', () => {
+  function layoutWithResource(resource: ImageResourceState = READY_PNG) {
+    return layoutSemanticDocument(load(inlinePictureXml()), 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: {
+        ownerPartName: OWNER,
+        project: (node) =>
+          projectDrawing(node, {
+            ownerPartName: OWNER,
+            limits: DEFAULT_DRAWING_PROJECTION_LIMITS,
+          }),
+        resourceOf: () => resource,
+      },
+    });
+  }
+
+  test('both collectors share one page-list visit, then skip unchanged-layout aggregation', () => {
+    const original = layoutWithResource();
+    let pageListReads = 0;
+    const layout = Object.freeze({
+      revision: original.revision,
+      get pages() {
+        pageListReads++;
+        return original.pages;
+      },
+    });
+    const elements = collectUsedDrawingElementKeys(layout);
+    const resources = collectUsedDrawingResourceKeys(layout);
+    expect(elements.size).toBe(1);
+    expect([...resources]).toEqual([READY_PNG.resourceKey]);
+    expect(pageListReads).toBe(1);
+    expect(collectUsedDrawingElementKeys(layout)).toBe(elements);
+    expect(collectUsedDrawingResourceKeys(layout)).toBe(resources);
+    expect(pageListReads).toBe(1);
+  });
+
+  test('reused drawings deduplicate resources but retain each page occurrence', () => {
+    const original = layoutWithResource();
+    const first = original.pages[0]!;
+    const shifted = Object.freeze({ ...first, index: 7 });
+    const layout = Object.freeze({ ...original, pages: Object.freeze([first, shifted]) });
+    const originalElements = collectUsedDrawingElementKeys(original);
+    expect([...collectUsedDrawingResourceKeys(layout)]).toEqual([READY_PNG.resourceKey]);
+    expect([...collectUsedDrawingElementKeys(layout)]).toEqual([
+      ...originalElements,
+      ...[...originalElements].map((key) => key.replace(/^p0\|/, 'p7|')),
+    ]);
+    const removed = Object.freeze({ ...layout, pages: Object.freeze([shifted]) });
+    expect([...collectUsedDrawingElementKeys(removed)]).toEqual(
+      [...originalElements].map((key) => key.replace(/^p0\|/, 'p7|'))
+    );
+    expect(collectUsedDrawingElementKeys(original)).toBe(originalElements);
+  });
+
+  test('new layouts invalidate ready membership even at the same document revision', () => {
+    const ready = layoutWithResource();
+    const pending = layoutWithResource(Object.freeze({ kind: 'pending', resourceKey: 'pending' }));
+    expect(ready.revision).toBe(pending.revision);
+    expect([...collectUsedDrawingResourceKeys(ready)]).toEqual([READY_PNG.resourceKey]);
+    expect(collectUsedDrawingResourceKeys(pending).size).toBe(0);
+    expect(collectUsedDrawingElementKeys(pending).size).toBe(1);
+    const replacement = layoutWithResource({ ...READY_PNG, resourceKey: 'replacement' });
+    expect([...collectUsedDrawingResourceKeys(replacement)]).toEqual(['replacement']);
+    expect([...collectUsedDrawingResourceKeys(ready)]).toEqual([READY_PNG.resourceKey]);
+  });
+
+  test('offscreen repaint retains resource and image until layout removal or detach', () => {
+    const layout = layoutWithResource();
+    const { port, revoked } = fakeUrlPort();
+    const container = document.createElement('div');
+    const options = { scale: 1, imageUrlPort: port };
+    paintSemanticLayout(container, layout, options);
+    const image = container.querySelector('img');
+    expect(image).not.toBeNull();
+    const url = image!.getAttribute('src');
+    paintSemanticLayout(container, layout, { ...options, materialize: new Set<number>() });
+    expect(container.querySelector('img')).toBeNull();
+    expect(revoked).toEqual([]);
+    expect(image!.getAttribute('src')).toBe(url);
+    paintSemanticLayout(container, layout, options);
+    expect(container.querySelector('img')).toBe(image);
+    expect(revoked).toEqual([]);
+    paintSemanticLayout(container, Object.freeze({ ...layout, pages: Object.freeze([]) }), options);
+    expect(revoked).toEqual([url!]);
+    expect(image!.getAttribute('src')).toBeNull();
+    paintSemanticLayout(container, layout, options);
+    detachDrawingUrlRegistry(container);
+    expect(revoked).toEqual([url!, url!]);
   });
 });
