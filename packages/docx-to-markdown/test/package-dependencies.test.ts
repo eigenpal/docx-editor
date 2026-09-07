@@ -42,12 +42,12 @@ describe('engine dependency integrity', () => {
     expect(manifest.devDependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
   });
 
-  test('participates in public releases with compatible engine dependencies', () => {
+  test('stays private and outside release automation with compatible engine dependencies', () => {
     const packageName = '@docx-editor.dev/docx-to-markdown';
-    expect(manifest.private).not.toBe(true);
-    expect(manifest.publishConfig).toEqual({ access: 'public' });
-    expect(changesetConfig.fixed?.flat()).toContain(packageName);
-    expect(changesetConfig.ignore).not.toContain(packageName);
+    expect(manifest.private).toBe(true);
+    expect(manifest.publishConfig).toBeUndefined();
+    expect(changesetConfig.fixed?.flat()).not.toContain(packageName);
+    expect(changesetConfig.ignore).toContain(packageName);
     expect(changesetConfig.updateInternalDependencies).toBe('patch');
     expect(
       requiresSameMinor(manifest.peerDependencies?.['@docx-editor.dev/core'], coreManifest.version)
@@ -75,12 +75,10 @@ describe('engine dependency integrity', () => {
     );
     expect(coreExportSource).not.toMatch(/Markdown|\.\/markdown/);
     expect(existsSync(join(repositoryRoot, 'packages/core/src/export/markdown.ts'))).toBe(false);
-    expect(existsSync(join(repositoryRoot, 'docs/site/content/docx-to-markdown/index.mdx'))).toBe(
-      true
-    );
+    expect(existsSync(join(repositoryRoot, 'docs/site/content/export/markdown.mdx'))).toBe(true);
     expect(
       readFileSync(join(repositoryRoot, 'docs', 'site', 'content', 'meta.json'), 'utf8')
-    ).toContain('docx-to-markdown');
+    ).toContain('export/markdown');
   });
 
   test('confines packaged fonts through the fonts package asset-root contract', () => {
