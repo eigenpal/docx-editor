@@ -20,9 +20,7 @@ exportMarkdownFrom(
 exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult;
 ```
 
-Use `exportMarkdown` for a single export. To reuse or inspect a layout, use
-`openDocumentForExport` and `exportMarkdownFrom`. To convert a layout after disposing its session,
-use `exportMarkdownLayout`.
+Use `exportMarkdown` for a single export. To reuse or inspect a layout, use `openDocumentForExport` and `exportMarkdownFrom`. To convert a layout after disposing its session, use `exportMarkdownLayout`.
 
 ### Result shape
 
@@ -90,19 +88,13 @@ interface MarkdownReviewBinding {
 }
 ```
 
-`fontResolution` lists requested families, resolved and substituted faces, coverage
-(`complete`, `partial`, or `none`), and nonfatal `originFailures`. Document-aware byte sessions
-return this report. Reusable sessions also expose it as `session.fontResolution`.
-It is `null` for detached layouts, custom measurers, ordinary Core sessions, and live views
-using shared shaping. Fatal failures throw `DocumentOpenError` or `ExportResourceError`.
+`fontResolution` lists requested families, resolved and substituted faces, coverage (`complete`, `partial`, or `none`), and nonfatal `originFailures`. Document-aware byte sessions return this report. Reusable sessions also expose it as `session.fontResolution`. It is `null` for detached layouts, custom measurers, ordinary Core sessions, and live views using shared shaping. Fatal failures throw `DocumentOpenError` or `ExportResourceError`.
 
-`pages` contains the page output from the editor's layout engine. Page numbers and IDs apply
-only to this export. Different fonts or Microsoft Word versions can produce different page breaks.
+`pages` contains the page output from the editor's layout engine. Page numbers and IDs apply only to this export. Different fonts or Microsoft Word versions can produce different page breaks.
 
 `pagination` records the layout source, export scope, Core revision, and tracked-change display mode.
 
-For citations that must survive storage or document updates, retain your own document version or
-content hash alongside the page number. For example:
+For citations that must survive storage or document updates, retain your own document version or content hash alongside the page number. For example:
 
 ```ts
 const citation = {
@@ -114,17 +106,13 @@ const citation = {
 };
 ```
 
-`result.markdown` contains the whole document. It joins content split across pages and excludes
-repeated headers and footers. Use `pages` when you need page citations.
+`result.markdown` contains the whole document. It joins content split across pages and excludes repeated headers and footers. Use `pages` when you need page citations.
 
 ### Comments and tracked changes
 
-Comments and revision metadata are returned separately from Markdown.
-Review IDs are opaque and valid only within one export. For stored citations, include your own
-document version or content hash.
+Comments and revision metadata are returned separately from Markdown. Review IDs are opaque and valid only within one export. For stored citations, include your own document version or content hash.
 
-`page.comments` and `page.trackedChanges` contain complete artifacts with occurrences on that page.
-Their `occurrences` can include other pages. Filter them to avoid double counting:
+`page.comments` and `page.trackedChanges` contain complete artifacts with occurrences on that page. Their `occurrences` can include other pages. Filter them to avoid double counting:
 
 ```ts
 const localComments = page.comments.flatMap((artifact) =>
@@ -134,12 +122,9 @@ const localComments = page.comments.flatMap((artifact) =>
 );
 ```
 
-Page artifacts can occur in the body, headers, footers, footnotes, endnotes, or note separators.
-`result.reviewArtifacts` contains all artifacts, including those without a page occurrence.
+Page artifacts can occur in the body, headers, footers, footnotes, endnotes, or note separators. `result.reviewArtifacts` contains all artifacts, including those without a page occurrence.
 
-`result.reviewBindings` connects each occurrence to offsets in `result.markdown`,
-`page.markdown`, `page.headerMarkdown`, or `page.footerMarkdown`. Offsets use JavaScript UTF-16
-string indexing and can be passed directly to `slice()`:
+`result.reviewBindings` connects each occurrence to offsets in `result.markdown`, `page.markdown`, `page.headerMarkdown`, or `page.footerMarkdown`. Offsets use JavaScript UTF-16 string indexing and can be passed directly to `slice()`:
 
 ```ts
 for (const binding of result.reviewBindings) {
@@ -154,15 +139,11 @@ for (const binding of result.reviewBindings) {
 }
 ```
 
-For source-aligned edits, require `coverage === 'complete'` and `precision === 'exact'`.
-For citations or display, you can use partial or `containing-construct` bindings if you retain
-that precision information. Unmapped artifacts include an `unmappedReason`.
+For source-aligned edits, require `coverage === 'complete'` and `precision === 'exact'`. For citations or display, you can use partial or `containing-construct` bindings if you retain that precision information. Unmapped artifacts include an `unmappedReason`.
 
 Artifact IDs, occurrence indexes, page IDs, and offsets are valid only within this export.
 
-Tracked changes also participate in layout through `displayMode`: `all-markup` (default) keeps
-inserted and deleted text visible, `proposed` includes pending insertions and hides pending deletions, and `original` shows the
-rejected view. There is no reviewer/author filtering in this API.
+Tracked changes also participate in layout through `displayMode`: `all-markup` (default) keeps inserted and deleted text visible, `proposed` includes pending insertions and hides pending deletions, and `original` shows the rejected view. Revision mode applies to the whole document.
 
 ## Options
 
@@ -185,8 +166,7 @@ rejected view. There is no reviewer/author filtering in this API.
 
 ### Tracked changes
 
-To show the proposed text, set `displayMode` to `proposed`. This changes the export projection; it does not accept changes in the DOCX.
-Review artifacts remain available:
+To show the proposed text, set `displayMode` to `proposed`. This changes the export projection; it does not accept changes in the DOCX. Review artifacts remain available:
 
 ```ts
 const proposed = await exportMarkdown(docxBytes, {
@@ -224,23 +204,17 @@ try {
 }
 ```
 
-Always call `dispose()` on reusable sessions to release caches and pending resource work.
-Repeated calls are safe. Live views can retain state across revisions; byte sources use
-one-shot caching by default.
+Always call `dispose()` on reusable sessions to release caches and pending resource work. Repeated calls are safe. Live views can retain state across revisions; byte sources use one-shot caching by default.
 
-For a single export, use `exportMarkdown(docxBytes)`. To keep a layout without retaining session
-resources, obtain it before disposal, then pass it to `exportMarkdownLayout`. Layouts remain
-valid after disposal.
+For a single export, use `exportMarkdown(docxBytes)`. To keep a layout without retaining session resources, obtain it before disposal, then pass it to `exportMarkdownLayout`. Layouts remain valid after disposal.
 
 ## Images
 
-Images affect page boundaries but are omitted from Markdown. There is no image URL callback.
-If omitting an inline image would join words, the exporter inserts a space.
+Images affect page boundaries but are omitted from Markdown. If omitting an inline image would join words, the exporter inserts a space.
 
 ## Errors and cancellation
 
-For malformed or unsupported DOCX input, `exportMarkdown` throws `DocumentOpenError`.
-`openDocumentForExport` returns `{ ok: false, reason, detail }` instead.
+For malformed or unsupported DOCX input, `exportMarkdown` throws `DocumentOpenError`. `openDocumentForExport` returns `{ ok: false, reason, detail }` instead.
 
 Both workflows can throw `ExportResourceError` with one of these codes:
 
@@ -248,9 +222,7 @@ Both workflows can throw `ExportResourceError` with one of these codes:
 - `layoutInvariant`: document geometry exceeds the engine's page model.
 - `layoutFailed`: another layout or host integration failure.
 
-The layout errors retain the original diagnostic as `cause`.
-Aborting a reusable session releases its resources and prevents reuse. Calling `dispose()`
-afterward is safe.
+The layout errors retain the original diagnostic as `cause`. Aborting a reusable session releases its resources and prevents reuse. Calling `dispose()` afterward is safe.
 
 ```ts
 import {
@@ -280,9 +252,7 @@ try {
 
 ## Layout and fonts
 
-Core resolves fonts, images, document geometry, and `displayMode` before pagination.
-Markdown uses that immutable layout. There is no separate page-width override.
-`signal` and `resourceTimeoutMs` cover resource processing.
+Core resolves fonts, images, document geometry, and `displayMode` before pagination. Markdown uses that immutable layout. `signal` and `resourceTimeoutMs` cover resource processing.
 
 Fonts resolve in this order:
 
@@ -290,17 +260,11 @@ Fonts resolve in this order:
 2. Bundled substitutes from `@docx-editor.dev/fonts`.
 3. Optional `fallbackFonts`.
 
-The Node.js defaults use HarfBuzz and packaged substitutes: Carlito for Calibri, Caladea for
-Cambria, Liberation Serif for Times New Roman, Liberation Sans for Arial, and Liberation Mono
-for Courier New. These fonts require no network requests.
+The Node.js defaults use HarfBuzz and packaged substitutes: Carlito for Calibri, Caladea for Cambria, Liberation Serif for Times New Roman, Liberation Sans for Arial, and Liberation Mono for Courier New. These fonts are bundled with the package.
 
-For accurate pagination, supply the author's licensed fonts, use `fontPolicy: 'strict'`,
-save the font-resolution report, and pin the exporter, Core, and font catalog versions.
-The default `best-effort` policy uses approximate measurements for unresolved fonts.
+For accurate pagination, supply the author's licensed fonts, use `fontPolicy: 'strict'`, save the font-resolution report, and pin the exporter, Core, and font catalog versions. The default `best-effort` policy uses approximate measurements for unresolved fonts.
 
-To enable Google Fonts as a fallback, pass `googleFonts()` through `fallbackFonts`.
-It uses a pinned catalog and verified content hashes. Requests disclose requested font families
-to the CDN:
+To enable Google Fonts as a fallback, pass `googleFonts()` through `fallbackFonts`. It uses a pinned catalog and verified content hashes. Requests disclose requested font families to the CDN:
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -343,17 +307,11 @@ const result = await exportMarkdown(docxBytes, {
 });
 ```
 
-Omit `fallbackFonts` to use only your fonts and bundled substitutes. For network-free exports,
-your own resolvers must also use local data.
+Omit `fallbackFonts` to use only your fonts and bundled substitutes. For network-free exports, your own resolvers must also use local data.
 
-Custom `fonts` and `fallbackFonts` require immutable DOCX bytes. For a live `HeadlessDocumentView`,
-use a host-owned, revision-stable `measurer` with a stable `producer`. A custom measurer takes
-precedence and bypasses both font options.
+Custom `fonts` and `fallbackFonts` require immutable DOCX bytes. For a live `HeadlessDocumentView`, use a host-owned, revision-stable `measurer` with a stable `producer`. A custom measurer takes precedence and bypasses both font options.
 
-`fontPolicy: 'strict'` rejects origin failures or missing regular, bold, italic, or bold-italic
-faces. Use `onFontResolution` to record resolved and substituted faces, and
-`googleFonts({ onFailure })` to log fallback failures. More than 64 candidate families causes
-`layoutFailed`. Failed or aborted Google Fonts requests are not cached.
+`fontPolicy: 'strict'` rejects origin failures or missing regular, bold, italic, or bold-italic faces. Use `onFontResolution` to record resolved and substituted faces, and `googleFonts({ onFailure })` to log fallback failures. More than 64 candidate families causes `layoutFailed`. Failed or aborted Google Fonts requests are not cached.
 
 ### Font limits
 
@@ -363,17 +321,13 @@ The package exports these limits:
 - `HARD_MAX_FONT_SOURCES`: 256 sources per composition.
 - `HARD_MAX_AGGREGATE_FONT_BYTES`: 128 MiB per composition and across active document font leases.
 
-Invalid or oversized origins are reported and skipped. Exceeding the process-wide lease budget
-causes `layoutFailed`. Return only requested faces from resolvers, limit concurrent exports,
-and dispose reusable sessions promptly. Use the exported constants in your code.
+Invalid or oversized origins are reported and skipped. Exceeding the process-wide lease budget causes `layoutFailed`. Return only requested faces from resolvers, limit concurrent exports, and dispose reusable sessions promptly. Use the exported constants in your code.
 
-Document-embedded fonts are admitted after explicit origins, using the same mapper as the browser editor.
-Regular, bold, italic, and bold-italic embedded faces must pass the shared font limits.
+Document-embedded fonts are admitted after explicit origins, using the same mapper as the browser editor. Regular, bold, italic, and bold-italic embedded faces must pass the shared font limits.
 
 ## Warnings
 
-`result.warnings` contains `{ code, message, pageNumber?, partName? }` objects. Codes are stable;
-messages are for display. `pageNumber` is one-based when present.
+`result.warnings` contains `{ code, message, pageNumber?, partName? }` objects. Codes are stable; messages are for display. `pageNumber` is one-based when present.
 
 | Code                 | Meaning                                                              |
 | -------------------- | -------------------------------------------------------------------- |
@@ -383,22 +337,15 @@ messages are for display. `pageNumber` is one-based when present.
 | `content-scan-limit` | Source inspection reached its bound; additional omissions may exist. |
 | `incomplete-font`    | A requested family lacks one or more faces; pagination may differ.   |
 
-Drawing warnings are grouped by category and page, including headers, footers, and
-notes. Unsupported legacy images, shapes, and text boxes are reported from the source
-package with `partName`, without a page number.
-They report omissions; they do not contain extracted image or text box content.
+Drawing warnings are grouped by category and page, including headers, footers, and notes. Unsupported legacy images, shapes, and text boxes are reported from the source package with `partName`, without a page number. Each warning identifies omitted content.
 
 ## Markdown limitations
 
 - Use `pages` for page output and `markdown` for the whole document.
 - Page headers and footers are returned separately per page.
 - Merged table cells are flattened.
-- GFM has no nested-table construct. Nested tables alone use plain inline `<table>`, `<tr>`,
-  `<td>`, and `<th>` HTML on one line, so strict sanitizers (including GitHub's) keep the
-  structure and inline Markdown inside each cell remains parseable.
+- Nested tables use inline HTML (`<table>`, `<tr>`, `<td>`, and `<th>`). Cells retain inline Markdown.
 - Images affect layout but are omitted from Markdown.
-- Anchored text-box text is omitted because it has no unambiguous linear position; comments and
-  tracked changes inside it remain available as page artifacts with exact text-box provenance.
+- Anchored text-box text is omitted because it has no unambiguous linear position; comments and tracked changes inside it remain available as page artifacts with exact text-box provenance.
 - Office Math uses the core semantic equation fallback.
-- A note continued without its reference is emitted as a labeled continuation block in page
-  Markdown.
+- A note continued without its reference is emitted as a labeled continuation block in page Markdown.
