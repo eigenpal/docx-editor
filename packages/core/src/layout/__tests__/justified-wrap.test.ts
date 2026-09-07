@@ -9,6 +9,8 @@ import {
   candidateNeedsWrap,
   distributeCappedShrink,
   hangingBoundarySpaceWidth,
+  hangingBoundaryTailStartIndex,
+  justifySlackGapIndices,
   minExpandableSpaceWidth,
   stripTrailingOrdinarySpaces,
   visibleCandidateWidth,
@@ -152,6 +154,7 @@ describe('EP_ZMVZ_MULTI_v4 italic wrap regression', () => {
     `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
     run('w w w w w w w w w w') +
     run(GLUE, '<w:sz w:val="22"/><w:i/>') +
+    run(' ') +
     run('tail') +
     `</w:p>`;
 
@@ -165,10 +168,90 @@ describe('EP_ZMVZ_MULTI_v4 italic wrap regression', () => {
     expect(glued[0]!.text).toBe('a\u00a0zapisovateľom ');
 
     const aligned = alignSpans(lines[0]!.spans, fixtureMeasurer, 0, AVAIL, 'both', false);
-    const last = aligned[aligned.length - 1]!;
-    const visible = last.text.replace(/ +$/u, '');
-    const visibleWidth = fixtureMeasurer.measure(visible, last.style);
-    expect(last.box.x + visibleWidth).toBeLessThanOrEqual(AVAIL + 0.05);
+    const italic = aligned.find((span) => span.text.includes('zapisovateľom'))!;
+    const visible = stripTrailingOrdinarySpaces(italic.text);
+    const visibleWidth = fixtureMeasurer.measure(visible, italic.style);
+    expect(italic.box.x + visibleWidth).toBeCloseTo(AVAIL, 1);
+    expect(hangingBoundarySpaceWidth(aligned, fixtureMeasurer)).toBeCloseTo(2 * SPACE, 5);
+  });
+});
+
+describe('cross-run hanging boundary for w:jc both', () => {
+  const style: ResolvedRunStyle = { ...DEFAULT_RUN_STYLE, fontSizePt: 11 };
+  const italic: ResolvedRunStyle = { ...style, italic: true };
+
+  function span(
+    text: string,
+    width: number,
+    start: number,
+    face: ResolvedRunStyle = style
+  ): StyleSpanRecord {
+    return {
+      range: { paragraphId: 'p', start, end: start + text.length },
+      text,
+      props: [],
+      style: face,
+      box: { x: start === 0 ? 0 : NaN, y: 0, width, height: 14 },
+    };
+  }
+
+  function place(spans: StyleSpanRecord[]): StyleSpanRecord[] {
+    let x = 0;
+    return spans.map((entry) => {
+      const placed = { ...entry, box: { ...entry.box, x } };
+      x += entry.box.width;
+      return placed;
+    });
+  }
+
+  test('italic trailing U+0020 plus a following space-only run sum the hanging tail', () => {
+    const SPACE = 2.75;
+    const VISIBLE = 58.542;
+    const tailMeasurer: TextMeasurer = {
+      measure: (text) => {
+        if (text === ' ') return SPACE;
+        if (text === 'a\u00a0zapisovateľom') return VISIBLE;
+        return text.length * 6;
+      },
+      lineMetrics: () => ({ height: 14, baseline: 11 }),
+    };
+    const spans = place([
+      span('a\u00a0zapisovateľom ', VISIBLE + SPACE, 0, italic),
+      span(' ', SPACE, 18),
+    ]);
+    expect(hangingBoundarySpaceWidth(spans, tailMeasurer)).toBeCloseTo(2 * SPACE, 5);
+    expect(hangingBoundaryTailStartIndex(spans)).toBe(1);
+  });
+
+  test('BodyText trailing U+0020 on the last span hangs without a connector run', () => {
+    const spans = place([span('TITLE ', 36, 0)]);
+    expect(hangingBoundarySpaceWidth(spans, measurer)).toBe(6);
+    expect(hangingBoundaryTailStartIndex(spans)).toBe(1);
+  });
+
+  test('justify slack skips the gap before the hanging tail', () => {
+    const spans = place([
+      span('aa ', 12, 0),
+      span('bb ', 12, 3),
+      span('cc ', 18, 6),
+      span(' ', 6, 9),
+    ]);
+    expect(justifySlackGapIndices(spans)).toEqual([1, 2]);
+    const stretched = alignSpans(spans, measurer, 0, 54, 'both', false);
+    expect(stretched[3]!.box.x - (stretched[2]!.box.x + stretched[2]!.box.width)).toBeCloseTo(0, 5);
+    expect(stretched[1]!.box.x).toBeGreaterThan(stretched[0]!.box.x + stretched[0]!.box.width + 6);
+  });
+
+  test('a trailing NBSP is not part of the hanging tail', () => {
+    const spans = place([span('AB\u00a0', 18, 0)]);
+    expect(hangingBoundarySpaceWidth(spans, measurer)).toBe(0);
+  });
+
+  test('a pure U+0020 span before a drawing is not hung', () => {
+    const spans = place([span('x', 6, 0), span(' ', 6, 1)]);
+    expect(hangingBoundarySpaceWidth(spans, measurer)).toBe(0);
+    expect(hangingBoundaryTailStartIndex(spans)).toBe(2);
+    expect(justifySlackGapIndices(spans)).toEqual([]);
   });
 });
 
@@ -224,25 +307,25 @@ describe('justify helpers', () => {
     expect(distributeCappedShrink(10, [3, 3, 3])).toEqual([3, 3, 3]);
   });
 
-  test('hangingBoundarySpaceWidth reads a committed connector', () => {
+  test('hangingBoundarySpaceWidth sums a visible tail and a following connector', () => {
     const style: ResolvedRunStyle = { ...DEFAULT_RUN_STYLE, fontSizePt: 11 };
     const spans: StyleSpanRecord[] = [
       {
-        range: { paragraphId: 'p', start: 0, end: 3 },
-        text: 'aa',
+        range: { paragraphId: 'p', start: 0, end: 5 },
+        text: 'word ',
         props: [],
         style,
-        box: { x: 0, y: 0, width: 12, height: 14 },
+        box: { x: 0, y: 0, width: 30, height: 14 },
       },
       {
-        range: { paragraphId: 'p', start: 3, end: 4 },
+        range: { paragraphId: 'p', start: 5, end: 6 },
         text: ' ',
         props: [],
         style,
-        box: { x: 12, y: 0, width: 6, height: 14 },
+        box: { x: 30, y: 0, width: 6, height: 14 },
       },
     ];
-    expect(hangingBoundarySpaceWidth(spans, measurer)).toBe(6);
+    expect(hangingBoundarySpaceWidth(spans, measurer)).toBe(12);
   });
 });
 

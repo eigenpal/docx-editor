@@ -104,15 +104,54 @@ export function hangingBoundarySpaceWidth(
     if (!endsWithExpandableSpace(span.text)) break;
     const visible = stripTrailingOrdinarySpaces(span.text);
     if (visible.length === 0) {
-      hanging += span.box.width;
-      continue;
+      const prev = index > 0 ? spans[index - 1] : undefined;
+      const prevVisible = prev ? stripTrailingOrdinarySpaces(prev.text) : '';
+      if (prev && prevVisible.length > 0 && endsWithExpandableSpace(prev.text)) {
+        hanging += span.box.width;
+        continue;
+      }
+      break;
     }
-    if (visible === span.text) break;
     const face = styleForFontSlot(span.style, span.fontSlot);
     hanging += Math.max(0, span.box.width - measureDisplayText(visible, face, measurer));
     break;
   }
   return hanging;
+}
+
+/**
+ * First span index in the trailing hanging U+0020 chain.
+ *
+ * Gaps at or after this index are not inter-word justify slots. A pure U+0020 span before an
+ * inline drawing stays outside the chain when a visible span precedes it.
+ */
+export function hangingBoundaryTailStartIndex(spans: readonly StyleSpanRecord[]): number {
+  for (let index = spans.length - 1; index >= 0; index -= 1) {
+    const span = spans[index]!;
+    if (span.lineEndWhitespace === true) continue;
+    if (!endsWithExpandableSpace(span.text)) return index + 1;
+    const visible = stripTrailingOrdinarySpaces(span.text);
+    if (visible.length === 0) {
+      const prev = index > 0 ? spans[index - 1] : undefined;
+      const prevVisible = prev ? stripTrailingOrdinarySpaces(prev.text) : '';
+      if (prev && prevVisible.length > 0 && endsWithExpandableSpace(prev.text)) continue;
+      return index + 1;
+    }
+    return index + 1;
+  }
+  return 0;
+}
+
+/** Inter-word gap indices that may receive justified slack or shrink. */
+export function justifySlackGapIndices(spans: readonly StyleSpanRecord[]): number[] {
+  const tailStart = hangingBoundaryTailStartIndex(spans);
+  const gaps: number[] = [];
+  for (let index = 1; index < spans.length; index += 1) {
+    if (index >= tailStart) continue;
+    if (spans[index - 1]!.lineEndWhitespace === true) continue;
+    if (endsWithExpandableSpace(spans[index - 1]!.text)) gaps.push(index);
+  }
+  return gaps;
 }
 
 /** How far one candidate's trailing U+0020 may shrink before it hits the floor. */
@@ -229,26 +268,17 @@ export function alignSpans(
     });
   }
 
-  // Trailing whitespace hangs into the margin rather than pushing the text off-centre, which
-  // is what Word does and what stops a line ending in a space from looking misaligned.
   const last = spans[spans.length - 1]!;
-  const visible = last.text.replace(/\s+$/u, '');
-  // `box.width` was reserved from the DRAWN text, so the visible part has to be measured the
-  // same way: the difference is what the trailing whitespace measures, and mixing a drawn
-  // total with a source-measured visible part reports nearly the whole span as whitespace.
-  // Justify still uses that price when `lineUsedWidth` is absent. Centre and right always
-  // subtract collapsible trailing U+0020, including when the caller passes `lineUsedWidth`.
-  const trailing =
-    visible === last.text
-      ? 0
-      : last.box.width -
-        measureDisplayText(visible, styleForFontSlot(last.style, last.fontSlot), measurer);
-  const geometricUsed = last.box.x - indentLeft + last.box.width;
-  const lastContent = spans[trailingEnd - 1] ?? last;
+  const contentSpans = spans.slice(0, trailingEnd);
+  const lastContent = contentSpans[contentSpans.length - 1] ?? last;
+  const geometricUsed = lastContent.box.x - indentLeft + lastContent.box.width;
+  const hanging = hangingBoundarySpaceWidth(contentSpans, measurer);
   const used =
-    alignment === 'center' || alignment === 'right'
-      ? (lineUsedWidth ?? geometricUsed) - trailingCollapsibleSpaceWidth(lastContent, measurer)
-      : (lineUsedWidth ?? geometricUsed - trailing);
+    alignment === 'both'
+      ? (lineUsedWidth ?? geometricUsed) - hanging
+      : alignment === 'center' || alignment === 'right'
+        ? (lineUsedWidth ?? geometricUsed) - trailingCollapsibleSpaceWidth(lastContent, measurer)
+        : (lineUsedWidth ?? geometricUsed);
   const slack = available - used;
 
   // The last line of a justified paragraph is set flush left, never stretched or compressed.
@@ -278,10 +308,7 @@ function applyJustifySlack(
   slack: number,
   measurer: TextMeasurer
 ): readonly StyleSpanRecord[] {
-  const gapBefore: number[] = [];
-  for (let index = 1; index < spans.length; index += 1) {
-    if (endsWithExpandableSpace(spans[index - 1]!.text)) gapBefore.push(index);
-  }
+  const gapBefore = justifySlackGapIndices(spans);
   if (gapBefore.length === 0) return spans;
   if (slack > 0) {
     const step = slack / gapBefore.length;
