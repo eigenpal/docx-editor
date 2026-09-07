@@ -37,11 +37,9 @@ import {
   retainLiveBreakKeys,
   withDrawingContext,
 } from './layout-cache.ts';
-import { resolveCjkTypography } from './cjk-typography.ts';
 import {
   alignSpans,
   alignDrawings,
-  breakParagraph,
   pendingLineFlowExtentAtPlacement,
   type Alignment,
   type PendingLine,
@@ -71,16 +69,13 @@ import {
   type ParagraphKeeps,
 } from './pagination-keeps.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
+import type { ResolvedTabStops } from './paragraph-tabs.ts';
 import {
-  tabStopsFingerprint,
-  withDefaultTabInterval,
-  type ResolvedTabStops,
-} from './paragraph-tabs.ts';
-import {
-  resolveParagraphLayoutInputs,
-  cascadeRunProperties,
-  type StyleCascadeTable,
-} from './style-cascade.ts';
+  prepareParagraphBreakInputs,
+  bodyParagraphBreakKey,
+  breakPreparedParagraph,
+} from './paragraph-break-request.ts';
+import { resolveParagraphLayoutInputs, type StyleCascadeTable } from './style-cascade.ts';
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -1113,12 +1108,11 @@ function layoutBlocksPass(
         block.children.find((child) => child.kind === 'paragraphProperties'),
         styleCascade
       );
-      // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
-      const tabStops = withDefaultTabInterval(preparedParagraph.tabStops, defaultTabStopPt);
-      const tabStopsCacheToken =
-        tabStops === preparedParagraph.tabStops
-          ? preparedParagraph.tabStopsCacheToken
-          : tabStopsFingerprint(tabStops);
+      const { tabStops, properties: breakProperties } = prepareParagraphBreakInputs(
+        preparedParagraph,
+        defaultTabStopPt,
+        { listToken: listItem?.cacheToken, hostedListToken, refToken }
+      );
       entry = {
         kind: 'paragraph',
         ...(frame ? { frame } : {}),
@@ -1150,19 +1144,7 @@ function layoutBlocksPass(
         ...(listItem ? { listItem } : {}),
         key: keyFor({
           paragraph: block,
-          properties: [
-            ...props,
-            ...inheritedRunProperties,
-            ...markRunProperties,
-            { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
-            ...(listItem
-              ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }]
-              : []),
-            ...(hostedListToken
-              ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
-              : []),
-            ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
-          ],
+          properties: breakProperties,
           width: available,
           producer,
           drawingToken: keyedDrawingToken,
@@ -1767,43 +1749,30 @@ function layoutBlocksPass(
     // what varies per PLACEMENT joins below; the common path must stay `entry.key` BY
     // IDENTITY, because retention names the prepass keys (suffixed and off-prepass-width
     // keys are transient by design) and V8 caches the shared string's hash.
-    // A new placement-varying input joins BOTH this suffix chain and the cell path's
-    // `paragraphLayoutKey` call in `semantic-table-layout.ts` — the roles map in
-    // `layout-cache.ts` guards only the typed inputs, not these suffixes.
     let cacheKey: string | null = null;
     if (cache && !suppressChrome) {
-      // `cursorY` belongs in the key: the zones are page-content bands, so the same text at
-      // the same width breaks differently depending on where down the page it starts. Keying
-      // on zone geometry alone lets a paragraph clear of the float reuse the wrapped break
-      // of an identical one that crosses it. NUL-framed: XML text cannot carry U+0000, so
-      // no file-derived token can forge a suffix boundary.
-      cacheKey = entry.key;
-      if (exclusionToken) {
-        cacheKey += `\0excl:${flowColumnIndex}|${cursorY.toFixed(3)}|${exclusionToken}`;
-      }
-      if (startOffset > 0) cacheKey += `\0from:${startOffset}`;
+      cacheKey = bodyParagraphBreakKey(entry.key, {
+        exclusionToken,
+        paragraphStartY: cursorY,
+        columnIndex: flowColumnIndex,
+        startOffset,
+      });
       rememberBreakKey(paragraphId, cacheKey);
     }
     const usePageColumnCoords = columnCount > 1;
-    return breakParagraph(
-      entry.paragraph,
+    return breakPreparedParagraph({
+      paragraph: entry.paragraph,
       paragraphId,
-      entry.indent.left,
+      indentLeft: entry.indent.left,
       available,
       measurer,
       cache,
       cacheKey,
-      entry.inheritedRunProperties,
-      entry.tabStops,
-      undefined,
-      styleCascade
-        ? (inherited: readonly OoxmlProperty[], direct: readonly OoxmlProperty[]) =>
-            cascadeRunProperties(inherited, direct, styleCascade)
-        : undefined,
-      {
-        lineSpacing: entry.lineSpacing,
-        typography: resolveCjkTypography(entry.props, styleCascade?.typography),
-        equationCacheToken: producer,
+      formatting: entry,
+      producer,
+      styleCascade,
+      tabStops: entry.tabStops,
+      flow: {
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
@@ -1826,10 +1795,8 @@ function layoutBlocksPass(
         paragraphStartY: cursorY,
         ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
         ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
-        ...(styleCascade ? { themeFonts: styleCascade.themeFonts } : {}),
-        markRunProperties: entry.markRunProperties,
-      }
-    );
+      },
+    });
   };
 
   const pageExclusionZonesForEntry = (
