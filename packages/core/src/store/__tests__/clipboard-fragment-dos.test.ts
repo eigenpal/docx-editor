@@ -30,27 +30,20 @@
 // tolerate it; what it must still catch is quadratic work, which lands at 64x before any of
 // that and only climbs from there.
 //
-// The MEDIA axis is not, and it is worth writing down why, because the obvious guard is wrong.
-// Merging 250 images costs ~38ms and merging 375 costs ~37.7ms — the small end is essentially
-// all fixed cost, so a ratio taken there is `large / constant`, not a measure of growth at all.
-// It moves with the machine: this harness read 34x locally and 81x on a CI runner for the same
-// code. So the media axis gets the absolute backstop only.
-//
-// Which leaves that axis with no growth guard, and it needs one, because it is QUADRATIC:
-//
-//   n       375     750     1500    3000    6000
-//   ms      41.5    128.9   402.8   1633.7  7555.9
-//   ms/n    0.111   0.172   0.269   0.545   1.259     <- doubles as n doubles
-//   exp     -       1.64    1.64    2.02    2.30
-//
-// The name of its old guard was `no O(media^2)` and the merge is O(media^2); the absolute
-// ceiling never noticed because 3000 images land at ~1.5s, comfortably under 4s. That curve is
-// identical on `main`, so it is long-standing rather than new. Fixing it is what earns this
-// axis a real growth guard, at two work-dominated sizes the way the style axis has one.
+// The media axis uses 1000 and 8000 distinct images. Fixture creation stays outside timing.
+// Both sizes do measurable merge work. Smaller fixtures can mostly measure fixed overhead.
+// Before the indexed content-type edit, this step grew by 68x on Windows; after it, by 7.8x.
+// Keep the same generous growth threshold as the style axis, plus the absolute backstop.
 
 import { describe, expect, test } from 'bun:test';
 import { zipSync, strToU8 } from 'fflate';
-import { readOoxmlPackage, type OoxmlPackage } from '../package/ooxml-package.ts';
+import {
+  readOoxmlPackage,
+  writeOoxmlPackage,
+  type OoxmlPackage,
+} from '../package/ooxml-package.ts';
+import { relationshipsOf, validatePackageInvariants } from '../package/package-edit.ts';
+import { resolveInternalTarget } from '../package/opc-names.ts';
 import { mergeFragmentIntoPackage } from '../store/clipboard-fragment-merge.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -112,7 +105,7 @@ const NEAR_LINEAR_GROWTH = SIZE_FACTOR * 4;
  * A backstop no plausible machine reaches.
  *
  * It catches what a ratio cannot — a constant factor a hundred times worse grows at the same
- * rate — and it is the media axis's only guard until that axis is linear enough to measure.
+ * rate. Both axes also have a growth guard.
  * Two orders of magnitude above the ~1.5s the biggest of these merges takes, so a stalled
  * runner cannot reach it: the 12.9s stall that started all this would still pass.
  */
@@ -124,8 +117,7 @@ const ABSURD_MS = 60_000;
  * The minimum, not the mean: noise on a shared runner only ever adds time, so the best run is
  * the closest estimate of what the code costs and the outliers are exactly what should be
  * discarded. Five runs, because the ratio fails only when EVERY large run is slow while the
- * small ones are not, and the only merge measured this way tops out near 60ms, so the extra
- * runs cost a fraction of a second. The first run also warms the JIT, which otherwise lands
+ * small ones are not. The first run also warms the JIT, which otherwise lands
  * on the small measurement and deflates the ratio. `prepare` builds the inputs and returns
  * the call to time, so fixture construction stays outside the measurement.
  *
@@ -170,6 +162,17 @@ function growthOverSizeStep(
   };
   const smallMs = timeAt(small);
   const largeMs = timeAt(small * SIZE_FACTOR);
+  if (process.env.DOCX_PASTE_BENCH === '1') {
+    console.warn(
+      JSON.stringify({
+        small,
+        large: small * SIZE_FACTOR,
+        smallMs,
+        largeMs,
+        ratio: largeMs / smallMs,
+      })
+    );
+  }
   expect(largeMs).toBeLessThan(ABSURD_MS);
   // Guard the division: a small measurement of zero on a very fast machine is not a signal.
   return smallMs > 0 ? largeMs / smallMs : 0;
@@ -263,6 +266,10 @@ function styledTarget(): OoxmlPackage {
 }
 
 describe('how the paste merge grows with the fragment', () => {
+  test('distinct images have near-linear merge growth (no O(media^2))', () => {
+    expect(growthOverSizeStep(1000, mediaFragment, blankTarget)).toBeLessThan(NEAR_LINEAR_GROWTH);
+  }, 300_000);
+
   test('colliding style ids resolve in linear time (no O(style^2))', () => {
     // 1000 then 8000. The target's own `Normal` differs, so every one of them collides.
     expect(growthOverSizeStep(1000, collidingStyleFragment, styledTarget)).toBeLessThan(
@@ -271,10 +278,7 @@ describe('how the paste merge grows with the fragment', () => {
   }, 60_000);
 
   test('a fragment of distinct images merges at all, well inside any budget', () => {
-    // NO GROWTH ASSERTION on this axis, deliberately — see the file header. It is quadratic,
-    // and its small end is all fixed cost, so a ratio here measures the runner rather than the
-    // merge. What is left is worth keeping: 3000 images, the size the media budget is written
-    // against, must merge, and must not take a length of time that means something broke.
+    // Keep the absolute backstop and check that faster merging does not lose media.
     const fragment = mediaFragment(3000);
     const target = blankTarget();
     const start = performance.now();
@@ -282,5 +286,28 @@ describe('how the paste merge grows with the fragment', () => {
     const elapsed = performance.now() - start;
     expect(merged.ok).toBe(true);
     expect(elapsed).toBeLessThan(ABSURD_MS);
+    if (!merged.ok) return;
+    expect(merged.blocks).toHaveLength(3000);
+    expect(validatePackageInvariants(merged.pkg).ok).toBe(true);
+    const reopened = load(writeOoxmlPackage(merged.pkg));
+    const images = relationshipsOf(reopened, reopened.mainDocumentPart).filter(
+      (rel) => rel.type === `${R}/image`
+    );
+    expect(images).toHaveLength(3000);
+    const expected = new Set<string>();
+    for (const [name, bytes] of fragment.partBytes) {
+      if (name.includes('/media/')) expected.add(Array.from(bytes).join(','));
+    }
+    const actual = new Set<string>();
+    for (const rel of images) {
+      const targetName = resolveInternalTarget(rel.ownerPart, rel.rawTarget);
+      expect(targetName.ok).toBe(true);
+      if (!targetName.ok) continue;
+      const bytes = reopened.partBytes.get(targetName.partName)!;
+      actual.add(Array.from(bytes).join(','));
+      expect(reopened.contentTypes.overrides.get(targetName.partName)).toBe('image/png');
+    }
+    expect(actual.size).toBe(3000);
+    expect(actual).toEqual(expected);
   }, 60_000);
 });

@@ -139,6 +139,10 @@ as DOM text, not a canvas bitmap.
 Usable font bytes are required for Word-accurate text measurement. See
 [Fonts and measurement](/docs/2.x/guides/fonts).
 
+The configured font resolver also receives faces used by SYMBOL fields and numbering markers.
+Your host must supply usable font bytes for those faces when they are unavailable locally.
+Unused numbering definitions do not add font requests.
+
 East Asian layout keeps punctuation, graphemes, and full-width number groups
 together across formatting changes. Justified lines distribute inter-character
 spacing through the same geometry used for paint and caret placement.

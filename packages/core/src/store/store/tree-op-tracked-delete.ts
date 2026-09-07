@@ -96,7 +96,8 @@ export function applyDeleteTracked(
   const carriesStruckAtom = (node: OoxmlNode): boolean =>
     node.kind !== 'textValue' && contentOf(node).some((child) => struck.has(child.id));
 
-  const strike = (nodes: readonly OoxmlNode[]): OoxmlNode => {
+  let exceedsDepth = false;
+  const strike = (nodes: readonly OoxmlNode[], depth: number): OoxmlNode => {
     // A JOINED deletion is this transaction's strike too, though it minted nothing — a
     // replacement over words abutting a strike from a moment ago belongs after all of them.
     // Recorded HERE rather than beside the join, because a range covering only this author's
@@ -105,7 +106,15 @@ export function applyDeleteTracked(
     // them.
     const id = revisionId();
     revisionIds?.wrote(revisionKey(id, revision.author, attribution.date));
-    return build(mint(), 'revisionDelete', 'del', revisionAttributes(id, attribution), nodes);
+    const wrapper = build(
+      mint(),
+      'revisionDelete',
+      'del',
+      revisionAttributes(id, attribution),
+      nodes
+    );
+    if (nextInlineContainerDepth(wrapper, depth) >= MAX_INLINE_CONTAINER_DEPTH) exceedsDepth = true;
+    return wrapper;
   };
 
   const rebuild = (
@@ -131,7 +140,7 @@ export function applyDeleteTracked(
             mint,
             node.children.map((child) =>
               child.kind === 'run' && !insideDeletion(stack)
-                ? strike([toDeleted(mint, child)])
+                ? strike([toDeleted(mint, child)], nextInlineContainerDepth(node, containerDepth))
                 : child
             )
           ),
@@ -197,7 +206,7 @@ export function applyDeleteTracked(
       if (pieces.covered) {
         // Our own pending insertion: remove rather than strike. The words were never anyone
         // else's to see, so there is no proposal to make about taking them away.
-        if (!own) out.push(strike([toDeleted(mint, pieces.covered)]));
+        if (!own) out.push(strike([toDeleted(mint, pieces.covered)], containerDepth));
       }
       if (pieces.after) out.push(pieces.after);
     }
@@ -205,6 +214,7 @@ export function applyDeleteTracked(
   };
 
   const children = mergedRevisions(mint, rebuild(paragraph.children, []));
+  if (exceedsDepth) return { ok: false, reason: 'invalid-range' };
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
 }
 

@@ -1068,6 +1068,9 @@ export function formsProtectionRefusal(
   preferredFieldId?: string
 ): TreeOpRejection | null {
   if (!enforcesFormsProtection(settings)) return null;
+  // Filling permission never grants permission to change a legacy field definition.
+  if (op.op === 'setTextFormFieldDefault' && sectionProtectsForms(part, op.paragraphId))
+    return 'locked';
   if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
   const textField = textFormFieldForEdit(part, op, preferredFieldId);
   if (

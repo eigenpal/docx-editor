@@ -42,7 +42,7 @@ describe('engine dependency integrity', () => {
     expect(manifest.devDependencies?.['@docx-editor.dev/core']).toBe('workspace:*');
   });
 
-  test('stays private and outside releases with compatible engine dependencies', () => {
+  test('stays private and outside release automation with compatible engine dependencies', () => {
     const packageName = '@docx-editor.dev/docx-to-markdown';
     expect(manifest.private).toBe(true);
     expect(manifest.publishConfig).toBeUndefined();

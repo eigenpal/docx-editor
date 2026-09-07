@@ -674,3 +674,46 @@ for (const [input, maxLength, format] of [
     expect(serializeOoxmlPart(reopened.part)).toBe(xml);
   });
 }
+
+test('forms protection blocks default metadata edits through an unlocked content control', async () => {
+  const { TreeDocumentStore } = await import('../index.ts');
+  for (const enforcement of [true, false]) {
+    const settings = readOoxmlPart(
+      `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="forms" w:enforcement="${enforcement ? '1' : '0'}"/></w:settings>`,
+      { name: '/word/settings.xml', contentType: 'application/xml' }
+    );
+    if (!settings.ok) throw new Error(settings.reason);
+    for (const unprotectedSection of [true, false]) {
+      const part = fromXml(
+        serializeOoxmlPart(fixture('smartTag', true))
+          .replace('<w:lock w:val="contentLocked"/>', '')
+          .replace(
+            '</w:body>',
+            `${unprotectedSection ? '<w:sectPr><w:formProt w:val="0"/></w:sectPr>' : ''}</w:body>`
+          )
+      );
+      const p = paragraph(part);
+      const field = textFormFieldsOf(p)[0]!;
+      const store = new TreeDocumentStore(part, { settingsPart: () => settings.part });
+      const before = serializeOoxmlPart(store.part);
+      const result = store.transact((ctx) =>
+        ctx.apply({
+          op: 'setTextFormFieldDefault',
+          paragraphId: p.id,
+          fieldNodeId: field.fieldNodeId,
+          text: 'Changed',
+          options: { type: 'regular', format: '', maxLength: 10, enabled: false },
+        })
+      );
+      expect(result.ok).toBe(!enforcement || unprotectedSection);
+      if (enforcement && !unprotectedSection) {
+        expect(serializeOoxmlPart(store.part)).toBe(before);
+      } else {
+        expect(textFormFieldsOf(paragraph(store.part))[0]).toMatchObject({
+          defaultText: 'Changed',
+          enabled: false,
+        });
+      }
+    }
+  }
+});

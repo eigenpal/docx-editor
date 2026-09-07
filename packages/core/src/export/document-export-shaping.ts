@@ -14,11 +14,11 @@ import {
 } from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
 import { HARD_MAX_AGGREGATE_FONT_BYTES } from '../layout/font-resource.ts';
-import { buildNumberingIndex } from '../layout/numbering-index.ts';
-import { resolveStoryListItems } from '../layout/list-resolve.ts';
-import { buildStyleCascadeTable } from '../layout/style-cascade.ts';
+import {
+  complexSymbolFieldFonts,
+  usedNumberingFontFamilies,
+} from '../layout/synthesized-font-families.ts';
 import { EQUATION_FONT_FAMILY } from '../layout/equation-layout.ts';
-import { hostedTextboxContents, textboxStoryListItems } from '../layout/textbox-story-layout.ts';
 import {
   createFieldParseState,
   effectiveFieldInstruction,
@@ -37,7 +37,6 @@ import { parseSymbolInstruction } from '../layout/field-symbol.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 import { noteIdOf, noteTypeOf, type NoteKind } from '../store/package/note-nodes.ts';
 import { hasLegacyFormFieldData } from '../store/package/field-nodes.ts';
-import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import {
   MAX_INLINE_CONTAINER_DEPTH,
@@ -75,7 +74,6 @@ import {
   type ExportLaidOutTextApi,
 } from './export-laid-out-text.ts';
 import { createSessionExportShaping, type SessionExportShaping } from './shared-export-shaping.ts';
-import { boundedTextContent, complexSymbolFieldFonts } from './export-inline-field-fonts.ts';
 
 export type {
   ExportDroppedEmbeddedFont,
@@ -808,82 +806,17 @@ function layoutSynthesizedFontFamilies(roots: readonly OoxmlElement[]): readonly
   return [...byFold.values()];
 }
 
-function usedNumberingFontFamilies(
-  storyRoots: readonly OoxmlElement[],
-  numberingRoot: OoxmlElement | null,
-  stylesRoot: OoxmlElement | null,
-  theme: {
-    readonly major: string | null;
-    readonly minor: string | null;
-    readonly majorEastAsia: string | null;
-    readonly minorEastAsia: string | null;
-  }
-): readonly string[] {
-  if (!numberingRoot) return [];
-  const numbering = buildNumberingIndex(numberingRoot);
-  const styles = buildStyleCascadeTable(stylesRoot, theme);
-  const byFold = new Map<string, string>();
-  for (const root of storyRoots) {
-    for (const container of storyFlowContainers(root)) {
-      const blocks = collectFlowBlocks(container.children);
-      const noteItems = (
-        items:
-          | ReadonlyMap<
-              string,
-              {
-                readonly markerStyle: {
-                  readonly fontFamily?: string | null;
-                  readonly fontFamilyEastAsia?: string | null;
-                };
-              }
-            >
-          | undefined
-      ): void => {
-        if (!items) return;
-        for (const item of items.values()) {
-          for (const candidate of [
-            item.markerStyle.fontFamily,
-            item.markerStyle.fontFamilyEastAsia,
-          ]) {
-            const family = validFontFamily(candidate ?? undefined);
-            if (family === null) continue;
-            const fold = family.toLowerCase();
-            if (!byFold.has(fold)) byFold.set(fold, family);
-          }
-        }
-      };
-      noteItems(resolveStoryListItems(blocks, numbering, styles));
-      for (const block of blocks) {
-        const hosted = hostedTextboxContents(block);
-        for (const content of hosted.contents) {
-          noteItems(textboxStoryListItems(content, numbering, styles));
-        }
+function boundedTextContent(root: OoxmlElement): string {
+  let text = '';
+  const stack = [...root.children].reverse();
+  while (stack.length > 0 && text.length <= 256) {
+    const node = stack.pop()!;
+    if (node.kind === 'textValue') text += node.value;
+    else {
+      for (let index = node.children.length - 1; index >= 0; index -= 1) {
+        stack.push(node.children[index]!);
       }
     }
   }
-  return [...byFold.values()].sort((left, right) => left.localeCompare(right));
-}
-
-function storyFlowContainers(root: OoxmlElement): readonly OoxmlElement[] {
-  if (root.localName === 'document') {
-    for (const candidate of root.children) {
-      if (candidate.kind !== 'textValue' && candidate.localName === 'body') {
-        return [candidate as OoxmlElement];
-      }
-    }
-    return [];
-  }
-  if (root.localName === 'footnotes' || root.localName === 'endnotes') {
-    const notes: OoxmlElement[] = [];
-    for (const candidate of root.children) {
-      if (
-        candidate.kind !== 'textValue' &&
-        (candidate.localName === 'footnote' || candidate.localName === 'endnote')
-      ) {
-        notes.push(candidate as OoxmlElement);
-      }
-    }
-    return notes;
-  }
-  return [root];
+  return text;
 }

@@ -405,14 +405,18 @@ function applyTrackedInsertion(
     return replacedWrapperTotal;
   };
 
-  const wrap = (properties: readonly OoxmlNode[]): OoxmlNode =>
-    build(
+  let exceedsDepth = false;
+  const wrap = (properties: readonly OoxmlNode[], depth: number): OoxmlNode => {
+    const wrapper = build(
       mint(),
       'revisionInsert',
       'ins',
       revisionAttributes(mintedInsertionId(), attribution),
       payload.nodes ? [runOf(mint, [...properties, ...payload.nodes(mint)])] : [payload.run!(mint)]
     );
+    if (nextInlineContainerDepth(wrapper, depth) >= MAX_INLINE_CONTAINER_DEPTH) exceedsDepth = true;
+    return wrapper;
+  };
 
   const rebuild = (
     nodes: readonly OoxmlNode[],
@@ -529,7 +533,7 @@ function applyTrackedInsertion(
           (holdsReplaced || (sharedTrailingOwner && node.id === trailingDestination?.holderId)) &&
           offset === cursor.offset
         ) {
-          rebuilt.push(wrap([]));
+          rebuilt.push(wrap([], nextInlineContainerDepth(node, containerDepth)));
           placed = true;
         }
         out.push({ ...node, children: rebuilt } as OoxmlNode);
@@ -551,7 +555,7 @@ function applyTrackedInsertion(
         (node.kind === 'revisionDelete' || node.kind === 'revisionMoveFrom')
       ) {
         cursor.offset = end;
-        out.push(node, wrap([]));
+        out.push(node, wrap([], containerDepth));
         placed = true;
         continue;
       }
@@ -573,11 +577,11 @@ function applyTrackedInsertion(
           deletionId(node) === replaced!.id
         ) {
           cursor.offset = end;
-          out.push(node, wrap([]));
+          out.push(node, wrap([], containerDepth));
           placed = true;
           continue;
         }
-        out.push(wrap([]));
+        out.push(wrap([], containerDepth));
         placed = true;
         cursor.offset = end;
         out.push(node);
@@ -622,12 +626,12 @@ function applyTrackedInsertion(
         }
         const properties = insertedRunProperties(mint, node);
         if (offset === start) {
-          out.push(wrap(properties), node);
+          out.push(wrap(properties, containerDepth), node);
         } else if (offset === end) {
-          out.push(node, wrap(properties));
+          out.push(node, wrap(properties, containerDepth));
         } else {
           const [head, tail] = splitRun(mint, offsets, node, offset - start);
-          out.push(head, wrap(properties), tail);
+          out.push(head, wrap(properties, containerDepth), tail);
         }
         placed = true;
         cursor.offset = end;
@@ -646,8 +650,9 @@ function applyTrackedInsertion(
     if (offset !== cursor.offset) {
       return { ok: false, reason: 'offset-out-of-range', detail: 'offset past the paragraph' };
     }
-    children = [...children, wrap([])];
+    children = [...children, wrap([], 0)];
   }
+  if (exceedsDepth) return { ok: false, reason: 'invalid-range' };
   return fromEdit(replaceChildren(part, paragraph.id, children, options), effect);
 }
 
