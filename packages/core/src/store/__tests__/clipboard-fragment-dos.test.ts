@@ -13,8 +13,22 @@
 // property an absolute ceiling lacks.
 //
 // A GROWTH RATIO IS ONLY HONEST WHERE BOTH MEASUREMENTS ARE DOMINATED BY THE WORK. The style
-// axis is: 1000 styles cost 6.2ms and 2000 cost 11.7ms, so doubling the input doubles the
-// time and the constant overhead is already noise. That ratio is the same on any machine.
+// axis is: 1000 styles cost ~5ms and 8000 cost ~55ms, so the constant overhead is already
+// noise at the small end.
+//
+// THE RATIO IS NOT EXACTLY THE SIZE STEP, EVEN FOR LINEAR WORK. The merge does the same work
+// per style at every size (a profile is flat: tree walks, id rewrites, one append), but the
+// wall-clock cost per style still rises with the size of the tree it walks, because a bigger
+// working set spills further down the cache hierarchy. Measured here, best of 5 runs:
+//
+//   n        500    1000   2000   4000   8000   16000  32000
+//   us/style 4.6    5.0    5.2    6.1    6.9    7.5    7.6     <- flattens, never doubles
+//
+// So an 8x step reads about 11x on this machine, and it read 26.5x once on a shared CI runner
+// with the rest of the test pool competing for the same cache and memory bandwidth — the same
+// slope, steeper. That slope belongs to the runner, not the merge, so the guard has to
+// tolerate it; what it must still catch is quadratic work, which lands at 64x before any of
+// that and only climbs from there.
 //
 // The MEDIA axis is not, and it is worth writing down why, because the obvious guard is wrong.
 // Merging 250 images costs ~38ms and merging 375 costs ~37.7ms — the small end is essentially
@@ -84,13 +98,15 @@ const SIZE_FACTOR = 8;
 /**
  * How much growth still counts as linear.
  *
- * Three times the size factor, which sits well clear of both ends: linear work lands at about
- * `SIZE_FACTOR` and quadratic at about `SIZE_FACTOR ** 2` (64), so there is 3x of headroom
- * above the shape that must pass and 2.7x of margin below the shape that must fail. The gap is
- * that wide because the small measurement carries a fixed setup cost the large one amortises,
- * which deflates the ratio — in the permissive direction, never the flaky one.
+ * Four times the size factor, which sits clear of both ends: linear work lands at about
+ * `SIZE_FACTOR` and quadratic at about `SIZE_FACTOR ** 2` (64), so there is 4x of headroom
+ * above the shape that must pass and 2x of margin below the shape that must fail. The
+ * headroom is that wide because linear work does not read as exactly `SIZE_FACTOR` in wall
+ * time — see the file header: the per-style cost rises with the working set, ~11x locally
+ * and 26.5x once on a loaded shared runner, for a merge whose profile is flat. Three times
+ * the size factor (24) was under that tail; a quadratic merge is not under this one.
  */
-const NEAR_LINEAR_GROWTH = SIZE_FACTOR * 3;
+const NEAR_LINEAR_GROWTH = SIZE_FACTOR * 4;
 
 /**
  * A backstop no plausible machine reaches.
@@ -107,14 +123,21 @@ const ABSURD_MS = 60_000;
  *
  * The minimum, not the mean: noise on a shared runner only ever adds time, so the best run is
  * the closest estimate of what the code costs and the outliers are exactly what should be
- * discarded. Two runs is enough to drop a single stall, and these merges are slow enough that
- * a third would cost more suite time than it buys. `prepare` builds the inputs and returns the
- * call to time, so fixture construction stays outside the measurement.
+ * discarded. Five runs, because the ratio fails only when EVERY large run is slow while the
+ * small ones are not, and the only merge measured this way tops out near 60ms, so the extra
+ * runs cost a fraction of a second. The first run also warms the JIT, which otherwise lands
+ * on the small measurement and deflates the ratio. `prepare` builds the inputs and returns
+ * the call to time, so fixture construction stays outside the measurement.
+ *
+ * A full collection precedes each timed run: the garbage left by fixture construction and
+ * the previous run is otherwise collected INSIDE the measurement, and the large run, which
+ * allocates the most, inherits the most.
  */
-function fastestMs(prepare: () => () => void, repeats = 2): number {
+function fastestMs(prepare: () => () => void, repeats = 5): number {
   let best = Number.POSITIVE_INFINITY;
   for (let attempt = 0; attempt < repeats; attempt += 1) {
     const run = prepare();
+    Bun.gc(true);
     const start = performance.now();
     run();
     best = Math.min(best, performance.now() - start);

@@ -1,16 +1,23 @@
 # @docx-editor.dev/fonts
 
+## 2.15.1
+
+### Patch changes
+
+- 1acd366: Fix import crashes in webpack and Turbopack builds. Bundled `FONT_ASSET_ROOT` now
+  returns a non-`file:` URL, including in Electron and pages opened from disk. Fix font loading
+  when bundlers emit relative paths or install paths contain parentheses.
+
 ## 2.15.0
 
-### Minor Changes
+### Minor changes
 
-- 0d81033: Export `FONT_ASSET_ROOT` so hosts can confine packaged-font reads to the fonts package without guessing its install path.
+- 0d81033: Export `FONT_ASSET_ROOT` to restrict font reads to the package directory.
 
-### Patch Changes
+### Patch changes
 
-- 5284df5: Preserve one literal asset URL per packaged font face in the ESM browser build so Next.js with
-  Turbopack, Vite, and webpack resolve every requested filename instead of collapsing dynamic URLs
-  to one font. Keep the CommonJS build resolving the same packaged files in Node.
+- 5284df5: Fix packaged font URLs in Turbopack, Vite, and webpack builds. The CommonJS build
+  continues to use local font files in Node.js.
 
 ## 2.14.1
 

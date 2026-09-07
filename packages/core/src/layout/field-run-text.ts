@@ -6,6 +6,7 @@
 // by construction.
 
 import { hardBreakText, type OoxmlNode, type OoxmlProperty } from '@docx-editor.dev/core/store';
+import { runTextOutlineProperty } from './run-text-outline.ts';
 
 /** Optional per-run merge of inherited + direct `rPr` (character styles, defaults). */
 export type RunPropertyCascader = (
@@ -33,6 +34,11 @@ export function propertiesOfRunContainer(container: OoxmlNode | undefined): Ooxm
   const props: OoxmlProperty[] = [];
   for (const child of container.children) {
     if (child.kind === 'textValue') continue;
+    if (child.localName === 'textOutline') {
+      const outline = runTextOutlineProperty(child);
+      if (outline) props.push(outline);
+      continue;
+    }
     const attributes: Record<string, string> = {};
     for (const entry of child.attributes) attributes[entry.localName] = entry.value;
     const hasAttributes = Object.keys(attributes).length > 0;

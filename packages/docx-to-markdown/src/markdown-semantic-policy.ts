@@ -92,6 +92,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     horizontalScalePercent: 'layout-only',
     kerningMinPt: 'layout-only',
     hidden: 'layout-only',
+    textOutline: 'layout-only',
   } satisfies Record<keyof ResolvedRunStyle, MarkdownFieldPolicy>,
   link: {
     id: 'layout-only',
@@ -142,6 +143,9 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     tabStops: 'layout-only',
     lines: 'represented',
     box: 'layout-only',
+    clipToBox: 'layout-only',
+    outOfFlow: 'layout-only',
+    positionedFrame: 'layout-only',
   } satisfies Record<keyof ParagraphFragmentRecord, MarkdownFieldPolicy>,
   listMarker: {
     text: 'explicitly-omitted',
@@ -161,6 +165,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     columnEdges: 'represented',
     rows: 'represented',
     box: 'layout-only',
+    floatingWrap: 'layout-only',
   } satisfies Record<keyof TableFragmentRecord, MarkdownFieldPolicy>,
   tableRow: {
     id: 'represented',

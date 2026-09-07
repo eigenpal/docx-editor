@@ -267,9 +267,11 @@ function computeRevisionItemsOf(
       if (kind !== 'structural' && existing.revisionKind === 'structural') {
         existing.revisionKind = kind;
       }
-      // An address holding BOTH an insertion and a deletion is one edit that replaced text:
-      // this engine writes a replacement that way on purpose, so the halves cannot drift
-      // apart and one Accept resolves them together.
+      // An address holding BOTH an insertion and a deletion is one edit that replaced text.
+      // Note that the key above carries the ELEMENT NAME, so `w:ins` and `w:del` never reach
+      // this together however they are numbered: a replacement is recognised by ADJACENCY, in
+      // `pairReplacements` below, which is the only thing that works for a file this engine
+      // did not write. This stands for the kinds that do share one element name.
       if (
         (kind === 'insert' && existing.revisionKind === 'delete') ||
         (kind === 'delete' && existing.revisionKind === 'insert') ||
@@ -431,9 +433,10 @@ function pairReplacements(
             id: `replace-${deletion.id}-${insertion.id}`,
             revisionKind: 'replace',
             ...(date === undefined ? {} : { date }),
-            // DEDUPED: when this engine wrote the replacement both halves share one identity,
-            // and applying the same `acceptRevision` twice in one transaction refuses the second
-            // — which refused the whole thing and left the replacement unresolved.
+            // DEDUPED: a replacement this engine wrote before it numbered the halves
+            // separately (#691) shares one identity across both, and applying the same
+            // `acceptRevision` twice in one transaction refuses the second — which refused the
+            // whole thing and left the replacement unresolved.
             addresses: dedupeAddresses([...deletion.addresses, ...insertion.addresses]),
             text: insertion.text,
             replacedText: deletion.text,

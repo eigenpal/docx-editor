@@ -5,7 +5,7 @@
 // memoized per revision, with no knowledge of stops or selections.
 
 import { lineSegments } from './line-segments.ts';
-import type { LineRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
+import type { LayoutBox, LineRecord, PageRecord, SemanticLayout } from './semantic-records.ts';
 import { lineAtPosition, paragraphFragmentsOf } from './semantic-records.ts';
 import type { SemanticPosition } from './semantic-interaction.ts';
 
@@ -21,6 +21,7 @@ import type { SemanticPosition } from './semantic-interaction.ts';
 export interface PlacedLine {
   readonly line: LineRecord;
   readonly pageIndex: number;
+  readonly clipBox?: LayoutBox;
 }
 
 const paragraphLinesCache = new WeakMap<SemanticLayout, Map<string, PlacedLine[]>>();
@@ -60,9 +61,9 @@ function pageLines(page: PageRecord): ReadonlyMap<string, readonly PlacedLine[]>
    * A merged line belongs to two paragraphs, and a caret walking either of them has to find
    * it. An ordinary line has one segment and lands in exactly the one bucket it always did.
    */
-  const indexLine = (line: LineRecord, pageIndex: number): void => {
+  const indexLine = (line: LineRecord, pageIndex: number, clipBox?: LayoutBox): void => {
     for (const segment of lineSegments(line)) {
-      const placed = { line, pageIndex };
+      const placed = { line, pageIndex, ...(clipBox ? { clipBox } : {}) };
       const entry = index.get(segment.paragraphId);
       if (entry) entry.push(placed);
       else index.set(segment.paragraphId, [placed]);
@@ -77,7 +78,8 @@ function pageLines(page: PageRecord): ReadonlyMap<string, readonly PlacedLine[]>
     ): void => {
       for (const block of blocks) {
         if (block.kind === 'paragraph') {
-          for (const line of block.lines) indexLine(line, pageIndex);
+          for (const line of block.lines)
+            indexLine(line, pageIndex, block.clipToBox ? block.box : undefined);
           continue;
         }
         for (const row of block.rows) {
@@ -90,7 +92,8 @@ function pageLines(page: PageRecord): ReadonlyMap<string, readonly PlacedLine[]>
   };
   // Body first — primary story for caret stops built elsewhere via paragraphFragmentsOf.
   for (const fragment of paragraphFragmentsOf(page)) {
-    for (const line of fragment.lines) indexLine(line, page.index);
+    for (const line of fragment.lines)
+      indexLine(line, page.index, fragment.clipToBox ? fragment.box : undefined);
   }
   // Furniture paragraphs share this index so formatting / paragraphTextFromLayout can
   // resolve an open header/footer selection. documentOrder and caretStops stay body-only.

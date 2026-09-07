@@ -22,18 +22,15 @@
 //   evaluating `w:tblLook` — a first-row face usually does render.
 // - Only paragraphs, runs and tables that contain a GLYPH-BEARING run count — literal
 //   `w:t`/`w:delText` text or a mark element the run's face paints (`w:footnoteRef`,
-//   `w:sym`, `w:tab`, …). An empty paragraph's mark metrics do move layout, but the
-//   notice's contract is "text renders in the wrong face".
+//   `w:tab`, …). An empty paragraph's mark metrics do move layout, but the notice's
+//   contract is "text renders in the wrong face". A `w:sym` naming a face of its own is
+//   the one mark that does NOT count, because layout paints it in that face instead of the
+//   run's — see `GLYPH_MARKS` below.
 
 import type { OoxmlElement, OoxmlNode } from './ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
 import type { DocumentThemeFonts } from './theme-font-scheme.ts';
-import {
-  eastAsiaFamilyFromRFonts,
-  familyFromRFonts,
-  validFontFamily,
-  validStyleId,
-} from './run-defaults.ts';
+import { eastAsiaFamilyFromRFonts, familyFromRFonts, validStyleId } from './run-defaults.ts';
 
 /** `basedOn` walk cap, matching `run-defaults`. */
 const CHAIN_CAP = 16;
@@ -129,13 +126,29 @@ function addFamily(families: Map<string, string>, family: string | null): void {
 
 /**
  * Run children that paint a glyph in the RUN's face without carrying text: note reference
- * marks, symbol runs (their `w:font` face is a pre-existing `collectDocumentFonts` gap,
- * but the run's own `w:rFonts`/`w:rStyle` still resolve the surrounding face), tabs
- * (leader dots measure in the run face) and hyphens. `w:br` paints nothing;
+ * marks, tabs (leader dots measure in the run face) and hyphens. `w:br` paints nothing;
  * `w:instrText` is never painted — the field RESULT runs are.
+ *
+ * `w:sym` is NOT one of them when it names a face of its own. `layout/symbol-run.ts`
+ * overrides the run's `rFonts` with `w:sym/@w:font`, so the run's own face draws nothing
+ * there — and Word writes that face on the run as well (a checkbox content control is
+ * `w:rFonts ascii="MS Gothic"` beside `w:sym w:font="MS Gothic"`), which would put a
+ * symbol face in this answer through the back door. It is ONE glyph whose code point
+ * `layout/symbol-encoding.ts` resolves to a real Unicode character wherever it can, so the
+ * fallback stack draws the character the author meant, and a notice naming the face would
+ * report a fidelity loss the reader cannot see.
+ *
+ * A code point that table cannot map does paint as a tofu box without the authored face —
+ * but the answer to that is supplying the face, not a notice. This module's contract is
+ * text rendering in the wrong face, and the notice can only name families a font
+ * configuration could cover. So the faces a resolver should TRY for a symbol are collected
+ * separately (`collectSymbolFontFamilies`, and the export lane's own walk), and the editor
+ * asks for them.
+ *
+ * A `w:sym` with no usable `@w:font` is the other case: nothing overrides the run, so the
+ * glyph really does paint in the run's face, and the run counts like any other.
  */
 const GLYPH_MARKS: ReadonlySet<string> = new Set([
-  'sym',
   'tab',
   'noBreakHyphen',
   'softHyphen',
@@ -146,15 +159,51 @@ const GLYPH_MARKS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Whether a `w:r` puts a glyph on the page: a non-empty `w:t`, a `w:delText` (tracked
- * deletions render in markup view — over-reporting in final view, never hiding), or a
- * glyph mark element.
+ * `layout/symbol-run.ts`'s `MAX_SYMBOL_FONT_LENGTH`, kept by value: the store lane does not
+ * import layout, and this question is about what layout will DO, not what a name may be.
+ *
+ * Exported so a test can pin the two together. A silent drift would make a name in the gap
+ * an override to one lane and not the other, and the run's real face would then be wrongly
+ * kept in this answer or wrongly dropped from it, with nothing failing.
+ */
+export const MAX_SYMBOL_FONT_LENGTH = 128;
+
+/**
+ * Whether a `w:sym` replaces the run's face with one of its own.
+ *
+ * Answered by layout's rule, not this module's name validation. `symbolRunStyle` overrides
+ * `rFonts` whenever `@w:font` is present and within its length bound — a vertical-writing
+ * `@MS Gothic`, a name too long for a CSS sink, any of them. Asking `validFontFamily` here
+ * instead would answer "no override" for a name layout does apply, and the run's own face
+ * would enter this answer for a glyph that never paints in it.
+ *
+ * The attribute is read the way `symbol-run.ts` reads it — the WML namespace or none, since
+ * unprefixed attributes on WML elements are common in authored packages — so a
+ * foreign-namespaced `font`, which layout ignores, does not count as an override either.
+ */
+function symbolOverridesRunFace(sym: OoxmlElement): boolean {
+  for (const attribute of sym.attributes) {
+    if (attribute.localName !== 'font') continue;
+    if (attribute.namespaceUri !== WML_NAMESPACE_URI && attribute.namespaceUri !== '') continue;
+    return attribute.value.length > 0 && attribute.value.length <= MAX_SYMBOL_FONT_LENGTH;
+  }
+  return false;
+}
+
+/**
+ * Whether a `w:r` puts a glyph on the page IN ITS OWN FACE: a non-empty `w:t`, a
+ * `w:delText` (tracked deletions render in markup view — over-reporting in final view,
+ * never hiding), a glyph mark element, or a `w:sym` that names no face of its own.
  */
 function runRendersGlyphs(run: OoxmlElement, projectedGlyphIds?: ReadonlySet<string>): boolean {
   if (projectedGlyphIds?.has(run.id)) return true;
   for (const child of run.children as readonly OoxmlNode[]) {
     if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
     if (GLYPH_MARKS.has(child.localName)) return true;
+    if (child.localName === 'sym') {
+      if (!symbolOverridesRunFace(child)) return true;
+      continue;
+    }
     if (child.localName !== 't' && child.localName !== 'delText') continue;
     for (const grand of child.children as readonly OoxmlNode[]) {
       if (!isElement(grand) && grand.value.length > 0) return true;
@@ -230,12 +279,6 @@ function applyRun(
     addFamily(summary.families, familyFromRFonts(rFonts, themeFonts));
     if (runHasEastAsianText(run)) {
       addFamily(summary.families, eastAsiaFamilyFromRFonts(rFonts, themeFonts));
-    }
-  }
-  for (const child of run.children as readonly OoxmlNode[]) {
-    if (!isElement(child) || child.namespaceUri !== WML_NAMESPACE_URI) continue;
-    if (child.localName === 'sym') {
-      addFamily(summary.families, validFontFamily(attributeValue(child, 'font')));
     }
   }
   const rStyle = rPr ? childElement(rPr, 'rStyle') : undefined;

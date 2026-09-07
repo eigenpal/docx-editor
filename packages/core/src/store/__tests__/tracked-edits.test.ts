@@ -6,40 +6,8 @@
 // the cases where a naive implementation still produces valid XML that says the wrong thing.
 
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, serializeOoxmlPart, type OoxmlPart } from '../package/ooxml-tree.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
-import type { TreeDocOp } from '../store/tree-op-validate.ts';
-
-const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-const ADA = { author: 'Ada Lovelace', date: '2026-01-02T03:04:05Z' };
-
-function part(body: string): OoxmlPart {
-  const read = readOoxmlPart(`<w:document xmlns:w="${W}"><w:body>${body}</w:body></w:document>`, {
-    name: '/word/document.xml',
-    contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml',
-  });
-  if (!read.ok) throw new Error(`fixture did not parse: ${read.reason}`);
-  return read.part;
-}
-
-/** The only paragraph in the fixture. */
-function paragraphId(source: OoxmlPart): string {
-  const body = source.root.children.find((child) => child.kind !== 'textValue');
-  const found = body && body.kind !== 'textValue' ? body.children[0] : undefined;
-  if (!found) throw new Error('no paragraph');
-  return found.id;
-}
-
-function apply(source: OoxmlPart, op: TreeDocOp): OoxmlPart {
-  const result = applyTreeOp(source, op);
-  if (!result.ok) throw new Error(`op refused: ${result.reason} ${result.detail ?? ''}`);
-  return result.part;
-}
-
-/** Serialized, with the noise a diff does not care about collapsed. */
-function xml(source: OoxmlPart): string {
-  return serializeOoxmlPart(source).replace(/^<\?xml[^>]*\?>/, '');
-}
+import { ADA, apply, paragraphId, part, xml } from './tracked-edit-fixture.ts';
 
 describe('a tracked insertion', () => {
   test('splits the run and lands between the halves as w:ins', () => {
@@ -193,62 +161,6 @@ describe('a tracked insertion', () => {
     expect(out.match(/<w:ins\b/g)?.length).toBe(2);
     expect(out).toMatch(/w:author="Ada Lovelace"/);
     expect(out).toMatch(/w:author="Alan Turing"/);
-  });
-});
-
-describe('a replacement', () => {
-  test('the halves share one revision identity and read in Word order', () => {
-    // Typing over a selection: the delete lands first, then the insert, in one transaction.
-    let current = part('<w:p><w:r><w:t>alpha beta</w:t></w:r></w:p>');
-    const id = paragraphId(current);
-    current = apply(current, {
-      op: 'deleteText',
-      paragraphId: id,
-      start: 0,
-      end: 5,
-      revision: ADA,
-    });
-    current = apply(current, {
-      op: 'insertText',
-      paragraphId: id,
-      offset: 0,
-      text: 'omega',
-      // The same instant, because it is the same edit — the surface stamps one timestamp per
-      // transaction. A month apart would NOT join, and must not: see the next test.
-      revision: ADA,
-    });
-    const out = xml(current);
-    // Struck text first, then what takes its place — Word's arrangement, and the order that
-    // reads as a sentence. Before it, the replacement would read "omega alpha".
-    expect(out).toMatch(
-      /<w:del[^>]*><w:r><w:delText>alpha<\/w:delText><\/w:r><\/w:del><w:ins[^>]*><w:r><w:t>omega<\/w:t><\/w:r><\/w:ins>/
-    );
-    // ONE identity across both halves: the insert adopted the deletion's id AND its date,
-    // which is what makes accept/reject resolve the pair together.
-    const ids = [...out.matchAll(/<w:(?:ins|del)[^>]*w:id="(\d+)"/g)].map((match) => match[1]);
-    expect(new Set(ids).size).toBe(1);
-    const dates = [...out.matchAll(/<w:(?:ins|del)[^>]*w:date="([^"]+)"/g)].map((m) => m[1]);
-    expect(new Set(dates).size).toBe(1);
-  });
-
-  test("an OLD deletion by the same author is not absorbed into today's edit", () => {
-    const before = part(
-      `<w:p><w:del w:id="5" w:author="Ada Lovelace" w:date="2020-01-01T00:00:00Z">` +
-        `<w:r><w:delText>old</w:delText></w:r></w:del><w:r><w:t>new</w:t></w:r></w:p>`
-    );
-    const after = apply(before, {
-      op: 'deleteText',
-      paragraphId: paragraphId(before),
-      start: 3,
-      end: 6,
-      revision: ADA,
-    });
-    const out = xml(after);
-    // Two decisions. Joining them would backdate today's edit into a revision from 2020 and
-    // make rejecting one reject the other.
-    expect(out.match(/<w:del\b/g)?.length).toBe(2);
-    expect(out).toContain('w:date="2020-01-01T00:00:00Z"');
-    expect(out).toContain(`w:date="${ADA.date}"`);
   });
 });
 

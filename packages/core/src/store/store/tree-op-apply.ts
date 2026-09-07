@@ -29,8 +29,8 @@ import {
 import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
 import { resolveRevisions } from './tree-op-revisions.ts';
 import { applyInsertCommentMarker } from './tree-op-comments.ts';
+import { applyDeleteTracked } from './tree-op-tracked-delete.ts';
 import {
-  applyDeleteTracked,
   applyInsertTracked,
   applyInsertTrackedElement,
   applyInsertTrackedElements,

@@ -1509,6 +1509,7 @@ export interface PaginatedSurface {
         readonly commitGuard?: () => boolean;
         readonly expectedPackageRevision: number;
     }): Promise<ImageIntentResult>;
+    replacementLanding(paragraphId: string, start: number, end: number): number | null;
     retainedSelection(): SemanticSelection | null;
     retainSelection(): SelectionPin;
     revealPage(pageIndex: number, options?: RevealOptions): boolean;
@@ -1526,6 +1527,7 @@ export interface PaginatedSurface {
     sectionProperties(): SectionProperties;
     sectionPropertiesAt(paragraphId: string): SectionProperties;
     selectAll(): void;
+    selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
     selectedText(): string;
     // (undocumented)
     readonly session: TreeDocxSessionView;
@@ -2421,6 +2423,7 @@ export interface TreeDocxSessionView extends HeadlessDocumentView {
     // (undocumented)
     subscribe(onChange: (change: TreeModelChange) => void): () => void;
     sweepCustomNodePayloads(namespaces: readonly string[]): CustomNodeSweepOutcome;
+    symbolFontFamilies(): readonly string[];
     trackingSettings(): DocumentTrackingSettings;
     undo(): SelectionMark | null;
 }

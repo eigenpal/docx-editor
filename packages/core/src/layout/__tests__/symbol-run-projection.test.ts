@@ -15,6 +15,7 @@ import {
 } from '@docx-editor.dev/core/store';
 import { piecesOfParagraph } from '../field-projection.ts';
 import { symbolGlyphOf } from '../symbol-run.ts';
+import { styleForFontSlot } from '../script-itemization.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -85,6 +86,23 @@ describe('a w:sym between two text nodes', () => {
 });
 
 describe('symbol-font encodings', () => {
+  test('an explicit font survives neighboring Han while an inherited font follows its slot', () => {
+    const props = '<w:rPr><w:rFonts w:ascii="Arial" w:eastAsia="SimSun"/></w:rPr>';
+    for (const explicit of [false, true]) {
+      const glyph = `<w:sym ${explicit ? 'w:font="Segoe UI Symbol" ' : ''}w:char="2713"/>`;
+      for (const leading of [false, true]) {
+        const han = '<w:t>中</w:t>';
+        const pieces = project(
+          `<w:p><w:r>${props}${leading ? glyph + han : han + glyph}</w:r></w:p>`
+        );
+        const symbol = pieces.find((piece) => piece.text === '✓')!;
+        expect(styleForFontSlot(symbol.style, symbol.fontSlot).fontFamily).toBe(
+          explicit ? 'Segoe UI Symbol' : 'SimSun'
+        );
+      }
+    }
+  });
+
   test('a bare byte on a symbol font maps like its 0xF000-page twin', () => {
     // Word accepts both `w:char="F046"` and `w:char="46"` for the same Wingdings glyph.
     const bare = project('<w:p><w:r><w:sym w:font="Wingdings" w:char="6C"/></w:r></w:p>');

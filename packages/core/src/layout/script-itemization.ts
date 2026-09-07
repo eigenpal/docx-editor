@@ -1,6 +1,8 @@
 import type { BidiEmbeddingLevels } from './bidi.ts';
 import type { TextDirection } from './shaped-run.ts';
 import { withFontFamily, type ResolvedRunStyle } from './run-style.ts';
+import { isEastAsiaHintSymbol } from './east-asia-symbol-hint.ts';
+import { segmentGraphemes } from './grapheme.ts';
 
 /**
  * Which `w:rFonts` slot a character resolves its face through.
@@ -314,7 +316,10 @@ const pureAscii = (text: string): boolean => {
  * whose docDefaults author an East Asian face pay two compares per character, not a
  * classifier call.
  */
-export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly SegmentSlotRange[] {
+export function eastAsiaRunsOfSegments(
+  segments: readonly string[],
+  hintedSegments: readonly boolean[] = []
+): readonly SegmentSlotRange[] {
   const out: SegmentSlotRange[] = [];
   const addEastAsia = (segment: number, from: number, to: number): void => {
     const previous = out.at(-1);
@@ -327,6 +332,19 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
 
   /** Strongly classified text seen so far, or null while only Common text has streamed by. */
   let precedingStrong: Exclude<SlotClass, 'common'> | null = null;
+  // Segment only when the hint can change a face. Joining once keeps clusters intact
+  // across w:t boundaries, without adding segmentation to ordinary Latin/CJK paragraphs.
+  const needsGraphemes = segments.some((text, index) => {
+    if (!hintedSegments[index] || pureAscii(text)) return false;
+    for (const character of text) {
+      if (isEastAsiaHintSymbol(character.codePointAt(0)!)) return true;
+    }
+    return false;
+  });
+  const graphemes = needsGraphemes ? segmentGraphemes(segments.join('')) : null;
+  let graphemeIndex = 0;
+  let segmentOffset = 0;
+  let clusterHinted = false;
   /** Leading Common units waiting for the FOLLOWING strong item; `ascii` blocks eastAsia. */
   const pending: { segment: number; from: number; to: number; ascii: boolean }[] = [];
   const resolvePending = (strong: Exclude<SlotClass, 'common'>): void => {
@@ -338,7 +356,9 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
 
   for (let segment = 0; segment < segments.length; segment += 1) {
     const text = segments[segment]!;
-    if (pureAscii(text)) {
+    const offset = segmentOffset;
+    segmentOffset += text.length;
+    if (!graphemes && pureAscii(text)) {
       // Never eastAsia, so only the strong/Common distinction matters: any alphanumeric
       // is a strong Latin item; pure punctuation and whitespace stay transparent.
       if (/[0-9A-Za-z]/.test(text)) {
@@ -348,8 +368,33 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
       continue;
     }
     for (let from = 0; from < text.length; ) {
-      const codePoint = text.codePointAt(from)!;
-      const to = from + (codePoint > 0xffff ? 2 : 1);
+      let codePoint = text.codePointAt(from)!;
+      let to = from + (codePoint > 0xffff ? 2 : 1);
+      let hinted = false;
+      if (graphemes) {
+        const position = offset + from;
+        while (graphemes[graphemeIndex]!.utf16To <= position) graphemeIndex += 1;
+        const cluster = graphemes[graphemeIndex]!;
+        codePoint = cluster.text.codePointAt(0)!;
+        to = Math.min(text.length, cluster.utf16To - offset);
+        if (position === cluster.utf16From) {
+          clusterHinted = !!hintedSegments[segment] && isEastAsiaHintSymbol(codePoint);
+        }
+        hinted = clusterHinted;
+      }
+      // The base selects the face for its whole cluster. Marks and ZWJ components
+      // cannot select another face, even when a cluster crosses a text segment.
+      // The hint changes the face, but preserves the base's script strength.
+      if (hinted) {
+        const underlyingClass = slotClassOf(codePoint);
+        if (underlyingClass !== 'common') {
+          resolvePending(underlyingClass);
+          precedingStrong = underlyingClass;
+        }
+        addEastAsia(segment, from, to);
+        from = to;
+        continue;
+      }
       const slotClass = slotClassOf(codePoint);
       if (slotClass === 'common') {
         if (precedingStrong === null) {
@@ -367,5 +412,21 @@ export function eastAsiaRunsOfSegments(segments: readonly string[]): readonly Se
   }
   // A sequence of nothing but Common text has no strong item to inherit from on either
   // side; it stays in the base slots, exactly as it did before slot resolution existed.
-  return out;
+  //
+  // Leading Common units resolve only once the strong item AFTER them arrives, and a hinted
+  // symbol between the two is emitted first, so the list can be out of document order.
+  // The consumer slices pieces with a monotonic cursor, so order and merge here.
+  if (out.length < 2) return out;
+  out.sort((a, b) => a.segment - b.segment || a.from - b.from);
+  const merged: { segment: number; from: number; to: number }[] = [out[0]!];
+  for (let index = 1; index < out.length; index += 1) {
+    const range = out[index]!;
+    const previous = merged[merged.length - 1]!;
+    if (previous.segment === range.segment && range.from <= previous.to) {
+      if (range.to > previous.to) merged[merged.length - 1] = { ...previous, to: range.to };
+    } else {
+      merged.push(range);
+    }
+  }
+  return merged;
 }

@@ -4,6 +4,8 @@
 // projection-only — every authored branch stays in the tree on save.
 
 import { sanitizeHref } from './sinks.ts';
+import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
+import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
 import {
@@ -44,6 +46,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from './ooxml-tree.ts';
+import { readEffectExtentFromNode, readExtent } from './drawing-anchor-extent.ts';
 import type { OoxmlPackage } from './ooxml-package.ts';
 import { createPackageShapeThemeResolvers } from './theme-color-resolution.ts';
 import {
@@ -214,7 +217,7 @@ export interface DrawingProjection {
   readonly vectorShape: VectorShapeProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
   readonly locks: DrawingLocks;
-  readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
+  readonly effects: DrawingImageEffects;
   readonly compatibilityBranchNodeId: string | null;
   readonly diagnostics: readonly DrawingDiagnostic[];
 }
@@ -750,28 +753,6 @@ function readDistances(
   });
 }
 
-function readEffectExtentFromNode(
-  node: OoxmlElement | null,
-  compatibilityMode: boolean
-): Readonly<{ top: number; right: number; bottom: number; left: number }> | null {
-  if (!node) return null;
-  const effect =
-    findDirectKind(node.children, 'drawingEffectExtent') ??
-    (compatibilityMode
-      ? findDirectChild(node.children, {
-          namespaceUri: WP_NAMESPACE_URI,
-          localName: 'effectExtent',
-        })
-      : null);
-  if (!effect) return null;
-  return Object.freeze({
-    left: parseEmu(schemaAttributeValue(effect.attributes, 'l'), false) ?? 0,
-    top: parseEmu(schemaAttributeValue(effect.attributes, 't'), false) ?? 0,
-    right: parseEmu(schemaAttributeValue(effect.attributes, 'r'), false) ?? 0,
-    bottom: parseEmu(schemaAttributeValue(effect.attributes, 'b'), false) ?? 0,
-  });
-}
-
 function readEffectExtent(
   anchor: OoxmlElement,
   wrapElement: OoxmlElement | null,
@@ -785,22 +766,6 @@ function readEffectExtent(
   const fromAnchor = readEffectExtentFromNode(anchor, compatibilityMode);
   if (fromAnchor) return fromAnchor;
   return EMPTY_EDGES;
-}
-
-function readExtent(
-  anchor: OoxmlElement,
-  compatibilityMode: boolean
-): Readonly<{ cx: number; cy: number }> | null {
-  const extent =
-    findDirectKind(anchor.children, 'drawingExtent') ??
-    (compatibilityMode
-      ? findDirectChild(anchor.children, { namespaceUri: WP_NAMESPACE_URI, localName: 'extent' })
-      : null);
-  if (!extent) return null;
-  const cx = parseEmu(schemaAttributeValue(extent.attributes, 'cx'));
-  const cy = parseEmu(schemaAttributeValue(extent.attributes, 'cy'));
-  if (cx === null || cy === null) return null;
-  return Object.freeze({ cx, cy });
 }
 
 function readPositionAxis<H extends string>(
@@ -1076,34 +1041,18 @@ function readDocPrMetadata(
   });
 }
 
-function parseLumPercent(value: string | undefined): number | null {
-  if (value === undefined || !/^-?\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed)) return null;
-  return parsed / 1000;
-}
-
-function readBlipEffects(
-  blip: OoxmlElement
-): Readonly<{ grayscale: boolean; brightness: number; contrast: number }> {
-  let grayscale = false;
-  let brightness = 0;
-  let contrast = 0;
-  for (const child of blip.children) {
-    if (!isElement(child) || child.kind !== 'generic') continue;
-    if (child.namespaceUri !== DRAWINGML_MAIN_NAMESPACE_URI) continue;
-    if (child.localName === 'grayscl') {
-      grayscale = true;
-      continue;
-    }
-    if (child.localName === 'lum') {
-      const bright = parseLumPercent(schemaAttributeValue(child.attributes, 'bright'));
-      const contrastRaw = parseLumPercent(schemaAttributeValue(child.attributes, 'contrast'));
-      if (bright !== null) brightness = bright;
-      if (contrastRaw !== null) contrast = contrastRaw;
-    }
-  }
-  return Object.freeze({ grayscale, brightness, contrast });
+/**
+ * Whether an anchor's own metadata keeps its drawing off the page.
+ *
+ * Layout skips a hidden drawing outright, and hit testing rejects a zero-sized one, so a
+ * derivation that lists drawings for SELECTION must apply the same two rules. Without them it
+ * reports a drawing that no page paints and no overlay can resolve. A missing `wp:extent`
+ * demotes the drawing to generic at read time, so it never reaches here.
+ */
+export function anchorHidesDrawing(anchor: OoxmlElement, compatibilityMode: boolean): boolean {
+  if (readDocPrMetadata(anchor, compatibilityMode).hidden) return true;
+  const extent = readExtent(anchor, compatibilityMode);
+  return extent !== null && (extent.cx <= 0 || extent.cy <= 0);
 }
 
 function projectPicture(
@@ -1115,7 +1064,7 @@ function projectPicture(
 ): {
   readonly picture: PictureProjection | null;
   readonly relationshipId: string | null;
-  readonly effects: Readonly<{ grayscale: boolean; brightness: number; contrast: number }>;
+  readonly effects: DrawingImageEffects;
   readonly diagnostic: DrawingDiagnostic | null;
 } {
   if (!visitNode(state, ctx.limits)) {
@@ -1290,16 +1239,7 @@ function freezeDrawingProjection(projection: DrawingProjection): DrawingProjecti
           // `components` is required and non-empty: paint iterates it, so a conditional
           // spread that ever took the empty branch would strip the field and throw.
           components: Object.freeze(
-            projection.vectorShape.components.map((component) =>
-              Object.freeze({
-                ...component,
-                subpathsEmu: Object.freeze(
-                  component.subpathsEmu.map((points) =>
-                    Object.freeze(points.map((point) => Object.freeze({ ...point })))
-                  )
-                ),
-              })
-            )
+            projection.vectorShape.components.map(freezeVectorShapeComponent)
           ),
         })
       : null,

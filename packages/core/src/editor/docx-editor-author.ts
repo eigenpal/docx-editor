@@ -12,3 +12,11 @@ export function initialsOfAuthor(author: string): string {
     .map((word) => word[0]!.toUpperCase())
     .join('');
 }
+
+/** Surface refusals whose missing-author precondition a configured author resolves. */
+export function isMissingAuthorRefusal(reason: string | null): boolean {
+  return (
+    reason === 'suggesting needs an author before it can propose a change' ||
+    reason === 'tracked changes need a non-empty author'
+  );
+}

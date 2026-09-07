@@ -1,18 +1,16 @@
 # `@docx-editor.dev/docx-to-markdown`
 
-> Private workspace package. Publishing is intentionally deferred to the final release step.
+> Private workspace package. Not available on npm.
 
-Server-first DOCX-to-Markdown conversion powered by the same semantic layout engine as the
-browser editor and future exporters. It requires no DOM, browser, editor instance, or CLI.
+Convert DOCX to Markdown with page boundaries, headers, footers, and review metadata.
+No browser or DOM required.
 
 ## Quick start
 
-To try the private package from this workspace, run `bun dev:markdown`. The standalone demo opens
-the real paginated editor beside a live page-by-page GFM preview, supports upload and drag/drop,
-and re-exports the current DOCX after edits.
+Run `bun dev:markdown` from the repository root to try the editor and Markdown preview.
+Within this workspace, use `workspace:*` as the dependency version.
 
-The one-shot API accepts DOCX bytes, opens and lays out the document, translates it, and disposes
-its internal session.
+Use `exportMarkdown` to convert DOCX bytes. It manages layout and session cleanup:
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -35,14 +33,9 @@ for (const page of pages) {
 }
 ```
 
-The package is private in this change and cannot be installed from the public registry yet.
-Inside this monorepo, depend on it with `workspace:*`.
-
-The final release step must replace this private banner and workspace demo quick start with public
-installation and usage instructions, remove the package from Changesets `ignore`, choose the public
-version, align the `@docx-editor.dev/core` and `@docx-editor.dev/fonts` version floors with that
-release, and only then remove `private: true`. Repository tests intentionally reject a partial
-release state.
+For public release, replace this private banner and workspace demo quick start with public
+installation and usage instructions. Remove the package from Changesets `ignore`, choose its
+version, align the Core and fonts dependency versions, then remove `private: true`.
 
 ## Public interface
 
@@ -64,11 +57,9 @@ exportMarkdownFrom(
 exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExportResult;
 ```
 
-`exportMarkdown` is the usual entry point. It disposes its producer session after layout and
-translates the detached immutable snapshot, keeping the one-shot memory lifecycle bounded.
-`openDocumentForExport` and `exportMarkdownFrom` are for workflows that need to reuse one settled
-layout, inspect semantic records, or share the same layout with another exporter.
-`exportMarkdownLayout` translates a snapshot after its session has been disposed.
+Use `exportMarkdown` for a single export. To reuse or inspect a layout, use
+`openDocumentForExport` and `exportMarkdownFrom`. To convert a layout after disposing its session,
+use `exportMarkdownLayout`.
 
 ### Result shape
 
@@ -134,29 +125,16 @@ interface MarkdownReviewBinding {
 }
 ```
 
-`fontResolution` is returned data, not a console side effect. It lists requested families, every
-resolved face and whether it was direct or substituted, per-family `complete`/`partial`/`none`
-coverage, and nonfatal `originFailures`. A reusable `opened.session.fontResolution` retains the
-same report and `exportMarkdownFrom(opened.session)` copies it into its result. It is non-null for
-document-aware byte sessions opened by Markdown or Core. It is `null` when no session owns font
-evidence: detached layouts, caller-supplied measurers, ordinary Core sessions, and live views using
-shared shaping. Fatal
-document-open and resource/layout failures remain typed refusals or thrown
-`DocumentOpenError`/`ExportResourceError`; they are not disguised as font warnings.
+`fontResolution` lists requested families, resolved and substituted faces, coverage
+(`complete`, `partial`, or `none`), and nonfatal `originFailures`. Document-aware byte sessions
+return this report. Reusable sessions also expose it as `session.fontResolution`.
+It is `null` for detached layouts, custom measurers, ordinary Core sessions, and live views
+using shared shaping. Fatal failures throw `DocumentOpenError` or `ExportResourceError`.
 
-`pages` is the primary interface. Page boundaries come from the same layout engine that renders
-the editor; they are not inferred from `w:lastRenderedPageBreak` or approximated after Markdown
-conversion. This is the appropriate shape for page citations such as “page 12”, legal/compliance
-review, retrieval chunks tied to one rendered result, and page-aware agent workflows.
+`pages` contains the page output from the editor's layout engine. Page numbers and IDs apply
+only to this export. Different fonts or Microsoft Word versions can produce different page breaks.
 
-`pagination.source` confirms that pages came from the layout engine. `pagination.scope` means the
-page numbers describe this returned export. `layoutRevision` identifies the Core document state,
-and `displayMode` repeats the option used to show tracked changes as markup, proposed content, or
-original content.
-
-Page IDs and numbers are local to this returned export; do not use them as permanent document
-identifiers. They reflect the same Core layout the editor uses, but are not a certification that a
-particular Microsoft Word build with a different font installation will produce identical breaks.
+`pagination` records the layout source, export scope, Core revision, and tracked-change display mode.
 
 For citations that must survive storage or document updates, retain your own document version or
 content hash alongside the page number. For example:
@@ -171,22 +149,17 @@ const citation = {
 };
 ```
 
-`result.markdown` is a convenience projection for consumers that only need one conventional
-Markdown document. It joins split records and excludes repeated page furniture, so it deliberately
-cannot preserve page provenance.
+`result.markdown` contains the whole document. It joins content split across pages and excludes
+repeated headers and footers. Use `pages` when you need page citations.
 
 ### Comments and tracked changes
 
-Ordinary Markdown stays clean: comments and revision metadata are not injected as HTML comments,
-CriticMarkup, or visible footnotes. Normalized structured review metadata is returned beside it.
+Comments and revision metadata are returned separately from Markdown.
+Review IDs are opaque and valid only within one export. For stored citations, include your own
+document version or content hash.
 
-> **Important:** Review IDs are opaque and stable only within one export result. Never store or
-> compare them across exports. Pair any persisted citation with your own document version or
-> content hash.
-
-`page.comments` and `page.trackedChanges` are membership views. Each entry is the complete
-document-wide artifact, not a page-trimmed copy, so its `occurrences` can include other pages. To
-avoid double counting and select page-local provenance, always filter the occurrences:
+`page.comments` and `page.trackedChanges` contain complete artifacts with occurrences on that page.
+Their `occurrences` can include other pages. Filter them to avoid double counting:
 
 ```ts
 const localComments = page.comments.flatMap((artifact) =>
@@ -196,9 +169,8 @@ const localComments = page.comments.flatMap((artifact) =>
 );
 ```
 
-Page membership covers artifacts physically occurring in the body, header, footer, footnotes,
-endnotes, or note separator. `result.reviewArtifacts` is the authoritative document-wide list and
-also retains orphaned comments or structural changes with no linear page occurrence.
+Page artifacts can occur in the body, headers, footers, footnotes, endnotes, or note separators.
+`result.reviewArtifacts` contains all artifacts, including those without a page occurrence.
 
 `result.reviewBindings` connects each occurrence to offsets in `result.markdown`,
 `page.markdown`, `page.headerMarkdown`, or `page.footerMarkdown`. Offsets use JavaScript UTF-16
@@ -217,14 +189,11 @@ for (const binding of result.reviewBindings) {
 }
 ```
 
-Use `coverage === 'complete'` with only `precision === 'exact'` ranges for source-aligned edits.
-Citation or presentation workflows can accept partial or `containing-construct` bindings while
-preserving the declared fidelity. Text boxes and structural changes that have no honest linear
-Markdown range remain available as artifacts and carry an explicit `unmappedReason`.
+For source-aligned edits, require `coverage === 'complete'` and `precision === 'exact'`.
+For citations or display, you can use partial or `containing-construct` bindings if you retain
+that precision information. Unmapped artifacts include an `unmappedReason`.
 
-Artifact IDs, occurrence indexes, page IDs, and binding offsets are local to this immutable export
-result. IDs are opaque, even when their string values look familiar. Do not join them across
-exports; store your own document version or content hash when a workflow needs durable identity.
+Artifact IDs, occurrence indexes, page IDs, and offsets are valid only within this export.
 
 Tracked changes also participate in layout through `displayMode`: `all-markup` (default) keeps
 inserted and deleted text visible, `proposed` shows the accepted view, and `original` shows the
@@ -240,20 +209,19 @@ rejected view. There is no reviewer/author filtering in this API.
 | `signal`                | Aborts resource waits and later layout work.                                                  |
 | `resourceTimeoutMs`     | Deadline applied separately to initial font provisioning and each layout resource wait.       |
 | `reuseAcrossRevisions`  | Retains state for live/caller-measured sessions; document-aware byte sessions reject `true`.  |
-| `fonts`                 | Caller configuration/resolver, first-wins; requires immutable DOCX-byte input.                |
-| `fallbackFonts`         | Opt-in origins after bundled substitutes; requires bytes; use for `googleFonts()`.            |
+| `fonts`                 | Font configuration or resolver. Earlier entries win. Requires immutable DOCX bytes.           |
+| `fallbackFonts`         | Fallback after bundled fonts. Requires DOCX bytes. Accepts `googleFonts()`.                   |
 | `fontPolicy`            | `best-effort` (default), or `strict` to require all four static faces and no origin failures. |
-| `onFontResolution`      | Receives requested, direct/substituted, unresolved, and failed-origin evidence.               |
-| `measurer`              | Host-owned text measurer; when present it takes precedence over all font origins.             |
+| `onFontResolution`      | Receives the font-resolution report.                                                          |
+| `measurer`              | Custom text measurer. Overrides font resolution.                                              |
 | `producer`              | Stable identity for a host-owned measurer and its cache entries.                              |
-| `imageDecodePort`       | Host image metadata decoder. Omit for the bounded Node decoder.                               |
+| `imageDecodePort`       | Custom image metadata decoder. Defaults to the Node.js decoder.                               |
 | `convertPreservedImage` | Converts preserved EMF, WMF, or TIFF bytes to a supported raster format.                      |
 
 ### Tracked changes
 
-The default keeps all pending changes visible in Markdown. A whole-document resolved view must be
-requested explicitly. The artifact list remains available as provenance; this option controls the
-whole-document revision projection.
+To show the document with changes accepted, set `displayMode` to `proposed`.
+Review artifacts remain available:
 
 ```ts
 const proposed = await exportMarkdown(bytes, {
@@ -261,7 +229,7 @@ const proposed = await exportMarkdown(bytes, {
 });
 ```
 
-## Reusing an export session
+## Reuse an export session
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -291,37 +259,33 @@ try {
 }
 ```
 
-Always dispose a reusable session. `dispose()` is idempotent and releases document caches and
-pending resource work. A live `HeadlessDocumentView` can retain incremental state across document
-revisions; immutable byte sources default to one-shot cache ownership.
+Always call `dispose()` on reusable sessions to release caches and pending resource work.
+Repeated calls are safe. Live views can retain state across revisions; byte sources use
+one-shot caching by default.
 
-If only one projection is needed, prefer `exportMarkdown(bytes)`. A reusable session deliberately
-retains source, resource, and alternate-display-mode state. To inspect or share a layout without
-retaining that producer state, dispose the session, then pass the already-published layout to
-`exportMarkdownLayout`. Published layouts are immutable snapshots and remain valid after disposal.
+For a single export, use `exportMarkdown(bytes)`. To keep a layout without retaining session
+resources, obtain it before disposal, then pass it to `exportMarkdownLayout`. Layouts remain
+valid after disposal.
 
 ## Images
 
-Image geometry participates in layout and therefore in page boundaries, but v1 deliberately omits
-image content from Markdown. The package does not expose an image URL callback or emit temporary
-browser URLs. This keeps the initial contract portable while a durable asset-manifest design is
-developed. When omission would fuse word-like text on either side of an inline drawing, the
-translator inserts one neutral space; punctuation is left untouched. Core image facilities remain
-exporter-neutral and available to future exporters.
+Images affect page boundaries but are omitted from Markdown. There is no image URL callback.
+If omitting an inline image would join words, the exporter inserts a space.
 
 ## Errors and cancellation
 
-The one-shot `exportMarkdown` API throws `DocumentOpenError` for malformed or unsupported DOCX
-input. Use `openDocumentForExport` when control flow should inspect its typed `{ ok: false,
-reason, detail }` result instead. Layout or resource processing can throw `ExportResourceError`
-with `code` equal to `aborted`, `timedOut`, `nonConvergent`, `disposed`, `layoutInvariant`, or
-`layoutFailed` in either workflow. `layoutInvariant` means recognized authored geometry could not
-be represented within the engine's bounded page model. `layoutFailed` identifies another engine
-or host-integration failure, such as an unavailable custom measurer. Both retain the original
-diagnostic as the standard `cause` without making consumers import a layout implementation type.
-Aborting the caller signal is terminal for a reusable session and immediately runs its idempotent
-resource teardown, including pending image work and document-specific font leases. Calling
-`dispose()` afterward remains safe.
+For malformed or unsupported DOCX input, `exportMarkdown` throws `DocumentOpenError`.
+`openDocumentForExport` returns `{ ok: false, reason, detail }` instead.
+
+Both workflows can throw `ExportResourceError` with one of these codes:
+
+- `aborted`, `timedOut`, `nonConvergent`, or `disposed`.
+- `layoutInvariant`: document geometry exceeds the engine's page model.
+- `layoutFailed`: another layout or host integration failure.
+
+The layout errors retain the original diagnostic as `cause`.
+Aborting a reusable session releases its resources and prevents reuse. Calling `dispose()`
+afterward is safe.
 
 ```ts
 import {
@@ -349,49 +313,29 @@ try {
 }
 ```
 
-## Layout and Markdown policy
+## Layout and fonts
 
-### Export fidelity contract
+Core resolves fonts, images, document geometry, and `displayMode` before pagination.
+Markdown uses that immutable layout. There is no separate page-width override.
+`signal` and `resourceTimeoutMs` cover resource processing.
 
-Pagination is created in Core before Markdown translation. The export lane must therefore settle
-every input that can change geometry before it asks for a layout snapshot:
+Fonts resolve in this order:
 
-- DOCX page geometry, section breaks, margins, columns, styles, theme mappings, run font family,
-  run font size, weight, italic state, character spacing, scaling, and line spacing come from the
-  immutable document snapshot. There is intentionally no Markdown-only page-width override.
-- Font origins are resolved in `fonts` → bundled substitutes → `fallbackFonts` order. Core measures
-  every run at its resolved OOXML size. It shapes a run with admitted bytes when its face resolves
-  and uses the deterministic fixed measurer for that run otherwise; Markdown never measures text
-  or invents page breaks after the fact.
-- Images and preserved-format conversion settle through the same bounded Core session before the
-  semantic layout is published. `signal` and `resourceTimeoutMs` cover that work.
-- `displayMode` is applied by Core before pagination, so inserted/deleted content and page fields
-  are measured in the same mode reported by `pagination.displayMode`.
-- The resulting layout is immutable. Markdown and future translators must consume that one
-  snapshot rather than reopening the DOCX or re-resolving fonts independently.
+1. Your `fonts` configuration or resolvers; earlier entries take priority.
+2. Bundled substitutes from `@docx-editor.dev/fonts`.
+3. Optional `fallbackFonts`.
 
-For citation-sensitive production exports, supply the same licensed font files used by the author
-through `fonts`, use `fontPolicy: 'strict'`, persist `onFontResolution` with the job record, and pin
-the exporter/Core/font-catalog versions. Only complete strict coverage establishes that every
-requested static face used font-backed shaping. In `best-effort`, any family reported as `partial`
-or `none` can use Core's deterministic approximate measurer for unresolved runs; if no source is
-admitted, the whole layout uses it rather than losing the document. That fallback is bounded and
-reproducible, but it is not a high-fidelity pagination claim.
+The Node.js defaults use HarfBuzz and packaged substitutes: Carlito for Calibri, Caladea for
+Cambria, Liberation Serif for Times New Roman, Liberation Sans for Arial, and Liberation Mono
+for Courier New. These fonts require no network requests.
 
-The Node defaults use the packaged, validated metric-compatible faces from
-`@docx-editor.dev/fonts` with shared HarfBuzz shaping: Calibri → Carlito, Cambria → Caladea, Times
-New Roman → Liberation Serif, Arial → Liberation Sans, and Courier New → Liberation Mono. These
-open faces are selected for matching layout metrics and require no runtime Google Fonts request.
+For accurate pagination, supply the author's licensed fonts, use `fontPolicy: 'strict'`,
+save the font-resolution report, and pin the exporter, Core, and font catalog versions.
+The default `best-effort` policy uses approximate measurements for unresolved fonts.
 
-For higher fidelity, pass licensed or application-owned faces through `fonts`. The value can be a
-Core font configuration, a marked on-demand resolver, or an ordered list; earlier entries win.
-The exporter parses the DOCX first, asks resolvers only for the bounded family list used by the
-body, styles, headers, footers, and notes, then lays out once with the settled HarfBuzz measurer.
-Bundled Word-compatible substitutes fill any gaps after caller fonts.
-
-Google Fonts is an explicit last resort because it performs network requests and can disclose the
-font families a document uses to the CDN. Opt in with `fallbackFonts`; the resolver uses a closed,
-commit-pinned catalog and content hashes rather than constructing URLs from DOCX text:
+To enable Google Fonts as a fallback, pass `googleFonts()` through `fallbackFonts`.
+It uses a pinned catalog and verified content hashes. Requests disclose requested font families
+to the CDN:
 
 ```ts
 import { readFile } from 'node:fs/promises';
@@ -434,51 +378,44 @@ const result = await exportMarkdown(bytes, {
 });
 ```
 
-Omit `fallbackFonts` for a network-free export. Supply only `fallbackFonts: googleFonts()` when
-there are no application-owned faces. If a host already owns a complete measurement stack, pass
-`measurer` with a stable `producer`; that explicit measurer takes precedence over font origins.
-Custom `fonts` and `fallbackFonts` are accepted only with immutable DOCX bytes. A live
-`HeadlessDocumentView` may change between resolution and layout, so export it with the host's
-revision-stable `measurer`; when `measurer` is present, neither font-origin option is invoked.
+Omit `fallbackFonts` to use only your fonts and bundled substitutes. For network-free exports,
+your own resolvers must also use local data.
 
-For audit-sensitive jobs, route `googleFonts({ onFailure })` failures into job diagnostics and
-supply licensed/application faces in `fonts` for every required family. `fontPolicy: 'strict'`
-refuses the export if an origin failed or any requested family lacks regular, bold, italic, or
-bold-italic coverage; `onFontResolution` records the direct and substituted faces that produced
-the page breaks. Documents whose candidate catalog exceeds the safe 64-family resolver boundary
-also fail with a typed `layoutFailed` error instead of silently dropping a face. Google fallback is
-opt-in, uses a bounded process cache, and a timeout or abort never leaves a failed request cached.
+Custom `fonts` and `fallbackFonts` require immutable DOCX bytes. For a live `HeadlessDocumentView`,
+use a host-owned, revision-stable `measurer` with a stable `producer`. A custom measurer takes
+precedence and bypasses both font options.
 
-Font admission is deliberately bounded against hostile or unexpectedly large inputs. The public
-`HARD_MAX_FONT_BYTES`, `HARD_MAX_FONT_SOURCES`, and `HARD_MAX_AGGREGATE_FONT_BYTES` constants are
-re-exported by this package; currently they cap one face at 64 MiB, one composition at 256 sources
-and 128 MiB, and all active document-specific export leases in a process at 128 MiB. A malformed or
-individually over-limit origin is reported and skipped before later origins are consulted. A
-process-wide lease refusal is a typed `layoutFailed` error: it does not start another network
-fallback or silently substitute approximate pagination. Serverless and worker hosts should return
-only the document-requested faces from resolvers, cap concurrent font-heavy exports, dispose every
-reusable session promptly, and use the exported constants rather than duplicating numeric limits.
+`fontPolicy: 'strict'` rejects origin failures or missing regular, bold, italic, or bold-italic
+faces. Use `onFontResolution` to record resolved and substituted faces, and
+`googleFonts({ onFailure })` to log fallback failures. More than 64 candidate families causes
+`layoutFailed`. Failed or aborted Google Fonts requests are not cached.
 
-Document-embedded fonts are admitted after explicit origins, using the same mapper as the browser editor. A DOCX that depends on `w:embedRegular`, `w:embedBold`, `w:embedItalic`, or
-`w:embedBoldItalic` therefore paginates with those faces when they pass the shared byte budgets.
-Logical full-document Markdown remains independent of page breaks.
+### Font limits
 
-Markdown is a semantic degradation:
+The package exports these limits:
 
-- Physical Word-layout pages are first-class; flattened `markdown` is secondary.
+- `HARD_MAX_FONT_BYTES`: 64 MiB per face.
+- `HARD_MAX_FONT_SOURCES`: 256 sources per composition.
+- `HARD_MAX_AGGREGATE_FONT_BYTES`: 128 MiB per composition and across active document font leases.
+
+Invalid or oversized origins are reported and skipped. Exceeding the process-wide lease budget
+causes `layoutFailed`. Return only requested faces from resolvers, limit concurrent exports,
+and dispose reusable sessions promptly. Use the exported constants in your code.
+
+Document-embedded fonts are admitted after explicit origins, using the same mapper as the browser editor.
+Regular, bold, italic, and bold-italic embedded faces must pass the shared font limits.
+
+## Markdown limitations
+
+- Use `pages` for page output and `markdown` for the whole document.
 - Page headers and footers are returned separately per page.
 - Merged table cells are flattened.
 - GFM has no nested-table construct. Nested tables alone use plain inline `<table>`, `<tr>`,
   `<td>`, and `<th>` HTML on one line, so strict sanitizers (including GitHub's) keep the
   structure and inline Markdown inside each cell remains parseable.
-- Image content is omitted in v1, while image geometry still participates in page layout.
+- Images affect layout but are omitted from Markdown.
 - Anchored text-box text is omitted because it has no unambiguous linear position; comments and
   tracked changes inside it remain available as page artifacts with exact text-box provenance.
 - Office Math uses the core semantic equation fallback.
-- A note continued without its reference is emitted as a labelled continuation block in page
+- A note continued without its reference is emitted as a labeled continuation block in page
   Markdown.
-
-Browser and headless export use the same core layout coordinator. Core projection and layout
-improvements therefore flow into Markdown automatically. Compile-time policy ratchets require a
-new semantic record field or kind to be represented or explicitly classified as layout-only or
-omitted; focused output tests remain the behavioral authority.

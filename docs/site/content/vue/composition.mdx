@@ -15,7 +15,7 @@ need a different interface.
 | `DocxEditorRoot`         | Every composed editor            | Owns and provides the editor instance                            |
 | `DocxEditorViewport`     | Every composed editor            | Supplies the scroll container and page-layout classes            |
 | `DocxEditorContent`      | Every composed editor            | Mounts the painted document surface                              |
-| Remount `:key`           | When you change modules          | Registers the new construction-only module set                   |
+| Remount `:key`           | When you change modules          | Loads the new modules                                            |
 | Positioned workspace row | When you use the navigation pane | Anchors the navigation pane                                      |
 | Pro review module        | When you use Pro review chrome   | Enables comments, tracked changes, and custom-node review chrome |
 
@@ -59,8 +59,7 @@ Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and the 
 apply without a rebuild. Existing revisions keep their authors.
 The root ignores a later `modules` array change until you remount it with a different `:key`.
 
-The engine uses `locale` for engine-generated content, such as the table of contents title.
-Changes apply without a remount.
+The engine uses `locale` for generated content, such as the table of contents title.
 
 For full prop types, see the
 [Vue API reference](/docs/2.x/api/vue).

@@ -81,10 +81,33 @@ function automationCommentIntent(
  * subscription this adapter took and leaves the editor mounted and editable.
  */
 export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost {
-  return createAutomationHost({
+  const host = createAutomationHost({
     port: sessionPort(editor),
     capabilities: BROWSER_AUTOMATION_CAPABILITIES,
   });
+  let disposed = false;
+  return {
+    ...host,
+    dispose: () => {
+      disposed = true;
+      host.dispose();
+    },
+    execute: (request) => {
+      // COALESCED TYPING FIRST, ONCE, at the batch's own entry.
+      //
+      // A keystroke still in the buffer lands as its own transaction the moment anything asks
+      // the surface for state, so a batch that read a revision or a package ahead of it
+      // planned against a document it no longer writes to — and `expectedRevision` waved
+      // through exactly the move it exists to catch. Settling HERE rather than inside those
+      // reads keeps the commit off the change-notification path: `revision()` is called from
+      // the host's own `on('change')` subscriber, and flushing there would commit typing from
+      // inside a render.
+      // Nothing to settle for a batch that will be refused anyway: a disposed host must not
+      // commit the editor's buffered keystrokes on its way to saying it is disposed.
+      if (!disposed) editor.surface?.flushPendingInput();
+      return host.execute(request);
+    },
+  };
 }
 
 function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
@@ -131,6 +154,8 @@ function sessionPort(editor: DocxEditorInstance): AutomationDocumentPort {
     // caller with no view means.
     revisionDisplayMode: () =>
       editor.surface?.revisionDisplayMode() ?? DEFAULT_FORMATTING_DISPLAY_MODE,
+    replacementLanding: (paragraphId, start, end) =>
+      editor.surface?.replacementLanding(paragraphId, start, end) ?? null,
     apply(staged: AutomationStagedOps, scope: StoryScope): AutomationPortApplyResult {
       sync();
       const surface = editor.surface;

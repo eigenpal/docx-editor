@@ -13,17 +13,15 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 // UNTRUSTED BYTES. A `.docx` is a zip of XML an attacker controls end to end, and every one of
 // those defences lives in the core reader this calls: decompression-ratio and size caps, part and
 // relationship path validation, DTD/entity-free XML. This module adds no parsing of its own, and
-// a refusal comes back as `InvalidArgument` rather than as a throw from inside a zip decoder.
-// Nothing about WHY the document was refused is put in the message: a caller opening files they
-// did not author gets "not a document this API can open", and a probe cannot use the error to
-// learn about the reader's limits.
+// malformed input comes back as `InvalidArgument`. Resource refusals use a stable API limit
+// name without forwarding file-controlled details or internal parser messages.
 
 import { createServerAutomationHost } from '@docx-editor.dev/core/automation';
 import type {
   CollaborationModuleContribution,
   EditorCollaborationSession,
 } from '@docx-editor.dev/core/collaboration';
-import { fail } from './errors.ts';
+import { fail, type DocxEditorErrorInit } from './errors.ts';
 import { createRuntime, type DocxEditorServerRuntime, type RevisionTextView } from './runtime.ts';
 
 /**
@@ -61,11 +59,14 @@ export interface DocumentZipLimits {
 export interface DocumentXmlLimits {
   /** Most bytes any one XML part may be. */
   readonly maxBytes: number;
-  /** Most elements any one XML part may contain. */
+  /**
+   * Most elements any one XML part may contain. Defaults to the engine budget
+   * (10,000,000); callers may raise it up to the engine ceiling (50,000,000).
+   */
   readonly maxElements?: number;
 }
 
-/** Optional tighter limits applied while opening untrusted DOCX bytes. */
+/** Resource budgets applied while opening DOCX bytes, subject to engine ceilings. */
 export interface DocumentLimits {
   /** Archive-level caps. */
   readonly zip?: DocumentZipLimits;
@@ -81,10 +82,9 @@ export interface DocumentLimits {
  * How `DocxEditor.createServer` opens a document.
  *
  * Opening DOCX bytes is a bounded parse: decompression-ratio and size caps, part and relationship
- * path validation, DTD- and entity-free XML. A refusal comes back as `InvalidArgument` rather
- * than as a throw from inside a zip decoder, and says nothing about WHY — a caller opening files
- * they did not author gets "not a document this API can open", so a probe cannot use the error to
- * learn the reader's limits.
+ * path validation, DTD- and entity-free XML. Malformed input returns `InvalidArgument`.
+ * Resource refusals return `ResourceLimitExceeded`, with `limit` identifying the exceeded cap.
+ * File-controlled details and internal parser messages are never included.
  *
  * The bounded parse is complete when this promise resolves. The runtime does not retain the
  * caller's `Uint8Array`, so the caller may reuse or transfer that input buffer afterward.
@@ -98,10 +98,11 @@ export interface CreateServerOptions {
    */
   readonly modules?: readonly EditorModule[];
   /**
-   * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.
+   * Budgets for the bounded reader — archive size, part count, and XML elements.
    *
-   * Exposed because a server opening documents it did not author is exactly where a caller may
-   * want smaller limits than the defaults. Omitted means the engine's own defaults.
+   * Omitted means the engine defaults. Lower budgets for untrusted input, or raise
+   * `xml.maxElements` for larger documents when the host has sufficient memory.
+   * Engine ceilings still apply.
    */
   readonly limits?: DocumentLimits;
   /**
@@ -120,16 +121,51 @@ export interface CreateServerOptions {
   readonly revisionTextView?: RevisionTextView;
 }
 
+/** Invalid caller budgets are argument errors, not document resource refusals. */
+function validateDocumentLimits(limits: DocumentLimits | undefined): void {
+  const counts = [
+    limits?.zip?.maxEntries,
+    limits?.zip?.maxTotalBytes,
+    limits?.xml?.maxBytes,
+    limits?.xml?.maxElements,
+    limits?.maxXmlParts,
+    limits?.maxRelationships,
+  ];
+  const ratio = limits?.zip?.maxRatio;
+  if (
+    counts.some((value) => value !== undefined && (!Number.isInteger(value) || value < 0)) ||
+    (ratio !== undefined && (!Number.isFinite(ratio) || ratio < 0))
+  ) {
+    fail({ code: 'InvalidArgument', target: 'createServer' });
+  }
+}
+
 export async function createServer(
   bytes: Uint8Array,
   options: CreateServerOptions = {}
 ): Promise<DocxEditorServerRuntime> {
+  validateDocumentLimits(options.limits);
   const collaborationModel = collaborationModelOf(options.modules);
   const opened = createServerAutomationHost(bytes, {
     ...(options.limits === undefined ? {} : { limits: options.limits }),
     ...(collaborationModel === undefined ? {} : { collaborationModel }),
   });
-  if (!opened.ok) fail({ code: 'InvalidArgument', target: 'createServer' });
+  if (!opened.ok) {
+    const limits: Partial<Record<typeof opened.reason, DocxEditorErrorInit['limit']>> = {
+      'too-many-entries': 'zip.maxEntries',
+      'too-large': 'xml.maxBytes',
+      'too-many-elements': 'xml.maxElements',
+      'too-deep': 'xml.maxDepth',
+      'too-many-xml-parts': 'maxXmlParts',
+      'too-many-relationships': 'maxRelationships',
+    };
+    const limit = opened.limit ?? limits[opened.reason];
+    fail({
+      code: limit === undefined ? 'InvalidArgument' : 'ResourceLimitExceeded',
+      target: 'createServer',
+      ...(limit === undefined ? {} : { limit }),
+    });
+  }
   return createRuntime({
     host: opened.host,
     save: true,

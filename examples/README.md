@@ -17,7 +17,7 @@ bun run dev                 # React and Vue
 bun run dev:react           # Vite and React
 bun run dev:vue             # Vite and Vue
 bun run dev:happypath       # Packaged React component
-bun run dev:markdown        # Live DOCX editor + page-aware Markdown export
+bun run dev:markdown        # DOCX editor and Markdown preview
 bun run dev:igloo           # Customized React interface
 bun run dev:custom-nodes    # Custom content controls
 bun run dev:nextjs          # Next.js
@@ -55,8 +55,8 @@ Build and serve the combined deployment preview:
 bun run preview
 ```
 
-Open `/react/`, `/vue/`, `/igloo/`, or `/docx-to-markdown/` on the printed local URL. The local
-static server does not apply the hostname rewrites from `vercel.json`, so use these explicit paths.
+Open `/react/`, `/vue/`, `/igloo/`, or `/docx-to-markdown/` at the local URL.
+The preview does not apply hostname rewrites from `vercel.json`.
 
 Fill a DOCX template without a browser:
 
@@ -73,8 +73,7 @@ Stop one server before you start the other.
   under the EigenPal Pro License and a custom citation node.
 - `vue/` shows the Vue 3 adapter and mirrors the React example.
 - `happy-path/` shows the packaged `<DocxEditor>` component with minimal host code.
-- `docx-to-markdown/` shows live, page-aware Markdown beside an editable DOCX, including GFM
-  tables and separate header/footer output.
+- `docx-to-markdown/` shows Markdown beside an editable DOCX, with tables, headers, and footers.
 - `igloo/` shows extensive interface customization. See
   [Customize the editor](../docs/CUSTOMIZING.md).
 - `custom-nodes/` defines and edits a custom citation content control.

@@ -251,8 +251,8 @@ const COORDINATE_BITS = new Uint32Array(COORDINATE_SCRATCH.buffer);
 export function vectorShapeLayoutToken(
   vector: NonNullable<DrawingProjection['vectorShape']>
 ): string {
-  let hashA = 0x811c_9dc5;
-  let hashB = 0x1000_0193;
+  HASH_SCRATCH[0] = 0x811c_9dc5;
+  HASH_SCRATCH[1] = 0x1000_0193;
   const scalars: string[] = [];
   for (const component of vector.components) {
     scalars.push(
@@ -263,15 +263,23 @@ export function vectorShapeLayoutToken(
       String(component.strokeWidthEmu),
       String(component.subpathsEmu.length)
     );
-    for (const subpath of component.subpathsEmu) {
-      scalars.push(String(subpath.length));
-      for (const point of subpath) {
-        COORDINATE_SCRATCH[0] = point.x;
-        hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
-        hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
-        COORDINATE_SCRATCH[0] = point.y;
-        hashA = Math.imul(hashA ^ COORDINATE_BITS[1]!, 0x0100_0193);
-        hashB = Math.imul(hashB ^ COORDINATE_BITS[0]!, 0x0100_01b3);
+    const subpaths = component.subpathsEmu;
+    for (let index = 0; index < subpaths.length; index += 1) {
+      const subpath = subpaths[index]!;
+      // An omitted close flag paints closed, exactly like `true`; only `false` leaves the
+      // path open, so that is the one value that must separate two otherwise equal shapes.
+      scalars.push(String(subpath.length), component.subpathsClosed?.[index] === false ? '0' : '1');
+      foldPointsInto(subpath, HASH_SCRATCH);
+    }
+    // Line-end triangles are generated geometry the painter fills separately, so a changed
+    // `a:headEnd`/`a:tailEnd` moves nothing in the subpath stream. Their vertices join the
+    // same accumulators, framed by their counts, so the token cannot reuse a stale record.
+    const arrowheads = component.arrowheadsEmu;
+    scalars.push(String(arrowheads?.length ?? 0));
+    if (arrowheads) {
+      for (const arrowhead of arrowheads) {
+        scalars.push(String(arrowhead.length));
+        foldPointsInto(arrowhead, HASH_SCRATCH);
       }
     }
   }
@@ -280,9 +288,64 @@ export function vectorShapeLayoutToken(
     String(vector.extentEmu.cy),
     String(vector.components.length),
     scalars.join(','),
-    (hashA >>> 0).toString(36),
-    (hashB >>> 0).toString(36),
+    HASH_SCRATCH[0]!.toString(36),
+    HASH_SCRATCH[1]!.toString(36),
   ].join(';');
+}
+
+/** The two FNV-1a accumulators {@link vectorShapeLayoutToken} folds every point stream into. */
+const HASH_SCRATCH = new Uint32Array(2);
+
+type EmuPoints = readonly Readonly<{ x: number; y: number }>[];
+
+/** A standalone digest of one point list, for the wrap polygon. */
+function pointsDigest(points: EmuPoints): string {
+  HASH_SCRATCH[0] = 0x811c_9dc5;
+  HASH_SCRATCH[1] = 0x1000_0193;
+  foldPointsInto(points, HASH_SCRATCH);
+  return `${HASH_SCRATCH[0]!.toString(36)}:${HASH_SCRATCH[1]!.toString(36)}`;
+}
+
+/** One fold shared by subpaths, line ends and wrap polygons, so all hash the same way. */
+function foldPointsInto(points: EmuPoints, hash: Uint32Array): void {
+  let hashA = hash[0]!;
+  let hashB = hash[1]!;
+  for (const point of points) {
+    COORDINATE_SCRATCH[0] = point.x;
+    hashA = Math.imul(hashA ^ COORDINATE_BITS[0]!, 0x0100_0193);
+    hashB = Math.imul(hashB ^ COORDINATE_BITS[1]!, 0x0100_01b3);
+    COORDINATE_SCRATCH[0] = point.y;
+    hashA = Math.imul(hashA ^ COORDINATE_BITS[1]!, 0x0100_0193);
+    hashB = Math.imul(hashB ^ COORDINATE_BITS[0]!, 0x0100_01b3);
+  }
+  hash[0] = hashA;
+  hash[1] = hashB;
+}
+
+// A story root is immutable. Identity detects text and formatting edits without walking
+// the entire hosted story each time a drawing token is requested.
+const textboxContentIdentities = new WeakMap<OoxmlNode, number>();
+let textboxContentIdentityCounter = 0;
+
+function textboxLayoutToken(story: NonNullable<DrawingProjection['textboxStory']>): string {
+  let identity = textboxContentIdentities.get(story.content);
+  if (identity === undefined) {
+    identity = ++textboxContentIdentityCounter;
+    textboxContentIdentities.set(story.content, identity);
+  }
+  return framedTokenJoin([
+    String(identity),
+    story.contentNodeId,
+    String(story.insetsEmu.top),
+    String(story.insetsEmu.right),
+    String(story.insetsEmu.bottom),
+    String(story.insetsEmu.left),
+    story.verticalAnchor,
+    story.autofit,
+    story.fillHex ?? '',
+    story.strokeHex ?? '',
+    String(story.strokeWidthEmu),
+  ]);
 }
 
 function drawingProjectionLayoutToken(projection: DrawingProjection): string {
@@ -295,30 +358,70 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
   // are verbatim file values, so a printable field separator would let two different
   // picture references serialize to one token — and `isCompatibleWith` compares
   // projections by this token alone when the resource substrate is unchanged.
-  return framedTokenJoin([
-    projection.drawingNodeId,
-    projection.ownerPartName,
-    projection.kind,
-    projection.hidden ? '1' : '0',
-    String(projection.extentEmu.cx),
-    String(projection.extentEmu.cy),
-    String(projection.effectExtentEmu.top),
-    String(projection.effectExtentEmu.right),
-    String(projection.effectExtentEmu.bottom),
-    String(projection.effectExtentEmu.left),
-    projection.compatibilityBranchNodeId ?? '',
-    anchor?.simplePos ? 'sp' : 'pv',
-    anchor ? String(anchor.relativeHeight) : '',
-    anchor ? (anchor.layoutInCell ? '1' : '0') : '',
-    picture
+  // This also validates retained projections used by paint and drawing controls. Every
+  // top-level field needs a token decision, including diagnostics used for placeholders.
+  const fields = {
+    drawingNodeId: projection.drawingNodeId,
+    ownerPartName: projection.ownerPartName,
+    kind: projection.kind,
+    diagnostics: framedTokenJoin(
+      projection.diagnostics.map((diagnostic) =>
+        framedTokenJoin([diagnostic.code, diagnostic.nodeId, diagnostic.detail ?? ''])
+      )
+    ),
+    relationshipId: projection.relationshipId ?? '',
+    docPrId: String(projection.docPrId ?? ''),
+    name: projection.name,
+    title: projection.title,
+    description: projection.description,
+    hyperlinkHref: projection.hyperlinkHref ?? '',
+    hidden: String(projection.hidden),
+    extentEmu: framedTokenJoin([String(projection.extentEmu.cx), String(projection.extentEmu.cy)]),
+    effectExtentEmu: framedTokenJoin([
+      String(projection.effectExtentEmu.top),
+      String(projection.effectExtentEmu.right),
+      String(projection.effectExtentEmu.bottom),
+      String(projection.effectExtentEmu.left),
+    ]),
+    inlineDistancesEmu: framedTokenJoin([
+      String(projection.inlineDistancesEmu.top),
+      String(projection.inlineDistancesEmu.right),
+      String(projection.inlineDistancesEmu.bottom),
+      String(projection.inlineDistancesEmu.left),
+    ]),
+    wrap: projection.wrap,
+    textboxStory: projection.textboxStory ? textboxLayoutToken(projection.textboxStory) : '',
+    compatibilityBranchNodeId: projection.compatibilityBranchNodeId ?? '',
+    anchor: anchor
+      ? framedTokenJoin([
+          String(anchor.simplePos),
+          String(anchor.relativeHeight),
+          String(anchor.layoutInCell),
+          String(anchor.allowOverlap),
+          String(anchor.behindDocument),
+        ])
+      : '',
+    locks: framedTokenJoin([
+      String(projection.locks.select),
+      String(projection.locks.move),
+      String(projection.locks.resize),
+      String(projection.locks.changeAspect),
+    ]),
+    effects: framedTokenJoin([
+      String(projection.effects.grayscale),
+      String(projection.effects.brightness),
+      String(projection.effects.contrast),
+      String(projection.effects.bilevel ?? ''),
+    ]),
+    picture: picture
       ? framedTokenJoin([
           String(picture.crop.left),
           String(picture.crop.top),
           String(picture.crop.right),
           String(picture.crop.bottom),
           String(picture.transform.rotationDegrees),
-          picture.transform.flipHorizontal ? '1' : '0',
-          picture.transform.flipVertical ? '1' : '0',
+          String(picture.transform.flipHorizontal),
+          String(picture.transform.flipVertical),
           String(picture.transform.offsetEmu.x),
           String(picture.transform.offsetEmu.y),
           String(picture.transform.extentEmu.cx),
@@ -326,10 +429,11 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           picture.embeddedRelationshipId ?? '',
           picture.linkedRelationshipId ?? '',
           picture.presetGeometry ?? '',
+          picture.fillMode,
         ])
       : '',
-    vector ? vectorShapeLayoutToken(vector) : '',
-    wrap
+    vectorShape: vector ? vectorShapeLayoutToken(vector) : '',
+    wrapGeometry: wrap
       ? framedTokenJoin([
           wrap.element,
           wrap.textSide,
@@ -338,9 +442,10 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(wrap.distancesEmu.bottom),
           String(wrap.distancesEmu.left),
           String(wrap.polygon.length),
+          pointsDigest(wrap.polygon),
         ])
       : '',
-    position
+    position: position
       ? framedTokenJoin([
           position.horizontal.relativeFrom,
           position.horizontal.align ?? '',
@@ -352,7 +457,8 @@ function drawingProjectionLayoutToken(projection: DrawingProjection): string {
           String(position.simplePosition.yEmu),
         ])
       : '',
-  ]);
+  } satisfies Record<keyof DrawingProjection, string>;
+  return framedTokenJoin(Object.values(fields));
 }
 
 // Length-framed where a field embeds file text (resource keys carry relationship ids and

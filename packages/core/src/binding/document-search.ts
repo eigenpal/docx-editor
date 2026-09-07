@@ -17,8 +17,9 @@
 // projection, so a field result can be longer than the editable model range it maps to.
 //
 // WHAT IS SEARCHED: body, furniture, footnotes, then endnotes. Each story uses the shared
-// paragraph walk, which descends into tables, nested tables, and block controls. Text-box
-// stories remain excluded until the surface can place a caret inside them.
+// paragraph walk, which descends into tables, nested tables, and block controls. Selectable
+// body and furniture text boxes follow their owners: ANCHORED ones only, because layout paints
+// no story for an inline box. Note-owned text boxes remain excluded.
 
 import {
   SEARCH_MATCH_LIMIT,
@@ -41,9 +42,10 @@ import {
 import { isFldSimple } from '../store/package/field-nodes.ts';
 import { bodyStoryRoot, storyParagraphs, storyRootsOf } from '../store/package/story-blocks.ts';
 import { walkParagraphInline } from '../store/package/content-control-walk.ts';
-import type { OoxmlNode, OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
+import type { OoxmlParagraphNode, OoxmlPart } from '../store/package/ooxml-tree.ts';
 import { projectVisibleParagraphText } from '../store/store/text-projection.ts';
 import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import { expandSelectableTextboxStories, type SearchStory } from './document-search-frames.ts';
 
 export { SEARCH_MATCH_LIMIT, SEARCH_QUERY_MAX };
 
@@ -151,12 +153,6 @@ function runStarts(paragraph: OoxmlParagraphNode): RunStart[] {
   return starts;
 }
 
-interface SearchStory {
-  readonly part: OoxmlPart;
-  readonly root: OoxmlNode;
-  readonly scope?: ViewScope;
-}
-
 function bodyStories(part: OoxmlPart): SearchStory[] {
   const body = bodyStoryRoot(part);
   return body ? [{ part, root: body }] : [];
@@ -209,20 +205,25 @@ function noteStories(
 
 function searchStories(part: OoxmlPart, sources?: DocumentSearchSources): SearchStory[] {
   const stories = bodyStories(part);
-  if (!sources) return stories;
-  const seen = new Set<OoxmlPart>();
-  for (const story of furnitureStories(sources.headerFooterBySection, seen)) stories.push(story);
-  for (const story of noteStories(
-    sources.footnotes,
-    'footnote',
-    sources.referencedNoteIds.footnote
-  )) {
-    stories.push(story);
+  if (sources) {
+    const seen = new Set<OoxmlPart>();
+    for (const story of furnitureStories(sources.headerFooterBySection, seen)) stories.push(story);
+    for (const story of noteStories(
+      sources.footnotes,
+      'footnote',
+      sources.referencedNoteIds.footnote
+    )) {
+      stories.push(story);
+    }
+    for (const story of noteStories(
+      sources.endnotes,
+      'endnote',
+      sources.referencedNoteIds.endnote
+    )) {
+      stories.push(story);
+    }
   }
-  for (const story of noteStories(sources.endnotes, 'endnote', sources.referencedNoteIds.endnote)) {
-    stories.push(story);
-  }
-  return stories;
+  return expandSelectableTextboxStories(stories);
 }
 
 /** The run a paragraph offset falls in, and the offset inside it. */

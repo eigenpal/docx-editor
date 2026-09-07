@@ -33,10 +33,18 @@ export const DEFAULT_ZIP_LIMITS: ZipLimits = {
 /** The read entries, or the typed refusal. Never throws — the bytes are untrusted. */
 export type ZipReadResult =
   | { readonly ok: true; readonly entries: ReadonlyMap<string, Uint8Array> }
-  | { readonly ok: false; readonly reason: ZipRejection; readonly detail?: string };
+  | {
+      readonly ok: false;
+      readonly reason: ZipRejection;
+      readonly detail?: string;
+      readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
+    };
 
 class ZipViolation extends Error {
-  constructor(readonly reason: ZipRejection) {
+  constructor(
+    readonly reason: ZipRejection,
+    readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio'
+  ) {
     super(reason);
   }
 }
@@ -79,14 +87,21 @@ export function readZip(bytes: Uint8Array, limits: ZipLimits = DEFAULT_ZIP_LIMIT
         seenNorms.add(key);
         // Compression-ratio zip-bomb guard, checked before decompressing.
         if (file.originalSize / Math.max(1, file.size) > maxRatio)
-          throw new ZipViolation('too-large');
+          throw new ZipViolation('too-large', 'zip.maxRatio');
         totalUncompressed += file.originalSize;
-        if (totalUncompressed > limits.maxTotalBytes) throw new ZipViolation('too-large');
+        if (totalUncompressed > limits.maxTotalBytes)
+          throw new ZipViolation('too-large', 'zip.maxTotalBytes');
         return true;
       },
     });
   } catch (e) {
-    if (e instanceof ZipViolation) return { ok: false, reason: e.reason, detail: badDetail };
+    if (e instanceof ZipViolation)
+      return {
+        ok: false,
+        reason: e.reason,
+        detail: badDetail,
+        ...(e.limit === undefined ? {} : { limit: e.limit }),
+      };
     return { ok: false, reason: 'inflate-error' };
   }
 

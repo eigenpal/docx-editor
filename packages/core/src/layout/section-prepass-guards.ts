@@ -48,4 +48,5 @@ export const SECTION_PREPASS_GUARDS = {
   keepsNext: 'derived-covered',
   markerTexts: 'derived-covered',
   flowKeys: 'derived-covered',
+  terminalTextTables: 'derived-covered',
 } as const satisfies Record<keyof SectionPrepass, SectionPrepassGuard>;

@@ -24,15 +24,18 @@ export function createDocumentStyleDependencies(
   let styleThemeMajorEastAsia: string | null | undefined;
   let styleThemeMinorEastAsia: string | null | undefined;
   let styles: StyleCascadeTable | undefined;
+  let typographyRoot: OoxmlElement | null | undefined;
   let settingsRoot: OoxmlElement | null | undefined;
   let defaultTabStopPt: number | undefined;
   return {
     styleCascade() {
       const current = view.stylesRoot();
       const theme = view.documentThemeFonts();
+      const currentSettings = view.settingsRoot();
       if (
         styles === undefined ||
         current !== stylesRoot ||
+        currentSettings !== typographyRoot ||
         theme.major !== styleThemeMajor ||
         theme.minor !== styleThemeMinor ||
         theme.majorEastAsia !== styleThemeMajorEastAsia ||
@@ -43,7 +46,8 @@ export function createDocumentStyleDependencies(
         styleThemeMinor = theme.minor;
         styleThemeMajorEastAsia = theme.majorEastAsia;
         styleThemeMinorEastAsia = theme.minorEastAsia;
-        styles = buildStyleCascadeTable(current, theme);
+        typographyRoot = currentSettings;
+        styles = buildStyleCascadeTable(current, theme, currentSettings);
       }
       return styles;
     },

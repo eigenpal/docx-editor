@@ -19,6 +19,10 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
 
+JPEG validation accepts large EXIF and ICC metadata segments before the frame header.
+Intrinsic dimensions account for EXIF orientation, matching the browser's decoded image.
+The original photo bytes and the authored drawing extent remain unchanged.
+
 BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down
 bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended
 containers.
@@ -78,6 +82,10 @@ editor.snapshot().image; // reference-stable until selection or image fields mov
 | `topAndBottom` | Keeps text above and below                      | `wrapTopAndBottom`           |
 | `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
 | `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
+
+Images in front of or behind text can paint beyond their anchor cells. Their cell-relative
+position is preserved, but the cell does not crop these overlays. Page-relative images are
+clipped to the physical sheet, including its margins.
 
 The `resourceStatus` field reports image availability:
 
@@ -168,6 +176,10 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 - Optional explicit download-and-embed path for external targets is user-initiated only (bounded size/content-type).
 
 ## Drawing limits
+
+The editor renders brightness, contrast, grayscale, and bilevel black-and-white picture adjustments.
+It preserves image alpha and adjustment markup when you save.
+PDF export does not apply these adjustments.
 
 | Drawing content                                         | Status                                               |
 | ------------------------------------------------------- | ---------------------------------------------------- |

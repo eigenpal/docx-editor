@@ -747,7 +747,8 @@
     "noCopiedFormatting": null,
     "nothingToCopyFormatting": null,
     "nothingToPaint": null,
-    "noReviewAuthors": null
+    "noReviewAuthors": null,
+    "suggestingNeedsAuthor": null
   },
   "equationPopup": {
     "apply": null,

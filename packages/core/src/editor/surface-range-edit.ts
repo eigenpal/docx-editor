@@ -43,6 +43,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { directParagraphsInCells } from '../layout/semantic-cell-selection.ts';
 import { retractedLengthOf, retractedRangesOf } from '../store/store/tree-op-retraction.ts';
+import { trackedInsertionLanding } from '../store/store/tree-op-tracked-adjacency.ts';
 import { retractsOwnParagraphMark } from '../store/store/tree-op-tracked-marks.ts';
 import { partOfNodeId } from './surface-scope.ts';
 import {
@@ -64,6 +65,8 @@ export interface SurfaceRangeEditDeps {
   editingMode(): SurfaceEditingMode;
   /** The configured tracked-change author, unnormalized — each reader trims its own. */
   author(): string | undefined;
+  /** The stamp a tracked edit made now would carry; see `sameEditingMoment`. */
+  trackedDate(): string;
   storyScope(): StoryScope;
   /** Scoped document order: a header/footer or note selection orders within its own story. */
   paragraphOrder(): readonly string[];
@@ -271,12 +274,36 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     // automation lane's — so the after-the-strike rule applies under that author instead.
     const tracked = trackedAuthor !== undefined || deps.editingMode() === 'suggest';
     if (!tracked || from.paragraphId !== to.paragraphId) return from.offset;
+    // NOTHING TO REPLACE, nothing to land after. A zero-width range strikes no words, and
+    // mapping it out of a deletion it merely touches carried a scripted insert past struck
+    // text the operation never named — further than the same text inserted at that point.
+    if (to.offset <= from.offset) return from.offset;
     // A range end INSIDE a pre-existing deletion aims the insert at the interior of that
-    // `w:del`: the store relocates it past the deletion, the caret math does not hear about
-    // it, and the next keystroke lands before the previous one. Map past the old deletion
-    // FIRST; the retracted characters all sit before it, so the subtraction still holds.
-    const past = positionPastDeletion(deps.layout(), to);
-    return past.offset - retractedByInsertionAuthor(from, past, trackedAuthor ?? deps.author());
+    // `w:del`: the store relocates it past the deletion, and the caret math has to hear about
+    // it or the next keystroke lands before the previous one. That mapping, the adjacency
+    // question and the strike's end all come from the paragraph's OWN tree — one rule, the
+    // store's, so the surface cannot predict a landing the store will not use.
+    const author = (trackedAuthor ?? deps.author())?.trim();
+    if (!author) return positionPastDeletion(deps.layout(), to).offset;
+    const part = partOfNodeId(session, to.paragraphId) ?? session.part();
+    const paragraph = findNode(part, to.paragraphId);
+    if (!paragraph || paragraph.kind !== 'paragraph') {
+      return positionPastDeletion(deps.layout(), to).offset;
+    }
+    const struck = { start: from.offset, end: to.offset };
+    const { past, landing } = trackedInsertionLanding(
+      paragraph,
+      struck,
+      to.offset,
+      author,
+      deps.trackedDate()
+    );
+    const retracted = retractedLengthOf(paragraph, from.offset, past, author);
+    // NOTHING STRUCK, nothing to land after: a zero-width range, or one covering only this
+    // author's own pending insertion, which retracts and writes no strike at all. The store
+    // then places at the aim, and so must this.
+    const strikes = past - from.offset > retracted;
+    return (strikes ? landing : past) - retracted;
   }
 
   /**
@@ -480,7 +507,12 @@ export function createSurfaceRangeEditOps(deps: SurfaceRangeEditDeps): SurfaceRa
     const author = authorValue?.trim();
     if (!author) return 0;
     if (from.paragraphId !== to.paragraphId) return 0;
-    const part = session.partFor(deps.storyScope()) ?? session.part();
+    // The paragraph's OWN part, by its id: a scripted replacement addresses the body while
+    // the reader has a header open, and the reader's story would answer no paragraph and no
+    // retraction, landing the copy past its own pending text. `partOfNodeId` is a pure
+    // ancestry read; `partFor` would retain a story store for what is only a lookup.
+    const part =
+      partOfNodeId(session, to.paragraphId) ?? session.partFor(deps.storyScope()) ?? session.part();
     const paragraph = findNode(part, to.paragraphId);
     if (!paragraph || paragraph.kind !== 'paragraph') return 0;
     return retractedLengthOf(paragraph, from.offset, to.offset, author);

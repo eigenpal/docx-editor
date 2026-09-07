@@ -191,6 +191,7 @@ import {
   coveredFontFamiliesOf,
   createLocalFontProbe,
   detectFontSubstitutions,
+  fontResolverFamilies,
 } from './font-availability.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
@@ -207,9 +208,14 @@ import {
 import { surfaceScroller } from './surface-pages.ts';
 import { createZoomLane, zoomFacadeMembers } from './docx-editor-zoom.ts';
 import {
+  type CommandRefusal,
+  createSuggestingConfigurationReporter,
   documentEditingModeRestriction,
   documentTrackingAdoption,
   PRO_REVIEW_REASON,
+  resolveHostEditingMode,
+  SUGGESTING_AUTHOR_REASON,
+  suggestingModeRefusal,
 } from './opening-editing-mode.ts';
 import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
@@ -309,14 +315,23 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   /** A refusal this facade made before the surface could see the request; see `snapshot`. */
   let facadeRejection: string | null = null;
 
+  /** Suggesting's preconditions, read live: `author` moves through `setAuthor`. */
+  const suggestingGuards = () => ({ reviewEnabled, hasAuthor: Boolean(author) });
+  /** A runtime `setEditingMode('suggesting')` refused for the author alone, waiting for one. */
+  let pendingSuggestingRequest = false;
+  let pendingHostModeFallback: DocumentEditingMode | null = null;
+  // Raises the configuration error once, from a later task (`destroyed` exists by then).
+  const suggestingReporter = createSuggestingConfigurationReporter({
+    stillMissing: () =>
+      !destroyed && author === undefined && standingRejection(null) === SUGGESTING_AUTHOR_REASON,
+    emit: (error) => emitError(error),
+  });
   // The HOST's opening mode, when `config.mode` is explicit — precedence and reasons live
   // in `opening-editing-mode.ts`. Applied before the first mount reads `editingMode`.
-  const openingModeDecision = hostConfig.openingModeDecision({
-    reviewEnabled,
-    hasAuthor: Boolean(author),
-  });
+  const openingModeDecision = hostConfig.openingModeDecision(suggestingGuards());
   if (openingModeDecision.mode !== null) editingMode = openingModeDecision.mode;
   if (openingModeDecision.rejection !== null) facadeRejection = openingModeDecision.rejection;
+  suggestingReporter.report(openingModeDecision.rejection);
 
   let surface: PaginatedSurface | null = null;
   // The facade's copy of the host's remote-caret label host: registered before attach,
@@ -419,6 +434,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // ── State tick + cached snapshot ─────────────────────────────────────────────────────
   let stateVersion = 0;
   let cachedSnapshot: EditorSnapshot | null = null;
+  let cachedAuthor: string | undefined;
   /** The caret the cached snapshot was derived for — see `snapshotNow`. */
   let cachedCaret: ReturnType<PaginatedSurface['state']>['selection'] | null = null;
   /** The document revision the cached snapshot was derived for — see `snapshotNow`. */
@@ -590,7 +606,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // Keep the loading page centred and its comments control inactive until the review
     // model exists. Once open completes, show the pane only when the model found content.
     reviewPaneOpen = reviewEnabled && surface.session.reviewItems().length > 0;
-    adoptDocumentTracking();
+    publishSignal.adopt(surface);
+    if (pendingHostModeFallback !== null) applyHostModeDecision(pendingHostModeFallback, false);
+    else adoptDocumentTracking();
     sweepCustomNodePayloadsOnOpen(surface, modules);
     mountGeneration += 1;
     // A surface is rebuilt on load and on the font remount, and it comes up editable. The
@@ -609,7 +627,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     if (reviewActivationExclusions !== null) {
       surface.setReviewActivationExclusions(reviewActivationExclusions);
     }
-    publishSignal.adopt(surface);
     // `result.surface`, not the reassignable `surface`: this subscription is THIS session's.
     unsubscribeSession = result.surface.session.subscribe((change) => {
       const documentChange: DocumentChange = {
@@ -751,7 +768,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         typeof configured === 'function'
           ? normalizeFontResolverResult(
               await configured({
-                families: mounted.session.documentFonts().slice(0, MAX_RESOLVER_FAMILIES),
+                families: fontResolverFamilies(
+                  mounted.session.documentFonts(),
+                  mounted.session.symbolFontFamilies(),
+                  MAX_RESOLVER_FAMILIES
+                ),
                 defaultFamily: configuredDefaultFontFamily(fontConfiguration()),
               })
             )
@@ -1099,11 +1120,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       hiddenReviewAuthors: reviewAuthorVisibility.hiddenAuthorList,
       collaborationStatus: state?.collaborationStatus ?? 'inactive',
       editingMode,
-      // The facade's own refusal wins while it stands: the surface never saw the request.
-      // A document that ASKS for tracked changes and cannot get them — no author configured
-      // — is refused before any keystroke reaches the surface, so there is nothing in the
-      // surface state to report it. Cleared the moment the surface refuses anything itself.
-      lastRejection: state?.lastRejection ?? facadeRejection,
+      // A standing configuration refusal must not be hidden by an older surface refusal.
+      lastRejection: facadeRejection ?? state?.lastRejection ?? null,
       fontSubstitutions: deriveFontSubstitutions(),
       // Reference-stable from the surface, and a shared frozen constant when there is no
       // surface — the snapshot cache below compares this field with `===`.
@@ -1119,6 +1137,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function snapshotNow(): EditorSnapshot {
     if (cachedSnapshot && cachedVersion === stateVersion) return cachedSnapshot;
     const previous = cachedSnapshot;
+    const authorUnmoved = author === cachedAuthor;
+    cachedAuthor = author;
     const caret = surface?.state().selection ?? null;
     const caretUnmoved = selectionsMatch(caret, cachedCaret);
     cachedCaret = caret;
@@ -1165,7 +1185,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // canRedo all equal at an unmoved caret. Toggling a bullet OFF (a second press) left
       // the button pressed, and one Increase Indent that reached the deepest level a
       // definition declares left the button live for a press that could only be refused.
-      if (snapshotsEqual(next, previous) && caretUnmoved && documentUnmoved) next = previous;
+      if (snapshotsEqual(next, previous) && caretUnmoved && documentUnmoved && authorUnmoved) {
+        next = previous;
+      }
     }
     cachedSnapshot = deepFreezeValue(next);
     cachedVersion = stateVersion;
@@ -1602,9 +1624,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function documentTrackingDecision(currentMode = editingMode, readerChoice = readerChoseMode) {
     const tracking = documentTracking();
     return documentTrackingAdoption({
+      ...suggestingGuards(),
       viewOnly: hostConfig.mode() === 'view',
-      reviewEnabled,
-      hasAuthor: Boolean(author),
       hostChoseMode: hostConfig.mode() !== undefined,
       readerChoseMode: readerChoice,
       currentMode,
@@ -1614,6 +1635,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   }
 
   function applyEditingMode(next: DocumentEditingMode): void {
+    pendingHostModeFallback = null;
     editingMode = next;
     surface?.setEditingMode(
       next === 'suggesting' ? 'suggest' : next === 'viewing' ? 'view' : 'edit'
@@ -1621,11 +1643,52 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     surface?.setEditable(next !== 'viewing');
   }
 
+  /** Re-derive document, active-mode, pending-request, then host refusals on each mount. */
+  function standingRejection(documentRejection: string | null): string | null {
+    if (documentRejection !== null) return documentRejection;
+    if (editingMode === 'suggesting' && author === undefined) return SUGGESTING_AUTHOR_REASON;
+    if (pendingSuggestingRequest) return SUGGESTING_AUTHOR_REASON;
+    return readerChoseMode ? null : hostConfig.openingModeDecision(suggestingGuards()).rejection;
+  }
+
   function adoptDocumentTracking(): void {
     const decision = documentTrackingDecision();
-    if (decision.rejection !== null) facadeRejection = decision.rejection;
+    facadeRejection = standingRejection(decision.rejection);
     if (decision.mode !== 'suggesting') return;
     applyEditingMode('suggesting');
+  }
+
+  /** A deferred open must resolve host intent against the incoming document, not the old one. */
+  function applyHostModeDecision(fallback: DocumentEditingMode = 'editing', publish = true): void {
+    if (openScheduler.isScheduled()) {
+      pendingHostModeFallback = fallback;
+      return;
+    }
+    pendingHostModeFallback = null;
+    const decision = resolveHostEditingMode(
+      hostConfig.mode(),
+      suggestingGuards(),
+      documentTracking(),
+      editingMode,
+      fallback
+    );
+    if (decision.mode !== editingMode) applyEditingMode(decision.mode);
+    facadeRejection = standingRejection(decision.rejection);
+    suggestingReporter.report(decision.configurationRejection);
+    if (publish) {
+      bump();
+      emitSelectionChange();
+    }
+  }
+
+  /** Why `setEditingMode(mode)` is refused right now, or null: ONE ladder for `can` and `exec`. */
+  function editingModeRefusal(mode: DocumentEditingMode): CommandRefusal | null {
+    // A document opened with `mode: 'view'` is read-only for the session; the pill stays.
+    if (hostConfig.mode() === 'view' && mode !== 'viewing') {
+      return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
+    }
+    const suggesting = mode === 'suggesting' ? suggestingModeRefusal(suggestingGuards()) : null;
+    return suggesting ?? documentEditingModeRestriction(documentTracking(), mode);
   }
 
   function dateOfItem(item: ReviewItem): string | undefined {
@@ -1800,18 +1863,21 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
       }
       if (command.type === 'setEditingMode') {
-        // A document opened with `mode: 'view'` is read-only for the session. Letting the
-        // control move off Viewing put "Editing" on the pill of a document where every
-        // command was still refused.
-        if (hostConfig.mode() === 'view' && command.mode !== 'viewing') {
-          return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
+        const refusal = editingModeRefusal(command.mode);
+        if (refusal !== null) {
+          // Refused, not entered-then-mute (#692). The one refusal an author lifts is
+          // remembered and published, so `setAuthor` completes it and the snapshot says why.
+          if (refusal.reason === SUGGESTING_AUTHOR_REASON) {
+            pendingSuggestingRequest = true;
+            facadeRejection = refusal.reason;
+            suggestingReporter.report(refusal.reason);
+            bump();
+            emitSelectionChange();
+          }
+          return refusal;
         }
-        if (command.mode === 'suggesting' && !reviewEnabled) {
-          return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-        }
-        const restriction = documentEditingModeRestriction(documentTracking(), command.mode);
-        if (restriction) return restriction;
         readerChoseMode = true;
+        pendingSuggestingRequest = false;
         facadeRejection = null;
         // The surface decides what an op becomes and whether the browser offers edits.
         applyEditingMode(command.mode);
@@ -1884,19 +1950,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         if (command.type === 'toggleReviewPane' && !reviewEnabled) {
           return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
         }
-        if (
-          command.type === 'setEditingMode' &&
-          hostConfig.mode() === 'view' &&
-          command.mode !== 'viewing'
-        ) {
-          return { ok: false, code: 'locked', reason: 'this document was opened for viewing' };
-        }
         if (command.type === 'setEditingMode') {
-          if (command.mode === 'suggesting' && !reviewEnabled) {
-            return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-          }
-          const restriction = documentEditingModeRestriction(documentTracking(), command.mode);
-          if (restriction) return restriction;
+          const refusal = editingModeRefusal(command.mode);
+          if (refusal !== null) return refusal;
         }
         return { ok: true };
       }
@@ -2163,24 +2219,26 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (author === normalized) return;
       author = normalized;
       surface?.setAuthor(author);
+      // Preserve pending host intent and adopted document modes across author-only changes.
+      if (author !== undefined && pendingSuggestingRequest) {
+        pendingSuggestingRequest = false;
+        readerChoseMode = true;
+        applyEditingMode('suggesting');
+      } else if (!readerChoseMode) {
+        const fallback = pendingHostModeFallback ?? editingMode;
+        applyHostModeDecision(hostConfig.mode() === undefined ? fallback : 'editing');
+        return;
+      }
+      facadeRejection = standingRejection(null);
+      suggestingReporter.report(facadeRejection);
       bump();
       emitSelectionChange();
     },
     setMode(nextMode) {
       if (!hostConfig.setMode(nextMode)) return;
       readerChoseMode = false;
-      const hostDecision = hostConfig.openingModeDecision({
-        reviewEnabled,
-        hasAuthor: Boolean(author),
-      });
-      let next: DocumentEditingMode =
-        nextMode === 'view' ? 'viewing' : (hostDecision.mode ?? 'editing');
-      const documentDecision = documentTrackingDecision(next, false);
-      if (documentDecision.mode !== null) next = documentDecision.mode;
-      facadeRejection = documentDecision.rejection ?? hostDecision.rejection;
-      applyEditingMode(next);
-      bump();
-      emitSelectionChange();
+      pendingSuggestingRequest = false;
+      applyHostModeDecision();
     },
     setTranslate(nextTranslate) {
       const drawingStrings = hostConfig.setTranslate(nextTranslate);
@@ -2566,6 +2624,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
 
     destroy() {
       destroyed = true;
+      suggestingReporter.dispose();
       openScheduler.cancel();
       zoomLane.detach();
       disposeEmbeddedFaces();
