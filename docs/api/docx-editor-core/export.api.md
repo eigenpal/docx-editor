@@ -265,6 +265,11 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<OpenDocumen
     readonly fontResolutionTimeoutMs?: number;
     readonly fonts: FontOrigin | readonly FontOrigin[];
     readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
+    readonly pageGeometryPolicy?: Readonly<{
+        contentExtent?: 'source-span-nearest';
+        rounding: 'nearest';
+        unitPt: number;
+    }>;
     readonly reuseAcrossRevisions?: false;
 }
 

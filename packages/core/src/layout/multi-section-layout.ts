@@ -143,10 +143,11 @@ export function furnitureForSection(
  */
 export function multiSectionStructureKey(
   sections: readonly DocumentSection[],
-  options: SemanticLayoutOptions
+  options: SemanticLayoutOptions,
+  sectionGeometries?: readonly PageGeometry[]
 ): string {
   const entries = sections.map((section, index) => {
-    const geometry = geometryOfSection(section.properties);
+    const geometry = sectionGeometries?.[index] ?? geometryOfSection(section.properties);
     const furniture = furnitureForSection(options, index, sections.length);
     const pn = section.properties.pageNumbering;
     // A bare `<w:pgNumType/>` keys its empty attributes while an ABSENT element keys
@@ -365,10 +366,11 @@ export function layoutMultiSectionDocument(
   sections: readonly DocumentSection[],
   revision: number,
   options: SemanticLayoutOptions,
-  layoutSection: LayoutSectionFn
+  layoutSection: LayoutSectionFn,
+  sectionGeometries?: readonly PageGeometry[]
 ): SemanticLayout {
   const { session, ...rest } = options;
-  const structureKey = multiSectionStructureKey(sections, options);
+  const structureKey = multiSectionStructureKey(sections, options, sectionGeometries);
   const multi = ensureMultiState(session, structureKey, sections.length);
   // One retention pass over the UNION of every section's live keys. Retaining inside each
   // section's pass evicted every other section's entries — the multi-section break cache
@@ -407,7 +409,7 @@ export function layoutMultiSectionDocument(
   for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
     const section = sections[sectionIndex]!;
     const slice = blocks.slice(section.blockStart, section.blockEndExclusive);
-    const geometry = geometryOfSection(section.properties);
+    const geometry = sectionGeometries?.[sectionIndex] ?? geometryOfSection(section.properties);
     const furniture = furnitureForSection(options, sectionIndex, sections.length);
     const startIndex = pages.length;
     const startSheetY = sheetY;
@@ -631,7 +633,9 @@ export function layoutMultiSectionDocument(
   }
 
   if (pages.length === 0) {
-    const geometry = geometryOfSection(sections[0]?.properties ?? DEFAULT_SECTION_PROPERTIES);
+    const geometry =
+      sectionGeometries?.[0] ??
+      geometryOfSection(sections[0]?.properties ?? DEFAULT_SECTION_PROPERTIES);
     const laid = layoutSection([], revision, {
       ...rest,
       retainKeys,

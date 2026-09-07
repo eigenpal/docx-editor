@@ -51,16 +51,20 @@ import {
 } from './revision-projection.ts';
 import {
   appliedSpaceBefore,
-  paragraphBorderExtentPt,
-  paragraphBorderHorizontalBox,
-  paragraphBorderSideOuterExtentPt,
-  paragraphBorderStrokeWidthPt,
   collapsedSpaceBefore,
   paragraphBreaksBefore,
   type ParagraphBorders,
   type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
+import type { PageGeometryGridPolicy } from './page-geometry-policy.ts';
+import {
+  gridRoundedBorderComponent,
+  gridRoundedBorderExtent,
+  gridRoundedBorderStroke,
+  gridRoundedHorizontalBorderBox,
+  gridRoundedSideOuterExtent,
+} from './paragraph-border-grid.ts';
 import { resolveParagraphBorders } from './paragraph-border-resolve.ts';
 import {
   adjustedBreakIndex,
@@ -395,7 +399,9 @@ export interface SemanticLayoutOptions {
   readonly emptyTocSuppressedResultParagraphIds?: ReadonlySet<string>;
 }
 
-type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions>;
+type BlockLayoutOptions = ColumnBalanceBlockLayoutOptions<SemanticLayoutOptions> & {
+  readonly geometryGridPolicy?: PageGeometryGridPolicy;
+};
 
 /** Prepass results by block node, valid while the width and producer both hold. */
 type PreparedBlock =
@@ -581,6 +587,17 @@ export function layoutSemanticDocument(
   revision: number,
   options: SemanticLayoutOptions
 ): SemanticLayout {
+  return layoutSemanticDocumentWithResolvedSectionGeometries(part, revision, options);
+}
+
+/** Layout with coordinator-resolved immutable section geometry. @internal */
+export function layoutSemanticDocumentWithResolvedSectionGeometries(
+  part: OoxmlPart,
+  revision: number,
+  options: SemanticLayoutOptions,
+  sectionGeometries?: readonly PageGeometry[],
+  geometryGridPolicy?: PageGeometryGridPolicy
+): SemanticLayout {
   // ONE revision projection for both. Section block ranges index this exact list; using a
   // different display mode or author predicate maps filtered blocks to the wrong geometry.
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
@@ -590,8 +607,11 @@ export function layoutSemanticDocument(
   // Wrapper-only metadata (alias/tag/lock/…) lives outside flattened paragraph nodes. Fold a
   // fingerprint into the producer so incremental identity reuse cannot keep stale boundaries.
   const controlToken = contentControlContextToken(part);
-  const optionsWithControlContext: SemanticLayoutOptions = {
+  const optionsWithControlContext: SemanticLayoutOptions & {
+    readonly geometryGridPolicy?: PageGeometryGridPolicy;
+  } = {
     ...options,
+    ...(geometryGridPolicy ? { geometryGridPolicy } : {}),
     displayMode,
     producer: producerWithControlContext(options.producer, controlToken),
     tocFieldChromeParagraphIds:
@@ -648,12 +668,21 @@ export function layoutSemanticDocument(
 
   const runBody = (opts: SemanticLayoutOptions): SemanticLayout => {
     if (sections.length > 1) {
-      return layoutMultiSectionDocument(blocks, sections, revision, opts, layoutBlocksWithGeometry);
+      return layoutMultiSectionDocument(
+        blocks,
+        sections,
+        revision,
+        opts,
+        layoutBlocksWithGeometry,
+        sectionGeometries
+      );
     }
 
     const section = sections[0];
     const geometry =
-      opts.geometry ?? (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
+      opts.geometry ??
+      sectionGeometries?.[0] ??
+      (section ? geometryOfSection(section.properties) : DEFAULT_PAGE_GEOMETRY);
     const furniture = furnitureForSection(opts, 0, sections.length) ?? opts.furniture;
     const sectionNumbering = section?.properties.pageNumbering;
     const laid = layoutBlocksWithGeometry(blocks, revision, {
@@ -1043,6 +1072,7 @@ function layoutBlocksPass(
     contentWidth: contentWidthForReflow,
     insetsFor,
     pageCount: () => pages.length,
+    ...(options.geometryGridPolicy ? { anchorGridPolicy: options.geometryGridPolicy } : {}),
   });
   const { pageBox, furnitureFor, overflowShellAt } = sectionFurniture;
 
@@ -2218,8 +2248,8 @@ function layoutBlocksPass(
     const topEdge = continuesAbove ? undefined : borders.top;
     // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
     const closingEdge = continuesBelow ? borders.between : borders.bottom;
-    const topExtent = paragraphBorderExtentPt(topEdge);
-    const borderExtent = paragraphBorderExtentPt(closingEdge);
+    const topExtent = gridRoundedBorderExtent(topEdge, options.geometryGridPolicy);
+    const borderExtent = gridRoundedBorderExtent(closingEdge, options.geometryGridPolicy);
 
     if (paragraphBreaksBefore(props) && (pageFragments.length > 0 || pages.length === 0)) {
       flushPage();
@@ -2383,19 +2413,32 @@ function layoutBlocksPass(
       // doubles still publish a box paint can draw as two lines (shared with table borders).
       const textLeft = regionX + indent.left;
       const textRight = textLeft + available;
-      const leftStroke = borders.left ? paragraphBorderStrokeWidthPt(borders.left) : 0;
-      const rightStroke = borders.right ? paragraphBorderStrokeWidthPt(borders.right) : 0;
+      const leftStroke = borders.left
+        ? gridRoundedBorderStroke(borders.left, options.geometryGridPolicy)
+        : 0;
+      const rightStroke = borders.right
+        ? gridRoundedBorderStroke(borders.right, options.geometryGridPolicy)
+        : 0;
       const boxLeft = borders.left
-        ? textLeft - paragraphBorderSideOuterExtentPt(borders.left)
+        ? textLeft - gridRoundedSideOuterExtent(borders.left, options.geometryGridPolicy)
         : textLeft;
       const boxRight = borders.right
-        ? textRight + paragraphBorderSideOuterExtentPt(borders.right)
+        ? textRight + gridRoundedSideOuterExtent(borders.right, options.geometryGridPolicy)
         : textRight;
       const boxWidth = Math.max(boxRight - boxLeft, 0);
       if (fragmentTopExtent > 0 && topEdge) {
-        const topStroke = paragraphBorderStrokeWidthPt(topEdge);
-        const ruleY = linesTop - topEdge.spacePt - topStroke;
-        const horizontal = paragraphBorderHorizontalBox(textLeft, textRight, borders, topEdge);
+        const topStroke = gridRoundedBorderStroke(topEdge, options.geometryGridPolicy);
+        const ruleY =
+          linesTop -
+          gridRoundedBorderComponent(topEdge.spacePt, options.geometryGridPolicy) -
+          topStroke;
+        const horizontal = gridRoundedHorizontalBorderBox(
+          textLeft,
+          textRight,
+          borders,
+          topEdge,
+          options.geometryGridPolicy
+        );
         strokes.push({
           side: 'top',
           edge: topEdge,
@@ -2404,9 +2447,16 @@ function layoutBlocksPass(
         contentTop = ruleY;
       }
       if (isLast && closingEdge) {
-        const closeStroke = paragraphBorderStrokeWidthPt(closingEdge);
-        const ruleY = linesBottom + closingEdge.spacePt;
-        const horizontal = paragraphBorderHorizontalBox(textLeft, textRight, borders, closingEdge);
+        const closeStroke = gridRoundedBorderStroke(closingEdge, options.geometryGridPolicy);
+        const ruleY =
+          linesBottom + gridRoundedBorderComponent(closingEdge.spacePt, options.geometryGridPolicy);
+        const horizontal = gridRoundedHorizontalBorderBox(
+          textLeft,
+          textRight,
+          borders,
+          closingEdge,
+          options.geometryGridPolicy
+        );
         const box = { x: horizontal.x, y: ruleY, width: horizontal.width, height: closeStroke };
         strokes.push({ side: continuesBelow ? 'between' : 'bottom', edge: closingEdge, box });
         // `bottomBorder` stays the BOTTOM rule alone: a `between` rule closing a grouped
@@ -2449,7 +2499,7 @@ function layoutBlocksPass(
       // `w:bar` is the change-bar rule beside the paragraph. It belongs to the paragraph, not
       // to the block, so it neither opens nor closes with the group.
       if (borders.bar) {
-        const barStroke = paragraphBorderStrokeWidthPt(borders.bar);
+        const barStroke = gridRoundedBorderStroke(borders.bar, options.geometryGridPolicy);
         strokes.push({
           side: 'bar',
           edge: borders.bar,
@@ -2744,7 +2794,8 @@ function layoutBlocksPass(
         lineAvailableWidth,
         alignment,
         isLastLine,
-        alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
+        alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
+        pendingLine.drawings
       );
       // A line with no spans still aligns: an empty centred paragraph puts its (zero width)
       // content — and so the caret — at the middle of the measure, not at the left edge.
@@ -2752,11 +2803,8 @@ function layoutBlocksPass(
         placedSpans.length > 0 && alignedSpans.length > 0
           ? alignedSpans[0]!.box.x - placedSpans[0]!.box.x
           : alignment !== 'left' && alignment !== 'both'
-            ? (() => {
-                const slack = lineAvailableWidth - pendingLine.width;
-                if (slack <= 0) return 0;
-                return alignment === 'center' ? slack / 2 : slack;
-              })()
+            ? Math.max(0, lineAvailableWidth - pendingLine.width) *
+              (alignment === 'center' ? 0.5 : 1)
             : 0;
       const pageClip = Object.freeze({
         x: 0,

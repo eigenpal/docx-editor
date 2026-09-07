@@ -19,7 +19,15 @@ import {
   paragraphBorders,
   paragraphBordersFingerprint,
 } from '../paragraph-style.ts';
-import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import {
+  createFixedMeasurer,
+  layoutSemanticDocument,
+  layoutSemanticDocumentWithResolvedSectionGeometries,
+} from '../semantic-layout.ts';
+import {
+  applyPageGeometryGridPolicy,
+  type PageGeometryGridPolicy,
+} from '../page-geometry-policy.ts';
 import { elevenPointDefaults } from './fixtures/eleven-point-defaults.ts';
 import { buildStyleCascadeTable } from '../style-cascade.ts';
 import {
@@ -56,6 +64,24 @@ const lay = (body: string, geometry?: PageGeometry) =>
     styleCascade: elevenPointDefaults(),
     ...(geometry ? { geometry } : {}),
   });
+
+const WORD_GRID_POLICY: PageGeometryGridPolicy = Object.freeze({
+  unitPt: 72 / 300,
+  rounding: 'nearest',
+  contentExtent: 'source-span-nearest',
+});
+
+const layOnWordGrid = (body: string, geometry: PageGeometry) =>
+  layoutSemanticDocumentWithResolvedSectionGeometries(
+    load(body),
+    1,
+    {
+      measurer,
+      styleCascade: elevenPointDefaults(),
+    },
+    [applyPageGeometryGridPolicy(geometry, WORD_GRID_POLICY)],
+    WORD_GRID_POLICY
+  );
 
 const paragraph = (text: string, pPr = '') =>
   `<w:p>${pPr ? `<w:pPr>${pPr}</w:pPr>` : ''}${text ? `<w:r><w:t>${text}</w:t></w:r>` : ''}</w:p>`;
@@ -301,6 +327,41 @@ describe('a box publishes four strokes around the unchanged text column', () => 
     expect(bar.box.height).toBe(line.box.height);
     // A bar is beside the text, not above or below it: no flow height of its own.
     expect(fragment.box.height).toBe(paragraphsOf(lay(paragraph('changed')))[0]!.box.height);
+  });
+
+  test('device-grid profile rounds border components before grouped box flow', () => {
+    const a4: PageGeometry = {
+      width: 11907 / 20,
+      height: 16840 / 20,
+      margin: { top: 1797 / 20, right: 1797 / 20, bottom: 1797 / 20, left: 1797 / 20 },
+    };
+    const box =
+      '<w:pBdr>' +
+      '<w:top w:val="single" w:sz="4" w:space="1"/>' +
+      '<w:left w:val="single" w:sz="4" w:space="4"/>' +
+      '<w:bottom w:val="single" w:sz="4" w:space="1"/>' +
+      '<w:right w:val="single" w:sz="4" w:space="4"/>' +
+      '</w:pBdr>';
+    const body =
+      paragraph('one', box) + paragraph('two', box) + paragraph('three', box) + paragraph('after');
+    const profiled = paragraphsOf(layOnWordGrid(body, a4));
+    const exact = paragraphsOf(lay(body, a4));
+    expect(profiled[0]!.box.width).toBeCloseTo(415.68, 12);
+    expect(stroke(profiled[0]!, 'top').box).toEqual({
+      x: -5.76,
+      y: 0,
+      width: 427.2,
+      height: 0.48,
+    });
+    expect(stroke(profiled[2]!, 'bottom').box.y).toBeCloseTo(44.4, 12);
+    expect(profiled[3]!.lines[0]!.box.y).toBeCloseTo(44.88, 12);
+    expect(stroke(exact[0]!, 'top').box).toEqual({
+      x: -6,
+      y: 0,
+      width: 427.65,
+      height: 0.5,
+    });
+    expect(exact[3]!.lines[0]!.box.y).toBe(45);
   });
 });
 

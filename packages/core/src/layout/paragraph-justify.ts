@@ -74,9 +74,9 @@ export function visibleCandidateWidth(
 /**
  * Trailing U+0020 width on a span that also holds visible text.
  *
- * A span that is only U+0020 is left intact: it may be a connector before an inline
- * drawing, and hanging it would shift the drawing. Line-end fill runs stay on the
- * `lineEndWhitespace` path instead.
+ * A span that is only U+0020 is not measured here. Terminal space-only runs hang through
+ * {@link hangingBoundarySpaceWidth}; a connector before an inline drawing does not hang.
+ * Line-end fill runs stay on the `lineEndWhitespace` path instead.
  */
 export function trailingCollapsibleSpaceWidth(
   span: StyleSpanRecord,
@@ -89,10 +89,41 @@ export function trailingCollapsibleSpaceWidth(
   return Math.max(0, span.box.width - measureDisplayText(visible, face, measurer));
 }
 
-/** Advance of hanging/collapsible U+0020 already at the end of the line. */
+/**
+ * Same-line inline drawings, addressed by model start.
+ *
+ * `alignSpans` and the hanging-tail helpers take this instead of guessing from previous
+ * span text. A U+0020-only span that a drawing follows is a connector and must not hang.
+ */
+export type LineInlineDrawingStart = Readonly<{ readonly start: number }>;
+
+function inlineDrawingFollowsSpan(
+  span: StyleSpanRecord,
+  drawings: readonly LineInlineDrawingStart[] | undefined
+): boolean {
+  if (drawings === undefined || drawings.length === 0) return false;
+  const end = span.range.end;
+  for (const drawing of drawings) {
+    if (drawing.start >= end) return true;
+  }
+  return false;
+}
+
+function isOrdinarySpaceOnlySpan(span: StyleSpanRecord): boolean {
+  return endsWithExpandableSpace(span.text) && stripTrailingOrdinarySpaces(span.text).length === 0;
+}
+
+/**
+ * Advance of hanging/collapsible U+0020 already at the end of the line.
+ *
+ * Terminal ordinary U+0020-only spans hang even when the previous visible span ends in
+ * punctuation. `word ` plus a following space-only run both hang. A space-only span that
+ * an inline drawing follows on the same line is a connector and does not hang.
+ */
 export function hangingBoundarySpaceWidth(
   spans: readonly StyleSpanRecord[],
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  drawings?: readonly LineInlineDrawingStart[]
 ): number {
   let hanging = 0;
   for (let index = spans.length - 1; index >= 0; index -= 1) {
@@ -102,16 +133,12 @@ export function hangingBoundarySpaceWidth(
       continue;
     }
     if (!endsWithExpandableSpace(span.text)) break;
-    const visible = stripTrailingOrdinarySpaces(span.text);
-    if (visible.length === 0) {
-      const prev = index > 0 ? spans[index - 1] : undefined;
-      const prevVisible = prev ? stripTrailingOrdinarySpaces(prev.text) : '';
-      if (prev && prevVisible.length > 0 && endsWithExpandableSpace(prev.text)) {
-        hanging += span.box.width;
-        continue;
-      }
-      break;
+    if (isOrdinarySpaceOnlySpan(span)) {
+      if (inlineDrawingFollowsSpan(span, drawings)) break;
+      hanging += span.box.width;
+      continue;
     }
+    const visible = stripTrailingOrdinarySpaces(span.text);
     const face = styleForFontSlot(span.style, span.fontSlot);
     hanging += Math.max(0, span.box.width - measureDisplayText(visible, face, measurer));
     break;
@@ -122,20 +149,20 @@ export function hangingBoundarySpaceWidth(
 /**
  * First span index in the trailing hanging U+0020 chain.
  *
- * Gaps at or after this index are not inter-word justify slots. A pure U+0020 span before an
- * inline drawing stays outside the chain when a visible span precedes it.
+ * Gaps at or after this index are not inter-word justify slots. A pure U+0020 span that an
+ * inline drawing follows stays outside the chain.
  */
-export function hangingBoundaryTailStartIndex(spans: readonly StyleSpanRecord[]): number {
+export function hangingBoundaryTailStartIndex(
+  spans: readonly StyleSpanRecord[],
+  drawings?: readonly LineInlineDrawingStart[]
+): number {
   for (let index = spans.length - 1; index >= 0; index -= 1) {
     const span = spans[index]!;
     if (span.lineEndWhitespace === true) continue;
     if (!endsWithExpandableSpace(span.text)) return index + 1;
-    const visible = stripTrailingOrdinarySpaces(span.text);
-    if (visible.length === 0) {
-      const prev = index > 0 ? spans[index - 1] : undefined;
-      const prevVisible = prev ? stripTrailingOrdinarySpaces(prev.text) : '';
-      if (prev && prevVisible.length > 0 && endsWithExpandableSpace(prev.text)) continue;
-      return index + 1;
+    if (isOrdinarySpaceOnlySpan(span)) {
+      if (inlineDrawingFollowsSpan(span, drawings)) return index + 1;
+      continue;
     }
     return index + 1;
   }
@@ -143,8 +170,11 @@ export function hangingBoundaryTailStartIndex(spans: readonly StyleSpanRecord[])
 }
 
 /** Inter-word gap indices that may receive justified slack or shrink. */
-export function justifySlackGapIndices(spans: readonly StyleSpanRecord[]): number[] {
-  const tailStart = hangingBoundaryTailStartIndex(spans);
+export function justifySlackGapIndices(
+  spans: readonly StyleSpanRecord[],
+  drawings?: readonly LineInlineDrawingStart[]
+): number[] {
+  const tailStart = hangingBoundaryTailStartIndex(spans, drawings);
   const gaps: number[] = [];
   for (let index = 1; index < spans.length; index += 1) {
     if (index >= tailStart) continue;
@@ -224,7 +254,8 @@ export function alignSpans(
   available: number,
   alignment: Alignment,
   isLastLine: boolean,
-  lineUsedWidth?: number
+  lineUsedWidth?: number,
+  drawings?: readonly LineInlineDrawingStart[]
 ): readonly StyleSpanRecord[] {
   if (spans.length === 0) return spans;
   if (alignment === 'left') return spans;
@@ -272,19 +303,17 @@ export function alignSpans(
   const contentSpans = spans.slice(0, trailingEnd);
   const lastContent = contentSpans[contentSpans.length - 1] ?? last;
   const geometricUsed = lastContent.box.x - indentLeft + lastContent.box.width;
-  const hanging = hangingBoundarySpaceWidth(contentSpans, measurer);
+  const hanging = hangingBoundarySpaceWidth(contentSpans, measurer, drawings);
   const used =
-    alignment === 'both'
+    alignment === 'both' || alignment === 'center' || alignment === 'right'
       ? (lineUsedWidth ?? geometricUsed) - hanging
-      : alignment === 'center' || alignment === 'right'
-        ? (lineUsedWidth ?? geometricUsed) - trailingCollapsibleSpaceWidth(lastContent, measurer)
-        : (lineUsedWidth ?? geometricUsed);
+      : (lineUsedWidth ?? geometricUsed);
   const slack = available - used;
 
   // The last line of a justified paragraph is set flush left, never stretched or compressed.
   if (alignment === 'both') {
     if (isLastLine || Math.abs(slack) <= OVERFLOW_TOLERANCE_PT) return spans;
-    return applyJustifySlack(spans, slack, measurer);
+    return applyJustifySlack(spans, slack, measurer, drawings);
   }
 
   if (slack <= 0) return spans;
@@ -306,9 +335,10 @@ function shrinkCapacityOf(span: StyleSpanRecord, measurer: TextMeasurer): number
 function applyJustifySlack(
   spans: readonly StyleSpanRecord[],
   slack: number,
-  measurer: TextMeasurer
+  measurer: TextMeasurer,
+  drawings?: readonly LineInlineDrawingStart[]
 ): readonly StyleSpanRecord[] {
-  const gapBefore = justifySlackGapIndices(spans);
+  const gapBefore = justifySlackGapIndices(spans, drawings);
   if (gapBefore.length === 0) return spans;
   if (slack > 0) {
     const step = slack / gapBefore.length;

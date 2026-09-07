@@ -13,6 +13,7 @@ import {
   type FontOriginFailure,
 } from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
+import { normalizePageGeometryGridPolicy } from '../layout/page-geometry-policy.ts';
 import { HARD_MAX_AGGREGATE_FONT_BYTES } from '../layout/font-resource.ts';
 import { buildNumberingIndex } from '../layout/numbering-index.ts';
 import { resolveStoryListItems } from '../layout/list-resolve.ts';
@@ -46,7 +47,7 @@ import {
 } from '../store/headless-document-view.ts';
 import {
   ExportResourceError,
-  openDocumentForExport,
+  openDocumentForExportWithPageGeometryPolicy,
   type ExportSession,
   type OpenDocumentForExportOptions,
   type OpenDocumentForExportResult,
@@ -132,6 +133,15 @@ export interface OpenFontBackedDocumentForExportOptions extends Omit<
   readonly fontPolicy?: 'best-effort' | 'strict';
   /** Fire-and-forget diagnostics; returned promises are observed but do not delay export. */
   readonly onFontResolution?: (report: ExportFontResolutionReport) => void;
+  /** Optional declarative grid for resolved page geometry. The default is exact identity. */
+  readonly pageGeometryPolicy?: Readonly<{
+    /** Finite positive grid unit in points. */
+    unitPt: number;
+    /** Snap to the nearest grid unit, with half-grid ties away from zero. */
+    rounding: 'nearest';
+    /** Quantize the source content span before deriving the opposite page margin. */
+    contentExtent?: 'source-span-nearest';
+  }>;
 }
 
 let activeDocumentFontBytes = 0;
@@ -206,8 +216,15 @@ export async function openFontBackedDocumentForExport(
   if (options.signal?.aborted) return { ok: false, reason: 'aborted' };
   const opened = openHeadlessDocument(source);
   if (!opened.ok) return opened;
-  const { fonts, fontResolutionTimeoutMs, fontPolicy, onFontResolution, ...sessionOptions } =
-    options;
+  const {
+    fonts,
+    fontResolutionTimeoutMs,
+    fontPolicy,
+    onFontResolution,
+    pageGeometryPolicy,
+    ...sessionOptions
+  } = options;
+  const normalizedPageGeometryPolicy = normalizePageGeometryGridPolicy(pageGeometryPolicy);
   const origins = Array.isArray(fonts) ? fonts : [fonts as FontOrigin];
   let fontResolution: ExportFontResolutionReport | undefined;
   let shaping: DocumentExportShaping | undefined;
@@ -236,18 +253,22 @@ export async function openFontBackedDocumentForExport(
   }
   let result: OpenDocumentForExportResult;
   try {
-    result = openDocumentForExport(opened.view, {
-      ...sessionOptions,
-      reuseAcrossRevisions: false,
-      ...(shaping
-        ? {
-            measurer: shaping.createMeasurer(),
-            producer: options.producer ?? shaping.producer,
-          }
-        : options.producer
-          ? { producer: options.producer }
-          : {}),
-    });
+    result = openDocumentForExportWithPageGeometryPolicy(
+      opened.view,
+      {
+        ...sessionOptions,
+        reuseAcrossRevisions: false,
+        ...(shaping
+          ? {
+              measurer: shaping.createMeasurer(),
+              producer: options.producer ?? shaping.producer,
+            }
+          : options.producer
+            ? { producer: options.producer }
+            : {}),
+      },
+      normalizedPageGeometryPolicy
+    );
   } catch (error) {
     shaping?.dispose();
     throw error;

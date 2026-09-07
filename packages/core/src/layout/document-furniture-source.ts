@@ -22,12 +22,25 @@ import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
-import type { TextMeasurer } from './semantic-records.ts';
+import type { PageGeometry, TextMeasurer } from './semantic-records.ts';
 
 /** Page furniture supplied to semantic layout. @public */
 export interface DocumentFurnitureSource {
   furniture(): PageFurniture | undefined;
   sectionFurniture(): readonly (PageFurniture | undefined)[];
+}
+
+const sectionGeometryResolvers = new WeakMap<
+  DocumentFurnitureSource,
+  (sectionGeometries: readonly PageGeometry[]) => readonly (PageFurniture | undefined)[]
+>();
+
+/** Resolve furniture with coordinator-owned section geometry. @internal */
+export function documentFurnitureForSectionGeometries(
+  source: DocumentFurnitureSource,
+  sectionGeometries: readonly PageGeometry[]
+): readonly (PageFurniture | undefined)[] {
+  return sectionGeometryResolvers.get(source)?.(sectionGeometries) ?? source.sectionFurniture();
 }
 
 /** Inputs that remain valid for the lifetime of one furniture source. @public */
@@ -292,7 +305,9 @@ export function createDocumentFurnitureSource(
     };
   };
 
-  const sectionFurniture = (): readonly (PageFurniture | undefined)[] => {
+  const sectionFurniture = (
+    sectionGeometries?: readonly PageGeometry[]
+  ): readonly (PageFurniture | undefined)[] => {
     const packageOwner = view.currentPackage();
     const occurrenceOwner = headerFooterOccurrenceOwner(packageOwner);
     const sections = enumerateDocumentSections(view.part(), displayMode, revisionAuthorFilter);
@@ -312,16 +327,18 @@ export function createDocumentFurnitureSource(
         occurrenceOwner,
         bySection[sourceIndex],
         resolutionBySection[sourceIndex],
-        geometryOfSection(section.properties)
+        sectionGeometries?.[index] ?? geometryOfSection(section.properties)
       );
     });
   };
 
-  return {
-    sectionFurniture,
+  const source: DocumentFurnitureSource = {
+    sectionFurniture: () => sectionFurniture(),
     furniture() {
       const all = sectionFurniture();
       return all[all.length - 1];
     },
   };
+  sectionGeometryResolvers.set(source, sectionFurniture);
+  return source;
 }

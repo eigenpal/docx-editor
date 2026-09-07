@@ -117,6 +117,9 @@ export interface ImageDecodePort {
 }
 
 // @public
+export type PdfCompatibilityProfile = 'word-macos-300dpi';
+
+// @public
 export class PdfDocumentOpenError extends Error {
     constructor(reason: HeadlessDocumentRejection | 'aborted', detail?: string | undefined);
     // (undocumented)
@@ -127,6 +130,7 @@ export class PdfDocumentOpenError extends Error {
 
 // @public
 export interface PdfExportOptions {
+    readonly compatibilityProfile?: PdfCompatibilityProfile;
     readonly convertPreservedImage?: PreservedImageConverter;
     readonly displayMode?: RevisionDisplayMode;
     readonly fallbackFonts?: PdfFontsSource;
@@ -205,7 +209,13 @@ signal?: AbortSignal) => Promise<Readonly<{
 }> | null>;
 
 // @public
+export function quantizeWordMacos300Dpi(valuePt: number): number;
+
+// @public
 export type RevisionDisplayMode = 'all-markup' | 'proposed' | 'original';
+
+// @public
+export const WORD_MACOS_300DPI_GRID_PT: number;
 
 // (No @packageDocumentation comment for this package)
 

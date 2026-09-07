@@ -53,11 +53,11 @@ import {
 } from './table-anchor-republish.ts';
 import {
   markRevisionFields,
-  paragraphMarkMarkupVisible,
   visibleParagraphMarkRevisionsOf,
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
+import { cellParagraphPublishesPlacedGlyphs } from './cell-paragraph-collapse.ts';
 import {
   collapsedSpaceBefore,
   paragraphBorderExtentPt,
@@ -597,33 +597,14 @@ function placeCellParagraph(
   const maxBottom = options?.maxBottom ?? Number.POSITIVE_INFINITY;
   const includeAfter = options?.includeAfter ?? true;
   const includeBottomBorder = options?.includeBottomBorder ?? true;
-  // ONE question, asked once, so the next kind of furniture is caught by construction rather
-  // than arriving as the third late special case. The caller settles POSITION — last block of
-  // a cell, behind a table that actually emitted, structurally empty. What decides whether
-  // the collapse is SAFE is resolved here, and the line runs between two kinds of thing:
-  //
-  //   sized OFF the line box   borders, shading — a zero box paints a zero band, which is
-  //                            what "occupies no space" should look like. These collapse.
-  //   own intrinsic size       a list marker glyph, and the pilcrow and change bar a tracked
-  //                            `w:ins`/`w:del` on the paragraph MARK publishes. A zero box
-  //                            does not hide these, it MISPLACES them — paint centres the
-  //                            marker half a line above its row and drops the change bar
-  //                            entirely. These block the collapse.
-  //
-  // The mark revisions are read only in All Markup — that is the only view where the pilcrow
-  // and the change bar exist. In the resolved or original view a terminator whose mark is
-  // tracked-INSERTED publishes neither, so blocking there would keep a line Word's accept-all
-  // output does not have. (A tracked DELETE is a different case and never reaches here: the
-  // resolved view merges that paragraph away upstream.)
-  // Called behind the position gate: every paragraph is scanned on every placement pass,
-  // including trial rows and continuations; `||` cannot skip the `w:pPr`/`w:rPr` scan because
-  // `listItem` is undefined for the non-list paragraphs that are the overwhelming majority.
-  // The same pair of calls further down is gated on `showsMarkup` for exactly this reason.
-  const publishesPlacedGlyphs = (): boolean =>
-    listItem !== undefined ||
-    (deps.displayMode === 'all-markup' &&
-      paragraphMarkMarkupVisible(paragraph, 'all-markup', deps.revisionAuthorFilter));
-  const collapseHeight = (options?.collapseHeight ?? false) && !publishesPlacedGlyphs();
+  const collapseHeight =
+    (options?.collapseHeight ?? false) &&
+    !cellParagraphPublishesPlacedGlyphs(
+      paragraph,
+      listItem !== undefined,
+      deps.displayMode,
+      deps.revisionAuthorFilter
+    );
 
   const appliedBefore =
     lineStart === 0 && !collapseHeight
@@ -674,7 +655,8 @@ function placeCellParagraph(
       lineAvailableWidth,
       alignment,
       isLastLine,
-      alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined
+      alignment === 'center' || alignment === 'right' ? pendingLine.width : undefined,
+      pendingLine.drawings
     );
     // Empty lines align too — see the body-flow twin in `semantic-layout.ts`.
     const alignOffset =

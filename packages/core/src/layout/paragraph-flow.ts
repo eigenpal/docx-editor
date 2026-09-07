@@ -86,7 +86,12 @@ import {
   type Alignment,
 } from './paragraph-justify.ts';
 
-export { OVERFLOW_TOLERANCE_PT, alignSpans, type Alignment } from './paragraph-justify.ts';
+export {
+  OVERFLOW_TOLERANCE_PT,
+  alignSpans,
+  type Alignment,
+  type LineInlineDrawingStart,
+} from './paragraph-justify.ts';
 
 /**
  * Per-paragraph geometry the BREAK depends on, beyond width.

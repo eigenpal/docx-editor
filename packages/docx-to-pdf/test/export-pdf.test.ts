@@ -86,6 +86,38 @@ describe('one-shot exportPdf', () => {
     expect(result.diagnostics.length).toBeLessThanOrEqual(HARD_MAX_FIDELITY_DIAGNOSTICS);
   });
 
+  test('applies the macOS Word profile only when selected', async () => {
+    const bytes = docx(
+      '<w:p><w:r><w:t>A4</w:t></w:r></w:p>' +
+        '<w:sectPr><w:pgSz w:w="11907" w:h="16840"/>' +
+        '<w:pgMar w:top="1797" w:right="1797" w:bottom="1797" w:left="1797"/></w:sectPr>'
+    );
+    const exactResult = await exportPdf(bytes);
+    const implicitResult = await exportPdf(bytes, {});
+    const exact = pdfLatin1(exactResult.bytes);
+    const compatible = pdfLatin1(
+      (await exportPdf(bytes, { compatibilityProfile: 'word-macos-300dpi' })).bytes
+    );
+
+    expect(exact).toContain('/MediaBox [0 0 595.35 842]');
+    expect(compatible).toContain('/MediaBox [0 0 595.44 841.92]');
+    expect(implicitResult.bytes).toEqual(exactResult.bytes);
+  });
+
+  test('exports mixed sections and footer furniture through the profile', async () => {
+    const bytes = readFileSync(
+      join(import.meta.dir, '..', '..', '..', 'e2e', 'fixtures', 'issue-319-sections.docx')
+    );
+    const result = await exportPdf(bytes, { compatibilityProfile: 'word-macos-300dpi' });
+    const pdf = pdfLatin1(result.bytes);
+    const mediaBoxes = [...pdf.matchAll(/\/MediaBox \[([^\]]+)\]/g)].map((match) => match[1]);
+
+    expect(result.pageCount).toBe(8);
+    expect(mediaBoxes).toContain('0 0 595.44 841.92');
+    expect(mediaBoxes).toContain('0 0 841.92 595.44');
+    expect(result.diagnostics.some((diagnostic) => diagnostic.story === 'footer')).toBe(true);
+  });
+
   test('preserves Core all-markup as the default revision projection', async () => {
     const bytes = docx(
       '<w:p><w:del w:id="1" w:author="A"><w:r><w:delText>Old</w:delText></w:r></w:del>' +
@@ -282,23 +314,21 @@ describe('one-shot exportPdf', () => {
 
   test('keeps the font-backed session alive through planning and encoding', () => {
     const oneShot = exportSource.slice(exportSource.indexOf('export async function exportPdf('));
+    const planningCall = 'planPdfPaintFromLayoutAsync(layout, {';
     expect(oneShot).toContain('createFidelityDiagnosticCollector()');
     expect(oneShot).toContain('admittedFonts(opened.session)');
     expect(oneShot).not.toContain('shapeLaidOutText(');
-    expect(oneShot).toContain('planPdfPaintFromLayoutAsync(layout, { signal: options.signal })');
+    expect(oneShot).toContain(planningCall);
+    expect(oneShot).toContain('signal: options.signal');
     expect(oneShot).toContain('writePdfPaintPlanToBytes(planned.plan');
     expect(oneShot).not.toMatch(/\.\.\.written\.diagnostics/);
     expect(oneShot).not.toMatch(/\.\.\.planned\.diagnostics/);
-    expect(
-      oneShot.indexOf('planPdfPaintFromLayoutAsync(layout, { signal: options.signal })')
-    ).toBeLessThan(oneShot.indexOf('opened.session.dispose()'));
+    expect(oneShot.indexOf(planningCall)).toBeLessThan(oneShot.indexOf('opened.session.dispose()'));
     expect(oneShot.indexOf('writePdfPaintPlanToBytes(planned.plan')).toBeLessThan(
       oneShot.indexOf('opened.session.dispose()')
     );
     expect(oneShot).toContain('admittedFonts(opened.session)');
-    expect(oneShot.indexOf('try {')).toBeLessThan(
-      oneShot.indexOf('planPdfPaintFromLayoutAsync(layout, { signal: options.signal })')
-    );
+    expect(oneShot.indexOf('try {')).toBeLessThan(oneShot.indexOf(planningCall));
     expect(oneShot).toMatch(/\} finally \{\s*opened\.session\.dispose\(\);/);
   });
 });

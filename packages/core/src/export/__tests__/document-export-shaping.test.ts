@@ -172,6 +172,52 @@ function minimalDocx(body: string): Uint8Array {
   });
 }
 
+test('font-backed export validates and snapshots page geometry policy once', async () => {
+  const bytes = minimalDocx(
+    '<w:p><w:r><w:t>A4</w:t></w:r></w:p>' +
+      '<w:sectPr><w:pgSz w:w="11907" w:h="16840"/>' +
+      '<w:pgMar w:top="1797" w:right="1797" w:bottom="1797" w:left="1797"/></w:sectPr>'
+  );
+  const policy: {
+    unitPt: number;
+    rounding: 'nearest';
+    contentExtent: 'source-span-nearest';
+  } = {
+    unitPt: 72 / 300,
+    rounding: 'nearest',
+    contentExtent: 'source-span-nearest',
+  };
+  const opened = await openFontBackedDocumentForExport(bytes, {
+    fonts: [],
+    pageGeometryPolicy: policy,
+  });
+  expect(opened.ok).toBe(true);
+  policy.unitPt = 12;
+  if (!opened.ok) return;
+  try {
+    const page = (await opened.session.layout()).pages[0]!;
+    expect(page.box.width).toBeCloseTo(595.44, 12);
+    expect(page.box.height).toBeCloseTo(841.92, 12);
+    expect(page.contentBox.x).toBeCloseTo(89.76, 12);
+    expect(page.contentBox.width).toBeCloseTo(415.68, 12);
+  } finally {
+    opened.session.dispose();
+  }
+
+  await expect(
+    openFontBackedDocumentForExport(bytes, {
+      fonts: [],
+      pageGeometryPolicy: { unitPt: Number.NaN, rounding: 'nearest' },
+    })
+  ).rejects.toBeInstanceOf(TypeError);
+  await expect(
+    openFontBackedDocumentForExport(bytes, {
+      fonts: [],
+      pageGeometryPolicy: { unitPt: 0.24, rounding: 'invalid' as 'nearest' },
+    })
+  ).rejects.toBeInstanceOf(TypeError);
+});
+
 function fieldFloodDocx(): Uint8Array {
   const cached = Array.from(
     { length: 22 },

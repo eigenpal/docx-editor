@@ -8,15 +8,26 @@ import {
   createDocumentNotesInput,
   type CreateDocumentNotesInputOptions,
 } from './document-notes-input.ts';
-import type { DocumentFurnitureSource } from './document-furniture-source.ts';
+import {
+  documentFurnitureForSectionGeometries,
+  type DocumentFurnitureSource,
+} from './document-furniture-source.ts';
 import type { LayoutSession } from './layout-session.ts';
 import type { NumberingIndex } from './numbering-index.ts';
 import type { ParagraphLayoutCache } from './layout-cache.ts';
 import type { PendingLine } from './pending-line.ts';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
-import { layoutSemanticDocument, type SemanticLayoutOptions } from './semantic-layout.ts';
+import {
+  layoutSemanticDocumentWithResolvedSectionGeometries,
+  type SemanticLayoutOptions,
+} from './semantic-layout.ts';
 import type { SemanticLayout, TextMeasurer } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
+import {
+  applyPageGeometryGridPolicy,
+  type PageGeometryGridPolicy,
+} from './page-geometry-policy.ts';
+import { enumerateDocumentSections, geometryOfSection } from './section-properties.ts';
 
 type SemanticLayoutOptionRole =
   | 'document-coordinator'
@@ -100,6 +111,7 @@ export interface LayoutDocumentViewOptions {
   readonly drawingLayoutEpochForPart?: (partName: string) => string;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
+  readonly pageGeometryPolicy?: PageGeometryGridPolicy;
 }
 
 type LayoutDocumentViewSink = 'notes' | 'semantic-layout' | 'both';
@@ -126,6 +138,7 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   drawingLayoutEpochForPart: 'notes',
   displayMode: 'both',
   revisionAuthorFilter: 'both',
+  pageGeometryPolicy: 'semantic-layout',
 } as const satisfies Readonly<Record<keyof LayoutDocumentViewOptions, LayoutDocumentViewSink>>;
 
 type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> = {
@@ -145,6 +158,16 @@ type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> 
 export function layoutDocumentView(options: LayoutDocumentViewOptions): SemanticLayout {
   const defaultTabStopPt = options.defaultTabStopPt?.();
   const bodyPartName = options.view.part().name;
+  const sections = enumerateDocumentSections(
+    options.view.part(),
+    options.displayMode,
+    options.revisionAuthorFilter
+  );
+  const sectionGeometries = Object.freeze(
+    sections.map((section) =>
+      applyPageGeometryGridPolicy(geometryOfSection(section.properties), options.pageGeometryPolicy)
+    )
+  );
   const noteOptions = {
     view: options.view,
     measurer: options.measurer,
@@ -182,7 +205,12 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     drawingLayoutEpoch: options.drawingLayoutEpoch,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
+    pageGeometryPolicy: options.pageGeometryPolicy,
   } satisfies Record<CoordinatorInputsFor<'semantic-layout'>, unknown>;
+  const sectionFurniture = documentFurnitureForSectionGeometries(
+    semanticInputs.furniture,
+    sectionGeometries
+  );
   const semanticOptions = {
     measurer: semanticInputs.measurer,
     cache: semanticInputs.cache,
@@ -191,8 +219,8 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     styleCascade: semanticInputs.styleCascade?.(),
     defaultTabStopPt: semanticInputs.defaultTabStopPt,
     numberingIndex: semanticInputs.numberingIndex?.(),
-    sectionFurniture: semanticInputs.furniture.sectionFurniture(),
-    furniture: semanticInputs.furniture.furniture(),
+    sectionFurniture,
+    furniture: sectionFurniture[sectionFurniture.length - 1],
     projectLink: semanticInputs.linkProjectors.projectLink,
     projectFieldLink: semanticInputs.projectFieldLink,
     documentProperties: semanticInputs.view.documentProperties(),
@@ -208,9 +236,11 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     displayMode: semanticInputs.displayMode,
     revisionAuthorFilter: semanticInputs.revisionAuthorFilter,
   } satisfies SemanticLayoutOptions & Record<DocumentCoordinatedSemanticOption, unknown>;
-  return layoutSemanticDocument(
+  return layoutSemanticDocumentWithResolvedSectionGeometries(
     semanticInputs.view.part(),
     semanticInputs.revision,
-    semanticOptions
+    semanticOptions,
+    sectionGeometries,
+    semanticInputs.pageGeometryPolicy
   );
 }

@@ -36,6 +36,8 @@ export interface PdfPaintWriteOptions {
   readonly admittedFonts?: readonly PdfAdmittedFont[];
   /** Core's resolved default family for spans that omit `w:rFonts`. */
   readonly defaultFontFamily?: string;
+  /** Optional device grid for single-underline metric components. */
+  readonly singleUnderlineGridPt?: number;
 }
 
 /** Result of encoding one paint plan to PDF bytes. @internal */

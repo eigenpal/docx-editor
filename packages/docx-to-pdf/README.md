@@ -22,6 +22,12 @@ an internal PDFKit writer. Reusable export sessions are not published yet.
 
 Default `displayMode` is Core's `all-markup`. Default `fidelityPolicy` is `best-effort`. Strict
 policy throws `PdfFidelityError` when any visible approximation or unsupported diagnostic exists.
+The optional `compatibilityProfile: 'word-macos-300dpi'` profile matches Word for macOS PDF
+device-grid behavior. It quantizes page inputs before layout, then quantizes PDF font sizes,
+baselines, border components, fills, links, destinations, and single-underline metrics. It
+quantizes the source content span before it derives the trailing page margin. It preserves
+fractional shaped run advances within each line. Wrapped trailing spaces do not extend merged
+underlines. Omit this option to keep Core's default twip-exact layout.
 
 ### What Core already provides
 
@@ -93,6 +99,10 @@ const result = await exportPdf(docxBytes);
 result.bytes; // Uint8Array PDF
 result.pageCount;
 result.diagnostics;
+
+const wordMacPdf = await exportPdf(docxBytes, {
+  compatibilityProfile: 'word-macos-300dpi',
+});
 ```
 
 The package is private in this change and cannot be installed from the public registry yet.

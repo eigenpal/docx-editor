@@ -18,6 +18,12 @@ export const WORD_PDF_DEVICE_GRID_PT = 72 / 300;
 export const PDF_UNDERLINE_JOIN_EPSILON_PT = 0.25;
 
 /**
+ * IEEE slack when a stored absorption is compared to a reconstructed gap.
+ * This is not a layout join and must stay far below {@link PDF_UNDERLINE_JOIN_EPSILON_PT}.
+ */
+const PDF_UNDERLINE_ABSORPTION_FLOAT_PT = 1e-6;
+
+/**
  * Adobe standard-14 AFM underline metrics (1000-unit em).
  * Helvetica, Times-Roman, and Courier all publish these values.
  */
@@ -52,6 +58,32 @@ export interface PdfUnderlineSegment {
   readonly thicknessPt: number;
   readonly offsetTopPt: number;
   readonly linkKey: string | null;
+  /** Justified slack after this run that a trailing U+0020 may absorb. */
+  readonly gapAbsorptionPt: number;
+  /** Rendered width removed only when a wrapped trailing U+0020 hangs past the line edge. */
+  readonly excludedTrailingSpacePt: number;
+}
+
+const EXCLUDE_TRAILING_UNDERLINE_SPACE = Symbol('exclude-trailing-underline-space');
+
+type TrailingUnderlineSpaceCommand = Extract<PdfPaintCommand, { kind: 'textSpan' }> & {
+  readonly [EXCLUDE_TRAILING_UNDERLINE_SPACE]?: true;
+};
+
+/** Mark one immutable text command whose wrapped trailing U+0020 is not underlined. @internal */
+export function excludeTrailingUnderlineSpace(
+  command: Extract<PdfPaintCommand, { kind: 'textSpan' }>,
+  exclude: boolean
+): Extract<PdfPaintCommand, { kind: 'textSpan' }> {
+  if (!exclude) return command;
+  return Object.freeze({ ...command, [EXCLUDE_TRAILING_UNDERLINE_SPACE]: true });
+}
+
+/** Read the internal wrapped-space underline decision. @internal */
+export function excludesTrailingUnderlineSpace(
+  command: Extract<PdfPaintCommand, { kind: 'textSpan' }>
+): boolean {
+  return (command as TrailingUnderlineSpaceCommand)[EXCLUDE_TRAILING_UNDERLINE_SPACE] === true;
 }
 
 const MAX_SFNT_TABLES = 4096;
@@ -165,6 +197,19 @@ export function pdfSingleUnderlineGeometry(
   return Object.freeze({ thicknessPt, offsetTopPt });
 }
 
+/** Quantize underline metric components before deriving the final fill rectangle. @internal */
+export function gridRoundedSingleUnderlineGeometry(
+  geometry: PdfSingleUnderlineGeometry,
+  unitPt: number | undefined
+): PdfSingleUnderlineGeometry {
+  if (!(unitPt && Number.isFinite(unitPt) && unitPt > 0)) return geometry;
+  const nearest = (value: number): number => Math.floor(value / unitPt + 0.5) * unitPt;
+  return Object.freeze({
+    thicknessPt: nearest(geometry.thicknessPt),
+    offsetTopPt: nearest(geometry.offsetTopPt),
+  });
+}
+
 /** Reads `head.unitsPerEm` and `post` underline metrics from an admitted SFNT face. */
 export function pdfUnderlineMetricsFromSfnt(
   bytes: Uint8Array,
@@ -197,9 +242,41 @@ function linkTargetKey(command: PdfLinkCommand): string {
   return `internal:${command.target.destination}`;
 }
 
+const WRAP_ADVANCE_REFUSE_PT = 0.001;
+const WORD_SEPARATOR = /[\t\n\r \u00A0\u1361\u{10100}-\u{10102}\u{1039F}\u{1091F}]/u;
+
+/**
+ * How far a following compatible underline may sit past this span.
+ * Returns 0 unless a trailing U+0020 absorbs justified slack. Tabs,
+ * wrapAdvanceBefore / float exclusions, images, and host splits do not absorb.
+ */
+export function pdfUnderlineJustifyGapAbsorptionPt(input: {
+  readonly precedingText: string;
+  readonly gapAfterPt: number;
+  readonly nextWrapAdvanceBeforePt?: number;
+  readonly nextIsTab?: boolean;
+  readonly sharesAnchor?: boolean;
+  readonly horizontalScalePercent?: number;
+  readonly drawingOccupiesGap?: boolean;
+  readonly leftUnderlined?: boolean;
+  readonly rightUnderlined?: boolean;
+}): number {
+  if (input.leftUnderlined === false || input.rightUnderlined === false) return 0;
+  if (input.sharesAnchor === false) return 0;
+  if (input.drawingOccupiesGap === true) return 0;
+  if ((input.horizontalScalePercent ?? 100) !== 100) return 0;
+  if (!input.precedingText.endsWith(' ')) return 0;
+  if (WORD_SEPARATOR.test(input.precedingText.slice(0, -1))) return 0;
+  if (input.nextIsTab) return 0;
+  if ((input.nextWrapAdvanceBeforePt ?? 0) > WRAP_ADVANCE_REFUSE_PT) return 0;
+  if (!(input.gapAfterPt > PDF_UNDERLINE_JOIN_EPSILON_PT)) return 0;
+  return input.gapAfterPt;
+}
+
 /**
  * True when two single-underline fills may become one continuous rule.
  * Page, baseline, colour, thickness, offset, link identity, and x-continuity must match.
+ * A positive gap joins only when the left run absorbs justified space.
  */
 export function canMergeSingleUnderlineRuns(
   left: PdfUnderlineSegment,
@@ -213,9 +290,10 @@ export function canMergeSingleUnderlineRuns(
   if (left.offsetTopPt !== right.offsetTopPt) return false;
   const leftRight = left.x + left.width;
   const rightRight = right.x + right.width;
-  if (right.x > leftRight + PDF_UNDERLINE_JOIN_EPSILON_PT) return false;
   if (left.x > rightRight + PDF_UNDERLINE_JOIN_EPSILON_PT) return false;
-  return true;
+  const gap = right.x - leftRight;
+  if (gap <= PDF_UNDERLINE_JOIN_EPSILON_PT) return true;
+  return gap <= left.gapAbsorptionPt + PDF_UNDERLINE_ABSORPTION_FLOAT_PT;
 }
 
 /** Extends `left` so it covers `right` as well. */
@@ -229,6 +307,8 @@ export function extendSingleUnderlineRun(
     ...left,
     x,
     width: rightEdge - x,
+    gapAbsorptionPt: right.gapAbsorptionPt,
+    excludedTrailingSpacePt: right.excludedTrailingSpacePt,
   });
 }
 
@@ -237,7 +317,7 @@ export function pdfUnderlineFillRect(segment: PdfUnderlineSegment): PdfRect {
   return Object.freeze({
     x: segment.x,
     y: segment.baseline - segment.offsetTopPt - segment.thicknessPt,
-    width: segment.width,
+    width: Math.max(0, segment.width - segment.excludedTrailingSpacePt),
     height: segment.thicknessPt,
   });
 }

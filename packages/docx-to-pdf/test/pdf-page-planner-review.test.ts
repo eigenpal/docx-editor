@@ -364,14 +364,14 @@ describe('PDF planner revision and fill fidelity', () => {
     expect(source).toContain('iterateSemanticParagraphOrder');
     expect(source).toContain('function* recordReviewArtifactDiagnostics');
     expect(source).toContain('function* appendNamedDestinations');
-    expect(source).toMatch(/appendParagraphMarkerCommands[\s\S]*yield;/);
+    expect(source).toMatch(/plannedParagraphMarkerCommand[\s\S]*yield;/);
     expect(source).toMatch(
       /function\* appendPaintHostLayer\([\s\S]*?\): Generator<void> \{\n  yield;/
     );
     expect(source).toMatch(/layerVisits % PLANNER_ABORT_BATCH_SIZE === 0[\s\S]*yield;/);
     expect(source).toMatch(/function\* visitPageUnsupported/);
     expect(source).toMatch(/function\* visitBlocksForUnsupported/);
-    expect(source).toContain('yield* drainBatched(planPageDiagnostics');
+    expect(source).toMatch(/yield\* drainBatched\(\s*planPageDiagnostics/);
     expect(source).toContain('yield* visitPageUnsupported(page, diagnostics)');
     expect(source).toContain('yield* visitBlocksForPublishedBorders');
     expect(source).not.toMatch(/SemanticSpanVisit\[\]/);

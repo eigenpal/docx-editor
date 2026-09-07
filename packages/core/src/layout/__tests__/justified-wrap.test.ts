@@ -171,7 +171,7 @@ describe('EP_ZMVZ_MULTI_v4 italic wrap regression', () => {
     const italic = aligned.find((span) => span.text.includes('zapisovateľom'))!;
     const visible = stripTrailingOrdinarySpaces(italic.text);
     const visibleWidth = fixtureMeasurer.measure(visible, italic.style);
-    expect(italic.box.x + visibleWidth).toBeCloseTo(AVAIL, 1);
+    expect(italic.box.x + visibleWidth).toBeCloseTo(AVAIL, 5);
     expect(hangingBoundarySpaceWidth(aligned, fixtureMeasurer)).toBeCloseTo(2 * SPACE, 5);
   });
 });
@@ -247,11 +247,42 @@ describe('cross-run hanging boundary for w:jc both', () => {
     expect(hangingBoundarySpaceWidth(spans, measurer)).toBe(0);
   });
 
-  test('a pure U+0020 span before a drawing is not hung', () => {
-    const spans = place([span('x', 6, 0), span(' ', 6, 1)]);
+  test('a trailing tab is not part of the hanging tail', () => {
+    const spans = place([span('AB\t', 18, 0)]);
     expect(hangingBoundarySpaceWidth(spans, measurer)).toBe(0);
-    expect(hangingBoundaryTailStartIndex(spans)).toBe(2);
+    expect(hangingBoundaryTailStartIndex(spans)).toBe(1);
+  });
+
+  test('terminal U+0020 after punctuation hangs its full width', () => {
+    const SPACE = 2.75;
+    const WORD = 12.75;
+    const BYTOM = 40;
+    const words = Array.from({ length: 9 }, (_, index) => span('aa ', WORD, index * 3));
+    const spans = place([...words, span('bytom:', BYTOM, 27), span(' ', SPACE, 33)]);
+    expect(hangingBoundarySpaceWidth(spans, measurer)).toBeCloseTo(SPACE, 5);
+    expect(hangingBoundaryTailStartIndex(spans)).toBe(10);
+    expect(justifySlackGapIndices(spans)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+    const bytom = spans[9]!;
+    const available = bytom.box.x + bytom.box.width + 18;
+    const aligned = alignSpans(spans, measurer, 0, available, 'both', false);
+    expect(aligned[9]!.box.x + aligned[9]!.box.width).toBeCloseTo(available, 5);
+    expect(aligned[10]!.box.x - (aligned[9]!.box.x + aligned[9]!.box.width)).toBeCloseTo(0, 5);
+  });
+
+  test('visible x plus a terminal U+0020 hangs without a drawing', () => {
+    const spans = place([span('x', 6, 0), span(' ', 6, 1)]);
+    expect(hangingBoundarySpaceWidth(spans, measurer)).toBe(6);
+    expect(hangingBoundaryTailStartIndex(spans)).toBe(1);
     expect(justifySlackGapIndices(spans)).toEqual([]);
+  });
+
+  test('a U+0020 connector before an inline drawing does not hang', () => {
+    const spans = place([span('x', 6, 0), span(' ', 6, 1)]);
+    const drawings = [{ start: 2 }];
+    expect(hangingBoundarySpaceWidth(spans, measurer, drawings)).toBe(0);
+    expect(hangingBoundaryTailStartIndex(spans, drawings)).toBe(2);
+    expect(justifySlackGapIndices(spans, drawings)).toEqual([]);
   });
 });
 
@@ -381,13 +412,23 @@ describe('center and right hang trailing U+0020', () => {
     expect(centered[0]!.box.x).toBeCloseTo((90 - 30) / 2, 5);
   });
 
-  test('a pure U+0020 span is not hung, so a following drawing can still count it', () => {
+  test('a terminal U+0020-only span hangs when no drawing follows', () => {
     const text = span('x', 6);
     const space: StyleSpanRecord = {
       ...span(' ', 6, 1),
       box: { x: 6, y: 0, width: 6, height: 14 },
     };
     const aligned = alignSpans([text, space], measurer, 0, 90, 'center', true, 12);
+    expect(aligned[0]!.box.x).toBeCloseTo((90 - 6) / 2, 5);
+  });
+
+  test('a U+0020 connector before an inline drawing stays in the aligned width', () => {
+    const text = span('x', 6);
+    const space: StyleSpanRecord = {
+      ...span(' ', 6, 1),
+      box: { x: 6, y: 0, width: 6, height: 14 },
+    };
+    const aligned = alignSpans([text, space], measurer, 0, 90, 'center', true, 12, [{ start: 2 }]);
     expect(aligned[0]!.box.x).toBeCloseTo((90 - 12) / 2, 5);
   });
 

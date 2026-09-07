@@ -36,6 +36,23 @@ content geometry, line breaks, headers, footers, tables, drawings, and revision 
 - **WHEN** Core publishes pages with different authored sizes
 - **THEN** each PDF page uses the matching width and height in points without repagination
 
+#### Scenario: Optional Word for macOS 300 dpi compatibility
+
+- **WHEN** a caller selects `compatibilityProfile: 'word-macos-300dpi'`
+- **THEN** page inputs use the 0.24 pt device grid before pagination
+- **AND** the source content span and paragraph-border components use the grid before derived
+  geometry and flow height
+- **AND** font sizes, cumulative baselines, single-underline metrics, fills, links, and
+  destinations use the same grid during PDF planning
+- **AND** footer baselines round toward the physical bottom edge
+- **AND** a wrapped trailing U+0020 does not extend a merged underline
+- **AND** shaped run advances remain fractional relative to each line anchor
+
+#### Scenario: Default compatibility behavior
+
+- **WHEN** a caller omits `compatibilityProfile`
+- **THEN** Core uses its unchanged twip-exact layout and the PDF planner preserves its prior output
+
 #### Scenario: Exporter receives an unsupported record
 
 - **WHEN** a semantic record cannot be represented in PDF

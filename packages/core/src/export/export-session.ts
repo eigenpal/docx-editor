@@ -27,6 +27,7 @@ import { createParagraphLayoutCache } from '../layout/layout-cache.ts';
 import { createLayoutSession } from '../layout/layout-session.ts';
 import { releaseOverflowPageShellState } from '../layout/page-furniture-insets.ts';
 import type { AnchoredDrawingRecord, InlineDrawingRecord } from '../layout/drawing-layout.ts';
+import { type PageGeometryGridPolicy } from '../layout/page-geometry-policy.ts';
 import type { SemanticLayout, TextMeasurer } from '../layout/semantic-records.ts';
 import type { SemanticReviewArtifactRecord } from '../layout/review-artifact-records.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
@@ -239,6 +240,15 @@ function isDocumentView(source: ExportDocumentSource): source is HeadlessDocumen
 export function openDocumentForExport(
   source: ExportDocumentSource,
   options: OpenDocumentForExportOptions = {}
+): OpenDocumentForExportResult {
+  return openDocumentForExportWithPageGeometryPolicy(source, options);
+}
+
+/** Font-backed composition seam for a prevalidated page-geometry policy. @internal */
+export function openDocumentForExportWithPageGeometryPolicy(
+  source: ExportDocumentSource,
+  options: OpenDocumentForExportOptions = {},
+  pageGeometryPolicy?: PageGeometryGridPolicy
 ): OpenDocumentForExportResult {
   if (options.signal?.aborted) {
     // A session whose every method already throws is `ok: true` in shape only; answer the
@@ -527,6 +537,7 @@ export function openDocumentForExport(
         drawingLayoutEpochForPart: (partName) => state.drawingBundle.cacheTokenForPart(partName),
         displayMode: mode,
         revisionAuthorFilter: undefined,
+        pageGeometryPolicy,
       } satisfies LayoutDocumentViewOptions & Record<keyof LayoutDocumentViewOptions, unknown>);
       if (!layoutHasPendingImages(layout)) {
         const restartedBeforePublish = restartOnRevisionDrift();

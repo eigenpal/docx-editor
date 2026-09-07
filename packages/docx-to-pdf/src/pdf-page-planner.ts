@@ -12,8 +12,8 @@ import {
 import type {
   BlockFragmentRecord,
   HeaderFooterStoryRecord,
+  LineRecord,
   PageRecord,
-  ParagraphFragmentRecord,
   StyleSpanRecord,
 } from '@docx-editor.dev/core/layout';
 import {
@@ -27,7 +27,14 @@ import {
   type SemanticFillHostVisit,
   type SemanticRootStoryKind,
 } from '@docx-editor.dev/core/layout';
-import { coreBoxToPdfRect, coreYToPdfY } from './pdf-coordinates.ts';
+import { coreBoxToPdfRect } from './pdf-coordinates.ts';
+import {
+  compatibleWordMacos300DpiTextStyle,
+  quantizeWordMacos300Dpi,
+  quantizeWordMacos300DpiLineRect,
+  quantizeWordMacos300DpiRect,
+  type PdfCompatibilityProfile,
+} from './pdf-compatibility-profile.ts';
 import {
   createPdfFillBacking,
   paintedFillForParagraph,
@@ -70,6 +77,13 @@ import {
   pdfTextStyleFromResolvedRunStyle,
 } from './pdf-text-style.ts';
 import { validateCommandCount, validatePageCount } from './pdf-paint-bounds.ts';
+import {
+  plannedUnderlineExcludesTrailingSpace,
+  plannedUnderlineGapAbsorptionPt,
+} from './pdf-underline-absorption-plan.ts';
+import { excludeTrailingUnderlineSpace } from './pdf-underline-geometry.ts';
+import { compatibleSpanBaseline } from './pdf-span-geometry.ts';
+import { plannedParagraphMarkerCommand } from './pdf-paragraph-marker-planner.ts';
 
 /** Result of planning paint commands from one export layout snapshot. @public */
 export interface PdfPagePlanResult {
@@ -86,6 +100,7 @@ const NON_PAINTING_CONTROL_CHARS = new Set(['\f', '\n', '\r', '\t']);
 /** Optional planner controls. Existing callers may omit this argument. @public */
 export interface PdfPagePlanOptions {
   readonly signal?: AbortSignal;
+  readonly compatibilityProfile?: PdfCompatibilityProfile;
 }
 
 interface CommandTally {
@@ -142,32 +157,12 @@ function pageRelativeBox(
   );
 }
 
-function pageRelativeBaselineY(
-  page: PageRecord,
-  storyOriginY: number,
-  lineY: number,
-  lineBaseline: number,
-  baselineShiftPt: number
-): number {
-  const coreY = storyOriginY - page.box.y + lineY + lineBaseline - baselineShiftPt;
-  return coreYToPdfY(coreY, page.box.height);
+function compatibleRect(rect: PdfRect, profile: PdfCompatibilityProfile | undefined): PdfRect {
+  return profile === 'word-macos-300dpi' ? quantizeWordMacos300DpiRect(rect) : rect;
 }
 
-function markerLineBaseline(
-  fragment: ParagraphFragmentRecord,
-  fontSizePt: number
-): Readonly<{ readonly lineY: number; readonly baseline: number }> {
-  const firstLine = fragment.lines[0];
-  if (firstLine) {
-    return Object.freeze({ lineY: firstLine.box.y, baseline: firstLine.baseline });
-  }
-  const markerBox = fragment.marker?.box;
-  const boxHeight = markerBox && markerBox.height > 0 ? markerBox.height : fontSizePt;
-  const fallback = fontSizePt > 0 ? Math.min(fontSizePt, boxHeight) : boxHeight;
-  return Object.freeze({
-    lineY: markerBox?.y ?? 0,
-    baseline: fallback > 0 ? fallback : 0,
-  });
+function compatibleScalar(value: number, profile: PdfCompatibilityProfile | undefined): number {
+  return profile === 'word-macos-300dpi' ? quantizeWordMacos300Dpi(value) : value;
 }
 
 function recordRunStyleApproximations(
@@ -189,44 +184,6 @@ function recordRunStyleApproximations(
       })
     );
   }
-}
-
-function appendParagraphMarkerCommands(
-  page: PageRecord,
-  storyOrigin: Readonly<{ readonly x: number; readonly y: number }>,
-  fragment: ParagraphFragmentRecord,
-  commands: PdfPaintCommand[],
-  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
-  tally: CommandTally
-): void {
-  const marker = fragment.marker;
-  if (!marker || marker.text.length === 0) return;
-  const coreRect = Object.freeze({
-    x: storyOrigin.x + marker.box.x - page.box.x,
-    y: storyOrigin.y + marker.box.y - page.box.y,
-    width: marker.box.width,
-    height: marker.box.height,
-  });
-  const faceStyle = styleForFontSlot(marker.style, undefined);
-  const baselineShiftPt = baselineShiftPtOf(faceStyle);
-  const lineBaseline = markerLineBaseline(fragment, faceStyle.fontSizePt);
-  pushBoundedCommand(
-    commands,
-    pdfTextSpan(
-      coreBoxToPdfRect(coreRect, page.box.height),
-      pageRelativeBaselineY(
-        page,
-        storyOrigin.y,
-        lineBaseline.lineY,
-        lineBaseline.baseline,
-        baselineShiftPt
-      ),
-      pdfDisplayText(marker.text, marker.style),
-      pdfTextStyleFromResolvedRunStyle(marker.style)
-    ),
-    tally
-  );
-  recordRunStyleApproximations(page, fragment.paragraphId, marker.style, diagnostics);
 }
 
 function shouldPaintSpan(span: StyleSpanRecord): boolean {
@@ -331,9 +288,12 @@ function appendSpanCommands(
   page: PageRecord,
   storyKind: PdfFidelityStoryKind,
   storyOrigin: Readonly<{ readonly x: number; readonly y: number }>,
+  lineX: number,
   lineY: number,
   lineBaseline: number,
   span: StyleSpanRecord,
+  line: LineRecord,
+  paragraphOrder: ReadonlyMap<string, number>,
   absoluteBox: Readonly<{
     readonly x: number;
     readonly y: number;
@@ -343,7 +303,8 @@ function appendSpanCommands(
   commands: PdfPaintCommand[],
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
   tally: CommandTally,
-  backing: PdfFillBacking
+  backing: PdfFillBacking,
+  profile: PdfCompatibilityProfile | undefined
 ): void {
   if (!shouldPaintSpan(span)) {
     if (span.equation) {
@@ -374,26 +335,33 @@ function appendSpanCommands(
 
   if (!shouldPaintSpanText(span, absoluteBox)) {
     if (hasUsablePaintGeometry(absoluteBox)) {
-      const rect = pageRelativeBox(page, absoluteBox);
+      const rect = compatibleRect(pageRelativeBox(page, absoluteBox), profile);
       appendSpanLinkCommands(layout, page, span, rect, commands, diagnostics, tally);
     }
     return;
   }
 
   const faceStyle = styleForFontSlot(span.style, span.fontSlot);
-  const rect = pageRelativeBox(page, absoluteBox);
-  const baseline = pageRelativeBaselineY(
+  const baseRect = pageRelativeBox(page, absoluteBox);
+  const rect =
+    profile === 'word-macos-300dpi'
+      ? quantizeWordMacos300DpiLineRect(baseRect, storyOrigin.x - page.box.x + lineX)
+      : baseRect;
+  const baseline = compatibleSpanBaseline(
     page,
     storyOrigin.y,
     lineY,
     lineBaseline,
-    baselineShiftPtOf(faceStyle)
+    baselineShiftPtOf(faceStyle),
+    storyKind === 'footer',
+    profile
   );
   const presentation = pdfRevisionPresentationOf(span.revisions);
   let textStyle = pdfTextStyleFromResolvedRunStyle(span.style, span.fontSlot);
   if (presentation) {
     textStyle = applyPdfRevisionPresentation(textStyle, presentation);
   }
+  textStyle = compatibleWordMacos300DpiTextStyle(textStyle, profile);
   for (const diagnostic of pdfRevisionPresentationDiagnostics({
     pageIndex: page.index,
     paragraphId: span.range.paragraphId,
@@ -403,11 +371,24 @@ function appendSpanCommands(
   })) {
     diagnostics.push(diagnostic);
   }
-  pushBoundedCommand(
-    commands,
-    pdfTextSpan(rect, baseline, pdfDisplayText(span.text, span.style), textStyle),
-    tally
+  const absorption =
+    profile === 'word-macos-300dpi'
+      ? plannedUnderlineGapAbsorptionPt({
+          page,
+          storyOrigin,
+          lineX,
+          line,
+          span,
+          leftRect: rect,
+          profile,
+          paragraphOrder,
+        })
+      : undefined;
+  const textCommand = excludeTrailingUnderlineSpace(
+    pdfTextSpan(rect, baseline, pdfDisplayText(span.text, span.style), textStyle, absorption),
+    plannedUnderlineExcludesTrailingSpace(line, span, profile)
   );
+  pushBoundedCommand(commands, textCommand, tally);
   recordRunStyleApproximations(page, span.range.paragraphId, span.style, diagnostics);
   const omittedFill = span.style.shading
     ? `#${span.style.shading}`
@@ -424,7 +405,15 @@ function appendSpanCommands(
   });
   if (unreadable) diagnostics.push(unreadable);
 
-  appendSpanLinkCommands(layout, page, span, rect, commands, diagnostics, tally);
+  appendSpanLinkCommands(
+    layout,
+    page,
+    span,
+    compatibleRect(rect, profile),
+    commands,
+    diagnostics,
+    tally
+  );
 }
 
 function recordTableDiagnostics(
@@ -600,12 +589,21 @@ function* planPageDiagnostics(
   layout: ExportSemanticLayout,
   pageCommands: Map<number, PdfPaintCommand[]>,
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
-  tally: CommandTally
+  tally: CommandTally,
+  profile: PdfCompatibilityProfile | undefined
 ): Generator<void> {
   for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
     const page = layout.pages[pageIndex]!;
     const pageList: PdfPaintCommand[] = [];
-    pushBoundedCommand(pageList, pdfBeginPage(page.index, page.box.width, page.box.height), tally);
+    pushBoundedCommand(
+      pageList,
+      pdfBeginPage(
+        page.index,
+        compatibleScalar(page.box.width, profile),
+        compatibleScalar(page.box.height, profile)
+      ),
+      tally
+    );
     pageCommands.set(page.index, pageList);
     yield* visitPageUnsupported(page, diagnostics);
   }
@@ -680,7 +678,8 @@ function* appendNamedDestinations(
   layout: ExportSemanticLayout,
   pageCommands: Map<number, PdfPaintCommand[]>,
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
-  tally: CommandTally
+  tally: CommandTally,
+  profile: PdfCompatibilityProfile | undefined
 ): Generator<void> {
   const destinations = layout.destinations;
   if (!destinations) return;
@@ -715,7 +714,11 @@ function* appendNamedDestinations(
       yield;
       continue;
     }
-    pushBoundedCommand(pageList, pdfDestination(destination.anchor.name, rect), tally);
+    pushBoundedCommand(
+      pageList,
+      pdfDestination(destination.anchor.name, compatibleRect(rect, profile)),
+      tally
+    );
     yield;
   }
 }
@@ -727,7 +730,8 @@ function* appendPaintHostLayer(
   pageCommands: Map<number, PdfPaintCommand[]>,
   diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
   tally: CommandTally,
-  backing: PdfFillBacking
+  backing: PdfFillBacking,
+  profile: PdfCompatibilityProfile | undefined
 ): Generator<void> {
   yield;
   if (!ROOT_TEXT_STORY_KINDS.has(host.rootStory)) return;
@@ -740,7 +744,7 @@ function* appendPaintHostLayer(
     host.fragments,
     storyKind,
     backing,
-    (absolute) => pageRelativeBox(host.page, absolute),
+    (absolute) => compatibleRect(pageRelativeBox(host.page, absolute), profile),
     (command) => {
       pushBoundedCommand(commands, command, tally);
     },
@@ -751,7 +755,7 @@ function* appendPaintHostLayer(
     host.storyOrigin,
     host.fragments,
     storyKind,
-    (absolute) => pageRelativeBox(host.page, absolute),
+    (absolute) => compatibleRect(pageRelativeBox(host.page, absolute), profile),
     (command) => {
       pushBoundedCommand(commands, command, tally);
     },
@@ -767,26 +771,38 @@ function* appendPaintHostLayer(
       visit.page,
       storyKind,
       visit.storyOrigin,
+      visit.line.box.x,
       visit.line.box.y,
       visit.line.baseline,
       visit.span,
+      visit.line,
+      paragraphOrder,
       visit.absoluteBox,
       commands,
       diagnostics,
       tally,
-      backing
+      backing,
+      profile
     );
     yield;
   }
   for (const fragment of paragraphFragmentsOfBlocks(host.fragments, true)) {
-    appendParagraphMarkerCommands(
-      host.page,
-      host.storyOrigin,
+    const command = plannedParagraphMarkerCommand({
+      page: host.page,
+      storyKind,
+      storyOrigin: host.storyOrigin,
       fragment,
-      commands,
-      diagnostics,
-      tally
-    );
+      profile,
+    });
+    if (command) {
+      pushBoundedCommand(commands, command, tally);
+      recordRunStyleApproximations(
+        host.page,
+        fragment.paragraphId,
+        fragment.marker!.style,
+        diagnostics
+      );
+    }
     yield;
   }
 }
@@ -822,7 +838,8 @@ function finishPaintPlan(
 
 function* planPdfPaintSteps(
   layout: ExportSemanticLayout,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  profile: PdfCompatibilityProfile | undefined
 ): Generator<void, PdfPagePlanResult> {
   throwIfAborted(signal, 'PDF page planning was aborted');
   validatePageCount(layout.pages.length);
@@ -831,10 +848,16 @@ function* planPdfPaintSteps(
   const tally: CommandTally = { count: 0 };
   const backing = createPdfFillBacking();
 
-  yield* drainBatched(planPageDiagnostics(layout, pageCommands, diagnostics, tally), signal);
+  yield* drainBatched(
+    planPageDiagnostics(layout, pageCommands, diagnostics, tally, profile),
+    signal
+  );
 
   yield* drainBatched(recordReviewArtifactDiagnostics(layout, diagnostics), signal);
-  yield* drainBatched(appendNamedDestinations(layout, pageCommands, diagnostics, tally), signal);
+  yield* drainBatched(
+    appendNamedDestinations(layout, pageCommands, diagnostics, tally, profile),
+    signal
+  );
 
   const orderWalk = iterateSemanticParagraphOrder(layout);
   let orderStep = orderWalk.next();
@@ -854,7 +877,8 @@ function* planPdfPaintSteps(
       pageCommands,
       diagnostics,
       tally,
-      backing
+      backing,
+      profile
     )) {
       layerVisits += 1;
       if (layerVisits % PLANNER_ABORT_BATCH_SIZE === 0) {
@@ -869,9 +893,10 @@ function* planPdfPaintSteps(
 
 function consumePlanSync(
   layout: ExportSemanticLayout,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  profile: PdfCompatibilityProfile | undefined
 ): PdfPagePlanResult {
-  const steps = planPdfPaintSteps(layout, signal);
+  const steps = planPdfPaintSteps(layout, signal, profile);
   while (true) {
     const step = steps.next();
     if (step.done) return step.value;
@@ -883,7 +908,7 @@ export function planPdfPaintFromLayout(
   layout: ExportSemanticLayout,
   options: PdfPagePlanOptions = {}
 ): PdfPagePlanResult {
-  return consumePlanSync(layout, options.signal);
+  return consumePlanSync(layout, options.signal, options.compatibilityProfile);
 }
 
 /**
@@ -899,7 +924,7 @@ export async function planPdfPaintFromLayoutAsync(
   throwIfAborted(options.signal, 'PDF page planning was aborted');
   await yieldToEventLoop();
   throwIfAborted(options.signal, 'PDF page planning was aborted');
-  const steps = planPdfPaintSteps(layout, options.signal);
+  const steps = planPdfPaintSteps(layout, options.signal, options.compatibilityProfile);
   while (true) {
     const step = steps.next();
     if (step.done) return step.value;

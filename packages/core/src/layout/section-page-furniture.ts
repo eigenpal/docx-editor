@@ -17,6 +17,10 @@ import {
   type PageFurniture,
 } from './page-furniture-insets.ts';
 import type { HeaderFooterStoryRecord, LayoutBox, PageGeometry } from './semantic-records.ts';
+import {
+  quantizePageGeometryComponent,
+  type PageGeometryGridPolicy,
+} from './page-geometry-policy.ts';
 
 export interface SectionPageFurnitureInputs {
   readonly furniture?: PageFurniture;
@@ -33,6 +37,8 @@ export interface SectionPageFurnitureInputs {
   readonly insetsFor: (localIndex: number) => PageContentInsets;
   /** Pages the pass has completed so far, read when a story projects NUMPAGES. */
   readonly pageCount: () => number;
+  /** Optional grid for attached story anchors. */
+  readonly anchorGridPolicy?: PageGeometryGridPolicy;
 }
 
 export interface SectionPageFurniture {
@@ -79,10 +85,11 @@ export function createSectionPageFurniture(
     // An absent variant shows nothing — Word falls back to blank, not to `default`.
     if (!story) return undefined;
     const place = (laid: HeaderFooterStoryLayout): HeaderFooterStoryRecord => {
-      const storyY =
+      const continuousStoryY =
         kind === 'header'
           ? box.y + headerDistance
           : box.y + geometry.height - footerDistance - laid.flowHeight;
+      const storyY = quantizePageGeometryComponent(continuousStoryY, inputs.anchorGridPolicy);
       return {
         kind,
         variant,
@@ -109,8 +116,9 @@ export function createSectionPageFurniture(
     const layoutForPage = (fields: FieldPageContext): HeaderFooterStoryLayout => {
       let laid = story;
       for (let pass = 0; pass < 8; pass += 1) {
-        const storyTop =
+        const continuousStoryTop =
           kind === 'header' ? headerDistance : geometry.height - footerDistance - laid.flowHeight;
+        const storyTop = quantizePageGeometryComponent(continuousStoryTop, inputs.anchorGridPolicy);
         const context: HeaderFooterLayoutPageContext = {
           ...fields,
           contentInsetTop: insets.top,

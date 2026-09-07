@@ -11,6 +11,7 @@ import type {
 import type { RevisionDisplayMode } from '@docx-editor.dev/core/layout';
 import type { HeadlessDocumentRejection, ImageDecodePort } from '@docx-editor.dev/core/store';
 import type { PdfFidelityDiagnostic } from './pdf-fidelity-diagnostics.ts';
+import type { PdfCompatibilityProfile } from './pdf-compatibility-profile.ts';
 
 /** Strict refuses visible approximations; best-effort records them on the result. @public */
 export type PdfFidelityPolicy = 'strict' | 'best-effort';
@@ -23,6 +24,10 @@ export type PdfFontsSource = PdfFontOrigin | readonly PdfFontOrigin[];
 
 /** Layout, resource, and fidelity controls for one-shot PDF export. @public */
 export interface PdfExportOptions {
+  /**
+   * Optional PDF-only layout compatibility behavior. Omit it for Core's twip-exact layout.
+   */
+  readonly compatibilityProfile?: PdfCompatibilityProfile;
   /**
    * Revision projection applied before records reach the PDF planner. Default: `all-markup`.
    *

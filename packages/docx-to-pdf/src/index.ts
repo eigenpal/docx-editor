@@ -31,6 +31,11 @@ export type { HeadlessDocumentRejection, ImageDecodePort } from '@docx-editor.de
 
 export { exportPdf } from './pdf-export.ts';
 export {
+  WORD_MACOS_300DPI_GRID_PT,
+  quantizeWordMacos300Dpi,
+  type PdfCompatibilityProfile,
+} from './pdf-compatibility-profile.ts';
+export {
   PdfDocumentOpenError,
   PdfFidelityError,
   type PdfExportOptions,

@@ -27,6 +27,10 @@ import { planPdfPaintFromLayoutAsync } from './pdf-page-planner.ts';
 import { writePdfPaintPlanToBytes } from './pdfkit-paint-writer.ts';
 import { HARD_MAX_OUTPUT_BYTES, validateOutputByteLimit } from './pdf-paint-bounds.ts';
 import type { PdfAdmittedFont } from './pdf-paint-writer-port.ts';
+import {
+  WORD_MACOS_300DPI_GRID_PT,
+  WORD_MACOS_300DPI_PAGE_GEOMETRY_POLICY,
+} from './pdf-compatibility-profile.ts';
 
 const packagedFileFetch = createPackagedFileFetch({
   trustedRoot: new URL('./', FONT_ASSET_ROOT),
@@ -111,10 +115,20 @@ export async function exportPdf(
 ): Promise<PdfExportResult> {
   const outputByteLimit = validateOutputByteLimit(options.maxOutputBytes ?? HARD_MAX_OUTPUT_BYTES);
   throwIfAborted(options.signal, 'Export was aborted before layout');
-  const { fonts, fallbackFonts, fidelityPolicy, maxOutputBytes, ...coreOptions } = options;
+  const {
+    fonts,
+    fallbackFonts,
+    fidelityPolicy,
+    maxOutputBytes,
+    compatibilityProfile,
+    ...coreOptions
+  } = options;
   void maxOutputBytes;
   const opened = await openFontBackedDocumentForExport(source, {
     ...coreOptions,
+    ...(compatibilityProfile === 'word-macos-300dpi'
+      ? { pageGeometryPolicy: WORD_MACOS_300DPI_PAGE_GEOMETRY_POLICY }
+      : {}),
     reuseAcrossRevisions: false,
     fonts: [...fontOrigins(fonts), packagedExportFonts, ...fontOrigins(fallbackFonts)],
   });
@@ -131,7 +145,10 @@ export async function exportPdf(
     throwIfAborted(options.signal, 'Export was aborted before layout');
     const layout = await opened.session.layout();
     throwIfAborted(options.signal, 'Export was aborted before PDF encoding');
-    const planned = await planPdfPaintFromLayoutAsync(layout, { signal: options.signal });
+    const planned = await planPdfPaintFromLayoutAsync(layout, {
+      signal: options.signal,
+      compatibilityProfile,
+    });
     const diagnostics = createFidelityDiagnosticCollector();
     absorbDiagnostics(diagnostics, planned.diagnostics);
     const written = await writePdfPaintPlanToBytes(planned.plan, {
@@ -139,6 +156,9 @@ export async function exportPdf(
       maxOutputBytes: outputByteLimit,
       admittedFonts: admittedFonts(opened.session),
       defaultFontFamily: opened.session.fontResolution.defaultFamily,
+      ...(compatibilityProfile === 'word-macos-300dpi'
+        ? { singleUnderlineGridPt: WORD_MACOS_300DPI_GRID_PT }
+        : {}),
     });
     throwIfAborted(options.signal, 'Export was aborted during PDF encoding');
     absorbDiagnostics(diagnostics, written.diagnostics);

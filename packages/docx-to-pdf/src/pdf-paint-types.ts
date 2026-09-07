@@ -8,6 +8,7 @@ import {
   HARD_MAX_LINK_TARGET_LENGTH,
   HARD_MAX_METADATA_VALUE_LENGTH,
   HARD_MAX_TEXT_SPAN_LENGTH,
+  PdfPaintValidationError,
   validateBoundedString,
   validateColor,
   validateCommandCount,
@@ -107,6 +108,11 @@ export interface PdfTextSpanCommand {
   readonly baseline: number;
   readonly text: string;
   readonly style: PdfTextStyle;
+  /**
+   * Positive x-gap after this span that a trailing U+0020 may absorb into one
+   * single underline. Omit or use 0 to keep the 0.25 pt join epsilon only.
+   */
+  readonly underlineGapAbsorptionPt?: number;
 }
 
 /** Embeds a validated raster image at semantic geometry. @public */
@@ -259,19 +265,31 @@ export function pdfStrokeRect(
   });
 }
 
+function optionalUnderlineGapAbsorption(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const bounded = validateCoordinate('underlineGapAbsorptionPt', value);
+  if (bounded < 0) {
+    throw new PdfPaintValidationError('underlineGapAbsorptionPt', 'must be non-negative');
+  }
+  return bounded === 0 ? undefined : bounded;
+}
+
 /** Creates a validated text-span command. @public */
 export function pdfTextSpan(
   rect: PdfRect,
   baseline: number,
   text: string,
-  style: PdfTextStyle
+  style: PdfTextStyle,
+  underlineGapAbsorptionPt?: number
 ): PdfTextSpanCommand {
+  const absorption = optionalUnderlineGapAbsorption(underlineGapAbsorptionPt);
   return Object.freeze({
     kind: 'textSpan',
     rect: freezeRect(rect),
     baseline: validateCoordinate('baseline', baseline),
     text: validateBoundedString('text', text, HARD_MAX_TEXT_SPAN_LENGTH),
     style,
+    ...(absorption === undefined ? {} : { underlineGapAbsorptionPt: absorption }),
   });
 }
 

@@ -39,7 +39,9 @@ import { isWinAnsiRepresentable } from './pdf-winansi-encoding.ts';
 import {
   PDF_STANDARD_UNDERLINE_METRICS,
   canMergeSingleUnderlineRuns,
+  excludesTrailingUnderlineSpace,
   extendSingleUnderlineRun,
+  gridRoundedSingleUnderlineGeometry,
   pdfSingleUnderlineGeometry,
   pdfUnderlineFillRect,
   pdfUnderlineLinkKey,
@@ -385,6 +387,7 @@ interface TextSpanPaintContext {
   commandIndex: number;
   readonly underline: UnderlinePaintBuffer;
   readonly underlineMetrics: Map<string, PdfUnderlineMetrics | null>;
+  readonly singleUnderlineGridPt?: number;
 }
 
 function strikeLineWidth(fontSizePt: number): number {
@@ -459,11 +462,19 @@ function noteSingleUnderline(
 ): void {
   if (command.style.decoration !== 'underline') return;
   if (!(command.rect.width > 0)) return;
-  const geometry = pdfSingleUnderlineGeometry(
-    command.style.fontSizePt,
-    underlineMetricsFor(font, context.underlineMetrics)
+  const geometry = gridRoundedSingleUnderlineGeometry(
+    pdfSingleUnderlineGeometry(
+      command.style.fontSizePt,
+      underlineMetricsFor(font, context.underlineMetrics)
+    ),
+    context.singleUnderlineGridPt
   );
   if (!(geometry.thicknessPt > 0)) return;
+  const renderedWidth = doc.widthOfString(command.text);
+  const excludedTrailingSpacePt =
+    excludesTrailingUnderlineSpace(command) && renderedWidth > 0
+      ? doc.widthOfString(' ') * (command.rect.width / renderedWidth)
+      : 0;
   const segment: PdfUnderlineSegment = Object.freeze({
     pageIndex: page.index,
     x: command.rect.x,
@@ -473,6 +484,8 @@ function noteSingleUnderline(
     thicknessPt: geometry.thicknessPt,
     offsetTopPt: geometry.offsetTopPt,
     linkKey: pdfUnderlineLinkKey(context.commands[context.commandIndex + 1]),
+    gapAbsorptionPt: command.text.endsWith(' ') ? (command.underlineGapAbsorptionPt ?? 0) : 0,
+    excludedTrailingSpacePt,
   });
   const pending = context.underline.pending;
   if (pending && canMergeSingleUnderlineRuns(pending, segment)) {
@@ -712,6 +725,9 @@ export class PdfKitPaintWriter implements PdfPaintWriterPort {
       commandIndex: 0,
       underline: { pending: null },
       underlineMetrics: new Map(),
+      ...(options.singleUnderlineGridPt
+        ? { singleUnderlineGridPt: options.singleUnderlineGridPt }
+        : {}),
     };
 
     const doc = new PDFDocument({

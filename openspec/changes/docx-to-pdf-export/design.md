@@ -182,6 +182,19 @@ PDF pages use points like Core, but PDF origins start at the lower-left. The wri
 one page transform from Core's top-left coordinate system. Translators then use semantic coordinates
 directly and do not round values before writing.
 
+An optional `word-macos-300dpi` profile is the one exception. Core export sessions accept a
+declarative page-geometry grid with a finite positive point unit and nearest rounding. Core
+validates and freezes one policy copy at the export boundary. The document coordinator resolves
+each section geometry once, then shares it with cache keys, body layout, furniture, headers,
+footers, and notes. The policy can quantize the source content span before it derives the trailing
+margin. Core also rounds paragraph-border space, side gutter, and stroke components before it
+derives border boxes and flow height. The PDF package maps its profile to a private 0.24 pt policy.
+The planner snaps absolute baseline positions, font sizes, and shared rectangle edges. Footer
+baselines round toward the physical bottom edge. Single-underline metric components use the grid,
+while a wrapped trailing space does not extend the merged rule. The planner keeps each run's
+fractional x offset and width relative to its line anchor. Half-grid ties round away from zero,
+including negative drawing coordinates.
+
 ### Separate traversal from PDF encoding
 
 A page planner converts semantic records into immutable paint commands. A PDF writer encodes those

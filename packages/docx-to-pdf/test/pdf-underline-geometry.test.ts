@@ -13,8 +13,10 @@ import {
   WORD_PDF_DEVICE_GRID_PT,
   canMergeSingleUnderlineRuns,
   extendSingleUnderlineRun,
+  gridRoundedSingleUnderlineGeometry,
   pdfSingleUnderlineGeometry,
   pdfUnderlineFillRect,
+  pdfUnderlineJustifyGapAbsorptionPt,
   pdfUnderlineLinkKey,
   pdfUnderlineMetricsFromSfnt,
   quantizeWordPdfDeviceGrid,
@@ -27,7 +29,9 @@ import {
   pdfExternalLink,
   pdfInternalLink,
   pdfTextSpan,
+  type PdfPaintCommand,
 } from '../src/pdf-paint-types.ts';
+import { PdfPaintValidationError } from '../src/pdf-paint-bounds.ts';
 import { pdfTextStyleFromResolvedRunStyle } from '../src/pdf-text-style.ts';
 import { writePdfPaintPlanToBytes } from '../src/pdfkit-paint-writer.ts';
 
@@ -104,9 +108,14 @@ function segment(overrides: Partial<PdfUnderlineSegment> = {}): PdfUnderlineSegm
     thicknessPt: 0.55,
     offsetTopPt: 1.1,
     linkKey: null,
+    gapAbsorptionPt: 0,
+    excludedTrailingSpacePt: 0,
     ...overrides,
   });
 }
+
+/** Confirmed `w:jc=both` inter-span slack on paragraph 38. */
+const JUSTIFY_GAP_PT = 7.706;
 
 function pdfContentStreams(bytes: Uint8Array): string {
   const pdf = Buffer.from(bytes);
@@ -173,6 +182,14 @@ describe('pdfSingleUnderlineGeometry', () => {
     expect(geometry.thicknessPt).toBeCloseTo(0.55, 10);
     expect(geometry.offsetTopPt).toBeCloseTo(1.1, 10);
   });
+
+  test('profile rounds metric components before deriving the fill rectangle', () => {
+    const continuous = pdfSingleUnderlineGeometry(11, GARAMOND_METRICS);
+    const profiled = gridRoundedSingleUnderlineGeometry(continuous, 72 / 300);
+    expect(profiled).toEqual({ thicknessPt: 0.48, offsetTopPt: 0.72 });
+    expect(continuous.thicknessPt).toBeCloseTo(0.5478515625, 12);
+    expect(continuous.offsetTopPt).toBeCloseTo(0.8271484375, 12);
+  });
 });
 
 describe('pdfUnderlineMetricsFromSfnt', () => {
@@ -218,6 +235,88 @@ describe('canMergeSingleUnderlineRuns', () => {
     expect(canMergeSingleUnderlineRuns(link, segment({ x: 152, linkKey: 'internal:Dest' }))).toBe(
       false
     );
+  });
+
+  test('joins a justified gap only when the left run absorbs it', () => {
+    const left = segment({ width: 50, gapAbsorptionPt: JUSTIFY_GAP_PT });
+    const right = segment({ x: 72 + 50 + JUSTIFY_GAP_PT, width: 40 });
+    expect(canMergeSingleUnderlineRuns(left, right)).toBe(true);
+    expect(
+      canMergeSingleUnderlineRuns(
+        left,
+        segment({ x: 72 + 50 + JUSTIFY_GAP_PT + Number.EPSILON * 64, width: 40 })
+      )
+    ).toBe(true);
+    expect(canMergeSingleUnderlineRuns(segment({ width: 50 }), right)).toBe(false);
+    const merged = extendSingleUnderlineRun(left, right);
+    expect(merged.width).toBeCloseTo(50 + JUSTIFY_GAP_PT + 40, 10);
+    expect(merged.gapAbsorptionPt).toBe(0);
+  });
+
+  test('removes only the final hanging U+0020 from the merged extent', () => {
+    const merged = segment({
+      x: 89.676,
+      width: 418.277,
+      excludedTrailingSpacePt: 2.988,
+    });
+    const rect = pdfUnderlineFillRect(merged);
+    expect(rect.x).toBe(89.676);
+    expect(rect.width).toBeCloseTo(415.289, 12);
+  });
+});
+
+describe('pdfUnderlineJustifyGapAbsorptionPt', () => {
+  test('absorbs justified slack after a trailing U+0020', () => {
+    expect(
+      pdfUnderlineJustifyGapAbsorptionPt({
+        precedingText: 'word ',
+        gapAfterPt: JUSTIFY_GAP_PT,
+      })
+    ).toBe(JUSTIFY_GAP_PT);
+  });
+
+  test('refuses wrapAdvanceBefore, tabs, and text that does not end with U+0020', () => {
+    expect(
+      pdfUnderlineJustifyGapAbsorptionPt({
+        precedingText: 'word ',
+        gapAfterPt: JUSTIFY_GAP_PT,
+        nextWrapAdvanceBeforePt: 12,
+      })
+    ).toBe(0);
+    expect(
+      pdfUnderlineJustifyGapAbsorptionPt({
+        precedingText: 'word ',
+        gapAfterPt: JUSTIFY_GAP_PT,
+        nextIsTab: true,
+      })
+    ).toBe(0);
+    expect(
+      pdfUnderlineJustifyGapAbsorptionPt({
+        precedingText: 'word',
+        gapAfterPt: JUSTIFY_GAP_PT,
+      })
+    ).toBe(0);
+    expect(
+      pdfUnderlineJustifyGapAbsorptionPt({
+        precedingText: 'word ',
+        gapAfterPt: JUSTIFY_GAP_PT,
+        drawingOccupiesGap: true,
+      })
+    ).toBe(0);
+    expect(
+      pdfUnderlineJustifyGapAbsorptionPt({
+        precedingText: 'word ',
+        gapAfterPt: JUSTIFY_GAP_PT,
+        sharesAnchor: false,
+      })
+    ).toBe(0);
+    expect(
+      pdfUnderlineJustifyGapAbsorptionPt({
+        precedingText: 'word ',
+        gapAfterPt: JUSTIFY_GAP_PT,
+        rightUnderlined: false,
+      })
+    ).toBe(0);
   });
 });
 
@@ -333,6 +432,148 @@ describe('PDFKit single underline fills', () => {
     expect(fills).toHaveLength(2);
     expect(fills[0]!.width).toBeCloseTo(20, 5);
     expect(fills[1]!.width).toBeCloseTo(40, 5);
+  });
+
+  test('paints one continuous fill across justified gaps', async () => {
+    const underlined = style({ fontSizePt: 11, decoration: 'underline', fontWeight: 'bold' });
+    const widths = [48, 52, 44, 60, 50, 56, 40];
+    const commands: PdfPaintCommand[] = [pdfBeginPage(0, 612, 792)];
+    let x = 72;
+    for (let index = 0; index < widths.length; index += 1) {
+      const width = widths[index]!;
+      const isLast = index === widths.length - 1;
+      commands.push(
+        pdfTextSpan(
+          { x, y: 700, width, height: 12 },
+          708,
+          isLast ? 'end' : 'word ',
+          underlined,
+          isLast ? undefined : JUSTIFY_GAP_PT
+        )
+      );
+      x += width + (isLast ? 0 : JUSTIFY_GAP_PT);
+    }
+    const result = await writePdfPaintPlanToBytes(createPdfPaintPlan(commands));
+    const fills = fillRects(pdfContentStreams(result.bytes));
+    expect(fills).toHaveLength(1);
+    expect(fills[0]!.x).toBeCloseTo(72, 5);
+    expect(fills[0]!.width).toBeCloseTo(x - 72, 5);
+  });
+
+  test('does not bridge non-underlined middle text', async () => {
+    const underlined = style({ fontSizePt: 11, decoration: 'underline' });
+    const plain = style({ fontSizePt: 11, decoration: 'none' });
+    const result = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan(
+          { x: 72, y: 700, width: 40, height: 12 },
+          708,
+          'ab ',
+          underlined,
+          JUSTIFY_GAP_PT
+        ),
+        pdfTextSpan(
+          { x: 72 + 40 + JUSTIFY_GAP_PT, y: 700, width: 30, height: 12 },
+          708,
+          'mid',
+          plain
+        ),
+        pdfTextSpan(
+          { x: 72 + 40 + JUSTIFY_GAP_PT + 30 + JUSTIFY_GAP_PT, y: 700, width: 40, height: 12 },
+          708,
+          'cd',
+          underlined
+        ),
+      ])
+    );
+    const fills = fillRects(pdfContentStreams(result.bytes));
+    expect(fills).toHaveLength(2);
+    expect(fills[0]!.width).toBeCloseTo(40, 5);
+    expect(fills[1]!.width).toBeCloseTo(40, 5);
+  });
+
+  test('keeps a no-justify gap as two fills', async () => {
+    const underlined = style({ fontSizePt: 11, decoration: 'underline' });
+    const result = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 700, width: 40, height: 12 }, 708, 'ab ', underlined),
+        pdfTextSpan(
+          { x: 72 + 40 + JUSTIFY_GAP_PT, y: 700, width: 40, height: 12 },
+          708,
+          'cd',
+          underlined
+        ),
+      ])
+    );
+    const fills = fillRects(pdfContentStreams(result.bytes));
+    expect(fills).toHaveLength(2);
+  });
+
+  test('does not absorb a wrapAdvanceBefore gap after a trailing space', async () => {
+    const underlined = style({ fontSizePt: 11, decoration: 'underline' });
+    const wrapGap = 18;
+    expect(
+      pdfUnderlineJustifyGapAbsorptionPt({
+        precedingText: 'ab ',
+        gapAfterPt: wrapGap,
+        nextWrapAdvanceBeforePt: wrapGap,
+      })
+    ).toBe(0);
+    const result = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 700, width: 40, height: 12 }, 708, 'ab ', underlined),
+        pdfTextSpan({ x: 72 + 40 + wrapGap, y: 700, width: 40, height: 12 }, 708, 'cd', underlined),
+      ])
+    );
+    const fills = fillRects(pdfContentStreams(result.bytes));
+    expect(fills).toHaveLength(2);
+  });
+
+  test('keeps colour, size, and link splits across an absorbed justify gap', async () => {
+    const black = style({ fontSizePt: 11, decoration: 'underline' });
+    const red = style({ fontSizePt: 11, decoration: 'underline', color: '#FF0000' });
+    const fourteen = style({ fontSizePt: 14, decoration: 'underline' });
+    const rightX = 72 + 20 + JUSTIFY_GAP_PT;
+    const colour = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 700, width: 20, height: 12 }, 708, 'aa ', black, JUSTIFY_GAP_PT),
+        pdfTextSpan({ x: rightX, y: 700, width: 20, height: 12 }, 708, 'bb', red),
+      ])
+    );
+    const size = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 700, width: 20, height: 12 }, 708, 'aa ', black, JUSTIFY_GAP_PT),
+        pdfTextSpan({ x: rightX, y: 700, width: 20, height: 14 }, 708, 'bb', fourteen),
+      ])
+    );
+    const link = await writePdfPaintPlanToBytes(
+      createPdfPaintPlan([
+        pdfBeginPage(0, 612, 792),
+        pdfTextSpan({ x: 72, y: 700, width: 20, height: 12 }, 708, 'aa ', black, JUSTIFY_GAP_PT),
+        pdfTextSpan({ x: rightX, y: 700, width: 40, height: 12 }, 708, 'link', black),
+        pdfExternalLink({ x: rightX, y: 700, width: 40, height: 12 }, 'https://example.com'),
+      ])
+    );
+    expect(fillRects(pdfContentStreams(colour.bytes))).toHaveLength(2);
+    expect(fillRects(pdfContentStreams(size.bytes))).toHaveLength(2);
+    expect(fillRects(pdfContentStreams(link.bytes))).toHaveLength(2);
+  });
+
+  test('rejects a negative underline gap absorption', () => {
+    expect(() =>
+      pdfTextSpan(
+        { x: 72, y: 700, width: 20, height: 12 },
+        708,
+        'aa ',
+        style({ decoration: 'underline' }),
+        -1
+      )
+    ).toThrow(PdfPaintValidationError);
   });
 
   test('uses Carlito face metrics at 11pt and writes deterministic bytes', async () => {
