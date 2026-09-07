@@ -189,13 +189,7 @@ import {
 import { noteRefNumberingFromNotes } from './field-noteref.ts';
 import { refTokenForTableBlock, resolveStoryRefFieldsWithNoteNumbers } from './field-ref.ts';
 import { publishListMarker } from './list-marker.ts';
-import {
-  NO_DEFERRED_DRAWINGS,
-  NO_DEFER_COUNTS,
-  sameAnchoredDrawings,
-  sameDeferCounts,
-  sameFragments,
-} from './semantic-fragment-signature.ts';
+import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { replaceLayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
@@ -1431,23 +1425,24 @@ function layoutBlocksPass(
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
-  /** The flow as it stands: what a later pass resumes from and converges against. The
-   * deferred anchor state is copied only when there is some — this runs once per block. */
-  const checkpointNow = (): FlowCheckpoint => ({
-    pageCount: pages.length,
-    pageFragments: [...pageFragments],
-    pendingAnchoredDrawings: [...pendingAnchoredDrawings],
-    pendingParagraphFrames: paragraphFrames.checkpoint(),
-    deferredAnchoredDrawings:
-      deferredAnchoredDrawings.length > 0 ? [...deferredAnchoredDrawings] : NO_DEFERRED_DRAWINGS,
-    anchorPageDeferCounts:
-      anchorPageDeferCounts.size > 0 ? new Map(anchorPageDeferCounts) : NO_DEFER_COUNTS,
-    ...positionedFlow.checkpoint(pendingFloatIds, floatSignals),
-    cursorY,
-    lineCounter,
-    previousSpaceAfter,
-    flowColumnIndex,
+  const checkpointOwner = new FlowCheckpointOwner({
+    paragraphFrames,
+    positionedFlow,
+    pendingFloatIds,
+    floatSignals,
+    anchorPageDeferCounts,
   });
+  const checkpointNow = (): FlowCheckpoint =>
+    checkpointOwner.capture({
+      pageCount: pages.length,
+      pageFragments,
+      pendingAnchoredDrawings,
+      deferredAnchoredDrawings,
+      cursorY,
+      lineCounter,
+      previousSpaceAfter,
+      flowColumnIndex,
+    });
   let startIndex = 0;
   let placed = 0;
   let reusedPages = 0;
@@ -1456,22 +1451,20 @@ function layoutBlocksPass(
   // RESUME. The checkpoint before the first changed paragraph describes a flow the new
   // document still agrees with, so the pages completed by then are carried over by
   // REFERENCE — unchanged pages keep their identity, which is what lets a consumer skip
-  // repainting them (task 9.4).
+  // repainting them.
   if (resumable && firstChanged > 0 && firstChanged < session.checkpoints.length) {
     const checkpoint = session.checkpoints[firstChanged]!;
     pages.push(...previous!.pages.slice(0, checkpoint.pageCount));
-    pageFragments = [...checkpoint.pageFragments];
-    pendingAnchoredDrawings = [...checkpoint.pendingAnchoredDrawings];
-    paragraphFrames.restore(checkpoint.pendingParagraphFrames);
-    deferredAnchoredDrawings = [...checkpoint.deferredAnchoredDrawings];
-    anchorPageDeferCounts.clear();
-    for (const [id, n] of checkpoint.anchorPageDeferCounts) anchorPageDeferCounts.set(id, n);
-    cursorY = checkpoint.cursorY;
-    flowColumnIndex = checkpoint.flowColumnIndex;
-    columnIndex = checkpoint.flowColumnIndex;
-    lineCounter = checkpoint.lineCounter;
-    previousSpaceAfter = checkpoint.previousSpaceAfter;
-    positionedFlow.restore(checkpoint, pendingFloatIds, floatSignals);
+    ({
+      pageFragments,
+      pendingAnchoredDrawings,
+      deferredAnchoredDrawings,
+      cursorY,
+      flowColumnIndex,
+      lineCounter,
+      previousSpaceAfter,
+    } = checkpointOwner.restore(checkpoint));
+    columnIndex = flowColumnIndex;
     startIndex = firstChanged;
     firstParagraphOfSection = false;
     reusedPages = pages.length;
@@ -2033,24 +2026,7 @@ function layoutBlocksPass(
     // into line once the page it disturbed has been completed.
     if (resumable && commonSuffix > 0 && index >= prepared.length - commonSuffix) {
       const mark = session.checkpoints[index + (session.keys.length - prepared.length)];
-      if (
-        mark &&
-        mark.cursorY === cursorY &&
-        mark.previousSpaceAfter === previousSpaceAfter &&
-        mark.flowColumnIndex === flowColumnIndex &&
-        sameFragments(mark.pageFragments, pageFragments) &&
-        paragraphFrames.same(mark.pendingParagraphFrames) &&
-        sameAnchoredDrawings(mark.pendingAnchoredDrawings, pendingAnchoredDrawings) &&
-        // A flow that still owes the next page a drawing is not one that owes it nothing.
-        sameAnchoredDrawings(mark.deferredAnchoredDrawings, deferredAnchoredDrawings) &&
-        sameDeferCounts(mark.anchorPageDeferCounts, anchorPageDeferCounts) &&
-        positionedFlow.same(
-          mark.pendingPositionedTableTokens,
-          mark.positionedTableAnchorSignals,
-          pendingFloatIds,
-          floatSignals
-        )
-      ) {
+      if (mark && flowCheckpointsMatch(mark, checkpoints[index]!)) {
         // The in-page flow matches. At delta 0 the previous pages are appended by identity;
         // at a nonzero delta the tail is identical content `delta` sheets away and is reused
         // through `remapPage`, gated by `convergenceTailShiftAllowed`.

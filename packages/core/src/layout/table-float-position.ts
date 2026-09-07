@@ -123,6 +123,19 @@ interface PositionedTableCheckpointState {
   readonly positionedTableAnchorSignals?: readonly PositionedTableAnchorSignal[];
 }
 
+export function samePositionedTableCheckpoints(
+  left: PositionedTableCheckpointState,
+  right: PositionedTableCheckpointState
+): boolean {
+  const pending = right.pendingPositionedTableTokens;
+  const priorTokens = left.pendingPositionedTableTokens;
+  return (
+    (pending === priorTokens ||
+      (pending?.length === priorTokens?.length && pending?.signature === priorTokens?.signature)) &&
+    sameAnchorSignals(left.positionedTableAnchorSignals, right.positionedTableAnchorSignals ?? [])
+  );
+}
+
 /** Capture, restore, and compare the deferred-table portion of a flow checkpoint. */
 export function positionedTableFlow(
   positionedTables: readonly PositionedTableAnchor[],
@@ -206,11 +219,9 @@ export function positionedTableFlow(
       signals: readonly PositionedTableAnchorSignal[]
     ): boolean {
       sync(pendingIds);
-      return (
-        (pending === priorTokens ||
-          (pending?.length === priorTokens?.length &&
-            pending?.signature === priorTokens?.signature)) &&
-        sameAnchorSignals(priorSignals, signals)
+      return samePositionedTableCheckpoints(
+        { pendingPositionedTableTokens: priorTokens, positionedTableAnchorSignals: priorSignals },
+        { pendingPositionedTableTokens: pending, positionedTableAnchorSignals: signals }
       );
     },
   };
