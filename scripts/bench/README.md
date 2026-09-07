@@ -479,3 +479,23 @@ Not changed, deliberately: every convergence guard that must hold exactly (fragm
 signatures, anchor state, defer counts), every content-control lock semantic (the climb
 returns byte-identical chains), and the bench's round-0 oracle — every incremental result
 above is byte-identical to a clean full pass, asserted per scenario on every gate run.
+
+## Paragraph cache diagnostics
+
+The edit benchmark JSON includes `cacheDiagnostics` alongside each scenario's existing
+`work` counters. `beforeEdit` and `afterEdit` are lifetime-counter snapshots: subtract them
+to isolate the edit from cold layout and warmup. They distinguish soft/hard limit pressure,
+stale-generation eviction, one-shot releases and explicit clears. `payload` counts unique
+broken-line, span and drawing records reachable through the cache.
+
+These are on-demand inspections outside the measured transaction/layout windows. They do
+not touch LRU order or hit/miss counts. Key and span text bytes describe logical UTF-16
+payload, not retained JS heap: object headers, interning, shared backing storage, property
+graphs, DOM and WASM resources are excluded. Use the browser heap benchmark for retained
+heap comparisons; do not add these logical counts to post-GC heap totals.
+
+Internal callers can inspect built-in caches with `paragraphCacheDiagnostics(cache)` and
+line caches with `paragraphBreakPayload(cache)` from `layout/paragraph-cache-diagnostics.ts`.
+Custom cache implementations return `undefined`; the public cache interface is unchanged.
+Inspection walks the cache, so it belongs in an explicit diagnostic action rather than
+every keystroke or paint. Readers are weakly associated with their owning cache.

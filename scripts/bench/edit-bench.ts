@@ -37,6 +37,13 @@ import {
   type LayoutCacheStats,
 } from '../../packages/core/src/layout/layout-cache.ts';
 
+import {
+  paragraphCacheDiagnostics,
+  paragraphBreakPayload,
+  type ParagraphCacheDiagnostics,
+  type ParagraphBreakPayload,
+} from '../../packages/core/src/layout/paragraph-cache-diagnostics.ts';
+
 interface Args {
   fixture: string;
   runs: number;
@@ -65,6 +72,12 @@ interface ScenarioResult {
   layout: TimingSummary;
   total: TimingSummary;
   work: WorkSummary;
+  /** On-demand snapshots outside timed work; lifetime counters include initial layout. */
+  cacheDiagnostics: {
+    beforeEdit: ParagraphCacheDiagnostics;
+    afterEdit: ParagraphCacheDiagnostics;
+    payload: ParagraphBreakPayload;
+  };
 }
 
 interface BenchmarkReport {
@@ -366,6 +379,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
   const layoutTimes: number[] = [];
   const totalTimes: number[] = [];
   let work: WorkSummary | null = null;
+  let cacheDiagnostics: ScenarioResult['cacheDiagnostics'] | undefined;
   const rounds = args.warmup + args.runs;
 
   for (let round = 0; round < rounds; round += 1) {
@@ -388,6 +402,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
       producer: 'edit-bench',
     });
 
+    const beforeEdit = paragraphCacheDiagnostics(cache)!;
     const transactionStart = performance.now();
     const transaction = bodyStore.transact((ctx) => ctx.apply(scenario.op(target)));
     const transactionMs = performance.now() - transactionStart;
@@ -404,6 +419,11 @@ function runScenario(scenario: Scenario): ScenarioResult {
       producer: 'edit-bench',
     });
     const layoutMs = performance.now() - layoutStart;
+    cacheDiagnostics = {
+      beforeEdit,
+      afterEdit: paragraphCacheDiagnostics(cache)!,
+      payload: paragraphBreakPayload(cache)!,
+    };
     const currentWork: WorkSummary = {
       ...session.stats,
       pagesBefore: before.pages.length,
@@ -439,6 +459,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
     layout: summarize(layoutTimes),
     total: summarize(totalTimes),
     work: work!,
+    cacheDiagnostics: cacheDiagnostics!,
   };
 }
 
