@@ -38,11 +38,9 @@ import {
   retainLiveBreakKeys,
   withDrawingContext,
 } from './layout-cache.ts';
-import { resolveCjkTypography } from './cjk-typography.ts';
 import {
   alignSpans,
   alignDrawings,
-  breakParagraph,
   pendingLineFlowExtentAtPlacement,
   type Alignment,
   type PendingLine,
@@ -72,16 +70,13 @@ import {
   type ParagraphKeeps,
 } from './pagination-keeps.ts';
 import { DEFAULT_RUN_STYLE, resolveRunStyle } from './run-style.ts';
+import type { ResolvedTabStops } from './paragraph-tabs.ts';
 import {
-  tabStopsFingerprint,
-  withDefaultTabInterval,
-  type ResolvedTabStops,
-} from './paragraph-tabs.ts';
-import {
-  resolveParagraphLayoutInputs,
-  cascadeRunProperties,
-  type StyleCascadeTable,
-} from './style-cascade.ts';
+  prepareParagraphBreakInputs,
+  bodyParagraphBreakKey,
+  breakPreparedParagraph,
+} from './paragraph-break-request.ts';
+import { resolveParagraphLayoutInputs, type StyleCascadeTable } from './style-cascade.ts';
 import { paragraphBorderGroupKey } from './cell-border-groups.ts';
 import { paragraphShadingBox } from './ooxml-shading.ts';
 import { type TableAnchorFrames } from './semantic-table.ts';
@@ -190,13 +185,7 @@ import {
 import { noteRefNumberingFromNotes } from './field-noteref.ts';
 import { refTokenForTableBlock, resolveStoryRefFieldsWithNoteNumbers } from './field-ref.ts';
 import { publishListMarker } from './list-marker.ts';
-import {
-  NO_DEFERRED_DRAWINGS,
-  NO_DEFER_COUNTS,
-  sameAnchoredDrawings,
-  sameDeferCounts,
-  sameFragments,
-} from './semantic-fragment-signature.ts';
+import { FlowCheckpointOwner, flowCheckpointsMatch } from './flow-checkpoint.ts';
 import { createLayoutSession, type FlowCheckpoint, type LayoutSession } from './layout-session.ts';
 import { replaceLayoutSession } from './layout-session.ts';
 import { furnitureForSection, layoutMultiSectionDocument } from './multi-section-layout.ts';
@@ -583,7 +572,8 @@ function layoutBlocksPass(
         contentWidthForReflow,
         options.styleCascade,
         options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
-        options.revisionAuthorFilter
+        options.revisionAuthorFilter,
+        options.compatibilityMode
       )) &&
     options.drawingExclusionPass === undefined &&
     !options.drawingExclusionConverged
@@ -820,7 +810,8 @@ function layoutBlocksPass(
     defaultTabStopPt,
     displayMode,
     authorFilter,
-    options.bodyPageNumberFormat
+    options.bodyPageNumberFormat,
+    options.compatibilityMode
   );
 
   // Prepass and incremental keys use the first region. Placement re-prepares a block when it
@@ -966,6 +957,7 @@ function layoutBlocksPass(
       cache,
       styleCascade,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      compatibilityMode: options.compatibilityMode,
       ...(displayMode ? { displayMode } : {}),
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
       ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
@@ -1116,12 +1108,11 @@ function layoutBlocksPass(
         block.children.find((child) => child.kind === 'paragraphProperties'),
         styleCascade
       );
-      // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
-      const tabStops = withDefaultTabInterval(preparedParagraph.tabStops, defaultTabStopPt);
-      const tabStopsCacheToken =
-        tabStops === preparedParagraph.tabStops
-          ? preparedParagraph.tabStopsCacheToken
-          : tabStopsFingerprint(tabStops);
+      const { tabStops, properties: breakProperties } = prepareParagraphBreakInputs(
+        preparedParagraph,
+        defaultTabStopPt,
+        { listToken: listItem?.cacheToken, hostedListToken, refToken }
+      );
       entry = {
         kind: 'paragraph',
         ...(frame ? { frame } : {}),
@@ -1153,19 +1144,7 @@ function layoutBlocksPass(
         ...(listItem ? { listItem } : {}),
         key: keyFor({
           paragraph: block,
-          properties: [
-            ...props,
-            ...inheritedRunProperties,
-            ...markRunProperties,
-            { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
-            ...(listItem
-              ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }]
-              : []),
-            ...(hostedListToken
-              ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
-              : []),
-            ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
-          ],
+          properties: breakProperties,
           width: available,
           producer,
           drawingToken: keyedDrawingToken,
@@ -1242,7 +1221,8 @@ function layoutBlocksPass(
       contentWidth,
       styleCascade,
       displayMode,
-      authorFilter
+      authorFilter,
+      options.compatibilityMode
     );
     const keepsNext = prepared.map((entry) => entry.kind === 'paragraph' && entry.keeps.keepNext);
     const markerTexts = prepared.map((entry) =>
@@ -1303,7 +1283,8 @@ function layoutBlocksPass(
               contentWidth,
               styleCascade,
               displayMode,
-              authorFilter
+              authorFilter,
+              options.compatibilityMode
             ),
       keepsNext,
       markerTexts,
@@ -1414,7 +1395,8 @@ function layoutBlocksPass(
     contentWidth,
     styleCascade,
     displayMode,
-    authorFilter
+    authorFilter,
+    options.compatibilityMode
   );
   const positionedTableIds = new Set(positionedTables.map(({ table }) => table.id));
   const positionedFlow = tableFloat.positionedTableFlow(positionedTables, flowKeys);
@@ -1450,23 +1432,24 @@ function layoutBlocksPass(
   let lineCounter = lineCounterStart;
   let previousSpaceAfter = spaceBeforeCarry;
   const checkpoints: FlowCheckpoint[] = [];
-  /** The flow as it stands: what a later pass resumes from and converges against. The
-   * deferred anchor state is copied only when there is some — this runs once per block. */
-  const checkpointNow = (): FlowCheckpoint => ({
-    pageCount: pages.length,
-    pageFragments: [...pageFragments],
-    pendingAnchoredDrawings: [...pendingAnchoredDrawings],
-    pendingParagraphFrames: paragraphFrames.checkpoint(),
-    deferredAnchoredDrawings:
-      deferredAnchoredDrawings.length > 0 ? [...deferredAnchoredDrawings] : NO_DEFERRED_DRAWINGS,
-    anchorPageDeferCounts:
-      anchorPageDeferCounts.size > 0 ? new Map(anchorPageDeferCounts) : NO_DEFER_COUNTS,
-    ...positionedFlow.checkpoint(pendingFloatIds, floatSignals),
-    cursorY,
-    lineCounter,
-    previousSpaceAfter,
-    flowColumnIndex,
+  const checkpointOwner = new FlowCheckpointOwner({
+    paragraphFrames,
+    positionedFlow,
+    pendingFloatIds,
+    floatSignals,
+    anchorPageDeferCounts,
   });
+  const checkpointNow = (): FlowCheckpoint =>
+    checkpointOwner.capture({
+      pageCount: pages.length,
+      pageFragments,
+      pendingAnchoredDrawings,
+      deferredAnchoredDrawings,
+      cursorY,
+      lineCounter,
+      previousSpaceAfter,
+      flowColumnIndex,
+    });
   let startIndex = 0;
   let placed = 0;
   let reusedPages = 0;
@@ -1475,22 +1458,20 @@ function layoutBlocksPass(
   // RESUME. The checkpoint before the first changed paragraph describes a flow the new
   // document still agrees with, so the pages completed by then are carried over by
   // REFERENCE — unchanged pages keep their identity, which is what lets a consumer skip
-  // repainting them (task 9.4).
+  // repainting them.
   if (resumable && firstChanged > 0 && firstChanged < session.checkpoints.length) {
     const checkpoint = session.checkpoints[firstChanged]!;
     pages.push(...previous!.pages.slice(0, checkpoint.pageCount));
-    pageFragments = [...checkpoint.pageFragments];
-    pendingAnchoredDrawings = [...checkpoint.pendingAnchoredDrawings];
-    paragraphFrames.restore(checkpoint.pendingParagraphFrames);
-    deferredAnchoredDrawings = [...checkpoint.deferredAnchoredDrawings];
-    anchorPageDeferCounts.clear();
-    for (const [id, n] of checkpoint.anchorPageDeferCounts) anchorPageDeferCounts.set(id, n);
-    cursorY = checkpoint.cursorY;
-    flowColumnIndex = checkpoint.flowColumnIndex;
-    columnIndex = checkpoint.flowColumnIndex;
-    lineCounter = checkpoint.lineCounter;
-    previousSpaceAfter = checkpoint.previousSpaceAfter;
-    positionedFlow.restore(checkpoint, pendingFloatIds, floatSignals);
+    ({
+      pageFragments,
+      pendingAnchoredDrawings,
+      deferredAnchoredDrawings,
+      cursorY,
+      flowColumnIndex,
+      lineCounter,
+      previousSpaceAfter,
+    } = checkpointOwner.restore(checkpoint));
+    columnIndex = flowColumnIndex;
     startIndex = firstChanged;
     firstParagraphOfSection = false;
     reusedPages = pages.length;
@@ -1668,6 +1649,7 @@ function layoutBlocksPass(
     styleCascade,
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+    compatibilityMode: options.compatibilityMode,
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
@@ -1786,43 +1768,30 @@ function layoutBlocksPass(
     // what varies per PLACEMENT joins below; the common path must stay `entry.key` BY
     // IDENTITY, because retention names the prepass keys (suffixed and off-prepass-width
     // keys are transient by design) and V8 caches the shared string's hash.
-    // A new placement-varying input joins BOTH this suffix chain and the cell path's
-    // `paragraphLayoutKey` call in `semantic-table-layout.ts` — the roles map in
-    // `layout-cache.ts` guards only the typed inputs, not these suffixes.
     let cacheKey: string | null = null;
     if (cache && !suppressChrome) {
-      // `cursorY` belongs in the key: the zones are page-content bands, so the same text at
-      // the same width breaks differently depending on where down the page it starts. Keying
-      // on zone geometry alone lets a paragraph clear of the float reuse the wrapped break
-      // of an identical one that crosses it. NUL-framed: XML text cannot carry U+0000, so
-      // no file-derived token can forge a suffix boundary.
-      cacheKey = entry.key;
-      if (exclusionToken) {
-        cacheKey += `\0excl:${flowColumnIndex}|${cursorY.toFixed(3)}|${exclusionToken}`;
-      }
-      if (startOffset > 0) cacheKey += `\0from:${startOffset}`;
+      cacheKey = bodyParagraphBreakKey(entry.key, {
+        exclusionToken,
+        paragraphStartY: cursorY,
+        columnIndex: flowColumnIndex,
+        startOffset,
+      });
       rememberBreakKey(paragraphId, cacheKey);
     }
     const usePageColumnCoords = columnCount > 1;
-    return breakParagraph(
-      entry.paragraph,
+    return breakPreparedParagraph({
+      paragraph: entry.paragraph,
       paragraphId,
-      entry.indent.left,
+      indentLeft: entry.indent.left,
       available,
       measurer,
       cache,
       cacheKey,
-      entry.inheritedRunProperties,
-      entry.tabStops,
-      undefined,
-      styleCascade
-        ? (inherited: readonly OoxmlProperty[], direct: readonly OoxmlProperty[]) =>
-            cascadeRunProperties(inherited, direct, styleCascade)
-        : undefined,
-      {
-        lineSpacing: entry.lineSpacing,
-        typography: resolveCjkTypography(entry.props, styleCascade?.typography),
-        equationCacheToken: producer,
+      formatting: entry,
+      producer,
+      styleCascade,
+      tabStops: entry.tabStops,
+      flow: {
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
@@ -1845,10 +1814,8 @@ function layoutBlocksPass(
         paragraphStartY: cursorY,
         ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
         ...(suppressChrome ? { suppressEmptyPlaceholderLine: true } : {}),
-        ...(styleCascade ? { themeFonts: styleCascade.themeFonts } : {}),
-        markRunProperties: entry.markRunProperties,
-      }
-    );
+      },
+    });
   };
 
   const pageExclusionZonesForEntry = (
@@ -1961,7 +1928,7 @@ function layoutBlocksPass(
     const live =
       zones.length > 0 ? topAndBottomSkipBeforeLine(cursorY, pendingLine.height, zones) : 0;
     const breakSkip = pendingLine.exclusionSkipBefore ?? 0;
-    return live > 0.001 ? live : breakSkip;
+    return Math.max(live, breakSkip);
   };
 
   const layoutTableInFlow = (
@@ -1990,6 +1957,7 @@ function layoutBlocksPass(
       displayMode,
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
       deps: tableDeps,
+      compatibilityMode: options.compatibilityMode,
       shiftAnchor: (paragraphId, dy) =>
         shiftAnchoredDrawingRecords(pendingAnchoredDrawings, paragraphId, dy),
       // A sink, not the array: completing a page replaces `pageFragments`, and a reference
@@ -2052,24 +2020,7 @@ function layoutBlocksPass(
     // into line once the page it disturbed has been completed.
     if (resumable && commonSuffix > 0 && index >= prepared.length - commonSuffix) {
       const mark = session.checkpoints[index + (session.keys.length - prepared.length)];
-      if (
-        mark &&
-        mark.cursorY === cursorY &&
-        mark.previousSpaceAfter === previousSpaceAfter &&
-        mark.flowColumnIndex === flowColumnIndex &&
-        sameFragments(mark.pageFragments, pageFragments) &&
-        paragraphFrames.same(mark.pendingParagraphFrames) &&
-        sameAnchoredDrawings(mark.pendingAnchoredDrawings, pendingAnchoredDrawings) &&
-        // A flow that still owes the next page a drawing is not one that owes it nothing.
-        sameAnchoredDrawings(mark.deferredAnchoredDrawings, deferredAnchoredDrawings) &&
-        sameDeferCounts(mark.anchorPageDeferCounts, anchorPageDeferCounts) &&
-        positionedFlow.same(
-          mark.pendingPositionedTableTokens,
-          mark.positionedTableAnchorSignals,
-          pendingFloatIds,
-          floatSignals
-        )
-      ) {
+      if (mark && flowCheckpointsMatch(mark, checkpoints[index]!)) {
         // The in-page flow matches. At delta 0 the previous pages are appended by identity;
         // at a nonzero delta the tail is identical content `delta` sheets away and is reused
         // through `remapPage`, gated by `convergenceTailShiftAllowed`.

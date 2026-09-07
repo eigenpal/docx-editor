@@ -521,6 +521,8 @@ export interface CreateDocumentFurnitureSourceOptions {
     // (undocumented)
     readonly cache: ParagraphLayoutCache<readonly PendingLine[]>;
     // (undocumented)
+    readonly compatibilityMode?: () => number | undefined;
+    // (undocumented)
     readonly defaultTabStopPt?: () => number;
     // (undocumented)
     readonly displayMode?: RevisionDisplayMode;
@@ -557,6 +559,8 @@ export function createDocumentNotesInput(options: CreateDocumentNotesInputOption
 export interface CreateDocumentNotesInputOptions {
     // (undocumented)
     readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
+    // (undocumented)
+    readonly compatibilityMode?: number;
     // (undocumented)
     readonly defaultTabStopPt?: number;
     // (undocumented)
@@ -736,6 +740,8 @@ export interface DocumentSectionsEnumeration {
 
 // @public
 export interface DocumentStyleDependencies {
+    // (undocumented)
+    readonly compatibilityMode?: () => number | undefined;
     // (undocumented)
     readonly defaultTabStopPt: () => number;
     // (undocumented)
@@ -2071,6 +2077,8 @@ export interface NotesLayoutInput {
     // (undocumented)
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
     // (undocumented)
+    readonly compatibilityMode?: number;
+    // (undocumented)
     readonly defaultTabStopPt?: number;
     // (undocumented)
     readonly displayMode?: RevisionDisplayMode;
@@ -2653,7 +2661,7 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
 
 // @public
 export function readTableStructure(table: OoxmlNode, contentWidthPt: number, depth: number, styleCascade?: StyleCascadeTable,
-displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): SemanticTableStructure | null;
+displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, compatibilityMode?: number): SemanticTableStructure | null;
 
 // @public
 export interface RefFieldContext {
@@ -3361,6 +3369,7 @@ export interface SemanticLayout {
 // @public
 export interface SemanticLayoutOptions {
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
+    readonly compatibilityMode?: number;
     readonly defaultTabStopPt?: number;
     readonly displayMode?: RevisionDisplayMode;
     readonly documentProperties?: DocumentProperties;
@@ -3556,6 +3565,7 @@ export interface SemanticTableCell {
     readonly gridSpan: number;
     // (undocumented)
     readonly id: string;
+    readonly legacyContentAlignment?: true;
     readonly margins: CellMarginsPt;
     readonly preferredWidth: PreferredWidth;
     readonly shading?: string;
@@ -3592,6 +3602,7 @@ export interface SemanticTableStructure {
     readonly float?: TableFloatPosition;
     readonly indentPt: number;
     readonly layoutFixed: boolean;
+    readonly legacyContentAlignment?: true;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
     readonly tableBorders: TableBorderBox;

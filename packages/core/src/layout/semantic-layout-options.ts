@@ -117,6 +117,8 @@ export interface SemanticLayoutOptions {
    * here — which is why the prepared-block memo does not key on it.
    */
   readonly defaultTabStopPt?: number;
+  /** Explicit Word compatibility mode; absent retains existing geometry. */
+  readonly compatibilityMode?: number;
   /**
    * Turns a typed `w:hyperlink` into the SANITIZED record its spans carry.
    *

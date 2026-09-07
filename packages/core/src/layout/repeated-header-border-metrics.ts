@@ -158,7 +158,7 @@ export function prepareRepeatedHeaderBorderPlan(
       intervals.push({ start: segment.gridStart, end: segment.gridEnd, extent: width });
     }
     insets.set(cell.id, {
-      ...contentInsets(cell.margins, cell.borders),
+      ...contentInsets(cell.margins, cell.borders, cell.legacyContentAlignment === true),
       bottom: cell.margins.bottom + extent,
     });
   }
@@ -176,14 +176,18 @@ export function prepareRepeatedHeaderBorderPlan(
       extent = Math.max(extent, intervals[index]!.extent);
     }
     insets.set(cell.id, {
-      ...contentInsets(cell.margins, cell.borders),
+      ...contentInsets(cell.margins, cell.borders, cell.legacyContentAlignment === true),
       top: cell.margins.top + extent,
     });
   }
   if (
     [lastHeader, body].every((row) =>
       row.cells.every((cell) => {
-        const before = contentInsets(cell.margins, cell.borders);
+        const before = contentInsets(
+          cell.margins,
+          cell.borders,
+          cell.legacyContentAlignment === true
+        );
         const after = insets.get(cell.id)!;
         return before.top === after.top && before.bottom === after.bottom;
       })

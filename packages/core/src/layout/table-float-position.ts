@@ -60,7 +60,8 @@ export function positionedTableAnchors(
   contentWidth: number,
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode,
-  authorFilter: RevisionAuthorFilter | undefined
+  authorFilter: RevisionAuthorFilter | undefined,
+  compatibilityMode?: number
 ): PositionedTableAnchor[] {
   const result: PositionedTableAnchor[] = [];
   let nextParagraphId: string | undefined;
@@ -80,7 +81,8 @@ export function positionedTableAnchors(
       0,
       styleCascade,
       displayMode,
-      authorFilter
+      authorFilter,
+      compatibilityMode
     )?.float;
     if (!float || float.ySpec === 'inline') continue;
     if (!nextParagraphId) continue;
@@ -121,6 +123,19 @@ export interface PendingPositionedTableTokens {
 interface PositionedTableCheckpointState {
   readonly pendingPositionedTableTokens?: PendingPositionedTableTokens;
   readonly positionedTableAnchorSignals?: readonly PositionedTableAnchorSignal[];
+}
+
+export function samePositionedTableCheckpoints(
+  left: PositionedTableCheckpointState,
+  right: PositionedTableCheckpointState
+): boolean {
+  const pending = right.pendingPositionedTableTokens;
+  const priorTokens = left.pendingPositionedTableTokens;
+  return (
+    (pending === priorTokens ||
+      (pending?.length === priorTokens?.length && pending?.signature === priorTokens?.signature)) &&
+    sameAnchorSignals(left.positionedTableAnchorSignals, right.positionedTableAnchorSignals ?? [])
+  );
 }
 
 /** Capture, restore, and compare the deferred-table portion of a flow checkpoint. */
@@ -206,11 +221,9 @@ export function positionedTableFlow(
       signals: readonly PositionedTableAnchorSignal[]
     ): boolean {
       sync(pendingIds);
-      return (
-        (pending === priorTokens ||
-          (pending?.length === priorTokens?.length &&
-            pending?.signature === priorTokens?.signature)) &&
-        sameAnchorSignals(priorSignals, signals)
+      return samePositionedTableCheckpoints(
+        { pendingPositionedTableTokens: priorTokens, positionedTableAnchorSignals: priorSignals },
+        { pendingPositionedTableTokens: pending, positionedTableAnchorSignals: signals }
       );
     },
   };

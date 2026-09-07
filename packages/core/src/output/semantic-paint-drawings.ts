@@ -896,20 +896,42 @@ function pageDrawingKeys(page: PageRecord): PageDrawingKeys {
   return keys;
 }
 
-export function collectUsedDrawingResourceKeys(layout: SemanticLayout): ReadonlySet<string> {
-  const keys = new Set<string>();
+interface LayoutDrawingKeys {
+  readonly resourceKeys: ReadonlySet<string>;
+  readonly elementKeys: ReadonlySet<string>;
+}
+
+/**
+ * Repaints and virtualization can reuse the same immutable layout. Aggregate both
+ * key sets once, including offscreen pages: materialization does not end a resource's
+ * lifetime. A new layout rebuilds membership while reusing unchanged page extraction.
+ * Weak ownership releases the aggregate with the layout; it retains no DOM or bytes.
+ */
+const drawingKeysByLayout = new WeakMap<SemanticLayout, LayoutDrawingKeys>();
+
+function layoutDrawingKeys(layout: SemanticLayout): LayoutDrawingKeys {
+  const cached = drawingKeysByLayout.get(layout);
+  if (cached) return cached;
+  const resourceKeys = new Set<string>();
+  const elementKeys = new Set<string>();
   for (const page of layout.pages) {
-    for (const key of pageDrawingKeys(page).resourceKeys) keys.add(key);
+    const keys = pageDrawingKeys(page);
+    for (const key of keys.resourceKeys) resourceKeys.add(key);
+    for (const key of keys.elementKeys) elementKeys.add(key);
   }
+  const keys: LayoutDrawingKeys = Object.freeze({ resourceKeys, elementKeys });
+  drawingKeysByLayout.set(layout, keys);
   return keys;
 }
 
+/** Shared read-only membership for this immutable layout. */
+export function collectUsedDrawingResourceKeys(layout: SemanticLayout): ReadonlySet<string> {
+  return layoutDrawingKeys(layout).resourceKeys;
+}
+
+/** Shared read-only membership for this immutable layout. */
 export function collectUsedDrawingElementKeys(layout: SemanticLayout): ReadonlySet<string> {
-  const keys = new Set<string>();
-  for (const page of layout.pages) {
-    for (const key of pageDrawingKeys(page).elementKeys) keys.add(key);
-  }
-  return keys;
+  return layoutDrawingKeys(layout).elementKeys;
 }
 
 export function drawingPaintStringsCacheToken(strings: DrawingPaintStrings): string {

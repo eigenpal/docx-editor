@@ -380,6 +380,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. The same settings apply in body, header, footer, text-box, and note stories. Other table layouts keep their existing geometry.',
   },
   {
     id: 'tables.rows-columns',
@@ -493,7 +495,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays are not cropped by their anchor cell. Both share setImageWrapType and toolbarCommandState.',
+      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays are not cropped by their anchor cell. Authored anchor text distances are preserved. Text clears rectangular gaps narrower than the next glyph. Both share setImageWrapType and toolbarCommandState.',
   },
   {
     id: 'images.bmp-webp',
@@ -577,6 +579,18 @@ export const wordFeatures: WordFeature[] = [
     docsLink: '/docs/2.x/guides/images',
     notes:
       'Solid rectangles, ellipses, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. Other payloads reserve their extent with a placeholder.',
+  },
+  {
+    id: 'images.legacy-vml',
+    name: 'Legacy VML pictures, annotation groups & straight WordArt',
+    category: 'images',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'preserved',
+    tier: 'community',
+    docsLink: '/docs/2.x/guides/images',
+    notes:
+      'Standalone w:pict supports bounded unrotated photos and groups of photos, simple solid geometry, arrowed lines, and straight fit-to-box WordArt. Previews do not replace canonical VML or add media parts. Unknown templates, unsupported members, rotation, and clipped groups remain opaque as a whole. VML-only MC fallbacks are unchanged.',
   },
   {
     id: 'images.crop',
@@ -686,11 +700,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Watermarks (text & image)',
     category: 'layout',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Watermarks use VML or drawing markup in header parts. The editor does not render or edit them. It preserves the authored markup and package relationships through save.',
+      'The supported unrotated standalone VML subset can paint in header parts. Rotated or curved watermark templates remain opaque, and watermark authoring is unavailable. Authored markup and package relationships are preserved through save.',
     docsLink: '/docs/2.x/guides/headers-footers',
   },
   {

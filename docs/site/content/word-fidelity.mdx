@@ -67,6 +67,12 @@ There is no interface for creating, moving, or resizing text frames.
 
 <FeatureMatrix category="tables" />
 
+Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables.
+This applies in body, header, footer, text-box, and note stories.
+The table must have explicit zero indentation, left alignment, zero cell spacing, and consistent outer cell margins.
+Its complete authored grid must equal the text-column width plus those margins.
+Other layouts keep their existing geometry, including nested tables and files without an explicit compatibility mode.
+
 Body text wraps beside supported floating tables and below tables that cover the text column.
 The table's text distances keep the authored gap between its border and surrounding text.
 Text-anchored tables with numeric vertical offsets follow their next ordinary paragraph onto its page and column.

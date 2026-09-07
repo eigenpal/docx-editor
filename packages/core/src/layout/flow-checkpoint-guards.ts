@@ -1,15 +1,15 @@
 // What convergence does with each field of a FLOW CHECKPOINT.
 //
 // A resumed pass converges when the in-page flow returns to exactly the state the previous
-// pass recorded at the same paragraph (`semantic-layout.ts`, the `mark &&` block). That
-// comparison is hand-written: a field captured by `checkpointNow` and restored on resume but
+// pass recorded at the same paragraph (`flowCheckpointsMatch` in `flow-checkpoint.ts`). That
+// comparison is explicit: a field captured and restored by `FlowCheckpointOwner` but
 // missing from the comparison converges a MISMATCHED flow, and ships the silent failure this
 // lane has been bitten by before — `deferredAnchoredDrawings` was exactly that field once
 // (see the comment on it in `layout-session.ts`).
 //
 // This is `PAGE_REUSE_GUARDS` for the checkpoint: the set, written down and type-checked. A
 // new `FlowCheckpoint` field is a type error here until somebody says what convergence does
-// with it, and the companion test asserts the comparison in the source agrees with the map.
+// with it, and the companion test changes every field to verify its declared convergence behavior.
 
 import type { FlowCheckpoint } from './layout-session.ts';
 
@@ -52,7 +52,7 @@ export const FLOW_CHECKPOINT_GUARDS = {
  * Fields a checkpoint actually carries that the table above does not classify.
  *
  * The `satisfies` clause catches a field added to the INTERFACE. This catches the other
- * direction — a checkpoint built by `checkpointNow` with a key the interface never declared.
+ * direction — a checkpoint built by `FlowCheckpointOwner.capture` with a key the interface never declared.
  */
 export function unguardedCheckpointFields(checkpoint: FlowCheckpoint): readonly string[] {
   return Object.keys(checkpoint).filter((key) => !(key in FLOW_CHECKPOINT_GUARDS));

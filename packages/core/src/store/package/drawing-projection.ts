@@ -1,9 +1,11 @@
+import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
 // projection-only — every authored branch stays in the tree on save.
 
 import { sanitizeHref } from './sinks.ts';
+import { readDistances } from './drawing-distances.ts';
 import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
@@ -216,6 +218,8 @@ export interface DrawingProjection {
   readonly picture: PictureProjection | null;
   readonly vectorShape: VectorShapeProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
+  /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
+  readonly legacyGraphic?: LegacyGraphicProjection;
   readonly locks: DrawingLocks;
   readonly effects: DrawingImageEffects;
   readonly compatibilityBranchNodeId: string | null;
@@ -742,17 +746,6 @@ function findWrapElement(anchor: OoxmlElement, compatibilityMode: boolean): Ooxm
   return null;
 }
 
-function readDistances(
-  node: OoxmlElement
-): Readonly<{ top: number; right: number; bottom: number; left: number }> {
-  return Object.freeze({
-    top: parseEmu(schemaAttributeValue(node.attributes, 'distT')) ?? 0,
-    right: parseEmu(schemaAttributeValue(node.attributes, 'distR')) ?? 0,
-    bottom: parseEmu(schemaAttributeValue(node.attributes, 'distB')) ?? 0,
-    left: parseEmu(schemaAttributeValue(node.attributes, 'distL')) ?? 0,
-  });
-}
-
 function readEffectExtent(
   anchor: OoxmlElement,
   wrapElement: OoxmlElement | null,
@@ -938,7 +931,8 @@ function wrapTargetFromAnchor(
 function readWrapGeometry(
   wrap: OoxmlElement | null,
   state: WalkState,
-  nodeId: string
+  nodeId: string,
+  anchor: OoxmlElement
 ): DrawingWrapProjection | null {
   if (!wrap) return null;
   const element = wrapElementKind(wrap);
@@ -950,7 +944,7 @@ function readWrapGeometry(
   return Object.freeze({
     element,
     textSide,
-    distancesEmu: readDistances(wrap),
+    distancesEmu: readDistances(wrap, anchor),
     polygon:
       element === 'tight' || element === 'through'
         ? readPolygon(wrap, state, nodeId)
@@ -1473,7 +1467,7 @@ export function projectDrawingWithState(
     return buildUnrenderableProjection(drawing, ctx, state, kind, extent);
   }
   const wrapGeometry =
-    kind === 'anchored' ? readWrapGeometry(wrapElement, state, drawing.id) : null;
+    kind === 'anchored' ? readWrapGeometry(wrapElement, state, drawing.id, anchor) : null;
   const position = kind === 'anchored' ? readPosition(anchor, simplePosEnabled) : null;
   const anchorMeta =
     kind === 'anchored'
@@ -1640,6 +1634,13 @@ function collectDrawingsInPartBounded(
     if (frame.depth > MAX_XML_DEPTH) continue;
 
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
+
+    const legacy = projectLegacyVml(frame.node, ownerPartName);
+    if (legacy) {
+      out.push(legacy);
+      atomIndex?.set(frame.node.id, legacy);
+      continue;
+    }
 
     if (frame.node.kind === 'drawing') {
       const projected = projectDrawing(frame.node, { ...ctx, namespaceScope: scope });

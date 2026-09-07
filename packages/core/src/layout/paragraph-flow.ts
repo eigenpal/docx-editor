@@ -60,6 +60,7 @@ import {
   type ThemeFonts,
 } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
+import { createLineExclusionClearance } from './line-exclusion-clearance.ts';
 import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   buildInlineDrawingRecord,
@@ -78,7 +79,6 @@ import {
   snapXToAvailableInterval,
   synthesizeParagraphTopAndBottomZones,
   synthesizeParagraphWrapExclusionZones,
-  topAndBottomSkipBeforeLine,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { createEquationLayouter } from './equation-layout.ts';
@@ -706,7 +706,6 @@ export function breakParagraph(
     leading: 0,
     trailingSpacing: 0,
   };
-  let topAndBottomSkipApplied = false;
   const anchorLineTopByModelStart = new Map<number, number>();
 
   // The break-time wrap synthesis follows the published records: a drawing the display mode
@@ -844,22 +843,20 @@ export function breakParagraph(
     }
   };
 
-  const applyTopAndBottomSkipIfNeeded = (): void => {
-    if (topAndBottomSkipApplied) return;
-    const zones = activeExclusionZones();
-    if (zones.length === 0) return;
-    if (line.spans.length > 0 || line.drawings.length > 0) return;
-    const metrics = measurer.lineMetrics(emptyStyle);
-    const skip = topAndBottomSkipBeforeLine(
-      currentLineTopY(),
-      line.height > 0 ? line.height : metrics.height,
-      zones
-    );
-    if (skip > 0.001) {
-      topAndBottomSkipApplied = true;
-      line.exclusionSkipBefore = skip;
-    }
-  };
+  const {
+    applyTopAndBottomSkipIfNeeded,
+    applyNarrowWrapSkipIfNeeded,
+    finalizeTopAndBottomClearance,
+  } = createLineExclusionClearance({
+    line: () => line,
+    top: currentLineTopY,
+    zones: activeExclusionZones,
+    left: () => Math.max(contentLeft, lineOrigin()),
+    right: contentRight,
+    emptyStyle,
+    measurer,
+    lineSpacing,
+  });
 
   // Where the line will actually sit. A band that pushed this line down has already been
   // recorded on it, so probing must ask about the shifted position — probing the unshifted
@@ -1184,13 +1181,6 @@ export function breakParagraph(
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
         ? Math.max(0, spaced.height - naturalHeight)
         : 0;
-    const finalizeTopAndBottomClearance = (): void => {
-      const zones = activeExclusionZones();
-      if (zones.length === 0) return;
-      const skip = topAndBottomSkipBeforeLine(currentLineTopY(), line.height, zones);
-      if (skip > 0.001) line.exclusionSkipBefore = skip;
-      else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
-    };
     finalizeTopAndBottomClearance();
     // Before `markWrapAdvances`, so wrap-advance marking sees the merged shape — which is
     // the shape paint gets.
@@ -1201,7 +1191,6 @@ export function breakParagraph(
     lines.push(line);
     wordStartSpan = -1;
     wordStartWidth = 0;
-    topAndBottomSkipApplied = false;
     line = {
       spans: [],
       drawings: [],
@@ -1505,6 +1494,7 @@ export function breakParagraph(
         wordStartEnd = line.end;
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
+      applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
       const clippedWordEnd =
         !layoutOwned && piece.measureText === undefined
           ? lineEndSpaces.clipWordEnd(

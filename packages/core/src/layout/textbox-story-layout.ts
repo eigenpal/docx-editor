@@ -99,6 +99,7 @@ export interface TextboxStoryLayoutOptions {
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
   /** Host story's page-field context; PAGE-family fields inside the story project against it. */
   readonly pageContext?: FieldPageContext;
   readonly displayMode?: RevisionDisplayMode;
@@ -520,6 +521,8 @@ export function layoutTextboxStory(
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
+    compatibilityMode: options.compatibilityMode,
+    tableNestingOffset: 1,
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),
