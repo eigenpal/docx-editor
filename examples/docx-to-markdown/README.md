@@ -29,3 +29,15 @@ and exporter receive the same on-demand origins. Proprietary families absent fro
 set, and pinned Google catalog remain reported as unresolved rather than receiving an invented
 metric substitute. Raw file-derived HTML is never trusted; generated inline HTML is parsed and
 sanitized before rendering.
+
+The API tab shows a Node.js example using the current filename and selected page fields. Preview
+settings only choose which returned fields to display; they do not change the export result.
+The example includes the same Google Fonts fallback and resource timeout as the demo. Font
+resolution details remain available in the complete live JSON response.
+
+Copy follows the active view: the Node.js example, the live JSON response, or the full-document
+Markdown. Download saves `result.markdown` as a `.md` file using the input filename. Full-document
+Markdown excludes repeated headers and footers; those remain available on individual pages.
+
+The favicon is the SVG served by `https://www.docx-editor.dev/icon0.svg`, stored locally so the
+standalone deployment shares the main site's branding without a runtime request to that site.

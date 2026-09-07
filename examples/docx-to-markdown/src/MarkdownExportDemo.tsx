@@ -23,7 +23,7 @@ import {
 } from './export-state';
 import { developerPanelContent, type DeveloperPanelTab } from './developer-reference';
 import { createLatestOperationGate } from './latest-operation';
-import { HighlightedCode } from './HighlightedCode';
+import { DeveloperView } from './DeveloperView';
 import { MarkdownBlock } from './MarkdownBlock';
 import { PageReviewArtifacts } from './PageReviewArtifacts';
 import { markdownPageToReveal, type PreviewMode } from './preview-navigation';
@@ -100,54 +100,6 @@ function MarkdownLoadingState() {
       <Spinner />
       <span className="md-visually-hidden">Building Markdown</span>
     </div>
-  );
-}
-
-function DeveloperView({
-  tab,
-  result,
-  status,
-  error,
-  onTabChange,
-}: {
-  readonly tab: DeveloperPanelTab;
-  readonly result: MarkdownExportResult | null;
-  readonly status: ExportStatus;
-  readonly error: string | null;
-  readonly onTabChange: (tab: DeveloperPanelTab) => void;
-}) {
-  const content = useMemo(
-    () => developerPanelContent(tab, result, status, error),
-    [error, result, status, tab]
-  );
-  return (
-    <section className="md-developer-view" aria-labelledby="developer-view-title">
-      <header className="md-developer-view__header">
-        <strong id="developer-view-title">Use the export API</strong>
-        <span>One call returns logical and page-aware Markdown.</span>
-      </header>
-      <div className="md-developer-tabs" role="group" aria-label="Developer reference">
-        <button
-          type="button"
-          aria-pressed={tab === 'example'}
-          onClick={() => onTabChange('example')}
-        >
-          Example
-        </button>
-        <button
-          type="button"
-          aria-pressed={tab === 'response'}
-          onClick={() => onTabChange('response')}
-        >
-          Response
-        </button>
-      </div>
-      <HighlightedCode
-        code={content}
-        language={tab === 'example' ? 'typescript' : 'json'}
-        label={tab === 'example' ? 'TypeScript code example' : 'JSON API response'}
-      />
-    </section>
   );
 }
 
@@ -234,9 +186,9 @@ function coverageLabel(report: ExportFontResolutionReport | null): string | null
   const unresolved = report.families
     .filter((family) => family.coverage !== 'complete')
     .map((family) => family.family);
-  if (unresolved.length > 0) return `Incomplete font-face coverage: ${unresolved.join(', ')}`;
+  if (unresolved.length > 0) return `Some font styles are unavailable: ${unresolved.join(', ')}`;
   if (report.originFailures.length > 0)
-    return 'A font source failed; requested face coverage remains complete';
+    return 'A font source could not load. All requested font styles are available from other sources.';
   return null;
 }
 
@@ -263,6 +215,7 @@ export function MarkdownExportDemo() {
   const copiedTimer = useRef<number | null>(null);
   const [operations] = useState(createLatestOperationGate);
   const fonts = useFonts(EDITOR_PACKAGED_FONTS, GOOGLE_FONT_FALLBACK);
+  const [filename, setFilename] = useState('sample.docx');
   const [document, setDocument] = useState<Uint8Array>();
   const [exportView, setExportView] = useState<ExportViewState>(EMPTY_EXPORT);
   const [previewMode, setPreviewMode] = useState<PreviewMode>('rendered');
@@ -281,6 +234,15 @@ export function MarkdownExportDemo() {
   const [copied, setCopied] = useState(false);
   const [developerPanelTab, setDeveloperPanelTab] = useState<DeveloperPanelTab>('example');
   const [exportActivity, setExportActivity] = useState<ExportActivity>('document');
+
+  const previewFields = useMemo(
+    () => ({ showHeaders, showFooters, showComments, showTrackedChanges }),
+    [showHeaders, showFooters, showComments, showTrackedChanges]
+  );
+
+  useEffect(() => {
+    setCopied(false);
+  }, [previewMode, developerPanelTab, previewFields, filename, exportView.result]);
 
   const revealMarkdownPage = useCallback((pageNumber: number) => {
     const scroller = previewScroll.current;
@@ -398,10 +360,11 @@ export function MarkdownExportDemo() {
   );
 
   const openBytes = useCallback(
-    (bytes: Uint8Array, _name: string, operation: number) => {
+    (bytes: Uint8Array, name: string, operation: number) => {
       if (!operations.isCurrent(operation)) return;
       latestEditorPage.current = 1;
       sourcePointerReveal.current = false;
+      setFilename(name);
       setDocument(bytes);
       void runExport(bytes, operation, 'document');
     },
@@ -517,7 +480,17 @@ export function MarkdownExportDemo() {
   }, [beginOperation, operations, runExport]);
 
   const copyMarkdown = useCallback(() => {
-    const markdown = copyableMarkdown(exportView.status, exportView.result?.markdown ?? null);
+    const markdown =
+      previewMode === 'developer'
+        ? developerPanelContent(
+            developerPanelTab,
+            exportView.result,
+            exportView.status,
+            exportView.error,
+            previewFields,
+            filename
+          )
+        : copyableMarkdown(exportView.status, exportView.result?.markdown ?? null);
     if (markdown === null) return;
     void navigator.clipboard
       .writeText(markdown)
@@ -527,7 +500,18 @@ export function MarkdownExportDemo() {
         copiedTimer.current = window.setTimeout(() => setCopied(false), 1_500);
       })
       .catch((error) => console.warn(`[clipboard] ${errorMessage(error)}`));
-  }, [exportView.result, exportView.status]);
+  }, [exportView, previewMode, developerPanelTab, previewFields, filename]);
+
+  const downloadMarkdown = () => {
+    const markdown = copyableMarkdown(exportView.status, exportView.result?.markdown ?? null);
+    if (markdown === null) return;
+    const url = URL.createObjectURL(new Blob([markdown], { type: 'text/markdown;charset=utf-8' }));
+    const link = window.document.createElement('a');
+    link.href = url;
+    link.download = filename.replace(/\.docx$/i, '') + '.md';
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
 
   const fontStatus = coverageLabel(exportView.fontReport);
   const commentById = useMemo(() => {
@@ -683,27 +667,24 @@ export function MarkdownExportDemo() {
                 aria-pressed={previewMode === 'developer'}
                 onClick={() => setPreviewMode('developer')}
               >
-                Code
+                API
               </button>
             </div>
-            <details className="md-settings" hidden={previewMode === 'developer'}>
+            <details className="md-settings">
               <summary
                 className="md-icon-button"
-                aria-label={
-                  fontStatus
-                    ? `Page display and font fidelity settings; ${fontStatus}`
-                    : 'Page display settings'
-                }
-                title={
-                  fontStatus ? 'Page display and font fidelity settings' : 'Page display settings'
-                }
+                aria-label="Preview settings"
+                title="Preview settings"
               >
                 <SettingsIcon />
               </summary>
               <div className="md-settings-popover">
                 <div className="md-settings-heading">
-                  <strong>Page display</strong>
-                  <span>Choose what appears in the preview.</span>
+                  <strong>Preview settings</strong>
+                  <span>
+                    Choose page fields to display. The API returns all fields; full-document
+                    Markdown contains the body.
+                  </span>
                 </div>
                 <label className="md-setting-row">
                   <span>Page headers</span>
@@ -746,15 +727,47 @@ export function MarkdownExportDemo() {
               type="button"
               className="md-icon-button md-copy-action"
               onClick={copyMarkdown}
-              disabled={!canCopy}
-              aria-label={copied ? 'Markdown copied' : 'Copy full-document Markdown'}
-              title={copied ? 'Copied' : 'Copy Markdown'}
+              disabled={
+                previewMode === 'developer' && developerPanelTab === 'example' ? false : !canCopy
+              }
+              aria-label={
+                copied
+                  ? 'Copied'
+                  : previewMode === 'developer'
+                    ? developerPanelTab === 'example'
+                      ? 'Copy code'
+                      : 'Copy JSON response'
+                    : 'Copy full-document Markdown'
+              }
+              title={
+                copied
+                  ? 'Copied'
+                  : previewMode === 'developer'
+                    ? 'Copy code or response'
+                    : 'Copy full-document Markdown'
+              }
             >
               <CopyIcon copied={copied} />
             </button>
           </div>
         </div>
       </header>
+      <div className="md-converter-intro">
+        <span>
+          DOCX in. Markdown out.{' '}
+          <span className="md-intro-detail">Drop a file or edit the sample to see the result.</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            setPreviewMode('developer');
+            setMobilePane('markdown');
+          }}
+        >
+          <code>await exportMarkdown(docxBytes)</code>
+          <span aria-hidden="true"> ↗</span>
+        </button>
+      </div>
       <span className="md-visually-hidden" role="status" aria-live="polite">
         {exportStatusLabel}
       </span>
@@ -777,6 +790,12 @@ export function MarkdownExportDemo() {
           className="md-panel md-panel--editor"
           aria-label="Editable DOCX document"
         >
+          <div className="md-pane-caption">
+            <div>
+              <strong>DOCX input</strong>
+              <span title={filename}>{filename} · Rendered by our document engine</span>
+            </div>
+          </div>
           <div
             className="md-editor-frame"
             onPointerDownCapture={(event) => {
@@ -876,9 +895,31 @@ export function MarkdownExportDemo() {
               : 'Live paginated Markdown'
           }
         >
+          <div className="md-pane-caption">
+            <div>
+              <strong>
+                {previewMode === 'developer' ? 'Use it in your app' : 'Markdown output'}
+              </strong>
+              <span>
+                {exportView.status === 'ready'
+                  ? `${exportView.result?.pages.length ?? 0} pages · Converted in your browser`
+                  : exportStatusLabel}
+              </span>
+            </div>
+            <button
+              className="md-button md-button--quiet"
+              type="button"
+              onClick={downloadMarkdown}
+              disabled={!canCopy}
+            >
+              Download .md
+            </button>
+          </div>
           <div ref={previewScroll} className="md-preview-scroll" aria-busy={busy}>
             {previewMode === 'developer' ? (
               <DeveloperView
+                fields={previewFields}
+                filename={filename}
                 tab={developerPanelTab}
                 result={exportView.status === 'ready' ? exportView.result : null}
                 status={exportView.status}
