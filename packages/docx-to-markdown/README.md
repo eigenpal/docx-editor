@@ -5,6 +5,8 @@
 Convert DOCX to Markdown with page boundaries, headers, footers, and review metadata.
 No browser or DOM required.
 
+Apache-2.0, including comment and tracked-change extraction. No Pro package or license key required.
+
 ## Quick start
 
 Run `bun dev:markdown` from the repository root to try the editor and Markdown preview.
