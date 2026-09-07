@@ -1,3 +1,4 @@
+import { validateCommitTextFormField } from './tree-op-field-results.ts';
 import { textFormFieldForEdit } from './text-form-fields.ts';
 import { coveredTextFormDefinitionRefusal } from './text-form-field-deletion.ts';
 import { validateTextFormFieldDefault } from './tree-op-field-results.ts';
@@ -389,6 +390,7 @@ export function validateTreeOp(part: OoxmlPart, op: TreeDocOp): TreeOpRejection 
   if (op.op === 'rewriteTocPageNumbers') {
     return validateRewriteTocPageNumbers(part, op);
   }
+  if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
   if (op.op === 'setTextFormFieldDefault') return validateTextFormFieldDefault(part, op);
   if (op.op === 'refreshFieldResults') {
     return validateRefreshFieldResults(part, op);

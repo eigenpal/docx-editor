@@ -8,11 +8,11 @@ import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
 import { DocxEditorContent } from '../src/editor/DocxEditorContent';
 import { DocxEditorContextMenu } from '../src/editor/contextmenu/index.ts';
-import { flush, SOURCE } from './helpers/fixtures.ts';
+import { flush, SOURCE, docx } from './helpers/fixtures.ts';
 
 const t = (key: string): string => key;
 
-function mountMenu() {
+function mountMenu(source = SOURCE) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const ready: DocxEditorInstance[] = [];
@@ -21,7 +21,7 @@ function mountMenu() {
       h(
         DocxEditorRoot,
         {
-          document: SOURCE,
+          document: source,
           onReady: (editor: Editor) => {
             ready.push(editor as DocxEditorInstance);
           },
@@ -127,4 +127,25 @@ describe('DocxEditorContextMenu', () => {
       mounted.unmount();
     }
   });
+});
+
+
+test('Vue field context action opens and saves the shared options dialog', async () => {
+  const host = mountMenu(docx('<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'));
+  try {
+    await flush();
+    const field = host.container.querySelector<HTMLElement>('[data-field-atom="form"]')!;
+    field.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2, clientX: 30, clientY: 30 }));
+    await flush();
+    const action = host.container.querySelector<HTMLElement>('[data-slot="field.edit"]')!;
+    expect(action).not.toBeNull(); action.click(); await flush();
+    const dialog = host.container.querySelector('dialog')!; expect(dialog).not.toBeNull();
+    const [type, format] = dialog.querySelectorAll('select');
+    const [text, max, enabled] = dialog.querySelectorAll('input');
+    type!.value = 'regular'; type!.dispatchEvent(new Event('change'));
+    text!.value = 'hello'; max!.value = '5'; format!.value = 'Uppercase'; enabled!.checked = false;
+    dialog.querySelectorAll('button')[1]!.click(); await flush();
+    expect(host.container.querySelector('dialog')).toBeNull();
+    expect(host.container.querySelector('[data-field-atom="form"]')?.textContent).toBe('HELLO');
+  } finally { host.unmount(); }
 });

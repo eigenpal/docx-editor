@@ -1,3 +1,4 @@
+import { validateCommitTextFormField } from './tree-op-field-results.ts';
 import { enforcesFormsProtection, sectionProtectsForms } from './forms-protection.ts';
 export {
   enforcesFormsProtection,
@@ -5,7 +6,7 @@ export {
   sectionProtectsForms,
 } from './forms-protection.ts';
 import { protectedTextFormEditRefusal } from './tree-op-field-results.ts';
-import { textFormFieldForEdit } from './text-form-fields.ts';
+import { textFormFieldForEdit, textFormFieldsOf } from './text-form-fields.ts';
 // Writing content controls: values, metadata, insertion, removal — and the locks that refuse.
 //
 // EVERY refusal in this module is a STORE refusal. A widget that greys a button out is a
@@ -517,6 +518,7 @@ const TREE_OP_REACH: {
   rewriteTocPageNumbers: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   // A field-result refresh rewrites result runs in the paragraphs the op names, nothing else.
   setTextFormFieldDefault: (op) => whole(op.fieldNodeId),
+  commitTextFormField: (op) => whole(op.fieldNodeId),
   refreshFieldResults: (op) => ({ kind: 'nodes', targets: inParagraphs(op.updates) }),
   replaceStoryBlocks: (op) => ({
     kind: 'nodes',
@@ -1066,6 +1068,7 @@ export function formsProtectionRefusal(
   preferredFieldId?: string
 ): TreeOpRejection | null {
   if (!enforcesFormsProtection(settings)) return null;
+  if (op.op === 'commitTextFormField') return validateCommitTextFormField(part, op);
   const textField = textFormFieldForEdit(part, op, preferredFieldId);
   if (
     (op.op === 'insertText' || op.op === 'deleteText') &&
@@ -1075,6 +1078,24 @@ export function formsProtectionRefusal(
     return 'invalidArgs';
   if (textField && 'paragraphId' in op && sectionProtectsForms(part, op.paragraphId))
     return protectedTextFormEditRefusal(part, op, textField);
+  if (
+    (op.op === 'insertText' || op.op === 'deleteText') &&
+    sectionProtectsForms(part, op.paragraphId)
+  ) {
+    const paragraph = findNode(part, op.paragraphId);
+    if (paragraph?.kind === 'paragraph') {
+      const start = op.op === 'insertText' ? op.offset : op.start;
+      const end = op.op === 'insertText' ? op.offset : op.end;
+      if (
+        textFormFieldsOf(paragraph).some((field) =>
+          op.op === 'insertText'
+            ? start >= field.start && start <= field.end
+            : start < field.end && end > field.start
+        )
+      )
+        return 'locked';
+    }
+  }
   const reach = treeOpReach(op);
   if (reach.kind === 'none') return null;
   for (const node of resolveReach(part, reach).unprotected) {

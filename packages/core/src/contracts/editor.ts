@@ -1298,6 +1298,8 @@ export interface EditorCommands
   setWatermark: { watermark: Watermark | null };
   /** Insert a generated, hyperlink-enabled TOC for heading levels 1–3 at the selection. */
   insertToc: Record<never, never>;
+  /** Open options for the selected or context-clicked legacy text form. */
+  editTextFormField: Record<never, never>;
   refreshToc: { tocId?: string; mode?: 'entire' | 'pageNumbers' };
 
   undo: Record<never, never>;

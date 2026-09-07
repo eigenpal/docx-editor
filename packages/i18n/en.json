@@ -816,6 +816,24 @@
     "defaultText": "Default text",
     "apply": "OK",
     "cancel": "Cancel",
-    "unavailable": "This field cannot be changed."
+    "unavailable": "This field cannot be changed.",
+    "edit": "Edit field…",
+    "type": "Type",
+    "regular": "Regular text",
+    "number": "Number",
+    "date": "Date",
+    "preservedType": "Preserved field type",
+    "maxLength": "Maximum length (0 = unlimited)",
+    "format": "Format",
+    "noFormat": "No format",
+    "enabled": "Fill-in enabled",
+    "invalidOptions": "Check the default value, type, format, and maximum length.",
+    "invalidValue": "Enter a valid field value before leaving this field.",
+    "selected": "Whole field selected. Typing replaces the field when the form is unprotected.",
+    "editing": "Caret inside a text form field.",
+    "uppercase": "Uppercase",
+    "lowercase": "Lowercase",
+    "firstCapital": "First capital",
+    "titleCase": "Title case"
   }
 }

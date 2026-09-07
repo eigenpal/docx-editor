@@ -1,3 +1,5 @@
+import { supportsTextFormField } from './text-form-field-options.ts';
+import type { TextFormFieldOptions } from './text-form-field-options.ts';
 import { findNode } from '../package/ooxml-edit.ts';
 import type { OoxmlPart } from '../package/ooxml-tree.ts';
 import type { TreeDocOp } from './tree-op-types.ts';
@@ -17,6 +19,9 @@ export interface TextFormFieldRange {
   readonly end: number;
   readonly enabled: boolean;
   readonly defaultText: string;
+  readonly type: string;
+  readonly maxLength: number;
+  readonly format: string;
   readonly chromeIds: readonly string[];
 }
 
@@ -58,6 +63,8 @@ export function textFormFieldsOf(paragraph: OoxmlParagraphNode): readonly TextFo
     const data = child(field.node, 'ffData');
     if (!begin || !end || !data || !child(data, 'textInput')) return [];
     const enabled = child(data, 'enabled');
+    const input = child(data, 'textInput')!;
+    const rawMax = Number(value(child(input, 'maxLength')) ?? 0);
     const name = value(child(data, 'name'));
     const bookmarkStart = name
       ? bookmarks.find(
@@ -83,6 +90,9 @@ export function textFormFieldsOf(paragraph: OoxmlParagraphNode): readonly TextFo
         start: begin.start,
         end: end.end,
         enabled: !enabled || !['0', 'false', 'off'].includes(value(enabled) ?? '1'),
+        type: value(child(input, 'type')) ?? 'regular',
+        maxLength: Number.isInteger(rawMax) && rawMax > 0 && rawMax <= 32767 ? rawMax : 0,
+        format: value(child(input, 'format')) ?? '',
         defaultText:
           value(child(data, 'textInput') && child(child(data, 'textInput')!, 'default')) ?? '',
         chromeIds: [
@@ -110,7 +120,7 @@ export function textFormFieldForEdit(
   const end = op.op === 'insertText' ? op.offset : op.end;
   if (!Number.isInteger(start) || !Number.isInteger(end) || start > end) return null;
   const candidates = textFormFieldsOf(paragraph).filter(
-    (f) => f.enabled && start >= f.start && end <= f.end
+    (f) => f.enabled && supportsTextFormField(f) && start >= f.start && end <= f.end
   );
   if (op.textFormFieldId !== undefined)
     return candidates.find((f) => f.fieldNodeId === op.textFormFieldId) ?? null;
@@ -128,4 +138,12 @@ export interface SetTextFormFieldDefaultOp {
   readonly paragraphId: string;
   readonly fieldNodeId: string;
   readonly text: string;
+  readonly options?: TextFormFieldOptions;
+}
+
+/** Validate and format the existing result when a user finishes filling a field. */
+export interface CommitTextFormFieldOp {
+  readonly op: 'commitTextFormField';
+  readonly paragraphId: string;
+  readonly fieldNodeId: string;
 }

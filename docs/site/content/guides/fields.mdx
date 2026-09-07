@@ -103,7 +103,15 @@ macros, DDE instructions, OLE content, or external include instructions.
 
 In an unprotected document, replacing the whole `FORMTEXT` result removes the
 field definition. Editing part of its result keeps the definition.
-Double-click a text form field to change its default text and displayed result.
+Double-click a text form field, or select **Edit field…** from its context menu.
+Press Shift+F10 to open the context menu from the keyboard.
+The same options dialog appears in React and Vue.
+
+Set the default value, type, maximum length, format, and **Fill-in enabled**.
+A maximum length of zero means unlimited. The dialog supports regular text,
+number, and date inputs with the formats in its list.
+A solid outline marks a whole selected field; a dashed outline marks a caret
+inside its text.
 
 In a document protected for forms, typing changes the result and keeps the
 field definition and default. Press Tab or Shift+Tab to select another enabled
@@ -111,5 +119,11 @@ text form field. Other document text remains protected.
 
 The default-text dialog and protected filling accept plain text results.
 They refuse results with nested fields, revision markup, or other structure.
-The editor preserves other form-field options but does not apply their text
-format or maximum-length constraints. It never runs entry or exit macros.
+Protected filling enforces maximum length and skips disabled fields.
+When you leave an edited field, the editor validates and formats its result.
+The default value stays unchanged. An invalid number or date keeps the selection
+in the field so you can correct it.
+
+Computed text input types and format pictures outside the dialog's list remain
+preserved. They do not accept protected filling. Checkbox and dropdown interactions
+are not supported. The editor never runs entry or exit macros.

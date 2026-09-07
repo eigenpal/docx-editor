@@ -317,3 +317,262 @@ test('protected field insertion validates its result rather than the following l
   expect(result.ok).toBe(true);
   if (result.ok) expect(paragraphTextOf(result.part, p.id)).toBe('ASampleXZ');
 });
+
+test('options store type, maximum length, format, and enabled beside the unchanged bookmark', () => {
+  const part = fixture('customXml');
+  const p = paragraph(part);
+  const field = textFormFieldsOf(p)[0]!;
+  const result = applyTreeOp(part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: p.id,
+    fieldNodeId: field.fieldNodeId,
+    text: '1234.5',
+    options: { type: 'number', maxLength: 6, format: '#,##0.00', enabled: false },
+  });
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(paragraphTextOf(result.part, p.id)).toBe('A1,234.50Z');
+  expect(textFormFieldsOf(paragraph(result.part))[0]).toMatchObject({
+    type: 'number',
+    maxLength: 6,
+    format: '#,##0.00',
+    enabled: false,
+    defaultText: '1234.5',
+  });
+  const xml = serializeOoxmlPart(result.part);
+  expect(xml).toContain('bookmarkStart');
+  expect(xml).toContain('customXml');
+  expect(xml.indexOf('<w:type')).toBeLessThan(xml.indexOf('<w:default'));
+  expect(xml.indexOf('<w:default')).toBeLessThan(xml.indexOf('<w:maxLength'));
+  expect(xml.indexOf('<w:maxLength')).toBeLessThan(xml.indexOf('<w:format'));
+});
+
+test('options refuse invalid values atomically', () => {
+  const part = fixture();
+  const p = paragraph(part);
+  const f = textFormFieldsOf(p)[0]!;
+  for (const [text, options] of [
+    ['invalid', { type: 'number', maxLength: 0, format: '', enabled: true }],
+    ['2025-02-29', { type: 'date', maxLength: 0, format: 'yyyy-MM-dd', enabled: true }],
+    ['long', { type: 'regular', maxLength: 3, format: '', enabled: true }],
+    ['', { type: 'regular', maxLength: -1, format: '', enabled: true }],
+    ['', { type: 'regular', maxLength: 0, format: 'invalid', enabled: true }],
+  ] as const) {
+    expect(
+      applyTreeOp(part, {
+        op: 'setTextFormFieldDefault',
+        paragraphId: p.id,
+        fieldNodeId: f.fieldNodeId,
+        text,
+        options,
+      }).ok
+    ).toBe(false);
+  }
+  expect(paragraphTextOf(part, p.id)).toBe('ASampleZ');
+});
+
+test('protected length accepts Unicode characters, rejects overflow, and permits reducing existing overflow', () => {
+  const part = fixture();
+  const p = paragraph(part);
+  const f = textFormFieldsOf(p)[0]!;
+  const configured = applyTreeOp(part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: p.id,
+    fieldNodeId: f.fieldNodeId,
+    text: '😀',
+    options: { type: 'regular', maxLength: 2, format: '', enabled: true },
+  });
+  expect(configured.ok).toBe(true);
+  if (!configured.ok) return;
+  const field = textFormFieldsOf(paragraph(configured.part))[0]!;
+  const added = applyProtectedTextFormEdit(
+    configured.part,
+    { op: 'insertText', paragraphId: p.id, offset: field.end, text: 'b' },
+    field
+  );
+  expect(added.ok).toBe(true);
+  if (!added.ok) return;
+  const full = textFormFieldsOf(paragraph(added.part))[0]!;
+  expect(
+    applyProtectedTextFormEdit(
+      added.part,
+      { op: 'insertText', paragraphId: p.id, offset: full.end, text: 'c' },
+      full
+    ).ok
+  ).toBe(false);
+  const small = { ...full, maxLength: 1 };
+  expect(
+    applyProtectedTextFormEdit(
+      added.part,
+      { op: 'deleteText', paragraphId: p.id, start: 1, end: 3 },
+      small
+    ).ok
+  ).toBe(true);
+});
+
+test('finish filling formats only the result and retains the default', () => {
+  const part = fixture();
+  const p = paragraph(part);
+  const f = textFormFieldsOf(p)[0]!;
+  const configured = applyTreeOp(part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: p.id,
+    fieldNodeId: f.fieldNodeId,
+    text: 'Seed',
+    options: { type: 'regular', maxLength: 0, format: 'First capital', enabled: true },
+  });
+  expect(configured.ok).toBe(true);
+  if (!configured.ok) return;
+  let next = configured.part;
+  let field = textFormFieldsOf(paragraph(next))[0]!;
+  const erased = applyProtectedTextFormEdit(
+    next,
+    { op: 'deleteText', paragraphId: p.id, start: field.start, end: field.end },
+    field
+  );
+  expect(erased.ok).toBe(true);
+  if (!erased.ok) return;
+  next = erased.part;
+  field = textFormFieldsOf(paragraph(next))[0]!;
+  const typed = applyProtectedTextFormEdit(
+    next,
+    { op: 'insertText', paragraphId: p.id, offset: field.start, text: 'mARY SMITH' },
+    field
+  );
+  expect(typed.ok).toBe(true);
+  if (!typed.ok) return;
+  const finished = applyTreeOp(typed.part, {
+    op: 'commitTextFormField',
+    paragraphId: p.id,
+    fieldNodeId: f.fieldNodeId,
+  });
+  expect(finished.ok).toBe(true);
+  if (!finished.ok) return;
+  expect(paragraphTextOf(finished.part, p.id)).toBe('AMary smithZ');
+  expect(textFormFieldsOf(paragraph(finished.part))[0]?.defaultText).toBe('Seed');
+});
+
+test('protected outer deletion cannot discard a form field through an unlocked content control', async () => {
+  const { TreeDocumentStore } = await import('../index.ts');
+  const settings = readOoxmlPart(
+    `<w:settings xmlns:w="${W}"><w:documentProtection w:edit="forms" w:enforcement="1"/></w:settings>`,
+    {
+      name: '/word/settings.xml',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml',
+    }
+  );
+  if (!settings.ok) throw new Error(settings.reason);
+  for (const enabled of [true, false]) {
+    const part = fromXml(
+      serializeOoxmlPart(fixture('', true))
+        .replace('<w:lock w:val="contentLocked"/>', '')
+        .replace('<w:enabled/>', `<w:enabled w:val="${enabled ? '1' : '0'}"/>`)
+    );
+    const id = paragraph(part).id;
+    const store = new TreeDocumentStore(part, { settingsPart: () => settings.part });
+    expect(
+      store.transact((ctx) => ctx.apply({ op: 'deleteText', paragraphId: id, start: 0, end: 8 })).ok
+    ).toBe(false);
+    expect(serializeOoxmlPart(store.part)).toContain('FORMTEXT');
+  }
+});
+
+test('maximum length excludes generated numeric grouping when correcting a filled value', () => {
+  const part = fixture();
+  const p = paragraph(part);
+  const f = textFormFieldsOf(p)[0]!;
+  const configured = applyTreeOp(part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: p.id,
+    fieldNodeId: f.fieldNodeId,
+    text: '1000',
+    options: { type: 'number', maxLength: 4, format: '#,##0', enabled: true },
+  });
+  expect(configured.ok).toBe(true);
+  if (!configured.ok) return;
+  const field = textFormFieldsOf(paragraph(configured.part))[0]!;
+  const removed = applyProtectedTextFormEdit(
+    configured.part,
+    { op: 'deleteText', paragraphId: p.id, start: field.end - 1, end: field.end },
+    field
+  );
+  expect(removed.ok).toBe(true);
+  if (!removed.ok) return;
+  const shorter = textFormFieldsOf(paragraph(removed.part))[0]!;
+  const inserted = applyProtectedTextFormEdit(
+    removed.part,
+    { op: 'insertText', paragraphId: p.id, offset: shorter.end, text: '1' },
+    shorter
+  );
+  expect(inserted.ok).toBe(true);
+  if (!inserted.ok) return;
+  expect(paragraphTextOf(inserted.part, p.id)).toBe('A1,001Z');
+});
+
+test('generated decimal and named-date formats do not consume the raw input limit', () => {
+  for (const config of [
+    {
+      text: '1',
+      options: { type: 'number', maxLength: 1, format: '0.00', enabled: true },
+      expected: 'A2.00Z',
+    },
+    {
+      text: '1/1/2030',
+      options: { type: 'date', maxLength: 8, format: 'MMMM d, yyyy', enabled: true },
+      expected: 'AJanuary 2, 2030Z',
+    },
+  ] as const) {
+    const part = fixture();
+    const p = paragraph(part);
+    const f = textFormFieldsOf(p)[0]!;
+    const configured = applyTreeOp(part, {
+      op: 'setTextFormFieldDefault',
+      paragraphId: p.id,
+      fieldNodeId: f.fieldNodeId,
+      ...config,
+    });
+    expect(configured.ok).toBe(true);
+    if (!configured.ok) continue;
+    const field = textFormFieldsOf(paragraph(configured.part))[0]!;
+    const start = config.options.type === 'date' ? field.start + 8 : field.start;
+    const removed = applyProtectedTextFormEdit(
+      configured.part,
+      { op: 'deleteText', paragraphId: p.id, start, end: start + 1 },
+      field
+    );
+    expect(removed.ok).toBe(true);
+    if (!removed.ok) continue;
+    const shorter = textFormFieldsOf(paragraph(removed.part))[0]!;
+    const inserted = applyProtectedTextFormEdit(
+      removed.part,
+      { op: 'insertText', paragraphId: p.id, offset: start, text: '2' },
+      shorter
+    );
+    expect(inserted.ok).toBe(true);
+    if (!inserted.ok) continue;
+    expect(paragraphTextOf(inserted.part, p.id)).toBe(config.expected);
+  }
+});
+
+test('new input cannot reuse generated decimal padding to exceed maximum length', () => {
+  const part = fixture();
+  const p = paragraph(part);
+  const f = textFormFieldsOf(p)[0]!;
+  const configured = applyTreeOp(part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: p.id,
+    fieldNodeId: f.fieldNodeId,
+    text: '1',
+    options: { type: 'number', maxLength: 1, format: '0.00', enabled: true },
+  });
+  expect(configured.ok).toBe(true);
+  if (!configured.ok) return;
+  const field = textFormFieldsOf(paragraph(configured.part))[0]!;
+  expect(
+    applyProtectedTextFormEdit(
+      configured.part,
+      { op: 'insertText', paragraphId: p.id, offset: field.end, text: '000000' },
+      field
+    ).ok
+  ).toBe(false);
+});

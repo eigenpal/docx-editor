@@ -3416,6 +3416,9 @@ export function mountPaginatedSurface(
     if (typeBuffer.length > 0 && moved) {
       flushTypeBuffer();
     }
+    const fieldSelection = textFormInteraction?.beforeSelect(next);
+    if (fieldSelection === null) return;
+    next = fieldSelection ?? next;
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
     // exact armed position (the mirror re-adopting the same caret) keeps it.
     reconcilePendingWith(next);
@@ -3494,6 +3497,9 @@ export function mountPaginatedSurface(
     // The raw take-up, without the mirror or the report `setSelection` performs: the render
     // this runs inside is about to do both.
     adoptSelection: (next) => {
+      const fieldSelection = textFormInteraction?.beforeSelect(next);
+      if (fieldSelection === null) return;
+      next = fieldSelection ?? next;
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
       retireActivationPin();
@@ -4078,6 +4084,7 @@ export function mountPaginatedSurface(
 
   /** Draw selected cells, retained text, or paragraph marks native selection cannot show. */
   function renderOverlay(): void {
+    textFormInteraction?.update();
     const rects = cellSelection
       ? cellSelectionRects(currentLayout, cellSelection.cellIds)
       : retainedSelection
@@ -5139,6 +5146,8 @@ export function mountPaginatedSurface(
     canInsertToc,
     insertToc,
     canRefreshToc,
+    canEditTextFormField: () => textFormInteraction?.canEdit() ?? false,
+    editTextFormField: () => textFormInteraction?.edit() ?? false,
     refreshToc,
     refreshRefFieldResults,
     isInsideToc: (paragraphId) =>
@@ -5911,7 +5920,7 @@ export function mountPaginatedSurface(
       let applied = false;
       commit(() => {
         const result = applyOps([op]);
-        applied = result.committed;
+        applied = !result.rejected;
         return result;
       });
       return applied;

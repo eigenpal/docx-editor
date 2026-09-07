@@ -467,6 +467,16 @@ export interface CommentThreadState {
 }
 
 // @public
+export interface CommitTextFormFieldOp {
+    // (undocumented)
+    readonly fieldNodeId: string;
+    // (undocumented)
+    readonly op: 'commitTextFormField';
+    // (undocumented)
+    readonly paragraphId: string;
+}
+
+// @public
 export interface ComparatorDescriptor {
     readonly ephemera: readonly string[];
     // (undocumented)
@@ -3931,6 +3941,8 @@ export interface SetTextFormFieldDefaultOp {
     // (undocumented)
     readonly op: 'setTextFormFieldDefault';
     // (undocumented)
+    readonly options?: TextFormFieldOptions;
+    // (undocumented)
     readonly paragraphId: string;
     // (undocumented)
     readonly text: string;
@@ -4063,6 +4075,18 @@ export function textContent(node: Extract<XmlNode, {
 }>): string;
 
 // @public
+export interface TextFormFieldOptions {
+    // (undocumented)
+    readonly enabled: boolean;
+    // (undocumented)
+    readonly format: string;
+    // (undocumented)
+    readonly maxLength: number;
+    // (undocumented)
+    readonly type: TextFormFieldType;
+}
+
+// @public
 export interface TextFormFieldRange {
     // (undocumented)
     readonly chromeIds: readonly string[];
@@ -4075,11 +4099,20 @@ export interface TextFormFieldRange {
     // (undocumented)
     readonly fieldNodeId: string;
     // (undocumented)
+    readonly format: string;
+    // (undocumented)
+    readonly maxLength: number;
+    // (undocumented)
     readonly start: number;
+    // (undocumented)
+    readonly type: string;
 }
 
 // @public
 export function textFormFieldsOf(paragraph: OoxmlParagraphNode): readonly TextFormFieldRange[];
+
+// @public
+export type TextFormFieldType = 'regular' | 'number' | 'date';
 
 // @public
 export interface TextMatchOptions {
@@ -4188,7 +4221,7 @@ export interface TransportPort {
 }
 
 // @public
-export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setTextFormFieldDefault"];
+export const TREE_DOC_OP_KINDS: readonly ["replaceStoryBlocks", "insertText", "deleteText", "setParagraphMarkRevision", "proposeParagraphMerge", "insertCommentMarker", "acceptRevision", "rejectRevision", "acceptAllRevisions", "rejectAllRevisions", "insertTab", "insertHardBreak", "insertPageBreak", "insertPageField", "setListLevel", "setListNumbering", "setParagraphTabStops", "setParagraphMarkProperties", "splitParagraph", "splitParagraphMany", "joinParagraphs", "setRunProperties", "setParagraphProperties", "setSectionProperties", "setSectionMark", "insertHyperlink", "setHyperlinkTarget", "removeHyperlink", "setMathEquation", "removeMathEquation", "setContentControlValue", "removeContentControl", "insertInlineContentControl", "addRepeatingSectionItem", "removeRepeatingSectionItem", "deleteBlock", "insertTable", "insertTableRow", "deleteTableRow", "insertTableColumn", "deleteTableColumn", "setTableColumnWidths", "setTableRightEdgeWidth", "setTableRowHeight", "setTableCellBorders", "setTableCellFill", "setTableCellVerticalAlignment", "createHeaderFooter", "deleteHeaderFooter", "linkToPrevious", "unlinkFromPrevious", "setSectionFurnitureOptions", "insertNote", "deleteNote", "convertNote", "convertAllNotes", "setNoteProperties", "setContentControlProperties", "insertContentControl", "insertFragment", "insertDrawing", "replaceDrawingResource", "deleteDrawing", "resizeDrawing", "cropDrawing", "positionDrawing", "setDrawingWrap", "setDrawingMetadata", "setDrawingLocks", "transformDrawing", "insertToc", "replaceTocResult", "rewriteTocPageNumbers", "refreshFieldResults", "setTextFormFieldDefault", "commitTextFormField"];
 
 // @public
 export type TreeDocOp = {
@@ -4601,7 +4634,7 @@ export type TreeDocOp = {
         readonly pageNumberText: string;
         readonly paragraphId: string;
     }[];
-} | SetTextFormFieldDefaultOp | {
+} | SetTextFormFieldDefaultOp | CommitTextFormFieldOp | {
     readonly op: 'refreshFieldResults';
     readonly updates: readonly {
         readonly fieldNodeId: string;

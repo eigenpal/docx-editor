@@ -461,6 +461,8 @@ export interface PaginatedSurface {
   /** Insert and populate a generated body TOC before the caret paragraph. */
   insertToc(): boolean;
   /** Refresh cached TOC entries and/or page numbers through the two-pass layout pipeline. */
+  canEditTextFormField(): boolean;
+  editTextFormField(): boolean;
   refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
   /**
    * Rewrite stale REF field results in the body, footnote and endnote stories so a save

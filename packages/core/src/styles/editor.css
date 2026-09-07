@@ -6526,6 +6526,12 @@ a.docx-hyperlink:focus-visible {
 }
 
 .docx-editor .docx-text-form-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(420px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
   color: var(--doc-text);
   background: var(--doc-bg);
   border: 1px solid var(--doc-border);
@@ -6538,7 +6544,8 @@ a.docx-hyperlink:focus-visible {
   gap: 8px;
   margin-block: 16px;
 }
-.docx-editor .docx-text-form-dialog input {
+.docx-editor .docx-text-form-dialog input,
+.docx-editor .docx-text-form-dialog select {
   color: inherit;
   background: inherit;
   border: 1px solid var(--doc-border);
@@ -6549,4 +6556,46 @@ a.docx-hyperlink:focus-visible {
   padding: 6px 16px;
   border: 1px solid var(--doc-border);
   border-radius: 4px;
+}
+
+.docx-text-form-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.docx-editor [data-text-form-selection='whole'] {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 1px;
+}
+.docx-editor [data-text-form-selection='caret'] {
+  outline: 1px dashed var(--doc-border);
+  outline-offset: 1px;
+}
+
+.docx-text-form-status[data-field-error] {
+  position: fixed;
+  inset: auto 16px 16px auto;
+  z-index: 100;
+  width: auto;
+  height: auto;
+  max-width: min(420px, 90vw);
+  clip-path: none;
+  padding: 12px 16px;
+  border: 1px solid var(--doc-warning);
+  border-radius: 6px;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+}
+
+.docx-editor .docx-text-form-dialog h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.docx-editor .docx-text-form-dialog label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }

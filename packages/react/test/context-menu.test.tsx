@@ -867,3 +867,33 @@ describe('table context rows (Task 10)', () => {
     expect(editor().query({ type: 'isInsideToc', pos: 0 })).toBe(false);
   });
 });
+
+
+test('field context action opens shared options and saves all controls', () => {
+  const { view, editor } = mountDocument(docx('<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'));
+  select(editor(), 0, 0);
+  const field = view.container.querySelector<HTMLElement>('[data-field-atom="form"]')!;
+  act(() => { fireEvent.contextMenu(field, { button: 2, clientX: 30, clientY: 30 }); });
+  expect(rowNamed(view, 'field.edit').textContent).toContain('textFormField.edit');
+  act(() => { fireEvent.click(rowNamed(view, 'field.edit')); });
+  const dialog = view.container.querySelector('dialog')!;
+  expect(dialog).not.toBeNull();
+  const [type, format] = dialog.querySelectorAll('select');
+  const [text, max, enabled] = dialog.querySelectorAll('input');
+  act(() => {
+    fireEvent.change(type!, { target: { value: 'number' } });
+    text!.value = '12.5'; max!.value = '4'; format!.value = '0.00'; enabled!.checked = false;
+    fireEvent.click(dialog.querySelectorAll('button')[1]!);
+  });
+  expect(view.container.querySelector('dialog')).toBeNull();
+  expect(view.container.querySelector('[data-field-atom="form"]')?.textContent).toBe('12.50');
+});
+
+test('Shift F10 exposes field options from the keyboard selection', () => {
+  const { view, editor } = mountDocument(docx('<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:textInput><w:default w:val="Sample"/></w:textInput></w:ffData></w:fldChar></w:r><w:r><w:instrText> FORMTEXT </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Sample</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>'));
+  select(editor(), 1, 1);
+  act(() => { fireEvent.keyDown(view.container.querySelector('.docx-pages')!, { key: 'F10', shiftKey: true }); });
+  expect(rowNamed(view, 'field.edit')).toBeDefined();
+  act(() => { fireEvent.click(rowNamed(view, 'field.edit')); });
+  expect(view.container.querySelector('dialog')).not.toBeNull();
+});

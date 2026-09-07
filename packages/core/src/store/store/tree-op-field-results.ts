@@ -1,3 +1,8 @@
+import {
+  validTextFormOptions,
+  formatTextFormValue,
+  textFormInputLength,
+} from './text-form-field-options.ts';
 import { splitsSurrogate } from './tree-op-segments.ts';
 import { namedOwnerRefusal } from './tree-op-validate.ts';
 import type { TextFormFieldRange } from './text-form-fields.ts';
@@ -532,11 +537,18 @@ export function validateTextFormFieldDefault(
 ): TreeOpRejection | null {
   if (typeof op.text !== 'string' || !isValidXmlText(op.text) || /[\r\n\t]/.test(op.text))
     return 'invalidArgs';
+  if (op.options !== undefined && !validTextFormOptions(op.options)) return 'invalidArgs';
   const refusal = fieldResultUpdateRefusal(part, op.fieldNodeId);
   if (refusal) return refusal;
   const paragraph = findNode(part, op.paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return 'unknown-paragraph';
-  if (!textFormFieldsOf(paragraph).some((f) => f.fieldNodeId === op.fieldNodeId))
+  const field = textFormFieldsOf(paragraph).find((f) => f.fieldNodeId === op.fieldNodeId);
+  if (!field) return 'invalidArgs';
+  const config = op.options ?? field;
+  if (
+    (config.maxLength > 0 && [...op.text].length > config.maxLength) ||
+    formatTextFormValue(op.text, config) === null
+  )
     return 'invalidArgs';
   return locatePlainFields(paragraph, true).some(
     (f) => f.fieldNodeId === op.fieldNodeId && f.rewritable
@@ -550,42 +562,106 @@ export function applyTextFormFieldDefault(
   op: Extract<TreeDocOp, { op: 'setTextFormFieldDefault' }>,
   options?: EditOptions
 ): TreeOpResult {
+  const refusal = validateTextFormFieldDefault(part, op);
+  if (refusal) return { ok: false, reason: refusal };
+  const p = findNode(part, op.paragraphId)!;
+  if (p.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
+  const config = op.options ?? textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId)!;
+  const text = formatTextFormValue(op.text, config)!;
   const result = applyFieldResults(
     part,
-    { op: 'refreshFieldResults', updates: [op] },
+    { op: 'refreshFieldResults', updates: [{ ...op, text }] },
     options,
     true
   );
   if (!result.ok) return result;
   const field = findNode(result.part, op.fieldNodeId);
   if (!field || field.kind === 'textValue') return { ok: false, reason: 'invalidArgs' };
-  const data = field.children.find((n) => n.kind !== 'textValue' && n.localName === 'ffData');
+  const data = field.children.find(
+    (n) =>
+      n.kind !== 'textValue' && n.namespaceUri === WML_NAMESPACE_URI && n.localName === 'ffData'
+  );
   if (!data || data.kind === 'textValue') return { ok: false, reason: 'invalidArgs' };
-  const input = data.children.find((n) => n.kind !== 'textValue' && n.localName === 'textInput');
+  const input = data.children.find(
+    (n) =>
+      n.kind !== 'textValue' && n.namespaceUri === WML_NAMESPACE_URI && n.localName === 'textInput'
+  );
   if (!input || input.kind === 'textValue') return { ok: false, reason: 'invalidArgs' };
   const mint = createNodeIdAllocator(result.part);
-  const old = input.children.find((n) => n.kind !== 'textValue' && n.localName === 'default');
-  const def = {
-    id: mint(),
-    kind: 'generic',
-    namespaceUri: WML_NAMESPACE_URI,
-    prefix: 'w',
-    localName: 'default',
-    namespaceBindings: [],
-    children: [],
-    attributes: [
-      {
-        kind: 'genericExtension',
-        namespaceUri: WML_NAMESPACE_URI,
-        prefix: 'w',
-        localName: 'val',
-        value: op.text,
-      },
-    ],
-  } as OoxmlNode;
-  const edited = old
-    ? replaceNode(result.part, old.id, def, options)
-    : replaceChildren(result.part, input.id, [...input.children, def], options);
+  const property = (localName: string, value: string): OoxmlNode => {
+    const existing = (localName === 'enabled' ? data : input).children.find(
+      (n) =>
+        n.kind !== 'textValue' && n.namespaceUri === WML_NAMESPACE_URI && n.localName === localName
+    );
+    return {
+      ...(existing && existing.kind !== 'textValue'
+        ? existing
+        : {
+            id: mint(),
+            kind: 'generic',
+            namespaceUri: WML_NAMESPACE_URI,
+            prefix: 'w',
+            localName,
+            namespaceBindings: [],
+            children: [],
+          }),
+      attributes: [
+        ...(existing && existing.kind !== 'textValue'
+          ? existing.attributes.filter(
+              (a) => a.namespaceUri !== WML_NAMESPACE_URI || a.localName !== 'val'
+            )
+          : []),
+        {
+          kind: 'genericExtension',
+          namespaceUri: WML_NAMESPACE_URI,
+          prefix: 'w',
+          localName: 'val',
+          value,
+        },
+      ],
+    } as OoxmlNode;
+  };
+  const edits = new Map<string, string>([['default', op.text]]);
+  if (op.options) {
+    edits.set('type', op.options.type);
+    edits.set('maxLength', String(op.options.maxLength));
+    edits.set('format', op.options.format);
+  }
+  const children = input.children.filter(
+    (n) => n.kind === 'textValue' || n.namespaceUri !== WML_NAMESPACE_URI || !edits.has(n.localName)
+  );
+  for (const [name, value] of edits) children.push(property(name, value));
+  const order = ['type', 'default', 'maxLength', 'format'];
+  children.sort((a, b) => {
+    const rank = (n: OoxmlNode) =>
+      n.kind !== 'textValue' && n.namespaceUri === WML_NAMESPACE_URI && order.includes(n.localName)
+        ? order.indexOf(n.localName)
+        : 4;
+    return rank(a) - rank(b);
+  });
+  let edited = replaceChildren(result.part, input.id, children, options);
+  if (!edited.ok) return { ok: false, reason: 'tree-invariant' };
+  if (op.options) {
+    const latestData = findNode(edited.part, data.id)!;
+    if (latestData.kind === 'textValue') return { ok: false, reason: 'tree-invariant' };
+    const enabled = latestData.children.find(
+      (n) =>
+        n.kind !== 'textValue' && n.namespaceUri === WML_NAMESPACE_URI && n.localName === 'enabled'
+    );
+    edited = enabled
+      ? replaceNode(
+          edited.part,
+          enabled.id,
+          property('enabled', op.options.enabled ? '1' : '0'),
+          options
+        )
+      : replaceChildren(
+          edited.part,
+          data.id,
+          [property('enabled', op.options.enabled ? '1' : '0'), ...latestData.children],
+          options
+        );
+  }
   if (!edited.ok) return { ok: false, reason: 'tree-invariant' };
   return ok(edited.part, {
     dirty: [op.paragraphId],
@@ -628,7 +704,19 @@ export function protectedTextFormEditRefusal(
     (f) => f.fieldNodeId === field.fieldNodeId
   );
   if (!located?.rewritable) return 'invalidArgs';
-  if (op.op === 'insertText' && /[\r\n]/.test(op.text)) return 'invalidArgs';
+  if (op.op === 'insertText' && /[\r\n\t]/.test(op.text)) return 'invalidArgs';
+  if (
+    op.op === 'insertText' &&
+    field.maxLength > 0 &&
+    textFormInputLength(
+      located.cachedText.slice(0, op.offset - field.start) +
+        op.text +
+        located.cachedText.slice(op.offset - field.start),
+      field,
+      located.cachedText
+    ) > field.maxLength
+  )
+    return 'invalidArgs';
   return fieldResultUpdateRefusal(part, field.fieldNodeId);
 }
 
@@ -704,4 +792,40 @@ export function applyProtectedTextFormEdit(
     dependencyKeys: [op.paragraphId],
     impact: 'text-local',
   });
+}
+
+export function validateCommitTextFormField(
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'commitTextFormField' }>
+): TreeOpRejection | null {
+  const p = findNode(part, op.paragraphId);
+  if (!p || p.kind !== 'paragraph') return 'unknown-paragraph';
+  const field = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId);
+  const located = locatePlainFields(p, true).find((f) => f.fieldNodeId === op.fieldNodeId);
+  if (!field || !field.enabled || !located?.rewritable) return 'invalidArgs';
+  if (formatTextFormValue(located.cachedText, field) === null) return 'invalidArgs';
+  return fieldResultUpdateRefusal(part, op.fieldNodeId);
+}
+
+export function applyCommitTextFormField(
+  part: OoxmlPart,
+  op: Extract<TreeDocOp, { op: 'commitTextFormField' }>,
+  options?: EditOptions
+): TreeOpResult {
+  const refusal = validateCommitTextFormField(part, op);
+  if (refusal) return { ok: false, reason: refusal };
+  const p = findNode(part, op.paragraphId)!;
+  if (p.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
+  const field = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId)!;
+  const located = locatePlainFields(p, true).find((f) => f.fieldNodeId === op.fieldNodeId)!;
+  const text = formatTextFormValue(located.cachedText, field)!;
+  return applyFieldResults(
+    part,
+    {
+      op: 'refreshFieldResults',
+      updates: [{ paragraphId: op.paragraphId, fieldNodeId: op.fieldNodeId, text }],
+    },
+    options,
+    true
+  );
 }

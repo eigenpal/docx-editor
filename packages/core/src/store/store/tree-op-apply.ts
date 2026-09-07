@@ -1,4 +1,4 @@
-import { applyTextFormFieldDefault } from './tree-op-field-results.ts';
+import { applyCommitTextFormField, applyTextFormFieldDefault } from './tree-op-field-results.ts';
 import { removeCoveredTextFormDefinitions } from './text-form-field-deletion.ts';
 // Op application over the canonical tree (tree-ops seam).
 //
@@ -310,6 +310,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
   if (op.op === 'insertToc') return applyInsertToc(part, op, options);
   if (op.op === 'replaceTocResult') return applyReplaceTocResult(part, op, options);
   if (op.op === 'rewriteTocPageNumbers') return applyRewriteTocPageNumbers(part, op, options);
+  if (op.op === 'commitTextFormField') return applyCommitTextFormField(part, op, options);
   if (op.op === 'setTextFormFieldDefault') return applyTextFormFieldDefault(part, op, options);
   if (op.op === 'refreshFieldResults') return applyRefreshFieldResults(part, op, options);
   if (op.op === 'joinParagraphs') return applyJoin(part, op.firstId, op.secondId, options);

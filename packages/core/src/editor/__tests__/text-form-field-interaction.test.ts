@@ -1,6 +1,10 @@
+import { applyProtectedTextFormEdit } from '../../store/store/tree-op-field-results.ts';
+import { textFormFieldForEdit } from '../../store/store/text-form-fields.ts';
+import type { TreeDocOp } from '@docx-editor.dev/core/store';
 import { expect, test } from 'bun:test';
 import {
   readOoxmlPart,
+  paragraphTextOf,
   applyTreeOp,
   textFormFieldsOf,
   type OoxmlParagraphNode,
@@ -50,11 +54,13 @@ function setup(
     protected: () => protectedForm,
     selection: () => selection,
     select: (value) => {
-      selection = value;
+      const next = interaction.beforeSelect(value);
+      if (next) selection = next;
     },
     editable: () => true,
     apply(op) {
-      const result = applyTreeOp(part, op);
+      const field = protectedForm ? textFormFieldForEdit(part, op) : null;
+      const result = field ? applyProtectedTextFormEdit(part, op, field) : applyTreeOp(part, op);
       if (result.ok) part = result.part;
       return result.ok;
     },
@@ -65,6 +71,41 @@ function setup(
     interaction,
     selection: () => selection,
     part: () => part,
+    configure(
+      options: NonNullable<Extract<TreeDocOp, { op: 'setTextFormFieldDefault' }>['options']>,
+      text = 'Sample',
+      index = 0
+    ) {
+      const field = textFormFieldsOf(
+        (part.root.children[0] as typeof body).children[0] as OoxmlParagraphNode
+      )[index]!;
+      const result = applyTreeOp(part, {
+        op: 'setTextFormFieldDefault',
+        paragraphId: paragraph.id,
+        fieldNodeId: field.fieldNodeId,
+        text,
+        options,
+      });
+      if (!result.ok) throw new Error(result.reason);
+      part = result.part;
+    },
+    type(op: TreeDocOp) {
+      const annotated = interaction.annotate([op])[0]!;
+      const field = textFormFieldForEdit(part, annotated);
+      const result = field
+        ? applyProtectedTextFormEdit(part, annotated, field)
+        : applyTreeOp(part, annotated);
+      if (!result.ok) throw new Error(result.reason);
+      part = result.part;
+    },
+    select(start: number, end = start) {
+      const next = interaction.beforeSelect({
+        anchor: { paragraphId: paragraph.id, offset: start },
+        head: { paragraphId: paragraph.id, offset: end },
+      });
+      if (next) selection = next;
+      interaction.update();
+    },
     cleanup() {
       interaction.destroy();
       container.remove();
@@ -177,6 +218,76 @@ test('Tab cycles distinct adjacent empty fields by identity', () => {
     expect(identities[0]).toBeDefined();
     expect(identities[0]).not.toBe(identities[1]);
     expect(identities[0]).toBe(identities[2]);
+  } finally {
+    host.cleanup();
+  }
+});
+
+test('selection feedback distinguishes a whole reversed field from a caret', () => {
+  const host = setup();
+  try {
+    host.select(6, 0);
+    expect(host.span.dataset.textFormSelection).toBe('whole');
+    host.select(2);
+    expect(host.span.dataset.textFormSelection).toBe('caret');
+    host.select(8);
+    expect(host.span.dataset.textFormSelection).toBeUndefined();
+  } finally {
+    host.cleanup();
+  }
+});
+
+test('leaving a dirty protected field formats its result and remaps the next selection', () => {
+  const host = setup(true, false, '');
+  try {
+    host.configure({ type: 'regular', format: 'Uppercase', maxLength: 0, enabled: true });
+    const paragraphId = host.selection().head.paragraphId;
+    host.select(6);
+    host.type({ op: 'insertText', paragraphId, offset: 6, text: 'ß' });
+    host.select(7);
+    host.interaction.keydown(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
+    const p = (host.part().root.children[0] as { children: OoxmlParagraphNode[] }).children[0]!;
+    const fields = textFormFieldsOf(p);
+    expect(fields[0]!.end).toBe(8);
+    expect(host.selection().anchor.offset).toBe(8);
+    expect(host.selection().head.offset).toBe(14);
+  } finally {
+    host.cleanup();
+  }
+});
+
+test('unchanged imported values do not trap protected navigation', () => {
+  const host = setup(true);
+  try {
+    host.select(8);
+    expect(host.selection().head.offset).toBe(8);
+  } finally {
+    host.cleanup();
+  }
+});
+
+test('keyboard movement transfers dirty field ownership to the next field', () => {
+  const host = setup(true);
+  try {
+    host.configure(
+      { type: 'regular', format: 'Uppercase', maxLength: 0, enabled: true },
+      'Sample',
+      1
+    );
+    const paragraphId = host.selection().head.paragraphId;
+    host.select(1);
+    host.type({ op: 'insertText', paragraphId, offset: 1, text: 'x' });
+    host.select(13);
+    host.type({ op: 'insertText', paragraphId, offset: 13, text: 'z' });
+    host.select(0);
+    const p = (host.part().root.children[0] as { children: OoxmlParagraphNode[] }).children[0]!;
+    expect(textFormFieldsOf(p)[1]?.end).toBe(19);
+    expect(paragraphTextOf(host.part(), paragraphId)).toBe('Sxample and SZAMPLE');
+    const { head } = host.selection();
+    expect(head.offset).toBe(0);
+    // A second visit starts with the freshly formatted result.
+    host.select(13);
+    host.interaction.update();
   } finally {
     host.cleanup();
   }
