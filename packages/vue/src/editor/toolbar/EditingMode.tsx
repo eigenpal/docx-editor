@@ -1,6 +1,10 @@
 import { computed, defineComponent, ref, watch } from 'vue';
 import type { DocumentEditingMode, EditorSnapshot } from '@docx-editor.dev/core/contracts/editor';
-import { runToolbarCommand, toolbarCommandState } from '@docx-editor.dev/core/editor';
+import {
+  runToolbarCommand,
+  toolbarCommandState,
+  type DocxEditorInstance,
+} from '@docx-editor.dev/core/editor';
 import { localizeDisabledReason } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../../i18n';
 import { useDocxEditor } from '../context';
@@ -11,6 +15,12 @@ import type { ToolbarSlotPartComponent } from './parts';
 
 const selectMode = (snapshot: EditorSnapshot): DocumentEditingMode =>
   snapshot.editingMode ?? 'editing';
+// Keyboard travel skips a refused item; see the React twin.
+const MENU_ITEMS = '[role="menuitemradio"]:not([disabled])';
+
+type ItemReasons = readonly (string | null)[];
+const sameReasons = (a: ItemReasons, b: ItemReasons): boolean =>
+  a.length === b.length && a.every((reason, index) => reason === b[index]);
 const selectLoading = (snapshot: EditorSnapshot) =>
   snapshot.isLoading || snapshot.isOpening === true;
 
@@ -45,6 +55,17 @@ const MODE_OPTIONS: readonly ModeOption[] = [
   },
 ];
 
+const NO_REASONS: ItemReasons = Object.freeze(MODE_OPTIONS.map(() => null));
+
+/** Each item's refusal from the engine, or null where its mode can be entered. */
+function itemReasonsOf(editor: DocxEditorInstance | null): ItemReasons {
+  if (!editor) return NO_REASONS;
+  return MODE_OPTIONS.map((option) => {
+    const probe = editor.can({ type: 'setEditingMode', mode: option.mode });
+    return probe.ok ? null : probe.reason;
+  });
+}
+
 const CHECK_PATH = 'M382-240 154-468l57-57 171 171 367-367 57 57-424 424Z';
 
 function glyph(path: string) {
@@ -72,6 +93,8 @@ export const ToolbarEditingMode = defineComponent({
     const editorRef = useDocxEditor();
     const mode = useEditorState(selectMode);
     const loading = useEditorState(selectLoading);
+    // The provider coalesces events and re-runs this selector even when the snapshot holds.
+    const itemReasons = useEditorState(() => itemReasonsOf(editorRef.value), sameReasons);
     const label = useToolbarLabel();
     const { t } = useTranslation();
     const open = ref(false);
@@ -82,8 +105,11 @@ export const ToolbarEditingMode = defineComponent({
       open,
       (isOpen) => {
         if (!isOpen) return;
-        const items = menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]');
-        const checked = menuRef.value?.querySelector<HTMLButtonElement>('[aria-checked="true"]');
+        const items = menuRef.value?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS);
+        // Only an ENABLED checked item; see the React twin.
+        const checked = menuRef.value?.querySelector<HTMLButtonElement>(
+          `${MENU_ITEMS}[aria-checked="true"]`
+        );
         (checked ?? items?.[0] ?? undefined)?.focus();
       },
       { flush: 'post' }
@@ -110,9 +136,7 @@ export const ToolbarEditingMode = defineComponent({
     });
 
     const onMenuKeyDown = (event: KeyboardEvent) => {
-      const items = [
-        ...(menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? []),
-      ];
+      const items = [...(menuRef.value?.querySelectorAll<HTMLButtonElement>(MENU_ITEMS) ?? [])];
       const at = items.indexOf(document.activeElement as HTMLButtonElement);
       const move = (to: number) => {
         event.preventDefault();
@@ -175,27 +199,32 @@ export const ToolbarEditingMode = defineComponent({
               data-testid="editing-mode-menu"
               onKeydown={onMenuKeyDown}
             >
-              {MODE_OPTIONS.map((option) => (
-                <button
-                  key={option.mode}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={option.mode === mode.value}
-                  class="docx-toolbar__mode-item"
-                  data-testid={`editing-mode-${option.mode}`}
-                  onMousedown={guardToolbarMousedown}
-                  onClick={() => choose(option.mode)}
-                >
-                  {glyph(option.path)}
-                  <span class="docx-toolbar__mode-text">
-                    <span class="docx-toolbar__mode-label">{label(option.labelKey)}</span>
-                    <span class="docx-toolbar__mode-hint">{label(option.hintKey)}</span>
-                  </span>
-                  <span class="docx-toolbar__mode-check" aria-hidden="true">
-                    {option.mode === mode.value ? glyph(CHECK_PATH) : null}
-                  </span>
-                </button>
-              ))}
+              {MODE_OPTIONS.map((option, index) => {
+                const reason = localizeDisabledReason(itemReasons.value[index] ?? null, t);
+                return (
+                  <button
+                    key={option.mode}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={option.mode === mode.value}
+                    class="docx-toolbar__mode-item"
+                    data-testid={`editing-mode-${option.mode}`}
+                    disabled={reason !== null}
+                    {...(reason ? { title: reason } : {})}
+                    onMousedown={guardToolbarMousedown}
+                    onClick={() => choose(option.mode)}
+                  >
+                    {glyph(option.path)}
+                    <span class="docx-toolbar__mode-text">
+                      <span class="docx-toolbar__mode-label">{label(option.labelKey)}</span>
+                      <span class="docx-toolbar__mode-hint">{label(option.hintKey)}</span>
+                    </span>
+                    <span class="docx-toolbar__mode-check" aria-hidden="true">
+                      {option.mode === mode.value ? glyph(CHECK_PATH) : null}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           ) : null}
         </div>

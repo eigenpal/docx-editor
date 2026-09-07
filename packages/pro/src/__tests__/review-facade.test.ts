@@ -1047,14 +1047,15 @@ describe('suggesting mode', () => {
       document: docx({ body: PLAIN }),
       modules: [testReviewModule()],
     });
-    editor.setEditingMode('suggesting');
+    expect(editor.setEditingMode('suggesting')).toMatchObject({ ok: false, code: 'invalidArgs' });
+    editor.surface!.setEditingMode('suggest');
     editor.surface!.setSelection({
       anchor: { paragraphId: paragraphIdOf(editor), offset: 0 },
       head: { paragraphId: paragraphIdOf(editor), offset: 5 },
     });
     editor.surface!.deleteBackward();
-    // Nothing to attribute the proposal to, so nothing is proposed — and nothing is lost.
-    // Writing it untracked would remove words the reviewer was promised they could recover.
+    // The facade refuses the request (#692); the surface's own setter is the one way in, and
+    // its guard still proposes nothing and loses nothing: an untracked delete destroys text.
     expect(editor.surface!.session.bodyText()).toContain('alpha beta');
   });
 
