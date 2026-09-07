@@ -298,12 +298,12 @@ export function mountPaginatedSurface(
     readonly reviewAuthorSlots?: StableReviewAuthorSlots;
     readonly revisionAuthorVisibility?: RevisionAuthorVisibility;
     /**
-     * Start with this drawing-selection intent. The facade's font-load remount carries the
-     * old surface's intent through here, because its caret restore is a same-position
-     * `setSelection` whenever the saved caret sits at the mount default — which must stay
-     * `none` for a plain open, and so cannot restore a genuinely selected drawing.
+     * Carry drawing intent alongside the range on a font remount. A plain open starts
+     * with no drawing selected, even when the default caret sits at its anchor.
      */
     readonly initialDrawingSelectionIntent?: DrawingSelectionIntent;
+    /** Restore the model range on a font remount without claiming DOM selection/focus. */
+    readonly initialSelection?: SemanticSelection;
   };
   const opened = openTreeSession(
     bytes,
@@ -481,7 +481,7 @@ export function mountPaginatedSurface(
     paragraphIds.find((paragraphId) => !initialTocParagraphs.has(paragraphId)) ??
     paragraphIds[0] ??
     '';
-  let selection: SemanticSelection = {
+  let selection: SemanticSelection = runtimeOptions.initialSelection ?? {
     anchor: { paragraphId: firstParagraph, offset: 0 },
     head: { paragraphId: firstParagraph, offset: 0 },
   };
@@ -3491,7 +3491,8 @@ export function mountPaginatedSurface(
     // sits outside these pages, which is exactly the case when the request came from the
     // host's own chrome (a rail card takes focus on mousedown), and the range the caller
     // asked to SHOW then highlighted nothing at all. A pointer or keyboard move already owns
-    // the selection, so claiming changes nothing for them. Focus is never moved.
+    // the selection, so claiming changes nothing for them. In Chromium this write can
+    // also focus the contenteditable; passive remounts must not claim the selection.
     selectionSync.mirrorToDom(true);
     followCaretIntoView(true);
     renderOverlay();

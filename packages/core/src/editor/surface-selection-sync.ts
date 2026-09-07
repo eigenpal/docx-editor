@@ -170,7 +170,8 @@ export interface SurfaceSelectionSync {
    * ordinary write refuses whenever the DOM selection lives outside these pages, which is
    * the normal state when the request came from the host's own chrome: the caret moved and
    * the model held a range that nothing on screen highlighted. Claiming writes the range
-   * anyway; it never moves FOCUS, so the host's own control keeps it.
+   * anyway; in Chromium this can also focus the contenteditable. Passive restoration
+   * must use an unclaimed write.
    */
   mirrorToDom(claim?: boolean): void;
   /**
@@ -300,11 +301,14 @@ export function createSurfaceSelectionSync(deps: SurfaceSelectionSyncDeps): Surf
    * True when focus or the selection is already inside these pages, and also when NOTHING
    * holds a selection — writing one then takes it from nobody. What this refuses is the case
    * that matters: a caret living in another element, which a repaint here would otherwise
-   * yank away with no focus change and no interaction.
+   * yank away without an interaction.
    */
   function ownsSelection(): boolean {
     const active = document.activeElement;
     if (active && pagesLayer.contains(active)) return true;
+    // Text inputs can own focus while the document Selection is empty or still
+    // points into our pages. Their native caret is not represented by that Selection.
+    if (active && active !== document.body && active !== document.documentElement) return false;
     const domSelection = document.getSelection();
     if (!domSelection || domSelection.rangeCount === 0) return true;
     const anchor = domSelection.anchorNode;

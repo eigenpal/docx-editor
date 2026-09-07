@@ -46,6 +46,7 @@ import {
   type ReviewRange,
   type SemanticLayout,
   type SemanticPosition,
+  type SemanticSelection,
 } from '../layout/index.ts';
 import {
   createStableReviewAuthorSlots,
@@ -490,7 +491,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   });
   const scaleOf = (): number => zoomLane.scale();
 
-  function mountBytes(bytes: Uint8Array): void {
+  function mountBytes(bytes: Uint8Array, initialSelection?: SemanticSelection): void {
     if (!container) {
       // Detached: no DOM work. The bytes wait for `attach`, which mounts them under
       // whatever measurer has resolved by then. A previous document's parse failure is
@@ -520,6 +521,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       reviewAuthorSlots,
       revisionAuthorVisibility: reviewAuthorVisibility,
       initialDrawingSelectionIntent: remountDrawingIntent,
+      initialSelection,
       editingMode:
         editingMode === 'suggesting' ? 'suggest' : editingMode === 'viewing' ? 'view' : 'edit',
       // The free engine renders the FINAL-STATE projection (Word's "No Markup"):
@@ -1025,27 +1027,25 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // highlight when this remount replaced the surface.
         const savedSelection = surface.state().selection;
         remountDrawingIntent = surface.drawingSelectionIntent();
-        // A remount replaces the whole subtree, so focus lands on `document.body` — the
-        // user typing while fonts resolved would silently stop being able to type.
-        // Restore it when the OLD surface had it; never steal it otherwise.
-        const hadFocus =
-          typeof document !== 'undefined' &&
-          document.activeElement !== null &&
-          container !== null &&
-          container.contains(document.activeElement);
+        const activeElement = container?.ownerDocument.activeElement;
+        const hadFocus = !!activeElement && !!container?.contains(activeElement);
         try {
-          mountBytes(saved);
+          mountBytes(saved, savedSelection);
         } catch (remountError) {
           shapedMeasurer = undefined;
           shapedProducer = undefined;
           if (!surface) {
             pendingBytes = saved;
-            mountBytes(saved);
+            mountBytes(saved, savedSelection);
           }
           reportFontError(toEditorFontError(remountError));
         }
-        if (hadFocus) surface?.focus();
-        surface?.setSelection(savedSelection);
+        // Mount seeds the saved range without claiming focus. Chromium focuses editable
+        // DOM selections, so only explicitly restore one when the old surface had focus.
+        if (hadFocus) {
+          surface?.focus();
+          surface?.setSelection(savedSelection);
+        }
         remountDrawingIntent = { kind: 'none' }; // consumed; a plain open starts deselected
       } else bump();
     } catch (error) {
