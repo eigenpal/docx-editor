@@ -1324,6 +1324,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     };
     // (undocumented)
     deleteTable: Record<never, never>;
+    editTextFormField: Record<never, never>;
     // (undocumented)
     insertColumn: {
         target?: TableColumnOccurrenceTarget;

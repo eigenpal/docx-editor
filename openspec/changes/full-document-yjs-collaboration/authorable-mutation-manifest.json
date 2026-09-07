@@ -7,8 +7,8 @@
   "baseGitCommitDate": "2026-08-24 14:45:47 +0200",
   "inventoryNote": "Kinds, reach, properties, chrome slots, and lifecycle sets are taken from the implementation after rebase onto origin/main. Main added replaceStoryBlocks, setMathEquation, removeMathEquation, and insertFragment (rich-clipboard-fidelity).",
   "counts": {
-    "treeDocOpKinds": 74,
-    "singlePartApply": 62,
+    "treeDocOpKinds": 76,
+    "singlePartApply": 64,
     "headerFooterLifecycle": 5,
     "noteLifecycle": 5,
     "treeDocOpUnsupported": 2,
@@ -110,7 +110,9 @@
       "insertToc",
       "replaceTocResult",
       "rewriteTocPageNumbers",
-      "refreshFieldResults"
+      "refreshFieldResults",
+      "setTextFormFieldDefault",
+      "commitTextFormField"
     ],
     "headerFooterLifecycle": [
       "createHeaderFooter",
@@ -202,7 +204,9 @@
     "insertToc",
     "replaceTocResult",
     "rewriteTocPageNumbers",
-    "refreshFieldResults"
+    "refreshFieldResults",
+    "setTextFormFieldDefault",
+      "commitTextFormField"
   ],
   "authorableVariants": {
     "insertText": {
@@ -1030,6 +1034,24 @@
       "commandExposure": ["refreshRefFieldResults"],
       "packageIntents": [],
       "openSpec": []
+    },
+    {
+      "kind": "setTextFormFieldDefault",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
+    },
+    {
+      "kind": "commitTextFormField",
+      "commitPath": "applyTreeOp",
+      "storyScopes": ["body", "headerFooter", "notesPart"],
+      "storyParity": "all",
+      "commandExposure": [],
+      "packageIntents": [],
+      "openSpec": []
     }
   ],
   "packageIntents": [
@@ -1265,7 +1287,7 @@
       "id": "table-properties-header-select",
       "commands": ["toggleHeaderRow", "selectTableRegion", "setTableProperties"],
       "layer": "EditorCommand",
-      "evidence": "planTableCommand refuses command '…' is not supported by the tree editor. No TreeDocOp.",
+      "evidence": "planTableCommand refuses command '\u2026' is not supported by the tree editor. No TreeDocOp.",
       "openSpec": ["typed-ooxml-paragraph-editor"]
     },
     {

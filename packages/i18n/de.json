@@ -811,5 +811,30 @@
   "collaboration": {
     "moreParticipants": null,
     "participants": null
+  },
+  "textFormField": {
+    "apply": null,
+    "cancel": null,
+    "defaultText": null,
+    "title": null,
+    "unavailable": null,
+    "edit": null,
+    "type": null,
+    "regular": null,
+    "number": null,
+    "date": null,
+    "preservedType": null,
+    "maxLength": null,
+    "format": null,
+    "noFormat": null,
+    "enabled": null,
+    "invalidOptions": null,
+    "invalidValue": null,
+    "selected": null,
+    "editing": null,
+    "uppercase": null,
+    "lowercase": null,
+    "firstCapital": null,
+    "titleCase": null
   }
 }

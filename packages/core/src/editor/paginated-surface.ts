@@ -1,3 +1,5 @@
+import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
+import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
 // Painted pages are the editable surface; seams live in sibling surface-*.ts modules.
 
@@ -16,6 +18,7 @@ import {
   findNode,
   isContentControl,
   ORIGIN_IDS,
+  paragraphOffsetIndex,
   parentNodeOf,
   parseTocInstruction,
   planTocEntries,
@@ -2038,29 +2041,6 @@ export function mountPaginatedSurface(
       });
   }
 
-  function addressableLength(node: OoxmlNode): number {
-    if (node.kind === 'textValue') return node.value.length;
-    if (node.kind === 'tab' || node.kind === 'hardBreak') return 1;
-    if (node.kind === 'runProperties' || node.kind === 'generic') return 0;
-    const kind = (node as { kind: string }).kind;
-    if (kind === 'contentControl') {
-      let total = 0;
-      for (const child of node.children) {
-        if (child.kind === 'textValue') continue;
-        if (
-          (child as { kind: string }).kind === 'contentControlContent' ||
-          child.localName === 'sdtContent'
-        ) {
-          for (const inner of child.children) total += addressableLength(inner);
-        }
-      }
-      return total;
-    }
-    let total = 0;
-    for (const child of node.children) total += addressableLength(child);
-    return total;
-  }
-
   function contentChildrenOf(control: OoxmlElement): readonly OoxmlNode[] {
     for (const child of control.children) {
       if (child.kind === 'textValue') continue;
@@ -2083,7 +2063,7 @@ export function mountPaginatedSurface(
     const collectParagraphs = (nodes: readonly OoxmlNode[]): void => {
       for (const node of nodes) {
         if (node.kind === 'paragraph') {
-          paragraphs.push({ id: node.id, length: addressableLength(node) });
+          paragraphs.push({ id: node.id, length: paragraphOffsetIndex(node).length });
           continue;
         }
         if (node.kind === 'textValue') continue;
@@ -2111,49 +2091,26 @@ export function mountPaginatedSurface(
     let hostParagraphId: string | null = null;
     let start = 0;
     let end = 0;
-    const scanInline = (nodes: readonly OoxmlNode[], offset: number, paraId: string): boolean => {
-      let cursor = offset;
+    const scanParagraphs = (nodes: readonly OoxmlNode[]): boolean => {
       for (const node of nodes) {
-        if (node.id === controlId) {
-          hostParagraphId = paraId;
-          start = cursor;
-          end = cursor + addressableLength(node);
+        if (node.kind === 'paragraph') {
+          const span = paragraphOffsetIndex(node).spanOf(control);
+          if (!span) continue;
+          hostParagraphId = node.id;
+          start = span.start;
+          end = span.end;
           return true;
         }
         if (node.kind === 'textValue') {
-          cursor += node.value.length;
           continue;
         }
-        const kind = (node as { kind: string }).kind;
-        if (kind === 'contentControl') {
-          const length = addressableLength(node);
-          if (scanInline(contentChildrenOf(node as OoxmlElement), cursor, paraId)) return true;
-          cursor += length;
-          continue;
-        }
-        if (node.kind === 'run' || node.kind === 'hyperlink') {
-          if (scanInline(node.children, cursor, paraId)) return true;
-          cursor += addressableLength(node);
-          continue;
-        }
-        if (node.kind === 'paragraph') {
-          if (scanInline(node.children, 0, node.id)) return true;
-          continue;
-        }
-        if (node.kind === 'tab' || node.kind === 'hardBreak') {
-          cursor += 1;
-          continue;
-        }
-        if (scanInline(node.children, cursor, paraId)) return true;
-        cursor += addressableLength(node);
+        if (scanParagraphs(node.children)) return true;
       }
       return false;
     };
-    scanInline(
+    scanParagraphs(
       (session.partFor(storyScopeOfNodeId(session, controlId, storyScope())) ?? session.part()).root
-        .children,
-      0,
-      ''
+        .children
     );
     if (!hostParagraphId) return false;
     setSelection({
@@ -2942,6 +2899,7 @@ export function mountPaginatedSurface(
    * silently write an untracked edit in suggesting mode — the failure nobody notices until
    * the document has already lost the proposal.
    */
+  let textFormInteraction: ReturnType<typeof createTextFormFieldInteraction> | null = null;
   function applyOps(
     ops: readonly TreeDocOp[],
     selectionBefore?: Parameters<TreeDocxSession['applyTreeOps']>[1],
@@ -2960,7 +2918,9 @@ export function mountPaginatedSurface(
     if (refusal !== null) return { committed: false, rejected: true, opCount: 0, reason: refusal };
     // The scope resolves to `storyScope()` unless the caller named one, so an edit inside a
     // header, a footer or a note is applied to that story rather than to the body.
-    const attributed = trackedOps(ops);
+    const attributed = trackedOps(
+      checkSelection && textFormInteraction ? textFormInteraction.annotate(ops) : ops
+    );
     const result = applyJournaledOps(attributed, selectionBefore, selectionAfter, scope);
     if (result.committed && attributed.some(isTrackedEdit)) {
       runtimeOptions.onTrackedChange?.();
@@ -3451,6 +3411,9 @@ export function mountPaginatedSurface(
     if (typeBuffer.length > 0 && moved) {
       flushTypeBuffer();
     }
+    const fieldSelection = textFormInteraction?.beforeSelect(next);
+    if (fieldSelection === null) return;
+    next = fieldSelection ?? next;
     // Moving the caret discards a stored caret format — Word's rule. Landing back on the
     // exact armed position (the mirror re-adopting the same caret) keeps it.
     reconcilePendingWith(next);
@@ -3529,6 +3492,9 @@ export function mountPaginatedSurface(
     // The raw take-up, without the mirror or the report `setSelection` performs: the render
     // this runs inside is about to do both.
     adoptSelection: (next) => {
+      const fieldSelection = textFormInteraction?.beforeSelect(next);
+      if (fieldSelection === null) return;
+      next = fieldSelection ?? next;
       reconcilePendingWith(next);
       releaseRetainedIfEscaped(next);
       retireActivationPin();
@@ -4113,6 +4079,7 @@ export function mountPaginatedSurface(
 
   /** Draw selected cells, retained text, or paragraph marks native selection cannot show. */
   function renderOverlay(): void {
+    textFormInteraction?.update();
     const rects = cellSelection
       ? cellSelectionRects(currentLayout, cellSelection.cellIds)
       : retainedSelection
@@ -5174,6 +5141,8 @@ export function mountPaginatedSurface(
     canInsertToc,
     insertToc,
     canRefreshToc,
+    canEditTextFormField: () => textFormInteraction?.canEdit() ?? false,
+    editTextFormField: () => textFormInteraction?.edit() ?? false,
     refreshToc,
     refreshRefFieldResults,
     isInsideToc: (paragraphId) =>
@@ -5778,6 +5747,7 @@ export function mountPaginatedSurface(
       container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
       viewportObserver?.disconnect();
       observedScroller = null;
+      textFormInteraction?.destroy();
       pointer?.destroy();
       tableInteraction.destroy();
       navigation.destroy();
@@ -5935,6 +5905,26 @@ export function mountPaginatedSurface(
    * the DOM guessed.
    */
   let pointer: PointerController | null = null;
+  textFormInteraction = createTextFormFieldInteraction({
+    pagesLayer,
+    container,
+    part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
+    protected: (paragraphId = selection.head.paragraphId) =>
+      formsProtectionEnabled(session.settingsRoot()) &&
+      sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
+    selection: () => selection,
+    select: (next) => setSelection(next),
+    editable: () => editingMode === 'edit',
+    apply: (op) => {
+      let applied = false;
+      commit(() => {
+        const result = applyOps([op]);
+        applied = !result.rejected;
+        return result;
+      });
+      return applied;
+    },
+  });
   const dispatchKeyDown = createKeyDownHandler(
     surface,
     options.onRequestHyperlink ? { onRequestHyperlink: options.onRequestHyperlink } : {}
@@ -5943,7 +5933,7 @@ export function mountPaginatedSurface(
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.
     if (!event.defaultPrevented) selectionSync.adoptBeforeInput();
-    dispatchKeyDown(event);
+    if (!textFormInteraction?.keydown(event)) dispatchKeyDown(event);
   };
   const { onCopy, onCut, onPaste } = createClipboardHandlers(surface);
   const dispatchBeforeInput = createBeforeInputHandler(surface, {
@@ -6096,6 +6086,7 @@ export function mountPaginatedSurface(
 
   pointer = createPointerController(
     {
+      onTextFormDoubleClick: (event) => textFormInteraction?.doubleClick(event) ?? false,
       pagesLayer,
       container,
       scale: () => scale,

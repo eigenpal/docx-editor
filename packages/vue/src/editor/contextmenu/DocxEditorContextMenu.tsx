@@ -100,7 +100,29 @@ const ContextMenuAddComment = defineComponent({
   },
 });
 
+const ContextMenuEditField = defineComponent({
+  name: 'ContextMenuEditField',
+  setup() {
+    const editor = useDocxEditor();
+    const menu = useMenuContext();
+    const label = useMenuLabel();
+    return () =>
+      !editor.value?.can({ type: 'editTextFormField' }).ok ? null : (
+        <MenuRow
+          rowSlot="field.edit"
+          onSelect={() => {
+            menu.value.setOpenMenu(null);
+            editor.value?.exec({ type: 'editTextFormField' });
+          }}
+        >
+          {label('textFormField.edit')}
+        </MenuRow>
+      );
+  },
+});
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
+  { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },
