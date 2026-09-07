@@ -34,7 +34,7 @@ export function quickstart(
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
 import { googleFonts } from '@docx-editor.dev/fonts/google';
 
-const docxBytes = new Uint8Array(await readFile(${JSON.stringify(filename)}));
+const docxBytes = await readFile(${JSON.stringify(filename)});
 const result = await exportMarkdown(docxBytes, {
   fallbackFonts: googleFonts(),
 });

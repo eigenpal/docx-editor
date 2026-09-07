@@ -51,6 +51,7 @@ export type {
   ExportDestinationAnchor,
   ExportDestinationGeometry,
   ExportDocumentMetadata,
+  ExportContentWarning,
   ExportDocumentSource,
   ExportDroppedEmbeddedFont,
   ExportFontFaceResolution,
@@ -106,6 +107,7 @@ export type {
   MarkdownFontOrigin,
   MarkdownFontsSource,
   MarkdownPage,
+  MarkdownWarning,
   MarkdownPaginationInfo,
   OpenMarkdownDocumentForExportOptions,
 } from './markdown-types.ts';
@@ -176,6 +178,12 @@ const defaultFonts = createSuccessfulValueCache(async (signal): Promise<DefaultE
 const packagedExportFonts = packagedFonts({
   fetcher: packagedFileFetch,
   install: false,
+  onFailure(failure) {
+    throw new Error(
+      `Unable to load bundled font ${failure.file}: ${failure.diagnostic}. ` +
+        'In Next.js, add the converter, core, and fonts packages to serverExternalPackages.'
+    );
+  },
 });
 
 function isByteSource(source: ExportDocumentSource): source is Uint8Array {
@@ -235,7 +243,25 @@ function withFontResolution(
   result: MarkdownExportResult,
   fontResolution: ExportFontResolutionReport | null
 ): MarkdownExportResult {
-  return Object.freeze({ ...result, fontResolution });
+  const warnings = [...result.warnings];
+  for (const failure of fontResolution?.originFailures ?? []) {
+    warnings.push(
+      Object.freeze({
+        code: 'font-origin-failed' as const,
+        message: `A font source failed: ${failure.cause instanceof Error ? failure.cause.message : 'unknown error'}`,
+      })
+    );
+  }
+  for (const family of fontResolution?.families ?? []) {
+    if (family.coverage === 'complete') continue;
+    warnings.push(
+      Object.freeze({
+        code: 'incomplete-font' as const,
+        message: `Font coverage is incomplete for ${family.family}; page breaks may differ.`,
+      })
+    );
+  }
+  return Object.freeze({ ...result, fontResolution, warnings: Object.freeze(warnings) });
 }
 
 /** Open a reusable export session with packaged fonts and HarfBuzz shaping by default. @public */

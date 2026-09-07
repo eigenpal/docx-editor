@@ -311,6 +311,8 @@ export default defineConfig({ plugins: [react()] });
     { cwd: reactAppDir }
   );
 
+  run('node', [path.join(ROOT, 'scripts/check-markdown-consumer.mjs'), reactAppDir]);
+
   // The consumer has NO Tailwind and no PostCSS — exactly the host the shipped
   // stylesheet must carry on its own. Assert the CSS vite emitted is the compiled,
   // `.docx-editor`-scoped artifact: a raw `@tailwind` directive here means the chrome

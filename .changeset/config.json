@@ -11,13 +11,17 @@
       "@docx-editor.dev/nuxt",
       "@docx-editor.dev/i18n",
       "@docx-editor.dev/pro",
-      "@docx-editor.dev/fonts"
+      "@docx-editor.dev/fonts",
+      "@docx-editor.dev/docx-to-markdown"
     ]
   ],
   "linked": [],
-  "ignore": ["@docx-editor.dev/docx-to-markdown"],
+  "ignore": [],
   "access": "public",
-  "privatePackages": { "version": true, "tag": false },
+  "privatePackages": {
+    "version": true,
+    "tag": false
+  },
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {

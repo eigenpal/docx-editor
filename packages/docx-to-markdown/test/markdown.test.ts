@@ -869,6 +869,13 @@ describe('record-only Markdown export', () => {
       const rendered = await exportMarkdownFrom(opened.session);
       expect(rendered.markdown).not.toContain('Diagram');
       expect(rendered.pages[0]?.markdown).not.toContain('Diagram');
+      expect(rendered.warnings).toEqual([
+        {
+          code: 'omitted-drawing',
+          message: 'Images and shapes are omitted from Markdown.',
+          pageNumber: 1,
+        },
+      ]);
     } finally {
       opened.session.dispose();
     }

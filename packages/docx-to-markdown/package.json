@@ -1,8 +1,7 @@
 {
   "name": "@docx-editor.dev/docx-to-markdown",
-  "version": "2.14.0",
-  "private": true,
-  "description": "Server-first DOCX to Markdown conversion powered by the shared docx-editor.dev semantic layout engine.",
+  "version": "2.15.1",
+  "description": "Convert DOCX to Markdown with layout-derived pages, headers, footers, comments, and tracked changes.",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -20,6 +19,7 @@
     "dist",
     "!dist/metafile-*.json",
     "README.md",
+    "docs",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
@@ -53,5 +53,8 @@
     "type": "git",
     "url": "https://github.com/eigenpal/docx-editor.git",
     "directory": "packages/docx-to-markdown"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

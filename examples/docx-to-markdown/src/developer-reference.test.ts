@@ -39,6 +39,7 @@ describe('developer reference', () => {
   test('shows the complete API response without demo-only truncation', () => {
     const pageText = 'x'.repeat(1_000);
     const result = {
+      warnings: [],
       pages: Array.from({ length: 28 }, (_, index) => ({
         id: `page-${index}`,
         number: index + 1,
@@ -92,6 +93,7 @@ describe('developer reference', () => {
       })),
     } satisfies ExportFontResolutionReport;
     const result = {
+      warnings: [],
       pages: [
         {
           id: 'page-1',

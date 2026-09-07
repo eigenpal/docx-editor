@@ -2,6 +2,9 @@ import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { caretAt } from '../../layout/semantic-interaction.ts';
 import { openDocumentForExport } from '../export-session.ts';
+import { collectExportContentWarnings } from '../export-content-warnings.ts';
+import { openHeadlessDocument } from '../../store/headless-document-view.ts';
+import { MAX_XML_DEPTH } from '../../store/package/ooxml-drawing-rules.ts';
 import { exportDestinationNamed } from '../export-document-resources.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -212,4 +215,29 @@ test('header and note destinations publish caret geometry in page-content space'
   );
 
   opened.session.dispose();
+});
+
+test('source diagnostics skip inactive legacy fallbacks and report scan limits', () => {
+  const legacy =
+    '<v:shape xmlns:v="urn:schemas-microsoft-com:vml"><v:textbox><w:txbxContent>' +
+    '<w:p><w:r><w:t>Legacy text</w:t></w:r></w:p></w:txbxContent></v:textbox></v:shape>';
+  const body =
+    '<w:p><w:r><mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ' +
+    'xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' +
+    '<mc:Choice Requires="wps"><w:drawing/></mc:Choice><mc:Fallback><w:pict>' +
+    legacy +
+    '</w:pict></mc:Fallback></mc:AlternateContent></w:r></w:p>';
+  const opened = openHeadlessDocument(docxBytes(body, false));
+  if (!opened.ok) throw new Error(opened.reason);
+  expect(collectExportContentWarnings(opened.view)).toEqual([]);
+  const part = opened.view.part();
+  let nested = part.root;
+  for (let i = 0; i <= MAX_XML_DEPTH; i++)
+    nested = { ...part.root, kind: 'generic', localName: 'wrapper', children: [nested] };
+  const warnings = collectExportContentWarnings({
+    ...opened.view,
+    part: () => ({ ...part, root: nested }),
+  });
+  expect(warnings).toEqual([{ code: 'scan-limit', partName: '/word/document.xml' }]);
+  expect(Object.isFrozen(warnings)).toBe(true);
 });

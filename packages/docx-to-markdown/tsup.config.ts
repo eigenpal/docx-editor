@@ -4,7 +4,10 @@ export default defineConfig({
   entry: { index: 'src/index.ts' },
   platform: 'node',
   format: ['cjs', 'esm'],
-  dts: true,
+  // Advanced live-view types share browser contracts with Core. Declare that type-only
+  // dependency here so Node consumers do not need to change lib or skipLibCheck.
+  // This adds no DOM runtime dependency or polyfill.
+  dts: { banner: '/// <reference lib="dom" />' },
   splitting: true,
   clean: true,
   treeshake: true,

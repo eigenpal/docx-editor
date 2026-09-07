@@ -8,6 +8,7 @@ export function canonicalLayout(value: unknown, key = ''): unknown {
     key === 'resource' ||
     key === 'reviewArtifacts' ||
     key === 'documentMetadata' ||
+    key === 'contentWarnings' ||
     key === 'destinations'
   ) {
     return undefined;
