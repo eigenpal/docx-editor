@@ -628,7 +628,7 @@ describe('PdfKit paint writer', () => {
     expect(pdfContentStreams(first.bytes)).toContain('Tz');
   });
 
-  test('draws every text decoration as manual strokes', async () => {
+  test('fills a single underline and strokes strike decorations', async () => {
     const underline = { ...resolvedStyle('Helvetica'), decoration: 'underline' as const };
     const strike = { ...resolvedStyle('Helvetica'), decoration: 'strike' as const };
     const doubleStrike = { ...resolvedStyle('Helvetica'), decoration: 'double-strike' as const };
@@ -642,7 +642,8 @@ describe('PdfKit paint writer', () => {
     );
     const content = pdfContentStreams(result.bytes);
 
-    expect((content.match(/\nS\n/g) ?? []).length).toBe(4);
+    expect((content.match(/\nS\n/g) ?? []).length).toBe(3);
+    expect(content).toMatch(/\bre\n?f\b|\bre\s+f\b/);
     expect(content).not.toContain('underline');
     expect(content).not.toContain('strike');
   });

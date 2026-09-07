@@ -36,6 +36,17 @@ import {
   validateOutputByteLimit,
 } from './pdf-paint-bounds.ts';
 import { isWinAnsiRepresentable } from './pdf-winansi-encoding.ts';
+import {
+  PDF_STANDARD_UNDERLINE_METRICS,
+  canMergeSingleUnderlineRuns,
+  extendSingleUnderlineRun,
+  pdfSingleUnderlineGeometry,
+  pdfUnderlineFillRect,
+  pdfUnderlineLinkKey,
+  pdfUnderlineMetricsFromSfnt,
+  type PdfUnderlineMetrics,
+  type PdfUnderlineSegment,
+} from './pdf-underline-geometry.ts';
 
 const DETERMINISTIC_PDF_INFO: PDFKit.DocumentInfo = Object.freeze({
   Producer: 'docx-editor.dev',
@@ -365,17 +376,32 @@ function collectPdfBytes(
   };
 }
 
-function paintTextDecoration(
+interface UnderlinePaintBuffer {
+  pending: PdfUnderlineSegment | null;
+}
+
+interface TextSpanPaintContext {
+  readonly commands: readonly PdfPaintCommand[];
+  commandIndex: number;
+  readonly underline: UnderlinePaintBuffer;
+  readonly underlineMetrics: Map<string, PdfUnderlineMetrics | null>;
+}
+
+function strikeLineWidth(fontSizePt: number): number {
+  return Math.max(0.5, fontSizePt / 18);
+}
+
+function paintStrikeDecoration(
   doc: PDFKit.PDFDocument,
   command: Extract<PdfPaintCommand, { kind: 'textSpan' }>,
   y: number
 ): void {
   const { decoration, fontSizePt } = command.style;
-  if (decoration === 'none') return;
+  if (decoration !== 'strike' && decoration !== 'double-strike') return;
   const x = command.rect.x;
   const right = x + command.rect.width;
   if (!(right > x)) return;
-  const lineWidth = Math.max(0.5, fontSizePt / 18);
+  const lineWidth = strikeLineWidth(fontSizePt);
   const color = textColorOf(command.style);
   const stroke = (offset: number): void => {
     doc
@@ -385,16 +411,76 @@ function paintTextDecoration(
       .lineTo(right, y + offset)
       .stroke();
   };
-  if (decoration === 'underline') {
-    stroke(Math.max(1, fontSizePt * 0.08));
-    return;
-  }
   if (decoration === 'strike') {
     stroke(-fontSizePt * 0.3);
     return;
   }
   stroke(-fontSizePt * 0.22);
   stroke(-fontSizePt * 0.4);
+}
+
+function flushSingleUnderline(
+  doc: PDFKit.PDFDocument,
+  page: { height: number; open: boolean },
+  underline: UnderlinePaintBuffer
+): void {
+  const pending = underline.pending;
+  if (!pending || !page.open) {
+    underline.pending = null;
+    return;
+  }
+  if (!(pending.width > 0) || !(pending.thicknessPt > 0)) {
+    underline.pending = null;
+    return;
+  }
+  const rect = pdfRectToPdfKit(pdfUnderlineFillRect(pending), page.height);
+  doc.fillColor(pending.color).rect(rect.x, rect.y, rect.width, rect.height).fill();
+  underline.pending = null;
+}
+
+function underlineMetricsFor(
+  font: PdfAdmittedFont | undefined,
+  cache: Map<string, PdfUnderlineMetrics | null>
+): PdfUnderlineMetrics {
+  if (!font) return PDF_STANDARD_UNDERLINE_METRICS;
+  const cached = cache.get(font.identity);
+  if (cached !== undefined) return cached ?? PDF_STANDARD_UNDERLINE_METRICS;
+  const metrics = pdfUnderlineMetricsFromSfnt(font.bytes, font.faceIndex);
+  cache.set(font.identity, metrics);
+  return metrics ?? PDF_STANDARD_UNDERLINE_METRICS;
+}
+
+function noteSingleUnderline(
+  doc: PDFKit.PDFDocument,
+  command: Extract<PdfPaintCommand, { kind: 'textSpan' }>,
+  page: { height: number; index: number; open: boolean },
+  context: TextSpanPaintContext,
+  font: PdfAdmittedFont | undefined
+): void {
+  if (command.style.decoration !== 'underline') return;
+  if (!(command.rect.width > 0)) return;
+  const geometry = pdfSingleUnderlineGeometry(
+    command.style.fontSizePt,
+    underlineMetricsFor(font, context.underlineMetrics)
+  );
+  if (!(geometry.thicknessPt > 0)) return;
+  const segment: PdfUnderlineSegment = Object.freeze({
+    pageIndex: page.index,
+    x: command.rect.x,
+    width: command.rect.width,
+    baseline: command.baseline,
+    color: textColorOf(command.style),
+    thicknessPt: geometry.thicknessPt,
+    offsetTopPt: geometry.offsetTopPt,
+    linkKey: pdfUnderlineLinkKey(context.commands[context.commandIndex + 1]),
+  });
+  const pending = context.underline.pending;
+  if (pending && canMergeSingleUnderlineRuns(pending, segment)) {
+    context.underline.pending = extendSingleUnderlineRun(pending, segment);
+    return;
+  }
+  flushSingleUnderline(doc, page, context.underline);
+  context.underline.pending = segment;
 }
 
 function paintCommand(
@@ -405,10 +491,12 @@ function paintCommand(
   admittedFonts: readonly PdfAdmittedFont[],
   defaultFontFamily: string | undefined,
   registeredFonts: Map<string, FontEmbeddingDecision>,
-  cmapCache: EmbeddedCmapCache
+  cmapCache: EmbeddedCmapCache,
+  context: TextSpanPaintContext
 ): { height: number; index: number; open: boolean; pageCountDelta: number } {
   switch (command.kind) {
     case 'beginPage': {
+      flushSingleUnderline(doc, page, context.underline);
       doc.addPage({
         size: [command.width, command.height],
         margin: 0,
@@ -432,6 +520,7 @@ function paintCommand(
     }
     case 'clipRect': {
       if (!page.open) throw new Error('PDF paint command requires beginPage before page content');
+      flushSingleUnderline(doc, page, context.underline);
       const rect = pdfRectToPdfKit(command.rect, page.height);
       doc.rect(rect.x, rect.y, rect.width, rect.height).clip();
       return { ...page, pageCountDelta: 0 };
@@ -455,6 +544,9 @@ function paintCommand(
     case 'textSpan': {
       if (!page.open) throw new Error('PDF paint command requires beginPage before page content');
       const style = command.style;
+      if (style.decoration !== 'underline') {
+        flushSingleUnderline(doc, page, context.underline);
+      }
       const embedded = resolveEmbeddedFont(style, admittedFonts, defaultFontFamily);
       const decision = embedded
         ? (registeredFonts.get(embedded.font.identity) ?? fontEmbeddingDecision(embedded.font))
@@ -532,7 +624,14 @@ function paintCommand(
         baseline: 'alphabetic',
         ...(horizontalScaling === undefined ? {} : { horizontalScaling }),
       });
-      paintTextDecoration(doc, command, y);
+      paintStrikeDecoration(doc, command, y);
+      noteSingleUnderline(
+        doc,
+        command,
+        page,
+        context,
+        useEmbedded && embedded ? embedded.font : undefined
+      );
       diagnostics.push(
         pdfApproximationDiagnostic({
           feature: 'shaped-glyph-run',
@@ -570,6 +669,7 @@ function paintCommand(
     }
     case 'image': {
       if (!page.open) throw new Error('PDF paint command requires beginPage before page content');
+      flushSingleUnderline(doc, page, context.underline);
       diagnostics.push(
         pdfUnsupportedDiagnostic({
           feature: 'image',
@@ -607,6 +707,12 @@ export class PdfKitPaintWriter implements PdfPaintWriterPort {
     let page = { height: 0, index: 0, open: false };
     const registeredFonts = new Map<string, FontEmbeddingDecision>();
     const cmapCache: EmbeddedCmapCache = new Map();
+    const underlineContext: TextSpanPaintContext = {
+      commands: plan.commands,
+      commandIndex: 0,
+      underline: { pending: null },
+      underlineMetrics: new Map(),
+    };
 
     const doc = new PDFDocument({
       autoFirstPage: false,
@@ -626,6 +732,7 @@ export class PdfKitPaintWriter implements PdfPaintWriterPort {
           await yieldToEventLoop();
           throwIfAborted(options.signal, 'PDF encoding was aborted');
         }
+        underlineContext.commandIndex = index;
         const next = paintCommand(
           doc,
           plan.commands[index]!,
@@ -634,11 +741,13 @@ export class PdfKitPaintWriter implements PdfPaintWriterPort {
           options.admittedFonts ?? [],
           options.defaultFontFamily,
           registeredFonts,
-          cmapCache
+          cmapCache,
+          underlineContext
         );
         pageCount += next.pageCountDelta;
         page = { height: next.height, index: next.index, open: next.open };
       }
+      flushSingleUnderline(doc, page, underlineContext.underline);
 
       doc.end();
       const bytes = await collector.bytes;
