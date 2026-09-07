@@ -37,7 +37,6 @@ import { googleFonts } from '@docx-editor.dev/fonts/google';
 const docxBytes = new Uint8Array(await readFile(${JSON.stringify(filename)}));
 const result = await exportMarkdown(docxBytes, {
   fallbackFonts: googleFonts(),
-  resourceTimeoutMs: 30_000,
 });
 
 console.log(result.markdown); // Full document body.

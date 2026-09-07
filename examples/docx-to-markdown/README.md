@@ -32,7 +32,7 @@ sanitized before rendering.
 
 The API tab shows a Node.js example using the current filename and selected page fields. Preview
 settings only choose which returned fields to display; they do not change the export result.
-The example includes the same Google Fonts fallback and resource timeout as the demo. Font
+The example includes the same Google Fonts fallback as the demo and uses the default resource timeout. Font
 resolution details remain available in the complete live JSON response.
 
 Copy follows the active view: the Node.js example, the live JSON response, or the full-document

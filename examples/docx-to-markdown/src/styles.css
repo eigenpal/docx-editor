@@ -1325,6 +1325,13 @@ button {
 }
 
 .md-install-command {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--md-ink);
   margin: 0 28px;
   padding: 12px 14px;
   overflow-x: auto;
@@ -1356,5 +1363,42 @@ button {
   .md-code-note {
     margin-right: 18px;
     margin-left: 18px;
+  }
+}
+
+.md-install-command code {
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.md-install-copy {
+  flex: none;
+  color: var(--md-accent);
+  font:
+    600 11px/1.4 ui-sans-serif,
+    sans-serif;
+}
+
+.md-install-command:focus-visible {
+  outline: 2px solid var(--md-accent);
+  outline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .md-install-copy {
+    opacity: 0;
+  }
+
+  .md-install-command:hover,
+  .md-install-command:focus-visible {
+    border-color: var(--md-line-strong);
+    background: #f7f8fa;
+  }
+
+  .md-install-command:hover .md-install-copy,
+  .md-install-command:focus-visible .md-install-copy,
+  .md-install-copy[data-visible='true'] {
+    opacity: 1;
   }
 }
