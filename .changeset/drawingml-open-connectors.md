@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': minor
+'@docx-editor.dev/core': patch
 ---
 
-Project flipped DrawingML vector paths and straight connectors, preserve open versus closed paths, and render bounded triangular line ends without changing canonical XML.
+Render flipped DrawingML paths and open connectors with triangular line ends.

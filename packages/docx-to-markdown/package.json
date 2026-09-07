@@ -1,8 +1,8 @@
 {
   "name": "@docx-editor.dev/docx-to-markdown",
-  "version": "2.14.0",
+  "version": "2.15.1",
   "private": true,
-  "description": "Server-first DOCX to Markdown conversion powered by the shared docx-editor.dev semantic layout engine.",
+  "description": "Convert DOCX to Markdown with layout-derived pages, headers, footers, comments, and tracked changes.",
   "type": "module",
   "sideEffects": false,
   "engines": {
@@ -10,16 +10,21 @@
   },
   "exports": {
     ".": {
+      "require": {
+        "types": "./types/index.d.cts",
+        "default": "./dist/index.cjs"
+      },
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
+    "types",
     "!dist/metafile-*.json",
     "README.md",
+    "docs",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {

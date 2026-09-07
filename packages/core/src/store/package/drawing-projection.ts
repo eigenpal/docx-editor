@@ -1,10 +1,12 @@
+import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
 // projection-only — every authored branch stays in the tree on save.
 
 import { sanitizeHref } from './sinks.ts';
-import { readBlipEffects } from './drawing-image-effects.ts';
+import { readDistances } from './drawing-distances.ts';
+import { readBlipEffects, type DrawingImageEffects } from './drawing-image-effects.ts';
 import { freezeVectorShapeComponent } from './drawing-vector-freeze.ts';
 import { HYPERLINK_RELATIONSHIP_TYPE, type RelationshipTargetResolver } from './hyperlink.ts';
 import { resolveRelationship } from './relationships.ts';
@@ -216,13 +218,10 @@ export interface DrawingProjection {
   readonly picture: PictureProjection | null;
   readonly vectorShape: VectorShapeProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
+  /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
+  readonly legacyGraphic?: LegacyGraphicProjection;
   readonly locks: DrawingLocks;
-  readonly effects: Readonly<{
-    grayscale: boolean;
-    brightness: number;
-    contrast: number;
-    bilevel?: number;
-  }>;
+  readonly effects: DrawingImageEffects;
   readonly compatibilityBranchNodeId: string | null;
   readonly diagnostics: readonly DrawingDiagnostic[];
 }
@@ -747,17 +746,6 @@ function findWrapElement(anchor: OoxmlElement, compatibilityMode: boolean): Ooxm
   return null;
 }
 
-function readDistances(
-  node: OoxmlElement
-): Readonly<{ top: number; right: number; bottom: number; left: number }> {
-  return Object.freeze({
-    top: parseEmu(schemaAttributeValue(node.attributes, 'distT')) ?? 0,
-    right: parseEmu(schemaAttributeValue(node.attributes, 'distR')) ?? 0,
-    bottom: parseEmu(schemaAttributeValue(node.attributes, 'distB')) ?? 0,
-    left: parseEmu(schemaAttributeValue(node.attributes, 'distL')) ?? 0,
-  });
-}
-
 function readEffectExtent(
   anchor: OoxmlElement,
   wrapElement: OoxmlElement | null,
@@ -943,7 +931,8 @@ function wrapTargetFromAnchor(
 function readWrapGeometry(
   wrap: OoxmlElement | null,
   state: WalkState,
-  nodeId: string
+  nodeId: string,
+  anchor: OoxmlElement
 ): DrawingWrapProjection | null {
   if (!wrap) return null;
   const element = wrapElementKind(wrap);
@@ -955,7 +944,7 @@ function readWrapGeometry(
   return Object.freeze({
     element,
     textSide,
-    distancesEmu: readDistances(wrap),
+    distancesEmu: readDistances(wrap, anchor),
     polygon:
       element === 'tight' || element === 'through'
         ? readPolygon(wrap, state, nodeId)
@@ -1069,12 +1058,7 @@ function projectPicture(
 ): {
   readonly picture: PictureProjection | null;
   readonly relationshipId: string | null;
-  readonly effects: Readonly<{
-    grayscale: boolean;
-    brightness: number;
-    contrast: number;
-    bilevel?: number;
-  }>;
+  readonly effects: DrawingImageEffects;
   readonly diagnostic: DrawingDiagnostic | null;
 } {
   if (!visitNode(state, ctx.limits)) {
@@ -1317,6 +1301,28 @@ export function isRunLevelMcAlternateContent(node: OoxmlNode): node is OoxmlGene
   return isMcAlternateContent(node);
 }
 
+/** Selected MC branch container, retaining its namespace declarations for source walks. @internal */
+export function selectedRunLevelMcBranch(
+  wrapper: OoxmlGenericElementNode,
+  namespaceScope: ReadonlyMap<string, string>
+): Readonly<{ branch: OoxmlNode | null; refused: boolean }> {
+  const state = createWalkState();
+  const selected = selectCompatibilityBranch(
+    wrapper,
+    state,
+    DEFAULT_DRAWING_PROJECTION_LIMITS,
+    namespaceScope,
+    DEFAULT_SUPPORTED_MC_REQUIRES
+  );
+  return {
+    branch:
+      selected.branchNodeId === null
+        ? null
+        : (wrapper.children.find((child) => child.id === selected.branchNodeId) ?? null),
+    refused: state.refused,
+  };
+}
+
 /** Resolve a run-level MC wrapper into an atomic drawing segment descriptor. */
 export function resolveRunLevelMcAtom(
   wrapper: OoxmlGenericElementNode,
@@ -1483,7 +1489,7 @@ export function projectDrawingWithState(
     return buildUnrenderableProjection(drawing, ctx, state, kind, extent);
   }
   const wrapGeometry =
-    kind === 'anchored' ? readWrapGeometry(wrapElement, state, drawing.id) : null;
+    kind === 'anchored' ? readWrapGeometry(wrapElement, state, drawing.id, anchor) : null;
   const position = kind === 'anchored' ? readPosition(anchor, simplePosEnabled) : null;
   const anchorMeta =
     kind === 'anchored'
@@ -1650,6 +1656,13 @@ function collectDrawingsInPartBounded(
     if (frame.depth > MAX_XML_DEPTH) continue;
 
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
+
+    const legacy = projectLegacyVml(frame.node, ownerPartName);
+    if (legacy) {
+      out.push(legacy);
+      atomIndex?.set(frame.node.id, legacy);
+      continue;
+    }
 
     if (frame.node.kind === 'drawing') {
       const projected = projectDrawing(frame.node, { ...ctx, namespaceScope: scope });

@@ -718,3 +718,4 @@ export {
   type TableBorderStrokeRecord,
   type TableBorderStyle,
 } from './table-borders.ts';
+export type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';

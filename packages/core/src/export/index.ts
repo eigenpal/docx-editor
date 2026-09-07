@@ -63,3 +63,5 @@ export {
 } from './packaged-file-fetch.ts';
 export type { FontOrigin, FontOriginFailure } from '../editor/font-resolver.ts';
 export type { FontRequest, FontSubstitution } from '../layout/font-resource.ts';
+
+export type { ExportContentWarning } from './export-content-warnings.ts';

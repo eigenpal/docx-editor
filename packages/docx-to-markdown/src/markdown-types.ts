@@ -49,8 +49,27 @@ export interface MarkdownPaginationInfo {
   readonly displayMode: RevisionDisplayMode;
 }
 
+/** Content or resources that could not be represented fully. @public */
+export interface MarkdownWarning {
+  /** Stable code for filtering warnings without parsing messages. */
+  readonly code:
+    | 'omitted-drawing'
+    | 'omitted-textbox'
+    | 'font-origin-failed'
+    | 'incomplete-font'
+    | 'content-scan-limit';
+  /** Human-readable description of the limitation. */
+  readonly message: string;
+  /** One-based page number, when the warning concerns a drawing occurrence. */
+  readonly pageNumber?: number;
+  /** Package part when the warning comes from source inspection. */
+  readonly partName?: string;
+}
+
 /** Full logical document plus page-scoped projections. @public */
 export interface MarkdownExportResult {
+  /** Omitted content and font problems that may affect completeness or pagination. */
+  readonly warnings: readonly MarkdownWarning[];
   /** Primary physical page projections, preserving Word layout boundaries and furniture. */
   readonly pages: readonly MarkdownPage[];
   /**

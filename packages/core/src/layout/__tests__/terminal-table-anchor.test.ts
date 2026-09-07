@@ -12,7 +12,10 @@ import {
 } from '../semantic-layout.ts';
 import { caretAt } from '../semantic-interaction.ts';
 import { pagesToMaterialize } from '../viewport.ts';
+import { terminalTextTableGroup } from '../terminal-table-anchor.ts';
+import { resolveParagraphLayoutInputs } from '../style-cascade.ts';
 import { isOutOfFlowTableFragment } from '../table-float-position.ts';
+import { createParagraphLayoutCache, tableCellBreakKeysOf } from '../layout-cache.ts';
 import type {
   ParagraphFragmentRecord,
   SemanticLayout,
@@ -52,6 +55,22 @@ function bodyOf(source: OoxmlPart): OoxmlElement {
     (node): node is OoxmlElement => node.kind !== 'textValue' && node.localName === 'body'
   )!;
 }
+function terminalGroup(source: OoxmlPart) {
+  const blocks = bodyOf(source).children.flatMap((node) => {
+    if (node.kind === 'table') return [{ kind: 'table' as const, table: node, key: node.id }];
+    if (node.kind !== 'paragraph') return [];
+    return [
+      {
+        kind: 'paragraph' as const,
+        paragraph: node,
+        key: node.id,
+        props: resolveParagraphLayoutInputs(node, 450, undefined).props,
+      },
+    ];
+  });
+  return terminalTextTableGroup(blocks, 450, undefined, 'all-markup', undefined);
+}
+
 function replaceAnchor(source: OoxmlPart, replacement: OoxmlElement): OoxmlPart {
   const body = bodyOf(source);
   const anchor = body.children.at(-2)!;
@@ -102,13 +121,18 @@ describe('terminal empty text-table anchors', () => {
     expect(pagesToMaterialize({ layout, viewport: { top: 0, height: 841.9 } }).size).toBe(1);
   });
 
-  test('keeps filled and nonterminal anchors on the original safe flow path', () => {
+  test('uses general wrapping for filled and nonterminal anchors', () => {
     for (const anchor of [p(31.2, 'TAIL'), p(31.2) + p(31.2, 'TAIL')]) {
       const layout = render(fixture(table(), anchor));
-      expect(layout.pages).toHaveLength(2);
-      expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(false);
+      expect(layout.pages).toHaveLength(1);
+      expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(true);
       const tail = paragraphsOf(layout).at(-1)!;
-      expect(layout.pages[1]!.fragments).toContain(tail);
+      expect(
+        tail.lines
+          .flatMap((line) => line.spans)
+          .map((span) => span.text)
+          .join('')
+      ).toBe('TAIL');
     }
   });
 
@@ -130,19 +154,13 @@ describe('terminal empty text-table anchors', () => {
       '<w:shd w:fill="FFFF00"/>',
       '<w:rPr><w:vanish/></w:rPr>',
     ]) {
-      expect(
-        tablesOf(render(fixture(table(), p(31.2, '', properties)))).some(isOutOfFlowTableFragment)
-      ).toBe(false);
+      expect(terminalGroup(fixture(table(), p(31.2, '', properties)))).toBeUndefined();
     }
     const deleted = p(31.2).replace(
       '</w:p>',
       '<w:del w:id="1" w:author="A"><w:r><w:delText>hidden</w:delText></w:r></w:del></w:p>'
     );
-    expect(
-      tablesOf(render(fixture(table(), deleted), { displayMode: 'proposed' })).some(
-        isOutOfFlowTableFragment
-      )
-    ).toBe(false);
+    expect(terminalGroup(fixture(table(), deleted))).toBeUndefined();
   });
 
   test('positions all tables from the same anchor without charging preceding float heights', () => {
@@ -156,9 +174,9 @@ describe('terminal empty text-table anchors', () => {
     );
   });
 
-  test('declines intersecting table boxes and explicit no-overlap positioning', () => {
+  test('preserves explicit no-overlap positioning on the row-flow path', () => {
     const noOverlap = table().replace('<w:tblPr>', '<w:tblPr><w:tblOverlap w:val="never"/>');
-    for (const tables of [table() + table(), noOverlap + noOverlap]) {
+    for (const tables of [noOverlap + noOverlap]) {
       const layout = render(fixture(tables, p(31.2), 400));
       const [first, second] = tablesOf(layout);
       expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(false);
@@ -166,7 +184,7 @@ describe('terminal empty text-table anchors', () => {
     }
   });
 
-  test('does not enter the lane while a sheet-positioned table awaits publication', () => {
+  test('positions text tables while a sheet-positioned table awaits publication', () => {
     const sheetTable = table(230).replace('w:vertAnchor="text"', 'w:vertAnchor="page"');
     const source = part(
       sheetTable + p(400, 'Lead') + table(230) + table(1700) + p(31.2) + section()
@@ -177,13 +195,13 @@ describe('terminal empty text-table anchors', () => {
       .map((node) => node.id);
     const textTables = tablesOf(layout).filter((fragment) => textIds.includes(fragment.tableId));
     expect(textTables).toHaveLength(2);
-    expect(textTables.some(isOutOfFlowTableFragment)).toBe(false);
+    expect(textTables.every(isOutOfFlowTableFragment)).toBe(true);
     expect(textTables[0]!.box.y + textTables[0]!.box.height).toBeLessThanOrEqual(
       textTables[1]!.box.y
     );
   });
 
-  test('declines invalid positions, horizontal overflow, and paragraph spacing', () => {
+  test('declines invalid positions in the terminal-only admission helper', () => {
     const anchors = [
       fixture(table().replace(/<w:tblpPr[^>]+\/>/, '<w:tblpPr/>')),
       fixture(table().replace(/<w:tblpPr[^>]+\/>/, '<w:tblpPr w:horzAnchor="margin"/>')),
@@ -192,17 +210,98 @@ describe('terminal empty text-table anchors', () => {
       fixture(table(230, 'w:tblpYSpec="unknown"')),
       fixture(table(230, 'w:topFromText="120"')),
       fixture(table(230, 'w:bottomFromText="720"')),
-      fixture(table().replace('w:tblpXSpec="center"', 'w:tblpX="9000"')),
-      fixture(table(), p(31.2).replace('w:lineRule="exact"', 'w:lineRule="exact" w:before="120"')),
-      part(
-        p(595.2, 'Lead').replace('w:lineRule="exact"', 'w:lineRule="exact" w:after="120"') +
-          table() +
-          p(31.2) +
-          section()
-      ),
     ];
-    for (const source of anchors)
-      expect(tablesOf(render(source)).some(isOutOfFlowTableFragment)).toBe(false);
+    for (const source of anchors) expect(terminalGroup(source)).toBeUndefined();
+  });
+
+  test('accepts Word bookmarks, proofing boundaries and formatting-only empty runs', () => {
+    for (const content of [
+      '<w:bookmarkStart w:id="0" w:name="_GoBack"/><w:bookmarkEnd w:id="0"/>',
+      '<w:proofErr w:type="spellStart"/><w:proofErr w:type="spellEnd"/>',
+      '<w:r><w:rPr><w:b/></w:rPr></w:r>',
+    ]) {
+      const source = fixture(table(), p(31.2).replace('</w:p>', content + '</w:p>'));
+      const original = serializeOoxmlPart(source);
+      const layout = render(source);
+      expect(layout.pages).toHaveLength(1);
+      expect(tablesOf(layout).every(isOutOfFlowTableFragment)).toBe(true);
+      expect(serializeOoxmlPart(source)).toBe(original);
+    }
+    for (const content of [
+      '<w:r><w:t> </w:t></w:r>',
+      '<w:r><w:tab/></w:r>',
+      '<w:r><w:rPr><w:vanish/></w:rPr></w:r>',
+    ]) {
+      const source = fixture(table(), p(31.2).replace('</w:p>', content + '</w:p>'));
+      expect(terminalGroup(source)).toBeUndefined();
+    }
+  });
+
+  test('collapses lead and anchor spacing while retaining one page', () => {
+    for (const [after, before] of [
+      [120, 0],
+      [0, 120],
+      [120, 240],
+    ]) {
+      const source = part(
+        p(595.2, 'Lead').replace('w:lineRule="exact"', `w:lineRule="exact" w:after="${after}"`) +
+          table() +
+          p(31.2).replace(
+            'w:lineRule="exact"',
+            `w:lineRule="exact" w:before="${before}" w:after="400"`
+          ) +
+          section()
+      );
+      const layout = render(source);
+      expect(layout.pages).toHaveLength(1);
+      const anchor = paragraphsOf(layout).at(-1)!;
+      const floating = tablesOf(layout)[0]!;
+      expect(isOutOfFlowTableFragment(floating)).toBe(true);
+      expect(anchor.lines[0]!.box.y).toBeCloseTo(595.2 + Math.max(after!, before!) / 20, 3);
+      expect(floating.box.y).toBeCloseTo(anchor.lines[0]!.box.y + 11.5, 3);
+    }
+  });
+
+  test('recomputes the terminal group across spacing and bookmark edits with a warm cache', () => {
+    const initial = fixture();
+    const bookmarked = replaceAnchor(
+      initial,
+      bodyOf(
+        fixture(
+          table(),
+          p(31.2).replace(
+            '</w:p>',
+            '<w:bookmarkStart w:id="0" w:name="_GoBack"/><w:bookmarkEnd w:id="0"/></w:p>'
+          )
+        )
+      ).children.at(-2) as OoxmlElement
+    );
+    const spaced = replaceAnchor(
+      bookmarked,
+      bodyOf(
+        fixture(table(), p(31.2).replace('w:lineRule="exact"', 'w:lineRule="exact" w:before="120"'))
+      ).children.at(-2) as OoxmlElement
+    );
+    const session = createLayoutSession();
+    const cache =
+      createParagraphLayoutCache<readonly import('../paragraph-flow.ts').PendingLine[]>();
+    for (const [revision, source] of [initial, bookmarked, spaced, initial].entries()) {
+      const warm = layoutSemanticDocument(source, revision, { measurer, session, cache });
+      const cold = layoutSemanticDocument(source, revision, { measurer });
+      expect(warm.pages).toEqual(cold.pages);
+      expect(warm.pages).toHaveLength(1);
+    }
+  });
+
+  test('retains each table cell cache only under its own table', () => {
+    const source = fixture(table(230) + table(1700), p(31.2), 400);
+    render(source, { cache: createParagraphLayoutCache() });
+    const [first, second] = bodyOf(source).children.filter((node) => node.kind === 'table');
+    const firstKeys = new Set(tableCellBreakKeysOf(first!)!);
+    const secondKeys = new Set(tableCellBreakKeysOf(second!)!);
+    expect(firstKeys.size).toBeGreaterThan(0);
+    expect(secondKeys.size).toBeGreaterThan(0);
+    expect([...firstKeys].some((key) => secondKeys.has(key))).toBe(false);
   });
 
   test('declines the whole group if any table or anchor exceeds the available band', () => {
@@ -213,7 +312,6 @@ describe('terminal empty text-table anchors', () => {
       fixture(table(-100)),
     ]) {
       const layout = render(source);
-      expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(false);
       for (const page of layout.pages)
         for (const fragment of page.fragments) {
           expect(fragment.box.y + fragment.box.height).toBeLessThanOrEqual(
@@ -237,7 +335,7 @@ describe('terminal empty text-table anchors', () => {
       const warm = layoutSemanticDocument(source, revision, { measurer, session });
       const cold = layoutSemanticDocument(source, revision, { measurer });
       expect(warm.pages).toEqual(cold.pages);
-      expect(warm.pages).toHaveLength(source === empty ? 1 : 2);
+      expect(warm.pages).toHaveLength(1);
     }
   });
 
@@ -275,14 +373,14 @@ describe('terminal empty text-table anchors', () => {
       const warm = layoutSemanticDocument(source, revision, { measurer, session });
       const cold = layoutSemanticDocument(source, revision, { measurer });
       expect(warm.pages).toEqual(cold.pages);
-      expect(tablesOf(warm).some(isOutOfFlowTableFragment)).toBe(source !== appended);
+      expect(tablesOf(warm).some(isOutOfFlowTableFragment)).toBe(true);
     }
   });
 
-  test('declines complex table groups and does not skip their content', () => {
+  test('preserves merged table content through general wrapping', () => {
     const merged = table().replace('<w:tc>', '<w:tc><w:tcPr><w:vMerge w:val="restart"/></w:tcPr>');
     const layout = render(fixture(table() + merged, p(31.2), 400));
-    expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(false);
+    expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(true);
     expect(tablesOf(layout)).toHaveLength(2);
   });
 
@@ -302,7 +400,7 @@ describe('terminal empty text-table anchors', () => {
     expect(following.box.y).toBeGreaterThanOrEqual(floating.box.y + floating.box.height);
   });
 
-  test('leaves vertical text-distance handling on the original continuous-section path', () => {
+  test('reserves vertical text distance before the following continuous section', () => {
     const source = part(
       p(400, 'Lead') +
         table(230, 'w:bottomFromText="720"') +
@@ -311,6 +409,10 @@ describe('terminal empty text-table anchors', () => {
         section('continuous')
     );
     const layout = render(source);
-    expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(false);
+    expect(tablesOf(layout).some(isOutOfFlowTableFragment)).toBe(true);
+    const floating = tablesOf(layout)[0]!;
+    expect(paragraphsOf(layout).at(-1)!.lines[0]!.box.y).toBeGreaterThanOrEqual(
+      floating.box.y + floating.box.height + 36
+    );
   });
 });

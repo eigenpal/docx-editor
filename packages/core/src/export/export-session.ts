@@ -1,6 +1,11 @@
 // One neutral document layout session shared by all exporters.
 
 import {
+  collectExportContentWarnings,
+  type ExportContentWarning,
+} from './export-content-warnings.ts';
+
+import {
   openHeadlessDocument,
   type HeadlessDocumentRejection,
   type HeadlessDocumentView,
@@ -93,6 +98,8 @@ export interface OpenDocumentForExportOptions {
  * @public
  */
 export interface ExportSemanticLayout extends SemanticLayout {
+  /** Source omissions that cannot be detected by walking laid-out records. */
+  readonly contentWarnings?: readonly ExportContentWarning[];
   readonly reviewArtifacts: readonly SemanticReviewArtifactRecord[];
   readonly documentMetadata?: ExportDocumentMetadata;
   readonly destinations?: readonly ExportDestinationGeometry[];
@@ -486,6 +493,7 @@ export function openDocumentForExport(
         styleCascade: state.styles.styleCascade,
         numberingIndex: state.styles.numberingIndex,
         defaultTabStopPt: state.styles.defaultTabStopPt,
+        compatibilityMode: state.styles.compatibilityMode,
         displayMode: mode,
         revisionAuthorFilter: undefined,
         inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),
@@ -515,6 +523,7 @@ export function openDocumentForExport(
         defaultTabStopPt: state.styles.defaultTabStopPt,
         numberingIndex: state.styles.numberingIndex,
         furniture: source,
+        compatibilityMode: state.styles.compatibilityMode,
         linkProjectors: state.links,
         projectFieldLink: (spec) => fieldLinks.project(spec),
         inlineDrawingLayout: state.drawingBundle.bodyContext,
@@ -550,6 +559,7 @@ export function openDocumentForExport(
         const enrichedLayout: ExportSemanticLayout = {
           ...layout,
           ...resources,
+          contentWarnings: collectExportContentWarnings(state.view),
           reviewArtifacts,
         };
         const published = publishImmutableSemanticLayout(enrichedLayout);

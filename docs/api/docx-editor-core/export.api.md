@@ -46,6 +46,12 @@ export interface ExportAdmittedFontIdentity {
 }
 
 // @public
+export interface ExportContentWarning {
+    readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit';
+    readonly partName: string;
+}
+
+// @public
 export interface ExportDestinationAnchor {
     // (undocumented)
     readonly name: string;
@@ -160,6 +166,7 @@ export class ExportResourceError extends Error {
 
 // @public
 export interface ExportSemanticLayout extends SemanticLayout {
+    readonly contentWarnings?: readonly ExportContentWarning[];
     // (undocumented)
     readonly destinations?: readonly ExportDestinationGeometry[];
     // (undocumented)

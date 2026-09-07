@@ -84,7 +84,9 @@ export interface DocxEditorConfig {
    *   tracked changes; the reader still moves between modes from the toolbar.
    * - `'suggesting'` — opens in suggesting. It needs what suggesting always needs — a
    *   review module and an {@link DocxEditorConfig.author} — and falls back to editing
-   *   with the reason published when either is missing.
+   *   with the reason published when either is missing. A missing author is a host
+   *   configuration error and is also reported once on the console; the editor enters
+   *   suggesting as soon as {@link DocxEditorInstance.setAuthor} names one.
    * - `'view'` — read-only: every mutating command through the facade is refused, and
    *   the toolbar cannot leave viewing.
    * - Omitted — the DOCUMENT decides: a package carrying `w:trackRevisions` opens in
@@ -285,6 +287,10 @@ export interface DocxEditorInstance extends Editor {
    * later comment, reply, and tracked change. It does not rewrite existing revisions. The value
    * survives document reloads and font remounts. An empty or whitespace value clears the author,
    * after which suggesting refuses writes with its existing reason.
+   *
+   * Naming an author also completes a request for suggesting that was refused for want of
+   * one — a `mode: 'suggesting'` or a document's `w:trackRevisions` that opened in editing —
+   * unless the reader has chosen a mode since.
    *
    * @public
    */

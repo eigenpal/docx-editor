@@ -21,6 +21,8 @@ import { measureInlineDrawing } from './drawing-layout.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import type { EquationSpanRecord } from './equation-layout.ts';
 import type { TextMeasurer } from './semantic-records.ts';
+import { displayText } from './run-style.ts';
+import { clipWordEnd, isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 
 /** Model offset of the first character of the line each anchor start falls on. */
 export function anchorLineStartsByModelOffset(input: {
@@ -88,7 +90,14 @@ export function anchorLineStartsByModelOffset(input: {
       const candidate = piece.text.slice(consumed, boundary);
       if (candidate.length === 0) continue;
       const style = styleForFontSlot(piece.style, piece.fontSlot);
-      const width = measurer.measure(candidate, style);
+      const measure = (text: string): number => measurer.measure(displayText(text, style), style);
+      let width = measure(piece.measureText ?? candidate);
+      if (!probePieceLayoutOwned && piece.measureText === undefined) {
+        const remaining = probeLineAvail() - probeWidth;
+        width = clipWordEnd(candidate, width, remaining, measure, 0.001)?.width ?? width;
+        if (probeWidth > 0 && isCollapsibleLineEndWhitespace(candidate))
+          width = Math.min(width, Math.max(0, remaining));
+      }
       const modelStart = piece.start + consumed;
       const probeDecision =
         input.cjkBreaks?.decision(piece, consumed) ??

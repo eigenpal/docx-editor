@@ -2,6 +2,8 @@
 // stories. Split from drawing-projection.ts, which owns the drawing walk, MC selection, and
 // the assembled DrawingProjection; this module is pure direct-child reads with no walk state.
 
+import { parseEmu, findDirectChild } from './drawing-shape-readers.ts';
+export { MAX_EMU, parseEmu, findDirectChild } from './drawing-shape-readers.ts';
 import { findDirectKind, isElement } from './drawing-projection-walk.ts';
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { WML_NAMESPACE_URI } from './ooxml-shared.ts';
@@ -23,18 +25,6 @@ export type ShapeStyleMatrixResolver = (
   kind: 'fill' | 'line',
   index: number
 ) => OoxmlElement | null;
-
-export const MAX_EMU = 2 ** 31 - 1;
-
-export function parseEmu(value: string | undefined, clamp = true): number | null {
-  if (value === undefined || !/^-?\d{1,15}$/.test(value)) return null;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) return null;
-  if (!clamp) return parsed;
-  if (parsed < 0) return 0;
-  if (parsed > MAX_EMU) return MAX_EMU;
-  return parsed;
-}
 
 /**
  * An `xsd:boolean` attribute read fail-closed.
@@ -96,30 +86,6 @@ function schemaAngleIsZero(value: string | undefined): boolean {
   const collapsed = collapseSchemaWhitespace(value);
   // Bounded digit count: `rot` is an int, and this only ever compares it against zero.
   return /^[+-]?\d{1,12}$/.test(collapsed) && Number(collapsed) === 0;
-}
-
-export function findDirectChild(
-  nodes: readonly OoxmlNode[],
-  options: {
-    readonly typedKind?: string;
-    readonly namespaceUri?: string;
-    readonly localName?: string;
-  }
-): OoxmlElement | null {
-  for (const node of nodes) {
-    if (!isElement(node)) continue;
-    if (options.typedKind !== undefined && node.kind === options.typedKind) return node;
-    if (
-      options.namespaceUri !== undefined &&
-      options.localName !== undefined &&
-      node.kind === 'generic' &&
-      node.namespaceUri === options.namespaceUri &&
-      node.localName === options.localName
-    ) {
-      return node;
-    }
-  }
-  return null;
 }
 
 /**

@@ -3,37 +3,29 @@
 // DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
-import type {
-  DrawingAccessibility,
-  DrawingHorizontalReferenceFrame,
-  DrawingProjection,
-  DrawingTransform,
-  DrawingVerticalReferenceFrame,
-  ImageWrapTarget,
-  SourceCrop,
-  VectorShapeProjection,
-} from '../store/package/drawing-projection.ts';
+import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
 import {
   drawingAccessibility,
-  isRunLevelMcAlternateContent,
+  type DrawingAccessibility,
+  type DrawingHorizontalReferenceFrame,
+  type DrawingProjection,
+  type DrawingTransform,
+  type DrawingVerticalReferenceFrame,
+  type ImageWrapTarget,
+  type SourceCrop,
+  type VectorShapeProjection,
 } from '../store/package/drawing-projection.ts';
-import type { OoxmlNode, OoxmlParagraphNode } from '../store/package/ooxml-tree.ts';
-import { paragraphOffsetIndex } from '../store/store/tree-op-segments.ts';
+import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
 import { pageClipRegion } from './drawing-page-clip.ts';
 export { pageClipRegion } from './drawing-page-clip.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
-  NO_REVISIONS,
-  isRevisionWrapper,
   projectedRevisions,
-  revisionAttributionOf,
-  withRevision,
   type RevisionAttribution,
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
 } from './revision-projection.ts';
-import { walkDrawingAtoms, walkDrawingRunContent } from './drawing-inline-walk.ts';
 import { measureDisplayText } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
 import {
@@ -42,6 +34,12 @@ import {
   type DrawingGeometry,
 } from './drawing-geometry.ts';
 import type { LayoutBox } from './semantic-records.ts';
+import {
+  anchoredDrawingAtomsInParagraph,
+  drawingModelOffsetsInParagraph,
+} from './drawing-atom-walk.ts';
+
+export { anchoredDrawingAtomsInParagraph, drawingModelOffsetsInParagraph };
 
 export type { DrawingGeometry } from './drawing-geometry.ts';
 
@@ -67,7 +65,7 @@ const EMPTY_CROP: SourceCrop = Object.freeze({ left: 0, top: 0, right: 0, bottom
 
 function drawingPaintFields(projection: DrawingProjection): {
   readonly hyperlinkHref: string | null;
-  readonly effects: DrawingProjection['effects'];
+  readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   readonly placeholderGraphicKind: string | null;
@@ -89,7 +87,7 @@ function drawingPaintFields(projection: DrawingProjection): {
     effects: projection.effects,
     crop: picture?.crop ?? EMPTY_CROP,
     transform: picture?.transform ?? EMPTY_TRANSFORM,
-    placeholderGraphicKind: picture ? null : placeholderGraphicKind,
+    placeholderGraphicKind: picture || projection.legacyGraphic ? null : placeholderGraphicKind,
     vectorShape: projection.vectorShape,
   });
 }
@@ -319,7 +317,7 @@ export interface InlineDrawingRecord {
   readonly accessibility: DrawingAccessibility;
   /** Sanitized external hyperlink projection; inert until an explicit gesture activates it. */
   readonly hyperlinkHref: string | null;
-  readonly effects: DrawingProjection['effects'];
+  readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   /** Fixed non-picture graphic kind for refusal labels (`chart`, `group`, …); null for pictures. */
@@ -1007,60 +1005,6 @@ export function buildAnchoredDrawingRecord(options: {
     accessibility: drawingAccessibility(projection),
     ...drawingPaintFields(projection),
   });
-}
-
-/** Run-level drawing / MC atoms carrying anchored projections in one paragraph. */
-export function anchoredDrawingAtomsInParagraph(
-  paragraph: OoxmlNode,
-  context: InlineDrawingLayoutContext
-): readonly {
-  readonly atomId: string;
-  readonly projection: DrawingProjection;
-  /** Enclosing revision wrappers, outermost first — the stack spans carry (see #479). */
-  readonly revisions: readonly RevisionAttribution[];
-}[] {
-  if (paragraph.kind !== 'paragraph') return [];
-  const atoms: {
-    atomId: string;
-    projection: DrawingProjection;
-    revisions: readonly RevisionAttribution[];
-  }[] = [];
-  walkDrawingAtoms(paragraph, (node, containers) => {
-    let revisions: readonly RevisionAttribution[] = NO_REVISIONS;
-    for (const container of containers) {
-      const attribution = isRevisionWrapper(container) ? revisionAttributionOf(container) : null;
-      if (attribution) revisions = withRevision(revisions, attribution);
-    }
-    if (node.kind === 'drawing') {
-      const projection =
-        context.projectionForAtom?.(node.id) ??
-        context.project(node as import('../store/package/ooxml-tree.ts').OoxmlDrawingNode);
-      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
-      return;
-    }
-    if (isRunLevelMcAlternateContent(node)) {
-      const projection = context.projectionForAtom?.(node.id) ?? null;
-      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
-    }
-  });
-  return Object.freeze(atoms);
-}
-
-export function drawingModelOffsetsInParagraph(paragraph: OoxmlNode): ReadonlyMap<string, number> {
-  const offsets = new Map<string, number>();
-  if (paragraph.kind !== 'paragraph') return offsets;
-  // Offsets come from the paragraph offset index — THE authority — not a private counter.
-  // Counting only text and drawings put a drawing after a `w:br` at the break's offset, so
-  // the anchor attached to the wrong line: every modeled atom occupies its own unit.
-  // Text-only paragraphs need no drawing offsets. Keeping their full indexes alive
-  // inflated large export layouts past the constrained Node heap.
-  let index: ReturnType<typeof paragraphOffsetIndex> | undefined;
-  walkDrawingRunContent(paragraph, (node) => {
-    if (node.kind !== 'drawing' && !isRunLevelMcAlternateContent(node)) return;
-    const span = (index ??= paragraphOffsetIndex(paragraph as OoxmlParagraphNode)).spanOf(node);
-    if (span) offsets.set(node.id, span.start);
-  });
-  return offsets;
 }
 
 export function anchorCharacterXOnLine(

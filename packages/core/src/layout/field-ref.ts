@@ -104,6 +104,7 @@ import {
   type AutonumFieldSpec,
 } from './field-autonum.ts';
 import { composeFullContextNumber } from './list-counters.ts';
+import { framedTokenJoin } from './layout-cache.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
   NO_REVISIONS,
@@ -140,11 +141,13 @@ const MAX_REF_VERDICTS = 4096;
  */
 export interface RefFieldContext {
   /**
-   * Content token over every PAINTED REF output in the story, for the section prepass memo.
+   * Content token over each paragraph ID and its PAINTED REF outputs in the story, for the
+   * section prepass memo. IDs keep structural edits from moving an identical sequence of
+   * outputs between paragraphs while the aggregate falsely reports unchanged dependencies.
    * A renumbering edit can move a REF value in a section whose own blocks and list map are
    * identity-unchanged, and this token is the only validator that sees it. A field that
    * failed calibration contributes its (session-constant) cached text, so the token still
-   * moves exactly when painted output moves.
+   * moves when painted output or its owning paragraph changes.
    */
   readonly valuesToken: string;
   /** The paragraph's REF outputs folded for its block cache key; `''` when it holds none. */
@@ -782,11 +785,11 @@ function buildRefFieldContext(
     }
     const token = pieces.join('\u0003');
     tokens.set(paragraphId, token);
-    storyParts.push(token);
+    storyParts.push(paragraphId, token);
   }
 
   return {
-    valuesToken: storyParts.join('\u0004'),
+    valuesToken: framedTokenJoin(storyParts),
     tokenForParagraph: (paragraphId) => tokens.get(paragraphId) ?? '',
     liveValueOf: (anchorId, spec) => {
       const entry = liveByAnchor.get(anchorId);

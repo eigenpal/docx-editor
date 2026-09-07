@@ -60,6 +60,7 @@ import {
   type ThemeFonts,
 } from './run-style.ts';
 import { styleForFontSlot } from './script-itemization.ts';
+import { createLineExclusionClearance } from './line-exclusion-clearance.ts';
 import type { LayoutBox, StyleSpanRecord, TextMeasurer } from './semantic-records.ts';
 import {
   buildInlineDrawingRecord,
@@ -78,12 +79,11 @@ import {
   snapXToAvailableInterval,
   synthesizeParagraphTopAndBottomZones,
   synthesizeParagraphWrapExclusionZones,
-  topAndBottomSkipBeforeLine,
   type ExclusionZone,
 } from './drawing-exclusion.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import { anchorLineStartsByModelOffset } from './anchor-line-probe.ts';
-import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
+import * as lineEndSpaces from './line-end-whitespace.ts';
 import { chopOversizedWord } from './oversized-word-break.ts';
 
 /**
@@ -284,7 +284,8 @@ function placeableContentSuffixes(pieces: readonly Piece[]): readonly Uint8Array
       for (let cursor = piece.text.length - 1; cursor >= 0; cursor -= 1) {
         const ch = piece.text[cursor]!;
         if (ch === '\n' || ch === PAGE_BREAK_CHAR) suffix[cursor] = 0;
-        else if (ch !== '\t' && !isCollapsibleLineEndWhitespace(ch)) suffix[cursor] = 1;
+        else if (ch !== '\t' && !lineEndSpaces.isCollapsibleLineEndWhitespace(ch))
+          suffix[cursor] = 1;
         else suffix[cursor] = suffix[cursor + 1]!;
       }
     }
@@ -705,7 +706,6 @@ export function breakParagraph(
     leading: 0,
     trailingSpacing: 0,
   };
-  let topAndBottomSkipApplied = false;
   const anchorLineTopByModelStart = new Map<number, number>();
 
   // The break-time wrap synthesis follows the published records: a drawing the display mode
@@ -786,7 +786,7 @@ export function breakParagraph(
         if (!zoneApplies(zone)) return false;
         // Anchor paragraph uses break-time synthesis; page zones are for inherited bands only.
         if (zone.anchorParagraphId === paragraphId) {
-          if (zone.input.mode === 'topAndBottom') return false;
+          if (!zone.sourceKind && zone.input.mode === 'topAndBottom') return false;
           if (flow?.anchorCellBox != null) return false;
         }
         return true;
@@ -843,22 +843,20 @@ export function breakParagraph(
     }
   };
 
-  const applyTopAndBottomSkipIfNeeded = (): void => {
-    if (topAndBottomSkipApplied) return;
-    const zones = activeExclusionZones();
-    if (zones.length === 0) return;
-    if (line.spans.length > 0 || line.drawings.length > 0) return;
-    const metrics = measurer.lineMetrics(emptyStyle);
-    const skip = topAndBottomSkipBeforeLine(
-      currentLineTopY(),
-      line.height > 0 ? line.height : metrics.height,
-      zones
-    );
-    if (skip > 0.001) {
-      topAndBottomSkipApplied = true;
-      line.exclusionSkipBefore = skip;
-    }
-  };
+  const {
+    applyTopAndBottomSkipIfNeeded,
+    applyNarrowWrapSkipIfNeeded,
+    finalizeTopAndBottomClearance,
+  } = createLineExclusionClearance({
+    line: () => line,
+    top: currentLineTopY,
+    zones: activeExclusionZones,
+    left: () => Math.max(contentLeft, lineOrigin()),
+    right: contentRight,
+    emptyStyle,
+    measurer,
+    lineSpacing,
+  });
 
   // Where the line will actually sit. A band that pushed this line down has already been
   // recorded on it, so probing must ask about the shifted position — probing the unshifted
@@ -1183,13 +1181,6 @@ export function breakParagraph(
       line.drawings.length === 0 && lineSpacing.rule !== 'exact'
         ? Math.max(0, spaced.height - naturalHeight)
         : 0;
-    const finalizeTopAndBottomClearance = (): void => {
-      const zones = activeExclusionZones();
-      if (zones.length === 0) return;
-      const skip = topAndBottomSkipBeforeLine(currentLineTopY(), line.height, zones);
-      if (skip > 0.001) line.exclusionSkipBefore = skip;
-      else delete (line as { exclusionSkipBefore?: number }).exclusionSkipBefore;
-    };
     finalizeTopAndBottomClearance();
     // Before `markWrapAdvances`, so wrap-advance marking sees the merged shape — which is
     // the shape paint gets.
@@ -1200,7 +1191,6 @@ export function breakParagraph(
     lines.push(line);
     wordStartSpan = -1;
     wordStartWidth = 0;
-    topAndBottomSkipApplied = false;
     line = {
       spans: [],
       drawings: [],
@@ -1504,9 +1494,21 @@ export function breakParagraph(
         wordStartEnd = line.end;
       }
       advancePastAnchorExclusionForPlacement(piece.start + consumed);
+      applyNarrowWrapSkipIfNeeded(candidate, faceStyle);
+      const clippedWordEnd =
+        !layoutOwned && piece.measureText === undefined
+          ? lineEndSpaces.clipWordEnd(
+              candidate,
+              width,
+              lineAvailable() - line.width,
+              (text) => measurer.measure(displayText(text, faceStyle), faceStyle),
+              OVERFLOW_TOLERANCE_PT
+            )
+          : undefined;
+      width = clippedWordEnd?.width ?? width;
       // Hang overflowing space runs on this line, preserving text/ranges and authored leading spaces.
       const lineEndWhitespace =
-        isCollapsibleLineEndWhitespace(candidate) &&
+        lineEndSpaces.isCollapsibleLineEndWhitespace(candidate) &&
         (placeableSuffixes[pieceIndex]![boundary] !== 1 ||
           (!layoutOwned &&
             (line.spans.length > 0 || line.drawings.length > 0) &&
@@ -1640,7 +1642,7 @@ export function breakParagraph(
       // The chop leaves its final protected group pending, including oversized groups
       // whose next run may start with another closing character or combining mark.
       if (remaining.length > 0) {
-        line.spans.push({
+        const span: StyleSpanRecord = {
           range: layoutOwned
             ? spanRange
             : { paragraphId, start: remainingStart, end: piece.start + boundary },
@@ -1659,7 +1661,8 @@ export function breakParagraph(
           ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
           ...(lineEndWhitespace ? { lineEndWhitespace: true as const } : {}),
           ...revisionsOf(piece),
-        });
+        };
+        lineEndSpaces.appendWordEnd(line.spans, span, clippedWordEnd);
         line.width += remainingWidth;
         line.height = Math.max(line.height, metrics.height);
         line.baseline = Math.max(line.baseline, metrics.baseline);

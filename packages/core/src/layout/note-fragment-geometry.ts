@@ -7,7 +7,7 @@ import type {
   PageRecord,
   ParagraphFragmentRecord,
 } from './semantic-records.ts';
-import { isOutOfFlowTableFragment } from './table-float-position.ts';
+import { isOutOfFlowFragment } from './fragment-flow.ts';
 
 /** Translate one paragraph fragment (and every box inside it) by `dy`. */
 export function shiftParagraphFragment(
@@ -75,7 +75,7 @@ export function shiftFragments(
 export function fragmentFlowBottom(fragments: readonly BlockFragmentRecord[]): number {
   let bottom = 0;
   for (const fragment of fragments) {
-    if (isOutOfFlowTableFragment(fragment)) continue;
+    if (isOutOfFlowFragment(fragment)) continue;
     bottom = Math.max(bottom, fragment.box.y + fragment.box.height);
   }
   return bottom;
@@ -102,7 +102,7 @@ export function bodyFitBottomPt(page: PageRecord): number {
 
 /** One fragment's fit-rule bottom — its box minus a paragraph's trailing after-spacing. */
 export function fragmentFitBottomPt(fragment: BlockFragmentRecord): number {
-  if (isOutOfFlowTableFragment(fragment)) return 0;
+  if (isOutOfFlowFragment(fragment)) return 0;
   const trailingAfter = fragment.kind === 'paragraph' ? fragment.spacing.after : 0;
   return fragment.box.y + fragment.box.height - trailingAfter;
 }
@@ -118,7 +118,7 @@ export function fragmentFitBottomPt(fragment: BlockFragmentRecord): number {
 export function firstBodyContentTopPt(page: PageRecord): number {
   let top = Number.POSITIVE_INFINITY;
   for (const fragment of page.fragments) {
-    if (isOutOfFlowTableFragment(fragment)) continue;
+    if (isOutOfFlowFragment(fragment)) continue;
     const fragmentTop =
       fragment.kind === 'paragraph' ? (fragment.lines[0]?.box.y ?? fragment.box.y) : fragment.box.y;
     top = Math.min(top, fragmentTop);
@@ -211,7 +211,7 @@ function computeReferenceLineBand(
         blockTop = block.box.y;
         // Only a located LINE may be evicted; an ownership match without a line segment
         // (merged/projected offsets) falls back to the fragment band and stays put.
-        evictable = line !== null;
+        evictable = line !== null && !isOutOfFlowFragment(block);
       }
       continue;
     }

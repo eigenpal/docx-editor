@@ -42,6 +42,7 @@ function paragraph(
 
 function anchor(label: string, textbox = false): AnchoredDrawingRecord {
   return {
+    kind: 'anchoredDrawing',
     accessibility: { label },
     ...(textbox ? { textboxStory: { fragments: [] } } : {}),
   } as unknown as AnchoredDrawingRecord;
@@ -177,6 +178,10 @@ describe('Markdown semantic-record policies', () => {
     expect(result.pages[0]?.headerMarkdown).toBe('');
     expect(result.pages[0]?.footerMarkdown).toBe('');
     expect(JSON.stringify(result)).not.toMatch(/Body anchor|Header anchor|Footer anchor|Textbox/);
+    expect(result.warnings.map(({ code, pageNumber }) => ({ code, pageNumber }))).toEqual([
+      { code: 'omitted-drawing', pageNumber: 1 },
+      { code: 'omitted-textbox', pageNumber: 1 },
+    ]);
   });
 
   test('does not leak drawing links or revision wrappers when images are omitted', async () => {

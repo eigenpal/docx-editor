@@ -38,6 +38,7 @@ export interface CreateDocumentNotesInputOptions {
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
   ) => InlineDrawingLayoutContext | undefined;
@@ -148,6 +149,7 @@ export function createDocumentNotesInput(
     styleCascade: options.styleCascade?.(),
     numberingIndex: options.numberingIndex?.(),
     defaultTabStopPt: options.defaultTabStopPt,
+    compatibilityMode: options.compatibilityMode,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
     projectLinkForPart: options.linkProjectors.projectLinkForPart,

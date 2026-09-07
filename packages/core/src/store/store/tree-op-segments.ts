@@ -5,6 +5,7 @@
 // share this model so offsets agree across insert/delete/format/link.
 
 import type { OoxmlElement, OoxmlNode, OoxmlParagraphNode } from '../package/ooxml-tree.ts';
+import { isLegacyVmlAtom } from '../package/legacy-vml-projection.ts';
 import {
   DEFAULT_SUPPORTED_MC_REQUIRES,
   emptyNamespaceScope,
@@ -311,7 +312,7 @@ function walkParagraph(
       record(node, start);
       return;
     }
-    if (node.kind === 'drawing') {
+    if (node.kind === 'drawing' || isLegacyVmlAtom(node)) {
       emitAtom({ runId, node, removeNodeIds: [node.id] });
       record(node, start);
       return;

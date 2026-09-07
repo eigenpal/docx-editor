@@ -4,6 +4,8 @@
 
 ```ts
 
+/// <reference lib="dom" />
+
 import { createFontSource } from '@docx-editor.dev/core/editor';
 import { defineFontResolver } from '@docx-editor.dev/core/editor';
 
@@ -104,6 +106,12 @@ export interface DrawingTransform {
 
 // @public (undocumented)
 export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'line' | 'margin' | 'outsideMargin' | 'page' | 'paragraph' | 'topMargin';
+
+// @public
+export interface ExportContentWarning {
+    readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit';
+    readonly partName: string;
+}
 
 // @public
 export interface ExportDestinationAnchor {
@@ -209,6 +217,7 @@ export class ExportResourceError extends Error {
 
 // @public
 export interface ExportSemanticLayout extends SemanticLayout {
+    readonly contentWarnings?: readonly ExportContentWarning[];
     // (undocumented)
     readonly destinations?: readonly ExportDestinationGeometry[];
     // (undocumented)
@@ -366,7 +375,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly drawingNodeId: string;
     // (undocumented)
-    readonly effects: DrawingProjection['effects'];
+    readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
     // (undocumented)
@@ -425,6 +434,7 @@ export interface MarkdownExportResult {
     readonly pagination: MarkdownPaginationInfo;
     readonly reviewArtifacts: readonly MarkdownReviewArtifact[];
     readonly reviewBindings: readonly MarkdownReviewBinding[];
+    readonly warnings: readonly MarkdownWarning[];
 }
 
 // @public
@@ -503,6 +513,14 @@ export type MarkdownReviewUnmappedReason = 'not-represented-in-markdown' | 'non-
 
 // @public
 export type MarkdownTrackedChange = SemanticTrackedChangeArtifactRecord;
+
+// @public
+export interface MarkdownWarning {
+    readonly code: 'omitted-drawing' | 'omitted-textbox' | 'font-origin-failed' | 'incomplete-font' | 'content-scan-limit';
+    readonly message: string;
+    readonly pageNumber?: number;
+    readonly partName?: string;
+}
 
 // @public
 export function openDocumentForExport(source: ExportDocumentSource, options?: OpenMarkdownDocumentForExportOptions): Promise<OpenMarkdownDocumentForExportResult>;

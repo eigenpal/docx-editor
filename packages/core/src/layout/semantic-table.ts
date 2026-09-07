@@ -15,6 +15,7 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
+import { readTableFloatPosition } from './table-float-properties.ts';
 import {
   revisionNodeProjectionMode,
   type RevisionAuthorFilter,
@@ -60,6 +61,8 @@ import {
 import { readCellTextDirection } from './table-cell-text-direction.ts';
 import { readCellVerticalAlign, type CellVerticalAlign } from './table-cell-vertical-align.ts';
 import { tableRowIsHeader } from './table-row-header-style.ts';
+import { legacyRoundedCellClaims, legacyTableContentWidth } from './legacy-table-content-width.ts';
+export { tableOriginX, tableFloatOriginX } from './table-origin.ts';
 // Cell padding is its own unit (`table-cell-margins.ts`); re-exported here because this is
 // where the published table surface lives.
 export {
@@ -168,6 +171,12 @@ export interface TableFloatPosition {
   readonly ySpec?: TableFloatYSpec;
   /** `w:tblpY` in points; signed. */
   readonly yPt: number;
+  readonly distances?: {
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+    readonly left: number;
+  };
 }
 
 /** One anchor box, in the same coordinates layout reports fragment boxes in. */
@@ -187,12 +196,6 @@ export interface TableAnchorFrames {
 }
 
 /**
- * Ceiling on a `w:tblpX`/`w:tblpY` offset (~22"), matching the other bounded geometry
- * reads here. Both are signed, so the clamp is two-sided.
- */
-const MAX_TABLE_FLOAT_OFFSET_PT = 31_680 / 20;
-
-/**
  * One cell in the resolved table structure.
  *
  * `gridSpan` is clamped at READ time and layout never re-derives it — the value comes from a file
@@ -200,6 +203,8 @@ const MAX_TABLE_FLOAT_OFFSET_PT = 31_680 / 20;
  */
 export interface SemanticTableCell {
   readonly id: string;
+  /** Derived content-edge geometry for a verified legacy full-width parent table. */
+  readonly legacyContentAlignment?: true;
   /** Clamped to [1, MAX_TABLE_COLUMNS] at read time; layout never re-derives it. */
   readonly gridSpan: number;
   /**
@@ -277,6 +282,8 @@ export interface SemanticTableRow {
 export interface SemanticTableStructure {
   readonly columnWidthsPt: readonly number[];
   readonly rows: readonly SemanticTableRow[];
+  /** Verified pre-2013 content-aligned full-width inline table; derived, never serialized. */
+  readonly legacyContentAlignment?: true;
   /** `w:tblPr/w:tblW` — the width the table asked for. */
   readonly tableWidth: PreferredWidth;
   /**
@@ -411,105 +418,6 @@ function readRowHeight(rowProperties: OoxmlElement | undefined): TableRowHeight 
   // Omitted hRule + present val → atLeast (Word), not ECMA's auto-with-ignored-val.
   const effective: 'atLeast' | 'exact' = rule === 'exact' ? 'exact' : 'atLeast';
   return { rule: effective, valuePt };
-}
-
-/**
- * Where a table's left edge sits inside the box that contains it.
- *
- * 17.4.50 puts a left-aligned table at `w:tblInd` from the leading margin. 17.4.29's other
- * two placements are stated relative to the containing box instead, so the indent does not
- * also apply to them — Word centres a centred table in the text column whatever indent the
- * file carries. A table wider than its container starts flush so its leading edge stays on
- * the page rather than being centred off it.
- */
-export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
-  const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
-  const slack = containerWidthPt - width;
-  if (!Number.isFinite(slack) || slack <= 0) return 0;
-  if (structure.alignment === 'center') return slack / 2;
-  if (structure.alignment === 'right') return slack;
-  return Math.min(structure.indentPt, slack);
-}
-
-function readFloatAnchor(raw: string | undefined): TableFloatAnchor | undefined {
-  if (raw === 'page') return 'page';
-  if (raw === 'margin') return 'margin';
-  if (raw === 'text') return 'text';
-  return undefined;
-}
-
-function readSignedTwipsPt(raw: string | undefined): number | undefined {
-  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return undefined;
-  const twips = Number(raw);
-  if (!Number.isFinite(twips)) return undefined;
-  const pt = twips / 20;
-  return Math.max(-MAX_TABLE_FLOAT_OFFSET_PT, Math.min(MAX_TABLE_FLOAT_OFFSET_PT, pt));
-}
-
-/**
- * Read `w:tblpPr`. Absent anchors default to `text` (17.4.58/17.4.66); an unrecognised
- * spec is dropped rather than guessed at, which leaves the offset to place the table.
- */
-function readTableFloatPosition(
-  container: OoxmlElement | undefined
-): TableFloatPosition | undefined {
-  const tblpPr = container && childNamed(container, 'tblpPr');
-  if (!tblpPr) return undefined;
-  const rawXSpec = attributeValue(tblpPr, 'tblpXSpec');
-  const xSpec: TableFloatXSpec | undefined =
-    rawXSpec === 'left' ||
-    rawXSpec === 'center' ||
-    rawXSpec === 'right' ||
-    rawXSpec === 'inside' ||
-    rawXSpec === 'outside'
-      ? rawXSpec
-      : undefined;
-  const rawYSpec = attributeValue(tblpPr, 'tblpYSpec');
-  const ySpec: TableFloatYSpec | undefined =
-    rawYSpec === 'inline' ||
-    rawYSpec === 'top' ||
-    rawYSpec === 'center' ||
-    rawYSpec === 'bottom' ||
-    rawYSpec === 'inside' ||
-    rawYSpec === 'outside'
-      ? rawYSpec
-      : undefined;
-  return {
-    horzAnchor: readFloatAnchor(attributeValue(tblpPr, 'horzAnchor')) ?? 'text',
-    vertAnchor: readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'text',
-    ...(xSpec ? { xSpec } : {}),
-    xPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpX')) ?? 0,
-    ...(ySpec ? { ySpec } : {}),
-    yPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpY')) ?? 0,
-  };
-}
-
-/**
- * Where a floated table's left edge sits, in the coordinates layout reports boxes in.
- *
- * `w:tblpXSpec` aligns the table inside its anchor box; `w:tblpX` offsets it from that
- * box's leading edge instead. `inside`/`outside` are the mirrored-margin spellings of
- * `left`/`right` and render as those — the odd/even page flip they ask for only exists in
- * a document with mirrored margins, which this layout does not model.
- *
- * The result keeps the table's leading edge on the sheet whatever the file states, so a
- * hostile offset moves the table rather than painting it off the page entirely.
- */
-export function tableFloatOriginX(
-  float: TableFloatPosition,
-  tableWidthPt: number,
-  frames: TableAnchorFrames
-): number {
-  const frame = frames[float.horzAnchor];
-  const slack = frame.width - tableWidthPt;
-  let x: number;
-  if (float.xSpec === 'center') x = frame.left + slack / 2;
-  else if (float.xSpec === 'right' || float.xSpec === 'outside') x = frame.left + slack;
-  else if (float.xSpec) x = frame.left;
-  else x = frame.left + float.xPt;
-  if (!Number.isFinite(x)) return frame.left;
-  const pageRight = frames.page.left + frames.page.width;
-  return Math.max(frames.page.left, Math.min(x, pageRight));
 }
 
 /**
@@ -708,6 +616,7 @@ interface TableStructureMemo {
   readonly styleCascade: StyleCascadeTable | undefined;
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
+  readonly compatibilityMode: number | undefined;
   readonly structure: SemanticTableStructure | null;
 }
 
@@ -731,7 +640,8 @@ export function readTableStructure(
   styleCascade?: StyleCascadeTable,
   /** Which revisions the view resolves away; only the proposed result performs the join. */
   displayMode: RevisionDisplayMode = 'all-markup',
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  compatibilityMode?: number
 ): SemanticTableStructure | null {
   const memoStore = authorFilter ? filteredTableStructureMemos : tableStructureMemos;
   const memo = memoStore.get(table);
@@ -743,7 +653,8 @@ export function readTableStructure(
     // never mutated; a fresh-but-equal cascade only misses the memo, never lies to it.
     memo.styleCascade === styleCascade &&
     memo.displayMode === displayMode &&
-    memo.authorFilter === authorFilter
+    memo.authorFilter === authorFilter &&
+    memo.compatibilityMode === compatibilityMode
   ) {
     return memo.structure;
   }
@@ -753,7 +664,8 @@ export function readTableStructure(
     depth,
     styleCascade,
     displayMode,
-    authorFilter
+    authorFilter,
+    compatibilityMode
   );
   const entry: TableStructureMemo = {
     contentWidthPt,
@@ -761,6 +673,7 @@ export function readTableStructure(
     styleCascade,
     displayMode,
     authorFilter,
+    compatibilityMode,
     structure,
   };
   memoStore.set(table, entry);
@@ -773,7 +686,8 @@ function readTableStructureUncached(
   depth: number,
   styleCascade: StyleCascadeTable | undefined,
   displayMode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
+  authorFilter?: RevisionAuthorFilter,
+  compatibilityMode?: number
 ): SemanticTableStructure | null {
   if (depth >= MAX_TABLE_NESTING) return null;
   if (table.kind !== 'table') return null;
@@ -1073,16 +987,40 @@ function readTableStructureUncached(
     styleCellSpacingPt ??
     0;
 
+  const legacyWidth = legacyTableContentWidth({
+    table,
+    propertyNodes: tableStyle.tablePropertyNodes,
+    rows,
+    columnCount,
+    contentWidthPt,
+    compatibilityMode,
+    depth,
+    tableWidth,
+    layoutFixed,
+    alignment,
+    indentPt,
+    cellSpacingPt,
+    floating: float !== undefined,
+  });
+
   return {
     columnWidthsPt: resolveColumnWidthsPt({
       gridCols,
-      claims,
+      claims:
+        legacyWidth === undefined ? claims : legacyRoundedCellClaims(claims, gridCols, legacyWidth),
       columnCount,
-      contentWidthPt,
+      contentWidthPt: legacyWidth ?? contentWidthPt,
       tableWidth,
       layoutFixed,
     }),
-    rows,
+    rows:
+      legacyWidth === undefined
+        ? rows
+        : rows.map((row) => ({
+            ...row,
+            cells: row.cells.map((cell) => ({ ...cell, legacyContentAlignment: true as const })),
+          })),
+    ...(legacyWidth === undefined ? {} : { legacyContentAlignment: true as const }),
     tableWidth,
     layoutFixed,
     indentPt,

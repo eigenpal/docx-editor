@@ -3,6 +3,7 @@
 // Separate from the paragraph break cache: the cache stores how a paragraph BREAKS; this
 // stores where the flow WAS. One survives reflow, the other is invalidated by it.
 
+import type { PendingParagraphFrames } from './paragraph-frame-flow.ts';
 import type { AnchoredDrawingRecord } from './drawing-layout.ts';
 import type { PageRecord, SemanticLayout } from './semantic-records.ts';
 import type { PositionedTableAnchorSignal } from './table-float-position.ts';
@@ -15,6 +16,8 @@ export interface FlowCheckpoint {
   readonly pageFragments: readonly import('./semantic-records.ts').BlockFragmentRecord[];
   /** Anchored drawings already collected for the open page. */
   readonly pendingAnchoredDrawings: readonly AnchoredDrawingRecord[];
+  /** Local frame paragraphs waiting for their next regular paragraph anchor. */
+  readonly pendingParagraphFrames?: PendingParagraphFrames;
   /**
    * Anchored drawings overlap resolution pushed onto the NEXT page, and how many times each
    * drawing has been pushed.
@@ -27,7 +30,7 @@ export interface FlowCheckpoint {
   readonly deferredAnchoredDrawings: readonly AnchoredDrawingRecord[];
   readonly anchorPageDeferCounts: ReadonlyMap<string, number>;
   /** Sheet-positioned tables and zero-line anchors still owed by the open page. */
-  readonly pendingPositionedTableTokens?: readonly string[];
+  readonly pendingPositionedTableTokens?: import('./table-float-position.ts').PendingPositionedTableTokens;
   readonly positionedTableAnchorSignals?: readonly PositionedTableAnchorSignal[];
   readonly cursorY: number;
   readonly lineCounter: number;

@@ -1,4 +1,5 @@
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { isLegacyVmlAtom } from '../store/package/legacy-vml-projection.ts';
 import { isRunLevelMcAlternateContent } from '../store/package/drawing-projection.ts';
 import { isInlineRunContainer, MAX_INLINE_CONTAINER_DEPTH } from '../store/package/ooxml-shared.ts';
 import {
@@ -31,15 +32,19 @@ export function walkDrawingRunContent(
 /** Visit addressable drawing atoms with their transparent-container ancestry. */
 export function walkDrawingAtoms(
   paragraph: Exclude<OoxmlNode, { kind: 'textValue' }>,
-  visit: (node: OoxmlNode, containers: readonly OoxmlNode[]) => void
+  visit: (node: OoxmlNode, containers: readonly OoxmlNode[], run: OoxmlNode) => void
 ): void {
   const containers: OoxmlNode[] = [];
   const walk = (child: OoxmlNode, depth: number): void => {
     if (depth >= MAX_INLINE_CONTAINER_DEPTH) return;
     if (child.kind === 'run') {
       for (const inner of child.children) {
-        if (inner.kind === 'drawing' || isRunLevelMcAlternateContent(inner)) {
-          visit(inner, containers);
+        if (
+          inner.kind === 'drawing' ||
+          isRunLevelMcAlternateContent(inner) ||
+          isLegacyVmlAtom(inner)
+        ) {
+          visit(inner, containers, child);
         }
       }
       return;

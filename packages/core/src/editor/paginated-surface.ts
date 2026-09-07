@@ -5,6 +5,7 @@ import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/c
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
+import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import {
   openTreeSession,
   type TreeApplyResult,
@@ -518,6 +519,7 @@ export function mountPaginatedSurface(
   /** Sibling of `selection`: rectangle of table cells, or null for ordinary text. */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
+  const AUTHOR_WRITE_REFUSAL = 'suggesting needs an author before it can propose a change';
   /** Show-all content-control boundary chrome — surface furniture, never a layout input. */
   let showAllContentControls = false;
   /** Form-fill Tab navigation between editable controls. */
@@ -766,7 +768,8 @@ export function mountPaginatedSurface(
   let lastSelectionMs = 0;
 
   // Style and numbering indexes are identity-memoized and shared by every story.
-  const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
+  const { styleCascade, numberingIndex, defaultTabStopPt, compatibilityMode } =
+    createSurfaceStyleDeps(session);
   // Word's "style for following paragraph". Its own lane, because it is a question about
   // `styles.xml` rather than about the selection an Enter is standing in.
   const nextStyle = createNextStyleWrites({
@@ -882,9 +885,7 @@ export function mountPaginatedSurface(
       measurer,
       producer,
       cache: layoutCache,
-      styleCascade,
-      numberingIndex,
-      defaultTabStopPt,
+      ...{ styleCascade, numberingIndex, defaultTabStopPt, compatibilityMode },
       // Furniture answers the document's display mode, like the body does — and it is named
       // even when it is the default, because a lane that says nothing is treated as saying
       // "not All Markup", which is what keeps markup out of the resolved views.
@@ -1245,6 +1246,7 @@ export function mountPaginatedSurface(
       defaultTabStopPt,
       numberingIndex,
       furniture: activeFurnitureSource,
+      compatibilityMode,
       linkProjectors,
       projectFieldLink: (spec) => fieldLinks.project(spec),
       inlineDrawingLayout: drawingBundle.bodyContext,
@@ -2987,15 +2989,8 @@ export function mountPaginatedSurface(
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
-    // SUGGESTING with no author cannot write `CT_TrackChange`, and the fallback of writing
-    // an untracked edit is only tolerable when nothing is destroyed. A deletion in that
-    // state removes text the reviewer was promised they could get back.
-    // EVERY edit, not just the destructive ones. Letting insertions through wrote permanent
-    // changes to someone else's document while the pill said Suggesting and the review pane
-    // stayed empty — half the keyboard proposing and half editing outright.
-    if (editingMode === 'suggest' && !author?.trim() && edits) {
-      return 'suggesting needs an author before it can propose a change';
-    }
+    // Without an author, refuse every suggested edit instead of writing untracked changes.
+    if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
     // Deleting a note is a package-level removal with no tracked form: the reference and
     // the body go outright, with no `w:del` and no card, while every insertion around it
     // is a proposal. Striking the reference (Backspace over it) IS the tracked deletion —
@@ -5341,6 +5336,10 @@ export function mountPaginatedSurface(
       if (author === nextAuthor) return;
       flushTypeBuffer();
       author = nextAuthor;
+      if (nextAuthor?.trim() && isMissingAuthorRefusal(lastRejection)) {
+        lastRejection = null;
+        options.onChange?.(currentState());
+      }
     },
     setDrawingStrings: (strings) => {
       if (drawingStrings === strings) return;

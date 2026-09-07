@@ -1,3 +1,4 @@
+import { fingerprintNotesInput } from '../note-input-fingerprint.ts';
 import { expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
@@ -142,4 +143,12 @@ test('a stable projection epoch keeps callback allocation out of whole-note memo
   );
   expect(session.notes).toBe(memo);
   expect(second).toBe(first);
+});
+
+test('compatibility-only changes invalidate the note geometry fingerprint', () => {
+  const { notes } = fixture();
+  const legacy = fingerprintNotesInput({ ...notes, compatibilityMode: 14 });
+  expect(legacy).not.toBeNull();
+  expect(fingerprintNotesInput({ ...notes, compatibilityMode: 15 })).not.toBe(legacy);
+  expect(fingerprintNotesInput({ ...notes, compatibilityMode: 14 })).toBe(legacy);
 });

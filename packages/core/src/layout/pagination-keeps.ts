@@ -24,6 +24,7 @@
 // a table it cannot fit beside.
 
 import type { OoxmlProperty } from '@docx-editor.dev/core/store';
+import { framedTokenJoin } from './layout-cache.ts';
 
 /**
  * How many blocks one `w:keepNext` chain may bind together before layout gives up.
@@ -185,12 +186,14 @@ export function keepNextGroupHeight(
   blocks: readonly KeepNextBlock[],
   start: number,
   carry: number,
-  lineHeights: (index: number) => readonly number[]
+  lineHeights: (index: number) => readonly number[],
+  skipBlock?: (index: number) => boolean
 ): number | null {
   let total = 0;
   let after = carry;
   for (let index = start; index - start < MAX_KEEP_NEXT_CHAIN; index += 1) {
     const block = blocks[index];
+    if (block && skipBlock?.(index)) continue;
     if (!block || block.kind !== 'paragraph' || !block.spacing || !block.keeps) return null;
     // Adjacent before/after collapse to the larger gap rather than summing (Word).
     total += Math.max(block.spacing.before, after) - after;
@@ -369,23 +372,36 @@ export function tocFieldFlowKeys(keys: string[], verdictAt: (index: number) => s
  * carries its members' pre-fold keys, and a head that never re-places when a member's
  * marker text or contextual verdict moves is a stale keep-next group.
  */
-export function keepNextFlowKeys(keys: string[], keepsNext: (index: number) => boolean): string[] {
+export function keepNextFlowKeys(
+  keys: string[],
+  keepsNext: (index: number) => boolean,
+  skipBlock?: (index: number) => boolean
+): string[] {
   let flow = keys;
   let chain = 0;
-  for (let index = keys.length - 2; index >= 0; index -= 1) {
-    if (keepsNext(index) && chain < MAX_KEEP_NEXT_CHAIN) {
+  let next = -1;
+  for (let index = keys.length - 1; index >= 0; index -= 1) {
+    if (skipBlock?.(index)) continue;
+    if (next >= 0 && keepsNext(index) && chain < MAX_KEEP_NEXT_CHAIN) {
       if (flow === keys) flow = [...keys];
-      flow[index] = `${keys[index]}~kn~${flow[index + 1]}`;
+      flow[index] = `${keys[index]}~kn~${flow[next]}`;
       chain += 1;
     } else {
       chain = 0;
     }
+    next = index;
   }
   return flow;
 }
 
 /** The per-block answers {@link composeFlowKeys} folds over the break-cache keys. */
 export interface FlowKeyFoldInputs {
+  /** Shared token forces resume before every member of a terminal floating-table group. */
+  readonly terminalTableGroup?: {
+    readonly start: number;
+    readonly anchorIndex: number;
+    readonly token: string;
+  };
   readonly contextualSpacingAt: (index: number) => boolean;
   /** `null` for a block that can never match a neighbour — a table, or an unstyled paragraph. */
   readonly styleIdAt: (index: number) => string | null;
@@ -395,6 +411,8 @@ export interface FlowKeyFoldInputs {
   readonly tocVerdicts: readonly string[];
   readonly markerTextAt: (index: number) => string | undefined;
   readonly keepsNextAt: (index: number) => boolean;
+  /** Positioned frames contribute neither flow height nor a keep-chain boundary. */
+  readonly skipKeepNextAt?: (index: number) => boolean;
 }
 
 /**
@@ -418,10 +436,18 @@ export interface FlowKeyFoldInputs {
  * `pagination-keeps.test.ts`.
  */
 export function composeFlowKeys(keys: string[], at: FlowKeyFoldInputs): string[] {
-  let flow = contextualSpacingFlowKeys(keys, at.contextualSpacingAt, at.styleIdAt);
+  const group = at.terminalTableGroup;
+  const grouped = group
+    ? keys.map((key, index) =>
+        index >= group.start && index <= group.anchorIndex
+          ? framedTokenJoin([key, group.token])
+          : key
+      )
+    : keys;
+  let flow = contextualSpacingFlowKeys(grouped, at.contextualSpacingAt, at.styleIdAt);
   flow = borderGroupFlowKeys(flow, at.borderGroupKeyAt);
   if (at.tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => at.tocVerdicts[index]!);
   flow = listMarkerFlowKeys(flow, at.markerTextAt);
-  flow = keepNextFlowKeys(flow, at.keepsNextAt); // LAST — see the doc comment above.
+  flow = keepNextFlowKeys(flow, at.keepsNextAt, at.skipKeepNextAt); // LAST — see the doc comment above.
   return flow;
 }

@@ -17,7 +17,10 @@
   "linked": [],
   "ignore": ["@docx-editor.dev/docx-to-markdown"],
   "access": "public",
-  "privatePackages": { "version": true, "tag": false },
+  "privatePackages": {
+    "version": true,
+    "tag": false
+  },
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {

@@ -20,11 +20,44 @@ import type { FontOrigin, FontOriginCompositionRequest } from '../font-resolver.
 import type { FontConfigurationFragment, FontResolutionRequest } from '../font-composition.ts';
 import type { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { prepareLayoutFontConfiguration } from '../../layout/layout-shaping.ts';
+import { HARD_MAX_FONT_SOURCES } from '../../layout/font-resource.ts';
 
 const REQUEST: FontResolutionRequest = {
   families: ['Calibri', 'Montserrat'],
   defaultFamily: 'Calibri',
 };
+
+test('partial font failures are bounded snapshots and do not discard usable sources', async () => {
+  const cause = new Error('Missing bold face');
+  const failures = Array.from({ length: HARD_MAX_FONT_SOURCES + 2 }, () => cause);
+  const reports: unknown[] = [];
+  const fragment = { sources: [source('Calibri', 'available')], failures };
+  const merged = await composeFontOrigins([fragment], REQUEST, {
+    onOriginFailure: ({ cause }) => {
+      reports.push(cause);
+      failures.length = 0;
+    },
+  });
+  expect(merged?.sources?.map(({ id }) => id)).toEqual(['available']);
+  expect(reports).toHaveLength(2); // One unique cause plus the truncation diagnostic.
+  expect(reports[0]).toBe(cause);
+  expect(merged?.failures).toHaveLength(HARD_MAX_FONT_SOURCES + 1);
+});
+
+test('concurrent font compositions keep partial failure reports independent', async () => {
+  const first = new Error('First export'),
+    second = new Error('Second export');
+  const results = await Promise.all(
+    [first, second].map(async (cause) => {
+      const reports: unknown[] = [];
+      await composeFontOrigins([Promise.resolve({ sources: [], failures: [cause] })], REQUEST, {
+        onOriginFailure: ({ cause }) => reports.push(cause),
+      });
+      return reports;
+    })
+  );
+  expect(results).toEqual([[first], [second]]);
+});
 
 function source(family: string, id: string): FontSource {
   return {

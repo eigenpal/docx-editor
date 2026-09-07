@@ -16,7 +16,7 @@ describe('the prepassValid expression agrees with the map', () => {
     fileURLToPath(new URL('../semantic-layout.ts', import.meta.url)),
     'utf8'
   );
-  const start = source.indexOf('const prepassValid =');
+  const start = source.indexOf('const prepassInputsValid =');
   expect(start).toBeGreaterThan(-1);
   // The validity expression ends where the memo is consumed.
   const end = source.indexOf('const prepass: SectionPrepass', start);

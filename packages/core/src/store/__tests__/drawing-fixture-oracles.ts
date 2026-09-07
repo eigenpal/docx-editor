@@ -40,17 +40,23 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     },
   },
   'list-pagination-break.docx': {
-    // One MC-wrapped header textbox ("Textbox 1") surfaced when textbox stories became
-    // renderable payloads; it was invisible before the textbox-story-layout change.
-    drawingCount: 1,
+    // Word-authored VML uses repeated inert styles and page wrap anchors.
+    // The paint harness injects ready resources; the package tests refuse external fetches.
+    drawingCount: 28,
     pageCount: 81,
-    readyCount: 0,
+    readyCount: 27,
     placeholderCount: 0,
     assertProjections: (projections) => {
-      expect(projections).toHaveLength(1);
-      expect(projections[0]!.ownerPartName).toBe('/word/header3.xml');
-      expect(projections[0]!.textboxStory).not.toBeNull();
-      expect(projections[0]!.picture).toBeNull();
+      const photos = projections.filter((projection) => projection.picture);
+      expect(photos).toHaveLength(27);
+      for (const photo of photos) {
+        expect(photo.legacyGraphic).toBeUndefined();
+        expect(photo.position?.horizontal.relativeFrom).toBe('page');
+        expect(photo.position?.vertical.relativeFrom).toBe('page');
+        expect(photo.anchor?.behindDocument).toBe(true);
+      }
+      const textbox = projections.find((projection) => projection.textboxStory);
+      expect(textbox?.ownerPartName).toBe('/word/header3.xml');
     },
   },
   'float-wrap-comprehensive-test.docx': {
@@ -286,12 +292,16 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     },
   },
   'images-compatibility-malformed.docx': {
-    drawingCount: 1,
+    drawingCount: 2,
     pageCount: 1,
-    readyCount: 1,
+    readyCount: 2,
     placeholderCount: 0,
     assertProjections: (projections) => {
-      expect(projections).toHaveLength(1);
+      // One selected DrawingML branch plus the independent native VML photo.
+      // The malformed anchor and unselected fallback still add nothing.
+      expect(projections).toHaveLength(2);
+      expect(projections.filter((projection) => projection.legacyGraphic)).toHaveLength(0);
+      expect(projections.filter((projection) => projection.picture)).toHaveLength(2);
     },
   },
   'images-drawingml-watermark.docx': {

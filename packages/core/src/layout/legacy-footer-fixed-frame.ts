@@ -4,7 +4,7 @@ import {
   type OoxmlNode,
   type OoxmlPart,
 } from '../store/package/ooxml-tree.ts';
-import { allowlistedPageField } from './field-instruction.ts';
+import { readLegacyPageField } from './legacy-footer-page-field.ts';
 import { shiftParagraphFragment } from './note-fragment-geometry.ts';
 import type { BlockFragmentRecord, ParagraphFragmentRecord } from './semantic-records.ts';
 
@@ -24,69 +24,10 @@ function one(node: OoxmlElement, name: string): OoxmlElement | undefined {
   const matches = elements(node).filter((child) => child.localName === name);
   return matches.length === 1 && isW(matches[0]!, name) ? matches[0] : undefined;
 }
-/**
- * A PAGE instruction the live page-field projection evaluates: bare `PAGE`, with the
- * `\* MERGEFORMAT` Word appends, or a `\#` numeric picture. It is the allowlist
- * `field-instruction.ts` evaluates the projected value through, so the frame lanes never
- * claim a field whose result the page context will not refresh (`\* roman`, `\* Arabic`
- * and every other switch stay in ordinary flow with their cached text).
- */
-function isPageInstruction(instruction: string): boolean {
-  return allowlistedPageField(instruction) === 'PAGE';
-}
 function twips(value: string | undefined): number | undefined {
   if (value === undefined || !/^\d{1,5}$/.test(value)) return undefined;
   const pt = Number(value) / 20;
   return pt <= MAX_PT ? pt : undefined;
-}
-
-/** Bounded only-PAGE paragraphs; decoration is content, never a deduplication key. */
-function pageText(paragraph: OoxmlElement, leadingTab: boolean): string | undefined {
-  let state = 0,
-    instruction = '',
-    prefix = '',
-    suffix = '',
-    tabs = 0;
-  for (const run of elements(paragraph)) {
-    if (isW(run, 'pPr')) continue;
-    if (!isW(run, 'r')) return undefined;
-    for (const node of elements(run)) {
-      if (isW(node, 'rPr')) continue;
-      if (
-        isW(node, 'tab') &&
-        state === 0 &&
-        !prefix &&
-        !tabs &&
-        leadingTab &&
-        !node.children.length
-      ) {
-        tabs++;
-        continue;
-      }
-      if (isW(node, 'fldChar') && !node.children.length) {
-        const type = attr(node, 'fldCharType');
-        if (state === 0 && type === 'begin') state = 1;
-        else if (state === 1 && type === 'separate' && isPageInstruction(instruction)) state = 2;
-        else if (state === 2 && type === 'end') state = 3;
-        else return undefined;
-        continue;
-      }
-      if (node.children.some(isElement)) return undefined;
-      const value = node.children
-        .map((child) => (child.kind === 'textValue' ? child.value : ''))
-        .join('');
-      if (isW(node, 'instrText') && state === 1) instruction += value;
-      else if (isW(node, 't') && state === 0) prefix += value;
-      else if (isW(node, 't') && state === 3) suffix += value;
-      else if (!(isW(node, 't') && state === 2 && /^\d*$/.test(value))) return undefined;
-    }
-  }
-  return state === 3 &&
-    isPageInstruction(instruction) &&
-    tabs === Number(leadingTab) &&
-    ((!prefix && !suffix) || (prefix === '- ' && suffix === ' -'))
-    ? prefix + suffix
-    : undefined;
 }
 
 function simple(fragment: BlockFragmentRecord): fragment is ParagraphFragmentRecord {
@@ -189,10 +130,14 @@ export function positionFixedFooterPageFrame<
     elements(anchorProps).some((p) => !['pStyle', 'jc', 'ind', 'rPr'].some((name) => isW(p, name)))
   )
     return flow;
-  const decoration = pageText(paragraphs[0]!, true);
+  const decoration = readLegacyPageField(paragraphs[0]!, {
+    leadingTab: true,
+    allowDecoration: true,
+  });
   if (
     decoration === undefined ||
-    (pageText(paragraphs[1]!, false) === undefined && !emptyAnchor(paragraphs[1]!, anchor))
+    (readLegacyPageField(paragraphs[1]!, { allowDecoration: true }) === undefined &&
+      !emptyAnchor(paragraphs[1]!, anchor))
   )
     return flow;
   const frame = one(firstProps, 'framePr');

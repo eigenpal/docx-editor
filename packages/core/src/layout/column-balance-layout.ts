@@ -7,7 +7,7 @@ import type { PageContentInsets, OverflowPageShell } from './page-furniture-inse
 import { resolveSectionColumns, type ResolvedSectionColumns } from './section-columns.ts';
 import { DEFAULT_SECTION_PROPERTIES, type SectionColumns } from './section-properties.ts';
 import type { LayoutBox, PageGeometry, PageRecord, SemanticLayout } from './semantic-records.ts';
-import { isOutOfFlowTableFragment } from './table-float-position.ts';
+import { isOutOfFlowFragment } from './fragment-flow.ts';
 
 /** Result shared by ordinary and column-balanced block-flow passes. @internal */
 export interface BlockLayoutResult {
@@ -63,7 +63,7 @@ function columnBottomsOf(
 ): number[] {
   const bottoms = columns.lefts.map(() => regionTop);
   for (const fragment of page.fragments) {
-    if (isOutOfFlowTableFragment(fragment)) continue;
+    if (isOutOfFlowFragment(fragment)) continue;
     let column = 0;
     // A fragment starts at its column's left edge plus indents; assign it to the LAST
     // column whose origin it does not precede (half-point slack for table indents).

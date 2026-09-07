@@ -521,6 +521,8 @@ export interface CreateDocumentFurnitureSourceOptions {
     // (undocumented)
     readonly cache: ParagraphLayoutCache<readonly PendingLine[]>;
     // (undocumented)
+    readonly compatibilityMode?: () => number | undefined;
+    // (undocumented)
     readonly defaultTabStopPt?: () => number;
     // (undocumented)
     readonly displayMode?: RevisionDisplayMode;
@@ -557,6 +559,8 @@ export function createDocumentNotesInput(options: CreateDocumentNotesInputOption
 export interface CreateDocumentNotesInputOptions {
     // (undocumented)
     readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
+    // (undocumented)
+    readonly compatibilityMode?: number;
     // (undocumented)
     readonly defaultTabStopPt?: number;
     // (undocumented)
@@ -737,6 +741,8 @@ export interface DocumentSectionsEnumeration {
 // @public
 export interface DocumentStyleDependencies {
     // (undocumented)
+    readonly compatibilityMode?: () => number | undefined;
+    // (undocumented)
     readonly defaultTabStopPt: () => number;
     // (undocumented)
     readonly numberingIndex: () => NumberingIndex;
@@ -777,6 +783,18 @@ export interface DrawingGeometry {
 
 // @public (undocumented)
 export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMargin' | 'leftMargin' | 'margin' | 'outsideMargin' | 'page' | 'rightMargin';
+
+// @public
+export interface DrawingImageEffects {
+    // (undocumented)
+    readonly bilevel?: number;
+    // (undocumented)
+    readonly brightness: number;
+    // (undocumented)
+    readonly contrast: number;
+    // (undocumented)
+    readonly grayscale: boolean;
+}
 
 // @public (undocumented)
 export interface DrawingInsets {
@@ -1447,7 +1465,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly drawingNodeId: string;
     // (undocumented)
-    readonly effects: DrawingProjection['effects'];
+    readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
     // (undocumented)
@@ -2059,6 +2077,8 @@ export interface NotesLayoutInput {
     // (undocumented)
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
     // (undocumented)
+    readonly compatibilityMode?: number;
+    // (undocumented)
     readonly defaultTabStopPt?: number;
     // (undocumented)
     readonly displayMode?: RevisionDisplayMode;
@@ -2389,8 +2409,19 @@ export interface ParagraphFragmentRecord {
     readonly markRevision?: RevisionAttribution;
     readonly markRevisions?: readonly RevisionAttribution[];
     readonly outlineLevel: number | null;
+    readonly outOfFlow?: true;
     // (undocumented)
     readonly paragraphId: string;
+    readonly positionedFrame?: {
+        readonly anchorId: string;
+        readonly box: LayoutBox;
+        readonly columnIndex: number;
+        readonly groupId: string;
+        readonly hSpace: number;
+        readonly sourceOrder: number;
+        readonly vSpace: number;
+        readonly wrap: 'around' | 'none' | 'notBeside';
+    };
     // (undocumented)
     readonly props: readonly OoxmlProperty[];
     // (undocumented)
@@ -2630,7 +2661,7 @@ export function readTableBorders(tblPr: OoxmlElement | undefined): TableBorderBo
 
 // @public
 export function readTableStructure(table: OoxmlNode, contentWidthPt: number, depth: number, styleCascade?: StyleCascadeTable,
-displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter): SemanticTableStructure | null;
+displayMode?: RevisionDisplayMode, authorFilter?: RevisionAuthorFilter, compatibilityMode?: number): SemanticTableStructure | null;
 
 // @public
 export interface RefFieldContext {
@@ -3338,6 +3369,7 @@ export interface SemanticLayout {
 // @public
 export interface SemanticLayoutOptions {
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
+    readonly compatibilityMode?: number;
     readonly defaultTabStopPt?: number;
     readonly displayMode?: RevisionDisplayMode;
     readonly documentProperties?: DocumentProperties;
@@ -3533,6 +3565,7 @@ export interface SemanticTableCell {
     readonly gridSpan: number;
     // (undocumented)
     readonly id: string;
+    readonly legacyContentAlignment?: true;
     readonly margins: CellMarginsPt;
     readonly preferredWidth: PreferredWidth;
     readonly shading?: string;
@@ -3569,6 +3602,7 @@ export interface SemanticTableStructure {
     readonly float?: TableFloatPosition;
     readonly indentPt: number;
     readonly layoutFixed: boolean;
+    readonly legacyContentAlignment?: true;
     // (undocumented)
     readonly rows: readonly SemanticTableRow[];
     readonly tableBorders: TableBorderBox;
@@ -4117,6 +4151,12 @@ export interface TableFragmentRecord {
     // (undocumented)
     readonly box: LayoutBox;
     readonly columnEdges: readonly number[];
+    readonly floatingWrap?: {
+        readonly anchorId: string;
+        readonly columnIndex: number;
+        readonly float: TableFloatPosition;
+        readonly sourceOrder: number;
+    };
     readonly fragmentIndex: number;
     // (undocumented)
     readonly id: string;

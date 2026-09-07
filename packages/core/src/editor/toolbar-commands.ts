@@ -18,6 +18,7 @@
 
 import type {
   CanResult,
+  DocumentEditingMode,
   Editor,
   EditorCommand,
   ExecResult,
@@ -302,6 +303,8 @@ export function tableChromeToolbarState(
     : { id: slot, enabled: false, disabledReason: result.reason, active: false };
 }
 
+const EDITING_MODES: readonly DocumentEditingMode[] = ['editing', 'suggesting', 'viewing'];
+
 /**
  * Ask the engine whether one control should be enabled.
  *
@@ -314,15 +317,19 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
   }
   if (id === 'review.editingMode') {
     const mode = editor.getEditingMode?.() ?? 'editing';
-    // Enabled state comes from the ENGINE, like every other control: a document opened
-    // read-only refuses the switch, and the control must say so rather than look live.
-    const probe = editor.can(
-      commandForSlotValue(id, mode === 'editing' ? 'suggesting' : 'editing')!
+    // Enabled state comes from the ENGINE, like every other control — but the pill is how a
+    // reader LEAVES a mode as much as enters one, so it probes every other mode and is live
+    // while any can be entered. Gating it on suggesting alone locked a reader with no
+    // review module, or no author, out of Viewing; each menu item carries its own refusal.
+    const probes = EDITING_MODES.filter((other) => other !== mode).map((other) =>
+      editor.can(commandForSlotValue(id, other)!)
     );
+    const reachable = probes.some((probe) => probe.ok);
+    const refused = probes.find((probe) => !probe.ok);
     return {
       id,
-      enabled: probe.ok,
-      disabledReason: probe.ok ? null : probe.reason,
+      enabled: reachable,
+      disabledReason: !reachable && refused && !refused.ok ? refused.reason : null,
       active: false,
       value: mode,
     };

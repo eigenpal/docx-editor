@@ -6,6 +6,7 @@ import { strToU8, zipSync } from 'fflate';
 import { serializeOoxmlPart } from '@docx-editor.dev/core/store';
 import { createDocxEditor, type DocxEditorInstance } from '../docx-editor.ts';
 import { stubReviewModule } from './review-test-module.ts';
+import { trackedDocx } from './paginated-surface-fixtures.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
@@ -17,19 +18,6 @@ function packageDocx(parts: Record<string, string>): Uint8Array {
   return zipSync(
     Object.fromEntries(Object.entries(parts).map(([name, xml]) => [name, strToU8(xml)]))
   );
-}
-
-function trackedDocx(): Uint8Array {
-  return packageDocx({
-    '[Content_Types].xml':
-      `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-      '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>',
-    '_rels/.rels': `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${OD}" Target="word/document.xml"/></Relationships>`,
-    'word/_rels/document.xml.rels': `<Relationships xmlns="${REL}"><Relationship Id="rIdSettings" Type="${R}/settings" Target="settings.xml"/></Relationships>`,
-    'word/settings.xml': `<w:settings xmlns:w="${W}"><w:trackRevisions/></w:settings>`,
-    'word/document.xml': `<w:document xmlns:w="${W}"><w:body><w:p><w:r><w:t>tracked</w:t></w:r></w:p></w:body></w:document>`,
-  });
 }
 
 function drawingDocx(): Uint8Array {

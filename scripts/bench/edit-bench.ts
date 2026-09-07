@@ -5,7 +5,7 @@
 // hardware-independent work counters that tell us whether an optimization changed complexity.
 //
 // Usage:
-//   bun scripts/bench/edit-bench.ts [fixture] [--runs 9] [--warmup 2] [--json]
+//   bun scripts/bench/edit-bench.ts [fixture] [--runs 9] [--warmup 2] [--json] [--cache-diagnostics]
 //   bun scripts/bench/edit-bench.ts [fixture] --compare /tmp/edit-before.json
 
 import { readFileSync } from 'node:fs';
@@ -37,11 +37,19 @@ import {
   type LayoutCacheStats,
 } from '../../packages/core/src/layout/layout-cache.ts';
 
+import {
+  paragraphCacheDiagnostics,
+  paragraphBreakPayload,
+  type ParagraphCacheDiagnostics,
+  type ParagraphBreakPayload,
+} from '../../packages/core/src/layout/paragraph-cache-diagnostics.ts';
+
 interface Args {
   fixture: string;
   runs: number;
   warmup: number;
   json: boolean;
+  cacheDiagnostics: boolean;
   compare?: string;
 }
 
@@ -65,6 +73,12 @@ interface ScenarioResult {
   layout: TimingSummary;
   total: TimingSummary;
   work: WorkSummary;
+  /** Separate replay after all timing rounds; lifetime counters include initial layout. */
+  cacheDiagnostics?: {
+    beforeEdit: ParagraphCacheDiagnostics;
+    afterEdit: ParagraphCacheDiagnostics;
+    payload: ParagraphBreakPayload;
+  };
 }
 
 interface BenchmarkReport {
@@ -203,11 +217,14 @@ function parseArgs(argv: readonly string[]): Args {
   let runs = 9;
   let warmup = 2;
   let json = false;
+  let cacheDiagnostics = false;
   let compare: string | undefined;
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index]!;
     if (value === '--json') {
       json = true;
+    } else if (value === '--cache-diagnostics') {
+      cacheDiagnostics = true;
     } else if (value === '--runs') {
       runs = positiveInteger(argv[++index], runs, '--runs');
     } else if (value === '--warmup') {
@@ -226,6 +243,7 @@ function parseArgs(argv: readonly string[]): Args {
     runs,
     warmup,
     json,
+    cacheDiagnostics,
     ...(compare ? { compare: resolve(compare) } : {}),
   };
 }
@@ -340,7 +358,7 @@ function sameWork(a: WorkSummary, b: WorkSummary): boolean {
   );
 }
 
-function runScenario(scenario: Scenario): ScenarioResult {
+function runScenario(scenario: Scenario, diagnosticsOnly = false): ScenarioResult {
   let paragraphIndex: number;
   let target: ScenarioTarget;
   if (scenario.target === 'adjacent-body-pair') {
@@ -366,7 +384,9 @@ function runScenario(scenario: Scenario): ScenarioResult {
   const layoutTimes: number[] = [];
   const totalTimes: number[] = [];
   let work: WorkSummary | null = null;
-  const rounds = args.warmup + args.runs;
+  let cacheDiagnostics: ScenarioResult['cacheDiagnostics'] | undefined;
+  const warmup = diagnosticsOnly ? 0 : args.warmup;
+  const rounds = diagnosticsOnly ? 1 : warmup + args.runs;
 
   for (let round = 0; round < rounds; round += 1) {
     const store = new TreePackageStore(normalizedPackage, normalizedPart);
@@ -388,6 +408,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
       producer: 'edit-bench',
     });
 
+    const beforeEdit = diagnosticsOnly ? paragraphCacheDiagnostics(cache) : undefined;
     const transactionStart = performance.now();
     const transaction = bodyStore.transact((ctx) => ctx.apply(scenario.op(target)));
     const transactionMs = performance.now() - transactionStart;
@@ -404,6 +425,13 @@ function runScenario(scenario: Scenario): ScenarioResult {
       producer: 'edit-bench',
     });
     const layoutMs = performance.now() - layoutStart;
+    if (beforeEdit) {
+      cacheDiagnostics = {
+        beforeEdit,
+        afterEdit: paragraphCacheDiagnostics(cache)!,
+        payload: paragraphBreakPayload(cache)!,
+      };
+    }
     const currentWork: WorkSummary = {
       ...session.stats,
       pagesBefore: before.pages.length,
@@ -425,7 +453,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
     }
     work = currentWork;
 
-    if (round >= args.warmup) {
+    if (round >= warmup) {
       transactionTimes.push(transactionMs);
       layoutTimes.push(layoutMs);
       totalTimes.push(transactionMs + layoutMs);
@@ -439,6 +467,7 @@ function runScenario(scenario: Scenario): ScenarioResult {
     layout: summarize(layoutTimes),
     total: summarize(totalTimes),
     work: work!,
+    ...(cacheDiagnostics ? { cacheDiagnostics } : {}),
   };
 }
 
@@ -453,8 +482,21 @@ const report: BenchmarkReport = {
     warmup: args.warmup,
     measurer: 'fixed(6px,14px)',
   },
-  scenarios: SCENARIOS.map(runScenario),
+  scenarios: SCENARIOS.map((scenario) => runScenario(scenario)),
 };
+
+// Cache walks allocate and change cache temperature even outside a timer. Complete
+// every measured scenario before replaying any diagnostic inspection.
+if (args.cacheDiagnostics) {
+  for (const [index, scenario] of SCENARIOS.entries()) {
+    const replay = runScenario(scenario, true);
+    const measured = report.scenarios[index]!;
+    if (!sameWork(measured.work, replay.work)) {
+      throw new Error(`${scenario.name}: diagnostic replay changed deterministic work counters`);
+    }
+    measured.cacheDiagnostics = replay.cacheDiagnostics;
+  }
+}
 
 if (args.compare) {
   const baseline = JSON.parse(readFileSync(args.compare, 'utf8')) as BenchmarkReport;

@@ -1,29 +1,31 @@
 # DOCX to Markdown demo
 
-Edit a DOCX and preview its Markdown page by page. This demo uses the private
-`@docx-editor.dev/docx-to-markdown` workspace package.
+Convert a DOCX in your browser and compare the document with its Markdown output.
 
-## Run the demo
+## Run
 
-From the repository root, run:
+From the repository root:
 
 ```bash
 bun dev:markdown
 ```
 
-Open [the local demo](http://localhost:5177). Upload or drag in a `.docx`, then edit it.
-The Markdown refreshes after you pause typing.
+Open [localhost:5177](http://localhost:5177). Drop a `.docx` or edit the sample.
+Markdown updates after you pause typing.
 
-- **Preview** renders GitHub-flavored Markdown (GFM), including tables and task lists.
-- **Source** shows each page's Markdown, header, and footer.
-- Both views show comments separately from the exported Markdown.
+## Use
 
-## Fonts and output
+- **Preview** renders Markdown by page.
+- **Source** shows the page Markdown.
+- **API** shows a Node.js example and the live JSON response. Click the install command to copy it.
+- **Copy** copies the active code, JSON, or full-document Markdown.
+- **Download** saves the full-document Markdown as a `.md` file.
 
-The editor and exporter use the same fonts: packaged substitutes first, then Google Fonts.
-The Google Fonts resolver makes network requests. Fonts unavailable in the document, packaged
-set, or pinned Google catalog are reported as unresolved.
+Preview settings select which page fields to show. They don't change the API response.
+Full-document Markdown excludes repeated headers and footers.
 
-Images affect page layout but are omitted from Markdown. Nested tables use inline HTML.
-The preview renders and sanitizes output with `react-markdown`, `remark-gfm`, `rehype-raw`,
-and `rehype-sanitize`.
+## Output details
+
+Fonts use packaged substitutes, then Google Fonts, which requires network access.
+Images affect pagination but are omitted from Markdown. Nested tables use inline HTML.
+The preview sanitizes HTML before rendering it.

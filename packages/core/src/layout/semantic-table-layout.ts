@@ -1,3 +1,4 @@
+import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 // Table row and cell layout over the canonical tree.
 //
 // Row, cell, and nested-table flow operate on typed tree nodes with the injected
@@ -31,7 +32,6 @@ import {
   exclusionLayoutToken,
   filterExclusionZonesForParagraphOrder,
   localizeExclusionZones,
-  topAndBottomSkipBeforeLine,
 } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
@@ -43,8 +43,7 @@ import {
   withDrawingContext,
   type ParagraphLayoutCache,
 } from './layout-cache.ts';
-import { alignDrawings, alignSpans, breakParagraph, type PendingLine } from './paragraph-flow.ts';
-import { resolveCjkTypography } from './cjk-typography.ts';
+import { alignDrawings, alignSpans, type PendingLine } from './paragraph-flow.ts';
 import { mergeBoundariesOf, remapMergedLines } from './merged-paragraph-ranges.ts';
 import { isEmptyCellTerminator, paragraphMergeGroupOf } from './story-roots.ts';
 import {
@@ -64,11 +63,14 @@ import {
   paragraphBorderExtentPt,
   paragraphBorderStrokeWidthPt,
 } from './paragraph-style.ts';
-import { tabStopsFingerprint, withDefaultTabInterval } from './paragraph-tabs.ts';
+import {
+  prepareParagraphBreakInputs,
+  positionedParagraphExclusionToken,
+  breakPreparedParagraph,
+} from './paragraph-break-request.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import {
   resolveParagraphLayoutInputs,
-  cascadeRunProperties,
   type StyleCascadeTable,
   type TableCellStyleFormatting,
 } from './style-cascade.ts';
@@ -105,7 +107,7 @@ import { annotateTableFragmentGeometry } from './semantic-table-interaction.ts';
 import { borderExtentPt, type TableBorderOwnershipBudget } from './table-borders.ts';
 import { type TableVMergeResolveBudget } from './table-vmerge.ts';
 import { acceptVMergeSpansAt, planTableVMergeHeights } from './table-vmerge-heights.ts';
-import { contentInsets } from './table-cell-geometry.ts';
+import { contentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import { blockInlineRight } from './table-cell-text-direction.ts';
 import { finalizeTableRows, shiftBlocks } from './table-fragment-finalize.ts';
 export { finalizeTableRows } from './table-fragment-finalize.ts';
@@ -117,51 +119,7 @@ export {
   MAX_BORDER_OWNERSHIP_INTERVALS,
 } from './table-borders.ts';
 
-/** Walk top-level prepared blocks and table cell paragraphs in document order. */
-export function paragraphDocumentOrderOf(
-  prepared: readonly {
-    readonly kind: 'paragraph' | 'table';
-    readonly paragraph?: OoxmlElement;
-    readonly table?: OoxmlElement;
-  }[],
-  contentWidth: number,
-  styleCascade: StyleCascadeTable | undefined,
-  displayMode: RevisionDisplayMode,
-  authorFilter?: RevisionAuthorFilter
-): ReadonlyMap<string, number> {
-  const order = new Map<string, number>();
-  let index = 0;
-  const walkTable = (table: OoxmlElement): void => {
-    const structure = readTableStructure(
-      table,
-      contentWidth,
-      0,
-      styleCascade,
-      displayMode,
-      authorFilter
-    );
-    if (!structure) return;
-    for (const row of structure.rows) {
-      for (const cell of row.cells) {
-        for (const block of cell.blocks) {
-          if (block.localName === 'p') {
-            order.set(block.id, index++);
-          } else if (block.localName === 'tbl') {
-            walkTable(block);
-          }
-        }
-      }
-    }
-  };
-  for (const block of prepared) {
-    if (block.kind === 'paragraph' && block.paragraph) {
-      order.set(block.paragraph.id, index++);
-    } else if (block.kind === 'table' && block.table) {
-      walkTable(block.table);
-    }
-  }
-  return order;
-}
+export { paragraphDocumentOrderOf } from './paragraph-document-order.ts';
 
 export {
   createTableVMergeResolveBudget,
@@ -209,6 +167,8 @@ export interface HostedStoryFlowDeps {
 
 export interface TableFlowDeps {
   readonly measurer: TextMeasurer;
+  /** Layout-only insets for one repeated-header/body occurrence. */
+  readonly cellContentInsets?: ReadonlyMap<string, CellContentInsets>;
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]> | undefined;
   readonly producer: string;
   /** Produces a stable id from the paragraph-local line identity. */
@@ -237,6 +197,9 @@ export interface TableFlowDeps {
    * paragraph tabs on the same document-wide grid as a body paragraph.
    */
   readonly defaultTabStopPt?: number;
+  readonly compatibilityMode?: number;
+  /** Story boxes start their first table at traversal depth one. */
+  readonly tableNestingOffset?: 1;
   /**
    * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
    * table cell is an ordinary link; without this it would paint its text and be dead.
@@ -453,14 +416,9 @@ function placeCellParagraph(
     styleId,
     outlineLevel,
     spacing,
-    lineSpacing,
     bottomBorder,
     borders,
     shading,
-    inheritedRunProperties,
-    markRunProperties,
-    tabStops: cascadedTabStops,
-    tabStopsCacheToken: cascadedTabStopsCacheToken,
   } = layoutInputs;
   // `w:between` (§17.3.1.24): consecutive paragraphs with IDENTICAL border settings are ONE
   // bordered block — the box opens above the first and closes below the last, and each
@@ -481,10 +439,15 @@ function placeCellParagraph(
   const topEdge = continuesAbove ? undefined : borders.top;
   // What closes the paragraph: the bottom rule, or the `between` rule when the block runs on.
   const closingEdge = continuesBelow ? borders.between : bottomBorder;
-  // `w:defaultTabStop` lives in settings.xml, which the paragraph cascade never reads.
-  const tabStops = withDefaultTabInterval(cascadedTabStops, deps.defaultTabStopPt);
-  const tabStopsCacheToken =
-    tabStops === cascadedTabStops ? cascadedTabStopsCacheToken : tabStopsFingerprint(tabStops);
+  const { tabStops, properties: breakProperties } = prepareParagraphBreakInputs(
+    layoutInputs,
+    deps.defaultTabStopPt,
+    {
+      listToken: listItem?.cacheToken,
+      hostedListToken: deps.hostedStory?.hostedListTokenForParagraph?.(paragraph) ?? '',
+      refToken: deps.refFields?.tokenForParagraph(paragraphId) ?? '',
+    }
+  );
   // A cell paragraph breaks like a body paragraph: same line spacing, same first-line
   // offset. Contextual spacing is a body-flow question (it compares document neighbours),
   // so it is not applied per cell.
@@ -510,27 +473,10 @@ function placeCellParagraph(
   // otherwise share a cache entry and the one that sits clear of the picture would inherit
   // the wrapped break of the one that does not.
   const exclusionToken = exclusionLayoutToken(pageZones);
-  const positionedExclusionToken = exclusionToken ? `${top.toFixed(3)}|${exclusionToken}` : '';
-  // The cell paragraph's resolved REF values, keyed exactly as the body flow keys them: a
-  // renumbering edit moves the painted reference while the cell's subtree stays identical.
-  const refToken = deps.refFields?.tokenForParagraph(paragraphId) ?? '';
-  // The list state of any hosted text-box story, keyed as the body flow keys it: its own
-  // `txbxList` property. A numbering edit moves only this property while the host's
-  // subtree stays byte-identical; box-free paragraphs keep their pre-existing key shape.
-  const hostedListToken = deps.hostedStory?.hostedListTokenForParagraph?.(paragraph) ?? '';
+  const positionedExclusionToken = positionedParagraphExclusionToken(exclusionToken, top);
   const key = keyFor({
     paragraph,
-    properties: [
-      ...props,
-      ...inheritedRunProperties,
-      ...markRunProperties,
-      { localName: 'tabStops', attributes: { token: tabStopsCacheToken } },
-      ...(listItem ? [{ localName: 'list', attributes: { token: listItem.cacheToken } }] : []),
-      ...(hostedListToken
-        ? [{ localName: 'txbxList', attributes: { token: hostedListToken } }]
-        : []),
-      ...(refToken ? [{ localName: 'refFields', attributes: { token: refToken } }] : []),
-    ],
+    properties: breakProperties,
     width: available,
     producer: deps.producer,
     // The inline-drawing CONTEXT joins the token exactly as it does in the body flow: the
@@ -546,24 +492,20 @@ function placeCellParagraph(
     ...(positionedExclusionToken ? { exclusionToken: positionedExclusionToken } : {}),
   });
   if (deps.cache) deps.onCellBreakKey?.(key);
-  const lines = breakParagraph(
+  const lines = breakPreparedParagraph({
     paragraph,
     paragraphId,
-    indent.left,
+    indentLeft: indent.left,
     available,
-    deps.measurer,
-    deps.cache,
-    deps.cache ? key : null,
-    inheritedRunProperties,
+    measurer: deps.measurer,
+    cache: deps.cache,
+    cacheKey: deps.cache ? key : null,
+    formatting: layoutInputs,
+    producer: deps.producer,
+    styleCascade: deps.styleCascade,
     tabStops,
-    deps.pageContext,
-    deps.styleCascade
-      ? (inherited, direct) => cascadeRunProperties(inherited, direct, deps.styleCascade)
-      : undefined,
-    {
-      lineSpacing,
-      typography: resolveCjkTypography(props, deps.styleCascade?.typography),
-      equationCacheToken: deps.producer,
+    ...(deps.pageContext ? { pageContext: deps.pageContext } : {}),
+    flow: {
       firstLineOffset,
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
@@ -586,10 +528,8 @@ function placeCellParagraph(
         height: Math.max(1, available),
       }),
       ...(pageZones.length > 0 ? { pageExclusionZones: pageZones } : {}),
-      ...(deps.styleCascade ? { themeFonts: deps.styleCascade.themeFonts } : {}),
-      markRunProperties,
-    }
-  );
+    },
+  });
 
   const lineStart = options?.lineStart ?? 0;
   const fragmentIndex = options?.fragmentIndex ?? 0;
@@ -649,9 +589,7 @@ function placeCellParagraph(
     const afterExtra = isLastLine && includeAfter && !collapseHeight ? spacing.after : 0;
     const skipBefore = collapseHeight
       ? 0
-      : pageZones.length > 0
-        ? topAndBottomSkipBeforeLine(y, pendingLine.height, pageZones)
-        : (pendingLine.exclusionSkipBefore ?? 0);
+      : pendingLineExclusionSkipAtPlacement(pendingLine, y, pageZones);
     const lineBottom = collapseHeight
       ? y
       : y + skipBefore + pendingLine.height + borderExtra + afterExtra;
@@ -1316,7 +1254,13 @@ export function layoutRowFragmentBounded(
     const inset = Math.min(gap, Math.max((slotW - MIN_CELL_BOX_PT) / 2, 0));
     const cellX = slotX + inset;
     const cellW = Math.max(slotW - 2 * inset, MIN_CELL_BOX_PT);
-    const insets = contentInsets(cell.margins, cell.borders);
+    const insets =
+      deps.cellContentInsets?.get(cell.id) ??
+      contentInsets(
+        cell.margins,
+        cell.borders,
+        cell.legacyContentAlignment === true && cellSpacingPt === 0
+      );
     const topInset = isContinuation ? borderExtentPt(cell.borders.top) : insets.top;
     // Always reserve bottom inset so the fragment never paints into the margin/border band.
     // A detached head answers to the page and to its own SPAN, and to nothing about this
@@ -1651,10 +1595,11 @@ function emitNestedTable(
   const structure = readTableStructure(
     table,
     containerWidth,
-    depth,
+    depth - (deps.tableNestingOffset ?? 0),
     deps.styleCascade,
     deps.displayMode,
-    deps.revisionAuthorFilter
+    deps.revisionAuthorFilter,
+    deps.compatibilityMode
   );
   if (!structure || structure.rows.length === 0) return null;
   const nestedDeferred: DeferredRowAnchor[] = [];

@@ -110,9 +110,13 @@ describe('free tier: no modules registered', () => {
     const comments = toolbarCommandState(editor, 'review.comments');
     expect(comments.enabled).toBe(false);
     expect(comments.disabledReason).toContain('pro');
+    // The pill itself stays live — Viewing is still the reader's — and the refusal sits on
+    // the Suggesting item, which is what `can` answers for that mode.
     const pill = toolbarCommandState(editor, 'review.editingMode');
-    expect(pill.enabled).toBe(false);
-    expect(pill.disabledReason).toContain('pro');
+    expect(pill.enabled).toBe(true);
+    const suggesting = editor.can({ type: 'setEditingMode', mode: 'suggesting' });
+    expect(suggesting.ok).toBe(false);
+    if (!suggesting.ok) expect(suggesting.reason).toContain('pro');
     const authors = toolbarCommandState(editor, 'review.authors');
     expect(authors.enabled).toBe(false);
     expect(authors.disabledReason).toContain('pro');

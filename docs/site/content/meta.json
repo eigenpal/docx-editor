@@ -42,6 +42,8 @@
     "guides/custom-styles",
     "guides/fonts",
     "guides/dark-mode",
+    "---Export formats---",
+    "export/markdown",
     "---Pro---",
     "pro/index",
     "pro/tracked-changes",

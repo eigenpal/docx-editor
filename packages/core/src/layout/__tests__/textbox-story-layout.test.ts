@@ -880,3 +880,25 @@ describe('list markers inside textbox stories', () => {
     expect(markerTexts(record.textboxStory)).toEqual(['1.', '2.']);
   });
 });
+
+test('text-box tables follow compatibility mode with a shared paragraph cache', () => {
+  const table =
+    '<w:tbl><w:tblPr><w:tblW w:type="pct" w:w="5000"/><w:tblInd w:type="dxa" w:w="0"/><w:tblLayout w:type="autofit"/></w:tblPr><w:tblGrid><w:gridCol w:w="4216"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>text</w:t></w:r></w:p></w:tc></w:tr></w:tbl>';
+  const pkg = openPackage(
+    footerTextboxDoc(textboxDrawing(table, { cx: 200 * 12700, cy: 100 * 12700 }), 1)
+  );
+  const footer = pkg.parts.get('/word/footer1.xml')!;
+  const projection = [...indexInlineDrawingProjectionsInPart(footer).values()][0]!;
+  const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+  for (const mode of [14, 15, 14]) {
+    const result = layoutTextboxStory(projection, {
+      measurer,
+      producer: 'compatibility',
+      cache,
+      compatibilityMode: mode,
+    });
+    const found = result?.fragments.find((fragment) => fragment.kind === 'table');
+    expect(found?.box.width).toBeCloseTo(mode === 14 ? 210.8 : 200, 7);
+    expect(found?.box.x).toBeCloseTo(mode === 14 ? -5.4 : 0, 7);
+  }
+});

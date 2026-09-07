@@ -1,6 +1,16 @@
 import { schemaAttributeValue } from './ooxml-drawing-rules.ts';
 import { DRAWINGML_MAIN_NAMESPACE_URI, type OoxmlElement } from './ooxml-tree.ts';
 
+/** Picture color adjustments shared by projection, layout, and paint.
+ * @public
+ */
+export interface DrawingImageEffects {
+  readonly grayscale: boolean;
+  readonly brightness: number;
+  readonly contrast: number;
+  readonly bilevel?: number;
+}
+
 function parseLumPercent(value: string | undefined): number | null {
   if (value === undefined || !/^-?\d+$/.test(value)) return null;
   const parsed = Number(value);
@@ -9,9 +19,7 @@ function parseLumPercent(value: string | undefined): number | null {
 }
 
 /** Bounded picture colour modes; projection never rewrites source media. */
-export function readBlipEffects(
-  blip: OoxmlElement
-): Readonly<{ grayscale: boolean; brightness: number; contrast: number; bilevel?: number }> {
+export function readBlipEffects(blip: OoxmlElement): DrawingImageEffects {
   let grayscale = false;
   let brightness = 0;
   let contrast = 0;

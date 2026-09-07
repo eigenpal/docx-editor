@@ -31,6 +31,32 @@ an `author` are present. An explicit `mode` overrides this document setting.
 The `<DocxEditor>` convenience component defaults to `mode="edit"`. Enforced
 document protection can also restrict the available mode.
 
+### Suggesting needs an author
+
+A revision records who proposed it, so suggesting mode needs an `author`. If you
+enable suggesting without one, the editor refuses the request instead of
+accepting focus and ignoring keystrokes:
+
+- `setEditingMode('suggesting')` returns `{ ok: false, code: 'invalidArgs' }`
+  with the reason. `can` reports the same reason. The toolbar disables the
+  **Suggesting** item and shows the reason. Other permitted modes stay available.
+- A `mode="suggesting"` prop without an `author` opens in editing mode.
+- Each case publishes the reason as `lastRejection` in the editor state.
+- The editor raises the configuration error once per instance through the
+  `error` event, with the code `suggestingNeedsAuthor`, and logs the same
+  message to the console once.
+
+Set the author at mount, or later with `setAuthor` or the `author` prop. When
+the author arrives, the pending request enters suggesting mode, unless the
+reader has already chosen a mode. Calls to `setEditingMode` count as reader
+choices, including calls from `onReady`.
+
+If you remove the author while `mode="suggesting"` is active, the editor
+returns to editing mode and publishes the reason, unless document protection
+forbids editing. Suggesting adopted from a document or chosen through
+`setEditingMode` stays active, refuses edits, and publishes the reason until
+the author returns.
+
 This example switches between editing and suggesting:
 
 <FrameworkTabs>

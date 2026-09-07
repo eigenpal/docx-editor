@@ -12,8 +12,9 @@ import { GlobalRegistrator } from '@happy-dom/global-registrator';
 if (!GlobalRegistrator.isRegistered) GlobalRegistrator.register();
 
 import { describe, expect, test } from 'bun:test';
-import { zipSync, strToU8 } from 'fflate';
+import { zipSync, unzipSync, strToU8 } from 'fflate';
 import { createDocxEditor } from '../docx-editor.ts';
+import { trackedDocx } from './paginated-surface-fixtures.ts';
 import { stubReviewModule } from './review-test-module.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -247,5 +248,178 @@ describe('deferred open of a large document', () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(editor.surface).toBeNull();
     expect(container.textContent ?? '').not.toContain('large document body');
+  });
+});
+
+describe('host configuration during a deferred replacement', () => {
+  test('uses incoming protection after a host leaves viewing', async () => {
+    const container = document.createElement('div');
+    const editor = createDocxEditor({
+      container,
+      mode: 'view',
+      document: trackedDocx('<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>'),
+    });
+    try {
+      editor.load(LARGE);
+      expect(editor.snapshot().isOpening).toBe(true);
+      editor.setMode('edit');
+      expect(editor.snapshot().isOpening).toBe(true);
+      expect(editor.getEditingMode()).toBe('viewing');
+      await editor.save();
+      expect(editor.surface!.session.bodyText()).toBe('large document body');
+      expect(editor.snapshot().parseError).toBeNull();
+      expect(editor.getEditingMode()).toBe('editing');
+      expect(editor.snapshot().lastRejection).toBeNull();
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('does not adopt tracking from the previous document when an author arrives', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: trackedDocx(),
+      modules: [stubReviewModule()],
+    });
+    try {
+      editor.load(LARGE);
+      expect(editor.snapshot().isOpening).toBe(true);
+      editor.setAuthor('Ada');
+      expect(editor.snapshot().isOpening).toBe(true);
+      expect(editor.getEditingMode()).toBe('editing');
+      await editor.save();
+      expect(editor.surface!.session.bodyText()).toBe('large document body');
+      expect(editor.getEditingMode()).toBe('editing');
+      expect(editor.snapshot().lastRejection).toBeNull();
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('preserves the incoming document protection refusal after resolving host intent', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: SMALL,
+      mode: 'view',
+    });
+    const protectedReplacement = zipSync({
+      ...unzipSync(LARGE),
+      ...unzipSync(
+        trackedDocx('<w:documentProtection w:edit="trackedChanges" w:enforcement="1"/>')
+      ),
+    });
+    try {
+      editor.load(protectedReplacement);
+      expect(editor.snapshot().isOpening).toBe(true);
+      editor.setMode('edit');
+      await editor.save();
+      expect(editor.snapshot().parseError).toBeNull();
+      expect(editor.getEditingMode()).toBe('viewing');
+      expect(editor.snapshot().lastRejection).toBe(
+        'this document permits editing only as tracked changes'
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('keeps pending host intent across detach and attach', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: SMALL,
+      mode: 'view',
+    });
+    try {
+      editor.load(LARGE);
+      editor.setMode('edit');
+      editor.detach();
+      editor.attach(document.createElement('div'));
+      await editor.save();
+      expect(editor.surface!.session.bodyText()).toBe('large document body');
+      expect(editor.getEditingMode()).toBe('editing');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('a reader choice while detached replaces queued host intent', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: SMALL,
+      mode: 'view',
+    });
+    try {
+      editor.load(LARGE);
+      editor.setMode('edit');
+      editor.detach();
+      expect(editor.setEditingMode('viewing').ok).toBe(true);
+      editor.attach(document.createElement('div'));
+      await editor.save();
+      expect(editor.getEditingMode()).toBe('viewing');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('a completed suggesting request while detached replaces queued host intent', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: SMALL,
+      mode: 'view',
+      modules: [stubReviewModule()],
+    });
+    try {
+      editor.load(LARGE);
+      editor.setMode('edit');
+      editor.detach();
+      expect(editor.setEditingMode('suggesting').ok).toBe(false);
+      editor.setAuthor('Ada');
+      editor.attach(document.createElement('div'));
+      await editor.save();
+      expect(editor.getEditingMode()).toBe('suggesting');
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('an author update preserves a pending release of the host viewing lock', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: SMALL,
+      mode: 'view',
+    });
+    try {
+      editor.load(LARGE);
+      editor.setMode(undefined);
+      editor.setAuthor('Ada');
+      await editor.save();
+      expect(editor.getEditingMode()).toBe('editing');
+      expect(editor.snapshot().lastRejection).toBeNull();
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  test('resolves the latest configuration against a superseding document', async () => {
+    const editor = createDocxEditor({
+      container: document.createElement('div'),
+      document: trackedDocx(),
+      modules: [stubReviewModule()],
+    });
+    try {
+      editor.load(LARGE);
+      editor.setAuthor('Ada');
+      editor.setMode('view');
+      editor.setMode('suggesting');
+      editor.setAuthor(undefined);
+      editor.setMode('edit');
+      editor.setAuthor('Grace');
+      editor.load(SMALL);
+      expect(editor.surface!.session.bodyText()).toBe('small document body');
+      expect(editor.getEditingMode()).toBe('editing');
+      expect(editor.snapshot().lastRejection).toBeNull();
+    } finally {
+      editor.destroy();
+    }
   });
 });
