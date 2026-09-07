@@ -482,14 +482,16 @@ above is byte-identical to a clean full pass, asserted per scenario on every gat
 
 ## Paragraph cache diagnostics
 
-The edit benchmark JSON includes `cacheDiagnostics` alongside each scenario's existing
-`work` counters. `beforeEdit` and `afterEdit` are lifetime-counter snapshots: subtract them
+Run `bun scripts/bench/edit-bench.ts --cache-diagnostics --json` to include
+`cacheDiagnostics` alongside each scenario's existing `work` counters. Default benchmark
+runs perform no cache inspections. `beforeEdit` and `afterEdit` are lifetime-counter snapshots: subtract them
 to isolate the edit from cold layout and warmup. They distinguish soft/hard limit pressure,
 stale-generation eviction, one-shot releases and explicit clears. `payload` counts unique
 broken-line, span and drawing records reachable through the cache.
 
-These are on-demand inspections outside the measured transaction/layout windows. They do
-not touch LRU order or hit/miss counts. Key and span text bytes describe logical UTF-16
+These inspections run in a separate replay after all scenarios finish their timing rounds,
+so diagnostic allocations cannot disturb later measurements. Replay work counters must
+match the measured scenario. Inspections do not touch LRU order or hit/miss counts. Key and span text bytes describe logical UTF-16
 payload, not retained JS heap: object headers, interning, shared backing storage, property
 graphs, DOM and WASM resources are excluded. Use the browser heap benchmark for retained
 heap comparisons; do not add these logical counts to post-GC heap totals.
