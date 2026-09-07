@@ -14,11 +14,11 @@ import {
 } from '../layout/font-resolver.ts';
 import { prepareOwnedLayoutFontConfiguration } from '../layout/layout-shaping.ts';
 import { HARD_MAX_AGGREGATE_FONT_BYTES } from '../layout/font-resource.ts';
-import { buildNumberingIndex } from '../layout/numbering-index.ts';
-import { resolveStoryListItems } from '../layout/list-resolve.ts';
-import { buildStyleCascadeTable } from '../layout/style-cascade.ts';
+import {
+  complexSymbolFieldFonts,
+  usedNumberingFontFamilies,
+} from '../layout/synthesized-font-families.ts';
 import { EQUATION_FONT_FAMILY } from '../layout/equation-layout.ts';
-import { hostedTextboxContents, textboxStoryListItems } from '../layout/textbox-story-layout.ts';
 import {
   createFieldParseState,
   effectiveFieldInstruction,
@@ -37,7 +37,6 @@ import { parseSymbolInstruction } from '../layout/field-symbol.ts';
 import { collectNoteReferences, resolveNotesPart } from '../store/package/note-references.ts';
 import { noteIdOf, noteTypeOf, type NoteKind } from '../store/package/note-nodes.ts';
 import { hasLegacyFormFieldData } from '../store/package/field-nodes.ts';
-import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
 import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
 import {
@@ -795,59 +794,6 @@ function layoutSynthesizedFontFamilies(roots: readonly OoxmlElement[]): readonly
   return [...byFold.values()];
 }
 
-function complexSymbolFieldFonts(paragraph: OoxmlElement): readonly string[] {
-  const families: string[] = [];
-  const state = createFieldParseState();
-  const stack: OoxmlElement[] = [];
-  for (let index = paragraph.children.length - 1; index >= 0; index -= 1) {
-    const child = paragraph.children[index]!;
-    if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
-  }
-  while (stack.length > 0) {
-    const node = stack.pop()!;
-    if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'p') continue;
-    if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldChar') {
-      const kind = attributeValue(node, 'fldCharType');
-      if (kind === 'begin') onFldCharBegin(state);
-      else if (kind === 'separate') {
-        if (state.nesting === 1) noteEffectiveSymbolFont(state, families);
-        onFldCharSeparate(state);
-      } else if (kind === 'end') {
-        if (state.nesting === 1) noteEffectiveSymbolFont(state, families);
-        onFldCharEnd(state);
-      }
-      continue;
-    }
-    if (
-      node.namespaceUri === WML_NAMESPACE_URI &&
-      (node.localName === 'instrText' || node.localName === 'delInstrText')
-    ) {
-      onInstrText(state, boundedTextContent(node), node.localName === 'delInstrText');
-      continue;
-    }
-    if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldSimple') {
-      const spec = parseSymbolInstruction(attributeValue(node, 'instr') ?? '');
-      if (spec?.font) families.push(spec.font);
-    }
-    for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      const child = node.children[index]!;
-      if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
-    }
-  }
-  resetFieldParseState(state);
-  return families;
-}
-
-function noteEffectiveSymbolFont(
-  state: ReturnType<typeof createFieldParseState>,
-  families: string[]
-): void {
-  const effective = effectiveFieldInstruction(state);
-  if (effective.overflow) return;
-  const spec = parseSymbolInstruction(effective.instruction);
-  if (spec?.font) families.push(spec.font);
-}
-
 function boundedTextContent(root: OoxmlElement): string {
   let text = '';
   const stack = [...root.children].reverse();
@@ -861,84 +807,4 @@ function boundedTextContent(root: OoxmlElement): string {
     }
   }
   return text;
-}
-
-function usedNumberingFontFamilies(
-  storyRoots: readonly OoxmlElement[],
-  numberingRoot: OoxmlElement | null,
-  stylesRoot: OoxmlElement | null,
-  theme: {
-    readonly major: string | null;
-    readonly minor: string | null;
-    readonly majorEastAsia: string | null;
-    readonly minorEastAsia: string | null;
-  }
-): readonly string[] {
-  if (!numberingRoot) return [];
-  const numbering = buildNumberingIndex(numberingRoot);
-  const styles = buildStyleCascadeTable(stylesRoot, theme);
-  const byFold = new Map<string, string>();
-  for (const root of storyRoots) {
-    for (const container of storyFlowContainers(root)) {
-      const blocks = collectFlowBlocks(container.children);
-      const noteItems = (
-        items:
-          | ReadonlyMap<
-              string,
-              {
-                readonly markerStyle: {
-                  readonly fontFamily?: string | null;
-                  readonly fontFamilyEastAsia?: string | null;
-                };
-              }
-            >
-          | undefined
-      ): void => {
-        if (!items) return;
-        for (const item of items.values()) {
-          for (const candidate of [
-            item.markerStyle.fontFamily,
-            item.markerStyle.fontFamilyEastAsia,
-          ]) {
-            const family = validFontFamily(candidate ?? undefined);
-            if (family === null) continue;
-            const fold = family.toLowerCase();
-            if (!byFold.has(fold)) byFold.set(fold, family);
-          }
-        }
-      };
-      noteItems(resolveStoryListItems(blocks, numbering, styles));
-      for (const block of blocks) {
-        const hosted = hostedTextboxContents(block);
-        for (const content of hosted.contents) {
-          noteItems(textboxStoryListItems(content, numbering, styles));
-        }
-      }
-    }
-  }
-  return [...byFold.values()].sort((left, right) => left.localeCompare(right));
-}
-
-function storyFlowContainers(root: OoxmlElement): readonly OoxmlElement[] {
-  if (root.localName === 'document') {
-    for (const candidate of root.children) {
-      if (candidate.kind !== 'textValue' && candidate.localName === 'body') {
-        return [candidate as OoxmlElement];
-      }
-    }
-    return [];
-  }
-  if (root.localName === 'footnotes' || root.localName === 'endnotes') {
-    const notes: OoxmlElement[] = [];
-    for (const candidate of root.children) {
-      if (
-        candidate.kind !== 'textValue' &&
-        (candidate.localName === 'footnote' || candidate.localName === 'endnote')
-      ) {
-        notes.push(candidate as OoxmlElement);
-      }
-    }
-    return notes;
-  }
-  return [root];
 }

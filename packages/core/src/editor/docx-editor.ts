@@ -1,8 +1,7 @@
 // The `Editor` facade over the paginated surface.
 //
 // `createDocxEditor` implements the FULL `Editor` contract over the paginated surface —
-// the document session, semantic layout and painted pages. This is the composition root
-// the framework adapters mount.
+// the document session, semantic layout and painted pages that framework adapters mount.
 //
 // - REAL: load/save, the exec subset below (marks, mark attributes via `setMarkAttr`,
 //   alignment, indent, line break, undo/redo, semantic setSelection, selection-addressed
@@ -193,6 +192,7 @@ import {
   detectFontSubstitutions,
   fontResolverFamilies,
 } from './font-availability.ts';
+import { resolverGlyphFontFamilies } from './resolver-glyph-font-families.ts';
 import { tryCreateBrowserCanvasContext } from './browser-canvas-context.ts';
 import {
   registerEmbeddedFontFaces,
@@ -770,7 +770,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
               await configured({
                 families: fontResolverFamilies(
                   mounted.session.documentFonts(),
-                  mounted.session.symbolFontFamilies(),
+                  resolverGlyphFontFamilies(mounted.session),
                   MAX_RESOLVER_FAMILIES
                 ),
                 defaultFamily: configuredDefaultFontFamily(fontConfiguration()),

@@ -203,7 +203,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Symbol runs render and survive editing and save. You can insert a symbol from the Insert menu. Existing symbol run properties are not editable.',
+      'Symbol runs render and survive editing and save. The editor requests fonts for symbol runs, SYMBOL fields, and used numbering markers through the configured font resolver. You can insert a symbol from the Insert menu. Existing symbol run properties are not editable.',
   },
 
   // --- Paragraphs & styles ---------------------------------------------
