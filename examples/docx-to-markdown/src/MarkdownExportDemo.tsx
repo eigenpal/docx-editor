@@ -725,6 +725,18 @@ export function MarkdownExportDemo() {
           <div className="md-preview-actions">
             <button
               type="button"
+              className="md-icon-button"
+              onClick={downloadMarkdown}
+              disabled={!canCopy}
+              aria-label="Download Markdown"
+              title="Download .md"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M10 3v10m0 0 3.5-3.5M10 13 6.5 9.5M4 13v4h12v-4" />
+              </svg>
+            </button>
+            <button
+              type="button"
               className="md-icon-button md-copy-action"
               onClick={copyMarkdown}
               disabled={
@@ -752,22 +764,6 @@ export function MarkdownExportDemo() {
           </div>
         </div>
       </header>
-      <div className="md-converter-intro">
-        <span>
-          DOCX in. Markdown out.{' '}
-          <span className="md-intro-detail">Drop a file or edit the sample to see the result.</span>
-        </span>
-        <button
-          type="button"
-          onClick={() => {
-            setPreviewMode('developer');
-            setMobilePane('markdown');
-          }}
-        >
-          <code>await exportMarkdown(docxBytes)</code>
-          <span aria-hidden="true"> ↗</span>
-        </button>
-      </div>
       <span className="md-visually-hidden" role="status" aria-live="polite">
         {exportStatusLabel}
       </span>
@@ -790,12 +786,6 @@ export function MarkdownExportDemo() {
           className="md-panel md-panel--editor"
           aria-label="Editable DOCX document"
         >
-          <div className="md-pane-caption">
-            <div>
-              <strong>DOCX input</strong>
-              <span title={filename}>{filename} · Rendered by our document engine</span>
-            </div>
-          </div>
           <div
             className="md-editor-frame"
             onPointerDownCapture={(event) => {
@@ -895,26 +885,6 @@ export function MarkdownExportDemo() {
               : 'Live paginated Markdown'
           }
         >
-          <div className="md-pane-caption">
-            <div>
-              <strong>
-                {previewMode === 'developer' ? 'Use it in your app' : 'Markdown output'}
-              </strong>
-              <span>
-                {exportView.status === 'ready'
-                  ? `${exportView.result?.pages.length ?? 0} pages · Converted in your browser`
-                  : exportStatusLabel}
-              </span>
-            </div>
-            <button
-              className="md-button md-button--quiet"
-              type="button"
-              onClick={downloadMarkdown}
-              disabled={!canCopy}
-            >
-              Download .md
-            </button>
-          </div>
           <div ref={previewScroll} className="md-preview-scroll" aria-busy={busy}>
             {previewMode === 'developer' ? (
               <DeveloperView
