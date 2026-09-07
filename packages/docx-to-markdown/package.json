@@ -1,6 +1,7 @@
 {
   "name": "@docx-editor.dev/docx-to-markdown",
   "version": "2.15.1",
+  "private": true,
   "description": "Convert DOCX to Markdown with layout-derived pages, headers, footers, comments, and tracked changes.",
   "type": "module",
   "sideEffects": false,
@@ -57,8 +58,5 @@
     "type": "git",
     "url": "https://github.com/eigenpal/docx-editor.git",
     "directory": "packages/docx-to-markdown"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }
