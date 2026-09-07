@@ -99,7 +99,7 @@
     },
     "examples/collaboration": {
       "name": "@docx-editor.dev/example-collaboration",
-      "version": "0.0.5",
+      "version": "0.0.7",
       "dependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@docx-editor.dev/editor-api": "workspace:*",
@@ -353,7 +353,7 @@
     },
     "packages/core": {
       "name": "@docx-editor.dev/core",
-      "version": "2.14.1",
+      "version": "2.15.1",
       "dependencies": {
         "@docx-editor.dev/i18n": "^2.14.1",
         "bidi-js": "1.0.3",
@@ -387,7 +387,7 @@
     },
     "packages/docx-to-markdown": {
       "name": "@docx-editor.dev/docx-to-markdown",
-      "version": "2.14.0",
+      "version": "2.15.1",
       "dependencies": {
         "@docx-editor.dev/fonts": "~2.14.1",
       },
@@ -405,7 +405,7 @@
     },
     "packages/editor-api": {
       "name": "@docx-editor.dev/editor-api",
-      "version": "2.14.1",
+      "version": "2.15.1",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@microsoft/api-extractor": "^7.50.0",
@@ -418,7 +418,7 @@
     },
     "packages/fonts": {
       "name": "@docx-editor.dev/fonts",
-      "version": "2.14.1",
+      "version": "2.15.1",
       "devDependencies": {
         "@docx-editor.dev/core": "workspace:*",
         "@happy-dom/global-registrator": "^20.8.3",
@@ -428,7 +428,7 @@
     },
     "packages/i18n": {
       "name": "@docx-editor.dev/i18n",
-      "version": "2.14.1",
+      "version": "2.15.1",
       "devDependencies": {
         "tsup": "^8.0.1",
         "typescript": "^5.3.3",
@@ -436,7 +436,7 @@
     },
     "packages/nuxt": {
       "name": "@docx-editor.dev/nuxt",
-      "version": "2.14.1",
+      "version": "2.15.1",
       "dependencies": {
         "@docx-editor.dev/vue": "^2.9.1",
         "@nuxt/kit": "^3.14.0 || ^4.0.0",
@@ -462,7 +462,7 @@
     },
     "packages/pro": {
       "name": "@docx-editor.dev/pro",
-      "version": "2.14.1",
+      "version": "2.15.1",
       "dependencies": {
         "y-protocols": "^1.0.7",
       },
@@ -509,7 +509,7 @@
     },
     "packages/react": {
       "name": "@docx-editor.dev/react",
-      "version": "2.14.1",
+      "version": "2.15.1",
       "dependencies": {
         "@docx-editor.dev/i18n": "^2.14.1",
         "@radix-ui/react-select": "^2.3.3",
@@ -532,7 +532,7 @@
     },
     "packages/vue": {
       "name": "@docx-editor.dev/vue",
-      "version": "2.14.1",
+      "version": "2.15.1",
       "dependencies": {
         "@docx-editor.dev/i18n": "^2.14.1",
       },
