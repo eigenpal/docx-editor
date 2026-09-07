@@ -576,3 +576,52 @@ test('new input cannot reuse generated decimal padding to exceed maximum length'
     ).ok
   ).toBe(false);
 });
+
+for (const previousLimit of [null, 0, 8]) {
+  test(`unlimited options omit maximum length after imported ${previousLimit ?? 'absent'} limit`, () => {
+    const xml = serializeOoxmlPart(fixture()).replace(
+      '</w:textInput>',
+      `${previousLimit === null ? '' : `<w:maxLength w:val="${previousLimit}"/>`}</w:textInput>`
+    );
+    const parsed = readOoxmlPart(xml, metadata);
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const p = paragraph(parsed.part);
+    const field = textFormFieldsOf(p)[0]!;
+    expect(serializeOoxmlPart(parsed.part)).toBe(xml);
+    const result = applyTreeOp(parsed.part, {
+      op: 'setTextFormFieldDefault',
+      paragraphId: p.id,
+      fieldNodeId: field.fieldNodeId,
+      text: 'Updated',
+      options: { type: 'regular', maxLength: 0, format: '', enabled: true },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const saved = serializeOoxmlPart(result.part);
+    expect(saved).not.toContain('<w:maxLength');
+    const reopened = readOoxmlPart(saved, metadata);
+    if (!reopened.ok) throw new Error(reopened.reason);
+    expect(textFormFieldsOf(paragraph(reopened.part))[0]).toMatchObject({
+      maxLength: 0,
+      defaultText: 'Updated',
+    });
+  });
+}
+
+test('default-only edits preserve an imported maximum length element', () => {
+  const xml = serializeOoxmlPart(fixture()).replace(
+    '</w:textInput>',
+    '<w:maxLength w:val="0"/></w:textInput>'
+  );
+  const parsed = readOoxmlPart(xml, metadata);
+  if (!parsed.ok) throw new Error(parsed.reason);
+  const p = paragraph(parsed.part);
+  const result = applyTreeOp(parsed.part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: p.id,
+    fieldNodeId: textFormFieldsOf(p)[0]!.fieldNodeId,
+    text: 'Updated',
+  });
+  expect(result.ok).toBe(true);
+  if (result.ok) expect(serializeOoxmlPart(result.part)).toContain('<w:maxLength w:val="0"/>');
+});

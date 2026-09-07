@@ -4508,6 +4508,7 @@ export function mountPaginatedSurface(
   const { insertPlainText, copyFlavoursNow, pasteRichNow, armForcePlainPaste } =
     createSurfaceClipboardOps({
       session,
+      textFormFieldId: () => textFormInteraction?.fieldId() ?? null,
       layout: () => currentLayout,
       cellSelection: () => cellSelection,
       editingMode: () => editingMode,
@@ -6089,6 +6090,7 @@ export function mountPaginatedSurface(
   pointer = createPointerController(
     {
       onTextFormDoubleClick: (event) => textFormInteraction?.doubleClick(event) ?? false,
+      onTextFormPointerUp: (event) => textFormInteraction?.pointerUp(event),
       pagesLayer,
       container,
       scale: () => scale,

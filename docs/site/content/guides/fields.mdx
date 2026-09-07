@@ -101,8 +101,8 @@ macros, DDE instructions, OLE content, or external include instructions.
 
 ## Legacy text form fields
 
-In an unprotected document, replacing the whole `FORMTEXT` result removes the
-field definition. Editing part of its result keeps the definition.
+In an unprotected document, clicking a `FORMTEXT` field selects its whole result.
+Replacing the whole result removes the field definition. Editing part of its result keeps the definition.
 Press Backspace immediately after a field, or Delete immediately before it,
 to select the whole field. Press the key again to remove it.
 Double-click a text form field, or select **Edit field…** from its context menu.
@@ -122,9 +122,15 @@ text form field. Other document text remains protected.
 The default-text dialog and protected filling accept plain text results.
 They refuse results with nested fields, revision markup, or other structure.
 Protected filling enforces maximum length and skips disabled fields.
+Pasting into a limited field keeps the prefix that fits its remaining capacity.
 When you leave an edited field, the editor validates and formats its result.
 The default value stays unchanged. An invalid number or date keeps the selection
 in the field so you can correct it.
+
+Numeric and date conversion do not exactly match Word. Word can extract digits
+from mixed text in a formatted numeric field; the editor rejects that input.
+Numeric dates use the selected format to determine day and month order.
+Input-date parsing and conversion can differ from Word.
 
 Computed text input types and format pictures outside the dialog's list remain
 preserved. They do not accept protected filling. Checkbox and dropdown interactions

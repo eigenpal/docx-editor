@@ -124,6 +124,7 @@ export interface PointerHost {
   onContentControlWidget?(controlId: string, kind: string): void;
   /** Options interaction on a legacy text form, before ordinary word selection. */
   onTextFormDoubleClick?(event: PointerEvent): boolean;
+  onTextFormPointerUp?(event: PointerEvent): void;
   /**
    * A pointer selection gesture has settled — the press, drag and release are over and the
    * model selection is final.
@@ -1064,7 +1065,10 @@ export function createPointerController(
     //
     // AFTER the re-assertion above, so anything acting on the settled selection sees the
     // model's answer rather than whatever the browser left behind mid-drag.
-    if (event.type === 'pointerup') host.onSelectionSettled?.();
+    if (event.type === 'pointerup') {
+      host.onTextFormPointerUp?.(event);
+      host.onSelectionSettled?.();
+    }
   };
 
   function endGesture(): void {

@@ -621,16 +621,19 @@ export function applyTextFormFieldDefault(
       ],
     } as OoxmlNode;
   };
-  const edits = new Map<string, string>([['default', op.text]]);
+  const edits = new Map<string, string | null>([['default', op.text]]);
   if (op.options) {
     edits.set('type', op.options.type);
-    edits.set('maxLength', String(op.options.maxLength));
+    // OOXML represents unlimited input by omitting maxLength, not by writing zero.
+    edits.set('maxLength', op.options.maxLength === 0 ? null : String(op.options.maxLength));
     edits.set('format', op.options.format);
   }
   const children = input.children.filter(
     (n) => n.kind === 'textValue' || n.namespaceUri !== WML_NAMESPACE_URI || !edits.has(n.localName)
   );
-  for (const [name, value] of edits) children.push(property(name, value));
+  for (const [name, value] of edits) {
+    if (value !== null) children.push(property(name, value));
+  }
   const order = ['type', 'default', 'maxLength', 'format'];
   children.sort((a, b) => {
     const rank = (n: OoxmlNode) =>

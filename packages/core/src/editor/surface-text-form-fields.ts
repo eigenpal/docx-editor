@@ -25,8 +25,10 @@ interface Host {
 
 /** Shared field interaction for all editor hosts. */
 export function createTextFormFieldInteraction(host: Host): {
+  fieldId(): string | null;
   keydown(event: KeyboardEvent): boolean;
   doubleClick(event: MouseEvent): boolean;
+  pointerUp(event: PointerEvent): void;
   selectForDeletion(direction: 'backward' | 'forward'): boolean;
   annotate(ops: readonly TreeDocOp[]): readonly TreeDocOp[];
   canEdit(): boolean;
@@ -110,13 +112,82 @@ export function createTextFormFieldInteraction(host: Host): {
     if (!field) return null;
     return { paragraphId, field };
   };
+  let press: {
+    x: number;
+    y: number;
+    paragraphId: string;
+    fieldNodeId: string;
+    moved: boolean;
+  } | null = null;
+  const modified = (event: MouseEvent): boolean =>
+    event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
   const rememberField = (event: PointerEvent): void => {
     contextual = undefined;
+    press = null;
     if (event.button !== 0) return;
     const hit = fieldAtTarget(event);
+    if (hit && !modified(event) && !host.protected(hit.paragraphId))
+      press = {
+        x: event.clientX,
+        y: event.clientY,
+        paragraphId: hit.paragraphId,
+        fieldNodeId: hit.field.fieldNodeId,
+        moved: false,
+      };
     incoming = hit ? { paragraphId: hit.paragraphId, fieldNodeId: hit.field.fieldNodeId } : null;
   };
   host.pagesLayer.addEventListener('pointerdown', rememberField, { capture: true });
+  const move = (event: PointerEvent): void => {
+    if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 4)
+      press.moved = true;
+  };
+  const cancelPress = (): void => {
+    press = null;
+  };
+  const singleClick = (event: MouseEvent, settled = false): void => {
+    const started = press;
+    press = null;
+    if (
+      !started ||
+      started.moved ||
+      dialog ||
+      event.button !== 0 ||
+      event.detail > 1 ||
+      Math.hypot(event.clientX - started.x, event.clientY - started.y) > 4 ||
+      !host.editable() ||
+      modified(event)
+    )
+      return;
+    if (host.protected(started.paragraphId)) return;
+    const paragraph = findNode(host.part(), started.paragraphId);
+    const field =
+      paragraph?.kind === 'paragraph'
+        ? textFormFieldsOf(paragraph).find(
+            (candidate) => candidate.fieldNodeId === started.fieldNodeId
+          )
+        : null;
+    if (!field) return;
+    const selection = host.selection();
+    if (
+      settled &&
+      (selection.anchor.paragraphId !== selection.head.paragraphId ||
+        selection.anchor.offset !== selection.head.offset) &&
+      !(
+        selection.anchor.paragraphId === started.paragraphId &&
+        selection.head.paragraphId === started.paragraphId &&
+        Math.min(selection.anchor.offset, selection.head.offset) === field.start &&
+        Math.max(selection.anchor.offset, selection.head.offset) === field.end
+      )
+    )
+      return;
+    // Pointer capture and repaint can retarget click to the pages layer. Resolve the
+    // recorded identity against the current tree instead of requiring the old span.
+    select(started.paragraphId, field);
+  };
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointercancel', cancelPress);
+  host.pagesLayer.addEventListener('click', singleClick);
+
   const doubleClick = (event: MouseEvent): boolean => {
     if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return false;
     const hit = fieldAtTarget(event);
@@ -184,6 +255,7 @@ export function createTextFormFieldInteraction(host: Host): {
 
   return {
     doubleClick,
+    pointerUp: (event) => singleClick(event, true),
     canEdit,
     edit() {
       if (!canEdit()) return false;
@@ -310,6 +382,7 @@ export function createTextFormFieldInteraction(host: Host): {
       else status.removeAttribute('role');
       status.textContent = hit ? t(whole ? 'textFormField.selected' : 'textFormField.editing') : '';
     },
+    fieldId: () => selectionField()?.field.fieldNodeId ?? null,
     annotate(ops) {
       if (ops.some((op) => op.op === 'insertText' || op.op === 'deleteText'))
         delete status.dataset.fieldError;
@@ -419,6 +492,9 @@ export function createTextFormFieldInteraction(host: Host): {
       return true;
     },
     destroy() {
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointercancel', cancelPress);
+      host.pagesLayer.removeEventListener('click', singleClick);
       host.pagesLayer.removeEventListener('contextmenu', onContext);
       status.remove();
       host.pagesLayer.removeEventListener('dblclick', doubleClick);
