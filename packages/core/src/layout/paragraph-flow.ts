@@ -79,7 +79,6 @@ import {
 import { createEquationLayouter } from './equation-layout.ts';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
 import {
-  OVERFLOW_TOLERANCE_PT,
   candidateNeedsWrap,
   expandableShrinkBudget,
   expandableSpaceCapacity,
@@ -1481,7 +1480,16 @@ export function breakParagraph(
             if (!ensurePlacementWidth(width)) continue;
           }
         }
-      } else if (hasLineContent && line.width + width > lineAvailable() + OVERFLOW_TOLERANCE_PT) {
+      } else if (
+        hasLineContent &&
+        candidateNeedsWrap({
+          lineWidth: line.width,
+          visibleWidth,
+          available: lineAvailable(),
+          allowShrink: alignment === 'both' && placeableSuffixes[pieceIndex]![boundary] === 1,
+          shrinkBudget: expandableShrinkBudget(line.spans, measurer),
+        })
+      ) {
         // Mid-word overflow: carry the whole word to the next line rather than splitting it
         // at a run boundary. The spans already placed for it are lifted off this line, the
         // line is closed without them, and they are re-laid at the new origin.

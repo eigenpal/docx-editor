@@ -10,6 +10,7 @@ import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode } from '@docx-editor.dev/core/store';
 import { breakParagraph } from '../paragraph-flow.ts';
 import { createFixedMeasurer } from '../semantic-layout.ts';
+import type { TextMeasurer } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 /** 6pt per character, so a 60pt measure holds exactly ten. */
@@ -159,5 +160,73 @@ describe('a word wider than the measure breaks at the margin', () => {
 
   test('a word that follows text on the line wraps first, then chops', () => {
     expect(linesOf(`<w:p>${run('aaa cccccccccccc')}</w:p>`)).toEqual(['aaa ', 'cccccccccc', 'cc']);
+  });
+});
+
+describe('justified run-spanning words use shrink and hang', () => {
+  // EP_ZMVZ_MULTI_v4 /word/document.xml#0.0.40 shape: Spolo + č + nosti .
+  // Natural visible overflow is 4.352pt; existing shrink budget is 7.333pt.
+  const AVAIL = 400;
+  const VISIBLE_OVERFLOW = 4.352;
+  const SHRINK_BUDGET = 7.333;
+  const NOSTI_VIS = 24.352;
+  const NOSTI_HANG = 3;
+  const SPLOLO = 18;
+  const C_WIDTH = 6;
+  const PREFIX_WIDTH = AVAIL + VISIBLE_OVERFLOW - NOSTI_VIS - SPLOLO - C_WIDTH;
+  const AAA_WIDTH = PREFIX_WIDTH / 2;
+  const BBB_WIDTH = PREFIX_WIDTH - AAA_WIDTH;
+  const SPACE = SHRINK_BUDGET / 2 + 3; // two spaces, floor 3pt each → capacity 7.333
+
+  const spoloMeasurer: TextMeasurer = {
+    measure: (text) => {
+      if (text === ' ') return SPACE;
+      if (text === 'aaa') return AAA_WIDTH - SPACE;
+      if (text === 'aaa ') return AAA_WIDTH;
+      if (text === 'bbb') return BBB_WIDTH - SPACE;
+      if (text === 'bbb ') return BBB_WIDTH;
+      if (text === 'Spolo') return SPLOLO;
+      if (text === 'č') return C_WIDTH;
+      if (text === 'nosti ') return NOSTI_VIS + NOSTI_HANG;
+      if (text === 'nosti') return NOSTI_VIS;
+      if (text === 'tail') return 50;
+      return text.length * 6;
+    },
+    lineMetrics: () => ({ height: 14, baseline: 11 }),
+  };
+
+  const justifiedBody =
+    `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>` +
+    `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">aaa bbb </w:t></w:r>` +
+    `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>Spolo</w:t></w:r>` +
+    `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>č</w:t></w:r>` +
+    `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">nosti </w:t></w:r>` +
+    `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t>tail</w:t></w:r>` +
+    `</w:p>`;
+
+  const linesAt = (width: number) =>
+    breakParagraph(paragraph(justifiedBody), 'p', 0, width, spoloMeasurer, undefined, null).map(
+      (line) => line.spans.map((span) => span.text).join('')
+    );
+
+  test('a three-run justified word stays when hang and shrink cover overflow', () => {
+    const lines = linesAt(AVAIL);
+    expect(lines[0]).toContain('bbb ');
+    expect(lines[0]).toContain('Spolo');
+    expect(lines[0]).toContain('č');
+    expect(lines[0]).toContain('nosti ');
+    expect(lines[0]).not.toContain('tail');
+    expect(lines.some((line) => line.includes('tail'))).toBe(true);
+  });
+
+  test('the same three-run word carries when shrink budget is insufficient', () => {
+    const lines = linesAt(AVAIL - 5);
+    expect(lines[0]).not.toContain('nosti');
+    expect(lines.some((line) => line.includes('Spolo') && line.includes('nosti'))).toBe(true);
+  });
+
+  test('non-justified split words still carry on natural overflow', () => {
+    const leftBody = `<w:p>` + `${run('aaa ')}${run('bbbbb')}${run('ccccc')}` + `</w:p>`;
+    expect(linesOf(leftBody)).toEqual(['aaa ', 'bbbbbccccc']);
   });
 });
