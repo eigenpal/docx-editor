@@ -344,6 +344,19 @@ export interface ParagraphFragmentRecord {
   readonly fragmentIndex: number;
   /** A fixed text frame clips its painted ink to this fragment's box; source ranges remain intact. */
   readonly clipToBox?: true;
+  /** A positioned text frame retains its source identity without consuming body flow height. */
+  readonly outOfFlow?: true;
+  /** Placement and wrapping of one authored text-frame group, in page-content coordinates. */
+  readonly positionedFrame?: {
+    readonly anchorId: string;
+    readonly columnIndex: number;
+    readonly groupId: string;
+    readonly sourceOrder: number;
+    readonly wrap: 'around' | 'none' | 'notBeside';
+    readonly hSpace: number;
+    readonly vSpace: number;
+    readonly box: LayoutBox;
+  };
   readonly range: SourceRange;
   readonly props: readonly OoxmlProperty[];
   /** Resolved paragraph style after the style/default cascade, or null when none applies. */
@@ -505,6 +518,13 @@ export interface ListMarkerRecord {
  */
 export interface TableFragmentRecord {
   readonly kind: 'table';
+  /** Source and positioning inputs needed to reconstruct wrapping on an incremental pass. */
+  readonly floatingWrap?: {
+    readonly anchorId: string;
+    readonly columnIndex: number;
+    readonly float: import('./semantic-table.ts').TableFloatPosition;
+    readonly sourceOrder: number;
+  };
   readonly id: string;
   /** Canonical node id of the `w:tbl`. */
   readonly tableId: string;

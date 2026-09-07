@@ -606,3 +606,16 @@ describe('composeFlowKeys — the one composition, and its load-bearing order', 
     expect(composed).toEqual(byHand);
   });
 });
+
+test('keep-next keys carry the next ordinary chain through positioned frames', () => {
+  const fold = (tail: string) =>
+    keepNextFlowKeys(
+      ['heading', 'positioned', 'anchor', tail],
+      (index) => index === 0 || index === 2,
+      (index) => index === 1
+    );
+  const before = fold('short');
+  expect(before[0]).toBe('heading~kn~anchor~kn~short');
+  expect(before[1]).toBe('positioned');
+  expect(fold('long')[0]).not.toBe(before[0]);
+});

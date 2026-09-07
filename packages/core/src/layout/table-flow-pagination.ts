@@ -46,6 +46,8 @@ import type {
 
 /** The body flow a table is placed into: the cursor it moves, and what it publishes to. */
 export interface TableFlowCursor {
+  /** The caller admitted a text-anchored table as one object on its anchor sheet. */
+  readonly positionTextTable?: boolean;
   /** Points down the page content box. The paginator both reads and advances it. */
   cursorY: number;
   /** Width of the column being filled. */
@@ -138,7 +140,7 @@ export function paginateTableInFlow(
   if (!structure || structure.rows.length === 0) return { outOfFlow: false };
   const outOfFlow =
     structure.float !== undefined &&
-    structure.float.vertAnchor !== 'text' &&
+    (structure.float.vertAnchor !== 'text' || flow.positionTextTable === true) &&
     structure.float.ySpec !== 'inline';
   const bodyCursorY = flow.cursorY;
   const verticalFrames = outOfFlow ? verticalAnchorFrames() : undefined;
@@ -156,7 +158,12 @@ export function paginateTableInFlow(
   let tableLeft = originX();
   // A text anchor offsets the current body position. Page and margin anchors are sheet
   // positions, so the table uses a private cursor and the body cursor is restored below.
-  if (structure.float && structure.float.vertAnchor === 'text' && !structure.float.ySpec) {
+  if (
+    !outOfFlow &&
+    structure.float &&
+    structure.float.vertAnchor === 'text' &&
+    !structure.float.ySpec
+  ) {
     flow.cursorY = Math.max(0, Math.min(flow.cursorY + structure.float.yPt, contentHeight()));
   } else if (outOfFlow && structure.float && verticalFrames) {
     // Alignment needs the final table height. Start at the frame origin, then shift the
@@ -164,14 +171,16 @@ export function paginateTableInFlow(
     flow.cursorY = tableFloatOriginY(structure.float, 0, verticalFrames);
   }
   /** One row's natural height where the table stands now. `tableLeft` moves; this reads it. */
-  const rowHeightOf = (probeRow: SemanticTableRow): number =>
+  const rowHeightOf = (probeRow: SemanticTableRow, top = flow.cursorY): number =>
     measureRowHeight(
       probeRow,
       structure.columnWidthsPt,
       tableLeft,
       0,
       tableDeps,
-      structure.cellSpacingPt
+      structure.cellSpacingPt,
+      undefined,
+      tableDeps.pageExclusionZones?.().length ? top : undefined
     );
   const headerRows: SemanticTableRow[] = [];
   for (const row of structure.rows) {
@@ -181,7 +190,8 @@ export function paginateTableInFlow(
   // Word treats a header prefix taller than a true fresh page as ordinary authored rows. A note
   // reservation only shrinks an advisory band and must never split an otherwise valid prefix.
   let headerGroupHeight = 0;
-  for (const headerRow of headerRows) headerGroupHeight += rowHeightOf(headerRow);
+  for (const headerRow of headerRows)
+    headerGroupHeight += rowHeightOf(headerRow, flow.cursorY + headerGroupHeight);
   let initialHeaderGroupDegraded =
     headerGroupHeight > (flow.unreservedContentHeight?.() ?? contentHeight()) + 0.001;
   let repeatsEnabled = !initialHeaderGroupDegraded;
@@ -339,7 +349,7 @@ export function paginateTableInFlow(
   let naturalHeight = 0;
   const admitSpans = (bodyRowIndex: number, probeRow?: SemanticTableRow): void => {
     vMerge = admitVMergeSpansAt(vMergePlan, bodyRowIndex, flow.cursorY, contentHeight());
-    naturalHeight = vMerge?.heightFloorPt ?? (probeRow ? rowHeightOf(probeRow) : naturalHeight);
+    naturalHeight = vMerge?.heightFloorPt ?? rowHeightOf(probeRow ?? bodyRows[bodyRowIndex]!);
   };
 
   for (const [bodyRowIndex, row] of bodyRows.entries()) {

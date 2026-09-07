@@ -53,6 +53,8 @@ export class DrawingExclusionConvergenceError extends Error {
 }
 
 export interface ExclusionZone {
+  /** Non-drawing objects publish their anchor exclusion directly instead of synthesizing it. */
+  readonly sourceKind?: 'table' | 'frame';
   readonly drawingNodeId: string;
   readonly anchorParagraphId: string;
   /** UTF-16 model offset of the anchor atom — exclusions apply at/after this point in the paragraph. */
@@ -770,6 +772,7 @@ export function exclusionLayoutToken(zones: readonly ExclusionZone[]): string {
       );
       return [
         zone.drawingNodeId,
+        zone.sourceKind ?? '',
         String(zone.sourceOrder),
         String(zone.columnIndex),
         zone.y.toFixed(3),

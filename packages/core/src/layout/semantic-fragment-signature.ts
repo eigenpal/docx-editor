@@ -40,6 +40,8 @@ const PARAGRAPH_FIELDS = {
   paragraphId: 'covered',
   fragmentIndex: 'covered',
   clipToBox: 'hashed',
+  outOfFlow: 'hashed',
+  positionedFrame: 'hashed',
   range: 'hashed',
   // A paragraph-property change that layout does not read moves no geometry. Without this
   // the freshly built fragment converged against the old one and was discarded, leaving a
@@ -98,6 +100,7 @@ const PARAGRAPH_FIELDS = {
  */
 const TABLE_FIELDS = {
   kind: 'covered',
+  floatingWrap: 'hashed',
   id: 'hashed',
   tableId: 'hashed',
   fragmentIndex: 'hashed',

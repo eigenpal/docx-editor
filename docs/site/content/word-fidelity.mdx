@@ -45,6 +45,20 @@ The matrix reports three separate support axes.
 
 <FeatureMatrix category="paragraphs" />
 
+Body text frames with numeric `w:x`, `w:y`, and `w:w` retain their authored positions.
+Text wraps inside the frame width and remains selectable and editable.
+Adjacent paragraphs with identical `w:framePr` attributes share one frame.
+Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height.
+Following text wraps around frames; `none` and `notBeside` move that text below the frame.
+
+This supports auto-height frames in single-column sections with page, margin, or text anchors.
+Drop caps, fixed heights, alignment-based positions, and frames containing drawings or notes retain ordinary layout.
+Upward text-relative offsets also retain ordinary layout.
+Frame groups that block the full text width and leave no vertical room on a fresh page use ordinary layout.
+The editor preserves their properties on save.
+A following continuous section starts below the preceding frames.
+There is no interface for creating, moving, or resizing text frames.
+
 ### Lists and numbering
 
 <FeatureMatrix category="lists" />
@@ -53,11 +67,17 @@ The matrix reports three separate support axes.
 
 <FeatureMatrix category="tables" />
 
-A text-anchored table can share a terminal empty paragraph without shrinking that paragraph.
-This applies to simple tables that fit with the anchor inside one content box.
-Bookmarks, proofing markers, formatting-only runs, and paragraph spacing are supported in this case.
-Explicit page breaks, complex tables, and anchors with text retain their existing layout.
-Text wrapping beside floating tables is not supported.
+Body text wraps beside supported floating tables and below tables that cover the text column.
+The table's text distances keep the authored gap between its border and surrounding text.
+Text-anchored tables with numeric vertical offsets follow their next ordinary paragraph onto its page and column.
+Negative offsets remain in place when they clear preceding text.
+A table that intersects preceding text moves below that text.
+
+Text-anchored tables taller than a content page retain row pagination.
+Text-anchored tables marked no-overlap or using vertical alignment also retain their normal flow behavior.
+Tables whose cells can wrap around earlier floating objects also retain row pagination.
+Simple tables can share a terminal empty paragraph without shrinking that paragraph or adding a blank page.
+Floating-table properties survive save, but have no editing interface.
 
 ### Images and drawings
 

@@ -2401,8 +2401,19 @@ export interface ParagraphFragmentRecord {
     readonly markRevision?: RevisionAttribution;
     readonly markRevisions?: readonly RevisionAttribution[];
     readonly outlineLevel: number | null;
+    readonly outOfFlow?: true;
     // (undocumented)
     readonly paragraphId: string;
+    readonly positionedFrame?: {
+        readonly anchorId: string;
+        readonly box: LayoutBox;
+        readonly columnIndex: number;
+        readonly groupId: string;
+        readonly hSpace: number;
+        readonly sourceOrder: number;
+        readonly vSpace: number;
+        readonly wrap: 'around' | 'none' | 'notBeside';
+    };
     // (undocumented)
     readonly props: readonly OoxmlProperty[];
     // (undocumented)
@@ -4129,6 +4140,12 @@ export interface TableFragmentRecord {
     // (undocumented)
     readonly box: LayoutBox;
     readonly columnEdges: readonly number[];
+    readonly floatingWrap?: {
+        readonly anchorId: string;
+        readonly columnIndex: number;
+        readonly float: TableFloatPosition;
+        readonly sourceOrder: number;
+    };
     readonly fragmentIndex: number;
     // (undocumented)
     readonly id: string;

@@ -787,7 +787,7 @@ export function breakParagraph(
         if (!zoneApplies(zone)) return false;
         // Anchor paragraph uses break-time synthesis; page zones are for inherited bands only.
         if (zone.anchorParagraphId === paragraphId) {
-          if (zone.input.mode === 'topAndBottom') return false;
+          if (!zone.sourceKind && zone.input.mode === 'topAndBottom') return false;
           if (flow?.anchorCellBox != null) return false;
         }
         return true;

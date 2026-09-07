@@ -519,6 +519,21 @@ function resolveBlocks(
 ): SemanticHit | null {
   if (blocks.length === 0) return null;
 
+  // Positioned paragraphs may overlap. Resolve their shared band in reverse paint order,
+  // including ordinary anchor text painted after them. Keep ordinary flow's edge rules.
+  if (
+    blocks.some(
+      (block) => block.kind === 'paragraph' && block.outOfFlow && contains(block.box, point)
+    )
+  ) {
+    for (let index = blocks.length - 1; index >= 0; index -= 1) {
+      const block = blocks[index]!;
+      if (!contains(block.box, point)) continue;
+      const hit = resolveOneBlock(block, point, context, cell);
+      if (hit) return hit;
+    }
+  }
+
   // Containment first, and HALF-OPEN, so a point exactly on the edge two stacked blocks share
   // belongs to the lower one — the same rule the line bands use, decided by construction
   // rather than by a tolerance. Distance alone cannot express it: the shared edge is zero

@@ -186,12 +186,14 @@ export function keepNextGroupHeight(
   blocks: readonly KeepNextBlock[],
   start: number,
   carry: number,
-  lineHeights: (index: number) => readonly number[]
+  lineHeights: (index: number) => readonly number[],
+  skipBlock?: (index: number) => boolean
 ): number | null {
   let total = 0;
   let after = carry;
   for (let index = start; index - start < MAX_KEEP_NEXT_CHAIN; index += 1) {
     const block = blocks[index];
+    if (block && skipBlock?.(index)) continue;
     if (!block || block.kind !== 'paragraph' || !block.spacing || !block.keeps) return null;
     // Adjacent before/after collapse to the larger gap rather than summing (Word).
     total += Math.max(block.spacing.before, after) - after;
@@ -370,17 +372,24 @@ export function tocFieldFlowKeys(keys: string[], verdictAt: (index: number) => s
  * carries its members' pre-fold keys, and a head that never re-places when a member's
  * marker text or contextual verdict moves is a stale keep-next group.
  */
-export function keepNextFlowKeys(keys: string[], keepsNext: (index: number) => boolean): string[] {
+export function keepNextFlowKeys(
+  keys: string[],
+  keepsNext: (index: number) => boolean,
+  skipBlock?: (index: number) => boolean
+): string[] {
   let flow = keys;
   let chain = 0;
-  for (let index = keys.length - 2; index >= 0; index -= 1) {
-    if (keepsNext(index) && chain < MAX_KEEP_NEXT_CHAIN) {
+  let next = -1;
+  for (let index = keys.length - 1; index >= 0; index -= 1) {
+    if (skipBlock?.(index)) continue;
+    if (next >= 0 && keepsNext(index) && chain < MAX_KEEP_NEXT_CHAIN) {
       if (flow === keys) flow = [...keys];
-      flow[index] = `${keys[index]}~kn~${flow[index + 1]}`;
+      flow[index] = `${keys[index]}~kn~${flow[next]}`;
       chain += 1;
     } else {
       chain = 0;
     }
+    next = index;
   }
   return flow;
 }
@@ -402,6 +411,8 @@ export interface FlowKeyFoldInputs {
   readonly tocVerdicts: readonly string[];
   readonly markerTextAt: (index: number) => string | undefined;
   readonly keepsNextAt: (index: number) => boolean;
+  /** Positioned frames contribute neither flow height nor a keep-chain boundary. */
+  readonly skipKeepNextAt?: (index: number) => boolean;
 }
 
 /**
@@ -437,6 +448,6 @@ export function composeFlowKeys(keys: string[], at: FlowKeyFoldInputs): string[]
   flow = borderGroupFlowKeys(flow, at.borderGroupKeyAt);
   if (at.tocVerdicts.length > 0) flow = tocFieldFlowKeys(flow, (index) => at.tocVerdicts[index]!);
   flow = listMarkerFlowKeys(flow, at.markerTextAt);
-  flow = keepNextFlowKeys(flow, at.keepsNextAt); // LAST — see the doc comment above.
+  flow = keepNextFlowKeys(flow, at.keepsNextAt, at.skipKeepNextAt); // LAST — see the doc comment above.
   return flow;
 }

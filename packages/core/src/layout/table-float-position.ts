@@ -1,5 +1,9 @@
 // Vertical placement for top-level `w:tblpPr` tables.
 
+import { sha256FontBytes } from '../store/package/sha256.ts';
+import { framedTokenJoin } from './layout-cache.ts';
+import { isOutOfFlowFragment } from './fragment-flow.ts';
+
 import type { OoxmlElement, OoxmlProperty } from '@docx-editor.dev/core/store';
 import type { RevisionAuthorFilter, RevisionDisplayMode } from './revision-projection.ts';
 import type { BlockFragmentRecord, TableFragmentRecord } from './semantic-records.ts';
@@ -20,12 +24,14 @@ export interface PositionedTableAnchor {
   readonly table: OoxmlElement;
   readonly sourceIndex: number;
   readonly anchorId: string;
+  readonly float: TableFloatPosition;
 }
 
 export interface PositionedTableAnchorSignal {
   readonly anchorId: string;
   readonly column: number;
   readonly fragmentIndex: number;
+  readonly anchorY: number;
 }
 
 const anchorsByParagraphMemo = new WeakMap<
@@ -33,7 +39,7 @@ const anchorsByParagraphMemo = new WeakMap<
   ReadonlyMap<string, readonly PositionedTableAnchor[]>
 >();
 
-function anchorsByParagraph(
+export function positionedTablesByAnchor(
   positionedTables: readonly PositionedTableAnchor[]
 ): ReadonlyMap<string, readonly PositionedTableAnchor[]> {
   const memo = anchorsByParagraphMemo.get(positionedTables);
@@ -76,20 +82,16 @@ export function positionedTableAnchors(
       displayMode,
       authorFilter
     )?.float;
-    if (!float || float.vertAnchor === 'text' || float.ySpec === 'inline') continue;
+    if (!float || float.ySpec === 'inline') continue;
     if (!nextParagraphId) continue;
     result.push({
       table: block.table,
       sourceIndex,
       anchorId: nextParagraphId,
+      float,
     });
   }
   return result.reverse();
-}
-
-function sameStrings(left: readonly string[] | undefined, right: readonly string[]): boolean {
-  const values = left ?? [];
-  return values.length === right.length && values.every((value, index) => value === right[index]);
 }
 
 function sameAnchorSignals(
@@ -103,13 +105,21 @@ function sameAnchorSignals(
       (value, index) =>
         value.anchorId === right[index]!.anchorId &&
         value.column === right[index]!.column &&
-        value.fragmentIndex === right[index]!.fragmentIndex
+        value.fragmentIndex === right[index]!.fragmentIndex &&
+        value.anchorY === right[index]!.anchorY
     )
   );
 }
 
+export interface PendingPositionedTableTokens {
+  readonly token: string;
+  readonly previous: PendingPositionedTableTokens | undefined;
+  readonly length: number;
+  readonly signature: string;
+}
+
 interface PositionedTableCheckpointState {
-  readonly pendingPositionedTableTokens?: readonly string[];
+  readonly pendingPositionedTableTokens?: PendingPositionedTableTokens;
   readonly positionedTableAnchorSignals?: readonly PositionedTableAnchorSignal[];
 }
 
@@ -127,23 +137,48 @@ export function positionedTableFlow(
     idByToken.set(token, positioned.table.id);
     anchorIds.add(positioned.anchorId);
   }
-  const tokensOf = (pendingIds: ReadonlySet<string>): string[] =>
-    [...pendingIds].flatMap((id) => {
+  let pending: PendingPositionedTableTokens | undefined;
+  const append = (token: string): void => {
+    pending = {
+      token,
+      previous: pending,
+      length: (pending?.length ?? 0) + 1,
+      signature: sha256FontBytes(
+        new TextEncoder().encode(framedTokenJoin([pending?.signature ?? '', token]))
+      ),
+    };
+  };
+  // Publication only removes IDs. Rebuild once after a removal, never at each addition.
+  const sync = (ids: ReadonlySet<string>): void => {
+    if ((pending?.length ?? 0) === ids.size) return;
+    pending = undefined;
+    for (const id of ids) {
       const token = tokenById.get(id);
-      return token ? [token] : [];
-    });
+      if (token) append(token);
+    }
+  };
   return {
+    add(ids: Set<string>, id: string): void {
+      sync(ids);
+      if (ids.has(id)) return;
+      const token = tokenById.get(id);
+      if (!token) return;
+      ids.add(id);
+      append(token);
+    },
     note(
       signals: PositionedTableAnchorSignal[],
       anchorId: string,
       column: number,
-      fragmentIndex: number
+      fragmentIndex: number,
+      anchorY: number
     ): void {
-      if (anchorIds.has(anchorId)) signals.push({ anchorId, column, fragmentIndex });
+      if (anchorIds.has(anchorId)) signals.push({ anchorId, column, fragmentIndex, anchorY });
     },
     checkpoint(pendingIds: ReadonlySet<string>, signals: readonly PositionedTableAnchorSignal[]) {
+      sync(pendingIds);
       return {
-        pendingPositionedTableTokens: tokensOf(pendingIds),
+        pendingPositionedTableTokens: pending,
         positionedTableAnchorSignals: [...signals],
       };
     },
@@ -153,20 +188,29 @@ export function positionedTableFlow(
       signals: PositionedTableAnchorSignal[]
     ): void {
       pendingIds.clear();
-      for (const token of checkpoint.pendingPositionedTableTokens ?? []) {
-        const id = idByToken.get(token);
+      const tokens: string[] = [];
+      for (let node = checkpoint.pendingPositionedTableTokens; node; node = node.previous)
+        tokens.push(node.token);
+      for (let index = tokens.length - 1; index >= 0; index--) {
+        const id = idByToken.get(tokens[index]!);
         if (id) pendingIds.add(id);
       }
+      pending = checkpoint.pendingPositionedTableTokens;
+      sync(pendingIds);
       signals.splice(0, signals.length, ...(checkpoint.positionedTableAnchorSignals ?? []));
     },
     same(
-      priorTokens: readonly string[] | undefined,
+      priorTokens: PendingPositionedTableTokens | undefined,
       priorSignals: readonly PositionedTableAnchorSignal[] | undefined,
       pendingIds: ReadonlySet<string>,
       signals: readonly PositionedTableAnchorSignal[]
     ): boolean {
+      sync(pendingIds);
       return (
-        sameStrings(priorTokens, tokensOf(pendingIds)) && sameAnchorSignals(priorSignals, signals)
+        (pending === priorTokens ||
+          (pending?.length === priorTokens?.length &&
+            pending?.signature === priorTokens?.signature)) &&
+        sameAnchorSignals(priorSignals, signals)
       );
     },
   };
@@ -178,9 +222,14 @@ export function publishPositionedTablesOnPage(
   outstandingIds: Set<string>,
   pageFragments: BlockFragmentRecord[],
   anchorSignals: PositionedTableAnchorSignal[],
-  placeTable: (table: OoxmlElement, column: number) => void
+  placeTable: (
+    table: OoxmlElement,
+    column: number,
+    anchorY: number,
+    anchorFragmentIndex: number
+  ) => void
 ): void {
-  const byParagraph = anchorsByParagraph(positionedTables);
+  const byParagraph = positionedTablesByAnchor(positionedTables);
   let insertedFragments = 0;
   for (const signal of anchorSignals) {
     const positionedForAnchor = byParagraph.get(signal.anchorId);
@@ -189,7 +238,21 @@ export function publishPositionedTablesOnPage(
     const publishedAt = pageFragments.length;
     for (const positioned of positionedForAnchor) {
       if (!outstandingIds.has(positioned.table.id)) continue;
-      placeTable(positioned.table, signal.column);
+      const start = pageFragments.length;
+      placeTable(positioned.table, signal.column, signal.anchorY, insertionIndex);
+      for (let index = start; index < pageFragments.length; index++) {
+        const fragment = pageFragments[index]!;
+        if (fragment.kind === 'table')
+          pageFragments[index] = {
+            ...fragment,
+            floatingWrap: {
+              anchorId: signal.anchorId,
+              columnIndex: signal.column,
+              float: positioned.float,
+              sourceOrder: positioned.sourceIndex,
+            },
+          };
+      }
       outstandingIds.delete(positioned.table.id);
     }
     const fragments = pageFragments.splice(publishedAt);
@@ -249,7 +312,7 @@ export function hasFlowFragments(
 ): boolean {
   for (let index = start; index < fragments.length; index += 1) {
     const fragment = fragments[index]!;
-    if (!isOutOfFlowTableFragment(fragment)) return true;
+    if (!isOutOfFlowFragment(fragment)) return true;
   }
   return false;
 }

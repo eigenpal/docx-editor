@@ -304,7 +304,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'A centered, auto-sized PAGE footer frame can overlay an empty or centered middle-dot anchor without adding a footer line. Supported single-line fixed-width PAGE frames use their page-relative horizontal position and clip overflow above an empty anchor or a second PAGE paragraph. All fields and paragraphs survive save. Frames that need text wrapping, unsupported positions, and drop caps stay in ordinary flow.',
+      'In single-column sections, body text frames with numeric x, y, and width use page, margin, or text anchors without adding their height to paragraph flow. Adjacent paragraphs with identical frame properties share one frame. Following text wraps around frames or clears them for none and notBeside. Continuous sections start below preceding frames. Text remains selectable and editable; frame creation and resizing have no UI. Centered auto-sized and supported fixed-width PAGE footer frames retain their specialized layout. Drop caps, fixed-height frames, alignment-based positions, and frames with unsupported content stay in ordinary flow. Upward text-relative offsets and frame groups that block a full fresh page use ordinary flow. All frame properties survive save.',
   },
   {
     id: 'paragraphs.hyphenation',
@@ -456,7 +456,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box. It uses tblpY or tblpYSpec against the selected vertical anchor. Page-anchored and margin-anchored tables do not advance body flow. Simple text-anchored tables can share a terminal empty paragraph without adding a blank page when the complete group fits the same content box, including paragraph spacing and inert bookmark or formatting markup. Other text-anchored tables remain in flow. Text does not wrap beside them yet.',
+      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box, and tblpY or tblpYSpec against its vertical anchor. Body text wraps beside supported floating tables and below full-width tables, including authored text distances. Text-anchored tables with numeric vertical offsets move with their following paragraph and do not add table height to paragraph flow. Negative offsets retain their position when clear of preceding text; intersecting tables move below that text. Text-anchored tables taller than a page, marked no-overlap, using vertical alignment, or affected by earlier wrapping objects retain row pagination. Simple terminal empty anchors retain their shared-page layout. Floating-table positioning has no editing UI.',
   },
   {
     id: 'tables.text-direction',
