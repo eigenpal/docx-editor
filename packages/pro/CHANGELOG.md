@@ -4,7 +4,7 @@
 
 ## 2.15.0
 
-### Patch Changes
+### Patch changes
 
 - 7dc8b22: Preserve concurrent text edits when another collaborator formats the same run. Fixes #590.
 - Updated dependencies [5284df5]

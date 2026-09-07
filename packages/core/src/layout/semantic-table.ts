@@ -15,6 +15,7 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { shadingFillFromElement } from './ooxml-shading.ts';
+import { readTableFloatPosition } from './table-float-properties.ts';
 import {
   revisionNodeProjectionMode,
   type RevisionAuthorFilter,
@@ -170,6 +171,12 @@ export interface TableFloatPosition {
   readonly ySpec?: TableFloatYSpec;
   /** `w:tblpY` in points; signed. */
   readonly yPt: number;
+  readonly distances?: {
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+    readonly left: number;
+  };
 }
 
 /** One anchor box, in the same coordinates layout reports fragment boxes in. */
@@ -187,12 +194,6 @@ export interface TableAnchorFrames {
   /** The whole sheet, margins included. */
   readonly page: TableAnchorFrame;
 }
-
-/**
- * Ceiling on a `w:tblpX`/`w:tblpY` offset (~22"), matching the other bounded geometry
- * reads here. Both are signed, so the clamp is two-sided.
- */
-const MAX_TABLE_FLOAT_OFFSET_PT = 31_680 / 20;
 
 /**
  * One cell in the resolved table structure.
@@ -417,59 +418,6 @@ function readRowHeight(rowProperties: OoxmlElement | undefined): TableRowHeight 
   // Omitted hRule + present val → atLeast (Word), not ECMA's auto-with-ignored-val.
   const effective: 'atLeast' | 'exact' = rule === 'exact' ? 'exact' : 'atLeast';
   return { rule: effective, valuePt };
-}
-
-function readFloatAnchor(raw: string | undefined): TableFloatAnchor | undefined {
-  if (raw === 'page') return 'page';
-  if (raw === 'margin') return 'margin';
-  if (raw === 'text') return 'text';
-  return undefined;
-}
-
-function readSignedTwipsPt(raw: string | undefined): number | undefined {
-  if (raw === undefined || !/^-?\d{1,9}$/.test(raw)) return undefined;
-  const twips = Number(raw);
-  if (!Number.isFinite(twips)) return undefined;
-  const pt = twips / 20;
-  return Math.max(-MAX_TABLE_FLOAT_OFFSET_PT, Math.min(MAX_TABLE_FLOAT_OFFSET_PT, pt));
-}
-
-/**
- * Read `w:tblpPr`. Absent anchors default to `text` (17.4.58/17.4.66); an unrecognised
- * spec is dropped rather than guessed at, which leaves the offset to place the table.
- */
-function readTableFloatPosition(
-  container: OoxmlElement | undefined
-): TableFloatPosition | undefined {
-  const tblpPr = container && childNamed(container, 'tblpPr');
-  if (!tblpPr) return undefined;
-  const rawXSpec = attributeValue(tblpPr, 'tblpXSpec');
-  const xSpec: TableFloatXSpec | undefined =
-    rawXSpec === 'left' ||
-    rawXSpec === 'center' ||
-    rawXSpec === 'right' ||
-    rawXSpec === 'inside' ||
-    rawXSpec === 'outside'
-      ? rawXSpec
-      : undefined;
-  const rawYSpec = attributeValue(tblpPr, 'tblpYSpec');
-  const ySpec: TableFloatYSpec | undefined =
-    rawYSpec === 'inline' ||
-    rawYSpec === 'top' ||
-    rawYSpec === 'center' ||
-    rawYSpec === 'bottom' ||
-    rawYSpec === 'inside' ||
-    rawYSpec === 'outside'
-      ? rawYSpec
-      : undefined;
-  return {
-    horzAnchor: readFloatAnchor(attributeValue(tblpPr, 'horzAnchor')) ?? 'text',
-    vertAnchor: readFloatAnchor(attributeValue(tblpPr, 'vertAnchor')) ?? 'text',
-    ...(xSpec ? { xSpec } : {}),
-    xPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpX')) ?? 0,
-    ...(ySpec ? { ySpec } : {}),
-    yPt: readSignedTwipsPt(attributeValue(tblpPr, 'tblpY')) ?? 0,
-  };
 }
 
 /**

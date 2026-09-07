@@ -110,6 +110,15 @@ export interface AutomationDocumentPort {
    */
   revisionDisplayMode?(): FormattingDisplayMode;
   /**
+   * Where a replacement for `[start, end)` of a paragraph lands under the owner's editing
+   * mode, or null when the edit would not be tracked — the surface's own landing rule.
+   *
+   * A scripted `Replace` in suggesting mode strikes the words and must put the new text after
+   * them, as typing does; the planner has no editing mode of its own, so it asks. Absent on a
+   * headless owner, which writes nothing tracked.
+   */
+  replacementLanding?(paragraphId: string, start: number, end: number): number | null;
+  /**
    * Commit ops as ONE transaction against ONE story.
    *
    * Ordered and atomic is the port's contract, not the caller's convention: on any rejection

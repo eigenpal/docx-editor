@@ -1,7 +1,11 @@
 // The font compatibility notice's detection: which document families render substituted.
 
 import { describe, expect, test } from 'bun:test';
-import { createLocalFontProbe, detectFontSubstitutions } from '../font-availability.ts';
+import {
+  createLocalFontProbe,
+  detectFontSubstitutions,
+  fontResolverFamilies,
+} from '../font-availability.ts';
 
 /** A canvas-like context where only `widths`-listed families change the measurement. */
 function fakeContext(resolvedFamilies: readonly string[]) {
@@ -89,5 +93,62 @@ describe('detectFontSubstitutions', () => {
         (family) => family === 'Carlito'
       )
     ).toEqual([]);
+  });
+});
+
+describe('fontResolverFamilies', () => {
+  test('declared families come first, symbol faces after, with no duplicate', () => {
+    expect(fontResolverFamilies(['Garamond', 'MS Gothic'], ['Wingdings', 'ms gothic'], 64)).toEqual(
+      ['Garamond', 'MS Gothic', 'Wingdings']
+    );
+  });
+
+  test('a document that fills the bound with declared families still asks for its symbols', () => {
+    // Without the reservation a template naming `cap` faces crowds every symbol face out,
+    // so an app could never supply the face a private-use glyph needs.
+    const declared = Array.from({ length: 64 }, (_, index) => `Face ${index}`);
+    const families = fontResolverFamilies(declared, ['Wingdings'], 64);
+    expect(families).toHaveLength(64);
+    expect(families.at(-1)).toBe('Wingdings');
+    expect(families[0]).toBe('Face 0');
+  });
+
+  test('the bound is never exceeded, and symbol faces never take it whole', () => {
+    // The reservation is a floor on what steps aside, so a tight bound still leads with the
+    // face the text renders in.
+    const symbols = Array.from({ length: 20 }, (_, index) => `Symbol ${index}`);
+    const families = fontResolverFamilies(['Garamond'], symbols, 4);
+    expect(families).toHaveLength(4);
+    expect(families[0]).toBe('Garamond');
+  });
+
+  test('a symbol face the cut would drop is still asked for, declared or not', () => {
+    // Word writes the symbol face on the run as well, so a checkbox face is usually
+    // declared too — and `documentFonts()` sorts by code point, which puts Wingdings past
+    // the cut in any long list.
+    const declared = [...Array.from({ length: 70 }, (_, index) => `Face ${index}`), 'Wingdings'];
+    expect(fontResolverFamilies(declared, ['Wingdings'], 64)).toContain('Wingdings');
+  });
+
+  test('a symbol face the bound already carries costs the declared list nothing', () => {
+    const declared = ['MS Gothic', ...Array.from({ length: 63 }, (_, index) => `Face ${index}`)];
+    const families = fontResolverFamilies(declared, ['MS Gothic'], 64);
+    expect(families).toHaveLength(64);
+    expect(families.at(-1)).toBe('Face 62');
+  });
+
+  test('reserving for one symbol face never evicts another into its slot', () => {
+    // The head cut can push a symbol face that WAS inside the bound out of it, and that
+    // face must not then spend the slot reserved for the one that never fitted.
+    const declared = [...Array.from({ length: 63 }, (_, index) => `Face ${index}`), 'MS Gothic'];
+    const families = fontResolverFamilies(declared, ['MS Gothic', 'Wingdings'], 64);
+    expect(families).toContain('MS Gothic');
+    expect(families).toContain('Wingdings');
+    expect(families).toHaveLength(64);
+  });
+
+  test('room left over after the reservation still goes to the remaining symbol faces', () => {
+    const symbols = Array.from({ length: 10 }, (_, index) => `Symbol ${index}`);
+    expect(fontResolverFamilies(['Garamond'], symbols, 64)).toHaveLength(11);
   });
 });

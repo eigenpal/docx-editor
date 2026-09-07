@@ -188,7 +188,8 @@ describe('multi-section reserve index space (#460)', () => {
     });
     expect(sortedKeys(session.notePageBottomReserves!)).toEqual([2]);
 
-    const { part: grownPart, notes: grownNotes } = notesFor(docWith(30), 3);
+    // Hanging same-run separators let 30 paragraphs fit one page; 40 forces the shift.
+    const { part: grownPart, notes: grownNotes } = notesFor(docWith(40), 3);
     const incremental = layoutSemanticDocument(grownPart, 2, {
       measurer: grownNotes.measurer,
       notes: grownNotes,
@@ -230,7 +231,8 @@ describe('multi-section reserve index space (#460)', () => {
     // reserve at the shared sheet's DOCUMENT page index, so the continued flow also stops
     // above the note area rather than filling the band the note needs.
     const bytes = zipFootnoteDoc(
-      paras('S0', 60, 18, 59) +
+      // Keep the citation on document page 2 after same-run separators can hang.
+      paras('S0', 80, 18, 79) +
         sectionBreak +
         paras('S1', 40, 18) +
         `<w:sectPr><w:type w:val="continuous"/>${SECT_GEOMETRY}</w:sectPr>`,

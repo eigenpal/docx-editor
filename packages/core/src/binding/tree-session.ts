@@ -72,6 +72,7 @@ import { headerFooterPartsFromResolution } from '../store/package/hf-references.
 import {
   collectDocumentFonts,
   collectDocumentStyles,
+  collectSymbolFontFamilies,
   documentRendersText,
   type DocumentStyleEntry,
 } from './document-catalog.ts';
@@ -494,6 +495,8 @@ export function openTreeSession(
     readonly styles: OoxmlElement | null;
     readonly families: readonly string[];
   } | null = null;
+  let symbolFontsCache: { readonly revision: number; readonly fonts: readonly string[] } | null =
+    null;
   let rendersTextCache: { readonly revision: number; readonly rendersText: boolean } | null = null;
   let stylesCache: readonly DocumentStyleEntry[] | null = null;
   let themeColorsCache: readonly DocumentThemeColorEntry[] | null = null;
@@ -824,6 +827,18 @@ export function openTreeSession(
           ),
         };
         return fontsCache.fonts;
+      },
+
+      symbolFontFamilies() {
+        // Same revision key as `documentFonts`: a `w:sym` can be pasted in or deleted.
+        if (symbolFontsCache && symbolFontsCache.revision === packageStore.packageRevision) {
+          return symbolFontsCache.fonts;
+        }
+        symbolFontsCache = {
+          revision: packageStore.packageRevision,
+          fonts: collectSymbolFontFamilies(catalogRoots()),
+        };
+        return symbolFontsCache.fonts;
       },
 
       renderedFontFamilies() {

@@ -6,6 +6,7 @@
 
 import { lineSegments, segmentOverlap } from './line-segments.ts';
 import { xWithinLine } from './line-geometry.ts';
+import { clipParagraphBox } from './paragraph-frame-clip.ts';
 import { paragraphFragmentsOf, paragraphFragmentsOfBlocks } from './semantic-records.ts';
 import type {
   BlockFragmentRecord,
@@ -168,15 +169,18 @@ function rangeRects(
           );
           const startX = Math.min(...edges);
           const endX = Math.max(...edges);
-          rects.push(
-            bottomToTopRectInLayout(layout, segment.paragraphId, {
+          const clipped = clipParagraphBox(
+            {
               pageIndex: page.index,
               x: startX,
               y: line.box.y,
               width: endX - startX,
               height: line.box.height,
-            })
+            },
+            fragment.clipToBox ? fragment.box : undefined
           );
+          if (!clipped) continue;
+          rects.push(bottomToTopRectInLayout(layout, segment.paragraphId, clipped));
         }
       }
     }
@@ -227,15 +231,18 @@ export function keyedRangeRects(
             const startX = xWithinLine(line, overlap.start, measurer, segment);
             const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
-            rects.push(
-              bottomToTopRectInLayout(layout, segment.paragraphId, {
+            const clipped = clipParagraphBox(
+              {
                 pageIndex: page.index,
                 x: Math.min(startX, endX),
                 y: line.box.y,
                 width: Math.abs(endX - startX),
                 height: line.box.height,
-              })
+              },
+              fragment.clipToBox ? fragment.box : undefined
             );
+            if (!clipped) continue;
+            rects.push(bottomToTopRectInLayout(layout, segment.paragraphId, clipped));
             found.set(range.key, rects);
           }
       }
@@ -381,6 +388,7 @@ export function presenceRangeRects(
     if (pair) ordered.push({ key: range.key, from: pair.from, to: pair.to });
   }
   if (ordered.length === 0) return found;
+  const orderIndex = indexesOf(order);
   const take = (
     blocks: readonly BlockFragmentRecord[],
     pageIndex: number,
@@ -392,18 +400,23 @@ export function presenceRangeRects(
         presenceWalkLines += 1;
         for (const segment of lineSegments(line)) {
           for (const range of ordered) {
-            const overlap = segmentOverlap(layout, segment, range.from, range.to);
+            const overlap = segmentOverlap(layout, segment, range.from, range.to, orderIndex);
             if (!overlap) continue;
             const startX = xWithinLine(line, overlap.start, measurer, segment);
             const endX = xWithinLine(line, overlap.end, measurer, segment);
             const rects = found.get(range.key) ?? [];
-            rects.push({
-              pageIndex,
-              x: Math.min(startX, endX) + offsetX,
-              y: line.box.y + offsetY,
-              width: Math.abs(endX - startX),
-              height: line.box.height,
-            });
+            const clipped = clipParagraphBox(
+              {
+                pageIndex,
+                x: Math.min(startX, endX),
+                y: line.box.y,
+                width: Math.abs(endX - startX),
+                height: line.box.height,
+              },
+              fragment.clipToBox ? fragment.box : undefined
+            );
+            if (!clipped) continue;
+            rects.push({ ...clipped, x: clipped.x + offsetX, y: clipped.y + offsetY });
             found.set(range.key, rects);
           }
         }

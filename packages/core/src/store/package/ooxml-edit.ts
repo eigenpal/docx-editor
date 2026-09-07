@@ -63,6 +63,39 @@ export interface EditOptions {
    * caller outside a transaction gets.
    */
   readonly revisionIds?: () => string;
+  /**
+   * The transaction's revision-id bookkeeping for the tracked TEXT ops, where `revisionIds`
+   * above hands the property ops one shared id for their whole group.
+   *
+   * Absent means "mint your own and remember nothing", which is what a caller outside a
+   * transaction gets: every applier falls back to its own walk of the part.
+   */
+  readonly trackedRevisionIds?: TransactionRevisionIds;
+}
+
+/**
+ * What one transaction knows about the revision ids its tracked text ops write.
+ *
+ * TWO questions, and they are the same bookkeeping. `nextRevisionId` walks the whole part, so
+ * a replacement — a `deleteText` and an `insertText` in one transaction — walked it twice, and
+ * on a five-hundred-page document that doubled the cost of every one. And an insertion aimed
+ * at the front edge of a deletion relocates past it only when that deletion is THIS
+ * transaction's own: typing over a selection. Backspace, then a keystroke, is two
+ * transactions, and there the typed text belongs in FRONT of the struck character, as Word
+ * writes it. Adjacency alone cannot tell the two apart; the ids can.
+ */
+export interface TransactionRevisionIds {
+  /** A fresh `@w:id`, from this transaction's one walk of the part. */
+  mint(): string;
+  /**
+   * Record a wrapper this transaction wrote, by its FULL `CT_TrackChange` identity — id,
+   * author and date, as `revisionKey` spells it. Not by the id alone: that number comes out
+   * of the file, nothing makes it unique, and a strike joining `w:id="3"` in one paragraph
+   * would otherwise claim an unrelated `w:id="3"` elsewhere as this edit's own.
+   */
+  wrote(key: string): void;
+  /** Whether this transaction wrote a wrapper with that identity. */
+  wroteUnder(key: string): boolean;
 }
 
 /**

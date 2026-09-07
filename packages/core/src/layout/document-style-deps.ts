@@ -10,7 +10,7 @@ import { buildStyleCascadeTable, type StyleCascadeTable } from './style-cascade.
 export interface DocumentStyleDependencies {
   readonly styleCascade: () => StyleCascadeTable | undefined;
   readonly defaultTabStopPt: () => number;
-  readonly compatibilityMode: () => number | undefined;
+  readonly compatibilityMode?: () => number | undefined;
   readonly numberingIndex: () => NumberingIndex;
 }
 
@@ -26,6 +26,7 @@ export function createDocumentStyleDependencies(
   let styleThemeMajorEastAsia: string | null | undefined;
   let styleThemeMinorEastAsia: string | null | undefined;
   let styles: StyleCascadeTable | undefined;
+  let typographyRoot: OoxmlElement | null | undefined;
   let settingsRoot: OoxmlElement | null | undefined;
   let defaultTabStopPt: number | undefined;
   let compatibilityRoot: OoxmlElement | null | undefined;
@@ -34,9 +35,11 @@ export function createDocumentStyleDependencies(
     styleCascade() {
       const current = view.stylesRoot();
       const theme = view.documentThemeFonts();
+      const currentSettings = view.settingsRoot();
       if (
         styles === undefined ||
         current !== stylesRoot ||
+        currentSettings !== typographyRoot ||
         theme.major !== styleThemeMajor ||
         theme.minor !== styleThemeMinor ||
         theme.majorEastAsia !== styleThemeMajorEastAsia ||
@@ -47,7 +50,8 @@ export function createDocumentStyleDependencies(
         styleThemeMinor = theme.minor;
         styleThemeMajorEastAsia = theme.majorEastAsia;
         styleThemeMinorEastAsia = theme.minorEastAsia;
-        styles = buildStyleCascadeTable(current, theme);
+        typographyRoot = currentSettings;
+        styles = buildStyleCascadeTable(current, theme, currentSettings);
       }
       return styles;
     },

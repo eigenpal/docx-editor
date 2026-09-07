@@ -23,13 +23,13 @@ export function contentInsets(
     (edge) => edge.state !== 'edge' || edge.style === 'single' || edge.style === 'thick'
   );
   // The admitted legacy table's margins already start at the collapsed grid lines. Only
-  // reuse that budget when BOTH margins clear their half-strokes; thick/asymmetric cases
+  // reuse that budget when BOTH margins clear their full painted strokes; thick/asymmetric cases
   // keep the existing conservative inset. This is not a general Word border-box model.
   const marginCoversRules =
     legacyCollapsedContentAlignment &&
     simpleRules &&
-    margins.left >= leftExtent / 2 &&
-    margins.right >= rightExtent / 2;
+    margins.left >= leftExtent &&
+    margins.right >= rightExtent;
   return {
     top: margins.top + borderExtentPt(borders.top),
     right: margins.right + (marginCoversRules ? 0 : rightExtent),

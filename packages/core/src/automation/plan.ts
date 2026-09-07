@@ -108,12 +108,14 @@ import {
   contentControlText,
   type AutomationContentControlRead,
 } from './content-controls.ts';
+import { contentControlPropertiesOf } from '../store/package/content-control-nodes.ts';
 import {
-  contentControlContentNodeOf,
-  contentControlPropertiesOf,
-  contentControlsIn,
-} from '../store/package/content-control-nodes.ts';
-import type { ContentControlValueInput } from '../store/store/tree-op-content-controls.ts';
+  CONTENT_CONTROL_LOCKS,
+  CONTENT_CONTROL_RANGE_LOCATIONS,
+  CONTENT_CONTROL_SUBTYPES,
+  allControlsUnder,
+  contentControlValueOf,
+} from './content-control-input.ts';
 import type { InsertCustomNodeWrite } from '../store/store/custom-node-writes.ts';
 import {
   customNodePayloadOf,
@@ -228,6 +230,8 @@ export interface BatchPlannerHost {
   readonly capabilities: AutomationCapabilities;
   /** The reader's view — see `AutomationDocumentPort.revisionDisplayMode`. */
   readonly displayMode?: FormattingDisplayMode;
+  /** Where a tracked replacement lands — see `AutomationDocumentPort.replacementLanding`. */
+  readonly replacementLanding?: (paragraphId: string, start: number, end: number) => number | null;
   /** Moves a reader's caret. Only called when `capabilities.selection` is true. */
   readonly select?: (range: ResolvedRange, mode: AutomationSelectionMode) => void;
 }
@@ -271,95 +275,6 @@ const APPLIED: AutomationValue = Object.freeze({ kind: 'applied' as const });
 
 function query(value: AutomationValue): PlannedOperation {
   return { ok: true, kind: 'query', value };
-}
-
-/**
- * Every control under a scope, nested ones included, in document order.
- *
- * For the lookups that search what the FILE wrote — an id, a tag, a title. Word's own numbering
- * is not scoped to a nesting level, so a lookup restricted to a scope's direct children would
- * report a control that plainly exists as absent.
- */
-function allControlsUnder(scope: OoxmlNode): readonly OoxmlNode[] {
-  const root = scope.kind === 'contentControl' ? contentControlContentNodeOf(scope) : scope;
-  if (!root) return [];
-  return contentControlsIn(root).map((entry) => entry.node);
-}
-
-const CONTENT_CONTROL_LOCKS: ReadonlySet<string> = new Set([
-  'unlocked',
-  'sdtLocked',
-  'contentLocked',
-  'sdtContentLocked',
-]);
-
-const CONTENT_CONTROL_RANGE_LOCATIONS: ReadonlySet<string> = new Set([
-  'whole',
-  'content',
-  'start',
-  'end',
-  'before',
-  'after',
-]);
-
-const CONTENT_CONTROL_SUBTYPES: ReadonlySet<string> = new Set([
-  'richText',
-  'plainText',
-  'dropDownList',
-  'comboBox',
-  'date',
-]);
-
-/** Longest tag/title/value a caller may author, so a script cannot ask for an unbounded write. */
-const MAX_CONTROL_STRING = 4_096;
-
-/**
- * The typed value a caller offered, or why it is not one.
- *
- * Validated HERE and not only in the store, because a caller-supplied object is untrusted input
- * arriving over a transport: a `value` that is a number, or a `kind` nobody declares, must be a
- * named refusal rather than something the tree lane has to defend against.
- */
-function contentControlValueOf(value: unknown):
-  | { readonly ok: true; readonly value: ContentControlValueInput }
-  | {
-      readonly ok: false;
-      readonly code: AutomationErrorCode;
-      readonly message: string;
-      readonly detail?: string;
-    } {
-  const bad = (message: string, detail?: string) => ({
-    ok: false as const,
-    code: 'unsupported-content' as AutomationErrorCode,
-    message,
-    detail,
-  });
-  if (typeof value !== 'object' || value === null || !('kind' in value)) {
-    return bad('a control value states its kind', 'value');
-  }
-  const offered = value as Record<string, unknown>;
-  const kind = offered.kind;
-  if (kind === 'text' || kind === 'listItem') {
-    const raw = kind === 'text' ? offered.text : offered.value;
-    if (typeof raw !== 'string') return bad('that value is not a string', String(kind));
-    if (raw.length > MAX_CONTROL_STRING) return bad('that value is too long', String(raw.length));
-    return {
-      ok: true,
-      value: kind === 'text' ? { kind: 'text', text: raw } : { kind: 'listItem', value: raw },
-    };
-  }
-  if (kind === 'checkbox') {
-    const checked = offered.checked;
-    if (typeof checked !== 'boolean') return bad('a checkbox is checked or not', 'checked');
-    return { ok: true, value: { kind: 'checkbox', checked } };
-  }
-  if (kind === 'date') {
-    const iso = offered.iso;
-    if (typeof iso !== 'string') return bad('a date is an ISO-8601 string', 'iso');
-    if (iso.length > 64) return bad('that is not a date', String(iso.length));
-    return { ok: true, value: { kind: 'date', iso } };
-  }
-  return bad('that is not a value any control accepts', String(kind));
 }
 
 /** Every occurrence of any delimiter in `text`, non-overlapping, in order. */
@@ -851,10 +766,34 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       }
     }
 
-    if (text.length > 0)
-      ops.push({ op: 'insertText', paragraphId: first, offset: range.start.offset, text });
+    // WHERE THE TEXT GOES. In suggesting mode the deletion strikes the words in place and the
+    // replacement belongs after them — Word's order, the order the keyboard writes, and the
+    // adjacency the review lane pairs into one card. The owner's landing rule says where that
+    // is: past the struck stretch, minus whatever of it was this author's own pending
+    // insertion, which leaves. With no rule, or none that tracks, the words are simply gone
+    // and the range start is the spot. The answer is that same spot, so a caller that
+    // formats or comments on what it just wrote addresses the new text; with an empty `text`
+    // it is where a replacement would have gone.
+    //
+    // ALWAYS THE FIRST PARAGRAPH, past its own struck tail. The keyboard puts a spanning
+    // replacement in the last paragraph instead, and matching that here refused the batch
+    // outright: the proposed merge REALLY merges when the first paragraph's mark is this
+    // author's own pending insertion, so the last paragraph leaves the tree and an op naming
+    // it vetoes the transaction. The two lanes therefore still pair a spanning replacement
+    // into different review cards; a refused edit is the worse of the two.
+    // Read against the document as the batch was PLANNED, like every offset a batch carries:
+    // a second `replaceSpan` earlier in the same paragraph shifts this one, and a caller
+    // orders such a batch back to front. The landing inherits that constraint, no more.
+    // RAW text, the offset authority the `deleteText` above measures with. The projected
+    // reading expands a field to its result, so a paragraph holding one made the struck
+    // stretch a range that does not exist — and the landing computed from it aimed past the
+    // paragraph's end, refusing the whole scripted replacement as `offset-out-of-range`.
+    const struckEnd = ids.length === 1 ? range.end.offset : (reads.rawText(first) ?? '').length;
+    const landing = host.replacementLanding?.(first, range.start.offset, struckEnd);
+    const at = landing ?? range.start.offset;
+    if (text.length > 0) ops.push({ op: 'insertText', paragraphId: first, offset: at, text });
 
-    const start: ResolvedPoint = { ...range.start, paragraphId: first };
+    const start: ResolvedPoint = { ...range.start, paragraphId: first, offset: at };
     const answer = (): AutomationValue => ({
       kind: 'span',
       span: spanOf({ start, end: { ...start, offset: start.offset + text.length } }),
@@ -931,6 +870,9 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     );
     const target = kept[0] as string;
 
+    // RAW text, for the reason `planReplaceSpan` spells out: this is the same measure the
+    // `deleteText` below strikes with, and the projected one disagrees over a field.
+    const targetLength = (reads.rawText(target) ?? '').length;
     for (const paragraphId of kept) {
       const length = (reads.rawText(paragraphId) ?? '').length;
       if (length > 0) ops.push({ op: 'deleteText', paragraphId, start: 0, end: length });
@@ -939,7 +881,12 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       if (block.id === keeper?.id) continue;
       ops.push({ op: 'deleteBlock', blockId: block.id });
     }
-    if (text.length > 0) ops.push({ op: 'insertText', paragraphId: target, offset: 0, text });
+    // The same landing rule `planReplaceSpan` reads, for the same reason: in suggesting mode
+    // the struck words keep their offsets and the new text belongs after them. Aimed at
+    // offset 0 the store relocates it anyway, and the span answered here then named the
+    // struck words rather than what replaced them.
+    const at = host.replacementLanding?.(target, 0, targetLength) ?? 0;
+    if (text.length > 0) ops.push({ op: 'insertText', paragraphId: target, offset: at, text });
 
     for (const block of removed) {
       if (block.id === keeper?.id) continue;
@@ -953,11 +900,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
       story: reads.story,
       paragraphId: target,
       index: reads.indexOf(target),
-      offset: 0,
+      offset: at,
     };
     const answer = (): AutomationValue => ({
       kind: 'span',
-      span: spanOf({ start, end: { ...start, offset: text.length } }),
+      span: spanOf({ start, end: { ...start, offset: at + text.length } }),
     });
     return { ok: true, kind: 'command', ops, story: reads.story, answer };
   };

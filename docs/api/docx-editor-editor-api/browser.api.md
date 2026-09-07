@@ -321,6 +321,7 @@ export class DocxEditorError extends Error {
     readonly actualRevision?: number;
     readonly code: DocxEditorErrorCode;
     readonly expectedRevision?: number;
+    readonly limit?: DocxEditorErrorInit['limit'];
     readonly target?: string;
 }
 
@@ -343,6 +344,8 @@ export type DocxEditorErrorCode =
 | 'ObjectInUse'
 /** An argument or load option this API does not accept. */
 | 'InvalidArgument'
+/** Opening the document exceeded a bounded reader resource limit. */
+| 'ResourceLimitExceeded'
 /** The collection has no such item — `getFirst()` on an empty one. */
 | 'ItemNotFound'
 /** The host cannot do this at all — a capability it reports false. */
@@ -379,6 +382,7 @@ export interface DocxEditorErrorInit {
     readonly actualRevision?: number;
     readonly code: DocxEditorErrorCode;
     readonly expectedRevision?: number;
+    readonly limit?: 'zip.maxEntries' | 'zip.maxTotalBytes' | 'zip.maxRatio' | 'xml.maxBytes' | 'xml.maxElements' | 'xml.maxDepth' | 'maxXmlParts' | 'maxRelationships';
     readonly target?: string;
 }
 

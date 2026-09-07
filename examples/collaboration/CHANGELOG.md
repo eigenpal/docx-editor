@@ -2,7 +2,7 @@
 
 ## 0.0.7
 
-### Patch Changes
+### Patch changes
 
 - @docx-editor.dev/core@2.15.1
   - @docx-editor.dev/editor-api@2.15.1
@@ -11,7 +11,7 @@
 
 ## 0.0.6
 
-### Patch Changes
+### Patch changes
 
 - Updated dependencies [5284df5]
 - Updated dependencies [e9baf4d]

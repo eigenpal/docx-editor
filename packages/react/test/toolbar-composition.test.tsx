@@ -90,6 +90,7 @@ function mountToolbar(
     <DocxEditorRoot
       document={source}
       modules={[testReviewModule()]}
+      author="Grace Hopper"
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
       }}

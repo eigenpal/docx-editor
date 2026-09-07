@@ -80,6 +80,7 @@ export type ServerAutomationHostResult =
   | {
       readonly ok: false;
       readonly reason: ServerAutomationHostRejection;
+      readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
       readonly detail?: string;
     };
 
@@ -90,10 +91,11 @@ export type ServerAutomationHostResult =
  */
 export interface ServerAutomationHostOptions {
   /**
-   * Tighter budgets for the bounded reader — zip ratio, part count, XML depth.
+   * Budgets for the bounded reader — archive size, part count, and XML elements.
    *
-   * Exposed because a server opening documents it did not author is exactly where a caller
-   * may want smaller limits than the defaults. Omitted means the engine's own defaults.
+   * Omitted means the engine defaults. Lower budgets for untrusted input, or raise
+   * `xml.maxElements` for larger documents when the host has sufficient memory.
+   * Engine ceilings still apply.
    */
   readonly limits?: OoxmlPackageLimits;
   /**
@@ -120,6 +122,7 @@ export function createServerAutomationHost(
     return {
       ok: false,
       reason: loaded.reason,
+      ...(loaded.limit === undefined ? {} : { limit: loaded.limit }),
       ...(loaded.detail ? { detail: loaded.detail } : {}),
     };
   }

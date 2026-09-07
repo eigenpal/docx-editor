@@ -75,4 +75,14 @@ describe('availableFontFamilies', () => {
     const catalog = availableFontFamilies(undefined, ['Georgia', 'x'.repeat(65), 'bad;name']);
     expect(catalog).toEqual(['Calibri', 'Georgia']);
   });
+
+  test('a face supplied for a symbol is offerable, like every other honoured family', () => {
+    // The editor asks the resolver for the face a `w:sym` names. Once an app answers, the
+    // editor can honour that family for text too, which is the only question this catalog
+    // asks — Word lists installed symbol fonts in its own picker for the same reason. A
+    // symbol face nothing supplied never reaches here: `collectDocumentFonts` reads
+    // `w:rFonts` declarations, and a `w:sym` face is not one.
+    const catalog = availableFontFamilies({ sources: [source('Wingdings')] }, ['Georgia']);
+    expect(catalog).toEqual(['Calibri', 'Georgia', 'Wingdings']);
+  });
 });

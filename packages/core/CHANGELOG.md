@@ -2,37 +2,33 @@
 
 ## 2.15.1
 
-### Patch Changes
+### Patch changes
 
 - @docx-editor.dev/i18n@2.15.1
 
 ## 2.15.0
 
-### Minor Changes
+### Minor changes
 
-- 5284df5: Add the DOM-free `@docx-editor.dev/core/export` session with immutable export-ready semantic
-  layouts and shared shaping and resource settlement. Exporters consume the same layout
-  coordinator and semantic records as the browser engine, including page-scoped, exporter-neutral
-  comment and tracked-change provenance that future Markdown, PDF, and other exporters can bind to
-  their own output coordinates. Document-aware font-backed sessions also retain immutable resolution
-  evidence so every exporter can report the exact direct, substituted, incomplete, and failed font
-  origins behind pagination.
-- 0d81033: Add session-owned font resources, exact shaped text, embedded document fonts, document metadata,
-  internal destinations, and review occurrence geometry to semantic export sessions.
-- 8e6133f: Apply live author, mode, translation, and locale changes without rebuilding the editor. Keep Vue root and packaged editor props reactive after mount. A locale catalog change no longer rebuilds the editor. Fixes #695 and #561.
+- 5284df5: Add `@docx-editor.dev/core/export` for document layout without a DOM. Export sessions
+  share the browser editor's layout engine and return immutable pages, comments, tracked changes,
+  and font-resolution reports.
+- 0d81033: Add font resources, shaped text, embedded fonts, metadata, internal link targets, and
+  comment and tracked-change positions to export sessions.
+- 8e6133f: Apply author, mode, translation, and locale changes without rebuilding the editor, including Vue root and packaged components. Fixes #695 and #561.
 
-### Patch Changes
+### Patch changes
 
-- e9baf4d: Search headers, footers, footnotes, endnotes, table cells, and saved field results. Fixes #703, fixes #694
-- 087bb78: Position page- and margin-anchored floating tables at `tblpY` without advancing body flow. Preserve `btLr` cell text, built-up bar fractions, and inline pictures in later columns. Keep automatic line spacing from scaling built-up equations and changing pagination. Fixes #662.
-- a3819aa: Reflow long unbroken words continuously across tracked-insertion run boundaries while typing in
-  Suggesting mode, without splitting Unicode graphemes. Fixes #716.
-- a53f75c: Hyperlinks in headers, footers, and anchored text boxes now resolve through their owning OOXML part and paint as link anchors. You can edit or remove header and footer links with Ctrl+K while editing their story; secondary-story anchors remain inert. Fixes #643.
-- 36c1f04: Keep table-hosted text-box list markers current while reducing repeated layout work for their host paragraphs. Fixes #639.
-- 678fe91: Group every tracked field control into the review card beside it, so a struck or inserted field is one decision instead of one card per control. Fixes #718
-- cfe3fe1: Treat empty on-demand font resolver fragments like an undefined result instead of reporting a missing-font configuration.
+- e9baf4d: Search headers, footers, footnotes, endnotes, table cells, and saved field results. Fixes #703 and #694.
+- 087bb78: Fix floating table positions, vertical cell text, stacked fractions, and inline pictures
+  in later columns. Preserve equation size and pagination with automatic line spacing. Fixes #662.
+- a3819aa: Wrap long words across tracked insertions in suggesting mode without splitting Unicode graphemes. Fixes #716.
+- a53f75c: Render hyperlinks in headers, footers, and anchored text boxes. While editing a header or footer, use Control+K to edit or remove its links. Links in these regions do not navigate. Fixes #643.
+- 36c1f04: Update list markers in text boxes inside tables and reduce repeated paragraph layout work. Fixes #639.
+- 678fe91: Group tracked field controls into one review card for each insertion or deletion. Fixes #718.
+- cfe3fe1: Allow on-demand font resolvers to return empty results without a configuration error.
 - 0e1360d: Keep underlined trailing spaces and underscore tab leaders as single rules that reach the line margin.
-- 2a8e57e: Show tracked field controls with their adjacent replacement instead of separate Deleted cards.
+- 2a8e57e: Show tracked field controls with their adjacent replacement instead of separate **Deleted** cards.
 - @docx-editor.dev/i18n@2.15.0
 
 ## 2.14.1

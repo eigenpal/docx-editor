@@ -74,6 +74,62 @@ export function createLocalFontProbe(
 }
 
 /**
+ * Symbol faces a document may claim from the resolver bound, whatever else it declares.
+ *
+ * Appending symbol faces after the declared list alone would let a template naming `cap`
+ * families crowd every one of them out, so an app could never supply the face a private-use
+ * glyph needs. Small on purpose: a file uses one or two symbol fonts, and the reservation
+ * comes out of the declared families' share.
+ */
+const RESERVED_SYMBOL_FAMILIES = 4;
+
+/**
+ * The families one font-resolver call may ask for, in priority order and capped.
+ *
+ * Declared families first, symbol faces after them. Both are genuinely wanted — a symbol
+ * face is the only thing that can paint an unmapped private-use glyph — but a face carrying
+ * one dingbat must not spend the bound ahead of the face a page of text renders in.
+ */
+export function fontResolverFamilies(
+  declared: readonly string[],
+  symbols: readonly string[],
+  cap: number
+): readonly string[] {
+  const seen = new Set<string>();
+  const wanted: string[] = [];
+  for (const family of symbols) {
+    const fold = family.toLowerCase();
+    if (seen.has(fold)) continue;
+    seen.add(fold);
+    wanted.push(family);
+  }
+  const keptFolds = (size: number): ReadonlySet<string> =>
+    new Set(declared.slice(0, Math.max(size, 0)).map((family) => family.toLowerCase()));
+  // Only the symbol faces the declared list would not carry anyway need reserving. Word
+  // writes a symbol face on the run too, so a checkbox face is usually declared as well —
+  // and `documentFonts()` sorts by code point, which puts Symbol, Webdings and Wingdings
+  // near the end of a long list. One that lands inside the bound costs nothing; one that
+  // lands past it is the case the reservation exists for.
+  //
+  // Run to a fixed point, because reserving a slot shortens the declared head, which can
+  // evict a symbol face that WAS inside the bound and so need one more. Each pass either
+  // raises the count or is the last, and `RESERVED_SYMBOL_FAMILIES` bounds it. The floor is
+  // never more than half the bound, so a small `cap` cannot invert the priority.
+  let reserved = 0;
+  for (let pass = 0; pass <= RESERVED_SYMBOL_FAMILIES; pass += 1) {
+    const kept = keptFolds(cap - reserved);
+    const unreachable = wanted.filter((family) => !kept.has(family.toLowerCase())).length;
+    const next = Math.min(unreachable, RESERVED_SYMBOL_FAMILIES, Math.floor(cap / 2));
+    if (next === reserved) break;
+    reserved = next;
+  }
+  const head = declared.slice(0, Math.max(cap - reserved, 0));
+  const kept = keptFolds(cap - reserved);
+  const tail = wanted.filter((family) => !kept.has(family.toLowerCase()));
+  return [...head, ...tail].slice(0, cap);
+}
+
+/**
  * The document families that will render in a face with DIFFERENT metrics: not covered by
  * an embedded or app-supplied face, not resolvable by the platform, and with no
  * metric-compatible twin in the surface fallback stack either. Order follows `families`

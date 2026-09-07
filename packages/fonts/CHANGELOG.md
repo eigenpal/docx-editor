@@ -2,41 +2,22 @@
 
 ## 2.15.1
 
-### Patch Changes
+### Patch changes
 
-- 1acd366: Stop `FONT_ASSET_ROOT` from throwing at module scope under webpack and Turbopack, which
-  took down the whole client bundle of any app that imported this package.
-
-  Those bundlers replace `new URL('../assets/<face>', import.meta.url)` with a bare
-  relative path string for the asset they emitted. Deriving the asset root from one entry
-  with a single-argument `new URL()` therefore threw `URL constructor:
-/_next/static/media/Caladea-Bold.<hash>.ttf is not a valid URL` while the module was
-  still evaluating, where nothing can catch it.
-
-  In a bundled build the root now reports a non-`file:` URL, which is what consumers
-  already gate on before using it as a `createPackagedFileFetch` trusted root. That holds
-  even when the page itself was opened from disk, as in an Electron renderer or a static
-  export: the bundler moved the faces, so no local directory holds them, and a bundle
-  serving assets from the path root would otherwise have resolved to the filesystem root,
-  which `createPackagedFileFetch` rejects by throwing.
-
-  Two ways a packaged face could silently fail to register are also fixed. The `FontFace`
-  URL source read `.href` off the bundler's string, which is `undefined`, emitting the
-  literal `url(undefined)`. And the source was unquoted, so an install path containing
-  characters an unquoted CSS `url()` token forbids, parentheses among them, produced a
-  token the browser could not parse.
+- 1acd366: Fix import crashes in webpack and Turbopack builds. Bundled `FONT_ASSET_ROOT` now
+  returns a non-`file:` URL, including in Electron and pages opened from disk. Fix font loading
+  when bundlers emit relative paths or install paths contain parentheses.
 
 ## 2.15.0
 
-### Minor Changes
+### Minor changes
 
-- 0d81033: Export `FONT_ASSET_ROOT` so hosts can confine packaged-font reads to the fonts package without guessing its install path.
+- 0d81033: Export `FONT_ASSET_ROOT` to restrict font reads to the package directory.
 
-### Patch Changes
+### Patch changes
 
-- 5284df5: Preserve one literal asset URL per packaged font face in the ESM browser build so Next.js with
-  Turbopack, Vite, and webpack resolve every requested filename instead of collapsing dynamic URLs
-  to one font. Keep the CommonJS build resolving the same packaged files in Node.
+- 5284df5: Fix packaged font URLs in Turbopack, Vite, and webpack builds. The CommonJS build
+  continues to use local font files in Node.js.
 
 ## 2.14.1
 

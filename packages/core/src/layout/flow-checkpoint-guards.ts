@@ -35,6 +35,7 @@ export type FlowCheckpointGuard =
 export const FLOW_CHECKPOINT_GUARDS = {
   pageCount: 'delta',
   pageFragments: 'compared', // sameFragments — structural, via the fragment signature
+  pendingParagraphFrames: 'compared', // ParagraphFrameFlow.same
   pendingAnchoredDrawings: 'compared', // sameAnchoredDrawings — reference per record
   // A flow that still owes the next page a drawing is not one that owes it nothing.
   deferredAnchoredDrawings: 'compared', // sameAnchoredDrawings

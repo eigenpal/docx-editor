@@ -39,6 +39,7 @@ export interface CreateDocumentFurnitureSourceOptions {
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: () => number;
+  readonly compatibilityMode?: () => number | undefined;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
   readonly inlineDrawingLayoutForPart?: (
@@ -90,6 +91,7 @@ export function createDocumentFurnitureSource(
     styleCascade,
     numberingIndex,
     defaultTabStopPt,
+    compatibilityMode,
     displayMode,
     revisionAuthorFilter,
     inlineDrawingLayoutForPart,
@@ -112,6 +114,7 @@ export function createDocumentFurnitureSource(
       projectionEpoch: string;
       revisionAuthorFilterKey: string;
       defaultTabStopPt: number | undefined;
+      compatibilityMode: number | undefined;
       drawingLayoutToken: string;
       numberingIndex: NumberingIndex | undefined;
       styleCascade: StyleCascadeTable | undefined;
@@ -174,6 +177,7 @@ export function createDocumentFurnitureSource(
     const projectionEpoch = linkProjectors.epochForPart(part.name);
     const revisionAuthorFilterKey = revisionAuthorFilter?.cacheKey ?? '';
     const currentDefaultTabStopPt = defaultTabStopPt?.();
+    const currentCompatibilityMode = compatibilityMode?.();
     const drawingLayoutToken = drawingLayoutTokenForPart?.(part.name) ?? '';
     const numbering = numberingIndex?.();
     const styles = styleCascade?.();
@@ -191,6 +195,7 @@ export function createDocumentFurnitureSource(
       cached.projectionEpoch === projectionEpoch &&
       cached.revisionAuthorFilterKey === revisionAuthorFilterKey &&
       cached.defaultTabStopPt === currentDefaultTabStopPt &&
+      cached.compatibilityMode === currentCompatibilityMode &&
       cached.drawingLayoutToken === drawingLayoutToken &&
       cached.numberingIndex === numbering &&
       cached.styleCascade === styles
@@ -225,6 +230,7 @@ export function createDocumentFurnitureSource(
       },
       view.documentProperties(),
       {
+        compatibilityMode: currentCompatibilityMode,
         ...(numbering ? { numberingIndex: numbering } : {}),
         projectLink,
         ...(projectFieldLink ? { projectFieldLink } : {}),
@@ -247,6 +253,7 @@ export function createDocumentFurnitureSource(
       projectionEpoch,
       revisionAuthorFilterKey,
       defaultTabStopPt: currentDefaultTabStopPt,
+      compatibilityMode: currentCompatibilityMode,
       drawingLayoutToken,
       numberingIndex: numbering,
       styleCascade: styles,

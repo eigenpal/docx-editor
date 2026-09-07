@@ -166,11 +166,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Text effects (outline, shadow, emboss, emphasis mark)',
     category: 'text',
     editing: 'none',
-    rendering: 'full',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'w:outline, w:shadow, w:emboss, w:imprint, and w:em render and round-trip. You cannot set them from the toolbar. w14 glow and gradient text fill are not supported.',
+      'Opaque solid w14:textOutline with an explicit RGB color renders. Theme-colored, transparent, gradient, dashed, compound, and inset outlines do not render. Legacy outline, shadow, emboss, imprint, and emphasis marks are preserved but do not render. Text effects have no toolbar controls.',
   },
   {
     id: 'text.hidden',
@@ -215,6 +215,19 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Justified East Asian lines distribute inter-character spacing. The last line stays left-aligned. Tabs and float passages retain their reserved positions.',
+  },
+  {
+    id: 'paragraphs.east-asian-typography',
+    name: 'East Asian typography',
+    category: 'paragraphs',
+    editing: 'preserved',
+    rendering: 'partial',
+    roundTrip: 'full',
+    tier: 'community',
+    notes:
+      'Protects graphemes, punctuation, and full-width number groups across run boundaries. East Asian font hints cover supported punctuation, symbols, Greek, and Cyrillic ranges while preserving explicit symbol fonts. Reads kinsoku, wordWrap, overflowPunct, strictFirstAndLastChars, language-specific custom line-break sets, and characterSpacingControl. Korean character wrapping follows wordWrap. Compression uses deterministic punctuation and kana advance reductions; font-specific optical compression and vertical Japanese composition are not modeled. Typography settings have no dedicated UI.',
   },
   {
     id: 'paragraphs.spacing',
@@ -287,11 +300,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Drop caps & text frames (framePr)',
     category: 'paragraphs',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Parsed and round-tripped; text flows inline rather than as a drop cap or positioned frame.',
+      'In single-column sections, body text frames with numeric x, y, and width use page, margin, or text anchors without adding their height to paragraph flow. Adjacent paragraphs with identical frame properties share one frame. Following text wraps around frames or clears them for none and notBeside. Continuous sections start below preceding frames. Text remains selectable and editable; frame creation and resizing have no UI. Centered auto-sized and supported fixed-width PAGE footer frames retain their specialized layout. Drop caps, fixed-height frames, alignment-based positions, and frames with unsupported content stay in ordinary flow. Upward text-relative offsets and frame groups that block a full fresh page use ordinary flow. All frame properties survive save.',
   },
   {
     id: 'paragraphs.hyphenation',
@@ -367,6 +380,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes: 'Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables. The same settings apply in body, header, footer, text-box, and note stories. Other table layouts keep their existing geometry.',
   },
   {
     id: 'tables.rows-columns',
@@ -410,7 +424,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Rows split mid-content with correct cut borders. Vertically merged cells repaint on continuation pages, like Word.',
+      'Rows split mid-content with correct cut borders. Vertically merged cells repaint on continuation pages, like Word. Repeated headers and bounded complete text rows reserve their shared horizontal border before pagination. This boundary adjustment excludes spaced cells, vertical merges, split rows, positioned tables, drawings, nested tables, and vertical text.',
   },
   {
     id: 'tables.nested',
@@ -443,7 +457,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box. It uses tblpY or tblpYSpec against the selected vertical anchor. Page-anchored and margin-anchored tables do not advance body flow. Text does not wrap beside them yet.',
+      'An anchored table uses tblpXSpec or tblpX across the text, margin, or page box, and tblpY or tblpYSpec against its vertical anchor. Body text wraps beside supported floating tables and below full-width tables, including authored text distances. Text-anchored tables with numeric vertical offsets move with their following paragraph and do not add table height to paragraph flow. Negative offsets retain their position when clear of preceding text; intersecting tables move below that text. Text-anchored tables taller than a page, marked no-overlap, using vertical alignment, or affected by earlier wrapping objects retain row pagination. Simple terminal empty anchors retain their shared-page layout. Floating-table positioning has no editing UI.',
   },
   {
     id: 'tables.text-direction',
@@ -468,7 +482,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. Both adapters ship insert and overlay authoring: the Insert menu, toolbar, properties dialog, and keyboard resize through the shared engine commands. An inserted image keeps its natural size when it fits and scales down proportionally to its cell, column, or page content box when it does not.',
+      'The engine lays out and paints embedded PNG, JPEG, and GIF at the authored size. JPEG validation accepts large metadata segments and accounts for EXIF-oriented intrinsic dimensions without rewriting the photo. Both adapters ship insert and overlay authoring: the Insert menu, toolbar, properties dialog, and keyboard resize through the shared engine commands. An inserted image keeps its natural size when it fits and scales down proportionally to its cell, column, or page content box when it does not.',
   },
   {
     id: 'images.anchored',
@@ -480,7 +494,7 @@ export const wordFeatures: WordFeature[] = [
     tier: 'community',
     docsLink: '/docs/2.x/guides/images',
     notes:
-      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. Both share setImageWrapType and toolbarCommandState.',
+      'Nine wrap modes, exclusion reflow, z-order, and drag and resize in both adapters. In-front and behind-text overlays are not cropped by their anchor cell. Authored anchor text distances are preserved. Text clears rectangular gaps narrower than the next glyph. Both share setImageWrapType and toolbarCommandState.',
   },
   {
     id: 'images.bmp-webp',
@@ -566,6 +580,18 @@ export const wordFeatures: WordFeature[] = [
       'Solid rectangles, ellipses, bounded polygon geometry, and grouped shapes render with sRGB or theme colors. Other payloads reserve their extent with a placeholder.',
   },
   {
+    id: 'images.legacy-vml',
+    name: 'Legacy VML pictures, annotation groups & straight WordArt',
+    category: 'images',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'preserved',
+    tier: 'community',
+    docsLink: '/docs/2.x/guides/images',
+    notes:
+      'Standalone w:pict supports bounded unrotated photos and groups of photos, simple solid geometry, arrowed lines, and straight fit-to-box WordArt. Previews do not replace canonical VML or add media parts. Unknown templates, unsupported members, rotation, and clipped groups remain opaque as a whole. VML-only MC fallbacks are unchanged.',
+  },
+  {
     id: 'images.crop',
     name: 'Picture cropping (srcRect)',
     category: 'images',
@@ -586,7 +612,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Transparency, brightness, contrast, and grayscale project where supported. Authored adjustment markup is preserved on save.',
+      'Brightness, contrast, grayscale, and bilevel black-and-white adjustments render in the editor. Image alpha and authored adjustment markup are preserved. PDF export does not apply these adjustments.',
   },
   {
     id: 'images.effects',
@@ -673,11 +699,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Watermarks (text & image)',
     category: 'layout',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Watermarks use VML or drawing markup in header parts. The editor does not render or edit them. It preserves the authored markup and package relationships through save.',
+      'The supported unrotated standalone VML subset can paint in header parts. Rotated or curved watermark templates remain opaque, and watermark authoring is unavailable. Authored markup and package relationships are preserved through save.',
     docsLink: '/docs/2.x/guides/headers-footers',
   },
   {
@@ -778,7 +804,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'A full revision model, including structural changes to paragraph breaks, paragraph properties, and table rows and cells. A change to a paragraph mark draws a pilcrow and a change bar wherever the paragraph is, table cells included, and a mark that one author inserted and another proposed removing carries both decisions. A tracked insert or delete around a field result paints as tracked, not as ordinary text. Attribution is drawn in All Markup only, as in Word. The resolved views drop the attribution and merge the paragraphs the decision merges, so No Markup shows the document as accepting every change would leave it. The Reviewers menu can hide individual authors without mutating the DOCX. The setTrackedChangesFilter API accepts a predicate over complete revision items, so a host can combine author, date, kind, range, and other revision metadata. Excluded content, moves, paragraph marks, and table-row revisions can render as temporarily accepted or rejected without changing saved OOXML. Suggesting mode records a formatting change rather than applying it outright: a run gets w:rPrChange, a paragraph mark gets w:pPr/w:rPr/w:rPrChange, and paragraph properties get w:pPrChange, so reject restores what the change replaced, and one press is one card however many runs it covers. Lists, indent level, tab stops, and table properties changed in the editor are applied without a record. A document that sets w:doNotTrackFormatting gets no formatting records. Painted markup follows Word’s by-author view by default — one color per author, matched by the review cards — and named authors can take a color, a background, class names, and an avatar of their own. The output opens cleanly in Word’s review pane.',
+      'A full revision model, including structural changes to paragraph breaks, paragraph properties, and table rows and cells. A change to a paragraph mark draws a pilcrow and a change bar wherever the paragraph is, table cells included, and a mark that one author inserted and another proposed removing carries both decisions. A tracked insert or delete around a field result paints as tracked, not as ordinary text. Attribution is drawn in All Markup only, as in Word. The resolved views drop the attribution and merge the paragraphs the decision merges, so No Markup shows the document as accepting every change would leave it. The Reviewers menu can hide individual authors without mutating the DOCX. The setTrackedChangesFilter API accepts a predicate over complete revision items, so a host can combine author, date, kind, range, and other revision metadata. Excluded content, moves, paragraph marks, and table-row revisions can render as temporarily accepted or rejected without changing saved OOXML. Suggesting requires a configured author; an authorless request reports a configuration error and disables the Suggesting menu item. Suggesting mode records a formatting change rather than applying it outright: a run gets w:rPrChange, a paragraph mark gets w:pPr/w:rPr/w:rPrChange, and paragraph properties get w:pPrChange, so reject restores what the change replaced, and one press is one card however many runs it covers. Lists, indent level, tab stops, and table properties changed in the editor are applied without a record. A document that sets w:doNotTrackFormatting gets no formatting records. Painted markup follows Word’s by-author view by default — one color per author, matched by the review cards — and named authors can take a color, a background, class names, and an avatar of their own. The output opens cleanly in Word’s review pane.',
     docsLink: '/docs/2.x/pro/tracked-changes',
   },
   {
@@ -1035,7 +1061,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Searches headers, footers, footnotes, endnotes, table cells, and saved field results.',
+    notes:
+      'Searches headers, footers, footnotes, endnotes, body, header, and footer text boxes, table cells, and saved field results. Only anchored text boxes are searched, because an inline one paints no story. Note-owned text boxes are excluded until their drawings are selectable. A text-box match selects the text box instead of placing the caret inside it.',
   },
   {
     id: 'collab.clipboard',
@@ -1088,7 +1115,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'A batching object model shaped after a documented subset of the Word JavaScript API. The server entry works over bytes, and the browser entry works over an open editor. It ships no model integration, tool catalog, or MCP transport.',
+      'A batching object model shaped after a documented subset of the Word JavaScript API. The server entry works over bytes and reports exceeded resource limits with typed errors. The browser entry works over an open editor. It ships no model integration, tool catalog, or MCP transport.',
     docsLink: '/docs/2.x/editor-api',
   },
 ];

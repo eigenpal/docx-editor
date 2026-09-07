@@ -366,11 +366,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly drawingNodeId: string;
     // (undocumented)
-    readonly effects: Readonly<{
-        readonly brightness: number;
-        readonly contrast: number;
-        readonly grayscale: boolean;
-    }>;
+    readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
     // (undocumented)

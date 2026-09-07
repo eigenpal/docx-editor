@@ -7,6 +7,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, type OoxmlNode, type OoxmlPart } from '@docx-editor.dev/core/store';
 import { piecesOfParagraph } from '../field-projection.ts';
+import { styleForFontSlot } from '../script-itemization.ts';
 import type { RevisionDisplayMode } from '../revision-projection.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -51,6 +52,34 @@ function complexField(instr: string, result = '', chromeRpr = ''): string {
 }
 
 describe('a complex SYMBOL field', () => {
+  test('an explicit font survives neighboring Han while an inherited font follows its slot', () => {
+    const props = '<w:rPr><w:rFonts w:ascii="Arial" w:eastAsia="SimSun"/></w:rPr>';
+    for (const explicit of [false, true]) {
+      const instruction = ` SYMBOL 10003 ${explicit ? '\\f "Segoe UI Symbol" ' : ''}\\u `;
+      for (const leading of [false, true]) {
+        const han = `<w:r>${props}<w:t>中</w:t></w:r>`;
+        const field = complexField(instruction, '', props);
+        const pieces = project(`<w:p>${leading ? field + han : han + field}</w:p>`);
+        const symbol = pieces.find((piece) => piece.text === '✓')!;
+        expect(styleForFontSlot(symbol.style, symbol.fontSlot).fontFamily).toBe(
+          explicit ? 'Segoe UI Symbol' : 'SimSun'
+        );
+      }
+    }
+  });
+
+  test('keeps an explicit Unicode symbol face under an inherited East Asian hint', () => {
+    const props =
+      '<w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial" w:eastAsia="SimSun" w:hint="eastAsia"/></w:rPr>';
+    const pieces = project(
+      `<w:p>${complexField(' SYMBOL 10003 \\f "Segoe UI Symbol" \\u ', '', props)}</w:p>`
+    );
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0]).toMatchObject({ text: '✓', projected: true });
+    expect(pieces[0]!.style.fontFamily).toBe('Segoe UI Symbol');
+    expect(pieces[0]!.fontSlot).toBeUndefined();
+  });
+
   test('paints the mapped glyph over one atom unit with the \\f family', () => {
     const pieces = project(
       '<w:p><w:r><w:t>A</w:t></w:r>' +

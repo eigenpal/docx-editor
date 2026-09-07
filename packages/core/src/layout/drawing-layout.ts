@@ -3,29 +3,25 @@
 // DOM-free points everywhere. `wp:extent` EMUs convert at this boundary; intrinsic pixel
 // dimensions never resize layout. Paint and hit testing consume the published records only.
 
-import type {
-  DrawingAccessibility,
-  DrawingHorizontalReferenceFrame,
-  DrawingProjection,
-  DrawingTransform,
-  DrawingVerticalReferenceFrame,
-  ImageWrapTarget,
-  SourceCrop,
-  VectorShapeProjection,
-} from '../store/package/drawing-projection.ts';
+import type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';
 import {
   drawingAccessibility,
-  isRunLevelMcAlternateContent,
+  type DrawingAccessibility,
+  type DrawingHorizontalReferenceFrame,
+  type DrawingProjection,
+  type DrawingTransform,
+  type DrawingVerticalReferenceFrame,
+  type ImageWrapTarget,
+  type SourceCrop,
+  type VectorShapeProjection,
 } from '../store/package/drawing-projection.ts';
 import type { OoxmlNode } from '../store/package/ooxml-tree.ts';
+import { pageClipRegion } from './drawing-page-clip.ts';
+export { pageClipRegion } from './drawing-page-clip.ts';
 import type { ImageResourceState } from '../store/package/image-resources.ts';
 import {
   DEFAULT_REVISION_DISPLAY_MODE,
-  NO_REVISIONS,
-  isRevisionWrapper,
   projectedRevisions,
-  revisionAttributionOf,
-  withRevision,
   type RevisionAttribution,
   type RevisionAuthorFilter,
   type RevisionDisplayMode,
@@ -38,6 +34,12 @@ import {
   type DrawingGeometry,
 } from './drawing-geometry.ts';
 import type { LayoutBox } from './semantic-records.ts';
+import {
+  anchoredDrawingAtomsInParagraph,
+  drawingModelOffsetsInParagraph,
+} from './drawing-atom-walk.ts';
+
+export { anchoredDrawingAtomsInParagraph, drawingModelOffsetsInParagraph };
 
 export type { DrawingGeometry } from './drawing-geometry.ts';
 
@@ -63,11 +65,7 @@ const EMPTY_CROP: SourceCrop = Object.freeze({ left: 0, top: 0, right: 0, bottom
 
 function drawingPaintFields(projection: DrawingProjection): {
   readonly hyperlinkHref: string | null;
-  readonly effects: Readonly<{
-    readonly grayscale: boolean;
-    readonly brightness: number;
-    readonly contrast: number;
-  }>;
+  readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   readonly placeholderGraphicKind: string | null;
@@ -89,7 +87,7 @@ function drawingPaintFields(projection: DrawingProjection): {
     effects: projection.effects,
     crop: picture?.crop ?? EMPTY_CROP,
     transform: picture?.transform ?? EMPTY_TRANSFORM,
-    placeholderGraphicKind: picture ? null : placeholderGraphicKind,
+    placeholderGraphicKind: picture || projection.legacyGraphic ? null : placeholderGraphicKind,
     vectorShape: projection.vectorShape,
   });
 }
@@ -319,11 +317,7 @@ export interface InlineDrawingRecord {
   readonly accessibility: DrawingAccessibility;
   /** Sanitized external hyperlink projection; inert until an explicit gesture activates it. */
   readonly hyperlinkHref: string | null;
-  readonly effects: Readonly<{
-    readonly grayscale: boolean;
-    readonly brightness: number;
-    readonly contrast: number;
-  }>;
+  readonly effects: DrawingImageEffects;
   readonly crop: SourceCrop;
   readonly transform: DrawingTransform;
   /** Fixed non-picture graphic kind for refusal labels (`chart`, `group`, …); null for pictures. */
@@ -829,29 +823,6 @@ function positionFromVertical(
   return edges.top + offset;
 }
 
-/**
- * Full page clip including margin bands — page-relative anchors may paint into margins.
- *
- * Width MUST be {@link DrawingAnchorFrameContext.pageWidth}, not `contentWidth`: in a
- * multi-column section `contentWidth` is the active column, and page-relative drawings that
- * sit outside that column must still paint. Height stays the physical content band plus
- * margin bands (furniture-shrunk `contentHeight` must not clip page-relative paint).
- */
-export function pageClipRegion(
-  frameBase: Pick<
-    DrawingAnchorFrameContext,
-    'pageWidth' | 'marginLeft' | 'contentInsetTop' | 'contentInsetBottom' | 'contentBandHeight'
-  >
-): LayoutBox {
-  const bandHeight = frameBase.contentBandHeight;
-  return Object.freeze({
-    x: -frameBase.marginLeft,
-    y: -frameBase.contentInsetTop,
-    width: frameBase.pageWidth,
-    height: bandHeight + frameBase.contentInsetTop + frameBase.contentInsetBottom,
-  });
-}
-
 /** Resolve anchored x/y in page-content coordinates. */
 export function resolveAnchoredDrawingPosition(
   projection: DrawingProjection,
@@ -1034,79 +1005,6 @@ export function buildAnchoredDrawingRecord(options: {
     accessibility: drawingAccessibility(projection),
     ...drawingPaintFields(projection),
   });
-}
-
-/** Run-level drawing / MC atoms carrying anchored projections in one paragraph. */
-export function anchoredDrawingAtomsInParagraph(
-  paragraph: OoxmlNode,
-  context: InlineDrawingLayoutContext
-): readonly {
-  readonly atomId: string;
-  readonly projection: DrawingProjection;
-  /** Enclosing revision wrappers, outermost first — the stack spans carry (see #479). */
-  readonly revisions: readonly RevisionAttribution[];
-}[] {
-  if (paragraph.kind !== 'paragraph') return [];
-  const atoms: {
-    atomId: string;
-    projection: DrawingProjection;
-    revisions: readonly RevisionAttribution[];
-  }[] = [];
-  const visit = (node: OoxmlNode, revisions: readonly RevisionAttribution[]): void => {
-    if (node.kind === 'drawing') {
-      const projection =
-        context.projectionForAtom?.(node.id) ??
-        context.project(node as import('../store/package/ooxml-tree.ts').OoxmlDrawingNode);
-      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
-      return;
-    }
-    if (isRunLevelMcAlternateContent(node)) {
-      const projection = context.projectionForAtom?.(node.id) ?? null;
-      if (projection?.kind === 'anchored') atoms.push({ atomId: node.id, projection, revisions });
-      return;
-    }
-    if ('children' in node) {
-      const attribution = isRevisionWrapper(node) ? revisionAttributionOf(node) : null;
-      const enclosing = attribution ? withRevision(revisions, attribution) : revisions;
-      for (const child of node.children) visit(child, enclosing);
-    }
-  };
-  for (const child of paragraph.children) visit(child, NO_REVISIONS);
-  return Object.freeze(atoms);
-}
-
-export function drawingModelOffsetsInParagraph(paragraph: OoxmlNode): ReadonlyMap<string, number> {
-  const offsets = new Map<string, number>();
-  if (paragraph.kind !== 'paragraph') return offsets;
-  let offset = 0;
-  const visitRunContent = (node: OoxmlNode): void => {
-    if (node.kind === 'drawing' || isRunLevelMcAlternateContent(node)) {
-      offsets.set(node.id, offset);
-      offset += 1;
-      return;
-    }
-    if (node.kind === 'textValue') {
-      offset += node.value.length;
-      return;
-    }
-    if ('children' in node) {
-      for (const child of node.children) visitRunContent(child);
-    }
-  };
-  // Descends hyperlinks and revision wrappers in either order: a `w:ins` wraps runs and
-  // hyperlinks the model still counts, so skipping it left every drawing after (or inside)
-  // the wrapper at a stale offset and an anchored drawing in a tracked insertion invisible.
-  const visitInlineChild = (child: OoxmlNode): void => {
-    if (child.kind === 'run') {
-      for (const grand of child.children) visitRunContent(grand);
-      return;
-    }
-    if (child.kind === 'hyperlink' || isRevisionWrapper(child)) {
-      for (const grand of child.children) visitInlineChild(grand);
-    }
-  };
-  for (const child of paragraph.children) visitInlineChild(child);
-  return offsets;
 }
 
 export function anchorCharacterXOnLine(
@@ -1296,6 +1194,8 @@ export function publishAnchoredDrawingsForParagraph(options: {
     });
     const resolved = resolveAnchoredDrawingPosition(projection, frameContext);
     const clipToCell =
+      projection.wrap !== 'inFront' &&
+      projection.wrap !== 'behind' &&
       layoutInCell &&
       options.cellBox !== null &&
       Number.isFinite(options.cellBox.height) &&

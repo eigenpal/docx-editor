@@ -1,6 +1,15 @@
 import { expect, test } from 'bun:test';
-import { strToU8, zipSync } from 'fflate';
-import { readOoxmlPart } from '@docx-editor.dev/core/store';
+import { strToU8, zipSync, unzipSync } from 'fflate';
+import {
+  readOoxmlPart,
+  readOoxmlPackage,
+  relationshipTargetIn,
+  resolveHeaderFooterPartsBySection,
+  type HeadlessDocumentView,
+} from '@docx-editor.dev/core/store';
+import { createDocumentFurnitureSource } from '../../layout/document-furniture-source.ts';
+import { createDocumentLinkProjectors } from '../../layout/document-link-projector.ts';
+import { layoutDocumentView } from '../../layout/document-layout-coordinator.ts';
 import { createFixedMeasurer } from '../../layout/fixed-measurer.ts';
 import { createParagraphLayoutCache } from '../../layout/layout-cache.ts';
 import { createLayoutSession } from '../../layout/layout-session.ts';
@@ -104,4 +113,133 @@ test('switching compatibility mode invalidates prepared tables and retained layo
   expect(table(layout(14)).box.width).toBeCloseTo(478.8, 8);
   expect(session.keys).toEqual(initialKeys);
   expect(table(layout(undefined)).box.width).toBeCloseTo(468, 8);
+});
+
+function storyBytes(mode: number) {
+  const entries = unzipSync(bytes(mode));
+  const tableXml = body.slice(0, body.indexOf('</w:tbl>') + '</w:tbl>'.length);
+  const stories = [
+    ['header1.xml', 'header', `<w:hdr xmlns:w="${W}">${tableXml}</w:hdr>`],
+    ['footer1.xml', 'footer', `<w:ftr xmlns:w="${W}">${tableXml}</w:ftr>`],
+    [
+      'footnotes.xml',
+      'footnotes',
+      `<w:footnotes xmlns:w="${W}"><w:footnote w:id="1">${tableXml}<w:p/></w:footnote></w:footnotes>`,
+    ],
+  ];
+  const decode = (name: string) => new TextDecoder().decode(entries[name]);
+  let types = decode('[Content_Types].xml');
+  let rels = decode('word/_rels/document.xml.rels');
+  for (const [name, kind, xml] of stories) {
+    entries[`word/${name}`] = strToU8(xml!);
+    types = types.replace(
+      '</Types>',
+      `<Override PartName="/word/${name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${kind}+xml"/></Types>`
+    );
+    rels = rels.replace(
+      '</Relationships>',
+      `<Relationship Id="r${kind}" Type="${R}/${kind}" Target="${name}"/></Relationships>`
+    );
+  }
+  entries['[Content_Types].xml'] = strToU8(types);
+  entries['word/_rels/document.xml.rels'] = strToU8(rels);
+  entries['word/document.xml'] = strToU8(
+    documentXml
+      .replace('<w:document ', `<w:document xmlns:r="${R}" `)
+      .replace(
+        '<w:p/>',
+        '<w:p><w:r><w:t>Reference</w:t><w:footnoteReference w:id="1"/></w:r></w:p>'
+      )
+      .replace(
+        '<w:sectPr>',
+        '<w:sectPr><w:headerReference w:type="default" r:id="rheader"/><w:footerReference w:type="default" r:id="rfooter"/>'
+      )
+  );
+  return zipSync(entries);
+}
+
+test('browser and headless hosts apply the same mode to header, footer, and footnote tables', async () => {
+  for (const mode of [14, 15]) {
+    const input = storyBytes(mode);
+    const container = document.createElement('div');
+    const mounted = mountPaginatedSurface(container, input, { measurer, scale: 1 });
+    if (!mounted.ok) throw new Error(mounted.reason);
+    const exported = openDocumentForExport(input, { measurer });
+    if (!exported.ok) throw new Error(exported.reason);
+    try {
+      for (const layout of [mounted.surface.layout(), await exported.session.layout()]) {
+        const page = layout.pages[0]!;
+        const fragments = [
+          page.header?.fragments,
+          page.footer?.fragments,
+          page.footnotes?.notes[0]?.fragments,
+        ];
+        for (const [storyIndex, story] of fragments.entries()) {
+          const found = story?.find((fragment) => fragment.kind === 'table');
+          expect(found?.box.width, `mode ${mode}, story ${storyIndex}`).toBeCloseTo(
+            mode === 14 ? 478.8 : 468,
+            7
+          );
+          expect(found?.box.x).toBeCloseTo(mode === 14 ? -5.4 : 0, 7);
+        }
+      }
+    } finally {
+      mounted.surface.destroy();
+      exported.session.dispose();
+    }
+  }
+});
+
+test('mode-only changes refresh retained body, furniture, and note geometry', () => {
+  const loaded = readOoxmlPackage(storyBytes(14));
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const pkg = loaded.package;
+  const view: HeadlessDocumentView = {
+    part: () => pkg.parts.get(pkg.mainDocumentPart)!,
+    currentPackage: () => pkg,
+    packageRevision: () => 0,
+    stylesRoot: () => null,
+    numberingRoot: () => null,
+    settingsRoot: () => null,
+    documentThemeFonts: () => ({ major: null, minor: null }),
+    documentProperties: () => ({}),
+    headerFooterPartsBySection: () => resolveHeaderFooterPartsBySection(pkg),
+    relationshipTarget: (id) => relationshipTargetIn(pkg, pkg.mainDocumentPart, id),
+  };
+  let mode = 14;
+  const cache = createParagraphLayoutCache<readonly PendingLine[]>();
+  const session = createLayoutSession();
+  const links = createDocumentLinkProjectors(view);
+  const furniture = createDocumentFurnitureSource({
+    view,
+    measurer,
+    producer: 'compat-cache',
+    cache,
+    linkProjectors: links,
+    compatibilityMode: () => mode,
+  });
+  for (const next of [14, 15, 14]) {
+    mode = next;
+    const result = layoutDocumentView({
+      view,
+      measurer,
+      revision: 0,
+      producer: 'compat-cache',
+      cache,
+      session,
+      linkProjectors: links,
+      furniture,
+      compatibilityMode: () => mode,
+    });
+    const page = result.pages[0]!;
+    for (const fragments of [
+      page.fragments,
+      page.header?.fragments,
+      page.footer?.fragments,
+      page.footnotes?.notes[0]?.fragments,
+    ]) {
+      const found = fragments?.find((fragment) => fragment.kind === 'table');
+      expect(found?.box.width).toBeCloseTo(mode === 14 ? 478.8 : 468, 7);
+    }
+  }
 });

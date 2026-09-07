@@ -1,6 +1,4 @@
-// Paint semantic layout records to DOM (task 7.5).
-//
-// A NON-AUTHORITATIVE CONSUMER. It positions every element from the numbers layout already
+// Non-authoritative semantic DOM paint: position elements from the numbers layout already
 // published and never measures anything back: no `getBoundingClientRect`, no `offsetWidth`,
 // no `getComputedStyle`, no canvas text metrics. If this file could measure, the DOM would
 // become a second source of geometry and the two would drift — which is exactly the
@@ -71,6 +69,7 @@ import {
 } from './semantic-paint-drawings.ts';
 import { mountEquationGeometry } from './semantic-paint-equation.ts';
 import { prepareTextPaintHost } from './semantic-paint-line-end-whitespace.ts';
+import { applyTextOutline } from './semantic-paint-text-outline.ts';
 
 /**
  * When a field's result is drawn on its grey block, following Word's own View option.
@@ -670,6 +669,7 @@ function applyTabAdvanceUnderline(
 function applyRunFaceStyle(element: HTMLElement, style: ResolvedRunStyle, ctx: PaintContext): void {
   const css = element.style;
   const scale = ctx.scale;
+  applyTextOutline(css, style, scale);
   // Super/subscript draw at three quarters — the same reduction the measurer applies, so
   // the painted glyphs match the advance layout reserved. Painting them full size while
   // measuring them small made every line containing one slightly too wide.
@@ -1567,7 +1567,7 @@ function interSpanGapBefore(
   if (drawingOccupiesGap) return 0;
   const gap =
     current.box.x - (previous.box.x + previous.box.width) - (current.wrapAdvanceBefore ?? 0);
-  return gap > 0.25 ? gap : 0;
+  return gap > 0.001 ? gap : 0;
 }
 
 /**
@@ -1624,6 +1624,7 @@ function paintFragment(
   const scale = ctx.scale;
   const element = positioned(document, 'div', fragment.box, scale);
   element.className = 'docx-paragraph-fragment layout-paragraph';
+  if (fragment.clipToBox) element.style.overflow = 'hidden';
   element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
   if (ctx.readOnlyParagraphIds?.has(fragment.paragraphId)) {

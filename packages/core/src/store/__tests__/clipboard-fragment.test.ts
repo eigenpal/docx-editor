@@ -816,63 +816,85 @@ describe('clipboard fragment round trip', () => {
     );
   });
 
-  test('fragment media with a spoofed content type is dropped, not copied', () => {
-    // The fragment's own [Content_Types].xml claims image/png for bytes that are not a
-    // PNG. The signature sniff is authoritative: the relationship drops, the drawing
-    // degrades away, and no spoofed bytes land in the target package.
-    const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
-    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-    const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-    const entries: Record<string, Uint8Array> = {
-      '[Content_Types].xml': strToU8(
-        `<Types xmlns="${CT}">` +
-          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
-          '<Default Extension="png" ContentType="image/png"/>' +
-          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
-          '</Types>'
-      ),
-      '_rels/.rels': strToU8(
-        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
-      ),
-      'word/_rels/document.xml.rels': strToU8(
-        `<Relationships xmlns="${REL}"><Relationship Id="rId7" Type="${R}/image" Target="media/image1.png"/></Relationships>`
-      ),
-      'word/document.xml': strToU8(
-        `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}">` +
-          '<w:body><w:p><w:r><w:t>keepme</w:t></w:r>' +
-          '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
-          '<wp:extent cx="914400" cy="914400"/><wp:docPr id="1" name=""/>' +
-          '<wp:cNvGraphicFramePr/>' +
-          `<a:graphic><a:graphicData uri="${PIC}"><pic:pic>` +
-          '<pic:nvPicPr><pic:cNvPr id="0" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
-          '<pic:blipFill><a:blip r:embed="rId7"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
-          '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm>' +
-          '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
-          '</pic:pic></a:graphicData></a:graphic>' +
-          '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>'
-      ),
-      'word/media/image1.png': strToU8('this is not a png at all, just text bytes'),
-    };
-    const fragmentBytes = zipSync(entries);
+  test.each(['drawingml', 'vml'])(
+    'fragment %s media with a spoofed content type is dropped, not copied',
+    (kind) => {
+      // The fragment's own [Content_Types].xml claims image/png for bytes that are not a
+      // PNG. The signature sniff is authoritative: the relationship drops, the drawing
+      // degrades away, and no spoofed bytes land in the target package.
+      const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+      const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+      const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+      const entries: Record<string, Uint8Array> = {
+        '[Content_Types].xml': strToU8(
+          `<Types xmlns="${CT}">` +
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+            '<Default Extension="png" ContentType="image/png"/>' +
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+            '</Types>'
+        ),
+        '_rels/.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+        ),
+        'word/_rels/document.xml.rels': strToU8(
+          `<Relationships xmlns="${REL}"><Relationship Id="rId7" Type="${R}/image" Target="media/image1.png"/></Relationships>`
+        ),
+        'word/document.xml': strToU8(
+          `<w:document xmlns:w="${W}" xmlns:r="${R}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}">` +
+            '<w:body><w:p><w:r><w:t>keepme</w:t></w:r>' +
+            '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">' +
+            '<wp:extent cx="914400" cy="914400"/><wp:docPr id="1" name=""/>' +
+            '<wp:cNvGraphicFramePr/>' +
+            `<a:graphic><a:graphicData uri="${PIC}"><pic:pic>` +
+            '<pic:nvPicPr><pic:cNvPr id="0" name=""/><pic:cNvPicPr/></pic:nvPicPr>' +
+            '<pic:blipFill><a:blip r:embed="rId7"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>' +
+            '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="914400" cy="914400"/></a:xfrm>' +
+            '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>' +
+            '</pic:pic></a:graphicData></a:graphic>' +
+            '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>'
+        ),
+        'word/media/image1.png': strToU8('this is not a png at all, just text bytes'),
+      };
+      if (kind === 'vml') {
+        const xml = new TextDecoder().decode(entries['word/document.xml']);
+        entries['word/document.xml'] = strToU8(
+          xml.replace(
+            /<w:drawing>[\s\S]*?<\/w:drawing>/,
+            '<w:pict xmlns:v="urn:schemas-microsoft-com:vml"><v:shape type="#_x0000_t75" style="width:72pt;height:72pt"><v:imagedata r:id="rId7"/></v:shape></w:pict>'
+          )
+        );
+        const pkg = loadPackage(zipSync(entries));
+        const extracted = extractFragmentPackage(pkg, fullBodyCoverage(pkg), { omitMedia: true });
+        expect(extracted.ok).toBe(true);
+        if (extracted.ok) {
+          const stripped = loadPackage(extracted.bytes);
+          expect(serializeOoxmlPart(stripped.parts.get(stripped.mainDocumentPart)!)).not.toContain(
+            'w:pict'
+          );
+        }
+      }
+      const fragmentBytes = zipSync(entries);
 
-    const target = buildPackage('<w:p/>');
-    const store = openStore(target);
-    const hostId = paragraphIdsUnder(
-      bodyOf(store.currentPackage().parts.get(target.mainDocumentPart)!)
-    )[0]!;
-    const pasted = store.applyFragmentPaste(
-      { kind: 'body' },
-      { paragraphId: hostId, offset: 0, fragmentBytes, lastMarkCovered: true }
-    );
-    expect(pasted.ok).toBe(true);
+      const target = buildPackage('<w:p/>');
+      const store = openStore(target);
+      const hostId = paragraphIdsUnder(
+        bodyOf(store.currentPackage().parts.get(target.mainDocumentPart)!)
+      )[0]!;
+      const pasted = store.applyFragmentPaste(
+        { kind: 'body' },
+        { paragraphId: hostId, offset: 0, fragmentBytes, lastMarkCovered: true }
+      );
+      expect(pasted.ok).toBe(true);
 
-    const after = store.currentPackage();
-    // The text landed; the spoofed drawing and its bytes did not.
-    const documentXml = serializeOoxmlPart(after.parts.get(after.mainDocumentPart)!);
-    expect(documentXml).toContain('keepme');
-    expect(documentXml.includes('w:drawing')).toBe(false);
-    expect([...after.partBytes.keys()].some((name) => name.includes('/media/'))).toBe(false);
-  });
+      const after = store.currentPackage();
+      // The text landed; the spoofed drawing and its bytes did not.
+      const documentXml = serializeOoxmlPart(after.parts.get(after.mainDocumentPart)!);
+      expect(documentXml).toContain('keepme');
+      expect(documentXml.includes('w:drawing')).toBe(false);
+      expect(documentXml.includes('w:pict')).toBe(false);
+      expect([...after.partBytes.keys()].some((name) => name.includes('/media/'))).toBe(false);
+    }
+  );
 
   test('a fragment past the insert budget is refused before the merge runs', () => {
     // 50_001 body paragraphs: over MAX_FRAGMENT_INSERT_BLOCKS. The early budget walk

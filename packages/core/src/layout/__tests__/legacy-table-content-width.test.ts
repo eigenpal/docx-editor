@@ -1,3 +1,6 @@
+import { hasFloatingTables } from '../table-float-exclusion.ts';
+import { paragraphDocumentOrderOf } from '../paragraph-document-order.ts';
+import { positionedTableAnchors } from '../table-float-position.ts';
 import { describe, expect, test } from 'bun:test';
 import {
   readOoxmlPart,
@@ -242,4 +245,16 @@ describe('explicit legacy full-width content alignment', () => {
     }
     expect(seenRows).toBe(30);
   });
+});
+
+test('document-order and float-anchor probes retain the same table memo in explicit modes', () => {
+  for (const mode of [14, 15]) {
+    const { table } = open();
+    const blocks = [{ kind: 'table' as const, table, key: 'table' }];
+    const first = readTableStructure(table, 200, 0, undefined, 'all-markup', undefined, mode);
+    hasFloatingTables([table], 200, undefined, 'all-markup', undefined, mode);
+    paragraphDocumentOrderOf(blocks, 200, undefined, 'all-markup', undefined, mode);
+    positionedTableAnchors(blocks, 200, undefined, 'all-markup', undefined, mode);
+    expect(readTableStructure(table, 200, 0, undefined, 'all-markup', undefined, mode)).toBe(first);
+  }
 });

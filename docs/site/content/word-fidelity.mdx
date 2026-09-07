@@ -45,6 +45,20 @@ The matrix reports three separate support axes.
 
 <FeatureMatrix category="paragraphs" />
 
+Body text frames with numeric `w:x`, `w:y`, and `w:w` retain their authored positions.
+Text wraps inside the frame width and remains selectable and editable.
+Adjacent paragraphs with identical `w:framePr` attributes share one frame.
+Frames follow their next ordinary paragraph across page breaks and do not consume normal paragraph height.
+Following text wraps around frames; `none` and `notBeside` move that text below the frame.
+
+This supports auto-height frames in single-column sections with page, margin, or text anchors.
+Drop caps, fixed heights, alignment-based positions, and frames containing drawings or notes retain ordinary layout.
+Upward text-relative offsets also retain ordinary layout.
+Frame groups that block the full text width and leave no vertical room on a fresh page use ordinary layout.
+The editor preserves their properties on save.
+A following continuous section starts below the preceding frames.
+There is no interface for creating, moving, or resizing text frames.
+
 ### Lists and numbering
 
 <FeatureMatrix category="lists" />
@@ -52,6 +66,28 @@ The matrix reports three separate support axes.
 ### Tables
 
 <FeatureMatrix category="tables" />
+
+Explicit Word compatibility modes 11, 12, and 14 preserve content alignment for supported full-width AutoFit tables.
+This applies in body, header, footer, text-box, and note stories.
+The table must have explicit zero indentation, left alignment, zero cell spacing, and consistent outer cell margins.
+Its complete authored grid must equal the text-column width plus those margins.
+Other layouts keep their existing geometry, including nested tables and files without an explicit compatibility mode.
+
+Body text wraps beside supported floating tables and below tables that cover the text column.
+The table's text distances keep the authored gap between its border and surrounding text.
+Text-anchored tables with numeric vertical offsets follow their next ordinary paragraph onto its page and column.
+Negative offsets remain in place when they clear preceding text.
+A table that intersects preceding text moves below that text.
+
+Text-anchored tables taller than a content page retain row pagination.
+Text-anchored tables marked no-overlap or using vertical alignment also retain their normal flow behavior.
+Tables whose cells can wrap around earlier floating objects also retain row pagination.
+Simple tables can share a terminal empty paragraph without shrinking that paragraph or adding a blank page.
+Floating-table properties survive save, but have no editing interface.
+
+When you compare a multipage table, check the space between each repeated header
+and its first body row. The table pagination note lists the shared-border
+measurement limits. Keep the original document when you report a spacing issue.
 
 ### Images and drawings
 
@@ -90,6 +126,10 @@ often affect document evaluation.
 
 ## Rendering and pagination
 
+The editor renders opaque solid Word 2010 text outlines with explicit RGB colors.
+Other text effects remain preserved; the text-effects matrix lists the rendering limits.
+PDF export does not paint these outlines.
+
 The editor calculates document layout without browser flow layout. It uses
 document fonts, themes, section geometry, margins, and Word units.
 
@@ -98,6 +138,20 @@ as DOM text, not a canvas bitmap.
 
 Usable font bytes are required for Word-accurate text measurement. See
 [Fonts and measurement](/docs/2.x/guides/fonts).
+
+East Asian layout keeps punctuation, graphemes, and full-width number groups
+together across formatting changes. Justified lines distribute inter-character
+spacing through the same geometry used for paint and caret placement.
+
+East Asian font hints select the document's East Asian face for supported punctuation,
+symbols, Greek, and Cyrillic ranges. Combining marks and joined emoji keep their base character's slot across text runs.
+Explicit symbol fonts retain their selected face.
+
+Existing document settings control kinsoku, Japanese strict rules, custom
+language-specific break restrictions, Korean character wrapping, punctuation
+overflow, and punctuation or kana compression. Compression uses deterministic
+advance reductions. Font-specific optical compression is not modeled.
+The feature matrix lists the support limits for East Asian typography.
 
 For pipeline details, see [Architecture](/docs/2.x/core/architecture). Test your
 documents in the [live demo](https://docx-editor.dev/editor).

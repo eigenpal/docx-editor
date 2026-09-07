@@ -1139,6 +1139,18 @@ export interface DocumentViewSettings {
 }
 
 // @public
+export interface DrawingImageEffects {
+    // (undocumented)
+    readonly bilevel?: number;
+    // (undocumented)
+    readonly brightness: number;
+    // (undocumented)
+    readonly contrast: number;
+    // (undocumented)
+    readonly grayscale: boolean;
+}
+
+// @public
 export type DrawingKind = 'inline' | 'anchored';
 
 // @public
@@ -1188,6 +1200,7 @@ export interface EditOptions {
     // (undocumented)
     readonly deferValidation?: boolean;
     readonly revisionIds?: () => string;
+    readonly trackedRevisionIds?: TransactionRevisionIds;
 }
 
 // @public
@@ -2889,6 +2902,7 @@ export type OoxmlPackageResult = {
     readonly package: OoxmlPackage;
 } | {
     readonly detail?: string;
+    readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
     readonly ok: false;
     readonly reason: OoxmlPackageRejection;
 };
@@ -4006,6 +4020,16 @@ export type TabStopWrite = ParagraphTabStop;
 export type TargetMode = 'Internal' | 'External';
 
 // @public
+export function textboxStoriesInPart(part: OoxmlPart): readonly TextboxStoryRoot[];
+
+// @public
+export interface TextboxStoryRoot {
+    readonly drawingNodeId: string;
+    readonly hostParagraphId: string;
+    readonly root: OoxmlElement;
+}
+
+// @public
 export function textContent(node: Extract<XmlNode, {
     type: 'element';
 }>): string;
@@ -4102,6 +4126,13 @@ export interface TocOutlineHeading {
 
 // @public
 export function toSafeRecord(value: unknown, path?: string): unknown;
+
+// @public
+export interface TransactionRevisionIds {
+    mint(): string;
+    wrote(key: string): void;
+    wroteUnder(key: string): boolean;
+}
 
 // @public
 export interface TransportPort {
@@ -5039,7 +5070,6 @@ export const XML_NAMESPACE_URI = "http://www.w3.org/XML/1998/namespace";
 export interface XmlLimits {
     // (undocumented)
     readonly maxBytes: number;
-    // (undocumented)
     readonly maxElements?: number;
 }
 
@@ -5083,6 +5113,7 @@ export type ZipReadResult = {
     readonly ok: true;
 } | {
     readonly detail?: string;
+    readonly limit?: 'zip.maxTotalBytes' | 'zip.maxRatio';
     readonly ok: false;
     readonly reason: ZipRejection;
 };

@@ -1,14 +1,7 @@
 // The paginated surface's public contract owns the types a host programs against.
 // paginated-surface.ts implements and re-exports them, so importers keep one entry point.
 
-import type { IndentFormatting } from '../contracts/types.ts';
-import type {
-  ParagraphDisagreements,
-  ParagraphFlags,
-  SurfaceParagraphFormat,
-  ParagraphPropertyEdit,
-  ParagraphTabStop,
-} from './paragraph-format-contract.ts';
+import type { SurfaceParagraphFormat, ParagraphPropertyEdit } from './paragraph-format-contract.ts';
 import type { TreeApplyResult, TreeDocxSessionView } from '@docx-editor.dev/core/binding';
 import type { BookmarkIndex, StoryScope, TreeDocOp } from '@docx-editor.dev/core/store';
 import type {
@@ -19,15 +12,9 @@ import type {
 } from '../contracts/editor.ts';
 import type { RevisionDisplayMode } from '../layout/revision-projection.ts';
 import type { RevisionStyles } from '../output/revision-presentation.ts';
-import type { FieldShadingMode } from '../output/semantic-paint.ts';
-import type {
-  ReviewModuleContribution,
-  CollaborationModuleContribution,
-} from '../contracts/modules.ts';
-import type { CollaborationStatus } from '../collaboration/index.ts';
 import type { HyperlinkOps } from './surface-hyperlinks.ts';
-import type { EquationActivation, EquationOps } from './surface-equations.ts';
-import type { HyperlinkActivation, SurfaceNavigation } from './surface-navigation.ts';
+import type { EquationOps } from './surface-equations.ts';
+import type { SurfaceNavigation } from './surface-navigation.ts';
 import type {
   CellSelection,
   NavigationCommand,
@@ -35,7 +22,6 @@ import type {
   SemanticLayout,
   SemanticPosition,
   SemanticSelection,
-  TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 
 /**
@@ -69,273 +55,23 @@ export type { PaginatedSurfacePerf };
 import type { RemoteCaretLabelAnchor, RemoteCaretLabelHost } from './surface-remote-caret-label.ts';
 export type { RemoteCaretLabelAnchor, RemoteCaretLabelHost };
 
-/**
- * How a paginated surface opens. Every field is optional.
- *
- * `measurer` is the injection seam that keeps layout DOM-free — supply one to lay a document out
- * on a server, or leave it off in a browser to get the canvas measurer.
- */
-export interface PaginatedSurfaceOptions {
-  /**
-   * The collaboration module's replica for this surface's session. Absent,
-   * the surface does not attach, and local store history remains the undo
-   * authority.
-   */
-  readonly collaborationModel?: CollaborationModuleContribution;
-  readonly measurer?: TextMeasurer;
-  /** Ambient author for tracked edits. Required before suggesting can write anything. */
-  readonly author?: string;
-  /** Opening mode; changeable at runtime with `setEditingMode`. */
-  readonly editingMode?: SurfaceEditingMode;
-  /**
-   * Identifies the measurer for cache invalidation.
-   *
-   * Fonts resolve asynchronously, so a host that swaps its measurer must change this or the
-   * cached pre-font layout is served for the rest of the session.
-   */
-  readonly producer?: string;
-  /**
-   * Maps a document-declared font family to the alias its registered bytes live under, so
-   * painted runs can use embedded glyphs without the file's family name entering the
-   * page-global CSS font namespace.
-   */
-  readonly fontAlias?: (family: string) => string | undefined;
-  /** Points to CSS pixels. */
-  readonly scale?: number;
-  /**
-   * How revisions project into layout and paint. Omitted keeps the layout default
-   * (`all-markup`). The editor facade passes `proposed` when no review module is
-   * registered — the free tier's final-state rendering; the machinery below this
-   * option is shared either way.
-   */
-  readonly revisionDisplayMode?: RevisionDisplayMode;
-  /** Authors whose changes open in their accepted view-time projection. */
-  readonly hiddenRevisionAuthors?: readonly string[];
-  /**
-   * When a field's result wears Word's grey shading. Omitted keeps Word's own default,
-   * `when-selected`.
-   *
-   * Applies to ORDINARY fields only. Legacy form fields follow the document's
-   * `w:doNotShadeFormData`, because a form's blanks are the document's own statement about
-   * itself rather than a reader's preference.
-   *
-   * A paint-level option, not a layout one: it changes no geometry, so switching it repaints
-   * without remeasuring a single line.
-   */
-  readonly fieldShading?: FieldShadingMode;
-  /**
-   * How tracked changes are coloured: by AUTHOR (the default), by kind, or by author with
-   * host-pinned colours. A paint-level option like {@link fieldShading}: it changes no
-   * geometry, so switching it repaints without remeasuring a line. Applies wherever
-   * revision markup paints, whatever the {@link revisionDisplayMode} leaves visible.
-   */
-  readonly revisionStyles?: RevisionStyles;
-  /**
-   * The review module's derivation hooks for this surface's session. Absent,
-   * `session.reviewItems()` is the typed empty queue and every review affordance
-   * built on it stays inert.
-   */
-  readonly reviewModel?: ReviewModuleContribution;
-  /**
-   * The family a run with no authored font is reported as by `formatting()` AND painted
-   * in — the face the measurer falls back to. Absent, such a run reports
-   * `fontFamily: null` and paints in whatever font the page inherits, which the measurer
-   * did not measure: visible glyphs drift from wrap points and caret geometry.
-   */
-  readonly defaultFontFamily?: string;
-  /**
-   * Who resolves a pointer to a caret.
-   *
-   * `'engine'` (the default) answers from the layout records, which is what makes a click in
-   * a margin, an indent or a cell's padding land where it was aimed. `'native'` binds no
-   * pointer handlers and leaves the browser's own caret placement in charge.
-   */
-  readonly pointer?: 'engine' | 'native';
-  readonly onChange?: (state: PaginatedSurfaceState) => void;
-  /**
-   * A plain click on an external (or inert) hyperlink, for a host to open its popover with.
-   *
-   * Absent means such a click does nothing. That is deliberate: a host with no popover
-   * mounted must not have clicks silently opening tabs, and the popover is the only path to
-   * activation (see the navigation module's single `window.open` gate).
-   */
-  readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
-  readonly onEquationPopover?: (activation: EquationActivation) => void;
-  /**
-   * Ctrl/Cmd+K — Word's Insert Hyperlink. The engine reports the request; the host's chrome
-   * decides what a link dialog looks like. A host that passes nothing leaves the key alone
-   * rather than doing something surprising with it.
-   */
-  readonly onRequestHyperlink?: () => void;
-  /**
-   * Localized accessible names for core-owned table insertion furniture.
-   * Defaults to English from `@docx-editor.dev/i18n` when omitted.
-   */
-  readonly tableInteractionLabel?: (
-    key: 'table.insertRowBelow' | 'table.insertColumnRight'
-  ) => string;
-  /** Localized drawing refusal labels; defaults to English when omitted. */
-  readonly drawingStrings?: import('../output/semantic-paint-drawings.ts').DrawingPaintStrings;
-  /** Override raster decode for package image intents; defaults to browser/headless. */
-  readonly imageDecodePort?: import('../store/package/image-resources.ts').ImageDecodePort;
-  /**
-   * Localized name for a generated TOC, written as the control's `w:alias` on insert.
-   *
-   * The update ACTIONS are not here: they are rows in the host's context menu, which owns
-   * its own labels. The engine paints no menu of its own.
-   */
-  readonly tocLabels?: { readonly title: string };
-}
+import type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
 
-/**
- * What the selection is currently formatted as.
- *
- * A value is present only when EVERY span in the selection agrees on it: a selection running
- * from 11pt into 14pt has no font size, and a toolbar should show a blank rather than pick
- * one of the two and imply the whole selection is that.
- */
-export interface SurfaceFormatting {
-  readonly bold: boolean;
-  readonly italic: boolean;
-  readonly underline: boolean;
-  readonly strikethrough: boolean;
-  readonly superscript: boolean;
-  readonly subscript: boolean;
-  readonly fontFamily: string | null;
-  /** Half-points, the unit OOXML stores and the picker expects. */
-  readonly fontSizeHalfPoints: number | null;
-  readonly color: string | null;
-  readonly highlight: string | null;
-  readonly alignment: 'left' | 'center' | 'right' | 'both' | null;
-  readonly styleId: string | null;
-  /**
-   * `w:spacing`'s line rule and its value: LINES for `multiple`, points for the other two
-   * (`w:line` is 240ths of a line under `auto` and twentieths of a point otherwise).
-   * Null when the selection's paragraphs disagree, or state no line spacing at all.
-   */
-  readonly lineSpacing: {
-    readonly rule: 'multiple' | 'exact' | 'atLeast';
-    readonly value: number;
-  } | null;
-  /** `w:spacing/@w:before` and `@w:after` in points, null when the selection disagrees. */
-  readonly spaceBeforePt: number | null;
-  readonly spaceAfterPt: number | null;
-  /**
-   * Effective indent at the selection, in twips, or null with no selection or inside a
-   * table.
-   *
-   * The one field here that does NOT go null on disagreement: the values are the FIRST
-   * touched paragraph's and `mixed` reports the disagreement per field, because a ruler
-   * must draw its handles somewhere and Word draws them at the first selected paragraph.
-   */
-  readonly indent: IndentFormatting | null;
-  /**
-   * The paragraph flags the Paragraph dialog shows as checkboxes, or null when the
-   * selection's paragraphs disagree about that one.
-   *
-   * `contextualSpacing` is "Don't add space between paragraphs of the same style"; the
-   * other four are its Pagination block. Each is read from the cascade, so a flag a STYLE
-   * sets reads as on — which is what a checkbox has to show.
-   */
-  readonly paragraphFlags: ParagraphFlags;
-  /**
-   * The paragraph's resolved custom tab stops, cascade included, or null when the selection
-   * disagrees or nothing is loaded. Positions in TWIPS, like every other measurement a
-   * control writes back.
-   */
-  readonly tabStops: readonly ParagraphTabStop[] | null;
-  /**
-   * Which of the paragraph-level reads above are `null` because the selection DISAGREES,
-   * as opposed to because nothing states them. See {@link ParagraphDisagreements}.
-   */
-  readonly disagrees: ParagraphDisagreements;
-}
+export type { PaginatedSurfaceOptions } from './paginated-surface-options.ts';
 
-/** How a reveal places its target in the viewport. */
-export interface RevealOptions {
-  /**
-   * `'start'` puts the target near the top (a heading the user jumped to), `'center'`
-   * centres it, `'nearest'` scrolls only when it is out of view — and only far enough to
-   * clear the edge, which parks the target flush against it. `'centerIfNeeded'` is the one
-   * a jump-to-next-thing control wants: silent while the target is already on screen, and
-   * centred when it has to move, so the reader lands looking AT the thing rather than at
-   * the bottom line of the window. Default `'start'`.
-   */
-  readonly block?: 'start' | 'center' | 'centerIfNeeded' | 'nearest';
-  /** Padding above the target, in CSS pixels. Default 24. */
-  readonly offsetPx?: number;
-  readonly behavior?: ScrollBehavior;
-}
+import type {
+  DrawingSelectionIntent,
+  PaginatedSurfaceState,
+  RevealOptions,
+  SurfaceFormatting,
+} from './paginated-surface-state.ts';
 
-/**
- * How the current selection came to address a drawing — see
- * {@link PaginatedSurface.drawingSelectionIntent}.
- */
-export type DrawingSelectionIntent =
-  | { readonly kind: 'none' }
-  | { readonly kind: 'pointer'; readonly drawingNodeId: string }
-  | { readonly kind: 'programmatic' };
-
-/**
- * Everything observable about the surface right now, as one immutable value.
- *
- * `revision` is the change token: it moves whenever anything else here does, which is what lets
- * `snapshot()` hand back the same reference until state actually changes.
- */
-export interface PaginatedSurfaceState {
-  readonly revision: number;
-  readonly pageCount: number;
-  readonly selection: SemanticSelection;
-  /**
-   * The rectangle of table cells a drag across cells selected, or null.
-   *
-   * `selection` always holds the equivalent TEXT range, so a reader that does not care about
-   * rectangles needs no branch. This is for the ones that do — the highlight, and table
-   * commands that act on cells rather than characters.
-   */
-  readonly cellSelection: CellSelection | null;
-  readonly canUndo: boolean;
-  readonly canRedo: boolean;
-  /**
-   * Lifecycle of the attached replica, or `'inactive'` when no collaboration
-   * module is registered on this surface.
-   */
-  readonly collaborationStatus: CollaborationStatus | 'inactive';
-  readonly lastRejection: string | null;
-  /**
-   * The typing format armed at the caret (Word's stored marks), or null.
-   *
-   * NOT document state — nothing is written until the next characters are typed — but it
-   * IS observable state: `formatting()` reports it, so a host that reflects the toolbar
-   * has to learn when it moves. Reference-stable while unchanged, so a host can compare
-   * it to decide whether to re-derive. See `toggleRunProperty` for the lane itself.
-   */
-  readonly pendingFormat: readonly { readonly localName: string }[] | null;
-  /**
-   * Content-control chrome and form-fill mode.
-   *
-   * Surface-owned (not document bytes). Updates report through the same `onChange` path as
-   * selection moves — hosts must not maintain a parallel channel.
-   */
-  readonly contentControls: ContentControlSurfaceState;
-  /**
-   * The TOC the last right-click landed on, or null.
-   *
-   * A right-click deliberately does not move the caret, and a TOC refuses the caret
-   * entirely, so `selection` can never say which table of contents the user is pointing at.
-   * This is how a host's context menu learns it. Surface chrome, not document state.
-   */
-  readonly contextTocId: string | null;
-  /**
-   * Format painter arming, and the level of what it holds.
-   *
-   * Surface chrome, not document bytes — the lane `contentControls` above sits in, reported
-   * through the same `onChange` so a toolbar's pressed state has exactly one source.
-   */
-  readonly formatPainter: FormatPainterSurfaceState;
-  /** Timing and reuse counters for the last pass. Diagnostics, not document state. */
-  readonly perf: PaginatedSurfacePerf;
-}
+export type {
+  SurfaceFormatting,
+  RevealOptions,
+  DrawingSelectionIntent,
+  PaginatedSurfaceState,
+} from './paginated-surface-state.ts';
 
 /**
  * Where the section after an inserted break begins — Word's Layout > Breaks menu.
@@ -533,6 +269,13 @@ export interface PaginatedSurface {
   revealPosition(position: SemanticPosition, options?: RevealOptions): boolean;
   /** Set the selection directly, for a host driving the surface programmatically. */
   setSelection(next: SemanticSelection): void;
+  /**
+   * Select one painted drawing at its host paragraph, as a pointer press would.
+   *
+   * False when the layout paints no such drawing on that paragraph, in which case nothing
+   * moves: the caller decides what to do rather than being left mid-way.
+   */
+  selectDrawing(drawingNodeId: string, hostParagraphId: string): boolean;
   /**
    * Select a rectangle of table cells, or clear one with null.
    *
@@ -839,6 +582,16 @@ export interface PaginatedSurface {
    * would mean another to a script that assumed the resolved result.
    */
   revisionDisplayMode(): RevisionDisplayMode;
+  /**
+   * Where a replacement for `[start, end)` of a paragraph lands, or null when the edit would
+   * not be tracked.
+   *
+   * Non-null exactly when suggesting: the struck words stay, so the replacement goes past
+   * them, minus whatever of the range was this author's own pending insertion, which leaves.
+   * The SAME rule every replacing lane of the keyboard reads, exposed so the automation object
+   * model aims a scripted `Replace` where typing does and can answer the span it wrote.
+   */
+  replacementLanding(paragraphId: string, start: number, end: number): number | null;
   /**
    * Commit review ops — accept, reject, a new comment — through the SAME path a keystroke
    * takes: layout, paint, and a caret clamped to what the document now holds.

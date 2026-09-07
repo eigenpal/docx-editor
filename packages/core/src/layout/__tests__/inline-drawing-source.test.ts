@@ -6,11 +6,13 @@ import {
   type OoxmlNode,
 } from '@docx-editor.dev/core/store';
 import { zipSync, strToU8 } from 'fflate';
+import { indexInlineDrawingProjectionsInPart } from '../../store/package/drawing-projection.ts';
 import {
   createInlineDrawingLayoutBundle,
   drawingAtomIdentities,
   drawingTokenForTableBlock,
   drawingTokenForTableBlockMemo,
+  drawingProjectionLayoutToken,
   vectorShapeLayoutToken,
 } from '../inline-drawing-source.ts';
 
@@ -255,16 +257,21 @@ describe('vector shape layout token', () => {
       readonly extraComponent: boolean;
       readonly splitSubpaths: boolean;
       readonly splitAt: number;
+      readonly open: boolean;
+      readonly arrowheads: readonly (readonly Readonly<{ x: number; y: number }>[])[];
     }> = {}
   ) => {
     const points = overrides.points ?? [point(0, 0), point(100, 0), point(100, 50.5)];
+    const subpathsEmu =
+      overrides.splitAt !== undefined
+        ? [points.slice(0, overrides.splitAt), points.slice(overrides.splitAt)]
+        : overrides.splitSubpaths
+          ? [points.slice(0, 1), points.slice(1)]
+          : [points];
     const component = {
-      subpathsEmu:
-        overrides.splitAt !== undefined
-          ? [points.slice(0, overrides.splitAt), points.slice(overrides.splitAt)]
-          : overrides.splitSubpaths
-            ? [points.slice(0, 1), points.slice(1)]
-            : [points],
+      subpathsEmu,
+      ...(overrides.open ? { subpathsClosed: subpathsEmu.map(() => false) } : {}),
+      ...(overrides.arrowheads ? { arrowheadsEmu: overrides.arrowheads } : {}),
       fillHex: overrides.fillHex === undefined ? '4472C4' : overrides.fillHex,
       fillAlpha: overrides.fillAlpha ?? 1,
       strokeHex: overrides.strokeHex ?? null,
@@ -313,12 +320,94 @@ describe('vector shape layout token', () => {
       'a stroke width': shape({ strokeWidthEmu: 12_700 }),
       'a different extent': shape({ cx: 1001 }),
       'a second component': shape({ extraComponent: true }),
+      'an open subpath': shape({ open: true }),
+      'a line-end triangle': shape({ arrowheads: [[point(0, 0), point(5, 5), point(-5, 5)]] }),
     };
     for (const [label, changed] of Object.entries(differences)) {
       expect(`${label} collides: ${vectorShapeLayoutToken(changed) === baseline}`).toBe(
         `${label} collides: false`
       );
     }
+  });
+
+  test('line-end triangles separate by count and by vertex', () => {
+    const one = shape({ arrowheads: [[point(0, 0), point(5, 5), point(-5, 5)]] });
+    const moved = shape({ arrowheads: [[point(0, 0), point(5, 5), point(-5, 5.5)]] });
+    const two = shape({
+      arrowheads: [
+        [point(0, 0), point(5, 5), point(-5, 5)],
+        [point(100, 50.5), point(95, 45), point(105, 45)],
+      ],
+    });
+    expect(vectorShapeLayoutToken(one)).toBe(vectorShapeLayoutToken(one));
+    expect(vectorShapeLayoutToken(moved)).not.toBe(vectorShapeLayoutToken(one));
+    expect(vectorShapeLayoutToken(two)).not.toBe(vectorShapeLayoutToken(one));
+  });
+
+  // Projected from markup rather than hand-built: `a:close` and `a:tailEnd` move no vertex
+  // of the authored path, so only the close flags and the generated triangle can tell the
+  // shapes apart. A token blind to either reuses a stale record across the edit.
+  test('projections that differ only by a close command or a line end differ', () => {
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+    const project = (options: { close?: boolean; tailEnd?: boolean }) => {
+      const xml =
+        `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}"><w:body><w:p><w:r>` +
+        '<w:drawing><wp:inline><wp:extent cx="1270000" cy="635000"/><wp:docPr id="1" name="c"/>' +
+        `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:spPr>` +
+        '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm>' +
+        '<a:custGeom><a:pathLst><a:path w="1000" h="1000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo>' +
+        '<a:lnTo><a:pt x="1000" y="1000"/></a:lnTo><a:lnTo><a:pt x="0" y="1000"/></a:lnTo>' +
+        `${options.close ? '<a:close/>' : ''}</a:path></a:pathLst></a:custGeom>` +
+        '<a:noFill/><a:ln w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>' +
+        `${options.tailEnd ? '<a:tailEnd type="triangle"/>' : ''}</a:ln>` +
+        '</wps:spPr></wps:wsp></a:graphicData></a:graphic></wp:inline></w:drawing>' +
+        '</w:r></w:p></w:body></w:document>';
+      const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
+      if (!parsed.ok) throw new Error(parsed.reason);
+      const projections = [...indexInlineDrawingProjectionsInPart(parsed.part).values()];
+      expect(projections).toHaveLength(1);
+      const vector = projections[0]!.vectorShape;
+      if (!vector) throw new Error('expected a vector shape projection');
+      return vector;
+    };
+    const open = project({});
+    const closed = project({ close: true });
+    const arrow = project({ tailEnd: true });
+    expect(closed.components[0]!.subpathsEmu).toEqual(open.components[0]!.subpathsEmu);
+    expect(arrow.components[0]!.subpathsEmu).toEqual(open.components[0]!.subpathsEmu);
+    expect(vectorShapeLayoutToken(project({}))).toBe(vectorShapeLayoutToken(open));
+    expect(vectorShapeLayoutToken(closed)).not.toBe(vectorShapeLayoutToken(open));
+    expect(vectorShapeLayoutToken(arrow)).not.toBe(vectorShapeLayoutToken(open));
+  });
+
+  test('a moved wrap polygon vertex or a flipped anchor flag separates the drawing token', () => {
+    const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const PIC = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const project = (options: { vertexX?: number; allowOverlap?: boolean; behind?: boolean }) => {
+      const xml =
+        `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:pic="${PIC}" xmlns:r="${R}"><w:body><w:p><w:r><w:drawing>` +
+        `<wp:anchor simplePos="0" behindDoc="${options.behind ? 1 : 0}" layoutInCell="1" allowOverlap="${options.allowOverlap === false ? 0 : 1}" locked="0" relativeHeight="1">` +
+        '<wp:simplePos x="0" y="0"/><wp:positionH relativeFrom="column"><wp:posOffset>0</wp:posOffset></wp:positionH>' +
+        '<wp:positionV relativeFrom="paragraph"><wp:posOffset>0</wp:posOffset></wp:positionV>' +
+        '<wp:extent cx="1270000" cy="635000"/><wp:wrapTight wrapText="bothSides"><wp:wrapPolygon edited="0">' +
+        `<wp:start x="0" y="0"/><wp:lineTo x="${options.vertexX ?? 21600}" y="0"/><wp:lineTo x="21600" y="21600"/><wp:lineTo x="0" y="21600"/><wp:lineTo x="0" y="0"/>` +
+        '</wp:wrapPolygon></wp:wrapTight><wp:docPr id="1" name="p"/>' +
+        `<a:graphic><a:graphicData uri="${PIC}"><pic:pic><pic:nvPicPr><pic:cNvPr id="1" name="p"/><pic:cNvPicPr/></pic:nvPicPr>` +
+        '<pic:blipFill><a:blip r:embed="rId9"/></pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic>' +
+        '</wp:anchor></w:drawing></w:r></w:p></w:body></w:document>';
+      const parsed = readOoxmlPart(xml, { name: '/word/document.xml', contentType: 'app/xml' });
+      if (!parsed.ok) throw new Error(parsed.reason);
+      const projections = [...indexInlineDrawingProjectionsInPart(parsed.part).values()];
+      expect(projections).toHaveLength(1);
+      return projections[0]!;
+    };
+    const base = drawingProjectionLayoutToken(project({}));
+    expect(drawingProjectionLayoutToken(project({}))).toBe(base);
+    expect(drawingProjectionLayoutToken(project({ vertexX: 10000 }))).not.toBe(base);
+    expect(drawingProjectionLayoutToken(project({ allowOverlap: false }))).not.toBe(base);
+    expect(drawingProjectionLayoutToken(project({ behind: true }))).not.toBe(base);
   });
 
   test('the token stays small for a shape at the point budget', () => {
@@ -420,4 +509,142 @@ test('a theme-part swap refuses the slot even though the document part is identi
   bundle.sync(session);
 
   expect(fill()).toBe('79C9B1');
+});
+
+// Tree edits retain the package resource substrate. The slot must still replace projections
+// when drawing spacing, textbox properties, or hosted text changes.
+describe('drawing slot invalidation after tree edits', () => {
+  const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+  const WPS = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+  const CT = 'http://schemas.openxmlformats.org/package/2006/content-types';
+  const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
+  const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const owner = '/word/document.xml';
+
+  for (const edit of [
+    'distance',
+    'inset',
+    'anchor',
+    'text',
+    'title',
+    'lock',
+    'brightness',
+    'fill',
+    'diagnostic',
+  ] as const) {
+    test(`refreshes the retained projection after a ${edit} edit`, () => {
+      const isPicture = edit === 'brightness' || edit === 'fill';
+      const hasTextbox = !isPicture && edit !== 'diagnostic';
+      const graphic =
+        edit === 'diagnostic'
+          ? '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"/></a:graphicData></a:graphic>'
+          : isPicture
+            ? `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+              '<pic:nvPicPr><pic:cNvPr id="1" name="picture"/><pic:cNvPicPr/></pic:nvPicPr>' +
+              `<pic:blipFill><a:blip xmlns:r="${R}" r:embed="rIdImage"><a:lum bright="0" contrast="0"/></a:blip><a:stretch/></pic:blipFill>` +
+              '<pic:spPr/></pic:pic></a:graphicData></a:graphic>'
+            : `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp><wps:spPr>` +
+              '<a:xfrm><a:off x="0" y="0"/><a:ext cx="1270000" cy="635000"/></a:xfrm>' +
+              '<a:prstGeom prst="rect"/><a:noFill/></wps:spPr>' +
+              '<wps:txbx><w:txbxContent><w:p><w:r><w:t>Before</w:t></w:r></w:p></w:txbxContent></wps:txbx>' +
+              '<wps:bodyPr lIns="91440" anchor="t"/></wps:wsp></a:graphicData></a:graphic>';
+      const loaded = readOoxmlPackage(
+        zipSync({
+          '[Content_Types].xml': strToU8(
+            `<Types xmlns="${CT}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+              `<Override PartName="${owner}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+          ),
+          '_rels/.rels': strToU8(
+            `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+          ),
+          'word/document.xml': strToU8(
+            `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}"><w:body><w:p><w:r><w:drawing>` +
+              '<wp:inline distL="0"><wp:extent cx="1270000" cy="635000"/><wp:docPr id="1" name="box" title="Before"/>' +
+              '<wp:cNvGraphicFramePr><a:graphicFrameLocks noResize="0"/></wp:cNvGraphicFramePr>' +
+              graphic +
+              '</wp:inline></w:drawing></w:r></w:p></w:body></w:document>'
+          ),
+        })
+      );
+      if (!loaded.ok) throw new Error(loaded.reason);
+      let pkg = loaded.package;
+      let revision = 0;
+      const session = {
+        packageRevision: () => revision,
+        currentPackage: () => pkg,
+        part: () => pkg.parts.get(owner)!,
+      };
+      const resourceLookup: ImageResourceLookup = {
+        resolveEmbedded: async () => ({ kind: 'missing' }),
+        resolveLinked: () => ({ kind: 'missing' }),
+        resolveForProjection: async () => ({ kind: 'missing' }),
+        liveReferenceCount: () => 0,
+        dispose: () => {},
+      };
+      const bundle = createInlineDrawingLayoutBundle({
+        session,
+        decodePort: {
+          decode: async () => {
+            throw new Error('unused');
+          },
+        },
+        resourceLookup,
+        onResourcesChanged: () => {},
+      });
+      const atomId = [...drawingAtomIdentities(session.part())!.keys()][0]!;
+      const before = bundle.bodyContext.projectionForAtom!(atomId)!;
+      if (hasTextbox) expect(before.textboxStory).not.toBeNull();
+      const beforeToken = drawingProjectionLayoutToken(before);
+      const change = (node: OoxmlNode): OoxmlNode => {
+        if (node.kind === 'textValue') {
+          return edit === 'text' && node.value === 'Before' ? { ...node, value: 'After' } : node;
+        }
+        if (edit === 'diagnostic' && node.localName === 'graphic')
+          return { ...node, kind: 'generic', localName: 'unsupportedGraphic' } as OoxmlNode;
+        if (edit === 'fill' && node.localName === 'stretch')
+          return { ...node, kind: 'pictureTile', localName: 'tile' } as OoxmlNode;
+        const attributes = node.attributes.map((attr) => {
+          const value =
+            edit === 'distance' && node.localName === 'inline' && attr.localName === 'distL'
+              ? '127000'
+              : edit === 'inset' && node.localName === 'bodyPr' && attr.localName === 'lIns'
+                ? '127000'
+                : edit === 'anchor' && node.localName === 'bodyPr' && attr.localName === 'anchor'
+                  ? 'b'
+                  : edit === 'title' && node.localName === 'docPr' && attr.localName === 'title'
+                    ? 'After'
+                    : edit === 'lock' &&
+                        node.localName === 'graphicFrameLocks' &&
+                        attr.localName === 'noResize'
+                      ? '1'
+                      : edit === 'brightness' &&
+                          node.localName === 'lum' &&
+                          attr.localName === 'bright'
+                        ? '50000'
+                        : attr.value;
+          return value === attr.value ? attr : { ...attr, value };
+        });
+        const children = node.children.map(change);
+        if (
+          attributes.every((attr, index) => attr === node.attributes[index]) &&
+          children.every((child, index) => child === node.children[index])
+        )
+          return node;
+        return { ...node, attributes, children } as OoxmlNode;
+      };
+      const part = session.part();
+      const nextPart = { ...part, root: change(part.root) as typeof part.root };
+      pkg = { ...pkg, parts: new Map(pkg.parts).set(owner, nextPart) };
+      revision += 1;
+      bundle.sync(session);
+      const after = bundle.bodyContext.projectionForAtom!(atomId)!;
+      const expected = indexInlineDrawingProjectionsInPart(nextPart).get(atomId)!;
+      expect(after).toEqual(expected);
+      expect(drawingProjectionLayoutToken(after)).not.toBe(beforeToken);
+      // Property edits preserve the content root; their own token fields must invalidate.
+      if (edit !== 'text' && hasTextbox)
+        expect(after.textboxStory!.content).toBe(before.textboxStory!.content);
+      bundle.dispose();
+    });
+  }
 });

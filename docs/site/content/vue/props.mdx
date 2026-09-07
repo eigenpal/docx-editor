@@ -12,14 +12,14 @@ use. See the [Vue API reference](/docs/2.x/api/vue) for generated signatures.
 
 Use `document` for the document source.
 
-| Prop       | Type                               | Description                                                                                                       |
-| ---------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `document` | `DocumentSource`                   | DOCX bytes, `'blank'`, or a `DocumentHandle`.                                                                     |
-| `author`   | `string`                           | Author for later comments, replies, and tracked changes.                                                          |
-| `locale`   | `string`                           | Engine locale for engine-generated content, such as the table of contents title. Changes apply without a remount. |
-| `mode`     | `'edit' \| 'view' \| 'suggesting'` | Live host mode. The packaged `<DocxEditor>` defaults to `'edit'`.                                                 |
-| `zoom`     | `number`                           | Numeric display scale.                                                                                            |
-| `zoomMode` | `ZoomMode \| 'auto'`               | Zoom source. `'auto'` fits the page width.                                                                        |
+| Prop       | Type                               | Description                                                                                   |
+| ---------- | ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| `document` | `DocumentSource`                   | DOCX bytes, `'blank'`, or a `DocumentHandle`.                                                 |
+| `author`   | `string`                           | Author for later comments, replies, and tracked changes.                                      |
+| `locale`   | `string`                           | Locale for generated content, such as the table of contents title. Updates without a remount. |
+| `mode`     | `'edit' \| 'view' \| 'suggesting'` | Editing mode. The packaged `<DocxEditor>` defaults to `'edit'`.                               |
+| `zoom`     | `number`                           | Numeric display scale.                                                                        |
+| `zoomMode` | `ZoomMode \| 'auto'`               | Zoom source. `'auto'` fits the page width.                                                    |
 
 `DocumentSource` accepts `Uint8Array`, `ArrayBuffer`, `'blank'`, or an existing
 `DocumentHandle`. Resolve URLs and paths with

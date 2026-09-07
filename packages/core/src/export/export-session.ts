@@ -486,6 +486,7 @@ export function openDocumentForExport(
         styleCascade: state.styles.styleCascade,
         numberingIndex: state.styles.numberingIndex,
         defaultTabStopPt: state.styles.defaultTabStopPt,
+        compatibilityMode: state.styles.compatibilityMode,
         displayMode: mode,
         revisionAuthorFilter: undefined,
         inlineDrawingLayoutForPart: (partName) => state.drawingBundle.contextForPart(partName),

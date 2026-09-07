@@ -13,7 +13,7 @@ import {
   publishAnchoredDrawingsForParagraph,
   shiftInlineDrawingRecord,
 } from './drawing-layout.ts';
-import { contentInsets } from './table-cell-geometry.ts';
+import { contentInsets, type CellContentInsets } from './table-cell-geometry.ts';
 import {
   resolveTableCellBorderGrid,
   type BorderGridCell,
@@ -158,7 +158,8 @@ export function finalizeTableRows(
   vMergeBudget?: TableVMergeResolveBudget,
   vMergeWork?: TableVMergeResolveWork,
   onAnchorShift?: (paragraphId: string, dy: number) => void,
-  anchorDeps?: TableFlowDeps
+  anchorDeps?: TableFlowDeps,
+  occurrenceInsets?: ReadonlyMap<TableRowFragmentRecord, ReadonlyMap<string, CellContentInsets>>
 ): TableRowFragmentRecord[] {
   if (rows.length === 0) return [];
 
@@ -196,11 +197,13 @@ export function finalizeTableRows(
       const authored = authoredById.get(cell.id);
       let blocks = cell.blocks;
       if (authored && authored.vAlign !== 'top' && blocks.length > 0) {
-        const insets = contentInsets(
-          authored.margins,
-          authored.borders,
-          authored.legacyContentAlignment === true && structure.cellSpacingPt === 0
-        );
+        const insets =
+          occurrenceInsets?.get(row)?.get(cell.id) ??
+          contentInsets(
+            authored.margins,
+            authored.borders,
+            authored.legacyContentAlignment === true && structure.cellSpacingPt === 0
+          );
         // Content was placed relative to the first row; measure current content band.
         let contentTop = Number.POSITIVE_INFINITY;
         let contentBottom = Number.NEGATIVE_INFINITY;

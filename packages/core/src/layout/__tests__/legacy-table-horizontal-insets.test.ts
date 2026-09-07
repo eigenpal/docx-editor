@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { readOoxmlPart, serializeOoxmlPart } from '../../store/package/ooxml-tree.ts';
 import { contentInsets } from '../table-cell-geometry.ts';
-import { contentInsets as compatibilityInsets } from '../table-cell-box.ts';
 import type { CellBorderBox, TableBorderSide } from '../table-borders.ts';
 import {
   readTableStructure,
@@ -25,10 +24,7 @@ const borders = (left = edge(0.5), right = left): CellBorderBox => ({
 const margins = (left = 5.4, right = left) => ({ top: 1, bottom: 2, left, right });
 
 describe('narrow legacy collapsed-cell horizontal inset policy', () => {
-  for (const [name, calculate] of [
-    ['geometry', contentInsets],
-    ['compatibility', compatibilityInsets],
-  ] as const) {
+  for (const [name, calculate] of [['geometry', contentInsets]] as const) {
     test(`${name}: the ordinary border-box path is unchanged`, () => {
       expect(calculate(margins(), borders())).toEqual({
         top: 1.5,
@@ -37,7 +33,7 @@ describe('narrow legacy collapsed-cell horizontal inset policy', () => {
         right: 5.9,
       });
     });
-    test(`${name}: covered half-strokes do not add a second horizontal charge`, () => {
+    test(`${name}: covered painted strokes do not add a second horizontal charge`, () => {
       expect(calculate(margins(), borders(), true)).toEqual({
         top: 1.5,
         bottom: 2.5,
@@ -46,8 +42,8 @@ describe('narrow legacy collapsed-cell horizontal inset policy', () => {
       });
       expect(calculate(margins(1, 2), borders(), true).left).toBe(1);
       expect(calculate(margins(1, 2), borders(), true).right).toBe(2);
-      expect(calculate(margins(0.25), borders(), true).left).toBe(0.25);
-      expect(calculate(margins(), borders(edge(6, 'thick')), true).left).toBe(5.4);
+      expect(calculate(margins(0.25), borders(), true).left).toBe(0.75);
+      expect(calculate(margins(), borders(edge(6, 'thick')), true).left).toBe(11.4);
     });
     test(`${name}: uncovered thick, zero, asymmetric and compound margins keep the old path`, () => {
       for (const [pad, rules] of [

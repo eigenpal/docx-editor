@@ -19,13 +19,8 @@ import {
 } from '../package/ooxml-edit.ts';
 import { nextRevisionId } from './tree-op-revision-ids.ts';
 import { TEXT_DEPS, fromEdit } from './tree-op-nodes.ts';
-import {
-  build,
-  childrenOf,
-  isWmlNamed,
-  revisionAttributes,
-  sameEditingMoment,
-} from './tree-op-tracked.ts';
+import { build, childrenOf, isWmlNamed, revisionAttributes } from './tree-op-tracked.ts';
+import { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
 import type { RevisionAttributionInput, TreeOpEffect, TreeOpResult } from './tree-op-validate.ts';
 
 /**

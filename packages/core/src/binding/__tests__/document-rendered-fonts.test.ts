@@ -116,6 +116,109 @@ describe('collectRenderedFontFamilies', () => {
     expect(cjk.renderedFontFamilies()).toEqual(['DengXian', 'Garamond']);
   });
 
+  test('a w:sym face is not a rendered text face', () => {
+    // Word writes `w:sym w:font="MS Gothic"` for a checkbox and `Wingdings` for a bullet.
+    // A symbol face paints one glyph, moves no text metrics, and is not a family the picker
+    // offers or the editor asks a resolver for — so the substitution notice, which reports
+    // faces an app could have supplied, must not name it. The run's own face still counts:
+    // it is what the surrounding text renders in.
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym w:font="MS Gothic" w:char="2612"/><w:t>checked</w:t></w:r></w:p>',
+      })
+    );
+    expect(session.renderedFontFamilies()).toEqual(['Garamond']);
+
+    // Word's own checkbox shape, which `applySetContentControlValue` also mints when the
+    // user ticks a box: the symbol face is repeated on the RUN. Nothing paints in it —
+    // `symbolRunStyle` overrides `rFonts` with `w:sym/@w:font` — so it must not come back
+    // into the answer through the run.
+    const wordCheckbox = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="MS Gothic" w:eastAsia="MS Gothic" ' +
+          'w:hAnsi="MS Gothic"/></w:rPr><w:sym w:font="MS Gothic" w:char="2612"/></w:r>' +
+          '<w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr><w:t>Task done</w:t></w:r></w:p>',
+      })
+    );
+    expect(wordCheckbox.renderedFontFamilies()).toEqual(['Garamond']);
+
+    // A `w:sym` naming no face of its own DOES paint in the run's face, so that one counts.
+    const runFaced = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym w:char="2612"/></w:r></w:p>',
+      })
+    );
+    expect(runFaced.renderedFontFamilies()).toEqual(['Garamond']);
+
+    // Layout applies any `@w:font` within its length bound, including a name no CSS sink
+    // would take — Word's vertical-writing `@` prefix is the everyday one. The override is
+    // real, so the run's own face still paints nothing.
+    const verticalWriting = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="MS Gothic"/></w:rPr>' +
+          '<w:sym w:font="@MS Gothic" w:char="2612"/></w:r></w:p>',
+      })
+    );
+    expect(verticalWriting.renderedFontFamilies()).toEqual([]);
+    // And no resolver is asked for `@MS Gothic`: the measurer and the paint sink both
+    // reject that name, so bytes supplied under it could never reach the glyph.
+    expect(verticalWriting.symbolFontFamilies()).toEqual([]);
+
+    // A `font` in a foreign namespace is one layout ignores, so the run keeps its own face
+    // and this answer must keep reporting it.
+    const foreignNamespace = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym xmlns:x="urn:x" x:font="Wingdings" w:char="2612"/></w:r></w:p>',
+      })
+    );
+    expect(foreignNamespace.renderedFontFamilies()).toEqual(['Garamond']);
+
+    // A face named BOTH by a symbol and by rendered text stays reported.
+    const alsoText = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="MS Gothic"/></w:rPr>' +
+          '<w:sym w:font="MS Gothic" w:char="2612"/><w:t>checked</w:t></w:r></w:p>',
+      })
+    );
+    expect(alsoText.renderedFontFamilies()).toEqual(['MS Gothic']);
+  });
+
+  test('a w:sym face is its own answer: not the picker, not the notice, but the resolver', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:rPr><w:rFonts w:ascii="Garamond"/></w:rPr>' +
+          '<w:sym w:font="Wingdings" w:char="F0A8"/><w:t>bullet</w:t></w:r></w:p>',
+      })
+    );
+    // Applying Wingdings to a selection would set text in a dingbat face, so the picker
+    // never offers it — but a resolver has to hear about it, or nothing can supply the face
+    // an unmapped private-use glyph needs.
+    expect(session.documentFonts()).toEqual(['Garamond']);
+    expect(session.renderedFontFamilies()).toEqual(['Garamond']);
+    expect(session.symbolFontFamilies()).toEqual(['Wingdings']);
+  });
+
+  test('symbol faces fold case-insensitively, keeping the first spelling a reader sees', () => {
+    const session = open(
+      docx({
+        body:
+          '<w:p><w:r><w:sym w:font="Wingdings" w:char="F0A8"/><w:t>one</w:t></w:r></w:p>' +
+          '<w:p><w:r><w:sym w:font="WINGDINGS" w:char="F0A7"/><w:t>two</w:t></w:r></w:p>',
+      })
+    );
+    expect(session.symbolFontFamilies()).toEqual(['Wingdings']);
+  });
+
   test('a run without text contributes nothing; an empty document answers []', () => {
     const empty = open(docx({ body: '<w:p/>' }));
     expect(empty.renderedFontFamilies()).toEqual([]);

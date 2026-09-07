@@ -3,6 +3,7 @@
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
+import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import {
   openTreeSession,
   type TreeApplyResult,
@@ -30,6 +31,7 @@ import {
   type TreeModelChange,
 } from '@docx-editor.dev/core/store';
 import { resolveSelectedDrawingRecord } from './docx-editor-images.ts';
+import { drawingSelectionPosition } from './surface-drawing-selection.ts';
 import { syncActiveFieldShading } from './surface-field-shading.ts';
 import {
   createLayoutScheduler,
@@ -514,6 +516,7 @@ export function mountPaginatedSurface(
   /** Sibling of `selection`: rectangle of table cells, or null for ordinary text. */
   let cellSelection: CellSelection | null = null;
   let lastRejection: string | null = null;
+  const AUTHOR_WRITE_REFUSAL = 'suggesting needs an author before it can propose a change';
   /** Show-all content-control boundary chrome — surface furniture, never a layout input. */
   let showAllContentControls = false;
   /** Form-fill Tab navigation between editable controls. */
@@ -879,9 +882,7 @@ export function mountPaginatedSurface(
       measurer,
       producer,
       cache: layoutCache,
-      styleCascade,
-      numberingIndex,
-      defaultTabStopPt,
+      ...{ styleCascade, numberingIndex, defaultTabStopPt, compatibilityMode },
       // Furniture answers the document's display mode, like the body does — and it is named
       // even when it is the default, because a lane that says nothing is treated as saying
       // "not All Markup", which is what keeps markup out of the resolved views.
@@ -1103,6 +1104,16 @@ export function mountPaginatedSurface(
         level
       ) !== null,
   });
+  /** The contract's `replacementLanding`; the hyperlink lane reads the same rule. */
+  function replacementLanding(paragraphId: string, start: number, end: number): number | null {
+    if (editingMode !== 'suggest') return null;
+    // A POSITIONAL READ, and it does not settle anything itself: flushing here would commit
+    // buffered typing in the middle of a caller that had already captured the offsets it
+    // builds ops from. Both callers settle first — the hyperlink lane through
+    // `orderedRange()`, an automation batch at its own entry — which is where a flush belongs.
+    return replacementOffset({ paragraphId, offset: start }, { paragraphId, offset: end });
+  }
+
   const hyperlinks = createHyperlinkOps({
     session: gatedSession,
     // A HYPERLINK field is not a tree node, so its link resolves from the layout projection
@@ -1115,14 +1126,8 @@ export function mountPaginatedSurface(
     refusesWrite: () => writeRefusal(true) !== null,
     withMintActor: (mint) => runWithTransactionActor(collaborationSession?.identity.actorId, mint),
     storyScope,
-    // Non-null exactly when suggesting: the link lane then replaces the selection with
-    // tracked ops and wraps the fresh insertion, instead of writing an unattributed wrap.
-    // The landing is the SAME rule every replacing lane reads — past the struck words,
-    // minus this author's own retracted insertion.
-    suggestReplacementOffset: (paragraphId, start, end) =>
-      editingMode === 'suggest'
-        ? replacementOffset({ paragraphId, offset: start }, { paragraphId, offset: end })
-        : null,
+    // Non-null exactly when suggesting: the link lane then replaces with tracked ops.
+    replacementLanding,
     insertionLanding: (paragraphId, offset) =>
       positionPastDeletion(currentLayout, { paragraphId, offset }).offset,
     selection: () => selection,
@@ -3024,15 +3029,8 @@ export function mountPaginatedSurface(
     ) {
       return TOC_READ_ONLY_REFUSAL;
     }
-    // SUGGESTING with no author cannot write `CT_TrackChange`, and the fallback of writing
-    // an untracked edit is only tolerable when nothing is destroyed. A deletion in that
-    // state removes text the reviewer was promised they could get back.
-    // EVERY edit, not just the destructive ones. Letting insertions through wrote permanent
-    // changes to someone else's document while the pill said Suggesting and the review pane
-    // stayed empty — half the keyboard proposing and half editing outright.
-    if (editingMode === 'suggest' && !author?.trim() && edits) {
-      return 'suggesting needs an author before it can propose a change';
-    }
+    // Without an author, refuse every suggested edit instead of writing untracked changes.
+    if (editingMode === 'suggest' && !author?.trim() && edits) return AUTHOR_WRITE_REFUSAL;
     // Deleting a note is a package-level removal with no tracked form: the reference and
     // the body go outright, with no `w:del` and no card, while every insertion around it
     // is a proposal. Striking the reference (Backspace over it) IS the tracked deletion —
@@ -4530,6 +4528,7 @@ export function mountPaginatedSurface(
     cellSelection: () => cellSelection,
     editingMode: () => editingMode,
     author: () => author,
+    trackedDate,
     storyScope,
     paragraphOrder,
     flushPendingInputAndLayout,
@@ -5099,6 +5098,16 @@ export function mountPaginatedSurface(
       setSelection(next);
     },
 
+    selectDrawing(drawingNodeId, hostParagraphId) {
+      flushLayout();
+      const at = drawingSelectionPosition(currentLayout, drawingNodeId, hostParagraphId);
+      if (!at) return false;
+      const next = collapsedAt(at);
+      setDrawingIntent({ kind: 'pointer', drawingNodeId }, selectionsEqual(next, selection));
+      setSelection(next);
+      return resolveSelectedDrawingRecord(surface)?.drawingNodeId === drawingNodeId;
+    },
+
     revealPage(pageIndex, options) {
       // Flushed like its siblings below: a page the deferred pass creates is not findable
       // in the superseded layout, and "false" must mean "no such page", not "not yet".
@@ -5275,6 +5284,7 @@ export function mountPaginatedSurface(
     },
 
     revisionDisplayMode,
+    replacementLanding,
     applyAutomationOps: (staged, scope) => {
       // THE SAME PATH A KEYSTROKE TAKES, minus the keystroke. `applyOps` is where viewing
       // refuses and where suggesting turns an edit into a proposal, and `commit` is where the
@@ -5355,6 +5365,10 @@ export function mountPaginatedSurface(
       if (author === nextAuthor) return;
       flushTypeBuffer();
       author = nextAuthor;
+      if (nextAuthor?.trim() && isMissingAuthorRefusal(lastRejection)) {
+        lastRejection = null;
+        options.onChange?.(currentState());
+      }
     },
     setDrawingStrings: (strings) => {
       if (drawingStrings === strings) return;

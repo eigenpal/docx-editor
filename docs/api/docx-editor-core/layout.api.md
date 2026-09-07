@@ -139,7 +139,7 @@ export function buildNumberingIndex(root: OoxmlElement | null | undefined): Numb
 export function buildPageRefIndex(allRefs: readonly PageRefHit[]): PageRefIndex;
 
 // @public
-export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null, themeFonts?: ThemeFonts): StyleCascadeTable;
+export function buildStyleCascadeTable(stylesRoot: OoxmlElement | null, themeFonts?: ThemeFonts, settingsRoot?: OoxmlElement | null): StyleCascadeTable;
 
 // @public
 export type CacheLookup<V> = {
@@ -337,6 +337,14 @@ export function cellSelectionText(layout: SemanticLayout, selection: CellSelecti
 export type CellVerticalAlign = 'top' | 'center' | 'bottom';
 
 // @public
+export interface CjkTypographySettings {
+    readonly after: Readonly<Record<string, string>>;
+    readonly before: Readonly<Record<string, string>>;
+    readonly compression: 'doNotCompress' | 'compressPunctuation' | 'compressPunctuationAndJapaneseKana';
+    readonly strict: boolean;
+}
+
+// @public
 export function clampListValue(value: number): number;
 
 // @public
@@ -513,6 +521,8 @@ export interface CreateDocumentFurnitureSourceOptions {
     // (undocumented)
     readonly cache: ParagraphLayoutCache<readonly PendingLine[]>;
     // (undocumented)
+    readonly compatibilityMode?: () => number | undefined;
+    // (undocumented)
     readonly defaultTabStopPt?: () => number;
     // (undocumented)
     readonly displayMode?: RevisionDisplayMode;
@@ -549,6 +559,8 @@ export function createDocumentNotesInput(options: CreateDocumentNotesInputOption
 export interface CreateDocumentNotesInputOptions {
     // (undocumented)
     readonly cache: Parameters<typeof layoutHeaderFooterStory>[4];
+    // (undocumented)
+    readonly compatibilityMode?: number;
     // (undocumented)
     readonly defaultTabStopPt?: number;
     // (undocumented)
@@ -729,7 +741,7 @@ export interface DocumentSectionsEnumeration {
 // @public
 export interface DocumentStyleDependencies {
     // (undocumented)
-    readonly compatibilityMode: () => number | undefined;
+    readonly compatibilityMode?: () => number | undefined;
     // (undocumented)
     readonly defaultTabStopPt: () => number;
     // (undocumented)
@@ -771,6 +783,18 @@ export interface DrawingGeometry {
 
 // @public (undocumented)
 export type DrawingHorizontalReferenceFrame = 'character' | 'column' | 'insideMargin' | 'leftMargin' | 'margin' | 'outsideMargin' | 'page' | 'rightMargin';
+
+// @public
+export interface DrawingImageEffects {
+    // (undocumented)
+    readonly bilevel?: number;
+    // (undocumented)
+    readonly brightness: number;
+    // (undocumented)
+    readonly contrast: number;
+    // (undocumented)
+    readonly grayscale: boolean;
+}
 
 // @public (undocumented)
 export interface DrawingInsets {
@@ -1441,11 +1465,7 @@ export interface InlineDrawingRecord {
     // (undocumented)
     readonly drawingNodeId: string;
     // (undocumented)
-    readonly effects: Readonly<{
-        readonly brightness: number;
-        readonly contrast: number;
-        readonly grayscale: boolean;
-    }>;
+    readonly effects: DrawingImageEffects;
     // (undocumented)
     readonly geometry: DrawingGeometry;
     // (undocumented)
@@ -2057,6 +2077,8 @@ export interface NotesLayoutInput {
     // (undocumented)
     readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
     // (undocumented)
+    readonly compatibilityMode?: number;
+    // (undocumented)
     readonly defaultTabStopPt?: number;
     // (undocumented)
     readonly displayMode?: RevisionDisplayMode;
@@ -2372,6 +2394,7 @@ export interface ParagraphFragmentRecord {
     readonly bottomBorder?: ParagraphBottomBorderRecord;
     // (undocumented)
     readonly box: LayoutBox;
+    readonly clipToBox?: true;
     readonly fragmentIndex: number;
     // (undocumented)
     readonly id: string;
@@ -2386,8 +2409,19 @@ export interface ParagraphFragmentRecord {
     readonly markRevision?: RevisionAttribution;
     readonly markRevisions?: readonly RevisionAttribution[];
     readonly outlineLevel: number | null;
+    readonly outOfFlow?: true;
     // (undocumented)
     readonly paragraphId: string;
+    readonly positionedFrame?: {
+        readonly anchorId: string;
+        readonly box: LayoutBox;
+        readonly columnIndex: number;
+        readonly groupId: string;
+        readonly hSpace: number;
+        readonly sourceOrder: number;
+        readonly vSpace: number;
+        readonly wrap: 'around' | 'none' | 'notBeside';
+    };
     // (undocumented)
     readonly props: readonly OoxmlProperty[];
     // (undocumented)
@@ -2798,6 +2832,10 @@ export interface ResolvedRunStyle {
     readonly smallCaps: boolean;
     // (undocumented)
     readonly strike: boolean;
+    readonly textOutline?: {
+        readonly color: string;
+        readonly widthPt: number;
+    };
     // (undocumented)
     readonly underline: ResolvedUnderline | null;
     // (undocumented)
@@ -3915,6 +3953,8 @@ export interface StyleCascadeTable {
     // (undocumented)
     readonly styles: ReadonlyMap<string, StyleDefinition>;
     readonly themeFonts: ThemeFonts;
+    // (undocumented)
+    readonly typography?: CjkTypographySettings;
 }
 
 // @public (undocumented)
@@ -4111,6 +4151,12 @@ export interface TableFragmentRecord {
     // (undocumented)
     readonly box: LayoutBox;
     readonly columnEdges: readonly number[];
+    readonly floatingWrap?: {
+        readonly anchorId: string;
+        readonly columnIndex: number;
+        readonly float: TableFloatPosition;
+        readonly sourceOrder: number;
+    };
     readonly fragmentIndex: number;
     // (undocumented)
     readonly id: string;
@@ -4241,6 +4287,10 @@ export function utf16OffsetToGrapheme(text: string, utf16Offset: number): number
 
 // @public (undocumented)
 export interface VectorShapeComponent {
+    readonly arrowheadsEmu?: readonly (readonly Readonly<{
+        x: number;
+        y: number;
+    }>[])[];
     // (undocumented)
     readonly fillAlpha: number;
     // (undocumented)
@@ -4251,6 +4301,7 @@ export interface VectorShapeComponent {
     readonly strokeHex: string | null;
     // (undocumented)
     readonly strokeWidthEmu: number;
+    readonly subpathsClosed?: readonly boolean[];
     // (undocumented)
     readonly subpathsEmu: readonly (readonly Readonly<{
         x: number;

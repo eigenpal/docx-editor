@@ -652,7 +652,10 @@ export function extractFragmentPackage(
     droppable: ReadonlySet<string>
   ): OoxmlNode | null => {
     if (node.kind === 'textValue') return node;
-    if (node.kind === 'drawing') {
+    if (
+      node.kind === 'drawing' ||
+      (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'pict')
+    ) {
       const ids = new Set<string>();
       collectRelationshipIds([node], ids);
       for (const id of ids) if (droppable.has(id)) return null;

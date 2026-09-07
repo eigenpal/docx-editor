@@ -55,6 +55,7 @@ import type {
 } from './semantic-records.ts';
 import type { StyleCascadeTable } from './style-cascade.ts';
 import { storyBlocks } from './story-roots.ts';
+import { positionLegacyFooterPageFrame } from './legacy-footer-page-frame.ts';
 
 /**
  * Distinct PAGE-dependent contexts retained before LRU eviction.
@@ -181,6 +182,7 @@ function createBoundedContextCache(maxEntries: number): {
  * painted no marker for as long as headers have been editable. Everything new goes here.
  */
 export interface HeaderFooterStoryInputs {
+  readonly compatibilityMode?: number;
   /**
    * `numbering.xml`, so a `w:numPr` paragraph in this story resolves a marker — directly or
    * inside an anchored text box, which lays out with its own per-box counters.
@@ -353,6 +355,7 @@ export function layoutHeaderFooterStory(
         styleCascade,
         ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+        compatibilityMode: inputs?.compatibilityMode,
         displayMode,
         ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
         ...(documentProperties ? { documentProperties } : {}),
@@ -402,6 +405,8 @@ export function layoutHeaderFooterStory(
           hostedStory,
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+          compatibilityMode: inputs?.compatibilityMode,
+          tableNestingOffset: 1,
           displayMode,
           ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
           ...(documentProperties ? { documentProperties } : {}),
@@ -486,6 +491,8 @@ export function layoutHeaderFooterStory(
         ...(listItems ? { listItems } : {}),
         pageContext: effectiveCtx,
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+        compatibilityMode: inputs?.compatibilityMode,
+        tableNestingOffset: 1,
         displayMode,
         ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
         ...(documentProperties ? { documentProperties } : {}),
@@ -500,6 +507,7 @@ export function layoutHeaderFooterStory(
       });
     }
 
+    flow = positionLegacyFooterPageFrame(part, flow, contentWidth, hfPageContext);
     const story: HeaderFooterStoryLayout = {
       partName: part.name,
       part,

@@ -2,7 +2,15 @@
 
 import { describe, expect, test } from 'bun:test';
 import { strToU8, zipSync } from 'fflate';
-import { MAX_NOTES_PER_PART } from '../../store/package/note-nodes.ts';
+import { MAX_NOTES_PER_PART, resolvableNotesOf } from '../../store/package/note-nodes.ts';
+import { paragraphTextOf } from '../../store/store/tree-op-apply.ts';
+import { readOoxmlPart } from '../../store/package/ooxml-tree.ts';
+import {
+  expandSelectableTextboxStories,
+  type SearchStory,
+  type TextboxStoryExpansionWork,
+} from '../document-search-frames.ts';
+import { textboxStoriesInPart } from '../../store/package/textbox-stories.ts';
 import { openTreeSession, type TreeDocxSession } from '../tree-session.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -15,7 +23,7 @@ const REL = 'http://schemas.openxmlformats.org/package/2006/relationships';
 
 const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 
-function textbox(text: string): string {
+function textbox(text: string, story = p(text)): string {
   return (
     '<w:r><w:drawing><wp:anchor distT="0" distB="0" distL="0" distR="0" simplePos="0" ' +
     'relativeHeight="1" behindDoc="0" locked="0" layoutInCell="1" allowOverlap="1">' +
@@ -27,7 +35,7 @@ function textbox(text: string): string {
     `<a:graphic><a:graphicData uri="${WPS}"><wps:wsp>` +
     '<wps:spPr><a:xfrm><a:ext cx="914400" cy="457200"/></a:xfrm>' +
     '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></wps:spPr>' +
-    `<wps:txbx><w:txbxContent>${p(text)}</w:txbxContent></wps:txbx>` +
+    `<wps:txbx><w:txbxContent>${story}</w:txbxContent></wps:txbx>` +
     '<wps:bodyPr/></wps:wsp></a:graphicData></a:graphic></wp:anchor></w:drawing></w:r>'
   );
 }
@@ -41,7 +49,7 @@ function fixture(): Uint8Array {
     `xmlns:a="${A}" xmlns:wps="${WPS}"><w:body>` +
     p('needle body') +
     '<w:p><w:r><w:footnoteReference w:id="1"/><w:endnoteReference w:id="2"/></w:r></w:p>' +
-    `<w:p>${textbox('needle textbox')}<w:pPr>${section}</w:pPr></w:p>` +
+    `<w:p><w:pPr>${section}</w:pPr>${textbox('needle textbox')}</w:p>` +
     section +
     '</w:body></w:document>';
   const contentTypes =
@@ -66,7 +74,11 @@ function fixture(): Uint8Array {
     ),
     'word/document.xml': strToU8(document),
     'word/_rels/document.xml.rels': strToU8(relationships),
-    'word/header1.xml': strToU8(`<w:hdr xmlns:w="${W}">${p('needle header')}</w:hdr>`),
+    'word/header1.xml': strToU8(
+      `<w:hdr xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" xmlns:wps="${WPS}">` +
+        p('needle header') +
+        `<w:p>${textbox('needle header textbox')}</w:p></w:hdr>`
+    ),
     'word/footer1.xml': strToU8(`<w:ftr xmlns:w="${W}">${p('needle footer')}</w:ftr>`),
     'word/footnotes.xml': strToU8(
       `<w:footnotes xmlns:w="${W}">` +
@@ -137,7 +149,32 @@ function footnoteFixture(notes: string, referenceIds: readonly number[] = [1]): 
       'word/_rels/document.xml.rels': strToU8(
         `<Relationships xmlns="${REL}"><Relationship Id="rFootnotes" Type="${R}/footnotes" Target="footnotes.xml"/></Relationships>`
       ),
-      'word/footnotes.xml': strToU8(`<w:footnotes xmlns:w="${W}">${notes}</w:footnotes>`),
+      'word/footnotes.xml': strToU8(
+        `<w:footnotes xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+          `xmlns:wps="${WPS}">${notes}</w:footnotes>`
+      ),
+    },
+    { level: 0 }
+  );
+}
+
+/** A body-only package, for questions that need no furniture or notes. */
+function bodyFixture(body: string): Uint8Array {
+  return zipSync(
+    {
+      '[Content_Types].xml': strToU8(
+        `<Types xmlns="${CT}">` +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+          '</Types>'
+      ),
+      '_rels/.rels': strToU8(
+        `<Relationships xmlns="${REL}"><Relationship Id="rId1" Type="${R}/officeDocument" Target="word/document.xml"/></Relationships>`
+      ),
+      'word/document.xml': strToU8(
+        `<w:document xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+          `xmlns:wps="${WPS}"><w:body>${body}</w:body></w:document>`
+      ),
     },
     { level: 0 }
   );
@@ -208,11 +245,16 @@ describe('navigation Find stories', () => {
   test('searches stories in order with scopes and deduplicated furniture parts', () => {
     const matches = open().findText('needle').matches;
 
-    expect(matches.map((match) => match.text)).toEqual(Array(5).fill('needle'));
-    expect(matches.map((match) => match.paragraphIndex)).toEqual([0, 0, 0, 0, 0]);
+    expect(matches.map((match) => match.text)).toEqual(Array(7).fill('needle'));
+    expect(matches.map((match) => match.paragraphIndex)).toEqual([0, 0, 0, 0, 0, 0, 0]);
     expect(matches.map((match) => match.scope)).toEqual([
       undefined,
+      expect.objectContaining({ kind: 'frame' }),
       { kind: 'headerFooter', rId: 'rHeader' },
+      expect.objectContaining({
+        kind: 'frame',
+        owner: { kind: 'headerFooter', rId: 'rHeader' },
+      }),
       { kind: 'headerFooter', rId: 'rFooter' },
       { kind: 'note', id: 'footnote:1' },
       { kind: 'note', id: 'endnote:2' },
@@ -280,8 +322,86 @@ describe('navigation Find stories', () => {
     expect(session.findText('outside cap').matches).toEqual([]);
   });
 
-  test('skips text-box stories until the surface can address them', () => {
-    expect(open().findText('needle textbox').matches).toEqual([]);
+  test('searches body text-box stories after body paragraphs', () => {
+    const session = open();
+    const [root] = textboxStoriesInPart(session.part());
+    const matches = session.findText('needle').matches;
+    const frame = matches[1]!;
+
+    expect(frame.scope).toEqual({
+      kind: 'frame',
+      id: root?.root.id ?? '',
+      drawingNodeId: root?.drawingNodeId ?? '',
+      hostParagraphId: root?.hostParagraphId ?? '',
+    });
+    expect(frame.text).toBe('needle');
+  });
+
+  test('reports frame offsets in the shared paragraph vocabulary', () => {
+    // A tab and a break each occupy one unit of paragraph text, so a frame match that
+    // computed its own offsets instead of using the shared index would land short here.
+    const story =
+      '<w:p><w:r><w:tab/><w:br/><w:t xml:space="preserve">before needle</w:t></w:r></w:p>';
+    const session = open(bodyFixture(`<w:p>${textbox('', story)}</w:p>`));
+    const match = session.findText('needle').matches.find((hit) => hit.scope?.kind === 'frame');
+    if (!match) throw new Error('frame match missing');
+    const raw = paragraphTextOf(session.part(), match.blockId);
+
+    expect(raw).toBe('\t\nbefore needle');
+    expect(raw.slice(match.start, match.start + match.length)).toBe('needle');
+  });
+
+  test('charges thousands of notes nothing, because a note owns no selectable frame', () => {
+    const count = 2_000;
+    const notes = Array.from(
+      { length: count },
+      (_, index) => `<w:footnote w:id="${index + 1}"><w:p>${textbox('boxed')}</w:p></w:footnote>`
+    ).join('');
+    const parsed = readOoxmlPart(
+      `<w:footnotes xmlns:w="${W}" xmlns:wp="${WP}" xmlns:a="${A}" ` +
+        `xmlns:wps="${WPS}">${notes}</w:footnotes>`,
+      { name: '/word/footnotes.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const stories: SearchStory[] = resolvableNotesOf(parsed.part.root).map((root, index) => ({
+      part: parsed.part,
+      root,
+      scope: { kind: 'note', id: `footnote:${index + 1}` },
+    }));
+    const work: TextboxStoryExpansionWork = { indexBuilds: 0, hostLookups: 0, indexedFrames: 0 };
+
+    expect(expandSelectableTextboxStories(stories, work)).toEqual(stories);
+    expect(work).toEqual({ indexBuilds: 0, hostLookups: 0, indexedFrames: 0 });
+  });
+
+  test('indexes and expands a very large frame list without varargs', () => {
+    const count = 150_000;
+    const parsed = readOoxmlPart(
+      `<w:document xmlns:w="${W}"><w:body>${p('host')}</w:body></w:document>`,
+      { name: '/word/document.xml', contentType: 'application/xml' }
+    );
+    if (!parsed.ok) throw new Error(parsed.reason);
+    const root = parsed.part.root.children.find((child) => child.kind === 'body');
+    if (!root) throw new Error('body missing');
+    const paragraph = root.children.find((child) => child.kind === 'paragraph');
+    if (!paragraph) throw new Error('host paragraph missing');
+    const frame = { root: paragraph, drawingNodeId: 'drawing', hostParagraphId: paragraph.id };
+    const frames = Array(count).fill(frame) as (typeof frame)[];
+    const work: TextboxStoryExpansionWork = { indexBuilds: 0, hostLookups: 0, indexedFrames: 0 };
+    const stories: SearchStory[] = [{ part: parsed.part, root }];
+
+    expect(expandSelectableTextboxStories(stories, work, () => frames)).toHaveLength(count + 1);
+    expect(work).toEqual({ indexBuilds: 1, hostLookups: 1, indexedFrames: count });
+  });
+
+  test('excludes a text box owned by a footnote', () => {
+    const notes =
+      `<w:footnote w:id="1">${p('ordinary note')}` +
+      `<w:p>${textbox('note boxed needle')}</w:p></w:footnote>`;
+    const session = open(footnoteFixture(notes));
+
+    expect(session.findText('ordinary note').matches).toHaveLength(1);
+    expect(session.findText('note boxed needle').matches).toEqual([]);
   });
 
   test.each([
@@ -312,6 +432,12 @@ describe('navigation Find stories', () => {
     const result = open().findText('needle', { limit: 4 });
 
     expect(result.matches).toHaveLength(4);
+    expect(result.matches.map((match) => match.scope?.kind ?? 'body')).toEqual([
+      'body',
+      'frame',
+      'headerFooter',
+      'frame',
+    ]);
     expect(result.truncated).toBe(true);
   });
 });

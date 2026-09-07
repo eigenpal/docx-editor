@@ -379,6 +379,7 @@ export {
   type ResolvedListItem,
 } from './list-resolve.ts';
 export { createFixedMeasurer } from './fixed-measurer.ts';
+export type { CjkTypographySettings } from './cjk-typography.ts';
 export {
   layoutEquation,
   type EquationFractionGeometry,
@@ -717,3 +718,4 @@ export {
   type TableBorderStrokeRecord,
   type TableBorderStyle,
 } from './table-borders.ts';
+export type { DrawingImageEffects } from '../store/package/drawing-image-effects.ts';

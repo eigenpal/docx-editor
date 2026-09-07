@@ -70,11 +70,11 @@ test('a retained style-dependency callback observes settings changes and removal
     settingsRoot: () => current,
   } as unknown as HeadlessDocumentView);
   expect(deps.defaultTabStopPt()).toBe(36);
-  expect(deps.compatibilityMode()).toBe(14);
+  expect(deps.compatibilityMode?.()).toBe(14);
   current = settings(`<w:defaultTabStop w:val="1440"/><w:compat>${setting('15')}</w:compat>`);
-  expect(deps.compatibilityMode()).toBe(15);
+  expect(deps.compatibilityMode?.()).toBe(15);
   expect(deps.defaultTabStopPt()).toBe(72);
   current = settings('');
   expect(deps.defaultTabStopPt()).toBe(36);
-  expect(deps.compatibilityMode()).toBeUndefined();
+  expect(deps.compatibilityMode?.()).toBeUndefined();
 });

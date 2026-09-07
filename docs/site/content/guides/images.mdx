@@ -19,6 +19,10 @@ DrawingML pictures (`w:drawing` with `pic:pic`) lay out, paint, and round-trip t
 
 Insert accepts PNG/JPEG/GIF only. Other payloads stay in the package and affect pagination through their authored extent.
 
+JPEG validation accepts large EXIF and ICC metadata segments before the frame header.
+Intrinsic dimensions account for EXIF orientation, matching the browser's decoded image.
+The original photo bytes and the authored drawing extent remain unchanged.
+
 BMP and WebP decode in the browser and paint like PNG or JPEG. BMP support includes top-down
 bitmaps and the 12-byte `BITMAPCOREHEADER`. WebP support includes lossy, lossless, and extended
 containers.
@@ -78,6 +82,10 @@ editor.snapshot().image; // reference-stable until selection or image fields mov
 | `topAndBottom` | Keeps text above and below                      | `wrapTopAndBottom`           |
 | `behind`       | Places the picture behind document content      | `wrapNone`, `@behindDoc="1"` |
 | `inFront`      | Places the picture in front of document content | `wrapNone`, `@behindDoc="0"` |
+
+Images in front of or behind text can paint beyond their anchor cells. Their cell-relative
+position is preserved, but the cell does not crop these overlays. Page-relative images are
+clipped to the physical sheet, including its margins.
 
 The `resourceStatus` field reports image availability:
 
@@ -156,6 +164,8 @@ Floating pictures: select in the canvas, drag to move (`setImagePosition`), eigh
 
 Wrap changes are **layout-structural**: exclusion zones feed line breaking before paint. Square/tight/through use authored polygons (with distances and `effectExtent`); top-and-bottom and square variants reflow body text accordingly. Header/footer rule: page-relative anchored letterheads do **not** inflate the header box. Body flow height still sizes the furniture band.
 
+Text distances inherit each missing side from `wp:anchor`; an explicit wrap-child value, including zero, overrides that side. When square or rectangular tight wrapping leaves no passage wide enough for the next glyph, text clears the image before continuing. The clearance participates in pagination without repeating the gap on subsequent lines. Nonrectangular contours keep their existing scanline behavior.
+
 ## Accessibility
 
 Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture with neither description nor title is exposed as decorative. Hidden drawings (`@hidden`) suppress paint, hit-testing, and handles while remaining preserved on save.
@@ -169,6 +179,10 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 
 ## Drawing limits
 
+The editor renders brightness, contrast, grayscale, and bilevel black-and-white picture adjustments.
+It preserves image alpha and adjustment markup when you save.
+PDF export does not apply these adjustments.
+
 | Drawing content                                         | Status                                               |
 | ------------------------------------------------------- | ---------------------------------------------------- |
 | Solid shapes and bounded shape groups                   | Render geometry with sRGB or theme colors            |
@@ -176,11 +190,32 @@ Alt text uses `@descr`, then `@title`; `@name` is never announced. A picture wit
 | Anchored text boxes                                     | Render the story read-only and clip it to the extent |
 | Page fields in anchored header or footer text boxes     | Evaluate per page                                    |
 | Inline text boxes, linked chains, autofit, and rotation | Show a placeholder                                   |
-| VML (`w:pict`)                                          | Preserve inertly; do not render or edit watermarks   |
+| Standalone VML (`w:pict`)                               | Render the bounded read-only subset described below  |
 | `w:object` and `w:altChunk`                             | Preserve as generic content with diagnostics         |
 | Tracked image insertion and deletion                    | Record the change in suggesting mode                 |
 | Tracked image property edits                            | Stay unavailable in suggesting mode                  |
 | Artistic effects (`a:effectLst`)                        | Do not render; authored markup round-trips           |
+
+## Legacy VML previews
+
+Standalone `w:pict` can render unrotated embedded photos and bounded groups of photos,
+solid rectangles/ellipses, straight line segments with arrows, and straight fit-to-box
+WordArt (`_x0000_t136`). Group-local coordinates, picture crops, supported text wrapping,
+and source order are retained. WordArt uses the authored font when available on the host;
+curved or rotated WordArt is not supported.
+
+The preview is one read-only drawing atom. Original VML, media, and relationships remain
+canonical: saving does not add generated SVG parts or replace the source with DrawingML.
+Shared photo relationships remain protected when another picture is deleted. Unsupported
+or oversized groups remain opaque as a whole, including groups whose members or ink would
+be clipped by the preview extent. Custom templates, text boxes, curves, image effects,
+rotation, and mixed unsupported members are not partially rendered. Only recognized
+standard shape templates are accepted. An already-selected DrawingML MC branch never
+paints its dead VML fallback too; VML-only MC fallback support is unchanged.
+
+Standalone photos reuse validated image resources and retain their authored crop. Groups, WordArt, and color-key previews use bounded static SVG resources. Embedded members still pass the
+normal image validation and decode limits; an external or missing member never triggers
+a fetch or a misleading partial group preview.
 
 ## Next steps
 

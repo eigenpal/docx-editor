@@ -243,6 +243,7 @@ export {
   replaceNode,
   type EditOptions,
   type OoxmlEditResult,
+  type TransactionRevisionIds,
 } from './ooxml-edit.ts';
 export {
   PAGE_BREAK_CHAR,
@@ -504,6 +505,7 @@ export {
   type OoxmlStoryKind,
   type OoxmlStoryRoot,
 } from './story-blocks.ts';
+export { textboxStoriesInPart, type TextboxStoryRoot } from './textbox-stories.ts';
 export {
   CUSTOM_XML_PROPS_REL,
   CUSTOM_XML_PROPS_TYPE,
@@ -541,3 +543,4 @@ export {
   type CustomNodeExportRequest,
   type CustomNodeExportResult,
 } from './custom-node-export.ts';
+export type { DrawingImageEffects } from './drawing-image-effects.ts';
