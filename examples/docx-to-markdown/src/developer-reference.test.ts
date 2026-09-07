@@ -3,7 +3,7 @@ import type {
   ExportFontResolutionReport,
   MarkdownExportResult,
 } from '@docx-editor.dev/docx-to-markdown';
-import { developerPanelContent } from './developer-reference';
+import { developerPanelContent, quickstart } from './developer-reference';
 
 describe('developer reference', () => {
   test('does not inspect or serialize the result while showing the code example', () => {
@@ -13,7 +13,27 @@ describe('developer reference', () => {
       },
     }) as MarkdownExportResult;
 
-    expect(developerPanelContent('example', hostile)).toContain('exportMarkdown(bytes)');
+    expect(developerPanelContent('example', hostile)).toContain('exportMarkdown(docxBytes,');
+  });
+
+  test('shows only selected page fields while preserving the one-call conversion', () => {
+    const code = quickstart(
+      { showHeaders: false, showFooters: true, showComments: false, showTrackedChanges: true },
+      'contract.docx'
+    );
+    expect(code).toContain('readFile("contract.docx")');
+    expect(code.match(/await exportMarkdown\(/g)).toHaveLength(1);
+    expect(code).toContain('page.footerMarkdown');
+    expect(code).toContain('page.trackedChanges');
+    expect(code).not.toContain('page.headerMarkdown');
+    expect(code).not.toContain('page.comments');
+    expect(code).not.toContain('fontResolution');
+    expect(code).toContain('fallbackFonts: googleFonts()');
+  });
+
+  test('safely quotes filenames in runnable code', () => {
+    const filename = 'a"\\b\n.docx';
+    expect(quickstart(undefined, filename)).toContain(`readFile(${JSON.stringify(filename)})`);
   });
 
   test('shows the complete API response without demo-only truncation', () => {

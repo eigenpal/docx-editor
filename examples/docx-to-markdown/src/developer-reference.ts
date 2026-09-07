@@ -3,15 +3,49 @@ import type { ExportStatus } from './export-state';
 
 export type DeveloperPanelTab = 'example' | 'response';
 
-export const QUICKSTART = `import { readFile } from 'node:fs/promises';
+export interface PreviewFields {
+  readonly showHeaders: boolean;
+  readonly showFooters: boolean;
+  readonly showComments: boolean;
+  readonly showTrackedChanges: boolean;
+}
+
+export const DEFAULT_PREVIEW_FIELDS: PreviewFields = {
+  showHeaders: true,
+  showFooters: true,
+  showComments: true,
+  showTrackedChanges: true,
+};
+
+export function quickstart(
+  fields: PreviewFields = DEFAULT_PREVIEW_FIELDS,
+  filename = 'document.docx'
+): string {
+  const selectedFields = [
+    fields.showHeaders && '  console.log(page.headerMarkdown);',
+    '  console.log(page.markdown);',
+    fields.showFooters && '  console.log(page.footerMarkdown);',
+    fields.showComments && '  console.log(page.comments);',
+    fields.showTrackedChanges && '  console.log(page.trackedChanges);',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return `import { readFile } from 'node:fs/promises';
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
+import { googleFonts } from '@docx-editor.dev/fonts/google';
 
-const bytes = new Uint8Array(await readFile('document.docx'));
-const result = await exportMarkdown(bytes);
+const docxBytes = new Uint8Array(await readFile(${JSON.stringify(filename)}));
+const result = await exportMarkdown(docxBytes, {
+  fallbackFonts: googleFonts(),
+});
 
-console.log(result.markdown);       // complete logical document
-console.log(result.pages[0]);       // page-aware Markdown + review artifacts
-console.log(result.fontResolution); // font fidelity evidence`;
+console.log(result.markdown); // Full document body.
+
+// Selected page fields. The API returns all fields.
+for (const page of result.pages) {
+${selectedFields}
+}`;
+}
 
 function responseJson(value: unknown): string {
   return JSON.stringify(
@@ -51,7 +85,9 @@ export function developerPanelContent(
   tab: DeveloperPanelTab,
   result: MarkdownExportResult | null,
   status: ExportStatus = result ? 'ready' : 'idle',
-  error: string | null = null
+  error: string | null = null,
+  fields: PreviewFields = DEFAULT_PREVIEW_FIELDS,
+  filename = 'document.docx'
 ): string {
-  return tab === 'example' ? QUICKSTART : responsePreview(result, status, error);
+  return tab === 'example' ? quickstart(fields, filename) : responsePreview(result, status, error);
 }
