@@ -1,6 +1,17 @@
 import { describe, expect, test } from 'bun:test';
-import { readOoxmlPart, TreeDocumentStore, type OoxmlElement } from '@docx-editor.dev/core/store';
-import { createFixedMeasurer, createLayoutSession, layoutSemanticDocument } from '../index.ts';
+import {
+  readOoxmlPart,
+  TreeDocumentStore,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
+import {
+  createFixedMeasurer,
+  createLayoutSession,
+  createParagraphLayoutCache,
+  layoutSemanticDocument,
+} from '../index.ts';
 import type { SectionPrepass, SemanticLayoutOptions } from '../semantic-layout.ts';
 import { prepareSectionBlocks, sameSectionParagraphOrder } from '../section-preparation.ts';
 
@@ -156,5 +167,85 @@ test('a column-policy transition cannot reuse a paragraph with frames disabled',
       ...options,
       session: createLayoutSession(),
     }).pages
+  );
+});
+
+test('REF output reassignment cannot poison retained keys for a later target edit', () => {
+  const reference = (name: string) =>
+    `<w:p><w:fldSimple w:instr=" REF ${name} "><w:r><w:t/></w:r></w:fldSimple></w:p>`;
+  const target = (name: string, text: string, id: number) =>
+    `<w:p><w:bookmarkStart w:id="${id}" w:name="${name}"/><w:r><w:t>${text}</w:t></w:r><w:bookmarkEnd w:id="${id}"/></w:p>`;
+  const loaded = readOoxmlPart(
+    '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+      reference('a') +
+      reference('b') +
+      reference('c') +
+      '<w:p><w:r><w:t>filler</w:t></w:r></w:p>'.repeat(40) +
+      target('a', 'X', 1) +
+      target('b', 'YYYYYYYYYY', 2) +
+      target('c', 'YYYYYYYYYY', 3) +
+      '</w:body></w:document>',
+    { name: '/word/document.xml', contentType: 'app/xml' }
+  );
+  if (!loaded.ok) throw new Error(loaded.reason);
+  const part = loaded.part;
+  const body = part.root.children[0] as OoxmlElement;
+  const firstReference = body.children[0] as OoxmlElement;
+  const editedTarget = body.children[44]!;
+  const withChildren = (children: readonly OoxmlNode[]): OoxmlPart => ({
+    ...part,
+    root: { ...part.root, children: [{ ...body, children }] },
+  });
+  const changeText = (node: OoxmlNode): OoxmlNode => {
+    if (node.kind === 'textValue') return { ...node, value: 'X' };
+    return 'children' in node ? { ...node, children: node.children.map(changeText) } : node;
+  };
+  const duplicate = (node: OoxmlNode): OoxmlNode => ({
+    ...node,
+    id: `${node.id}-inserted`,
+    ...('children' in node ? { children: node.children.map(duplicate) } : {}),
+  });
+  const session = createLayoutSession();
+  const options: SemanticLayoutOptions = {
+    session,
+    measurer: createFixedMeasurer(6, 14),
+    cache: createParagraphLayoutCache(),
+    geometry: {
+      width: 180,
+      height: 300,
+      margin: { top: 0, left: 0, right: 0, bottom: 0 },
+    },
+  };
+  const compareCold = (input: OoxmlPart, revision: number) => {
+    const warm = layoutSemanticDocument(input, revision, options);
+    expect(warm.pages).toEqual(
+      layoutSemanticDocument(structuredClone(input), revision, {
+        ...options,
+        session: createLayoutSession(),
+        cache: createParagraphLayoutCache(),
+      }).pages
+    );
+  };
+  compareCold(part, 0);
+  const before = session.prepass as SectionPrepass;
+  // The REF output sequence stays [X, YYYYYYYYYY, YYYYYYYYYY], but REF(b)'s output
+  // changes. Its paragraph node is untouched, so partial reuse needs a stronger aggregate.
+  const children = body.children.map((node) =>
+    node === firstReference
+      ? { ...firstReference, children: [] }
+      : node === editedTarget
+        ? changeText(node)
+        : node
+  );
+  children.splice(3, 0, duplicate(body.children[2]!));
+  compareCold(withChildren(children), 1);
+  const reassigned = session.prepass as SectionPrepass;
+  expect(reassigned.refToken).not.toBe(before.refToken);
+  expect(reassigned.prepared[1]).not.toBe(before.prepared[1]);
+  // Restoring the late target must invalidate the earlier REF(b). A stale prepass key
+  // from the previous edit otherwise matches again and resumes after its old painted X.
+  compareCold(
+    withChildren(children.map((node) => (node.id === editedTarget.id ? editedTarget : node))),
+    2
   );
 });
