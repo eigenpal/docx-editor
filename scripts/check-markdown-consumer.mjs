@@ -50,23 +50,22 @@ if (new Set(chunks.map(chunk => chunk.metadata.page)).size !== 15) throw new Err
 if (chunks.some(chunk => chunk.metadata.source !== 'narrow-pages.docx' || !chunk.metadata.page)) throw new Error('Splitter lost citation metadata');
 `
 );
-run('node', [
-  'node_modules/typescript/bin/tsc',
-  '--target',
-  'ES2022',
-  '--lib',
-  'ES2022',
-  '--module',
-  'NodeNext',
-  '--types',
-  'node',
-  '--strict',
-  '--skipLibCheck',
-  'false',
-  '--outDir',
-  'markdown-check',
-  'markdown-node.mts',
-]);
+writeFileSync(
+  path.join(consumer, 'tsconfig.markdown-esm.json'),
+  JSON.stringify({
+    compilerOptions: {
+      target: 'ES2022',
+      lib: ['ES2022'],
+      module: 'NodeNext',
+      types: ['node'],
+      strict: true,
+      skipLibCheck: false,
+      outDir: 'markdown-check',
+    },
+    files: ['markdown-node.mts'],
+  })
+);
+run('node', ['node_modules/typescript/bin/tsc', '--project', 'tsconfig.markdown-esm.json']);
 run('node', ['markdown-check/markdown-node.mjs']);
 
 writeFileSync(
@@ -90,23 +89,22 @@ async function main() {
 void main().catch(error => { console.error(error); process.exitCode = 1; });
 `
 );
-run('node', [
-  'node_modules/typescript/bin/tsc',
-  '--target',
-  'ES2022',
-  '--lib',
-  'ES2022',
-  '--module',
-  'Node16',
-  '--types',
-  'node',
-  '--strict',
-  '--skipLibCheck',
-  'false',
-  '--outDir',
-  'markdown-check',
-  'markdown-node.cts',
-]);
+writeFileSync(
+  path.join(consumer, 'tsconfig.markdown-cjs.json'),
+  JSON.stringify({
+    compilerOptions: {
+      target: 'ES2022',
+      lib: ['ES2022'],
+      module: 'Node16',
+      types: ['node'],
+      strict: true,
+      skipLibCheck: false,
+      outDir: 'markdown-check',
+    },
+    files: ['markdown-node.cts'],
+  })
+);
+run('node', ['node_modules/typescript/bin/tsc', '--project', 'tsconfig.markdown-cjs.json']);
 run('node', ['markdown-check/markdown-node.cjs']);
 
 const nextApp = path.join(consumer, 'markdown-next');
