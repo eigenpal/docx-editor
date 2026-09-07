@@ -4702,6 +4702,7 @@ export function mountPaginatedSurface(
     insertPlainText: (text: string) => insertPlainText(text),
 
     deleteBackward() {
+      if (textFormInteraction?.selectForDeletion('backward')) return;
       const plan = deleteSelectionPlan();
       if (plan.ops.length > 0) {
         commit(
@@ -4986,6 +4987,7 @@ export function mountPaginatedSurface(
     },
 
     deleteForward() {
+      if (textFormInteraction?.selectForDeletion('forward')) return;
       if (surface.deleteSelection()) return;
       // Delete keeps the typing format like Backspace does — the caret does not move, so
       // the armed format re-anchors in place.

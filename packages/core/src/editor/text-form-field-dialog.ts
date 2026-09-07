@@ -19,13 +19,22 @@ export function textFormFieldDialog(
   panel.className = 'docx-text-form-dialog';
   panel.setAttribute('aria-label', t('textFormField.title'));
   const heading = document.createElement('h2');
+  heading.className = 'docx-text-form-dialog__header';
   heading.textContent = t('textFormField.title');
-  panel.append(heading);
+  const body = document.createElement('div');
+  body.className = 'docx-text-form-dialog__body';
+  const footer = document.createElement('div');
+  footer.className = 'docx-text-form-dialog__footer';
+  panel.append(heading, body, footer);
   const label = (key: Parameters<typeof t>[0], control: HTMLElement): void => {
     const element = document.createElement('label');
-    element.textContent = t(key);
-    element.append(control);
-    panel.append(element);
+    element.className = 'docx-text-form-dialog__row';
+    const caption = document.createElement('span');
+    caption.className = 'docx-text-form-dialog__label';
+    caption.textContent = t(key);
+    control.className = 'docx-text-form-dialog__input';
+    element.append(caption, control);
+    body.append(element);
   };
   const input = document.createElement('input');
   input.type = 'text';
@@ -87,15 +96,22 @@ export function textFormFieldDialog(
   const enabled = document.createElement('input');
   enabled.type = 'checkbox';
   enabled.checked = field.enabled;
-  label('textFormField.enabled', enabled);
+  const enabledLabel = document.createElement('label');
+  enabledLabel.className = 'docx-text-form-dialog__checkbox-row';
+  enabledLabel.append(enabled, document.createTextNode(t('textFormField.enabled')));
+  body.append(enabledLabel);
   const error = document.createElement('p');
+  error.className = 'docx-text-form-dialog__error';
   error.setAttribute('role', 'alert');
+  body.append(error);
   const cancel = document.createElement('button');
   cancel.type = 'button';
+  cancel.className = 'docx-text-form-dialog__button';
   cancel.textContent = t('textFormField.cancel');
   cancel.addEventListener('click', close);
   const apply = document.createElement('button');
   apply.type = 'button';
+  apply.className = 'docx-text-form-dialog__button docx-text-form-dialog__button--primary';
   apply.textContent = t('textFormField.apply');
   const submit = (): void => {
     if (
@@ -124,7 +140,7 @@ export function textFormFieldDialog(
     event.preventDefault();
     close();
   });
-  panel.append(error, cancel, apply);
+  footer.append(cancel, apply);
   container.append(panel);
   panel.showModal();
   input.focus();

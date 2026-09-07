@@ -27,6 +27,7 @@ interface Host {
 export function createTextFormFieldInteraction(host: Host): {
   keydown(event: KeyboardEvent): boolean;
   doubleClick(event: MouseEvent): boolean;
+  selectForDeletion(direction: 'backward' | 'forward'): boolean;
   annotate(ops: readonly TreeDocOp[]): readonly TreeDocOp[];
   canEdit(): boolean;
   edit(): boolean;
@@ -45,9 +46,12 @@ export function createTextFormFieldInteraction(host: Host): {
   let dialog: HTMLDialogElement | null = null;
   let active: { paragraphId: string; fieldNodeId: string } | null = null;
   const close = (): void => {
+    const selected = host.selection();
     dialog?.remove();
     dialog = null;
     host.pagesLayer.focus({ preventScroll: true });
+    // Native focus can collapse the DOM range at the start of the editable surface.
+    host.select(selected);
   };
   function select(paragraphId: string, field: TextFormFieldRange): void {
     incoming = { paragraphId, fieldNodeId: field.fieldNodeId };
@@ -186,6 +190,28 @@ export function createTextFormFieldInteraction(host: Host): {
       const hit = targetField()!;
       select(hit.paragraphId, hit.field);
       open(hit.paragraphId, hit.field);
+      return true;
+    },
+    selectForDeletion(direction) {
+      const selected = host.selection();
+      const { paragraphId, offset } = selected.head;
+      if (
+        !host.editable() ||
+        host.protected(paragraphId) ||
+        selected.anchor.paragraphId !== paragraphId ||
+        selected.anchor.offset !== offset
+      )
+        return false;
+      const paragraph = findNode(host.part(), paragraphId);
+      if (paragraph?.kind !== 'paragraph') return false;
+      const field = textFormFieldsOf(paragraph).find(
+        (candidate) =>
+          candidate.start < candidate.end &&
+          (direction === 'backward' ? candidate.end === offset : candidate.start === offset)
+      );
+      if (!field) return false;
+      // Word selects a field before deleting from its boundary. Interior edits remain text edits.
+      select(paragraphId, field);
       return true;
     },
     beforeSelect(next) {
