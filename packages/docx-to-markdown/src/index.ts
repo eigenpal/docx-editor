@@ -24,6 +24,7 @@ import {
   type PreparedLayoutFontConfiguration,
 } from '@docx-editor.dev/core/layout';
 import type { HeadlessDocumentRejection } from '@docx-editor.dev/core/store';
+import { defineFontResolver } from '@docx-editor.dev/core/editor';
 import { FONT_ASSET_ROOT, loadDefaultFonts, packagedFonts } from '@docx-editor.dev/fonts';
 import {
   exportMarkdownFrom as translateMarkdown,
@@ -175,15 +176,24 @@ const defaultFonts = createSuccessfulValueCache(async (signal): Promise<DefaultE
   });
 });
 
-const packagedExportFonts = packagedFonts({
+const resolvePackagedFonts = packagedFonts({
   fetcher: packagedFileFetch,
   install: false,
-  onFailure(failure) {
-    throw new Error(
-      `Unable to load bundled font ${failure.file}: ${failure.diagnostic}. ` +
-        'In Next.js, add the converter, core, and fonts packages to serverExternalPackages.'
-    );
-  },
+  // Core reports returned fragment failures without discarding successfully loaded faces.
+  onFailure() {},
+});
+const packagedExportFonts = defineFontResolver(async (request) => {
+  const fragment = await resolvePackagedFonts(request);
+  return {
+    ...fragment,
+    failures: fragment.failures.map(
+      (failure) =>
+        new Error(
+          `Unable to load bundled font ${failure.file}: ${failure.diagnostic}. ` +
+            'In Next.js, add the converter, core, and fonts packages to serverExternalPackages.'
+        )
+    ),
+  };
 });
 
 function isByteSource(source: ExportDocumentSource): source is Uint8Array {
@@ -245,10 +255,18 @@ function withFontResolution(
 ): MarkdownExportResult {
   const warnings = [...result.warnings];
   for (const failure of fontResolution?.originFailures ?? []) {
+    let detail = 'unknown error';
+    try {
+      if (failure.cause instanceof Error && typeof failure.cause.message === 'string') {
+        detail = failure.cause.message;
+      }
+    } catch {
+      // Resolver exceptions are untrusted values; diagnostics must not fail the export.
+    }
     warnings.push(
       Object.freeze({
         code: 'font-origin-failed' as const,
-        message: `A font source failed: ${failure.cause instanceof Error ? failure.cause.message : 'unknown error'}`,
+        message: `A font source failed: ${detail}`,
       })
     );
   }

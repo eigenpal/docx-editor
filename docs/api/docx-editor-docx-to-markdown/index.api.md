@@ -109,7 +109,7 @@ export type DrawingVerticalReferenceFrame = 'bottomMargin' | 'insideMargin' | 'l
 
 // @public
 export interface ExportContentWarning {
-    readonly code: 'legacy-textbox' | 'scan-limit';
+    readonly code: 'legacy-textbox' | 'legacy-drawing' | 'scan-limit';
     readonly partName: string;
 }
 

@@ -207,7 +207,7 @@ export interface FontOriginCompositionRequest extends FontResolutionRequest {
   readonly committedSourceBytes?: number;
 }
 
-/** One font origin that could not contribute a valid fragment. @public */
+/** A failed font origin or a partial failure in an otherwise usable fragment. @public */
 export interface FontOriginFailure {
   /** Zero-based position in the first-wins origin list. */
   readonly originIndex: number;
@@ -392,6 +392,16 @@ async function composeFontOriginsInternal(
         continue;
       }
       const answerFailures = 'failures' in answer ? answer.failures : undefined;
+      // A partial origin can keep its usable faces while reporting failed fetches. Snapshot
+      // bounded diagnostics before notifying hosts; never spread an unbounded caller array.
+      const partialFailures: unknown[] = [];
+      if (Array.isArray(answerFailures)) {
+        const count = Math.min(answerFailures.length, HARD_MAX_FONT_SOURCES);
+        for (let i = 0; i < count; i++) partialFailures.push(answerFailures[i]);
+        if (answerFailures.length > count) {
+          partialFailures.push(new Error('Additional font-origin failures were omitted'));
+        }
+      } else if (answerFailures !== undefined) partialFailures.push(answerFailures);
       // Read the whole answer BEFORE committing any of it. A malformed source — no
       // `request`, an unusable family — throws in `faceKey`, and an origin half-ingested
       // is worse than one skipped: it would sit in `present` with its faces unrecorded and
@@ -412,15 +422,11 @@ async function composeFontOriginsInternal(
       sampledAnswer = sampledOrigin;
       // A dropped face degraded alone; its siblings still compose below. Report each drop the
       // same way a whole-origin failure is reported, so hosts see exactly what went missing.
-      for (const cause of sampledOrigin.dropped) {
+      for (const cause of new Set([...sampledOrigin.dropped, ...partialFailures])) {
         reportOriginFailure(options, origin, originIndex, cause);
       }
       const sampled = sampledOrigin.fragment;
-      if (Array.isArray(answerFailures)) {
-        failures.push(...answerFailures);
-      } else if (answerFailures !== undefined) {
-        failures.push(answerFailures);
-      }
+      failures.push(...partialFailures);
       const faces = (sampled.sources ?? []).map((source) => {
         fontRequestKey(source.request);
         return [faceKey(source.request), source.request] as const;

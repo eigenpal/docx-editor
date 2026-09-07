@@ -25,6 +25,7 @@ run('npm', [
   '--ignore-scripts',
   'next@16.3.4',
   '@langchain/core@1.2.9',
+  '@langchain/textsplitters@1.0.1',
   '@types/node@22',
 ]);
 cpSync(fixture, path.join(consumer, 'narrow-pages.docx'));
@@ -33,6 +34,7 @@ writeFileSync(
   `
 import { readFile } from 'node:fs/promises';
 import { Document } from '@langchain/core/documents';
+import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { exportMarkdown } from '@docx-editor.dev/docx-to-markdown';
 const docxBytes = await readFile('narrow-pages.docx');
 const result = await exportMarkdown(docxBytes);
@@ -42,6 +44,10 @@ const documents = result.pages.map(page => new Document({
 }));
 if (documents.length !== 15 || documents[14]?.metadata.page !== 15) throw new Error('Page metadata lost');
 if (result.warnings.length) throw new Error(JSON.stringify(result.warnings));
+const chunks = await new RecursiveCharacterTextSplitter({chunkSize: 80, chunkOverlap: 10}).splitDocuments(documents);
+if (chunks.length <= documents.length) throw new Error('Splitter did not create chunks');
+if (new Set(chunks.map(chunk => chunk.metadata.page)).size !== 15) throw new Error('Splitter lost pages');
+if (chunks.some(chunk => chunk.metadata.source !== 'narrow-pages.docx' || !chunk.metadata.page)) throw new Error('Splitter lost citation metadata');
 `
 );
 run('node', [
@@ -62,6 +68,46 @@ run('node', [
   'markdown-node.mts',
 ]);
 run('node', ['markdown-check/markdown-node.mjs']);
+
+writeFileSync(
+  path.join(consumer, 'markdown-node.cts'),
+  `
+import { readFile } from 'node:fs/promises';
+import * as api from '@docx-editor.dev/docx-to-markdown';
+import { DocumentOpenError, ExportResourceError, type MarkdownExportResult } from '@docx-editor.dev/docx-to-markdown';
+// Class exports must remain usable as both values and types in CommonJS.
+const openError: DocumentOpenError = new DocumentOpenError('aborted');
+const resourceError: ExportResourceError = new ExportResourceError('aborted', 'Cancelled');
+void [openError, resourceError];
+async function main() {
+  const result: MarkdownExportResult = await api.exportMarkdown(await readFile('narrow-pages.docx'));
+  if (result.pages.length !== 15 || result.warnings.length) throw new Error('CommonJS conversion failed');
+  const esm = await import('@docx-editor.dev/docx-to-markdown');
+  // Check the bridge declares every runtime value, not just the basic converter.
+  const values: Record<keyof typeof esm, unknown> = api;
+  void values;
+}
+void main().catch(error => { console.error(error); process.exitCode = 1; });
+`
+);
+run('node', [
+  'node_modules/typescript/bin/tsc',
+  '--target',
+  'ES2022',
+  '--lib',
+  'ES2022',
+  '--module',
+  'Node16',
+  '--types',
+  'node',
+  '--strict',
+  '--skipLibCheck',
+  'false',
+  '--outDir',
+  'markdown-check',
+  'markdown-node.cts',
+]);
+run('node', ['markdown-check/markdown-node.cjs']);
 
 const nextApp = path.join(consumer, 'markdown-next');
 mkdirSync(path.join(nextApp, 'app/api/convert'), { recursive: true });

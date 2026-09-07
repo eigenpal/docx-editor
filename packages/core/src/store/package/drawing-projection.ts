@@ -1301,6 +1301,28 @@ export function isRunLevelMcAlternateContent(node: OoxmlNode): node is OoxmlGene
   return isMcAlternateContent(node);
 }
 
+/** Selected MC branch container, retaining its namespace declarations for source walks. @internal */
+export function selectedRunLevelMcBranch(
+  wrapper: OoxmlGenericElementNode,
+  namespaceScope: ReadonlyMap<string, string>
+): Readonly<{ branch: OoxmlNode | null; refused: boolean }> {
+  const state = createWalkState();
+  const selected = selectCompatibilityBranch(
+    wrapper,
+    state,
+    DEFAULT_DRAWING_PROJECTION_LIMITS,
+    namespaceScope,
+    DEFAULT_SUPPORTED_MC_REQUIRES
+  );
+  return {
+    branch:
+      selected.branchNodeId === null
+        ? null
+        : (wrapper.children.find((child) => child.id === selected.branchNodeId) ?? null),
+    refused: state.refused,
+  };
+}
+
 /** Resolve a run-level MC wrapper into an atomic drawing segment descriptor. */
 export function resolveRunLevelMcAtom(
   wrapper: OoxmlGenericElementNode,

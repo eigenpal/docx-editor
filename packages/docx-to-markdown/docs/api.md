@@ -377,14 +377,15 @@ messages are for display. `pageNumber` is one-based when present.
 
 | Code                 | Meaning                                                              |
 | -------------------- | -------------------------------------------------------------------- |
-| `omitted-drawing`    | Images or shapes on this page are omitted.                           |
-| `omitted-textbox`    | Text box content on this page is omitted.                            |
+| `omitted-drawing`    | Images or shapes are omitted.                                        |
+| `omitted-textbox`    | Text box content is omitted.                                         |
 | `font-origin-failed` | A font source failed to load.                                        |
 | `content-scan-limit` | Source inspection reached its bound; additional omissions may exist. |
 | `incomplete-font`    | A requested family lacks one or more faces; pagination may differ.   |
 
 Drawing warnings are grouped by category and page, including headers, footers, and
-notes. Legacy text boxes are also reported from the source package, without a page number.
+notes. Unsupported legacy images, shapes, and text boxes are reported from the source
+package with `partName`, without a page number.
 They report omissions; they do not contain extracted image or text box content.
 
 ## Markdown limitations

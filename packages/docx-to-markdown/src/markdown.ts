@@ -759,12 +759,16 @@ export function exportMarkdownLayout(layout: ExportSemanticLayout): MarkdownExpo
         code:
           warning.code === 'legacy-textbox'
             ? ('omitted-textbox' as const)
-            : ('content-scan-limit' as const),
+            : warning.code === 'legacy-drawing'
+              ? ('omitted-drawing' as const)
+              : ('content-scan-limit' as const),
         partName: warning.partName,
         message:
           warning.code === 'legacy-textbox'
             ? `Legacy text box content in ${warning.partName} may be omitted from Markdown.`
-            : `Content checks stopped at the scan limit in ${warning.partName}.`,
+            : warning.code === 'legacy-drawing'
+              ? `Legacy images or shapes in ${warning.partName} are omitted from Markdown and may affect page breaks.`
+              : `Content checks stopped at the scan limit in ${warning.partName}.`,
       })
     ) ?? [];
   const warned = new Set<string>();
