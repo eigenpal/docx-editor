@@ -47,6 +47,13 @@ export interface PendingParagraphFrames {
   readonly signature: string;
 }
 
+export function samePendingParagraphFrames(
+  left: PendingParagraphFrames | undefined,
+  right: PendingParagraphFrames | undefined
+): boolean {
+  return left === right || (left?.length === right?.length && left?.signature === right?.signature);
+}
+
 /** Local frame paragraphs wait for the actual page and origin of their next regular paragraph. */
 export class ParagraphFrameFlow {
   private pending: PendingParagraphFrames | undefined;
@@ -58,10 +65,7 @@ export class ParagraphFrameFlow {
     this.pending = pending;
   }
   same(pending: PendingParagraphFrames | undefined): boolean {
-    return (
-      this.pending === pending ||
-      (this.pending?.length === pending?.length && this.pending?.signature === pending?.signature)
-    );
+    return samePendingParagraphFrames(this.pending, pending);
   }
 
   start(
