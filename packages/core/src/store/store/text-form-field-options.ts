@@ -110,7 +110,7 @@ export function formatTextFormValue(
   if (options.type === 'number') {
     const input = text.trim();
     if (!/^[+-]?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)%?$/.test(input)) return null;
-    let number = Number(input.replaceAll(',', '').replace('%', ''));
+    let number = Number(input.replaceAll(',', '').replaceAll('%', ''));
     if (input.endsWith('%')) number /= 100;
     if (!Number.isFinite(number)) return null;
     if (!options.format) return text;
