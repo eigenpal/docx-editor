@@ -75,15 +75,15 @@ export function formatTextFormValue(
     return text;
   }
   if (options.type === 'number') {
-    // Word also converts mixed text in formatted numeric defaults.
-    // Empty-picture defaults retain their existing strict validation.
-    const input = intent === 'fill' || options.format ? normalizeTextFormNumber(text) : text.trim();
+    // An unformatted default is stored verbatim; protected filling still converts it.
+    if (intent === 'default' && !options.format) return text;
+    const input = normalizeTextFormNumber(text);
     if (input === null) return null;
     if (!/^[+-]?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)%?$/.test(input)) return null;
     let number = Number(input.replaceAll(',', '').replaceAll('%', ''));
     if (input.endsWith('%')) number /= 100;
     if (!Number.isFinite(number)) return null;
-    if (!options.format) return intent === 'fill' ? truncateTextFormNumber(input) : text;
+    if (!options.format) return truncateTextFormNumber(input);
     const percent = options.format.endsWith('%');
     if (percent) number *= 100;
     if (!Number.isFinite(number) || Math.abs(number) >= 1e21) return null;

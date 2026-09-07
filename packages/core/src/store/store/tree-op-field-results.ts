@@ -547,8 +547,17 @@ export function validateTextFormFieldDefault(
   const field = textFormFieldsOf(paragraph).find((f) => f.fieldNodeId === op.fieldNodeId);
   if (!field) return 'invalidArgs';
   const config = op.options ?? field;
+  // A saved numeric picture can be longer than its original input limit.
+  // Reopening unchanged options must not reject the value that we wrote.
+  const unchangedNumericDefault =
+    field.type === 'number' &&
+    field.format !== '' &&
+    config.type === field.type &&
+    config.format === field.format &&
+    config.maxLength === field.maxLength &&
+    op.text === field.defaultText;
   if (
-    (config.maxLength > 0 && [...op.text].length > config.maxLength) ||
+    (config.maxLength > 0 && [...op.text].length > config.maxLength && !unchangedNumericDefault) ||
     formatTextFormValue(op.text, config, 'default', op.dateInputOrder) === null
   )
     return 'invalidArgs';
@@ -623,7 +632,8 @@ export function applyTextFormFieldDefault(
       ],
     } as OoxmlNode;
   };
-  const edits = new Map<string, string | null>([['default', op.text]]);
+  const defaultText = config.type === 'number' && config.format ? text : op.text;
+  const edits = new Map<string, string | null>([['default', defaultText]]);
   if (op.options) {
     edits.set('type', op.options.type);
     // OOXML represents unlimited input by omitting maxLength, not by writing zero.

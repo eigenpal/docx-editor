@@ -134,7 +134,9 @@ formatting. For example, `a1b2c3` becomes `123`, and `abc` becomes zero.
 It accepts dollar signs, grouping commas, spaces, and accounting parentheses.
 An empty numeric output format truncates fractional digits during filling.
 Formatted numeric defaults use the same conversion: `abc 12` with `0.00` becomes `12.00`.
-Default-value editing without a numeric format retains strict validation.
+Without a numeric format, the default remains verbatim, including text such as `abc 12`.
+Formatted numeric defaults store the formatted value in the DOCX default metadata.
+Reopening an unchanged numeric default preserves its existing input-length limit.
 
 Set `dateInputOrder="dmy"` or `dateInputOrder="mdy"` on the React or Vue editor
 or root component. This setting controls ambiguous slash-date input independently

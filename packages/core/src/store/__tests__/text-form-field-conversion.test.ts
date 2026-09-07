@@ -132,6 +132,7 @@ for (const input of ['abc 12', 'abc12']) {
     expect(paragraphTextOf(reopened.part, nextParagraph.id)).toBe('12.00');
     expect(textFormFieldsOf(nextParagraph)).toHaveLength(1);
     expect(textFormFieldsOf(nextParagraph)[0]!.format).toBe('0.00');
+    expect(textFormFieldsOf(nextParagraph)[0]!.defaultText).toBe('12.00');
   });
 }
 
@@ -145,5 +146,58 @@ test('formatted numeric default still refuses malformed punctuation atomically',
   } as const;
   expect(validateTreeOp(part, op)).toBe('invalidArgs');
   expect(applyTreeOp(part, op).ok).toBe(false);
+  expect(paragraphTextOf(part, paragraph.id)).toBe('7');
+});
+
+for (const input of ['abc 12', '12.9']) {
+  test(`unformatted numeric default preserves ${input}, while protected exit converts`, () => {
+    const { part, paragraph, field } = numberField('7', '');
+    const op = {
+      op: 'setTextFormFieldDefault',
+      paragraphId: paragraph.id,
+      fieldNodeId: field.fieldNodeId,
+      text: input,
+    } as const;
+    expect(validateTreeOp(part, op)).toBeNull();
+    const applied = applyTreeOp(part, op);
+    expect(applied.ok).toBe(true);
+    if (!applied.ok) return;
+    expect(paragraphTextOf(applied.part, paragraph.id)).toBe(input);
+    const reopened = readOoxmlPart(serializeOoxmlPart(applied.part), {
+      name: '/word/document.xml',
+      contentType: 'application/xml',
+    });
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    const body = reopened.part.root.children[0]!;
+    if (body.kind === 'textValue') throw new Error('body');
+    const next = body.children[0] as OoxmlParagraphNode;
+    const savedField = textFormFieldsOf(next)[0]!;
+    expect(paragraphTextOf(reopened.part, next.id)).toBe(input);
+    expect(savedField.defaultText).toBe(input);
+    expect(savedField.format).toBe('');
+    const committed = applyTreeOp(reopened.part, {
+      op: 'commitTextFormField',
+      paragraphId: next.id,
+      fieldNodeId: savedField.fieldNodeId,
+    });
+    expect(committed.ok).toBe(true);
+    if (committed.ok) expect(paragraphTextOf(committed.part, next.id)).toBe('12');
+  });
+}
+
+test('unformatted numeric default still enforces XML text and maximum length', () => {
+  const { part, paragraph, field } = numberField('7', '');
+  for (const text of ['abc 12', 'a\tb', 'a\u0000b']) {
+    const op = {
+      op: 'setTextFormFieldDefault',
+      paragraphId: paragraph.id,
+      fieldNodeId: field.fieldNodeId,
+      text,
+      options: { type: 'number', maxLength: 3, format: '', enabled: true },
+    } as const;
+    expect(validateTreeOp(part, op)).toBe('invalidArgs');
+    expect(applyTreeOp(part, op).ok).toBe(false);
+  }
   expect(paragraphTextOf(part, paragraph.id)).toBe('7');
 });

@@ -337,7 +337,7 @@ test('options store type, maximum length, format, and enabled beside the unchang
     maxLength: 6,
     format: '#,##0.00',
     enabled: false,
-    defaultText: '1234.5',
+    defaultText: '1,234.50',
   });
   const xml = serializeOoxmlPart(result.part);
   expect(xml).toContain('bookmarkStart');
@@ -352,7 +352,7 @@ test('options refuse invalid values atomically', () => {
   const p = paragraph(part);
   const f = textFormFieldsOf(p)[0]!;
   for (const [text, options] of [
-    ['invalid', { type: 'number', maxLength: 0, format: '', enabled: true }],
+    ['1.2.3', { type: 'number', maxLength: 0, format: '0.00', enabled: true }],
     ['2025-02-29', { type: 'date', maxLength: 0, format: 'yyyy-MM-dd', enabled: true }],
     ['long', { type: 'regular', maxLength: 3, format: '', enabled: true }],
     ['', { type: 'regular', maxLength: -1, format: '', enabled: true }],
@@ -625,3 +625,52 @@ test('default-only edits preserve an imported maximum length element', () => {
   expect(result.ok).toBe(true);
   if (result.ok) expect(serializeOoxmlPart(result.part)).toContain('<w:maxLength w:val="0"/>');
 });
+
+for (const [input, maxLength, format] of [
+  ['1234.5', 6, '#,##0.00'],
+  ['12345', 5, '0.00%'],
+] as const) {
+  test(`unchanged ${format} numeric default survives reopening its input limit`, () => {
+    const original = fixture();
+    const p = paragraph(original);
+    const field = textFormFieldsOf(p)[0]!;
+    const options = { type: 'number', maxLength, format, enabled: true } as const;
+    const first = applyTreeOp(original, {
+      op: 'setTextFormFieldDefault',
+      paragraphId: p.id,
+      fieldNodeId: field.fieldNodeId,
+      text: input,
+      options,
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    const reopened = readOoxmlPart(serializeOoxmlPart(first.part), metadata);
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    const next = paragraph(reopened.part);
+    const saved = textFormFieldsOf(next)[0]!;
+    expect(saved.defaultText.length).toBeGreaterThan(maxLength);
+    const op = {
+      op: 'setTextFormFieldDefault',
+      paragraphId: next.id,
+      fieldNodeId: saved.fieldNodeId,
+      text: saved.defaultText,
+      options,
+    } as const;
+    const unchanged = applyTreeOp(reopened.part, op);
+    expect(unchanged.ok).toBe(true);
+    if (unchanged.ok) {
+      expect(textFormFieldsOf(paragraph(unchanged.part))[0]!.defaultText).toBe(saved.defaultText);
+      expect(paragraphTextOf(unchanged.part, next.id)).toBe(
+        paragraphTextOf(reopened.part, next.id)
+      );
+    }
+    // New input and a reduced limit still use the normal validation authority.
+    const xml = serializeOoxmlPart(reopened.part);
+    expect(applyTreeOp(reopened.part, { ...op, text: '1' + saved.defaultText }).ok).toBe(false);
+    expect(
+      applyTreeOp(reopened.part, { ...op, options: { ...options, maxLength: maxLength - 1 } }).ok
+    ).toBe(false);
+    expect(serializeOoxmlPart(reopened.part)).toBe(xml);
+  });
+}
