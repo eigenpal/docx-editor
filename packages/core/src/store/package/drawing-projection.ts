@@ -1,3 +1,4 @@
+import { projectLegacyVml, type LegacyGraphicProjection } from './legacy-vml-projection.ts';
 // Bounded semantic projection for typed `w:drawing` nodes and run-level MC wrappers (task 3).
 //
 // Reads the canonical tree without mutating it. `mc:AlternateContent` branch selection is
@@ -217,6 +218,8 @@ export interface DrawingProjection {
   readonly picture: PictureProjection | null;
   readonly vectorShape: VectorShapeProjection | null;
   readonly textboxStory: TextboxStoryProjection | null;
+  /** Read-only preview of the supported native VML subset; the canonical XML is untouched. */
+  readonly legacyGraphic?: LegacyGraphicProjection;
   readonly locks: DrawingLocks;
   readonly effects: DrawingImageEffects;
   readonly compatibilityBranchNodeId: string | null;
@@ -1631,6 +1634,13 @@ function collectDrawingsInPartBounded(
     if (frame.depth > MAX_XML_DEPTH) continue;
 
     const scope = namespaceScopeForNode(frame.namespaceScope, frame.node);
+
+    const legacy = projectLegacyVml(frame.node, ownerPartName);
+    if (legacy) {
+      out.push(legacy);
+      atomIndex?.set(frame.node.id, legacy);
+      continue;
+    }
 
     if (frame.node.kind === 'drawing') {
       const projected = projectDrawing(frame.node, { ...ctx, namespaceScope: scope });

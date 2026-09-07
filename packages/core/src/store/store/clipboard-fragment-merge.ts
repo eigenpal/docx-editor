@@ -161,7 +161,7 @@ function withoutDanglingDrawings(
   if (dropRelIds.size === 0) return [...nodes];
   const rewrite = (node: OoxmlNode): OoxmlNode | OoxmlNode[] | null => {
     if (node.kind === 'textValue') return node;
-    if (node.kind === 'drawing') {
+    if (node.kind === 'drawing' || isWml(node, 'pict')) {
       let dangling = false;
       walkAll([node], (inner) => {
         if (inner.kind === 'textValue') return;
