@@ -38,7 +38,7 @@ export interface PendingLine {
   columnBreakAfter?: boolean;
   /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
   deletedRanges?: readonly ModelRange[];
-  /** Vertical gap inserted before this line to clear a topAndBottom exclusion band. */
+  /** Vertical gap inserted before this line to clear a drawing exclusion band. */
   exclusionSkipBefore?: number;
   /** Tracked anchored-drawing attributions on this line; see {@link LineRecord.anchorRevisions}. */
   anchorRevisions?: readonly RevisionAttribution[];
@@ -165,16 +165,24 @@ export function pendingLineFlowExtent(
 }
 
 /** Recompute topAndBottom skip at placement time from live page zones and absolute line top. */
+export function pendingLineExclusionSkipAtPlacement(
+  line: Pick<PendingLine, 'height' | 'exclusionSkipBefore'>,
+  lineTopY: number,
+  zones: readonly ExclusionZone[]
+): number {
+  return Math.max(
+    topAndBottomSkipBeforeLine(lineTopY, line.height, zones),
+    line.exclusionSkipBefore ?? 0
+  );
+}
+
 export function pendingLineFlowExtentAtPlacement(
   lineTopY: number,
   line: Pick<PendingLine, 'height' | 'trailingSpacing' | 'exclusionSkipBefore'>,
   zones: readonly ExclusionZone[],
   tail = 0
 ): number {
-  const skip =
-    zones.length > 0
-      ? topAndBottomSkipBeforeLine(lineTopY, line.height, zones)
-      : (line.exclusionSkipBefore ?? 0);
+  const skip = pendingLineExclusionSkipAtPlacement(line, lineTopY, zones);
   return skip + Math.max(0, line.height - line.trailingSpacing) + tail;
 }
 

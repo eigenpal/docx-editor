@@ -1,3 +1,4 @@
+import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
 // Table row and cell layout over the canonical tree.
 //
 // Row, cell, and nested-table flow operate on typed tree nodes with the injected
@@ -31,7 +32,6 @@ import {
   exclusionLayoutToken,
   filterExclusionZonesForParagraphOrder,
   localizeExclusionZones,
-  topAndBottomSkipBeforeLine,
 } from './drawing-exclusion.ts';
 import type {
   FieldLinkProjector,
@@ -651,9 +651,7 @@ function placeCellParagraph(
     const afterExtra = isLastLine && includeAfter && !collapseHeight ? spacing.after : 0;
     const skipBefore = collapseHeight
       ? 0
-      : pageZones.length > 0
-        ? topAndBottomSkipBeforeLine(y, pendingLine.height, pageZones)
-        : (pendingLine.exclusionSkipBefore ?? 0);
+      : pendingLineExclusionSkipAtPlacement(pendingLine, y, pageZones);
     const lineBottom = collapseHeight
       ? y
       : y + skipBefore + pendingLine.height + borderExtra + afterExtra;
