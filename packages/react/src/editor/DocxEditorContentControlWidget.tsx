@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
-import { useTranslation } from '../i18n';
+import { useFormControlTranslate } from './form-control-translate';
 import { useEditorState } from './useEditorState';
 import { absolutePointInScroller } from './scroller-geometry';
 
@@ -24,7 +24,7 @@ export function DocxEditorContentControlWidget(props: DocxEditorContentControlWi
   return <WidgetForm key={generation} {...props} />;
 }
 function WidgetForm({ session, className, style, children }: DocxEditorContentControlWidgetProps) {
-  const { t } = useTranslation();
+  const t = useFormControlTranslate();
   const [value, setValue] = useState(
     session.kind === 'date' ? session.value.slice(0, 10) : session.value
   );

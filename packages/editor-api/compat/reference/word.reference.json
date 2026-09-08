@@ -666,6 +666,17 @@
             }
           ]
         },
+        "changeTrackingMode": {
+          "uid": "Word.Document#changeTrackingMode",
+          "kind": "property",
+          "requirementSet": "WordApi 1.4",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Off\" | \"TrackAll\" | \"TrackMineOnly\""
+            }
+          ]
+        },
         "comments": {
           "uid": "Word.Document#comments",
           "kind": "property",
@@ -1389,6 +1400,17 @@
             }
           ]
         },
+        "clear": {
+          "uid": "Word.Range#clear",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "contentControls": {
           "uid": "Word.Range#contentControls",
           "kind": "property",
@@ -1398,6 +1420,17 @@
             {
               "params": [],
               "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "Word.Range#delete",
+          "kind": "method",
+          "requirementSet": "WordApi 1.1",
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
             }
           ]
         },

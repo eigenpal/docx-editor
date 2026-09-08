@@ -73,10 +73,9 @@ export interface DocxEditorConfig {
    */
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   author?: string;
+  /** BCP-47 locale for regional date input and generated labels; defaults to en-US. */
   locale?: string;
-  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
-  dateInputOrder?: 'mdy' | 'dmy';
-  /** Localized drawing refusal labels; defaults to English when omitted. */
+  /** Drawing and form-control UI labels; defaults to English when omitted. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
    * Capability modules to register — the seam `@docx-editor.dev/pro` plugs in
@@ -329,8 +328,8 @@ export interface DocxEditorInstance extends Editor {
    */
   setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
   /**
-   * Set the drawing-label resolver without rebuilding the editor. Painted placeholders update
-   * immediately, and later surface mounts use the same resolver.
+   * Set the drawing and form-control label resolver without rebuilding the editor.
+   * Open dialogs preserve their controls and input; later surface mounts use the same resolver.
    *
    * @public
    */
@@ -338,14 +337,13 @@ export interface DocxEditorInstance extends Editor {
     translate: ((key: string, params?: Record<string, string | number>) => string) | undefined
   ): void;
   /**
-   * Set the engine locale without rebuilding the editor. Later table-of-contents insertions use
-   * the resolved locale label. Unsupported and omitted locales resolve to English.
+   * Set regional date input and generated labels without rebuilding the editor.
+   * Stored dates are preserved; an in-progress field edit retains its starting locale.
+   * Omitted, invalid, and unsupported locales use en-US. Translation catalogues fall back by language.
    *
    * @public
    */
   setLocale(locale: string | undefined): void;
-  /** Change slash-date input order for subsequent field edits. */
-  setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
   /**
    * The style declared for one author, whether or not the SURFACE has published them yet —
    * so review chrome can draw a card the rail is holding before the roster catches up.

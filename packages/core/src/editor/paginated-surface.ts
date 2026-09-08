@@ -3,6 +3,8 @@ import {
   contentControlWidgetItems,
   contentControlWidgetDate,
 } from './content-control-widget-session.ts';
+import { applyTextFormOperation } from './surface-text-form-apply.ts';
+import { createSurfaceDateLocale } from './surface-date-locale.ts';
 import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
 import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
@@ -10,6 +12,7 @@ import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/c
 
 /* eslint-disable max-lines -- composition root; seams live in surface-*.ts */
 
+import { isRevisionCapable, isTrackedEdit } from './surface-tracked-ops.ts';
 import { isMissingAuthorRefusal } from './docx-editor-author.ts';
 import {
   openTreeSession,
@@ -2880,7 +2883,8 @@ export function mountPaginatedSurface(
    * silently write an untracked edit in suggesting mode — the failure nobody notices until
    * the document has already lost the proposal.
    */
-  let dateInputOrder: 'mdy' | 'dmy' = options.dateInputOrder === 'dmy' ? 'dmy' : 'mdy';
+  const dateLocale = createSurfaceDateLocale(options.locale, flushTypeBuffer);
+  let translate = options.translate;
   let textFormInteraction: ReturnType<typeof createTextFormFieldInteraction> | null = null;
   function applyOps(
     ops: readonly TreeDocOp[],
@@ -2904,6 +2908,7 @@ export function mountPaginatedSurface(
       checkSelection && textFormInteraction ? textFormInteraction.annotate(ops) : ops
     );
     const result = applyJournaledOps(attributed, selectionBefore, selectionAfter, scope);
+    if (checkSelection) textFormInteraction?.afterApply(result.committed);
     if (result.committed && attributed.some(isTrackedEdit)) {
       runtimeOptions.onTrackedChange?.();
     }
@@ -3035,38 +3040,6 @@ export function mountPaginatedSurface(
    * permanent edit with no card, nothing to reject, and — once formatting learned to reach
    * tracked text — a silent rewrite of another author's pending insertion (#495).
    */
-  type RevisionCapableOp = Extract<
-    TreeDocOp,
-    {
-      op:
-        | 'insertText'
-        | 'deleteText'
-        | 'insertTab'
-        | 'insertHardBreak'
-        | 'insertPageBreak'
-        | 'insertPageField'
-        | 'insertNote'
-        | 'insertTableRow'
-        | 'deleteTableRow'
-        | 'setRunProperties'
-        | 'setParagraphProperties'
-        | 'setParagraphMarkProperties';
-    }
-  >;
-  const REVISION_CAPABLE_OPS: ReadonlySet<TreeDocOp['op']> = new Set<RevisionCapableOp['op']>([
-    'insertText',
-    'deleteText',
-    'insertTab',
-    'insertHardBreak',
-    'insertPageBreak',
-    'insertPageField',
-    'insertNote',
-    'insertTableRow',
-    'deleteTableRow',
-    'setRunProperties',
-    'setParagraphProperties',
-    'setParagraphMarkProperties',
-  ]);
 
   /**
    * Whether this op's tracked form is a PROPERTY CHANGE record.
@@ -3084,25 +3057,6 @@ export function mountPaginatedSurface(
 
   /** Whether this document wants its formatting changes recorded at all. */
   const formattingTracked = (): boolean => !session.trackingSettings().doNotTrackFormatting;
-  function isRevisionCapable(op: TreeDocOp): op is RevisionCapableOp {
-    return REVISION_CAPABLE_OPS.has(op.op);
-  }
-
-  function isTrackedEdit(op: TreeDocOp): boolean {
-    if (isRevisionCapable(op)) return op.revision !== undefined;
-    switch (op.op) {
-      case 'setParagraphMarkRevision':
-      case 'proposeParagraphMerge':
-        return true;
-      // Paste proposes its breaks through the op itself, so a paste of newlines alone is a
-      // tracked edit with no `insertText` beside it to report for it.
-      case 'splitParagraphMany':
-        return op.revision !== undefined;
-      default:
-        return false;
-    }
-  }
-
   function attributeTrackedOps(
     ops: readonly TreeDocOp[],
     revision: import('../store/store/tree-op-types.ts').RevisionAttributionInput,
@@ -5293,6 +5247,14 @@ export function mountPaginatedSurface(
               reason: refused ?? 'this engine will not author that hyperlink target',
             });
           }
+          if (!options.reviewModel && ops.some(isTrackedEdit)) {
+            return (result = {
+              committed: false,
+              rejected: true,
+              opCount: 0,
+              reason: 'review-module-required',
+            });
+          }
           return (result = applyOps(ops, undefined, undefined, story, false));
         },
         () => {
@@ -5333,8 +5295,11 @@ export function mountPaginatedSurface(
       flushPendingInputAndLayout();
       render(false);
     },
-    setDateInputOrder: (order) => {
-      dateInputOrder = order === 'dmy' ? 'dmy' : 'mdy';
+    setLocale: dateLocale.set,
+    setTranslate: (next) => {
+      if (translate === next) return;
+      translate = next;
+      textFormInteraction?.update();
     },
     setTocLabels: (labels) => {
       tocLabels = labels;
@@ -5774,11 +5739,10 @@ export function mountPaginatedSurface(
   function restoreSelection(
     mark: { paragraphId: string; start: number; end: number } | null
   ): void {
-    // Undo and redo go straight to the session rather than through `commit`, so the armed
-    // typing format is retired here. Word discards it on undo, and a history entry can
-    // restore the caret to the exact position it was armed at — which would otherwise leave
-    // it armed against a tree the undo has already replaced.
+    // History restores text, input locale, and selection together. Retire pending typing
+    // formats so the restored caret cannot inherit formatting armed against the old tree.
     pendingFormats = null;
+    textFormInteraction?.restoreAfterHistory();
     // The tree about to be published is not the one the DOM selection was made against, so
     // the flush below must not read it back: offsets in the reverted tree do not correspond
     // to offsets in the one that replaced it.
@@ -5893,8 +5857,8 @@ export function mountPaginatedSurface(
   textFormInteraction = createTextFormFieldInteraction({
     onRequest: options.onRequestTextFormField,
     onInvalidRequest: options.onRequestInvalidTextFormField,
-    translate: options.textFormFieldTranslate,
-    dateInputOrder: () => dateInputOrder,
+    locale: dateLocale.get,
+    translate: (key, params) => translate?.(key, params) ?? key,
     pagesLayer,
     container,
     part: (paragraphId?: string) =>
@@ -5905,15 +5869,7 @@ export function mountPaginatedSurface(
     selection: () => selection,
     select: (next) => setSelection(next),
     editable: () => editingMode === 'edit',
-    apply: (op) => {
-      let applied = false;
-      commit(() => {
-        const result = applyOps([op]);
-        applied = !result.rejected;
-        return result;
-      });
-      return applied;
-    },
+    apply: (op) => applyTextFormOperation(op, commit, applyOps),
   });
   const dispatchKeyDown = createKeyDownHandler(
     surface,

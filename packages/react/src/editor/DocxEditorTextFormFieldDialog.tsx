@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
 import { TEXT_FORM_FORMATS } from '@docx-editor.dev/core/editor';
 import type { TextFormFieldOptions } from '@docx-editor.dev/core/store';
-import { useTranslation } from '../i18n';
+import { useFormControlTranslate } from './form-control-translate';
 import {
   createDialogParts,
   DialogFrame,
@@ -48,7 +48,7 @@ function TextFormFieldForm({
   className,
   style,
 }: DialogCustomizationProps & { session: TextFormFieldDialogSession }) {
-  const { t } = useTranslation();
+  const t = useFormControlTranslate();
   const isEnabled = useEditorState(() => session.canApply());
   const [values, setValues] = useState<TextFormFieldDialogFields>(() => ({
     defaultText: session.field.defaultText,

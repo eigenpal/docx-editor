@@ -59,10 +59,42 @@ Changes to `author`, `locale`, `mode`, `translate`, `zoom`, `zoomMode`, and the 
 apply without a rebuild. Existing revisions keep their authors.
 The root ignores a later `modules` array change until you remount it with a different `:key`.
 
-The engine uses `locale` for generated content, such as the table of contents title.
+`locale` selects regional date input and generated document labels. It defaults to `en-US`.
 
 For full prop types, see the
 [Vue API reference](/docs/2.x/api/vue).
+
+### UI language and date input
+
+`DocxEditorRoot` reads UI translations from `LocaleProvider`; it has no `i18n` prop.
+Set `locale` separately for regional date input. This example uses Polish for both:
+
+```vue
+<script setup lang="ts">
+import {
+  DocxEditorContent,
+  DocxEditorRoot,
+  DocxEditorToolbar,
+  DocxEditorViewport,
+  LocaleProvider,
+} from '@docx-editor.dev/vue';
+import { pl } from '@docx-editor.dev/i18n';
+</script>
+
+<template>
+  <LocaleProvider :i18n="pl">
+    <DocxEditorRoot :document="bytes" locale="pl-PL">
+      <DocxEditorToolbar />
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  </LocaleProvider>
+</template>
+```
+
+Without the provider, UI strings remain English unless an ancestor supplies a catalog.
+See [internationalization](/docs/2.x/i18n) for catalog imports and defaults.
 
 ## `provideDocxEditor()`
 

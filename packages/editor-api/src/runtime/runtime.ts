@@ -127,7 +127,7 @@ export interface CreateRuntimeOptions {
    *
    * There is no signed-in user behind this API — a server has none, and the editor does not publish
    * one — and `CT_TrackChange` makes `@w:author` mandatory, so a reply written without one is
-   * invalid XML rather than an anonymous remark. A runtime given no author refuses to write comments
+   * invalid XML rather than an anonymous remark. A runtime given no author refuses to enable tracking or write comments
    * (`NotSupported`) instead of inventing a name that would end up in the file.
    */
   readonly author?: string;

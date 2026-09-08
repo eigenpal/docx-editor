@@ -243,7 +243,7 @@ the reason.
 
 ## Typed control chrome
 
-In the editor, typed controls get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. These controls work without host event handlers.
+In the editor, typed controls get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. These controls work without host event handlers. When you toggle a checkbox, an omitted state font defaults to MS Gothic.
 
 ## Operational limits
 
@@ -261,3 +261,9 @@ In the editor, typed controls get an interactive trigger at the top-right of the
 - [Editing API](/docs/2.x/editor-api): the full object model and its batching rules
 - [Custom nodes](/docs/2.x/pro/custom-nodes): your own typed inline nodes over the same OOXML primitive
 - [React hooks](/docs/2.x/react/hooks) and [Vue composables](/docs/2.x/vue/composables)
+
+## Customize control popups
+
+Use `popups.contentControl` for the control popup and `popups.contentControlWidget`
+for dropdown, combo box, and date entry. Omitted entries retain their default UI.
+See [Customize popups](/docs/2.x/guides/customize-dialogs) for renderer ownership and sessions.

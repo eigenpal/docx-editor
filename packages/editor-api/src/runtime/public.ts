@@ -42,6 +42,7 @@ export {
   RevisionCollection,
   Section,
   SectionCollection,
+  type ChangeTrackingMode,
   type BesideLocation,
   type BodyInsertParagraphLocation,
   type BodyInsertTextLocation,

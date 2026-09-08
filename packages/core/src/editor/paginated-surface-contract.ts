@@ -513,8 +513,10 @@ export interface PaginatedSurface {
   setDrawingStrings(
     strings: import('../output/semantic-paint-drawings.ts').DrawingPaintStrings
   ): void;
-  /** Set slash-date input order independently of the field output format. */
-  setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
+  /** Update shared form-control labels without replacing open dialogs. */
+  setTranslate(translate: PaginatedSurfaceOptions['translate']): void;
+  /** Set regional conventions for subsequent date input without reformatting stored values. */
+  setLocale(locale: string | undefined): void;
   /** Replace the localized title used by later TOC insertions. */
   setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
   /**

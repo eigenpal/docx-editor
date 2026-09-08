@@ -42,7 +42,12 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
     if (!open) return undefined;
     const onMouseDown = (event: MouseEvent): void => {
       const root = rootRef.current;
-      if (root && event.target instanceof Node && root.contains(event.target)) return;
+      if (
+        event.target instanceof Node &&
+        (root?.contains(event.target) ||
+          root?.ownerDocument.getElementById(panelId)?.contains(event.target))
+      )
+        return;
       setOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -57,7 +62,7 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
       document.removeEventListener('mousedown', onMouseDown, true);
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [open]);
+  }, [open, panelId]);
 
   const apply = useCallback(() => {
     execute(draft);

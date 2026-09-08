@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import type { DocxEditorPopups } from '../src/editor/popup-config';
 // Image authoring chrome — insert, wrap, alt text, properties, contextual toolbar group.
 
@@ -930,3 +931,36 @@ for (const disabled of [false, true]) {
     expect(within(view.container).queryByRole('dialog')).toBeNull();
   });
 }
+
+test('a portaled image alt-text popup keeps pointer input inside its owner', async () => {
+  const { view, ready, selectDrawing } = mount(<DocxEditorToolbar />, inlinePictureDocument(), {
+    imageAltText: (props) =>
+      createPortal(
+        <div id={props.id} data-testid="portaled-alt-text">
+          <input
+            aria-label="Custom alt text"
+            value={props.value}
+            onChange={(event) => props.onValueChange(event.target.value)}
+          />
+        </div>,
+        document.body
+      ),
+  });
+  await ready();
+  await selectDrawing();
+  await act(async () => {
+    fireEvent.click(view.container.querySelector('[data-slot="image.altText"]')!);
+  });
+  const input = document.querySelector<HTMLInputElement>('[aria-label="Custom alt text"]')!;
+  expect(input).not.toBeNull();
+  await act(async () => {
+    fireEvent.mouseDown(input);
+    fireEvent.change(input, { target: { value: 'Draft in portal' } });
+  });
+  expect(document.querySelector('[data-testid="portaled-alt-text"]')).not.toBeNull();
+  expect(input.value).toBe('Draft in portal');
+  await act(async () => {
+    fireEvent.mouseDown(document.body);
+  });
+  expect(document.querySelector('[data-testid="portaled-alt-text"]')).toBeNull();
+});

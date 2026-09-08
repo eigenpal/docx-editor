@@ -227,6 +227,7 @@ export function packageStorePort(
     return result;
   };
   return {
+    localChangeTracking: true,
     revision: () => store.packageRevision,
     currentPackage: (): OoxmlPackage | null => (live ? store.currentPackage() : null),
     apply(staged: AutomationStagedOps, scope: StoryScope = BODY): AutomationPortApplyResult {

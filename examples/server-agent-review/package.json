@@ -1,0 +1,40 @@
+{
+  "name": "docx-editor-example-server-agent-review",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "server": "node --env-file-if-exists=.env server/collaboration.ts",
+    "worker": "node --env-file-if-exists=.env server/index.ts",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test ./server/tools.test.ts ./server/jobs.test.ts ./server/job-state.test.ts && bun run test:lifecycle",
+    "test:lifecycle": "node --test server/lifecycle.integration.mjs"
+  },
+  "dependencies": {
+    "@docx-editor.dev/core": "workspace:*",
+    "@docx-editor.dev/fonts": "workspace:*",
+    "@docx-editor.dev/i18n": "workspace:*",
+    "@docx-editor.dev/pro": "workspace:*",
+    "@docx-editor.dev/react": "workspace:*",
+    "@hocuspocus/provider": "^4.6.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "yjs": "^13.6.32",
+    "@docx-editor.dev/editor-api": "workspace:*",
+    "@hocuspocus/server": "^4.6.0",
+    "@ai-sdk/openai": "^4.0.27",
+    "ai": "^7.0.48",
+    "zod": "^4.4.3",
+    "fflate": "^0.8.2"
+  },
+  "devDependencies": {
+    "@hocuspocus/server": "^4.6.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.0.1",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10",
+    "@types/node": "^26.1.1"
+  }
+}

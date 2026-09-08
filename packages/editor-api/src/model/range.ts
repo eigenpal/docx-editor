@@ -192,6 +192,13 @@ export class Range extends ModelObject implements PromisedItem {
 
   /**
    * Write text at or over this range. Answers the range the written text occupies.
+   * Await `context.sync()` before loading or addressing that returned range.
+   *
+   * With server `document.changeTrackingMode = 'TrackMineOnly'`, this creates a tracked text
+   * edit attributed to the runtime author. Tracked edits must stay within one paragraph and
+   * cannot touch pending revisions. Structural and formatting tracking are not supported.
+   * Empty text with `Replace` deletes the range; empty text at an insertion point is a no-op.
+   * Agent tools that intend a replacement should validate non-empty model output first.
    *
    * `Before`/`Start` and `After`/`End` land at the SAME position here, and the difference Word
    * draws between them — whether the new text becomes part of this range — has no meaning for a
@@ -222,6 +229,18 @@ export class Range extends ModelObject implements PromisedItem {
       }
     );
     return created;
+  }
+
+  /** Delete this range's content. TrackMineOnly preserves inline text as a pending deletion. */
+  delete(): void {
+    const span = this.#span();
+    this.commandDiscarding('delete', () => ({ op: 'replaceSpan', span, text: '' }));
+  }
+
+  /** Clear this range's content, preserving the surrounding structure. */
+  clear(): void {
+    const span = this.#span();
+    this.commandDiscarding('clear', () => ({ op: 'replaceSpan', span, text: '' }));
   }
 
   /**

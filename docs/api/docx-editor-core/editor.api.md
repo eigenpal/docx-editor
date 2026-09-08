@@ -859,11 +859,9 @@ export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
     container?: HTMLElement;
-    dateInputOrder?: 'mdy' | 'dmy';
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
-    // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];
@@ -893,7 +891,6 @@ export interface DocxEditorInstance extends Editor {
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
-    setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
@@ -1608,7 +1605,6 @@ export interface PaginatedSurface {
     setAllRevisionAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
     setCellSelection(next: CellSelection | null): void;
-    setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
     setDrawingStrings(strings: DrawingPaintStrings): void;
     setEditable(editable: boolean): void;
     // (undocumented)
@@ -1618,6 +1614,7 @@ export interface PaginatedSurface {
         readonly left?: number | null;
         readonly right?: number | null;
     }): boolean;
+    setLocale(locale: string | undefined): void;
     // (undocumented)
     setNoteProperties(args: {
         readonly endnote?: {
@@ -1659,6 +1656,7 @@ export interface PaginatedSurface {
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
+    setTranslate(translate: PaginatedSurfaceOptions['translate']): void;
     showAllRevisionAuthors(): void;
     // (undocumented)
     splitParagraph(): void;
@@ -1677,7 +1675,6 @@ export interface PaginatedSurface {
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
     readonly collaborationModel?: CollaborationModuleContribution;
-    readonly dateInputOrder?: 'mdy' | 'dmy';
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
@@ -1685,6 +1682,7 @@ export interface PaginatedSurfaceOptions {
     readonly fontAlias?: (family: string) => string | undefined;
     readonly hiddenRevisionAuthors?: readonly string[];
     readonly imageDecodePort?: ImageDecodePort;
+    readonly locale?: string;
     // (undocumented)
     readonly measurer?: TextMeasurer;
     // (undocumented)
@@ -1705,11 +1703,10 @@ export interface PaginatedSurfaceOptions {
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
     readonly tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
-    // (undocumented)
-    readonly textFormFieldTranslate?: (key: string) => string;
     readonly tocLabels?: {
         readonly title: string;
     };
+    readonly translate?: (key: string, params?: Record<string, string | number>) => string;
 }
 
 // @public

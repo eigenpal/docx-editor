@@ -1,5 +1,5 @@
 import { TEXT_FORM_FORMATS } from '../store/store/text-form-field-options.ts';
-import { createT, en } from '@docx-editor.dev/i18n';
+import { textFormLabels, textFormTranslate } from './text-form-field-translations.ts';
 import {
   type TextFormFieldOptions,
   type TextFormFieldType,
@@ -12,16 +12,17 @@ export function textFormFieldDialog(
   field: TextFormFieldRange,
   save: (text: string, options: TextFormFieldOptions) => boolean,
   close: () => void,
-  translate?: ReturnType<typeof createT>
+  translate?: ReturnType<typeof textFormTranslate>
 ): HTMLDialogElement {
-  const t = translate ?? createT(en);
+  const t = textFormTranslate(translate);
   const document = container.ownerDocument;
   const panel = document.createElement('dialog');
+  const text = textFormLabels(panel, t);
   panel.className = 'docx-text-form-dialog';
-  panel.setAttribute('aria-label', t('textFormField.title'));
+  text(panel, 'textFormField.title', 'aria-label');
   const heading = document.createElement('h2');
   heading.className = 'docx-text-form-dialog__header';
-  heading.textContent = t('textFormField.title');
+  text(heading, 'textFormField.title');
   const body = document.createElement('div');
   body.className = 'docx-text-form-dialog__body';
   const footer = document.createElement('div');
@@ -32,7 +33,7 @@ export function textFormFieldDialog(
     element.className = 'docx-text-form-dialog__row';
     const caption = document.createElement('span');
     caption.className = 'docx-text-form-dialog__label';
-    caption.textContent = t(key);
+    text(caption, key);
     control.className = 'docx-text-form-dialog__input';
     element.append(caption, control);
     body.append(element);
@@ -46,13 +47,13 @@ export function textFormFieldDialog(
   for (const value of types) {
     const option = document.createElement('option');
     option.value = value;
-    option.textContent = t(`textFormField.${value}`);
+    text(option, `textFormField.${value}`);
     type.append(option);
   }
   if (!types.includes(field.type as TextFormFieldType)) {
     const option = document.createElement('option');
     option.value = field.type;
-    option.textContent = t('textFormField.preservedType');
+    text(option, 'textFormField.preservedType');
     option.disabled = true;
     type.append(option);
   }
@@ -79,13 +80,15 @@ export function textFormFieldDialog(
         'Title case': 'textFormField.titleCase',
       } as const;
       const key = regularLabels[value as keyof typeof regularLabels];
-      option.textContent = key ? t(key) : value || t('textFormField.noFormat');
+      if (key || !value) text(option, key ?? 'textFormField.noFormat');
+      else option.textContent = value;
       format.append(option);
     }
     if (!values.includes(selected)) {
       const option = document.createElement('option');
       option.value = selected;
-      option.textContent = selected || t('textFormField.noFormat');
+      if (selected) option.textContent = selected;
+      else text(option, 'textFormField.noFormat');
       option.disabled = true;
       format.append(option);
     }
@@ -99,7 +102,9 @@ export function textFormFieldDialog(
   enabled.checked = field.enabled;
   const enabledLabel = document.createElement('label');
   enabledLabel.className = 'docx-text-form-dialog__checkbox-row';
-  enabledLabel.append(enabled, document.createTextNode(t('textFormField.enabled')));
+  const enabledText = document.createElement('span');
+  text(enabledText, 'textFormField.enabled');
+  enabledLabel.append(enabled, enabledText);
   body.append(enabledLabel);
   const error = document.createElement('p');
   error.className = 'docx-text-form-dialog__error';
@@ -108,12 +113,12 @@ export function textFormFieldDialog(
   const cancel = document.createElement('button');
   cancel.type = 'button';
   cancel.className = 'docx-text-form-dialog__button';
-  cancel.textContent = t('textFormField.cancel');
+  text(cancel, 'textFormField.cancel');
   cancel.addEventListener('click', close);
   const apply = document.createElement('button');
   apply.type = 'button';
   apply.className = 'docx-text-form-dialog__button docx-text-form-dialog__button--primary';
-  apply.textContent = t('textFormField.apply');
+  text(apply, 'textFormField.apply');
   const submit = (): void => {
     if (
       !max.value ||
@@ -125,7 +130,7 @@ export function textFormFieldDialog(
         enabled: enabled.checked,
       })
     ) {
-      error.textContent = t('textFormField.invalidOptions');
+      text(error, 'textFormField.invalidOptions');
       return;
     }
     close();

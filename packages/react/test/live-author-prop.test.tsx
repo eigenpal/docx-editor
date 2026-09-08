@@ -114,12 +114,12 @@ describe('DocxEditor.Root author prop', () => {
     };
 
     await act(async () => {
-      view.rerender(tree('view', updatedTranslate, 'de'));
+      view.rerender(tree('view', updatedTranslate, 'de-DE'));
     });
     expect(instance).toBe(firstInstance);
     expect(firstInstance.getEditingMode()).toBe('viewing');
     expect(receivedTranslate?.('probe')).toBe('updated:probe');
-    expect(receivedLocale).toBe('de');
+    expect(receivedLocale).toBe('de-DE');
   });
 
   test('an unrelated rerender does not restore a host mode after a reader change', async () => {

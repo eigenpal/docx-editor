@@ -1,5 +1,7 @@
 /** Live host configuration for the editor facade. */
 
+import { resolveLocale } from '../store/store/text-form-date-locale.ts';
+
 import {
   createT,
   deepMerge,
@@ -26,26 +28,42 @@ export interface TocLabels {
   readonly title: string;
 }
 
-function localeState(locale: string | undefined): { code: LocaleCode; labels: TocLabels } {
-  const code = locale && locale in locales ? (locale as LocaleCode) : ('en' as const);
+function localeState(value: string | undefined): { locale: string; labels: TocLabels } {
+  const locale = resolveLocale(value);
+  // Keep the full regional tag for input, while catalogues fall back by language.
+  // Strip Unicode extensions before looking up translated labels.
+  let candidate = new Intl.Locale(locale).baseName;
+  while (candidate && !Object.hasOwn(locales, candidate)) {
+    const separator = candidate.lastIndexOf('-');
+    candidate = separator < 0 ? '' : candidate.slice(0, separator);
+  }
+  // Some catalogues are named by region only (pt-BR, zh-CN). Fall back to a
+  // compatible language/script without mapping Traditional Chinese to Simplified.
+  const requested = new Intl.Locale(locale).maximize();
+  const languageMatch = candidate
+    ? undefined
+    : Object.keys(locales).find((name) => {
+        const available = new Intl.Locale(name).maximize();
+        return available.language === requested.language && available.script === requested.script;
+      });
+  const code = (candidate || languageMatch || 'en') as LocaleCode;
   const t = createT(
     deepMerge(en, code === 'en' ? undefined : locales[code]) as LocaleStrings,
     code
   );
-  return { code, labels: { title: t('toolbar.tableOfContents') } };
+  return { locale, labels: { title: t('toolbar.tableOfContents') } };
 }
 
 /** State that construction config and later instance setters share. */
 export interface DocxEditorHostConfigState {
-  translate(key: string): string;
   mode(): HostEditingMode | undefined;
   modeForGate(): HostEditingMode;
   openingModeDecision(guards: OpeningModeGuards): OpeningModeDecision;
   setMode(mode: HostEditingMode | undefined): boolean;
+  translate(): EditorTranslate | undefined;
   drawingStrings(): DrawingPaintStrings;
   setTranslate(translate: EditorTranslate | undefined): DrawingPaintStrings | null;
-  dateInputOrder(): 'mdy' | 'dmy';
-  setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
+  locale(): string;
   tocLabels(): TocLabels;
   setLocale(locale: string | undefined): TocLabels | null;
 }
@@ -55,7 +73,6 @@ export function createDocxEditorHostConfigState(initial: {
   readonly mode?: HostEditingMode;
   readonly translate?: EditorTranslate;
   readonly locale?: string;
-  readonly dateInputOrder?: 'mdy' | 'dmy';
 }): DocxEditorHostConfigState {
   let mode = initial.mode;
   let translate = initial.translate;
@@ -63,15 +80,8 @@ export function createDocxEditorHostConfigState(initial: {
     ? drawingPaintStringsFromTranslate(translate)
     : DEFAULT_DRAWING_PAINT_STRINGS;
   let locale = localeState(initial.locale);
-  let dateInputOrder: 'mdy' | 'dmy' = initial.dateInputOrder === 'dmy' ? 'dmy' : 'mdy';
 
   return {
-    translate: (key) =>
-      translate?.(key) ??
-      createT(
-        deepMerge(en, locales[locale.code]) as LocaleStrings,
-        locale.code
-      )(key as Parameters<ReturnType<typeof createT>>[0]),
     mode: () => mode,
     modeForGate: () => mode ?? 'edit',
     openingModeDecision: (guards) => resolveOpeningEditingMode(mode, guards),
@@ -80,6 +90,7 @@ export function createDocxEditorHostConfigState(initial: {
       mode = next;
       return true;
     },
+    translate: () => translate,
     drawingStrings: () => drawingStrings,
     setTranslate(next) {
       if (translate === next) return null;
@@ -97,14 +108,11 @@ export function createDocxEditorHostConfigState(initial: {
       drawingStrings = nextDrawingStrings;
       return drawingStrings;
     },
-    dateInputOrder: () => dateInputOrder,
-    setDateInputOrder: (order) => {
-      dateInputOrder = order === 'dmy' ? 'dmy' : 'mdy';
-    },
+    locale: () => locale.locale,
     tocLabels: () => locale.labels,
     setLocale(next) {
       const resolved = localeState(next);
-      if (locale.code === resolved.code) return null;
+      if (locale.locale === resolved.locale) return null;
       locale = resolved;
       return locale.labels;
     },
@@ -116,9 +124,10 @@ export function liveHostConfigSetters(
   state: DocxEditorHostConfigState,
   host: {
     surface(): {
+      setTranslate(translate: EditorTranslate | undefined): void;
       setDrawingStrings(strings: DrawingPaintStrings): void;
       setTocLabels(labels: TocLabels): void;
-      setDateInputOrder(order: 'mdy' | 'dmy'): void;
+      setLocale(locale: string): void;
     } | null;
     bump(): void;
     emitSelectionChange(): void;
@@ -127,6 +136,7 @@ export function liveHostConfigSetters(
   return {
     setTranslate(next: EditorTranslate | undefined) {
       const strings = state.setTranslate(next);
+      host.surface()?.setTranslate(state.translate());
       if (strings === null) return;
       host.surface()?.setDrawingStrings(strings);
       host.bump();
@@ -135,13 +145,10 @@ export function liveHostConfigSetters(
     setLocale(next: string | undefined) {
       const labels = state.setLocale(next);
       if (labels === null) return;
+      host.surface()?.setLocale(state.locale());
       host.surface()?.setTocLabels(labels);
       host.bump();
       host.emitSelectionChange();
-    },
-    setDateInputOrder(order: 'mdy' | 'dmy' | undefined) {
-      state.setDateInputOrder(order);
-      host.surface()?.setDateInputOrder(state.dateInputOrder());
     },
   };
 }

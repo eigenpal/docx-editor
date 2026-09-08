@@ -112,11 +112,11 @@ describe('live Vue props', () => {
         setLocale(value);
       };
 
-      await wrapper.setProps({ mode: 'view', translate: updatedTranslate, locale: 'de' });
+      await wrapper.setProps({ mode: 'view', translate: updatedTranslate, locale: 'de-DE' });
       expect(wrapper.editor()).toBe(editor);
       expect(editor.getEditingMode()).toBe('viewing');
       expect(receivedTranslate?.('probe')).toBe('updated:probe');
-      expect(receivedLocale).toBe('de');
+      expect(receivedLocale).toBe('de-DE');
     } finally {
       wrapper.unmount();
     }

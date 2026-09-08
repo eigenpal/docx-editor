@@ -81,6 +81,9 @@ export class BookmarkCollection extends HandleCollection<Bookmark> {
 }
 
 // @public
+export type ChangeTrackingMode = 'Off' | 'TrackAll' | 'TrackMineOnly';
+
+// @public
 export abstract class ClientObject implements RuntimeManagedObject {
     // @internal
     [REBIND](context: RequestContext): void;
@@ -260,6 +263,8 @@ export interface CreateServerOptions {
 // @public
 class Document_2 extends ModelObject {
     get body(): Body_2;
+    get changeTrackingMode(): ChangeTrackingMode;
+    set changeTrackingMode(mode: ChangeTrackingMode);
     get comments(): CommentCollection;
     get contentControls(): ContentControlCollection;
     get endnotes(): NoteItemCollection;
@@ -618,6 +623,8 @@ class Range_2 extends ModelObject implements PromisedItem {
     // @internal
     static at(context: RequestContext, label: string, address: ObjectAddress): Range_2;
     get bookmarks(): BookmarkCollection;
+    clear(): void;
+    delete(): void;
     get font(): Font;
     // @internal
     hydrateAddress(address: ObjectAddress): void;

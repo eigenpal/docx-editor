@@ -18,7 +18,8 @@
     "examples/nuxt",
     "examples/remix",
     "examples/vite",
-    "examples/vue"
+    "examples/vue",
+    "examples/server-agent-review"
   ],
   "type": "module",
   "scripts": {
@@ -126,7 +127,9 @@
     "test:watch": "bun test --watch",
     "typecheck": "bun run --filter '*' typecheck",
     "typecheck:root": "tsc -p tsconfig.json --noEmit",
-    "version-packages": "changeset version && bun run --filter '@docx-editor.dev/editor-api' compat:generate"
+    "version-packages": "changeset version && bun run --filter '@docx-editor.dev/editor-api' compat:generate",
+    "dev:server-agent-review": "bun run build:packages && node examples/server-agent-review/dev.mjs",
+    "test:server-agent-review": "playwright test --config e2e/server-agent-review.config.ts"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",

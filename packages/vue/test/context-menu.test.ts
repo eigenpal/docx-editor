@@ -161,6 +161,7 @@ test('Vue field context action opens and saves the shared options dialog', async
     enabled!.checked = false;
     enabled!.dispatchEvent(new Event('change', { bubbles: true }));
     await flush();
+
     dialog.querySelectorAll('button')[1]!.click();
     await flush();
     expect(host.container.querySelector('dialog')).toBeNull();

@@ -93,65 +93,46 @@ when one exists.
 The editor preserves field instructions through save. It does not execute
 macros, DDE instructions, OLE content, or external include instructions.
 
+## Legacy text form fields
+
+Click a `FORMTEXT` field to select it. Double-click or choose **Edit field…** to
+set its default value, type, maximum length, format, and **Fill-in enabled**.
+A maximum length of zero means unlimited. React and Vue share the same default behavior.
+
+In an unprotected document, partial edits keep the field definition; replacing
+its whole result removes it. In a document protected for forms, editing keeps
+the definition. Tab and Shift+Tab move between enabled text fields.
+
+Protected fields validate and format input when you leave. Pasted text is limited
+to the remaining capacity. Invalid numbers or dates open an alert; acknowledging
+it clears the input, which can be restored with Undo.
+
+Use `popups.textFormField` for Field Options and `popups.invalidTextFormField`
+for the validation alert. See [Customize popups](/docs/2.x/guides/customize-dialogs).
+
+### Date input and UI language
+
+`locale` controls date input; `i18n` controls UI strings. For Polish dates with
+the default English UI, use:
+
+```tsx
+<DocxEditor locale="pl-PL" />
+```
+
+With `pl-PL`, `01.02.2030` means February 1. The default `en-US` interprets
+`01/02/2030` as January 2. ISO input (`2030-02-01`) works in every locale.
+Each field's format controls its displayed result. Changing locale preserves
+existing dates and applies to subsequent edits.
+
+Date input supports Gregorian numeric dates, regional digits, and full English
+month names. Localized month names and non-Gregorian dates are not supported.
+
+Only plain text results and the dialog's listed types and formats support editing
+and protected filling. Other field structures are preserved. Checkbox and dropdown
+interactions are not supported, and entry or exit macros never run.
+
 ## Next steps
 
 - [Headers and footers](/docs/2.x/guides/headers-footers): Add page-number fields.
 - [Loading and saving](/docs/2.x/guides/loading-and-saving): Save updated field results.
 - [Word fidelity](/docs/2.x/word-fidelity): Review field support status.
-
-## Legacy text form fields
-
-In an unprotected document, clicking a `FORMTEXT` field selects its whole result.
-Replacing the whole result removes the field definition. Editing part of its result keeps the definition.
-Press Backspace immediately after a field, or Delete immediately before it,
-to select the whole field. Press the key again to remove it.
-Double-click a text form field, or select **Edit field…** from its context menu.
-Press Shift+F10 to open the context menu from the keyboard.
-The same options dialog appears in React and Vue.
-
-Set the default value, type, maximum length, format, and **Fill-in enabled**.
-A maximum length of zero means unlimited. The dialog supports regular text,
-number, and date inputs with the formats in its list.
-The native selection highlight marks a whole selected field. A caret marks an
-insertion point inside its text. Field shading and accessible status provide context.
-
-In a document protected for forms, typing changes the result and keeps the
-field definition and default. Press Tab or Shift+Tab to select another enabled
-text form field. Other document text remains protected.
-
-The default-text dialog and protected filling accept plain text results.
-They refuse results with nested fields, revision markup, or other structure.
-Protected filling enforces maximum length and skips disabled fields.
-Pasting into a limited field keeps the prefix that fits its remaining capacity.
-When you leave a field, the editor validates and formats its result.
-The default value stays unchanged. An invalid number or date opens an alert.
-Acknowledge the alert to clear the invalid result and enter another value in the same field.
-Undo restores the cleared input. If the field changes while the alert is open,
-the editor checks its current value and protection before clearing it.
-
-When you leave a numeric field, the editor converts supported mixed input before
-formatting. For example, `a1b2c3` becomes `123`, and `abc` becomes zero.
-It accepts dollar signs, grouping commas, spaces, and accounting parentheses.
-An empty numeric output format truncates fractional digits during filling.
-Formatted numeric defaults use the same conversion: `abc 12` with `0.00` becomes `12.00`.
-Without a numeric format, the default remains verbatim, including text such as `abc 12`.
-Formatted numeric defaults store the formatted value in the DOCX default metadata.
-Reopening an unchanged numeric default preserves its existing input-length limit.
-
-Set `dateInputOrder="dmy"` or `dateInputOrder="mdy"` on the React or Vue editor
-or root component. This setting controls ambiguous slash-date input independently
-of the output format. The default is `mdy`. The demos expose a **Date input** selector.
-Choose the order used by your operating system's short-date setting when comparing Word.
-Browsers cannot read a custom operating-system short-date override from its language alone.
-
-For example, with `dmy`, entering `1/2/2030` means February 1, even when the output
-format is `MM/dd/yyyy`. Unambiguous `12/31/2030` and `31/12/2030` both mean December 31.
-Two-digit years 00–29 mean 2000–2029; 30–99 mean 1930–1999.
-ISO dates and full English month names are also supported.
-
-Full parity across Word locales and all input grammars is not established.
-Unsupported syntax remains refused rather than guessed.
-
-Computed text input types and format pictures outside the dialog's list remain
-preserved. They do not accept protected filling. Checkbox and dropdown interactions
-are not supported. The editor never runs entry or exit macros.

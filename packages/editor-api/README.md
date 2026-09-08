@@ -177,3 +177,40 @@ Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-ed
 
 > [!TIP]
 > Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+
+## Office-shaped redlines on the server
+
+Start with the [Office.js developer guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md) for a complete server example and batching conventions.
+
+Set `document.changeTrackingMode = 'TrackMineOnly'`, then use standard Word editing methods.
+Supply the agent's `author` when opening the server or collaborative runtime:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 7 days');
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose a unique target');
+
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const replacement = matches.items[0]!.insertText('within 30 days', 'Replace');
+  await context.sync();
+  replacement.load('text');
+  await context.sync();
+});
+```
+
+Use `range.insertText(text, 'Before' | 'After')` for insertions, and `range.delete()` or
+`range.clear()` for deletions. `insertText()` returns the inserted range. Mode assignments
+and edits commit together at `sync()`; failed batches preserve the previous mode and document.
+Load `document.changeTrackingMode` before reading it. `Off` is the initial mode.
+
+This is a supported Office.js subset. `TrackMineOnly` applies to this server host and persists
+across its `run()` calls. It does not change peers' tracking settings or save a document-wide
+tracking policy. `TrackAll` and browser-host mode control explicitly refuse with `NotSupported`.
+Tracked text edits support one paragraph, including table-cell text. They refuse targets touching
+pending revisions. Structural and formatting mutations under tracking also refuse. Comments and
+revision decisions remain available. Set `Off` explicitly when permanent edits are intended.
+
+See the [server-agent review example](../../examples/server-agent-review/README.md) for Hocuspocus,
+stale-read handling, and the review lifecycle.

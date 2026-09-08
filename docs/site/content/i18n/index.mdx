@@ -13,7 +13,30 @@ Locale data for the editor UI. Both adapters consume it through the `i18n` prop.
 npm install @docx-editor.dev/i18n
 ```
 
-You usually do not install this package directly. The adapter installs it as a transitive dependency. Install it explicitly only when you use locale data outside the editor, such as in a custom toolbar or search dropdown.
+Add this package as a direct dependency when importing its catalogs, including for the editor's `i18n` prop.
+
+## UI language and date input
+
+`i18n` supplies UI translations; `locale` selects regional date input and generated
+document labels. Neither setting infers the other. UI strings default to English
+or an inherited catalog; `locale` defaults to `en-US`.
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { pl } from '@docx-editor.dev/i18n';
+
+// English UI, Polish dates (with no inherited catalog)
+<DocxEditor document={bytes} locale="pl-PL" />;
+
+// Polish UI, Polish dates
+<DocxEditor document={bytes} locale="pl-PL" i18n={pl} />;
+```
+
+In Vue, use `locale="pl-PL"` and `:i18n="pl"` on `<DocxEditor>`.
+For composed editors, wrap Root and its chrome in `LocaleProvider`; Root has no
+`i18n` prop. See the [React](/docs/2.x/react/composition#ui-language-and-date-input)
+and [Vue](/docs/2.x/vue/composition#ui-language-and-date-input) examples.
+See [form fields](/docs/2.x/guides/fields) for supported date input.
 
 ## Available locales
 
@@ -43,7 +66,8 @@ ls node_modules/@docx-editor.dev/i18n/
 
 ## Wiring into the editor
 
-Pass the locale object to the `i18n` prop.
+Pass the catalog to `i18n`. These examples change UI language only; date input
+keeps the default `en-US` conventions.
 
 <FrameworkTabs>
 <Framework value="react">

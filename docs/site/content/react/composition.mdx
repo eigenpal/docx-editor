@@ -70,7 +70,7 @@ These changes preserve edits, caret position, and undo history.
 | `document`              | `DocumentSource`                                                 | Loads DOCX bytes, `'blank'`, or a `DocumentHandle`. An identity change remounts the editor.        |
 | `fonts`                 | `FontConfiguration \| FontConfigurationFragment \| FontResolver` | Supplies font bytes or a resolver. An identity change remounts the editor.                         |
 | `author`                | `string`                                                         | Sets the author for later comments, replies, and tracked changes. Changes apply without a remount. |
-| `locale`                | `string`                                                         | Locale for generated content, such as the table of contents title. Updates without a remount.      |
+| `locale`                | `string`                                                         | Regional date input and generated document labels. Defaults to `en-US`; updates without a remount. |
 | `mode`                  | `'edit' \| 'view' \| 'suggesting'`                               | Sets the editing mode. When omitted, `w:trackRevisions` can select suggesting mode.                |
 | `modules`               | `readonly EditorModule[]`                                        | Registers modules during construction. Remount with a different `key` to change them.              |
 | `zoom` / `zoomMode`     | `number` / `ZoomMode \| 'auto'`                                  | Sets the display scale and its source. `'auto'` fits the page width.                               |
@@ -82,6 +82,28 @@ These changes preserve edits, caret position, and undo history.
 | `imageDecodePort`       | `ImageDecodePort`                                                | Overrides raster decoding for tests or custom hosts.                                               |
 
 For exact signatures, see the [React API reference](/docs/2.x/api/react).
+
+### UI language and date input
+
+`Root` reads UI translations from `LocaleProvider`; it has no `i18n` prop.
+Set `locale` separately for regional date input. This example uses Polish for both:
+
+```tsx
+import { DocxEditor, LocaleProvider } from '@docx-editor.dev/react';
+import { pl } from '@docx-editor.dev/i18n';
+
+<LocaleProvider i18n={pl}>
+  <DocxEditor.Root document={bytes} locale="pl-PL">
+    <DocxEditor.Toolbar />
+    <DocxEditor.Viewport>
+      <DocxEditor.Content />
+    </DocxEditor.Viewport>
+  </DocxEditor.Root>
+</LocaleProvider>;
+```
+
+Without the provider, UI strings remain English unless an ancestor supplies a catalog.
+See [internationalization](/docs/2.x/i18n) for catalog imports and defaults.
 
 ## Customization options
 

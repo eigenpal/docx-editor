@@ -1041,11 +1041,9 @@ export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
     container?: HTMLElement;
-    dateInputOrder?: 'mdy' | 'dmy';
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
-    // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];
@@ -1075,7 +1073,6 @@ export interface DocxEditorInstance extends Editor {
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
     setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
-    setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;

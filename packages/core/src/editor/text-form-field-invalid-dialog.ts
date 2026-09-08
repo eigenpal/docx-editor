@@ -1,34 +1,32 @@
-import { createT, en } from '@docx-editor.dev/i18n';
+import { textFormLabels, textFormTranslate } from './text-form-field-translations.ts';
 
 /** Shared invalid-fill acknowledgement. The caller owns removal and selection restoration. */
 export function textFormFieldInvalidDialog(
   container: HTMLElement,
   type: 'number' | 'date',
   acknowledge: () => void,
-  translate?: ReturnType<typeof createT>
+  translate?: ReturnType<typeof textFormTranslate>
 ): HTMLDialogElement {
-  const t = translate ?? createT(en);
+  const t = textFormTranslate(translate);
   const document = container.ownerDocument;
   const panel = document.createElement('dialog');
+  const text = textFormLabels(panel, t);
   panel.className = 'docx-text-form-dialog';
   panel.setAttribute('role', 'alertdialog');
-  panel.setAttribute('aria-label', t('textFormField.invalidTitle'));
-  panel.setAttribute(
-    'aria-description',
-    t(`textFormField.invalid${type === 'number' ? 'Number' : 'Date'}`)
-  );
+  text(panel, 'textFormField.invalidTitle', 'aria-label');
+  text(panel, `textFormField.invalid${type === 'number' ? 'Number' : 'Date'}`, 'aria-description');
   const heading = document.createElement('h2');
   heading.className = 'docx-text-form-dialog__header';
-  heading.textContent = t('textFormField.invalidTitle');
+  text(heading, 'textFormField.invalidTitle');
   const body = document.createElement('div');
   body.className = 'docx-text-form-dialog__body';
-  body.textContent = t(`textFormField.invalid${type === 'number' ? 'Number' : 'Date'}`);
+  text(body, `textFormField.invalid${type === 'number' ? 'Number' : 'Date'}`);
   const footer = document.createElement('div');
   footer.className = 'docx-text-form-dialog__footer';
   const ok = document.createElement('button');
   ok.type = 'button';
   ok.className = 'docx-text-form-dialog__button docx-text-form-dialog__button--primary';
-  ok.textContent = t('textFormField.apply');
+  text(ok, 'textFormField.apply');
   let acknowledged = false;
   const accept = (): void => {
     if (acknowledged) return;

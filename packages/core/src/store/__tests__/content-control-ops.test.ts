@@ -991,6 +991,22 @@ describe('setContentControlValue', () => {
     expect(attributeOfV2(list, 'lastValue')).toBe('custom');
   });
 
+  test('combo keeps four-digit hexadecimal text unchanged', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:comboBox/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>old</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: '2612',
+    });
+    expect(collectTextV2(childNamedV2(findContentControl(next, control.id)!, 'sdtContent')!)).toBe(
+      '2612'
+    );
+  });
+
   test('checkbox toggles w14:checked and rewrites the glyph', () => {
     const part = loadV2(
       '<w:p><w:sdt><w:sdtPr><w14:checkbox>' +

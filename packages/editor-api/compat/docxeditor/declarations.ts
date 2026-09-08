@@ -96,6 +96,7 @@ export declare namespace DocxEditor {
   }
 
   export class Document {
+    changeTrackingMode: 'Off' | 'TrackAll' | 'TrackMineOnly';
     readonly body: Body;
     readonly comments: CommentCollection;
     readonly contentControls: ContentControlCollection;
@@ -125,6 +126,8 @@ export declare namespace DocxEditor {
   // would make this file a roadmap rather than an inventory. The recorded reasons are the
   // `Word.Range#start` / `Word.Range#end` entries in `compat/manifest.json`'s omissions.
   export class Range {
+    clear(): void;
+    delete(): void;
     readonly bookmarks: BookmarkCollection;
     readonly contentControls: ContentControlCollection;
     readonly font: Font;

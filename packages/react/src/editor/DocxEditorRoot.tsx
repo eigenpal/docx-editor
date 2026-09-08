@@ -1,3 +1,4 @@
+import { FormControlTranslateProvider } from './form-control-translate';
 import { DialogProvider } from './dialog-host';
 import { PopupConfigProvider, type DocxEditorPopups } from './popup-config';
 import type { DocxEditorChildren } from '../docx-editor-children';
@@ -79,13 +80,12 @@ export interface DocxEditorRootProps {
   /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
   /**
-   * Engine locale for engine-generated content, such as the table of contents title.
-   * Changes apply without a remount.
+   * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
+   * Changes apply to subsequent edits without a remount; stored date formats are preserved.
+   * For UI translations, wrap Root and its chrome in LocaleProvider with an i18n catalog.
    */
   locale?: string;
-  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
-  dateInputOrder?: 'mdy' | 'dmy';
-  /** Live drawing labels for painted placeholders; defaults to the active locale catalogue. */
+  /** Live drawing and form-control labels; defaults to the active catalogue. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
    * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes,
@@ -213,7 +213,6 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     fonts,
     author,
     locale,
-    dateInputOrder,
     translate,
     mode,
     zoom,
@@ -263,7 +262,6 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.fonts ? { fonts: p.fonts } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
-      ...(p.dateInputOrder !== undefined ? { dateInputOrder: p.dateInputOrder } : {}),
       translate,
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(declaredStyles !== undefined ? { revisionStyles: declaredStyles } : {}),
@@ -381,10 +379,6 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     editor.setLocale(locale);
   }, [editor, locale]);
 
-  useEffect(() => {
-    editor?.setDateInputOrder(dateInputOrder);
-  }, [editor, dateInputOrder]);
-
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {
     if (!editor) return;
@@ -432,26 +426,28 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
   }, [revisionStyleRegistry, editor]);
 
   return (
-    <ReviewRailContext.Provider value={railRegistry}>
-      <DocxEditorContext.Provider value={editor}>
-        <NavigationLayoutContext.Provider value={navigationLayout}>
-          <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
-            {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
+    <FormControlTranslateProvider value={translate ?? defaultTranslate}>
+      <ReviewRailContext.Provider value={railRegistry}>
+        <DocxEditorContext.Provider value={editor}>
+          <NavigationLayoutContext.Provider value={navigationLayout}>
+            <RevisionStyleRegistryContext.Provider value={revisionStyleRegistry}>
+              {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
                 popover panel — which are siblings, not ancestor and descendant — see the same
                 open/closed state and only one of them registers with the engine's gestures. */}
-            <HyperlinkPopupProvider>
-              <ContentControlProvider>
-                <ImageInsertProvider>
-                  <PopupConfigProvider value={props.popups}>
-                    <DialogProvider popups={props.popups}>{children}</DialogProvider>
-                  </PopupConfigProvider>
-                </ImageInsertProvider>
-              </ContentControlProvider>
-            </HyperlinkPopupProvider>
-          </RevisionStyleRegistryContext.Provider>
-        </NavigationLayoutContext.Provider>
-      </DocxEditorContext.Provider>
-    </ReviewRailContext.Provider>
+              <HyperlinkPopupProvider>
+                <ContentControlProvider>
+                  <ImageInsertProvider>
+                    <PopupConfigProvider value={props.popups}>
+                      <DialogProvider popups={props.popups}>{children}</DialogProvider>
+                    </PopupConfigProvider>
+                  </ImageInsertProvider>
+                </ContentControlProvider>
+              </HyperlinkPopupProvider>
+            </RevisionStyleRegistryContext.Provider>
+          </NavigationLayoutContext.Provider>
+        </DocxEditorContext.Provider>
+      </ReviewRailContext.Provider>
+    </FormControlTranslateProvider>
   );
 }
 

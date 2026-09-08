@@ -1,7 +1,8 @@
-import { validDateInputOrder } from './text-form-date-format.ts';
+import { validLocale } from './text-form-date-locale.ts';
 import {
   validTextFormOptions,
   formatTextFormValue,
+  formatTextFormDefault,
   textFormInputLength,
 } from './text-form-field-options.ts';
 import { splitsSurrogate } from './tree-op-segments.ts';
@@ -536,7 +537,7 @@ export function validateTextFormFieldDefault(
   part: OoxmlPart,
   op: Extract<TreeDocOp, { op: 'setTextFormFieldDefault' }>
 ): TreeOpRejection | null {
-  if (!validDateInputOrder(op.dateInputOrder)) return 'invalidArgs';
+  if (!validLocale(op.locale)) return 'invalidArgs';
   if (typeof op.text !== 'string' || !isValidXmlText(op.text) || /[\r\n\t]/.test(op.text))
     return 'invalidArgs';
   if (op.options !== undefined && !validTextFormOptions(op.options)) return 'invalidArgs';
@@ -547,18 +548,20 @@ export function validateTextFormFieldDefault(
   const field = textFormFieldsOf(paragraph).find((f) => f.fieldNodeId === op.fieldNodeId);
   if (!field) return 'invalidArgs';
   const config = op.options ?? field;
-  // A saved numeric picture can be longer than its original input limit.
+  // A saved date or numeric picture can be longer than its original input limit.
   // Reopening unchanged options must not reject the value that we wrote.
-  const unchangedNumericDefault =
-    field.type === 'number' &&
-    field.format !== '' &&
+  const unchangedFormattedDefault =
+    (field.type === 'date' || (field.type === 'number' && field.format !== '')) &&
     config.type === field.type &&
-    config.format === field.format &&
-    config.maxLength === field.maxLength &&
+    (field.type === 'date' || config.format === field.format) &&
+    (config.maxLength === field.maxLength ||
+      (field.type === 'date' && field.maxLength > 0 && config.maxLength >= field.maxLength)) &&
     op.text === field.defaultText;
   if (
-    (config.maxLength > 0 && [...op.text].length > config.maxLength && !unchangedNumericDefault) ||
-    formatTextFormValue(op.text, config, 'default', op.dateInputOrder) === null
+    (config.maxLength > 0 &&
+      [...op.text].length > config.maxLength &&
+      !unchangedFormattedDefault) ||
+    formatTextFormDefault(op.text, config, field, op.locale) === null
   )
     return 'invalidArgs';
   return locatePlainFields(paragraph, true).some(
@@ -577,8 +580,9 @@ export function applyTextFormFieldDefault(
   if (refusal) return { ok: false, reason: refusal };
   const p = findNode(part, op.paragraphId)!;
   if (p.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
-  const config = op.options ?? textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId)!;
-  const text = formatTextFormValue(op.text, config, 'default', op.dateInputOrder)!;
+  const previous = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId)!;
+  const config = op.options ?? previous;
+  const text = formatTextFormDefault(op.text, config, previous, op.locale)!;
   const result = applyFieldResults(
     part,
     { op: 'refreshFieldResults', updates: [{ ...op, text }] },
@@ -632,7 +636,8 @@ export function applyTextFormFieldDefault(
       ],
     } as OoxmlNode;
   };
-  const defaultText = config.type === 'number' && config.format ? text : op.text;
+  const defaultText =
+    (config.type === 'number' || config.type === 'date') && config.format ? text : op.text;
   const edits = new Map<string, string | null>([['default', defaultText]]);
   if (op.options) {
     edits.set('type', op.options.type);
@@ -813,13 +818,13 @@ export function validateCommitTextFormField(
   part: OoxmlPart,
   op: Extract<TreeDocOp, { op: 'commitTextFormField' }>
 ): TreeOpRejection | null {
-  if (!validDateInputOrder(op.dateInputOrder)) return 'invalidArgs';
+  if (!validLocale(op.locale)) return 'invalidArgs';
   const p = findNode(part, op.paragraphId);
   if (!p || p.kind !== 'paragraph') return 'unknown-paragraph';
   const field = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId);
   const located = locatePlainFields(p, true).find((f) => f.fieldNodeId === op.fieldNodeId);
   if (!field || !field.enabled || !located?.rewritable) return 'invalidArgs';
-  if (formatTextFormValue(located.cachedText, field, 'fill', op.dateInputOrder) === null)
+  if (formatTextFormValue(located.cachedText, field, 'fill', op.locale) === null)
     return 'invalidArgs';
   return fieldResultUpdateRefusal(part, op.fieldNodeId);
 }
@@ -835,7 +840,7 @@ export function applyCommitTextFormField(
   if (p.kind !== 'paragraph') return { ok: false, reason: 'unknown-paragraph' };
   const field = textFormFieldsOf(p).find((f) => f.fieldNodeId === op.fieldNodeId)!;
   const located = locatePlainFields(p, true).find((f) => f.fieldNodeId === op.fieldNodeId)!;
-  const text = formatTextFormValue(located.cachedText, field, 'fill', op.dateInputOrder)!;
+  const text = formatTextFormValue(located.cachedText, field, 'fill', op.locale)!;
   return applyFieldResults(
     part,
     {

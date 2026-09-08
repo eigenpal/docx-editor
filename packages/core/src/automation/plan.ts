@@ -1,8 +1,5 @@
 // What each operation MEANS, as reads off a snapshot and `TreeDocOp`s for one transaction.
-//
-// INTERNAL, and the only place in the lane that decides anything. `host.ts` runs a batch;
-// this file is what a batch is made of. Keeping it separate is not tidiness: the planner is
-// pure with respect to the document — it reads a snapshot and produces ops — so every semantic
+// The planner is pure with respect to the document: it reads a snapshot and produces ops. Every
 // question ("what does inserting a paragraph before another one do to identity", "what does
 // deleting across a paragraph mark leave behind") is answered in one testable place instead of
 // being distributed across two host adapters.
@@ -92,6 +89,7 @@ import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
+import { planProposal } from './plan-proposal.ts';
 import { revisionCollectionOps, revisionDecisionTarget } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
@@ -237,7 +235,7 @@ export interface BatchPlannerHost {
 }
 
 export interface BatchPlanner {
-  plan(operation: AutomationOperation): PlannedOperation;
+  plan(operation: AutomationOperation, trackingAuthor?: string): PlannedOperation;
   /** Whether any planned operation writes. */
   readonly hasCommands: boolean;
   /**
@@ -1640,7 +1638,24 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { reads, range: { start: point(bookmark.start), end: point(bookmark.end) } };
   };
 
-  const plan = (operation: AutomationOperation): PlannedOperation => {
+  const plan = (operation: AutomationOperation, trackingAuthor?: string): PlannedOperation => {
+    const tracked = trackingAuthor !== undefined;
+    if (tracked && operation.op === 'insertText') {
+      operation = {
+        op: 'proposeInsertion',
+        span: { start: operation.at, end: operation.at },
+        text: operation.text,
+        where: 'Before',
+        author: trackingAuthor,
+      };
+    } else if (tracked && operation.op === 'replaceSpan') {
+      operation = {
+        op: 'proposeReplacement',
+        span: operation.span,
+        text: operation.text,
+        author: trackingAuthor,
+      };
+    }
     switch (operation.op) {
       case 'getDocument':
         return query({ kind: 'handle', handle: handles.document() });
@@ -1744,6 +1759,14 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         if (!story.ok) return refuse(story.code, 'that is not a scope to search', story.detail);
         return searchScope(story.value, scope.value, operation.text, operation.options);
       }
+
+      case 'proposeInsertion':
+      case 'proposeDeletion':
+      case 'proposeReplacement':
+        return planProposal(operation, tracked, handles, packageReads, (story, paragraphId) => {
+          const storyPlan = planFor(story);
+          return pinWrite(storyPlan) ?? claim(storyPlan, paragraphId);
+        });
 
       case 'insertText': {
         const at = resolvePoint(operation.at, handles, packageReads);
@@ -2834,10 +2857,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   };
 
   return {
-    plan(operation) {
+    plan(operation, trackingAuthor) {
       const conflict = commandPolicy.conflict(operation);
       if (conflict) return refuse('conflicting-operations', conflict.message, conflict.detail);
-      const planned = plan(operation);
+      const planned = plan(operation, trackingAuthor);
       if (planned.ok) commandPolicy.note(operation);
       return planned;
     },

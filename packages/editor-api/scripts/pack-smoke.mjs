@@ -170,7 +170,7 @@ try {
   };
   walk(root);
 
-  const allowed = /^(?:package\.json|LICENSE\.md|README\.md|dist\/)/;
+  const allowed = /^(?:package\.json|LICENSE\.md|README\.md|OFFICE_JS_GUIDE\.md|dist\/)/;
   const strays = shipped.filter((file) => !allowed.test(file));
   check(strays.length === 0, `the tarball ships files it should not: ${strays.join(', ')}`);
   check(
@@ -240,10 +240,7 @@ try {
     const source = readFileSync(path.join(root, name), 'utf8');
     const bare = [...new Set(bareImports(source))];
     const nonCore = bare.filter((specifier) => !specifier.startsWith('@docx-editor.dev/core'));
-    check(
-      nonCore.length === 0,
-      `${name} imports ${nonCore.join(', ')} unexpectedly`
-    );
+    check(nonCore.length === 0, `${name} imports ${nonCore.join(', ')} unexpectedly`);
     const coreImports = bare.filter((specifier) => specifier.startsWith('@docx-editor.dev/core'));
     const disallowedCore = coreImports.filter((specifier) => !ALLOWED_CORE.has(specifier));
     check(

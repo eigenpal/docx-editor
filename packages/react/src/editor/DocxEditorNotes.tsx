@@ -171,7 +171,9 @@ export function DocxEditorNotesChrome({
 
   useEffect(() => {
     if (!editor) return undefined;
-    const root = chromeRef.current?.closest('.docx-editor__scroll-container');
+    const root =
+      chromeRef.current?.closest('.docx-editor__scroll-container') ??
+      chromeRef.current?.closest('.docx-editor');
     if (!root) return undefined;
 
     const onClick = (event: Event) => {

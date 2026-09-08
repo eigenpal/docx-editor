@@ -34,6 +34,8 @@ Session renderers follow the supplied abort signal. Widget sessions expose
 `value`, `items`, `anchor`, `canApply()`, `apply(value)`, and `cancel()`.
 Invalid-field sessions expose `acknowledge()` to handle the invalid fill and
 `cancel()` to close without clearing it. Custom renderers retain core validation.
+`locale` controls regional date input; `i18n` controls UI strings. See
+[Date input and UI language](/docs/2.x/guides/fields#date-input-and-ui-language).
 
 Use `false` when you mount the surface yourself. You also own its trigger and
 visibility; controlled dialogs need your own `open` state and close handler.

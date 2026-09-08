@@ -131,7 +131,7 @@ jobs:
       - name: Upload SARIF
         if: always()
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: shipped-advisories.sarif
           category: shipped-advisories
@@ -178,6 +178,16 @@ jobs:
         run: bun run build:packages
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+
+      # This integration test runs real Node workers against built package exports.
+      # Keep it after build: the general Bun suite runs on a source-only checkout.
+      - name: Setup Node for server agent integration
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Server agent lifecycle integration
+        run: bun run --filter './examples/server-agent-review' test:lifecycle
 
       # Sizes of the exact artifacts `npm publish` ships (`npm pack --dry-run`
       # per published package). Uploaded as an artifact: main-branch runs are

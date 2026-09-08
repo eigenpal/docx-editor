@@ -20,7 +20,7 @@ export {
   type ContentControlSubtype,
   type ContentControlValue,
 } from './content-controls.ts';
-export { Document } from './document.ts';
+export { Document, type ChangeTrackingMode } from './document.ts';
 export { Font } from './font.ts';
 export { List, ListCollection, ListItem } from './lists.ts';
 export { NoteItem, NoteItemCollection, type NoteItemType } from './notes.ts';

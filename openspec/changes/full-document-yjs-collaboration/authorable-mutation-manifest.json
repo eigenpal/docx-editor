@@ -206,7 +206,7 @@
     "rewriteTocPageNumbers",
     "refreshFieldResults",
     "setTextFormFieldDefault",
-      "commitTextFormField"
+    "commitTextFormField"
   ],
   "authorableVariants": {
     "insertText": {

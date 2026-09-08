@@ -11,7 +11,7 @@ import {
 } from 'vue';
 import { TEXT_FORM_FORMATS, type TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
 import type { TextFormFieldOptions, TextFormFieldType } from '@docx-editor.dev/core/store';
-import { useTranslation } from '../i18n';
+import { useFormControlTranslate } from './form-control-translate';
 import {
   createDialogComposition,
   NativeDialog,
@@ -46,7 +46,7 @@ const Impl = defineComponent({
     style: Object as PropType<CSSProperties>,
   },
   setup(p, { slots }) {
-    const { t } = useTranslation();
+    const t = useFormControlTranslate();
     const values = ref<TextFormFieldDialogFields>({
       defaultText: '',
       type: 'regular',

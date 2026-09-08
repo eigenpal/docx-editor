@@ -9,7 +9,7 @@ import {
 import type { ContentControlWidgetSession } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { useEditorState } from './useEditorState';
-import { useTranslation } from '../i18n';
+import { useFormControlTranslate } from './form-control-translate';
 import { absolutePointInScroller } from './scroller-geometry';
 /** Value-widget session and optional replacement controls. @public */
 export interface DocxEditorContentControlWidgetProps {
@@ -28,7 +28,7 @@ export const DocxEditorContentControlWidget = defineComponent({
     children: Object as PropType<DocxEditorChildren>,
   },
   setup(props, { slots }) {
-    const { t } = useTranslation();
+    const t = useFormControlTranslate();
     const value = ref(props.session.value);
     const closed = ref(props.session.signal.aborted);
     const refused = ref(false);

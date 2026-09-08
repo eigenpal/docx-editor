@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import type { InvalidTextFormFieldSession } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
-import { useTranslation } from '../i18n';
+import { useFormControlTranslate } from './form-control-translate';
 import { DialogFrame } from './dialog-parts';
 
 /** Invalid-value acknowledgement with editor-owned clearing and focus restoration. @public */
@@ -30,7 +30,7 @@ function InvalidForm({
   style,
   children,
 }: DocxEditorInvalidTextFormFieldDialogProps) {
-  const { t } = useTranslation();
+  const t = useFormControlTranslate();
   const [closed, setClosed] = useState(session.signal.aborted);
   const panelRef = useRef<HTMLDialogElement | null>(null);
   useEffect(() => {

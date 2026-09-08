@@ -2,7 +2,7 @@ import { defineComponent, ref, watch, type CSSProperties, type PropType } from '
 import type { InvalidTextFormFieldSession } from '@docx-editor.dev/core/editor';
 import type { DocxEditorChildren } from '../docx-editor-children';
 import { NativeDialog } from './dialog-parts';
-import { useTranslation } from '../i18n';
+import { useFormControlTranslate } from './form-control-translate';
 /** Invalid-value acknowledgement with editor-owned clearing and focus restoration. @public */
 export interface DocxEditorInvalidTextFormFieldDialogProps {
   session: InvalidTextFormFieldSession;
@@ -20,7 +20,7 @@ export const DocxEditorInvalidTextFormFieldDialog = defineComponent({
     children: Object as PropType<DocxEditorChildren>,
   },
   setup(props, { slots }) {
-    const { t } = useTranslation();
+    const t = useFormControlTranslate();
     const closed = ref(false);
     watch(
       () => props.session,

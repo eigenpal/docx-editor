@@ -1,7 +1,6 @@
 import {
   parseTextFormDate as parseDate,
   textFormMonths as months,
-  type DateInputOrder,
 } from './text-form-date-format.ts';
 import { normalizeTextFormNumber, truncateTextFormNumber } from './text-form-number-input.ts';
 import { textFormFixedDecimal } from './text-form-number-format.ts';
@@ -53,7 +52,7 @@ export function formatTextFormValue(
   text: string,
   options: Pick<TextFormFieldRange, 'type' | 'format'>,
   intent: 'default' | 'fill' = 'default',
-  dateInputOrder: DateInputOrder = 'mdy'
+  locale = 'en-US'
 ): string | null {
   if (!Object.hasOwn(TEXT_FORM_FORMATS, options.type)) return null;
   if (
@@ -102,7 +101,7 @@ export function formatTextFormValue(
     }
     return result + (percent ? '%' : '');
   }
-  const date = parseDate(text.trim(), dateInputOrder);
+  const date = parseDate(text.trim(), locale);
   if (!date) return null;
   if (!options.format) return text;
   return options.format.replace(
@@ -117,6 +116,24 @@ export function formatTextFormValue(
         d: String(date.day),
       })[token]!
   );
+}
+
+/** A saved date default already follows its authored picture, not the current input locale. */
+export function formatTextFormDefault(
+  text: string,
+  options: Pick<TextFormFieldRange, 'type' | 'format'>,
+  field: Pick<TextFormFieldRange, 'type' | 'format' | 'defaultText'>,
+  locale: string | undefined
+): string | null {
+  if (field.type === 'date' && options.type === 'date' && text === field.defaultText) {
+    if (!options.format) return text;
+    // Interpret the saved picture (or an unambiguous ISO default), never the user's new locale.
+    const pictureLocale = field.format.startsWith('d') ? 'en-GB' : 'en-US';
+    const date = parseDate(text, pictureLocale);
+    if (field.format && date) text = `${date.year}-${date.month}-${date.day}`;
+    else if (options.format === field.format) return text;
+  }
+  return formatTextFormValue(text, options, 'default', locale);
 }
 
 /** Preserved computed types and unimplemented format pictures are not filling targets. */
