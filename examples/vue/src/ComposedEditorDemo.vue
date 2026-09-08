@@ -22,15 +22,13 @@
       :document="bytes"
       author="Demo Reviewer"
       mode="edit"
-      :date-input-order="dateInputOrder"
+      date-input-order="mdy"
       :modules="proModules"
       :fonts="fonts ?? undefined"
       @font-error="onFontError"
     >
       <EditorChrome
         :title="title"
-        :date-input-order="dateInputOrder"
-        @update:date-input-order="dateInputOrder = $event"
         :color-mode="colorMode"
         :show-adapter-switcher="showAdapterSwitcher"
         @update:title="title = $event"
@@ -127,7 +125,6 @@ const title = ref(
     ?.replace(/\.docx$/i, '') ?? 'Document'
 );
 const colorMode = ref<'light' | 'dark'>('light');
-const dateInputOrder = ref<'mdy' | 'dmy'>('mdy');
 const citationForm = ref<CitationFormState | null>(null);
 
 // ORDER IS PRECEDENCE. `packagedFonts()` answers first from bytes inside
