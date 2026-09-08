@@ -60,6 +60,7 @@ export interface DocxEditorHostConfigState {
   modeForGate(): HostEditingMode;
   openingModeDecision(guards: OpeningModeGuards): OpeningModeDecision;
   setMode(mode: HostEditingMode | undefined): boolean;
+  translate(): EditorTranslate | undefined;
   drawingStrings(): DrawingPaintStrings;
   setTranslate(translate: EditorTranslate | undefined): DrawingPaintStrings | null;
   locale(): string;
@@ -89,6 +90,7 @@ export function createDocxEditorHostConfigState(initial: {
       mode = next;
       return true;
     },
+    translate: () => translate,
     drawingStrings: () => drawingStrings,
     setTranslate(next) {
       if (translate === next) return null;
@@ -122,6 +124,7 @@ export function liveHostConfigSetters(
   state: DocxEditorHostConfigState,
   host: {
     surface(): {
+      setTranslate(translate: EditorTranslate | undefined): void;
       setDrawingStrings(strings: DrawingPaintStrings): void;
       setTocLabels(labels: TocLabels): void;
       setLocale(locale: string): void;
@@ -133,6 +136,7 @@ export function liveHostConfigSetters(
   return {
     setTranslate(next: EditorTranslate | undefined) {
       const strings = state.setTranslate(next);
+      host.surface()?.setTranslate(state.translate());
       if (strings === null) return;
       host.surface()?.setDrawingStrings(strings);
       host.bump();

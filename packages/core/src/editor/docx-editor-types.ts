@@ -69,7 +69,7 @@ export interface DocxEditorConfig {
   author?: string;
   /** BCP-47 locale for regional date input and generated labels; defaults to en-US. */
   locale?: string;
-  /** Localized drawing refusal labels; defaults to English when omitted. */
+  /** Drawing and form-control UI labels; defaults to English when omitted. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
    * Capability modules to register — the seam `@docx-editor.dev/pro` plugs in
@@ -307,8 +307,8 @@ export interface DocxEditorInstance extends Editor {
    */
   setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
   /**
-   * Set the drawing-label resolver without rebuilding the editor. Painted placeholders update
-   * immediately, and later surface mounts use the same resolver.
+   * Set the drawing and form-control label resolver without rebuilding the editor.
+   * Open dialogs preserve their controls and input; later surface mounts use the same resolver.
    *
    * @public
    */

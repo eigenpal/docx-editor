@@ -1,3 +1,4 @@
+import { applyTextFormOperation } from './surface-text-form-apply.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
 import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
 import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
@@ -2901,6 +2902,7 @@ export function mountPaginatedSurface(
    * the document has already lost the proposal.
    */
   const dateLocale = createSurfaceDateLocale(options.locale, flushTypeBuffer);
+  let translate = options.translate;
   let textFormInteraction: ReturnType<typeof createTextFormFieldInteraction> | null = null;
   function applyOps(
     ops: readonly TreeDocOp[],
@@ -5355,6 +5357,11 @@ export function mountPaginatedSurface(
       render(false);
     },
     setLocale: dateLocale.set,
+    setTranslate: (next) => {
+      if (translate === next) return;
+      translate = next;
+      textFormInteraction?.update();
+    },
     setTocLabels: (labels) => {
       tocLabels = labels;
     },
@@ -5914,6 +5921,7 @@ export function mountPaginatedSurface(
   let pointer: PointerController | null = null;
   textFormInteraction = createTextFormFieldInteraction({
     locale: dateLocale.get,
+    translate: (key, params) => translate?.(key, params) ?? key,
     pagesLayer,
     container,
     part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
@@ -5923,15 +5931,7 @@ export function mountPaginatedSurface(
     selection: () => selection,
     select: (next) => setSelection(next),
     editable: () => editingMode === 'edit',
-    apply: (op) => {
-      let applied = false;
-      commit(() => {
-        const result = applyOps([op]);
-        applied = !result.rejected;
-        return result;
-      });
-      return applied;
-    },
+    apply: (op) => applyTextFormOperation(op, commit, applyOps),
   });
   const dispatchKeyDown = createKeyDownHandler(
     surface,

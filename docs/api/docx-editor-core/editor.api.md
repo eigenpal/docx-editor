@@ -1589,6 +1589,7 @@ export interface PaginatedSurface {
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
+    setTranslate(translate: PaginatedSurfaceOptions['translate']): void;
     showAllRevisionAuthors(): void;
     // (undocumented)
     splitParagraph(): void;
@@ -1633,6 +1634,7 @@ export interface PaginatedSurfaceOptions {
     readonly tocLabels?: {
         readonly title: string;
     };
+    readonly translate?: (key: string, params?: Record<string, string | number>) => string;
 }
 
 // @public

@@ -77,10 +77,10 @@ export interface DocxEditorRootProps {
   /**
    * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
    * Changes apply to subsequent edits without a remount; stored date formats are preserved.
-   * UI translations are supplied separately through i18n.
+   * For UI translations, wrap Root and its chrome in LocaleProvider with an i18n catalog.
    */
   locale?: string;
-  /** Live drawing labels for painted placeholders; defaults to the active locale catalogue. */
+  /** Live drawing and form-control labels; defaults to the active catalogue. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
    * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes,

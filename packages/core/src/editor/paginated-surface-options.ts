@@ -23,6 +23,8 @@ import type { PaginatedSurfaceState, SurfaceEditingMode } from './paginated-surf
  * on a server, or leave it off in a browser to get the canvas measurer.
  */
 export interface PaginatedSurfaceOptions {
+  /** UI labels for shared form controls; omitted keys fall back to English. */
+  readonly translate?: (key: string, params?: Record<string, string | number>) => string;
   /** Regional conventions for new date input; defaults to en-US. */
   readonly locale?: string;
   /**

@@ -92,8 +92,8 @@ export interface DocxEditorProps {
    *
    * Equivalent to wrapping this editor in `<LocaleProvider i18n={de}>`, which is still
    * the way to set one language for several editors at once — this prop overrides such a
-   * provider for this editor only. Unlike `locale`, which tells the ENGINE what language
-   * the document is in, this decides what the buttons say.
+   * provider for this editor only. `locale` separately selects regional date input and
+   * generated document labels; it does not select the UI language.
    *
    * Hold it at a stable identity: a catalogue written inline (`i18n={{ toolbar: … }}`) is
    * a new object every render, and the merged catalogue behind it is what the chrome

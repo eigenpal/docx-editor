@@ -5,3 +5,5 @@
 ---
 
 Use `locale` for regional date input in text form fields, including dotted dates and year-first patterns. Remove the unreleased `dateInputOrder` prop and setter. Preserve existing dates when locale changes.
+
+Form-field dialogs and accessibility labels now honor `i18n`, including live catalogue changes.

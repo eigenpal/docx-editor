@@ -36,6 +36,7 @@ test('live regional changes reach the surface even when the translation language
     surface: () =>
       mounted
         ? {
+            setTranslate() {},
             setDrawingStrings() {},
             setTocLabels() {},
             setLocale(locale) {
