@@ -739,7 +739,8 @@ const runtime = await DocxEditor.createCollaborative(room.document, room.session
 });
 ```
 
-Call `room.destroy()` to stop the replica.
+When the job finishes, call `runtime.dispose()` and then `room.destroy()` to release
+the runtime and stop the replica.
 
 ## Let a server agent propose redlines
 
@@ -747,13 +748,15 @@ A background worker can join the same Hocuspocus room as the browser peers with
 `role: 'agent'`, then attach `DocxEditor.createCollaborative` as above. The worker
 owns its connection, so closing the initiating browser does not stop its job.
 
-Use Office-shaped tracking mode and standard edits to create Word tracked changes:
+Set the tracking mode before editing to create Word tracked changes:
 
 ```ts
 await runtime.run(async (context) => {
-  const range = context.document.body.search('within 7 days').getFirstOrNullObject();
+  const matches = context.document.body.search('within 7 days', { matchCase: true });
+  matches.load('items');
   await context.sync();
-  if (range.isNullObject) return;
+  if (matches.items.length !== 1) throw new Error('Choose a unique target');
+  const range = matches.items[0]!;
   range.load('text');
   await context.sync();
 

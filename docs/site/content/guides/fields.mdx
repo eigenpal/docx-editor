@@ -95,9 +95,10 @@ macros, DDE instructions, OLE content, or external include instructions.
 
 ## Legacy text form fields
 
-Click a `FORMTEXT` field to select it. Double-click or choose **Edit field…** to
-set its default value, type, maximum length, format, and **Fill-in enabled**.
-A maximum length of zero means unlimited. React and Vue use the same dialog.
+Select a `FORMTEXT` field, then double-click it or choose **Edit field…** from
+the context menu. Set its default value, type (regular text, number, or date),
+maximum length, format, and **Fill-in enabled** setting. A maximum length of
+zero means unlimited. React and Vue use the same dialog.
 
 In an unprotected document, partial edits keep the field definition; replacing
 its whole result removes it. In a document protected for forms, editing keeps
@@ -113,7 +114,7 @@ it clears the input, which can be restored with Undo.
 the default English UI, use:
 
 ```tsx
-<DocxEditor locale="pl-PL" />
+<DocxEditor document={bytes} locale="pl-PL" />
 ```
 
 With `pl-PL`, `01.02.2030` means February 1. The default `en-US` interprets
@@ -125,8 +126,10 @@ Date input supports Gregorian numeric dates, regional digits, and full English
 month names. Localized month names and non-Gregorian dates are not supported.
 
 Only plain text results and the dialog's listed types and formats support editing
-and protected filling. Other field structures are preserved. Checkbox and dropdown
-interactions are not supported, and entry or exit macros never run.
+and protected filling. The editor preserves other field structures. Legacy
+checkbox and dropdown form fields are not interactive; use
+[content controls](/docs/2.x/guides/content-controls) for those interactions.
+Entry and exit macros never run.
 
 ## Next steps
 

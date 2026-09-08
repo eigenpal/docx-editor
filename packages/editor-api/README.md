@@ -14,13 +14,13 @@
 
 # @docx-editor.dev/editor-api
 
-An **Office.js-compatible editing API** for DOCX. It implements the Word JavaScript object model —
-`context.document.body.paragraphs`, `load()` then `sync()`, `search()`, `getFirstOrNullObject()` —
-so code written for a Word add-in compiles and runs here.
+`@docx-editor.dev/editor-api` edits DOCX files through a supported subset of Word's
+JavaScript object model, including paragraphs, ranges, comments, and revisions.
+Use `load()` to queue reads and `sync()` to apply each batch atomically.
 
-Describe work against objects, and one `sync()` sends it as a single ordered batch that either
-applies whole or not at all. The same code drives bytes on a server and a document a reader
-already has open in a page.
+Run the API on a server over DOCX bytes or in the browser against an open editor.
+See [Office.js compatibility](https://www.docx-editor.dev/docs/2.x/editor-api/office-js-api)
+for supported members and differences from Word.
 
 ```bash
 npm install @docx-editor.dev/editor-api @docx-editor.dev/core
@@ -63,6 +63,43 @@ caller-owned `Uint8Array`, so transferring or mutating one result does not affec
 later save. Detached edits remain detached until your application explicitly loads the returned
 bytes into a live editor.
 
+## Create tracked changes on a server
+
+Start with the [Office.js developer guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md) for a complete server example and batching conventions.
+
+Set `document.changeTrackingMode = 'TrackMineOnly'`, then use standard Word editing methods.
+Supply the agent's `author` when opening the server or collaborative runtime:
+
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 7 days');
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose a unique target');
+
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const replacement = matches.items[0]!.insertText('within 30 days', 'Replace');
+  await context.sync();
+  replacement.load('text');
+  await context.sync();
+});
+```
+
+Use `range.insertText(text, 'Before' | 'After')` for insertions, and `range.delete()` or
+`range.clear()` for deletions. `insertText()` returns the inserted range. Mode assignments
+and edits commit together at `sync()`; failed batches preserve the previous mode and document.
+Load `document.changeTrackingMode` before reading it. `Off` is the initial mode.
+
+This is a supported Office.js subset. `TrackMineOnly` applies to this server host and persists
+across its `run()` calls. It does not change peers' tracking settings or save a document-wide
+tracking policy. `TrackAll` and browser-host mode control explicitly refuse with `NotSupported`.
+Tracked text edits support one paragraph, including table-cell text. They refuse targets touching
+pending revisions. Structural and formatting mutations under tracking also refuse. Comments and
+revision decisions remain available. Set `Off` explicitly when permanent edits are intended.
+
+See the [server-agent review example](../../examples/server-agent-review/README.md) for Hocuspocus,
+stale-read handling, and the review lifecycle.
+
 ## In the browser
 
 The browser entry takes an editor the host already created, from `@docx-editor.dev/react` or a
@@ -83,11 +120,11 @@ await runtime.run(async (context) => {
 });
 ```
 
-Import it from `/browser` deliberately: reaching a live editor means reaching the painted engine,
-and a server holding bytes should not pay for that.
+Use the `/browser` entry for an open editor. Use the root entry on servers to exclude
+browser rendering code from the bundle.
 
-`author` is optional for source compatibility and ordinary edits, but required by
-`Range.insertComment()` and `Comment.reply()`. A missing identity refuses with `NotSupported`; a
+`author` is optional for ordinary edits. Supply it for `Range.insertComment()`,
+`Comment.reply()`, and server-side `TrackMineOnly` mode. A missing identity refuses with `NotSupported`; a
 live comment write also requires the Pro review module and a writable editing mode. There is no
 static comment-write capability because those conditions are dynamic, so callers should handle the
 typed refusal from the call or `sync()`.
@@ -118,9 +155,9 @@ decisions join the editor's Undo stack, with one collection decision as one Undo
   the read rather than producing a wrong document later.
 - `sync()` is the only round trip. Everything queued between two syncs is one ordered batch,
   applied atomically.
-- Objects are proxies into a document the runtime owns and live inside `run`. Keeping one past
-  the callback, or past `dispose()`, is an error rather than a stale read; to keep one across
-  syncs deliberately, hand it to `context.trackedObjects`.
+- Proxies remain valid across `sync()` calls within a `run()`. To reuse a proxy in a later
+  run, add it to `context.trackedObjects` and pass it to `runtime.run(object, callback)`.
+  No proxy remains valid after `dispose()`.
 - `getFirstOrNullObject` / `getLastOrNullObject` answer an object whose `isNullObject` is
   `true`, which is the difference between "no such heading" and a crash.
 - Review timestamps come from untrusted, optional OOXML attributes. `Comment.creationDate`,
@@ -173,44 +210,7 @@ This package is licensed under the [EigenPal Pro License](https://github.com/eig
 
 Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-editor/blob/main/CONTRIBUTING.md) for setup, tests, and the one-time CLA signature.
 
-## Commercial Support
+## Commercial support
 
 > [!TIP]
 > Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
-
-## Office-shaped redlines on the server
-
-Start with the [Office.js developer guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md) for a complete server example and batching conventions.
-
-Set `document.changeTrackingMode = 'TrackMineOnly'`, then use standard Word editing methods.
-Supply the agent's `author` when opening the server or collaborative runtime:
-
-```ts
-await runtime.run(async (context) => {
-  const matches = context.document.body.search('within 7 days');
-  matches.load('items');
-  await context.sync();
-  if (matches.items.length !== 1) throw new Error('Choose a unique target');
-
-  context.document.changeTrackingMode = 'TrackMineOnly';
-  const replacement = matches.items[0]!.insertText('within 30 days', 'Replace');
-  await context.sync();
-  replacement.load('text');
-  await context.sync();
-});
-```
-
-Use `range.insertText(text, 'Before' | 'After')` for insertions, and `range.delete()` or
-`range.clear()` for deletions. `insertText()` returns the inserted range. Mode assignments
-and edits commit together at `sync()`; failed batches preserve the previous mode and document.
-Load `document.changeTrackingMode` before reading it. `Off` is the initial mode.
-
-This is a supported Office.js subset. `TrackMineOnly` applies to this server host and persists
-across its `run()` calls. It does not change peers' tracking settings or save a document-wide
-tracking policy. `TrackAll` and browser-host mode control explicitly refuse with `NotSupported`.
-Tracked text edits support one paragraph, including table-cell text. They refuse targets touching
-pending revisions. Structural and formatting mutations under tracking also refuse. Comments and
-revision decisions remain available. Set `Off` explicitly when permanent edits are intended.
-
-See the [server-agent review example](../../examples/server-agent-review/README.md) for Hocuspocus,
-stale-read handling, and the review lifecycle.

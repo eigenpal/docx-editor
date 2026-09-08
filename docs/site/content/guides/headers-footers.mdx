@@ -12,11 +12,11 @@ header or footer area to edit it in place.
 
 Double-click inside the header or footer band to enter edit mode. From there, editing follows the same model as the document body: click to place the caret, drag to select, double- and triple-click for word and paragraph selection, right-click menus, hyperlinks, image selection, and table row, column, and edge resize all work identically. Undo and redo cover header and footer edits.
 
-While editing, a separator bar labels the region (Header or Footer) and shows an Options menu:
+While editing, a separator bar labels the region (**Header** or **Footer**) and shows an **Options** menu:
 
-- **Insert current page number** inserts a PAGE field.
-- **Insert total page count** inserts a NUMPAGES field.
-- **Insert section page count** inserts a SECTIONPAGES field.
+- **Insert current page number** inserts a `PAGE` field.
+- **Insert total page count** inserts a `NUMPAGES` field.
+- **Insert section page count** inserts a `SECTIONPAGES` field.
 - **Remove header/footer** clears the region.
 
 Press Escape or click the close action to save and leave header/footer editing.
@@ -70,11 +70,12 @@ Documents using any of these render and round-trip correctly; editing a header e
 
 ## Watermarks
 
-Watermarks live in header parts (that is how Word models them). Their VML or
-DrawingML markup and image payloads are preserved through editing and save.
+Word stores watermarks in header parts. The editor renders the supported
+unrotated [legacy VML subset](/docs/2.x/guides/images#legacy-vml-previews) there.
+Rotated or curved watermark templates remain opaque.
 
-Dedicated watermark rendering, insertion, editing, and headless authoring are not
-supported. Existing watermarks remain inert rather than being dropped.
+Watermark insertion, editing, and headless authoring are not supported. The editor
+preserves the original VML or DrawingML markup and image payloads when you save.
 
 ## Next steps
 

@@ -8,9 +8,13 @@ seoTitle: 'Office.js-compatible DOCX editing API'
 
 <PackageStats name="@docx-editor.dev/editor-api" />
 
-`@docx-editor.dev/editor-api` is an **Office.js-compatible editing API** for DOCX. It implements the same object model (`context.document.body.paragraphs`, `load()` then `sync()`, `search()`, `getFirstOrNullObject()`) so code written for a Word add-in compiles and runs here.
+`@docx-editor.dev/editor-api` edits DOCX files through a supported subset of Word's
+JavaScript object model, including paragraphs, ranges, comments, and revisions.
+Use `load()` to queue reads and `sync()` to apply each batch atomically.
 
-You describe work against objects (paragraphs, ranges, comments, revisions, content controls) and one `sync()` sends it as a single ordered batch that either applies whole or not at all. The same code runs in two places: on a server over DOCX bytes, or in a page against a document a reader already has open.
+Run the API on a server over DOCX bytes or in the browser against an open editor.
+See [Office.js compatibility](/docs/2.x/editor-api/office-js-api)
+for supported members and differences from Word.
 
 ```bash
 npm install @docx-editor.dev/editor-api @docx-editor.dev/core
@@ -18,16 +22,6 @@ npm install @docx-editor.dev/editor-api @docx-editor.dev/core
 
 `@docx-editor.dev/core` is a peer dependency: the engine holds identity-keyed state, so your
 project must resolve exactly one copy of it, shared with any editor adapter you install.
-
-`DocxEditor.createServer` rejects with error code `ResourceLimitExceeded` when opening exceeds a resource cap.
-Catch `DocxEditorError` and inspect its `limit` field, such as `xml.maxElements` or `zip.maxRatio`.
-The XML reader uses the engine's default budget of 10,000,000 elements per part.
-Set `limits.xml.maxElements` to lower that budget for untrusted input or raise it for larger documents,
-up to the engine ceiling of 50,000,000. Set `limits.xml.maxBytes` alongside it.
-The 64 MiB per-part byte ceiling and 256-level depth ceiling still apply.
-These budgets do not guarantee that a document fits in the host's memory.
-Counts and byte budgets must be finite nonnegative integers; compression ratios may be fractional.
-Malformed input and invalid budget options reject with `InvalidArgument`.
 
 ## Choose a host
 
@@ -122,6 +116,33 @@ await runtime.run(async (context) => {
 `document.body.bookmarks` covers only the main body story. A header or footer `Body` has its own
 collection; this accessor never combines separate stories into a document-wide answer.
 
+### Handle resource limits
+
+`DocxEditor.createServer` rejects with error code `ResourceLimitExceeded` when opening exceeds a resource cap.
+Catch `DocxEditorError` and inspect its `limit` field, such as `xml.maxElements` or `zip.maxRatio`.
+The XML reader uses the engine's default budget of 10,000,000 elements per part.
+Set `limits.xml.maxElements` to lower that budget for untrusted input or raise it for larger documents,
+up to the engine ceiling of 50,000,000. Set `limits.xml.maxBytes` alongside it.
+The 64 MiB per-part byte ceiling and 256-level depth ceiling still apply.
+These budgets do not guarantee that a document fits in the host's memory.
+Counts and byte budgets must be finite nonnegative integers; compression ratios may be fractional.
+Malformed input and invalid budget options reject with `InvalidArgument`.
+
+## Create tracked changes on a server
+
+Set `context.document.changeTrackingMode = 'TrackMineOnly'` before calling
+`range.insertText()` or `range.delete()`. Configure an `author` when you create
+the runtime. The mode applies to that runtime and persists across `run()` calls.
+
+Tracked edits support text within one paragraph, including table cells. Edits
+that touch pending revisions, structural edits, and formatting edits are rejected
+atomically. `TrackAll` and browser runtime tracking-mode control are unsupported.
+
+For a complete example, see the
+[server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md).
+To publish suggestions to a shared document, use
+[`DocxEditor.createCollaborative`](/docs/2.x/pro/collaboration#let-a-server-agent-propose-redlines).
+
 ## In the browser
 
 The browser entry takes an editor the host already created (from `@docx-editor.dev/react` or a plain page) and drives it in place. Edits apply to the open document with the reader's undo stack intact, so there is no `save()`: the host continues to call its existing save path.
@@ -144,7 +165,7 @@ The `/browser` entry includes integration with the painted engine. Import the ro
 to keep that browser code out of the bundle.
 
 The optional `author` has the same meaning as it does for `createServer`.
-It supplies the identity for comment writes.
+It supplies the identity for comments. Server runtimes also require it for tracked text edits.
 
 ## Delete comments and Undo
 

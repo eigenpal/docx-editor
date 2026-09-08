@@ -5,18 +5,21 @@ category: 'Guides'
 seoTitle: 'Content controls (SDTs)'
 ---
 
-Word content controls (`w:sdt`, Structured Document Tags) are labeled, bounded regions of a document. A control carries a stable `tag`, `title`, and `id`. Use those identifiers as addresses for templates and programmatic filling: design the template in Word, tag the fillable regions, then fill them by tag from code.
+Word content controls (`w:sdt`, structured document tags) mark regions you can
+fill from code. Create a template in Word, tag its fillable regions, and use
+`tag`, `title`, or `id` to find each control.
 
-The editor parses controls into the canonical tree, keeps them editable, renders their boundary, and round-trips them with structural fidelity. Properties it does not model, such as `w:dataBinding` and `w15:repeatingSection`, remain as generic nodes and survive editing and save.
+The editor displays control boundaries and supports the editing operations below.
+It preserves unsupported properties, including `w:dataBinding` and
+`w15:repeatingSection`, when you save.
 
 <Callout>
   Content controls are addressed by `tag`, `title`, or `id`. They are not `{{ mustache }}` template
   variables; the two systems can coexist in one document.
 </Callout>
 
-For cross-feature support levels, see the authoritative
-[Word fidelity matrix](/docs/2.x/word-fidelity). This guide covers content
-control tasks and operational refusals.
+See the [Word fidelity matrix](/docs/2.x/word-fidelity) for support levels across
+features.
 
 ## Filling a template from a server
 
@@ -241,9 +244,15 @@ the reason.
 | Create       | The selection crosses paragraphs                             | Inline controls cannot wrap block content     |
 | Create       | The position is inside a hyperlink, field, or inline control | The new control has no valid sibling position |
 
-## Typed control chrome
+## Checkbox, dropdown, and date interactions
 
-In the editor, typed controls get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. These controls work without host event handlers. When you toggle a checkbox, an omitted state font defaults to MS Gothic.
+Select the button at the upper-right corner of a control to toggle a checkbox,
+open a dropdown menu, or open a date picker. Each edit supports undo and requires
+no application event handler. Checkbox toggles use MS Gothic when the document
+omits the state font.
+
+These interactions apply to content controls. For legacy Word form fields, see
+[Legacy text form fields](/docs/2.x/guides/fields#legacy-text-form-fields).
 
 ## Operational limits
 

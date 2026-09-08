@@ -1,12 +1,14 @@
-# Margin: a server-side AI reviewer in a shared document
+# Server agent review
 
-A runnable collaborative review room. A Node worker joins Hocuspocus as **Review agent** and proposes real Word insertions, deletions, and replacements. Open the room in two browsers to watch the same redlines arrive, then accept or reject them from either browser.
+Run a Node.js worker that joins a Hocuspocus room as **Review agent** and proposes
+Word tracked changes. Open the room in two browsers, then accept or reject
+suggestions from either browser.
 
 The browser renders the editor and requests jobs. All model calls and proposal execution happen on the worker. The job continues if its initiating browser closes.
 
 ## Run
 
-Use Node **22.18 or later** and Bun for workspace installation/builds. The worker uses Node's native WebSocket and TypeScript stripping; the client uses the Hocuspocus provider.
+Use Node.js 22.18 or later and Bun for workspace installation and builds. The worker uses native WebSocket support and TypeScript stripping in Node.js; the client uses the Hocuspocus provider.
 
 ```sh
 bun install
@@ -14,15 +16,13 @@ cp examples/server-agent-review/.env.example examples/server-agent-review/.env
 bun run dev:server-agent-review
 ```
 
-Open **http://localhost:5180**. This command builds the workspace packages and starts Vite, Hocuspocus, and the worker. Stop all three with Ctrl+C.
+Open [localhost:5180](http://localhost:5180). This command builds the workspace packages and starts Vite, Hocuspocus, and the worker. Stop all three with Ctrl+C.
 
 1. Enter your display name and open the sample agreement, or upload a DOCX (up to 10 MiB) to create a new room.
-2. Copy the invite link into another browser/profile and join under a different name.
+2. Copy the invite link into another browser or browser profile and join under a different name.
 3. Choose **Scripted review** to demonstrate four edits without a model key. This mode only targets clauses from the sample; missing clauses in uploads are skipped.
 4. To use AI, set `OPENAI_API_KEY` in `.env`, restart, and select **AI review**. `OPENAI_MODEL` defaults to `gpt-5.4-mini`. Give the agent a review instruction.
-5. Open **Changes** to accept/reject suggestions. Download exports the current shared document, including pending revisions.
-
-The page offers no promise that AI suggestions are correct; the document remains reviewable and human decisions use the engine's existing review API.
+5. Open **Changes** to accept or reject suggestions. **Download** exports the current shared document, including pending revisions.
 
 ## Architecture
 
@@ -46,7 +46,9 @@ Job state and room files live in ignored `.data/`. Override the directory with `
 
 ## Copyable server integration
 
-This is the essential integration; `generateReplacement` is your model call. The example's complete tool loop adds snapshot validation, cancellation, bounded retries, and tool-call deduplication.
+Join an existing room, generate one replacement, and commit it as a tracked change.
+Provide `roomId`, `instruction`, and your `generateReplacement` function. The complete
+example adds snapshot validation, cancellation, bounded retries, and tool-call deduplication.
 
 ```ts
 import { DocxEditor } from '@docx-editor.dev/editor-api';
@@ -99,7 +101,7 @@ try {
 ```
 
 For insertions use `range.insertText(text, 'Before' | 'After')`. For deletions use `range.delete()`.
-These public methods follow Office.js shape. Supply an `author` and enable `TrackMineOnly` before editing.
+These methods follow the supported Office.js subset. Supply an `author` and enable `TrackMineOnly` before editing.
 The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is explicitly unsupported,
 as are structural or formatting mutations while tracking. Other peers keep their own editing mode.
 The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
@@ -113,9 +115,8 @@ Each model tool has a focused schema: insertion requires text and an explicit po
 and deletion accepts only its snapshot and quote. Refusals include the public error target and recovery guidance.
 They never tell the model to disable tracking or blindly repeat a refused edit.
 
-The worker batches paragraph loads before each `sync()`. It reads only the requested page's text and identity.
-It serializes tool calls and commits one completed suggestion at a time. These write boundaries intentionally
-make each suggestion visible and reviewable; they are not per-item read round trips.
+The worker batches paragraph reads, serializes tool calls, and commits one suggestion
+at a time. Each commit becomes available for review while the job continues.
 
 ## Client integration
 
@@ -144,7 +145,7 @@ function SharedDocument({ room }) {
 
 Pass a stable `room` configuration with the same room ID and server URL, `bootstrap: { kind: 'join' }`, and a unique actor ID for each browser attachment. Add font configuration as in the runnable app.
 
-## Guarantees and limits
+## Behavior and limits
 
 - Each proposal is one atomic document transaction. Replacement creates deletion and insertion revisions together; the review engine derives their decision cards.
 - The worker’s proposal tools support only single-paragraph text ranges, including table-cell paragraphs. Cross-paragraph ranges, paragraph-break text, missing authors, empty replacement/insertion text, and touching or overlapping pending revisions refuse. A paragraph may receive only one proposal/edit per batch; use separate syncs for sequential edits.
@@ -170,3 +171,8 @@ Build the workspace packages before running Node or the browser suite. The deter
 CI runs the Node lifecycle integration in its build job, after workspace packages exist; the source-only Bun suite runs the unit tests. To run the integration alone after building, use `bun run --filter './examples/server-agent-review' test:lifecycle`.
 
 The Node lifecycle test also kills the collaboration transport and restarts the worker, checking failure, persisted-room recovery, and interrupted-job handling without replay.
+
+## Next steps
+
+- [Server agent API patterns](../../packages/editor-api/OFFICE_JS_GUIDE.md)
+- [Collaboration reference](https://www.docx-editor.dev/docs/2.x/pro/collaboration)

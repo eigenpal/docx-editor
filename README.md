@@ -134,7 +134,7 @@ bun run typecheck
 
 Try unreleased changes in the [preview of `main`](https://latest.docx-editor.dev/).
 
-Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration)
+Examples: [Vite](examples/vite) | [DOCX to Markdown](examples/docx-to-markdown) | [Next.js](examples/nextjs) | [Remix](examples/remix) | [Astro](examples/astro) | [Vue](examples/vue) | [Collaboration](examples/collaboration) | [Server agent review](examples/server-agent-review)
 
 **[Documentation](https://www.docx-editor.dev/docs)** | **[React props and ref methods](https://www.docx-editor.dev/docs/2.x/react/props)** | **[Vue props and ref methods](https://www.docx-editor.dev/docs/2.x/vue/props)**
 

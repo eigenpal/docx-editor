@@ -19,13 +19,19 @@ clarity**.
 The demo uses the Vercel AI SDK. The document tools work with any tool-calling
 framework.
 
+For an agent that continues working after the browser closes, run the
+[server agent review example](https://github.com/eigenpal/docx-editor/tree/main/examples/server-agent-review).
+Its worker joins a shared Hocuspocus room and publishes suggestions for browser
+peers to accept or reject. Scripted review works without a model API key.
+
 ## Before you start
 
 - You need `@docx-editor.dev/editor-api` and `@docx-editor.dev/core`.
 - If you show the document in a page, install `@docx-editor.dev/react` or
   `@docx-editor.dev/vue`.
-- If the agent writes comments or tracked changes, install
-  `@docx-editor.dev/pro` and pass a non-empty `author`.
+- For comments or tracked changes, pass a non-empty `author`. Browser review
+  also requires `@docx-editor.dev/pro` and its review module. The server runtime
+  provides these writes without a browser review module.
 
 <Steps>
 
@@ -58,7 +64,7 @@ npm install @docx-editor.dev/vue
 </Framework>
 </FrameworkTabs>
 
-If you record comments or tracked changes, also install Pro:
+If you display or edit comments and tracked changes in the browser, also install Pro:
 
 ```bash
 npm install @docx-editor.dev/pro
@@ -227,6 +233,11 @@ Read the user request, then pick tools:
   insertion, or deletion.
 - If the user says "suggest", "review", or "redline", call tracked proposal
   tools.
+
+On a server, set `context.document.changeTrackingMode = 'TrackMineOnly'` and use
+`range.insertText()` or `range.delete()` to record tracked text edits. See the
+[server tracking example](/docs/2.x/editor-api#create-tracked-changes-on-a-server)
+for prerequisites and limits.
 
 Leave accept and reject off the agent allowlist. The reader decides in the
 editor.

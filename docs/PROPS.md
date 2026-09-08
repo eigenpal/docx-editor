@@ -23,21 +23,21 @@ so they stay explicit instead of accidental.
 
 ### Shared root props
 
-| Prop          | Type                                             | Package(s) | Description                                      |
-| ------------- | ------------------------------------------------ | ---------- | ------------------------------------------------ |
-| `document`    | `DocumentSource`                                 | React, Vue | DOCX bytes or an existing `DocumentHandle`.      |
-| `fonts`       | `FontConfiguration \| FontConfigurationFragment` | React, Vue | Font bytes used for shaping and pagination.      |
-| `author`      | `string`                                         | React, Vue | Ambient author for authored commands.            |
-| `mode`        | `'edit' \| 'view' \| 'suggesting'`               | React, Vue | Mount-time editing mode.                         |
-| `zoom`        | `number`                                         | React, Vue | Mount-time zoom value.                           |
-| `zoomMode`    | `ZoomMode \| 'auto'`                             | React, Vue | Automatic or fixed zoom behavior.                |
-| `locale`      | `string`                                         | React, Vue | Locale passed to the underlying editor instance. |
-| `i18n`        | `Translations`                                   | React, Vue | Translation overrides for editor chrome.         |
-| `t`           | `(key, params?) => string`                       | React, Vue | Host translation function for editor chrome.     |
-| `colorMode`   | `'light' \| 'dark' \| 'system'`                  | React, Vue | Color mode for editor chrome.                    |
-| `rulers`      | `boolean`                                        | React, Vue | Toggles the packaged rulers.                     |
-| `modules`     | `readonly EditorModule[]`                        | React, Vue | Feature modules applied at mount.                |
-| `onFontError` | `(error: EditorFontError) => void`               | React, Vue | Reports typed font-resolution failures.          |
+| Prop          | Type                                             | Package(s) | Description                                                       |
+| ------------- | ------------------------------------------------ | ---------- | ----------------------------------------------------------------- |
+| `document`    | `DocumentSource`                                 | React, Vue | DOCX bytes or an existing `DocumentHandle`.                       |
+| `fonts`       | `FontConfiguration \| FontConfigurationFragment` | React, Vue | Font bytes used for shaping and pagination.                       |
+| `author`      | `string`                                         | React, Vue | Ambient author for authored commands.                             |
+| `mode`        | `'edit' \| 'view' \| 'suggesting'`               | React, Vue | Editing mode; changes apply without remounting.                   |
+| `zoom`        | `number`                                         | React, Vue | Fixed zoom scale; changes apply without remounting.               |
+| `zoomMode`    | `ZoomMode \| 'auto'`                             | React, Vue | Automatic or fixed zoom behavior.                                 |
+| `locale`      | `string`                                         | React, Vue | Regional date input and generated labels; defaults to `en-US`.    |
+| `i18n`        | `Translations`                                   | React, Vue | UI translations, including form controls; separate from `locale`. |
+| `t`           | `(key, params?) => string`                       | React, Vue | Host translation function for editor chrome.                      |
+| `colorMode`   | `'light' \| 'dark' \| 'system'`                  | React, Vue | Color mode for editor chrome.                                     |
+| `rulers`      | `boolean`                                        | React, Vue | Toggles the packaged rulers.                                      |
+| `modules`     | `readonly EditorModule[]`                        | React, Vue | Feature modules applied at mount.                                 |
+| `onFontError` | `(error: EditorFontError) => void`               | React, Vue | Reports typed font-resolution failures.                           |
 
 ### React root chrome props
 

@@ -33,21 +33,22 @@ const { document, fonts } = useDocxSource(url, {
 ```
 
 The list is a precedence order: the first origin that supplies a face wins, and
-later origins are told which faces are already covered so they don't load them
-again. Put the origin you'd rather pay for first.
+later origins receive the resolved faces so they can skip duplicate downloads.
+Put preferred sources first.
 
-`googleFonts()` fetches from a content delivery network. Nothing else here
-touches the network, and no origin is on by default.
+`googleFonts()` fetches from a content delivery network. `packagedFonts()` and
+`defaultFonts()` load assets shipped with the package, typically from your own
+origin in a browser. No optional font source is enabled by default.
 
 ## Choose a font source
 
-| Source                     | Network on document open     | Loads                                               | Measurement                        |
+| Source                     | Third-party requests         | Loads                                               | Measurement                        |
 | -------------------------- | ---------------------------- | --------------------------------------------------- | ---------------------------------- |
 | Fonts embedded in the DOCX | No                           | The faces in the file                               | Uses the embedded bytes            |
 | `packagedFonts()`          | No                           | The packaged families in use, plus the default face | Uses metric-compatible substitutes |
 | `defaultFonts()`           | No                           | All 20 faces of the five defaults, every time       | Uses metric-compatible substitutes |
 | `googleFonts()`            | Yes, for catalogued families | The catalog families in use, plus the default face  | Uses the fetched faces             |
-| `loadFonts` with your URLs | Only when your code calls it | The URLs you list                                   | Uses admitted files                |
+| `loadFonts` with your URLs | Depends on your URLs         | The URLs you list                                   | Uses admitted files                |
 | No usable source           | No                           | Nothing                                             | Canvas or fixed fallback           |
 
 Embedded fonts load automatically. The editor registers them under internal
@@ -62,9 +63,10 @@ compatible face. It excludes metric-compatible substitutions.
 The notice also excludes font declarations that rendered text does not use. The
 font picker can still list those declared families.
 
-The notice excludes symbol faces too, such as the MS Gothic face a Word checkbox
-names in `w:sym`. A symbol run paints one character, and the editor resolves it
-to its Unicode equivalent wherever one exists, so any face can draw it.
+The notice also excludes symbol faces, such as MS Gothic in a Word checkbox
+(`w:sym`). The editor maps symbols to Unicode where a mapping exists. Rendering
+still depends on the available font glyphs; a missing notice does not guarantee
+that every symbol can render.
 
 The font picker is a separate list. It offers the families your configuration
 supplies and the families the document declares in `w:rFonts`, so a symbol face
@@ -442,11 +444,11 @@ const brandFonts = defineFontResolver(async ({ families, defaultFamily, resolved
 The request carries `families`, the names that document declares, and `defaultFamily`,
 the face a run naming no font resolves to. Both count as declared.
 
-`families` ends with the symbol faces the document names in `w:sym`, after the
-declared ones. Supply those to paint a symbol in the authored face: the editor
-maps a private-use character to its Unicode equivalent where one exists, and
-keeps the original character otherwise. A face you supply this way becomes
-offerable in the font picker, like any other family you supply.
+`families` also includes faces used by `w:sym`, `SYMBOL` fields, and numbering
+markers. Unused numbering definitions do not add requests. Supply usable bytes
+for these faces to render their authored glyphs. The editor maps private-use
+symbols to Unicode where a mapping exists and preserves the character otherwise.
+Supplied faces are also available in the font picker.
 
 `resolvedFaces` lists the faces earlier origins in the same composition can already
 paint. It reports faces rather than families, and only faces backed by bytes, so
