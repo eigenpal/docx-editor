@@ -138,6 +138,9 @@ Tracked edits support text within one paragraph, including table cells. Edits
 that touch pending revisions, structural edits, and formatting edits are rejected
 atomically. `TrackAll` and browser runtime tracking-mode control are unsupported.
 
+A pending row insertion or deletion blocks tracked edits throughout that row,
+including other cells and nested tables.
+
 For a complete example, see the
 [server agent guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md).
 To publish suggestions to a shared document, use

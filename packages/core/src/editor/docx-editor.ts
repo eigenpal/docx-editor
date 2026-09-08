@@ -102,6 +102,7 @@ import {
 } from '@docx-editor.dev/core/layout';
 import { createAnchorIndex } from './docx-editor-anchors.ts';
 import { snapshotTextFormInput, type PendingTextFormInput } from './surface-text-form-fields.ts';
+import { saveEditorDocument } from './docx-editor-save.ts';
 import {
   enterStoryPosition,
   leaveScopeForBodyParagraph,
@@ -1840,16 +1841,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     save() {
       // A save inside the open's yield window sees the just-loaded document: mount now.
       openScheduler.flush();
-      if (!surface) return Promise.reject(editorError('notFound', 'no document is loaded'));
-      // Ctrl+S can race a typing burst: queued keystrokes belong in the bytes.
-      surface.flushPendingInput();
-      // Stale REF results rewrite first; false (collab skip) exports cached results anyway.
-      surface.refreshRefFieldResults();
-      // A fresh copy, so the returned ArrayBuffer is exactly the document — not a window
-      // into a larger allocation.
-      const bytes = surface.session.save();
-      const copy = bytes.slice();
-      return Promise.resolve(copy.buffer as ArrayBuffer);
+      return saveEditorDocument(surface, container, () => surface);
     },
 
     getDocumentHandle(): DocumentHandle {

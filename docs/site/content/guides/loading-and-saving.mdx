@@ -260,9 +260,15 @@ Use one of these save paths:
 </Framework>
 </FrameworkTabs>
 
-`save()` on the ref resolves `null` when no editor is mounted, so guard the result. `Editor.save()` on the instance always resolves an `ArrayBuffer`.
+`save()` on the ref resolves `null` when no editor is mounted, so guard the result.
+`Editor.save()` returns an `ArrayBuffer` on success and rejects when saving fails.
 
 ### Field result refresh
+
+Save validates pending protected form input and applies the field's format using
+the locale active when you entered the value. Invalid input rejects with code
+`invalidArgs`. The editor keeps the input and does not open an alert.
+Collaborative sessions reject saves that require form-field formatting.
 
 Save updates stale, calibrated `REF` and `NOTEREF` results in the body,
 footnotes, and endnotes. The editor commits all updated parts as one undo step.
@@ -312,9 +318,13 @@ export function AutosaveEditor({ docId, bytes }: { docId: string; bytes: Uint8Ar
   const onChange = () => {
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(async () => {
-      const buf = await ref.current?.save();
-      if (!buf) return;
-      await fetch(`/api/documents/${docId}`, { method: 'PUT', body: buf });
+      try {
+        const buf = await ref.current?.save();
+        if (!buf) return;
+        await fetch(`/api/documents/${docId}`, { method: 'PUT', body: buf });
+      } catch (error) {
+        console.error('Autosave failed', error);
+      }
     }, 1500);
   };
 
@@ -337,9 +347,13 @@ let timer: number | null = null;
 function onChange() {
   if (timer !== null) window.clearTimeout(timer);
   timer = window.setTimeout(async () => {
-    const buf = await editorRef.value?.save();
-    if (!buf) return;
-    await fetch(`/api/documents/${props.docId}`, { method: 'PUT', body: buf });
+    try {
+      const buf = await editorRef.value?.save();
+      if (!buf) return;
+      await fetch(`/api/documents/${props.docId}`, { method: 'PUT', body: buf });
+    } catch (error) {
+      console.error('Autosave failed', error);
+    }
   }, 1500);
 }
 

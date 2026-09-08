@@ -334,7 +334,11 @@ export interface Editor {
    * `save`, `exec` and `selectMatch` complete a scheduled open before they run.
    */
   load(document: DocumentSource): void;
-  /** Serialize the current canonical document to DOCX bytes — on demand, never per keystroke. */
+  /**
+   * Serialize the current document, finalizing pending text form values first.
+   * Invalid input rejects with `EditorError.code === 'invalidArgs'` and remains editable.
+   * Validation does not open a dialog. Other write refusals also reject the save.
+   */
   save(): Promise<ArrayBuffer>;
   /** An opaque handle to the current document (identity + revision). Replaces the former
    *  structured `getDocument()`; the canonical state is the engine `PackageModel`, not a tree. */

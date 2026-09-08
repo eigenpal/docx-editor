@@ -94,7 +94,8 @@ This is a supported Office.js subset. `TrackMineOnly` applies to this server hos
 across its `run()` calls. It does not change peers' tracking settings or save a document-wide
 tracking policy. `TrackAll` and browser-host mode control explicitly refuse with `NotSupported`.
 Tracked text edits support one paragraph, including table-cell text. They refuse targets touching
-pending revisions. Structural and formatting mutations under tracking also refuse. Comments and
+pending revisions, including text inside a row with a pending insertion or deletion.
+Structural and formatting mutations under tracking also refuse. Comments and
 revision decisions remain available. Set `Off` explicitly when permanent edits are intended.
 
 See the [server-agent review example](../../examples/server-agent-review/README.md) for Hocuspocus,

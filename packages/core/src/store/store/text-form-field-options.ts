@@ -107,7 +107,7 @@ export function formatTextFormValue(
     /yyyy|MMMM|MM|dd|M|d/g,
     (token) =>
       ({
-        yyyy: String(date.year),
+        yyyy: String(date.year).padStart(4, '0'),
         MMMM: months[date.month - 1]!,
         MM: String(date.month).padStart(2, '0'),
         dd: String(date.day).padStart(2, '0'),
@@ -129,7 +129,8 @@ export function formatTextFormDefault(
     // Interpret the saved picture (or an unambiguous ISO default), never the user's new locale.
     const pictureLocale = field.format.startsWith('d') ? 'en-GB' : 'en-US';
     const date = parseDate(text, pictureLocale);
-    if (field.format && date) text = `${date.year}-${date.month}-${date.day}`;
+    if (field.format && date)
+      text = `${String(date.year).padStart(4, '0')}-${date.month}-${date.day}`;
     else if (options.format === field.format) return text;
   }
   return formatTextFormValue(text, options, 'default', locale);
@@ -185,7 +186,7 @@ export function textFormInputLength(
   }
   if (field.type === 'date' && /[A-Za-z]/.test(previous)) {
     const date = parseDate(text.trim());
-    if (date) input = `${date.month}/${date.day}/${date.year}`;
+    if (date) input = `${date.month}/${date.day}/${String(date.year).padStart(4, '0')}`;
   }
   return [...input].length;
 }

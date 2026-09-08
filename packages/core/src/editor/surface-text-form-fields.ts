@@ -17,6 +17,7 @@ import {
   type TextFormFieldRange,
 } from '@docx-editor.dev/core/store';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
+import { planTextFormSave } from './text-form-save-plan.ts';
 
 /** Input provenance belongs to the open document, including during a font remount. */
 export type PendingTextFormInput = readonly {
@@ -26,6 +27,12 @@ export type PendingTextFormInput = readonly {
   readonly locale: string;
 }[];
 const inputSnapshots = new WeakMap<HTMLElement, () => PendingTextFormInput>();
+const inputSaves = new WeakMap<HTMLElement, () => string | null>();
+
+/** Finalize valid pending input before exporting; a refusal leaves the input intact. */
+export function commitTextFormInput(container: HTMLElement): string | null {
+  return inputSaves.get(container)?.() ?? null;
+}
 
 function fieldsInPart(part: OoxmlPart): TextFormFieldRange[] {
   return [...deepParagraphOrderOfPart(part).keys()].flatMap((id) => {
@@ -50,6 +57,7 @@ interface Host {
   selection(): SemanticSelection;
   select(selection: SemanticSelection): void;
   apply(op: TreeDocOp): boolean;
+  save?(ops: readonly TreeDocOp[], selection: SemanticSelection): string | null;
   editable(): boolean;
 }
 
@@ -65,7 +73,7 @@ export function createTextFormFieldInteraction(
   selectForDeletion(direction: 'backward' | 'forward'): boolean;
   annotate(ops: readonly TreeDocOp[]): readonly TreeDocOp[];
   afterApply(committed: boolean): void;
-  restoreAfterHistory(): void;
+  restoreAfterHistory(): SemanticSelection | null;
   canEdit(): boolean;
   edit(): boolean;
   update(): void;
@@ -93,17 +101,60 @@ export function createTextFormFieldInteraction(
   // Store history restores immutable part identities. Keep input provenance with those
   // snapshots so undo restores a clean date and redo restores the original input locale.
   const inputHistory = new WeakMap<OoxmlPart, DirtyFields>();
-  const rememberInput = (): void => {
-    inputHistory.set(host.part(), new Map(dirtyBaseline));
+  const savedSelections = new WeakMap<OoxmlPart, SemanticSelection>();
+  const rememberInput = (part = host.part()): void => {
+    inputHistory.set(
+      part,
+      new Map([...dirtyBaseline].filter(([id]) => id.startsWith(`${part.name}#`)))
+    );
   };
-  const restoreInput = (): void => {
-    dirtyBaseline = new Map(inputHistory.get(host.part()));
+  const restoreInput = (): SemanticSelection | null => {
+    dirtyBaseline = new Map(parts().flatMap((part) => [...(inputHistory.get(part) ?? [])]));
+    return savedSelections.get(host.part()) ?? null;
   };
   const forgetField = (id: string): void => {
     dirtyBaseline.delete(id);
     rememberInput();
   };
-  rememberInput();
+  parts().forEach(rememberInput);
+  const saveInput = (): string | null => {
+    if (!dirtyBaseline.size) return null;
+    if (committing) return 'invalidState';
+    const plan = planTextFormSave(parts(), dirtyBaseline, host.selection());
+    if ('reason' in plan) return plan.reason;
+    if (plan.ops.length && !host.editable()) return 'locked';
+    const before = parts();
+    parts().forEach(rememberInput);
+    const previous = dirtyBaseline;
+    if (plan.ops.length) savedSelections.set(host.part(), host.selection());
+    // Session changes notify hosts synchronously. A nested save must see committed values,
+    // not reinterpret the output picture using the original input locale a second time.
+    dirtyBaseline = new Map();
+    committing = true;
+    try {
+      const refusal = plan.ops.length
+        ? host.save
+          ? host.save(plan.ops, plan.selection)
+          : 'unsupported'
+        : null;
+      if (refusal) dirtyBaseline = previous;
+      else {
+        delete status.dataset.fieldError;
+        if (plan.ops.length) savedSelections.set(host.part(), plan.selection);
+      }
+      parts().forEach(rememberInput);
+      return refusal;
+    } catch (error) {
+      // An exception before the atomic write retains raw input. A throwing change listener
+      // runs after the write; restoring its old provenance would parse formatted dates again.
+      if (parts().every((part) => before.includes(part))) dirtyBaseline = previous;
+      parts().forEach(rememberInput);
+      throw error;
+    } finally {
+      committing = false;
+    }
+  };
+  inputSaves.set(host.container, saveInput);
   const snapshotInput = (): PendingTextFormInput => {
     if (!dirtyBaseline.size) return [];
     // Node IDs encode parse paths and can change when an earlier field gains a result run.
@@ -663,6 +714,7 @@ export function createTextFormFieldInteraction(
       return true;
     },
     destroy() {
+      if (inputSaves.get(host.container) === saveInput) inputSaves.delete(host.container);
       if (inputSnapshots.get(host.container) === snapshotInput)
         inputSnapshots.delete(host.container);
       document.removeEventListener('pointermove', move);

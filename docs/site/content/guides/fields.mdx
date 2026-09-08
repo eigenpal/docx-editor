@@ -108,6 +108,10 @@ Protected fields validate and format input when you leave. Pasted text is limite
 to the remaining capacity. Invalid numbers or dates open an alert; acknowledging
 it clears the input, which can be restored with Undo.
 
+Save also validates pending protected field input and applies its format. Invalid
+input rejects the save with code `invalidArgs`. The input stays available for
+correction, and save does not open an alert.
+
 ### Date input and UI language
 
 `locale` controls date input; `i18n` controls UI strings. For Polish dates with

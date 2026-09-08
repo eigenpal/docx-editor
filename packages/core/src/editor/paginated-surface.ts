@@ -1,4 +1,5 @@
-import { applyTextFormOperation } from './surface-text-form-apply.ts';
+import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
+import { beginSurfaceCommit } from './surface-commit-state.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
 import {
   createTextFormFieldInteraction,
@@ -3218,7 +3219,15 @@ export function mountPaginatedSurface(
     return { paragraphId: position.paragraphId, start: position.offset, end: position.offset };
   }
 
-  function commit(
+  function commit(...args: Parameters<typeof commitNow>): void {
+    const finish = beginSurfaceCommit(container);
+    try {
+      commitNow(...args);
+    } finally {
+      finish();
+    }
+  }
+  function commitNow(
     run: () => ReturnType<TreeDocxSession['applyPmDoc']> | boolean,
     selectionAfter?: () => SemanticSelection | null,
     options:
@@ -5503,7 +5512,9 @@ export function mountPaginatedSurface(
         if (collaborationSession.undo()) restoreSelection(null);
         return;
       }
-      restoreSelection(session.undo());
+      const revision = session.packageRevision();
+      const mark = session.undo();
+      if (session.packageRevision() !== revision) restoreSelection(mark);
     },
     redo: () => {
       if (editingMode === 'view') {
@@ -5516,7 +5527,9 @@ export function mountPaginatedSurface(
         if (collaborationSession.redo()) restoreSelection(null);
         return;
       }
-      restoreSelection(session.redo());
+      const revision = session.packageRevision();
+      const mark = session.redo();
+      if (session.packageRevision() !== revision) restoreSelection(mark);
     },
     sectionAtPage,
     activeScope: () => {
@@ -5764,7 +5777,8 @@ export function mountPaginatedSurface(
     // History restores text, input locale, and selection together. Retire pending typing
     // formats so the restored caret cannot inherit formatting armed against the old tree.
     pendingFormats = null;
-    textFormInteraction?.restoreAfterHistory();
+    const formSelection = textFormInteraction?.restoreAfterHistory();
+    if (!mark && formSelection) selection = formSelection;
     // The tree about to be published is not the one the DOM selection was made against, so
     // the flush below must not read it back: offsets in the reverted tree do not correspond
     // to offsets in the one that replaced it.
@@ -5896,6 +5910,14 @@ export function mountPaginatedSurface(
       select: (next) => setSelection(next),
       editable: () => editingMode === 'edit',
       apply: (op) => applyTextFormOperation(op, commit, applyOps),
+      save: (ops, next) =>
+        applyTextFormSave(ops, next, {
+          session,
+          commit,
+          refusal: () => writeRefusal(true, ops, false),
+          gate: (values, scope) => collaborationSession?.gateOperations(values, scope) ?? null,
+          collaborationActive: collaborationSession !== undefined,
+        }),
     },
     runtimeOptions.initialTextFormInput
   );
