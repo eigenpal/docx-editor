@@ -513,7 +513,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // "Calibri", not an em-dash.
       defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
       drawingStrings: hostConfig.drawingStrings(),
-      dateInputOrder: hostConfig.dateInputOrder(),
+      locale: hostConfig.locale(),
       // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
       // which survives a document reload because the reader chose it, not the file.
       ...(author ? { author } : {}),

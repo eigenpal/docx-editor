@@ -22,19 +22,19 @@ function dateField(value: string, format: string) {
   return { part: opened.part, paragraph, field };
 }
 
-for (const [order, format, expected] of [
-  ['dmy', 'MM/dd/yyyy', '02/01/2030'],
-  ['dmy', 'dd/MM/yyyy', '01/02/2030'],
-  ['dmy', 'MMMM d, yyyy', 'February 1, 2030'],
-  ['mdy', 'dd/MM/yyyy', '02/01/2030'],
+for (const [locale, format, expected] of [
+  ['en-GB', 'MM/dd/yyyy', '02/01/2030'],
+  ['en-GB', 'dd/MM/yyyy', '01/02/2030'],
+  ['en-GB', 'MMMM d, yyyy', 'February 1, 2030'],
+  ['en-US', 'dd/MM/yyyy', '02/01/2030'],
 ] as const) {
-  test(`date input ${order} is independent of output ${format}`, () => {
+  test(`date input ${locale} is independent of output ${format}`, () => {
     const { part, paragraph, field } = dateField('1/2/2030', format);
     const op = {
       op: 'commitTextFormField',
       paragraphId: paragraph.id,
       fieldNodeId: field.fieldNodeId,
-      dateInputOrder: order,
+      locale,
     } as const;
     expect(validateTreeOp(part, op)).toBeNull();
     const result = applyTreeOp(part, op);
@@ -45,7 +45,7 @@ for (const [order, format, expected] of [
       paragraphId: paragraph.id,
       fieldNodeId: field.fieldNodeId,
       text: '1/2/2030',
-      dateInputOrder: order,
+      locale,
     } as const;
     expect(validateTreeOp(part, defaults)).toBeNull();
     const edited = applyTreeOp(part, defaults);
@@ -54,19 +54,19 @@ for (const [order, format, expected] of [
   });
 }
 test('date input falls back when preferred slash order is invalid', () => {
-  for (const order of ['mdy', 'dmy'] as const) {
+  for (const locale of ['en-US', 'en-GB'] as const) {
     for (const value of ['12/31/2030', '31/12/2030']) {
-      expect(parseTextFormDate(value, order)).toEqual({ year: 2030, month: 12, day: 31 });
+      expect(parseTextFormDate(value, locale)).toEqual({ year: 2030, month: 12, day: 31 });
     }
-    expect(parseTextFormDate('2/30/2030', order)).toBeNull();
+    expect(parseTextFormDate('2/30/2030', locale)).toBeNull();
   }
 });
 test('date input supports ISO and the two-digit year cutoff', () => {
-  expect(parseTextFormDate('2030-02-01', 'dmy')).toEqual({ year: 2030, month: 2, day: 1 });
-  expect(parseTextFormDate('1/2/29', 'dmy')).toEqual({ year: 2029, month: 2, day: 1 });
-  expect(parseTextFormDate('1/2/30', 'dmy')).toEqual({ year: 1930, month: 2, day: 1 });
+  expect(parseTextFormDate('2030-02-01', 'en-GB')).toEqual({ year: 2030, month: 2, day: 1 });
+  expect(parseTextFormDate('1/2/29', 'en-GB')).toEqual({ year: 2029, month: 2, day: 1 });
+  expect(parseTextFormDate('1/2/30', 'en-GB')).toEqual({ year: 1930, month: 2, day: 1 });
 });
-test('date input defaults to mdy and rejects invalid operation policy', () => {
+test('date input defaults to en-US and rejects malformed operation locales', () => {
   const { part, paragraph, field } = dateField('1/2/2030', 'dd/MM/yyyy');
   const op = {
     op: 'commitTextFormField',
@@ -76,7 +76,175 @@ test('date input defaults to mdy and rejects invalid operation policy', () => {
   const result = applyTreeOp(part, op);
   expect(result.ok).toBe(true);
   if (result.ok) expect(paragraphTextOf(result.part, paragraph.id)).toBe('02/01/2030');
-  const invalid = { ...op, dateInputOrder: 'invalid' } as unknown as typeof op;
+  const invalid = { ...op, locale: 'not_a_locale' } as unknown as typeof op;
   expect(validateTreeOp(part, invalid)).toBe('invalidArgs');
   expect(applyTreeOp(part, invalid).ok).toBe(false);
+});
+
+for (const [locale, input, month, day] of [
+  ['en-US', '1/2/2030', 1, 2],
+  ['en-GB', '1/2/2030', 2, 1],
+  ['pl-PL', '01.02.2030', 2, 1],
+  ['de-DE', '1.2.2030', 2, 1],
+  ['fr-FR', '01/02/2030', 2, 1],
+  ['pt-BR', '01/02/2030', 2, 1],
+  ['hi-IN', '1/2/2030', 2, 1],
+  ['tr-TR', '01.02.2030', 2, 1],
+  ['id-ID', '1/2/2030', 2, 1],
+  ['he-IL', '1.2.2030', 2, 1],
+  ['ja-JP', '2030/2/1', 2, 1],
+  ['zh-CN', '2030/2/1', 2, 1],
+  ['ko-KR', '2030. 2. 1.', 2, 1],
+  ['sv-SE', '2030-02-01', 2, 1],
+  ['ar-EG', '١/٢/٢٠٣٠', 2, 1],
+  ['en-GB-u-nu-arab', '١/٢/٢٠٣٠', 2, 1],
+  ['en-US', 'February 1, 2030', 2, 1],
+  ['pl-PL', '1 February 2030', 2, 1],
+] as const) {
+  test(`${locale} parses ${input} as a Gregorian date`, () => {
+    expect(parseTextFormDate(input, locale)).toEqual({ year: 2030, month, day });
+  });
+}
+
+for (const locale of ['en-US', 'en-GB', 'pl-PL', 'ja-JP', 'ko-KR', 'ar-EG', 'fa-IR', 'th-TH']) {
+  test(`accepts Intl's Gregorian numeric pattern and digits for ${locale}`, () => {
+    const text = new Intl.DateTimeFormat(locale, {
+      calendar: 'gregory',
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    }).format(new Date(Date.UTC(2030, 1, 1)));
+    expect(parseTextFormDate(text, locale)).toEqual({ year: 2030, month: 2, day: 1 });
+    expect(parseTextFormDate('2030-02-01', locale)).toEqual({ year: 2030, month: 2, day: 1 });
+  });
+}
+
+for (const [locale, value] of [
+  ['en-US', '2/29/2030'],
+  ['pl-PL', '29.02.2030'],
+  ['en-GB', '31/04/2030'],
+  ['ja-JP', '2030/13/1'],
+  ['en-US', '1/2/030'],
+  ['en-GB', '1/2/0'],
+  ['en-US', '1/2/20300'],
+  ['en-US', '1/2-2030'],
+  ['en-GB', '01/02/2030 junk'],
+  ['en-US', '2030-02-30'],
+  ['en-GB', '0000-01-01'],
+  ['en-US', '0/1/2030'],
+  ['pl-PL', '1 lutego 2030'],
+  ['en-US', '1/2/2030 12:00'],
+] as const) {
+  test(`${locale} refuses invalid or unsupported input ${value}`, () => {
+    expect(parseTextFormDate(value, locale)).toBeNull();
+  });
+}
+
+test('valid leap days, canonical locale tags, and deterministic fallback', () => {
+  expect(parseTextFormDate('29.02.2032', 'pl-pl')).toEqual({ year: 2032, month: 2, day: 29 });
+  for (const locale of [undefined, 'not_a_locale', 'zz-ZZ', '']) {
+    expect(parseTextFormDate('1/2/2030', locale)).toEqual({ year: 2030, month: 1, day: 2 });
+  }
+});
+
+test('changing locale or reopening a saved default does not reinterpret its authored picture', () => {
+  const { part, paragraph, field } = dateField('01/02/2030', 'MM/dd/yyyy');
+  const first = applyTreeOp(part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: paragraph.id,
+    fieldNodeId: field.fieldNodeId,
+    text: '2030-01-02',
+    locale: 'en-US',
+  });
+  expect(first.ok).toBe(true);
+  if (!first.ok) return;
+  for (const format of ['MM/dd/yyyy', 'yyyy-MM-dd', 'dd/MM/yyyy']) {
+    const next = applyTreeOp(first.part, {
+      op: 'setTextFormFieldDefault',
+      paragraphId: paragraph.id,
+      fieldNodeId: field.fieldNodeId,
+      text: '01/02/2030',
+      locale: 'en-GB',
+      options: { type: 'date', format, maxLength: 0, enabled: true },
+    });
+    expect(next.ok).toBe(true);
+    if (next.ok)
+      expect(paragraphTextOf(next.part, paragraph.id)).toBe(
+        format === 'yyyy-MM-dd'
+          ? '2030-01-02'
+          : format === 'dd/MM/yyyy'
+            ? '02/01/2030'
+            : '01/02/2030'
+      );
+  }
+});
+
+test('changing a saved date picture preserves the original input limit', () => {
+  const { part, paragraph, field } = dateField('01/02/2030', 'MM/dd/yyyy');
+  const initial = applyTreeOp(part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: paragraph.id,
+    fieldNodeId: field.fieldNodeId,
+    text: '1/2/2030',
+    locale: 'en-US',
+    options: { type: 'date', format: 'MMMM d, yyyy', maxLength: 10, enabled: true },
+  });
+  expect(initial.ok).toBe(true);
+  if (!initial.ok) return;
+  const change = {
+    op: 'setTextFormFieldDefault',
+    paragraphId: paragraph.id,
+    fieldNodeId: field.fieldNodeId,
+    text: 'January 2, 2030',
+    locale: 'en-GB',
+    options: { type: 'date', format: 'yyyy-MM-dd', maxLength: 10, enabled: true },
+  } as const;
+  const result = applyTreeOp(initial.part, change);
+  expect(result.ok).toBe(true);
+  if (result.ok) expect(paragraphTextOf(result.part, paragraph.id)).toBe('2030-01-02');
+  expect(validateTreeOp(initial.part, { ...change, text: 'January 3, 2030' })).toBe('invalidArgs');
+  expect(
+    validateTreeOp(initial.part, { ...change, options: { ...change.options, maxLength: 9 } })
+  ).toBe('invalidArgs');
+});
+
+test('ISO interpretation takes precedence over colliding regional year-day-month patterns', () => {
+  for (const locale of ['ky', 'ug']) {
+    expect(parseTextFormDate('2030-01-02', locale)).toEqual({ year: 2030, month: 1, day: 2 });
+  }
+});
+
+test('clearing a saved date picture keeps the default reopenable at its original input limit', () => {
+  const { part, paragraph, field } = dateField('01/02/2030', 'MM/dd/yyyy');
+  const initial = applyTreeOp(part, {
+    op: 'setTextFormFieldDefault',
+    paragraphId: paragraph.id,
+    fieldNodeId: field.fieldNodeId,
+    text: '1/2/2030',
+    locale: 'en-US',
+    options: { type: 'date', format: 'MMMM d, yyyy', maxLength: 10, enabled: true },
+  });
+  expect(initial.ok).toBe(true);
+  if (!initial.ok) return;
+  const change = {
+    op: 'setTextFormFieldDefault',
+    paragraphId: paragraph.id,
+    fieldNodeId: field.fieldNodeId,
+    text: 'January 2, 2030',
+    locale: 'pl-PL',
+    options: { type: 'date', format: '', maxLength: 10, enabled: true },
+  } as const;
+  const cleared = applyTreeOp(initial.part, change);
+  expect(cleared.ok).toBe(true);
+  if (!cleared.ok) return;
+  const reopened = applyTreeOp(cleared.part, change);
+  expect(reopened.ok).toBe(true);
+  expect(
+    validateTreeOp(cleared.part, { ...change, options: { ...change.options, maxLength: 12 } })
+  ).toBeNull();
+  expect(validateTreeOp(cleared.part, { ...change, text: 'January 3, 2030' })).toBe('invalidArgs');
+  expect(
+    validateTreeOp(cleared.part, { ...change, options: { ...change.options, maxLength: 9 } })
+  ).toBe('invalidArgs');
 });

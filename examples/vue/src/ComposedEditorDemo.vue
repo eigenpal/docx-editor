@@ -22,7 +22,6 @@
       :document="bytes"
       author="Demo Reviewer"
       mode="edit"
-      date-input-order="mdy"
       :modules="proModules"
       :fonts="fonts ?? undefined"
       @font-error="onFontError"

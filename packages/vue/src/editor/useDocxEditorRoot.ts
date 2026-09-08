@@ -53,12 +53,11 @@ export interface DocxEditorRootProps {
   /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */
   author?: string;
   /**
-   * Engine locale for engine-generated content, such as the table of contents title.
-   * Changes apply without a remount.
+   * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
+   * Changes apply to subsequent edits without a remount; stored date formats are preserved.
+   * UI translations are supplied separately through i18n.
    */
   locale?: string;
-  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
-  dateInputOrder?: 'mdy' | 'dmy';
   /** Live drawing labels. Defaults to the active locale catalog. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /** Construction-time capability modules. Later array changes need a remount. */
@@ -205,7 +204,6 @@ export function useDocxEditorRootOwner(
       ...(p.fonts ? { fonts: p.fonts } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
-      ...(p.dateInputOrder !== undefined ? { dateInputOrder: p.dateInputOrder } : {}),
       translate: translateResolver.value,
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(revisionStyleRegistry.current() !== undefined
@@ -330,12 +328,6 @@ export function useDocxEditorRootOwner(
     { flush: 'post' }
   );
 
-  watch(
-    () => [editorRef.value, toValue(props).dateInputOrder] as const,
-    ([editor, order]) => {
-      editor?.setDateInputOrder(order);
-    }
-  );
   watch(
     () => [editorRef.value, toValue(props).locale] as const,
     ([editor, locale]) => {

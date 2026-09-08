@@ -47,11 +47,11 @@ function setup(
   pagesLayer.append(span);
   container.append(pagesLayer);
   document.body.append(container);
-  let dateInputOrder: 'mdy' | 'dmy' = 'mdy';
+  let locale = 'en-US';
   let commits = 0;
   let rejectDelete = false;
   const interaction = createTextFormFieldInteraction({
-    dateInputOrder: () => dateInputOrder,
+    locale: () => locale,
     container,
     pagesLayer,
     part: () => part,
@@ -80,8 +80,8 @@ function setup(
     rejectDelete: () => {
       rejectDelete = true;
     },
-    setDateOrder: (order: 'mdy' | 'dmy') => {
-      dateInputOrder = order;
+    setLocale: (next: string) => {
+      locale = next;
     },
     selection: () => selection,
     part: () => part,
@@ -307,31 +307,62 @@ test('keyboard movement transfers dirty field ownership to the next field', () =
   }
 });
 
-test('leaving an untouched date applies input order without a no-op history commit', () => {
+test('visiting existing dates after a locale change preserves their value and history', () => {
   const host = setup(true);
   try {
     host.configure({ type: 'date', format: 'MM/dd/yyyy', maxLength: 0, enabled: true }, '1/2/2030');
-    host.setDateOrder('dmy');
-    host.select(0);
-    host.select(20);
+    host.setLocale('en-GB');
     const paragraphId = host.selection().head.paragraphId;
-    expect(paragraphTextOf(host.part(), paragraphId)).toBe('02/01/2030 and Sample');
-    expect(host.commits()).toBe(1);
-    host.select(0);
-    host.select(20);
-    expect(paragraphTextOf(host.part(), paragraphId)).toBe('01/02/2030 and Sample');
-    expect(host.commits()).toBe(2);
-    host.configure(
-      { type: 'date', format: 'yyyy-MM-dd', maxLength: 0, enabled: true },
-      '2030-02-01'
-    );
-    host.select(0);
-    host.select(20);
-    expect(host.commits()).toBe(2);
+    for (let visit = 0; visit < 3; visit++) {
+      host.select(0);
+      host.select(20);
+      expect(paragraphTextOf(host.part(), paragraphId)).toBe('01/02/2030 and Sample');
+      expect(host.commits()).toBe(0);
+    }
   } finally {
     host.cleanup();
   }
 });
+
+for (const [locale, input, output] of [
+  ['en-GB', '1/2/2030', '02/01/2030'],
+  ['pl-PL', '01.02.2030', '02/01/2030'],
+  ['ja-JP', '2030/2/1', '02/01/2030'],
+] as const) {
+  test(`protected date input follows ${locale} and keeps the authored output picture`, () => {
+    const host = setup(true);
+    try {
+      host.configure(
+        { type: 'date', format: 'MM/dd/yyyy', maxLength: 0, enabled: true },
+        '2030-01-02'
+      );
+      host.setLocale(locale);
+      host.select(0, 10);
+      const paragraphId = host.selection().head.paragraphId;
+      host.type({ op: 'deleteText', paragraphId, start: 0, end: 10 });
+      host.select(0);
+      host.type({ op: 'insertText', paragraphId, offset: 0, text: input });
+      // A live locale change must not reinterpret input already being edited.
+      host.setLocale('en-US');
+      host.select(30);
+      expect(paragraphTextOf(host.part(), paragraphId)).toBe(`${output} and Sample`);
+      expect(host.commits()).toBe(1);
+      host.select(0);
+      host.select(30);
+      expect(paragraphTextOf(host.part(), paragraphId)).toBe(`${output} and Sample`);
+      expect(host.commits()).toBe(1);
+      // The next edit adopts the updated locale.
+      host.select(0, 10);
+      host.type({ op: 'deleteText', paragraphId, start: 0, end: 10 });
+      host.select(0);
+      host.type({ op: 'insertText', paragraphId, offset: 0, text: '1/2/2030' });
+      host.select(30);
+      expect(paragraphTextOf(host.part(), paragraphId)).toBe('01/02/2030 and Sample');
+    } finally {
+      host.cleanup();
+    }
+  });
+}
 
 for (const scenario of ['changed type', 'refused deletion'] as const) {
   test(`invalid fill acknowledgement preserves content after ${scenario}`, () => {

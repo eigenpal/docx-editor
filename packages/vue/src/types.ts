@@ -49,12 +49,11 @@ export interface DocxEditorProps {
   zoom?: number;
   zoomMode?: ZoomMode | 'auto';
   /**
-   * Engine locale for engine-generated content, such as the table of contents title.
-   * Changes apply without a remount.
+   * BCP-47 locale for regional date input and engine-generated labels. Defaults to en-US.
+   * Changes apply to subsequent edits without a remount; stored date formats are preserved.
+   * UI translations are supplied separately through i18n.
    */
   locale?: string;
-  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
-  dateInputOrder?: 'mdy' | 'dmy';
   author?: string;
   /** Construction-time capability modules. Later array changes need a remount. */
   modules?: readonly EditorModule[];

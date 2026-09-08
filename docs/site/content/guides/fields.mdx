@@ -138,16 +138,46 @@ Without a numeric format, the default remains verbatim, including text such as `
 Formatted numeric defaults store the formatted value in the DOCX default metadata.
 Reopening an unchanged numeric default preserves its existing input-length limit.
 
-Set `dateInputOrder="dmy"` or `dateInputOrder="mdy"` on the React or Vue editor
-or root component. This setting controls ambiguous slash-date input independently
-of the output format. The default is `mdy`. The demos expose a **Date input** selector.
-Choose the order used by your operating system's short-date setting when comparing Word.
-Browsers cannot read a custom operating-system short-date override from its language alone.
+Set `locale` on the React or Vue editor or root component to select regional date
+input conventions. Use a full BCP-47 tag, such as `en-US`, `en-GB`, or `pl-PL`:
 
-For example, with `dmy`, entering `1/2/2030` means February 1, even when the output
-format is `MM/dd/yyyy`. Unambiguous `12/31/2030` and `31/12/2030` both mean December 31.
+```tsx
+<DocxEditor locale="pl-PL" />
+```
+
+`locale` selects how newly entered dates are interpreted. Each field's authored
+output format still controls its displayed result. With `en-GB`, `1/2/2030` means
+February 1, even when the field displays `MM/dd/yyyy`. With `pl-PL`, `01.02.2030`
+also means February 1. Year-first locales such as `ja-JP` accept `2030/2/1`.
+
+The editor derives Gregorian numeric order and punctuation from
+`Intl.DateTimeFormat.formatToParts()`. It accepts the locale's numeric pattern,
+ASCII digits and the locale's digits, and common slash, dot, or hyphen separators.
+Dates use the Gregorian calendar even if the locale requests another calendar.
+ISO dates (`2030-02-01`) and full English month names are also supported.
+ISO-shaped year-month-day input takes precedence if it conflicts with a regional pattern. Localized
+month names, non-Gregorian input, and arbitrary operating-system date-format overrides
+are not supported. Locale does not change number-field parsing or localize the
+month names in an authored output picture.
+
+For day-first and month-first locales, unambiguous `12/31/2030` and `31/12/2030`
+both mean December 31. Ambiguous dates follow locale; impossible dates are rejected.
 Two-digit years 00–29 mean 2000–2029; 30–99 mean 1930–1999.
-ISO dates and full English month names are also supported.
+
+Omitted, malformed, or runtime-unsupported editor locales fall back to `en-US`,
+independently of the browser or server default. Language-only tags are accepted;
+use a regional tag when the distinction matters. UI strings remain controlled by
+`i18n`. Engine-generated labels use the matching translation catalogue, falling
+back to a compatible language/script catalogue and then to English.
+
+Locale changes apply without a remount. An in-progress field edit keeps the locale
+it started with; later edits use the new locale. Visiting an unchanged field does
+not reparse its displayed date. Saved formatted date defaults retain their output
+picture when reopened under another locale.
+
+For headless form operations, pass `locale` to `setTextFormFieldDefault` or
+`commitTextFormField`. Omission means `en-US`; malformed operation locale values
+are rejected as invalid arguments.
 
 Full parity across Word locales and all input grammars is not established.
 Unsupported syntax remains refused rather than guessed.

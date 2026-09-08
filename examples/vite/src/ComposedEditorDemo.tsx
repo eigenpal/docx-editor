@@ -669,7 +669,6 @@ export function ComposedEditorDemo({ fixtureUrl }: { fixtureUrl: string }) {
           // The demo always opens ready to type: without an explicit mode, a document
           // carrying `w:trackRevisions` opens in suggesting (the Root follows the file).
           mode="edit"
-          dateInputOrder="mdy"
           modules={collaboration.modules}
           {...(fonts ? { fonts } : {})}
           onFontError={(error) => console.warn(`[fonts] ${error.code}: ${error.message}`)}

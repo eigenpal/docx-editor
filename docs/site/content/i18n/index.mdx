@@ -15,6 +15,23 @@ npm install @docx-editor.dev/i18n
 
 You usually do not install this package directly. The adapter installs it as a transitive dependency. Install it explicitly only when you use locale data outside the editor, such as in a custom toolbar or search dropdown.
 
+## Regional date input
+
+The editor's `locale` prop selects regional date input and engine-generated labels;
+`i18n` supplies UI strings. For example, use `locale="pl-PL"` with `i18n={pl}` for
+Polish date input and Polish chrome, or keep English chrome while using `en-GB`
+date input. Full regional tags are preserved independently of catalogue fallback.
+See [form fields](/docs/2.x/guides/fields) for supported date syntax and defaults.
+
+```tsx
+import { DocxEditor } from '@docx-editor.dev/react';
+import { pl } from '@docx-editor.dev/i18n';
+
+<DocxEditor document={bytes} locale="pl-PL" i18n={pl} />;
+```
+
+In Vue, use `locale="pl-PL"` and `:i18n="pl"` on `<DocxEditor>`.
+
 ## Available locales
 
 | Code    | Language             | Named export |

@@ -282,9 +282,9 @@ describe('live host configuration', () => {
       expect(editor.snapshot().parseError).toBeNull();
       let changes = 0;
       editor.on('selectionChange', () => changes++);
-      editor.setLocale('de');
+      editor.setLocale('de-DE');
       expect(changes).toBe(1);
-      editor.setLocale('de');
+      editor.setLocale('de-DE');
       expect(changes).toBe(1);
       expect(editor.exec({ type: 'insertToc' })).toMatchObject({ ok: true, changed: true });
       expect(xmlOf(editor)).toContain('w:alias w:val="Inhaltsverzeichnis"');

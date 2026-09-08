@@ -2860,7 +2860,6 @@ export interface DocxEditorProps {
     colorMode?: 'light' | 'dark' | 'system';
     // (undocumented)
     contextMenu?: boolean | DocxEditorContextMenuProps;
-    dateInputOrder?: 'mdy' | 'dmy';
     // (undocumented)
     document?: DocumentSource;
     // (undocumented)
@@ -2915,10 +2914,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: StringConstructor;
     };
-    dateInputOrder: {
-        default: undefined;
-        type: PropType<"mdy" | "dmy">;
-    };
     document: {
         default: undefined;
         type: PropType<DocumentSource>;
@@ -2970,10 +2965,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         default: undefined;
         type: StringConstructor;
     };
-    dateInputOrder: {
-        default: undefined;
-        type: PropType<"mdy" | "dmy">;
-    };
     document: {
         default: undefined;
         type: PropType<DocumentSource>;
@@ -3020,7 +3011,6 @@ export const DocxEditorRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     onReady?: ((_editor: Editor) => any) | undefined;
 }>, {
     author: string;
-    dateInputOrder: "mdy" | "dmy";
     document: DocumentSource;
     fonts: _docx_editor_dev_core.FontConfiguration | _docx_editor_dev_core.FontConfigurationFragment | _docx_editor_dev_core.FontResolver | undefined;
     imageDecodePort: ImageDecodePort;
@@ -3048,7 +3038,6 @@ export interface DocxEditorRootProps {
     author?: string;
     // (undocumented)
     children?: DocxEditorChildren;
-    dateInputOrder?: 'mdy' | 'dmy';
     // (undocumented)
     document?: DocumentSource;
     // (undocumented)

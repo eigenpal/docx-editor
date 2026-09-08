@@ -111,7 +111,6 @@ export const DocxEditorRoot = defineComponent({
     },
     author: { type: String, default: undefined },
     locale: { type: String, default: undefined },
-    dateInputOrder: { type: String as PropType<'mdy' | 'dmy'>, default: undefined },
     translate: { type: Function as PropType<DocxEditorRootProps['translate']>, default: undefined },
     modules: { type: Array as PropType<readonly EditorModule[]>, default: undefined },
     mode: { type: String as PropType<'edit' | 'view' | 'suggesting'>, default: undefined },

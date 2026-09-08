@@ -1,3 +1,4 @@
+import { createSurfaceDateLocale } from './surface-date-locale.ts';
 import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
 import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
@@ -2899,7 +2900,7 @@ export function mountPaginatedSurface(
    * silently write an untracked edit in suggesting mode — the failure nobody notices until
    * the document has already lost the proposal.
    */
-  let dateInputOrder: 'mdy' | 'dmy' = options.dateInputOrder === 'dmy' ? 'dmy' : 'mdy';
+  const dateLocale = createSurfaceDateLocale(options.locale, flushTypeBuffer);
   let textFormInteraction: ReturnType<typeof createTextFormFieldInteraction> | null = null;
   function applyOps(
     ops: readonly TreeDocOp[],
@@ -2923,6 +2924,7 @@ export function mountPaginatedSurface(
       checkSelection && textFormInteraction ? textFormInteraction.annotate(ops) : ops
     );
     const result = applyJournaledOps(attributed, selectionBefore, selectionAfter, scope);
+    if (checkSelection) textFormInteraction?.afterApply(result.committed);
     if (result.committed && attributed.some(isTrackedEdit)) {
       runtimeOptions.onTrackedChange?.();
     }
@@ -5352,9 +5354,7 @@ export function mountPaginatedSurface(
       flushPendingInputAndLayout();
       render(false);
     },
-    setDateInputOrder: (order) => {
-      dateInputOrder = order === 'dmy' ? 'dmy' : 'mdy';
-    },
+    setLocale: dateLocale.set,
     setTocLabels: (labels) => {
       tocLabels = labels;
     },
@@ -5792,11 +5792,10 @@ export function mountPaginatedSurface(
   function restoreSelection(
     mark: { paragraphId: string; start: number; end: number } | null
   ): void {
-    // Undo and redo go straight to the session rather than through `commit`, so the armed
-    // typing format is retired here. Word discards it on undo, and a history entry can
-    // restore the caret to the exact position it was armed at — which would otherwise leave
-    // it armed against a tree the undo has already replaced.
+    // History restores text, input locale, and selection together. Retire pending typing
+    // formats so the restored caret cannot inherit formatting armed against the old tree.
     pendingFormats = null;
+    textFormInteraction?.restoreAfterHistory();
     // The tree about to be published is not the one the DOM selection was made against, so
     // the flush below must not read it back: offsets in the reverted tree do not correspond
     // to offsets in the one that replaced it.
@@ -5914,7 +5913,7 @@ export function mountPaginatedSurface(
    */
   let pointer: PointerController | null = null;
   textFormInteraction = createTextFormFieldInteraction({
-    dateInputOrder: () => dateInputOrder,
+    locale: dateLocale.get,
     pagesLayer,
     container,
     part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),

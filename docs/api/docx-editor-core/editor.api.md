@@ -823,11 +823,9 @@ export interface DocxEditorConfig {
     // (undocumented)
     author?: string;
     container?: HTMLElement;
-    dateInputOrder?: 'mdy' | 'dmy';
     document?: DocumentSource;
     fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
     imageDecodePort?: ImageDecodePort;
-    // (undocumented)
     locale?: string;
     mode?: 'edit' | 'view' | 'suggesting';
     modules?: readonly EditorModule[];
@@ -856,7 +854,6 @@ export interface DocxEditorInstance extends Editor {
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
-    setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
     setLocale(locale: string | undefined): void;
@@ -1541,7 +1538,6 @@ export interface PaginatedSurface {
     setAllRevisionAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
     setCellSelection(next: CellSelection | null): void;
-    setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
     setDrawingStrings(strings: DrawingPaintStrings): void;
     setEditable(editable: boolean): void;
     // (undocumented)
@@ -1551,6 +1547,7 @@ export interface PaginatedSurface {
         readonly left?: number | null;
         readonly right?: number | null;
     }): boolean;
+    setLocale(locale: string | undefined): void;
     // (undocumented)
     setNoteProperties(args: {
         readonly endnote?: {
@@ -1610,7 +1607,6 @@ export interface PaginatedSurface {
 export interface PaginatedSurfaceOptions {
     readonly author?: string;
     readonly collaborationModel?: CollaborationModuleContribution;
-    readonly dateInputOrder?: 'mdy' | 'dmy';
     readonly defaultFontFamily?: string;
     readonly drawingStrings?: DrawingPaintStrings;
     readonly editingMode?: SurfaceEditingMode;
@@ -1618,6 +1614,7 @@ export interface PaginatedSurfaceOptions {
     readonly fontAlias?: (family: string) => string | undefined;
     readonly hiddenRevisionAuthors?: readonly string[];
     readonly imageDecodePort?: ImageDecodePort;
+    readonly locale?: string;
     // (undocumented)
     readonly measurer?: TextMeasurer;
     // (undocumented)
