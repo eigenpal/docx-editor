@@ -224,6 +224,34 @@ export class Range extends ModelObject implements PromisedItem {
     return created;
   }
 
+  /** DocxEditor extension: propose text before or after this inline range. */
+  proposeInsertion(text: string, where: 'Before' | 'After'): void {
+    const author = this.#proposalAuthor('proposeInsertion');
+    if (where !== 'Before' && where !== 'After') fail({ code: 'InvalidArgument', target: 'where' });
+    const span = this.#span();
+    this.command('proposeInsertion', () => ({ op: 'proposeInsertion', span, text, where, author }));
+  }
+
+  /** DocxEditor extension: preserve this text as a pending Word deletion. */
+  proposeDeletion(): void {
+    const author = this.#proposalAuthor('proposeDeletion');
+    const span = this.#span();
+    this.command('proposeDeletion', () => ({ op: 'proposeDeletion', span, author }));
+  }
+
+  /** DocxEditor extension: atomically propose deleting this text and inserting its replacement. */
+  proposeReplacement(text: string): void {
+    const author = this.#proposalAuthor('proposeReplacement');
+    const span = this.#span();
+    this.command('proposeReplacement', () => ({ op: 'proposeReplacement', span, text, author }));
+  }
+
+  #proposalAuthor(target: string): string {
+    const author = this.internals.author;
+    if (typeof author !== 'string' || !author.trim()) fail({ code: 'NotSupported', target });
+    return author;
+  }
+
   /**
    * Create a top-level comment anchored to exactly this range.
    *

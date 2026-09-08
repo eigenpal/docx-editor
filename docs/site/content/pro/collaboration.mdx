@@ -741,6 +741,46 @@ const runtime = await DocxEditor.createCollaborative(room.document, room.session
 
 Call `room.destroy()` to stop the replica.
 
+## Let a server agent propose redlines
+
+A background worker can join the same Hocuspocus room as the browser peers with
+`role: 'agent'`, then attach `DocxEditor.createCollaborative` as above. The worker
+owns its connection, so closing the initiating browser does not stop its job.
+
+Use the explicit proposal methods to create Word tracked changes:
+
+```ts
+await runtime.run(async (context) => {
+  const range = context.document.body.search('within 7 days').getFirstOrNullObject();
+  await context.sync();
+  if (range.isNullObject) return;
+  range.load('text');
+  await context.sync();
+
+  // Decide from the loaded snapshot; sync refuses if the replica changed meanwhile.
+  range.proposeReplacement('within 30 days');
+  await context.sync();
+});
+```
+
+`proposeInsertion(text, 'Before' | 'After')` and `proposeDeletion()` use the same
+transaction path. Configure a non-empty runtime `author`; ordinary `insertText`
+continues to make ordinary edits. Proposals support inline, single-paragraph
+ranges, including table cells. Touching or overlapping pending revisions refuse;
+resolve those decisions before proposing at their boundaries.
+
+Commit one logical suggestion per sync. Send progress through a separate job/event
+channel, while the collaboration session publishes committed redlines to peers.
+On a stale snapshot, reread and reconsider the edit. A local revision check cannot
+see remote changes that have not reached the worker yet.
+
+The [server agent review example](https://github.com/eigenpal/docx-editor/tree/main/examples/server-agent-review)
+includes a React review room, Hocuspocus persistence, a Node worker, scripted and
+AI modes, snapshot tokens, deduplication, cancellation, and browser-independent
+jobs. It also shows how to wait for outbound transport acknowledgement and clean
+up both the runtime and the room. Browser peers need the review module to display
+and accept or reject suggestions.
+
 ## Compose custom controls
 
 Add custom controls as children of the collaboration root shown in

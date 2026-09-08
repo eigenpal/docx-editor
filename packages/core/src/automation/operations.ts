@@ -220,6 +220,25 @@ export type AutomationOperation =
    * the ones it was planned with. Addressing distinct paragraphs keeps a batch
    * order-independent.
    */
+  /** Explicit inline Word revision, independent of a browser's editing mode. */
+  | {
+      readonly op: 'proposeInsertion';
+      readonly span: AutomationSpanRef;
+      readonly text: string;
+      readonly where: 'Before' | 'After';
+      readonly author: string;
+    }
+  | {
+      readonly op: 'proposeDeletion';
+      readonly span: AutomationSpanRef;
+      readonly author: string;
+    }
+  | {
+      readonly op: 'proposeReplacement';
+      readonly span: AutomationSpanRef;
+      readonly text: string;
+      readonly author: string;
+    }
   | { readonly op: 'insertText'; readonly at: AutomationPoint; readonly text: string }
   /**
    * Replace a span with text, which may be empty — that is how a deletion is spelled.
@@ -851,6 +870,9 @@ export const AUTOMATION_QUERY_OPERATIONS = [
 
 /** Operations that write. Every one of these goes through the single transaction path. */
 export const AUTOMATION_COMMAND_OPERATIONS = [
+  'proposeInsertion',
+  'proposeDeletion',
+  'proposeReplacement',
   'insertText',
   'replaceSpan',
   'replaceStoryBlocks',

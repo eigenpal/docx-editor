@@ -429,13 +429,60 @@ function applyTrackedInsertion(
     return replacedWrapperTotal;
   };
 
+  // A replacement inherits the first replaced run, even when the whole run was struck.
+  // A deletion wrapper is not an ordinary insertion host: at its boundary the generic
+  // placement path has no run properties to borrow, and used to silently drop bold/links'
+  // character styles when the replacement was accepted.
+  const firstRun = (node: OoxmlNode): OoxmlNode | null => {
+    if (node.kind === 'run') return node;
+    if (node.kind === 'textValue') return null;
+    for (const child of node.children) {
+      const found = firstRun(child);
+      if (found) return found;
+    }
+    return null;
+  };
+  const replacedRunIn = (nodes: readonly OoxmlNode[], start = 0): OoxmlNode | null => {
+    for (const node of nodes) {
+      if (node.kind === 'textValue') continue;
+      const end = start + offsets.lengthOf(node);
+      if (
+        start <= aim &&
+        aim <= end &&
+        node.kind === 'revisionDelete' &&
+        deletionId(node) === replaced?.id &&
+        node.attributes.some(
+          (attribute) =>
+            attribute.namespaceUri === WML_NAMESPACE_URI &&
+            attribute.localName === 'author' &&
+            attribute.value === revision.author
+        ) &&
+        revisionDateOf(node) === replaced?.date
+      ) {
+        const run = firstRun(node);
+        if (run) return run;
+      }
+      const nested = replacedRunIn(node.children, start);
+      if (nested) return nested;
+      start = end;
+    }
+    return null;
+  };
+  const replacementRun = replacesThisEdit ? replacedRunIn(paragraph.children) : null;
   const wrap = (properties: readonly OoxmlNode[]): OoxmlNode =>
     build(
       mint(),
       'revisionInsert',
       'ins',
       revisionAttributes(mintedInsertionId(), attribution),
-      payload.nodes ? [runOf(mint, [...properties, ...payload.nodes(mint)])] : [payload.run!(mint)]
+      payload.nodes
+        ? [
+            runOf(mint, [
+              ...(replacementRun ? insertedRunProperties(mint, replacementRun) : properties),
+              ...payload.nodes(mint),
+            ]),
+          ]
+        : [payload.run!(mint)]
     );
 
   const rebuild = (nodes: readonly OoxmlNode[], stack: readonly OoxmlNode[]): OoxmlNode[] => {

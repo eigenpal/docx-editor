@@ -641,6 +641,9 @@ class Range_2 extends ModelObject implements PromisedItem {
     get paragraphs(): ParagraphCollection;
     // @internal
     static promised(context: RequestContext, label: string, nullable: boolean): Range_2;
+    proposeDeletion(): void;
+    proposeInsertion(text: string, where: 'Before' | 'After'): void;
+    proposeReplacement(text: string): void;
     search(searchText: string, options?: SearchOptions): RangeCollection;
     select(selectionMode_?: SelectionMode_2): void;
     get style(): string;

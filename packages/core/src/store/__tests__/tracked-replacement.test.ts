@@ -172,6 +172,28 @@ describe('a replacement', () => {
     );
   });
 
+  test('replacement formatting uses full revision identity despite imported ID collisions', () => {
+    const before = part(
+      `<w:p><w:del w:id="0" w:author="Grace Hopper" w:date="${ADA.date}">` +
+        '<w:r><w:rPr><w:b/></w:rPr><w:delText>ab</w:delText></w:r></w:del><w:r><w:t>cd</w:t></w:r>' +
+        `<w:del w:id="0" w:author="Ada Lovelace" w:date="${ADA.date}">` +
+        '<w:r><w:delText>ef</w:delText></w:r></w:del><w:r><w:t>gh</w:t></w:r></w:p>'
+    );
+    const out = xml(replaced(before, 6, 8, 8, 'X'));
+    expect(out).toMatch(/<w:ins[^>]*><w:r><w:t>X<\/w:t><\/w:r><\/w:ins>/);
+  });
+
+  test('replacement formatting uses the adjacent piece when disconnected revisions share identity', () => {
+    const before = part(
+      `<w:p><w:del w:id="0" w:author="Ada Lovelace" w:date="${ADA.date}">` +
+        '<w:r><w:rPr><w:b/></w:rPr><w:delText>ab</w:delText></w:r></w:del><w:r><w:t>cd</w:t></w:r>' +
+        `<w:del w:id="0" w:author="Ada Lovelace" w:date="${ADA.date}">` +
+        '<w:r><w:delText>ef</w:delText></w:r></w:del><w:r><w:t>gh</w:t></w:r></w:p>'
+    );
+    const out = xml(replaced(before, 6, 8, 8, 'X'));
+    expect(out).toMatch(/<w:ins[^>]*><w:r><w:t>X<\/w:t><\/w:r><\/w:ins>/);
+  });
+
   test("another author's strike under the SAME id does not carry the replacement past it", () => {
     // `@w:id` comes out of the file and nothing makes it unique, so a foreign `w:del` can
     // reuse one. Reading the strike's end by id alone dropped the typed words past text this

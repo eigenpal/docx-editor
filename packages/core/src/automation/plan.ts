@@ -1,8 +1,5 @@
 // What each operation MEANS, as reads off a snapshot and `TreeDocOp`s for one transaction.
-//
-// INTERNAL, and the only place in the lane that decides anything. `host.ts` runs a batch;
-// this file is what a batch is made of. Keeping it separate is not tidiness: the planner is
-// pure with respect to the document — it reads a snapshot and produces ops — so every semantic
+// The planner is pure with respect to the document: it reads a snapshot and produces ops. Every
 // question ("what does inserting a paragraph before another one do to identity", "what does
 // deleting across a paragraph mark leave behind") is answered in one testable place instead of
 // being distributed across two host adapters.
@@ -92,6 +89,7 @@ import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
+import { proposalInputError, proposalRevisionError } from './proposals.ts';
 import { revisionCollectionOps, revisionDecisionTarget } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
@@ -1743,6 +1741,64 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
         const story = storyOfSpanRef(operation.scope, handles, packageReads);
         if (!story.ok) return refuse(story.code, 'that is not a scope to search', story.detail);
         return searchScope(story.value, scope.value, operation.text, operation.options);
+      }
+
+      case 'proposeInsertion':
+      case 'proposeDeletion':
+      case 'proposeReplacement': {
+        const inputError = proposalInputError(operation);
+        if (inputError) return { ok: false, error: inputError };
+        const insertion = operation.op === 'proposeInsertion';
+        const deletion = operation.op === 'proposeDeletion';
+        const resolved = resolveSpanRef(operation.span, handles, packageReads);
+        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
+        const range = resolved.value;
+        if (!range || range.start.paragraphId !== range.end.paragraphId) {
+          return refuse(
+            'unsupported-content',
+            'proposals require a single paragraph range',
+            'span'
+          );
+        }
+        if (!insertion && range.start.offset === range.end.offset) {
+          return refuse(
+            'unsupported-content',
+            'deletion and replacement need a non-empty range',
+            'span'
+          );
+        }
+        const story = storyOfSpanRef(operation.span, handles, packageReads);
+        if (!story.ok) return refuse(story.code, 'that story is not a place', story.detail);
+        const paragraphId = range.start.paragraphId;
+        const start =
+          insertion && operation.where === 'After' ? range.end.offset : range.start.offset;
+        const end = insertion ? start : range.end.offset;
+        const revisionError = proposalRevisionError(story.value, paragraphId, start, end);
+        if (revisionError) return { ok: false, error: revisionError };
+        const plan = planFor(story.value);
+        const pin = pinWrite(plan);
+        if (pin) return pin;
+        // Only one proposal/edit per paragraph per batch: all anchors refer to the snapshot.
+        const conflict = claim(plan, paragraphId);
+        if (conflict) return conflict;
+        const revision = { author: operation.author.trim(), date: new Date().toISOString() };
+        const ops: TreeDocOp[] = [];
+        if (!insertion) ops.push({ op: 'deleteText', paragraphId, start, end, revision });
+        if (!deletion)
+          ops.push({
+            op: 'insertText',
+            paragraphId,
+            offset: insertion ? start : end,
+            text: operation.text,
+            revision,
+          });
+        return {
+          ok: true,
+          kind: 'command',
+          ops,
+          story: story.value.story,
+          answer: () => ({ kind: 'applied' }),
+        };
       }
 
       case 'insertText': {

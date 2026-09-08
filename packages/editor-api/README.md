@@ -177,3 +177,16 @@ Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-ed
 
 > [!TIP]
 > Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
+
+## Explicit redlines on the server
+
+A collaborative server runtime can propose inline Word revisions with
+`range.proposeInsertion(text, 'Before' | 'After')`, `range.proposeDeletion()`, and
+`range.proposeReplacement(text)`. Supply an `author` when opening the runtime, and call
+`context.sync()` to commit. These methods are DocxEditor extensions; ordinary `insertText()`
+continues to make ordinary server edits.
+
+Proposals support one paragraph at a time, including table-cell text, and refuse targets
+touching or overlapping pending revisions. Browser use additionally requires the review module and a
+writable editor. See the [server-agent review example](../../examples/server-agent-review/README.md)
+for the Hocuspocus worker, client setup, stale-read handling, and review lifecycle.
