@@ -1,3 +1,4 @@
+import { renderPopup, type DocxEditorPopup } from './popup-renderer';
 import type { DocxEditorContentControlWidgetProps } from './DocxEditorContentControlWidget';
 import type { DocxEditorInvalidTextFormFieldDialogProps } from './DocxEditorInvalidTextFormFieldDialog';
 import type { DocxEditorImagePropertiesDialogProps } from './images/ImageProperties';
@@ -17,7 +18,6 @@ import {
   type InjectionKey,
   type PropType,
 } from 'vue';
-import type { DocxEditorChildren } from '../docx-editor-children';
 import type { DocxEditorPageSetupDialogProps } from './DocxEditorPageSetup';
 import type { DocxEditorParagraphDialogProps } from './DocxEditorParagraphDialog';
 import type { DocxEditorTextFormFieldDialogProps } from './DocxEditorTextFormFieldDialog';
@@ -29,32 +29,20 @@ import { useTranslation } from '../i18n';
 
 /** Render overrides for automatically hosted editor popups. False disables a popup. @public */
 export interface DocxEditorPopups {
-  contentControlWidget?:
-    | false
-    | ((props: DocxEditorContentControlWidgetProps) => DocxEditorChildren | null);
-  invalidTextFormField?:
-    | false
-    | ((props: DocxEditorInvalidTextFormFieldDialogProps) => DocxEditorChildren | null);
-  imageProperties?:
-    | false
-    | ((props: DocxEditorImagePropertiesDialogProps) => DocxEditorChildren | null);
-  imageAltText?: false | ((props: DocxEditorImageAltTextPopupProps) => DocxEditorChildren | null);
-  noteProperties?:
-    | false
-    | ((props: DocxEditorNotePropertiesDialogProps) => DocxEditorChildren | null);
-  notesContextMenu?:
-    | false
-    | ((props: DocxEditorNotesContextMenuProps) => DocxEditorChildren | null);
-  notePreview?: false | ((props: DocxEditorNotePreviewProps) => DocxEditorChildren | null);
-  pageSetup?: false | ((props: DocxEditorPageSetupDialogProps) => DocxEditorChildren | null);
-  paragraph?: false | ((props: DocxEditorParagraphDialogProps) => DocxEditorChildren | null);
-  textFormField?:
-    | false
-    | ((props: DocxEditorTextFormFieldDialogProps) => DocxEditorChildren | null);
-  hyperlink?: false | ((props: HyperLinkProps) => DocxEditorChildren | null);
-  contentControl?: false | ((props: ContentControlProps) => DocxEditorChildren | null);
-  equation?: false | ((props: Record<string, never>) => DocxEditorChildren | null);
-  contextMenu?: false | ((props: DocxEditorContextMenuProps) => DocxEditorChildren | null);
+  contentControlWidget?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
+  invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
+  imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
+  imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
+  noteProperties?: DocxEditorPopup<DocxEditorNotePropertiesDialogProps>;
+  notesContextMenu?: DocxEditorPopup<DocxEditorNotesContextMenuProps>;
+  notePreview?: DocxEditorPopup<DocxEditorNotePreviewProps>;
+  pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
+  paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
+  textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
+  hyperlink?: DocxEditorPopup<HyperLinkProps>;
+  contentControl?: DocxEditorPopup<ContentControlProps>;
+  equation?: DocxEditorPopup<Record<string, never>>;
+  contextMenu?: DocxEditorPopup<DocxEditorContextMenuProps>;
 }
 const key: InjectionKey<ComputedRef<DocxEditorPopups | undefined>> = Symbol('docx.popups');
 export function usePopupConfig(): ComputedRef<DocxEditorPopups | undefined> {
@@ -85,11 +73,13 @@ export const ConfiguredPopups = defineComponent({
     return () => {
       const popups = config.value;
       return [
-        popups?.hyperlink ? popups.hyperlink({}) : null,
-        popups?.contentControl ? popups.contentControl({}) : null,
-        popups?.equation ? popups.equation({}) : null,
+        popups?.hyperlink ? renderPopup(popups.hyperlink, {}) : null,
+        popups?.contentControl ? renderPopup(popups.contentControl, {}) : null,
+        popups?.equation ? renderPopup(popups.equation, {}) : null,
         popups?.contextMenu
-          ? popups.contextMenu({ t: (key: string) => t(key as Parameters<typeof t>[0]) })
+          ? renderPopup(popups.contextMenu, {
+              t: (key: string) => t(key as Parameters<typeof t>[0]),
+            })
           : null,
       ];
     };
@@ -120,7 +110,7 @@ export function createPackagedPopups(
       explicitContextMenu !== undefined
         ? explicitContextMenu === false
           ? false
-          : (props) => explicitContextMenu({ ...props, t })
+          : (props) => renderPopup(explicitContextMenu, { ...props, t })
         : contextMenu === false
           ? false
           : (props) =>

@@ -112,3 +112,29 @@ for (const asChild of [false, true]) {
     expect(saved).toHaveLength(1);
   });
 }
+
+test('forwarding optional SFC children does not expose a readonly DOM property', async () => {
+  const { DocxEditorPageSetupDialog } = await import('../src/editor/DocxEditorPageSetup');
+  const { defineComponent } = await import('vue');
+  const warnings: string[] = [];
+  const Wrapper = defineComponent({
+    setup: () => () =>
+      h(DocxEditorPageSetupDialog, {
+        open: true,
+        onClose: () => {},
+        children: undefined,
+      }),
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const app = createApp(Wrapper);
+  app.config.warnHandler = (message) => warnings.push(message);
+  app.mount(container);
+  cleanups.push(() => {
+    app.unmount();
+    container.remove();
+  });
+  await nextTick();
+  expect(warnings.filter((message) => message.includes('children'))).toEqual([]);
+  expect(container.querySelector('dialog')?.hasAttribute('children')).toBe(false);
+});

@@ -443,6 +443,7 @@ export type {
   UseDialogReturn,
 } from './editor/dialog-parts';
 export type { DocxEditorPopups } from './editor/popup-config';
+export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';
 export {
   usePageSetupDialog,
   type PageSetupDialogFields,

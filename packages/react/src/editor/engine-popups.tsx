@@ -1,3 +1,4 @@
+import { renderPopup } from './popup-renderer';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ContentControlWidgetSession,
@@ -72,8 +73,12 @@ export function EnginePopups() {
   }, [popups, widget, invalid]);
   return (
     <>
-      {widget && popups?.contentControlWidget && popups.contentControlWidget({ session: widget })}
-      {invalid && popups?.invalidTextFormField && popups.invalidTextFormField({ session: invalid })}
+      {widget &&
+        popups?.contentControlWidget &&
+        renderPopup(popups.contentControlWidget, { session: widget }, widget)}
+      {invalid &&
+        popups?.invalidTextFormField &&
+        renderPopup(popups.invalidTextFormField, { session: invalid }, invalid)}
     </>
   );
 }

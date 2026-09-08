@@ -1,3 +1,4 @@
+import { renderPopup } from '../popup-renderer';
 import { refAsRefObject, type RefObject } from '../../docx-editor-ref-object';
 import { usePopupConfig } from '../popup-config';
 import { defineComponent, ref, watch, type VNode, type PropType } from 'vue';
@@ -117,7 +118,7 @@ export const ImageAltText = defineComponent({
           )}
           {open.value && popups.value?.imageAltText !== false ? (
             popups.value?.imageAltText ? (
-              popups.value.imageAltText(popupProps)
+              renderPopup(popups.value.imageAltText, popupProps)
             ) : (
               <DocxEditorImageAltTextPopup {...popupProps} />
             )

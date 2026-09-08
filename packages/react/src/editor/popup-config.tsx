@@ -10,7 +10,7 @@ import type {
 import type { TranslationKey } from '@docx-editor.dev/i18n';
 import { useTranslation } from '../i18n';
 import { createContext, useContext } from 'react';
-import type { DocxEditorChildren } from '../docx-editor-children';
+import { renderPopup, type DocxEditorPopup } from './popup-renderer';
 import type { DocxEditorPageSetupDialogProps } from './DocxEditorPageSetup';
 import type { DocxEditorParagraphDialogProps } from './DocxEditorParagraphDialog';
 import type { DocxEditorTextFormFieldDialogProps } from './DocxEditorTextFormFieldDialog';
@@ -21,32 +21,20 @@ import { DocxEditorContextMenu, type DocxEditorContextMenuProps } from './contex
 
 /** Render overrides for automatically mounted editor popups. `false` disables automatic rendering. @public */
 export interface DocxEditorPopups {
-  contentControlWidget?:
-    | false
-    | ((props: DocxEditorContentControlWidgetProps) => DocxEditorChildren | null);
-  invalidTextFormField?:
-    | false
-    | ((props: DocxEditorInvalidTextFormFieldDialogProps) => DocxEditorChildren | null);
-  imageProperties?:
-    | false
-    | ((props: DocxEditorImagePropertiesDialogProps) => DocxEditorChildren | null);
-  imageAltText?: false | ((props: DocxEditorImageAltTextPopupProps) => DocxEditorChildren | null);
-  noteProperties?:
-    | false
-    | ((props: DocxEditorNotePropertiesDialogProps) => DocxEditorChildren | null);
-  notePreview?: false | ((props: DocxEditorNotePreviewProps) => DocxEditorChildren | null);
-  notesContextMenu?:
-    | false
-    | ((props: DocxEditorNotesContextMenuProps) => DocxEditorChildren | null);
-  pageSetup?: false | ((props: DocxEditorPageSetupDialogProps) => DocxEditorChildren | null);
-  paragraph?: false | ((props: DocxEditorParagraphDialogProps) => DocxEditorChildren | null);
-  textFormField?:
-    | false
-    | ((props: DocxEditorTextFormFieldDialogProps) => DocxEditorChildren | null);
-  hyperlink?: false | ((props: HyperLinkProps) => DocxEditorChildren | null);
-  contentControl?: false | ((props: ContentControlProps) => DocxEditorChildren | null);
-  equation?: false | ((props: Record<string, never>) => DocxEditorChildren | null);
-  contextMenu?: false | ((props: DocxEditorContextMenuProps) => DocxEditorChildren | null);
+  contentControlWidget?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
+  invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
+  imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
+  imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
+  noteProperties?: DocxEditorPopup<DocxEditorNotePropertiesDialogProps>;
+  notePreview?: DocxEditorPopup<DocxEditorNotePreviewProps>;
+  notesContextMenu?: DocxEditorPopup<DocxEditorNotesContextMenuProps>;
+  pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
+  paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
+  textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
+  hyperlink?: DocxEditorPopup<HyperLinkProps>;
+  contentControl?: DocxEditorPopup<ContentControlProps>;
+  equation?: DocxEditorPopup<Record<string, never>>;
+  contextMenu?: DocxEditorPopup<DocxEditorContextMenuProps>;
 }
 
 const Context = createContext<DocxEditorPopups | undefined>(undefined);
@@ -59,10 +47,11 @@ export function ConfiguredPopups() {
   const { t } = useTranslation();
   return (
     <>
-      {popups?.hyperlink && popups.hyperlink({})}
-      {popups?.contentControl && popups.contentControl({})}
-      {popups?.equation && popups.equation({})}
-      {popups?.contextMenu && popups.contextMenu({ t: (key) => t(key as TranslationKey) })}
+      {popups?.hyperlink && renderPopup(popups.hyperlink, {})}
+      {popups?.contentControl && renderPopup(popups.contentControl, {})}
+      {popups?.equation && renderPopup(popups.equation, {})}
+      {popups?.contextMenu &&
+        renderPopup(popups.contextMenu, { t: (key) => t(key as TranslationKey) })}
     </>
   );
 }
@@ -85,7 +74,8 @@ export function createPackagedPopups(
       popups?.contextMenu !== undefined
         ? popups.contextMenu === false
           ? false
-          : (props) => popups.contextMenu && popups.contextMenu({ ...props, t: t ?? props.t })
+          : (props) =>
+              popups.contextMenu && renderPopup(popups.contextMenu, { ...props, t: t ?? props.t })
         : contextMenu === false
           ? false
           : (props) => (

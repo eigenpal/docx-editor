@@ -4,6 +4,7 @@
 
 ```ts
 
+import { AllowedComponentProps } from 'vue';
 import { CHROME_GROUPS } from '@docx-editor.dev/core/editor';
 import { CHROME_MENUS } from '@docx-editor.dev/core/editor';
 import { ChromeMenu } from '@docx-editor.dev/core/editor';
@@ -16,6 +17,8 @@ import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { Component } from 'vue';
+import { ComponentCustomProps } from 'vue';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import { composeFontOrigins } from '@docx-editor.dev/core/editor';
 import { ComputedRef } from 'vue';
@@ -55,6 +58,7 @@ import { FontResolverMark } from '@docx-editor.dev/core/editor';
 import { FontSource } from '@docx-editor.dev/core/contracts/editor';
 import { FontSourceSubstitution } from '@docx-editor.dev/core/contracts/editor';
 import { FontUrlSource } from '@docx-editor.dev/core/editor';
+import { FunctionalComponent } from 'vue';
 import { generateRulerTicks } from '@docx-editor.dev/core/editor';
 import { ImageDecodePort } from '@docx-editor.dev/core/editor';
 import { ImageWrapTarget } from '@docx-editor.dev/core/editor';
@@ -110,6 +114,7 @@ import { TranslationKey } from '@docx-editor.dev/i18n';
 import { Translations } from '@docx-editor.dev/i18n';
 import { ViewScope } from '@docx-editor.dev/core/contracts/editor';
 import { VNode } from 'vue';
+import { VNodeProps } from 'vue';
 import * as vue from 'vue';
 import * as vue_jsx_runtime from 'vue/jsx-runtime';
 import { WORD_DEFAULT_FONT } from '@docx-editor.dev/core/editor';
@@ -2004,6 +2009,13 @@ export { createFontSource }
 export { defineFontResolver }
 
 // @public
+export function definePopup<C extends Component | FunctionalComponent<never>>(component: C): (props: C extends new (...args: never[]) => {
+    $props: infer P;
+} ? Omit<P, {
+    [K in keyof P]-?: K extends keyof (VNodeProps & AllowedComponentProps & ComponentCustomProps) ? {} extends Pick<P, K> ? (VNodeProps & AllowedComponentProps & ComponentCustomProps)[K] extends P[K] ? K : never : never : never;
+}[keyof P]> : C extends (props: infer P, ...args: never[]) => unknown ? P : never) => DocxEditorChildren;
+
+// @public
 export interface DialogCustomizationProps {
     // (undocumented)
     children?: DocxEditorChildren;
@@ -3181,6 +3193,7 @@ export interface DocxEditorPageNumberProps {
 // @public
 export const DocxEditorPageSetupDialog: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
         className: {
             default: undefined;
             type: StringConstructor;
@@ -3209,6 +3222,7 @@ export const DocxEditorPageSetupDialog: {
         M: {};
         P: {};
     }, Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
         className: {
             default: undefined;
             type: StringConstructor;
@@ -3234,6 +3248,7 @@ export const DocxEditorPageSetupDialog: {
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
     className: {
         default: undefined;
         type: StringConstructor;
@@ -3271,6 +3286,7 @@ export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps
 // @public
 export const DocxEditorParagraphDialog: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
         className: {
             default: undefined;
             type: StringConstructor;
@@ -3299,6 +3315,7 @@ export const DocxEditorParagraphDialog: {
         M: {};
         P: {};
     }, Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
         className: {
             default: undefined;
             type: StringConstructor;
@@ -3324,6 +3341,7 @@ export const DocxEditorParagraphDialog: {
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
     className: {
         default: undefined;
         type: StringConstructor;
@@ -3359,35 +3377,38 @@ export interface DocxEditorParagraphDialogProps extends DialogCustomizationProps
 }
 
 // @public
+export type DocxEditorPopup<P extends object> = false | ((props: P) => DocxEditorChildren | null);
+
+// @public
 export interface DocxEditorPopups {
     // (undocumented)
-    contentControl?: false | ((props: ContentControlProps) => DocxEditorChildren | null);
+    contentControl?: DocxEditorPopup<ContentControlProps>;
     // (undocumented)
-    contentControlWidget?: false | ((props: DocxEditorContentControlWidgetProps) => DocxEditorChildren | null);
+    contentControlWidget?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
     // (undocumented)
-    contextMenu?: false | ((props: DocxEditorContextMenuProps) => DocxEditorChildren | null);
+    contextMenu?: DocxEditorPopup<DocxEditorContextMenuProps>;
     // (undocumented)
-    equation?: false | ((props: Record<string, never>) => DocxEditorChildren | null);
+    equation?: DocxEditorPopup<Record<string, never>>;
     // (undocumented)
-    hyperlink?: false | ((props: HyperLinkProps) => DocxEditorChildren | null);
+    hyperlink?: DocxEditorPopup<HyperLinkProps>;
     // (undocumented)
-    imageAltText?: false | ((props: DocxEditorImageAltTextPopupProps) => DocxEditorChildren | null);
+    imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
     // (undocumented)
-    imageProperties?: false | ((props: DocxEditorImagePropertiesDialogProps) => DocxEditorChildren | null);
+    imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
     // (undocumented)
-    invalidTextFormField?: false | ((props: DocxEditorInvalidTextFormFieldDialogProps) => DocxEditorChildren | null);
+    invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
     // (undocumented)
-    notePreview?: false | ((props: DocxEditorNotePreviewProps) => DocxEditorChildren | null);
+    notePreview?: DocxEditorPopup<DocxEditorNotePreviewProps>;
     // (undocumented)
-    noteProperties?: false | ((props: DocxEditorNotePropertiesDialogProps) => DocxEditorChildren | null);
+    noteProperties?: DocxEditorPopup<DocxEditorNotePropertiesDialogProps>;
     // (undocumented)
-    notesContextMenu?: false | ((props: DocxEditorNotesContextMenuProps) => DocxEditorChildren | null);
+    notesContextMenu?: DocxEditorPopup<DocxEditorNotesContextMenuProps>;
     // (undocumented)
-    pageSetup?: false | ((props: DocxEditorPageSetupDialogProps) => DocxEditorChildren | null);
+    pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
     // (undocumented)
-    paragraph?: false | ((props: DocxEditorParagraphDialogProps) => DocxEditorChildren | null);
+    paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
     // (undocumented)
-    textFormField?: false | ((props: DocxEditorTextFormFieldDialogProps) => DocxEditorChildren | null);
+    textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
 }
 
 // @public
@@ -3626,6 +3647,7 @@ export const DocxEditorShell: DocxEditorNamespace;
 // @public
 export const DocxEditorTextFormFieldDialog: {
     new (...args: any[]): vue.CreateComponentPublicInstanceWithMixins<Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
         className: StringConstructor;
         preset: {
             default: boolean;
@@ -3647,6 +3669,7 @@ export const DocxEditorTextFormFieldDialog: {
         M: {};
         P: {};
     }, Readonly<vue.ExtractPropTypes<{
+        children: PropType<DocxEditorChildren>;
         className: StringConstructor;
         preset: {
             default: boolean;
@@ -3665,6 +3688,7 @@ export const DocxEditorTextFormFieldDialog: {
     __isTeleport?: never;
     __isSuspense?: never;
 } & vue.ComponentOptionsBase<Readonly<vue.ExtractPropTypes<{
+    children: PropType<DocxEditorChildren>;
     className: StringConstructor;
     preset: {
         default: boolean;

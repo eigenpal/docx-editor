@@ -1,14 +1,104 @@
 ---
 title: 'Customize popups'
-description: 'Style parts, replace controls, and arrange dialogs in React and Vue.'
+description: 'Use your components to customize editor popups in React and Vue.'
 category: 'Guides'
 ---
 
-Pass `popups` to the editor or `Root` to customize automatic editor overlays.
-Each entry accepts a renderer or `false` for manual ownership. Renderers return
-components; call hooks inside those components.
+Pass `popups` to the editor or `Root`. Use `definePopup(MyPopup)` to supply
+an ordinary React component or Vue single-file component. The editor opens it
+and supplies its typed props. Forward those props to the default component to
+retain its state, validation, and commands.
 
-| Entry                    | Renderer props                             |
+## Replace a button
+
+These examples replace **Apply** in Page Setup. You do not need to manage its
+opening state or create a session.
+
+<FrameworkTabs>
+<Framework value="react">
+
+```tsx
+import { DocxEditor, definePopup } from '@docx-editor.dev/react';
+import type { DocxEditorPageSetupDialogProps, DocxEditorPopups } from '@docx-editor.dev/react';
+import '@docx-editor.dev/core/styles/editor.css';
+
+function PageSetup(props: DocxEditorPageSetupDialogProps) {
+  return (
+    <DocxEditor.PageSetupDialog {...props}>
+      <DocxEditor.PageSetupDialog.Apply asChild>
+        <button className="app-apply">Apply changes</button>
+      </DocxEditor.PageSetupDialog.Apply>
+    </DocxEditor.PageSetupDialog>
+  );
+}
+
+const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
+
+export function Editor({ document }: { document: ArrayBuffer }) {
+  return <DocxEditor document={document} popups={popups} />;
+}
+```
+
+</Framework>
+<Framework value="vue">
+
+Create `PageSetup.vue`:
+
+```vue
+<script setup lang="ts">
+import { DocxEditorPageSetupDialog as Dialog } from '@docx-editor.dev/vue';
+import type { DocxEditorPageSetupDialogProps } from '@docx-editor.dev/vue';
+
+const props = withDefaults(defineProps<DocxEditorPageSetupDialogProps>(), {
+  preset: true,
+});
+const Apply = Dialog.Apply;
+</script>
+
+<template>
+  <Dialog v-bind="props">
+    <Apply as-child>
+      <button class="app-apply">Apply changes</button>
+    </Apply>
+  </Dialog>
+</template>
+```
+
+Keep `preset: true` when forwarding Vue props; omitted Boolean props otherwise
+become `false`. Register the component in your editor:
+
+```vue
+<script setup lang="ts">
+import { DocxEditor, definePopup } from '@docx-editor.dev/vue';
+import type { DocxEditorPopups } from '@docx-editor.dev/vue';
+import PageSetup from './PageSetup.vue';
+import '@docx-editor.dev/core/styles/editor.css';
+
+defineProps<{ document: ArrayBuffer }>();
+const popups: DocxEditorPopups = { pageSetup: definePopup(PageSetup) };
+</script>
+
+<template>
+  <DocxEditor :document="document" :popups="popups" />
+</template>
+```
+
+</Framework>
+</FrameworkTabs>
+
+Custom button components must forward refs, attributes, and listeners to their
+native button. Preserve the supplied handler and disabled state.
+
+Render callbacks also work: `pageSetup: (props) => <PageSetup {...props} />` in
+React, or `pageSetup: (props) => h(PageSetup, props)` in Vue. Call hooks inside
+components, not render callbacks.
+
+## Choose a popup
+
+Each entry accepts a `definePopup()` result, render callback, or `false`.
+Props match the surface; dialogs, menus, and value widgets retain distinct contracts.
+
+| Entry                    | Supplied props                             |
 | ------------------------ | ------------------------------------------ |
 | `pageSetup`, `paragraph` | Controlled dialog props: `open`, `onClose` |
 | `textFormField`          | `{ session: TextFormFieldDialogSession }`  |
@@ -24,161 +114,47 @@ components; call hooks inside those components.
 | `contentControlWidget`   | `{ session: ContentControlWidgetSession }` |
 | `invalidTextFormField`   | `{ session: InvalidTextFormFieldSession }` |
 
-The packaged editor supplies its default popups. `Root` mounts configured surfaces;
-image and note overrides use their existing triggers. Omitted entries retain
-existing behavior, including native widget and invalid-field dialogs.
-An explicit entry, including `false`, overrides `menu.onPageSetup`,
-`hyperlinkPopup`, or `contextMenu` shortcuts.
+Omitted entries retain existing behavior, including native widget and invalid-field
+dialogs. The packaged editor supplies defaults. `Root` mounts configured surfaces;
+image and note overrides use their existing triggers. Explicit entries override
+`menu.onPageSetup`, `hyperlinkPopup`, and `contextMenu` shortcuts.
 
-Session renderers follow the supplied abort signal. Widget sessions expose
-`value`, `items`, `anchor`, `canApply()`, `apply(value)`, and `cancel()`.
-Invalid-field sessions expose `acknowledge()` to handle the invalid fill and
-`cancel()` to close without clearing it. Custom renderers retain core validation.
-`locale` controls regional date input; `i18n` controls UI strings. See
-[Date input and UI language](/docs/2.x/guides/fields#date-input-and-ui-language).
+For manual ownership, use `false` and mount the surface yourself. You then own its
+trigger and visibility. Ordinary component customization does not need this option.
+Toolbar menus and pickers use their existing compound `.Content` parts, outside this map.
 
-Use `false` when you mount the surface yourself. You also own its trigger and
-visibility; controlled dialogs need your own `open` state and close handler.
-Toolbar menus and pickers retain their existing compound `.Content` customization;
-they are not entries in `popups`.
+## Arrange parts and custom fields
 
-Run the [React example](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)
-or [Vue example](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)
-with `?dialogs=1` to try two themed editors with custom dialog and link controls.
+Page Setup, Paragraph Options, and Field Options expose `Header`, `Title`, `Body`,
+`Footer`, `Apply`, `Cancel`, `Error`, and typed `Field` parts. Parts accept
+`className`, `style`, `hidden`, and `asChild`. Other popups retain their existing parts.
 
-## Replace a button
+Named children replace default parts. Use `hidden` to remove a part or
+`preset={false}` to supply the complete arrangement. Include a title, error region,
+and accessible Apply and Cancel controls. Omitted fields retain their draft values.
 
-Forward renderer props to the matching component. Page Setup, Paragraph Options,
-and Field Options expose `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`,
-`Error`, and typed `Field` parts. Parts accept `className`, `style`, `hidden`, and
-`asChild`. Other popups retain their existing compound parts.
-
-These examples replace **Apply** while keeping its command wiring:
-
-<FrameworkTabs>
-<Framework value="react">
-
-```tsx
-import { DocxEditor } from '@docx-editor.dev/react';
-import type { DocxEditorPopups } from '@docx-editor.dev/react';
-import '@docx-editor.dev/core/styles/editor.css';
-
-const popups: DocxEditorPopups = {
-  pageSetup: (props) => (
-    <DocxEditor.PageSetupDialog {...props}>
-      <DocxEditor.PageSetupDialog.Apply asChild>
-        <button className="app-apply">Apply changes</button>
-      </DocxEditor.PageSetupDialog.Apply>
-    </DocxEditor.PageSetupDialog>
-  ),
-};
-
-export function Editor({ document }: { document: ArrayBuffer }) {
-  return <DocxEditor document={document} popups={popups} />;
-}
-```
-
-</Framework>
-<Framework value="vue">
-
-```vue
-<script setup lang="ts">
-import { h } from 'vue';
-import { DocxEditor, DocxEditorPageSetupDialog } from '@docx-editor.dev/vue';
-import type { DocxEditorPopups } from '@docx-editor.dev/vue';
-import '@docx-editor.dev/core/styles/editor.css';
-
-defineProps<{ document: ArrayBuffer }>();
-const popups: DocxEditorPopups = {
-  pageSetup: (props) =>
-    h(DocxEditorPageSetupDialog, props, {
-      default: () =>
-        h(
-          DocxEditorPageSetupDialog.Apply,
-          { asChild: true },
-          {
-            default: () => h('button', { class: 'app-apply' }, 'Apply changes'),
-          }
-        ),
-    }),
-};
-</script>
-
-<template>
-  <DocxEditor :document="document" :popups="popups" />
-</template>
-```
-
-</Framework>
-</FrameworkTabs>
-
-Custom button components must forward refs, attributes, and listeners to their
-native button. Preserve the supplied handler and disabled state.
-
-## Arrange parts
-
-With `preset={true}`, named children replace matching default parts. Use `hidden`
-to remove a part. Set `preset={false}` to supply the complete content arrangement.
-Keep a title, error region, and accessible Apply and Cancel controls.
-
-For example, replace the React callback with this arrangement:
-
-```tsx
-const Dialog = DocxEditor.PageSetupDialog;
-const popups: DocxEditorPopups = {
-  pageSetup: (props) => (
-    <Dialog {...props} preset={false}>
-      <Dialog.Header>
-        <Dialog.Title />
-      </Dialog.Header>
-      <Dialog.Body>
-        <Dialog.Field name="orientation" />
-        <Dialog.Field name="pageSize" />
-      </Dialog.Body>
-      <Dialog.Footer>
-        <Dialog.Error />
-        <Dialog.Cancel />
-        <Dialog.Apply />
-      </Dialog.Footer>
-    </Dialog>
-  ),
-};
-```
-
-In Vue, pass the same parts through the dialog's default slot with
-`:preset="false"`. For a complete example, see the Vue demo linked earlier.
-
-Omitted controls retain their draft values. `Field` names are typed.
 Page Setup's `pageSize` part is its size selector. Paragraph's `tabStops` part
-contains the complete collection control; `specialBy` appears when relevant.
+contains the collection control; `specialBy` appears when relevant.
 
-## Connect custom fields
+For custom value controls, call `usePageSetupDialog()`, `useParagraphDialog()`, or
+`useTextFormFieldDialog()` inside a child of the matching dialog. Each supplies
+`values`, `setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.
+Vue exposes state as refs. Use these draft APIs instead of creating another form session.
 
-Call `usePageSetupDialog()`, `useParagraphDialog()`, or `useTextFormFieldDialog()`
-inside a child of the corresponding dialog. Each provides `values`,
-`setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.
-Vue exposes state as refs; use `.value` in JavaScript.
-
-Use `setValue` for drafts and `apply` for validated writes. A refused write keeps
-the dialog open. Show errors in an accessible region. Paragraph also exposes
-mixed-selection state. Page Setup dimensions and margins use twips: 1,440 per inch.
-
-A `Field` represents the labeled row. Supply a custom labeled input as its child.
-`asChild` replaces the row element; it does not translate value-change events.
-For exact types, see [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
-[Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts).
+A `Field` represents the labeled row; `asChild` does not adapt input value events.
+Page Setup dimensions use twips: 1,440 per inch. Paragraph also exposes mixed-selection state.
+See [React hooks](/docs/2.x/react/hooks#dialog-draft-contexts) or
+[Vue composables](/docs/2.x/vue/composables#dialog-draft-contexts) for types.
 
 ## Style and accessibility
 
-Import your application stylesheet after the core stylesheet. Dialogs inherit
-`--doc-*` colors. Optional tokens are `--doc-dialog-font-family`,
-`--doc-dialog-font-size`, `--doc-dialog-radius`, `--doc-dialog-padding`, and
-`--doc-dialog-gap`. Unset tokens retain each part's default: 13 px body text, 16 px headings,
-an 8 px panel radius, and 16 px × 20 px body padding.
+Import your stylesheet after the core stylesheet. Dialogs inherit `--doc-*` colors.
+Optional tokens are `--doc-dialog-font-family`, `--doc-dialog-font-size`,
+`--doc-dialog-radius`, `--doc-dialog-padding`, and `--doc-dialog-gap`.
 
 Use `data-docx-dialog` values `pageSetup`, `paragraph`, or `textFormField`.
 `data-docx-part` uses lowercase part names; fields also expose `data-docx-field`.
-For example, style the replacement button without `!important`:
+For example, style your replacement without `!important`:
 
 ```css
 .docx-editor [data-docx-dialog='pageSetup'] .app-apply {
@@ -187,11 +163,15 @@ For example, style the replacement button without `!important`:
 }
 ```
 
-Automatic dialogs mount within their editor's theme scope, outside editable
-content. For external portals or Vue `Teleport`, provide the theme at the
-destination. Framework context does not transfer CSS inheritance.
+Automatic dialogs inherit their editor's theme. For external portals or Vue
+`Teleport`, provide the theme at the destination; framework context does not transfer CSS inheritance.
+Preserve labels, keyboard behavior, and input-method composition on custom controls.
 
-The native shell contains focus, handles Escape, and restores focus to a surviving
-opener without scrolling. Page Setup and Paragraph Options dismiss on outside
-clicks; Field Options does not. Preserve labels, keyboard behavior, and input-method
-composition when you replace controls.
+For a complete session renderer, follow its abort signal and use its supplied
+actions. Widget sessions validate through `apply(value)`. Invalid-field sessions
+use `acknowledge()` to handle the invalid fill, or `cancel()` to dismiss without clearing it.
+`locale` controls regional dates; `i18n` controls UI strings.
+
+Run the [React example](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)
+or [Vue example](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)
+with `?dialogs=1` to try two themed editors with custom dialog and link controls.

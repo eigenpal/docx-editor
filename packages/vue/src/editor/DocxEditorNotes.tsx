@@ -1,3 +1,4 @@
+import { renderPopup } from './popup-renderer';
 import { usePopupConfig } from './popup-config';
 import {
   DocxEditorNotePreview,
@@ -643,21 +644,21 @@ export const DocxEditorNotesChrome = defineComponent({
 
           preview.value && popups.value?.notePreview !== false ? (
             popups.value?.notePreview ? (
-              popups.value.notePreview(preview.value)
+              renderPopup(popups.value.notePreview, preview.value)
             ) : (
               <DocxEditorNotePreview {...preview.value} />
             )
           ) : null,
           menuProps && popups.value?.notesContextMenu !== false ? (
             popups.value?.notesContextMenu ? (
-              popups.value.notesContextMenu(menuProps)
+              renderPopup(popups.value.notesContextMenu, menuProps)
             ) : (
               <DocxEditorNotesContextMenu {...menuProps} />
             )
           ) : null,
           propsOpen.value && popups.value?.noteProperties !== false ? (
             popups.value?.noteProperties ? (
-              popups.value.noteProperties(propertiesProps)
+              renderPopup(popups.value.noteProperties, propertiesProps)
             ) : (
               <DocxEditorNotePropertiesDialog {...propertiesProps} />
             )

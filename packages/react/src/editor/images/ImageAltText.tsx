@@ -1,3 +1,4 @@
+import { renderPopup } from '../popup-renderer';
 import { usePopupConfig } from '../popup-config';
 import type { RefObject } from '../../docx-editor-ref-object';
 import type { DocxEditorChildren } from '../../docx-editor-children';
@@ -108,7 +109,7 @@ export function ImageAltText({ className, hidden, asChild, children }: ImageAltT
       )}
       {open && popups?.imageAltText !== false ? (
         popups?.imageAltText ? (
-          popups.imageAltText(popupProps)
+          renderPopup(popups.imageAltText, popupProps)
         ) : (
           <DocxEditorImageAltTextPopup {...popupProps} />
         )

@@ -1,3 +1,4 @@
+import { renderPopup } from './popup-renderer';
 import { defineComponent, shallowRef, watch } from 'vue';
 import type {
   ContentControlWidgetSession,
@@ -86,10 +87,10 @@ export const ConfiguredEnginePopups = defineComponent({
     );
     return () => [
       widget.value && config.value?.contentControlWidget
-        ? config.value.contentControlWidget({ session: widget.value })
+        ? renderPopup(config.value.contentControlWidget, { session: widget.value }, widget.value)
         : null,
       invalid.value && config.value?.invalidTextFormField
-        ? config.value.invalidTextFormField({ session: invalid.value })
+        ? renderPopup(config.value.invalidTextFormField, { session: invalid.value }, invalid.value)
         : null,
     ];
   },

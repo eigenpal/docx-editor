@@ -1,3 +1,4 @@
+import { definePopup } from '../src/editor/popup-renderer';
 // DocxEditor.ContentControl — inspector, remove, accessibility, focus preservation.
 //
 // Against the REAL engine: a mounted document with an SDT, caret inside it, live query
@@ -439,7 +440,7 @@ describe('content-control authoring surface', () => {
   });
 });
 
-for (const mode of ['native', 'custom', 'manual'] as const) {
+for (const mode of ['native', 'custom', 'component', 'manual'] as const) {
   test(`value widget ownership: ${mode}`, async () => {
     let manual: ContentControlWidgetSession | undefined;
     let editor: DocxEditorInstance | undefined;
@@ -468,7 +469,9 @@ for (const mode of ['native', 'custom', 'manual'] as const) {
               ? undefined
               : mode === 'manual'
                 ? false
-                : (props) => <DocxEditorContentControlWidget {...props} />,
+                : mode === 'component'
+                  ? definePopup(DocxEditorContentControlWidget)
+                  : (props) => <DocxEditorContentControlWidget {...props} />,
         }}
       >
         <DocxEditorViewport>
@@ -491,7 +494,7 @@ for (const mode of ['native', 'custom', 'manual'] as const) {
       mode === 'native' ? 1 : 0
     );
     expect(view.container.querySelectorAll('[data-docx-popup="contentControlWidget"]').length).toBe(
-      mode === 'custom' ? 1 : 0
+      mode === 'custom' || mode === 'component' ? 1 : 0
     );
     if (mode === 'manual') {
       expect(manual !== undefined).toBe(true);
@@ -501,7 +504,7 @@ for (const mode of ['native', 'custom', 'manual'] as const) {
       });
       expect(editor!.surface!.session.bodyText()).toContain('Two');
     }
-    if (mode === 'custom') {
+    if (mode === 'custom' || mode === 'component') {
       const select = view.getByRole('combobox') as HTMLSelectElement;
       expect(select.value).toBe('1');
       expect(document.activeElement === select).toBe(true);

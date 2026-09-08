@@ -1,3 +1,4 @@
+import { renderPopup } from './popup-renderer';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { DocxEditorPopups } from './popup-config';
@@ -87,19 +88,19 @@ export function DialogProvider({
   const content =
     active === 'pageSetup' && popups?.pageSetup !== false ? (
       popups?.pageSetup ? (
-        popups.pageSetup(props)
+        renderPopup(popups.pageSetup, props)
       ) : (
         <DocxEditorPageSetupDialog {...props} />
       )
     ) : active === 'paragraph' && popups?.paragraph !== false ? (
       popups?.paragraph ? (
-        popups.paragraph(props)
+        renderPopup(popups.paragraph, props)
       ) : (
         <DocxEditorParagraphDialog {...props} />
       )
     ) : session && popups?.textFormField !== false ? (
       popups?.textFormField ? (
-        popups.textFormField({ session })
+        renderPopup(popups.textFormField, { session }, session)
       ) : (
         <DocxEditorTextFormFieldDialog session={session} />
       )

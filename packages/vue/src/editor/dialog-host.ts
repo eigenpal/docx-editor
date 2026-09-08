@@ -1,3 +1,4 @@
+import { renderPopup } from './popup-renderer';
 import { useEditorState } from './useEditorState';
 import {
   defineComponent,
@@ -116,17 +117,21 @@ export const DialogHost = defineComponent({
         ? h(Teleport, { to: host.target.value }, [
             host.active.value === 'pageSetup' && p.popups?.pageSetup !== false
               ? p.popups?.pageSetup
-                ? p.popups.pageSetup({ open: true, onClose: host.close })
+                ? renderPopup(p.popups.pageSetup, { open: true, onClose: host.close })
                 : h(DocxEditorPageSetupDialog, { open: true, onClose: host.close })
               : null,
             host.active.value === 'paragraph' && p.popups?.paragraph !== false
               ? p.popups?.paragraph
-                ? p.popups.paragraph({ open: true, onClose: host.close })
+                ? renderPopup(p.popups.paragraph, { open: true, onClose: host.close })
                 : h(DocxEditorParagraphDialog, { open: true, onClose: host.close })
               : null,
             host.session.value && p.popups?.textFormField !== false
               ? p.popups?.textFormField
-                ? p.popups.textFormField({ session: host.session.value })
+                ? renderPopup(
+                    p.popups.textFormField,
+                    { session: host.session.value },
+                    host.session.value
+                  )
                 : h(DocxEditorTextFormFieldDialog, { session: host.session.value })
               : null,
           ])

@@ -1,3 +1,5 @@
+import { definePopup } from '../src/editor/popup-renderer';
+import { renderPopup } from '../src/editor/popup-renderer';
 import './dom-setup.ts';
 import { afterEach, expect, test } from 'bun:test';
 import { createApp, h, nextTick, ref } from 'vue';
@@ -147,7 +149,122 @@ test('explicit context menu receives editor translation without legacy options',
     () => 'editor'
   ).contextMenu;
   if (!config) throw new Error('Expected custom renderer');
-  const node = config({ t: () => 'catalog' });
+  const node = renderPopup(config, { t: () => 'catalog' });
   expect(node?.children).toBe('editor');
   expect(received).not.toHaveProperty('className');
+});
+
+test('component adapters retain setup state across recreated maps and isolate editors', async () => {
+  const { defineComponent, onUnmounted } = await import('vue');
+  const { useDocxEditor: editorContext } = await import('../src/editor/context');
+  const revision = ref(0);
+  const disabled = ref(false);
+  const owners: unknown[] = [];
+  let setups = 0;
+  let unmounts = 0;
+  const Custom = defineComponent({
+    setup() {
+      setups++;
+      const editor = editorContext();
+      const count = ref(0);
+      onUnmounted(() => unmounts++);
+      return () =>
+        h(
+          'button',
+          {
+            'data-component-popup': '',
+            onClick: () => {
+              owners.push(editor.value);
+              count.value++;
+            },
+          },
+          String(count.value)
+        );
+    },
+  });
+  const container = document.createElement('div');
+  document.body.append(container);
+  const app = createApp({
+    render: () =>
+      [0, 1].map((key) =>
+        h(DocxEditor, {
+          key,
+          document: SOURCE,
+          className: `revision-${revision.value}`,
+          hyperlinkPopup: false,
+          popups: { hyperlink: disabled.value ? false : definePopup(Custom) },
+        })
+      ),
+  });
+  app.mount(container);
+  cleanups.push(() => {
+    app.unmount();
+    container.remove();
+  });
+  await flush();
+  const buttons = container.querySelectorAll<HTMLButtonElement>('[data-component-popup]');
+  expect(buttons.length).toBe(2);
+  expect(setups).toBe(2);
+  buttons[0]!.click();
+  await nextTick();
+  revision.value++;
+  await flush();
+  expect(container.querySelector('[data-component-popup]')).toBe(buttons[0]);
+  expect(buttons[0]!.textContent).toBe('1');
+  expect(buttons[1]!.textContent).toBe('0');
+  expect(setups).toBe(2);
+  buttons[1]!.click();
+  expect(owners[0]).not.toBeNull();
+  expect(owners[1]).not.toBe(owners[0]);
+  disabled.value = true;
+  await nextTick();
+  expect(container.querySelector('[data-component-popup]')).toBeNull();
+  expect(unmounts).toBe(2);
+});
+
+test('session replacement resets custom component drafts while map recreation preserves them', async () => {
+  const { defineComponent, shallowRef } = await import('vue');
+  const session = shallowRef({ value: 'First' });
+  let setups = 0;
+  const Custom = defineComponent({
+    props: { session: { type: Object, required: true } },
+    setup(props) {
+      setups++;
+      const draft = ref(props.session.value);
+      return () =>
+        h('input', {
+          value: draft.value,
+          onInput: (e: Event) => {
+            draft.value = (e.target as HTMLInputElement).value;
+          },
+        });
+    },
+  });
+  const revision = ref(0);
+  const container = document.createElement('div');
+  document.body.append(container);
+  const app = createApp({
+    render: () => {
+      revision.value;
+      return renderPopup(definePopup(Custom), { session: session.value }, session.value);
+    },
+  });
+  app.mount(container);
+  cleanups.push(() => {
+    app.unmount();
+    container.remove();
+  });
+  const input = container.querySelector('input')!;
+  input.value = 'Draft';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  revision.value++;
+  await nextTick();
+  expect(container.querySelector('input')).toBe(input);
+  expect(input.value).toBe('Draft');
+  expect(setups).toBe(1);
+  session.value = { value: 'Second' };
+  await nextTick();
+  expect(container.querySelector('input')).not.toBe(input);
+  expect(container.querySelector('input')!.value).toBe('Second');
+  expect(setups).toBe(2);
 });

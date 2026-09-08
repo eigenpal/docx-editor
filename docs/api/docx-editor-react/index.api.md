@@ -16,6 +16,7 @@ import { ChromeMenuSubmenuEntry } from '@docx-editor.dev/core/editor';
 import { ChromeSlotId } from '@docx-editor.dev/core/editor';
 import { ColorValue } from '@docx-editor.dev/core/contracts/editor';
 import { commandForSlot } from '@docx-editor.dev/core/editor';
+import { ComponentType } from 'react';
 import { composeFontConfiguration } from '@docx-editor.dev/core/editor';
 import { composeFontOrigins } from '@docx-editor.dev/core/editor';
 import { ContentControlSummary } from '@docx-editor.dev/core';
@@ -355,6 +356,9 @@ export interface ContextMenuTableRowProps extends ContextMenuCommandProps {
 export { createFontSource }
 
 export { defineFontResolver }
+
+// @public
+export function definePopup<Props extends object>(component: ComponentType<Props>): (props: Props) => DocxEditorChildren;
 
 // @public
 export interface DialogCustomizationProps {
@@ -940,35 +944,38 @@ export interface DocxEditorParagraphDialogProps extends DialogCustomizationProps
 }
 
 // @public
+export type DocxEditorPopup<Props extends object> = false | ((props: Props) => DocxEditorChildren | null);
+
+// @public
 export interface DocxEditorPopups {
     // (undocumented)
-    contentControl?: false | ((props: ContentControlProps) => DocxEditorChildren | null);
+    contentControl?: DocxEditorPopup<ContentControlProps>;
     // (undocumented)
-    contentControlWidget?: false | ((props: DocxEditorContentControlWidgetProps) => DocxEditorChildren | null);
+    contentControlWidget?: DocxEditorPopup<DocxEditorContentControlWidgetProps>;
     // (undocumented)
-    contextMenu?: false | ((props: DocxEditorContextMenuProps) => DocxEditorChildren | null);
+    contextMenu?: DocxEditorPopup<DocxEditorContextMenuProps>;
     // (undocumented)
-    equation?: false | ((props: Record<string, never>) => DocxEditorChildren | null);
+    equation?: DocxEditorPopup<Record<string, never>>;
     // (undocumented)
-    hyperlink?: false | ((props: HyperLinkProps) => DocxEditorChildren | null);
+    hyperlink?: DocxEditorPopup<HyperLinkProps>;
     // (undocumented)
-    imageAltText?: false | ((props: DocxEditorImageAltTextPopupProps) => DocxEditorChildren | null);
+    imageAltText?: DocxEditorPopup<DocxEditorImageAltTextPopupProps>;
     // (undocumented)
-    imageProperties?: false | ((props: DocxEditorImagePropertiesDialogProps) => DocxEditorChildren | null);
+    imageProperties?: DocxEditorPopup<DocxEditorImagePropertiesDialogProps>;
     // (undocumented)
-    invalidTextFormField?: false | ((props: DocxEditorInvalidTextFormFieldDialogProps) => DocxEditorChildren | null);
+    invalidTextFormField?: DocxEditorPopup<DocxEditorInvalidTextFormFieldDialogProps>;
     // (undocumented)
-    notePreview?: false | ((props: DocxEditorNotePreviewProps) => DocxEditorChildren | null);
+    notePreview?: DocxEditorPopup<DocxEditorNotePreviewProps>;
     // (undocumented)
-    noteProperties?: false | ((props: DocxEditorNotePropertiesDialogProps) => DocxEditorChildren | null);
+    noteProperties?: DocxEditorPopup<DocxEditorNotePropertiesDialogProps>;
     // (undocumented)
-    notesContextMenu?: false | ((props: DocxEditorNotesContextMenuProps) => DocxEditorChildren | null);
+    notesContextMenu?: DocxEditorPopup<DocxEditorNotesContextMenuProps>;
     // (undocumented)
-    pageSetup?: false | ((props: DocxEditorPageSetupDialogProps) => DocxEditorChildren | null);
+    pageSetup?: DocxEditorPopup<DocxEditorPageSetupDialogProps>;
     // (undocumented)
-    paragraph?: false | ((props: DocxEditorParagraphDialogProps) => DocxEditorChildren | null);
+    paragraph?: DocxEditorPopup<DocxEditorParagraphDialogProps>;
     // (undocumented)
-    textFormField?: false | ((props: DocxEditorTextFormFieldDialogProps) => DocxEditorChildren | null);
+    textFormField?: DocxEditorPopup<DocxEditorTextFormFieldDialogProps>;
 }
 
 // @public

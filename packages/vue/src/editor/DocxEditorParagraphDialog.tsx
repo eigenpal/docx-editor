@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
 // The Paragraph dialog — the Vue twin of the React part. Alignment, indentation with its
 // Special/By pair, spacing with its line-spacing rule and value, and the flags. The whole
 // form is written back as ONE `setParagraphFormat` on OK, so the dialog is a single undo
@@ -64,6 +65,7 @@ export interface DocxEditorParagraphDialogProps extends DialogCustomizationProps
 const ParagraphDialogImpl = defineComponent({
   name: 'DocxEditorParagraphDialog',
   props: {
+    children: Object as PropType<DocxEditorChildren>,
     open: { type: Boolean, required: true },
     onClose: { type: Function as PropType<() => void>, required: true },
     className: { type: String, default: undefined },
@@ -731,7 +733,13 @@ const ParagraphDialogImpl = defineComponent({
             }
             if (paragraph.isEnabled.value) handleApply();
           }}
-          content={() => renderParts(defaults, slots.default?.() ?? [], props.preset)}
+          content={() =>
+            renderParts(
+              defaults,
+              slots.default?.() ?? (props.children ? [props.children] : []),
+              props.preset
+            )
+          }
         />
       );
     };

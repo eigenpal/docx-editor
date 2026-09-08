@@ -468,3 +468,5 @@ export {
   DocxEditorInvalidTextFormFieldDialog,
   type DocxEditorInvalidTextFormFieldDialogProps,
 } from './editor/DocxEditorInvalidTextFormFieldDialog';
+
+export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';

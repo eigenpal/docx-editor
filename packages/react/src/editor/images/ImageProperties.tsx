@@ -1,3 +1,4 @@
+import { renderPopup } from '../popup-renderer';
 import { usePopupConfig } from '../popup-config';
 // Image properties dialog — one atomic `setImageProperties` on Apply.
 
@@ -873,7 +874,7 @@ export function ImagePropertiesTrigger({
       )}
       {open && popups?.imageProperties !== false ? (
         popups?.imageProperties ? (
-          popups.imageProperties({ open, onClose: () => setOpen(false), triggerRef })
+          renderPopup(popups.imageProperties, { open, onClose: () => setOpen(false), triggerRef })
         ) : (
           <DocxEditorImagePropertiesDialog
             open={open}

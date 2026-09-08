@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
 import { useEditorState } from './useEditorState';
 import {
   Fragment,
@@ -40,6 +41,7 @@ export interface DocxEditorTextFormFieldDialogProps extends DialogCustomizationP
 const Impl = defineComponent({
   name: 'DocxEditorTextFormFieldDialog',
   props: {
+    children: Object as PropType<DocxEditorChildren>,
     session: { type: Object as PropType<TextFormFieldDialogSession | null>, default: null },
     preset: { type: Boolean, default: true },
     className: String,
@@ -245,7 +247,9 @@ const Impl = defineComponent({
               apply();
             }
           }}
-          content={() => renderParts(defaults, slots.default?.() ?? [], p.preset)}
+          content={() =>
+            renderParts(defaults, slots.default?.() ?? (p.children ? [p.children] : []), p.preset)
+          }
         />
       );
     };

@@ -1,3 +1,5 @@
+import { definePopup } from '@docx-editor.dev/react';
+import type { ComponentProps } from 'react';
 import {
   DocxEditor,
   DocxEditorPageSetupDialog,
@@ -8,8 +10,8 @@ import {
 import type { DocxEditorPopups } from '@docx-editor.dev/react';
 import '../../shared/dialog-customization.css';
 
-const popups: DocxEditorPopups = {
-  hyperlink: (props) => (
+function CustomHyperlink(props: ComponentProps<typeof DocxEditorHyperLink>) {
+  return (
     <DocxEditorHyperLink {...props}>
       <DocxEditorHyperLink.Edit asChild>
         <button className="brand-dialog-button">Edit link</button>
@@ -19,28 +21,44 @@ const popups: DocxEditorPopups = {
       </DocxEditorHyperLink.Apply>
       <DocxEditorHyperLink.Copy hidden />
     </DocxEditorHyperLink>
-  ),
-  pageSetup: (props) => (
+  );
+}
+
+function CustomPageSetup(props: ComponentProps<typeof DocxEditorPageSetupDialog>) {
+  return (
     <DocxEditorPageSetupDialog {...props}>
       <DocxEditorPageSetupDialog.Apply asChild>
         <button className="brand-dialog-button">Save settings</button>
       </DocxEditorPageSetupDialog.Apply>
     </DocxEditorPageSetupDialog>
-  ),
-  paragraph: (props) => (
+  );
+}
+
+function CustomParagraph(props: ComponentProps<typeof DocxEditorParagraphDialog>) {
+  return (
     <DocxEditorParagraphDialog {...props}>
       <DocxEditorParagraphDialog.Apply asChild>
         <button className="brand-dialog-button">Save settings</button>
       </DocxEditorParagraphDialog.Apply>
     </DocxEditorParagraphDialog>
-  ),
-  textFormField: (props) => (
+  );
+}
+
+function CustomTextFormField(props: ComponentProps<typeof DocxEditorTextFormFieldDialog>) {
+  return (
     <DocxEditorTextFormFieldDialog {...props}>
       <DocxEditorTextFormFieldDialog.Apply asChild>
         <button className="brand-dialog-button">Save settings</button>
       </DocxEditorTextFormFieldDialog.Apply>
     </DocxEditorTextFormFieldDialog>
-  ),
+  );
+}
+
+const popups: DocxEditorPopups = {
+  hyperlink: definePopup(CustomHyperlink),
+  pageSetup: definePopup(CustomPageSetup),
+  paragraph: definePopup(CustomParagraph),
+  textFormField: definePopup(CustomTextFormField),
 };
 /** Two independently themed editors using the same custom button. */
 export function DialogCustomizationDemo() {

@@ -1,3 +1,4 @@
+import { renderPopup } from '../popup-renderer';
 import { usePopupConfig } from '../popup-config';
 import { computed, defineComponent, nextTick, ref, watch, type PropType } from 'vue';
 import type { DocxEditorChildren } from '../../docx-editor-children';
@@ -909,7 +910,7 @@ export const ImagePropertiesTrigger = defineComponent({
             <button {...shared}>{slots.default?.() ?? chromeIcon(control?.paths)}</button>
           )}
           {popups.value?.imageProperties === false ? null : popups.value?.imageProperties ? (
-            popups.value.imageProperties({
+            renderPopup(popups.value.imageProperties, {
               open: open.value,
               onClose: () => {
                 open.value = false;

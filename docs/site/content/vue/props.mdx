@@ -268,10 +268,10 @@ Use `snapshot()` for a synchronous state read.
 
 ## `popups`
 
-Configure automatic overlays with typed renderer callbacks or `false` for manual
-ownership. Entries cover dialogs, hyperlinks, images, notes, content controls,
-equations, validation messages, and context menus. Explicit entries override legacy popup shortcuts. For callback props
-and defaults, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+Use `definePopup(MyPopup)` to customize an automatic popup with your component.
+Forward its typed props to the default component to retain editor behavior.
+Render callbacks also work. Use `false` only when you own the trigger and visibility.
+For supported surfaces and defaults, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 
 ## Next steps
 

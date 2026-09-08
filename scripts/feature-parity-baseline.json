@@ -246,13 +246,13 @@
         "pageHeightTwips",
         "pageWidthTwips"
       ],
-      "propsAddedInVue": ["className", "name", "preset", "props", "style"],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorParagraphDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["className", "name", "preset", "props", "style"],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -290,7 +290,7 @@
     },
     "editor/DocxEditorTextFormFieldDialog": {
       "propsAddedInReact": [],
-      "propsAddedInVue": ["className", "name", "preset", "props", "style"],
+      "propsAddedInVue": ["children", "className", "name", "preset", "props", "style"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },

@@ -1,3 +1,4 @@
+import { renderPopup } from './popup-renderer';
 import { usePopupConfig } from './popup-config';
 import {
   DocxEditorNotePreview,
@@ -364,14 +365,14 @@ export function DocxEditorNotesChrome({
 
       {preview && popups?.notePreview !== false ? (
         popups?.notePreview ? (
-          popups.notePreview(preview)
+          renderPopup(popups.notePreview, preview)
         ) : (
           <DocxEditorNotePreview {...preview} />
         )
       ) : null}
       {menuProps && popups?.notesContextMenu !== false ? (
         popups?.notesContextMenu ? (
-          popups.notesContextMenu(menuProps)
+          renderPopup(popups.notesContextMenu, menuProps)
         ) : (
           <DocxEditorNotesContextMenu {...menuProps} />
         )
@@ -379,7 +380,7 @@ export function DocxEditorNotesChrome({
 
       {propsOpen && popups?.noteProperties !== false ? (
         popups?.noteProperties ? (
-          popups.noteProperties(propertiesProps)
+          renderPopup(popups.noteProperties, propertiesProps)
         ) : (
           <DocxEditorNotePropertiesDialog {...propertiesProps} />
         )

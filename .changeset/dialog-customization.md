@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': minor
 ---
 
-Add a unified popup customization API for React and Vue, including composable Field Options, Page Setup, and Paragraph Options dialogs, typed widget sessions, and explicit rendering ownership. Fixes #771.
+Customize React and Vue popups with ordinary components through `definePopup()` or with typed render callbacks. Use existing parts and draft hooks to retain automatic behavior, or disable automatic rendering for manual ownership. Includes composable Page Setup, Paragraph Options, and Field Options dialogs. Fixes #771.

@@ -452,10 +452,9 @@ const [open, setOpen] = useState(false);
 The dialog and `usePageSetup()` use the same engine command.
 
 Page Setup, Paragraph Options, and legacy text Field Options expose replaceable
-parts and dialog draft contexts. Pass `popups` to the editor or `Root` to customize
-automatically opened instances. For examples, see
-[Customize popups](/docs/2.x/guides/customize-dialogs).
-Use that hook to build a custom form.
+parts and draft contexts. Import `definePopup` from `@docx-editor.dev/react`.
+Set `popups.pageSetup` to `definePopup(MyPopup)` on the editor or `Root`.
+For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
 
 ## Content-control panel
 

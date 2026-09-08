@@ -1,3 +1,4 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
 import {
   Fragment,
   computed,
@@ -76,6 +77,7 @@ export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps
 const PageSetupDialogImpl = defineComponent({
   name: 'DocxEditorPageSetupDialog',
   props: {
+    children: Object as PropType<DocxEditorChildren>,
     open: { type: Boolean, required: true },
     onClose: { type: Function as PropType<() => void>, required: true },
     className: { type: String, default: undefined },
@@ -320,7 +322,13 @@ const PageSetupDialogImpl = defineComponent({
               handleApply();
             }
           }}
-          content={() => renderParts(defaults, slots.default?.() ?? [], props.preset)}
+          content={() =>
+            renderParts(
+              defaults,
+              slots.default?.() ?? (props.children ? [props.children] : []),
+              props.preset
+            )
+          }
         />
       );
     };
