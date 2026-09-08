@@ -180,6 +180,8 @@ Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-ed
 
 ## Office-shaped redlines on the server
 
+Start with the [Office.js developer guide](https://github.com/eigenpal/docx-editor/blob/main/packages/editor-api/OFFICE_JS_GUIDE.md) for a complete server example and batching conventions.
+
 Set `document.changeTrackingMode = 'TrackMineOnly'`, then use standard Word editing methods.
 Supply the agent's `author` when opening the server or collaborative runtime:
 

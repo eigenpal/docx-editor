@@ -36,6 +36,19 @@ Extend the pinned Office.js reference, conformance fixtures, and runtime tests w
 Keep host creation, collaboration transport, and job orchestration separate from the Office-shaped document model.
 These infrastructure APIs have no Office.js equivalent. Do not claim full Office.js compatibility from subset conformance.
 
+### Office.js developer experience
+
+- Load only the properties needed. Use explicit property names in examples.
+- Batch independent loads and writes. Keep `context.sync()` outside per-item read loops.
+- Use an explicit final `await context.sync()` when commands remain queued.
+- Keep proxies within their `run()` lifetime. Pass plain data to models and job queues.
+- Explain intentional sync boundaries for progressive, separately reviewable suggestions.
+- Handle stable error codes. On stale reads, re-read and reconsider; never blindly replay model edits.
+- Make supported host and operation limits visible in types, JSDoc, examples, and compatibility documentation.
+- Never disable tracking automatically to make an unsupported tracked edit succeed.
+
+Use `packages/editor-api/OFFICE_JS_GUIDE.md` as the reference for agent-facing examples.
+
 ## Packages
 
 One engine. Thin chrome on top.

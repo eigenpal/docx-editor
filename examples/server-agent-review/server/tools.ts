@@ -67,7 +67,7 @@ export function createReviewTools(
     options.progress('Reading the current document');
     const page = await runtime.run(async (context) => {
       const paragraphs = context.document.body.paragraphs;
-      paragraphs.load();
+      paragraphs.load('items');
       await context.sync();
       const items = paragraphs.items.slice(start, start + count);
       for (const paragraph of items) paragraph.load(['text', 'uniqueLocalId']);
@@ -103,11 +103,11 @@ export function createReviewTools(
     try {
       const result = await runtime.run(async (context) => {
         const matches = context.document.body.search(input.quote, { matchCase: true });
-        matches.load();
+        matches.load('items');
         await context.sync();
         if (matches.items.length > 100)
           return { ok: false, code: 'ambiguous-anchor', message: 'Use a longer quote.' };
-        for (const match of matches.items) match.paragraphs.load();
+        for (const match of matches.items) match.paragraphs.load('items');
         await context.sync();
         for (const match of matches.items)
           for (const p of match.paragraphs.items) p.load(['text', 'uniqueLocalId']);

@@ -75,7 +75,7 @@ try {
     const matches = context.document.body.search('may terminate immediately', {
       matchCase: true,
     });
-    matches.load();
+    matches.load('items');
     await context.sync();
     if (matches.items.length !== 1) throw new Error('Choose a unique target');
 
@@ -100,6 +100,15 @@ These public methods follow Office.js shape. Supply an `author` and enable `Trac
 The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is explicitly unsupported,
 as are structural or formatting mutations while tracking. Other peers keep their own editing mode.
 The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
+
+## Office.js developer patterns
+
+Follow the [Office.js guide](../../packages/editor-api/OFFICE_JS_GUIDE.md) for explicit property loads,
+batched reads, proxy lifetimes, error handling, and the supported tracking subset.
+
+The worker batches paragraph loads before each `sync()`. It reads only the requested page's text and identity.
+It serializes tool calls and commits one completed suggestion at a time. These write boundaries intentionally
+make each suggestion visible and reviewable; they are not per-item read round trips.
 
 ## Client integration
 

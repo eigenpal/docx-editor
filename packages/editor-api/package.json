@@ -39,6 +39,7 @@
     "dist",
     "!dist/metafile-*.json",
     "LICENSE.md",
+    "OFFICE_JS_GUIDE.md",
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
