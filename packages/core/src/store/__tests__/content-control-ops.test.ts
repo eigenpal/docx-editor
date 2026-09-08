@@ -991,6 +991,22 @@ describe('setContentControlValue', () => {
     expect(attributeOfV2(list, 'lastValue')).toBe('custom');
   });
 
+  test('combo keeps four-digit hexadecimal text unchanged', () => {
+    const part = loadV2(
+      '<w:sdt><w:sdtPr><w:comboBox/></w:sdtPr>' +
+        '<w:sdtContent><w:p><w:r><w:t>old</w:t></w:r></w:p></w:sdtContent></w:sdt>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: '2612',
+    });
+    expect(collectTextV2(childNamedV2(findContentControl(next, control.id)!, 'sdtContent')!)).toBe(
+      '2612'
+    );
+  });
+
   test('checkbox toggles w14:checked and rewrites the glyph', () => {
     const part = loadV2(
       '<w:p><w:sdt><w:sdtPr><w14:checkbox>' +
@@ -1023,6 +1039,31 @@ describe('setContentControlValue', () => {
       return null;
     };
     expect(attributeOfV2(walk(findContentControl(next, control.id)!)!, 'char')).toBe('2612');
+  });
+
+  test('checkbox writes a fontless state code point as Unicode text', () => {
+    const part = loadV2(
+      '<w:p><w:sdt><w:sdtPr><w14:checkbox>' +
+        '<w14:checked w14:val="0"/>' +
+        '<w14:checkedState w14:val="2612"/>' +
+        '<w14:uncheckedState w14:val="2610"/>' +
+        '</w14:checkbox></w:sdtPr>' +
+        '<w:sdtContent><w:r><w:t>☐</w:t></w:r></w:sdtContent>' +
+        '</w:sdt></w:p>'
+    );
+    const control = firstSdtV2(part);
+    const next = applyV2(part, {
+      op: 'setContentControlValue',
+      controlId: control.id,
+      value: 'true',
+    });
+    const updated = findContentControl(next, control.id)!;
+    const content = childNamedV2(updated, 'sdtContent')!;
+    const xml = serializeOoxmlPart(next);
+    expect(collectTextV2(content)).toBe('☒');
+    expect(xml).toContain('<w:t>☒</w:t>');
+    expect(xml).not.toContain('<w:t>2612</w:t>');
+    expect(xml).not.toContain('<w:sym');
   });
 
   test('date writes fullDate and formatted display text', () => {

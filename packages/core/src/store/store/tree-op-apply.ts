@@ -2211,7 +2211,13 @@ function applySetContentControlValue(
       });
       const glyph = checked ? payload.checkedGlyph : payload.uncheckedGlyph;
       const font = checked ? payload.checkedFont : payload.uncheckedFont;
-      setTextContent(glyph, font);
+      // A fontless checkbox state still stores a hexadecimal Unicode code point. Decode it
+      // here, so four-digit text in another content-control type stays unchanged.
+      const display =
+        !font && /^[0-9A-Fa-f]{4}$/.test(glyph)
+          ? String.fromCodePoint(Number.parseInt(glyph, 16))
+          : glyph;
+      setTextContent(display, font);
       break;
     }
     case 'date': {
