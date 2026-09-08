@@ -11,9 +11,10 @@ export function textFormFieldDialog(
   container: HTMLElement,
   field: TextFormFieldRange,
   save: (text: string, options: TextFormFieldOptions) => boolean,
-  close: () => void
+  close: () => void,
+  translate?: ReturnType<typeof createT>
 ): HTMLDialogElement {
-  const t = createT(en);
+  const t = translate ?? createT(en);
   const document = container.ownerDocument;
   const panel = document.createElement('dialog');
   panel.className = 'docx-text-form-dialog';
@@ -131,7 +132,7 @@ export function textFormFieldDialog(
   };
   apply.addEventListener('click', submit);
   panel.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {
+    if (event.key === 'Enter' && !event.isComposing && event.target instanceof HTMLInputElement) {
       event.preventDefault();
       submit();
     }

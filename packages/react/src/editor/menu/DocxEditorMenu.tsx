@@ -1,3 +1,4 @@
+import { useDialogHost } from '../dialog-host';
 import type { DocxEditorChildren } from '../../docx-editor-children';
 import type { ReactNode } from 'react';
 // The compound menu bar: File · Format · Insert · Review · Help, derived FROM the chrome registry.
@@ -156,6 +157,7 @@ function menuOfChild(child: ReactNode): ChromeMenuId | null {
 }
 
 function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
+  const dialogs = useDialogHost();
   // Skip the scope class when the packaged wrapper already carries it.
   const scopeClassName = useScopeClassName();
   const {
@@ -229,7 +231,16 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       });
   }, [editor, fileName, openedName]);
 
-  const packagedPageSetup = useCallback(() => setPageSetupOpen(true), []);
+  const packagedPageSetup = useCallback(
+    () =>
+      dialogs
+        ? dialogs.open(
+            'pageSetup',
+            rootRef.current?.querySelector<HTMLElement>('[data-menu="file"] > [role="menuitem"]')
+          )
+        : setPageSetupOpen(true),
+    [dialogs]
+  );
 
   // The resolved actions, host override first. Each is undefined without an editor, which
   // is what disables the row before the document is ready.
@@ -278,7 +289,15 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       onOpen: resolvedOpen,
       onSave: resolvedSave,
       onPageSetup: resolvedPageSetup,
-      onParagraphDialog: () => setParagraphDialogOpen(true),
+      onParagraphDialog: () =>
+        dialogs
+          ? dialogs.open(
+              'paragraph',
+              rootRef.current?.querySelector<HTMLElement>(
+                '[data-menu="format"] > [role="menuitem"]'
+              )
+            )
+          : setParagraphDialogOpen(true),
       onReportIssue,
       reportIssue,
     }),
@@ -290,6 +309,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
       resolvedOpen,
       resolvedSave,
       resolvedPageSetup,
+      dialogs,
       onReportIssue,
       reportIssue,
     ]

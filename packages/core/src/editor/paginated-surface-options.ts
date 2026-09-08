@@ -116,6 +116,11 @@ export interface PaginatedSurfaceOptions {
    * rather than doing something surprising with it.
    */
   readonly onRequestHyperlink?: () => void;
+  /** Return true when host chrome handles this session. */
+  readonly onRequestTextFormField?: (
+    session: import('./text-form-field-session.ts').TextFormFieldDialogSession
+  ) => boolean;
+  readonly textFormFieldTranslate?: (key: string) => string;
   /**
    * Localized accessible names for core-owned table insertion furniture.
    * Defaults to English from `@docx-editor.dev/i18n` when omitted.

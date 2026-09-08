@@ -1,3 +1,4 @@
+import { DialogProvider, type DocxEditorDialogs } from './dialog-host';
 import type { DocxEditorChildren } from '../docx-editor-children';
 // Provider-first host for the docx editor facade.
 //
@@ -59,6 +60,8 @@ import {
  * @public
  */
 export interface DocxEditorRootProps {
+  /** Customize dialogs opened by editor controls. */
+  dialogs?: DocxEditorDialogs;
   /** A document to load: DOCX bytes, `'blank'` for an empty one, or an existing handle.
    * Identity change remounts; `'blank'` is a constant, so holding it across renders does
    * not. Omitting this mounts NO document, which is not the same as an empty one. */
@@ -435,11 +438,13 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
             {/* ONE link-popover state per editor, published here so a TOOLBAR button and the
                 popover panel — which are siblings, not ancestor and descendant — see the same
                 open/closed state and only one of them registers with the engine's gestures. */}
-            <HyperlinkPopupProvider>
-              <ContentControlProvider>
-                <ImageInsertProvider>{children}</ImageInsertProvider>
-              </ContentControlProvider>
-            </HyperlinkPopupProvider>
+            <DialogProvider dialogs={props.dialogs}>
+              <HyperlinkPopupProvider>
+                <ContentControlProvider>
+                  <ImageInsertProvider>{children}</ImageInsertProvider>
+                </ContentControlProvider>
+              </HyperlinkPopupProvider>
+            </DialogProvider>
           </RevisionStyleRegistryContext.Provider>
         </NavigationLayoutContext.Provider>
       </DocxEditorContext.Provider>

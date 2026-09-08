@@ -10,10 +10,10 @@ if you find yourself at the bottom of this page, open an issue rather than livin
 
 ## 1. Props on the parts
 
-Every packaged control is a compound with the same contract: render it with no children and
-you get the default arrangement; a child that names one of its members **replaces that member
-in place**; `hidden` removes it; `preset={false}` starts from nothing; and there is a part for
-adding something the library does not model.
+Packaged compounds expose named parts. Render a compound without children to use
+its default arrangement. A named child replaces the corresponding part in place.
+Use `hidden` to remove a part and `preset={false}` to supply your own arrangement.
+The available parts depend on the component.
 
 ```tsx
 <DocxEditor.Toolbar>
@@ -27,11 +27,14 @@ adding something the library does not model.
 The same shape applies to `DocxEditor.Menu`, `DocxEditor.ContextMenu` and
 `DocxEditor.Navigation`.
 
+Page Setup, Paragraph Options, and legacy text Field Options also expose named
+parts. Use the editor's `dialogs` configuration for automatically opened instances.
+See [Customize dialogs](site/content/guides/customize-dialogs.mdx) for React and Vue examples.
+
 ### Prefer your own classes over styling ours
 
-Every compound exposes its internals as statics, and every part takes a `className`. So
-instead of writing CSS against our class names, **compose the parts and hang your own class
-on each one**:
+Use the documented part statics and their `className` props to attach your own
+classes. For example:
 
 ```tsx
 <DocxEditor.Navigation className="my-nav" toggle={{ className: 'my-nav__toggle' }}>
@@ -57,20 +60,25 @@ props: `toggle={{ className }}`. `menu` and `contextMenu` on `<DocxEditor>` acce
 
 **What you can pass**
 
-| Prop | Where | Notes |
-| --- | --- | --- |
-| `icon` | toolbar parts, menu rows, menu triggers, colour splits, context-menu rows | Any `ReactNode`. ~18px inline SVG matches the packaged controls |
-| `t` | any compound | Your i18n resolver. Without it the raw keys render, never English |
-| `preset={false}` | any compound | Renders your children verbatim, in your order |
-| `hidden` | any packaged part | Removes it from the default arrangement |
-| `className` | every part | Appended after the load-bearing classes |
-| `label`, `onSelect`, `disabled`, `disabledReason` | `Toolbar.Action`, `ContextMenu.Item`, `Menu.Row` | Host-owned actions |
+| Prop                                              | Where                                                                     | Notes                                                             |
+| ------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `icon`                                            | toolbar parts, menu rows, menu triggers, colour splits, context-menu rows | Any `ReactNode`. ~18px inline SVG matches the packaged controls   |
+| `t`                                               | any compound                                                              | Your i18n resolver. Without it the raw keys render, never English |
+| `preset={false}`                                  | any compound                                                              | Renders your children verbatim, in your order                     |
+| `hidden`                                          | any packaged part                                                         | Removes it from the default arrangement                           |
+| `className`                                       | every part                                                                | Appended after the load-bearing classes                           |
+| `label`, `onSelect`, `disabled`, `disabledReason` | `Toolbar.Action`, `ContextMenu.Item`, `Menu.Row`                          | Host-owned actions                                                |
 
 **Host actions still ask the engine.** A control the registry does not describe has no
 enabled state of its own — but you can borrow the engine's:
 
 ```tsx
-const { isEnabled, disabledReason } = useEditorCommand({ type: 'setMarkAttr', mark: 'highlight', attr: 'val', value: 'cyan' });
+const { isEnabled, disabledReason } = useEditorCommand({
+  type: 'setMarkAttr',
+  mark: 'highlight',
+  attr: 'val',
+  value: 'cyan',
+});
 ```
 
 `useEditorCommand` takes a `ChromeSlotId` **or** a raw `EditorCommand`, so your own action
@@ -99,23 +107,23 @@ pane alone, and nothing else in the app changes.
 
 ### The palette
 
-| Token | Paints |
-| --- | --- |
-| `--doc-surface` | Panels, menus, dropdowns, cards |
-| `--doc-card` | Comment and suggestion cards |
-| `--doc-bg` | The workspace behind the page |
-| `--doc-bg-subtle`, `--doc-bg-input` | Section backgrounds, input fields |
-| `--doc-bg-hover` | Hover states — **and** the navigation toggle's resting plate |
-| `--doc-primary`, `--doc-primary-hover`, `--doc-primary-light` | Accent, selected states |
-| `--doc-accent`, `--doc-accent-bg` | Secondary accent |
-| `--doc-on-primary` | Text on an accent fill |
-| `--doc-text`, `--doc-text-muted`, `--doc-text-subtle`, `--doc-text-placeholder` | Text ramp. The rulers draw their ticks in the last two |
-| `--doc-border`, `--doc-border-light`, `--doc-border-dark`, `--doc-border-input` | Rules and outlines |
-| `--doc-link` | Hyperlinks in chrome |
-| `--doc-error`, `--doc-success`, `--doc-warning` (+ `-bg`) | Status |
-| `--doc-focus-ring`, `--doc-selection` | Focus and selection |
-| `--doc-shadow`, `--doc-shadow-strong`, `--doc-shadow-subtle`, `--doc-shadow-lg` | Elevation |
-| `--doc-overlay` | Modal backdrops |
+| Token                                                                           | Paints                                                       |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `--doc-surface`                                                                 | Panels, menus, dropdowns, cards                              |
+| `--doc-card`                                                                    | Comment and suggestion cards                                 |
+| `--doc-bg`                                                                      | The workspace behind the page                                |
+| `--doc-bg-subtle`, `--doc-bg-input`                                             | Section backgrounds, input fields                            |
+| `--doc-bg-hover`                                                                | Hover states — **and** the navigation toggle's resting plate |
+| `--doc-primary`, `--doc-primary-hover`, `--doc-primary-light`                   | Accent, selected states                                      |
+| `--doc-accent`, `--doc-accent-bg`                                               | Secondary accent                                             |
+| `--doc-on-primary`                                                              | Text on an accent fill                                       |
+| `--doc-text`, `--doc-text-muted`, `--doc-text-subtle`, `--doc-text-placeholder` | Text ramp. The rulers draw their ticks in the last two       |
+| `--doc-border`, `--doc-border-light`, `--doc-border-dark`, `--doc-border-input` | Rules and outlines                                           |
+| `--doc-link`                                                                    | Hyperlinks in chrome                                         |
+| `--doc-error`, `--doc-success`, `--doc-warning` (+ `-bg`)                       | Status                                                       |
+| `--doc-focus-ring`, `--doc-selection`                                           | Focus and selection                                          |
+| `--doc-shadow`, `--doc-shadow-strong`, `--doc-shadow-subtle`, `--doc-shadow-lg` | Elevation                                                    |
+| `--doc-overlay`                                                                 | Modal backdrops                                              |
 
 Dark mode is the same list re-declared under `.docx-editor.dark`.
 
@@ -129,7 +137,7 @@ Dark mode is the same list re-declared under `.docx-editor.dark`.
 ### What is deliberately not themeable
 
 **The document canvas.** Painter output stays Word-faithful — a page that matched your brand
-would be a lie about what the file contains. Theme the space *around* the page instead; Igloo
+would be a lie about what the file contains. Theme the space _around_ the page instead; Igloo
 puts the page on an iceberg rather than tinting it.
 
 ---
@@ -166,7 +174,7 @@ Both cost real debugging time in Igloo, and both are ordinary CSS a host would w
 **`backdrop-filter` captures `position: fixed` children.** An element with
 `backdrop-filter` (or `filter`, or `transform`) becomes the containing block for every fixed
 descendant. A frosted header containing the menu bar makes the Page Setup dialog's
-`inset: 0` overlay resolve against the *header*, so the dialog centres inside a 120px strip.
+`inset: 0` overlay resolve against the _header_, so the dialog centres inside a 120px strip.
 Put the effect on a `::before` pseudo-element instead.
 
 **`z-index` traps popovers.** A `z-index` on the wrapper around `Viewport` opens a stacking

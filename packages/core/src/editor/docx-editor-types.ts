@@ -1,3 +1,4 @@
+import type { TextFormFieldChromeHandlers } from './text-form-field-session.ts';
 /**
  * Instance-level types for `createDocxEditor` — kept out of the composition root so
  * `docx-editor.ts` stays under the max-lines gate. Re-exported from `docx-editor.ts`
@@ -194,6 +195,8 @@ export interface DocxEditorInstance extends Editor {
    * command needs.
    */
   setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+  /** Register Field Options chrome. Disposal closes sessions owned by this registration. */
+  setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers): Unsubscribe;
   /** Wire the host equation popover to painted equation clicks. */
   setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
   /**

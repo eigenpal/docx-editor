@@ -92,3 +92,55 @@ describe('DocxEditorMenu composition', () => {
     view.unmount();
   });
 });
+
+test('automatic Page Setup uses the Root render callback and survives menu dismissal', async () => {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  let renders = 0;
+  const app = createApp({
+    render: () =>
+      h(
+        DocxEditorRoot,
+        {
+          document: SOURCE,
+          dialogs: {
+            pageSetup: ({ onClose }) => {
+              renders++;
+              return h(
+                'button',
+                { 'data-custom-page-dialog': '', onClick: onClose },
+                'Close page setup'
+              );
+            },
+          },
+        },
+        {
+          default: () => [
+            h(DocxEditorMenu),
+            h(DocxEditorViewport, null, { default: () => h(DocxEditorContent) }),
+          ],
+        }
+      ),
+  });
+  try {
+    app.mount(container);
+    await flush();
+    const trigger = container.querySelector(
+      '[data-menu="file"] .docx-menubar__trigger'
+    ) as HTMLButtonElement;
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await flush();
+    (container.querySelector('[data-slot="file.pageSetup"]') as HTMLButtonElement).click();
+    await flush();
+    expect(renders).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-custom-page-dialog]').length).toBe(1);
+    expect(container.querySelector('[data-docx-dialog="pageSetup"]')).toBeNull();
+    (container.querySelector('[data-custom-page-dialog]') as HTMLButtonElement).click();
+    await flush();
+    expect(container.querySelector('[data-custom-page-dialog]')).toBeNull();
+  } finally {
+    app.unmount();
+    container.remove();
+  }
+});

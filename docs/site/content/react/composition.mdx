@@ -428,6 +428,11 @@ const [open, setOpen] = useState(false);
 ```
 
 The dialog and `usePageSetup()` use the same engine command.
+
+Page Setup, Paragraph Options, and legacy text Field Options expose replaceable
+parts and dialog draft contexts. Pass `dialogs` to the editor or `Root` to customize
+automatically opened instances. For examples, see
+[Customize dialogs](/docs/2.x/guides/customize-dialogs).
 Use that hook to build a custom form.
 
 ## Content-control panel

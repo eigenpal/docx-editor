@@ -1,3 +1,4 @@
+import { DialogMount } from './dialog-host';
 // The engine's mount point: where the pages actually paint.
 //
 // Renders the `docx-paginated-surface` element and hands it to the facade with
@@ -120,6 +121,7 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
         onDragOver={onDragOver}
         onDrop={onDrop}
       />
+      <DialogMount />
       {editor ? <ImageSelectionOverlay containerRef={elementRef} portalRef={portalRef} /> : null}
     </div>
   );

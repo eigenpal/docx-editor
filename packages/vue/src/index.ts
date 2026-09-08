@@ -423,3 +423,26 @@ export type {
   RevisionStyles,
 } from '@docx-editor.dev/core/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
+
+export {
+  usePageSetupDialog,
+  type PageSetupDialogFields,
+  type UsePageSetupDialogReturn,
+} from './editor/DocxEditorPageSetup';
+export {
+  useParagraphDialog,
+  type UseParagraphDialogReturn,
+} from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorTextFormFieldDialog,
+  useTextFormFieldDialog,
+  type TextFormFieldDialogFields,
+  type UseTextFormFieldDialogReturn,
+  type DocxEditorTextFormFieldDialogProps,
+} from './editor/DocxEditorTextFormFieldDialog';
+export type { DocxEditorDialogs } from './editor/dialog-host';
+export type {
+  DialogPartProps,
+  DialogCustomizationProps,
+  UseDialogReturn,
+} from './editor/dialog-parts';

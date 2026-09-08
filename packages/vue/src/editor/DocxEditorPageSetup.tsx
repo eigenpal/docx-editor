@@ -1,4 +1,20 @@
-import { defineComponent, ref, watch, type CSSProperties, type PropType } from 'vue';
+import {
+  Fragment,
+  computed,
+  cloneVNode,
+  defineComponent,
+  ref,
+  watch,
+  type CSSProperties,
+  type PropType,
+} from 'vue';
+import {
+  createDialogComposition,
+  NativeDialog,
+  useDialogGeneration,
+  type DialogCustomizationProps,
+  type UseDialogReturn,
+} from './dialog-parts';
 import { useTranslation } from '../i18n';
 import { usePageSetup } from './usePageSetup';
 
@@ -28,43 +44,47 @@ function findPageSizeIndex(w: number, h: number): number {
   );
 }
 
-const overlayStyle: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  backgroundColor: 'var(--doc-overlay)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 10000,
-};
-
-const dialogStyle: CSSProperties = {
-  backgroundColor: 'var(--doc-surface)',
-  borderRadius: '8px',
-  boxShadow: '0 4px 20px var(--doc-shadow)',
-  minWidth: '400px',
-  maxWidth: '480px',
-  width: '100%',
-  margin: '20px',
-};
-
-/** @public */
-export interface DocxEditorPageSetupDialogProps {
-  open: boolean;
-  onClose: () => void;
-  className?: string;
+/** Page Setup draft values in twips. @public */
+export interface PageSetupDialogFields {
+  pageWidth: number;
+  pageHeight: number;
+  orientation: 'portrait' | 'landscape';
+  marginTop: number;
+  marginBottom: number;
+  marginLeft: number;
+  marginRight: number;
+  scope: 'document' | 'section';
+}
+/** Page Setup draft state and actions. @public */
+export interface UsePageSetupDialogReturn extends UseDialogReturn<PageSetupDialogFields> {}
+const composition = createDialogComposition<
+  PageSetupDialogFields,
+  Exclude<keyof PageSetupDialogFields, 'pageWidth' | 'pageHeight'> | 'pageSize'
+>('PageSetupDialog');
+/** Access the current Page Setup draft and actions. @public */
+export function usePageSetupDialog(): UsePageSetupDialogReturn {
+  return composition.useContext();
 }
 
 /** @public */
-export const DocxEditorPageSetupDialog = defineComponent({
+export interface DocxEditorPageSetupDialogProps extends DialogCustomizationProps {
+  open: boolean;
+  onClose: () => void;
+}
+
+/** @public */
+const PageSetupDialogImpl = defineComponent({
   name: 'DocxEditorPageSetupDialog',
   props: {
     open: { type: Boolean, required: true },
     onClose: { type: Function as PropType<() => void>, required: true },
     className: { type: String, default: undefined },
+    style: Object as PropType<CSSProperties>,
+    preset: { type: Boolean, default: true },
   },
-  setup(props) {
+  setup(props, { slots }) {
     const { t } = useTranslation();
+    const currentGeneration = useDialogGeneration(() => props.open, props.onClose);
     const setup = usePageSetup();
     const pageWidth = ref(DEFAULT_WIDTH);
     const pageHeight = ref(DEFAULT_HEIGHT);
@@ -74,13 +94,14 @@ export const DocxEditorPageSetupDialog = defineComponent({
     const marginLeft = ref(DEFAULT_MARGIN);
     const marginRight = ref(DEFAULT_MARGIN);
     const scope = ref<'document' | 'section'>('document');
-    const panelRef = ref<HTMLDivElement | null>(null);
+    const refused = ref(false);
     const seeded = ref<'no' | 'loading' | 'yes'>('no');
 
     watch(
       [() => props.open, () => setup.pageSetup.value],
       ([open]) => {
         if (!open) {
+          refused.value = false;
           seeded.value = 'no';
           return;
         }
@@ -100,15 +121,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
         scope.value = 'document';
         seeded.value = ps === null ? 'loading' : 'yes';
       },
-      { flush: 'post' }
-    );
-
-    watch(
-      () => props.open,
-      (open) => {
-        if (open) panelRef.value?.focus();
-      },
-      { flush: 'post' }
+      { flush: 'post', immediate: true }
     );
 
     const handlePageSizeChange = (index: number) => {
@@ -128,6 +141,7 @@ export const DocxEditorPageSetupDialog = defineComponent({
     };
 
     const handleApply = () => {
+      if (!currentGeneration()) return;
       const accepted = setup.apply({
         pageWidthTwips: pageWidth.value,
         pageHeightTwips: pageHeight.value,
@@ -138,223 +152,179 @@ export const DocxEditorPageSetupDialog = defineComponent({
         marginLeftTwips: marginLeft.value,
         scope: scope.value,
       });
+      refused.value = !accepted;
       if (accepted) props.onClose();
     };
 
+    const fields = {
+      pageWidth,
+      pageHeight,
+      orientation,
+      marginTop,
+      marginBottom,
+      marginLeft,
+      marginRight,
+      scope,
+    };
+    const renderParts = composition.provideContext({
+      values: computed(
+        () =>
+          ({
+            ...Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, value.value])),
+          }) as unknown as PageSetupDialogFields
+      ),
+      errors: computed(() => (refused.value ? { form: t('dialogs.paragraph.refused') } : {})),
+      isEnabled: setup.isEnabled,
+      setValue: (name, value) => {
+        if (name === 'orientation') handleOrientationChange(value as 'portrait' | 'landscape');
+        else (fields[name as keyof typeof fields] as { value: unknown }).value = value;
+      },
+      apply: handleApply,
+      cancel: props.onClose,
+    });
     return () => {
       if (!props.open) return null;
       const sizeIndex = findPageSizeIndex(pageWidth.value, pageHeight.value);
-      const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: '12px' };
-      const labelStyle: CSSProperties = {
-        width: '80px',
-        fontSize: '13px',
-        color: 'var(--doc-text-muted)',
-      };
-      const inputStyle: CSSProperties = {
-        flex: 1,
-        padding: '6px 8px',
-        border: '1px solid var(--doc-border)',
-        borderRadius: '4px',
-        fontSize: '13px',
-        backgroundColor: 'var(--doc-surface)',
-        color: 'var(--doc-text)',
-      };
-
-      const marginRow = (
-        labelKey: 'top' | 'bottom' | 'left' | 'right',
-        value: number,
-        set: (twips: number) => void
-      ) => (
-        <div style={rowStyle}>
-          <label style={labelStyle}>{t(`dialogs.pageSetup.${labelKey}`)}</label>
-          <input
-            type="number"
-            style={inputStyle}
-            min={0}
-            max={22}
-            step={0.1}
-            value={twipsToInches(value)}
-            onInput={(event) =>
-              set(Math.max(0, inchesToTwips(Number((event.target as HTMLInputElement).value) || 0)))
-            }
-            aria-label={t(`dialogs.pageSetup.${labelKey}`)}
-          />
-          <span style={{ fontSize: '11px', color: 'var(--doc-text-muted)', width: '16px' }}>
-            in
-          </span>
-        </div>
+      const field = (name: string, label: string, input: import('vue').VNode) => (
+        <label data-docx-part="field" data-docx-field={name} class="docx-dialog__row">
+          <span class="docx-dialog__label">{label}</span>
+          {cloneVNode(input, { 'aria-label': label })}
+          {name.startsWith('margin') ? <span class="docx-dialog__unit">in</span> : null}
+        </label>
       );
-
-      return (
-        <div
-          class={props.className}
-          style={overlayStyle}
-          onClick={props.onClose}
-          onKeydown={(event: KeyboardEvent) => {
-            if (event.key === 'Escape') props.onClose();
-            if (event.key === 'Enter') handleApply();
-          }}
-        >
-          <div
-            ref={panelRef}
-            tabindex={-1}
-            style={dialogStyle}
-            onClick={(event) => event.stopPropagation()}
-            onMousedown={(event) => event.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('dialogs.pageSetup.title')}
-          >
-            <div
-              style={{
-                padding: '16px 20px 12px',
-                borderBottom: '1px solid var(--doc-border)',
-                fontSize: '16px',
-                fontWeight: 600,
-                color: 'var(--doc-text)',
-              }}
-            >
+      const margins = ['top', 'bottom', 'left', 'right'] as const;
+      const defaults = (
+        <Fragment>
+          <div data-docx-part="header" class="docx-dialog__header">
+            <span data-docx-part="title" class="docx-dialog__title">
               {t('dialogs.pageSetup.title')}
-            </div>
-            <div
-              style={{
-                padding: '16px 20px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '14px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--doc-text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                }}
-              >
-                {t('dialogs.pageSetup.pageSize')}
-              </div>
-              <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.pageSetup.sizeLabel')}</label>
-                <select
-                  style={inputStyle}
-                  value={sizeIndex}
-                  onChange={(event) =>
-                    handlePageSizeChange(Number((event.target as HTMLSelectElement).value))
-                  }
-                  aria-label={t('dialogs.pageSetup.sizeLabel')}
-                >
-                  {PAGE_SIZES.map((size, index) => (
-                    <option key={size.labelKey} value={index}>
-                      {t(size.labelKey)}
-                    </option>
-                  ))}
-                  {sizeIndex < 0 && <option value={-1}>{t('dialogs.pageSetup.custom')}</option>}
-                </select>
-              </div>
-              <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.pageSetup.orientation')}</label>
-                <select
-                  style={inputStyle}
-                  value={orientation.value}
-                  onChange={(event) =>
-                    handleOrientationChange(
-                      (event.target as HTMLSelectElement).value as 'portrait' | 'landscape'
-                    )
-                  }
-                  aria-label={t('dialogs.pageSetup.orientation')}
-                >
-                  <option value="portrait">{t('dialogs.pageSetup.portrait')}</option>
-                  <option value="landscape">{t('dialogs.pageSetup.landscape')}</option>
-                </select>
-              </div>
-              <div
-                style={{
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  color: 'var(--doc-text-muted)',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  marginTop: '4px',
-                }}
-              >
-                {t('dialogs.pageSetup.margins')}
-              </div>
-              {marginRow('top', marginTop.value, (v) => {
-                marginTop.value = v;
-              })}
-              {marginRow('bottom', marginBottom.value, (v) => {
-                marginBottom.value = v;
-              })}
-              {marginRow('left', marginLeft.value, (v) => {
-                marginLeft.value = v;
-              })}
-              {marginRow('right', marginRight.value, (v) => {
-                marginRight.value = v;
-              })}
-              <div style={rowStyle}>
-                <label style={labelStyle}>{t('dialogs.pageSetup.applyTo')}</label>
-                <select
-                  style={inputStyle}
-                  value={scope.value}
-                  onChange={(event) => {
-                    scope.value = (event.target as HTMLSelectElement).value as
-                      | 'document'
-                      | 'section';
-                  }}
-                  aria-label={t('dialogs.pageSetup.applyTo')}
-                >
-                  <option value="document">{t('dialogs.pageSetup.applyToDocument')}</option>
-                  <option value="section">{t('dialogs.pageSetup.applyToSection')}</option>
-                </select>
-              </div>
-            </div>
-            <div
-              style={{
-                padding: '12px 20px 16px',
-                borderTop: '1px solid var(--doc-border)',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                gap: '8px',
-              }}
-            >
-              <button
-                type="button"
-                style={{
-                  padding: '6px 16px',
-                  fontSize: '13px',
-                  border: '1px solid var(--doc-border)',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  backgroundColor: 'var(--doc-surface)',
-                  color: 'var(--doc-text)',
-                }}
-                onClick={props.onClose}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                style={{
-                  padding: '6px 16px',
-                  fontSize: '13px',
-                  border: '1px solid var(--doc-primary)',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  backgroundColor: 'var(--doc-primary)',
-                  color: 'var(--doc-on-primary)',
-                  opacity: setup.isEnabled.value ? 1 : 0.5,
-                }}
-                disabled={!setup.isEnabled.value}
-                onClick={handleApply}
-              >
-                {t('common.apply')}
-              </button>
-            </div>
+            </span>
           </div>
-        </div>
+          <div data-docx-part="body" class="docx-dialog__body">
+            <div class="docx-dialog__section-label">{t('dialogs.pageSetup.pageSize')}</div>
+            {field(
+              'pageSize',
+              t('dialogs.pageSetup.sizeLabel'),
+              <select
+                class="docx-dialog__input"
+                value={sizeIndex}
+                onChange={(e) =>
+                  handlePageSizeChange(Number((e.target as HTMLSelectElement).value))
+                }
+              >
+                {PAGE_SIZES.map((size, i) => (
+                  <option value={i}>{t(size.labelKey)}</option>
+                ))}
+                {sizeIndex < 0 ? <option value={-1}>{t('dialogs.pageSetup.custom')}</option> : null}
+              </select>
+            )}
+            {field(
+              'orientation',
+              t('dialogs.pageSetup.orientation'),
+              <select
+                class="docx-dialog__input"
+                value={orientation.value}
+                onChange={(e) =>
+                  handleOrientationChange(
+                    (e.target as HTMLSelectElement).value as 'portrait' | 'landscape'
+                  )
+                }
+              >
+                <option value="portrait">{t('dialogs.pageSetup.portrait')}</option>
+                <option value="landscape">{t('dialogs.pageSetup.landscape')}</option>
+              </select>
+            )}
+            <div class="docx-dialog__section-label docx-dialog__section-label--spaced">
+              {t('dialogs.pageSetup.margins')}
+            </div>
+            {margins.map((side) => {
+              const name = `margin${side[0].toUpperCase()}${side.slice(1)}` as
+                | 'marginTop'
+                | 'marginBottom'
+                | 'marginLeft'
+                | 'marginRight';
+              return field(
+                name,
+                t(`dialogs.pageSetup.${side}`),
+                <input
+                  class="docx-dialog__input"
+                  type="number"
+                  min={0}
+                  max={22}
+                  step={0.1}
+                  value={twipsToInches(fields[name].value)}
+                  onInput={(e) => {
+                    fields[name].value = Math.max(
+                      0,
+                      inchesToTwips(Number((e.target as HTMLInputElement).value) || 0)
+                    );
+                  }}
+                />
+              );
+            })}
+            {field(
+              'scope',
+              t('dialogs.pageSetup.applyTo'),
+              <select
+                class="docx-dialog__input"
+                value={scope.value}
+                onChange={(e) => {
+                  scope.value = (e.target as HTMLSelectElement).value as 'document' | 'section';
+                }}
+              >
+                <option value="document">{t('dialogs.pageSetup.applyToDocument')}</option>
+                <option value="section">{t('dialogs.pageSetup.applyToSection')}</option>
+              </select>
+            )}
+          </div>
+          <div data-docx-part="footer" class="docx-dialog__footer">
+            <span data-docx-part="error" class="docx-dialog__error" role="alert">
+              {refused.value ? t('dialogs.paragraph.refused') : null}
+            </span>
+            <button
+              data-docx-part="cancel"
+              class="docx-dialog__button docx-dialog__cancel"
+              type="button"
+              onClick={props.onClose}
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              data-docx-part="apply"
+              class="docx-dialog__button docx-dialog__apply"
+              type="button"
+              disabled={!setup.isEnabled.value}
+              onClick={handleApply}
+            >
+              {t('common.apply')}
+            </button>
+          </div>
+        </Fragment>
+      );
+      return (
+        <NativeDialog
+          kind="pageSetup"
+          label={t('dialogs.pageSetup.title')}
+          onClose={props.onClose}
+          class={props.className}
+          style={props.style}
+          onKeydown={(event: KeyboardEvent) => {
+            if (
+              event.key === 'Enter' &&
+              !event.isComposing &&
+              !(event.target instanceof HTMLButtonElement) &&
+              !(event.target instanceof HTMLSelectElement) &&
+              setup.isEnabled.value
+            ) {
+              event.preventDefault();
+              handleApply();
+            }
+          }}
+          content={() => renderParts(defaults, slots.default?.() ?? [], props.preset)}
+        />
       );
     };
   },
 });
+/** Customizable Page Setup dialog. @public */
+export const DocxEditorPageSetupDialog = Object.assign(PageSetupDialogImpl, composition.parts);

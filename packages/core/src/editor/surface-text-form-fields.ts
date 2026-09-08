@@ -1,3 +1,4 @@
+import type { TextFormFieldDialogSession } from './text-form-field-session.ts';
 import {
   supportsTextFormField,
   formatTextFormValue,
@@ -20,7 +21,9 @@ interface Host {
   dateInputOrder?(): 'mdy' | 'dmy';
   readonly pagesLayer: HTMLElement;
   readonly container: HTMLElement;
-  part(): OoxmlPart;
+  part(paragraphId?: string): OoxmlPart;
+  onRequest?: ((session: TextFormFieldDialogSession) => boolean) | undefined;
+  translate?: ((key: string) => string) | undefined;
   protected(paragraphId?: string): boolean;
   selection(): SemanticSelection;
   select(selection: SemanticSelection): void;
@@ -42,7 +45,7 @@ export function createTextFormFieldInteraction(host: Host): {
   beforeSelect(next: SemanticSelection): SemanticSelection | null;
   destroy(): void;
 } {
-  const t = createT(en);
+  const t = host.translate ?? createT(en);
   const document = host.container.ownerDocument;
   let contextual: { paragraphId: string; fieldNodeId: string } | null | undefined;
   let committing = false;
@@ -52,10 +55,20 @@ export function createTextFormFieldInteraction(host: Host): {
     (paragraphTextOf(host.part(), paragraphId) ?? '').slice(field.start, field.end);
   let dialog: HTMLDialogElement | null = null;
   let active: { paragraphId: string; fieldNodeId: string } | null = null;
-  const close = (): void => {
-    const selected = host.selection();
+  let sessionController: AbortController | null = null;
+  let destroyed = false;
+  const invalidate = (): void => {
+    const controller = sessionController;
+    sessionController = null;
     dialog?.remove();
     dialog = null;
+    controller?.abort();
+  };
+  const close = (): void => {
+    if (!dialog && !sessionController) return;
+    const selected = host.selection();
+    invalidate();
+    if (destroyed) return;
     host.pagesLayer.focus({ preventScroll: true });
     // Native focus can collapse the DOM range at the start of the editable surface.
     host.select(selected);
@@ -75,14 +88,27 @@ export function createTextFormFieldInteraction(host: Host): {
     incoming = undefined;
   }
   function open(paragraphId: string, field: TextFormFieldRange): void {
+    if (destroyed) return;
     close();
-    dialog = textFormFieldDialog(
-      host.container,
-      field,
-      (text, options) => {
+    const controller = new AbortController();
+    sessionController = controller;
+    const canApply = (): boolean => {
+      if (destroyed || controller.signal.aborted || sessionController !== controller) return false;
+      const target = findNode(host.part(paragraphId), paragraphId);
+      return (
+        target?.kind === 'paragraph' &&
+        textFormFieldsOf(target).some((entry) => entry.fieldNodeId === field.fieldNodeId) &&
+        host.editable() &&
+        !host.protected(paragraphId)
+      );
+    };
+    const session: TextFormFieldDialogSession = {
+      field: { ...field },
+      signal: controller.signal,
+      canApply,
+      apply(text, options) {
         if (
-          !host.editable() ||
-          host.protected(paragraphId) ||
+          !canApply() ||
           !host.apply({
             op: 'setTextFormFieldDefault',
             dateInputOrder: host.dateInputOrder?.() ?? 'mdy',
@@ -93,17 +119,26 @@ export function createTextFormFieldInteraction(host: Host): {
           })
         )
           return false;
-        const p = findNode(host.part(), paragraphId);
+        // Applying can synchronously notify consumers that replace the document or UI.
+        if (destroyed || sessionController !== controller || controller.signal.aborted) return true;
+        const p = findNode(host.part(paragraphId), paragraphId);
         const current =
           p?.kind === 'paragraph'
-            ? textFormFieldsOf(p).find((f) => f.fieldNodeId === field.fieldNodeId)
+            ? textFormFieldsOf(p).find((entry) => entry.fieldNodeId === field.fieldNodeId)
             : null;
         if (current) select(paragraphId, current);
+        close();
         return true;
       },
-      close
-    );
+      cancel() {
+        if (sessionController === controller && !controller.signal.aborted) close();
+      },
+    };
+    if (host.onRequest?.(session)) return;
+    if (controller.signal.aborted) return;
+    dialog = textFormFieldDialog(host.container, field, session.apply, session.cancel, t);
   }
+
   const fieldAtTarget = (
     event: MouseEvent
   ): { paragraphId: string; field: TextFormFieldRange } | null => {
@@ -572,6 +607,8 @@ export function createTextFormFieldInteraction(host: Host): {
       return true;
     },
     destroy() {
+      destroyed = true;
+      invalidate();
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointercancel', cancelPress);
       host.pagesLayer.removeEventListener('click', singleClick);

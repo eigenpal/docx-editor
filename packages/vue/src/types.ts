@@ -31,6 +31,7 @@ export type EditorMode = 'edit' | 'view' | 'suggesting';
 
 /** Props for the Vue `DocxEditor` sugar host. @public */
 export interface DocxEditorProps {
+  dialogs?: import('./editor/dialog-host').DocxEditorDialogs;
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   colorMode?: 'light' | 'dark' | 'system';
   /** Live resolver for chrome and drawing labels. */

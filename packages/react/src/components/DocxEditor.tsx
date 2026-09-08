@@ -1,3 +1,4 @@
+import { DocxEditorTextFormFieldDialog } from '../editor/DocxEditorTextFormFieldDialog';
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ForwardRefExoticComponent, RefAttributes } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
@@ -417,6 +418,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
     // through `setZoom`, callbacks are read at their latest identity.
     return (
       <DocxEditorRoot
+        dialogs={props.dialogs}
         {...(doc !== undefined ? { document: doc } : {})}
         {...(fonts ? { fonts } : {})}
         {...(author !== undefined ? { author } : {})}
@@ -495,6 +497,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
+  readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
   /** Floating localized page readout for the active viewport. */
   readonly PageNumber: typeof DocxEditorPageNumber;
@@ -540,6 +543,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
+  TextFormFieldDialog: DocxEditorTextFormFieldDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,

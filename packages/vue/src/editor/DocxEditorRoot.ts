@@ -1,3 +1,4 @@
+import { DialogHost, type DocxEditorDialogs } from './dialog-host';
 import {
   defineComponent,
   h,
@@ -101,6 +102,7 @@ export function provideDocxEditor(options: DocxEditorRootProps): ProvideDocxEdit
 export const DocxEditorRoot = defineComponent({
   name: 'DocxEditorRoot',
   props: {
+    dialogs: Object as PropType<DocxEditorDialogs>,
     document: {
       type: [String, Object, Uint8Array, ArrayBuffer] as PropType<DocumentSource>,
       default: undefined,
@@ -154,7 +156,8 @@ export const DocxEditorRoot = defineComponent({
           h(ContentControlProvider, null, {
             default: () =>
               h(ImageInsertProvider, null, {
-                default: () => slots.default?.(),
+                default: () =>
+                  h(DialogHost, { dialogs: props.dialogs }, { default: () => slots.default?.() }),
               }),
           }),
       });

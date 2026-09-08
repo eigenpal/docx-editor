@@ -37,6 +37,7 @@ function localeState(locale: string | undefined): { code: LocaleCode; labels: To
 
 /** State that construction config and later instance setters share. */
 export interface DocxEditorHostConfigState {
+  translate(key: string): string;
   mode(): HostEditingMode | undefined;
   modeForGate(): HostEditingMode;
   openingModeDecision(guards: OpeningModeGuards): OpeningModeDecision;
@@ -65,6 +66,12 @@ export function createDocxEditorHostConfigState(initial: {
   let dateInputOrder: 'mdy' | 'dmy' = initial.dateInputOrder === 'dmy' ? 'dmy' : 'mdy';
 
   return {
+    translate: (key) =>
+      translate?.(key) ??
+      createT(
+        deepMerge(en, locales[locale.code]) as LocaleStrings,
+        locale.code
+      )(key as Parameters<ReturnType<typeof createT>>[0]),
     mode: () => mode,
     modeForGate: () => mode ?? 'edit',
     openingModeDecision: (guards) => resolveOpeningEditingMode(mode, guards),

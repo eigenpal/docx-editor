@@ -261,6 +261,13 @@ The ref exposes seven methods:
 Use `exec()` for commands that must use the same validation as packaged chrome.
 Use `snapshot()` for a synchronous state read.
 
+## `dialogs`
+
+Configure automatic dialogs on the editor or `Root` with `pageSetup`, `paragraph`,
+and `textFormField` render callbacks. Forward their supplied props to the dialog.
+Omitted callbacks use defaults. For examples and callback props, see
+[Customize dialogs](/docs/2.x/guides/customize-dialogs).
+
 ## Next steps
 
 - [Vue quickstart](/docs/2.x/vue)

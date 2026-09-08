@@ -1,3 +1,4 @@
+import type { TextFormFieldDialogSession } from '../text-form-field-session.ts';
 import { applyProtectedTextFormEdit } from '../../store/store/tree-op-field-results.ts';
 import { textFormFieldForEdit } from '../../store/store/text-form-fields.ts';
 import type { TreeDocOp } from '@docx-editor.dev/core/store';
@@ -15,7 +16,8 @@ function setup(
   protectedForm = false,
   emptyFirst = false,
   separator = ' and ',
-  emptySecond = false
+  emptySecond = false,
+  onRequest?: (session: TextFormFieldDialogSession) => boolean
 ) {
   const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const field = (name: string) =>
@@ -51,6 +53,7 @@ function setup(
   let commits = 0;
   let rejectDelete = false;
   const interaction = createTextFormFieldInteraction({
+    onRequest,
     dateInputOrder: () => dateInputOrder,
     container,
     pagesLayer,
@@ -76,6 +79,19 @@ function setup(
     span,
     interaction,
     commits: () => commits,
+    setProtected: (value: boolean) => {
+      protectedForm = value;
+    },
+    deleteFirstField: () => {
+      const result = applyTreeOp(part, {
+        op: 'deleteText',
+        paragraphId: paragraph.id,
+        start: 0,
+        end: 6,
+      });
+      if (!result.ok) throw new Error(result.reason);
+      part = result.part;
+    },
     pagesLayer,
     rejectDelete: () => {
       rejectDelete = true;
@@ -359,3 +375,77 @@ for (const scenario of ['changed type', 'refused deletion'] as const) {
     }
   });
 }
+
+test('host Field Options session owns accepted and refused writes without native UI', () => {
+  const sessions: TextFormFieldDialogSession[] = [];
+  const host = setup(false, false, ' and ', false, (session) => {
+    sessions.push(session);
+    return true;
+  });
+  try {
+    expect(host.interaction.edit()).toBe(true);
+    const session = sessions[0]!;
+    expect(host.container.querySelector('dialog')).toBeNull();
+    const options = { type: 'regular' as const, maxLength: 0, format: '', enabled: true };
+    expect(session.apply('bad\nvalue', options)).toBe(false);
+    expect(session.signal.aborted).toBe(false);
+    expect(session.apply('Changed', options)).toBe(true);
+    expect(session.signal.aborted).toBe(true);
+    expect(session.canApply()).toBe(false);
+    expect(session.apply('Stale', options)).toBe(false);
+    expect(paragraphTextOf(host.part(), host.selection().head.paragraphId)).toContain('Changed');
+  } finally {
+    host.interaction.destroy();
+    host.container.remove();
+  }
+});
+
+test('reopening and destruction invalidate retained host Field Options callbacks', () => {
+  const sessions: TextFormFieldDialogSession[] = [];
+  const host = setup(false, false, ' and ', false, (session) => {
+    sessions.push(session);
+    return true;
+  });
+  const options = { type: 'regular' as const, maxLength: 0, format: '', enabled: true };
+  try {
+    host.interaction.edit();
+    host.interaction.edit();
+    expect(sessions[0]!.signal.aborted).toBe(true);
+    sessions[0]!.cancel();
+    expect(sessions[1]!.signal.aborted).toBe(false);
+    host.interaction.destroy();
+    expect(sessions[1]!.signal.aborted).toBe(true);
+    expect(sessions[1]!.apply('Stale', options)).toBe(false);
+    expect(paragraphTextOf(host.part(), host.selection().head.paragraphId)).toBe(
+      'Sample and Sample'
+    );
+  } finally {
+    host.container.remove();
+  }
+});
+
+test('host Field Options rechecks protection and deleted targets at apply time', () => {
+  const sessions: TextFormFieldDialogSession[] = [];
+  const host = setup(false, false, ' and ', false, (session) => {
+    sessions.push(session);
+    return true;
+  });
+  const options = { type: 'regular' as const, maxLength: 0, format: '', enabled: true };
+  try {
+    host.interaction.edit();
+    expect(sessions[0]!.canApply()).toBe(true);
+    host.setProtected(true);
+    expect(sessions[0]!.canApply()).toBe(false);
+    expect(sessions[0]!.apply('Refused', options)).toBe(false);
+    expect(sessions[0]!.signal.aborted).toBe(false);
+    host.setProtected(false);
+    expect(sessions[0]!.canApply()).toBe(true);
+    host.deleteFirstField();
+    expect(sessions[0]!.canApply()).toBe(false);
+    expect(sessions[0]!.apply('Deleted', options)).toBe(false);
+    expect(paragraphTextOf(host.part(), host.selection().head.paragraphId)).toBe(' and Sample');
+  } finally {
+    host.interaction.destroy();
+    host.container.remove();
+  }
+});

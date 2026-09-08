@@ -1,3 +1,4 @@
+import { useDialogHost } from './dialog-host';
 import {
   defineComponent,
   h,
@@ -34,6 +35,7 @@ export const DocxEditorContent = defineComponent({
     className: { type: String, default: undefined },
   },
   setup(props) {
+    const dialogs = useDialogHost();
     const editorRef = useDocxEditor();
     const imageInsert = useImageInsertOptional();
     const elementRef = shallowRef<HTMLDivElement | null>(null);
@@ -105,6 +107,7 @@ export const DocxEditorContent = defineComponent({
         {
           ref: (el: unknown) => {
             portalRef.value = el instanceof HTMLDivElement ? el : null;
+            if (dialogs) dialogs.target.value = portalRef.value;
           },
           class: 'docx-content-mount',
         },

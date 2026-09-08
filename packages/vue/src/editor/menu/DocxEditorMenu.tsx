@@ -1,3 +1,4 @@
+import { useDialogHost } from '../dialog-host';
 import {
   computed,
   defineComponent,
@@ -112,6 +113,7 @@ const DocxEditorMenuRoot = defineComponent({
     preset: { type: Boolean, default: true },
   },
   setup(props, { slots }) {
+    const dialogs = useDialogHost();
     const scopeClassName = useScopeClassName();
     const editorRef = useDocxEditor();
     const { t: catalogT } = useTranslation();
@@ -162,13 +164,22 @@ const DocxEditorMenuRoot = defineComponent({
     };
 
     const packagedPageSetup = () => {
-      pageSetupOpen.value = true;
+      if (dialogs)
+        dialogs.open(
+          'pageSetup',
+          rootRef.value?.querySelector<HTMLElement>('[data-menu="file"] .docx-menubar__trigger')
+        );
+      else pageSetupOpen.value = true;
     };
 
-    // The menu bar owns its own Paragraph dialog, the way it owns Page Setup's. It does not
-    // collapse, so this route survives the narrow window that hides the line-spacing menu.
+    // Use the Root coordinator when available; standalone menus retain a local host.
     const packagedParagraphDialog = () => {
-      paragraphDialogOpen.value = true;
+      if (dialogs)
+        dialogs.open(
+          'paragraph',
+          rootRef.value?.querySelector<HTMLElement>('[data-menu="format"] .docx-menubar__trigger')
+        );
+      else paragraphDialogOpen.value = true;
     };
 
     const resolvedOpen = computed(() =>

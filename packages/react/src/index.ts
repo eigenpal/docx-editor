@@ -436,3 +436,26 @@ export {
   type RulerUnit,
 } from './rulerTicks';
 export { useEditorSnapshot } from './useEditorSnapshot';
+
+export type {
+  DialogPartProps,
+  DialogCustomizationProps,
+  UseDialogReturn,
+} from './editor/dialog-parts';
+export type { DocxEditorDialogs } from './editor/dialog-host';
+export {
+  usePageSetupDialog,
+  type PageSetupDialogFields,
+  type UsePageSetupDialogReturn,
+} from './editor/DocxEditorPageSetup';
+export {
+  useParagraphDialog,
+  type UseParagraphDialogReturn,
+} from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorTextFormFieldDialog,
+  useTextFormFieldDialog,
+  type TextFormFieldDialogFields,
+  type DocxEditorTextFormFieldDialogProps,
+  type UseTextFormFieldDialogReturn,
+} from './editor/DocxEditorTextFormFieldDialog';

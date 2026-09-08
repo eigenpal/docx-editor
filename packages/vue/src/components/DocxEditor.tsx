@@ -1,3 +1,4 @@
+import { DocxEditorTextFormFieldDialog } from '../editor/DocxEditorTextFormFieldDialog';
 import {
   computed,
   defineComponent,
@@ -147,6 +148,7 @@ const ScopedChrome = defineComponent({
 /** @public */
 export interface DocxEditorNamespace {
   (props: DocxEditorProps): VNode;
+  readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
@@ -174,6 +176,7 @@ export interface DocxEditorNamespace {
 }
 
 const docxEditorFrameProps = {
+  dialogs: Object as PropType<DocxEditorProps['dialogs']>,
   document: {
     type: [String, Object, Uint8Array, ArrayBuffer] as PropType<DocxEditorProps['document']>,
     default: undefined,
@@ -420,6 +423,7 @@ const DocxEditorFrame = defineComponent({
           ...(props.author !== undefined ? { author: props.author } : {}),
           ...(props.locale !== undefined ? { locale: props.locale } : {}),
           ...(props.dateInputOrder !== undefined ? { dateInputOrder: props.dateInputOrder } : {}),
+          dialogs: props.dialogs,
           translate: t,
           ...(props.mode !== undefined ? { mode: props.mode } : { mode: 'edit' }),
           ...(props.modules !== undefined ? { modules: props.modules } : {}),
@@ -528,6 +532,7 @@ const DocxEditorImpl = defineComponent({
 
 /** @public */
 export const DocxEditor = Object.assign(DocxEditorImpl, {
+  TextFormFieldDialog: DocxEditorTextFormFieldDialog,
   Root: DocxEditorRoot,
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,

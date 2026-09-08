@@ -5905,19 +5905,17 @@ export function mountPaginatedSurface(
     selectionSync.onCompositionStart(...args);
   };
 
-  /**
-   * The pointer lane's handle, assigned once the surface it drives exists.
-   *
-   * Read by the selection mirror: the browser keeps reporting its own idea of the selection
-   * while a gesture runs, and adopting one of those mid-drag snaps the caret back to whatever
-   * the DOM guessed.
-   */
+  // The selection mirror checks this handle to avoid adopting browser selection mid-drag.
+  // It is assigned once the surface exists.
   let pointer: PointerController | null = null;
   textFormInteraction = createTextFormFieldInteraction({
+    onRequest: options.onRequestTextFormField,
+    translate: options.textFormFieldTranslate,
     dateInputOrder: () => dateInputOrder,
     pagesLayer,
     container,
-    part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
+    part: (paragraphId?: string) =>
+      partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
     protected: (paragraphId = selection.head.paragraphId) =>
       formsProtectionEnabled(session.settingsRoot()) &&
       sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
