@@ -106,10 +106,10 @@ export interface CreateServerOptions {
    */
   readonly limits?: DocumentLimits;
   /**
-   * Who comments this runtime writes are recorded as.
+   * Who comments and tracked text edits written by this runtime are recorded as.
    *
-   * Required to write one at all: `CT_TrackChange` makes `@w:author` mandatory and a server has no
-   * signed-in user, so a runtime opened without this refuses comment writes rather than putting a
+   * Required for comment writes and `document.changeTrackingMode = 'TrackMineOnly'`: `CT_TrackChange` makes `@w:author` mandatory and a server has no
+   * signed-in user, so a runtime opened without this refuses these operations rather than putting a
    * placeholder name into someone's document.
    */
   readonly author?: string;

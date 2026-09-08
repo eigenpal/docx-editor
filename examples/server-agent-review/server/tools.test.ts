@@ -153,3 +153,91 @@ for (const kind of ['insertion', 'replacement'] as const) {
     });
   }
 }
+
+for (const kind of ['insertion', 'replacement'] as const) {
+  test(`${kind} schema requires text before a model call can execute`, async () => {
+    const { proposalSchemas } = await import('./tools.ts');
+    const input = {
+      snapshot: 'token',
+      quote: '7 days',
+      ...(kind === 'insertion' ? { where: 'Before' } : {}),
+    };
+    expect(proposalSchemas[kind].safeParse(input).success).toBe(false);
+    expect(proposalSchemas[kind].safeParse({ ...input, text: '' }).success).toBe(false);
+    expect(proposalSchemas[kind].safeParse({ ...input, text: '30 days' }).success).toBe(true);
+  });
+}
+
+test('tool schemas expose only fields meaningful for their edit', async () => {
+  const { proposalSchemas } = await import('./tools.ts');
+  const anchor = { snapshot: 'token', quote: '7 days' };
+  expect(proposalSchemas.insertion.safeParse({ ...anchor, text: 'after' }).success).toBe(false);
+  expect(proposalSchemas.deletion.safeParse(anchor).success).toBe(true);
+  expect(
+    proposalSchemas.deletion.safeParse({ ...anchor, text: 'accidental replacement' }).success
+  ).toBe(false);
+  expect(
+    proposalSchemas.replacement.safeParse({ ...anchor, text: '30 days', where: 'After' }).success
+  ).toBe(false);
+});
+
+test('direct insertion requires a position and leaves its snapshot usable after validation failure', async () => {
+  const s = await setup();
+  try {
+    const snapshot = await s.read();
+    const before = await s.runtime.save();
+    expect(
+      await s.adapter.apply('insertion', {
+        snapshot: snapshot.snapshot,
+        quote: '7 days',
+        text: 'At least ',
+      })
+    ).toMatchObject({ ok: false, code: 'invalid-proposal' });
+    expect(s.committed()).toBe(0);
+    expect(await s.runtime.save()).toEqual(before);
+    expect(
+      await s.adapter.apply('insertion', {
+        snapshot: snapshot.snapshot,
+        quote: '7 days',
+        text: 'At least ',
+        where: 'Before',
+      })
+    ).toEqual({ ok: true });
+    expect(s.committed()).toBe(1);
+  } finally {
+    s.runtime.dispose();
+  }
+});
+
+test('pending revision refusal gives a public target and safe recovery guidance', async () => {
+  const s = await setup();
+  try {
+    const original = await s.read();
+    expect(
+      await s.adapter.apply('replacement', {
+        snapshot: original.snapshot,
+        quote: '7 days',
+        text: '30 days',
+      })
+    ).toEqual({ ok: true });
+    const fresh = await s.read();
+    const before = await s.runtime.save();
+    const result = await s.adapter.apply('replacement', {
+      snapshot: fresh.snapshot,
+      quote: '7 days',
+      text: '60 days',
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      code: 'NotImplemented',
+      target: expect.stringContaining('insertText'),
+    });
+    if (result.ok) throw new Error('expected refusal');
+    expect(result.message).toContain('Skip it');
+    expect(result.message).toContain('Do not retry the same edit or disable tracking');
+    expect(await s.runtime.save()).toEqual(before);
+    expect(s.committed()).toBe(1);
+  } finally {
+    s.runtime.dispose();
+  }
+});

@@ -83,6 +83,9 @@ try {
     range.load('text');
     await context.sync();
     const replacement = await generateReplacement(range.text, instruction);
+    if (typeof replacement !== 'string' || replacement.length === 0) {
+      throw new Error('The model returned no replacement. No edit was queued.');
+    }
 
     context.document.changeTrackingMode = 'TrackMineOnly';
     range.insertText(replacement, 'Replace');
@@ -105,6 +108,10 @@ The saved redlines are Word revisions; the local tracking setting is not a docum
 
 Follow the [Office.js guide](../../packages/editor-api/OFFICE_JS_GUIDE.md) for explicit property loads,
 batched reads, proxy lifetimes, error handling, and the supported tracking subset.
+
+Each model tool has a focused schema: insertion requires text and an explicit position, replacement requires text,
+and deletion accepts only its snapshot and quote. Refusals include the public error target and recovery guidance.
+They never tell the model to disable tracking or blindly repeat a refused edit.
 
 The worker batches paragraph loads before each `sync()`. It reads only the requested page's text and identity.
 It serializes tool calls and commits one completed suggestion at a time. These write boundaries intentionally
@@ -140,7 +147,7 @@ Pass a stable `room` configuration with the same room ID and server URL, `bootst
 ## Guarantees and limits
 
 - Each proposal is one atomic document transaction. Replacement creates deletion and insertion revisions together; the review engine derives their decision cards.
-- Only single-paragraph text ranges are supported, including table-cell paragraphs. Cross-paragraph ranges, paragraph-break text, missing authors, empty replacement/insertion text, and touching or overlapping pending revisions refuse. A paragraph may receive only one proposal/edit per batch; use separate syncs for sequential edits.
+- The worker’s proposal tools support only single-paragraph text ranges, including table-cell paragraphs. Cross-paragraph ranges, paragraph-break text, missing authors, empty replacement/insertion text, and touching or overlapping pending revisions refuse. A paragraph may receive only one proposal/edit per batch; use separate syncs for sequential edits.
 - Ranges are snapshots, not moving CRDT anchors. The example checks a saved-document digest and the target paragraph before committing. Any document change invalidates the read token, even an unrelated edit; the model must reread and reconsider. The final write also uses the runtime's local revision guard. This cannot detect a human update that has not reached the worker yet; concurrent delivered updates still merge through the CRDT.
 - Agent edits are disabled while disconnected. Loss of collaboration readiness stops the job; already committed suggestions remain. Cancellation prevents future writes and drains already committed updates when the transport permits it.
 - A successful `sync()` commits and publishes to the local replica. `waitForOutboundSync()` waits for Hocuspocus acknowledgement, **not** other browsers' rendering or durable disk persistence. Hocuspocus persists through its debounced store hook. A transport failure can leave delivery unconfirmed; the job is not automatically replayed.

@@ -1,16 +1,59 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { tool } from 'ai';
-import type { DocxEditorServerRuntime } from '@docx-editor.dev/editor-api';
+import {
+  isDocxEditorError,
+  type DocxEditorErrorCode,
+  type DocxEditorServerRuntime,
+} from '@docx-editor.dev/editor-api';
 
 export const proposalInput = z.object({
-  snapshot: z.string(),
-  quote: z.string().min(1).max(8000),
+  snapshot: z
+    .string()
+    .min(1)
+    .describe(
+      'Copy the opaque snapshot token from read_document. Read again after each successful edit.'
+    ),
+  quote: z
+    .string()
+    .min(1)
+    .max(8000)
+    .describe('Exact text occurring once in the snapshot paragraph.'),
   text: z.string().max(8000).optional(),
   where: z.enum(['Before', 'After']).optional(),
 });
 export type ProposalInput = z.infer<typeof proposalInput>;
 export type ProposalKind = 'insertion' | 'deletion' | 'replacement';
+const replacementText = z
+  .string()
+  .min(1)
+  .max(8000)
+  .describe('Non-empty inline text without paragraph breaks. Use propose_deletion to remove text.');
+export const proposalSchemas = {
+  insertion: proposalInput
+    .extend({
+      text: replacementText,
+      where: z
+        .enum(['Before', 'After'])
+        .describe('Choose which side of the quoted text receives the insertion.'),
+    })
+    .strict(),
+  replacement: proposalInput.omit({ where: true }).extend({ text: replacementText }).strict(),
+  deletion: proposalInput.pick({ snapshot: true, quote: true }).strict(),
+};
+const recovery: Partial<Record<DocxEditorErrorCode, string>> = {
+  NotImplemented:
+    'This target may contain a pending or unsupported revision. Skip it and report the limit. Do not retry the same edit or disable tracking.',
+  NotSupported:
+    'The host cannot perform this tracked edit. Check the configured author and supported tracking operations. Do not fall back to permanent edits.',
+  InvalidArgument:
+    'Use an exact quote and XML-safe inline text within one paragraph. Do not include paragraph breaks. Re-read if the target is no longer valid.',
+  ConflictingChanges:
+    'Re-read and plan one edit per paragraph per batch. Reconsider anchors before committing again.',
+  GeneralException:
+    'The document refused this edit. Skip the target and report the refusal instead of repeating it.',
+};
+
 export interface ParagraphSnapshot {
   snapshot: string;
   paragraphId: string;
@@ -97,6 +140,12 @@ export function createReviewTools(
         code: 'invalid-proposal',
         message: 'Insertion and replacement require non-empty text. Use deletion to remove text.',
       };
+    if (kind === 'insertion' && input.where !== 'Before' && input.where !== 'After')
+      return {
+        ok: false as const,
+        code: 'invalid-proposal',
+        message: 'Insertion requires an explicit Before or After position.',
+      };
     const snapshot = snapshots.get(input.snapshot);
     if (!snapshot) return stale();
     if ((await digest()) !== snapshot.digest) return stale();
@@ -144,10 +193,14 @@ export function createReviewTools(
       }
       return result;
     } catch (error) {
-      const code = (error as { code?: string }).code;
-      if (code === 'StaleDocument') return stale();
-      if (!code) throw error;
-      return { ok: false, code, message: (error as Error).message };
+      if (!isDocxEditorError(error)) throw error;
+      if (error.code === 'StaleDocument') return stale();
+      return {
+        ok: false as const,
+        code: error.code,
+        message: recovery[error.code] ?? error.message,
+        ...(error.target === undefined ? {} : { target: error.target }),
+      };
     }
   }
 
@@ -167,7 +220,7 @@ export function createReviewTools(
   const propose = (kind: ProposalKind) =>
     tool({
       description: `Propose an inline ${kind} as a tracked Word change. Use a fresh snapshot and an exact, unique quote. Read again after each successful proposal.`,
-      inputSchema: proposalInput,
+      inputSchema: proposalSchemas[kind],
       execute: (input, { toolCallId }) => once(toolCallId, () => apply(kind, input)),
     });
   return {

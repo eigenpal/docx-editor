@@ -17,6 +17,9 @@ export async function redlineQuote(
   replacement: string,
   author: string
 ): Promise<Uint8Array> {
+  if (typeof replacement !== 'string' || replacement.length === 0) {
+    throw new Error('Replacement text is required. Use an explicit deletion to remove the quote.');
+  }
   const runtime = await DocxEditor.createServer(bytes, { author });
   try {
     await runtime.run(async (context) => {

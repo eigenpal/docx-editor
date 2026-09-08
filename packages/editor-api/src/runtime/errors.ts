@@ -157,8 +157,8 @@ export interface DocxEditorErrorInit {
  * try {
  *   await context.sync();
  * } catch (error) {
- *   if (error instanceof DocxEditorError && error.code === 'StaleDocument') {
- *     // Re-read and retry: someone else changed the document first.
+ *   if (isDocxEditorError(error) && error.code === 'StaleDocument') {
+ *     // Re-read, re-anchor, and reconsider: someone else changed the document first.
  *   }
  * }
  * ```
