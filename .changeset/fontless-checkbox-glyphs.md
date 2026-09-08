@@ -2,4 +2,4 @@
 '@docx-editor.dev/core': patch
 ---
 
-Render a checkbox state that omits its optional font as the Unicode character named by its hexadecimal value. Fixes #752.
+Render checkbox states that omit their font with Word's default MS Gothic font instead of literal hexadecimal text. Fixes #752.

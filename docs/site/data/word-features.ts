@@ -993,7 +993,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Each control accepts only the value its own type allows. A dropdown must name an item it declares, and a combo box also takes free text. A date validates an ISO instant and writes both `w:fullDate` and the formatted text. A checkbox writes its declared glyph and its state together. The first write replaces a literal prompt whole, so clearing the value later leaves the control empty. A `w:temporary` control removes its own wrapper on the first edit and keeps the content.',
+      'Each control accepts only the value its own type allows. A dropdown must name an item it declares, and a combo box also takes free text. A date validates an ISO instant and writes both `w:fullDate` and the formatted text. A checkbox writes its declared glyph and its state together. Editor checkbox toggles use MS Gothic when the state omits its font. The first write replaces a literal prompt whole, so clearing the value later leaves the control empty. A `w:temporary` control removes its own wrapper on the first edit and keeps the content.',
     docsLink: '/docs/2.x/guides/content-controls',
   },
   {

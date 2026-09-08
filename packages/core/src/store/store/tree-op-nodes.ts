@@ -408,14 +408,14 @@ export function listItemsOf(control: OoxmlNode): readonly { displayText: string;
   return items;
 }
 
-/** `w14:checkbox` payload pieces. */
+/** `w14:checkbox` payload with the MS-DOCX §2.6.3.29 symbol defaults. */
 export function checkboxPayloadOf(control: OoxmlNode): {
   readonly checkbox: OoxmlElement;
   readonly checked: boolean;
   readonly checkedGlyph: string;
   readonly uncheckedGlyph: string;
-  readonly checkedFont: string | undefined;
-  readonly uncheckedFont: string | undefined;
+  readonly checkedFont: string;
+  readonly uncheckedFont: string;
 } | null {
   const checkbox = sdtPrChild(contentControlPropertiesOf(control), 'checkbox');
   if (!checkbox) return null;
@@ -446,8 +446,8 @@ export function checkboxPayloadOf(control: OoxmlNode): {
     checked,
     checkedGlyph: attributeValueOf(checkedState, 'val') ?? '2612',
     uncheckedGlyph: attributeValueOf(uncheckedState, 'val') ?? '2610',
-    checkedFont: attributeValueOf(checkedState, 'font'),
-    uncheckedFont: attributeValueOf(uncheckedState, 'font'),
+    checkedFont: attributeValueOf(checkedState, 'font') ?? 'MS Gothic',
+    uncheckedFont: attributeValueOf(uncheckedState, 'font') ?? 'MS Gothic',
   };
 }
 

@@ -1041,31 +1041,6 @@ describe('setContentControlValue', () => {
     expect(attributeOfV2(walk(findContentControl(next, control.id)!)!, 'char')).toBe('2612');
   });
 
-  test('checkbox writes a fontless state code point as Unicode text', () => {
-    const part = loadV2(
-      '<w:p><w:sdt><w:sdtPr><w14:checkbox>' +
-        '<w14:checked w14:val="0"/>' +
-        '<w14:checkedState w14:val="2612"/>' +
-        '<w14:uncheckedState w14:val="2610"/>' +
-        '</w14:checkbox></w:sdtPr>' +
-        '<w:sdtContent><w:r><w:t>☐</w:t></w:r></w:sdtContent>' +
-        '</w:sdt></w:p>'
-    );
-    const control = firstSdtV2(part);
-    const next = applyV2(part, {
-      op: 'setContentControlValue',
-      controlId: control.id,
-      value: 'true',
-    });
-    const updated = findContentControl(next, control.id)!;
-    const content = childNamedV2(updated, 'sdtContent')!;
-    const xml = serializeOoxmlPart(next);
-    expect(collectTextV2(content)).toBe('☒');
-    expect(xml).toContain('<w:t>☒</w:t>');
-    expect(xml).not.toContain('<w:t>2612</w:t>');
-    expect(xml).not.toContain('<w:sym');
-  });
-
   test('date writes fullDate and formatted display text', () => {
     const part = loadV2(
       '<w:sdt><w:sdtPr><w:date w:fullDate="2020-01-01T00:00:00Z">' +
