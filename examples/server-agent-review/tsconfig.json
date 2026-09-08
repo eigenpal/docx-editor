@@ -9,7 +9,19 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node", "vite/client", "bun"]
+    "types": ["node", "vite/client", "bun"],
+    "resolveJsonModule": true,
+    "paths": {
+      "@docx-editor.dev/core": ["../../packages/core/src/index.ts"],
+      "@docx-editor.dev/core/*": ["../../packages/core/src/*"],
+      "@docx-editor.dev/editor-api": ["../../packages/editor-api/src/index.ts"],
+      "@docx-editor.dev/editor-api/*": ["../../packages/editor-api/src/*"],
+      "@docx-editor.dev/fonts": ["../../packages/fonts/src/index.ts"],
+      "@docx-editor.dev/i18n": ["../../packages/i18n/src/index.ts"],
+      "@docx-editor.dev/pro": ["../../packages/pro/src/index.ts"],
+      "@docx-editor.dev/pro/*": ["../../packages/pro/src/*"],
+      "@docx-editor.dev/react": ["../../packages/react/src/index.ts"]
+    }
   },
   "include": ["src", "server"]
 }
