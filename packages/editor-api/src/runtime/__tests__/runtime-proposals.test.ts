@@ -26,9 +26,10 @@ async function propose(runtime: DocxEditorServerRuntime, kind: 'insert' | 'delet
     await c.sync();
     range.load('text');
     await c.sync();
-    if (kind === 'insert') range.proposeInsertion(' upon written notice', 'After');
-    else if (kind === 'delete') range.proposeDeletion();
-    else range.proposeReplacement('with 30 days’ notice');
+    c.document.changeTrackingMode = 'TrackMineOnly';
+    if (kind === 'insert') range.insertText(' upon written notice', 'After');
+    else if (kind === 'delete') range.delete();
+    else range.insertText('with 30 days’ notice', 'Replace');
     await c.sync();
   });
 }
@@ -97,7 +98,8 @@ describe('explicit inline proposals', () => {
             other.document.body.insertText('Human edit', 'End');
             await other.sync();
           });
-          range.proposeReplacement('later');
+          c.document.changeTrackingMode = 'TrackMineOnly';
+          range.insertText('later', 'Replace');
           await c.sync();
         })
       ).rejects.toMatchObject({ code: 'StaleDocument' });
@@ -133,7 +135,8 @@ describe('explicit inline proposals', () => {
         await r.run(async (c) => {
           const range = c.document.body.search('middle').getFirstOrNullObject();
           await c.sync();
-          range.proposeDeletion();
+          c.document.changeTrackingMode = 'TrackMineOnly';
+          range.delete();
           await c.sync();
         });
         const before = await xml(r);
@@ -145,9 +148,9 @@ describe('explicit inline proposals', () => {
               .getFirstOrNullObject();
             await c.sync();
             if (kind.startsWith('insert'))
-              range.proposeInsertion('X', beforeBoundary ? 'After' : 'Before');
-            else if (kind.startsWith('delete')) range.proposeDeletion();
-            else range.proposeReplacement('X');
+              range.insertText('X', beforeBoundary ? 'After' : 'Before');
+            else if (kind.startsWith('delete')) range.delete();
+            else range.insertText('X', 'Replace');
             await c.sync();
           })
         ).rejects.toBeDefined();
@@ -158,7 +161,7 @@ describe('explicit inline proposals', () => {
     });
   }
 
-  for (const bad of ['', 'two\nparagraphs', 'invalid\u0000xml']) {
+  for (const bad of ['two\nparagraphs', 'invalid\u0000xml']) {
     test(`invalid replacement ${JSON.stringify(bad)} rolls back other writes`, async () => {
       const r = await DocxEditor.createServer(bytes, { author: 'Agent' });
       try {
@@ -169,8 +172,9 @@ describe('explicit inline proposals', () => {
             await c.sync();
             range.load('text');
             await c.sync();
+            c.document.changeTrackingMode = 'TrackMineOnly';
             c.document.body.insertText('Must not survive', 'End');
-            range.proposeReplacement(bad);
+            range.insertText(bad, 'Replace');
             await c.sync();
           })
         ).rejects.toBeDefined();

@@ -178,15 +178,37 @@ Contributions welcome. See [CONTRIBUTING.md](https://github.com/eigenpal/docx-ed
 > [!TIP]
 > Questions or custom features? Email **[docx-editor@eigenpal.com](mailto:docx-editor@eigenpal.com)**.
 
-## Explicit redlines on the server
+## Office-shaped redlines on the server
 
-A collaborative server runtime can propose inline Word revisions with
-`range.proposeInsertion(text, 'Before' | 'After')`, `range.proposeDeletion()`, and
-`range.proposeReplacement(text)`. Supply an `author` when opening the runtime, and call
-`context.sync()` to commit. These methods are DocxEditor extensions; ordinary `insertText()`
-continues to make ordinary server edits.
+Set `document.changeTrackingMode = 'TrackMineOnly'`, then use standard Word editing methods.
+Supply the agent's `author` when opening the server or collaborative runtime:
 
-Proposals support one paragraph at a time, including table-cell text, and refuse targets
-touching or overlapping pending revisions. Browser use additionally requires the review module and a
-writable editor. See the [server-agent review example](../../examples/server-agent-review/README.md)
-for the Hocuspocus worker, client setup, stale-read handling, and review lifecycle.
+```ts
+await runtime.run(async (context) => {
+  const matches = context.document.body.search('within 7 days');
+  matches.load('items');
+  await context.sync();
+  if (matches.items.length !== 1) throw new Error('Choose a unique target');
+
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  const replacement = matches.items[0]!.insertText('within 30 days', 'Replace');
+  await context.sync();
+  replacement.load('text');
+  await context.sync();
+});
+```
+
+Use `range.insertText(text, 'Before' | 'After')` for insertions, and `range.delete()` or
+`range.clear()` for deletions. `insertText()` returns the inserted range. Mode assignments
+and edits commit together at `sync()`; failed batches preserve the previous mode and document.
+Load `document.changeTrackingMode` before reading it. `Off` is the initial mode.
+
+This is a supported Office.js subset. `TrackMineOnly` applies to this server host and persists
+across its `run()` calls. It does not change peers' tracking settings or save a document-wide
+tracking policy. `TrackAll` and browser-host mode control explicitly refuse with `NotSupported`.
+Tracked text edits support one paragraph, including table-cell text. They refuse targets touching
+pending revisions. Structural and formatting mutations under tracking also refuse. Comments and
+revision decisions remain available. Set `Off` explicitly when permanent edits are intended.
+
+See the [server-agent review example](../../examples/server-agent-review/README.md) for Hocuspocus,
+stale-read handling, and the review lifecycle.

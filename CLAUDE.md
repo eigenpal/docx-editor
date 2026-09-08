@@ -22,6 +22,20 @@ change. For example, write `packages/core/src/layout/semantic-layout.ts` and
 In user-facing text, always use the name `EigenPal Pro License`. Do not rename
 the legal license files or `LicenseRef-EigenPal-Pro-Evaluation-1.0` metadata.
 
+## Public API compatibility
+
+All public document automation APIs must keep the Microsoft Word Office.js shape.
+Match member names, signatures, enum values, return types, and `load()` / `context.sync()` behavior.
+Use existing Office.js members when they express the operation. Do not add competing convenience methods.
+This includes server agents: set `document.changeTrackingMode`, then use standard edits such as
+`range.insertText(text, 'Replace')` and `range.delete()` to create redlines.
+
+Compatibility includes behavior. Explicitly refuse unsupported modes or operations; never silently approximate them.
+Record supported subsets and differences in `packages/editor-api/compat/manifest.json` and public documentation.
+Extend the pinned Office.js reference, conformance fixtures, and runtime tests when adding public members.
+Keep host creation, collaboration transport, and job orchestration separate from the Office-shaped document model.
+These infrastructure APIs have no Office.js equivalent. Do not claim full Office.js compatibility from subset conformance.
+
 ## Packages
 
 One engine. Thin chrome on top.

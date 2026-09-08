@@ -84,7 +84,8 @@ try {
     await context.sync();
     const replacement = await generateReplacement(range.text, instruction);
 
-    range.proposeReplacement(replacement);
+    context.document.changeTrackingMode = 'TrackMineOnly';
+    range.insertText(replacement, 'Replace');
     await context.sync(); // StaleDocument if the local replica changed since the read
   });
   await waitForOutboundSync(room.provider);
@@ -94,7 +95,11 @@ try {
 }
 ```
 
-For insertion/deletion use `range.proposeInsertion(text, 'Before' | 'After')` or `range.proposeDeletion()`. These are DocxEditor extensions, not Office.js members. `author` is required; ordinary `insertText()` retains its existing behavior.
+For insertions use `range.insertText(text, 'Before' | 'After')`. For deletions use `range.delete()`.
+These public methods follow Office.js shape. Supply an `author` and enable `TrackMineOnly` before editing.
+The mode persists for the runtime session. `Off` makes ordinary edits. `TrackAll` is explicitly unsupported,
+as are structural or formatting mutations while tracking. Other peers keep their own editing mode.
+The saved redlines are Word revisions; the local tracking setting is not a document-wide saved policy.
 
 ## Client integration
 

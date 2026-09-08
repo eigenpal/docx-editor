@@ -83,6 +83,8 @@ export type AutomationStagedOps = (
 ) => readonly TreeDocOp[] | null;
 
 export interface AutomationDocumentPort {
+  /** This owner supports host-local Office-shaped tracking independently of browser UI modes. */
+  readonly localChangeTracking?: true;
   /**
    * Monotonic document revision. One committed batch moves it exactly once.
    *

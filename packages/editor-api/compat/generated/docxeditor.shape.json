@@ -666,6 +666,17 @@
             }
           ]
         },
+        "changeTrackingMode": {
+          "uid": "DocxEditor.Document#changeTrackingMode",
+          "kind": "property",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "\"Off\" | \"TrackAll\" | \"TrackMineOnly\""
+            }
+          ]
+        },
         "comments": {
           "uid": "DocxEditor.Document#comments",
           "kind": "property",
@@ -1389,6 +1400,17 @@
             }
           ]
         },
+        "clear": {
+          "uid": "DocxEditor.Range#clear",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
+            }
+          ]
+        },
         "contentControls": {
           "uid": "DocxEditor.Range#contentControls",
           "kind": "property",
@@ -1398,6 +1420,17 @@
             {
               "params": [],
               "returns": "ContentControlCollection"
+            }
+          ]
+        },
+        "delete": {
+          "uid": "DocxEditor.Range#delete",
+          "kind": "method",
+          "requirementSet": null,
+          "overloads": [
+            {
+              "params": [],
+              "returns": "void"
             }
           ]
         },

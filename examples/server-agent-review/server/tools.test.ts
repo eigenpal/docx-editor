@@ -123,3 +123,33 @@ test('three stale tool calls abort the job and latch a refusal for later reads a
     runtime.dispose();
   }
 });
+
+for (const kind of ['insertion', 'replacement'] as const) {
+  for (const value of [undefined, '']) {
+    test(`${kind} with ${value === undefined ? 'missing' : 'empty'} text cannot commit or remove content`, async () => {
+      const s = await setup();
+      try {
+        const before = await s.runtime.save();
+        const snapshot = await s.read();
+        expect(
+          await s.adapter.apply(kind, {
+            snapshot: snapshot.snapshot,
+            quote: '7 days',
+            ...(value === undefined ? {} : { text: value }),
+          })
+        ).toMatchObject({ ok: false, code: 'invalid-proposal' });
+        expect(s.committed()).toBe(0);
+        expect(await s.runtime.save()).toEqual(before);
+        expect(
+          await s.adapter.apply('deletion', {
+            snapshot: snapshot.snapshot,
+            quote: '7 days',
+          })
+        ).toEqual({ ok: true });
+        expect(s.committed()).toBe(1);
+      } finally {
+        s.runtime.dispose();
+      }
+    });
+  }
+}

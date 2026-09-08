@@ -513,3 +513,14 @@ void revisionItemsAreRevisions;
 void revisionsAreReachable;
 void noteItemsAreNotes;
 void notesAreReachable;
+
+const documentTracksChanges: Satisfies<
+  Pick<Document, 'changeTrackingMode'>,
+  Pick<Declared.Document, 'changeTrackingMode'>
+> = true;
+const rangeDeletesAndClears: Satisfies<
+  Pick<Range, 'delete' | 'clear'>,
+  Pick<Declared.Range, 'delete' | 'clear'>
+> = true;
+void documentTracksChanges;
+void rangeDeletesAndClears;

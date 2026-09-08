@@ -91,6 +91,12 @@ export function createReviewTools(
 
   async function apply(kind: ProposalKind, input: ProposalInput) {
     assertActive();
+    if (kind !== 'deletion' && (typeof input.text !== 'string' || input.text.length === 0))
+      return {
+        ok: false as const,
+        code: 'invalid-proposal',
+        message: 'Insertion and replacement require non-empty text. Use deletion to remove text.',
+      };
     const snapshot = snapshots.get(input.snapshot);
     if (!snapshot) return stale();
     if ((await digest()) !== snapshot.digest) return stale();
@@ -124,9 +130,10 @@ export function createReviewTools(
         )
           return stale();
         assertActive();
-        if (kind === 'insertion') range.proposeInsertion(input.text ?? '', input.where ?? 'After');
-        else if (kind === 'deletion') range.proposeDeletion();
-        else range.proposeReplacement(input.text ?? '');
+        context.document.changeTrackingMode = 'TrackMineOnly';
+        if (kind === 'insertion') range.insertText(input.text ?? '', input.where ?? 'After');
+        else if (kind === 'deletion') range.delete();
+        else range.insertText(input.text ?? '', 'Replace');
         await context.sync();
         return { ok: true as const };
       });

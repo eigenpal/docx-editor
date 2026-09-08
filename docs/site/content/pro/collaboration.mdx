@@ -747,7 +747,7 @@ A background worker can join the same Hocuspocus room as the browser peers with
 `role: 'agent'`, then attach `DocxEditor.createCollaborative` as above. The worker
 owns its connection, so closing the initiating browser does not stop its job.
 
-Use the explicit proposal methods to create Word tracked changes:
+Use Office-shaped tracking mode and standard edits to create Word tracked changes:
 
 ```ts
 await runtime.run(async (context) => {
@@ -758,16 +758,18 @@ await runtime.run(async (context) => {
   await context.sync();
 
   // Decide from the loaded snapshot; sync refuses if the replica changed meanwhile.
-  range.proposeReplacement('within 30 days');
+  context.document.changeTrackingMode = 'TrackMineOnly';
+  range.insertText('within 30 days', 'Replace');
   await context.sync();
 });
 ```
 
-`proposeInsertion(text, 'Before' | 'After')` and `proposeDeletion()` use the same
-transaction path. Configure a non-empty runtime `author`; ordinary `insertText`
-continues to make ordinary edits. Proposals support inline, single-paragraph
-ranges, including table cells. Touching or overlapping pending revisions refuse;
-resolve those decisions before proposing at their boundaries.
+`range.insertText(text, 'Before' | 'After')`, `range.delete()`, and `range.clear()` use the same
+transaction path. Configure an `author` on the runtime. `TrackMineOnly` persists across runs
+and applies only to that server host. Peers retain their own editing mode. `Off` makes ordinary edits.
+`TrackAll` and browser-host mode control refuse with `NotSupported`. The local mode is not saved as a
+document-wide policy. Tracked edits currently support inline text within one paragraph, including table cells.
+Targets touching pending revisions, structural changes, and formatting changes under tracking refuse atomically.
 
 Commit one logical suggestion per sync. Send progress through a separate job/event
 channel, while the collaboration session publishes committed redlines to peers.

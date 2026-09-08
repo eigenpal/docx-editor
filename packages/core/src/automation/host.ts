@@ -16,6 +16,7 @@
 // failing operation with a code and everything else as `skipped`. There is no path through
 // this file that writes part of a batch.
 
+import { trackingStep, type LocalTrackingState } from './change-tracking.ts';
 import type { OoxmlPackage } from '../store/package/ooxml-package.ts';
 import type { TreeDocOp } from '../store/store/tree-ops.ts';
 import { createHandleTable } from './handles.ts';
@@ -96,6 +97,9 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
   const handles = createHandleTable();
   const listeners = new Set<(event: AutomationChangeEvent) => void>();
   let disposed = false;
+  let tracking: LocalTrackingState = { mode: 'Off' };
+  let executing = 0;
+  let pendingEvent: AutomationChangeEvent | null = null;
   /** Reads keyed on package IDENTITY: packages are immutable, so an edit replaces the key. */
   let reads: { readonly pkg: OoxmlPackage; readonly value: AutomationPackageReads } | null = null;
 
@@ -104,7 +108,8 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     ? port.subscribe(() => {
         if (disposed) return;
         const event: AutomationChangeEvent = Object.freeze({ revision: port.revision() });
-        for (const listener of [...listeners]) listener(event);
+        if (executing > 0) pendingEvent = event;
+        else for (const listener of [...listeners]) listener(event);
       })
     : () => {};
 
@@ -115,7 +120,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     return value;
   };
 
-  const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
+  const executeBatch = (request: AutomationBatchRequest): AutomationBatchResponse => {
     const operations: readonly AutomationOperation[] = Array.isArray(request?.operations)
       ? request.operations
       : [];
@@ -188,8 +193,12 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
     /** The one custom-node write a batch may hold, solitary and its own commit for the same reason. */
     let customNodeWrite: { write: InsertCustomNodeWrite; scope: StoryScope } | null = null;
     let firstCommand = -1;
+    let stagedTracking = tracking;
     for (let index = 0; index < operations.length; index += 1) {
-      const step = planner.plan(operations[index]!);
+      const operation = operations[index]!;
+      const policy = trackingStep(operation, port.localChangeTracking === true, stagedTracking);
+      const step = policy?.step ?? planner.plan(operation, stagedTracking.author);
+      if (policy) stagedTracking = policy.state;
       if (!step.ok) return refuse(operations, index, step.error, revision);
       planned.push(step);
       if (step.kind === 'command') {
@@ -321,6 +330,7 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
       );
     }
 
+    tracking = stagedTracking;
     const results: AutomationOperationResult[] = planned.map((step) => ({
       status: 'ok',
       value:
@@ -331,6 +341,21 @@ export function createAutomationHost(composition: AutomationHostComposition): Au
             : step.answer(post, mintedComment),
     }));
     return { ok: true, results, revision: port.revision(), changed };
+  };
+
+  const execute = (request: AutomationBatchRequest): AutomationBatchResponse => {
+    executing += 1;
+    try {
+      return executeBatch(request);
+    } finally {
+      executing -= 1;
+      if (executing === 0 && pendingEvent) {
+        const event = pendingEvent;
+        pendingEvent = null;
+        // State and answers are final before an observer may read or write this host again.
+        for (const listener of [...listeners]) listener(event);
+      }
+    }
   };
 
   return {

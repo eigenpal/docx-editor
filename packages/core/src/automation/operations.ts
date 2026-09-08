@@ -156,6 +156,12 @@ export type AutomationSelectionMode = 'select' | 'start' | 'end';
  * host minted, never pointers, so an operation is plain transport data.
  */
 export type AutomationOperation =
+  | { readonly op: 'getChangeTrackingMode' }
+  | {
+      readonly op: 'setChangeTrackingMode';
+      readonly mode: 'Off' | 'TrackAll' | 'TrackMineOnly';
+      readonly author?: string;
+    }
   /** The document itself — the root every other handle is reached through. */
   | { readonly op: 'getDocument' }
   /** The main story of a document. */
@@ -810,6 +816,7 @@ export type AutomationOperationKind = AutomationOperation['op'];
 
 /** Operations that read. They never open a transaction. */
 export const AUTOMATION_QUERY_OPERATIONS = [
+  'getChangeTrackingMode',
   'getDocument',
   'getBody',
   'getParagraphs',
@@ -870,6 +877,7 @@ export const AUTOMATION_QUERY_OPERATIONS = [
 
 /** Operations that write. Every one of these goes through the single transaction path. */
 export const AUTOMATION_COMMAND_OPERATIONS = [
+  'setChangeTrackingMode',
   'proposeInsertion',
   'proposeDeletion',
   'proposeReplacement',

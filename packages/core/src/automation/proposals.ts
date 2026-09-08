@@ -14,7 +14,10 @@ const PARAGRAPH_BREAKING = /[\r\n\v\f\u2028\u2029]/;
 function invalid(code: AutomationErrorCode, message: string, detail: string): AutomationError {
   return { code, message, detail };
 }
-export function proposalInputError(operation: Proposal): AutomationError | null {
+export function proposalInputError(
+  operation: Proposal,
+  allowEmpty = false
+): AutomationError | null {
   if (
     typeof operation.author !== 'string' ||
     !operation.author.trim() ||
@@ -27,7 +30,7 @@ export function proposalInputError(operation: Proposal): AutomationError | null 
   if (
     !deletion &&
     (typeof operation.text !== 'string' ||
-      !operation.text.length ||
+      (!allowEmpty && !operation.text.length) ||
       PARAGRAPH_BREAKING.test(operation.text) ||
       !isValidXmlText(operation.text))
   ) {

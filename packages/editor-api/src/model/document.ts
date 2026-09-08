@@ -17,6 +17,7 @@ Production use requires a commercial agreement: licensing@eigenpal.com
 
 import {
   ObjectPath,
+  fail,
   internalsOf,
   type RequestContext,
   type ResolvedLoadOptions,
@@ -28,6 +29,9 @@ import { ModelObject } from './model-object.ts';
 import { NoteItemCollection } from './notes.ts';
 import { CommentCollection, RevisionCollection } from './review.ts';
 import { SectionCollection } from './sections.ts';
+
+/** Office.js tracking mode names. TrackAll is recognized but currently refused. @public */
+export type ChangeTrackingMode = 'Off' | 'TrackAll' | 'TrackMineOnly';
 
 /**
  * The document: the root every other object is reached from.
@@ -75,6 +79,27 @@ export class Document extends ModelObject {
 
   private constructor(context: RequestContext) {
     super(context, ObjectPath.of('document', internalsOf(context).roots().document));
+  }
+
+  /**
+   * Tracking for this server host. Load before reading. Assignments take effect at sync.
+   * TrackMineOnly tracks this runtime's inline text edits using its configured author.
+   * TrackAll and browser-host mode control are not supported. Unsupported tracked mutation
+   * kinds refuse; the setting is session-local and is not saved as a document-wide policy.
+   */
+  get changeTrackingMode(): ChangeTrackingMode {
+    return this.loadedProperty<ChangeTrackingMode>('changeTrackingMode');
+  }
+
+  set changeTrackingMode(mode: ChangeTrackingMode) {
+    if (!['Off', 'TrackAll', 'TrackMineOnly'].includes(mode))
+      fail({ code: 'InvalidArgument', target: 'document.changeTrackingMode' });
+    const author = this.internals.author;
+    this.commandAnswering(
+      'document.changeTrackingMode',
+      () => ({ op: 'setChangeTrackingMode', mode, ...(author === undefined ? {} : { author }) }),
+      () => this.setLoadedProperty('changeTrackingMode', mode)
+    );
   }
 
   /**
@@ -174,8 +199,8 @@ export class Document extends ModelObject {
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
-    // The document offers no readable property of its own in this slice, so the only selection it
-    // accepts is the empty one — and naming a property it does not have is refused, not ignored.
-    this.selection(request, []);
+    const selected = this.selection(request, ['changeTrackingMode']);
+    if (selected.includes('changeTrackingMode'))
+      this.loadTextInto('changeTrackingMode', () => ({ op: 'getChangeTrackingMode' }));
   }
 }

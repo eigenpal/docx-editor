@@ -89,7 +89,7 @@ import { paragraphStyleName, styleIdFor } from './styles.ts';
 import type { StoryScope } from '../store/store/tree-package-store.ts';
 import type { AutomationCommentWrite } from './document-port.ts';
 import { commentReads, revisionReads, type AutomationRevisionRead } from './review.ts';
-import { proposalInputError, proposalRevisionError } from './proposals.ts';
+import { planProposal } from './plan-proposal.ts';
 import { revisionCollectionOps, revisionDecisionTarget } from './revision-operations.ts';
 import type { ReviewCommentItem } from '../store/store/review-items.ts';
 import {
@@ -235,7 +235,7 @@ export interface BatchPlannerHost {
 }
 
 export interface BatchPlanner {
-  plan(operation: AutomationOperation): PlannedOperation;
+  plan(operation: AutomationOperation, trackingAuthor?: string): PlannedOperation;
   /** Whether any planned operation writes. */
   readonly hasCommands: boolean;
   /**
@@ -1638,7 +1638,24 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
     return { reads, range: { start: point(bookmark.start), end: point(bookmark.end) } };
   };
 
-  const plan = (operation: AutomationOperation): PlannedOperation => {
+  const plan = (operation: AutomationOperation, trackingAuthor?: string): PlannedOperation => {
+    const tracked = trackingAuthor !== undefined;
+    if (tracked && operation.op === 'insertText') {
+      operation = {
+        op: 'proposeInsertion',
+        span: { start: operation.at, end: operation.at },
+        text: operation.text,
+        where: 'Before',
+        author: trackingAuthor,
+      };
+    } else if (tracked && operation.op === 'replaceSpan') {
+      operation = {
+        op: 'proposeReplacement',
+        span: operation.span,
+        text: operation.text,
+        author: trackingAuthor,
+      };
+    }
     switch (operation.op) {
       case 'getDocument':
         return query({ kind: 'handle', handle: handles.document() });
@@ -1745,61 +1762,11 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
 
       case 'proposeInsertion':
       case 'proposeDeletion':
-      case 'proposeReplacement': {
-        const inputError = proposalInputError(operation);
-        if (inputError) return { ok: false, error: inputError };
-        const insertion = operation.op === 'proposeInsertion';
-        const deletion = operation.op === 'proposeDeletion';
-        const resolved = resolveSpanRef(operation.span, handles, packageReads);
-        if (!resolved.ok) return refuse(resolved.code, 'that span is not a place', resolved.detail);
-        const range = resolved.value;
-        if (!range || range.start.paragraphId !== range.end.paragraphId) {
-          return refuse(
-            'unsupported-content',
-            'proposals require a single paragraph range',
-            'span'
-          );
-        }
-        if (!insertion && range.start.offset === range.end.offset) {
-          return refuse(
-            'unsupported-content',
-            'deletion and replacement need a non-empty range',
-            'span'
-          );
-        }
-        const story = storyOfSpanRef(operation.span, handles, packageReads);
-        if (!story.ok) return refuse(story.code, 'that story is not a place', story.detail);
-        const paragraphId = range.start.paragraphId;
-        const start =
-          insertion && operation.where === 'After' ? range.end.offset : range.start.offset;
-        const end = insertion ? start : range.end.offset;
-        const revisionError = proposalRevisionError(story.value, paragraphId, start, end);
-        if (revisionError) return { ok: false, error: revisionError };
-        const plan = planFor(story.value);
-        const pin = pinWrite(plan);
-        if (pin) return pin;
-        // Only one proposal/edit per paragraph per batch: all anchors refer to the snapshot.
-        const conflict = claim(plan, paragraphId);
-        if (conflict) return conflict;
-        const revision = { author: operation.author.trim(), date: new Date().toISOString() };
-        const ops: TreeDocOp[] = [];
-        if (!insertion) ops.push({ op: 'deleteText', paragraphId, start, end, revision });
-        if (!deletion)
-          ops.push({
-            op: 'insertText',
-            paragraphId,
-            offset: insertion ? start : end,
-            text: operation.text,
-            revision,
-          });
-        return {
-          ok: true,
-          kind: 'command',
-          ops,
-          story: story.value.story,
-          answer: () => ({ kind: 'applied' }),
-        };
-      }
+      case 'proposeReplacement':
+        return planProposal(operation, tracked, handles, packageReads, (story, paragraphId) => {
+          const storyPlan = planFor(story);
+          return pinWrite(storyPlan) ?? claim(storyPlan, paragraphId);
+        });
 
       case 'insertText': {
         const at = resolvePoint(operation.at, handles, packageReads);
@@ -2890,10 +2857,10 @@ export function createBatchPlanner(host: BatchPlannerHost): BatchPlanner {
   };
 
   return {
-    plan(operation) {
+    plan(operation, trackingAuthor) {
       const conflict = commandPolicy.conflict(operation);
       if (conflict) return refuse('conflicting-operations', conflict.message, conflict.detail);
-      const planned = plan(operation);
+      const planned = plan(operation, trackingAuthor);
       if (planned.ok) commandPolicy.note(operation);
       return planned;
     },
