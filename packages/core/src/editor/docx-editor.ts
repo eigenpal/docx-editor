@@ -101,6 +101,7 @@ import {
   type TextMeasurer,
 } from '@docx-editor.dev/core/layout';
 import { createAnchorIndex } from './docx-editor-anchors.ts';
+import { snapshotTextFormInput, type PendingTextFormInput } from './surface-text-form-fields.ts';
 import {
   enterStoryPosition,
   leaveScopeForBodyParagraph,
@@ -494,7 +495,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   });
   const scaleOf = (): number => zoomLane.scale();
 
-  function mountBytes(bytes: Uint8Array, initialSelection?: SemanticSelection): void {
+  function mountBytes(
+    bytes: Uint8Array,
+    initialSelection?: SemanticSelection,
+    initialTextFormInput?: PendingTextFormInput
+  ): void {
     if (!container) {
       // Detached: no DOM work. The bytes wait for `attach`, which mounts them under
       // whatever measurer has resolved by then. A previous document's parse failure is
@@ -527,6 +532,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       revisionAuthorVisibility: reviewAuthorVisibility,
       initialDrawingSelectionIntent: remountDrawingIntent,
       initialSelection,
+      initialTextFormInput,
       editingMode:
         editingMode === 'suggesting' ? 'suggest' : editingMode === 'viewing' ? 'view' : 'edit',
       // The free engine renders the FINAL-STATE projection (Word's "No Markup"):
@@ -1020,28 +1026,22 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         `+fallback:${fallbackResolution.producer}@scale:${scaleOf()}`;
       fontsResolving = false;
       if (surface) {
-        // The remount tears the surface down BEFORE building the replacement, so the
-        // saved bytes are the only copy of the live document while it runs. Hold them:
-        // a mount that throws must leave a recoverable editor, not an empty container
-        // with the document gone. Font fidelity is never worth losing the document.
+        // Retain the document and pending field input before the remount destroys the surface.
         surface.flushPendingInput();
         const saved = surface.session.save();
-        // Selection is facade state just like the live tree. In particular, `onReady` can
-        // set and reveal a range while embedded fonts are still resolving; keeping only the
-        // scroller's offset made that first call travel to the right text and then lose its
-        // highlight when this remount replaced the surface.
+        const savedTextFormInput = container ? snapshotTextFormInput(container) : undefined;
         const savedSelection = surface.state().selection;
         remountDrawingIntent = surface.drawingSelectionIntent();
         const activeElement = container?.ownerDocument.activeElement;
         const hadFocus = !!activeElement && !!container?.contains(activeElement);
         try {
-          mountBytes(saved, savedSelection);
+          mountBytes(saved, savedSelection, savedTextFormInput);
         } catch (remountError) {
           shapedMeasurer = undefined;
           shapedProducer = undefined;
           if (!surface) {
             pendingBytes = saved;
-            mountBytes(saved, savedSelection);
+            mountBytes(saved, savedSelection, savedTextFormInput);
           }
           reportFontError(toEditorFontError(remountError));
         }

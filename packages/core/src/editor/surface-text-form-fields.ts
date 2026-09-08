@@ -8,6 +8,7 @@ import { refreshTextFormLabels, textFormTranslate } from './text-form-field-tran
 import type { EditorTranslate } from './docx-editor-host-config.ts';
 import {
   findNode,
+  deepParagraphOrderOfPart,
   paragraphTextOf,
   validateTreeOp,
   textFormFieldsOf,
@@ -17,12 +18,34 @@ import {
 } from '@docx-editor.dev/core/store';
 import type { SemanticSelection } from '@docx-editor.dev/core/layout';
 
+/** Input provenance belongs to the open document, including during a font remount. */
+export type PendingTextFormInput = readonly {
+  readonly partName: string;
+  readonly fieldIndex: number;
+  readonly text: string;
+  readonly locale: string;
+}[];
+const inputSnapshots = new WeakMap<HTMLElement, () => PendingTextFormInput>();
+
+function fieldsInPart(part: OoxmlPart): TextFormFieldRange[] {
+  return [...deepParagraphOrderOfPart(part).keys()].flatMap((id) => {
+    const paragraph = findNode(part, id);
+    return paragraph?.kind === 'paragraph' ? textFormFieldsOf(paragraph) : [];
+  });
+}
+
+/** Capture pending input before the current surface is destroyed. */
+export function snapshotTextFormInput(container: HTMLElement): PendingTextFormInput | undefined {
+  return inputSnapshots.get(container)?.();
+}
+
 interface Host {
   translate?: EditorTranslate;
   locale?(): string;
   readonly pagesLayer: HTMLElement;
   readonly container: HTMLElement;
   part(): OoxmlPart;
+  parts?(): readonly OoxmlPart[];
   protected(paragraphId?: string): boolean;
   selection(): SemanticSelection;
   select(selection: SemanticSelection): void;
@@ -31,7 +54,10 @@ interface Host {
 }
 
 /** Shared field interaction for all editor hosts. */
-export function createTextFormFieldInteraction(host: Host): {
+export function createTextFormFieldInteraction(
+  host: Host,
+  initialInput?: PendingTextFormInput
+): {
   fieldId(): string | null;
   keydown(event: KeyboardEvent): boolean;
   doubleClick(event: MouseEvent): boolean;
@@ -52,6 +78,18 @@ export function createTextFormFieldInteraction(host: Host): {
   let committing = false;
   type DirtyFields = Map<string, { text: string; locale: string }>;
   let dirtyBaseline: DirtyFields = new Map();
+  const parts = () => host.parts?.() ?? [host.part()];
+  if (initialInput?.length) {
+    for (const part of parts()) {
+      const saved = initialInput.filter((input) => input.partName === part.name);
+      if (!saved.length) continue;
+      const fields = fieldsInPart(part);
+      for (const input of saved) {
+        const field = fields[input.fieldIndex];
+        if (field) dirtyBaseline.set(field.fieldNodeId, { text: input.text, locale: input.locale });
+      }
+    }
+  }
   // Store history restores immutable part identities. Keep input provenance with those
   // snapshots so undo restores a clean date and redo restores the original input locale.
   const inputHistory = new WeakMap<OoxmlPart, DirtyFields>();
@@ -65,6 +103,19 @@ export function createTextFormFieldInteraction(host: Host): {
     dirtyBaseline.delete(id);
     rememberInput();
   };
+  rememberInput();
+  const snapshotInput = (): PendingTextFormInput => {
+    if (!dirtyBaseline.size) return [];
+    // Node IDs encode parse paths and can change when an earlier field gains a result run.
+    // Field order within the same saved story remains stable across serialization.
+    return parts().flatMap((part) =>
+      fieldsInPart(part).flatMap((field, fieldIndex) => {
+        const input = dirtyBaseline.get(field.fieldNodeId);
+        return input ? [{ partName: part.name, fieldIndex, ...input }] : [];
+      })
+    );
+  };
+  inputSnapshots.set(host.container, snapshotInput);
   let incoming: { paragraphId: string; fieldNodeId: string } | null | undefined;
   const rawValue = (paragraphId: string, field: TextFormFieldRange) =>
     (paragraphTextOf(host.part(), paragraphId) ?? '').slice(field.start, field.end);
@@ -612,6 +663,8 @@ export function createTextFormFieldInteraction(host: Host): {
       return true;
     },
     destroy() {
+      if (inputSnapshots.get(host.container) === snapshotInput)
+        inputSnapshots.delete(host.container);
       document.removeEventListener('pointermove', move);
       document.removeEventListener('pointercancel', cancelPress);
       host.pagesLayer.removeEventListener('click', singleClick);

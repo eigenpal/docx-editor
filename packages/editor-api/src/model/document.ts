@@ -82,7 +82,8 @@ export class Document extends ModelObject {
   }
 
   /**
-   * Tracking for this server host. Load before reading. Assignments take effect at sync.
+   * Tracking for this server host. Load 'changeTrackingMode' explicitly before reading.
+   * Document.load() keeps an empty default property set across hosts. Assignments take effect at sync.
    * TrackMineOnly tracks this runtime's inline text edits using its configured author.
    * TrackAll and browser-host mode control are not supported. Unsupported tracked mutation
    * kinds refuse; the setting is session-local and is not saved as a document-wide policy.
@@ -199,6 +200,8 @@ export class Document extends ModelObject {
 
   /** @internal Plan the read this object's `load(...)` asked for. */
   protected override onLoad(request: ResolvedLoadOptions): void {
+    // Keep the default load valid across hosts; tracking requires an explicit property load.
+    if (request.select.length === 0) return;
     const selected = this.selection(request, ['changeTrackingMode']);
     if (selected.includes('changeTrackingMode'))
       this.loadTextInto('changeTrackingMode', () => ({ op: 'getChangeTrackingMode' }));

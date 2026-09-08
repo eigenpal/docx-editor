@@ -56,12 +56,34 @@ describe('CJK follow-up: protected groups across every run seam', () => {
     expect(textLines(parts, width)).toEqual([...expected]);
   });
 
+  test('long Latin words wrap after a protected opening or combining seam', () => {
+    for (const [parts, expected] of [
+      [
+        ['（', 'ABCDEFGHIJK'],
+        ['（ABC', 'DEFG', 'HIJK'],
+      ],
+      [
+        ['A', '\u0301BCDEFGHIJ中'],
+        ['A\u0301BC', 'DEFG', 'HIJ中'],
+      ],
+    ] as const) {
+      const lines = layout(parts, 24);
+      expect(lines.map((line) => line.spans.map((span) => span.text).join(''))).toEqual([
+        ...expected,
+      ]);
+      for (const line of lines) expect(line.width).toBeLessThanOrEqual(24);
+      expect(textLines([parts.join('')], 24)).toEqual([...expected]);
+    }
+  });
+
   test('formatting seams cannot change line breaks or lose source offsets', () => {
     for (const text of [
       '甲方（以下简称「买方」）应当按照本合同第３条、第４条之约定，支付０．５％。',
       '甲か\u3099\u309a月𠀋乙',
       '甲👩‍👩‍👧‍👦乙',
       '甲ＡＢＣ乙１２，３４５．６７％丙',
+      '（ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+      '甲A\u0301BCDEFGHIJKLMNOPQRSTUVWXYZ中',
     ]) {
       for (const width of [7, 13, 25, 36, 60]) {
         const expected = textLines([text], width);

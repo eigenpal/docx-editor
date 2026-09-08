@@ -1,6 +1,9 @@
 import { applyTextFormOperation } from './surface-text-form-apply.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
-import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
+import {
+  createTextFormFieldInteraction,
+  type PendingTextFormInput,
+} from './surface-text-form-fields.ts';
 import { formsProtectionEnabled, sectionProtectsForms } from '@docx-editor.dev/core/store';
 // Engine-owned paginated paragraph surface (composition root).
 // Painted pages are the editable surface; seams live in sibling surface-*.ts modules.
@@ -310,6 +313,7 @@ export function mountPaginatedSurface(
     readonly initialDrawingSelectionIntent?: DrawingSelectionIntent;
     /** Restore the model range on a font remount without claiming DOM selection/focus. */
     readonly initialSelection?: SemanticSelection;
+    readonly initialTextFormInput?: PendingTextFormInput;
   };
   const opened = openTreeSession(
     bytes,
@@ -5877,20 +5881,24 @@ export function mountPaginatedSurface(
    * the DOM guessed.
    */
   let pointer: PointerController | null = null;
-  textFormInteraction = createTextFormFieldInteraction({
-    locale: dateLocale.get,
-    translate: (key, params) => translate?.(key, params) ?? key,
-    pagesLayer,
-    container,
-    part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
-    protected: (paragraphId = selection.head.paragraphId) =>
-      formsProtectionEnabled(session.settingsRoot()) &&
-      sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
-    selection: () => selection,
-    select: (next) => setSelection(next),
-    editable: () => editingMode === 'edit',
-    apply: (op) => applyTextFormOperation(op, commit, applyOps),
-  });
+  textFormInteraction = createTextFormFieldInteraction(
+    {
+      locale: dateLocale.get,
+      translate: (key, params) => translate?.(key, params) ?? key,
+      pagesLayer,
+      container,
+      part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
+      parts: () => session.storyParts(),
+      protected: (paragraphId = selection.head.paragraphId) =>
+        formsProtectionEnabled(session.settingsRoot()) &&
+        sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),
+      selection: () => selection,
+      select: (next) => setSelection(next),
+      editable: () => editingMode === 'edit',
+      apply: (op) => applyTextFormOperation(op, commit, applyOps),
+    },
+    runtimeOptions.initialTextFormInput
+  );
   const dispatchKeyDown = createKeyDownHandler(
     surface,
     options.onRequestHyperlink ? { onRequestHyperlink: options.onRequestHyperlink } : {}
