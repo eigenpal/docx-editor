@@ -146,4 +146,6 @@ bun run test:server-agent-review
 
 Build the workspace packages before running Node or the browser suite. The deterministic Playwright suite starts isolated ports (5280/3280/1380) and checks two-peer streaming, human edits, review decisions, export, cancellation, browser disconnects, upload, and narrow/dark layouts. No model API key is needed.
 
+CI runs the Node lifecycle integration in its build job, after workspace packages exist; the source-only Bun suite runs the unit tests. To run the integration alone after building, use `bun run --filter './examples/server-agent-review' test:lifecycle`.
+
 The Node lifecycle test also kills the collaboration transport and restarts the worker, checking failure, persisted-room recovery, and interrupted-job handling without replay.

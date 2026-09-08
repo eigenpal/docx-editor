@@ -8,7 +8,8 @@
     "worker": "node --env-file-if-exists=.env server/index.ts",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "bun test ./server/tools.test.ts ./server/jobs.test.ts ./server/job-state.test.ts && node --test server/lifecycle.test.mjs"
+    "test": "bun test ./server/tools.test.ts ./server/jobs.test.ts ./server/job-state.test.ts && bun run test:lifecycle",
+    "test:lifecycle": "node --test server/lifecycle.integration.mjs"
   },
   "dependencies": {
     "@docx-editor.dev/core": "workspace:*",
