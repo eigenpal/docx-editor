@@ -227,21 +227,20 @@
     },
     "editor/DocxEditorPageSetup": {
       "propsAddedInReact": [
-        "alignItems",
-        "backgroundColor",
-        "display",
-        "inset",
-        "justifyContent",
-        "position",
-        "zIndex"
+        "marginBottomTwips",
+        "marginLeftTwips",
+        "marginRightTwips",
+        "marginTopTwips",
+        "pageHeightTwips",
+        "pageWidthTwips"
       ],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInVue": ["className", "name", "preset", "props", "style"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorParagraphDialog": {
-      "propsAddedInReact": ["color", "fontSize", "marginRight"],
-      "propsAddedInVue": ["name", "props"],
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["className", "name", "preset", "props", "style"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -250,6 +249,7 @@
         "author",
         "children",
         "dateInputOrder",
+        "dialogs",
         "document",
         "fonts",
         "imageDecodePort",
@@ -275,6 +275,12 @@
       ],
       "propsAddedInVue": [],
       "emitsAddedInReact": ["change", "font-error", "ready"],
+      "emitsAddedInVue": []
+    },
+    "editor/DocxEditorTextFormFieldDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["className", "name", "preset", "props", "style"],
+      "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
     "editor/DocxEditorViewport": {
@@ -432,6 +438,7 @@
         "change",
         "children",
         "dateInputOrder",
+        "dialogs",
         "document",
         "editorRef",
         "emit",
