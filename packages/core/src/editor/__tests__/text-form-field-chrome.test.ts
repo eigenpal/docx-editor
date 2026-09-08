@@ -36,3 +36,47 @@ test('Field Options chrome supports reused handlers and out-of-order disposal', 
   expect(chrome.request(session())).toBe(false);
   expect(requests).toEqual([first, second, third]);
 });
+
+for (const fallbackFirst of [true, false]) {
+  test(`manual chrome outranks adapter fallback (fallback first: ${fallbackFirst})`, () => {
+    const chrome = createTextFormFieldChrome();
+    const calls: string[] = [];
+    const fallback = () =>
+      chrome.register(
+        {
+          onRequest: (request) => {
+            calls.push('fallback');
+            request.cancel();
+          },
+        },
+        { fallback: true }
+      );
+    const manual = () =>
+      chrome.register({
+        onRequest: () => {
+          calls.push('manual');
+        },
+      });
+    let disposeManual: () => void;
+    let disposeFallback: () => void;
+    if (fallbackFirst) {
+      disposeFallback = fallback();
+      disposeManual = manual();
+    } else {
+      disposeManual = manual();
+      disposeFallback = fallback();
+    }
+    const custom = session();
+    expect(chrome.request(custom)).toBe(true);
+    expect(calls).toEqual(['manual']);
+    expect(custom.signal.aborted).toBe(false);
+    disposeManual();
+    expect(custom.signal.aborted).toBe(true);
+    const suppressed = session();
+    expect(chrome.request(suppressed)).toBe(true);
+    expect(suppressed.signal.aborted).toBe(true);
+    expect(calls).toEqual(['manual', 'fallback']);
+    disposeFallback();
+    expect(chrome.request(session())).toBe(false);
+  });
+}

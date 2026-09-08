@@ -11,29 +11,14 @@ import {
   type InjectionKey,
   type PropType,
 } from 'vue';
-import type { DocxEditorChildren } from '../docx-editor-children';
+import type { DocxEditorPopups } from './popup-config';
 import type { TextFormFieldDialogSession } from '@docx-editor.dev/core/editor';
 import { useDocxEditor } from './context';
-import {
-  DocxEditorPageSetupDialog,
-  type DocxEditorPageSetupDialogProps,
-} from './DocxEditorPageSetup';
-import {
-  DocxEditorParagraphDialog,
-  type DocxEditorParagraphDialogProps,
-} from './DocxEditorParagraphDialog';
-import {
-  DocxEditorTextFormFieldDialog,
-  type DocxEditorTextFormFieldDialogProps,
-} from './DocxEditorTextFormFieldDialog';
-/** Render overrides for automatically opened dialogs. @public */
-export interface DocxEditorDialogs {
-  pageSetup?: (props: DocxEditorPageSetupDialogProps) => DocxEditorChildren | null;
-  paragraph?: (props: DocxEditorParagraphDialogProps) => DocxEditorChildren | null;
-  textFormField?: (props: DocxEditorTextFormFieldDialogProps) => DocxEditorChildren | null;
-}
+import { DocxEditorPageSetupDialog } from './DocxEditorPageSetup';
+import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
+import { DocxEditorTextFormFieldDialog } from './DocxEditorTextFormFieldDialog';
 const key: InjectionKey<ReturnType<typeof createHost>> = Symbol('docx.dialogs');
-function createHost() {
+function createHost(config: () => DocxEditorPopups | undefined) {
   const target = shallowRef<HTMLElement | null>(null);
   const active = shallowRef<'pageSetup' | 'paragraph' | null>(null);
   const session = shallowRef<TextFormFieldDialogSession | null>(null);
@@ -51,19 +36,40 @@ function createHost() {
   };
   const open = (kind: 'pageSetup' | 'paragraph', focus?: HTMLElement | null) => {
     close();
+    if (config()?.[kind] === false) return;
     opener =
       focus ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
     active.value = kind;
   };
-  return { target, active, session, open, close };
+  return {
+    target,
+    active,
+    session,
+    open,
+    close,
+    get ownsPageSetup() {
+      return config()?.pageSetup !== undefined;
+    },
+  };
 }
 export const useDialogHost = () => inject(key, null);
 export const DialogHost = defineComponent({
   name: 'DocxDialogHost',
-  props: { dialogs: Object as PropType<DocxEditorDialogs> },
+  props: { popups: Object as PropType<DocxEditorPopups> },
   setup(p, { slots }) {
-    const host = createHost();
+    const host = createHost(() => p.popups);
     provide(key, host);
+    watch(
+      () => p.popups,
+      (config) => {
+        if (
+          (host.active.value && config?.[host.active.value] === false) ||
+          (host.session.value && config?.textFormField === false)
+        )
+          host.close();
+      },
+      { deep: true }
+    );
     const editor = useDocxEditor();
     const generation = useEditorState(() => editor.value?.mountGeneration ?? 0);
     watch(generation, (value, previous) => {
@@ -77,19 +83,26 @@ export const DialogHost = defineComponent({
       (value, _old, onCleanup) => {
         host.close();
         if (!value) return;
-        const dispose = value.setTextFormFieldChrome({
-          onRequest: (session) => {
-            host.close();
-            host.session.value = session;
-            session.signal.addEventListener(
-              'abort',
-              () => {
-                if (host.session.value === session) host.session.value = null;
-              },
-              { once: true }
-            );
+        const dispose = value.setTextFormFieldChrome(
+          {
+            onRequest: (session) => {
+              host.close();
+              if (p.popups?.textFormField === false) {
+                session.cancel();
+                return;
+              }
+              host.session.value = session;
+              session.signal.addEventListener(
+                'abort',
+                () => {
+                  if (host.session.value === session) host.session.value = null;
+                },
+                { once: true }
+              );
+            },
           },
-        });
+          { fallback: true }
+        );
         onCleanup(() => {
           dispose();
           host.close();
@@ -101,19 +114,19 @@ export const DialogHost = defineComponent({
       slots.default?.(),
       host.target.value
         ? h(Teleport, { to: host.target.value }, [
-            host.active.value === 'pageSetup'
-              ? p.dialogs?.pageSetup
-                ? p.dialogs.pageSetup({ open: true, onClose: host.close })
+            host.active.value === 'pageSetup' && p.popups?.pageSetup !== false
+              ? p.popups?.pageSetup
+                ? p.popups.pageSetup({ open: true, onClose: host.close })
                 : h(DocxEditorPageSetupDialog, { open: true, onClose: host.close })
               : null,
-            host.active.value === 'paragraph'
-              ? p.dialogs?.paragraph
-                ? p.dialogs.paragraph({ open: true, onClose: host.close })
+            host.active.value === 'paragraph' && p.popups?.paragraph !== false
+              ? p.popups?.paragraph
+                ? p.popups.paragraph({ open: true, onClose: host.close })
                 : h(DocxEditorParagraphDialog, { open: true, onClose: host.close })
               : null,
-            host.session.value
-              ? p.dialogs?.textFormField
-                ? p.dialogs.textFormField({ session: host.session.value })
+            host.session.value && p.popups?.textFormField !== false
+              ? p.popups?.textFormField
+                ? p.popups.textFormField({ session: host.session.value })
                 : h(DocxEditorTextFormFieldDialog, { session: host.session.value })
               : null,
           ])

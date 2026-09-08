@@ -762,6 +762,37 @@ export function computeResizedImageExtentEmu(startWidthEmu: number, startHeightE
 };
 
 // @public
+export interface ContentControlWidgetChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: ContentControlWidgetSession) => void;
+}
+
+// @public
+export interface ContentControlWidgetSession {
+    // (undocumented)
+    readonly anchor: HTMLElement | null;
+    // (undocumented)
+    apply(value: string): boolean;
+    // (undocumented)
+    canApply(): boolean;
+    // (undocumented)
+    cancel(): void;
+    // (undocumented)
+    readonly controlId: string;
+    // (undocumented)
+    readonly items: readonly {
+        readonly displayText: string;
+        readonly value: string;
+    }[];
+    // (undocumented)
+    readonly kind: 'dropdown' | 'comboBox' | 'date';
+    // (undocumented)
+    readonly signal: AbortSignal;
+    // (undocumented)
+    readonly value: string;
+}
+
+// @public
 export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost;
 
 // @public
@@ -861,15 +892,17 @@ export interface DocxEditorInstance extends Editor {
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
+    setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setRevisionStyles(styles: RevisionStyles): void;
-    setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers): Unsubscribe;
+    setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setTranslate(translate: ((key: string, params?: Record<string, string | number>) => string) | undefined): void;
     showAllReviewAuthors(): void;
     stateVersion(): number;
@@ -1283,6 +1316,22 @@ export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight'
 export const inchesToTwips: (inches: number) => number;
 
 // @public
+export interface InvalidTextFormFieldChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: InvalidTextFormFieldSession) => void;
+}
+
+// @public
+export interface InvalidTextFormFieldSession {
+    acknowledge(): void;
+    cancel(): void;
+    // (undocumented)
+    readonly signal: AbortSignal;
+    // (undocumented)
+    readonly type: 'number' | 'date';
+}
+
+// @public
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
 
 // @public
@@ -1643,7 +1692,11 @@ export interface PaginatedSurfaceOptions {
     // (undocumented)
     readonly onEquationPopover?: (activation: EquationActivation) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
+    // (undocumented)
+    readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
     readonly onRequestHyperlink?: () => void;
+    // (undocumented)
+    readonly onRequestInvalidTextFormField?: (session: InvalidTextFormFieldSession) => boolean;
     readonly onRequestTextFormField?: (session: TextFormFieldDialogSession) => boolean;
     readonly pointer?: 'engine' | 'native';
     readonly producer?: string;
@@ -1864,6 +1917,11 @@ export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage'
 
 // @public
 export function pointsToEmu(points: number): number;
+
+// @public
+export interface PopupChromeRegistrationOptions {
+    readonly fallback?: boolean;
+}
 
 // @public
 export function positionInputFromPropertiesCommand(command: {

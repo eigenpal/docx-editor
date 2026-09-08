@@ -16,16 +16,16 @@ import {
   useParagraphDialog,
 } from '../src/editor/DocxEditorParagraphDialog';
 import { DocxEditorMenu } from '../src/editor/menu/DocxEditorMenu';
-import type { DocxEditorDialogs } from '../src/editor/dialog-host';
+import type { DocxEditorPopups } from '../src/editor/popup-config';
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 afterEach(cleanup);
-function mount(children?: ReactNode, dialogs?: DocxEditorDialogs) {
+function mount(children?: ReactNode, dialogs?: DocxEditorPopups) {
   let editor: DocxEditorInstance;
   const view = render(
     <DocxEditorRoot
       document="blank"
-      dialogs={dialogs}
+      popups={dialogs}
       onReady={(value) => {
         editor = value as DocxEditorInstance;
       }}

@@ -1,35 +1,55 @@
 ---
-title: 'Customize dialogs'
+title: 'Customize popups'
 description: 'Style parts, replace controls, and arrange dialogs in React and Vue.'
 category: 'Guides'
 ---
 
-Customize Page Setup, Paragraph Options, and legacy text Field Options through
-named parts. The library retains draft state, validation, commands, and the
-native modal shell.
+Pass `popups` to the editor or `Root` to customize automatic editor overlays.
+Each entry accepts a renderer or `false` for manual ownership. Renderers return
+components; call hooks inside those components.
 
-| React component                  | Vue component                   |
-| -------------------------------- | ------------------------------- |
-| `DocxEditor.PageSetupDialog`     | `DocxEditorPageSetupDialog`     |
-| `DocxEditor.ParagraphDialog`     | `DocxEditorParagraphDialog`     |
-| `DocxEditor.TextFormFieldDialog` | `DocxEditorTextFormFieldDialog` |
+| Entry                    | Renderer props                             |
+| ------------------------ | ------------------------------------------ |
+| `pageSetup`, `paragraph` | Controlled dialog props: `open`, `onClose` |
+| `textFormField`          | `{ session: TextFormFieldDialogSession }`  |
+| `hyperlink`              | `HyperLinkProps`                           |
+| `contentControl`         | `ContentControlProps`                      |
+| `equation`               | No state props                             |
+| `contextMenu`            | `DocxEditorContextMenuProps`               |
+| `imageProperties`        | `DocxEditorImagePropertiesDialogProps`     |
+| `imageAltText`           | `DocxEditorImageAltTextPopupProps`         |
+| `noteProperties`         | `DocxEditorNotePropertiesDialogProps`      |
+| `notesContextMenu`       | `DocxEditorNotesContextMenuProps`          |
+| `notePreview`            | `DocxEditorNotePreviewProps`               |
+| `contentControlWidget`   | `{ session: ContentControlWidgetSession }` |
+| `invalidTextFormField`   | `{ session: InvalidTextFormFieldSession }` |
 
-Each exposes `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`, `Error`, and
-`Field`. Parts accept `className`, `style`, `hidden`, and `asChild`.
+The packaged editor supplies its default popups. `Root` mounts configured surfaces;
+image and note overrides use their existing triggers. Omitted entries retain
+existing behavior, including native widget and invalid-field dialogs.
+An explicit entry, including `false`, overrides `menu.onPageSetup`,
+`hyperlinkPopup`, or `contextMenu` shortcuts.
+
+Session renderers follow the supplied abort signal. Widget sessions expose
+`value`, `items`, `anchor`, `canApply()`, `apply(value)`, and `cancel()`.
+Invalid-field sessions expose `acknowledge()` to handle the invalid fill and
+`cancel()` to close without clearing it. Custom renderers retain core validation.
+
+Use `false` when you mount the surface yourself. You also own its trigger and
+visibility; controlled dialogs need your own `open` state and close handler.
+Toolbar menus and pickers retain their existing compound `.Content` customization;
+they are not entries in `popups`.
 
 Run the [React example](https://github.com/eigenpal/docx-editor/tree/main/examples/vite)
 or [Vue example](https://github.com/eigenpal/docx-editor/tree/main/examples/vue)
-with `?dialogs=1` to try two independently themed editors.
+with `?dialogs=1` to try two themed editors with custom dialog and link controls.
 
 ## Replace a button
 
-Pass `dialogs` to the editor or `Root` to customize automatically opened dialogs.
-Its optional callbacks are `pageSetup`, `paragraph`, and `textFormField`.
-Omitted callbacks use the default dialog. An existing `onPageSetup` callback
-retains control of Page Setup opening.
-
-Forward the callback props to the dialog. Page Setup and Paragraph Options
-receive `open` and `onClose`. Field Options receives an editor-owned `session`.
+Forward renderer props to the matching component. Page Setup, Paragraph Options,
+and Field Options expose `Header`, `Title`, `Body`, `Footer`, `Apply`, `Cancel`,
+`Error`, and typed `Field` parts. Parts accept `className`, `style`, `hidden`, and
+`asChild`. Other popups retain their existing compound parts.
 
 These examples replace **Apply** while keeping its command wiring:
 
@@ -38,10 +58,10 @@ These examples replace **Apply** while keeping its command wiring:
 
 ```tsx
 import { DocxEditor } from '@docx-editor.dev/react';
-import type { DocxEditorDialogs } from '@docx-editor.dev/react';
+import type { DocxEditorPopups } from '@docx-editor.dev/react';
 import '@docx-editor.dev/core/styles/editor.css';
 
-const dialogs: DocxEditorDialogs = {
+const popups: DocxEditorPopups = {
   pageSetup: (props) => (
     <DocxEditor.PageSetupDialog {...props}>
       <DocxEditor.PageSetupDialog.Apply asChild>
@@ -52,7 +72,7 @@ const dialogs: DocxEditorDialogs = {
 };
 
 export function Editor({ document }: { document: ArrayBuffer }) {
-  return <DocxEditor document={document} dialogs={dialogs} />;
+  return <DocxEditor document={document} popups={popups} />;
 }
 ```
 
@@ -63,11 +83,11 @@ export function Editor({ document }: { document: ArrayBuffer }) {
 <script setup lang="ts">
 import { h } from 'vue';
 import { DocxEditor, DocxEditorPageSetupDialog } from '@docx-editor.dev/vue';
-import type { DocxEditorDialogs } from '@docx-editor.dev/vue';
+import type { DocxEditorPopups } from '@docx-editor.dev/vue';
 import '@docx-editor.dev/core/styles/editor.css';
 
 defineProps<{ document: ArrayBuffer }>();
-const dialogs: DocxEditorDialogs = {
+const popups: DocxEditorPopups = {
   pageSetup: (props) =>
     h(DocxEditorPageSetupDialog, props, {
       default: () =>
@@ -83,7 +103,7 @@ const dialogs: DocxEditorDialogs = {
 </script>
 
 <template>
-  <DocxEditor :document="document" :dialogs="dialogs" />
+  <DocxEditor :document="document" :popups="popups" />
 </template>
 ```
 
@@ -103,7 +123,7 @@ For example, replace the React callback with this arrangement:
 
 ```tsx
 const Dialog = DocxEditor.PageSetupDialog;
-const dialogs: DocxEditorDialogs = {
+const popups: DocxEditorPopups = {
   pageSetup: (props) => (
     <Dialog {...props} preset={false}>
       <Dialog.Header>
@@ -123,33 +143,8 @@ const dialogs: DocxEditorDialogs = {
 };
 ```
 
-In Vue, use the same parts through the dialog's default slot. For example, this
-callback uses `h()` to arrange the equivalent layout:
-
-```ts
-const Dialog = DocxEditorPageSetupDialog;
-const dialogs: DocxEditorDialogs = {
-  pageSetup: (props) =>
-    h(
-      Dialog,
-      { ...props, preset: false },
-      {
-        default: () => [
-          h(Dialog.Header, null, { default: () => h(Dialog.Title) }),
-          h(Dialog.Body, null, {
-            default: () => [
-              h(Dialog.Field, { name: 'orientation' }),
-              h(Dialog.Field, { name: 'pageSize' }),
-            ],
-          }),
-          h(Dialog.Footer, null, {
-            default: () => [h(Dialog.Error), h(Dialog.Cancel), h(Dialog.Apply)],
-          }),
-        ],
-      }
-    ),
-};
-```
+In Vue, pass the same parts through the dialog's default slot with
+`:preset="false"`. For a complete example, see the Vue demo linked earlier.
 
 Omitted controls retain their draft values. `Field` names are typed.
 Page Setup's `pageSize` part is its size selector. Paragraph's `tabStops` part

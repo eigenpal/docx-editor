@@ -1,3 +1,14 @@
+import { usePopupConfig } from './popup-config';
+import {
+  DocxEditorNotePreview,
+  DocxEditorNotesContextMenu,
+  type DocxEditorNotesContextMenuProps,
+} from './note-popup-parts';
+export { DocxEditorNotePreview, DocxEditorNotesContextMenu } from './note-popup-parts';
+export type {
+  DocxEditorNotePreviewProps,
+  DocxEditorNotesContextMenuProps,
+} from './note-popup-parts';
 // Thin React note chrome: hover preview, context menu, properties dialog.
 //
 // No model/layout logic — reads engine state and dispatches Editor.exec / setActiveScope.
@@ -5,7 +16,7 @@
 // and navigates only.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties, MouseEvent, ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import type { EditorCommand } from '@docx-editor.dev/core/contracts/editor';
 import { useTranslation } from '../i18n';
 import { Z_INDEX } from '../styles/zIndex';
@@ -123,6 +134,8 @@ function NoteStoryOptions(props: {
 export function DocxEditorNotesChrome({
   className,
 }: DocxEditorNotesChromeProps): ReactElement | null {
+  const popups = usePopupConfig();
+  const chromeRef = useRef<HTMLDivElement | null>(null);
   const { t } = useTranslation();
   const editor = useDocxEditor();
   const noteScope = useNoteScopeState();
@@ -158,7 +171,7 @@ export function DocxEditorNotesChrome({
 
   useEffect(() => {
     if (!editor) return undefined;
-    const root = document.querySelector('.docx-pages');
+    const root = chromeRef.current?.closest('.docx-editor__scroll-container');
     if (!root) return undefined;
 
     const onClick = (event: Event) => {
@@ -279,29 +292,6 @@ export function DocxEditorNotesChrome({
     convertAllCmd ?? { type: 'convertAllNotes', fromKind: 'footnote' }
   );
 
-  const previewStyle: CSSProperties = useMemo(
-    () => ({
-      position: 'fixed',
-      left: preview?.x ?? 0,
-      top: preview?.y ?? 0,
-      zIndex: Z_INDEX.popover,
-      maxWidth: 280,
-      maxHeight: '40vh',
-      overflowY: 'auto',
-      padding: '8px 10px',
-      background: 'var(--doc-popover-bg, #fff)',
-      color: 'var(--doc-popover-fg, #111)',
-      border: '1px solid var(--doc-border, #ddd)',
-      boxShadow: 'var(--doc-shadow, 0 4px 16px rgba(0,0,0,.12))',
-      fontSize: 12,
-      lineHeight: 1.4,
-      // A preview is informational, never an interaction surface. Large attacker-authored
-      // notes must not cover the viewport or intercept pointer input.
-      pointerEvents: 'none',
-    }),
-    [preview]
-  );
-
   const parsedActive = noteScope ? parseNoteScopeId(noteScope.id) : null;
   const regionLabel = parsedActive
     ? t('notes.editingRegion', {
@@ -311,11 +301,43 @@ export function DocxEditorNotesChrome({
       })
     : null;
 
+  const menuProps: DocxEditorNotesContextMenuProps | null =
+    menu && menuParsed
+      ? {
+          ...menu,
+          ...menuParsed,
+          onDelete: () => {
+            if (deleteCmd) runNoteCommand(deleteCmd);
+          },
+          onConvert: () => {
+            if (convertCmd) runNoteCommand(convertCmd);
+          },
+          onConvertAll: () => {
+            if (convertAllCmd) runNoteCommand(convertAllCmd);
+          },
+          onOpenProperties: () => setPropsOpen(true),
+          onClose: () => setMenu(null),
+          deleteEnabled: deleteGate.enabled,
+          convertEnabled: convertGate.enabled,
+          convertAllEnabled: convertAllGate.enabled,
+          deleteDisabledReason: deleteGate.reason ?? undefined,
+          convertDisabledReason: convertGate.reason ?? undefined,
+          convertAllDisabledReason: convertAllGate.reason ?? undefined,
+        }
+      : null;
+  const propertiesProps: DocxEditorNotePropertiesDialogProps = {
+    onClose: () => setPropsOpen(false),
+    onApply: (command) => {
+      runNoteCommand(command);
+      setPropsOpen(false);
+    },
+  };
   if (!editor) return null;
 
   return (
     <div
       className={className}
+      ref={chromeRef}
       data-docx-notes-chrome=""
       data-testid="docx-notes-chrome"
       aria-hidden={noteScope ? undefined : true}
@@ -338,94 +360,41 @@ export function DocxEditorNotesChrome({
         </div>
       ) : null}
 
-      {preview ? (
-        <div
-          role="tooltip"
-          data-testid="docx-notes-preview"
-          style={previewStyle}
-          onMouseDown={(event: MouseEvent) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-        >
-          {preview.text}
-        </div>
+      {preview && popups?.notePreview !== false ? (
+        popups?.notePreview ? (
+          popups.notePreview(preview)
+        ) : (
+          <DocxEditorNotePreview {...preview} />
+        )
+      ) : null}
+      {menuProps && popups?.notesContextMenu !== false ? (
+        popups?.notesContextMenu ? (
+          popups.notesContextMenu(menuProps)
+        ) : (
+          <DocxEditorNotesContextMenu {...menuProps} />
+        )
       ) : null}
 
-      {menu && menuParsed ? (
-        <div
-          role="menu"
-          data-testid="docx-notes-menu"
-          style={{
-            position: 'fixed',
-            left: menu.x,
-            top: menu.y,
-            zIndex: Z_INDEX.popover,
-            minWidth: 160,
-            background: 'var(--doc-popover-bg, #fff)',
-            border: '1px solid var(--doc-border, #ddd)',
-            boxShadow: 'var(--doc-shadow, 0 4px 16px rgba(0,0,0,.12))',
-            padding: 4,
-          }}
-          onMouseDown={guardToolbarMousedown}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            data-testid="docx-notes-menu-delete"
-            disabled={!deleteGate.enabled}
-            title={deleteGate.reason ?? undefined}
-            onClick={() => deleteCmd && runNoteCommand(deleteCmd)}
-          >
-            {t('notes.delete')}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            data-testid="docx-notes-menu-convert"
-            disabled={!convertGate.enabled}
-            title={convertGate.reason ?? undefined}
-            onClick={() => convertCmd && runNoteCommand(convertCmd)}
-          >
-            {menuParsed.noteKind === 'footnote'
-              ? t('notes.convertToEndnote')
-              : t('notes.convertToFootnote')}
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            data-testid="docx-notes-menu-convert-all"
-            disabled={!convertAllGate.enabled}
-            title={convertAllGate.reason ?? undefined}
-            onClick={() => convertAllCmd && runNoteCommand(convertAllCmd)}
-          >
-            {menuParsed.noteKind === 'footnote'
-              ? t('notes.convertAllFootnotes')
-              : t('notes.convertAllEndnotes')}
-          </button>
-          <button type="button" role="menuitem" onClick={() => setPropsOpen(true)}>
-            {t('dialogs.footnoteProperties.title')}
-          </button>
-        </div>
-      ) : null}
-
-      {propsOpen ? (
-        <NotePropertiesDialog
-          onClose={() => setPropsOpen(false)}
-          onApply={(command) => {
-            runNoteCommand(command);
-            setPropsOpen(false);
-          }}
-        />
+      {propsOpen && popups?.noteProperties !== false ? (
+        popups?.noteProperties ? (
+          popups.noteProperties(propertiesProps)
+        ) : (
+          <DocxEditorNotePropertiesDialog {...propertiesProps} />
+        )
       ) : null}
     </div>
   );
 }
 
-function NotePropertiesDialog(props: {
+/** Properties actions for a note settings dialog. @public */
+export interface DocxEditorNotePropertiesDialogProps {
   readonly onClose: () => void;
   readonly onApply: (command: EditorCommand) => void;
-}): ReactElement {
+}
+/** Default note properties dialog. @public */
+export function DocxEditorNotePropertiesDialog(
+  props: DocxEditorNotePropertiesDialogProps
+): ReactElement {
   const { t } = useTranslation();
   const editor = useDocxEditor();
   const engineState = useNotePropertiesState();

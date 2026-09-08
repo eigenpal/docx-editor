@@ -1,4 +1,4 @@
-import { createTextFormFieldChrome } from './text-form-field-chrome.ts';
+import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 // The `Editor` facade over the paginated surface.
 //
 // `createDocxEditor` implements the FULL `Editor` contract over the paginated surface —
@@ -348,7 +348,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
   const publishSignal = createPublishSignal();
   let remountDrawingIntent: DrawingSelectionIntent = { kind: 'none' };
-  const textFormFieldChrome = createTextFormFieldChrome();
+  const popupChrome = createEditorPopupChrome();
   const hyperlinkChrome = createChromeHandlerStack<HyperlinkChromeHandlers>({});
   const equationChrome = createChromeHandlerStack<EquationChromeHandlers>({});
   let destroyed = false;
@@ -572,7 +572,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // host's chrome wired to the surface it replaced.
       onHyperlinkPopover: (activation) => hyperlinkChrome.current().onPopover?.(activation),
       textFormFieldTranslate: (key) => hostConfig.translate(key),
-      onRequestTextFormField: textFormFieldChrome.request,
+      ...popupChrome.surfaceOptions,
       onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
       onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
@@ -1758,7 +1758,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface;
     },
 
-    setTextFormFieldChrome: textFormFieldChrome.register,
+    ...popupChrome.setters,
     setHyperlinkChrome: hyperlinkChrome.push,
 
     setEquationChrome: equationChrome.push,

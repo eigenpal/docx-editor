@@ -1,3 +1,4 @@
+import { flattenChildren } from '../../lib/flattenChildren';
 import {
   cloneVNode,
   defineComponent,
@@ -83,7 +84,7 @@ export const Slot = defineComponent({
     onBeforeUnmount(() => writeForwardedRef(null));
 
     return () => {
-      const children = slots.default?.() ?? [];
+      const children = flattenChildren(slots.default?.());
       if (children.length !== 1) return null;
       const child = children[0] as VNode;
       if (!child || typeof child !== 'object') return null;

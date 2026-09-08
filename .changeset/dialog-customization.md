@@ -2,4 +2,4 @@
 '@docx-editor.dev/react': minor
 ---
 
-Add customizable Field Options, Page Setup, and Paragraph Options dialogs with equivalent React and Vue controls and theme hooks. Fixes #771.
+Add a unified popup customization API for React and Vue, including composable Field Options, Page Setup, and Paragraph Options dialogs, typed widget sessions, and explicit rendering ownership. Fixes #771.

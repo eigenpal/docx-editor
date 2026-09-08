@@ -1074,15 +1074,17 @@ export interface DocxEditorInstance extends Editor {
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
+    setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setRevisionStyles(styles: RevisionStyles): void;
-    setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers): Unsubscribe;
+    setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setTranslate(translate: ((key: string, params?: Record<string, string | number>) => string) | undefined): void;
     showAllReviewAuthors(): void;
     stateVersion(): number;

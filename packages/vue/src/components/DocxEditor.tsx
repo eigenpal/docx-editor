@@ -1,3 +1,8 @@
+import { DocxEditorContentControlWidget } from '../editor/DocxEditorContentControlWidget';
+import { DocxEditorInvalidTextFormFieldDialog } from '../editor/DocxEditorInvalidTextFormFieldDialog';
+import { DocxEditorImageAltTextPopup } from '../editor/images/ImageAltText';
+import { DocxEditorImagePropertiesDialog } from '../editor/images/ImageProperties';
+import { createPackagedPopups } from '../editor/popup-config';
 import { DocxEditorTextFormFieldDialog } from '../editor/DocxEditorTextFormFieldDialog';
 import {
   computed,
@@ -32,7 +37,12 @@ import { DocxEditorFontNotice } from '../editor/DocxEditorFontNotice';
 import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorEquation } from '../editor/DocxEditorEquation';
-import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
+import {
+  DocxEditorNotesChrome,
+  DocxEditorNotePropertiesDialog,
+  DocxEditorNotesContextMenu,
+  DocxEditorNotePreview,
+} from '../editor/DocxEditorNotes';
 import { DocxEditorContextMenu, ContextMenu } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import {
@@ -149,6 +159,13 @@ const ScopedChrome = defineComponent({
 export interface DocxEditorNamespace {
   (props: DocxEditorProps): VNode;
   readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
+  readonly ContentControlWidget: typeof DocxEditorContentControlWidget;
+  readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
+  readonly ImageAltTextPopup: typeof DocxEditorImageAltTextPopup;
+  readonly ImagePropertiesDialog: typeof DocxEditorImagePropertiesDialog;
+  readonly NotePropertiesDialog: typeof DocxEditorNotePropertiesDialog;
+  readonly NotesContextMenu: typeof DocxEditorNotesContextMenu;
+  readonly NotePreview: typeof DocxEditorNotePreview;
   readonly Root: typeof DocxEditorRoot;
   readonly Viewport: typeof DocxEditorViewport;
   readonly Content: typeof DocxEditorContent;
@@ -176,7 +193,7 @@ export interface DocxEditorNamespace {
 }
 
 const docxEditorFrameProps = {
-  dialogs: Object as PropType<DocxEditorProps['dialogs']>,
+  popups: Object as PropType<DocxEditorProps['popups']>,
   document: {
     type: [String, Object, Uint8Array, ArrayBuffer] as PropType<DocxEditorProps['document']>,
     default: undefined,
@@ -335,15 +352,6 @@ const DocxEditorFrame = defineComponent({
             chrome.value ? h(DocxEditorHeaderFooterChrome) : null,
             chrome.value ? h(DocxEditorNotesChrome) : null,
             h(DocxEditorContent),
-            h(DocxEditorHyperLink, { hidden: hyperlinkPopup.value === false }),
-            h(DocxEditorEquation),
-            contextMenu.value === false
-              ? null
-              : h(DocxEditorContextMenu, {
-                  t,
-                  ...(typeof contextMenu.value === 'object' ? contextMenu.value : {}),
-                }),
-            h(DocxEditorContentControl),
             rulers.value && chrome.value
               ? h('div', { style: VERTICAL_RULER_STYLE, 'aria-hidden': 'true' }, [
                   h(DocxEditorVerticalRuler),
@@ -423,7 +431,7 @@ const DocxEditorFrame = defineComponent({
           ...(props.author !== undefined ? { author: props.author } : {}),
           ...(props.locale !== undefined ? { locale: props.locale } : {}),
           ...(props.dateInputOrder !== undefined ? { dateInputOrder: props.dateInputOrder } : {}),
-          dialogs: props.dialogs,
+          popups: createPackagedPopups(props.popups, hyperlinkPopup.value, contextMenu.value, t),
           translate: t,
           ...(props.mode !== undefined ? { mode: props.mode } : { mode: 'edit' }),
           ...(props.modules !== undefined ? { modules: props.modules } : {}),
@@ -533,6 +541,13 @@ const DocxEditorImpl = defineComponent({
 /** @public */
 export const DocxEditor = Object.assign(DocxEditorImpl, {
   TextFormFieldDialog: DocxEditorTextFormFieldDialog,
+  ContentControlWidget: DocxEditorContentControlWidget,
+  InvalidTextFormFieldDialog: DocxEditorInvalidTextFormFieldDialog,
+  ImageAltTextPopup: DocxEditorImageAltTextPopup,
+  ImagePropertiesDialog: DocxEditorImagePropertiesDialog,
+  NotePropertiesDialog: DocxEditorNotePropertiesDialog,
+  NotesContextMenu: DocxEditorNotesContextMenu,
+  NotePreview: DocxEditorNotePreview,
   Root: DocxEditorRoot,
   Viewport: DocxEditorViewport,
   Content: DocxEditorContent,

@@ -4,9 +4,10 @@ import { createT, en } from '@docx-editor.dev/i18n';
 export function textFormFieldInvalidDialog(
   container: HTMLElement,
   type: 'number' | 'date',
-  acknowledge: () => void
+  acknowledge: () => void,
+  translate?: ReturnType<typeof createT>
 ): HTMLDialogElement {
-  const t = createT(en);
+  const t = translate ?? createT(en);
   const document = container.ownerDocument;
   const panel = document.createElement('dialog');
   panel.className = 'docx-text-form-dialog';
@@ -36,7 +37,7 @@ export function textFormFieldInvalidDialog(
   };
   ok.addEventListener('click', accept);
   panel.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' || event.isComposing) return;
     event.preventDefault();
     event.stopPropagation();
     accept();

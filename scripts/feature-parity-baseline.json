@@ -201,9 +201,21 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/DocxEditorContentControlWidget": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/DocxEditorFontNotice": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["class", "name", "props", "role"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
+    "editor/DocxEditorInvalidTextFormFieldDialog": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name"],
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
@@ -249,7 +261,6 @@
         "author",
         "children",
         "dateInputOrder",
-        "dialogs",
         "document",
         "fonts",
         "imageDecodePort",
@@ -268,6 +279,7 @@
         "onReady",
         "onReady",
         "onReady",
+        "popups",
         "tableInteractionLabel",
         "translate",
         "zoom",
@@ -359,6 +371,12 @@
       "emitsAddedInReact": [],
       "emitsAddedInVue": []
     },
+    "editor/note-popup-parts": {
+      "propsAddedInReact": [],
+      "propsAddedInVue": ["name", "props"],
+      "emitsAddedInReact": [],
+      "emitsAddedInVue": []
+    },
     "editor/toolbar/ColorSplit": {
       "propsAddedInReact": [],
       "propsAddedInVue": ["className"],
@@ -438,7 +456,6 @@
         "change",
         "children",
         "dateInputOrder",
-        "dialogs",
         "document",
         "editorRef",
         "emit",
@@ -451,6 +468,7 @@
         "onChange",
         "onFontError",
         "onReady",
+        "popups",
         "props",
         "ready",
         "tableInteractionLabel",

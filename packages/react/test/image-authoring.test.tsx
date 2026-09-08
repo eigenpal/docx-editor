@@ -1,3 +1,4 @@
+import type { DocxEditorPopups } from '../src/editor/popup-config';
 // Image authoring chrome — insert, wrap, alt text, properties, contextual toolbar group.
 
 import './dom-setup.ts';
@@ -207,7 +208,8 @@ async function waitForSurface(editor: () => DocxEditorInstance): Promise<void> {
 
 function mount(
   ui: React.ReactNode,
-  source: Uint8Array = PLAIN_SOURCE
+  source: Uint8Array = PLAIN_SOURCE,
+  popups?: DocxEditorPopups
 ): {
   view: ReturnType<typeof render>;
   editor: () => DocxEditorInstance;
@@ -218,6 +220,7 @@ function mount(
   const view = render(
     <DocxEditorRoot
       document={source}
+      popups={popups}
       imageDecodePort={createTestImageDecodePort()}
       onReady={(editor) => {
         instance = editor as DocxEditorInstance;
@@ -885,3 +888,45 @@ describe('task 16 fix round 1 — overlay coordinates and scroll port', () => {
     expect(handle!.style.left).toMatch(/px/);
   });
 });
+
+for (const disabled of [false, true]) {
+  test(`image popup callbacks and false control automatic rendering (${disabled})`, async () => {
+    const { view, ready, selectDrawing } = mount(<DocxEditorToolbar />, inlinePictureDocument(), {
+      imageProperties: disabled
+        ? false
+        : (props) => (
+            <button data-testid="custom-image-properties" onClick={props.onClose}>
+              Close properties
+            </button>
+          ),
+      imageAltText: disabled
+        ? false
+        : (props) => (
+            <button data-testid="custom-image-alt" onClick={props.onClose}>
+              Close alt
+            </button>
+          ),
+    });
+    await ready();
+    await selectDrawing();
+    await act(async () => {
+      fireEvent.click(view.container.querySelector('[data-slot="image.properties"]')!);
+    });
+    expect(!!within(view.container).queryByTestId('custom-image-properties')).toBe(!disabled);
+    if (!disabled)
+      await act(async () => {
+        fireEvent.click(within(view.container).getByTestId('custom-image-properties'));
+      });
+    await act(async () => {
+      fireEvent.click(view.container.querySelector('[data-slot="image.altText"]')!);
+    });
+    expect(!!within(view.container).queryByTestId('custom-image-alt')).toBe(!disabled);
+    if (!disabled) {
+      await act(async () => {
+        fireEvent.click(within(view.container).getByTestId('custom-image-alt'));
+      });
+      expect(within(view.container).queryByTestId('custom-image-alt')).toBeNull();
+    }
+    expect(within(view.container).queryByRole('dialog')).toBeNull();
+  });
+}

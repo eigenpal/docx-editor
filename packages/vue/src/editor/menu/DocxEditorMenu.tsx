@@ -63,6 +63,7 @@ export interface DocxEditorMenuProps {
   onOpen?: () => void;
   onOpenFile?: (file: File) => void;
   onSave?: () => void;
+  /** Owns Page Setup opening when `popups.pageSetup` is omitted. Use `popups` to customize its UI. */
   onPageSetup?: () => void;
   onReportIssue?: () => void;
   reportIssue?: boolean;
@@ -189,7 +190,11 @@ const DocxEditorMenuRoot = defineComponent({
       editorRef.value ? (props.saveHandler ?? props.onSave ?? packagedSave) : undefined
     );
     const resolvedPageSetup = computed(() =>
-      editorRef.value ? (props.onPageSetup ?? packagedPageSetup) : undefined
+      editorRef.value
+        ? dialogs?.ownsPageSetup
+          ? packagedPageSetup
+          : (props.onPageSetup ?? packagedPageSetup)
+        : undefined
     );
 
     watch(

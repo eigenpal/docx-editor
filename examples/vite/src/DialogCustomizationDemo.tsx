@@ -3,11 +3,23 @@ import {
   DocxEditorPageSetupDialog,
   DocxEditorParagraphDialog,
   DocxEditorTextFormFieldDialog,
+  DocxEditorHyperLink,
 } from '@docx-editor.dev/react';
-import type { DocxEditorDialogs } from '@docx-editor.dev/react';
+import type { DocxEditorPopups } from '@docx-editor.dev/react';
 import '../../shared/dialog-customization.css';
 
-const dialogs: DocxEditorDialogs = {
+const popups: DocxEditorPopups = {
+  hyperlink: (props) => (
+    <DocxEditorHyperLink {...props}>
+      <DocxEditorHyperLink.Edit asChild>
+        <button className="brand-dialog-button">Edit link</button>
+      </DocxEditorHyperLink.Edit>
+      <DocxEditorHyperLink.Apply asChild>
+        <button className="brand-dialog-button">Save link</button>
+      </DocxEditorHyperLink.Apply>
+      <DocxEditorHyperLink.Copy hidden />
+    </DocxEditorHyperLink>
+  ),
   pageSetup: (props) => (
     <DocxEditorPageSetupDialog {...props}>
       <DocxEditorPageSetupDialog.Apply asChild>
@@ -34,11 +46,11 @@ const dialogs: DocxEditorDialogs = {
 export function DialogCustomizationDemo() {
   return (
     <main className="dialog-demo">
-      <h1>Customize dialogs</h1>
-      <p>Open File → Page setup or Format → Paragraph in either editor.</p>
+      <h1>Customize popups</h1>
+      <p>Open File → Page setup or Format → Paragraph. Insert a link to try custom link actions.</p>
       <div className="dialog-demo-editors">
-        <DocxEditor document="blank" className="brand-indigo" dialogs={dialogs} />
-        <DocxEditor document="blank" className="brand-green" dialogs={dialogs} />
+        <DocxEditor document="blank" className="brand-indigo" popups={popups} />
+        <DocxEditor document="blank" className="brand-green" popups={popups} />
       </div>
     </main>
   );

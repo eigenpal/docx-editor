@@ -179,6 +179,7 @@ export function createDialogParts<Name extends string, State>() {
 /** Native modal lifecycle shared by packaged dialog renderers. */
 export function DialogFrame({
   kind,
+  role = 'dialog',
   className,
   style,
   label,
@@ -190,7 +191,8 @@ export function DialogFrame({
   sessionSignal,
   restoreFocus = true,
 }: {
-  kind: 'pageSetup' | 'paragraph' | 'textFormField';
+  kind: 'pageSetup' | 'paragraph' | 'textFormField' | 'invalidTextFormField';
+  role?: 'dialog' | 'alertdialog';
   className?: string;
   style?: CSSProperties;
   label: string;
@@ -231,7 +233,7 @@ export function DialogFrame({
   return (
     <dialog
       ref={ref}
-      role="dialog"
+      role={role}
       aria-modal="true"
       aria-label={label}
       className={`docx-dialog${className ? ` ${className}` : ''}`}

@@ -28,8 +28,8 @@ The same shape applies to `DocxEditor.Menu`, `DocxEditor.ContextMenu` and
 `DocxEditor.Navigation`.
 
 Page Setup, Paragraph Options, and legacy text Field Options also expose named
-parts. Use the editor's `dialogs` configuration for automatically opened instances.
-See [Customize dialogs](site/content/guides/customize-dialogs.mdx) for React and Vue examples.
+parts. Use the editor's `popups` configuration for automatically opened instances.
+See [Customize popups](site/content/guides/customize-dialogs.mdx) for React and Vue examples.
 
 ### Prefer your own classes over styling ours
 

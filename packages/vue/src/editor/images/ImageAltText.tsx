@@ -1,4 +1,6 @@
-import { defineComponent, ref, watch, type VNode } from 'vue';
+import { refAsRefObject, type RefObject } from '../../docx-editor-ref-object';
+import { usePopupConfig } from '../popup-config';
+import { defineComponent, ref, watch, type VNode, type PropType } from 'vue';
 import { useTranslation } from '../../i18n';
 import { useStableDocxId } from '../../lib/stable-id';
 import { useEditorValueCommand } from '../useEditorValueCommand';
@@ -22,10 +24,16 @@ export const ImageAltText = defineComponent({
     asChild: { type: Boolean, default: undefined },
   },
   setup(props, { slots }) {
-    const { t } = useTranslation();
+    const popups = usePopupConfig();
     const label = useToolbarLabel();
     const command = useEditorValueCommand('image.altText');
     const open = ref(false);
+    watch(
+      () => popups.value?.imageAltText,
+      (renderer) => {
+        if (renderer === false) open.value = false;
+      }
+    );
     const draft = ref('');
     const rootRef = ref<HTMLDivElement | null>(null);
     const triggerRef = ref<HTMLButtonElement | null>(null);
@@ -39,7 +47,11 @@ export const ImageAltText = defineComponent({
       if (!isOpen) return;
       const onMouseDown = (event: MouseEvent) => {
         const root = rootRef.value;
-        if (root && event.target instanceof Node && root.contains(event.target)) return;
+        if (
+          event.target instanceof Node &&
+          (root?.contains(event.target) || document.getElementById(panelId)?.contains(event.target))
+        )
+          return;
         open.value = false;
       };
       const onKeyDown = (event: KeyboardEvent) => {
@@ -79,10 +91,23 @@ export const ImageAltText = defineComponent({
         title: command.disabledReason.value ?? text,
         onMousedown: guardToolbarMousedown,
         onClick: () => {
-          open.value = !open.value;
+          if (popups.value?.imageAltText !== false) open.value = !open.value;
         },
       };
 
+      const popupProps: DocxEditorImageAltTextPopupProps = {
+        id: panelId,
+        value: draft.value,
+        onValueChange: (value) => {
+          draft.value = value;
+        },
+        onApply: apply,
+        onClose: () => {
+          open.value = false;
+        },
+        isEnabled: command.isEnabled.value,
+        anchorRef: refAsRefObject(triggerRef),
+      };
       return (
         <div ref={rootRef} class="docx-toolbar__alt-text">
           {props.asChild ? (
@@ -90,43 +115,12 @@ export const ImageAltText = defineComponent({
           ) : (
             <button {...shared}>{slots.default?.() ?? text}</button>
           )}
-          {open.value ? (
-            <div
-              id={panelId}
-              role="dialog"
-              aria-label={t('imageAltText.panelTitle')}
-              class="docx-toolbar__alt-text-panel"
-              onMousedown={(event: MouseEvent) => event.stopPropagation()}
-            >
-              <label class="docx-dialog__label" for={`${panelId}-description`}>
-                {t('imageAltText.description')}
-              </label>
-              <textarea
-                id={`${panelId}-description`}
-                class="docx-dialog__textarea"
-                value={draft.value}
-                onInput={(event: Event) => {
-                  draft.value = (event.target as HTMLTextAreaElement).value;
-                }}
-                placeholder={t('dialogs.imageProperties.altTextPlaceholder')}
-              />
-              <div class="docx-dialog__footer">
-                <button
-                  type="button"
-                  class="docx-dialog__button"
-                  onClick={() => (open.value = false)}
-                >
-                  {t('common.cancel')}
-                </button>
-                <button
-                  type="button"
-                  class="docx-dialog__button docx-dialog__button--primary"
-                  onClick={apply}
-                >
-                  {t('common.apply')}
-                </button>
-              </div>
-            </div>
+          {open.value && popups.value?.imageAltText !== false ? (
+            popups.value?.imageAltText ? (
+              popups.value.imageAltText(popupProps)
+            ) : (
+              <DocxEditorImageAltTextPopup {...popupProps} />
+            )
           ) : null}
         </div>
       );
@@ -145,3 +139,67 @@ export interface ImageAltTextPartComponent {
 export const ToolbarImageAltText = Object.assign(ImageAltText, {
   docxSlot: 'image.altText' as const,
 }) as unknown as ImageAltTextPartComponent;
+
+/** Controlled image description popup. @public */
+export interface DocxEditorImageAltTextPopupProps {
+  id: string;
+  value: string;
+  onValueChange(value: string): void;
+  onApply(): void;
+  onClose(): void;
+  isEnabled: boolean;
+  className?: string;
+  anchorRef?: RefObject<HTMLElement | null>;
+}
+/** Packaged image description popup. @public */
+export const DocxEditorImageAltTextPopup = defineComponent({
+  name: 'DocxEditorImageAltTextPopup',
+  props: {
+    id: { type: String, required: true },
+    value: { type: String, required: true },
+    onValueChange: { type: Function as PropType<(value: string) => void>, required: true },
+    onApply: { type: Function as PropType<() => void>, required: true },
+    onClose: { type: Function as PropType<() => void>, required: true },
+    isEnabled: { type: Boolean, required: true },
+    className: String,
+    anchorRef: Object as PropType<RefObject<HTMLElement | null>>,
+  },
+  setup(props) {
+    const { t } = useTranslation();
+    return () => (
+      <div
+        id={props.id}
+        role="dialog"
+        aria-label={t('imageAltText.panelTitle')}
+        class={['docx-toolbar__alt-text-panel', props.className]}
+        onMousedown={(event: MouseEvent) => event.stopPropagation()}
+      >
+        <label class="docx-dialog__label" for={`${props.id}-description`}>
+          {t('imageAltText.description')}
+        </label>
+        <textarea
+          id={`${props.id}-description`}
+          class="docx-dialog__textarea"
+          value={props.value}
+          onInput={(event: Event) => {
+            props.onValueChange((event.target as HTMLTextAreaElement).value);
+          }}
+          placeholder={t('dialogs.imageProperties.altTextPlaceholder')}
+        />
+        <div class="docx-dialog__footer">
+          <button type="button" class="docx-dialog__button" onClick={props.onClose}>
+            {t('common.cancel')}
+          </button>
+          <button
+            type="button"
+            class="docx-dialog__button docx-dialog__button--primary"
+            disabled={!props.isEnabled}
+            onClick={props.onApply}
+          >
+            {t('common.apply')}
+          </button>
+        </div>
+      </div>
+    );
+  },
+});

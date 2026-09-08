@@ -442,7 +442,7 @@ export type {
   DialogCustomizationProps,
   UseDialogReturn,
 } from './editor/dialog-parts';
-export type { DocxEditorDialogs } from './editor/dialog-host';
+export type { DocxEditorPopups } from './editor/popup-config';
 export {
   usePageSetupDialog,
   type PageSetupDialogFields,
@@ -459,3 +459,27 @@ export {
   type DocxEditorTextFormFieldDialogProps,
   type UseTextFormFieldDialogReturn,
 } from './editor/DocxEditorTextFormFieldDialog';
+
+export {
+  DocxEditorImageAltTextPopup,
+  type DocxEditorImageAltTextPopupProps,
+} from './editor/images/ImageAltText';
+export {
+  DocxEditorNotePropertiesDialog,
+  type DocxEditorNotePropertiesDialogProps,
+} from './editor/DocxEditorNotes';
+export {
+  DocxEditorNotePreview,
+  DocxEditorNotesContextMenu,
+  type DocxEditorNotePreviewProps,
+  type DocxEditorNotesContextMenuProps,
+} from './editor/note-popup-parts';
+
+export {
+  DocxEditorContentControlWidget,
+  type DocxEditorContentControlWidgetProps,
+} from './editor/DocxEditorContentControlWidget';
+export {
+  DocxEditorInvalidTextFormFieldDialog,
+  type DocxEditorInvalidTextFormFieldDialogProps,
+} from './editor/DocxEditorInvalidTextFormFieldDialog';

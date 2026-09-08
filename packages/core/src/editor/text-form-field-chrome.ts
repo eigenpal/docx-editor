@@ -1,34 +1,56 @@
-import { createChromeHandlerStack } from './chrome-handler-stack.ts';
-import type {
-  TextFormFieldChromeHandlers,
-  TextFormFieldDialogSession,
-} from './text-form-field-session.ts';
+import type { ContentControlWidgetSession, InvalidTextFormFieldSession } from './popup-sessions.ts';
+import type { TextFormFieldDialogSession } from './text-form-field-session.ts';
+import type { PopupChromeRegistrationOptions } from './popup-sessions.ts';
 
-/** Own each registration's sessions independently of surface replacement. */
-export function createTextFormFieldChrome() {
-  const stack = createChromeHandlerStack<TextFormFieldChromeHandlers>({});
-  const registrations = new Map<TextFormFieldChromeHandlers, Set<TextFormFieldDialogSession>>();
+/** Manual renderers take priority over automatic adapter fallbacks in either mount order. */
+export function createSessionChrome<Session extends { signal: AbortSignal; cancel(): void }>() {
+  type Handlers = { readonly onRequest?: (session: Session) => void };
+  const registrations: { handlers: Handlers; fallback: boolean; sessions: Set<Session> }[] = [];
   return {
-    request(session: TextFormFieldDialogSession): boolean {
-      const handlers = stack.current();
-      if (!handlers.onRequest) return false;
-      const sessions = registrations.get(handlers)!;
+    request(session: Session): boolean {
+      const registration =
+        [...registrations].reverse().find((entry) => !entry.fallback) ?? registrations.at(-1);
+      if (!registration?.handlers.onRequest) return false;
+      const { sessions, handlers } = registration;
       sessions.add(session);
       session.signal.addEventListener('abort', () => sessions.delete(session), { once: true });
-      handlers.onRequest(session);
+      handlers.onRequest!(session);
       return true;
     },
-    register(handlers: TextFormFieldChromeHandlers): () => void {
-      // A caller may reuse the same handlers for separate registrations.
-      const registration = { ...handlers };
-      const sessions = new Set<TextFormFieldDialogSession>();
-      registrations.set(registration, sessions);
-      const dispose = stack.push(registration);
-      return () => {
-        dispose();
-        for (const session of sessions) session.cancel();
-        registrations.delete(registration);
+    register(handlers: Handlers, options?: PopupChromeRegistrationOptions): () => void {
+      const entry = {
+        handlers,
+        fallback: options?.fallback === true,
+        sessions: new Set<Session>(),
       };
+      registrations.push(entry);
+      return () => {
+        const index = registrations.indexOf(entry);
+        if (index < 0) return;
+        registrations.splice(index, 1);
+        for (const session of entry.sessions) session.cancel();
+      };
+    },
+  };
+}
+/** Own Field Options sessions independently of surface replacement. */
+export const createTextFormFieldChrome = () => createSessionChrome<TextFormFieldDialogSession>();
+
+/** Facade wiring shared by the three core-owned popup session families. */
+export function createEditorPopupChrome() {
+  const text = createTextFormFieldChrome();
+  const widget = createSessionChrome<ContentControlWidgetSession>();
+  const invalid = createSessionChrome<InvalidTextFormFieldSession>();
+  return {
+    surfaceOptions: {
+      onRequestTextFormField: text.request,
+      onRequestContentControlWidget: widget.request,
+      onRequestInvalidTextFormField: invalid.request,
+    },
+    setters: {
+      setTextFormFieldChrome: text.register,
+      setContentControlWidgetChrome: widget.register,
+      setInvalidTextFormFieldChrome: invalid.register,
     },
   };
 }

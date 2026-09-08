@@ -1,3 +1,4 @@
+import type { InvalidTextFormFieldSession } from './popup-sessions.ts';
 import type { TextFormFieldDialogSession } from './text-form-field-session.ts';
 import {
   supportsTextFormField,
@@ -22,6 +23,7 @@ interface Host {
   readonly pagesLayer: HTMLElement;
   readonly container: HTMLElement;
   part(paragraphId?: string): OoxmlPart;
+  onInvalidRequest?: ((session: InvalidTextFormFieldSession) => boolean) | undefined;
   onRequest?: ((session: TextFormFieldDialogSession) => boolean) | undefined;
   translate?: ((key: string) => string) | undefined;
   protected(paragraphId?: string): boolean;
@@ -57,9 +59,11 @@ export function createTextFormFieldInteraction(host: Host): {
   let active: { paragraphId: string; fieldNodeId: string } | null = null;
   let sessionController: AbortController | null = null;
   let destroyed = false;
+  let invalidSession = false;
   const invalidate = (): void => {
     const controller = sessionController;
     sessionController = null;
+    invalidSession = false;
     dialog?.remove();
     dialog = null;
     controller?.abort();
@@ -352,7 +356,7 @@ export function createTextFormFieldInteraction(host: Host): {
         delete status.dataset.fieldError;
         return value;
       };
-      if (committing || dialog?.getAttribute('role') === 'alertdialog') return null;
+      if (committing || invalidSession) return null;
       if (!host.editable()) return next;
       const hit = selectionField();
       if (
@@ -400,9 +404,14 @@ export function createTextFormFieldInteraction(host: Host): {
         status.dataset.fieldError = 'true';
         status.textContent = t('textFormField.invalidValue');
         if (formatted === null && (field.type === 'number' || field.type === 'date')) {
-          dialog = textFormFieldInvalidDialog(host.container, field.type, () => {
-            dialog?.remove();
-            dialog = null;
+          invalidate();
+          const controller = new AbortController();
+          sessionController = controller;
+          invalidSession = true;
+          const acknowledge = () => {
+            if (destroyed || controller.signal.aborted || sessionController !== controller) return;
+            invalidate();
+            if (destroyed) return;
             const selected = host.selection();
             const restoreFocus = (): void => {
               host.pagesLayer.focus({ preventScroll: true });
@@ -457,7 +466,17 @@ export function createTextFormFieldInteraction(host: Host): {
             } finally {
               committing = false;
             }
-          });
+          };
+          const request: InvalidTextFormFieldSession = {
+            type: field.type,
+            signal: controller.signal,
+            acknowledge,
+            cancel() {
+              if (sessionController === controller && !controller.signal.aborted) close();
+            },
+          };
+          if (!host.onInvalidRequest?.(request) && !controller.signal.aborted)
+            dialog = textFormFieldInvalidDialog(host.container, field.type, acknowledge, t);
         }
         return null;
       }

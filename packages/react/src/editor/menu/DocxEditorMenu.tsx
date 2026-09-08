@@ -99,7 +99,7 @@ export interface DocxEditorMenuProps {
   onOpenFile?: (file: File) => void;
   /** Replaces File › Save. The default runs `Editor.save()` and downloads the bytes. */
   onSave?: () => void;
-  /** Replaces File › Page setup. The default opens the packaged Page Setup dialog. */
+  /** Owns Page Setup opening when `popups.pageSetup` is omitted. Use `popups` to customize its UI. */
   onPageSetup?: () => void;
   /**
    * Replaces Help › Report issue. The default opens THIS project's issue tracker,
@@ -242,11 +242,16 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
     [dialogs]
   );
 
-  // The resolved actions, host override first. Each is undefined without an editor, which
+  // Explicit popup ownership wins for Page Setup; other actions use their host overrides.
+  // Each action is undefined without an editor, which
   // is what disables the row before the document is ready.
   const resolvedOpen = editor ? (onOpen ?? packagedOpen) : undefined;
   const resolvedSave = editor ? (onSave ?? packagedSave) : undefined;
-  const resolvedPageSetup = editor ? (onPageSetup ?? packagedPageSetup) : undefined;
+  const resolvedPageSetup = editor
+    ? dialogs?.ownsPageSetup
+      ? packagedPageSetup
+      : (onPageSetup ?? packagedPageSetup)
+    : undefined;
 
   // Ctrl/Cmd+O and Ctrl/Cmd+S, so the shortcut column tells the truth. Both are what the
   // browser would otherwise handle (open a local file, save the page), and an editor that
@@ -415,7 +420,7 @@ function DocxEditorMenuRoot(props: DocxEditorMenuProps) {
             });
         }}
       />
-      {/* The packaged Page Setup dialog. A host that passed `onPageSetup` never opens it. */}
+      {/* Fallback for menus mounted without the dialog coordinator. */}
       <DocxEditorPageSetupDialog open={pageSetupOpen} onClose={() => setPageSetupOpen(false)} />
       {/* The menu bar owns its own, the way it owns Page Setup's: it does not collapse, so
           this route survives the narrow window that hides the line-spacing menu. */}

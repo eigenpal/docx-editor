@@ -72,3 +72,28 @@ for (const [adapter, port] of [
     await expect(dialog).toHaveCount(0);
   });
 }
+
+for (const [adapter, port] of [
+  ['React', 5273],
+  ['Vue', 5274],
+] as const) {
+  test(`${adapter}: unified popup map replaces one hyperlink panel per editor`, async ({
+    page,
+  }) => {
+    await page.goto(`http://localhost:${port}/?dialogs=1`);
+    const editors = page.locator('.dialog-demo-editors > .docx-editor');
+    for (const index of [0, 1]) {
+      const editor = editors.nth(index);
+      await editor.locator('.docx-pages').click({ position: { x: 120, y: 110 } });
+      await page.keyboard.press('ControlOrMeta+k');
+      const popup = editor.getByTestId('hyperlink-popup');
+      await expect(popup).toBeVisible();
+      await expect(page.getByTestId('hyperlink-popup')).toHaveCount(1);
+      await popup.getByTestId('hyperlink-popup-url-input').fill('https://example.com');
+      await popup.getByTestId('hyperlink-popup-text').fill(`Editor ${index + 1}`);
+      await popup.getByRole('button', { name: 'Save link', exact: true }).click();
+      await expect(popup).toHaveCount(0);
+      await expect(editor.locator('.docx-hyperlink')).toHaveText(`Editor ${index + 1}`);
+    }
+  });
+}

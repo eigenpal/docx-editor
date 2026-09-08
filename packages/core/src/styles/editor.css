@@ -6935,3 +6935,16 @@ a.docx-hyperlink:focus-visible {
 :where(.docx-dialog__row--actions) {
   justify-content: flex-end;
 }
+
+:where(.docx-content-control-widget-popup) {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  color: var(--doc-text);
+  background: var(--doc-popover-bg, white);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 8px);
+  box-shadow: 0 4px 16px var(--doc-shadow);
+}

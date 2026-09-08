@@ -1,3 +1,5 @@
+import { EnginePopups } from './engine-popups';
+import { ConfiguredPopups } from './popup-config';
 import { DialogMount } from './dialog-host';
 // The engine's mount point: where the pages actually paint.
 //
@@ -122,6 +124,8 @@ export function DocxEditorContent({ className }: DocxEditorContentProps) {
         onDrop={onDrop}
       />
       <DialogMount />
+      <ConfiguredPopups />
+      <EnginePopups />
       {editor ? <ImageSelectionOverlay containerRef={elementRef} portalRef={portalRef} /> : null}
     </div>
   );

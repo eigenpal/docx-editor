@@ -48,7 +48,7 @@ import {
 
 /** @public */
 export interface DocxEditorRootProps {
-  dialogs?: import('./dialog-host').DocxEditorDialogs;
+  popups?: import('./popup-config').DocxEditorPopups;
   document?: DocumentSource;
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   /** Author for later comments, replies, and tracked changes. Changes apply without a remount. */

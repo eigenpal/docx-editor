@@ -1,3 +1,5 @@
+import { ConfiguredEnginePopups } from './engine-popups';
+import { ConfiguredPopups } from './popup-config';
 import { useDialogHost } from './dialog-host';
 import {
   defineComponent,
@@ -121,6 +123,8 @@ export const DocxEditorContent = defineComponent({
             onDragover: onDragOver,
             onDrop,
           }),
+          h(ConfiguredPopups),
+          h(ConfiguredEnginePopups),
           editorRef.value
             ? h(ImageSelectionOverlay, {
                 containerRef: elementRef,

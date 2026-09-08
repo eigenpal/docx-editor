@@ -120,6 +120,12 @@ export interface PaginatedSurfaceOptions {
   readonly onRequestTextFormField?: (
     session: import('./text-form-field-session.ts').TextFormFieldDialogSession
   ) => boolean;
+  readonly onRequestContentControlWidget?: (
+    session: import('./popup-sessions.ts').ContentControlWidgetSession
+  ) => boolean;
+  readonly onRequestInvalidTextFormField?: (
+    session: import('./popup-sessions.ts').InvalidTextFormFieldSession
+  ) => boolean;
   readonly textFormFieldTranslate?: (key: string) => string;
   /**
    * Localized accessible names for core-owned table insertion furniture.

@@ -1,3 +1,4 @@
+import type { InvalidTextFormFieldSession } from '../popup-sessions.ts';
 import type { TextFormFieldDialogSession } from '../text-form-field-session.ts';
 import { applyProtectedTextFormEdit } from '../../store/store/tree-op-field-results.ts';
 import { textFormFieldForEdit } from '../../store/store/text-form-fields.ts';
@@ -17,7 +18,8 @@ function setup(
   emptyFirst = false,
   separator = ' and ',
   emptySecond = false,
-  onRequest?: (session: TextFormFieldDialogSession) => boolean
+  onRequest?: (session: TextFormFieldDialogSession) => boolean,
+  onInvalidRequest?: (session: InvalidTextFormFieldSession) => boolean
 ) {
   const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
   const field = (name: string) =>
@@ -54,6 +56,7 @@ function setup(
   let rejectDelete = false;
   const interaction = createTextFormFieldInteraction({
     onRequest,
+    onInvalidRequest,
     dateInputOrder: () => dateInputOrder,
     container,
     pagesLayer,
@@ -449,3 +452,37 @@ test('host Field Options rechecks protection and deleted targets at apply time',
     host.container.remove();
   }
 });
+
+for (const action of ['acknowledge', 'cancel', 'destroy'] as const) {
+  test(`custom invalid-field ${action} preserves acknowledgement ownership`, () => {
+    const requests: InvalidTextFormFieldSession[] = [];
+    const host = setup(true, false, ' and ', false, undefined, (request) => {
+      requests.push(request);
+      return true;
+    });
+    try {
+      host.configure({ type: 'number', format: '0.00', maxLength: 0, enabled: true }, '1');
+      const paragraphId = host.selection().head.paragraphId;
+      host.select(0);
+      host.type({ op: 'insertText', paragraphId, offset: 0, text: '--' });
+      host.select(20);
+      expect(requests).toHaveLength(1);
+      expect(host.container.querySelector('dialog')).toBeNull();
+      const before = paragraphTextOf(host.part(), paragraphId);
+      const request = requests[0]!;
+      if (action === 'destroy') host.interaction.destroy();
+      else request[action]();
+      expect(request.signal.aborted).toBe(true);
+      if (action === 'acknowledge')
+        expect(paragraphTextOf(host.part(), paragraphId)).toBe(' and Sample');
+      else expect(paragraphTextOf(host.part(), paragraphId)).toBe(before);
+      request.acknowledge();
+      request.cancel();
+      expect(paragraphTextOf(host.part(), paragraphId)).toBe(
+        action === 'acknowledge' ? ' and Sample' : before
+      );
+    } finally {
+      host.cleanup();
+    }
+  });
+}

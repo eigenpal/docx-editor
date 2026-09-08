@@ -1,3 +1,8 @@
+import type {
+  PopupChromeRegistrationOptions,
+  ContentControlWidgetChromeHandlers,
+  InvalidTextFormFieldChromeHandlers,
+} from './popup-sessions.ts';
 import type { TextFormFieldChromeHandlers } from './text-form-field-session.ts';
 /**
  * Instance-level types for `createDocxEditor` — kept out of the composition root so
@@ -196,7 +201,20 @@ export interface DocxEditorInstance extends Editor {
    */
   setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
   /** Register Field Options chrome. Disposal closes sessions owned by this registration. */
-  setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers): Unsubscribe;
+  setTextFormFieldChrome(
+    handlers: TextFormFieldChromeHandlers,
+    options?: PopupChromeRegistrationOptions
+  ): Unsubscribe;
+  /** Register typed content-control widget chrome. */
+  setContentControlWidgetChrome(
+    handlers: ContentControlWidgetChromeHandlers,
+    options?: PopupChromeRegistrationOptions
+  ): Unsubscribe;
+  /** Register invalid protected-field acknowledgement chrome. */
+  setInvalidTextFormFieldChrome(
+    handlers: InvalidTextFormFieldChromeHandlers,
+    options?: PopupChromeRegistrationOptions
+  ): Unsubscribe;
   /** Wire the host equation popover to painted equation clicks. */
   setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
   /**

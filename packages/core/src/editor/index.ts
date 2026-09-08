@@ -357,3 +357,11 @@ export {
   trapTabWithin,
 } from './paragraph-dialog-fields.ts';
 export { TEXT_FORM_FORMATS } from '../store/store/text-form-field-options.ts';
+
+export type {
+  PopupChromeRegistrationOptions,
+  ContentControlWidgetSession,
+  ContentControlWidgetChromeHandlers,
+  InvalidTextFormFieldSession,
+  InvalidTextFormFieldChromeHandlers,
+} from './popup-sessions.ts';

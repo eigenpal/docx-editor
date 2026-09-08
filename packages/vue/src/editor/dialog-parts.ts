@@ -204,6 +204,7 @@ export const NativeDialog = defineComponent({
     onClose: { type: Function as PropType<() => void>, required: true },
     label: { type: String, required: true },
     kind: { type: String, required: true },
+    role: String,
     onKeydown: Function as PropType<(event: KeyboardEvent) => void>,
     dismissOutside: { type: Boolean, default: true },
     restoreFocus: { type: Boolean, default: true },
@@ -257,7 +258,7 @@ export const NativeDialog = defineComponent({
             } else p.onKeydown?.(event);
           },
           ref: panel,
-          role: 'dialog',
+          role: p.role ?? 'dialog',
           'aria-modal': true,
           'aria-label': p.label,
           'data-docx-dialog': p.kind,
