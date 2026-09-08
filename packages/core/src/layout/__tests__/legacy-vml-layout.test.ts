@@ -19,6 +19,7 @@ import {
 import { paragraphTextOf } from '../../store/store/tree-ops.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
+import { MAX_INLINE_CONTAINER_DEPTH } from '../../store/package/ooxml-shared.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const V = 'urn:schemas-microsoft-com:vml';
@@ -130,6 +131,84 @@ test('discovers floating VML and reserves its model offset without an inline pic
     expect(linesOf(result)[0]!.range.end).toBe(3);
   } finally {
     bundle.dispose();
+  }
+});
+
+test('nested transparent wrappers preserve VML offsets after breaks and tabs', () => {
+  for (const floating of [false, true]) {
+    const source = xml('Wrapped', 120, floating)
+      .replace('<w:p>', '<w:p><w:smartTag><w:customXml><w:dir w:val="ltr">')
+      .replace('</w:p>', '</w:dir></w:customXml></w:smartTag></w:p>')
+      .replace('<w:t>A</w:t>', '<w:t>A</w:t><w:br/><w:tab/><w:t>B</w:t>');
+    const { reader, bundle } = setup(source);
+    try {
+      const paragraph = paragraphOf(reader.part());
+      expect(paragraphTextOf(reader.part(), paragraph.id)).toBe('A\n\tB\uFFFCZ');
+      expect([...drawingModelOffsetsInParagraph(paragraph).values()]).toEqual([4]);
+      const result = layoutSemanticDocument(reader.part(), 1, {
+        measurer: createFixedMeasurer(6, 14),
+        inlineDrawingLayout: bundle.bodyContext,
+      });
+      const drawings = floating
+        ? result.pages.flatMap((page) => page.anchoredDrawings ?? [])
+        : linesOf(result).flatMap((line) => line.drawings ?? []);
+      expect(drawings).toHaveLength(1);
+      expect(drawings[0]).toMatchObject({ start: 4, width: 120, height: 30 });
+      const trailing = linesOf(result)
+        .flatMap((line) => line.spans)
+        .find((span) => span.text === 'Z');
+      expect(trailing?.range).toEqual({ paragraphId: paragraph.id, start: 5, end: 6 });
+    } finally {
+      bundle.dispose();
+    }
+  }
+});
+
+test('hidden VML anchors stay hidden inside transparent wrappers without losing offsets', () => {
+  const source = xml('Hidden', 120, true)
+    .replace('<w:r>', '<w:bdo w:val="ltr"><w:customXml><w:r><w:rPr><w:vanish/></w:rPr>')
+    .replace('</w:r>', '</w:r></w:customXml></w:bdo><w:r><w:t>Tail</w:t></w:r>');
+  const { reader, bundle } = setup(source);
+  try {
+    const paragraph = paragraphOf(reader.part());
+    expect([...drawingModelOffsetsInParagraph(paragraph).values()]).toEqual([1]);
+    expect(anchoredDrawingAtomsInParagraph(paragraph, bundle.bodyContext)).toHaveLength(0);
+    const result = layoutSemanticDocument(reader.part(), 1, {
+      measurer: createFixedMeasurer(6, 14),
+      inlineDrawingLayout: bundle.bodyContext,
+    });
+    expect(result.pages.flatMap((page) => page.anchoredDrawings ?? [])).toHaveLength(0);
+    const trailing = linesOf(result).flatMap((line) => line.spans);
+    expect(trailing.map((span) => span.text).join('')).toBe('Tail');
+    expect(trailing[0]?.range).toEqual({ paragraphId: paragraph.id, start: 3, end: 7 });
+  } finally {
+    bundle.dispose();
+  }
+});
+
+test('VML anchor discovery and offsets honor the shared inline depth boundary', () => {
+  for (const depth of [MAX_INLINE_CONTAINER_DEPTH - 1, MAX_INLINE_CONTAINER_DEPTH]) {
+    const source = xml('Bounded', 120, true)
+      .replace('<w:p>', `<w:p>${'<w:smartTag>'.repeat(depth)}`)
+      .replace('</w:p>', `${'</w:smartTag>'.repeat(depth)}</w:p>`);
+    const { reader, bundle } = setup(source);
+    try {
+      const paragraph = paragraphOf(reader.part());
+      const admitted = depth < MAX_INLINE_CONTAINER_DEPTH;
+      expect([...drawingModelOffsetsInParagraph(paragraph).values()]).toEqual(admitted ? [1] : []);
+      expect(anchoredDrawingAtomsInParagraph(paragraph, bundle.bodyContext)).toHaveLength(
+        admitted ? 1 : 0
+      );
+      const result = layoutSemanticDocument(reader.part(), 1, {
+        measurer: createFixedMeasurer(6, 14),
+        inlineDrawingLayout: bundle.bodyContext,
+      });
+      expect(result.pages.flatMap((page) => page.anchoredDrawings ?? [])).toHaveLength(
+        admitted ? 1 : 0
+      );
+    } finally {
+      bundle.dispose();
+    }
   }
 });
 

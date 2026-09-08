@@ -249,6 +249,7 @@
       "propsAddedInReact": [
         "author",
         "children",
+        "dateInputOrder",
         "document",
         "fonts",
         "imageDecodePort",
@@ -430,6 +431,7 @@
         "author",
         "change",
         "children",
+        "dateInputOrder",
         "document",
         "editorRef",
         "emit",

@@ -209,6 +209,8 @@ export interface DocxEditorProps {
    * Changes apply without a remount.
    */
   locale?: string;
+  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
+  dateInputOrder?: 'mdy' | 'dmy';
   author?: string;
   /**
    * Capability modules to register (`@docx-editor.dev/pro`'s review module, custom nodes).

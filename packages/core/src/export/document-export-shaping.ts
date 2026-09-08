@@ -38,7 +38,11 @@ import { collectNoteReferences, resolveNotesPart } from '../store/package/note-r
 import { noteIdOf, noteTypeOf, type NoteKind } from '../store/package/note-nodes.ts';
 import { hasLegacyFormFieldData } from '../store/package/field-nodes.ts';
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
-import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
+import {
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+  WML_NAMESPACE_URI,
+} from '../store/package/ooxml-shared.ts';
 import {
   openHeadlessDocument,
   type HeadlessDocumentView,
@@ -589,16 +593,23 @@ function collectParagraphSynthesizedFieldGlyphIds(
     node: OoxmlElement;
     runId: string | null;
     visibility: number;
+    containerDepth: number;
   }> = [];
   for (let index = paragraph.children.length - 1; index >= 0; index -= 1) {
     const child = paragraph.children[index]!;
     if (child.kind !== 'textValue') {
-      stack.push({ node: child as OoxmlElement, runId: null, visibility: ALL_REVISION_VIEWS });
+      stack.push({
+        node: child as OoxmlElement,
+        runId: null,
+        visibility: ALL_REVISION_VIEWS,
+        containerDepth: 0,
+      });
     }
   }
 
   while (stack.length > 0) {
-    const { node, runId: inheritedRunId, visibility } = stack.pop()!;
+    const { node, runId: inheritedRunId, visibility, containerDepth } = stack.pop()!;
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
     // A textbox is a distinct story with its own paragraph field state. It is discovered by
     // the root walk and processed separately; never let its markers nest into the host paragraph.
     if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'p') continue;
@@ -690,6 +701,7 @@ function collectParagraphSynthesizedFieldGlyphIds(
           node: child as OoxmlElement,
           runId,
           visibility: visibility & revisionWrapperVisibility(node),
+          containerDepth: nextInlineContainerDepth(node, containerDepth),
         });
       }
     }

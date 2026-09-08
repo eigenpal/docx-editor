@@ -79,6 +79,8 @@ export interface DocxEditorRootProps {
    * Changes apply without a remount.
    */
   locale?: string;
+  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
+  dateInputOrder?: 'mdy' | 'dmy';
   /** Live drawing labels for painted placeholders; defaults to the active locale catalogue. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
@@ -207,6 +209,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     fonts,
     author,
     locale,
+    dateInputOrder,
     translate,
     mode,
     zoom,
@@ -256,6 +259,7 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
       ...(p.fonts ? { fonts: p.fonts } : {}),
       ...(p.author !== undefined ? { author: p.author } : {}),
       ...(p.locale !== undefined ? { locale: p.locale } : {}),
+      ...(p.dateInputOrder !== undefined ? { dateInputOrder: p.dateInputOrder } : {}),
       translate,
       ...(p.mode !== undefined ? { mode: p.mode } : {}),
       ...(declaredStyles !== undefined ? { revisionStyles: declaredStyles } : {}),
@@ -372,6 +376,10 @@ export function DocxEditorRoot(props: DocxEditorRootProps) {
     if (!editor) return;
     editor.setLocale(locale);
   }, [editor, locale]);
+
+  useEffect(() => {
+    editor?.setDateInputOrder(dateInputOrder);
+  }, [editor, dateInputOrder]);
 
   // Table furniture labels follow the live locale resolver without remounting the editor.
   useEffect(() => {

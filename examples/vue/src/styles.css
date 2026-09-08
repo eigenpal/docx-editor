@@ -399,3 +399,17 @@
 .citation-card:not(:popover-open) {
   display: none;
 }
+
+.demo-date-order {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.demo-date-order select {
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--docx-border, #ddd);
+  border-radius: 6px;
+  padding: 5px 6px;
+}

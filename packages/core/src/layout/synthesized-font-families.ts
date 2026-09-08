@@ -1,6 +1,10 @@
 // Font needs synthesized by layout, shared by editor and export resolution.
 import type { OoxmlElement } from '../store/package/ooxml-tree.ts';
-import { WML_NAMESPACE_URI } from '../store/package/ooxml-shared.ts';
+import {
+  MAX_INLINE_CONTAINER_DEPTH,
+  nextInlineContainerDepth,
+  WML_NAMESPACE_URI,
+} from '../store/package/ooxml-shared.ts';
 import { validFontFamily } from '../store/package/run-defaults.ts';
 import { collectFlowBlocks } from '../store/package/content-control-walk.ts';
 import { buildNumberingIndex } from './numbering-index.ts';
@@ -51,13 +55,14 @@ export function symbolFieldFontFamilies(roots: readonly OoxmlElement[]): readonl
 export function complexSymbolFieldFonts(paragraph: OoxmlElement): readonly string[] {
   const families: string[] = [];
   const state = createFieldParseState();
-  const stack: OoxmlElement[] = [];
+  const stack: Array<{ node: OoxmlElement; containerDepth: number }> = [];
   for (let index = paragraph.children.length - 1; index >= 0; index -= 1) {
     const child = paragraph.children[index]!;
-    if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
+    if (child.kind !== 'textValue') stack.push({ node: child as OoxmlElement, containerDepth: 0 });
   }
   while (stack.length > 0) {
-    const node = stack.pop()!;
+    const { node, containerDepth } = stack.pop()!;
+    if (containerDepth >= MAX_INLINE_CONTAINER_DEPTH) continue;
     if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'p') continue;
     if (node.namespaceUri === WML_NAMESPACE_URI && node.localName === 'fldChar') {
       const kind = attributeValue(node, 'fldCharType');
@@ -82,9 +87,11 @@ export function complexSymbolFieldFonts(paragraph: OoxmlElement): readonly strin
       const spec = parseSymbolInstruction(attributeValue(node, 'instr') ?? '');
       if (spec?.font) families.push(spec.font);
     }
+    const depth = nextInlineContainerDepth(node, containerDepth);
     for (let index = node.children.length - 1; index >= 0; index -= 1) {
       const child = node.children[index]!;
-      if (child.kind !== 'textValue') stack.push(child as OoxmlElement);
+      if (child.kind !== 'textValue')
+        stack.push({ node: child as OoxmlElement, containerDepth: depth });
     }
   }
   resetFieldParseState(state);

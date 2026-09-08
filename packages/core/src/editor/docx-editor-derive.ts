@@ -396,6 +396,11 @@ export function gateCommand(
       },
     };
   }
+  if (command.type === 'editTextFormField' && !surface.canEditTextFormField())
+    return {
+      ok: false,
+      refusal: { ok: false, code: 'unsupported', reason: 'field options are unavailable' },
+    };
   if (command.type === 'refreshToc' && !surface.canRefreshToc(command.tocId)) {
     return {
       ok: false,

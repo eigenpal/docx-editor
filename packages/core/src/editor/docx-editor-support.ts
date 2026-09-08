@@ -657,6 +657,8 @@ export function classifyCommand(command: EditorCommand): CommandSupport {
           };
     case 'insertToc':
       return { supported: true, mutating: true };
+    case 'editTextFormField':
+      return { supported: true, mutating: false };
     case 'refreshToc':
       if (
         command.mode !== undefined &&

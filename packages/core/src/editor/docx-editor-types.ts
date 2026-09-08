@@ -68,6 +68,8 @@ export interface DocxEditorConfig {
   fonts?: FontConfiguration | FontConfigurationFragment | FontResolver;
   author?: string;
   locale?: string;
+  /** Slash-date input order. Defaults to mdy, independently of field output formatting. */
+  dateInputOrder?: 'mdy' | 'dmy';
   /** Localized drawing refusal labels; defaults to English when omitted. */
   translate?: (key: string, params?: Record<string, string | number>) => string;
   /**
@@ -321,6 +323,8 @@ export interface DocxEditorInstance extends Editor {
    * @public
    */
   setLocale(locale: string | undefined): void;
+  /** Change slash-date input order for subsequent field edits. */
+  setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
   /**
    * The style declared for one author, whether or not the SURFACE has published them yet —
    * so review chrome can draw a card the rail is holding before the roster catches up.

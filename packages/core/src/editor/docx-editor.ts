@@ -220,7 +220,10 @@ import {
 import { createRevisionStyleState, EMPTY_AUTHOR_SLOTS } from './revision-style-state.ts';
 import { createChromeHandlerStack } from './chrome-handler-stack.ts';
 import { initialsOfAuthor, normalizeEditorAuthor } from './docx-editor-author.ts';
-import { createDocxEditorHostConfigState } from './docx-editor-host-config.ts';
+import {
+  createDocxEditorHostConfigState,
+  liveHostConfigSetters,
+} from './docx-editor-host-config.ts';
 import type {
   DocxEditorConfig,
   DocxEditorInstance,
@@ -509,6 +512,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // "Calibri", not an em-dash.
       defaultFontFamily: configuredDefaultFontFamily(fontConfiguration()),
       drawingStrings: hostConfig.drawingStrings(),
+      dateInputOrder: hostConfig.dateInputOrder(),
       // Suggesting needs both: an author to attribute a proposal to, and the mode itself,
       // which survives a document reload because the reader chose it, not the file.
       ...(author ? { author } : {}),
@@ -2240,20 +2244,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       pendingSuggestingRequest = false;
       applyHostModeDecision();
     },
-    setTranslate(nextTranslate) {
-      const drawingStrings = hostConfig.setTranslate(nextTranslate);
-      if (drawingStrings === null) return;
-      surface?.setDrawingStrings(drawingStrings);
-      bump();
-      emitSelectionChange();
-    },
-    setLocale(nextLocale) {
-      const labels = hostConfig.setLocale(nextLocale);
-      if (labels === null) return;
-      surface?.setTocLabels(labels);
-      bump();
-      emitSelectionChange();
-    },
+    ...liveHostConfigSetters(hostConfig, {
+      surface: () => surface,
+      bump,
+      emitSelectionChange,
+    }),
     presenceColorFor: (name) => surface?.remotePresenceColor(name) ?? 'var(--doc-accent)',
     collaborationSession: () => surface?.collaborationSession() ?? null,
     getReviewAuthorStyle: (author) => revisionStyleState.styleFor(author),

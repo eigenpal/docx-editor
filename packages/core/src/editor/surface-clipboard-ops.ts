@@ -28,6 +28,7 @@ import {
 import { buildCopyFlavours } from './clipboard-copy-payload.ts';
 import { routePaste } from './clipboard-paste-router.ts';
 import { insertableText } from './clipboard-plain-text.ts';
+import { clampTextFormPaste } from './text-form-field-paste.ts';
 import {
   collapsedAt,
   fragmentCoverageOf,
@@ -42,6 +43,7 @@ type HistoryMark = { paragraphId: string; start: number; end: number };
 /** What this lane borrows from the mount closure. Mutable state arrives as a getter. */
 export interface SurfaceClipboardDeps {
   session: TreeDocxSessionView;
+  textFormFieldId?(): string | null;
   layout(): SemanticLayout;
   cellSelection(): CellSelection | null;
   editingMode(): SurfaceEditingMode;
@@ -113,7 +115,15 @@ export function createSurfaceClipboardOps(deps: SurfaceClipboardDeps): SurfaceCl
     // Normalized first: a Windows clipboard carries CRLF, a page break arrives as a form
     // feed, and either one left in run text is a control character the store refuses —
     // which vetoes the whole transaction and makes the paste do nothing at all.
-    const lines = insertableText(text).split('\n');
+    const normalized = insertableText(text);
+    const range = deps.orderedRange();
+    const lines = clampTextFormPaste(
+      session,
+      range.from,
+      range.to,
+      normalized,
+      deps.textFormFieldId?.() ?? null
+    ).split('\n');
 
     // ONE COMMIT, TWO OPS, whatever the clipboard holds.
     //

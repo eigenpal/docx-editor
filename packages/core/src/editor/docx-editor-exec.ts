@@ -397,6 +397,10 @@ export function execEditorCommand(
         };
       }
       break;
+    case 'editTextFormField':
+      return mounted.editTextFormField()
+        ? { ok: true, changed: false }
+        : { ok: false, code: 'unsupported', reason: 'field options are unavailable' };
     case 'refreshToc':
       if (!mounted.refreshToc(command.tocId, command.mode)) {
         return {

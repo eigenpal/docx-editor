@@ -6524,3 +6524,146 @@ a.docx-hyperlink:focus-visible {
   outline: 2px solid var(--doc-primary);
   outline-offset: 1px;
 }
+
+/* Field options use the Page Setup / Paragraph dialog visual language. */
+.docx-text-form-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(480px, calc(100vw - 40px));
+  max-width: calc(100vw - 40px);
+  max-height: 90dvh;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  box-shadow: 0 4px 20px var(--doc-shadow);
+  font: 13px/1.5 var(--doc-font-ui, system-ui, sans-serif);
+  overflow: hidden;
+}
+.docx-text-form-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.docx-text-form-dialog::backdrop {
+  background: var(--doc-overlay);
+}
+.docx-text-form-dialog__header {
+  margin: 0;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--doc-border);
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.docx-text-form-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.docx-text-form-dialog__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.docx-text-form-dialog__label {
+  flex: 0 0 132px;
+  color: var(--doc-text-muted);
+}
+.docx-text-form-dialog__input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  font: inherit;
+}
+.docx-text-form-dialog__checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.docx-text-form-dialog__checkbox-row input {
+  accent-color: var(--doc-primary);
+}
+.docx-text-form-dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--doc-border);
+  flex-shrink: 0;
+}
+.docx-text-form-dialog__button {
+  padding: 6px 16px;
+  border: 1px solid var(--doc-border);
+  border-radius: 4px;
+  background: var(--doc-surface);
+  color: var(--doc-text);
+  font: inherit;
+  cursor: pointer;
+}
+.docx-text-form-dialog__button:hover {
+  background: var(--doc-bg-hover);
+}
+.docx-text-form-dialog__button--primary {
+  border-color: var(--doc-primary);
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+}
+.docx-text-form-dialog__button--primary:hover {
+  background: var(--doc-primary-hover);
+}
+.docx-text-form-dialog :is(input, select, button):focus-visible {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+.docx-text-form-dialog__error {
+  margin: 0;
+  color: var(--doc-danger);
+  font-size: 12px;
+}
+.docx-text-form-dialog__error:empty {
+  display: none;
+}
+@media (max-width: 420px) {
+  .docx-text-form-dialog__row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .docx-text-form-dialog__label {
+    flex-basis: auto;
+  }
+}
+
+.docx-text-form-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+/* Field results can span many word boxes. Native selection and field shading
+   provide feedback without outlining each separately painted word. */
+
+.docx-text-form-status[data-field-error] {
+  position: fixed;
+  inset: auto 16px 16px auto;
+  z-index: 100;
+  width: auto;
+  height: auto;
+  max-width: min(420px, 90vw);
+  clip-path: none;
+  padding: 12px 16px;
+  border: 1px solid var(--doc-warning);
+  border-radius: 6px;
+  background: var(--doc-bg);
+  color: var(--doc-text);
+}

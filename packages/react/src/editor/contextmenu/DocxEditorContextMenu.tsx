@@ -134,7 +134,26 @@ function ContextMenuAddComment() {
   );
 }
 
+function ContextMenuEditField() {
+  const editor = useDocxEditor();
+  const menu = useMenuContext();
+  const label = useMenuLabel();
+  if (!editor?.can({ type: 'editTextFormField' }).ok) return null;
+  return (
+    <MenuRow
+      slot="field.edit"
+      onSelect={() => {
+        menu.setOpenMenu(null);
+        editor.exec({ type: 'editTextFormField' });
+      }}
+    >
+      {label('textFormField.edit')}
+    </MenuRow>
+  );
+}
+
 const BASE_DEFAULT_SET: readonly DefaultEntry[] = [
+  { kind: 'row', id: 'field.edit', render: () => <ContextMenuEditField /> },
   { kind: 'row', id: 'edit.cut', render: () => <ContextMenuCut /> },
   { kind: 'row', id: 'edit.copy', render: () => <ContextMenuCopy /> },
   { kind: 'row', id: 'edit.paste', render: () => <ContextMenuPaste /> },

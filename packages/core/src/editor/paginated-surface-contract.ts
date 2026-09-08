@@ -461,6 +461,8 @@ export interface PaginatedSurface {
   /** Insert and populate a generated body TOC before the caret paragraph. */
   insertToc(): boolean;
   /** Refresh cached TOC entries and/or page numbers through the two-pass layout pipeline. */
+  canEditTextFormField(): boolean;
+  editTextFormField(): boolean;
   refreshToc(tocId?: string, mode?: 'entire' | 'pageNumbers'): boolean;
   /**
    * Rewrite stale REF field results in the body, footnote and endnote stories so a save
@@ -511,6 +513,8 @@ export interface PaginatedSurface {
   setDrawingStrings(
     strings: import('../output/semantic-paint-drawings.ts').DrawingPaintStrings
   ): void;
+  /** Set slash-date input order independently of the field output format. */
+  setDateInputOrder(order: 'mdy' | 'dmy' | undefined): void;
   /** Replace the localized title used by later TOC insertions. */
   setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
   /**
