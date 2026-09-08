@@ -33,6 +33,7 @@
     "guides/loading-and-saving",
     "guides/toolbar",
     "guides/chrome-slots",
+    "guides/customize-dialogs",
     "guides/zoom",
     "guides/content-controls",
     "guides/headers-footers",

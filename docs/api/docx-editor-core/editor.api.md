@@ -39,6 +39,11 @@ export function canExecuteImageCommand(command: Extract<EditorCommand, {
 export function captureImageMutationPreconditions(editor: Pick<DocxEditorInstance, 'surface' | 'mountGeneration'>): ImageMutationPreconditions | null;
 
 // @public
+export function changedFields(seed: ParagraphDialogFields, current: ParagraphDialogFields,
+seedMixed?: ParagraphDialogMixed,
+currentMixed?: ParagraphDialogMixed): ParagraphFormatUpdate | null;
+
+// @public
 export const CHROME_GROUPS: readonly [{
     readonly controls: readonly [{
         readonly id: "undo";
@@ -757,6 +762,37 @@ export function computeResizedImageExtentEmu(startWidthEmu: number, startHeightE
 };
 
 // @public
+export interface ContentControlWidgetChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: ContentControlWidgetSession) => void;
+}
+
+// @public
+export interface ContentControlWidgetSession {
+    // (undocumented)
+    readonly anchor: HTMLElement | null;
+    // (undocumented)
+    apply(value: string): boolean;
+    // (undocumented)
+    canApply(): boolean;
+    // (undocumented)
+    cancel(): void;
+    // (undocumented)
+    readonly controlId: string;
+    // (undocumented)
+    readonly items: readonly {
+        readonly displayText: string;
+        readonly value: string;
+    }[];
+    // (undocumented)
+    readonly kind: 'dropdown' | 'comboBox' | 'date';
+    // (undocumented)
+    readonly signal: AbortSignal;
+    // (undocumented)
+    readonly value: string;
+}
+
+// @public
 export function createBrowserAutomationHost(editor: DocxEditorInstance): AutomationHost;
 
 // @public
@@ -854,13 +890,16 @@ export interface DocxEditorInstance extends Editor {
     presenceColorFor(name: string): string;
     setAllReviewAuthorsVisible(visible: boolean): void;
     setAuthor(author: string | undefined): void;
+    setContentControlWidgetChrome(handlers: ContentControlWidgetChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setEquationChrome(handlers: EquationChromeHandlers): Unsubscribe;
     setHyperlinkChrome(handlers: HyperlinkChromeHandlers): Unsubscribe;
+    setInvalidTextFormFieldChrome(handlers: InvalidTextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setLocale(locale: string | undefined): void;
     setMode(mode: 'edit' | 'view' | 'suggesting' | undefined): void;
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewAuthorVisible(author: string, visible: boolean): void;
     setRevisionStyles(styles: RevisionStyles): void;
+    setTextFormFieldChrome(handlers: TextFormFieldChromeHandlers, options?: PopupChromeRegistrationOptions): Unsubscribe;
     setTranslate(translate: ((key: string, params?: Record<string, string | number>) => string) | undefined): void;
     showAllReviewAuthors(): void;
     stateVersion(): number;
@@ -1091,6 +1130,9 @@ export interface FontUrlSource {
 }
 
 // @public
+export const formatInches: (twips: number) => string;
+
+// @public
 export function formattingBarChromeGroups(image: ImageContext | null): readonly ChromeGroup[];
 
 // @public
@@ -1267,6 +1309,25 @@ export interface ImageResourceLimits {
 // @public
 export type ImageWrapTarget = 'inline' | 'square' | 'squareLeft' | 'squareRight' | 'tight' | 'through' | 'topAndBottom' | 'behind' | 'inFront';
 
+// @public (undocumented)
+export const inchesToTwips: (inches: number) => number;
+
+// @public
+export interface InvalidTextFormFieldChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: InvalidTextFormFieldSession) => void;
+}
+
+// @public
+export interface InvalidTextFormFieldSession {
+    acknowledge(): void;
+    cancel(): void;
+    // (undocumented)
+    readonly signal: AbortSignal;
+    // (undocumented)
+    readonly type: 'number' | 'date';
+}
+
 // @public
 export function isFontResolver(value: unknown): value is MarkedFontResolver;
 
@@ -1315,10 +1376,16 @@ export type MarkedFontResolver<T extends FontResolver = FontResolver> = T & Font
 export const MAX_RESOLVER_FAMILIES = 64;
 
 // @public
+export function mixedFieldsOf(format: ParagraphFormatRead): ParagraphDialogMixed;
+
+// @public
 export function mountPaginatedSurface(container: HTMLElement, bytes: Uint8Array, options?: PaginatedSurfaceOptions): OpenPaginatedResult;
 
 // @public
 export type NavigationCommand = 'left' | 'right' | 'up' | 'down' | 'wordLeft' | 'wordRight' | 'lineStart' | 'lineEnd' | 'documentStart' | 'documentEnd' | 'pageUp' | 'pageDown';
+
+// @public (undocumented)
+export const NO_MIXED_FIELDS: ParagraphDialogMixed;
 
 // @public
 export type OpenPaginatedResult = {
@@ -1623,7 +1690,12 @@ export interface PaginatedSurfaceOptions {
     // (undocumented)
     readonly onEquationPopover?: (activation: EquationActivation) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
+    // (undocumented)
+    readonly onRequestContentControlWidget?: (session: ContentControlWidgetSession) => boolean;
     readonly onRequestHyperlink?: () => void;
+    // (undocumented)
+    readonly onRequestInvalidTextFormField?: (session: InvalidTextFormFieldSession) => boolean;
+    readonly onRequestTextFormField?: (session: TextFormFieldDialogSession) => boolean;
     readonly pointer?: 'engine' | 'native';
     readonly producer?: string;
     readonly reviewModel?: ReviewModuleContribution;
@@ -1663,6 +1735,73 @@ export interface PaginatedSurfaceState {
 }
 
 // @public
+export interface ParagraphDialogFields {
+    // (undocumented)
+    alignment: 'left' | 'center' | 'right' | 'justify';
+    clearedAllTabStops: boolean;
+    // (undocumented)
+    contextualSpacing: boolean;
+    // (undocumented)
+    indentLeft: number;
+    // (undocumented)
+    indentRight: number;
+    // (undocumented)
+    keepLines: boolean;
+    // (undocumented)
+    keepNext: boolean;
+    // (undocumented)
+    lineRule: 'multiple' | 'exact' | 'atLeast';
+    // (undocumented)
+    lineValue: number;
+    // (undocumented)
+    pageBreakBefore: boolean;
+    // (undocumented)
+    spaceAfter: number;
+    // (undocumented)
+    spaceBefore: number;
+    // (undocumented)
+    special: SpecialIndent;
+    // (undocumented)
+    specialBy: number;
+    // (undocumented)
+    tabStops: readonly ParagraphTabStop[];
+    // (undocumented)
+    widowControl: boolean;
+}
+
+// @public
+export interface ParagraphDialogMixed {
+    // (undocumented)
+    readonly alignment: boolean;
+    // (undocumented)
+    readonly contextualSpacing: boolean;
+    // (undocumented)
+    readonly indentLeft: boolean;
+    // (undocumented)
+    readonly indentRight: boolean;
+    // (undocumented)
+    readonly keepLines: boolean;
+    // (undocumented)
+    readonly keepNext: boolean;
+    // (undocumented)
+    readonly lineSpacing: boolean;
+    // (undocumented)
+    readonly pageBreakBefore: boolean;
+    // (undocumented)
+    readonly spaceAfter: boolean;
+    // (undocumented)
+    readonly spaceBefore: boolean;
+    // (undocumented)
+    readonly special: boolean;
+    readonly tabStops: boolean;
+    // (undocumented)
+    readonly widowControl: boolean;
+}
+
+// @public
+export type ParagraphFlagKey = 'contextualSpacing' | 'keepNext' | 'keepLines' | 'widowControl' | 'pageBreakBefore';
+
+// @public
 export interface ParagraphFlags {
     // (undocumented)
     readonly contextualSpacing: boolean | null;
@@ -1674,6 +1813,82 @@ export interface ParagraphFlags {
     readonly pageBreakBefore: boolean | null;
     // (undocumented)
     readonly widowControl: boolean | null;
+}
+
+// @public
+export type ParagraphFlagState = boolean | null;
+
+// @public
+export interface ParagraphFormatRead {
+    readonly alignment: 'left' | 'center' | 'right' | 'justify' | null;
+    // (undocumented)
+    readonly contextualSpacing: ParagraphFlagState;
+    readonly disagrees: {
+        readonly alignment: boolean;
+        readonly indentFirstLine: boolean;
+        readonly indentLeft: boolean;
+        readonly indentRight: boolean;
+        readonly lineSpacing: boolean;
+        readonly spaceAfterPt: boolean;
+        readonly spaceBeforePt: boolean;
+        readonly tabStops: boolean;
+    };
+    readonly indentFirstLineTwips: number | null;
+    // (undocumented)
+    readonly indentLeftTwips: number | null;
+    // (undocumented)
+    readonly indentRightTwips: number | null;
+    readonly indentUnknown: boolean;
+    // (undocumented)
+    readonly keepLines: ParagraphFlagState;
+    // (undocumented)
+    readonly keepNext: ParagraphFlagState;
+    // (undocumented)
+    readonly lineSpacing: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore: ParagraphFlagState;
+    // (undocumented)
+    readonly spaceAfterPt: number | null;
+    // (undocumented)
+    readonly spaceBeforePt: number | null;
+    readonly tabStops: readonly ParagraphTabStop[] | null;
+    // (undocumented)
+    readonly widowControl: ParagraphFlagState;
+}
+
+// @public
+export interface ParagraphFormatUpdate {
+    // (undocumented)
+    readonly alignment?: 'left' | 'center' | 'right' | 'justify';
+    // (undocumented)
+    readonly contextualSpacing?: boolean;
+    // (undocumented)
+    readonly indentFirstLineTwips?: number | null;
+    // (undocumented)
+    readonly indentLeftTwips?: number | null;
+    // (undocumented)
+    readonly indentRightTwips?: number | null;
+    // (undocumented)
+    readonly keepLines?: boolean;
+    // (undocumented)
+    readonly keepNext?: boolean;
+    // (undocumented)
+    readonly lineSpacing?: {
+        readonly rule: 'multiple' | 'exact' | 'atLeast';
+        readonly value: number;
+    } | null;
+    // (undocumented)
+    readonly pageBreakBefore?: boolean;
+    // (undocumented)
+    readonly spaceAfterPt?: number | null;
+    // (undocumented)
+    readonly spaceBeforePt?: number | null;
+    readonly tabStops?: readonly ParagraphTabStop[];
+    // (undocumented)
+    readonly widowControl?: boolean;
 }
 
 // @public
@@ -1699,6 +1914,11 @@ export function partOfNodeId(session: Pick<TreeDocxSessionView, 'currentPackage'
 
 // @public
 export function pointsToEmu(points: number): number;
+
+// @public
+export interface PopupChromeRegistrationOptions {
+    readonly fallback?: boolean;
+}
 
 // @public
 export function positionInputFromPropertiesCommand(command: {
@@ -1897,6 +2117,9 @@ export function runToolbarCommand(editor: Editor | null, id: ChromeSlotId,
 value?: unknown): ExecResult;
 
 // @public
+export function sameTabStops(a: readonly ParagraphTabStop[], b: readonly ParagraphTabStop[]): boolean;
+
+// @public
 export function sameZoomMode(a: ZoomMode, b: ZoomMode): boolean;
 
 // @public
@@ -1943,6 +2166,9 @@ export interface SectionProperties {
     // (undocumented)
     readonly titlePage: boolean;
 }
+
+// @public
+export function seedFields(format: ParagraphFormatRead): ParagraphDialogFields;
 
 // @public
 export interface SelectedDrawingOverlayTarget {
@@ -2051,6 +2277,9 @@ export interface SemanticSelection {
 }
 
 // @public
+export const signedFirstLineOf: (kind: SpecialIndent, magnitudeTwips: number) => number;
+
+// @public
 export const SNAP_TWIPS_CM: number;
 
 // @public
@@ -2064,6 +2293,12 @@ export function sniffImageMime(bytes: Uint8Array): RenderableImageMime | Preserv
 
 // @public
 export function sourceCropFromCropPercent(crop: ImageCropPercent): SourceCrop;
+
+// @public
+export type SpecialIndent = 'none' | 'firstLine' | 'hanging';
+
+// @public (undocumented)
+export const specialOf: (signedTwips: number | null) => SpecialIndent;
 
 // @public
 export type SupportedImageMime = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/bmp' | 'image/webp';
@@ -2214,6 +2449,18 @@ export interface SurfaceParagraphFormat {
 }
 
 // @public
+export const TAB_ALIGNMENT_LABELS: {
+    readonly bar: "dialogs.paragraph.tabAlignBar";
+    readonly center: "dialogs.paragraph.tabAlignCenter";
+    readonly decimal: "dialogs.paragraph.tabAlignDecimal";
+    readonly left: "dialogs.paragraph.tabAlignLeft";
+    readonly right: "dialogs.paragraph.tabAlignRight";
+};
+
+// @public (undocumented)
+export type TabAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar';
+
+// @public
 export const TABLE_BORDER_STYLE_OPTIONS: readonly TableBorderStyleOption[];
 
 // @public
@@ -2224,6 +2471,9 @@ export const TABLE_BORDER_WIDTH_OPTIONS: readonly TableBorderWidthOption[];
 
 // @public
 export const TABLE_CHROME_SLOT_IDS: readonly TableChromeSlotId[];
+
+// @public (undocumented)
+export type TabLeaderName = 'none' | 'dot' | 'hyphen' | 'underscore';
 
 // @public
 export interface TableBorderStyleOption {
@@ -2298,6 +2548,30 @@ export function tableCommandToolbarState(surface: PaginatedSurface | null, comma
 export type TableInteractionLabelKey = 'table.insertRowBelow' | 'table.insertColumnRight';
 
 // @public
+export const TEXT_FORM_FORMATS: {
+    readonly date: readonly ["", "M/d/yyyy", "MM/dd/yyyy", "d/M/yyyy", "dd/MM/yyyy", "yyyy-MM-dd", "d MMMM yyyy", "MMMM d, yyyy"];
+    readonly number: readonly ["", "0", "0.00", "#,##0", "#,##0.00", "0%", "0.00%"];
+    readonly regular: readonly ["", "Uppercase", "Lowercase", "First capital", "Title case"];
+};
+
+// @public
+export interface TextFormFieldChromeHandlers {
+    // (undocumented)
+    readonly onRequest?: (session: TextFormFieldDialogSession) => void;
+}
+
+// @public
+export interface TextFormFieldDialogSession {
+    apply(text: string, options: TextFormFieldOptions): boolean;
+    canApply(): boolean;
+    cancel(): void;
+    // (undocumented)
+    readonly field: TextFormFieldRange;
+    // (undocumented)
+    readonly signal: AbortSignal;
+}
+
+// @public
 export interface TextMeasurer {
     lineMetrics(style: ResolvedRunStyle): {
         baseline: number;
@@ -2331,6 +2605,9 @@ export type TrackedChangeFilterMode = 'accept' | 'reject';
 
 // @public
 export type TrackedChangePredicate = (revision: ReviewRevisionItem) => boolean;
+
+// @public
+export function trapTabWithin(panel: HTMLElement, event: KeyboardEvent): boolean;
 
 // @public
 export interface TreeApplyResult {
@@ -2441,6 +2718,9 @@ export const TWIPS_PER_CM = 567;
 // @public
 export const TWIPS_PER_INCH = 1440;
 
+// @public (undocumented)
+export const twipsToInches: (twips: number) => number;
+
 // @public
 export function validateDrawingPositionInput(position: DrawingPositionInput): boolean;
 
@@ -2463,6 +2743,9 @@ export function validateThemeModifier(value: unknown): value is number;
 
 // @public
 export type VectorImageMime = 'image/svg+xml';
+
+// @public
+export function withTabStop(stops: readonly ParagraphTabStop[], stop: ParagraphTabStop): readonly ParagraphTabStop[];
 
 // @public
 export const WORD_DEFAULT_FONT: FontConfiguration['defaultFont'];

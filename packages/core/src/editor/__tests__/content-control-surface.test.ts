@@ -1,3 +1,4 @@
+import type { ContentControlWidgetSession } from '../popup-sessions.ts';
 // Content-control surface chrome: boundary furniture, show-all, form-fill navigation,
 // lock/bound refusals, and remove — without layout reflow.
 
@@ -38,9 +39,15 @@ const p = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const sdt = (pr: string, content: string) =>
   `<w:sdt><w:sdtPr>${pr}</w:sdtPr><w:sdtContent>${content}</w:sdtContent></w:sdt>`;
 
-function mount(body: string): { surface: PaginatedSurface; container: HTMLElement } {
+function mount(
+  body: string,
+  onRequestContentControlWidget?: (request: ContentControlWidgetSession) => boolean
+): { surface: PaginatedSurface; container: HTMLElement } {
   const container = document.createElement('div');
-  const result = mountPaginatedSurface(container, docx(body), { scale: 1 });
+  const result = mountPaginatedSurface(container, docx(body), {
+    scale: 1,
+    ...(onRequestContentControlWidget ? { onRequestContentControlWidget } : {}),
+  });
   if (!result.ok) throw new Error(`${result.reason}: ${result.detail ?? ''}`);
   return { surface: result.surface, container };
 }
@@ -503,4 +510,59 @@ describe('content-control surface chrome', () => {
     expect(after?.getAttribute('data-checked')).toBe('true');
     expect(after?.getAttribute('aria-checked')).toBe('true');
   });
+});
+
+test('custom content-control widget sessions retain core writes and invalidate stale callbacks', () => {
+  const requests: ContentControlWidgetSession[] = [];
+  const body = `<w:p>${sdt(
+    '<w:dropDownList><w:listItem w:displayText="One" w:value="1"/><w:listItem w:displayText="Two" w:value="2"/></w:dropDownList>',
+    '<w:r><w:t>One</w:t></w:r>'
+  )}</w:p>`;
+  const { surface, container } = mount(body, (request) => {
+    requests.push(request);
+    return true;
+  });
+  const open = () =>
+    container.querySelector<HTMLElement>('[data-docx-cc-widget]')!.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+      })
+    );
+  try {
+    open();
+    const first = requests[0]!;
+    expect(first.kind).toBe('dropdown');
+    expect(first.value).toBe('1');
+    expect(first.items.map((item) => item.value)).toEqual(['1', '2']);
+    expect(first.anchor).not.toBeNull();
+    expect(container.querySelector('.docx-content-control-menu')).toBeNull();
+    expect(first.apply('invalid')).toBe(false);
+    expect(first.signal.aborted).toBe(false);
+    expect(first.apply('2')).toBe(true);
+    expect(first.signal.aborted).toBe(true);
+    expect(container.querySelector('.docx-page-content')?.textContent).toContain('Two');
+    expect(first.apply('1')).toBe(false);
+    open();
+    const second = requests[1]!;
+    open();
+    expect(second.signal.aborted).toBe(true);
+    const third = requests[2]!;
+    second.cancel();
+    expect(third.signal.aborted).toBe(false);
+    surface.setEditingMode('view');
+    expect(third.signal.aborted).toBe(true);
+    expect(third.canApply()).toBe(false);
+    surface.setEditingMode('edit');
+    open();
+    const last = requests[3]!;
+    surface.destroy();
+    expect(last.signal.aborted).toBe(true);
+    expect(last.apply('1')).toBe(false);
+  } finally {
+    container.remove();
+  }
 });

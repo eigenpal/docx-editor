@@ -324,3 +324,44 @@ export type {
   RevisionAuthorStyle,
   RevisionStyles,
 } from '../output/revision-presentation.ts';
+
+export type {
+  TextFormFieldDialogSession,
+  TextFormFieldChromeHandlers,
+} from './text-form-field-session.ts';
+
+export type {
+  ParagraphFlagState,
+  ParagraphFormatRead,
+  ParagraphFormatUpdate,
+} from './paragraph-dialog-types.ts';
+export {
+  twipsToInches,
+  formatInches,
+  inchesToTwips,
+  type TabAlignment,
+  type TabLeaderName,
+  TAB_ALIGNMENT_LABELS,
+  type SpecialIndent,
+  specialOf,
+  signedFirstLineOf,
+  type ParagraphDialogFields,
+  seedFields,
+  type ParagraphDialogMixed,
+  type ParagraphFlagKey,
+  NO_MIXED_FIELDS,
+  mixedFieldsOf,
+  sameTabStops,
+  changedFields,
+  withTabStop,
+  trapTabWithin,
+} from './paragraph-dialog-fields.ts';
+export { TEXT_FORM_FORMATS } from '../store/store/text-form-field-options.ts';
+
+export type {
+  PopupChromeRegistrationOptions,
+  ContentControlWidgetSession,
+  ContentControlWidgetChromeHandlers,
+  InvalidTextFormFieldSession,
+  InvalidTextFormFieldChromeHandlers,
+} from './popup-sessions.ts';

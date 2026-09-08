@@ -1,3 +1,6 @@
+import { ConfiguredEnginePopups } from './engine-popups';
+import { ConfiguredPopups } from './popup-config';
+import { useDialogHost } from './dialog-host';
 import {
   defineComponent,
   h,
@@ -34,6 +37,7 @@ export const DocxEditorContent = defineComponent({
     className: { type: String, default: undefined },
   },
   setup(props) {
+    const dialogs = useDialogHost();
     const editorRef = useDocxEditor();
     const imageInsert = useImageInsertOptional();
     const elementRef = shallowRef<HTMLDivElement | null>(null);
@@ -105,6 +109,7 @@ export const DocxEditorContent = defineComponent({
         {
           ref: (el: unknown) => {
             portalRef.value = el instanceof HTMLDivElement ? el : null;
+            if (dialogs) dialogs.target.value = portalRef.value;
           },
           class: 'docx-content-mount',
         },
@@ -118,6 +123,8 @@ export const DocxEditorContent = defineComponent({
             onDragover: onDragOver,
             onDrop,
           }),
+          h(ConfiguredPopups),
+          h(ConfiguredEnginePopups),
           editorRef.value
             ? h(ImageSelectionOverlay, {
                 containerRef: elementRef,

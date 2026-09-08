@@ -1,3 +1,4 @@
+import type { DocxEditorPopups } from './editor/popup-config';
 import type { DocxEditorChildren } from './docx-editor-children';
 import type {
   DocumentChange,
@@ -44,6 +45,8 @@ export type {
  * imports ProseMirror or OOXML feature logic.
  */
 export interface DocxEditorProps {
+  /** Customize automatically mounted popups. Set an entry to false for manual ownership. */
+  popups?: DocxEditorPopups;
   /**
    * Immutable byte-backed font sources sampled at mount. Remount to replace this
    * configuration atomically.
@@ -133,8 +136,8 @@ export interface DocxEditorProps {
    *
    * `false` removes it. An OBJECT is `DocxEditorMenuProps`, passed straight through, so a
    * host can redirect one row without giving up the bar: `menu={{ reportIssue: false }}`
-   * drops the report-an-issue row, `menu={{ onPageSetup: openMine }}` swaps the dialog,
-   * and `menu={{ children: <DocxEditor.Menu.File>…</DocxEditor.Menu.File> }}` replaces a
+   * drops the report-an-issue row. Use `popups.pageSetup` to customize Page Setup.
+   * `menu={{ children: <DocxEditor.Menu.File>…</DocxEditor.Menu.File> }}` replaces a
    * whole menu in place. Before this took an object the only way to change any of that was
    * `menu={false}` plus rebuilding the entire title block.
    *

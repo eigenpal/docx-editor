@@ -1,3 +1,12 @@
+import { DocxEditorNotesContextMenu } from '../editor/note-popup-parts';
+import { DocxEditorNotePreview } from '../editor/note-popup-parts';
+import { DocxEditorNotePropertiesDialog } from '../editor/DocxEditorNotes';
+import { DocxEditorImagePropertiesDialog } from '../editor/images/ImageProperties';
+import { DocxEditorImageAltTextPopup } from '../editor/images/ImageAltText';
+import { DocxEditorInvalidTextFormFieldDialog } from '../editor/DocxEditorInvalidTextFormFieldDialog';
+import { DocxEditorContentControlWidget } from '../editor/DocxEditorContentControlWidget';
+import { createPackagedPopups } from '../editor/popup-config';
+import { DocxEditorTextFormFieldDialog } from '../editor/DocxEditorTextFormFieldDialog';
 import { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 import type { CSSProperties, ForwardRefExoticComponent, RefAttributes } from 'react';
 import type { Editor } from '@docx-editor.dev/core/contracts/editor';
@@ -25,10 +34,7 @@ import { DocxEditorHeaderFooterChrome } from '../editor/DocxEditorHeaderFooter';
 import { DocxEditorHyperLink } from '../editor/DocxEditorHyperLink';
 import { DocxEditorEquation } from '../editor/DocxEditorEquation';
 import { DocxEditorNotesChrome } from '../editor/DocxEditorNotes';
-import {
-  ContextMenu as DocxEditorContextMenuCompound,
-  DocxEditorContextMenu,
-} from '../editor/contextmenu';
+import { ContextMenu as DocxEditorContextMenuCompound } from '../editor/contextmenu';
 import { DocxEditorContentControl } from '../editor/DocxEditorContentControl';
 import { LocaleProvider, useTranslation } from '../i18n';
 import type { TranslationKey } from '../i18n';
@@ -299,15 +305,6 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
         {chrome ? <DocxEditorHeaderFooterChrome /> : null}
         {chrome ? <DocxEditorNotesChrome /> : null}
         <DocxEditorContent />
-        <DocxEditorHyperLink hidden={hyperlinkPopup === false} />
-        <DocxEditorEquation />
-        {contextMenu === false ? null : (
-          <DocxEditorContextMenu
-            t={translate}
-            {...(typeof contextMenu === 'object' ? contextMenu : {})}
-          />
-        )}
-        <DocxEditorContentControl />
         {/* The vertical ruler scrolls WITH the document, so unlike its horizontal
           twin it belongs inside the scroller. aria-hidden: it carries no
           operable handles, unlike the horizontal one's indent sliders. */}
@@ -416,6 +413,7 @@ const DocxEditorFrame = forwardRef<DocxEditorRef, DocxEditorProps>(
     // through `setZoom`, callbacks are read at their latest identity.
     return (
       <DocxEditorRoot
+        popups={createPackagedPopups(props.popups, hyperlinkPopup, contextMenu, translate)}
         {...(doc !== undefined ? { document: doc } : {})}
         {...(fonts ? { fonts } : {})}
         {...(author !== undefined ? { author } : {})}
@@ -493,6 +491,7 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
   /** Page Setup dialog — size, orientation, margins — applied as one undo step. */
   readonly PageSetupDialog: typeof DocxEditorPageSetupDialog;
   /** The Paragraph dialog: alignment, indentation, spacing and the paragraph flags. */
+  readonly TextFormFieldDialog: typeof DocxEditorTextFormFieldDialog;
   readonly ParagraphDialog: typeof DocxEditorParagraphDialog;
   /** Floating localized page readout for the active viewport. */
   readonly PageNumber: typeof DocxEditorPageNumber;
@@ -520,6 +519,13 @@ export interface DocxEditorNamespace extends ForwardRefExoticComponent<
    * remove-keeping-content. Mounted by default inside the viewport; opens from the
    * `contentControl.inspector` chrome slot.
    */
+  readonly ContentControlWidget: typeof DocxEditorContentControlWidget;
+  readonly InvalidTextFormFieldDialog: typeof DocxEditorInvalidTextFormFieldDialog;
+  readonly ImageAltTextPopup: typeof DocxEditorImageAltTextPopup;
+  readonly ImagePropertiesDialog: typeof DocxEditorImagePropertiesDialog;
+  readonly NotePropertiesDialog: typeof DocxEditorNotePropertiesDialog;
+  readonly NotePreview: typeof DocxEditorNotePreview;
+  readonly NotesContextMenu: typeof DocxEditorNotesContextMenu;
   readonly ContentControl: typeof DocxEditorContentControl;
 }
 
@@ -538,6 +544,7 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Navigation: DocxEditorNavigationCompound,
   PageSetupDialog: DocxEditorPageSetupDialog,
   ParagraphDialog: DocxEditorParagraphDialog,
+  TextFormFieldDialog: DocxEditorTextFormFieldDialog,
   PageNumber: DocxEditorPageNumber,
   FontNotice: DocxEditorFontNotice,
   HeaderFooterChrome: DocxEditorHeaderFooterChrome,
@@ -545,5 +552,12 @@ export const DocxEditor: DocxEditorNamespace = Object.assign(DocxEditorImpl, {
   Equation: DocxEditorEquation,
   HyperLink: DocxEditorHyperLink,
   ContextMenu: DocxEditorContextMenuCompound,
+  ContentControlWidget: DocxEditorContentControlWidget,
+  InvalidTextFormFieldDialog: DocxEditorInvalidTextFormFieldDialog,
+  ImageAltTextPopup: DocxEditorImageAltTextPopup,
+  ImagePropertiesDialog: DocxEditorImagePropertiesDialog,
+  NotePropertiesDialog: DocxEditorNotePropertiesDialog,
+  NotePreview: DocxEditorNotePreview,
+  NotesContextMenu: DocxEditorNotesContextMenu,
   ContentControl: DocxEditorContentControl,
 });

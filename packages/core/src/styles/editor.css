@@ -6667,3 +6667,284 @@ a.docx-hyperlink:focus-visible {
   background: var(--doc-bg);
   color: var(--doc-text);
 }
+
+/* Dialog parts are a public styling contract. */
+:where([data-docx-dialog='pageSetup'].docx-dialog, [data-docx-dialog='textFormField'].docx-dialog) {
+  background-color: var(--doc-surface);
+  border-radius: var(--doc-dialog-radius, 8px);
+  box-shadow: 0 4px 20px var(--doc-shadow);
+  max-width: 480px;
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__header,
+  [data-docx-dialog='textFormField'] .docx-dialog__header
+) {
+  padding: var(--doc-dialog-padding, 16px 20px 12px);
+  border-bottom: 1px solid var(--doc-border);
+  font-size: var(--doc-dialog-font-size, 16px);
+  font-weight: 600;
+  color: var(--doc-text);
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__body,
+  [data-docx-dialog='textFormField'] .docx-dialog__body
+) {
+  padding: var(--doc-dialog-padding, 16px 20px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 14px);
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__section-label,
+  [data-docx-dialog='textFormField'] .docx-dialog__section-label
+) {
+  font-size: var(--doc-dialog-font-size, 12px);
+  font-weight: 600;
+  color: var(--doc-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__row,
+  [data-docx-dialog='textFormField'] .docx-dialog__row
+) {
+  display: flex;
+  align-items: center;
+  gap: var(--doc-dialog-gap, 12px);
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__label,
+  [data-docx-dialog='textFormField'] .docx-dialog__label
+) {
+  width: 80px;
+  font-size: var(--doc-dialog-font-size, 13px);
+  color: var(--doc-text-muted);
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__input,
+  [data-docx-dialog='textFormField'] .docx-dialog__input
+) {
+  flex: 1;
+  padding: var(--doc-dialog-padding, 6px 8px);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 4px);
+  font-size: var(--doc-dialog-font-size, 13px);
+  background-color: var(--doc-surface);
+  color: var(--doc-text);
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__unit,
+  [data-docx-dialog='textFormField'] .docx-dialog__unit
+) {
+  font-size: var(--doc-dialog-font-size, 11px);
+  color: var(--doc-text-muted);
+  width: 16px;
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__footer,
+  [data-docx-dialog='textFormField'] .docx-dialog__footer
+) {
+  padding: var(--doc-dialog-padding, 12px 20px 16px);
+  border-top: 1px solid var(--doc-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--doc-dialog-gap, 8px);
+}
+:where(
+  [data-docx-dialog='pageSetup'] .docx-dialog__button,
+  [data-docx-dialog='textFormField'] .docx-dialog__button
+) {
+  padding: var(--doc-dialog-padding, 6px 16px);
+  font-size: var(--doc-dialog-font-size, 13px);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 4px);
+  cursor: pointer;
+  background-color: var(--doc-surface);
+  color: var(--doc-text);
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__error) {
+  margin-right: auto;
+  font-size: var(--doc-dialog-font-size, 12px);
+  color: var(--doc-danger);
+}
+:where([data-docx-dialog='paragraph'].docx-dialog) {
+  background-color: var(--doc-surface);
+  border-radius: var(--doc-dialog-radius, 8px);
+  box-shadow: 0 4px 20px var(--doc-shadow);
+  max-width: 720px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0px;
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__header) {
+  padding: var(--doc-dialog-padding, 16px 20px 12px);
+  border-bottom: 1px solid var(--doc-border);
+  flex-shrink: 0;
+  font-size: var(--doc-dialog-font-size, 16px);
+  font-weight: 600;
+  color: var(--doc-text);
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__body) {
+  padding: var(--doc-dialog-padding, 16px 20px);
+  overflow-y: auto;
+  min-height: 0px;
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__columns) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--doc-dialog-gap, 28px);
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__column) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--doc-dialog-gap, 14px);
+  min-width: 0px;
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__section-label) {
+  font-size: var(--doc-dialog-font-size, 12px);
+  font-weight: 600;
+  color: var(--doc-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__row) {
+  display: flex;
+  align-items: center;
+  gap: var(--doc-dialog-gap, 12px);
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__label) {
+  width: 92px;
+  font-size: var(--doc-dialog-font-size, 13px);
+  color: var(--doc-text-muted);
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__input) {
+  flex: 1;
+  padding: var(--doc-dialog-padding, 6px 8px);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 4px);
+  font-size: var(--doc-dialog-font-size, 13px);
+  background-color: var(--doc-surface);
+  color: var(--doc-text);
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__unit) {
+  font-size: var(--doc-dialog-font-size, 11px);
+  color: var(--doc-text-muted);
+  width: 20px;
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__checkbox-row) {
+  display: flex;
+  align-items: center;
+  gap: var(--doc-dialog-gap, 8px);
+  font-size: var(--doc-dialog-font-size, 13px);
+  color: var(--doc-text);
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__footer) {
+  padding: var(--doc-dialog-padding, 12px 20px 16px);
+  border-top: 1px solid var(--doc-border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--doc-dialog-gap, 8px);
+  flex-shrink: 0;
+}
+:where([data-docx-dialog='paragraph'] .docx-dialog__button) {
+  padding: var(--doc-dialog-padding, 6px 16px);
+  font-size: var(--doc-dialog-font-size, 13px);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 4px);
+  cursor: pointer;
+  background-color: var(--doc-surface);
+  color: var(--doc-text);
+}
+
+:where(.docx-dialog) {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: calc(100vw - 40px);
+  max-width: 480px;
+  max-height: 90dvh;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  color: var(--doc-text);
+  background: var(--doc-surface);
+  font: var(--doc-dialog-font-size, 13px)/1.5
+    var(--doc-dialog-font-family, var(--doc-font-ui, system-ui, sans-serif));
+}
+:where(.docx-dialog[open]) {
+  display: flex;
+  flex-direction: column;
+}
+:where(.docx-dialog)::backdrop {
+  background: var(--doc-overlay);
+}
+:where(.docx-dialog__body) {
+  min-height: 0;
+  overflow-y: auto;
+}
+:where(.docx-dialog__input) {
+  min-width: 0;
+  font-family: inherit;
+}
+:where(.docx-dialog__button) {
+  font-family: inherit;
+}
+:where(.docx-dialog__apply) {
+  background: var(--doc-primary);
+  color: var(--doc-on-primary);
+  border-color: var(--doc-primary);
+}
+:where(.docx-dialog__button:disabled) {
+  opacity: 0.5;
+  cursor: default;
+}
+:where(.docx-dialog__error:empty) {
+  display: none;
+}
+:where(.docx-dialog :where(button, input, select, textarea):focus-visible) {
+  outline: 2px solid var(--doc-primary);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  :where([data-docx-dialog='paragraph'] .docx-dialog__columns) {
+    grid-template-columns: 1fr;
+  }
+}
+
+:where(.docx-dialog__note) {
+  font-size: 12px;
+  color: var(--doc-text-muted);
+}
+:where(.docx-dialog__tab-description) {
+  flex: 1;
+  font-size: 13px;
+  color: var(--doc-text-muted);
+}
+:where(.docx-dialog[data-docx-dialog='paragraph']) {
+  max-width: 720px;
+}
+
+:where(.docx-dialog__section-label--spaced) {
+  margin-top: 4px;
+}
+:where(.docx-dialog__tab-position) {
+  color: var(--doc-text);
+}
+:where(.docx-dialog__row--actions) {
+  justify-content: flex-end;
+}
+
+:where(.docx-content-control-widget-popup) {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  color: var(--doc-text);
+  background: var(--doc-popover-bg, white);
+  border: 1px solid var(--doc-border);
+  border-radius: var(--doc-dialog-radius, 8px);
+  box-shadow: 0 4px 16px var(--doc-shadow);
+}

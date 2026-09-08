@@ -393,6 +393,11 @@ const pageSetupOpen = ref(false);
 
 Use `usePageSetup()` to build a different form.
 
+Page Setup, Paragraph Options, and legacy text Field Options expose replaceable
+parts and draft contexts. Import `definePopup` from `@docx-editor.dev/vue`.
+Set `popups.pageSetup` to `definePopup(MyPopup)` on the editor or `Root`.
+For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+
 ## Content-control panel
 
 `DocxEditorContentControl` inspects the content control at the caret.

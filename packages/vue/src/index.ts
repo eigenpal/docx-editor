@@ -423,3 +423,50 @@ export type {
   RevisionStyles,
 } from '@docx-editor.dev/core/editor';
 export type { DocxDocument } from '@docx-editor.dev/core/contracts/types';
+
+export {
+  usePageSetupDialog,
+  type PageSetupDialogFields,
+  type UsePageSetupDialogReturn,
+} from './editor/DocxEditorPageSetup';
+export {
+  useParagraphDialog,
+  type UseParagraphDialogReturn,
+} from './editor/DocxEditorParagraphDialog';
+export {
+  DocxEditorTextFormFieldDialog,
+  useTextFormFieldDialog,
+  type TextFormFieldDialogFields,
+  type UseTextFormFieldDialogReturn,
+  type DocxEditorTextFormFieldDialogProps,
+} from './editor/DocxEditorTextFormFieldDialog';
+export type { DocxEditorPopups } from './editor/popup-config';
+export type {
+  DialogPartProps,
+  DialogCustomizationProps,
+  UseDialogReturn,
+} from './editor/dialog-parts';
+
+export {
+  DocxEditorImageAltTextPopup,
+  type DocxEditorImageAltTextPopupProps,
+} from './editor/images/ImageAltText';
+export {
+  DocxEditorNotePropertiesDialog,
+  type DocxEditorNotePropertiesDialogProps,
+  DocxEditorNotePreview,
+  type DocxEditorNotePreviewProps,
+  DocxEditorNotesContextMenu,
+  type DocxEditorNotesContextMenuProps,
+} from './editor/DocxEditorNotes';
+
+export {
+  DocxEditorContentControlWidget,
+  type DocxEditorContentControlWidgetProps,
+} from './editor/DocxEditorContentControlWidget';
+export {
+  DocxEditorInvalidTextFormFieldDialog,
+  type DocxEditorInvalidTextFormFieldDialogProps,
+} from './editor/DocxEditorInvalidTextFormFieldDialog';
+
+export { definePopup, type DocxEditorPopup } from './editor/popup-renderer';

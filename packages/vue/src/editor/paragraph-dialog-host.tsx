@@ -1,11 +1,6 @@
-// Who owns the Paragraph dialog's mount. The Vue twin of the React host.
-//
-// Not the control that opens it. The line-spacing part moves between the formatting bar and
-// the overflow panel whenever the toolbar re-measures — a window resize, a browser zoom,
-// opening devtools — and a dialog mounted inside it is unmounted with it, mid-edit, with no
-// warning and nothing written. The toolbar owns it instead, and the dialog is teleported to
-// the body — a dialog counted among the bar's own children fed the measurement that decides
-// what collapses.
+import { useDialogHost } from './dialog-host';
+// Bridge the toolbar trigger to the per-editor dialog coordinator. A standalone
+// toolbar retains a local native dialog host, which outlives overflow controls.
 
 import { defineComponent, h, inject, provide, ref, type InjectionKey, type Ref } from 'vue';
 import { DocxEditorParagraphDialog } from './DocxEditorParagraphDialog';
@@ -34,6 +29,11 @@ const PARAGRAPH_DIALOG: InjectionKey<ParagraphDialogHandle> = Symbol('docx.parag
 export const ParagraphDialogHost = defineComponent({
   name: 'DocxEditorParagraphDialogHost',
   setup(_props, { slots }) {
+    const coordinator = useDialogHost();
+    if (coordinator) {
+      provide(PARAGRAPH_DIALOG, { open: (focus) => coordinator.open('paragraph', focus) });
+      return () => slots.default?.();
+    }
     const open = ref(false);
     const opener: Ref<HTMLElement | null> = ref(null);
 
@@ -57,10 +57,8 @@ export const ParagraphDialogHost = defineComponent({
       if (previous?.isConnected) previous.focus({ preventScroll: true });
     };
 
-    // The dialog teleports itself to the body, so it is not counted among the children the
-    // toolbar measures to decide what collapses — and rendering it here inline keeps this
-    // component's root single, so the public `DocxEditorToolbar` still inherits its
-    // fallthrough attributes (`class`, `style`, `id`).
+    // The native modal stays outside toolbar measurement while the host remains
+    // mounted across overflow changes.
     return () => [
       ...(slots.default?.() ?? []),
       h(DocxEditorParagraphDialog, { open: open.value, onClose: close }),

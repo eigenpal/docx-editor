@@ -153,9 +153,15 @@ test('Vue field context action opens and saves the shared options dialog', async
     type!.value = 'regular';
     type!.dispatchEvent(new Event('change'));
     text!.value = 'hello';
+    text!.dispatchEvent(new Event('input', { bubbles: true }));
     max!.value = '5';
+    max!.dispatchEvent(new Event('input', { bubbles: true }));
     format!.value = 'Uppercase';
+    format!.dispatchEvent(new Event('change', { bubbles: true }));
     enabled!.checked = false;
+    enabled!.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+
     dialog.querySelectorAll('button')[1]!.click();
     await flush();
     expect(host.container.querySelector('dialog')).toBeNull();

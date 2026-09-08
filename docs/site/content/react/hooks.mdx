@@ -337,6 +337,15 @@ These hooks provide context-free variants of the corresponding hooks.
 `useReviewOf`, `useReviewItem`, and `useReviewAuthor`.
 [`@docx-editor.dev/pro/vue`](/docs/2.x/pro) provides the Vue equivalents.
 
+## Dialog draft contexts
+
+Use `usePageSetupDialog()`, `useParagraphDialog()`, or `useTextFormFieldDialog()`
+inside a child of the corresponding dialog. Each exposes `values`,
+`setValue(name, value)`, `errors`, `isEnabled`, `apply()`, and `cancel()`.
+
+Paragraph also exposes mixed-selection state. Page Setup dimensions use twips.
+For examples, see [Customize popups](/docs/2.x/guides/customize-dialogs).
+
 ## Next steps
 
 - [React composition](/docs/2.x/react/composition)

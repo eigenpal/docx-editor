@@ -1,3 +1,8 @@
+import {
+  createContentControlWidgetSessions,
+  contentControlWidgetItems,
+  contentControlWidgetDate,
+} from './content-control-widget-session.ts';
 import { applyTextFormOperation } from './surface-text-form-apply.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
 import { createTextFormFieldInteraction } from './surface-text-form-fields.ts';
@@ -2123,35 +2128,7 @@ export function mountPaginatedSurface(
     return true;
   }
 
-  function listItemsOfControl(
-    controlId: string
-  ): readonly { displayText: string; value: string }[] {
-    const control = findControl(controlId);
-    if (!control) return [];
-    for (const child of control.children) {
-      if (child.kind === 'textValue') continue;
-      if (
-        (child as { kind?: string }).kind !== 'contentControlProperties' &&
-        child.localName !== 'sdtPr'
-      ) {
-        continue;
-      }
-      for (const prop of child.children) {
-        if (prop.kind === 'textValue') continue;
-        if (prop.localName !== 'dropDownList' && prop.localName !== 'comboBox') continue;
-        const items: { displayText: string; value: string }[] = [];
-        for (const item of prop.children) {
-          if (item.kind === 'textValue' || item.localName !== 'listItem') continue;
-          const value = item.attributes.find((a) => a.localName === 'value')?.value ?? '';
-          const displayText =
-            item.attributes.find((a) => a.localName === 'displayText')?.value ?? value;
-          items.push({ displayText, value });
-        }
-        return items;
-      }
-    }
-    return [];
-  }
+  const listItemsOfControl = (id: string) => contentControlWidgetItems(findControl(id));
 
   function checkboxChecked(controlId: string): boolean {
     const control = findControl(controlId);
@@ -2176,18 +2153,7 @@ export function mountPaginatedSurface(
     return false;
   }
 
-  function dateValueOfControl(controlId: string): string | undefined {
-    const control = findControl(controlId);
-    if (!control) return undefined;
-    for (const child of control.children) {
-      if (child.kind !== 'contentControlProperties') continue;
-      for (const property of child.children) {
-        if (property.kind !== 'contentControlDate') continue;
-        return property.attributes.find((attribute) => attribute.localName === 'fullDate')?.value;
-      }
-    }
-    return undefined;
-  }
+  const dateValueOfControl = (id: string) => contentControlWidgetDate(findControl(id));
 
   function setContentControlWidgetOpen(controlId: string, open: boolean): void {
     for (const chrome of pagesLayer.querySelectorAll<HTMLElement>('[data-docx-content-control]')) {
@@ -2197,6 +2163,17 @@ export function mountPaginatedSurface(
     }
   }
 
+  const widgetSessions = createContentControlWidgetSessions({
+    find: findControl,
+    allowed: (id) => !contentControlsOps.disabledReason(id, 'edit'),
+    apply: (id, value) => contentControlsOps.setValue(id, value),
+    items: listItemsOfControl,
+    date: dateValueOfControl,
+    layer: pagesLayer,
+    setOpen: setContentControlWidgetOpen,
+    request: options.onRequestContentControlWidget,
+  });
+
   function closeContentControlMenu(menu: HTMLElement): void {
     const controlId = menu.dataset.docxCcId;
     menu.remove();
@@ -2204,6 +2181,7 @@ export function mountPaginatedSurface(
   }
 
   function removeExistingContentControlMenu(): void {
+    widgetSessions.cancel();
     const existing = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
     if (existing) closeContentControlMenu(existing);
   }
@@ -2273,6 +2251,9 @@ export function mountPaginatedSurface(
       contentControlsOps.setValue(controlId, checkboxChecked(controlId) ? 'false' : 'true');
       return;
     }
+    const existingWidget = pagesLayer.querySelector<HTMLElement>('.docx-content-control-menu');
+    if (existingWidget) closeContentControlMenu(existingWidget);
+    if (widgetSessions.open(controlId, kind)) return;
     if (kind === 'dropdown' || kind === 'comboBox') {
       const items = listItemsOfControl(controlId);
       if (items.length === 0 && kind === 'dropdown') return;
@@ -5720,6 +5701,7 @@ export function mountPaginatedSurface(
       container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
       viewportObserver?.disconnect();
       observedScroller = null;
+      widgetSessions.destroy();
       textFormInteraction?.destroy();
       pointer?.destroy();
       tableInteraction.destroy();
@@ -5869,20 +5851,18 @@ export function mountPaginatedSurface(
     selectionSync.onCompositionStart(...args);
   };
 
-  /**
-   * The pointer lane's handle, assigned once the surface it drives exists.
-   *
-   * Read by the selection mirror: the browser keeps reporting its own idea of the selection
-   * while a gesture runs, and adopting one of those mid-drag snaps the caret back to whatever
-   * the DOM guessed.
-   */
+  // The selection mirror checks this handle to avoid adopting browser selection mid-drag.
+  // It is assigned once the surface exists.
   let pointer: PointerController | null = null;
   textFormInteraction = createTextFormFieldInteraction({
+    onRequest: options.onRequestTextFormField,
+    onInvalidRequest: options.onRequestInvalidTextFormField,
     locale: dateLocale.get,
     translate: (key, params) => translate?.(key, params) ?? key,
     pagesLayer,
     container,
-    part: () => partOfNodeId(session, selection.head.paragraphId) ?? session.part(),
+    part: (paragraphId?: string) =>
+      partOfNodeId(session, paragraphId ?? selection.head.paragraphId) ?? session.part(),
     protected: (paragraphId = selection.head.paragraphId) =>
       formsProtectionEnabled(session.settingsRoot()) &&
       sectionProtectsForms(partOfNodeId(session, paragraphId) ?? session.part(), paragraphId),

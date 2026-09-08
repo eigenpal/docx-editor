@@ -1,3 +1,4 @@
+import { createEditorPopupChrome } from './text-form-field-chrome.ts';
 // The `Editor` facade over the paginated surface.
 //
 // `createDocxEditor` implements the FULL `Editor` contract over the paginated surface —
@@ -347,6 +348,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   // quiet — and one that moved only surface state does not. See `surface-publish-signal.ts`.
   const publishSignal = createPublishSignal();
   let remountDrawingIntent: DrawingSelectionIntent = { kind: 'none' };
+  const popupChrome = createEditorPopupChrome();
   const hyperlinkChrome = createChromeHandlerStack<HyperlinkChromeHandlers>({});
   const equationChrome = createChromeHandlerStack<EquationChromeHandlers>({});
   let destroyed = false;
@@ -570,6 +572,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // exists (the provider-first shape), and a document that reloads must not leave the
       // host's chrome wired to the surface it replaced.
       onHyperlinkPopover: (activation) => hyperlinkChrome.current().onPopover?.(activation),
+      ...popupChrome.surfaceOptions,
       onRequestHyperlink: () => hyperlinkChrome.current().onRequest?.(),
       onEquationPopover: (activation) => equationChrome.current().onPopover?.(activation),
       onTrackedChange: () => {
@@ -1755,6 +1758,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       return surface;
     },
 
+    ...popupChrome.setters,
     setHyperlinkChrome: hyperlinkChrome.push,
 
     setEquationChrome: equationChrome.push,

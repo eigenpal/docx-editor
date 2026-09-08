@@ -97,7 +97,7 @@ macros, DDE instructions, OLE content, or external include instructions.
 
 Click a `FORMTEXT` field to select it. Double-click or choose **Edit field…** to
 set its default value, type, maximum length, format, and **Fill-in enabled**.
-A maximum length of zero means unlimited. React and Vue use the same dialog.
+A maximum length of zero means unlimited. React and Vue share the same default behavior.
 
 In an unprotected document, partial edits keep the field definition; replacing
 its whole result removes it. In a document protected for forms, editing keeps
@@ -106,6 +106,9 @@ the definition. Tab and Shift+Tab move between enabled text fields.
 Protected fields validate and format input when you leave. Pasted text is limited
 to the remaining capacity. Invalid numbers or dates open an alert; acknowledging
 it clears the input, which can be restored with Undo.
+
+Use `popups.textFormField` for Field Options and `popups.invalidTextFormField`
+for the validation alert. See [Customize popups](/docs/2.x/guides/customize-dialogs).
 
 ### Date input and UI language
 

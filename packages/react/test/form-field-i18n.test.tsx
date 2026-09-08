@@ -1,6 +1,6 @@
 import React from 'react';
 import { afterEach, expect, test } from 'bun:test';
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import { DocxEditor } from '../src/components/DocxEditor';
 import { DocxEditorRoot } from '../src/editor/DocxEditorRoot';
 import { DocxEditorViewport } from '../src/editor/DocxEditorViewport';
@@ -44,12 +44,15 @@ for (const composed of [false, true]) {
       });
       expect(instance.surface!.editTextFormField()).toBe(true);
     });
+    await waitFor(() => expect(view.container.querySelector('dialog')).not.toBeNull());
     const panel = view.container.querySelector('dialog')!;
     expect(panel.getAttribute('aria-label')).toBe('Pole daty');
     expect(panel.textContent).toContain('Wartość');
     expect(panel.textContent).toContain('Maximum length'); // missing keys fall back to English
     const input = panel.querySelector('input')!;
-    input.value = 'unfinished';
+    act(() => {
+      fireEvent.change(input, { target: { value: 'unfinished' } });
+    });
     input.focus();
     await act(async () => {
       view.rerender(tree(nextFormCatalogue));
@@ -64,3 +67,47 @@ for (const composed of [false, true]) {
     );
   });
 }
+
+test('Root translate updates open Field Options without replacing its draft', async () => {
+  const bytes = formFieldDocx();
+  let editor: DocxEditorInstance | undefined;
+  const tree = (title: string) => (
+    <DocxEditorRoot
+      document={bytes}
+      translate={(key) => (key === 'textFormField.title' ? title : key)}
+      onReady={(value) => {
+        editor = value;
+      }}
+    >
+      <DocxEditorViewport>
+        <DocxEditorContent />
+      </DocxEditorViewport>
+    </DocxEditorRoot>
+  );
+  const view = render(tree('Custom field'));
+  await act(async () => {});
+  const instance = editor!;
+  const paragraphId = instance.surface!.session.paragraphIds()[0]!;
+  act(() => {
+    instance.surface!.setSelection({
+      anchor: { paragraphId, offset: 0 },
+      head: { paragraphId, offset: 10 },
+    });
+    instance.surface!.editTextFormField();
+  });
+  await waitFor(() =>
+    expect(view.container.querySelector('dialog')?.getAttribute('aria-label')).toBe('Custom field')
+  );
+  const panel = view.container.querySelector('dialog')!;
+  const input = panel.querySelector('input')!;
+  fireEvent.change(input, { target: { value: 'unfinished' } });
+  input.focus();
+  await act(async () => {
+    view.rerender(tree('Updated field'));
+  });
+  expect(view.container.querySelector('dialog')).toBe(panel);
+  expect(panel.getAttribute('aria-label')).toBe('Updated field');
+  expect(panel.textContent).toContain('Maximum length');
+  expect(input.value).toBe('unfinished');
+  expect(document.activeElement).toBe(input);
+});

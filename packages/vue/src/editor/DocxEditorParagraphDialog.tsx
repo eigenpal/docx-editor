@@ -1,18 +1,27 @@
+import type { DocxEditorChildren } from '../docx-editor-children';
 // The Paragraph dialog — the Vue twin of the React part. Alignment, indentation with its
 // Special/By pair, spacing with its line-spacing rule and value, and the flags. The whole
 // form is written back as ONE `setParagraphFormat` on OK, so the dialog is a single undo
 // step. The host owns visibility (`open`/`onClose`); the engine owns everything else.
 
 import {
+  Fragment,
+  computed,
   defineComponent,
   getCurrentInstance,
-  nextTick,
   ref,
   watch,
   type CSSProperties,
   type PropType,
+  type Ref,
 } from 'vue';
-import { Teleport } from 'vue';
+import {
+  createDialogComposition,
+  NativeDialog,
+  useDialogGeneration,
+  type DialogCustomizationProps,
+  type UseDialogReturn,
+} from './dialog-parts';
 import { useTranslation } from '../i18n';
 import { useParagraphFormat, type ParagraphTabStop } from './useParagraphFormat';
 import {
@@ -22,7 +31,6 @@ import {
   mixedFieldsOf,
   NO_MIXED_FIELDS,
   seedFields,
-  trapTabWithin,
   TAB_ALIGNMENT_LABELS,
   twipsToInches,
   withTabStop,
@@ -34,141 +42,39 @@ import {
   type TabLeaderName,
 } from './paragraph-dialog-fields';
 
-const refusedStyle: CSSProperties = {
-  marginRight: 'auto',
-  fontSize: '12px',
-  color: 'var(--doc-danger)',
-};
-
-const overlayStyle: CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  backgroundColor: 'var(--doc-overlay)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 10000,
-};
-
-const dialogStyle: CSSProperties = {
-  backgroundColor: 'var(--doc-surface)',
-  borderRadius: '8px',
-  boxShadow: '0 4px 20px var(--doc-shadow)',
-  minWidth: '620px',
-  maxWidth: '720px',
-  width: '100%',
-  margin: '20px',
-  maxHeight: '90vh',
-  // The panel is a column with a scrolling middle, NOT one scrolling box. Scrolling the
-  // whole panel put OK and Cancel below the fold on an ordinary laptop viewport: the form
-  // simply ended mid-control with no button and no scrollbar cue that more existed.
-  display: 'flex',
-  flexDirection: 'column',
-  minHeight: 0,
-};
-
-const headerStyle: CSSProperties = {
-  padding: '16px 20px 12px',
-  borderBottom: '1px solid var(--doc-border)',
-  flexShrink: 0,
-  fontSize: '16px',
-  fontWeight: 600,
-  color: 'var(--doc-text)',
-};
-
-const bodyStyle: CSSProperties = {
-  padding: '16px 20px',
-  // The one part that scrolls, so the header and the buttons stay put.
-  overflowY: 'auto',
-  minHeight: 0,
-};
-
-// Two columns, the way Word lays this dialog out: General and Indentation and the tab
-// stops on the left, Spacing and Pagination on the right. It halves the height, so the
-// whole form fits an ordinary viewport without scrolling.
-const columnsStyle: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '28px',
-};
-const columnStyle: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '14px',
-  minWidth: 0,
-};
-
-const sectionLabelStyle: CSSProperties = {
-  fontSize: '12px',
-  fontWeight: 600,
-  color: 'var(--doc-text-muted)',
-  textTransform: 'uppercase',
-  letterSpacing: '0.5px',
-};
-
-const rowStyle: CSSProperties = { display: 'flex', alignItems: 'center', gap: '12px' };
-const labelStyle: CSSProperties = {
-  width: '92px',
-  fontSize: '13px',
-  color: 'var(--doc-text-muted)',
-};
-const inputStyle: CSSProperties = {
-  flex: 1,
-  padding: '6px 8px',
-  border: '1px solid var(--doc-border)',
-  borderRadius: '4px',
-  fontSize: '13px',
-  backgroundColor: 'var(--doc-surface)',
-  color: 'var(--doc-text)',
-};
-const unitStyle: CSSProperties = {
-  fontSize: '11px',
-  color: 'var(--doc-text-muted)',
-  width: '20px',
-};
-const checkRowStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  fontSize: '13px',
-  color: 'var(--doc-text)',
-};
-const footerStyle: CSSProperties = {
-  padding: '12px 20px 16px',
-  borderTop: '1px solid var(--doc-border)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'flex-end',
-  gap: '8px',
-  flexShrink: 0,
-};
-const btnStyle: CSSProperties = {
-  padding: '6px 16px',
-  fontSize: '13px',
-  border: '1px solid var(--doc-border)',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  backgroundColor: 'var(--doc-surface)',
-  color: 'var(--doc-text)',
-};
+const composition = createDialogComposition<
+  ParagraphDialogFields,
+  Exclude<keyof ParagraphDialogFields, 'clearedAllTabStops'>
+>('ParagraphDialog');
+/** Paragraph draft state, mixed values, and actions. @public */
+export interface UseParagraphDialogReturn extends UseDialogReturn<ParagraphDialogFields> {
+  readonly mixed: Readonly<Ref<ParagraphDialogMixed>>;
+}
+/** Access the current Paragraph draft and actions. @public */
+export function useParagraphDialog(): UseParagraphDialogReturn {
+  return composition.useContext() as UseParagraphDialogReturn;
+}
 
 /** Props for `DocxEditorParagraphDialog`. @public */
-export interface DocxEditorParagraphDialogProps {
+export interface DocxEditorParagraphDialogProps extends DialogCustomizationProps {
   open: boolean;
   onClose: () => void;
-  className?: string;
 }
 
 /** The Paragraph dialog, applied as one undoable command. @public */
-export const DocxEditorParagraphDialog = defineComponent({
+const ParagraphDialogImpl = defineComponent({
   name: 'DocxEditorParagraphDialog',
   props: {
+    children: Object as PropType<DocxEditorChildren>,
     open: { type: Boolean, required: true },
     onClose: { type: Function as PropType<() => void>, required: true },
     className: { type: String, default: undefined },
+    style: Object as PropType<CSSProperties>,
+    preset: { type: Boolean, default: true },
   },
-  setup(props) {
+  setup(props, { slots }) {
     const { t } = useTranslation();
+    const currentGeneration = useDialogGeneration(() => props.open, props.onClose);
     const paragraph = useParagraphFormat();
 
     const alignment = ref<'left' | 'center' | 'right' | 'justify'>('left');
@@ -200,11 +106,6 @@ export const DocxEditorParagraphDialog = defineComponent({
     // hoistable, and Vue refuses a `ref` on a hoisted vnode ("Missing ref owner context"),
     // which left the dialog opening unfocused and Escape doing nothing.
     const instance = getCurrentInstance();
-    // Queried from the document, not the component's own element: the dialog teleports to
-    // the body, so `instance.vnode.el` is only the teleport's anchor comment. One dialog is
-    // open per host at a time, and the `Paragraph` label disambiguates it.
-    const panelOf = (): HTMLElement | null =>
-      document.querySelector('[role="dialog"][aria-label="' + t('dialogs.paragraph.title') + '"]');
     const refused = ref(false);
     // One prefix per mounted dialog, so a `<label for>` points at THIS dialog's input even
     // when a host renders two. Clicking a visible label is how a pointer user hits a small
@@ -257,7 +158,6 @@ export const DocxEditorParagraphDialog = defineComponent({
         seeded.value = true;
         // Focus the panel so Escape reaches the overlay's key handler. Without it the
         // dialog cannot be dismissed from the keyboard until the user tabs into it.
-        void nextTick(() => panelOf()?.focus());
       },
       { immediate: true }
     );
@@ -285,6 +185,7 @@ export const DocxEditorParagraphDialog = defineComponent({
     };
 
     const handleApply = (): void => {
+      if (!currentGeneration()) return;
       const seed = seedRef.value;
       const update =
         seed === null
@@ -328,6 +229,50 @@ export const DocxEditorParagraphDialog = defineComponent({
       refused.value = true;
     };
 
+    const fields = {
+      alignment,
+      indentLeft,
+      indentRight,
+      special,
+      specialBy,
+      spaceBefore,
+      spaceAfter,
+      lineRule,
+      lineValue,
+      contextualSpacing,
+      keepNext,
+      keepLines,
+      widowControl,
+      pageBreakBefore,
+      tabStops,
+      clearedAllTabStops,
+    };
+    const renderParts = composition.provideContext({
+      mixed,
+      values: computed(
+        () =>
+          Object.fromEntries(
+            Object.entries(fields).map(([key, value]) => [key, value.value])
+          ) as unknown as ParagraphDialogFields
+      ),
+      errors: computed(() => (refused.value ? { form: t('dialogs.paragraph.refused') } : {})),
+      isEnabled: paragraph.isEnabled,
+      setValue: (name, value) => {
+        (fields[name] as { value: unknown }).value = value;
+        if (name === 'lineRule')
+          lineValue.value =
+            value === seedRef.value?.lineRule
+              ? seedRef.value.lineValue
+              : value === 'multiple'
+                ? 1.08
+                : 12;
+        const mixedName =
+          name === 'lineRule' ? 'lineSpacing' : name === 'specialBy' ? 'special' : name;
+        if (name !== 'lineValue') mixed.value = { ...mixed.value, [mixedName]: false };
+      },
+      apply: handleApply,
+      cancel: props.onClose,
+    } as UseParagraphDialogReturn);
     return () => {
       if (!props.open) return null;
 
@@ -357,14 +302,18 @@ export const DocxEditorParagraphDialog = defineComponent({
         set: (twips: number) => void,
         mixedKey?: keyof ParagraphDialogMixed
       ) => (
-        <div style={rowStyle}>
-          <label style={labelStyle} for={`${fieldId}-${labelKey}`}>
+        <div
+          data-docx-part="field"
+          data-docx-field={labelKey === 'by' ? 'specialBy' : (mixedKey ?? labelKey)}
+          class="docx-dialog__row"
+        >
+          <label class="docx-dialog__label" for={`${fieldId}-${labelKey}`}>
             {t(`dialogs.paragraph.${labelKey}`)}
           </label>
           <input
             id={`${fieldId}-${labelKey}`}
             type="number"
-            style={inputStyle}
+            class="docx-dialog__input"
             min="0"
             step="0.1"
             {...(labelKey === 'tabPosition' ? { 'data-docx-tab-entry': '' } : {})}
@@ -376,7 +325,7 @@ export const DocxEditorParagraphDialog = defineComponent({
             }}
             aria-label={t(`dialogs.paragraph.${labelKey}`)}
           />
-          <span style={unitStyle}>{t('dialogs.paragraph.unitInches')}</span>
+          <span class="docx-dialog__unit">{t('dialogs.paragraph.unitInches')}</span>
         </div>
       );
 
@@ -386,14 +335,14 @@ export const DocxEditorParagraphDialog = defineComponent({
         set: (points: number) => void,
         mixedKey: keyof ParagraphDialogMixed
       ) => (
-        <div style={rowStyle}>
-          <label style={labelStyle} for={`${fieldId}-${labelKey}`}>
+        <div data-docx-part="field" data-docx-field={mixedKey} class="docx-dialog__row">
+          <label class="docx-dialog__label" for={`${fieldId}-${labelKey}`}>
             {t(`dialogs.paragraph.${labelKey}`)}
           </label>
           <input
             id={`${fieldId}-${labelKey}`}
             type="number"
-            style={inputStyle}
+            class="docx-dialog__input"
             min="0"
             step="1"
             value={mixed.value[mixedKey] ? '' : value}
@@ -404,7 +353,7 @@ export const DocxEditorParagraphDialog = defineComponent({
             }}
             aria-label={t(`dialogs.paragraph.${labelKey}`)}
           />
-          <span style={unitStyle}>{t('dialogs.paragraph.unitPoints')}</span>
+          <span class="docx-dialog__unit">{t('dialogs.paragraph.unitPoints')}</span>
         </div>
       );
 
@@ -413,7 +362,7 @@ export const DocxEditorParagraphDialog = defineComponent({
         checked: boolean,
         set: (next: boolean) => void
       ) => (
-        <label style={checkRowStyle}>
+        <label data-docx-part="field" data-docx-field={labelKey} class="docx-dialog__checkbox-row">
           <input
             type="checkbox"
             checked={checked}
@@ -436,380 +385,366 @@ export const DocxEditorParagraphDialog = defineComponent({
       // teleports to the body and `--doc-*` tokens are scoped under that class — outside it
       // every token resolves to nothing, leaving a transparent panel over an undimmed page.
       // The dark state is copied from the live editor element rather than threaded through.
-      const scoped =
-        typeof document !== 'undefined' ? document.querySelector('.docx-editor') : null;
-      const scopeClass = `docx-editor${scoped?.classList.contains('dark') ? ' dark' : ''}`;
+      const defaults = (
+        <Fragment>
+          <div data-docx-part="header" class="docx-dialog__header">
+            <span data-docx-part="title" class="docx-dialog__title">
+              {t('dialogs.paragraph.title')}
+            </span>
+          </div>
+          <div data-docx-part="body" class="docx-dialog__body">
+            <div class="docx-dialog__columns">
+              <div class="docx-dialog__column">
+                <div class="docx-dialog__section-label">{t('dialogs.paragraph.general')}</div>
+                <div data-docx-part="field" data-docx-field="alignment" class="docx-dialog__row">
+                  <label class="docx-dialog__label" for={`${fieldId}-alignment`}>
+                    {t('dialogs.paragraph.alignment')}
+                  </label>
+                  <select
+                    id={`${fieldId}-alignment`}
+                    class="docx-dialog__input"
+                    value={mixed.value.alignment ? '' : alignment.value}
+                    onChange={(event) => {
+                      resolve('alignment');
+                      alignment.value = (event.target as HTMLSelectElement)
+                        .value as typeof alignment.value;
+                    }}
+                    aria-label={t('dialogs.paragraph.alignment')}
+                  >
+                    {mixed.value.alignment ? (
+                      <option value="">{t('dialogs.paragraph.mixed')}</option>
+                    ) : null}
+                    <option value="left">{t('dialogs.paragraph.alignLeft')}</option>
+                    <option value="center">{t('dialogs.paragraph.alignCenter')}</option>
+                    <option value="right">{t('dialogs.paragraph.alignRight')}</option>
+                    <option value="justify">{t('dialogs.paragraph.alignJustify')}</option>
+                  </select>
+                </div>
 
-      return (
-        <Teleport to="body">
-          <div
-            class={`${scopeClass}${props.className ? ` ${props.className}` : ''}`}
-            style={overlayStyle}
-            onClick={props.onClose}
-            onKeydown={(event: KeyboardEvent) => {
-              if (event.key === 'Escape') props.onClose();
-              const panel = panelOf();
-              if (panel && trapTabWithin(panel, event)) event.preventDefault();
-              // Enter is the form's default submit, EXCEPT on a control that owns the key: a
-              // button acts on the Enter that focused it, and keydown here runs first, so
-              // Cancel pressed from the keyboard would otherwise apply the form first.
-              // Enter is the form's default submit, EXCEPT on a control that owns the key: a
-              // button acts on the Enter that focused it, and a `<select>` uses it to commit
-              // the option the user has arrowed to.
-              const ownsEnter =
-                event.target instanceof HTMLButtonElement ||
-                event.target instanceof HTMLSelectElement;
-              if (event.key === 'Enter' && !ownsEnter) {
-                // Enter inside the tab-stop entry row means "Set", the way it does in Word.
-                // Submitting the whole form there threw the pending row away without a word:
-                // it is not part of `tabStops` yet, so OK closed and wrote nothing.
-                const target = event.target;
-                if (target instanceof HTMLElement && target.dataset.docxTabEntry !== undefined) {
-                  setTabStop();
-                  return;
-                }
-                if (paragraph.isEnabled.value) handleApply();
-              }
-            }}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label={t('dialogs.paragraph.title')}
-              tabindex={-1}
-              style={dialogStyle}
-              onClick={(event: MouseEvent) => event.stopPropagation()}
-              // Painted pages ARE the editable surface, so any mousedown that reaches them
-              // moves the caret — and the dialog formats whatever the caret is on.
-              onMousedown={(event: MouseEvent) => event.stopPropagation()}
-            >
-              <div style={headerStyle}>{t('dialogs.paragraph.title')}</div>
-              <div style={bodyStyle}>
-                <div style={columnsStyle}>
-                  <div style={columnStyle}>
-                    <div style={sectionLabelStyle}>{t('dialogs.paragraph.general')}</div>
-                    <div style={rowStyle}>
-                      <label style={labelStyle} for={`${fieldId}-alignment`}>
-                        {t('dialogs.paragraph.alignment')}
-                      </label>
-                      <select
-                        id={`${fieldId}-alignment`}
-                        style={inputStyle}
-                        value={mixed.value.alignment ? '' : alignment.value}
-                        onChange={(event) => {
-                          resolve('alignment');
-                          alignment.value = (event.target as HTMLSelectElement)
-                            .value as typeof alignment.value;
-                        }}
-                        aria-label={t('dialogs.paragraph.alignment')}
-                      >
-                        {mixed.value.alignment ? (
-                          <option value="">{t('dialogs.paragraph.mixed')}</option>
-                        ) : null}
-                        <option value="left">{t('dialogs.paragraph.alignLeft')}</option>
-                        <option value="center">{t('dialogs.paragraph.alignCenter')}</option>
-                        <option value="right">{t('dialogs.paragraph.alignRight')}</option>
-                        <option value="justify">{t('dialogs.paragraph.alignJustify')}</option>
-                      </select>
-                    </div>
-
-                    <div style={sectionLabelStyle}>{t('dialogs.paragraph.indentation')}</div>
-                    {inchRow(
-                      'beforeText',
-                      indentLeft.value,
+                <div class="docx-dialog__section-label">{t('dialogs.paragraph.indentation')}</div>
+                {inchRow(
+                  'beforeText',
+                  indentLeft.value,
+                  (twips) => {
+                    indentLeft.value = twips;
+                  },
+                  'indentLeft'
+                )}
+                {inchRow(
+                  'afterText',
+                  indentRight.value,
+                  (twips) => {
+                    indentRight.value = twips;
+                  },
+                  'indentRight'
+                )}
+                <div data-docx-part="field" data-docx-field="special" class="docx-dialog__row">
+                  <label class="docx-dialog__label" for={`${fieldId}-special`}>
+                    {t('dialogs.paragraph.special')}
+                  </label>
+                  <select
+                    id={`${fieldId}-special`}
+                    class="docx-dialog__input"
+                    value={mixed.value.special ? '' : special.value}
+                    onChange={(event) => {
+                      resolve('special');
+                      special.value = (event.target as HTMLSelectElement).value as SpecialIndent;
+                    }}
+                    aria-label={t('dialogs.paragraph.special')}
+                  >
+                    {mixed.value.special ? <option value="">{blankLabel('special')}</option> : null}
+                    <option value="none">{t('dialogs.paragraph.specialNone')}</option>
+                    <option value="firstLine">{t('dialogs.paragraph.specialFirstLine')}</option>
+                    <option value="hanging">{t('dialogs.paragraph.specialHanging')}</option>
+                  </select>
+                </div>
+                {special.value !== 'none'
+                  ? inchRow(
+                      'by',
+                      specialBy.value,
                       (twips) => {
-                        indentLeft.value = twips;
+                        specialBy.value = Math.max(0, twips);
                       },
-                      'indentLeft'
-                    )}
-                    {inchRow(
-                      'afterText',
-                      indentRight.value,
-                      (twips) => {
-                        indentRight.value = twips;
-                      },
-                      'indentRight'
-                    )}
-                    <div style={rowStyle}>
-                      <label style={labelStyle} for={`${fieldId}-special`}>
-                        {t('dialogs.paragraph.special')}
-                      </label>
-                      <select
-                        id={`${fieldId}-special`}
-                        style={inputStyle}
-                        value={mixed.value.special ? '' : special.value}
-                        onChange={(event) => {
-                          resolve('special');
-                          special.value = (event.target as HTMLSelectElement)
-                            .value as SpecialIndent;
-                        }}
-                        aria-label={t('dialogs.paragraph.special')}
-                      >
-                        {mixed.value.special ? (
-                          <option value="">{blankLabel('special')}</option>
-                        ) : null}
-                        <option value="none">{t('dialogs.paragraph.specialNone')}</option>
-                        <option value="firstLine">{t('dialogs.paragraph.specialFirstLine')}</option>
-                        <option value="hanging">{t('dialogs.paragraph.specialHanging')}</option>
-                      </select>
-                    </div>
-                    {special.value !== 'none'
-                      ? inchRow(
-                          'by',
-                          specialBy.value,
-                          (twips) => {
-                            specialBy.value = Math.max(0, twips);
-                          },
-                          'special'
-                        )
-                      : null}
+                      'special'
+                    )
+                  : null}
 
-                    <div style={sectionLabelStyle}>{t('dialogs.paragraph.tabStops')}</div>
-                    {tabStops.value.length === 0 ? (
-                      <div style={{ fontSize: '12px', color: 'var(--doc-text-muted)' }}>
-                        {/* An empty list over a MIXED selection would read as "none of these
+                <div data-docx-part="field" data-docx-field="tabStops">
+                  <div class="docx-dialog__section-label">{t('dialogs.paragraph.tabStops')}</div>
+                  {tabStops.value.length === 0 ? (
+                    <div class="docx-dialog__note">
+                      {/* An empty list over a MIXED selection would read as "none of these
                           paragraphs has a tab stop", which is the opposite of what is true. */}
-                        {t(
-                          mixed.value.tabStops
-                            ? 'dialogs.paragraph.tabMixed'
-                            : 'dialogs.paragraph.tabEmpty'
-                        )}
+                      {t(
+                        mixed.value.tabStops
+                          ? 'dialogs.paragraph.tabMixed'
+                          : 'dialogs.paragraph.tabEmpty'
+                      )}
+                    </div>
+                  ) : (
+                    tabStops.value.map((stop) => (
+                      <div key={stop.positionTwips} class="docx-dialog__row">
+                        <span class="docx-dialog__label docx-dialog__tab-position">
+                          {t('dialogs.paragraph.tabPositionLabel', {
+                            position: formatInches(stop.positionTwips),
+                          })}
+                        </span>
+                        <span class="docx-dialog__tab-description">
+                          {t(TAB_ALIGNMENT_LABELS[stop.alignment])}
+                        </span>
+                        <button
+                          type="button"
+                          class="docx-dialog__button"
+                          onClick={() => {
+                            tabStops.value = tabStops.value.filter((entry) => entry !== stop);
+                          }}
+                          aria-label={t('dialogs.paragraph.tabRemoveAt', {
+                            position: formatInches(stop.positionTwips),
+                          })}
+                        >
+                          {t('dialogs.paragraph.tabRemove')}
+                        </button>
                       </div>
-                    ) : (
-                      tabStops.value.map((stop) => (
-                        <div key={stop.positionTwips} style={rowStyle}>
-                          <span style={{ ...labelStyle, color: 'var(--doc-text)' }}>
-                            {t('dialogs.paragraph.tabPositionLabel', {
-                              position: formatInches(stop.positionTwips),
-                            })}
-                          </span>
-                          <span
-                            style={{ flex: 1, fontSize: '13px', color: 'var(--doc-text-muted)' }}
-                          >
-                            {t(TAB_ALIGNMENT_LABELS[stop.alignment])}
-                          </span>
-                          <button
-                            type="button"
-                            style={btnStyle}
-                            onClick={() => {
-                              tabStops.value = tabStops.value.filter((entry) => entry !== stop);
-                            }}
-                            aria-label={t('dialogs.paragraph.tabRemoveAt', {
-                              position: formatInches(stop.positionTwips),
-                            })}
-                          >
-                            {t('dialogs.paragraph.tabRemove')}
-                          </button>
-                        </div>
-                      ))
-                    )}
-                    {inchRow('tabPosition', newTabPosition.value, (twips) => {
-                      newTabPosition.value = Math.max(0, twips);
-                    })}
-                    <div style={rowStyle}>
-                      <label style={labelStyle} for={`${fieldId}-tabAlignment`}>
-                        {t('dialogs.paragraph.tabAlignment')}
-                      </label>
-                      <select
-                        id={`${fieldId}-tabAlignment`}
-                        style={inputStyle}
-                        value={newTabAlignment.value}
-                        onChange={(event) => {
-                          newTabAlignment.value = (event.target as HTMLSelectElement)
-                            .value as TabAlignment;
-                        }}
-                        aria-label={t('dialogs.paragraph.tabAlignment')}
-                        data-docx-tab-entry=""
-                      >
-                        <option value="left">{t('dialogs.paragraph.tabAlignLeft')}</option>
-                        <option value="center">{t('dialogs.paragraph.tabAlignCenter')}</option>
-                        <option value="right">{t('dialogs.paragraph.tabAlignRight')}</option>
-                        {/* No `bar`: it draws a vertical rule rather than stopping the caret, so the
+                    ))
+                  )}
+                  {inchRow('tabPosition', newTabPosition.value, (twips) => {
+                    newTabPosition.value = Math.max(0, twips);
+                  })}
+                  <div class="docx-dialog__row">
+                    <label class="docx-dialog__label" for={`${fieldId}-tabAlignment`}>
+                      {t('dialogs.paragraph.tabAlignment')}
+                    </label>
+                    <select
+                      id={`${fieldId}-tabAlignment`}
+                      class="docx-dialog__input"
+                      value={newTabAlignment.value}
+                      onChange={(event) => {
+                        newTabAlignment.value = (event.target as HTMLSelectElement)
+                          .value as TabAlignment;
+                      }}
+                      aria-label={t('dialogs.paragraph.tabAlignment')}
+                      data-docx-tab-entry=""
+                    >
+                      <option value="left">{t('dialogs.paragraph.tabAlignLeft')}</option>
+                      <option value="center">{t('dialogs.paragraph.tabAlignCenter')}</option>
+                      <option value="right">{t('dialogs.paragraph.tabAlignRight')}</option>
+                      {/* No `bar`: it draws a vertical rule rather than stopping the caret, so the
                               engine neither paints it nor reports it back. Offering it here
                               would add a row that vanishes on OK. */}
-                        <option value="decimal">{t('dialogs.paragraph.tabAlignDecimal')}</option>
-                      </select>
-                    </div>
-                    <div style={rowStyle}>
-                      <label style={labelStyle} for={`${fieldId}-tabLeader`}>
-                        {t('dialogs.paragraph.tabLeader')}
-                      </label>
-                      <select
-                        id={`${fieldId}-tabLeader`}
-                        style={inputStyle}
-                        value={newTabLeader.value}
-                        onChange={(event) => {
-                          newTabLeader.value = (event.target as HTMLSelectElement)
-                            .value as TabLeaderName;
-                        }}
-                        aria-label={t('dialogs.paragraph.tabLeader')}
-                        data-docx-tab-entry=""
-                      >
-                        <option value="none">{t('dialogs.paragraph.tabNone')}</option>
-                        <option value="dot">{t('dialogs.paragraph.tabLeaderDot')}</option>
-                        <option value="hyphen">{t('dialogs.paragraph.tabLeaderHyphen')}</option>
-                        <option value="underscore">
-                          {t('dialogs.paragraph.tabLeaderUnderscore')}
-                        </option>
-                      </select>
-                    </div>
-                    <div style={{ ...rowStyle, justifyContent: 'flex-end' }}>
-                      <button type="button" style={btnStyle} onClick={setTabStop}>
-                        {t('dialogs.paragraph.tabAdd')}
-                      </button>
-                      <button
-                        type="button"
-                        style={btnStyle}
-                        onClick={() => {
-                          // Over a MIXED list this is still a decision, even though the list already
-                          // shows empty — `changedFields` needs the disagreement marked resolved.
-                          mixed.value = { ...mixed.value, tabStops: false };
-                          tabStops.value = [];
-                        }}
-                      >
-                        {t('dialogs.paragraph.tabClearAll')}
-                      </button>
-                    </div>
+                      <option value="decimal">{t('dialogs.paragraph.tabAlignDecimal')}</option>
+                    </select>
                   </div>
-                  <div style={columnStyle}>
-                    <div style={sectionLabelStyle}>{t('dialogs.paragraph.spacing')}</div>
-                    {pointRow(
-                      'spaceBefore',
-                      spaceBefore.value,
-                      (points) => {
-                        spaceBefore.value = points;
-                      },
-                      'spaceBefore'
-                    )}
-                    {pointRow(
-                      'spaceAfter',
-                      spaceAfter.value,
-                      (points) => {
-                        spaceAfter.value = points;
-                      },
-                      'spaceAfter'
-                    )}
-                    <div style={rowStyle}>
-                      <label style={labelStyle} for={`${fieldId}-lineSpacing`}>
-                        {t('dialogs.paragraph.lineSpacing')}
-                      </label>
-                      <select
-                        id={`${fieldId}-lineSpacing`}
-                        style={inputStyle}
-                        value={mixed.value.lineSpacing ? '' : lineRule.value}
-                        onChange={(event) => {
-                          const next = (event.target as HTMLSelectElement)
-                            .value as typeof lineRule.value;
-                          // Picking a rule RESOLVES the disagreement — without this the select
-                          // snapped back to blank and the value box stayed disabled forever, so a
-                          // mixed line spacing could not be corrected at all.
-                          resolve('lineSpacing');
-                          lineRule.value = next;
-                          // The value means LINES under Multiple and POINTS otherwise, so carrying
-                          // 1.08 into "Exactly" would ask for a 1pt line box.
-                          // Back to the rule it opened on means back to the value it opened
-                          // on, or a user who picked "Exactly" and changed their mind would
-                          // silently write 1.08 over the 1.15 their style supplies.
-                          lineValue.value =
-                            next === seedRef.value?.lineRule
-                              ? seedRef.value.lineValue
-                              : next === 'multiple'
-                                ? 1.08
-                                : 12;
-                        }}
-                        aria-label={t('dialogs.paragraph.lineSpacing')}
-                      >
-                        {mixed.value.lineSpacing ? (
-                          <option value="">{t('dialogs.paragraph.mixed')}</option>
-                        ) : null}
-                        <option value="multiple">{t('dialogs.paragraph.ruleMultiple')}</option>
-                        <option value="atLeast">{t('dialogs.paragraph.ruleAtLeast')}</option>
-                        <option value="exact">{t('dialogs.paragraph.ruleExactly')}</option>
-                      </select>
-                    </div>
-                    <div style={rowStyle}>
-                      <label style={labelStyle} for={`${fieldId}-at`}>
-                        {t('dialogs.paragraph.at')}
-                      </label>
-                      <input
-                        id={`${fieldId}-at`}
-                        type="number"
-                        style={inputStyle}
-                        // No `resolve` on this box: a number cannot say whether it means lines or
-                        // points. The rule select owns that, so until a rule is picked this is
-                        // disabled — typing 16 here over a mixed selection used to write sixteen
-                        // line-heights.
-                        disabled={mixed.value.lineSpacing}
-                        min="0.01"
-                        step={lineRule.value === 'multiple' ? '0.01' : '1'}
-                        value={mixed.value.lineSpacing ? '' : lineValue.value}
-                        onInput={(event) => {
-                          const next = (event.target as HTMLInputElement).value.trim();
-                          lineValue.value =
-                            next === ''
-                              ? lineRule.value === 'multiple'
-                                ? 1.08
-                                : 12
-                              : Number(next) || 0;
-                        }}
-                        aria-label={t('dialogs.paragraph.at')}
-                      />
-                      <span style={unitStyle}>
-                        {lineRule.value === 'multiple' ? '' : t('dialogs.paragraph.unitPoints')}
-                      </span>
-                    </div>
-                    {checkbox('contextualSpacing', contextualSpacing.value, (next) => {
-                      contextualSpacing.value = next;
-                    })}
-
-                    <div style={sectionLabelStyle}>{t('dialogs.paragraph.pagination')}</div>
-                    {checkbox('keepNext', keepNext.value, (next) => {
-                      keepNext.value = next;
-                    })}
-                    {checkbox('widowControl', widowControl.value, (next) => {
-                      widowControl.value = next;
-                    })}
-                    {checkbox('keepLines', keepLines.value, (next) => {
-                      keepLines.value = next;
-                    })}
-                    {checkbox('pageBreakBefore', pageBreakBefore.value, (next) => {
-                      pageBreakBefore.value = next;
-                    })}
+                  <div class="docx-dialog__row">
+                    <label class="docx-dialog__label" for={`${fieldId}-tabLeader`}>
+                      {t('dialogs.paragraph.tabLeader')}
+                    </label>
+                    <select
+                      id={`${fieldId}-tabLeader`}
+                      class="docx-dialog__input"
+                      value={newTabLeader.value}
+                      onChange={(event) => {
+                        newTabLeader.value = (event.target as HTMLSelectElement)
+                          .value as TabLeaderName;
+                      }}
+                      aria-label={t('dialogs.paragraph.tabLeader')}
+                      data-docx-tab-entry=""
+                    >
+                      <option value="none">{t('dialogs.paragraph.tabNone')}</option>
+                      <option value="dot">{t('dialogs.paragraph.tabLeaderDot')}</option>
+                      <option value="hyphen">{t('dialogs.paragraph.tabLeaderHyphen')}</option>
+                      <option value="underscore">
+                        {t('dialogs.paragraph.tabLeaderUnderscore')}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="docx-dialog__row docx-dialog__row--actions">
+                    <button type="button" class="docx-dialog__button" onClick={setTabStop}>
+                      {t('dialogs.paragraph.tabAdd')}
+                    </button>
+                    <button
+                      type="button"
+                      class="docx-dialog__button"
+                      onClick={() => {
+                        // Over a MIXED list this is still a decision, even though the list already
+                        // shows empty — `changedFields` needs the disagreement marked resolved.
+                        mixed.value = { ...mixed.value, tabStops: false };
+                        tabStops.value = [];
+                      }}
+                    >
+                      {t('dialogs.paragraph.tabClearAll')}
+                    </button>
                   </div>
                 </div>
               </div>
-              <div style={footerStyle}>
-                {/* `role="alert"` so the refusal is announced, not just drawn. */}
-                {refused.value ? (
-                  <span role="alert" style={refusedStyle}>
-                    {t('dialogs.paragraph.refused')}
+              <div class="docx-dialog__column">
+                <div class="docx-dialog__section-label">{t('dialogs.paragraph.spacing')}</div>
+                {pointRow(
+                  'spaceBefore',
+                  spaceBefore.value,
+                  (points) => {
+                    spaceBefore.value = points;
+                  },
+                  'spaceBefore'
+                )}
+                {pointRow(
+                  'spaceAfter',
+                  spaceAfter.value,
+                  (points) => {
+                    spaceAfter.value = points;
+                  },
+                  'spaceAfter'
+                )}
+                <div data-docx-part="field" data-docx-field="lineRule" class="docx-dialog__row">
+                  <label class="docx-dialog__label" for={`${fieldId}-lineSpacing`}>
+                    {t('dialogs.paragraph.lineSpacing')}
+                  </label>
+                  <select
+                    id={`${fieldId}-lineSpacing`}
+                    class="docx-dialog__input"
+                    value={mixed.value.lineSpacing ? '' : lineRule.value}
+                    onChange={(event) => {
+                      const next = (event.target as HTMLSelectElement)
+                        .value as typeof lineRule.value;
+                      // Picking a rule RESOLVES the disagreement — without this the select
+                      // snapped back to blank and the value box stayed disabled forever, so a
+                      // mixed line spacing could not be corrected at all.
+                      resolve('lineSpacing');
+                      lineRule.value = next;
+                      // The value means LINES under Multiple and POINTS otherwise, so carrying
+                      // 1.08 into "Exactly" would ask for a 1pt line box.
+                      // Back to the rule it opened on means back to the value it opened
+                      // on, or a user who picked "Exactly" and changed their mind would
+                      // silently write 1.08 over the 1.15 their style supplies.
+                      lineValue.value =
+                        next === seedRef.value?.lineRule
+                          ? seedRef.value.lineValue
+                          : next === 'multiple'
+                            ? 1.08
+                            : 12;
+                    }}
+                    aria-label={t('dialogs.paragraph.lineSpacing')}
+                  >
+                    {mixed.value.lineSpacing ? (
+                      <option value="">{t('dialogs.paragraph.mixed')}</option>
+                    ) : null}
+                    <option value="multiple">{t('dialogs.paragraph.ruleMultiple')}</option>
+                    <option value="atLeast">{t('dialogs.paragraph.ruleAtLeast')}</option>
+                    <option value="exact">{t('dialogs.paragraph.ruleExactly')}</option>
+                  </select>
+                </div>
+                <div data-docx-part="field" data-docx-field="lineValue" class="docx-dialog__row">
+                  <label class="docx-dialog__label" for={`${fieldId}-at`}>
+                    {t('dialogs.paragraph.at')}
+                  </label>
+                  <input
+                    id={`${fieldId}-at`}
+                    type="number"
+                    class="docx-dialog__input"
+                    // No `resolve` on this box: a number cannot say whether it means lines or
+                    // points. The rule select owns that, so until a rule is picked this is
+                    // disabled — typing 16 here over a mixed selection used to write sixteen
+                    // line-heights.
+                    disabled={mixed.value.lineSpacing}
+                    min="0.01"
+                    step={lineRule.value === 'multiple' ? '0.01' : '1'}
+                    value={mixed.value.lineSpacing ? '' : lineValue.value}
+                    onInput={(event) => {
+                      const next = (event.target as HTMLInputElement).value.trim();
+                      lineValue.value =
+                        next === ''
+                          ? lineRule.value === 'multiple'
+                            ? 1.08
+                            : 12
+                          : Number(next) || 0;
+                    }}
+                    aria-label={t('dialogs.paragraph.at')}
+                  />
+                  <span class="docx-dialog__unit">
+                    {lineRule.value === 'multiple' ? '' : t('dialogs.paragraph.unitPoints')}
                   </span>
-                ) : null}
-                <button type="button" style={btnStyle} onClick={props.onClose}>
-                  {t('dialogs.paragraph.cancel')}
-                </button>
-                <button
-                  type="button"
-                  style={{
-                    ...btnStyle,
-                    backgroundColor: 'var(--doc-primary)',
-                    color: 'var(--doc-on-primary)',
-                    borderColor: 'var(--doc-primary)',
-                    // The same dimming `DocxEditorPageSetup` uses. These two dialogs sit
-                    // beside each other in the same product; they cannot disagree about what
-                    // a primary button looks like.
-                    opacity: paragraph.isEnabled.value ? 1 : 0.5,
-                  }}
-                  disabled={!paragraph.isEnabled.value}
-                  onClick={handleApply}
-                >
-                  {t('dialogs.paragraph.ok')}
-                </button>
+                </div>
+                {checkbox('contextualSpacing', contextualSpacing.value, (next) => {
+                  contextualSpacing.value = next;
+                })}
+
+                <div class="docx-dialog__section-label">{t('dialogs.paragraph.pagination')}</div>
+                {checkbox('keepNext', keepNext.value, (next) => {
+                  keepNext.value = next;
+                })}
+                {checkbox('widowControl', widowControl.value, (next) => {
+                  widowControl.value = next;
+                })}
+                {checkbox('keepLines', keepLines.value, (next) => {
+                  keepLines.value = next;
+                })}
+                {checkbox('pageBreakBefore', pageBreakBefore.value, (next) => {
+                  pageBreakBefore.value = next;
+                })}
               </div>
             </div>
           </div>
-        </Teleport>
+          <div data-docx-part="footer" class="docx-dialog__footer">
+            {/* `role="alert"` so the refusal is announced, not just drawn. */}
+            <span data-docx-part="error" role="alert" class="docx-dialog__error">
+              {refused.value ? t('dialogs.paragraph.refused') : null}
+            </span>
+            <button
+              data-docx-part="cancel"
+              type="button"
+              class="docx-dialog__button docx-dialog__cancel"
+              onClick={props.onClose}
+            >
+              {t('dialogs.paragraph.cancel')}
+            </button>
+            <button
+              data-docx-part="apply"
+              type="button"
+              class="docx-dialog__button docx-dialog__apply"
+              disabled={!paragraph.isEnabled.value}
+              onClick={handleApply}
+            >
+              {t('dialogs.paragraph.ok')}
+            </button>
+          </div>
+        </Fragment>
+      );
+      return (
+        <NativeDialog
+          kind="paragraph"
+          label={t('dialogs.paragraph.title')}
+          onClose={props.onClose}
+          class={props.className}
+          style={props.style}
+          onKeydown={(event: KeyboardEvent) => {
+            if (
+              event.key !== 'Enter' ||
+              event.isComposing ||
+              event.target instanceof HTMLButtonElement ||
+              event.target instanceof HTMLSelectElement
+            )
+              return;
+            event.preventDefault();
+            if (
+              event.target instanceof HTMLElement &&
+              event.target.dataset.docxTabEntry !== undefined
+            ) {
+              setTabStop();
+              return;
+            }
+            if (paragraph.isEnabled.value) handleApply();
+          }}
+          content={() =>
+            renderParts(
+              defaults,
+              slots.default?.() ?? (props.children ? [props.children] : []),
+              props.preset
+            )
+          }
+        />
       );
     };
   },
 });
+
+/** Customizable Paragraph dialog. @public */
+export const DocxEditorParagraphDialog = Object.assign(ParagraphDialogImpl, composition.parts);
