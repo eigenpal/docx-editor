@@ -419,16 +419,16 @@ function readRowHeight(rowProperties: OoxmlElement | undefined): TableRowHeight 
  * 17.4.50 puts a left-aligned table at `w:tblInd` from the leading margin. 17.4.29's other
  * two placements are stated relative to the containing box instead, so the indent does not
  * also apply to them — Word centres a centred table in the text column whatever indent the
- * file carries. A table wider than its container starts flush so its leading edge stays on
- * the page rather than being centred off it.
+ * file carries. A centred or right-aligned table wider than its container starts flush. A
+ * left-aligned table still applies `w:tblInd` and lets its trailing edge overflow.
  */
 export function tableOriginX(structure: SemanticTableStructure, containerWidthPt: number): number {
   const width = structure.columnWidthsPt.reduce((sum, column) => sum + column, 0);
   const slack = containerWidthPt - width;
-  if (!Number.isFinite(slack) || slack <= 0) return 0;
-  if (structure.alignment === 'center') return slack / 2;
-  if (structure.alignment === 'right') return slack;
-  return Math.min(structure.indentPt, slack);
+  if (!Number.isFinite(slack)) return 0;
+  if (structure.alignment === 'center') return slack > 0 ? slack / 2 : 0;
+  if (structure.alignment === 'right') return slack > 0 ? slack : 0;
+  return slack > 0 ? Math.min(structure.indentPt, slack) : structure.indentPt;
 }
 
 function readFloatAnchor(raw: string | undefined): TableFloatAnchor | undefined {

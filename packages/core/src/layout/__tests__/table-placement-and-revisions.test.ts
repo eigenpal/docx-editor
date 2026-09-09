@@ -118,6 +118,16 @@ describe('w:tblInd and w:jc place the table in the text column', () => {
     expect(tableOriginX(structure, CONTENT_WIDTH_PT)).toBe(0);
   });
 
+  test('a wide left-aligned table keeps its indent and overflows at the trailing edge', () => {
+    const wide = `${grid(4680, 4680)}<w:tr>${cell()}${cell()}</w:tr>`;
+    const structure = structureOf(
+      `<w:tbl><w:tblPr><w:tblInd w:w="108" w:type="dxa"/>` +
+        `<w:tblLayout w:type="fixed"/></w:tblPr>${wide}</w:tbl>`
+    );
+    expect(structure.indentPt).toBe(5.4);
+    expect(tableOriginX(structure, 415.68)).toBe(5.4);
+  });
+
   test('an indent wider than the slack cannot push the table off the column', () => {
     const structure = structureOf(
       `<w:tbl><w:tblPr><w:tblInd w:w="20000" w:type="dxa"/></w:tblPr>${narrow}</w:tbl>`
