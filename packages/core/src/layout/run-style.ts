@@ -171,6 +171,7 @@ export function resolveRunStyle(
   const style: {
     -readonly [K in keyof ResolvedRunStyle]: ResolvedRunStyle[K];
   } = { ...DEFAULT_RUN_STYLE };
+  let underlineColor: string | null = null;
 
   for (const property of props) {
     switch (property.localName) {
@@ -217,11 +218,26 @@ export function resolveRunStyle(
         style.italic = toggle(property);
         break;
       case 'u': {
-        const variant = property.attributes?.val ?? 'single';
+        const attributes = property.attributes;
+        const hasColor = attributes?.color !== undefined || attributes?.themeColor !== undefined;
+        if (hasColor) underlineColor = hexColor(attributes?.color);
+        const authoredVariant = attributes?.val;
+        // Word stores underline type and colour independently. A colour-only `w:u` changes
+        // an existing underline colour, but it does not turn underlining on.
+        if (authoredVariant === undefined && hasColor) {
+          if (style.underline) {
+            style.underline = { ...style.underline, color: underlineColor };
+          }
+          break;
+        }
+        const variant = authoredVariant ?? 'single';
         style.underline =
           variant === 'none' || !toggle(property)
             ? null
-            : { variant, color: hexColor(property.attributes?.color) };
+            : {
+                variant,
+                color: hasColor ? underlineColor : (style.underline?.color ?? underlineColor),
+              };
         break;
       }
       case 'strike':

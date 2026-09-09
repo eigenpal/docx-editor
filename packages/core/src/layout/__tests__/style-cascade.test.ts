@@ -15,7 +15,7 @@ import {
 } from '../style-cascade.ts';
 import { resolveRunStyle } from '../run-style.ts';
 import { formatRevisionOf } from '../revision-projection.ts';
-import { paragraphSpacing } from '../paragraph-style.ts';
+import { paragraphLineSpacing, paragraphSpacing } from '../paragraph-style.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { linesOf } from '../semantic-records.ts';
 import { createParagraphLayoutCache } from '../layout-cache.ts';
@@ -219,6 +219,71 @@ describe('default paragraph style when pStyle is absent', () => {
       color: '1B3A5C',
       bold: true,
     });
+  });
+});
+
+describe('direct paragraph spacing replaces inherited line spacing', () => {
+  const styles =
+    `<w:style w:type="paragraph" w:styleId="Normal">` +
+    `<w:pPr><w:spacing w:line="276" w:lineRule="auto"/></w:pPr></w:style>` +
+    `<w:style w:type="paragraph" w:styleId="Body"><w:basedOn w:val="Normal"/>` +
+    `<w:pPr><w:spacing w:after="80"/></w:pPr></w:style>`;
+
+  test('direct after-only spacing returns to single line spacing', () => {
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(
+        `<w:p><w:pPr><w:pStyle w:val="Body"/><w:spacing w:after="160"/></w:pPr>` +
+          `<w:r><w:t>x</w:t></w:r></w:p>`
+      )
+    );
+    expect(paragraphLineSpacing(cascaded.paragraphProperties)).toEqual({
+      rule: 'auto',
+      value: 240,
+    });
+    expect(paragraphSpacing(cascaded.paragraphProperties).after).toBe(8);
+  });
+
+  test('direct line spacing remains authoritative', () => {
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(
+        `<w:p><w:pPr><w:pStyle w:val="Body"/>` +
+          `<w:spacing w:after="160" w:line="360"/></w:pPr>` +
+          `<w:r><w:t>x</w:t></w:r></w:p>`
+      )
+    );
+    expect(paragraphLineSpacing(cascaded.paragraphProperties)).toEqual({
+      rule: 'auto',
+      value: 360,
+    });
+  });
+
+  test('style-to-style spacing keeps inherited line attributes', () => {
+    const table = buildStyleCascadeTable(loadStyles(styles));
+    const cascaded = cascadeParagraphFormatting(
+      table,
+      paragraphPPr(`<w:p><w:pPr><w:pStyle w:val="Body"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p>`)
+    );
+    expect(paragraphLineSpacing(cascaded.paragraphProperties)).toEqual({
+      rule: 'auto',
+      value: 276,
+    });
+  });
+});
+
+describe('underline type and colour cascade independently', () => {
+  test('a style underline colour does not enable underlining', () => {
+    const table = buildStyleCascadeTable(
+      loadStyles(
+        `<w:style w:type="paragraph" w:default="1" w:styleId="Body">` +
+          `<w:rPr><w:u w:color="000000"/></w:rPr></w:style>`
+      )
+    );
+    const cascaded = cascadeParagraphFormatting(table, undefined);
+    expect(resolveRunStyle(cascaded.runProperties).underline).toBeNull();
   });
 });
 

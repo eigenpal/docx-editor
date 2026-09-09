@@ -43,11 +43,21 @@ describe('every D8 run property resolves', () => {
 
   test('underline keeps its variant and colour', () => {
     expect(resolve('u').underline).toEqual({ variant: 'single', color: null });
+    expect(resolve('u', { color: '000000' }).underline).toBeNull();
     expect(resolve('u', { val: 'wave', color: 'FF0000' }).underline).toEqual({
       variant: 'wave',
       color: 'FF0000',
     });
     expect(resolve('u', { val: 'none' }).underline).toBeNull();
+  });
+
+  test('underline colour remains separate from a later underline type', () => {
+    expect(
+      resolveRunStyle([
+        { localName: 'u', attributes: { color: 'FF0000' } },
+        { localName: 'u', attributes: { val: 'single' } },
+      ]).underline
+    ).toEqual({ variant: 'single', color: 'FF0000' });
   });
 
   test('fixture underline variants resolve without collapsing thick or double', () => {
