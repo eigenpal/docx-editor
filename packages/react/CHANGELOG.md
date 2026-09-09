@@ -1,5 +1,55 @@
 # @eigenpal/docx-js-editor
 
+## 2.16.0
+
+### Minor Changes
+
+- 2c7a3c9: Use `locale` for regional date input in text form fields, including dotted dates and year-first patterns. Remove the unreleased `dateInputOrder` prop and setter. Preserve existing dates when locale changes.
+
+  Form-field dialogs and accessibility labels now honor `i18n`, including live catalogue changes.
+
+### Patch Changes
+
+- 0a75175: Preserve pending form values when moving or remounting the editor. Add `PaginatedSurface.save()` to validate pending input and refresh REF fields before serialization. Browser automation and paginated React and Vue refs use this save path. Synchronous saves refuse active edits and destroyed surfaces. Field-exit callbacks can throw or remount the editor without changing date interpretation.
+
+  Preserve nested simple-field results in clipboard HTML. Reject partial field quotes in the server-agent review example before an edit can affect additional text. Refuse tracked deletion or replacement of simple fields with nested result structures instead of leaving old text behind.
+
+- Updated dependencies [96d7e74]
+- Updated dependencies [0a3b35d]
+- Updated dependencies [82b8e0c]
+- Updated dependencies [7a18c15]
+- Updated dependencies [863680d]
+- Updated dependencies [62a6911]
+- Updated dependencies [41a3bc7]
+- Updated dependencies [e295e90]
+- Updated dependencies [00666a8]
+- Updated dependencies [a4a9bbc]
+- Updated dependencies [76a4c5d]
+- Updated dependencies [b7c82fa]
+- Updated dependencies [03b88ea]
+- Updated dependencies [1f207f8]
+- Updated dependencies [19a420e]
+- Updated dependencies [485bfd4]
+- Updated dependencies [da01e25]
+- Updated dependencies [f416965]
+- Updated dependencies [954d9d1]
+- Updated dependencies [6fac0e1]
+- Updated dependencies [2c7a3c9]
+- Updated dependencies [85bfd9c]
+- Updated dependencies [3641f1e]
+- Updated dependencies [10a0575]
+- Updated dependencies [0a75175]
+- Updated dependencies [3ca855b]
+- Updated dependencies [46c0de2]
+- Updated dependencies [fdd6045]
+- Updated dependencies [eb0e520]
+- Updated dependencies [5505944]
+- Updated dependencies [b5ab91b]
+- Updated dependencies [1de0f64]
+- Updated dependencies [6f7da01]
+  - @docx-editor.dev/core@2.16.0
+  - @docx-editor.dev/i18n@2.16.0
+
 ## 2.15.1
 
 ### Patch changes

@@ -1,5 +1,46 @@
 # @docx-editor.dev/pro
 
+## 2.16.0
+
+### Patch Changes
+
+- Updated dependencies [96d7e74]
+- Updated dependencies [0a3b35d]
+- Updated dependencies [82b8e0c]
+- Updated dependencies [7a18c15]
+- Updated dependencies [863680d]
+- Updated dependencies [62a6911]
+- Updated dependencies [41a3bc7]
+- Updated dependencies [e295e90]
+- Updated dependencies [00666a8]
+- Updated dependencies [a4a9bbc]
+- Updated dependencies [76a4c5d]
+- Updated dependencies [b7c82fa]
+- Updated dependencies [03b88ea]
+- Updated dependencies [1f207f8]
+- Updated dependencies [19a420e]
+- Updated dependencies [485bfd4]
+- Updated dependencies [da01e25]
+- Updated dependencies [f416965]
+- Updated dependencies [954d9d1]
+- Updated dependencies [6fac0e1]
+- Updated dependencies [2c7a3c9]
+- Updated dependencies [85bfd9c]
+- Updated dependencies [3641f1e]
+- Updated dependencies [10a0575]
+- Updated dependencies [0a75175]
+- Updated dependencies [3ca855b]
+- Updated dependencies [46c0de2]
+- Updated dependencies [fdd6045]
+- Updated dependencies [eb0e520]
+- Updated dependencies [5505944]
+- Updated dependencies [b5ab91b]
+- Updated dependencies [1de0f64]
+- Updated dependencies [6f7da01]
+  - @docx-editor.dev/core@2.16.0
+  - @docx-editor.dev/react@2.16.0
+  - @docx-editor.dev/vue@2.16.0
+
 ## 2.15.1
 
 ## 2.15.0

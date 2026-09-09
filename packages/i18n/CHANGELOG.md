@@ -1,5 +1,11 @@
 # @docx-editor.dev/i18n
 
+## 2.16.0
+
+### Patch Changes
+
+- 00666a8: Render, edit, search, and copy text inside smart tags, inline custom XML, and bidirectional run wrappers, and add text form selection, boundary deletion, replacement, field options in React and Vue, and protected filling; Fixes #710
+
 ## 2.15.1
 
 ## 2.15.0
