@@ -113,6 +113,7 @@ import {
   type StableReviewAuthorSlots,
 } from '../output/revision-presentation.ts';
 import { createSurfaceReviewAuthors, reviewItemAuthor } from './surface-review-authors.ts';
+import { syncActiveParagraphMarks } from './surface-paragraph-mark-visibility.ts';
 import { createPresenceColors } from './surface-presence-color.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
@@ -4023,6 +4024,7 @@ export function mountPaginatedSurface(
     ) {
       return;
     }
+    syncActiveParagraphMarks(pagesLayer, active);
     // Once per paint, not once per rect: a decision spanning many lines asked the same
     // question for every one of them.
     const byKey = new Map<string, ReviewItem>();

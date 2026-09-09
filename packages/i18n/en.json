@@ -359,9 +359,13 @@
   },
   "revisions": {
     "paragraphMarkInserted": "Inserted paragraph break",
+    "paragraphMarksInserted": "Inserted paragraph breaks",
     "paragraphMarkDeleted": "Deleted paragraph break",
+    "paragraphMarksDeleted": "Deleted paragraph breaks",
     "paragraphMarkMovedFrom": "Moved paragraph break away",
+    "paragraphMarksMovedFrom": "Moved paragraph breaks away",
     "paragraphMarkMovedTo": "Moved paragraph break here",
+    "paragraphMarksMovedTo": "Moved paragraph breaks here",
     "runPropertiesChanged": "Changed text formatting"
   },
   "contextMenu": {

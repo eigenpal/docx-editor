@@ -1776,6 +1776,17 @@ a.docx-hyperlink:focus-visible {
   text-decoration-color: var(--doc-revision-format);
 }
 
+/* Keep tracked paragraph marks out of the ordinary editing view, as Word does. The surface
+   adds the active class to every mark covered by the selected review card, so a grouped
+   decision reveals its complete scope without leaving a permanent column of pilcrows. */
+.docx-revision-pmark {
+  opacity: 0;
+}
+
+.docx-revision-pmark--active {
+  opacity: 1;
+}
+
 .docx-editor-revision-cell.docx-editor-revision-ins {
   box-shadow: inset 0 3px 0 var(--doc-revision-insertion);
   background-color: var(--doc-revision-insertion-tint);

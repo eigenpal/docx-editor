@@ -555,7 +555,11 @@
     "runPropertiesChanged": "Zmieniono formatowanie tekstu",
     "paragraphMarkDeleted": null,
     "paragraphMarkMovedFrom": null,
-    "paragraphMarkMovedTo": null
+    "paragraphMarkMovedTo": null,
+    "paragraphMarksDeleted": null,
+    "paragraphMarksInserted": null,
+    "paragraphMarksMovedFrom": null,
+    "paragraphMarksMovedTo": null
   },
   "toc": {
     "refresh": "Aktualizuj cały spis",

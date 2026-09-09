@@ -555,7 +555,11 @@
     "runPropertiesChanged": "Mise en forme du texte modifiée",
     "paragraphMarkDeleted": null,
     "paragraphMarkMovedFrom": null,
-    "paragraphMarkMovedTo": null
+    "paragraphMarkMovedTo": null,
+    "paragraphMarksDeleted": null,
+    "paragraphMarksInserted": null,
+    "paragraphMarksMovedFrom": null,
+    "paragraphMarksMovedTo": null
   },
   "toc": {
     "refresh": "Mettre à jour toute la table",

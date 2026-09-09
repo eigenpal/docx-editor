@@ -188,8 +188,10 @@ are not recorded either; a `w:tblPrChange` a file already carries still renders.
 A document that sets `w:doNotTrackFormatting` in `settings.xml` gets no
 formatting records. Its text edits stay tracked.
 
-A changed paragraph mark shows a colored pilcrow and margin change bar. This
-display also works inside table cells.
+A changed paragraph mark keeps its pilcrow hidden during ordinary editing. If
+you select its review card, every break in that decision shows its colored
+pilcrow. The card shows the break count when one decision covers multiple
+breaks. Margin change bars remain visible, including inside table cells.
 
 One paragraph mark can contain two decisions. For example, one author can insert
 a break before another author suggests its removal.

@@ -6,8 +6,20 @@
 // the cases where a naive implementation still produces valid XML that says the wrong thing.
 
 import { describe, expect, test } from 'bun:test';
+import type { OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
+import { revisionItemsOf } from '../store/review-reads.ts';
 import { applyTreeOp } from '../store/tree-op-apply.ts';
 import { ADA, apply, paragraphId, part, xml } from './tracked-edit-fixture.ts';
+
+function paragraphIds(part: OoxmlPart): string[] {
+  const ids: string[] = [];
+  const visit = (node: OoxmlNode): void => {
+    if (node.kind === 'paragraph') ids.push(node.id);
+    if (node.kind !== 'textValue') for (const child of node.children) visit(child);
+  };
+  visit(part.root);
+  return ids;
+}
 
 describe('a tracked insertion', () => {
   test('splits the run and lands between the halves as w:ins', () => {
@@ -233,6 +245,27 @@ describe('a tracked paragraph mark', () => {
       revision: ADA,
     });
     expect(xml(twice).match(/<w:ins\b/g)?.length).toBe(1);
+  });
+
+  test('adjacent marks reuse the first timestamp across the grouping window', () => {
+    const before = part('<w:p><w:r><w:t>one</w:t></w:r></w:p><w:p><w:r><w:t>two</w:t></w:r></w:p>');
+    const [first, second] = paragraphIds(before);
+    const once = apply(before, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: first!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:00:00Z' },
+    });
+    const twice = apply(once, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: second!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:00:05Z' },
+    });
+    const marks = revisionItemsOf(twice).filter((item) => item.revisionKind === 'paragraphMark');
+    expect(marks).toHaveLength(1);
+    expect(marks[0]!.date).toBe('2026-09-09T08:00:00Z');
+    expect(marks[0]!.ranges).toHaveLength(2);
   });
 });
 

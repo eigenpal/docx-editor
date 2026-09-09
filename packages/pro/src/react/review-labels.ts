@@ -20,15 +20,23 @@ import type {
  */
 export function revisionLabelKey(
   kind: ReviewRevisionKind,
-  markDirection?: ReviewRevisionItem['markDirection']
+  markDirection?: ReviewRevisionItem['markDirection'],
+  siteCount = 1
 ): TranslationKey {
   if (kind === 'paragraphMark') {
-    if (markDirection === 'delete') return 'revisions.paragraphMarkDeleted';
+    const grouped = siteCount > 1;
+    if (markDirection === 'delete') {
+      return grouped ? 'revisions.paragraphMarksDeleted' : 'revisions.paragraphMarkDeleted';
+    }
     // The two halves of a move are opposite decisions, as they are for content: accepting a
     // `moveFrom` takes this copy of the break away, accepting a `moveTo` keeps it.
-    if (markDirection === 'moveFrom') return 'revisions.paragraphMarkMovedFrom';
-    if (markDirection === 'moveTo') return 'revisions.paragraphMarkMovedTo';
-    return 'revisions.paragraphMarkInserted';
+    if (markDirection === 'moveFrom') {
+      return grouped ? 'revisions.paragraphMarksMovedFrom' : 'revisions.paragraphMarkMovedFrom';
+    }
+    if (markDirection === 'moveTo') {
+      return grouped ? 'revisions.paragraphMarksMovedTo' : 'revisions.paragraphMarkMovedTo';
+    }
+    return grouped ? 'revisions.paragraphMarksInserted' : 'revisions.paragraphMarkInserted';
   }
   switch (kind) {
     case 'insert':
@@ -46,4 +54,24 @@ export function revisionLabelKey(
     default:
       return 'review.structural';
   }
+}
+
+/** The packaged label for one complete revision item. */
+export function revisionItemLabelKey(item: ReviewRevisionItem): TranslationKey {
+  return revisionLabelKey(item.revisionKind, item.markDirection, item.ranges.length);
+}
+
+/** A grouped paragraph-mark count, including its compact card punctuation. */
+export function revisionItemCountSuffix(item: ReviewRevisionItem): string {
+  return item.revisionKind === 'paragraphMark' && item.ranges.length > 1
+    ? ` (${item.ranges.length})`
+    : '';
+}
+
+/** The complete packaged card label, including a grouped paragraph-mark count. */
+export function revisionItemLabel(
+  item: ReviewRevisionItem,
+  translate: (key: TranslationKey) => string
+): string {
+  return `${translate(revisionItemLabelKey(item))}${revisionItemCountSuffix(item)}`;
 }

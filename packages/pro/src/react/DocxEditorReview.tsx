@@ -389,7 +389,7 @@ import {
 } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
 import { ReviewActionSlot } from './review-action-slot.tsx';
-import { revisionLabelKey } from './review-labels.ts';
+import { revisionItemLabel, revisionLabelKey } from './review-labels.ts';
 
 /**
  * The review rail.
@@ -1800,10 +1800,7 @@ function ReviewSummary({ className, asChild, hidden, children }: ReviewPartProps
   const t = useReviewLabel();
   if (hidden || !entry) return null;
   const text = entry.text;
-  const label =
-    entry.kind !== 'revision'
-      ? null
-      : t(revisionLabelKey(entry.revisionKind, entry.item.markDirection));
+  const label = entry.kind !== 'revision' ? null : revisionItemLabel(entry.item, t);
   // A replacement reads as one sentence, not as a label over a quote: what went, and what
   // took its place. Both quoted, both in their own colour, the way Word words it.
   const replaced = entry.kind === 'revision' && entry.revisionKind === 'replace';
