@@ -1106,7 +1106,7 @@ export function breakParagraph(
       line.height = metrics.height;
       line.baseline = metrics.baseline;
       glyphBaseline = metrics.baseline;
-    } else if (options?.includeParagraphMark) {
+    } else if (options?.includeParagraphMark && measurer.hasResolvedFont?.(emptyStyle) !== false) {
       // Paragraph mark `w:sz` (CT_PPr/rPr) can be taller than the visible runs. Grow the
       // line box to the mark height but keep the glyph baseline — the spare depth sits
       // below the text, matching Word's cover-page party-name rhythm. Pushing the baseline

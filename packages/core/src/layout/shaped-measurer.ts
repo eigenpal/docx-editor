@@ -225,6 +225,10 @@ export function createShapedMeasurer(
   };
 
   return {
+    hasResolvedFont(style) {
+      return resolveFontCached(style) !== null;
+    },
+
     measure(text, style) {
       if (text.length === 0) return 0;
       const font = resolveFontCached(style);

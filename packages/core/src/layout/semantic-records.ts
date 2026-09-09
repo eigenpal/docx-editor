@@ -898,6 +898,8 @@ export interface TextMeasurer {
   measure(text: string, style: ResolvedRunStyle): number;
   /** Line height and baseline for the resolved style. */
   lineMetrics(style: ResolvedRunStyle): { height: number; baseline: number };
+  /** Whether line metrics use the requested face instead of fallback metrics. */
+  hasResolvedFont?(style: ResolvedRunStyle): boolean;
 }
 
 export {

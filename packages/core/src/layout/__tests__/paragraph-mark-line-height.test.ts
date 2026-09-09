@@ -68,6 +68,27 @@ describe('auto line spacing and paragraph-mark height', () => {
     expect(markTall.leading).toBeCloseTo(0, 5);
   });
 
+  test('fallback metrics for an unavailable mark face do not grow visible text', () => {
+    const fontAwareMeasurer: TextMeasurer = {
+      ...measurer,
+      hasResolvedFont(style) {
+        return style.fontFamily !== 'Unavailable Mark Face';
+      },
+    };
+    const layout = layoutSemanticDocument(
+      load(
+        '<w:p><w:pPr><w:rPr><w:rFonts w:ascii="Unavailable Mark Face"/>' +
+          '<w:sz w:val="32"/></w:rPr></w:pPr>' +
+          '<w:r><w:rPr><w:rFonts w:ascii="Arial"/><w:sz w:val="20"/></w:rPr>' +
+          '<w:t>visible</w:t></w:r></w:p>'
+      ),
+      1,
+      { measurer: fontAwareMeasurer }
+    );
+
+    expect(linesOf(layout)[0]!.box.height).toBeCloseTo(RUN_H, 5);
+  });
+
   test('title-block inter-glyph gaps match Word arithmetic line-by-line', () => {
     // Verbatim spacing from shapes-and-page-breaks.docx title region.
     // "as Borrower and" keeps the authored left/right indents so it wraps; every wrap line

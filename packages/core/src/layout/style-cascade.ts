@@ -518,29 +518,6 @@ function styleChain(
 }
 
 /**
- * Direct `w:spacing` replaces inherited line attributes while its other attributes still merge.
- *
- * Word treats the direct element as a new line-spacing statement. Thus, direct `w:after` alone
- * returns line spacing to single. Style-to-style spacing remains a per-attribute cascade.
- */
-function paragraphPropertiesWithDirectSpacing(
-  inherited: readonly OoxmlProperty[],
-  direct: readonly OoxmlProperty[]
-): OoxmlProperty[] {
-  if (!direct.some((property) => property.localName === 'spacing')) {
-    return [...inherited, ...direct];
-  }
-  const withoutInheritedLine = inherited.map((property) => {
-    if (property.localName !== 'spacing' || !property.attributes) return property;
-    const attributes = { ...property.attributes };
-    delete attributes.line;
-    delete attributes.lineRule;
-    return { ...property, attributes };
-  });
-  return [...withoutInheritedLine, ...direct];
-}
-
-/**
  * Cascade paragraph + inherited run properties for one paragraph's direct `w:pPr`.
  *
  * Order: `docDefaults` → table style → `basedOn` ancestors → paragraph style → direct
@@ -563,10 +540,7 @@ export function cascadeParagraphFormatting(
     ...(tableCellStyle?.paragraphProperties ?? []),
     ...chain.flatMap((style) => style.paragraphProperties),
   ];
-  const paragraphProperties = paragraphPropertiesWithDirectSpacing(
-    inheritedParagraphProperties,
-    directProps
-  );
+  const paragraphProperties = [...inheritedParagraphProperties, ...directProps];
 
   const paragraphPropertyNodes: OoxmlNode[] = [];
   if (table.docDefaultsParagraphNode) paragraphPropertyNodes.push(table.docDefaultsParagraphNode);

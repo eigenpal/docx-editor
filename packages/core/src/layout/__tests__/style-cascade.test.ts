@@ -222,14 +222,14 @@ describe('default paragraph style when pStyle is absent', () => {
   });
 });
 
-describe('direct paragraph spacing replaces inherited line spacing', () => {
+describe('paragraph spacing cascades by attribute', () => {
   const styles =
     `<w:style w:type="paragraph" w:styleId="Normal">` +
     `<w:pPr><w:spacing w:line="276" w:lineRule="auto"/></w:pPr></w:style>` +
     `<w:style w:type="paragraph" w:styleId="Body"><w:basedOn w:val="Normal"/>` +
     `<w:pPr><w:spacing w:after="80"/></w:pPr></w:style>`;
 
-  test('direct after-only spacing returns to single line spacing', () => {
+  test('direct after-only spacing keeps inherited line spacing', () => {
     const table = buildStyleCascadeTable(loadStyles(styles));
     const cascaded = cascadeParagraphFormatting(
       table,
@@ -240,7 +240,7 @@ describe('direct paragraph spacing replaces inherited line spacing', () => {
     );
     expect(paragraphLineSpacing(cascaded.paragraphProperties)).toEqual({
       rule: 'auto',
-      value: 240,
+      value: 276,
     });
     expect(paragraphSpacing(cascaded.paragraphProperties).after).toBe(8);
   });
