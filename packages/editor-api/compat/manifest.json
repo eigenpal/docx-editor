@@ -438,7 +438,7 @@
   "divergences": [
     {
       "uid": "Word.Document#changeTrackingMode",
-      "note": "Server and collaborative hosts support Off and TrackMineOnly. Load changeTrackingMode explicitly before reading; Document.load() retains its empty default property set on every host. The setting is queued, atomic with edits, and retained per host across runs; it is not a persisted document-wide policy. TrackMineOnly uses the configured runtime author and does not change peers. TrackAll and browser-host mode control refuse with NotSupported. Tracked inline text operations support one paragraph and refuse touching pending revisions. Structural and formatting mutations while tracking refuse; comments and revision decisions remain available."
+      "note": "Server and collaborative hosts support Off and TrackMineOnly. Load changeTrackingMode explicitly before reading; Document.load() retains its empty default property set on every host. The setting is queued, atomic with edits, and retained per host across runs; it is not a persisted document-wide policy. TrackMineOnly uses the configured runtime author and does not change peers. TrackAll and browser-host mode control refuse with NotSupported. Tracked inline text operations support one paragraph and refuse touching pending revisions. Tracked deletion and replacement refuse simple fields whose cached results contain anything other than direct runs. Structural and formatting mutations while tracking refuse; comments and revision decisions remain available."
     },
     {
       "uid": "Word.Comment#creationDate",

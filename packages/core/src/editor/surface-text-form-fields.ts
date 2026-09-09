@@ -477,13 +477,29 @@ export function createTextFormFieldInteraction(
         return accept(next);
       }
       committing = true;
-      const applied = host.apply({
-        op: 'commitTextFormField',
-        locale: inputLocale,
-        paragraphId,
-        fieldNodeId: field.fieldNodeId,
-      });
-      committing = false;
+      const before = host.part();
+      rememberInput(before);
+      const previous = dirtyBaseline;
+      dirtyBaseline = new Map(previous);
+      // A change listener can remount synchronously after the write. Its snapshot
+      // must treat the formatted field as committed, while undo retains raw input.
+      dirtyBaseline.delete(field.fieldNodeId);
+      let applied: boolean;
+      try {
+        applied = host.apply({
+          op: 'commitTextFormField',
+          locale: inputLocale,
+          paragraphId,
+          fieldNodeId: field.fieldNodeId,
+        });
+        if (!applied) dirtyBaseline = previous;
+      } catch (error) {
+        if (host.part() === before) dirtyBaseline = previous;
+        throw error;
+      } finally {
+        rememberInput();
+        committing = false;
+      }
       if (!applied) {
         incoming = undefined;
         status.setAttribute('role', 'alert');
@@ -602,7 +618,8 @@ export function createTextFormFieldInteraction(
     },
     restoreAfterHistory: restoreInput,
     annotate(ops) {
-      rememberInput();
+      // Field-exit formatting already captured the old root before clearing its input.
+      if (!committing || ops.some((op) => op.op !== 'commitTextFormField')) rememberInput();
       if (ops.some((op) => op.op === 'insertText' || op.op === 'deleteText'))
         delete status.dataset.fieldError;
       const hit = selectionField();

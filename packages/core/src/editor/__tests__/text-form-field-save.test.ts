@@ -225,6 +225,61 @@ test('a thrown change listener does not restore raw-input provenance onto a comm
   }
 });
 
+for (const remount of [false, true]) {
+  test(`a thrown field-exit change listener preserves the committed date${remount ? ' across remount' : ''}`, async () => {
+    const host = open();
+    try {
+      host.enter('03/04/2030');
+      const off = host.editor.on('change', () => {
+        throw new Error('host callback failed');
+      });
+      expect(() => host.select(13)).toThrow('host callback failed');
+      off();
+      expect(host.text()).toBe('04/03/2030 tail');
+      if (remount) {
+        host.editor.detach();
+        host.editor.attach(host.container);
+      }
+      host.select(13);
+      expect(host.editor.surface!.state().selection.head.offset).toBe(13);
+      await host.editor.save();
+      expect(host.text()).toBe('04/03/2030 tail');
+      if (!remount) {
+        host.editor.surface!.undo();
+        expect(host.text()).toBe('03/04/2030 tail');
+        await host.editor.save();
+        expect(host.text()).toBe('04/03/2030 tail');
+      }
+    } finally {
+      host.dispose();
+    }
+  });
+}
+
+for (const throws of [false, true]) {
+  test(`a field-exit change listener can remount${throws ? ' and throw' : ''} without reinterpreting the date`, async () => {
+    const host = open();
+    try {
+      host.enter('03/04/2030');
+      const off = host.editor.on('change', () => {
+        off();
+        host.editor.detach();
+        host.editor.attach(host.container);
+        if (throws) throw new Error('host callback failed');
+      });
+      if (throws) expect(() => host.select(13)).toThrow('host callback failed');
+      else host.select(13);
+      expect(host.text()).toBe('04/03/2030 tail');
+      await host.editor.save();
+      expect(host.text()).toBe('04/03/2030 tail');
+      host.select(13);
+      expect(host.editor.surface!.state().selection.head.offset).toBe(13);
+    } finally {
+      host.dispose();
+    }
+  });
+}
+
 test('a refused save retains input provenance until editing resumes', async () => {
   const host = open();
   try {

@@ -82,6 +82,60 @@ describe('server review tools', () => {
   });
 });
 
+for (const wrapper of ['fldSimple', 'hyperlink', 'smartTag', 'sdt'] as const) {
+  for (const kind of ['deletion', 'replacement'] as const) {
+    test(`${kind} refuses a complete field quote with a ${wrapper} result without writes`, async () => {
+      const cached = '<w:r><w:t>cached</w:t></w:r>';
+      const wrapped =
+        wrapper === 'fldSimple'
+          ? `<w:fldSimple w:instr=" REF inner ">${cached}</w:fldSimple>`
+          : wrapper === 'sdt'
+            ? `<w:sdt><w:sdtPr/><w:sdtContent>${cached}</w:sdtContent></w:sdt>`
+            : `<w:${wrapper}>${cached}</w:${wrapper}>`;
+      const files = unzipSync(sampleDocument());
+      files['word/document.xml'] = strToU8(
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+          '<w:body><w:p><w:r><w:t xml:space="preserve">Date: </w:t></w:r>' +
+          '<w:fldSimple w:instr=" DATE "><w:r><w:t xml:space="preserve">plain </w:t></w:r>' +
+          wrapped +
+          '</w:fldSimple><w:r><w:t>.</w:t></w:r></w:p></w:body></w:document>'
+      );
+      const s = await setup(zipSync(files));
+      try {
+        const snapshot = (await s.adapter.read()).paragraphs[0]!;
+        expect(snapshot.text).toBe('Date: plain cached.');
+        const before = await s.runtime.save();
+        expect(
+          await s.adapter.apply(kind, {
+            snapshot: snapshot.snapshot,
+            quote: 'plain cached',
+            ...(kind === 'replacement' ? { text: 'NEW' } : {}),
+          })
+        ).toMatchObject({ ok: false, code: 'GeneralException' });
+        expect(s.committed()).toBe(0);
+        expect(await s.runtime.save()).toEqual(before);
+        await s.runtime.run(async (context) => {
+          context.document.load('changeTrackingMode');
+          context.document.revisions.load('items');
+          await context.sync();
+          expect(context.document.changeTrackingMode).toBe('Off');
+          expect(context.document.revisions.items).toHaveLength(0);
+        });
+        // Refusal preserves the snapshot and permits a supported edit beside the field.
+        expect(
+          await s.adapter.apply('replacement', {
+            snapshot: snapshot.snapshot,
+            quote: 'Date: ',
+            text: 'Value: ',
+          })
+        ).toEqual({ ok: true });
+      } finally {
+        s.runtime.dispose();
+      }
+    });
+  }
+}
+
 for (const fieldType of ['simple', 'complex'] as const) {
   for (const operation of [
     { kind: 'replacement', text: 'February 3, 2031', expected: 'Date: February 3, 2031.' },

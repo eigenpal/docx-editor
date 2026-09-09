@@ -175,3 +175,36 @@ for (const path of ['detach', 'move', 'automation'] as const) {
     });
   }
 }
+
+for (const throws of [false, true]) {
+  test(`field-exit callback remount preserves date input (throws: ${throws})`, async ({ page }) => {
+    await openDateField(page);
+    await page.keyboard.insertText('03/04/2030');
+    const result = await page.evaluate(async (throws) => {
+      const editor = window.__dateSave;
+      const container = document.body.firstElementChild as HTMLElement;
+      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+      const off = editor.on('change', () => {
+        off();
+        editor.detach();
+        editor.attach(container);
+        if (throws) throw new Error('host callback');
+      });
+      let caught = false;
+      try {
+        editor.surface!.setSelection({
+          anchor: { paragraphId, offset: 13 },
+          head: { paragraphId, offset: 13 },
+        });
+      } catch {
+        caught = true;
+      }
+      const bytes = await editor.save();
+      editor.load(bytes);
+      const text = editor.surface!.session.bodyText();
+      editor.destroy();
+      return { caught, text };
+    }, throws);
+    expect(result).toEqual({ caught: throws, text: '04/03/2030 tail' });
+  });
+}

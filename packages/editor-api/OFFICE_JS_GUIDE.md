@@ -120,6 +120,7 @@ Earlier successful syncs remain committed. Failed batches are discarded and are 
 `Off` is the initial server mode. `TrackMineOnly` needs a configured author and persists for that host session.
 It does not change peers' editing modes or persist a document-wide policy. `TrackAll` and browser-host mode control refuse.
 Tracked edits support inline text in one paragraph, including table cells, and refuse targets touching pending revisions.
+Tracked deletion and replacement refuse simple fields with nested fields or other result containers. Direct result runs remain supported.
 Structural and formatting mutations while tracking refuse. Comments and revision decisions remain available.
 Never silently fall back to `Off` when an edit cannot be tracked.
 
