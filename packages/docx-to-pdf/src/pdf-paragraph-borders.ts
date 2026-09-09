@@ -14,7 +14,10 @@ import type {
   TableBorderSideName,
 } from '@docx-editor.dev/core/layout';
 import { pdfColorFromPublishedFill } from './pdf-fill-contrast.ts';
-import type { PdfCompatibilityProfile } from './pdf-compatibility-profile.ts';
+import {
+  quantizeWordMacos300Dpi,
+  type PdfCompatibilityProfile,
+} from './pdf-compatibility-profile.ts';
 import type { PdfFidelityDiagnostic, PdfFidelityStoryKind } from './pdf-fidelity-diagnostics.ts';
 import { pdfApproximationDiagnostic } from './pdf-fidelity-diagnostics.ts';
 import type { PdfRect } from './pdf-paint-types.ts';
@@ -49,6 +52,11 @@ function publishedParagraphBorderStrokes(
   ];
 }
 
+function isBoxedParagraphBorder(block: ParagraphFragmentRecord): boolean {
+  const sides = new Set(publishedParagraphBorderStrokes(block).map((stroke) => stroke.side));
+  return sides.has('left') && sides.has('right');
+}
+
 function paintPublishedBorderStroke(
   page: PageRecord,
   storyOrigin: Readonly<{ readonly x: number; readonly y: number }>,
@@ -69,7 +77,10 @@ function paintPublishedBorderStroke(
 ): void {
   if (!hasUsableBox(stroke.box)) return;
   const horizontal = stroke.side === 'top' || stroke.side === 'bottom' || stroke.side === 'between';
-  const horizontalInset = profile === 'word-macos-300dpi' && horizontal ? 0.24 : 0;
+  const horizontalInset =
+    profile === 'word-macos-300dpi' && horizontal && isBoxedParagraphBorder(block)
+      ? quantizeWordMacos300Dpi(stroke.edge.widthPt)
+      : 0;
   pushCommand(
     pdfFillRect(
       toPageRect({

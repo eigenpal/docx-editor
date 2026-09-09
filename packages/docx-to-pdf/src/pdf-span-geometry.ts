@@ -16,7 +16,6 @@ export function compatibleSpanBaseline(
   storyOriginY: number,
   lineY: number,
   lineBaseline: number,
-  lineHeight: number,
   baselineShiftPt: number,
   isFooter: boolean,
   profile: PdfCompatibilityProfile | undefined
@@ -25,12 +24,7 @@ export function compatibleSpanBaseline(
     storyOriginY - page.box.y + lineY + lineBaseline - baselineShiftPt,
     page.box.height
   );
-  if (profile !== 'word-macos-300dpi') return continuous;
-  if (isFooter) return quantizeWordMacos300DpiStoryBaseline(continuous, true);
-  const continuousBottom = coreYToPdfY(
-    storyOriginY - page.box.y + lineY + lineHeight,
-    page.box.height
-  );
-  const snappedBottom = quantizeWordMacos300DpiStoryBaseline(continuousBottom, false);
-  return snappedBottom + lineHeight - lineBaseline + baselineShiftPt;
+  return profile === 'word-macos-300dpi'
+    ? quantizeWordMacos300DpiStoryBaseline(continuous, isFooter)
+    : continuous;
 }

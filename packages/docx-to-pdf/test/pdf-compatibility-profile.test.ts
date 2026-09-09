@@ -105,14 +105,13 @@ describe('word-macos-300dpi compatibility profile', () => {
     expect(steps[2]).toBeCloseTo(12.24, 12);
   });
 
-  test('derives body baselines from snapped line bottoms', () => {
+  test('snaps body baselines directly to the Word grid', () => {
     const targetPage = page(0, 612, 792);
     const first = compatibleSpanBaseline(
       targetPage,
       72,
       100,
       9,
-      12.375,
       0,
       false,
       PROFILE.compatibilityProfile
@@ -122,13 +121,14 @@ describe('word-macos-300dpi compatibility profile', () => {
       72,
       112.375,
       9,
-      12.375,
       0,
       false,
       PROFILE.compatibilityProfile
     );
 
     expect(first - second).toBeCloseTo(12.48, 12);
+    expect(first / 0.24).toBeCloseTo(Math.round(first / 0.24), 12);
+    expect(second / 0.24).toBeCloseTo(Math.round(second / 0.24), 12);
   });
 
   test('preserves line-relative run advances', () => {
@@ -199,14 +199,48 @@ describe('word-macos-300dpi compatibility profile', () => {
       0.48,
       12
     );
-    expect(compatibleFill?.kind === 'fillRect' ? compatibleFill.rect.x : null).toBeCloseTo(
-      72.24,
-      12
-    );
+    expect(compatibleFill?.kind === 'fillRect' ? compatibleFill.rect.x : null).toBeCloseTo(72, 12);
     expect(compatibleFill?.kind === 'fillRect' ? compatibleFill.rect.width : null).toBeCloseTo(
-      199.44,
+      199.92,
       12
     );
     expect(planPdfPaintFromLayout(document).plan).toEqual(exact.plan);
+  });
+
+  test('insets boxed horizontal rules by their quantized stroke width', () => {
+    const body = paragraph(
+      'boxed',
+      '',
+      { x: 0, y: 0, width: 200, height: 12 },
+      { x: 0, y: 0, width: 0, height: 9 },
+      {
+        lineMode: 'none',
+        borders: [
+          {
+            side: 'top',
+            edge: { val: 'single', color: null, widthPt: 0.5, spacePt: 0 },
+            box: { x: 0, y: 0, width: 200, height: 0.5 },
+          },
+          {
+            side: 'left',
+            edge: { val: 'single', color: null, widthPt: 0.5, spacePt: 0 },
+            box: { x: 0, y: 0, width: 0.5, height: 12 },
+          },
+          {
+            side: 'right',
+            edge: { val: 'single', color: null, widthPt: 0.5, spacePt: 0 },
+            box: { x: 199.5, y: 0, width: 0.5, height: 12 },
+          },
+        ],
+      }
+    );
+    const result = planPdfPaintFromLayout(
+      layout([page(0, 612, 792, { fragments: [body] })]),
+      PROFILE
+    );
+    const top = result.plan.commands.find((command) => command.kind === 'fillRect');
+
+    expect(top?.kind === 'fillRect' ? top.rect.x : null).toBeCloseTo(72.48, 12);
+    expect(top?.kind === 'fillRect' ? top.rect.width : null).toBeCloseTo(198.96, 12);
   });
 });

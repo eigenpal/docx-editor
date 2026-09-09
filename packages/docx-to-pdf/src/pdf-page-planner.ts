@@ -353,7 +353,6 @@ function appendSpanCommands(
     storyOrigin.y,
     lineY,
     lineBaseline,
-    line.box.height,
     baselineShiftPtOf(faceStyle),
     storyKind === 'footer',
     profile
