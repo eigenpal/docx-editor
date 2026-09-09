@@ -8,6 +8,10 @@ import type {
   PageRecord,
   ParagraphBorderStrokeRecord,
   ParagraphFragmentRecord,
+  ResolvedTableBorderEdge,
+  TableBorderStrokeRecord,
+  TableCellFragmentRecord,
+  TableBorderSideName,
 } from '@docx-editor.dev/core/layout';
 import { pdfColorFromPublishedFill } from './pdf-fill-contrast.ts';
 import type { PdfFidelityDiagnostic, PdfFidelityStoryKind } from './pdf-fidelity-diagnostics.ts';
@@ -88,6 +92,93 @@ function paintPublishedBorderStroke(
   );
 }
 
+function paintPublishedTableBorderStroke(
+  page: PageRecord,
+  storyOrigin: Readonly<{ readonly x: number; readonly y: number }>,
+  cell: TableCellFragmentRecord,
+  stroke: TableBorderStrokeRecord,
+  story: PdfFidelityStoryKind | null,
+  toPageRect: (
+    absolute: Readonly<{
+      readonly x: number;
+      readonly y: number;
+      readonly width: number;
+      readonly height: number;
+    }>
+  ) => PdfRect,
+  pushCommand: (command: PdfPaintCommand) => void,
+  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void }
+): void {
+  if (stroke.width <= 0 || stroke.height <= 0) return;
+  pushCommand(
+    pdfFillRect(
+      toPageRect({
+        x: storyOrigin.x + cell.box.x + stroke.x,
+        y: storyOrigin.y + cell.box.y + stroke.y,
+        width: stroke.width,
+        height: stroke.height,
+      }),
+      paragraphBorderColor(stroke.color)
+    )
+  );
+  if (stroke.cssStyle === 'solid') return;
+  diagnostics.push(
+    pdfApproximationDiagnostic({
+      feature: 'table-border',
+      pageIndex: page.index,
+      recordKind: 'tableCellFragment',
+      recordId: cell.id,
+      story,
+      reason:
+        `Table border ${stroke.cssStyle} (${stroke.side}) is painted as a solid rule at the` +
+        ' published stroke box',
+    })
+  );
+}
+
+function simpleStroke(
+  cell: TableCellFragmentRecord,
+  side: TableBorderSideName,
+  edge: ResolvedTableBorderEdge,
+  startPt: number,
+  endPt: number
+): TableBorderStrokeRecord {
+  const horizontal = side === 'top' || side === 'bottom';
+  const length = Math.max(0, endPt - startPt);
+  return {
+    side,
+    role: 'edge',
+    color: edge.color,
+    cssStyle: edge.style === 'dashed' || edge.style === 'dotted' ? edge.style : 'solid',
+    x: side === 'right' ? Math.max(0, cell.box.width - edge.widthPt) : horizontal ? startPt : 0,
+    y: side === 'bottom' ? Math.max(0, cell.box.height - edge.widthPt) : horizontal ? 0 : startPt,
+    width: horizontal ? length : edge.widthPt,
+    height: horizontal ? edge.widthPt : length,
+  };
+}
+
+function publishedSimpleTableStrokes(
+  cell: TableCellFragmentRecord
+): readonly TableBorderStrokeRecord[] {
+  if (!cell.borders) return [];
+  const compoundSides = new Set((cell.borders.strokes ?? []).map((stroke) => stroke.side));
+  const strokes: TableBorderStrokeRecord[] = [];
+  const segmentedSides = new Set<TableBorderSideName>();
+  for (const segment of cell.borders.edgeSegments ?? []) {
+    if (compoundSides.has(segment.side)) continue;
+    segmentedSides.add(segment.side);
+    strokes.push(simpleStroke(cell, segment.side, segment.edge, segment.startPt, segment.endPt));
+  }
+  for (const side of ['top', 'left', 'bottom', 'right'] as const) {
+    if (compoundSides.has(side) || segmentedSides.has(side)) continue;
+    const edge = cell.borders[side];
+    if (!edge) continue;
+    const end = side === 'top' || side === 'bottom' ? cell.box.width : cell.box.height;
+    strokes.push(simpleStroke(cell, side, edge, 0, end));
+  }
+  return strokes;
+}
+
 export function* visitBlocksForPublishedBorders(
   page: PageRecord,
   storyOrigin: Readonly<{ readonly x: number; readonly y: number }>,
@@ -113,6 +204,25 @@ export function* visitBlocksForPublishedBorders(
           continue;
         }
         for (const cell of row.cells) {
+          if (!cell.paintInert && !cell.vMergeContinue) {
+            const strokes = [
+              ...(cell.borders?.strokes ?? []),
+              ...publishedSimpleTableStrokes(cell),
+            ];
+            for (const stroke of strokes) {
+              paintPublishedTableBorderStroke(
+                page,
+                storyOrigin,
+                cell,
+                stroke,
+                story,
+                toPageRect,
+                pushCommand,
+                diagnostics
+              );
+              yield;
+            }
+          }
           yield;
           yield* visitBlocksForPublishedBorders(
             page,

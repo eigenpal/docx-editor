@@ -549,7 +549,7 @@ describe('planPdfPaintFromLayout', () => {
     expect(
       result.diagnostics.every((entry) =>
         entry.reason.includes(
-          'Table structure and decoration are unsupported; cell text remains painted'
+          'Tagged table structure is unsupported; cell fills, borders, and text remain painted'
         )
       )
     ).toBe(true);
@@ -602,7 +602,8 @@ describe('planPdfPaintFromLayout', () => {
       expect.objectContaining({
         feature: 'table',
         kind: 'unsupported',
-        reason: 'Table structure and decoration are unsupported; cell text remains painted',
+        reason:
+          'Tagged table structure is unsupported; cell fills, borders, and text remain painted',
       })
     );
   });

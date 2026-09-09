@@ -44,6 +44,7 @@ import {
   type PdfFillBacking,
 } from './pdf-fill-contrast.ts';
 import { visitBlocksForPublishedBorders } from './pdf-paragraph-borders.ts';
+import { pdfTextboxFrameCommands } from './pdf-textbox-frame.ts';
 import {
   createFidelityDiagnosticCollector,
   pdfApproximationDiagnostic,
@@ -429,7 +430,7 @@ function recordTableDiagnostics(
       recordKind: 'tableFragment',
       recordId: block.id,
       story,
-      reason: 'Table structure and decoration are unsupported; cell text remains painted',
+      reason: 'Tagged table structure is unsupported; cell fills, borders, and text remain painted',
     })
   );
 }
@@ -738,13 +739,20 @@ function* appendPaintHostLayer(
   const commands = pageCommands.get(host.page.index);
   if (!commands) return;
   const storyKind: PdfFidelityStoryKind = host.textboxDepth === 0 ? host.rootStory : 'textbox';
+  const toPageRect = (
+    absolute: Readonly<{ x: number; y: number; width: number; height: number }>
+  ) => compatibleRect(pageRelativeBox(host.page, absolute), profile);
+  for (const command of pdfTextboxFrameCommands(host, toPageRect)) {
+    pushBoundedCommand(commands, command, tally);
+    yield;
+  }
   yield* visitBlocksForPublishedFills(
     host.page,
     host.storyOrigin,
     host.fragments,
     storyKind,
     backing,
-    (absolute) => compatibleRect(pageRelativeBox(host.page, absolute), profile),
+    toPageRect,
     (command) => {
       pushBoundedCommand(commands, command, tally);
     },
@@ -755,7 +763,7 @@ function* appendPaintHostLayer(
     host.storyOrigin,
     host.fragments,
     storyKind,
-    (absolute) => compatibleRect(pageRelativeBox(host.page, absolute), profile),
+    toPageRect,
     (command) => {
       pushBoundedCommand(commands, command, tally);
     },

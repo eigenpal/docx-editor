@@ -11,6 +11,7 @@ import type {
   PageRecord,
   ParagraphBorderStrokeRecord,
   ParagraphFragmentRecord,
+  ResolvedCellBorders,
 } from '@docx-editor.dev/core/layout';
 import { coreBoxToPdfRect } from '../src/pdf-coordinates.ts';
 import type { PdfPaintCommand } from '../src/pdf-paint-types.ts';
@@ -68,7 +69,8 @@ function fillRects(commands: readonly PdfPaintCommand[]) {
 function cell(
   id: string,
   blocks: readonly unknown[],
-  box = { x: 40, y: 12, width: 100, height: 24 }
+  box = { x: 40, y: 12, width: 100, height: 24 },
+  borders?: ResolvedCellBorders
 ) {
   return Object.freeze({
     id,
@@ -77,6 +79,7 @@ function cell(
     vMergeContinue: false,
     blocks: Object.freeze(blocks),
     box: Object.freeze(box),
+    ...(borders ? { borders } : {}),
   });
 }
 
@@ -139,7 +142,8 @@ type PlannerTextboxDrawing = {
 function textboxDrawing(
   id: string,
   fragments: readonly unknown[],
-  nested?: PlannerTextboxDrawing
+  nested?: PlannerTextboxDrawing,
+  framed = false
 ): PlannerTextboxDrawing {
   return Object.freeze({
     kind: 'anchoredDrawing',
@@ -149,9 +153,37 @@ function textboxDrawing(
     paintBounds: Object.freeze({ x: 9, y: 19, width: 12, height: 22 }),
     hitBounds: Object.freeze({ x: 10, y: 20, width: 10, height: 20 }),
     behindDocument: false,
+    ...(framed
+      ? {
+          width: 100,
+          height: 40,
+          transform: {
+            rotationDegrees: 0,
+            flipHorizontal: false,
+            flipVertical: false,
+          },
+          vectorShape: {
+            extentEmu: { cx: 100, cy: 40 },
+            subpathsEmu: [
+              [
+                { x: 0, y: 0 },
+                { x: 100, y: 0 },
+                { x: 100, y: 40 },
+                { x: 0, y: 40 },
+                { x: 0, y: 0 },
+              ],
+            ],
+            fillHex: null,
+            strokeHex: '000000',
+            strokeWidthEmu: 12_700,
+            components: [{}],
+          },
+        }
+      : {}),
     textboxStory: Object.freeze({
       contentOffset: Object.freeze({ x: 3, y: 4 }),
       fragments: Object.freeze(fragments),
+      ...(framed ? { fillHex: null, strokeHex: '000000', strokeWidthPt: 1 } : {}),
       ...(nested ? { anchoredDrawings: Object.freeze([nested]) } : {}),
     }),
   });
@@ -185,6 +217,35 @@ async function planThenAbortAfterTimers(
 }
 
 describe('PDF paragraph border paint', () => {
+  test('paints a resolved simple table-cell border', () => {
+    const borderCell = cell(
+      'border-cell',
+      [],
+      { x: 40, y: 12, width: 100, height: 24 },
+      {
+        top: {
+          style: 'single',
+          color: '123456',
+          widthPt: 0.5,
+        },
+      }
+    );
+    const result = planPdfPaintFromLayout(
+      layout([
+        page(0, PAGE_WIDTH, PAGE_HEIGHT, {
+          fragments: [table('bordered-table', [borderCell]) as never],
+        }),
+      ])
+    );
+
+    expect(fillRects(result.plan.commands)).toContainEqual({
+      kind: 'fillRect',
+      color: '#123456',
+      rect: coreBoxToPdfRect({ x: 112, y: 84, width: 100, height: 0.5 }, PAGE_HEIGHT),
+    });
+    expect(result.diagnostics.some((entry) => entry.feature === 'table-border')).toBe(false);
+  });
+
   test('paints the EP_ZMVZ_MULTI_v4 page-1 subtitle bottom rule from the published box', () => {
     const bottomBox = { x: -1.5, y: 30.2727, width: 418.65, height: 0.5 };
     const subtitle = paragraph(
@@ -344,6 +405,23 @@ describe('PDF paragraph border paint', () => {
       expectedFill({ x: 1, y: 2, width: 12, height: 0.5 }, innerOrigin)
     );
     expect(result.diagnostics.some((entry) => entry.feature === 'paragraph-border')).toBe(false);
+  });
+
+  test('paints an axis-aligned textbox frame around its story', () => {
+    const result = planPdfPaintFromLayout(
+      layout([
+        page(0, PAGE_WIDTH, PAGE_HEIGHT, {
+          anchoredDrawings: [textboxDrawing('framed', [], undefined, true) as never],
+        }),
+      ])
+    );
+
+    expect(result.plan.commands).toContainEqual({
+      kind: 'strokeRect',
+      color: '#000000',
+      lineWidth: 1,
+      rect: coreBoxToPdfRect({ x: 82, y: 92, width: 100, height: 40 }, PAGE_HEIGHT),
+    });
   });
 
   test('paints header and footer published borders at furniture origins', () => {
