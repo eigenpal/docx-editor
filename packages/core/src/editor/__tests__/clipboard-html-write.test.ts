@@ -503,6 +503,63 @@ describe('interopHtmlFromFragment', () => {
     expect(interopHtmlFromFragment(input)).toContain('<img');
   });
 
+  test('nested simple fields retain their cached results and formatting', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:r><w:t xml:space="preserve">before </w:t></w:r>' +
+          '<w:fldSimple w:instr=" IF 1 = 1 &quot;yes&quot; &quot;no&quot; ">' +
+          '<w:fldSimple w:instr=" REF bookmark ">' +
+          '<w:r><w:rPr><w:b/></w:rPr><w:t>yes</w:t></w:r>' +
+          '</w:fldSimple></w:fldSimple>' +
+          '<w:r><w:t xml:space="preserve"> after</w:t></w:r></w:p>',
+      })
+    );
+
+    expect(html).toContain('before ');
+    expect(html).toContain('font-weight:bold');
+    expect(html).toContain('>yes</span>');
+    expect(html).toContain(' after');
+    expect(html).not.toContain('REF bookmark');
+    expect(html).not.toContain('IF 1');
+  });
+
+  test('nested simple fields still omit hidden, deleted, and unsupported content', () => {
+    const html = interopHtmlFromFragment(
+      fragment({
+        body:
+          '<w:p><w:fldSimple w:instr=" REF outer ">' +
+          '<w:fldSimple w:instr=" REF inner ">' +
+          '<w:r><w:t>visible</w:t></w:r>' +
+          '<w:r><w:rPr><w:vanish/></w:rPr><w:t>hidden</w:t></w:r>' +
+          '<w:del w:id="1" w:author="a"><w:r><w:delText>deleted</w:delText></w:r></w:del>' +
+          '<w:moveFrom w:id="2" w:author="a"><w:r><w:t>moved</w:t></w:r></w:moveFrom>' +
+          '<w:unknown><w:r><w:t>unsupported</w:t></w:r></w:unknown>' +
+          '<x:fldSimple xmlns:x="urn:other"><w:r><w:t>foreign</w:t></w:r></x:fldSimple>' +
+          '</w:fldSimple></w:fldSimple></w:p>',
+      })
+    );
+
+    expect(html).toBe('<p>visible</p>');
+  });
+
+  test.each([MAX_INLINE_CONTAINER_DEPTH - 1, MAX_INLINE_CONTAINER_DEPTH])(
+    'nested simple fields respect the inline depth limit at %i levels',
+    (levels) => {
+      let field = '<w:r><w:t>cached</w:t></w:r>';
+      for (let depth = 0; depth < levels; depth += 1) {
+        field = `<w:fldSimple w:instr=" REF bookmark ">${field}</w:fldSimple>`;
+      }
+      const html = interopHtmlFromFragment(
+        fragment({ body: `<w:p>${field}<w:r><w:t>after</w:t></w:r></w:p>` })
+      );
+
+      expect(html).toBe(
+        levels < MAX_INLINE_CONTAINER_DEPTH ? '<p>cachedafter</p>' : '<p>after</p>'
+      );
+    }
+  );
+
   test('hidden runs, deletions, and field machinery never reach the HTML', () => {
     const html = interopHtmlFromFragment(
       fragment({
@@ -527,10 +584,13 @@ describe('interopHtmlFromFragment', () => {
     expect(html).not.toContain('DATE');
   });
 
-  test('the deleted-field probe charges nested content-control depth', () => {
+  test.each(['sdt', 'fldSimple'])('the deleted-field probe charges nested %s depth', (wrapper) => {
     let deletedSeparate = '<w:r><w:fldChar w:fldCharType="separate"/></w:r>';
     for (let depth = 1; depth < MAX_INLINE_CONTAINER_DEPTH; depth += 1) {
-      deletedSeparate = `<w:sdt><w:sdtContent>${deletedSeparate}</w:sdtContent></w:sdt>`;
+      deletedSeparate =
+        wrapper === 'sdt'
+          ? `<w:sdt><w:sdtContent>${deletedSeparate}</w:sdtContent></w:sdt>`
+          : `<w:fldSimple w:instr=" REF bookmark ">${deletedSeparate}</w:fldSimple>`;
     }
     const html = interopHtmlFromFragment(
       fragment({

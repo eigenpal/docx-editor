@@ -279,6 +279,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   const reviewEnabled = modules.review !== null;
   /** Document bytes waiting for a container — set when constructed or loaded detached. */
   let pendingBytes: Uint8Array | null = null;
+  /** Pending input belongs to these exact remount bytes, including a deferred mount. */
+  let pendingTextFormInputs = new WeakMap<Uint8Array, PendingTextFormInput>();
   /** A big document's mount, deferred behind one painted frame so a loading screen can
    *  show — `snapshot().isOpening` holds for that window. See `docx-editor-open-scheduler.ts`. */
   const openScheduler = createOpenScheduler({
@@ -501,11 +503,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     initialSelection?: SemanticSelection,
     initialTextFormInput?: PendingTextFormInput
   ): void {
+    initialTextFormInput ??= pendingTextFormInputs.get(bytes);
+    pendingTextFormInputs.delete(bytes);
     if (!container) {
       // Detached: no DOM work. The bytes wait for `attach`, which mounts them under
       // whatever measurer has resolved by then. A previous document's parse failure is
       // not THESE bytes' state — `attach` re-derives any real error.
       pendingBytes = bytes;
+      if (initialTextFormInput) pendingTextFormInputs.set(bytes, initialTextFormInput);
       parseError = null;
       bump();
       return;
@@ -688,6 +693,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   function loadBytes(bytes: Uint8Array): void {
     // A load supersedes any open still waiting on its frame: drop the superseded bytes.
     openScheduler.cancel();
+    pendingTextFormInputs = new WeakMap();
     // The previous document can leave its comments pane open. Close it before a deferred
     // open publishes `isOpening`, so the loading page uses the full centred workspace.
     reviewPaneOpen = false;
@@ -1782,6 +1788,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // Moving containers: carry the live content, not the original bytes.
         surface.flushPendingInput();
         pendingBytes = surface.session.save();
+        const input = container ? snapshotTextFormInput(container) : undefined;
+        if (input) pendingTextFormInputs.set(pendingBytes, input);
         teardownSurface();
       }
       // A scheduled open was aimed at the PREVIOUS container — and being the newer
@@ -1818,6 +1826,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       if (surface) {
         surface.flushPendingInput();
         pendingBytes = surface.session.save();
+        const input = container ? snapshotTextFormInput(container) : undefined;
+        if (input) pendingTextFormInputs.set(pendingBytes, input);
         teardownSurface();
       }
       if (reclaimed) pendingBytes = reclaimed;
@@ -2619,6 +2629,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       teardownSurface();
       container = null;
       pendingBytes = null;
+      pendingTextFormInputs = new WeakMap();
       mountGeneration += 1;
       bump();
       for (const set of Object.values(handlers)) set.clear();

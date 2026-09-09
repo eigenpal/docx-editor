@@ -79,7 +79,7 @@ export interface PaginatedDocxEditorHandle {
   formatting(): SurfaceFormatting | null;
   /** The section the document declares — what a ruler is made of. */
   sectionProperties(): SectionProperties | null;
-  /** Serialize the current document. */
+  /** Save pending form input. Throws for invalid values or an active edit. */
   save(): Uint8Array | null;
 }
 
@@ -165,14 +165,7 @@ export function PaginatedDocxEditor({
       ) => surfaceRef.current?.setParagraphProperty(localName, attributes, options),
       formatting: () => surfaceRef.current?.formatting() ?? null,
       sectionProperties: () => surfaceRef.current?.sectionProperties() ?? null,
-      save: () => {
-        const surface = surfaceRef.current;
-        if (!surface) return null;
-        // Queued keystrokes belong in the bytes: an autosave in the same
-        // event-loop turn as the last key must not lose them.
-        surface.flushPendingInput();
-        return surface.session.save();
-      },
+      save: () => surfaceRef.current?.save() ?? null,
     }),
     []
   );

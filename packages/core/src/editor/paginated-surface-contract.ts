@@ -473,6 +473,13 @@ export interface PaginatedSurface {
    * the call returns false.
    */
   refreshRefFieldResults(): boolean;
+  /**
+   * Commit pending form input, refresh REF results, and serialize the document.
+   * Throws an error with code `invalidArgs` for invalid form values, or `invalidState`
+   * during an active edit. Retry after the edit finishes. A destroyed surface throws
+   * with code `destroyed`. Does not change focus.
+   */
+  save(): Uint8Array;
   /** Whether a body paragraph belongs to a detected TOC boundary or cached result. */
   isInsideToc(paragraphId: string): boolean;
   /**

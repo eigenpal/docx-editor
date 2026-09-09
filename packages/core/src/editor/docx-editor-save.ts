@@ -19,14 +19,36 @@ export async function saveEditorDocument(
         'The document changed before the pending save could finish.'
       );
   }
+  return surface.save().slice().buffer as ArrayBuffer;
+}
+
+/** Synchronous saves refuse reentrant edits before reading incomplete form state. */
+export function saveSurfaceDocument(
+  surface: PaginatedSurface,
+  container: HTMLElement,
+  isDestroyed: () => boolean
+): Uint8Array {
+  const assertLive = () => {
+    if (isDestroyed()) throw editorError('destroyed', 'Cannot save a destroyed surface.');
+  };
+  assertLive();
+  if (pendingSurfaceCommit(container)) {
+    throw editorError(
+      'invalidState',
+      'Cannot save during an active edit. Retry after the edit finishes.'
+    );
+  }
   surface.flushPendingInput();
-  const refusal = container ? commitTextFormInput(container) : null;
+  assertLive();
+  const refusal = commitTextFormInput(container);
   if (refusal) {
     throw editorError(
       refusal,
       'Cannot save pending text form input. Enter a valid value in each field.'
     );
   }
+  assertLive();
   surface.refreshRefFieldResults();
-  return surface.session.save().slice().buffer as ArrayBuffer;
+  assertLive();
+  return surface.session.save();
 }

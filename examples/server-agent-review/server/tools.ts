@@ -156,7 +156,10 @@ export function createReviewTools(
         await context.sync();
         if (matches.items.length > 100)
           return { ok: false, code: 'ambiguous-anchor', message: 'Use a longer quote.' };
-        for (const match of matches.items) match.paragraphs.load('items');
+        for (const match of matches.items) {
+          match.load('text');
+          match.paragraphs.load('items');
+        }
         await context.sync();
         for (const match of matches.items)
           for (const p of match.paragraphs.items) p.load(['text', 'uniqueLocalId']);
@@ -178,6 +181,14 @@ export function createReviewTools(
           (await digest()) !== snapshot.digest
         )
           return stale();
+        // Search can expand a partial field result to the whole field atom.
+        if (range.text !== input.quote)
+          return {
+            ok: false,
+            code: 'invalid-proposal',
+            message:
+              'The quote selects additional text. Quote the complete field or choose another target.',
+          };
         assertActive();
         context.document.changeTrackingMode = 'TrackMineOnly';
         if (kind === 'insertion') range.insertText(input.text ?? '', input.where ?? 'After');

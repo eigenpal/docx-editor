@@ -1,3 +1,4 @@
+import { saveSurfaceDocument } from './docx-editor-save.ts';
 import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
 import { beginSurfaceCommit } from './surface-commit-state.ts';
 import { createSurfaceDateLocale } from './surface-date-locale.ts';
@@ -4506,6 +4507,7 @@ export function mountPaginatedSurface(
     options.onChange?.(currentState());
   }
 
+  let destroyed = false;
   const surface: ScaleMutableSurface = {
     session,
     // The internal gated write — see the `ScaleMutableSurface` note. The content-control
@@ -5117,6 +5119,7 @@ export function mountPaginatedSurface(
     editTextFormField: () => textFormInteraction?.edit() ?? false,
     refreshToc,
     refreshRefFieldResults,
+    save: () => saveSurfaceDocument(surface, container, () => destroyed),
     isInsideToc: (paragraphId) =>
       detectBodyTocs(session.part()).some(
         (toc) =>
@@ -5716,52 +5719,57 @@ export function mountPaginatedSurface(
       tableInteraction.refreshLabels();
     },
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       // Typed-but-unflushed text lands before teardown, so a detach-then-save
       // flow keeps the last keystrokes — all the way to a paint and its state
       // report: the final commit's `onChange` used to come from the synchronous
       // commit tail, and a deferral swallowed by `scheduler.cancel()` below
       // would silence the last keystrokes for an onChange-driven host.
-      flushToPaint();
-      document.removeEventListener('selectionchange', onSelectionChange);
-      pagesLayer.removeEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
-      pagesLayer.removeEventListener('keydown', onDrawingKeyGesture, { capture: true });
-      pagesLayer.removeEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
-      pagesLayer.removeEventListener('keydown', onKeyDown);
-      pagesLayer.removeEventListener('beforeinput', onBeforeInput as EventListener);
-      pagesLayer.removeEventListener('copy', onCopy as EventListener);
-      pagesLayer.removeEventListener('cut', onCut as EventListener);
-      pagesLayer.removeEventListener('paste', onPaste as EventListener);
-      pagesLayer.removeEventListener('compositionstart', onCompositionStart);
-      pagesLayer.removeEventListener('compositionend', onCompositionEnd);
-      document.removeEventListener('scroll', onScroll, { capture: true });
-      container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
-      viewportObserver?.disconnect();
-      observedScroller = null;
-      textFormInteraction?.destroy();
-      pointer?.destroy();
-      tableInteraction.destroy();
-      navigation.destroy();
-      equationInteraction.destroy();
-      selectionSync.destroy();
-      pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
-      pagesLayer.removeEventListener('click', onTocRowClick);
-      pagesLayer.removeEventListener('pointermove', onTocPointerMove);
-      pagesLayer.removeEventListener('pointerleave', onTocPointerLeave);
-      // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
-      // another editor sharing this store would paint into a detached container.
-      scheduler.cancel();
-      if (deferredPublishRender !== null) clearTimeout(deferredPublishRender);
-      deferredPublishRender = null;
-      if (cancelDerivationPrewarm) cancelDerivationPrewarm();
-      cancelDerivationPrewarm = null;
-      drawingBundle.dispose();
-      detachDrawingUrlRegistry(pagesLayer);
-      caret.destroy();
-      unsubscribeRemoteSelections();
-      unsubscribeCollaborationStatus();
-      detachCollaboration();
-      unsubscribe();
-      container.replaceChildren();
+      try {
+        flushToPaint();
+      } finally {
+        document.removeEventListener('selectionchange', onSelectionChange);
+        pagesLayer.removeEventListener('pointerdown', onDrawingPointerGesture, { capture: true });
+        pagesLayer.removeEventListener('keydown', onDrawingKeyGesture, { capture: true });
+        pagesLayer.removeEventListener('beforeinput', onDrawingKeyGesture, { capture: true });
+        pagesLayer.removeEventListener('keydown', onKeyDown);
+        pagesLayer.removeEventListener('beforeinput', onBeforeInput as EventListener);
+        pagesLayer.removeEventListener('copy', onCopy as EventListener);
+        pagesLayer.removeEventListener('cut', onCut as EventListener);
+        pagesLayer.removeEventListener('paste', onPaste as EventListener);
+        pagesLayer.removeEventListener('compositionstart', onCompositionStart);
+        pagesLayer.removeEventListener('compositionend', onCompositionEnd);
+        document.removeEventListener('scroll', onScroll, { capture: true });
+        container.ownerDocument.defaultView?.removeEventListener('resize', onViewportResize);
+        viewportObserver?.disconnect();
+        observedScroller = null;
+        textFormInteraction?.destroy();
+        pointer?.destroy();
+        tableInteraction.destroy();
+        navigation.destroy();
+        equationInteraction.destroy();
+        selectionSync.destroy();
+        pagesLayer.removeEventListener('contextmenu', onTocContextMenu);
+        pagesLayer.removeEventListener('click', onTocRowClick);
+        pagesLayer.removeEventListener('pointermove', onTocPointerMove);
+        pagesLayer.removeEventListener('pointerleave', onTocPointerLeave);
+        // Drop pending layout work and stop listening BEFORE the DOM goes, or a commit from
+        // another editor sharing this store would paint into a detached container.
+        scheduler.cancel();
+        if (deferredPublishRender !== null) clearTimeout(deferredPublishRender);
+        deferredPublishRender = null;
+        if (cancelDerivationPrewarm) cancelDerivationPrewarm();
+        cancelDerivationPrewarm = null;
+        drawingBundle.dispose();
+        detachDrawingUrlRegistry(pagesLayer);
+        caret.destroy();
+        unsubscribeRemoteSelections();
+        unsubscribeCollaborationStatus();
+        detachCollaboration();
+        unsubscribe();
+        container.replaceChildren();
+      }
     },
   };
 

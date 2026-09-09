@@ -4407,7 +4407,6 @@ export interface PaginatedDocxEditorHandle {
     navigate(command: NavigationCommand, extend?: boolean): void;
     // (undocumented)
     redo(): void;
-    // (undocumented)
     save(): Uint8Array | null;
     // (undocumented)
     sectionProperties(): SectionProperties | null;

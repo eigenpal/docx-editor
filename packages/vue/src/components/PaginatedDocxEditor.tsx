@@ -50,6 +50,7 @@ export interface PaginatedDocxEditorHandle {
   ): void;
   formatting(): SurfaceFormatting | null;
   sectionProperties(): SectionProperties | null;
+  /** Save pending form input. Throws for invalid values or an active edit. */
   save(): Uint8Array | null;
 }
 
@@ -157,12 +158,7 @@ export const PaginatedDocxEditor = defineComponent({
       ) => surfaceRef.value?.setParagraphProperty(localName, attributes, options),
       formatting: () => surfaceRef.value?.formatting() ?? null,
       sectionProperties: () => surfaceRef.value?.sectionProperties() ?? null,
-      save: () => {
-        const surface = surfaceRef.value;
-        if (!surface) return null;
-        surface.flushPendingInput();
-        return surface.session.save();
-      },
+      save: () => surfaceRef.value?.save() ?? null,
     } satisfies PaginatedDocxEditorHandle);
 
     return (): VNode =>
