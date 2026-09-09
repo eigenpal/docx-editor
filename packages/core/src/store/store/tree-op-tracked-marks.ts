@@ -213,8 +213,10 @@ function adjacentParagraphMark(
     const rPr = properties
       ? childrenOf(properties).find((child) => isWmlNamed(child, 'rPr'))
       : undefined;
-    const mark = rPr ? childrenOf(rPr).find(isMarkRevision) : undefined;
-    if (!mark || mark.kind === 'textValue' || mark.localName !== kind) continue;
+    const mark = rPr
+      ? childrenOf(rPr).find((child) => isMarkRevisionOfKind(child, kind))
+      : undefined;
+    if (!mark || mark.kind === 'textValue') continue;
     const read = (localName: string): string | undefined =>
       mark.attributes.find(
         (attribute) =>

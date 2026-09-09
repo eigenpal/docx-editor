@@ -248,8 +248,12 @@ describe('a tracked paragraph mark', () => {
   });
 
   test('adjacent marks reuse the first timestamp across the grouping window', () => {
-    const before = part('<w:p><w:r><w:t>one</w:t></w:r></w:p><w:p><w:r><w:t>two</w:t></w:r></w:p>');
-    const [first, second] = paragraphIds(before);
+    const before = part(
+      '<w:p><w:r><w:t>one</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>two</w:t></w:r></w:p>' +
+        '<w:p><w:r><w:t>three</w:t></w:r></w:p>'
+    );
+    const [first, second, third] = paragraphIds(before);
     const once = apply(before, {
       op: 'setParagraphMarkRevision',
       paragraphId: first!,
@@ -260,12 +264,42 @@ describe('a tracked paragraph mark', () => {
       op: 'setParagraphMarkRevision',
       paragraphId: second!,
       kind: 'ins',
-      revision: { author: 'Ada', date: '2026-09-09T08:00:05Z' },
+      revision: { author: 'Ada', date: '2026-09-09T08:01:00Z' },
     });
-    const marks = revisionItemsOf(twice).filter((item) => item.revisionKind === 'paragraphMark');
-    expect(marks).toHaveLength(1);
-    expect(marks[0]!.date).toBe('2026-09-09T08:00:00Z');
-    expect(marks[0]!.ranges).toHaveLength(2);
+    const thrice = apply(twice, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: third!,
+      kind: 'ins',
+      revision: { author: 'Ada', date: '2026-09-09T08:01:01Z' },
+    });
+    const marks = revisionItemsOf(thrice).filter((item) => item.revisionKind === 'paragraphMark');
+    expect(marks).toHaveLength(2);
+    expect(marks.find((item) => item.date === '2026-09-09T08:00:00Z')?.ranges).toHaveLength(2);
+    expect(marks.find((item) => item.date === '2026-09-09T08:01:01Z')?.ranges).toHaveLength(1);
+  });
+
+  test('a paired mark coalesces against the matching revision kind', () => {
+    const before = part(
+      '<w:p><w:pPr><w:rPr>' +
+        '<w:ins w:id="1" w:author="Ada" w:date="2026-09-09T08:00:00Z"/>' +
+        '<w:del w:id="2" w:author="Bob" w:date="2026-09-09T08:00:00Z"/>' +
+        '</w:rPr></w:pPr></w:p><w:p/>'
+    );
+    const [, second] = paragraphIds(before);
+    const after = apply(before, {
+      op: 'setParagraphMarkRevision',
+      paragraphId: second!,
+      kind: 'del',
+      revision: { author: 'Bob', date: '2026-09-09T08:00:05Z' },
+    });
+    const deletions = revisionItemsOf(after).filter(
+      (item) =>
+        item.revisionKind === 'paragraphMark' &&
+        item.markDirection === 'delete' &&
+        item.author === 'Bob'
+    );
+    expect(deletions).toHaveLength(1);
+    expect(deletions[0]!.ranges).toHaveLength(2);
   });
 });
 

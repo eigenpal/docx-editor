@@ -968,18 +968,17 @@ describe('suggesting mode', () => {
   test('a run of Enters is ONE decision, not one card per press', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
-    for (const offset of [5, 4, 3]) {
-      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
-      editor.surface!.setSelection({
-        anchor: { paragraphId, offset },
-        head: { paragraphId, offset },
-      });
-      editor.surface!.splitParagraph();
-    }
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 5 },
+      head: { paragraphId, offset: 5 },
+    });
+    for (let count = 0; count < 3; count += 1) editor.surface!.splitParagraph();
     const marks = editor
       .getReviewItems()
       .filter((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
     expect(marks).toHaveLength(1);
+    expect(rev(marks[0]).item.ranges).toHaveLength(3);
   });
 
   test('back in editing mode an edit is an ordinary edit again', () => {
