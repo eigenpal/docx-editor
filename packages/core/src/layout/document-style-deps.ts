@@ -1,6 +1,11 @@
 // Shared style/numbering assembly for browser layout and headless exporters.
 
-import type { HeadlessDocumentView, OoxmlElement } from '@docx-editor.dev/core/store';
+import {
+  readHyphenationSettings,
+  type DocumentHyphenationSettings,
+  type HeadlessDocumentView,
+  type OoxmlElement,
+} from '@docx-editor.dev/core/store';
 import { buildNumberingIndex, type NumberingIndex } from './numbering-index.ts';
 import { defaultTabIntervalFromSettings } from './paragraph-tabs.ts';
 import { buildStyleCascadeTable, type StyleCascadeTable } from './style-cascade.ts';
@@ -9,6 +14,7 @@ import { buildStyleCascadeTable, type StyleCascadeTable } from './style-cascade.
 export interface DocumentStyleDependencies {
   readonly styleCascade: () => StyleCascadeTable | undefined;
   readonly defaultTabStopPt: () => number;
+  readonly hyphenationSettings: () => DocumentHyphenationSettings;
   readonly numberingIndex: () => NumberingIndex;
 }
 
@@ -26,6 +32,19 @@ export function createDocumentStyleDependencies(
   let styles: StyleCascadeTable | undefined;
   let settingsRoot: OoxmlElement | null | undefined;
   let defaultTabStopPt: number | undefined;
+  let hyphenationSettings: DocumentHyphenationSettings | undefined;
+  const syncSettings = (): void => {
+    const current = view.settingsRoot();
+    if (
+      defaultTabStopPt === undefined ||
+      hyphenationSettings === undefined ||
+      current !== settingsRoot
+    ) {
+      settingsRoot = current;
+      defaultTabStopPt = defaultTabIntervalFromSettings(current);
+      hyphenationSettings = readHyphenationSettings(current);
+    }
+  };
   return {
     styleCascade() {
       const current = view.stylesRoot();
@@ -48,12 +67,12 @@ export function createDocumentStyleDependencies(
       return styles;
     },
     defaultTabStopPt() {
-      const current = view.settingsRoot();
-      if (defaultTabStopPt === undefined || current !== settingsRoot) {
-        settingsRoot = current;
-        defaultTabStopPt = defaultTabIntervalFromSettings(current);
-      }
-      return defaultTabStopPt;
+      syncSettings();
+      return defaultTabStopPt!;
+    },
+    hyphenationSettings() {
+      syncSettings();
+      return hyphenationSettings!;
     },
     numberingIndex() {
       const current = view.numberingRoot();

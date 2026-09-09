@@ -99,6 +99,7 @@ export interface TextboxStoryLayoutOptions {
   readonly cache?: ParagraphLayoutCache<readonly PendingLine[]>;
   readonly styleCascade?: StyleCascadeTable;
   readonly defaultTabStopPt?: number;
+  readonly hyphenationSettings?: import('@docx-editor.dev/core/store').DocumentHyphenationSettings;
   /** Host story's page-field context; PAGE-family fields inside the story project against it. */
   readonly pageContext?: FieldPageContext;
   readonly displayMode?: RevisionDisplayMode;
@@ -523,6 +524,7 @@ export function layoutTextboxStory(
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),
+    ...(options.hyphenationSettings ? { hyphenationSettings: options.hyphenationSettings } : {}),
     ...(options.displayMode ? { displayMode: options.displayMode } : {}),
     ...(options.revisionAuthorFilter ? { revisionAuthorFilter: options.revisionAuthorFilter } : {}),
     ...(options.inlineDrawingLayout ? { inlineDrawingLayout: options.inlineDrawingLayout } : {}),

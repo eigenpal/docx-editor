@@ -183,6 +183,7 @@ export {
   type SemanticLayout,
   type SourceRange,
   type SpanLinkRecord,
+  type DiscretionaryHyphenRecord,
   type StyleSpanRecord,
   type TableCellFragmentRecord,
   type TableFragmentRecord,

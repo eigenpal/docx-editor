@@ -44,6 +44,9 @@ describe('document style dependencies', () => {
     const firstCascade = dependencies.styleCascade();
     expect(dependencies.styleCascade()).toBe(firstCascade);
     expect(dependencies.defaultTabStopPt()).toBe(36);
+    const firstHyphenation = dependencies.hyphenationSettings();
+    expect(firstHyphenation.autoHyphenation).toBe(false);
+    expect(dependencies.hyphenationSettings()).toBe(firstHyphenation);
 
     theme = {
       major: 'Heading One',
@@ -53,10 +56,12 @@ describe('document style dependencies', () => {
     };
     settings = root(
       '/word/settings.xml',
-      `<w:settings xmlns:w="${W}"><w:defaultTabStop w:val="1134"/></w:settings>`
+      `<w:settings xmlns:w="${W}"><w:defaultTabStop w:val="1134"/><w:autoHyphenation/></w:settings>`
     );
 
     expect(dependencies.styleCascade()).not.toBe(firstCascade);
     expect(dependencies.defaultTabStopPt()).toBe(1134 / 20);
+    expect(dependencies.hyphenationSettings()).not.toBe(firstHyphenation);
+    expect(dependencies.hyphenationSettings().autoHyphenation).toBe(true);
   });
 });

@@ -455,6 +455,17 @@ export {
   readViewSettings,
   type DocumentViewSettings,
 } from './view-settings.ts';
+export {
+  DEFAULT_HYPHENATION_SETTINGS,
+  DEFAULT_HYPHENATION_ZONE_PT,
+  DEFAULT_HYPHENATION_ZONE_TWIPS,
+  MAX_CONSECUTIVE_HYPHEN_LIMIT,
+  MAX_HYPHENATION_ZONE_TWIPS,
+  hyphenationProducerSuffix,
+  hyphenationSettingsFingerprint,
+  readHyphenationSettings,
+  type DocumentHyphenationSettings,
+} from './hyphenation-settings.ts';
 // Only the result type is public — it names `SemanticLayoutOptions.documentProperties` and the
 // session accessor. The reader and its caps stay engine-internal; `binding` and tests import them
 // directly from `./document-properties.ts`.

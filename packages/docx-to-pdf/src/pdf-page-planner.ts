@@ -85,6 +85,10 @@ import {
 import { excludeTrailingUnderlineSpace } from './pdf-underline-geometry.ts';
 import { compatibleSpanBaseline } from './pdf-span-geometry.ts';
 import { plannedParagraphMarkerCommand } from './pdf-paragraph-marker-planner.ts';
+import {
+  plannedDiscretionaryHyphenCommand,
+  spanTextWidthPt,
+} from './pdf-discretionary-hyphen-planner.ts';
 
 /** Result of planning paint commands from one export layout snapshot. @public */
 export interface PdfPagePlanResult {
@@ -345,10 +349,12 @@ function appendSpanCommands(
 
   const faceStyle = styleForFontSlot(span.style, span.fontSlot);
   const baseRect = pageRelativeBox(page, absoluteBox);
-  const rect =
+  const fullRect =
     profile === 'word-macos-300dpi'
       ? quantizeWordMacos300DpiLineRect(baseRect, storyOrigin.x - page.box.x + lineX)
       : baseRect;
+  const textWidthPt = spanTextWidthPt(span, fullRect.width);
+  const rect = Object.freeze({ ...fullRect, width: textWidthPt });
   const baseline = compatibleSpanBaseline(
     page,
     storyOrigin.y,
@@ -395,6 +401,8 @@ function appendSpanCommands(
     plannedUnderlineExcludesTrailingSpace(line, span, profile)
   );
   pushBoundedCommand(commands, textCommand, tally);
+  const hyphenCommand = plannedDiscretionaryHyphenCommand(fullRect, baseline, span, textStyle);
+  if (hyphenCommand) pushBoundedCommand(commands, hyphenCommand, tally);
   recordRunStyleApproximations(page, span.range.paragraphId, span.style, diagnostics);
   const omittedFill = span.style.shading
     ? `#${span.style.shading}`
@@ -415,7 +423,7 @@ function appendSpanCommands(
     layout,
     page,
     span,
-    compatibleRect(rect, profile),
+    compatibleRect(fullRect, profile),
     commands,
     diagnostics,
     tally

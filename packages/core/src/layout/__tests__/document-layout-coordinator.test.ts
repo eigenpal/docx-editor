@@ -434,6 +434,7 @@ describe('shared document-layout coordinator invalidation', () => {
       styleCascade: styles.styleCascade,
       numberingIndex: styles.numberingIndex,
       defaultTabStopPt: styles.defaultTabStopPt,
+      hyphenationSettings: styles.hyphenationSettings,
       linkProjectors: links,
     });
     const layout = (): SemanticLayout =>
@@ -447,6 +448,7 @@ describe('shared document-layout coordinator invalidation', () => {
         styleCascade: styles.styleCascade,
         numberingIndex: styles.numberingIndex,
         defaultTabStopPt: styles.defaultTabStopPt,
+        hyphenationSettings: styles.hyphenationSettings,
         furniture,
         linkProjectors: links,
       });

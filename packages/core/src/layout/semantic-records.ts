@@ -230,6 +230,26 @@ export interface StyleSpanRecord {
     readonly scopeId: string;
     readonly direction: 'to-note' | 'to-body';
   };
+  /**
+   * Layout-only discretionary hyphen painted AFTER this span.
+   *
+   * Automatic hyphenation never inserts U+00AD into {@link text} and never moves
+   * {@link range}: the model word stays whole. Paint draws a hyphen-minus of
+   * {@link DiscretionaryHyphenRecord.widthPt} after the last glyph. Absent on
+   * ordinary spans.
+   */
+  readonly discretionaryHyphen?: DiscretionaryHyphenRecord;
+}
+
+/**
+ * Geometry of a layout-only hyphen at a line break.
+ *
+ * The glyph is not in the span's text. Hit-testing and caret mapping ignore it
+ * and keep using {@link StyleSpanRecord.range} / {@link StyleSpanRecord.text}.
+ */
+export interface DiscretionaryHyphenRecord {
+  /** Width of the painted hyphen glyph, in points. */
+  readonly widthPt: number;
 }
 
 /**

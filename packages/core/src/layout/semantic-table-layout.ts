@@ -65,6 +65,7 @@ import {
   paragraphBorderSideOuterExtentPt,
   paragraphBorderStrokeWidthPt,
 } from './paragraph-style.ts';
+import { paragraphSuppressAutoHyphens } from './paragraph-suppress-auto-hyphens.ts';
 import { tabStopsFingerprint, withDefaultTabInterval } from './paragraph-tabs.ts';
 import { DEFAULT_RUN_STYLE } from './run-style.ts';
 import {
@@ -238,6 +239,8 @@ export interface TableFlowDeps {
    * paragraph tabs on the same document-wide grid as a body paragraph.
    */
   readonly defaultTabStopPt?: number;
+  /** Document hyphenation settings; absent keeps hyphenation off. */
+  readonly hyphenationSettings?: import('@docx-editor.dev/core/store').DocumentHyphenationSettings;
   /**
    * Turns a typed `w:hyperlink` into the sanitized record its spans carry. A link in a
    * table cell is an ordinary link; without this it would paint its text and be dead.
@@ -566,6 +569,8 @@ function placeCellParagraph(
       equationCacheToken: deps.producer,
       firstLineOffset,
       alignment,
+      ...(deps.hyphenationSettings ? { hyphenationSettings: deps.hyphenationSettings } : {}),
+      suppressAutoHyphens: paragraphSuppressAutoHyphens(props),
       // A cell's own content box is the column a positional tab measures against.
       marginExtent: { left: 0, right: indent.left + available + indent.right },
       ...(deps.projectLink ? { projectLink: deps.projectLink } : {}),

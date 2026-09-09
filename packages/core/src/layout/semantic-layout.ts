@@ -9,12 +9,14 @@
 // paragraph id. That is what makes a cross-page paragraph one paragraph for selection and
 // two boxes for pagination.
 
-import type {
-  DocumentProperties,
-  OoxmlElement,
-  OoxmlNode,
-  OoxmlPart,
-  OoxmlProperty,
+import {
+  hyphenationSettingsFingerprint,
+  type DocumentHyphenationSettings,
+  type DocumentProperties,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+  type OoxmlProperty,
 } from '@docx-editor.dev/core/store';
 import { WML_MAIN_DOCUMENT_PART } from '../store/package/opc-names.ts';
 import {
@@ -57,6 +59,7 @@ import {
   type ParagraphLineSpacing,
   type ParagraphSpacing,
 } from './paragraph-style.ts';
+import { paragraphSuppressAutoHyphens } from './paragraph-suppress-auto-hyphens.ts';
 import type { PageGeometryGridPolicy } from './page-geometry-policy.ts';
 import {
   gridRoundedBorderComponent,
@@ -329,6 +332,11 @@ export interface SemanticLayoutOptions {
    * here — which is why the prepared-block memo does not key on it.
    */
   readonly defaultTabStopPt?: number;
+  /**
+   * Document hyphenation settings from `settings.xml`. Absent keeps hyphenation off.
+   * Folded into the pass producer so a settings-only change cannot reuse stale breaks.
+   */
+  readonly hyphenationSettings?: DocumentHyphenationSettings;
   /**
    * Turns a typed `w:hyperlink` into the SANITIZED record its spans carry.
    *
@@ -946,6 +954,7 @@ function layoutBlocksPass(
   // The default-tab interval moves every default-interval tab, and the prepared-block memo
   // is keyed by producer — so it belongs here rather than only in the per-paragraph token.
   const defaultTabStopPt = options.defaultTabStopPt;
+  const hyphenationSettings = options.hyphenationSettings;
   const displayMode = options.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
   const authorFilter = options.revisionAuthorFilter;
   const showsMarkup = displayMode === 'all-markup';
@@ -976,7 +985,8 @@ function layoutBlocksPass(
     defaultTabStopPt,
     displayMode,
     authorFilter,
-    options.bodyPageNumberFormat
+    options.bodyPageNumberFormat,
+    hyphenationSettings ? hyphenationSettingsFingerprint(hyphenationSettings) : undefined
   );
 
   // Prepass and incremental keys use the first region. Placement re-prepares a block when it
@@ -1123,6 +1133,7 @@ function layoutBlocksPass(
       cache,
       styleCascade,
       ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+      ...(hyphenationSettings ? { hyphenationSettings } : {}),
       ...(displayMode ? { displayMode } : {}),
       ...(authorFilter ? { revisionAuthorFilter: authorFilter } : {}),
       ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
@@ -1761,6 +1772,7 @@ function layoutBlocksPass(
     styleCascade,
     listItems,
     ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+    ...(hyphenationSettings ? { hyphenationSettings } : {}),
     ...(options.projectLink ? { projectLink: options.projectLink } : {}),
     ...(options.projectFieldLink ? { projectFieldLink: options.projectFieldLink } : {}),
     ...(options.documentProperties ? { documentProperties: options.documentProperties } : {}),
@@ -1916,6 +1928,8 @@ function layoutBlocksPass(
         equationCacheToken: producer,
         firstLineOffset: startOffset === 0 ? firstLineOffsetOf(entry) : 0,
         alignment: entry.alignment,
+        hyphenationSettings,
+        suppressAutoHyphens: paragraphSuppressAutoHyphens(entry.props),
         startOffset,
         marginExtent: { left: 0, right: entry.indent.left + available + entry.indent.right },
         ...(options.projectLink ? { projectLink: options.projectLink } : {}),

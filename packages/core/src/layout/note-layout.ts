@@ -9,7 +9,12 @@
 // convergence counter never moves because a note changed. Resource accounting is
 // bounded: hostile note counts and over-tall flows fail closed with named reasons.
 
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import {
+  hyphenationProducerSuffix,
+  type OoxmlElement,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
 import {
   findNoteById,
   formatNoteScopeId,
@@ -148,6 +153,7 @@ export interface LayoutNoteStoryOptions {
    */
   readonly numberingIndex?: import('./numbering-index.ts').NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly hyphenationSettings?: import('@docx-editor.dev/core/store').DocumentHyphenationSettings;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
   /**
@@ -283,6 +289,7 @@ export function layoutNoteStory(
       options.producer +
       (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
       (options.revisionAuthorFilter ? `|reviewers:${options.revisionAuthorFilter.cacheKey}` : '') +
+      hyphenationProducerSuffix(options.hyphenationSettings) +
       `|${scopeId}`,
     nextLineId: () => `${prefix}-line-${lineCounter++}`,
     styleCascade: options.styleCascade,
@@ -308,6 +315,7 @@ export function layoutNoteStory(
     ...(options.defaultTabStopPt !== undefined
       ? { defaultTabStopPt: options.defaultTabStopPt }
       : {}),
+    ...(options.hyphenationSettings ? { hyphenationSettings: options.hyphenationSettings } : {}),
     ...(drawings
       ? {
           inlineDrawingLayout: drawings.inlineDrawingLayout,

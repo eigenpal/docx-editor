@@ -16,7 +16,11 @@
 //
 // Scope stays furniture-only; body field projection remains deferred.
 
-import type { OoxmlNode, OoxmlPart } from '@docx-editor.dev/core/store';
+import {
+  hyphenationProducerSuffix,
+  type OoxmlNode,
+  type OoxmlPart,
+} from '@docx-editor.dev/core/store';
 import { stableHash } from '../store/comparators/canonical.ts';
 import { canonicalOoxmlFingerprint } from '../store/package/ooxml-tree.ts';
 import {
@@ -189,6 +193,7 @@ export interface HeaderFooterStoryInputs {
    * merged into the paragraph's own.
    */
   readonly numberingIndex?: NumberingIndex;
+  readonly hyphenationSettings?: import('@docx-editor.dev/core/store').DocumentHyphenationSettings;
   /** Sanitized hyperlink seams scoped to this header/footer part. */
   readonly projectLink?: import('./field-pieces.ts').HyperlinkProjector;
   readonly projectFieldLink?: import('./field-pieces.ts').FieldLinkProjector;
@@ -275,6 +280,12 @@ export function layoutHeaderFooterStory(
       fieldPageContextToken(effectiveCtx, needs) +
       (inlineDrawingLayout ? `|pn:${pageNumber}` : '') +
       anchorPageToken;
+    const storyProducer =
+      producer +
+      token +
+      (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
+      (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : '') +
+      hyphenationProducerSuffix(inputs?.hyphenationSettings);
 
     if (token === '') {
       if (baseline) return baseline;
@@ -344,15 +355,12 @@ export function layoutHeaderFooterStory(
     ) =>
       layoutTextboxStory(projection, {
         measurer,
-        producer:
-          producer +
-          token +
-          (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
-          (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
+        producer: storyProducer,
         cache,
         styleCascade,
         ...(effectiveCtx ? { pageContext: effectiveCtx } : {}),
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+        ...(inputs?.hyphenationSettings ? { hyphenationSettings: inputs.hyphenationSettings } : {}),
         displayMode,
         ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
         ...(documentProperties ? { documentProperties } : {}),
@@ -391,17 +399,16 @@ export function layoutHeaderFooterStory(
         flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
           measurer,
           cache,
-          producer:
-            producer +
-            token +
-            (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
-            (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
+          producer: storyProducer,
           nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
           styleCascade,
           ...(listItems ? { listItems } : {}),
           hostedStory,
           pageContext: effectiveCtx,
           ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+          ...(inputs?.hyphenationSettings
+            ? { hyphenationSettings: inputs.hyphenationSettings }
+            : {}),
           displayMode,
           ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
           ...(documentProperties ? { documentProperties } : {}),
@@ -476,16 +483,13 @@ export function layoutHeaderFooterStory(
       flow = flowBlocksInBox(blocks, 0, Math.max(1, contentWidth), 0, 0, {
         measurer,
         cache,
-        producer:
-          producer +
-          token +
-          (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
-          (revisionAuthorFilter ? `|reviewers:${revisionAuthorFilter.cacheKey}` : ''),
+        producer: storyProducer,
         nextLineId: () => `hf-${part.name}-line-${lineCounter++}`,
         styleCascade,
         ...(listItems ? { listItems } : {}),
         pageContext: effectiveCtx,
         ...(defaultTabStopPt !== undefined ? { defaultTabStopPt } : {}),
+        ...(inputs?.hyphenationSettings ? { hyphenationSettings: inputs.hyphenationSettings } : {}),
         displayMode,
         ...(revisionAuthorFilter ? { revisionAuthorFilter } : {}),
         ...(documentProperties ? { documentProperties } : {}),

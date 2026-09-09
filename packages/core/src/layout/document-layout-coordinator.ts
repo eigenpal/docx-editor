@@ -1,6 +1,10 @@
 // Canonical document-view composition root shared by browser and exporter hosts.
 
-import type { HeadlessDocumentView, OoxmlNode } from '@docx-editor.dev/core/store';
+import type {
+  DocumentHyphenationSettings,
+  HeadlessDocumentView,
+  OoxmlNode,
+} from '@docx-editor.dev/core/store';
 import type { InlineDrawingLayoutContext } from './drawing-layout.ts';
 import type { DocumentLinkProjectors } from './document-link-projector.ts';
 import type { FieldLinkProjector } from './field-pieces.ts';
@@ -58,6 +62,7 @@ export const SEMANTIC_LAYOUT_OPTION_ROLES = Object.freeze({
   numberingIndex: 'document-coordinator',
   listItems: 'layout-internal',
   defaultTabStopPt: 'document-coordinator',
+  hyphenationSettings: 'document-coordinator',
   projectLink: 'document-coordinator',
   projectFieldLink: 'document-coordinator',
   documentProperties: 'document-coordinator',
@@ -97,6 +102,7 @@ export interface LayoutDocumentViewOptions {
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: () => number;
+  readonly hyphenationSettings?: () => DocumentHyphenationSettings;
   readonly furniture: DocumentFurnitureSource;
   /** Body/story projection paired with every cache identity it requires. */
   readonly linkProjectors: DocumentLinkProjectors;
@@ -127,6 +133,7 @@ const _LAYOUT_DOCUMENT_VIEW_OPTION_SINKS = {
   styleCascade: 'both',
   numberingIndex: 'both',
   defaultTabStopPt: 'both',
+  hyphenationSettings: 'both',
   furniture: 'semantic-layout',
   linkProjectors: 'both',
   projectFieldLink: 'both',
@@ -157,6 +164,7 @@ type CoordinatorInputsFor<Sink extends Exclude<LayoutDocumentViewSink, 'both'>> 
  */
 export function layoutDocumentView(options: LayoutDocumentViewOptions): SemanticLayout {
   const defaultTabStopPt = options.defaultTabStopPt?.();
+  const hyphenationSettings = options.hyphenationSettings?.();
   const bodyPartName = options.view.part().name;
   const sections = enumerateDocumentSections(
     options.view.part(),
@@ -176,6 +184,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     styleCascade: options.styleCascade,
     numberingIndex: options.numberingIndex,
     defaultTabStopPt,
+    hyphenationSettings,
     inlineDrawingLayoutForPart: options.inlineDrawingLayoutForPart,
     drawingTokenForParagraphForPart: options.drawingTokenForParagraphForPart,
     drawingLayoutEpochForPart: options.drawingLayoutEpochForPart,
@@ -197,6 +206,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     styleCascade: options.styleCascade,
     numberingIndex: options.numberingIndex,
     defaultTabStopPt,
+    hyphenationSettings,
     furniture: options.furniture,
     linkProjectors: options.linkProjectors,
     projectFieldLink: options.projectFieldLink,
@@ -218,6 +228,7 @@ export function layoutDocumentView(options: LayoutDocumentViewOptions): Semantic
     producer: semanticInputs.producer,
     styleCascade: semanticInputs.styleCascade?.(),
     defaultTabStopPt: semanticInputs.defaultTabStopPt,
+    hyphenationSettings: semanticInputs.hyphenationSettings,
     numberingIndex: semanticInputs.numberingIndex?.(),
     sectionFurniture,
     furniture: sectionFurniture[sectionFurniture.length - 1],

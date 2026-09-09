@@ -1,8 +1,10 @@
 // Shared header/footer assembly for every semantic-layout host.
 
 import {
+  hyphenationSettingsFingerprint,
   resolveRelationship,
   resolveHeaderFooterResolutionBySection,
+  type DocumentHyphenationSettings,
   type HeadlessDocumentView,
   type HeaderFooterSectionResolution,
   type OoxmlNode,
@@ -52,6 +54,7 @@ export interface CreateDocumentFurnitureSourceOptions {
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: () => number;
+  readonly hyphenationSettings?: () => DocumentHyphenationSettings;
   readonly displayMode?: RevisionDisplayMode;
   readonly revisionAuthorFilter?: RevisionAuthorFilter;
   readonly inlineDrawingLayoutForPart?: (
@@ -103,6 +106,7 @@ export function createDocumentFurnitureSource(
     styleCascade,
     numberingIndex,
     defaultTabStopPt,
+    hyphenationSettings,
     displayMode,
     revisionAuthorFilter,
     inlineDrawingLayoutForPart,
@@ -125,6 +129,7 @@ export function createDocumentFurnitureSource(
       projectionEpoch: string;
       revisionAuthorFilterKey: string;
       defaultTabStopPt: number | undefined;
+      hyphenationFingerprint: string;
       drawingLayoutToken: string;
       numberingIndex: NumberingIndex | undefined;
       styleCascade: StyleCascadeTable | undefined;
@@ -187,6 +192,9 @@ export function createDocumentFurnitureSource(
     const projectionEpoch = linkProjectors.epochForPart(part.name);
     const revisionAuthorFilterKey = revisionAuthorFilter?.cacheKey ?? '';
     const currentDefaultTabStopPt = defaultTabStopPt?.();
+    const currentHyphenation = hyphenationSettings?.();
+    const hyphenationFingerprint =
+      currentHyphenation === undefined ? '' : hyphenationSettingsFingerprint(currentHyphenation);
     const drawingLayoutToken = drawingLayoutTokenForPart?.(part.name) ?? '';
     const numbering = numberingIndex?.();
     const styles = styleCascade?.();
@@ -204,6 +212,7 @@ export function createDocumentFurnitureSource(
       cached.projectionEpoch === projectionEpoch &&
       cached.revisionAuthorFilterKey === revisionAuthorFilterKey &&
       cached.defaultTabStopPt === currentDefaultTabStopPt &&
+      cached.hyphenationFingerprint === hyphenationFingerprint &&
       cached.drawingLayoutToken === drawingLayoutToken &&
       cached.numberingIndex === numbering &&
       cached.styleCascade === styles
@@ -239,6 +248,7 @@ export function createDocumentFurnitureSource(
       view.documentProperties(),
       {
         ...(numbering ? { numberingIndex: numbering } : {}),
+        ...(currentHyphenation ? { hyphenationSettings: currentHyphenation } : {}),
         projectLink,
         ...(projectFieldLink ? { projectFieldLink } : {}),
         projectionEpoch,
@@ -260,6 +270,7 @@ export function createDocumentFurnitureSource(
       projectionEpoch,
       revisionAuthorFilterKey,
       defaultTabStopPt: currentDefaultTabStopPt,
+      hyphenationFingerprint,
       drawingLayoutToken,
       numberingIndex: numbering,
       styleCascade: styles,

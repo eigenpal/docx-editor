@@ -1,5 +1,6 @@
 // Content identity for the memoized note-pagination input.
 
+import { hyphenationSettingsFingerprint } from '@docx-editor.dev/core/store';
 import { DEFAULT_REVISION_DISPLAY_MODE } from './revision-projection.ts';
 import type { LayoutNoteStoryOptions } from './note-layout.ts';
 import type { NotesLayoutInput } from './note-pagination.ts';
@@ -35,6 +36,7 @@ const NOTES_LAYOUT_INPUT_MEMO_ROLES = Object.freeze({
   styleCascade: 'identity-check',
   numberingIndex: 'identity-check',
   defaultTabStopPt: 'content-fingerprint',
+  hyphenationSettings: 'content-fingerprint',
   projectLink: 'pass-projector',
   projectLinkForPart: 'relationship-epoch-guarded',
   linkRelsEpoch: 'content-fingerprint',
@@ -65,6 +67,7 @@ const NOTE_STORY_OPTION_MEMO_ROLES = Object.freeze({
   styleCascade: 'identity-check',
   numberingIndex: 'identity-check',
   defaultTabStopPt: 'content-fingerprint',
+  hyphenationSettings: 'content-fingerprint',
   projectLink: 'pass-projector',
   projectLinkForPart: 'relationship-epoch-guarded',
   projectFieldLink: 'pass-projector',
@@ -127,6 +130,7 @@ export function fingerprintNotesInput(input: NotesLayoutInput): string | null {
     input.displayMode ?? DEFAULT_REVISION_DISPLAY_MODE,
     input.revisionAuthorFilter?.cacheKey ?? '',
     input.defaultTabStopPt ?? '',
+    input.hyphenationSettings ? hyphenationSettingsFingerprint(input.hyphenationSettings) : '',
     input.drawingLayoutEpoch ?? '',
     input.linkRelsEpoch ?? '',
     input.projectionEpoch ?? '',

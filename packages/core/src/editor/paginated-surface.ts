@@ -762,7 +762,8 @@ export function mountPaginatedSurface(
   let lastSelectionMs = 0;
 
   // Style and numbering indexes are identity-memoized and shared by every story.
-  const { styleCascade, numberingIndex, defaultTabStopPt } = createSurfaceStyleDeps(session);
+  const { styleCascade, numberingIndex, defaultTabStopPt, hyphenationSettings } =
+    createSurfaceStyleDeps(session);
   // Word's "style for following paragraph". Its own lane, because it is a question about
   // `styles.xml` rather than about the selection an Enter is standing in.
   const nextStyle = createNextStyleWrites({
@@ -881,6 +882,7 @@ export function mountPaginatedSurface(
       styleCascade,
       numberingIndex,
       defaultTabStopPt,
+      hyphenationSettings,
       // Furniture answers the document's display mode, like the body does — and it is named
       // even when it is the default, because a lane that says nothing is treated as saying
       // "not All Markup", which is what keeps markup out of the resolved views.
@@ -1235,6 +1237,7 @@ export function mountPaginatedSurface(
       producer,
       styleCascade,
       defaultTabStopPt,
+      hyphenationSettings,
       numberingIndex,
       furniture: activeFurnitureSource,
       linkProjectors,

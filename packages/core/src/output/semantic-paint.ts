@@ -71,6 +71,7 @@ import {
 } from './semantic-paint-drawings.ts';
 import { mountEquationGeometry } from './semantic-paint-equation.ts';
 import { prepareTextPaintHost, setFlushSpaceWidth } from './semantic-paint-line-end-whitespace.ts';
+import { appendDiscretionaryHyphenAfter } from './semantic-paint-discretionary-hyphen.ts';
 
 /**
  * When a field's result is drawn on its grey block, following Word's own View option.
@@ -1469,19 +1470,14 @@ function paintLine(
     else setFlushSpaceWidth(painted, span, next !== undefined, scale);
     pendingGap = gapAfter;
     const link = span.link;
+    let spanHost: HTMLElement = element;
     if (!link) {
       anchor = null;
       anchorLinkId = null;
       anchorFieldStart = null;
-      element.append(painted);
-      continue;
-    }
-    // A field atom joins the current anchor only when it is the SAME field: same link id and
-    // same model offset. Two adjacent fields share one content-keyed id when their targets
-    // match, so keying on the id alone would merge two discrete links into one anchor a screen
-    // reader announces once. Keying on the offset too keeps each field its own link unit while
-    // still letting one field's wrapped or space-split result stay a single anchor.
-    if (span.fieldAtom) {
+    } else if (span.fieldAtom) {
+      // Match the link and model offset. Adjacent fields can share a content-keyed link id.
+      // The offset keeps those fields separate while wrapped results share one anchor.
       const sameField =
         anchor !== null && anchorLinkId === link.id && anchorFieldStart === span.range.start;
       if (!sameField) {
@@ -1490,18 +1486,27 @@ function paintLine(
         anchorFieldStart = span.range.start;
         element.append(anchor);
       }
-      anchor!.append(painted);
-      continue;
+      spanHost = anchor!;
+    } else {
+      // Keep typed links and field anchors distinct, even when they are adjacent.
+      if (!anchor || anchorLinkId !== link.id || anchorFieldStart !== null) {
+        anchor = paintHyperlinkAnchor(document, link, ctx);
+        anchorLinkId = link.id;
+        anchorFieldStart = null;
+        element.append(anchor);
+      }
+      spanHost = anchor;
     }
-    // A typed link never joins a field anchor (`anchorFieldStart !== null`), and a field never
-    // joins this one, so the two link kinds stay distinct even when adjacent.
-    if (!anchor || anchorLinkId !== link.id || anchorFieldStart !== null) {
-      anchor = paintHyperlinkAnchor(document, link, ctx);
-      anchorLinkId = link.id;
-      anchorFieldStart = null;
-      element.append(anchor);
-    }
-    anchor.append(painted);
+    spanHost.append(painted);
+    appendDiscretionaryHyphenAfter(
+      document,
+      spanHost,
+      span,
+      band,
+      leading,
+      { scale, paintContext: ctx },
+      { applyRunFaceStyle, mountRunText, applyRevisionPresentation }
+    );
   }
   // Past the end of the LAST segment, so a trailing image in either half still flushes.
   appendDrawingAdvancesBefore(

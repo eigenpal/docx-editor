@@ -38,6 +38,7 @@ export interface CreateDocumentNotesInputOptions {
   readonly styleCascade?: () => StyleCascadeTable | undefined;
   readonly numberingIndex?: () => NumberingIndex;
   readonly defaultTabStopPt?: number;
+  readonly hyphenationSettings?: import('@docx-editor.dev/core/store').DocumentHyphenationSettings;
   readonly inlineDrawingLayoutForPart?: (
     partName: string
   ) => InlineDrawingLayoutContext | undefined;
@@ -148,6 +149,7 @@ export function createDocumentNotesInput(
     styleCascade: options.styleCascade?.(),
     numberingIndex: options.numberingIndex?.(),
     defaultTabStopPt: options.defaultTabStopPt,
+    hyphenationSettings: options.hyphenationSettings,
     displayMode: options.displayMode,
     revisionAuthorFilter: options.revisionAuthorFilter,
     projectLinkForPart: options.linkProjectors.projectLinkForPart,

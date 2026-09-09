@@ -9,6 +9,7 @@ import {
   PAGE_BREAK_CHAR,
   twips,
   twipsToPoints,
+  type DocumentHyphenationSettings,
   type DocumentProperties,
   type OoxmlNode,
   type OoxmlProperty,
@@ -78,6 +79,16 @@ import {
 } from './drawing-exclusion.ts';
 import { createEquationLayouter } from './equation-layout.ts';
 import { isCollapsibleLineEndWhitespace } from './line-end-whitespace.ts';
+import {
+  hyphenateOverflowingCandidate,
+  leadingLetterRun,
+  letterWordTail,
+  nextOversizedEmptyLineCut,
+  placeDiscretionaryHyphenBreak,
+} from './paragraph-hyphenation.ts';
+import { paragraphSuppressAutoHyphens } from './paragraph-suppress-auto-hyphens.ts';
+import { lastWinsRunLanguage } from './run-language.ts';
+import { opensWordAfter, wordBoundaries } from './paragraph-word-boundaries.ts';
 import {
   candidateNeedsWrap,
   expandableShrinkBudget,
@@ -215,6 +226,10 @@ export interface ParagraphFlowOptions {
    * When omitted, falls back to the content `inheritedRunProperties` argument.
    */
   readonly markRunProperties?: readonly OoxmlProperty[];
+  /** Document hyphenation settings. Absent keeps hyphenation off. */
+  readonly hyphenationSettings?: DocumentHyphenationSettings;
+  /** Cascaded `w:suppressAutoHyphens`. Direct `w:pPr` is the fallback. */
+  readonly suppressAutoHyphens?: boolean;
 }
 
 /** One measurable piece of a paragraph: text carrying one property set. */
@@ -254,45 +269,6 @@ interface Piece {
 
 export function propertiesOf(container: OoxmlNode | undefined): OoxmlProperty[] {
   return propertiesOfRunContainer(container);
-}
-
-/**
- * Dashes a line may break AFTER, the way Word wraps "ALPHA-PRIME" as "ALPHA-" / "PRIME":
- * hyphen-minus, hyphen, en dash, em dash. U+2011 NON-BREAKING HYPHEN is deliberately
- * absent — its whole meaning is "no wrap here".
- */
-const BREAK_AFTER_DASH = new Set(['-', '‐', '–', '—']);
-
-/**
- * Break points inside a piece: after each run of spaces (words stay whole), after a dash
- * that sits between non-space text, and with each tab as its own atom so tab-stop
- * geometry can size `\t` independently of neighbouring text.
- *
- * A dash run breaks only after its LAST dash, mirroring how a run of spaces is one
- * boundary; a dash beside a space adds nothing the space boundary does not already give.
- */
-function wordBoundaries(text: string): number[] {
-  const boundaries: number[] = [];
-  for (let index = 0; index < text.length; index += 1) {
-    const ch = text[index]!;
-    if (ch === '\t') {
-      if (index > 0 && boundaries[boundaries.length - 1] !== index) boundaries.push(index);
-      boundaries.push(index + 1);
-    } else if (ch === ' ') {
-      boundaries.push(index + 1);
-    } else if (
-      BREAK_AFTER_DASH.has(ch) &&
-      index > 0 &&
-      text[index - 1] !== ' ' &&
-      index + 1 < text.length &&
-      text[index + 1] !== ' ' &&
-      !BREAK_AFTER_DASH.has(text[index + 1]!)
-    ) {
-      boundaries.push(index + 1);
-    }
-  }
-  if (boundaries[boundaries.length - 1] !== text.length) boundaries.push(text.length);
-  return boundaries;
 }
 
 /**
@@ -527,6 +503,10 @@ export function breakParagraph(
       ? undefined
       : paragraph.children.find((child) => child.kind === 'paragraphProperties');
   const alignment = flow?.alignment ?? paragraphAlignment(propertiesOf(directPPr));
+  const suppressAutoHyphens =
+    flow?.suppressAutoHyphens ?? paragraphSuppressAutoHyphens(propertiesOf(directPPr));
+  const templatePunct = flow?.hyphenationSettings?.autoHyphenation === true;
+  let consecutiveHyphenatedLines = 0;
 
   // Model ranges the caret must step over. Collected during the piece walk rather than derived
   // from the emitted spans, because in the proposed result a deletion produces no span at all
@@ -690,7 +670,7 @@ export function breakParagraph(
         continue;
       }
       let consumed = 0;
-      for (const boundary of wordBoundaries(piece.text)) {
+      for (const boundary of wordBoundaries(piece.text, templatePunct)) {
         const candidate = piece.text.slice(consumed, boundary);
         if (candidate.length === 0) continue;
         const style = styleForFontSlot(piece.style, piece.fontSlot);
@@ -1148,6 +1128,9 @@ export function breakParagraph(
     markWrapAdvances();
     const deleted = deletedWithin(line.start, line.end);
     if (deleted.length > 0) line.deletedRanges = deleted;
+    consecutiveHyphenatedLines = line.spans.at(-1)?.discretionaryHyphen
+      ? consecutiveHyphenatedLines + 1
+      : 0;
     lines.push(line);
     wordStartSpan = -1;
     wordStartWidth = 0;
@@ -1336,7 +1319,8 @@ export function breakParagraph(
     const faceStyle = styleForFontSlot(piece.style, piece.fontSlot);
     const metrics = measurer.lineMetrics(faceStyle);
     let consumed = 0;
-    for (const boundary of wordBoundaries(piece.text)) {
+    for (const boundary of wordBoundaries(piece.text, templatePunct)) {
+      if (boundary <= consumed) continue;
       const candidate = piece.text.slice(consumed, boundary);
       if (candidate.length === 0) continue;
       // Projected PAGE/NUMPAGES digits publish the suppressed cached-result model range (or a
@@ -1439,19 +1423,9 @@ export function breakParagraph(
       // a wider measureText (eachPage) while painting the real digits.
       const measureSource = piece.measureText ?? candidate;
       let width = measurer.measure(displayText(measureSource, faceStyle), faceStyle);
-      // A candidate may open a line only at a real break opportunity. Within a piece,
-      // `wordBoundaries` cuts after spaces, dashes and tabs, so every candidate but the
-      // first is one. The FIRST candidate of a piece continues whatever the previous piece
-      // ended with, so it is a break opportunity only if that ended in whitespace \u2014 or in a
-      // dash, which stays a break opportunity across run boundaries (a tracked change can
-      // split "ALPHA-" and "PRIME" into different runs without gluing them).
-      const opensWord =
-        consumed > 0 ||
-        lastEmitted === '' ||
-        /[\s\u00a0]$/.test(lastEmitted) ||
-        /^[\s\u00a0]/.test(candidate) ||
-        (BREAK_AFTER_DASH.has(lastEmitted[lastEmitted.length - 1]!) &&
-          !BREAK_AFTER_DASH.has(candidate[0]!));
+      // A candidate may open a line only at a real break. Later cuts in a piece already
+      // are. The first cut continues the previous piece, so `opensWordAfter` decides.
+      const opensWord = consumed > 0 || opensWordAfter(lastEmitted, candidate, templatePunct);
       if (opensWord) {
         wordStartSpan = line.spans.length;
         wordStartWidth = line.width;
@@ -1469,10 +1443,32 @@ export function breakParagraph(
         ? 0
         : visibleCandidateWidth(candidate, width, faceStyle, measurer);
       const hasLineContent = line.spans.length > 0 || line.drawings.length > 0;
+      let remaining = candidate;
+      let remainingStart = piece.start + consumed;
+      let remainingWidth = width;
+      let hyphenated = false;
+      const measureDrawn = (text: string) =>
+        measurer.measure(displayText(text, faceStyle), faceStyle);
+      const letterPrefix = leadingLetterRun(candidate);
+      const wrapVisibleWidth =
+        !lineEndWhitespace && letterPrefix === candidate && candidate.length > 0
+          ? Math.max(
+              visibleWidth,
+              measureDrawn(
+                candidate + letterWordTail(pieces, pieceIndex, consumed + candidate.length)
+              )
+            )
+          : visibleWidth;
+      const spanExtras = {
+        ...(piece.link ? { link: piece.link } : {}),
+        ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+        ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
+        ...revisionsOf(piece),
+      };
       if (hasLineContent && (opensWord || wordStartSpan <= 0)) {
         const wrapInput = () => ({
           lineWidth: line.width,
-          visibleWidth,
+          visibleWidth: wrapVisibleWidth,
           available: lineAvailable(),
           allowShrink: alignment === 'both' && placeableSuffixes[pieceIndex]![boundary] === 1,
           shrinkBudget: expandableShrinkBudget(line.spans, measurer),
@@ -1481,8 +1477,50 @@ export function breakParagraph(
           if (tryAdvanceToNextPassage() && !candidateNeedsWrap(wrapInput())) {
             // carry on in the next horizontal passage on this line
           } else {
-            closeLine();
-            if (!ensurePlacementWidth(width)) continue;
+            const hyphen = opensWord
+              ? hyphenateOverflowingCandidate({
+                  settings: flow?.hyphenationSettings,
+                  suppressAutoHyphens,
+                  consecutiveHyphenatedLines,
+                  slackPt: lineAvailable() - line.width,
+                  language: lastWinsRunLanguage(piece.props),
+                  capsFormatted: faceStyle.caps,
+                  measure: measureDrawn,
+                  candidate,
+                  pieces,
+                  pieceIndex,
+                  consumed,
+                  layoutOwned,
+                  measureText: piece.measureText,
+                })
+              : null;
+            if (hyphen) {
+              const placed = placeDiscretionaryHyphenBreak({
+                hyphen,
+                candidate,
+                paragraphId,
+                prefixStart: piece.start + consumed,
+                x: lineOrigin() + line.width,
+                height: metrics.height,
+                props: piece.props,
+                style: piece.style,
+                extras: spanExtras,
+              });
+              line.spans.push(placed.span);
+              line.width += placed.span.box.width;
+              line.height = Math.max(line.height, metrics.height);
+              line.baseline = Math.max(line.baseline, metrics.baseline);
+              line.end = placed.span.range.end;
+              closeLine();
+              remaining = placed.remaining;
+              remainingStart = placed.remainingStart;
+              remainingWidth = measureDrawn(remaining);
+              lastEmitted = '';
+              hyphenated = true;
+            } else {
+              closeLine();
+              if (!ensurePlacementWidth(width)) continue;
+            }
           }
         }
       } else if (
@@ -1529,60 +1567,59 @@ export function breakParagraph(
       ) {
         if (!ensurePlacementWidth(width)) continue;
       }
-      // A word wider than an EMPTY line has no boundary to wrap at, and Word breaks it at
-      // the margin rather than letting it run past the right edge — or, in a table cell,
-      // into the neighbouring cell. The longest fitting prefix closes each full line and
-      // the tail falls through to ordinary placement. Layout-owned pieces stay whole:
-      // every span they emit publishes the piece's model range, so cutting one would
-      // publish the same range twice; `measureText` pieces reserve a width their sliced
-      // text does not measure to.
-      let remaining = candidate;
-      let remainingStart = piece.start + consumed;
-      let remainingWidth = width;
+      // Oversized empty-line words hyphenate when eligible, else cut at the margin.
+      // Layout-owned and `measureText` pieces stay whole so their model range is unique.
       if (!layoutOwned && piece.measureText === undefined) {
         while (
           line.spans.length === 0 &&
           remaining.length > 1 &&
           remainingWidth > lineAvailable()
         ) {
-          let low = 1;
-          let high = remaining.length - 1;
-          let fitLength = 1;
-          while (low <= high) {
-            const mid = (low + high) >> 1;
-            const midWidth = measurer.measure(
-              displayText(remaining.slice(0, mid), faceStyle),
-              faceStyle
-            );
-            if (midWidth <= lineAvailable()) {
-              fitLength = mid;
-              low = mid + 1;
-            } else {
-              high = mid - 1;
-            }
-          }
-          const prefix = remaining.slice(0, fitLength);
-          const prefixWidth = measurer.measure(displayText(prefix, faceStyle), faceStyle);
-          line.spans.push({
-            range: { paragraphId, start: remainingStart, end: remainingStart + fitLength },
-            text: prefix,
+          const cut = nextOversizedEmptyLineCut({
+            remaining,
+            remainingStart,
+            availablePt: lineAvailable(),
+            measure: measureDrawn,
+            hyphen: {
+              settings: flow?.hyphenationSettings,
+              suppressAutoHyphens,
+              consecutiveHyphenatedLines,
+              language: lastWinsRunLanguage(piece.props),
+              capsFormatted: faceStyle.caps,
+              measure: measureDrawn,
+              pieces,
+              pieceIndex,
+              consumed: remainingStart - piece.start,
+              layoutOwned,
+              measureText: piece.measureText,
+            },
+            paragraphId,
+            x: lineOrigin() + line.width,
+            height: metrics.height,
             props: piece.props,
             style: piece.style,
-            box: { x: lineOrigin() + line.width, y: 0, width: prefixWidth, height: metrics.height },
-            ...(piece.link ? { link: piece.link } : {}),
-            ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
-            ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
-            ...revisionsOf(piece),
+            extras: spanExtras,
           });
-          line.width += prefixWidth;
+          if (!cut) break;
+          line.spans.push(cut.span);
+          line.width += cut.span.box.width;
           line.height = Math.max(line.height, metrics.height);
           line.baseline = Math.max(line.baseline, metrics.baseline);
-          line.end = remainingStart + fitLength;
+          line.end = cut.span.range.end;
           closeLine();
-          remaining = remaining.slice(fitLength);
-          remainingStart += fitLength;
-          remainingWidth = measurer.measure(displayText(remaining, faceStyle), faceStyle);
+          remaining = cut.remaining;
+          remainingStart = cut.remainingStart;
+          remainingWidth = cut.remainingWidth;
+          if (cut.usedHyphen) {
+            lastEmitted = '';
+            hyphenated = true;
+          }
         }
+      }
+      if (remaining.length === 0) {
+        lastEmitted = hyphenated ? '' : candidate;
+        consumed = boundary;
+        continue;
       }
       line.spans.push({
         range: layoutOwned
@@ -1603,7 +1640,7 @@ export function breakParagraph(
       line.height = Math.max(line.height, metrics.height);
       line.baseline = Math.max(line.baseline, metrics.baseline);
       line.end = layoutOwned ? piece.end : piece.start + boundary;
-      lastEmitted = candidate;
+      lastEmitted = hyphenated ? remaining : candidate;
       consumed = boundary;
     }
   }

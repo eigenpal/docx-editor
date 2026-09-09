@@ -65,6 +65,7 @@ interface PassProducerEntry {
   readonly base: string | undefined;
   readonly noteMarks: NoteMarkContext | undefined;
   readonly defaultTabStopPt: number | undefined;
+  readonly hyphenationFingerprint: string | undefined;
   readonly displayMode: RevisionDisplayMode;
   readonly authorFilter: RevisionAuthorFilter | undefined;
   readonly pageNumberFormat: string | undefined;
@@ -86,6 +87,7 @@ function passProducerEntryMatches(
   base: string | undefined,
   noteMarks: NoteMarkContext | undefined,
   defaultTabStopPt: number | undefined,
+  hyphenationFingerprint: string | undefined,
   displayMode: RevisionDisplayMode,
   authorFilter: RevisionAuthorFilter | undefined,
   pageNumberFormat: string | undefined
@@ -95,6 +97,7 @@ function passProducerEntryMatches(
     entry.base === base &&
     entry.noteMarks === noteMarks &&
     entry.defaultTabStopPt === defaultTabStopPt &&
+    entry.hyphenationFingerprint === hyphenationFingerprint &&
     entry.displayMode === displayMode &&
     entry.authorFilter === authorFilter &&
     entry.pageNumberFormat === pageNumberFormat
@@ -123,7 +126,8 @@ export function passProducerOf(
   defaultTabStopPt: number | undefined,
   displayMode: RevisionDisplayMode,
   authorFilter?: RevisionAuthorFilter,
-  pageNumberFormat?: string
+  pageNumberFormat?: string,
+  hyphenationFingerprint?: string
 ): string {
   const entry = styleCascade ? passProducersByCascade.get(styleCascade) : cascadeFreeProducerSlot;
   if (
@@ -132,6 +136,7 @@ export function passProducerOf(
       base,
       noteMarks,
       defaultTabStopPt,
+      hyphenationFingerprint,
       displayMode,
       authorFilter,
       pageNumberFormat
@@ -144,6 +149,7 @@ export function passProducerOf(
     (styleCascade ? `|sc:${styleCascade.cacheToken}` : '') +
     (noteMarks ? `|nm:${noteMarksCacheToken(noteMarks)}` : '') +
     (defaultTabStopPt !== undefined ? `|dts:${defaultTabStopPt}` : '') +
+    (hyphenationFingerprint !== undefined ? `|${hyphenationFingerprint}` : '') +
     (displayMode === DEFAULT_REVISION_DISPLAY_MODE ? '' : `|rev:${displayMode}`) +
     (authorFilter ? `|reviewers:${authorFilter.cacheKey}` : '') +
     (pageNumberFormat !== undefined ? `|pnf:${pageNumberFormat}` : '');
@@ -151,6 +157,7 @@ export function passProducerOf(
     base,
     noteMarks,
     defaultTabStopPt,
+    hyphenationFingerprint,
     displayMode,
     authorFilter,
     pageNumberFormat,
