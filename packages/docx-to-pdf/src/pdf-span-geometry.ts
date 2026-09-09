@@ -18,13 +18,25 @@ export function compatibleSpanBaseline(
   lineBaseline: number,
   baselineShiftPt: number,
   isFooter: boolean,
-  profile: PdfCompatibilityProfile | undefined
+  profile: PdfCompatibilityProfile | undefined,
+  paragraphAnchor?: Readonly<{ readonly lineY: number; readonly baseline: number }>
 ): number {
   const continuous = coreYToPdfY(
     storyOriginY - page.box.y + lineY + lineBaseline - baselineShiftPt,
     page.box.height
   );
-  return profile === 'word-macos-300dpi'
-    ? quantizeWordMacos300DpiStoryBaseline(continuous, isFooter)
-    : continuous;
+  if (profile !== 'word-macos-300dpi') return continuous;
+  if (isFooter || !paragraphAnchor) {
+    return quantizeWordMacos300DpiStoryBaseline(continuous, isFooter);
+  }
+  const anchor = coreYToPdfY(
+    storyOriginY - page.box.y + paragraphAnchor.lineY + paragraphAnchor.baseline,
+    page.box.height
+  );
+  const relativeBaseline = lineY + lineBaseline - paragraphAnchor.lineY - paragraphAnchor.baseline;
+  return (
+    quantizeWordMacos300DpiStoryBaseline(anchor, false) -
+    quantizeWordMacos300DpiStoryBaseline(relativeBaseline, false) +
+    baselineShiftPt
+  );
 }

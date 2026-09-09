@@ -294,6 +294,7 @@ function appendSpanCommands(
   lineBaseline: number,
   span: StyleSpanRecord,
   line: LineRecord,
+  paragraphFirstLine: LineRecord,
   paragraphOrder: ReadonlyMap<string, number>,
   absoluteBox: Readonly<{
     readonly x: number;
@@ -355,7 +356,11 @@ function appendSpanCommands(
     lineBaseline,
     baselineShiftPtOf(faceStyle),
     storyKind === 'footer',
-    profile
+    profile,
+    {
+      lineY: paragraphFirstLine.box.y,
+      baseline: paragraphFirstLine.baseline,
+    }
   );
   const presentation = pdfRevisionPresentationOf(span.revisions);
   let textStyle = pdfTextStyleFromResolvedRunStyle(span.style, span.fontSlot);
@@ -785,6 +790,7 @@ function* appendPaintHostLayer(
       visit.line.baseline,
       visit.span,
       visit.line,
+      visit.paragraph.lines[0] ?? visit.line,
       paragraphOrder,
       visit.absoluteBox,
       commands,

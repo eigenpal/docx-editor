@@ -62,6 +62,8 @@ export interface PdfUnderlineSegment {
   readonly gapAbsorptionPt: number;
   /** Rendered width removed only when a wrapped trailing U+0020 hangs past the line edge. */
   readonly excludedTrailingSpacePt: number;
+  /** Optional compatibility grid for the final merged underline edges. */
+  readonly deviceGridPt?: number;
 }
 
 const EXCLUDE_TRAILING_UNDERLINE_SPACE = Symbol('exclude-trailing-underline-space');
@@ -314,10 +316,15 @@ export function extendSingleUnderlineRun(
 
 /** PDF user-space fill for one merged single underline. Origin is the page lower-left. */
 export function pdfUnderlineFillRect(segment: PdfUnderlineSegment): PdfRect {
+  const continuousRight = segment.x + segment.width - segment.excludedTrailingSpacePt;
+  const unit = segment.deviceGridPt;
+  const snapsEdges = unit !== undefined && Number.isFinite(unit) && unit > 0;
+  const x = snapsEdges ? Math.round(segment.x / unit) * unit : segment.x;
+  const right = snapsEdges ? Math.round(continuousRight / unit) * unit : continuousRight;
   return Object.freeze({
-    x: segment.x,
+    x,
     y: segment.baseline - segment.offsetTopPt - segment.thicknessPt,
-    width: Math.max(0, segment.width - segment.excludedTrailingSpacePt),
+    width: Math.max(0, right - x),
     height: segment.thicknessPt,
   });
 }

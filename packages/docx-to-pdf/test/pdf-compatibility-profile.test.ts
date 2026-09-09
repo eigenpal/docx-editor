@@ -107,6 +107,7 @@ describe('word-macos-300dpi compatibility profile', () => {
 
   test('snaps body baselines directly to the Word grid', () => {
     const targetPage = page(0, 612, 792);
+    const anchor = { lineY: 100, baseline: 9 };
     const first = compatibleSpanBaseline(
       targetPage,
       72,
@@ -114,7 +115,8 @@ describe('word-macos-300dpi compatibility profile', () => {
       9,
       0,
       false,
-      PROFILE.compatibilityProfile
+      PROFILE.compatibilityProfile,
+      anchor
     );
     const second = compatibleSpanBaseline(
       targetPage,
@@ -123,12 +125,25 @@ describe('word-macos-300dpi compatibility profile', () => {
       9,
       0,
       false,
-      PROFILE.compatibilityProfile
+      PROFILE.compatibilityProfile,
+      anchor
+    );
+    const third = compatibleSpanBaseline(
+      targetPage,
+      72,
+      124.75,
+      9,
+      0,
+      false,
+      PROFILE.compatibilityProfile,
+      anchor
     );
 
     expect(first - second).toBeCloseTo(12.48, 12);
+    expect(second - third).toBeCloseTo(12.24, 12);
     expect(first / 0.24).toBeCloseTo(Math.round(first / 0.24), 12);
     expect(second / 0.24).toBeCloseTo(Math.round(second / 0.24), 12);
+    expect(third / 0.24).toBeCloseTo(Math.round(third / 0.24), 12);
   });
 
   test('preserves line-relative run advances', () => {

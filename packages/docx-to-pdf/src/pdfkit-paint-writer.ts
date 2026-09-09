@@ -486,6 +486,7 @@ function noteSingleUnderline(
     linkKey: pdfUnderlineLinkKey(context.commands[context.commandIndex + 1]),
     gapAbsorptionPt: command.text.endsWith(' ') ? (command.underlineGapAbsorptionPt ?? 0) : 0,
     excludedTrailingSpacePt,
+    ...(context.singleUnderlineGridPt ? { deviceGridPt: context.singleUnderlineGridPt } : {}),
   });
   const pending = context.underline.pending;
   if (pending && canMergeSingleUnderlineRuns(pending, segment)) {

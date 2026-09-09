@@ -263,6 +263,19 @@ describe('canMergeSingleUnderlineRuns', () => {
     expect(rect.x).toBe(89.676);
     expect(rect.width).toBeCloseTo(415.289, 12);
   });
+
+  test('snaps final underline edges to the compatibility grid', () => {
+    const rect = pdfUnderlineFillRect(
+      segment({
+        x: 89.76,
+        width: 54.089,
+        deviceGridPt: WORD_PDF_DEVICE_GRID_PT,
+      })
+    );
+
+    expect(rect.x).toBeCloseTo(89.76, 12);
+    expect(rect.width).toBeCloseTo(54, 12);
+  });
 });
 
 describe('pdfUnderlineJustifyGapAbsorptionPt', () => {
