@@ -36,7 +36,27 @@ def write_pdf(path: Path, pages: list[Image.Image]) -> None:
     )
 
 
-@unittest.skipUnless(shutil.which("pdfinfo") and shutil.which("pdftoppm"), "Poppler is required")
+def word(
+    text: str,
+    page_number: int,
+    x: float,
+    y: float,
+    width: float = 20,
+) -> dict[str, object]:
+    return {
+        "text": text,
+        "page": page_number,
+        "x0": x,
+        "y0": y,
+        "x1": x + width,
+        "y1": y + 10,
+    }
+
+
+@unittest.skipUnless(
+    shutil.which("pdfinfo") and shutil.which("pdftoppm") and shutil.which("pdftotext"),
+    "Poppler is required",
+)
 class PdfVisualDiffTest(unittest.TestCase):
     def test_reports_page_pixel_differences_and_writes_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -133,6 +153,77 @@ class PdfVisualDiffTest(unittest.TestCase):
     def test_validates_strong_threshold(self) -> None:
         with self.assertRaises(ValueError):
             MODULE.parse_thresholds("0,8", 256)
+
+    def test_ink_distance_separates_one_pixel_from_far_movement(self) -> None:
+        reference = page(20)
+        near = page(21)
+        far = page(40)
+
+        near_metrics = MODULE.ink_distance_metrics(reference, near, 72)
+        far_metrics = MODULE.ink_distance_metrics(reference, far, 72)
+
+        self.assertEqual(near_metrics["distanceBuckets"]["beyond8Pt"], 0)
+        self.assertGreater(far_metrics["distanceBuckets"]["beyond8Pt"], 0)
+        self.assertGreater(
+            far_metrics["farUnmatchedFraction"],
+            near_metrics["farUnmatchedFraction"],
+        )
+
+    def test_text_movement_makes_cross_page_changes_critical(self) -> None:
+        reference = [word("alpha", 1, 10, 10), word("beta", 1, 40, 10)]
+        candidate = [word("alpha", 1, 11, 10), word("beta", 2, 40, 10)]
+
+        summary, pairs = MODULE.compare_word_movement(reference, candidate)
+
+        self.assertEqual(summary["severity"], "critical")
+        self.assertEqual(summary["distanceBuckets"]["crossPage"], 1)
+        self.assertEqual(pairs[0]["distancePt"], 1)
+        self.assertIsNone(pairs[1]["distancePt"])
+
+    def test_text_movement_ranks_far_changes_above_small_changes(self) -> None:
+        reference = [word("alpha", 1, 10, 10)]
+        near, _ = MODULE.compare_word_movement(reference, [word("alpha", 1, 11, 10)])
+        far, _ = MODULE.compare_word_movement(reference, [word("alpha", 1, 30, 10)])
+
+        self.assertEqual(near["severity"], "minor")
+        self.assertEqual(far["severity"], "major")
+        self.assertGreater(far["movementScore"], near["movementScore"])
+
+    def test_text_movement_pairs_repeated_words_in_reading_order(self) -> None:
+        reference = [
+            word("the", 1, 10, 10),
+            word("the", 1, 40, 10),
+            word("the", 1, 70, 10),
+        ]
+        candidate = [
+            word("the", 1, 10, 10),
+            word("the", 1, 60, 10),
+            word("the", 1, 70, 10),
+        ]
+
+        summary, pairs = MODULE.compare_word_movement(reference, candidate)
+
+        self.assertEqual(summary["distanceBuckets"]["beyond8Pt"], 1)
+        self.assertEqual([pair["distancePt"] for pair in pairs], [0, 20, 0])
+
+    def test_deleted_word_is_not_classified_as_movement(self) -> None:
+        reference = [word("kept", 1, 10, 10), word("deleted", 1, 40, 10)]
+        candidate = [word("kept", 1, 10, 10)]
+
+        summary, _ = MODULE.compare_word_movement(reference, candidate)
+
+        self.assertEqual(summary["severity"], "equal")
+        self.assertEqual(summary["missingWordCount"], 1)
+        self.assertEqual(summary["extraWordCount"], 0)
+
+    def test_word_center_ignores_equal_font_width_growth(self) -> None:
+        reference = [word("alpha", 1, 10, 10, 20)]
+        candidate = [word("alpha", 1, 8, 10, 24)]
+
+        summary, pairs = MODULE.compare_word_movement(reference, candidate)
+
+        self.assertEqual(summary["severity"], "equal")
+        self.assertEqual(pairs[0]["distancePt"], 0)
 
 
 if __name__ == "__main__":

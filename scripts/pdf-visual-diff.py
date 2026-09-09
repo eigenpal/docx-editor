@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import math
 import re
@@ -11,11 +12,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import unicodedata
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
 from PIL import __version__ as pillow_version
-from PIL import Image, ImageChops, ImageDraw, ImageOps, ImageStat
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageOps, ImageStat
 
 DEFAULT_THRESHOLDS = (0, 8, 16, 28, 64)
 MARKER = ".pdf-visual-diff"
@@ -28,10 +31,14 @@ def command_path(name: str) -> str:
     return path
 
 
-def run(command: list[str], timeout_seconds: int = 120) -> str:
+def run(
+    command: list[str],
+    timeout_seconds: int = 120,
+    merge_stderr: bool = True,
+) -> str:
     return subprocess.check_output(
         command,
-        stderr=subprocess.STDOUT,
+        stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
         text=True,
         timeout=timeout_seconds,
     )
@@ -103,6 +110,313 @@ def validate_render_budget(
     return total
 
 
+def normalized_word(text: str) -> str:
+    return " ".join(unicodedata.normalize("NFC", text).split())
+
+
+def extract_words(
+    pdf: Path,
+    max_words: int,
+    max_words_per_page: int,
+    max_bbox_bytes: int,
+    timeout_seconds: int,
+) -> list[dict[str, Any]]:
+    xml = run(
+        [
+            command_path("pdftotext"),
+            "-bbox",
+            "-enc",
+            "UTF-8",
+            str(pdf),
+            "-",
+        ],
+        timeout_seconds,
+        merge_stderr=False,
+    )
+    if len(xml.encode("utf-8")) > max_bbox_bytes:
+        raise RuntimeError(f"{pdf} bbox output exceeds --max-bbox-bytes {max_bbox_bytes}")
+    root = ET.fromstring(xml)
+    words: list[dict[str, Any]] = []
+    pages = [element for element in root.iter() if element.tag.rsplit("}", 1)[-1] == "page"]
+    for page_index, page in enumerate(pages, start=1):
+        page_words = 0
+        for element in page.iter():
+            if element.tag.rsplit("}", 1)[-1] != "word":
+                continue
+            text = normalized_word(element.text or "")
+            if not text:
+                continue
+            words.append(
+                {
+                    "text": text,
+                    "page": page_index,
+                    "x0": float(element.attrib["xMin"]),
+                    "y0": float(element.attrib["yMin"]),
+                    "x1": float(element.attrib["xMax"]),
+                    "y1": float(element.attrib["yMax"]),
+                }
+            )
+            page_words += 1
+            if page_words > max_words_per_page:
+                raise RuntimeError(
+                    f"{pdf} page {page_index} has more than --max-words-per-page "
+                    f"{max_words_per_page}"
+                )
+            if len(words) > max_words:
+                raise RuntimeError(f"{pdf} has more than --max-words {max_words}")
+    return words
+
+
+def word_matches(
+    reference: list[dict[str, Any]],
+    candidate: list[dict[str, Any]],
+) -> list[tuple[int, int]]:
+    matches: list[tuple[int, int]] = []
+    matched_reference: set[int] = set()
+    matched_candidate: set[int] = set()
+    pages = sorted({word["page"] for word in reference} | {word["page"] for word in candidate})
+
+    for page in pages:
+        reference_indices = [
+            index for index, word in enumerate(reference) if word["page"] == page
+        ]
+        candidate_indices = [
+            index for index, word in enumerate(candidate) if word["page"] == page
+        ]
+        matcher = difflib.SequenceMatcher(
+            None,
+            [reference[index]["text"] for index in reference_indices],
+            [candidate[index]["text"] for index in candidate_indices],
+            autojunk=False,
+        )
+        for block in matcher.get_matching_blocks():
+            for offset in range(block.size):
+                reference_index = reference_indices[block.a + offset]
+                candidate_index = candidate_indices[block.b + offset]
+                matches.append((reference_index, candidate_index))
+                matched_reference.add(reference_index)
+                matched_candidate.add(candidate_index)
+
+    def pair_residuals(same_page: bool) -> None:
+        reference_groups: dict[tuple[Any, ...], list[int]] = {}
+        candidate_groups: dict[tuple[Any, ...], list[int]] = {}
+        for index, word in enumerate(reference):
+            if index in matched_reference:
+                continue
+            key = (word["page"], word["text"]) if same_page else (word["text"],)
+            reference_groups.setdefault(key, []).append(index)
+        for index, word in enumerate(candidate):
+            if index in matched_candidate:
+                continue
+            key = (word["page"], word["text"]) if same_page else (word["text"],)
+            candidate_groups.setdefault(key, []).append(index)
+        for key in sorted(reference_groups.keys() & candidate_groups.keys()):
+            reference_indices = sorted(
+                reference_groups[key],
+                key=lambda index: (
+                    reference[index]["page"],
+                    reference[index]["y0"],
+                    reference[index]["x0"],
+                    index,
+                ),
+            )
+            candidate_indices = sorted(
+                candidate_groups[key],
+                key=lambda index: (
+                    candidate[index]["page"],
+                    candidate[index]["y0"],
+                    candidate[index]["x0"],
+                    index,
+                ),
+            )
+            for reference_index, candidate_index in zip(reference_indices, candidate_indices):
+                matches.append((reference_index, candidate_index))
+                matched_reference.add(reference_index)
+                matched_candidate.add(candidate_index)
+
+    pair_residuals(True)
+    pair_residuals(False)
+    matches.sort()
+    return matches
+
+
+def compare_word_movement(
+    reference: list[dict[str, Any]],
+    candidate: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    matched_indices = word_matches(reference, candidate)
+    matched_reference = {pair[0] for pair in matched_indices}
+    matched_candidate = {pair[1] for pair in matched_indices}
+    buckets = {
+        "within0_5Pt": 0,
+        "between0_5And2Pt": 0,
+        "between2And8Pt": 0,
+        "beyond8Pt": 0,
+        "crossPage": 0,
+    }
+    distances: list[float] = []
+    pairs: list[dict[str, Any]] = []
+    weighted_penalty = 0.0
+    for reference_index, candidate_index in matched_indices:
+        reference_word = reference[reference_index]
+        candidate_word = candidate[candidate_index]
+        if reference_word["page"] != candidate_word["page"]:
+            buckets["crossPage"] += 1
+            weighted_penalty += 100
+            distance = None
+        else:
+            distance = math.hypot(
+                (candidate_word["x0"] + candidate_word["x1"]) / 2
+                - (reference_word["x0"] + reference_word["x1"]) / 2,
+                (candidate_word["y0"] + candidate_word["y1"]) / 2
+                - (reference_word["y0"] + reference_word["y1"]) / 2,
+            )
+            distances.append(distance)
+            if distance <= 0.5:
+                buckets["within0_5Pt"] += 1
+            elif distance <= 2:
+                buckets["between0_5And2Pt"] += 1
+            elif distance <= 8:
+                buckets["between2And8Pt"] += 1
+            else:
+                buckets["beyond8Pt"] += 1
+            weighted_penalty += min(100, distance * 5)
+        pairs.append(
+            {
+                "text": reference_word["text"],
+                "reference": reference_word,
+                "candidate": candidate_word,
+                "distancePt": round(distance, 4) if distance is not None else None,
+            }
+        )
+
+    unmatched_reference = len(reference) - len(matched_reference)
+    unmatched_candidate = len(candidate) - len(matched_candidate)
+    if buckets["crossPage"]:
+        severity = "critical"
+    elif buckets["beyond8Pt"]:
+        severity = "major"
+    elif buckets["between2And8Pt"]:
+        severity = "moderate"
+    elif buckets["between0_5And2Pt"]:
+        severity = "minor"
+    else:
+        severity = "equal"
+    sorted_distances = sorted(distances)
+    denominator = max(1, len(matched_indices) * 2)
+    largest_movements = sorted(
+        (
+            {
+                "text": pair["text"],
+                "referencePage": pair["reference"]["page"],
+                "candidatePage": pair["candidate"]["page"],
+                "referenceXPt": round(pair["reference"]["x0"], 3),
+                "referenceYPt": round(pair["reference"]["y0"], 3),
+                "candidateXPt": round(pair["candidate"]["x0"], 3),
+                "candidateYPt": round(pair["candidate"]["y0"], 3),
+                "distancePt": pair["distancePt"],
+            }
+            for pair in pairs
+            if pair["distancePt"] is None or pair["distancePt"] > 0.5
+        ),
+        key=lambda movement: (
+            movement["distancePt"] is None,
+            movement["distancePt"] or 0,
+        ),
+        reverse=True,
+    )[:100]
+    summary = {
+        "severity": severity,
+        "referenceWords": len(reference),
+        "candidateWords": len(candidate),
+        "matchedWords": len(matched_indices),
+        "unmatchedReferenceWords": unmatched_reference,
+        "unmatchedCandidateWords": unmatched_candidate,
+        "missingWordCount": unmatched_reference,
+        "extraWordCount": unmatched_candidate,
+        "distanceBuckets": buckets,
+        "maxDistancePt": round(max(distances), 4) if distances else None,
+        "medianDistancePt": (
+            round(sorted_distances[len(sorted_distances) // 2], 4)
+            if sorted_distances
+            else None
+        ),
+        "movementScore": round(min(100, weighted_penalty / denominator), 4),
+        "largestMovements": largest_movements,
+        "unmatchedReferenceSample": [
+            reference[index]["text"]
+            for index in range(len(reference))
+            if index not in matched_reference
+        ][:50],
+        "unmatchedCandidateSample": [
+            candidate[index]["text"]
+            for index in range(len(candidate))
+            if index not in matched_candidate
+        ][:50],
+    }
+    return summary, pairs
+
+
+def scaled_box(word: dict[str, Any], dpi: int) -> tuple[int, int, int, int]:
+    scale = dpi / 72
+    return tuple(round(word[key] * scale) for key in ("x0", "y0", "x1", "y1"))
+
+
+def save_movement_overlays(
+    pairs: list[dict[str, Any]],
+    output: Path,
+    dpi: int,
+    pages: int,
+) -> None:
+    images: dict[int, Image.Image] = {}
+    draws: dict[int, ImageDraw.ImageDraw] = {}
+
+    def drawing(page: int) -> ImageDraw.ImageDraw:
+        if page not in draws:
+            path = output / "pages" / f"page-{page:04d}" / "candidate.png"
+            images[page] = load_rgb(path)
+            draws[page] = ImageDraw.Draw(images[page])
+        return draws[page]
+
+    for pair in pairs:
+        reference = pair["reference"]
+        candidate = pair["candidate"]
+        distance = pair["distancePt"]
+        if reference["page"] != candidate["page"]:
+            reference_draw = drawing(reference["page"])
+            candidate_draw = drawing(candidate["page"])
+            reference_draw.rectangle(scaled_box(reference, dpi), outline=(255, 0, 0), width=2)
+            candidate_draw.rectangle(scaled_box(candidate, dpi), outline=(0, 96, 255), width=2)
+            continue
+        if distance is None or distance <= 2:
+            continue
+        page_draw = drawing(reference["page"])
+        reference_box = scaled_box(reference, dpi)
+        candidate_box = scaled_box(candidate, dpi)
+        color = (255, 0, 0) if distance > 8 else (255, 144, 0)
+        page_draw.rectangle(reference_box, outline=color, width=2)
+        page_draw.rectangle(candidate_box, outline=(0, 96, 255), width=2)
+        page_draw.line(
+            (
+                (reference_box[0] + reference_box[2]) // 2,
+                (reference_box[1] + reference_box[3]) // 2,
+                (candidate_box[0] + candidate_box[2]) // 2,
+                (candidate_box[1] + candidate_box[3]) // 2,
+            ),
+            fill=color,
+            width=2,
+        )
+
+    for page in range(1, pages + 1):
+        if page not in images:
+            source = output / "pages" / f"page-{page:04d}" / "candidate.png"
+            images[page] = load_rgb(source)
+        images[page].save(
+            output / "pages" / f"page-{page:04d}" / "movement-overlay.png",
+            compress_level=9,
+        )
+
+
 def prepare_output(path: Path, force: bool) -> None:
     if path.exists() and any(path.iterdir()):
         if not force:
@@ -168,6 +482,66 @@ def max_channel(image: Image.Image) -> Image.Image:
 def threshold_mask(magnitude: Image.Image, threshold: int) -> Image.Image:
     floor = max(1, threshold)
     return magnitude.point(lambda value: 255 if value >= floor else 0)
+
+
+def binary_count(mask: Image.Image) -> int:
+    return mask.histogram()[255]
+
+
+def ink_mask(image: Image.Image, dpi: int) -> Image.Image:
+    red, green, blue = image.convert("RGB").split()
+    darkest_channel = ImageChops.darker(ImageChops.darker(red, green), blue)
+    mask = darkest_channel.point(lambda value: 255 if value <= 247 else 0)
+    if dpi == 72:
+        return mask
+    normalized_size = (
+        max(1, round(mask.width * 72 / dpi)),
+        max(1, round(mask.height * 72 / dpi)),
+    )
+    reduced = mask.resize(normalized_size, Image.Resampling.BOX)
+    return reduced.point(lambda value: 255 if value else 0)
+
+
+def dilate(mask: Image.Image, radius: int) -> Image.Image:
+    return mask if radius == 0 else mask.filter(ImageFilter.MaxFilter(radius * 2 + 1))
+
+
+def ink_distance_metrics(reference: Image.Image, candidate: Image.Image, dpi: int) -> dict[str, Any]:
+    reference_ink = ink_mask(reference, dpi)
+    candidate_ink = ink_mask(candidate, dpi)
+    radii = (0, 1, 3, 8)
+    unmatched: dict[str, dict[str, int]] = {}
+    for radius in radii:
+        candidate_near = dilate(candidate_ink, radius)
+        reference_near = dilate(reference_ink, radius)
+        reference_unmatched = ImageChops.multiply(reference_ink, ImageOps.invert(candidate_near))
+        candidate_unmatched = ImageChops.multiply(candidate_ink, ImageOps.invert(reference_near))
+        unmatched[str(radius)] = {
+            "reference": binary_count(reference_unmatched),
+            "candidate": binary_count(candidate_unmatched),
+        }
+
+    totals = {
+        radius: values["reference"] + values["candidate"]
+        for radius, values in unmatched.items()
+    }
+    distance_buckets = {
+        "within1Pt": max(0, totals["0"] - totals["1"]),
+        "between1And3Pt": max(0, totals["1"] - totals["3"]),
+        "between3And8Pt": max(0, totals["3"] - totals["8"]),
+        "beyond8Pt": totals["8"],
+    }
+    total_ink = binary_count(reference_ink) + binary_count(candidate_ink)
+    far_fraction = totals["8"] / max(1, total_ink)
+    return {
+        "normalizationDpi": 72,
+        "inkThreshold": 8,
+        "referenceInkPixels": binary_count(reference_ink),
+        "candidateInkPixels": binary_count(candidate_ink),
+        "unmatchedInkByRadiusPt": unmatched,
+        "distanceBuckets": distance_buckets,
+        "farUnmatchedFraction": round(far_fraction, 8),
+    }
 
 
 def contiguous_bands(values: list[int], merge_gap: int = 2) -> list[tuple[int, int]]:
@@ -263,6 +637,7 @@ def compare_page(
     stat = ImageStat.Stat(difference)
     mean_absolute = sum(stat.mean) / 3
     root_mean_square = math.sqrt(sum(value * value for value in stat.rms) / 3)
+    ink_distance = ink_distance_metrics(reference, candidate, dpi)
 
     output.mkdir(parents=True, exist_ok=True)
     strong_count = counts[str(strong_threshold)]
@@ -294,6 +669,7 @@ def compare_page(
         },
         "meanAbsoluteDifference": round(mean_absolute, 5),
         "rootMeanSquareDifference": round(root_mean_square, 5),
+        "inkDistance": ink_distance,
         "strongDifferenceBoundsPx": list(bbox) if bbox else None,
         "strongDifferenceBoundsPt": (
             [round(value * points_per_pixel, 3) for value in bbox] if bbox else None
@@ -308,6 +684,7 @@ def compare_page(
             "amplified": str(output / "diff-amplified.png"),
             "overlay": str(output / "diff-overlay.png"),
             "strongOverlay": str(output / "diff-overlay-strong.png"),
+            "movementOverlay": str(output / "movement-overlay.png"),
             "montage": str(output / "montage.png"),
         },
     }
@@ -338,9 +715,17 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--max-pages", type=int, default=500)
     result.add_argument("--max-pixels", type=int, default=40_000_000)
     result.add_argument("--max-total-pixels", type=int, default=250_000_000)
+    result.add_argument("--max-words", type=int, default=100_000)
+    result.add_argument("--max-words-per-page", type=int, default=20_000)
+    result.add_argument("--max-bbox-bytes", type=int, default=32_000_000)
+    result.add_argument("--max-pdf-bytes", type=int, default=64 * 1024 * 1024)
     result.add_argument("--timeout-seconds", type=int, default=120)
     result.add_argument("--force", action="store_true")
     result.add_argument("--fail-above-percent", type=float)
+    result.add_argument(
+        "--fail-on-severity",
+        choices=("minor", "moderate", "major", "critical"),
+    )
     return result
 
 
@@ -352,6 +737,13 @@ def main(arguments: list[str] | None = None) -> int:
         raise ValueError("--max-pages must be between 1 and 10000")
     if options.max_pixels < 1 or options.max_total_pixels < 1:
         raise ValueError("Pixel limits must be positive")
+    if (
+        options.max_words < 1
+        or options.max_words_per_page < 1
+        or options.max_bbox_bytes < 1
+        or options.max_pdf_bytes < 1
+    ):
+        raise ValueError("Word and PDF byte limits must be positive")
     if not 1 <= options.timeout_seconds <= 3_600:
         raise ValueError("--timeout-seconds must be between 1 and 3600")
     if options.fail_above_percent is not None and options.fail_above_percent < 0:
@@ -359,6 +751,11 @@ def main(arguments: list[str] | None = None) -> int:
     for pdf in (options.reference, options.candidate):
         if not pdf.is_file():
             raise FileNotFoundError(pdf)
+        if pdf.stat().st_size > options.max_pdf_bytes:
+            raise RuntimeError(
+                f"{pdf} has {pdf.stat().st_size} bytes, above --max-pdf-bytes "
+                f"{options.max_pdf_bytes}"
+            )
     thresholds = parse_thresholds(options.thresholds, options.strong_threshold)
     reference_info = document_info(
         options.reference,
@@ -380,6 +777,21 @@ def main(arguments: list[str] | None = None) -> int:
         options.max_pixels,
         options.max_total_pixels,
     )
+    reference_words = extract_words(
+        options.reference,
+        options.max_words,
+        options.max_words_per_page,
+        options.max_bbox_bytes,
+        options.timeout_seconds,
+    )
+    candidate_words = extract_words(
+        options.candidate,
+        options.max_words,
+        options.max_words_per_page,
+        options.max_bbox_bytes,
+        options.timeout_seconds,
+    )
+    text_movement, movement_pairs = compare_word_movement(reference_words, candidate_words)
     prepare_output(options.output, options.force)
 
     page_reports: list[dict[str, Any]] = []
@@ -424,6 +836,12 @@ def main(arguments: list[str] | None = None) -> int:
             if candidate_rendered:
                 candidate_rendered.unlink()
 
+    save_movement_overlays(
+        movement_pairs,
+        options.output,
+        options.dpi,
+        compared_pages,
+    )
     total_pixels = sum(page["pixelCount"] for page in page_reports)
     if total_pixels > options.max_total_pixels:
         raise RuntimeError(
@@ -436,8 +854,44 @@ def main(arguments: list[str] | None = None) -> int:
         )
         for threshold in thresholds
     }
+    total_ink = sum(
+        page["inkDistance"]["referenceInkPixels"] + page["inkDistance"]["candidateInkPixels"]
+        for page in page_reports
+    )
+    far_ink = sum(
+        page["inkDistance"]["distanceBuckets"]["beyond8Pt"] for page in page_reports
+    )
+    far_ink_fraction = far_ink / max(1, total_ink)
+    displaced_ink = far_ink + sum(
+        page["inkDistance"]["distanceBuckets"]["between3And8Pt"] for page in page_reports
+    )
+    displaced_ink_fraction = displaced_ink / max(1, total_ink)
+    ink_penalty = sum(
+        page["inkDistance"]["distanceBuckets"]["within1Pt"] * 0.25
+        + page["inkDistance"]["distanceBuckets"]["between1And3Pt"]
+        + page["inkDistance"]["distanceBuckets"]["between3And8Pt"] * 4
+        + page["inkDistance"]["distanceBuckets"]["beyond8Pt"] * 10
+        for page in page_reports
+    )
+    ink_movement_score = min(100, ink_penalty * 100 / max(1, total_ink))
+    movement_severity = text_movement["severity"]
+    if reference_pages != candidate_pages:
+        movement_severity = "critical"
+    elif movement_severity in {"equal", "minor"}:
+        if far_ink_fraction > 0.01:
+            movement_severity = "major"
+        elif displaced_ink_fraction > 0.001:
+            movement_severity = "moderate"
+        elif aggregate_counts[str(options.strong_threshold)] > 0:
+            movement_severity = "minor"
+    movement_score = max(
+        text_movement["movementScore"],
+        ink_movement_score,
+    )
+    if reference_pages != candidate_pages:
+        movement_score = 100
     report = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "reference": str(options.reference.resolve()),
         "candidate": str(options.candidate.resolve()),
         "dpi": options.dpi,
@@ -451,6 +905,10 @@ def main(arguments: list[str] | None = None) -> int:
                 [command_path("pdftoppm"), "-v"],
                 options.timeout_seconds,
             ).splitlines()[0],
+            "pdftotext": run(
+                [command_path("pdftotext"), "-v"],
+                options.timeout_seconds,
+            ).splitlines()[0],
         },
         "thresholds": list(thresholds),
         "strongThreshold": options.strong_threshold,
@@ -458,12 +916,22 @@ def main(arguments: list[str] | None = None) -> int:
             "maxPages": options.max_pages,
             "maxPixels": options.max_pixels,
             "maxTotalPixels": options.max_total_pixels,
+            "maxWords": options.max_words,
+            "maxWordsPerPage": options.max_words_per_page,
+            "maxBboxBytes": options.max_bbox_bytes,
+            "maxPdfBytes": options.max_pdf_bytes,
             "timeoutSeconds": options.timeout_seconds,
         },
         "referencePages": reference_pages,
         "candidatePages": candidate_pages,
         "pageCountMismatch": reference_pages != candidate_pages,
         "estimatedPixels": estimated_pixels,
+        "movementSeverity": movement_severity,
+        "movementScore": round(movement_score, 4),
+        "inkMovementScore": round(ink_movement_score, 4),
+        "textMovement": text_movement,
+        "farInkFraction": round(far_ink_fraction, 8),
+        "displacedInkFraction": round(displaced_ink_fraction, 8),
         "totalPixels": total_pixels,
         "changedPixelsByThreshold": aggregate_counts,
         "changedFractionByThreshold": {
@@ -481,6 +949,8 @@ def main(arguments: list[str] | None = None) -> int:
                 "pages": compared_pages,
                 "pageCountMismatch": report["pageCountMismatch"],
                 "strongChangedPercent": round(strong_fraction * 100, 4),
+                "movementSeverity": movement_severity,
+                "movementScore": round(movement_score, 4),
             },
             indent=2,
         )
@@ -488,6 +958,18 @@ def main(arguments: list[str] | None = None) -> int:
     if (
         options.fail_above_percent is not None
         and strong_fraction * 100 > options.fail_above_percent
+    ):
+        return 2
+    severity_rank = {
+        "equal": 0,
+        "minor": 1,
+        "moderate": 2,
+        "major": 3,
+        "critical": 4,
+    }
+    if (
+        options.fail_on_severity is not None
+        and severity_rank[movement_severity] >= severity_rank[options.fail_on_severity]
     ):
         return 2
     return 0

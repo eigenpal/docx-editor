@@ -7,7 +7,7 @@ It does not use a browser, Microsoft Word automation, or a vision model.
 
 - Python 3
 - [Pillow](https://pypi.org/project/pillow/)
-- Poppler commands `pdfinfo` and `pdftoppm`
+- Poppler commands `pdfinfo`, `pdftoppm`, and `pdftotext`
 
 On macOS, install the command-line requirements with Homebrew:
 
@@ -36,6 +36,7 @@ The output contains:
 - `pages/page-0001/diff-amplified.png`: the absolute RGB difference at 8× intensity.
 - `pages/page-0001/diff-overlay.png`: the candidate page with all differences in red.
 - `pages/page-0001/diff-overlay-strong.png`: the candidate with strong differences in red.
+- `pages/page-0001/movement-overlay.png`: matched text movement over the candidate page.
 - `pages/page-0001/montage.png`: reference, candidate, and amplified difference side by side.
 
 The script compares matching page numbers without automatic alignment. A moved line must remain
@@ -58,6 +59,22 @@ layout defect.
 vertical bands that contain differences. Open `diff-overlay.png` or `montage.png` to inspect each
 band.
 
+`movementSeverity` ranks structural movement separately from changed pixel area:
+
+- `critical`: page-count changes or cross-page text movement.
+- `major`: matched text moves more than 8 points, or distant ink exceeds 1%.
+- `moderate`: matched text moves 2–8 points, or distant ink exceeds 0.1%.
+- `minor`: only small movement, antialiasing, or paint differences remain.
+- `equal`: no measured movement or pixel difference remains.
+
+`textMovement.largestMovements` lists moved words with reference and candidate coordinates.
+`missingWordCount` and `extraWordCount` report text changes separately from movement.
+`inkDistance` compares dark pixels after dilation at 1, 3, and 8 points. This makes one-pixel
+differences cheaper than content that moves far from its reference position.
+
+Each page also has `movement-overlay.png`. Red or orange boxes show reference positions. Blue boxes
+show candidate positions. Lines connect matched words that moved by more than 2 points.
+
 Use `--fail-above-percent N` in an automated gate. The command exits with status `2` when the
 strong changed percentage exceeds `N`.
 
@@ -70,8 +87,15 @@ python3 scripts/pdf-visual-diff.py reference.pdf candidate.pdf \
   --max-pages 500 \
   --max-pixels 40000000 \
   --max-total-pixels 250000000 \
+  --max-words 100000 \
+  --max-words-per-page 20000 \
+  --max-bbox-bytes 32000000 \
+  --max-pdf-bytes 67108864 \
   --timeout-seconds 120
 ```
+
+Use `--fail-on-severity moderate` to exit with status `2` for moderate, major, or critical
+movement.
 
 ## Replace generated output
 
