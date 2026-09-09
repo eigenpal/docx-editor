@@ -171,6 +171,61 @@ def word_matches(
     reference: list[dict[str, Any]],
     candidate: list[dict[str, Any]],
 ) -> list[tuple[int, int]]:
+    def monotonic_geometry_pairs(
+        left_words: list[dict[str, Any]],
+        left_indices: list[int],
+        right_words: list[dict[str, Any]],
+        right_indices: list[int],
+    ) -> list[tuple[int, int]]:
+        if len(left_indices) > len(right_indices):
+            return [
+                (right_index, left_index)
+                for left_index, right_index in monotonic_geometry_pairs(
+                    right_words,
+                    right_indices,
+                    left_words,
+                    left_indices,
+                )
+            ]
+        if len(left_indices) * len(right_indices) > 100_000:
+            return list(zip(left_indices, right_indices))
+        rows = len(left_indices)
+        columns = len(right_indices)
+        costs = [[math.inf] * (columns + 1) for _ in range(rows + 1)]
+        matched = [[False] * (columns + 1) for _ in range(rows + 1)]
+        for column in range(columns + 1):
+            costs[0][column] = 0
+        for row in range(1, rows + 1):
+            left = left_words[left_indices[row - 1]]
+            left_x = (left["x0"] + left["x1"]) / 2
+            left_y = (left["y0"] + left["y1"]) / 2
+            for column in range(1, columns + 1):
+                skip_cost = costs[row][column - 1]
+                right = right_words[right_indices[column - 1]]
+                right_x = (right["x0"] + right["x1"]) / 2
+                right_y = (right["y0"] + right["y1"]) / 2
+                pair_cost = costs[row - 1][column - 1] + math.hypot(
+                    right_x - left_x,
+                    right_y - left_y,
+                )
+                if pair_cost < skip_cost:
+                    costs[row][column] = pair_cost
+                    matched[row][column] = True
+                else:
+                    costs[row][column] = skip_cost
+        pairs: list[tuple[int, int]] = []
+        row = rows
+        column = columns
+        while row > 0 and column > 0:
+            if matched[row][column]:
+                pairs.append((left_indices[row - 1], right_indices[column - 1]))
+                row -= 1
+                column -= 1
+            else:
+                column -= 1
+        pairs.reverse()
+        return pairs
+
     matches: list[tuple[int, int]] = []
     matched_reference: set[int] = set()
     matched_candidate: set[int] = set()
@@ -236,6 +291,48 @@ def word_matches(
 
     pair_residuals(True)
     pair_residuals(False)
+
+    # Sequence alignment can pair repeated labels across distant table rows when nearby
+    # text wraps differently. Equal same-page inventories retain reading-order identity.
+    repeated_reference: dict[tuple[int, str], list[int]] = {}
+    repeated_candidate: dict[tuple[int, str], list[int]] = {}
+    for index, word in enumerate(reference):
+        repeated_reference.setdefault((word["page"], word["text"]), []).append(index)
+    for index, word in enumerate(candidate):
+        repeated_candidate.setdefault((word["page"], word["text"]), []).append(index)
+    for key in repeated_reference.keys() & repeated_candidate.keys():
+        reference_indices = repeated_reference[key]
+        candidate_indices = repeated_candidate[key]
+        if len(reference_indices) < 2 or len(candidate_indices) < 2:
+            continue
+        reference_set = set(reference_indices)
+        candidate_set = set(candidate_indices)
+        matches = [
+            pair
+            for pair in matches
+            if pair[0] not in reference_set and pair[1] not in candidate_set
+        ]
+        reading_order = lambda words, index: (
+            words[index]["y0"],
+            words[index]["x0"],
+            index,
+        )
+        ordered_reference = sorted(
+            reference_indices,
+            key=lambda index: reading_order(reference, index),
+        )
+        ordered_candidate = sorted(
+            candidate_indices,
+            key=lambda index: reading_order(candidate, index),
+        )
+        for reference_index, candidate_index in monotonic_geometry_pairs(
+            reference,
+            ordered_reference,
+            candidate,
+            ordered_candidate,
+        ):
+            matches.append((reference_index, candidate_index))
+
     matches.sort()
     return matches
 

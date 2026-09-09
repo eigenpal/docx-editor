@@ -206,6 +206,40 @@ class PdfVisualDiffTest(unittest.TestCase):
         self.assertEqual(summary["distanceBuckets"]["beyond8Pt"], 1)
         self.assertEqual([pair["distancePt"] for pair in pairs], [0, 20, 0])
 
+    def test_text_movement_repairs_distant_repeated_label_pairs(self) -> None:
+        reference = [
+            word("место", 1, 10, 10),
+            word("alpha", 1, 40, 10),
+            word("место", 1, 10, 100),
+            word("beta", 1, 40, 100),
+        ]
+        candidate = [
+            word("alpha", 1, 40, 22),
+            word("место", 1, 10, 22),
+            word("beta", 1, 40, 112),
+            word("место", 1, 10, 112),
+        ]
+
+        summary, pairs = MODULE.compare_word_movement(reference, candidate)
+        repeated = [pair["distancePt"] for pair in pairs if pair["text"] == "место"]
+
+        self.assertEqual(repeated, [12, 12])
+        self.assertEqual(summary["maxDistancePt"], 12)
+
+    def test_text_movement_skips_extra_repeated_labels(self) -> None:
+        reference = [word("место", 1, 10, 100), word("место", 1, 10, 500)]
+        candidate = [
+            word("место", 1, 10, 10),
+            word("место", 1, 10, 112),
+            word("место", 1, 10, 300),
+            word("место", 1, 10, 512),
+        ]
+
+        summary, pairs = MODULE.compare_word_movement(reference, candidate)
+
+        self.assertEqual([pair["distancePt"] for pair in pairs], [12, 12])
+        self.assertEqual(summary["extraWordCount"], 2)
+
     def test_deleted_word_is_not_classified_as_movement(self) -> None:
         reference = [word("kept", 1, 10, 10), word("deleted", 1, 40, 10)]
         candidate = [word("kept", 1, 10, 10)]

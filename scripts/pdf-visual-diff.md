@@ -69,6 +69,8 @@ band.
 
 `textMovement.largestMovements` lists moved words with reference and candidate coordinates.
 `missingWordCount` and `extraWordCount` report text changes separately from movement.
+Repeated same-page words use minimum-cost monotonic geometry matching to avoid distant table-row
+pairings when nearby text wraps differently.
 `inkDistance` compares dark pixels after dilation at 1, 3, and 8 points. This makes one-pixel
 differences cheaper than content that moves far from its reference position.
 
