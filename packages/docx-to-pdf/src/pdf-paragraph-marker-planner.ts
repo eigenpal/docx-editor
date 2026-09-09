@@ -19,15 +19,21 @@ import { pdfDisplayText, pdfTextStyleFromResolvedRunStyle } from './pdf-text-sty
 function markerLineBaseline(
   fragment: ParagraphFragmentRecord,
   fontSizePt: number
-): Readonly<{ readonly lineY: number; readonly baseline: number }> {
+): Readonly<{ readonly lineY: number; readonly baseline: number; readonly height: number }> {
   const firstLine = fragment.lines[0];
-  if (firstLine) return Object.freeze({ lineY: firstLine.box.y, baseline: firstLine.baseline });
+  if (firstLine)
+    return Object.freeze({
+      lineY: firstLine.box.y,
+      baseline: firstLine.baseline,
+      height: firstLine.box.height,
+    });
   const markerBox = fragment.marker?.box;
   const boxHeight = markerBox && markerBox.height > 0 ? markerBox.height : fontSizePt;
   const fallback = fontSizePt > 0 ? Math.min(fontSizePt, boxHeight) : boxHeight;
   return Object.freeze({
     lineY: markerBox?.y ?? 0,
     baseline: fallback > 0 ? fallback : 0,
+    height: boxHeight,
   });
 }
 
@@ -58,6 +64,7 @@ export function plannedParagraphMarkerCommand(input: {
       storyOrigin.y,
       lineBaseline.lineY,
       lineBaseline.baseline,
+      lineBaseline.height,
       baselineShiftPtOf(faceStyle),
       storyKind === 'footer',
       profile

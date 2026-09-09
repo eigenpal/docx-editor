@@ -353,6 +353,7 @@ function appendSpanCommands(
     storyOrigin.y,
     lineY,
     lineBaseline,
+    line.box.height,
     baselineShiftPtOf(faceStyle),
     storyKind === 'footer',
     profile
@@ -767,7 +768,8 @@ function* appendPaintHostLayer(
     (command) => {
       pushBoundedCommand(commands, command, tally);
     },
-    diagnostics
+    diagnostics,
+    profile
   );
   for (const visit of iterateSemanticFillHostSpans(host, paragraphOrder)) {
     if (exportSourceRangeOf(visit.span) === null && visit.span.text.length === 0) {

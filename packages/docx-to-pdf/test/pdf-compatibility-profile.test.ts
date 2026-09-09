@@ -14,6 +14,7 @@ import {
   quantizeWordMacos300DpiLineRect,
 } from '../src/pdf-compatibility-profile.ts';
 import { planPdfPaintFromLayout } from '../src/pdf-page-planner.ts';
+import { compatibleSpanBaseline } from '../src/pdf-span-geometry.ts';
 import { layout, page, paragraph, span } from './pdf-page-planner-fixtures.ts';
 
 const PROFILE = { compatibilityProfile: 'word-macos-300dpi' } as const;
@@ -104,6 +105,32 @@ describe('word-macos-300dpi compatibility profile', () => {
     expect(steps[2]).toBeCloseTo(12.24, 12);
   });
 
+  test('derives body baselines from snapped line bottoms', () => {
+    const targetPage = page(0, 612, 792);
+    const first = compatibleSpanBaseline(
+      targetPage,
+      72,
+      100,
+      9,
+      12.375,
+      0,
+      false,
+      PROFILE.compatibilityProfile
+    );
+    const second = compatibleSpanBaseline(
+      targetPage,
+      72,
+      112.375,
+      9,
+      12.375,
+      0,
+      false,
+      PROFILE.compatibilityProfile
+    );
+
+    expect(first - second).toBeCloseTo(12.48, 12);
+  });
+
   test('preserves line-relative run advances', () => {
     const first = quantizeWordMacos300DpiLineRect(
       { x: 90.03, y: 10.03, width: 17.137, height: 9 },
@@ -170,6 +197,14 @@ describe('word-macos-300dpi compatibility profile', () => {
     expect(exactFill?.kind === 'fillRect' ? exactFill.rect.height : null).toBe(0.5);
     expect(compatibleFill?.kind === 'fillRect' ? compatibleFill.rect.height : null).toBeCloseTo(
       0.48,
+      12
+    );
+    expect(compatibleFill?.kind === 'fillRect' ? compatibleFill.rect.x : null).toBeCloseTo(
+      72.24,
+      12
+    );
+    expect(compatibleFill?.kind === 'fillRect' ? compatibleFill.rect.width : null).toBeCloseTo(
+      199.44,
       12
     );
     expect(planPdfPaintFromLayout(document).plan).toEqual(exact.plan);

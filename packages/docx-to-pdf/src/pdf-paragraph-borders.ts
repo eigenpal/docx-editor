@@ -14,6 +14,7 @@ import type {
   TableBorderSideName,
 } from '@docx-editor.dev/core/layout';
 import { pdfColorFromPublishedFill } from './pdf-fill-contrast.ts';
+import type { PdfCompatibilityProfile } from './pdf-compatibility-profile.ts';
 import type { PdfFidelityDiagnostic, PdfFidelityStoryKind } from './pdf-fidelity-diagnostics.ts';
 import { pdfApproximationDiagnostic } from './pdf-fidelity-diagnostics.ts';
 import type { PdfRect } from './pdf-paint-types.ts';
@@ -63,15 +64,18 @@ function paintPublishedBorderStroke(
     }>
   ) => PdfRect,
   pushCommand: (command: PdfPaintCommand) => void,
-  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void }
+  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
+  profile: PdfCompatibilityProfile | undefined
 ): void {
   if (!hasUsableBox(stroke.box)) return;
+  const horizontal = stroke.side === 'top' || stroke.side === 'bottom' || stroke.side === 'between';
+  const horizontalInset = profile === 'word-macos-300dpi' && horizontal ? 0.24 : 0;
   pushCommand(
     pdfFillRect(
       toPageRect({
-        x: storyOrigin.x + stroke.box.x,
+        x: storyOrigin.x + stroke.box.x + horizontalInset,
         y: storyOrigin.y + stroke.box.y,
-        width: stroke.box.width,
+        width: Math.max(0, stroke.box.width - horizontalInset * 2),
         height: stroke.box.height,
       }),
       paragraphBorderColor(stroke.edge.color)
@@ -193,7 +197,8 @@ export function* visitBlocksForPublishedBorders(
     }>
   ) => PdfRect,
   pushCommand: (command: PdfPaintCommand) => void,
-  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void }
+  diagnostics: { push(diagnostic: PdfFidelityDiagnostic): void },
+  profile?: PdfCompatibilityProfile
 ): Generator<void> {
   for (const block of blocks) {
     if (block.kind === 'table') {
@@ -231,7 +236,8 @@ export function* visitBlocksForPublishedBorders(
             story,
             toPageRect,
             pushCommand,
-            diagnostics
+            diagnostics,
+            profile
           );
         }
       }
@@ -251,7 +257,8 @@ export function* visitBlocksForPublishedBorders(
         story,
         toPageRect,
         pushCommand,
-        diagnostics
+        diagnostics,
+        profile
       );
       yield;
     }
