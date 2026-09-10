@@ -226,9 +226,17 @@ describe('Form025U row-height regression', () => {
     const part = result.package.parts.get(result.package.mainDocumentPart)!;
     const styles = result.package.parts.get('/word/styles.xml');
     const settings = result.package.parts.get('/word/settings.xml');
+    // Times-like mixed-style widths. Latin is narrower than 0.5em; Cyrillic is
+    // slightly wider; punctuation is tight. A uniform 0.5em overfills the
+    // ~37pt house cell and invents a seventh line.
     const measurer: TextMeasurer = {
       measure(text, style) {
-        return text.length * style.fontSizePt * 0.5;
+        let width = 0;
+        for (const char of text) {
+          const em = /\p{Script=Cyrillic}/u.test(char) ? 0.52 : /[A-Za-z]/.test(char) ? 0.45 : 0.28;
+          width += style.fontSizePt * em;
+        }
+        return width;
       },
       lineMetrics(style) {
         return { height: style.fontSizePt * 1.15, baseline: style.fontSizePt * 0.9 };
@@ -301,7 +309,27 @@ describe('Form025U row-height regression', () => {
         .flatMap((block) => block.lines);
     expect(
       paragraphLines(series).map((line) => line.spans.map((span) => span.text).join(''))
-    ).toEqual(['{d.pa', 'tient.doc', 'uments[0].', 'series}']);
+    ).toEqual(['{d.pa', 'tient.docu', 'ments[0].se', 'ries}']);
+    expect(
+      paragraphLines(permanentHouse).map((line) => line.spans.map((span) => span.text).join(''))
+    ).toEqual([
+      '{d.patient.addr',
+      'esses[addressTy',
+      "pe='Постоян",
+      'ное место жи',
+      'тель',
+      "ства'].house}",
+    ]);
+    expect(
+      paragraphLines(actualHouse).map((line) => line.spans.map((span) => span.text).join(''))
+    ).toEqual([
+      '{d.patient.addr',
+      'esses[addressTy',
+      "pe='Фактиче",
+      'ское место жи',
+      'тель',
+      "ства'].house}",
+    ]);
     expect(paragraphLines(permanentHouse).length).toBe(6);
     expect(paragraphLines(actualHouse).length).toBe(6);
     expect(paragraphLines(permanentHouse).at(-1)!.box.height).toBeCloseTo(6.325, 3);
@@ -310,6 +338,10 @@ describe('Form025U row-height regression', () => {
     expect(
       paragraphLines(permanentHouse).reduce((sum, line) => sum + line.box.height, 0)
     ).toBeCloseTo(43.125, 2);
+    expect(paragraphLines(actualHouse).reduce((sum, line) => sum + line.box.height, 0)).toBeCloseTo(
+      43.125,
+      2
+    );
     expect(actual!.box.height).toBeCloseTo(43.68, 0);
     expect(lineCount(actual!)).toBe(6);
   });

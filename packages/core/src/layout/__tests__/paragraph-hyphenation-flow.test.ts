@@ -22,11 +22,16 @@ import {
   nextOversizedEmptyLineCut,
   type MixedPlaceablePiece,
 } from '../paragraph-hyphenation.ts';
+import {
+  mixedBraceTokenCovering,
+  mixedTemplateWrapResume,
+} from '../paragraph-hyphenation-stream.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import type { PendingLine } from '../pending-line.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from '../revision-projection.ts';
 import { linesOf as layoutLinesOf } from '../semantic-record-queries.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
+import type { TextMeasurer } from '../semantic-records.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const measurer = createFixedMeasurer(6, 14);
@@ -418,22 +423,169 @@ describe('discretionary hyphen in paragraph flow', () => {
     expect(textsOf(`<w:p>${run('{123}')}</w:p>`, 24)).toEqual(['{', '123}']);
   });
 
-  test('a mixed-style mixed token keeps punctuation wrap and skips multi-run hyphenation', () => {
+  test('a mixed-style mixed token stream-packs across punctuation without English TeX', () => {
     const token = '{d.patient.documents[0].series}';
     const open =
-      `<w:r><w:rPr><w:sz w:val="20"/><w:lang w:val="en-US"/></w:rPr>` +
+      `<w:r><w:rPr><w:sz w:val="20"/><w:lang w:val="ru-RU"/></w:rPr>` +
       `<w:t xml:space="preserve">{</w:t></w:r>`;
     const rest =
-      `<w:r><w:rPr><w:sz w:val="11"/><w:lang w:val="en-US"/></w:rPr>` +
+      `<w:r><w:rPr><w:sz w:val="11"/><w:lang w:val="ru-RU"/></w:rPr>` +
       `<w:t xml:space="preserve">d.patient.documents[0].series}</w:t></w:r>`;
     const body = `<w:p>${open}${rest}</w:p>`;
     const texts = textsOf(body, 72);
-    expect(texts[0]).not.toBe('{d.pa');
-    expect(texts[0]?.startsWith('{d.patient.')).toBe(true);
     expect(texts.join('')).toBe(token);
+    expect(texts[0]).not.toBe('{d.pa');
+    expect(texts[0]).not.toBe('{d.patient.');
+    expect(texts[0]?.startsWith('{')).toBe(true);
     expect(hasDiscretionaryHyphen(body, 72)).toBe(false);
-    expect(texts.some((line) => /[.[\]}]$/.test(line))).toBe(true);
     expect(textsOf(body, 72, DEFAULT_HYPHENATION_SETTINGS).join('')).toBe(token);
+  });
+
+  test('a mixed 10pt brace plus 5.5pt address token keeps source, styles, and Russian hyphens', () => {
+    const token = "{d.patient.addresses[addressType='Постоянное место жительства'].house}";
+    const open =
+      `<w:r><w:rPr><w:sz w:val="20"/><w:lang w:val="ru-RU"/></w:rPr>` +
+      `<w:t xml:space="preserve">{</w:t></w:r>`;
+    const rest =
+      `<w:r><w:rPr><w:sz w:val="11"/><w:lang w:val="ru-RU"/></w:rPr>` +
+      `<w:t xml:space="preserve">${token.slice(1)}</w:t></w:r>`;
+    const body = `<w:p>${open}${rest}</w:p>`;
+    const measurer: TextMeasurer = {
+      measure(text, style) {
+        let width = 0;
+        for (const char of text) {
+          const cyrillic = /\p{Script=Cyrillic}/u.test(char);
+          width += (style.fontSizePt / 11) * 6 * (cyrillic ? 1.22 : 1);
+        }
+        return width;
+      },
+      lineMetrics(style) {
+        const height = 14 * (style.fontSizePt / 11);
+        return { height, baseline: height * 0.8 };
+      },
+    };
+    const lines = breakParagraph(
+      paragraph(body),
+      'p',
+      0,
+      47.5,
+      measurer,
+      undefined,
+      null,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      { hyphenationSettings: ON }
+    );
+    const texts = lines.map((line) => line.spans.map((span) => span.text).join(''));
+    expect(texts).toEqual([
+      '{d.patient.addr',
+      'esses[addressTy',
+      "pe='Постоян",
+      'ное место жи',
+      'тель',
+      "ства'].house}",
+    ]);
+    expect(texts.join('')).toBe(token);
+    expect(lines[0]!.spans[0]!.style.fontSizePt).toBe(10);
+    expect(lines[0]!.spans[0]!.text).toBe('{');
+    expect(lines[0]!.spans.slice(1).every((span) => span.style.fontSizePt === 5.5)).toBe(true);
+    const ranges = lines.flatMap((line) => line.spans.map((span) => span.range));
+    expect(ranges[0]).toEqual({ paragraphId: 'p', start: 0, end: 1 });
+    for (let index = 1; index < ranges.length; index += 1) {
+      expect(ranges[index]!.start).toBe(ranges[index - 1]!.end);
+    }
+    expect(ranges[ranges.length - 1]!.end).toBe(token.length);
+    expect(lines[2]!.spans.at(-1)?.discretionaryHyphen).toBeDefined();
+    expect(lines[3]!.spans.at(-1)?.discretionaryHyphen).toBeDefined();
+    expect(lines[4]!.spans.at(-1)?.discretionaryHyphen).toBeDefined();
+    expect(lines[0]!.spans.every((span) => span.discretionaryHyphen === undefined)).toBe(true);
+    expect(textsOf(body, 47.5, DEFAULT_HYPHENATION_SETTINGS).join('')).toBe(token);
+  });
+
+  test('a mixed-style address token resumes after a mid-piece Russian hyphen', () => {
+    const token = "{d.patient.addresses[addressType='Постоянное место жительства'].house}";
+    const sz11 = `<w:rPr><w:sz w:val="11"/><w:lang w:val="ru-RU"/></w:rPr>`;
+    const run11 = (text: string) => `<w:r>${sz11}<w:t xml:space="preserve">${text}</w:t></w:r>`;
+    const body =
+      `<w:p>` +
+      `<w:r><w:rPr><w:sz w:val="20"/><w:lang w:val="ru-RU"/></w:rPr>` +
+      `<w:t xml:space="preserve">{</w:t></w:r>` +
+      run11("d.patient.addresses[addressType='Постоянное ") +
+      run11("место жительства'") +
+      run11('].') +
+      run11('house') +
+      run11('}') +
+      `</w:p>`;
+    const measurer: TextMeasurer = {
+      measure(text, style) {
+        let width = 0;
+        for (const char of text) {
+          const cyrillic = /\p{Script=Cyrillic}/u.test(char);
+          width += (style.fontSizePt / 11) * 6 * (cyrillic ? 1.22 : 1);
+        }
+        return width;
+      },
+      lineMetrics(style) {
+        const height = 14 * (style.fontSizePt / 11);
+        return { height, baseline: height * 0.8 };
+      },
+    };
+    const lines = breakParagraph(
+      paragraph(body),
+      'p',
+      0,
+      47.5,
+      measurer,
+      undefined,
+      null,
+      [],
+      undefined,
+      undefined,
+      undefined,
+      { hyphenationSettings: ON }
+    );
+    const texts = lines.map((line) => line.spans.map((span) => span.text).join(''));
+    expect(texts).toEqual([
+      '{d.patient.addr',
+      'esses[addressTy',
+      "pe='Постоян",
+      'ное место жи',
+      'тель',
+      "ства'].house}",
+    ]);
+    expect(texts.join('')).toBe(token);
+    const ranges = lines.flatMap((line) => line.spans.map((span) => span.range));
+    for (let index = 1; index < ranges.length; index += 1) {
+      expect(ranges[index]!.start).toBe(ranges[index - 1]!.end);
+    }
+    expect(ranges[ranges.length - 1]!.end).toBe(token.length);
+  });
+
+  test('mixedTemplateWrapResume retries a piece when a hyphen stops inside a candidate', () => {
+    expect(
+      mixedTemplateWrapResume(2, 17, {
+        nextPieceIndex: 2,
+        nextConsumed: 12,
+        fitsFully: false,
+      })
+    ).toEqual({ consumed: 12, retryAt: 2 });
+    expect(
+      mixedTemplateWrapResume(2, 17, {
+        nextPieceIndex: 2,
+        nextConsumed: 17,
+        fitsFully: false,
+      })
+    ).toEqual({ consumed: 17 });
+    expect(
+      mixedTemplateWrapResume(2, 17, {
+        nextPieceIndex: 4,
+        nextConsumed: 0,
+        fitsFully: true,
+      })
+    ).toEqual({ consumed: 0, retryAt: 4 });
+    expect(mixedBraceTokenCovering([{ text: '{ab}', start: 0 }] as never, 0, 0)).not.toBeNull();
   });
 
   test('Russian Постоянное splits at a TeX point', () => {

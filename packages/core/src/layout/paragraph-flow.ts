@@ -1,9 +1,5 @@
 // Paragraph measuring and breaking, shared between the body flow and table cells.
-//
-// Extracted from `semantic-layout.ts` unchanged so a cell paragraph breaks exactly like a
-// body paragraph: same pieces, same word boundaries, same cache discipline. The BREAK is
-// position-independent — span x offsets are relative to the paragraph origin — which is
-// what lets one cached break serve the same content at any x (body or any cell).
+// Cell and body paragraphs use the same pieces, word boundaries, and cache keys.
 
 import {
   PAGE_BREAK_CHAR,
@@ -85,8 +81,11 @@ import {
   letterWordTail,
   nextOversizedEmptyLineCut,
   placeDiscretionaryHyphenBreak,
-  tryPlaceUniformMixedTokenHyphen,
 } from './paragraph-hyphenation.ts';
+import {
+  mixedTemplateWrapResume,
+  tryPlaceMixedTemplateOverflow,
+} from './paragraph-hyphenation-stream.ts';
 import { paragraphSuppressAutoHyphens } from './paragraph-suppress-auto-hyphens.ts';
 import { lastWinsRunLanguage } from './run-language.ts';
 import { opensWordAfter, wordBoundaries } from './paragraph-word-boundaries.ts';
@@ -1473,7 +1472,7 @@ export function breakParagraph(
           ? expandableShrinkBudget(line.spans, measurer)
           : 0;
       if (templatePunct && !layoutOwned && piece.measureText === undefined && !lineEndWhitespace) {
-        const mixedResume = tryPlaceUniformMixedTokenHyphen({
+        const mixedResume = tryPlaceMixedTemplateOverflow({
           settings: flow?.hyphenationSettings,
           suppressAutoHyphens,
           consecutiveHyphenatedLines,
@@ -1481,13 +1480,14 @@ export function breakParagraph(
           language: lastWinsRunLanguage(piece.props),
           capsFormatted: faceStyle.caps,
           measure: measureDrawn,
+          measurer,
           candidate,
           pieces,
           pieceIndex,
           consumed,
           layoutOwned,
           measureText: piece.measureText,
-          ignoreHyphenationZone: line.spans.length === 0 && line.drawings.length === 0,
+          emptyLine: line.spans.length === 0 && line.drawings.length === 0,
           line,
           paragraphId,
           x: lineOrigin() + line.width,
@@ -1495,14 +1495,15 @@ export function breakParagraph(
           metrics,
         });
         if (mixedResume) {
-          closeLine();
+          if (!mixedResume.fitsFully) closeLine();
           lastEmitted = '';
-          if (mixedResume.nextPieceIndex !== pieceIndex) {
-            resumeConsumed = mixedResume.nextConsumed;
-            pieceIndex = mixedResume.nextPieceIndex - 1;
+          const resume = mixedTemplateWrapResume(pieceIndex, boundary, mixedResume);
+          if (resume.retryAt !== undefined) {
+            resumeConsumed = resume.consumed;
+            pieceIndex = resume.retryAt - 1;
             break;
           }
-          consumed = mixedResume.nextConsumed;
+          consumed = resume.consumed;
           continue;
         }
       }

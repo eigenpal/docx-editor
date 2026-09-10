@@ -355,24 +355,24 @@ export interface MixedPrefixSlice {
 }
 
 export interface MixedTokenHyphenPlan {
-  readonly hyphen: DiscretionaryHyphenBreak;
+  readonly hyphen: DiscretionaryHyphenBreak | null;
   readonly slices: readonly MixedPrefixSlice[];
   readonly nextPieceIndex: number;
   readonly nextConsumed: number;
 }
 
 /**
- * Map a glued-token hyphen offset onto the source runs that contain the prefix.
+ * Map a glued UTF-16 prefix onto the source runs that contain it.
  *
- * The last slice holds the break. `nextConsumed` is the local offset after that break.
+ * `nextConsumed` is the local offset after the last slice.
  */
-export function planMixedTokenHyphen(
+export function planMixedTokenPrefix(
   pieces: readonly HyphenationPieceView[],
   pieceIndex: number,
   consumed: number,
-  hyphen: DiscretionaryHyphenBreak
-): MixedTokenHyphenPlan | null {
-  let remaining = hyphen.utf16Offset;
+  utf16Length: number
+): Omit<MixedTokenHyphenPlan, 'hyphen'> | null {
+  let remaining = utf16Length;
   if (remaining <= 0) return null;
   const slices: MixedPrefixSlice[] = [];
   for (let index = pieceIndex; index < pieces.length && remaining > 0; index += 1) {
@@ -393,11 +393,26 @@ export function planMixedTokenHyphen(
   const last = slices[slices.length - 1];
   if (remaining > 0 || !last) return null;
   return {
-    hyphen,
     slices,
     nextPieceIndex: last.pieceIndex,
     nextConsumed: last.localEnd,
   };
+}
+
+/**
+ * Map a glued-token hyphen offset onto the source runs that contain the prefix.
+ *
+ * The last slice holds the break. `nextConsumed` is the local offset after that break.
+ */
+export function planMixedTokenHyphen(
+  pieces: readonly HyphenationPieceView[],
+  pieceIndex: number,
+  consumed: number,
+  hyphen: DiscretionaryHyphenBreak
+): MixedTokenHyphenPlan | null {
+  const prefix = planMixedTokenPrefix(pieces, pieceIndex, consumed, hyphen.utf16Offset);
+  if (!prefix) return null;
+  return { hyphen, ...prefix };
 }
 
 /**
@@ -432,6 +447,17 @@ type LineBox = {
   end: number;
 };
 
+function measureMixedSlice(
+  input: {
+    readonly measure: (text: string) => number;
+    readonly measurePiece?: (piece: MixedPlaceablePiece, text: string) => number;
+  },
+  piece: MixedPlaceablePiece,
+  text: string
+): number {
+  return input.measurePiece ? input.measurePiece(piece, text) : input.measure(text);
+}
+
 /** Prefix spans for a mixed-token hyphen, one span per source run, hyphen on the last. */
 export function placeMixedTokenHyphenPlan(input: {
   readonly plan: MixedTokenHyphenPlan;
@@ -440,23 +466,23 @@ export function placeMixedTokenHyphenPlan(input: {
   readonly x: number;
   readonly height: number;
   readonly measure: (text: string) => number;
+  readonly measurePiece?: (piece: MixedPlaceablePiece, text: string) => number;
 }): { readonly spans: StyleSpanRecord[]; readonly width: number } {
   const spans: StyleSpanRecord[] = [];
   let x = input.x;
   let width = 0;
   const lastIndex = input.plan.slices.length - 1;
+  const hyphen = input.plan.hyphen;
   for (let index = 0; index < input.plan.slices.length; index += 1) {
     const slice = input.plan.slices[index]!;
     const piece = input.pieces[slice.pieceIndex];
     if (!piece) continue;
-    const isBreak = index === lastIndex;
+    const isBreak = index === lastIndex && hyphen !== null;
     const measured = isBreak
-      ? input.measure(slice.text + DISCRETIONARY_HYPHEN_GLYPH)
-      : input.measure(slice.text);
+      ? measureMixedSlice(input, piece, slice.text + DISCRETIONARY_HYPHEN_GLYPH)
+      : measureMixedSlice(input, piece, slice.text);
     const spanWidth =
-      isBreak && input.plan.hyphen.widthPt - width > 0
-        ? input.plan.hyphen.widthPt - width
-        : measured;
+      isBreak && hyphen && hyphen.widthPt - width > 0 ? hyphen.widthPt - width : measured;
     spans.push({
       range: {
         paragraphId: input.paragraphId,
@@ -467,7 +493,7 @@ export function placeMixedTokenHyphenPlan(input: {
       props: piece.props,
       style: piece.style,
       box: { x, y: 0, width: spanWidth, height: input.height },
-      ...(isBreak ? { discretionaryHyphen: { widthPt: input.plan.hyphen.hyphenWidthPt } } : {}),
+      ...(isBreak && hyphen ? { discretionaryHyphen: { widthPt: hyphen.hyphenWidthPt } } : {}),
       ...(piece.link ? { link: piece.link } : {}),
       ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
       ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
