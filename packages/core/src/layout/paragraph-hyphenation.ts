@@ -5,13 +5,17 @@
 
 import type { DocumentHyphenationSettings, OoxmlProperty } from '@docx-editor.dev/core/store';
 import {
+  admittedHyphenationLanguage,
   DISCRETIONARY_HYPHEN_GLYPH,
   hyphenationBreakOffsets,
   lastFittingDiscretionaryHyphen,
   MAX_HYPHENATION_WORD_UTF16,
   type DiscretionaryHyphenBreak,
 } from './hyphenation.ts';
+import { wordBoundaries } from './paragraph-word-boundaries.ts';
+import { lastWinsRunLanguage } from './run-language.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
+import type { FontSlot } from './script-itemization.ts';
 import type { StyleSpanRecord } from './semantic-records.ts';
 
 const LETTER = /^\p{L}$/u;
@@ -20,6 +24,18 @@ const LETTER = /^\p{L}$/u;
 export interface HyphenationPieceView {
   readonly text: string;
   readonly measureText?: string;
+}
+
+/** Run fields mixed-token hyphenation needs to keep source style on each prefix span. */
+export interface MixedPlaceablePiece extends HyphenationPieceView {
+  readonly start: number;
+  readonly props: readonly OoxmlProperty[];
+  readonly style: ResolvedRunStyle;
+  readonly fontSlot?: FontSlot;
+  readonly link?: StyleSpanRecord['link'];
+  readonly noteNav?: StyleSpanRecord['noteNav'];
+  readonly revisions?: StyleSpanRecord['revisions'];
+  readonly fieldAtom?: StyleSpanRecord['fieldAtom'];
 }
 
 /** Leading Unicode letters of `text`, or empty when it does not open a letter word. */
@@ -100,6 +116,117 @@ export function letterWordTail(
     }
   }
   return out;
+}
+
+const TEMPLATE_PUNCT = /[.[\]{}=']/;
+
+/**
+ * Remaining space-delimited token from `consumed` through later pieces.
+ *
+ * Stops at a space, tab, or dash. A `measureText` piece cuts the token so a note mark
+ * cannot glue into following text.
+ */
+export function mixedTokenAcrossPieces(
+  pieces: readonly HyphenationPieceView[],
+  pieceIndex: number,
+  consumed: number
+): string {
+  let glued = '';
+  for (let index = pieceIndex; index < pieces.length; index += 1) {
+    const piece = pieces[index]!;
+    if (piece.measureText !== undefined) break;
+    const start = index === pieceIndex ? consumed : 0;
+    if (start < 0 || start > piece.text.length) continue;
+    glued += piece.text.slice(start);
+  }
+  const end = wordBoundaries(glued, false)[0];
+  return end === undefined ? glued : glued.slice(0, end);
+}
+
+/**
+ * Start of the current space-delimited token, walking back across earlier runs.
+ *
+ * Uniformity uses this origin so a later 5.5pt remainder cannot hyphenate after a 10pt `{`.
+ */
+export function mixedTokenOrigin(
+  pieces: readonly HyphenationPieceView[],
+  pieceIndex: number,
+  consumed: number
+): { readonly pieceIndex: number; readonly consumed: number } {
+  let index = pieceIndex;
+  let offset = consumed;
+  while (index >= 0) {
+    const piece = pieces[index];
+    if (!piece || piece.measureText !== undefined) {
+      return index === pieceIndex
+        ? { pieceIndex, consumed }
+        : { pieceIndex: index + 1, consumed: 0 };
+    }
+    if (offset === 0) {
+      if (index === 0) return { pieceIndex: 0, consumed: 0 };
+      index -= 1;
+      offset = pieces[index]!.text.length;
+      continue;
+    }
+    const prefix = piece.text.slice(0, offset);
+    let start = 0;
+    for (const boundary of wordBoundaries(prefix, false)) {
+      if (boundary < offset) start = boundary;
+    }
+    if (start === offset) return { pieceIndex: index, consumed: offset };
+    if (start > 0 || index === 0) return { pieceIndex: index, consumed: start };
+    index -= 1;
+    offset = pieces[index]!.text.length;
+  }
+  return { pieceIndex: 0, consumed: 0 };
+}
+
+function effectiveHyphenStyleKey(piece: MixedPlaceablePiece): string | null {
+  const language = admittedHyphenationLanguage(lastWinsRunLanguage(piece.props));
+  if (language === null) return null;
+  const style = piece.style;
+  return [
+    language,
+    piece.fontSlot ?? '',
+    style.fontFamily ?? '',
+    style.fontFamilyEastAsia ?? '',
+    String(style.fontSizePt),
+    style.bold ? 'b' : '',
+    style.italic ? 'i' : '',
+    style.caps ? 'c' : '',
+    style.smallCaps ? 's' : '',
+  ].join('\t');
+}
+
+/**
+ * Whether every run that forms the current space-delimited mixed token shares one
+ * effective face, font slot, and admitted hyphenation language.
+ */
+export function mixedTokenRunsAreUniform(
+  pieces: readonly MixedPlaceablePiece[],
+  pieceIndex: number,
+  consumed: number
+): boolean {
+  const origin = mixedTokenOrigin(pieces, pieceIndex, consumed);
+  const glued = mixedTokenAcrossPieces(pieces, origin.pieceIndex, origin.consumed);
+  if (glued.length === 0) return false;
+  let remaining = glued.length;
+  let key: string | null | undefined;
+  for (let index = origin.pieceIndex; index < pieces.length && remaining > 0; index += 1) {
+    const piece = pieces[index]!;
+    if (piece.measureText !== undefined) break;
+    const localStart = index === origin.pieceIndex ? origin.consumed : 0;
+    const available = piece.text.length - localStart;
+    if (available <= 0) continue;
+    const take = Math.min(available, remaining);
+    if (take <= 0) continue;
+    const next = effectiveHyphenStyleKey(piece);
+    if (next === null) return false;
+    if (key === undefined) key = next;
+    else if (next !== key) return false;
+    remaining -= take;
+  }
+  return key !== undefined && remaining === 0;
 }
 
 export interface HyphenationOverflowInput {
@@ -197,6 +324,179 @@ export function hyphenateOverflowingCandidate(
   if (limit !== null && input.consecutiveHyphenatedLines >= limit) return null;
   if (settings.doNotHyphenateCaps && input.capsFormatted) return null;
   return lastFittingInteriorHyphen(input);
+}
+
+export interface MixedPrefixSlice {
+  readonly pieceIndex: number;
+  readonly localStart: number;
+  readonly localEnd: number;
+  readonly text: string;
+}
+
+export interface MixedTokenHyphenPlan {
+  readonly hyphen: DiscretionaryHyphenBreak;
+  readonly slices: readonly MixedPrefixSlice[];
+  readonly nextPieceIndex: number;
+  readonly nextConsumed: number;
+}
+
+/**
+ * Map a glued-token hyphen offset onto the source runs that contain the prefix.
+ *
+ * The last slice holds the break. `nextConsumed` is the local offset after that break.
+ */
+export function planMixedTokenHyphen(
+  pieces: readonly HyphenationPieceView[],
+  pieceIndex: number,
+  consumed: number,
+  hyphen: DiscretionaryHyphenBreak
+): MixedTokenHyphenPlan | null {
+  let remaining = hyphen.utf16Offset;
+  if (remaining <= 0) return null;
+  const slices: MixedPrefixSlice[] = [];
+  for (let index = pieceIndex; index < pieces.length && remaining > 0; index += 1) {
+    const piece = pieces[index]!;
+    if (piece.measureText !== undefined) break;
+    const localStart = index === pieceIndex ? consumed : 0;
+    const available = piece.text.length - localStart;
+    if (available <= 0) continue;
+    const take = Math.min(available, remaining);
+    slices.push({
+      pieceIndex: index,
+      localStart,
+      localEnd: localStart + take,
+      text: piece.text.slice(localStart, localStart + take),
+    });
+    remaining -= take;
+  }
+  const last = slices[slices.length - 1];
+  if (remaining > 0 || !last) return null;
+  return {
+    hyphen,
+    slices,
+    nextPieceIndex: last.pieceIndex,
+    nextConsumed: last.localEnd,
+  };
+}
+
+/**
+ * Farthest-fitting hyphen in a uniform mixed token when that token overflows slack.
+ *
+ * Mixed effective styles, missing admitted language, or an ordinary letter word return
+ * `null` so punctuation and emergency cuts keep their baseline behaviour.
+ */
+export function hyphenateMixedToken(
+  input: Omit<OverflowingCandidateHyphenInput, 'maxUtf16Offset' | 'pieces'> & {
+    readonly pieces: readonly MixedPlaceablePiece[];
+  }
+): MixedTokenHyphenPlan | null {
+  const glued = mixedTokenAcrossPieces(input.pieces, input.pieceIndex, input.consumed);
+  if (glued.length <= input.candidate.length) return null;
+  if (!TEMPLATE_PUNCT.test(glued)) return null;
+  if (!mixedTokenRunsAreUniform(input.pieces, input.pieceIndex, input.consumed)) return null;
+  if (input.measure(glued) <= input.slackPt + 0.001) return null;
+  const found = hyphenateOverflowingCandidate({
+    ...input,
+    candidate: glued,
+  });
+  if (!found) return null;
+  return planMixedTokenHyphen(input.pieces, input.pieceIndex, input.consumed, found);
+}
+
+type LineBox = {
+  readonly spans: StyleSpanRecord[];
+  width: number;
+  height: number;
+  baseline: number;
+  end: number;
+};
+
+/** Prefix spans for a mixed-token hyphen, one span per source run, hyphen on the last. */
+export function placeMixedTokenHyphenPlan(input: {
+  readonly plan: MixedTokenHyphenPlan;
+  readonly pieces: readonly MixedPlaceablePiece[];
+  readonly paragraphId: string;
+  readonly x: number;
+  readonly height: number;
+  readonly measure: (text: string) => number;
+}): { readonly spans: StyleSpanRecord[]; readonly width: number } {
+  const spans: StyleSpanRecord[] = [];
+  let x = input.x;
+  let width = 0;
+  const lastIndex = input.plan.slices.length - 1;
+  for (let index = 0; index < input.plan.slices.length; index += 1) {
+    const slice = input.plan.slices[index]!;
+    const piece = input.pieces[slice.pieceIndex];
+    if (!piece) continue;
+    const isBreak = index === lastIndex;
+    const measured = isBreak
+      ? input.measure(slice.text + DISCRETIONARY_HYPHEN_GLYPH)
+      : input.measure(slice.text);
+    const spanWidth =
+      isBreak && input.plan.hyphen.widthPt - width > 0
+        ? input.plan.hyphen.widthPt - width
+        : measured;
+    spans.push({
+      range: {
+        paragraphId: input.paragraphId,
+        start: piece.start + slice.localStart,
+        end: piece.start + slice.localEnd,
+      },
+      text: slice.text,
+      props: piece.props,
+      style: piece.style,
+      box: { x, y: 0, width: spanWidth, height: input.height },
+      ...(isBreak ? { discretionaryHyphen: { widthPt: input.plan.hyphen.hyphenWidthPt } } : {}),
+      ...(piece.link ? { link: piece.link } : {}),
+      ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
+      ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
+      ...(piece.revisions ? { revisions: piece.revisions } : {}),
+      ...(piece.fieldAtom ? { fieldAtom: piece.fieldAtom } : {}),
+    });
+    x += spanWidth;
+    width += spanWidth;
+  }
+  return { spans, width };
+}
+
+export function appendSpansToLine(
+  line: LineBox,
+  spans: readonly StyleSpanRecord[],
+  metrics: { readonly height: number; readonly baseline: number }
+): void {
+  const target = line.spans;
+  for (const span of spans) {
+    target.push(span);
+    line.width += span.box.width;
+    line.height = Math.max(line.height, metrics.height);
+    line.baseline = Math.max(line.baseline, metrics.baseline);
+    line.end = span.range.end;
+  }
+}
+
+/** Hyphenate a uniform mixed token, append prefix spans, and return the resume cursor. */
+export function tryPlaceUniformMixedTokenHyphen(
+  input: Omit<OverflowingCandidateHyphenInput, 'maxUtf16Offset' | 'pieces'> & {
+    readonly pieces: readonly MixedPlaceablePiece[];
+    readonly line: LineBox;
+    readonly paragraphId: string;
+    readonly x: number;
+    readonly height: number;
+    readonly metrics: { readonly height: number; readonly baseline: number };
+  }
+): { readonly nextPieceIndex: number; readonly nextConsumed: number } | null {
+  const plan = hyphenateMixedToken(input);
+  if (!plan) return null;
+  const placed = placeMixedTokenHyphenPlan({
+    plan,
+    pieces: input.pieces,
+    paragraphId: input.paragraphId,
+    x: input.x,
+    height: input.height,
+    measure: input.measure,
+  });
+  appendSpansToLine(input.line, placed.spans, input.metrics);
+  return { nextPieceIndex: plan.nextPieceIndex, nextConsumed: plan.nextConsumed };
 }
 
 export function hyphenationSplitForOverflow(

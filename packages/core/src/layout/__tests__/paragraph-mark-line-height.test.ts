@@ -178,6 +178,37 @@ describe('auto line spacing and paragraph-mark height', () => {
     expect(max / min).toBeLessThan(2);
   });
 
+  test('a single 5.5pt line grows to a 10pt mark', () => {
+    const markTall = linesOf(
+      lay(
+        '<w:p><w:pPr><w:rPr><w:sz w:val="20"/></w:rPr></w:pPr>' +
+          '<w:r><w:rPr><w:sz w:val="11"/></w:rPr><w:t>house</w:t></w:r></w:p>'
+      )
+    )[0]!;
+    expect(markTall.box.height).toBeCloseTo(10 * 1.15, 5);
+    expect(markTall.baseline).toBeCloseTo(5.5 * 0.9, 5);
+    expect(markTall.leading).toBeCloseTo(0, 5);
+  });
+
+  test('a wrapped 5.5pt final line keeps 6.325pt when the mark is 10pt', () => {
+    const layout = layoutSemanticDocument(
+      load(
+        '<w:p><w:pPr><w:rPr><w:sz w:val="20"/></w:rPr></w:pPr>' +
+          '<w:r><w:rPr><w:sz w:val="11"/></w:rPr>' +
+          '<w:t>aaaaa aaaaa aaaaa aaaaa aaaaa z</w:t></w:r></w:p>' +
+          '<w:sectPr><w:pgSz w:w="1400" w:h="16840"/>' +
+          '<w:pgMar w:top="0" w:right="40" w:bottom="0" w:left="40"/></w:sectPr>'
+      ),
+      1,
+      { measurer }
+    );
+    const wrapped = linesOf(layout);
+    expect(wrapped.length).toBeGreaterThan(1);
+    const last = wrapped[wrapped.length - 1]!;
+    expect(last.box.height).toBeCloseTo(5.5 * 1.15, 5);
+    expect(last.leading).toBeCloseTo(0, 5);
+  });
+
   test('paint puts auto trailing depth in padding-bottom, not padding-top', () => {
     const layout = lay(
       '<w:p><w:pPr><w:spacing w:line="480" w:lineRule="auto"/></w:pPr>' +

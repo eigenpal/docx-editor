@@ -2,16 +2,24 @@
 
 import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
+import { readHyphenationSettings } from '../../store/package/hyphenation-settings.ts';
 import { readOoxmlPackage } from '../../store/package/ooxml-package.ts';
 import {
   readOoxmlPart,
   type OoxmlElement,
   type OoxmlPart,
 } from '../../store/package/ooxml-tree.ts';
+import { defaultTabIntervalFromSettings } from '../paragraph-tabs.ts';
 import { createFixedMeasurer, layoutSemanticDocument } from '../semantic-layout.ts';
 import { MAX_TABLE_ROW_HEIGHT_PT, readTableStructure } from '../semantic-table.ts';
 import { TablePaginationError } from '../semantic-table-layout.ts';
-import type { TableFragmentRecord } from '../semantic-records.ts';
+import type {
+  ParagraphFragmentRecord,
+  TableFragmentRecord,
+  TableRowFragmentRecord,
+  TextMeasurer,
+} from '../semantic-records.ts';
+import { buildStyleCascadeTable } from '../style-cascade.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
@@ -209,5 +217,100 @@ describe('Form025U row-height regression', () => {
     for (const row of shortRows) {
       expect(row.box.height).toBeGreaterThanOrEqual(14.2 - 0.05);
     }
+  });
+
+  test('page-1 document and address rows match Word heights', () => {
+    const bytes = readFileSync(`${import.meta.dir}/../../../../../e2e/fixtures/Form025U.docx`);
+    const result = readOoxmlPackage(bytes);
+    if (!result.ok) throw new Error(result.reason);
+    const part = result.package.parts.get(result.package.mainDocumentPart)!;
+    const styles = result.package.parts.get('/word/styles.xml');
+    const settings = result.package.parts.get('/word/settings.xml');
+    const measurer: TextMeasurer = {
+      measure(text, style) {
+        return text.length * style.fontSizePt * 0.5;
+      },
+      lineMetrics(style) {
+        return { height: style.fontSizePt * 1.15, baseline: style.fontSizePt * 0.9 };
+      },
+    };
+    const layout = layoutSemanticDocument(part, 0, {
+      measurer,
+      styleCascade: buildStyleCascadeTable(styles?.root ?? null),
+      defaultTabStopPt: defaultTabIntervalFromSettings(settings?.root),
+      hyphenationSettings: readHyphenationSettings(settings?.root),
+    });
+    const rows: TableRowFragmentRecord[] = [];
+    const walk = (tables: readonly TableFragmentRecord[]): void => {
+      for (const table of tables) {
+        for (const row of table.rows) {
+          rows.push(row);
+          for (const cell of row.cells) {
+            walk(
+              cell.blocks.filter((block): block is TableFragmentRecord => block.kind === 'table')
+            );
+          }
+        }
+      }
+    };
+    walk(allTables(layout));
+    const rowText = (row: TableRowFragmentRecord): string =>
+      row.cells
+        .flatMap((cell) => cell.blocks)
+        .filter((block): block is ParagraphFragmentRecord => block.kind === 'paragraph')
+        .flatMap((block) => block.lines.flatMap((line) => line.spans.map((span) => span.text)))
+        .join('');
+    const lineCount = (row: TableRowFragmentRecord): number =>
+      Math.max(
+        0,
+        ...row.cells.map((cell) =>
+          cell.blocks
+            .filter((block): block is ParagraphFragmentRecord => block.kind === 'paragraph')
+            .reduce((count, block) => count + block.lines.length, 0)
+        )
+      );
+    const document = rows.find((row) => rowText(row).includes('documents[0].series'));
+    const permanent = rows.find(
+      (row) =>
+        rowText(row).includes('Постоянное место жительства') && rowText(row).includes('.house')
+    );
+    const actual = rows.find(
+      (row) =>
+        rowText(row).includes('Фактическое место жительства') && rowText(row).includes('.house')
+    );
+    expect(document).toBeDefined();
+    expect(permanent).toBeDefined();
+    expect(actual).toBeDefined();
+    const cellWith = (row: TableRowFragmentRecord, needle: string) =>
+      row.cells.find((cell) =>
+        cell.blocks
+          .filter((block): block is ParagraphFragmentRecord => block.kind === 'paragraph')
+          .some((block) =>
+            block.lines
+              .map((line) => line.spans.map((span) => span.text).join(''))
+              .join('')
+              .includes(needle)
+          )
+      );
+    const series = cellWith(document!, 'series')!;
+    const permanentHouse = cellWith(permanent!, '.house')!;
+    const actualHouse = cellWith(actual!, '.house')!;
+    const paragraphLines = (cell: NonNullable<typeof series>) =>
+      cell.blocks
+        .filter((block): block is ParagraphFragmentRecord => block.kind === 'paragraph')
+        .flatMap((block) => block.lines);
+    expect(
+      paragraphLines(series).map((line) => line.spans.map((span) => span.text).join(''))
+    ).toEqual(['{d.pa', 'tient.doc', 'uments[0].', 'series}']);
+    expect(paragraphLines(permanentHouse).length).toBe(6);
+    expect(paragraphLines(actualHouse).length).toBe(6);
+    expect(paragraphLines(permanentHouse).at(-1)!.box.height).toBeCloseTo(6.325, 3);
+    expect(paragraphLines(actualHouse).at(-1)!.box.height).toBeCloseTo(6.325, 3);
+    expect(document!.box.height).toBeCloseTo(46.56, 0);
+    expect(
+      paragraphLines(permanentHouse).reduce((sum, line) => sum + line.box.height, 0)
+    ).toBeCloseTo(43.125, 2);
+    expect(actual!.box.height).toBeCloseTo(43.68, 0);
+    expect(lineCount(actual!)).toBe(6);
   });
 });

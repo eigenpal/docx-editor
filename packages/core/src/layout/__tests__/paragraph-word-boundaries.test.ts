@@ -143,16 +143,14 @@ describe('template expressions in paragraph flow', () => {
     const on = textsOf(body, 72, ON);
     expect(off[0]?.startsWith('{d.patient.d')).toBe(true);
     expect(off.join('')).toBe(token);
-    expect(on[0]).toBe('{d.patient.');
-    expect(on[0]).not.toBe('{d.pa');
+    expect(on[0]).toBe('{d.pa');
     expect(on.join('')).toBe(token);
   });
 
-  test('{d.patient.documents[0].citizenship} wraps at template punctuation when hyphenation is on', () => {
+  test('{d.patient.documents[0].citizenship} hyphenates a uniform mixed token before punctuation', () => {
     const body = `<w:p>${run('{d.patient.documents[0].citizenship}')}</w:p>`;
     const texts = textsOf(body, 72);
-    expect(texts[0]).toBe('{d.patient.');
-    expect(texts[0]).not.toBe('{d.pa');
+    expect(texts[0]).toBe('{d.pa');
     expect(texts.join('')).toBe('{d.patient.documents[0].citizenship}');
   });
 

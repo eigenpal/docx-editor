@@ -85,6 +85,7 @@ import {
   letterWordTail,
   nextOversizedEmptyLineCut,
   placeDiscretionaryHyphenBreak,
+  tryPlaceUniformMixedTokenHyphen,
 } from './paragraph-hyphenation.ts';
 import { paragraphSuppressAutoHyphens } from './paragraph-suppress-auto-hyphens.ts';
 import { lastWinsRunLanguage } from './run-language.ts';
@@ -1086,11 +1087,14 @@ export function breakParagraph(
       line.height = metrics.height;
       line.baseline = metrics.baseline;
       glyphBaseline = metrics.baseline;
-    } else if (options?.includeParagraphMark && measurer.hasResolvedFont?.(emptyStyle) !== false) {
+    } else if (
+      options?.includeParagraphMark &&
+      lines.length === 0 &&
+      measurer.hasResolvedFont?.(emptyStyle) !== false
+    ) {
       // Paragraph mark `w:sz` (CT_PPr/rPr) can be taller than the visible runs. Grow the
-      // line box to the mark height but keep the glyph baseline — the spare depth sits
-      // below the text, matching Word's cover-page party-name rhythm. Pushing the baseline
-      // down (max-ascent) made "between"/"MERIDIAN" clump while inflating other gaps.
+      // first or only line to the mark height and keep the glyph baseline. Spare depth sits
+      // below the text. A wrapped final line keeps visible metrics.
       line.height = Math.max(line.height, metrics.height);
     }
     finalizeDrawingGeometry();
@@ -1151,7 +1155,7 @@ export function breakParagraph(
 
   /** Whether the last thing placed was a line break, so the paragraph ends on a fresh line. */
   let trailingLineBreak = false;
-
+  let resumeConsumed = 0;
   for (let pieceIndex = 0; pieceIndex < pieces.length; pieceIndex += 1) {
     const piece = pieces[pieceIndex]!;
     if (piece.breakKind === 'column') {
@@ -1318,7 +1322,8 @@ export function breakParagraph(
     // resolution — plus the slot, and re-resolve through the same helper.
     const faceStyle = styleForFontSlot(piece.style, piece.fontSlot);
     const metrics = measurer.lineMetrics(faceStyle);
-    let consumed = 0;
+    let consumed = resumeConsumed;
+    resumeConsumed = 0;
     for (const boundary of wordBoundaries(piece.text, templatePunct)) {
       if (boundary <= consumed) continue;
       const candidate = piece.text.slice(consumed, boundary);
@@ -1465,6 +1470,40 @@ export function breakParagraph(
         ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
         ...revisionsOf(piece),
       };
+      if (templatePunct && !layoutOwned && piece.measureText === undefined && !lineEndWhitespace) {
+        const mixedResume = tryPlaceUniformMixedTokenHyphen({
+          settings: flow?.hyphenationSettings,
+          suppressAutoHyphens,
+          consecutiveHyphenatedLines,
+          slackPt: lineAvailable() - line.width,
+          language: lastWinsRunLanguage(piece.props),
+          capsFormatted: faceStyle.caps,
+          measure: measureDrawn,
+          candidate,
+          pieces,
+          pieceIndex,
+          consumed,
+          layoutOwned,
+          measureText: piece.measureText,
+          ignoreHyphenationZone: line.spans.length === 0 && line.drawings.length === 0,
+          line,
+          paragraphId,
+          x: lineOrigin() + line.width,
+          height: metrics.height,
+          metrics,
+        });
+        if (mixedResume) {
+          closeLine();
+          lastEmitted = '';
+          if (mixedResume.nextPieceIndex !== pieceIndex) {
+            resumeConsumed = mixedResume.nextConsumed;
+            pieceIndex = mixedResume.nextPieceIndex - 1;
+            break;
+          }
+          consumed = mixedResume.nextConsumed;
+          continue;
+        }
+      }
       if (hasLineContent && (opensWord || wordStartSpan <= 0)) {
         const wrapInput = () => ({
           lineWidth: line.width,

@@ -11,12 +11,17 @@ import { createParagraphLayoutCache } from '../layout-cache.ts';
 import { passProducerOf } from '../pass-producer.ts';
 import { breakParagraph } from '../paragraph-flow.ts';
 import {
+  hyphenateMixedToken,
   hyphenateOverflowingCandidate,
   hyphenationSplitForOverflow,
   interiorLetterRuns,
   leadingLetterRun,
   letterWordTail,
+  mixedTokenAcrossPieces,
+  mixedTokenRunsAreUniform,
+  type MixedPlaceablePiece,
 } from '../paragraph-hyphenation.ts';
+import { DEFAULT_RUN_STYLE } from '../run-style.ts';
 import type { PendingLine } from '../pending-line.ts';
 import { DEFAULT_REVISION_DISPLAY_MODE } from '../revision-projection.ts';
 import { linesOf as layoutLinesOf } from '../semantic-record-queries.ts';
@@ -116,6 +121,13 @@ describe('paragraph-hyphenation helpers', () => {
       { start: 11, length: 9 },
       { start: 24, length: 6 },
     ]);
+    expect(
+      mixedTokenAcrossPieces(
+        [{ text: '{' }, { text: 'd.patient' }, { text: '.documents[0].series}' }],
+        0,
+        0
+      )
+    ).toBe('{d.patient.documents[0].series}');
   });
 
   test('a mixed token takes the last interior hyphen that fits', () => {
@@ -159,6 +171,66 @@ describe('paragraph-hyphenation helpers', () => {
     });
     expect(second?.utf16Offset).toBe(10);
     expect(rest.slice(0, second!.utf16Offset)).toBe('tient.docu');
+  });
+
+  test('a six-run mixed token last-fits a later-run hyphen when styles are uniform', () => {
+    const en = [{ localName: 'lang', attributes: { val: 'en-US' } }];
+    const style = { ...DEFAULT_RUN_STYLE, fontSizePt: 10 };
+    let start = 0;
+    const pieces: MixedPlaceablePiece[] = [
+      '{',
+      'd.patient',
+      '.documents',
+      '[0',
+      '].series',
+      '}',
+    ].map((text) => {
+      const piece = { text, start, props: en, style };
+      start += text.length;
+      return piece;
+    });
+    expect(mixedTokenAcrossPieces(pieces, 0, 0)).toBe('{d.patient.documents[0].series}');
+    expect(mixedTokenRunsAreUniform(pieces, 0, 0)).toBe(true);
+    const measure = (text: string) => text.length * 6;
+    const base = {
+      settings: ON,
+      suppressAutoHyphens: false,
+      consecutiveHyphenatedLines: 0,
+      language: 'en-US',
+      capsFormatted: false,
+      measure,
+      pieces,
+      layoutOwned: false,
+      measureText: undefined,
+      ignoreHyphenationZone: false,
+    };
+    const narrow = hyphenateMixedToken({
+      ...base,
+      candidate: '{',
+      slackPt: 66,
+      pieceIndex: 0,
+      consumed: 0,
+    });
+    expect(narrow?.hyphen.utf16Offset).toBe(5);
+    expect(narrow?.slices.map((slice) => slice.text)).toEqual(['{', 'd.pa']);
+    expect(narrow?.nextPieceIndex).toBe(1);
+    expect(narrow?.nextConsumed).toBe(4);
+    const mixedStyle = pieces.map((piece, index) => ({
+      ...piece,
+      style: { ...style, fontSizePt: index === 0 ? 10 : 5.5 },
+    }));
+    expect(mixedTokenRunsAreUniform(mixedStyle, 0, 0)).toBe(false);
+    expect(mixedTokenRunsAreUniform(mixedStyle, 1, 0)).toBe(false);
+    expect(
+      hyphenateMixedToken({
+        ...base,
+        pieces: mixedStyle,
+        candidate: '{',
+        slackPt: 66,
+        pieceIndex: 0,
+        consumed: 0,
+      })
+    ).toBeNull();
   });
 
   test('consecutive limit and zone refuse a split', () => {
@@ -234,19 +306,47 @@ describe('discretionary hyphen in paragraph flow', () => {
     expect(lines[1]!.spans[0]!.text).toBe('zenship');
   });
 
-  test('a mixed template token wraps at punctuation instead of an interior Latin hyphen', () => {
+  test('a uniform mixed template token hyphenates interior letter runs before punctuation', () => {
     const token = '{d.patient.documents[0].series}';
-    const body = `<w:p>${run(token)}</w:p>`;
-    const texts = textsOf(body, 72);
-    expect(texts).toEqual(['{d.patient.', 'documents[0]', '.series}']);
+    const body = `<w:p>${run('{')}${run('d.patient')}${run('.documents')}${run('[0')}${run('].series')}${run('}')}</w:p>`;
+    const lines = breakLines(body, 72);
+    const texts = lines.map((line) => line.spans.map((span) => span.text).join(''));
+    expect(texts).toEqual(['{d.pa', 'tient.docu', 'ments[0].se', 'ries}']);
     expect(texts.join('')).toBe(token);
-    expect(texts[0]).not.toBe('{d.pa');
-    expect(hasDiscretionaryHyphen(body, 72)).toBe(false);
-    expect(textsOf(body, 72, DEFAULT_HYPHENATION_SETTINGS)[0]?.startsWith('{d.patient.d')).toBe(
-      true
-    );
+    expect(lines[0]!.spans.map((span) => span.range)).toEqual([
+      { paragraphId: 'p', start: 0, end: 1 },
+      { paragraphId: 'p', start: 1, end: 5 },
+    ]);
+    expect(lines[0]!.spans[0]!.discretionaryHyphen).toBeUndefined();
+    expect(lines[0]!.spans[1]!.discretionaryHyphen?.widthPt).toBe(6);
+    expect(lines[0]!.spans[0]!.style.fontSizePt).toBe(lines[0]!.spans[1]!.style.fontSizePt);
+    expect(hasDiscretionaryHyphen(body, 72, DEFAULT_HYPHENATION_SETTINGS)).toBe(false);
+    expect(textsOf(body, 72, DEFAULT_HYPHENATION_SETTINGS).join('')).toBe(token);
+    expect(
+      textsOf(`<w:p>${run(token)}</w:p>`, 72, DEFAULT_HYPHENATION_SETTINGS)[0]?.startsWith(
+        '{d.patient.d'
+      )
+    ).toBe(true);
     expect(textsOf(body, 200)).toEqual([token]);
     expect(textsOf(`<w:p>${run('{123}')}</w:p>`, 24)).toEqual(['{', '123}']);
+  });
+
+  test('a mixed-style mixed token keeps punctuation wrap and skips multi-run hyphenation', () => {
+    const token = '{d.patient.documents[0].series}';
+    const open =
+      `<w:r><w:rPr><w:sz w:val="20"/><w:lang w:val="en-US"/></w:rPr>` +
+      `<w:t xml:space="preserve">{</w:t></w:r>`;
+    const rest =
+      `<w:r><w:rPr><w:sz w:val="11"/><w:lang w:val="en-US"/></w:rPr>` +
+      `<w:t xml:space="preserve">d.patient.documents[0].series}</w:t></w:r>`;
+    const body = `<w:p>${open}${rest}</w:p>`;
+    const texts = textsOf(body, 72);
+    expect(texts[0]).not.toBe('{d.pa');
+    expect(texts[0]?.startsWith('{d.patient.')).toBe(true);
+    expect(texts.join('')).toBe(token);
+    expect(hasDiscretionaryHyphen(body, 72)).toBe(false);
+    expect(texts.some((line) => /[.[\]}]$/.test(line))).toBe(true);
+    expect(textsOf(body, 72, DEFAULT_HYPHENATION_SETTINGS).join('')).toBe(token);
   });
 
   test('Russian Постоянное splits at a TeX point', () => {
