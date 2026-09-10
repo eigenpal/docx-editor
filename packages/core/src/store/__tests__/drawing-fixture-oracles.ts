@@ -43,7 +43,9 @@ export const FIXTURE_ORACLES: Readonly<Record<string, FixtureLayoutPaintOracle>>
     // Word-authored VML uses repeated inert styles and page wrap anchors.
     // The paint harness injects ready resources; the package tests refuse external fetches.
     drawingCount: 28,
-    pageCount: 81,
+    // Fixed-measurer baseline, not Word's page count: 717 authored w:cr breaks now
+    // lay out like w:br (83 pages); dropping those breaks reproduces the old 81.
+    pageCount: 83,
     readyCount: 27,
     placeholderCount: 0,
     assertProjections: (projections) => {

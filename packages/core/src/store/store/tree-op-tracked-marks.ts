@@ -62,8 +62,15 @@ export function applyParagraphMarkRevision(
     return fromEdit({ ok: true, part }, effect);
   }
 
-  const id = adjacentParagraphMarkId(part, paragraph, kind, revision) ?? nextRevisionId(part)();
-  const mark = build(mint(), 'generic', kind, revisionAttributes(id, revision), []);
+  const adjacent = adjacentParagraphMark(part, paragraph, kind, revision);
+  const id = adjacent?.id ?? nextRevisionId(part)();
+  const attribution = adjacent
+    ? {
+        author: revision.author,
+        ...(adjacent.date === undefined ? {} : { date: adjacent.date }),
+      }
+    : revision;
+  const mark = build(mint(), 'generic', kind, revisionAttributes(id, attribution), []);
 
   const properties = childrenOf(paragraph).find((child) => child.kind === 'paragraphProperties');
   const rest = childrenOf(paragraph).filter((child) => child.kind !== 'paragraphProperties');
@@ -183,18 +190,19 @@ function isMarkRevision(node: OoxmlNode): boolean {
 }
 
 /**
- * The id of a same-kind, same-author, same-moment paragraph mark on a NEIGHBOURING paragraph.
+ * The identity of a same-kind, same-author, same-moment mark on a NEIGHBOURING paragraph.
  *
  * A run of Enters, or a run of Backspaces at a paragraph start, is one editing gesture — Word
- * groups it under one revision and offers one Accept. Without this each press minted its own,
- * and the pane filled with a card per keystroke.
+ * groups it under one revision and offers one Accept. Both id and date must match because the
+ * review queue addresses a decision by their pair. Reusing only the id still made one card per
+ * second, which is why the same number of Enter presses produced an inconsistent card count.
  */
-function adjacentParagraphMarkId(
+function adjacentParagraphMark(
   part: OoxmlPart,
   paragraph: OoxmlParagraphNode,
   kind: 'ins' | 'del',
   revision: RevisionAttributionInput
-): string | null {
+): { readonly id: string; readonly date?: string } | null {
   const parent = parentOf(part, paragraph.id);
   if (!parent) return null;
   const siblings = parent.children;
@@ -205,8 +213,10 @@ function adjacentParagraphMarkId(
     const rPr = properties
       ? childrenOf(properties).find((child) => isWmlNamed(child, 'rPr'))
       : undefined;
-    const mark = rPr ? childrenOf(rPr).find(isMarkRevision) : undefined;
-    if (!mark || mark.kind === 'textValue' || mark.localName !== kind) continue;
+    const mark = rPr
+      ? childrenOf(rPr).find((child) => isMarkRevisionOfKind(child, kind))
+      : undefined;
+    if (!mark || mark.kind === 'textValue') continue;
     const read = (localName: string): string | undefined =>
       mark.attributes.find(
         (attribute) =>
@@ -215,7 +225,8 @@ function adjacentParagraphMarkId(
     if (read('author') !== revision.author) continue;
     if (!sameEditingMoment(read('date'), revision.date)) continue;
     const id = read('id');
-    if (id !== undefined) return id;
+    const date = read('date');
+    if (id !== undefined) return date === undefined ? { id } : { id, date };
   }
   return null;
 }

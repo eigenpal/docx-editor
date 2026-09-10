@@ -1,3 +1,4 @@
+import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument } from './docx-editor-save.ts';
 import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
 import { beginSurfaceCommit } from './surface-commit-state.ts';
@@ -838,16 +839,9 @@ export function mountPaginatedSurface(
     mintValidatedBytes: (handle, expectedContentId) =>
       drawingBundle.mintValidatedBytes(handle, expectedContentId),
   });
-  /**
-   * Which revision halves this surface is SHOWING — the one answer every lane asks for.
-   *
-   * Layout, furniture and the FORMATTING walks read it: a write must not restyle text the
-   * view hides, because the store offsets cover every revision half whatever the view does
-   * with them (#497). A function rather than a constant so a future
-   * `setRevisionDisplayMode` moves every reader at once.
-   */
-  const revisionDisplayMode = (): RevisionDisplayMode =>
-    options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  // Layout, furniture, and formatting writes share the view's current projection (#497).
+  let displayMode = options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const revisionDisplayMode = (): RevisionDisplayMode => displayMode;
   const revisionAuthorVisibility =
     runtimeOptions.revisionAuthorVisibility ??
     createRevisionAuthorVisibility(options.hiddenRevisionAuthors);
@@ -969,6 +963,11 @@ export function mountPaginatedSurface(
   let currentLayout = layoutOnce();
   // Declared before the first paint can run — `render` reads it.
   let revisionStyles = options.revisionStyles;
+  const paragraphMarks = createParagraphMarkVisibility(
+    options.showParagraphMarks ?? false,
+    flushPendingInputAndLayout,
+    () => render(false)
+  );
   // The facade owns this across internal remounts of the SAME attached document. A direct
   // surface mount has no facade session, so it correctly starts a fresh assignment here.
   const stableAuthorSlots = runtimeOptions.reviewAuthorSlots ?? createStableReviewAuthorSlots();
@@ -2753,6 +2752,7 @@ export function mountPaginatedSurface(
         ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
         ...(revisionStyles !== undefined ? { revisionStyles } : {}),
         shadeFormFields: shadeFormFields(),
+        showParagraphMarks: paragraphMarks.get(),
         ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
         ...(activeHf
           ? {
@@ -3855,13 +3855,12 @@ export function mountPaginatedSurface(
     readonly anchor: SemanticPosition;
     readonly head: SemanticPosition;
   } | null = null;
-
   /**
    * Set only while {@link activateReview} installs its own caret, so the write below does
    * not retire the pin it was just asked to raise.
    */
   let activationSelectionWrite = false;
-
+  let allowExcludedReviewPin = false;
   /** Any selection the reader (or an edit) moves retires the pin. See {@link activatedReview}. */
   function retireActivationPin(): void {
     if (!activationSelectionWrite) activatedReview = null;
@@ -3881,7 +3880,8 @@ export function mountPaginatedSurface(
     if (
       found.kind === 'revision' &&
       reviewActivationExclusions !== null &&
-      reviewActivationExclusions.has(found.revisionKind)
+      reviewActivationExclusions.has(found.revisionKind) &&
+      !allowExcludedReviewPin
     ) {
       return null;
     }
@@ -5378,6 +5378,12 @@ export function mountPaginatedSurface(
     },
 
     revisionAuthors: () => reviewAuthors.get().value,
+    setRevisionDisplayMode(mode) {
+      if (destroyed || mode === displayMode) return;
+      flushPendingInputAndLayout();
+      displayMode = mode;
+      applyRevisionAuthorVisibility(true);
+    },
     hiddenRevisionAuthors: () => revisionAuthorVisibility.hiddenAuthors,
     setRevisionAuthorVisible(author, visible) {
       applyRevisionAuthorVisibility(revisionAuthorVisibility.setVisible(author, visible));
@@ -5395,6 +5401,7 @@ export function mountPaginatedSurface(
     },
     collaborationSession: () => collaborationSession ?? null,
     remotePresenceColor,
+    setShowParagraphMarks: paragraphMarks.set,
     setRevisionStyles: (colors) => {
       if (colors === revisionStyles) return;
       revisionStyles = colors;
@@ -5431,7 +5438,7 @@ export function mountPaginatedSurface(
       const active = activeReviewAtCaret();
       return active ? reviewItemKey(active) : null;
     },
-    activateReview: (key, next) => {
+    activateReview: (key, next, activationOptions) => {
       // Reopening a card the reader dismissed has to clear the dismissal: activation can leave
       // the caret exactly where it already was, so nothing else would take it down and the card
       // would refuse to reopen however many times it was clicked.
@@ -5441,6 +5448,7 @@ export function mountPaginatedSurface(
       // way round, `setSelection` repainted the bands and fired `onChange` while the caret was
       // still the only evidence — so a host saw the WRONG twin reported active for one frame
       // and then a correction. One publish, one answer.
+      allowExcludedReviewPin = activationOptions?.allowExcluded ?? false;
       activatedReview = next
         ? { key, anchor: next.anchor, head: next.head }
         : { key, anchor: selection.anchor, head: selection.head };
@@ -5929,10 +5937,7 @@ export function mountPaginatedSurface(
     },
     runtimeOptions.initialTextFormInput
   );
-  const dispatchKeyDown = createKeyDownHandler(
-    surface,
-    options.onRequestHyperlink ? { onRequestHyperlink: options.onRequestHyperlink } : {}
-  );
+  const dispatchKeyDown = createKeyDownHandler(surface, options);
   const onKeyDown = (event: KeyboardEvent): void => {
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.

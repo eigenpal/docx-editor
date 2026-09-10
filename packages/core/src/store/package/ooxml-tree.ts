@@ -867,14 +867,14 @@ export interface OoxmlTabNode extends OoxmlElementBase<
   readonly localName: 'tab';
 }
 
-/** `w:br` — a line, column or page break inside a run. */
+/** `w:br` — a line, column or page break; `w:cr` — a manual line break. */
 export interface OoxmlHardBreakNode extends OoxmlElementBase<
   readonly [],
   readonly OoxmlKnownNodeAttribute[]
 > {
   readonly kind: 'hardBreak';
   readonly namespaceUri: typeof WML_NAMESPACE_URI;
-  readonly localName: 'br';
+  readonly localName: 'br' | 'cr';
 }
 
 /**
@@ -1449,6 +1449,7 @@ const KNOWN_WML_ELEMENTS: Readonly<Record<string, KnownKind>> = {
   pPr: 'paragraphProperties',
   tab: 'tab',
   br: 'hardBreak',
+  cr: 'hardBreak',
   fldChar: 'fldChar',
   instrText: 'instrText',
   fldSimple: 'fldSimple',

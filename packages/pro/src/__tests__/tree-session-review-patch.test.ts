@@ -194,6 +194,38 @@ const MIXED_LOCAL_REVISION_ORDER =
   `<w:p>${run('second ')}${ins('2', run('kept'))}</w:p>`;
 
 describe('local review patch after one-paragraph text-local edits', () => {
+  for (const direction of ['ins', 'del'] as const) {
+    test(`new text edits join the preceding ${direction} paragraph mark before reload`, () => {
+      const session = open(
+        docx(
+          `<w:p><w:pPr><w:rPr><w:${direction} w:id="1" w:author="Ada"/></w:rPr></w:pPr></w:p>` +
+            `<w:p>${direction === 'del' ? run('Hello') : ''}</w:p>`
+        )
+      );
+      const before = session.reviewItems();
+      expect(before).toHaveLength(1);
+      const paragraphId = session.paragraphIds()[1]!;
+      const revision = { author: 'Ada', date: '2026-01-01T00:00:00Z' };
+      const result = session.applyTreeOps([
+        direction === 'ins'
+          ? { op: 'insertText', paragraphId, offset: 0, text: 'Hello', revision }
+          : { op: 'deleteText', paragraphId, start: 0, end: 5, revision },
+      ]);
+      expect(result.committed).toBe(true);
+      expect(session.reviewItems()).toEqual(oracle(session));
+      expect(session.reviewItems()).toHaveLength(1);
+      const grouped = session.reviewItems()[0]!;
+      expect(grouped.kind === 'revision' && grouped.text).toBe('\nHello');
+
+      session.undo();
+      expect(session.reviewItems()).toEqual(oracle(session));
+      expect(session.reviewItems()).toEqual(before);
+      session.redo();
+      expect(session.reviewItems()).toEqual(oracle(session));
+      expect(session.reviewItems()).toHaveLength(1);
+    });
+  }
+
   test('paragraph-local revisions splice in document order, not site order', () => {
     const session = open(docx(MIXED_LOCAL_REVISION_ORDER));
     const part = session.part();

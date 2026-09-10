@@ -552,6 +552,8 @@ export interface PaginatedSurface {
    * remeasuring a line, and the caret, selection and undo history stay where they are.
    */
   setRevisionStyles(colors: RevisionStyles | undefined): void;
+  /** Toggle paragraph-end furniture without layout or document changes. */
+  setShowParagraphMarks(show: boolean): void;
   /**
    * Hand remote-caret label content to the host, or take it back with `null`.
    *
@@ -595,6 +597,8 @@ export interface PaginatedSurface {
    * would mean another to a script that assumed the resolved result.
    */
   revisionDisplayMode(): RevisionDisplayMode;
+  /** Change the review display without accepting, rejecting, or changing author filters. */
+  setRevisionDisplayMode(mode: RevisionDisplayMode): void;
   /**
    * Where a replacement for `[start, end)` of a paragraph lands, or null when the edit would
    * not be tracked.
@@ -677,7 +681,11 @@ export interface PaginatedSurface {
    * evidence, so a host saw the wrong twin active for one frame and then a correction. Omit it
    * to pin against the live selection, which is what a header or note scope has already set.
    */
-  activateReview(key: string, selection?: SemanticSelection): void;
+  activateReview(
+    key: string,
+    selection?: SemanticSelection,
+    options?: { readonly allowExcluded?: boolean }
+  ): void;
   /**
    * The key {@link activateReview} pinned, or null once its selection is no longer live.
    *

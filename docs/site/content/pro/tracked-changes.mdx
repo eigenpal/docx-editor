@@ -14,6 +14,27 @@ are optional. Saved files use Word `w:ins` and `w:del` markup.
 This feature requires the review module from
 [`@docx-editor.dev/pro`](/docs/2.x/pro).
 
+## Review changes
+
+Use **Review > Next Change** or **Previous Change** to move between visible
+changes. Navigation skips comments and hidden authors, and wraps at the end.
+Accepting or rejecting a card preserves the caret. Use **Next Change** to continue review.
+
+Use **Review > Accept All Changes** or **Reject All Changes** to resolve the
+whole document, including hidden authors, headers, footers, and notes.
+The operation keeps comments and creates one undo step. If a change cannot be
+resolved, the editor refuses the operation without partially applying it.
+
+Formatting cards describe changed language, bold, italic, underline, strike,
+font, size, color, alignment, indentation, and paragraph spacing values.
+Separate formatting decisions remain independently reviewable even when their
+OOXML revision IDs match.
+
+**Review > Display for Review** offers **All Markup**, **No Markup**, and
+**Original**. These views preserve the document and its pending changes.
+Original restores prior run and paragraph formatting. Prior table, row, cell,
+and section formatting remains unsupported. Simple Markup is not offered.
+
 ## Choose an editing mode
 
 | Root `mode` value | Engine state   | Behavior                              |
@@ -188,14 +209,21 @@ are not recorded either; a `w:tblPrChange` a file already carries still renders.
 A document that sets `w:doNotTrackFormatting` in `settings.xml` gets no
 formatting records. Its text edits stay tracked.
 
-A changed paragraph mark shows a colored pilcrow and margin change bar. This
-display also works inside table cells.
+Paragraph marks stay hidden until **Review → Show paragraph breaks** is enabled, even
+when a review card is selected. Use the Review menu, **Cmd+8** on Mac, or
+**Ctrl+Shift+8** on Windows. This changes the view only, including ordinary
+paragraph ends (¶) and manual line breaks (↵, Shift+Enter). Tracked line-break marks
+use their revision color and decoration. Automatic line wraps,
+page breaks, and column breaks do not receive a line-break arrow. Showing these symbols
+does not change copied text or saved documents. Adjacent inserted text and breaks by the same author form one
+review decision. A decision containing only breaks shows their count. Margin
+change bars remain visible, including inside table cells.
 
 One paragraph mark can contain two decisions. For example, one author can insert
 a break before another author suggests its removal.
 
-Attribution appears only in **All Markup**. Resolved views omit review colors,
-pilcrows, and change bars. **No Markup** merges paragraphs when a revision
+Attribution appears only in **All Markup**. Resolved views omit review colors and change bars. The same setting controls
+ordinary paragraph marks. **No Markup** merges paragraphs when a revision
 deletes their paragraph mark.
 
 For author colors and avatars, see
@@ -206,14 +234,16 @@ For author colors and avatars, see
 `<DocxEditorReview />` renders one card for each included pending decision.
 Place it inside the viewport so the rail scrolls with the document.
 
-The default sidebar excludes structural and formatting revisions. Its props can
-include those revisions or filter the queue further.
+The default sidebar shows content changes and comments. Formatting and structural
+changes remain available in page balloons: click the changed text or paragraph
+to inspect them. Set `formatting` or `structural` to include those cards in the
+sidebar as well.
 
 | Prop         | Default | Behavior                                                        |
 | ------------ | ------- | --------------------------------------------------------------- |
 | `filter`     | None    | Returns a subset of items.                                      |
 | `structural` | `false` | Adds cards for structural revisions.                            |
-| `formatting` | `false` | Adds cards for formatting revisions.                            |
+| `formatting` | `false` | Shows cards for formatting revisions.                           |
 | `stack`      | `true`  | Moves overlapping cards to prevent collisions.                  |
 | `gap`        | `8`     | Sets the CSS-pixel gap between stacked cards.                   |
 | `furniture`  | None    | Adds host content before cards.                                 |

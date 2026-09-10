@@ -54,6 +54,7 @@ export interface PaintOptions {
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
     readonly shadeFormFields?: boolean;
+    readonly showParagraphMarks?: boolean;
 }
 
 // @public

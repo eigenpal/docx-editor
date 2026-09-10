@@ -434,9 +434,18 @@ describe('DocxEditorReview (Vue)', () => {
         '[data-testid="review-reply-input"]'
       ) as HTMLInputElement;
       expect(input).toBeTruthy();
+      const submit = mounted.container.querySelector(
+        '[data-testid="review-reply-submit"]'
+      ) as HTMLButtonElement;
+      expect(submit.disabled).toBe(true);
+      input.value = '   ';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await flush();
+      expect(submit.disabled).toBe(true);
       input.value = 'Why this wording?';
       input.dispatchEvent(new Event('input', { bubbles: true }));
       await flush();
+      expect(submit.disabled).toBe(false);
       (
         mounted.container.querySelector('[data-testid="review-reply-submit"]') as HTMLButtonElement
       ).click();
@@ -452,23 +461,48 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
-  test('a tracked change carries a delete control that discards the suggestion', async () => {
-    const mounted = mountReview(TRACKED);
-    try {
-      await flush();
-      expect(mounted.container.querySelectorAll('[data-testid="review-delete"]').length).toBe(1);
-      (
-        mounted.container.querySelector('[data-testid="review-delete"]') as HTMLButtonElement
-      ).click();
-      await waitFor(() => mounted.editor().getReviewItems().length === 0);
-      await waitFor(
-        () => mounted.container.querySelectorAll('[data-testid="review-card"]').length === 0
+  for (const explicitDelete of [false, true]) {
+    test(`a tracked change exposes Discard only when explicitly composed: ${explicitDelete}`, async () => {
+      const mounted = mountEditorTree(
+        () => [],
+        TRACKED,
+        () => [
+          h(DocxEditorReview, null, {
+            default: () =>
+              explicitDelete
+                ? [
+                    h(DocxEditorReview.List, null, {
+                      default: () =>
+                        h(DocxEditorReview.Card, null, {
+                          default: () => h(DocxEditorReview.Delete),
+                        }),
+                    }),
+                  ]
+                : [],
+          }),
+        ],
+        [reviewModule()]
       );
-      expect(mounted.editor().surface!.session.bodyText()).toBe('base ');
-    } finally {
-      mounted.unmount();
-    }
-  });
+      try {
+        await flush();
+        expect(mounted.container.querySelectorAll('[data-testid="review-delete"]').length).toBe(
+          explicitDelete ? 1 : 0
+        );
+        (
+          mounted.container.querySelector(
+            `[data-testid="${explicitDelete ? 'review-delete' : 'review-reject'}"]`
+          ) as HTMLButtonElement
+        ).click();
+        await waitFor(() => mounted.editor().getReviewItems().length === 0);
+        await waitFor(
+          () => mounted.container.querySelectorAll('[data-testid="review-card"]').length === 0
+        );
+        expect(mounted.editor().surface!.session.bodyText()).toBe('base ');
+      } finally {
+        mounted.unmount();
+      }
+    });
+  }
 
   test('stops observing a card slot when the card unmounts', async () => {
     const original = globalThis.ResizeObserver;
@@ -491,7 +525,7 @@ describe('DocxEditorReview (Vue)', () => {
       const slot = observed.find((node) => node.classList.contains('docx-review__slot'));
       expect(slot).toBeDefined();
       (
-        mounted.container.querySelector('[data-testid="review-delete"]') as HTMLButtonElement
+        mounted.container.querySelector('[data-testid="review-reject"]') as HTMLButtonElement
       ).click();
       await waitFor(() => mounted.editor().getReviewItems().length === 0);
       await waitFor(() => unobserved.includes(slot!));
@@ -654,7 +688,64 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
-  test('default rail lists only non-format/non-structural cards', async () => {
+  test('Next and Previous Change open the balloon for a rail-hidden format revision', async () => {
+    const mounted = mountReview(FORMAT_AND_INSERT);
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('[data-testid="review-rail"]') !== null);
+      expect(
+        mounted.container.querySelector('[data-testid="review-rail"]')?.getAttribute('data-count')
+      ).toBe('1');
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
+
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-balloon-card"]') !== null
+      );
+      const balloon = mounted.container.querySelector(
+        '[data-testid="review-balloon-card"]'
+      ) as HTMLElement;
+      expect(balloon.dataset.kind).toBe('format');
+      expect(
+        mounted.container.querySelector(
+          '[data-testid="review-balloon"] [data-testid="review-accept"]'
+        )
+      ).not.toBeNull();
+
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-card"][data-active]') !== null
+      );
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
+      expect(
+        (mounted.container.querySelector('[data-testid="review-card"]') as HTMLElement).dataset.kind
+      ).toBe('insert');
+
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'previous' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-balloon-card"]') !== null
+      );
+      expect(
+        (mounted.container.querySelector('[data-testid="review-balloon-card"]') as HTMLElement)
+          .dataset.kind
+      ).toBe('format');
+
+      mounted.container.querySelector('[data-revision-kind="format"]')?.remove();
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      await flush();
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'previous' });
+      await flush();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
+  test('default rail keeps formatting in the page balloon', async () => {
     const mounted = mountReview(FORMAT_AND_INSERT);
     try {
       await flush();

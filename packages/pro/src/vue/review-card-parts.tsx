@@ -21,7 +21,7 @@ import {
   icon,
   resolvedCommentIcon,
 } from './review-icons.tsx';
-import { revisionLabelKey } from './review-labels.ts';
+import { revisionItemLabel } from './review-labels.ts';
 import { ReviewActionSlot } from './review-action-slot.tsx';
 import { createCommentResolutionParts } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
@@ -177,10 +177,7 @@ export const ReviewSummary = markPart(
         const entry = entryRef.value;
         if (props.hidden || !entry) return null;
         const text = entry.text;
-        const label =
-          entry.kind !== 'revision'
-            ? null
-            : t(revisionLabelKey(entry.revisionKind, entry.item.markDirection));
+        const label = entry.kind !== 'revision' ? null : revisionItemLabel(entry.item, t);
         const replaced = entry.kind === 'revision' && entry.revisionKind === 'replace';
         const shared = {
           class: `docx-review__summary${props.className ? ` ${props.className}` : ''}`,
@@ -460,7 +457,7 @@ const ReviewCardPreset = defineComponent({
                 {take('Reject', <ReviewReject />)}
                 {take('Resolve', <ReviewResolve />)}
                 {take('Reopen', <ReviewReopen />)}
-                {take('Delete', <ReviewDelete />)}
+                {take('Delete', entry.kind === 'comment' ? <ReviewDelete /> : null)}
               </div>
             ) : null}
           </div>

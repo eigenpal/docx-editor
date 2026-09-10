@@ -59,6 +59,7 @@
     "src/__tests__/collaboration-presence-ui-vue.test.ts",
     "src/__tests__/custom-node-vue-chrome.test.ts",
     "src/__tests__/review-sidebar-vue.test.ts",
+    "src/__tests__/formatting-page-balloon-vue.test.ts",
     "src/__tests__/review-vue-harness.ts",
     "src/__tests__/use-collaboration-participants-vue.test.ts",
     "src/__tests__/use-document-collaboration-vue.test.ts",

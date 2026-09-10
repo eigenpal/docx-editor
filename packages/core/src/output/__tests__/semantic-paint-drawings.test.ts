@@ -729,6 +729,7 @@ describe('URL port lifecycle', () => {
               kind: 'paragraph' as const,
               paragraphId: 'p1',
               fragmentIndex: 0,
+              props: [],
               box: Object.freeze({ x: 0, y: 0, width: 600, height: 100 }),
               lines: [
                 Object.freeze({

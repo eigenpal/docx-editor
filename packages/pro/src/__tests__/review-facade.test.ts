@@ -910,8 +910,9 @@ describe('suggesting mode', () => {
     // restore the words and not the boundary — the original was unrecoverable.
     expect(editor.surface!.session.paragraphIds()).toHaveLength(2);
     const kinds = editor.getReviewItems().map((item) => rev(item).revisionKind);
-    expect(kinds).toContain('delete');
-    expect(kinds).toContain('paragraphMark');
+    // Word presents the text and boundary as one deletion decision.
+    expect(kinds).toEqual(['delete']);
+    expect(rev(editor.getReviewItems()[0]!).item.ranges).toHaveLength(3);
 
     // And rejecting puts the document back exactly as it was.
     for (const item of editor.getReviewItems()) editor.rejectReviewItem(item.key);
@@ -968,18 +969,17 @@ describe('suggesting mode', () => {
   test('a run of Enters is ONE decision, not one card per press', () => {
     const editor = mount({ body: PLAIN });
     editor.setEditingMode('suggesting');
-    for (const offset of [5, 4, 3]) {
-      const paragraphId = editor.surface!.session.paragraphIds()[0]!;
-      editor.surface!.setSelection({
-        anchor: { paragraphId, offset },
-        head: { paragraphId, offset },
-      });
-      editor.surface!.splitParagraph();
-    }
+    const paragraphId = editor.surface!.session.paragraphIds()[0]!;
+    editor.surface!.setSelection({
+      anchor: { paragraphId, offset: 5 },
+      head: { paragraphId, offset: 5 },
+    });
+    for (let count = 0; count < 3; count += 1) editor.surface!.splitParagraph();
     const marks = editor
       .getReviewItems()
       .filter((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
     expect(marks).toHaveLength(1);
+    expect(rev(marks[0]).item.ranges).toHaveLength(3);
   });
 
   test('back in editing mode an edit is an ordinary edit again', () => {
@@ -1366,10 +1366,7 @@ describe('tracked changes in headers', () => {
   });
 
   test('accepting a header card leaves the caret inside the header, still typable', () => {
-    // The post-commit clamp used the BODY's paragraph list, so resolving a header card
-    // threw the caret into the document while the scope stayed on the header — and every
-    // keystroke after it was refused as `unknown-paragraph`. The reader typed and nothing
-    // happened.
+    // Resolving a card preserves its caret and active story scope.
     const editor = mount({ body: INSERTION, header: HEADER_INSERTION });
     const header = editor.getReviewItems().find((card) => card.author === 'Margaret Hamilton')!;
     editor.setActiveReviewItem(header.key);
@@ -1379,6 +1376,7 @@ describe('tracked changes in headers', () => {
     const caret = editor.surface!.state().selection.head.paragraphId;
     const bodyParagraphs = editor.surface!.session.paragraphIds();
     expect(bodyParagraphs).not.toContain(caret);
+    expect(editor.surface!.activeScope()).toEqual({ kind: 'headerFooter', rId: 'rIdH' });
   });
 
   test('replying to a header card lands, rather than being refused every time', () => {

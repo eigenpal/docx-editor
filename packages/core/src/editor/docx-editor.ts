@@ -1,3 +1,5 @@
+import { createReviewCommands } from './docx-editor-review-commands.ts';
+import { canEditorViewCommand, createEditorParagraphMarks } from './docx-editor-view-commands.ts';
 // The `Editor` facade over the paginated surface.
 //
 // `createDocxEditor` implements the FULL `Editor` contract over the paginated surface —
@@ -10,18 +12,6 @@
 //   change/selectionChange/error events, focus, destroy, attach/detach, `query` for
 //   `selectedText` and `selectionFormatting`, and the document catalogs
 //   (`getDocumentFonts`/`getDocumentStyles`, derived from the canonical trees).
-// THE GEOMETRY/INTERACTION CLUSTER IS GONE, not stubbed. `getInteractionFrame`, `hitTest`,
-// `dispatchInteraction`, `resolvePointer`, the caret and selection rect readers and the
-// accessibility observation were all placeholders here, and none of them had a caller. They
-// were removed from the contract rather than filled in, because the honest-empty rule does
-// NOT extend to them: `getComments()` returning `[]` is a true statement about a document,
-// while `hitTest` returning `null` is indistinguishable from "you clicked the page margin",
-// so a caller could not tell an unimplemented member from a real answer. `getPageGeometry`
-// is the one survivor and is now REAL — it had the cluster's only consumer, and returning
-// `[]` had silently made both Vue rulers render nothing.
-//
-// Filling any of these in later lights up whichever control reads it, with no change to
-// callers — which is the point of wiring the full contract now.
 //
 // STATE TICK + CACHED SNAPSHOT (the external-store contract).
 //
@@ -303,6 +293,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * the first mount, which reads it.
    */
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
+  let allowExcludedFormatNavigation = false;
   const reviewAuthorVisibility = createRevisionAuthorVisibility();
   // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
   const revisionStyleState = createRevisionStyleState(config.revisionStyles);
@@ -452,6 +443,12 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
   let cachedVersion = -1;
   /** Closed until a mounted review model confirms that the document has review content. */
   let reviewPaneOpen = false;
+  let reviewDisplayMode: 'all-markup' | 'proposed' | 'original' = 'all-markup';
+  const paragraphMarks = createEditorParagraphMarks((visible) => {
+    surface?.setShowParagraphMarks(visible);
+    bump();
+    emitSelectionChange();
+  });
 
   /** Called at every place observable state can move. Derivation stays lazy. */
   function bump(): void {
@@ -519,6 +516,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     let publishedReviewFilterState = reviewAuthorVisibility.stateKey;
     const result = mountPaginatedSurface(container, bytes, {
       scale: scaleOf(),
+      showParagraphMarks: paragraphMarks.get(),
+      onToggleParagraphMarks: paragraphMarks.toggle,
       // What a run with no authored font is REPORTED as, matching what it is measured
       // as (`resolveFont`'s fallback below) — so a blank document's font box reads
       // "Calibri", not an em-dash.
@@ -545,7 +544,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // insertions applied, deletions hidden, lossless on save. Markup rendering is a
       // review-module display mode; with one registered the surface keeps the layout
       // default (`all-markup`), which is what the review rail annotates.
-      ...(reviewEnabled ? {} : { revisionDisplayMode: 'proposed' as const }),
+      revisionDisplayMode: reviewEnabled ? reviewDisplayMode : 'proposed',
       // The module's derivation reaches the session through the surface: the session
       // owns the per-revision memo, the module owns the algorithm. Registered custom-node
       // definitions ride along OPAQUELY so the derivation can contribute `custom` cards;
@@ -603,8 +602,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // re-derivation returns the previous snapshot reference, so a no-op publish costs
         // one comparison, never a spurious re-render.
         bump();
+        const displayModeMoved =
+          reviewEnabled && reviewDisplayMode !== surface.revisionDisplayMode();
+        if (displayModeMoved) reviewDisplayMode = surface.revisionDisplayMode();
         const reviewVisibilityMoved =
-          publishedReviewFilterState !== reviewAuthorVisibility.stateKey;
+          publishedReviewFilterState !== reviewAuthorVisibility.stateKey || displayModeMoved;
         publishedReviewFilterState = reviewAuthorVisibility.stateKey;
         // The caret is not the only observable thing that moves: an armed typing format, an
         // open furniture story, how a drawing came to be selected and the format painter's
@@ -1128,6 +1130,9 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       canRedo: state?.canRedo ?? false,
       pageSetup: pageSetupOf(surface),
       reviewPaneOpen,
+      showParagraphMarks: paragraphMarks.get(),
+      reviewDisplayMode:
+        surface && reviewEnabled ? surface.revisionDisplayMode() : reviewDisplayMode,
       hasReviewContent: surface?.session.hasReviewContent() ?? false,
       hiddenReviewAuthors: reviewAuthorVisibility.hiddenAuthorList,
       collaborationStatus: state?.collaborationStatus ?? 'inactive',
@@ -1261,7 +1266,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       reviewActivationExclusions.includes(item.revisionKind)
     );
   }
-
   const anchorIndexOf = createAnchorIndex();
 
   /**
@@ -1708,51 +1712,29 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     return item.kind === 'revision' ? item.date : undefined;
   }
 
-  function resolveReviewItem(key: string, action: 'accept' | 'reject'): ExecResult {
-    if (!reviewEnabled) {
-      return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-    }
-    const placement = reviewPlacements().find((entry) => entry.key === key);
-    const item = placement?.item as ReviewItem | undefined;
-    if (!item || item.kind !== 'revision') {
-      return { ok: false, code: 'notFound', reason: 'no revision with that key' };
-    }
-    if (item.readOnly) {
-      return {
-        ok: false,
-        code: 'unsupported',
-        reason: 'this revision kind has no structural accept/reject yet',
-      };
-    }
-    // EVERY address the card stands for, in ONE transaction. A replacement is two revisions
-    // in the file and one decision to the reviewer; resolving half of it — the deletion
-    // accepted, the replacement text still pending — is a state nobody asked for and one
-    // undo would not take back.
-    let applied: { committed: boolean; reason?: unknown } | undefined;
-    // A revision in a header/footer resolves against ITS story store, not the body's. The
-    // default body scope simply failed to find the address, so an Accept on a header card
-    // reported "refused" over a change the queue itself had listed. A note is the same
-    // case, now that note revisions reach the queue at all.
-    surface?.commitReviewOps(() => {
-      applied = surface!.session.applyTreeOps(
-        item.addresses.map((revision) =>
-          action === 'accept'
-            ? ({ op: 'acceptRevision', revision } as const)
-            : ({ op: 'rejectRevision', revision } as const)
-        ),
-        undefined,
-        undefined,
-        storyScopeOfReviewItem(item)
-      );
-      return applied;
-    }, 'revision-resolve');
-    if (!applied?.committed) {
-      const reason =
-        typeof applied?.reason === 'string' ? applied.reason : 'the revision was refused';
-      return { ok: false, code: 'unsupported', reason };
-    }
-    return { ok: true, changed: true };
-  }
+  const reviewCommands = createReviewCommands({
+    surface: () => surface,
+    enabled: () => reviewEnabled,
+    destroyed: () => destroyed,
+    viewing: () => editingMode === 'viewing',
+    placements: () => reviewPlacements(),
+    scope: storyScopeOfReviewItem,
+    activate: (key, allowExcludedFormat) => {
+      allowExcludedFormatNavigation = allowExcludedFormat ?? false;
+      try {
+        return editor.setActiveReviewItem(key);
+      } finally {
+        allowExcludedFormatNavigation = false;
+      }
+    },
+    setDisplayMode: (mode) => {
+      reviewDisplayMode = mode;
+      surface?.setRevisionDisplayMode(mode);
+      bump();
+      emitSelectionChange();
+    },
+  });
+  const { resolveReviewItem } = reviewCommands;
 
   const editor: DocxEditorInstance = {
     get mountGeneration() {
@@ -1866,9 +1848,13 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A view command: it edits nothing, so it runs before the document gate, and it works
       // on a document that failed to open — the pane is still the reader's to close. Not on a
       // DESTROYED editor, though: there is no reader left.
-      if (destroyed && (command.type === 'toggleReviewPane' || command.type === 'setEditingMode')) {
-        return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
-      }
+      const viewCapability = canEditorViewCommand(
+        command,
+        destroyed,
+        reviewEnabled,
+        editingModeRefusal
+      );
+      if (destroyed && viewCapability && !viewCapability.ok) return viewCapability;
       if (command.type === 'setEditingMode') {
         const refusal = editingModeRefusal(command.mode);
         if (refusal !== null) {
@@ -1892,6 +1878,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
+      if (command.type === 'toggleParagraphMarks') {
+        paragraphMarks.toggle();
+        return { ok: true, changed: false };
+      }
       if (command.type === 'toggleReviewPane') {
         if (!reviewEnabled) {
           return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
@@ -1901,6 +1891,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         emitSelectionChange();
         return { ok: true, changed: false };
       }
+      const reviewResult = reviewCommands.exec(command);
+      if (reviewResult) return reviewResult;
       if (isContentControlEditorCommand(command)) {
         // The LIVE mode, not the constructed one — see `gateModeOf`.
         return runContentControlCommand(command, surface, gateModeOf(editingMode), options);
@@ -1947,22 +1939,15 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         }
         return canAsyncImageCommandOf(command, surface);
       }
-      if (command.type === 'toggleReviewPane' || command.type === 'setEditingMode') {
-        // Not on a destroyed instance, and not for a mode this document refuses. `can` is
-        // the one thing chrome trusts; answering `ok` for an editor that no longer exists is
-        // the invention the enabled-state rule exists to prevent.
-        // `notFound` rather than a new code: a destroyed editor answers the same way for
-        // every command, and the established contract for "there is nothing here" is this.
-        if (destroyed) return { ok: false, code: 'notFound', reason: 'the editor was destroyed' };
-        if (command.type === 'toggleReviewPane' && !reviewEnabled) {
-          return { ok: false, code: 'unsupported', reason: PRO_REVIEW_REASON };
-        }
-        if (command.type === 'setEditingMode') {
-          const refusal = editingModeRefusal(command.mode);
-          if (refusal !== null) return refusal;
-        }
-        return { ok: true };
-      }
+      const viewCapability = canEditorViewCommand(
+        command,
+        destroyed,
+        reviewEnabled,
+        editingModeRefusal
+      );
+      if (viewCapability) return viewCapability;
+      const reviewCapability = reviewCommands.can(command);
+      if (reviewCapability) return reviewCapability;
       if (isContentControlEditorCommand(command)) {
         return canContentControlCommand(command, surface, gateModeOf(editingMode), options);
       }
@@ -2024,6 +2009,8 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     // agreement rule, the same one `toggleRunProperty` toggles against. Everything else
     // stays honest-false until its derivation exists.
     isActive(command) {
+      if (command.type === 'toggleParagraphMarks') return paragraphMarks.get();
+      if (command.type === 'setReviewDisplayMode') return reviewDisplayMode === command.mode;
       if (command.type === 'toggleReviewPane') return reviewPaneOpen;
       if (command.type === 'setEditingMode') return editingMode === command.mode;
       const formatting = surface ? snapshotNow().formatting : null;
@@ -2308,7 +2295,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // a selection nothing lights up: the caret would land on the text, no card would open,
       // and a host stepping through its queue would see the viewport move and the active key
       // stay put with nothing to explain it.
-      if (!reviewItemActivatable(item)) {
+      if (
+        !reviewItemActivatable(item) &&
+        !(
+          allowExcludedFormatNavigation &&
+          item.kind === 'revision' &&
+          item.revisionKind === 'format'
+        )
+      ) {
         return {
           ok: false,
           code: 'unsupported',
@@ -2359,7 +2353,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // before the selection is published, or the surface reports whichever card the caret
         // classifies to — the wrong twin, when two cards share one span — and corrects itself
         // a frame later.
-        surface.activateReview(key, { anchor: caret, head: caret });
+        surface.activateReview(
+          key,
+          { anchor: caret, head: caret },
+          { allowExcluded: allowExcludedFormatNavigation }
+        );
         // Focus-independent by design: the rail card focused itself on mousedown, which is
         // exactly what keeps the caret-follow scroll from ever firing here.
         // `centerIfNeeded` by default, not `nearest`: opening a card the reader can already
@@ -2374,7 +2372,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A header, footer or note card pins here instead: those branches install the selection
       // themselves, inside the scope they open, so there is nothing to hand down. The body
       // branch above has already pinned with its own selection.
-      if (home !== null || note !== null) surface.activateReview(key);
+      if (home !== null || note !== null)
+        surface.activateReview(key, undefined, {
+          allowExcluded: allowExcludedFormatNavigation,
+        });
       // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
       // and the surface's `onChange` deliberately stays quiet when the caret did not move —
       // which is precisely this case whenever the card is reopened after being DISMISSED:

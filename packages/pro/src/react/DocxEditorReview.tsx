@@ -363,10 +363,8 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
    */
   structural?: boolean;
   /**
-   * Show the "changed text formatting" cards. Default `false`, same reasoning as
-   * {@link structural}: a restyled document mints one per run, and the decision is
-   * reachable by clicking the grey-marked text instead. The rail keeps the decisions a
-   * reviewer reads in order — content changes and comments.
+   * Show formatting changes in the rail. Default `false`: inspect formatting in the
+   * page balloon. Set `true` to also include its decisions in the sidebar.
    */
   formatting?: boolean;
 }
@@ -389,7 +387,14 @@ import {
 } from './review-comment-resolution.tsx';
 import { createReviewComposeParts } from './review-compose-boxes.tsx';
 import { ReviewActionSlot } from './review-action-slot.tsx';
-import { revisionLabelKey } from './review-labels.ts';
+import { revisionItemLabel, revisionLabelKey } from './review-labels.ts';
+import {
+  activeItemNeedsBalloon,
+  anchorFromRevisionElement,
+  findPaintedRevisionElement,
+  matchBalloonReviewItem,
+  type BalloonAnchor,
+} from './review-balloon-anchor.ts';
 
 /**
  * The review rail.
@@ -1163,26 +1168,6 @@ function ReviewAddComment({
 }
 ReviewAddComment.docxReviewPart = 'AddComment' as const;
 
-/** What a clicked tracked change tells us before any item matching — straight off its DOM. */
-interface BalloonAnchor {
-  readonly revisionId: string;
-  readonly author: string;
-  readonly date?: string;
-  readonly kind?: string;
-  /** True when the pressed element is a tracked table ROW — a structural site. */
-  readonly structuralSite: boolean;
-  /** The pressed span's own range, for the position rung of the match. */
-  readonly paragraphId?: string;
-  readonly start?: number;
-  readonly end?: number;
-  /** Rail-relative CSS px of the pressed element's box. */
-  readonly left: number;
-  readonly top: number;
-  readonly bottom: number;
-  /** True when the balloon opens upward — the target sits low in the window. */
-  readonly above: boolean;
-}
-
 /**
  * The decision balloon: CLICKING a format or structural change in the PAGE opens its card
  * beside the text — author, what changed, when, and accept/reject where the engine can
@@ -1208,6 +1193,19 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
   const t = useReviewLabel();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<BalloonAnchor | null>(null);
+  const navigationAnchorKeyRef = useRef<string | null>(null);
+  const displayMode = useEditorState((snapshot) => snapshot.reviewDisplayMode ?? 'all-markup');
+  useEffect(() => {
+    navigationAnchorKeyRef.current = null;
+    setAnchor(null);
+  }, [displayMode]);
+  const navigationActive = allItems.find((entry) => entry.isActive) ?? null;
+  const navigationActiveRef = useRef(navigationActive);
+  navigationActiveRef.current = navigationActive;
+  const navigationActiveKey = navigationActive?.key ?? null;
+  const navigationNeedsBalloon =
+    navigationActive !== null &&
+    activeItemNeedsBalloon(navigationActive, review.items, review.paneOpen);
   // Whether a balloon is up, readable from the listener without re-binding it.
   const openRef = useRef(false);
   openRef.current = anchor !== null;
@@ -1222,33 +1220,8 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
     if (!host || !rail || !scroller) return undefined;
 
     const open = (element: HTMLElement, structuralSite: boolean): void => {
-      const railRect = rail.getBoundingClientRect();
-      const rect = element.getBoundingClientRect();
-      const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
-      const start = Number(element.dataset.start);
-      const end = Number(element.dataset.end);
-      setAnchor({
-        revisionId: element.dataset.revisionId!,
-        author: element.dataset.reviewAuthor ?? '',
-        ...(element.dataset.revisionDate !== undefined
-          ? { date: element.dataset.revisionDate }
-          : {}),
-        ...(element.dataset.revisionKind !== undefined
-          ? { kind: element.dataset.revisionKind }
-          : {}),
-        structuralSite,
-        ...(element.dataset.paragraphId !== undefined
-          ? { paragraphId: element.dataset.paragraphId }
-          : {}),
-        ...(Number.isFinite(start) ? { start } : {}),
-        ...(Number.isFinite(end) ? { end } : {}),
-        left: rect.left - railRect.left,
-        top: rect.top - railRect.top,
-        bottom: rect.bottom - railRect.top,
-        // Opens upward when there is no room below — a change on the last visible line
-        // would otherwise push its balloon under the fold.
-        above: rect.bottom + 220 > viewportBottom,
-      });
+      navigationAnchorKeyRef.current = null;
+      setAnchor(anchorFromRevisionElement(element, rail, structuralSite));
     };
 
     // Capture-phase press listeners; nothing runs at pointer-movement frequency.
@@ -1268,7 +1241,10 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
           return;
         }
       }
-      if (openRef.current) setAnchor(null);
+      if (openRef.current) {
+        navigationAnchorKeyRef.current = null;
+        setAnchor(null);
+      }
     };
     // BOTH press events, not mousedown alone. The surface cancels `pointerdown` when it
     // places the caret, and a cancelled pointerdown SUPPRESSES the compatibility mousedown
@@ -1283,65 +1259,62 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
     };
   }, []);
 
-  // The decision the pressed SITE belongs to. Sites coalesce into decisions by the
-  // `(id, author, date)` triple, which is what the painted element carries — but real
-  // files drift: producers reuse ids, omit dates on one wrapper and not another, and a
-  // strict triple left the balloon informational over changes the rail could resolve. So
-  // the match RELAXES in steps, taking the strictest interpretation with a single answer:
-  // the full triple, then `(id, author)`, then the id alone — and never a guess between
-  // two candidates.
-  // ONE allocation-free pass, not one filter per rung: this re-derives on every review
-  // tick while a balloon is up, and the queue behind a heavy redline runs to thousands.
-  // The exact triple returns the FIRST hit immediately (Word reuses ids across an editing
-  // burst, and reading order picks the right one); the relaxed rungs each keep a single
-  // candidate and disqualify themselves on a second distinct hit. The POSITION rung runs
-  // over the same pass: the pressed span's own paragraph range against the item's ranges,
-  // restricted to the balloon's kinds — attribution can drift between the painter's read
-  // and the review model's, but both took the range from the same characters.
-  const entry = useMemo(() => {
-    if (!anchor) return null;
-    let byAuthor: ReviewItemView | null = null;
-    let byAuthorAmbiguous = false;
-    let byId: ReviewItemView | null = null;
-    let byIdAmbiguous = false;
-    let byRange: ReviewItemView | null = null;
-    let byRangeAmbiguous = false;
-    for (const candidate of allItems) {
-      if (candidate.kind !== 'revision' || candidate.item.kind !== 'revision') continue;
-      for (const address of candidate.item.addresses) {
-        if (address.id !== anchor.revisionId) continue;
-        if (address.author === anchor.author) {
-          if (address.date === anchor.date) return candidate;
-          if (byAuthor === null) byAuthor = candidate;
-          else if (byAuthor !== candidate) byAuthorAmbiguous = true;
-        }
-        if (byId === null) byId = candidate;
-        else if (byId !== candidate) byIdAmbiguous = true;
+  // Next/Previous Change can activate a format decision the rail hides. The pointer path
+  // already opens the balloon on click; this mirrors that when the engine marks the item
+  // active without a qualifying press on its painted site.
+  useEffect(() => {
+    const host = rootRef.current;
+    const rail = host?.closest('.docx-review') as HTMLElement | null;
+    const scroller = (rail?.closest('.docx-editor__scroll-container') ??
+      rail?.offsetParent) as HTMLElement | null;
+    if (!host || !rail || !scroller) return undefined;
+
+    const active = navigationActiveRef.current;
+    // A page click can move the caret without activating its rail-hidden format item.
+    // Keep that click-opened balloon until a later press or display-mode change closes it.
+    if (!active) {
+      if (navigationAnchorKeyRef.current !== null) {
+        navigationAnchorKeyRef.current = null;
+        setAnchor(null);
       }
-      if (
-        anchor.paragraphId !== undefined &&
-        anchor.start !== undefined &&
-        anchor.end !== undefined &&
-        (candidate.revisionKind === 'format' || candidate.revisionKind === 'structural')
-      ) {
-        for (const range of candidate.item.ranges) {
-          if (
-            range.start.paragraphId === anchor.paragraphId &&
-            range.start.offset < anchor.end &&
-            range.end.offset > anchor.start
-          ) {
-            if (byRange === null) byRange = candidate;
-            else if (byRange !== candidate) byRangeAmbiguous = true;
-            break;
-          }
-        }
-      }
+      return undefined;
     }
-    if (byAuthor !== null && !byAuthorAmbiguous) return byAuthor;
-    if (byId !== null && !byIdAmbiguous) return byId;
-    if (byRange !== null && !byRangeAmbiguous) return byRange;
-    return null;
-  }, [allItems, anchor]);
+
+    if (!navigationNeedsBalloon) {
+      navigationAnchorKeyRef.current = null;
+      setAnchor(null);
+      return undefined;
+    }
+
+    // Do not show the previous decision while the new painted site catches up.
+    navigationAnchorKeyRef.current = active.key;
+    setAnchor(null);
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      if (cancelled) return;
+      const element = findPaintedRevisionElement(scroller, active);
+      if (!element) {
+        setAnchor(null);
+        return;
+      }
+      setAnchor(
+        anchorFromRevisionElement(
+          element,
+          rail,
+          element.classList.contains('docx-table-row--revision')
+        )
+      );
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+    };
+  }, [displayMode, navigationActiveKey, navigationNeedsBalloon]);
+
+  const entry = useMemo(
+    () => (anchor ? matchBalloonReviewItem(anchor, allItems) : null),
+    [allItems, anchor]
+  );
 
   // The balloon serves the kinds the rail does not; a drifted id that happened to land on
   // a CONTENT decision must not raise a balloon over text whose card is beside the page.
@@ -1371,7 +1344,9 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
     // The wrapper always mounts — it is what the wiring effect climbs from — and carries
     // no box of its own until there is a balloon to show.
     <div ref={rootRef} className={`docx-review__balloon-root${className ? ` ${className}` : ''}`}>
-      {anchor === null ? null : (
+      {anchor === null ||
+      displayMode !== 'all-markup' ||
+      (served && review.items.some((item) => item.id === served.id) && review.paneOpen) ? null : (
         <div
           className="docx-review__balloon"
           data-testid="review-balloon"
@@ -1654,7 +1629,7 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
             {take('Reject', <ReviewReject />)}
             {take('Resolve', <ReviewResolve />)}
             {take('Reopen', <ReviewReopen />)}
-            {take('Delete', <ReviewDelete />)}
+            {take('Delete', entry.kind === 'comment' ? <ReviewDelete /> : null)}
           </div>
         ) : null}
       </div>
@@ -1800,10 +1775,7 @@ function ReviewSummary({ className, asChild, hidden, children }: ReviewPartProps
   const t = useReviewLabel();
   if (hidden || !entry) return null;
   const text = entry.text;
-  const label =
-    entry.kind !== 'revision'
-      ? null
-      : t(revisionLabelKey(entry.revisionKind, entry.item.markDirection));
+  const label = entry.kind !== 'revision' ? null : revisionItemLabel(entry.item, t);
   // A replacement reads as one sentence, not as a label over a quote: what went, and what
   // took its place. Both quoted, both in their own colour, the way Word words it.
   const replaced = entry.kind === 'revision' && entry.revisionKind === 'replace';

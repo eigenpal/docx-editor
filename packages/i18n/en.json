@@ -111,7 +111,8 @@
     "formatPainterShortcut": "Format painter (Ctrl+Alt+C, Ctrl+Alt+V)",
     "commentsAndChanges": "Comments & Changes",
     "more": "More",
-    "unavailableInPreview": "Not available in this preview build"
+    "unavailableInPreview": "Not available in this preview build",
+    "paragraphMarks": "Show paragraph breaks"
   },
   "alignment": {
     "alignLeft": "Align Left",
@@ -359,10 +360,45 @@
   },
   "revisions": {
     "paragraphMarkInserted": "Inserted paragraph break",
+    "paragraphMarksInserted": "Inserted paragraph breaks",
     "paragraphMarkDeleted": "Deleted paragraph break",
+    "paragraphMarksDeleted": "Deleted paragraph breaks",
     "paragraphMarkMovedFrom": "Moved paragraph break away",
+    "paragraphMarksMovedFrom": "Moved paragraph breaks away",
     "paragraphMarkMovedTo": "Moved paragraph break here",
-    "runPropertiesChanged": "Changed text formatting"
+    "paragraphMarksMovedTo": "Moved paragraph breaks here",
+    "runPropertiesChanged": "Formatted",
+    "formattingDetails": {
+      "bold": "Bold",
+      "notBold": "Not bold",
+      "italic": "Italic",
+      "notItalic": "Not italic",
+      "underline": "Underline",
+      "strike": "Strikethrough",
+      "notStrike": "No strikethrough",
+      "fontFamily": "Font",
+      "fontSize": "Font size",
+      "color": "Font color",
+      "alignment": "Alignment",
+      "leftIndent": "Left indent",
+      "rightIndent": "Right indent",
+      "firstLineIndent": "First line indent",
+      "hangingIndent": "Hanging indent",
+      "spaceBefore": "Space before",
+      "spaceAfter": "Space after",
+      "default": "Default",
+      "points": "pt",
+      "left": "Left",
+      "center": "Centered",
+      "right": "Right",
+      "both": "Justified",
+      "start": "Start",
+      "end": "End",
+      "none": "None",
+      "single": "Single",
+      "double": "Double",
+      "auto": "Automatic"
+    }
   },
   "contextMenu": {
     "ariaLabel": "Context menu",
@@ -792,6 +828,14 @@
     "caretPages": "{count, plural, one {# page} other {# pages}}"
   },
   "review": {
+    "displayForReview": "Display for Review",
+    "allMarkup": "All Markup",
+    "noMarkup": "No Markup",
+    "original": "Original",
+    "previousChange": "Previous Change",
+    "nextChange": "Next Change",
+    "acceptAllChanges": "Accept All Changes",
+    "rejectAllChanges": "Reject All Changes",
     "ariaLabel": "Review",
     "empty": "No changes or comments",
     "accept": "Accept",

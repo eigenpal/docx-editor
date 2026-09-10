@@ -108,6 +108,7 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     truncated: 'explicitly-omitted',
   } satisfies Record<keyof EquationSpanRecord, MarkdownFieldPolicy>,
   line: {
+    manualBreakAfter: 'layout-only',
     id: 'layout-only',
     range: 'represented',
     spans: 'represented',
@@ -136,6 +137,8 @@ const MARKDOWN_SEMANTIC_POLICY_RATCHETS = Object.freeze({
     borders: 'explicitly-omitted',
     shading: 'explicitly-omitted',
     shadingBox: 'layout-only',
+    paragraphEnd: 'layout-only',
+    emptyParagraphStyle: 'layout-only',
     markRevisions: 'explicitly-omitted',
     markRevision: 'explicitly-omitted',
     markFormatRevision: 'explicitly-omitted',

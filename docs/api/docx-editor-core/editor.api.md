@@ -274,6 +274,78 @@ export const CHROME_GROUPS: readonly [{
     readonly labelKey: "formattingBar.groups.format";
 }, {
     readonly controls: readonly [{
+        readonly defaultToolbar: false;
+        readonly id: "allMarkup";
+        readonly labelKey: "review.allMarkup";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "noMarkup";
+        readonly labelKey: "review.noMarkup";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "original";
+        readonly labelKey: "review.original";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "previousChange";
+        readonly labelKey: "review.previousChange";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "nextChange";
+        readonly labelKey: "review.nextChange";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "acceptAllChanges";
+        readonly labelKey: "review.acceptAllChanges";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "rejectAllChanges";
+        readonly labelKey: "review.rejectAllChanges";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "paragraphMarks";
+        readonly labelKey: "formattingBar.paragraphMarks";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
         readonly id: "comments";
         readonly labelKey: "formattingBar.commentsAndChanges";
         readonly paths: readonly string[];
@@ -675,7 +747,7 @@ export interface ChromeMenuSubmenuEntry {
 export function chromeProbeForSlot(slotId: ChromeSlotId): EditorCommand | null;
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export function chromeSlotId(group: {
@@ -1361,7 +1433,9 @@ export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
 // @public
 export interface PaginatedSurface {
     activatedReviewKey(): string | null;
-    activateReview(key: string, selection?: SemanticSelection): void;
+    activateReview(key: string, selection?: SemanticSelection, options?: {
+        readonly allowExcluded?: boolean;
+    }): void;
     activeReviewKey(): string | null;
     activeScope(): ViewScope;
     adjustIndent(direction: 'increase' | 'decrease'): boolean;
@@ -1574,6 +1648,7 @@ export interface PaginatedSurface {
     setRemoteCaretLabelHost(host: RemoteCaretLabelHost | null): void;
     setReviewActivationExclusions(kinds: readonly ReviewRevisionKind[] | null): void;
     setRevisionAuthorVisible(author: string, visible: boolean): void;
+    setRevisionDisplayMode(mode: RevisionDisplayMode): void;
     setRevisionStyles(colors: RevisionStyles | undefined): void;
     setRunProperty(localName: string, attributes?: Record<string, string>): void;
     setSectionProperties(update: {
@@ -1587,6 +1662,7 @@ export interface PaginatedSurface {
         readonly pageWidthTwips?: number;
     }): boolean;
     setSelection(next: SemanticSelection): void;
+    setShowParagraphMarks(show: boolean): void;
     setTableInteractionLabel(resolver: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string): void;
     setTocLabels(labels: NonNullable<PaginatedSurfaceOptions['tocLabels']>): void;
     setTrackedChangesFilter(predicate: TrackedChangePredicate | null, mode?: TrackedChangeFilterMode): void;
@@ -1625,12 +1701,15 @@ export interface PaginatedSurfaceOptions {
     readonly onEquationPopover?: (activation: EquationActivation) => void;
     readonly onHyperlinkPopover?: (activation: HyperlinkActivation) => void;
     readonly onRequestHyperlink?: () => void;
+    // (undocumented)
+    readonly onToggleParagraphMarks?: () => void;
     readonly pointer?: 'engine' | 'native';
     readonly producer?: string;
     readonly reviewModel?: ReviewModuleContribution;
     readonly revisionDisplayMode?: RevisionDisplayMode;
     readonly revisionStyles?: RevisionStyles;
     readonly scale?: number;
+    readonly showParagraphMarks?: boolean;
     readonly tableInteractionLabel?: (key: 'table.insertRowBelow' | 'table.insertColumnRight') => string;
     readonly tocLabels?: {
         readonly title: string;

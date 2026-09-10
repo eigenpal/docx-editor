@@ -2791,7 +2791,7 @@ export interface OoxmlHardBreakNode extends OoxmlElementBase<readonly [], readon
     // (undocumented)
     readonly kind: 'hardBreak';
     // (undocumented)
-    readonly localName: 'br';
+    readonly localName: 'br' | 'cr';
     // (undocumented)
     readonly namespaceUri: typeof WML_NAMESPACE_URI;
 }
@@ -3755,6 +3755,12 @@ export interface ReviewRevisionItem {
     readonly author: string;
     // (undocumented)
     readonly date?: string;
+    readonly formattingChanges?: readonly {
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter';
+        readonly value: string | null;
+    }[];
+    readonly formattingKind?: string;
+    readonly formattingLanguages?: readonly string[];
     readonly id: string;
     // (undocumented)
     readonly kind: 'revision';
@@ -4277,10 +4283,12 @@ export type TreeDocOp = {
     readonly localName?: string;
     readonly op: 'acceptRevision';
     readonly revision: RevisionAddress;
+    readonly siteNodeIds?: readonly string[];
 } | {
     readonly localName?: string;
     readonly op: 'rejectRevision';
     readonly revision: RevisionAddress;
+    readonly siteNodeIds?: readonly string[];
 } | {
     readonly op: 'acceptAllRevisions';
     readonly scopeRootId?: string;

@@ -57,6 +57,14 @@ const SLOT_COMMANDS: Partial<Record<ChromeSlotId, EditorCommand>> = {
   // A VIEW toggle, wired here like any other button so its pressed state comes from
   // `isActive` rather than from a flag each host keeps for itself.
   'review.comments': { type: 'toggleReviewPane' },
+  'review.paragraphMarks': { type: 'toggleParagraphMarks' },
+  'review.allMarkup': { type: 'setReviewDisplayMode', mode: 'all-markup' },
+  'review.noMarkup': { type: 'setReviewDisplayMode', mode: 'proposed' },
+  'review.original': { type: 'setReviewDisplayMode', mode: 'original' },
+  'review.previousChange': { type: 'navigateReviewChange', direction: 'previous' },
+  'review.nextChange': { type: 'navigateReviewChange', direction: 'next' },
+  'review.acceptAllChanges': { type: 'resolveAllReviewChanges', action: 'accept' },
+  'review.rejectAllChanges': { type: 'resolveAllReviewChanges', action: 'reject' },
   'history.undo': { type: 'undo' },
   'history.redo': { type: 'redo' },
   'text.bold': { type: 'toggleMark', mark: 'bold' },
@@ -564,7 +572,12 @@ export function toolbarCommandState(editor: Editor | null, id: ChromeSlotId): To
 export function chromeSlotIsToggle(slotId: ChromeSlotId): boolean {
   if (slotId === 'format.painter') return true;
   const command = commandForSlot(slotId);
-  return command?.type === 'toggleMark' || command?.type === 'setAlignment';
+  return (
+    command?.type === 'toggleMark' ||
+    command?.type === 'toggleParagraphMarks' ||
+    command?.type === 'setReviewDisplayMode' ||
+    command?.type === 'setAlignment'
+  );
 }
 
 /**

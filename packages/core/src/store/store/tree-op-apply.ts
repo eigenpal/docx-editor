@@ -36,7 +36,7 @@ import {
 } from '../package/ooxml-edit.ts';
 import { wmlFreshNamespaceContextAt } from '../package/wml-namespace.ts';
 import { contentControlLevelOf } from '../package/content-control-nodes.ts';
-import { resolveRevisions } from './tree-op-revisions.ts';
+import { resolveRevisionOperation } from './tree-op-revisions.ts';
 import { applyInsertCommentMarker } from './tree-op-comments.ts';
 import { applyDeleteTracked } from './tree-op-tracked-delete.ts';
 import {
@@ -361,17 +361,7 @@ export function applyTreeOp(part: OoxmlPart, op: TreeDocOp, options?: EditOption
     op.op === 'rejectAllRevisions'
   ) {
     const accept = op.op === 'acceptRevision' || op.op === 'acceptAllRevisions';
-    const address =
-      op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.revision : undefined;
-    const localName =
-      op.op === 'acceptRevision' || op.op === 'rejectRevision' ? op.localName : undefined;
-    const scopeRootId =
-      op.op === 'acceptAllRevisions' || op.op === 'rejectAllRevisions' ? op.scopeRootId : undefined;
-    const resolved = resolveRevisions(part, accept ? 'accept' : 'reject', address, {
-      ...options,
-      ...(localName === undefined ? {} : { localName }),
-      ...(scopeRootId === undefined ? {} : { scopeRootId }),
-    });
+    const resolved = resolveRevisionOperation(part, accept ? 'accept' : 'reject', op, options);
     if (!resolved.ok || !resolved.part || !resolved.effect) {
       return { ok: false, reason: resolved.reason ?? 'tree-invariant' };
     }

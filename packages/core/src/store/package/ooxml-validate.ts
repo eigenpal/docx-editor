@@ -279,13 +279,15 @@ function runValidation(part: OoxmlPart, previous: OoxmlPart | null): OoxmlInvari
     if (node.kind !== 'generic') {
       const [namespaceUri, localName] = KNOWN_ELEMENT_NAMES[node.kind];
       const localNameOk =
-        node.kind === 'note'
-          ? node.localName === 'footnote' || node.localName === 'endnote'
-          : node.kind === 'noteReference'
-            ? node.localName === 'footnoteReference' || node.localName === 'endnoteReference'
-            : node.kind === 'noteRef'
-              ? node.localName === 'footnoteRef' || node.localName === 'endnoteRef'
-              : node.localName === localName;
+        node.kind === 'hardBreak'
+          ? node.localName === 'br' || node.localName === 'cr'
+          : node.kind === 'note'
+            ? node.localName === 'footnote' || node.localName === 'endnote'
+            : node.kind === 'noteReference'
+              ? node.localName === 'footnoteReference' || node.localName === 'endnoteReference'
+              : node.kind === 'noteRef'
+                ? node.localName === 'footnoteRef' || node.localName === 'endnoteRef'
+                : node.localName === localName;
       if (
         node.namespaceUri !== namespaceUri ||
         !localNameOk ||
