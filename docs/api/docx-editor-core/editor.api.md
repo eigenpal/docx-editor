@@ -1433,7 +1433,9 @@ export function overlayHostOrigin(surfaceElement: HTMLElement | null): {
 // @public
 export interface PaginatedSurface {
     activatedReviewKey(): string | null;
-    activateReview(key: string, selection?: SemanticSelection): void;
+    activateReview(key: string, selection?: SemanticSelection, options?: {
+        readonly allowExcluded?: boolean;
+    }): void;
     activeReviewKey(): string | null;
     activeScope(): ViewScope;
     adjustIndent(direction: 'increase' | 'decrease'): boolean;

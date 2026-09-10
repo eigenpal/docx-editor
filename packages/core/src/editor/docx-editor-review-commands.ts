@@ -6,6 +6,7 @@ import type {
   ReviewItem,
   ReviewItemPlacement,
   ReviewRevisionItem,
+  ReviewRevisionPlacement,
 } from '../contracts/editor.ts';
 import type { StoryScope, TreeDocOp } from '../store/index.ts';
 import {
@@ -24,14 +25,19 @@ interface ReviewCommandDependencies {
   viewing(): boolean;
   placements(): readonly ReviewItemPlacement[];
   scope(item: ReviewItem): StoryScope;
-  activate(key: string | null): ExecResult;
+  activate(key: string | null, allowExcludedFormat?: boolean): ExecResult;
   setDisplayMode(mode: 'all-markup' | 'proposed' | 'original'): void;
 }
 
 /** Review commands share navigation, mutation gates, and atomic story resolution. */
 export function createReviewCommands(deps: ReviewCommandDependencies) {
-  const visible = () =>
-    deps.placements().filter((item) => item.kind === 'revision' && item.activatable);
+  const navigable = () =>
+    deps
+      .placements()
+      .filter(
+        (item): item is ReviewRevisionPlacement =>
+          item.kind === 'revision' && (item.activatable || item.revisionKind === 'format')
+      );
   const all = () =>
     deps
       .surface()
@@ -68,7 +74,7 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
     )
       return { ok: false, code: 'invalidArgs', reason: 'unknown review resolution action' };
     if (command.type === 'navigateReviewChange')
-      return visible().length
+      return navigable().length
         ? { ok: true }
         : { ok: false, code: 'notFound', reason: 'no visible changes to review' };
     if (deps.viewing())
@@ -142,14 +148,15 @@ export function createReviewCommands(deps: ReviewCommandDependencies) {
       return { ok: true, changed: false };
     }
     if (command.type === 'navigateReviewChange') {
-      const items = visible();
+      const items = navigable();
       const active = items.findIndex((item) => item.isActive);
       const step = command.direction === 'next' ? 1 : -1;
       const index =
         active < 0
           ? nextFromCaret(items, surface, step)
           : (active + step + items.length) % items.length;
-      return deps.activate(items[index]!.key);
+      const target = items[index]!;
+      return deps.activate(target.key, !target.activatable && target.revisionKind === 'format');
     }
     if (command.type !== 'resolveAllReviewChanges') return null;
     const scopes = new Map<string, StoryScope>();
@@ -212,36 +219,23 @@ function nextFromCaret(
   return step > 0 ? 0 : items.length - 1;
 }
 
-function revisionElementName(item: ReviewRevisionItem): string | undefined {
-  if (item.revisionKind === 'format') return item.formattingKind;
-  const kind = item.revisionKind === 'paragraphMark' ? item.markDirection : item.revisionKind;
-  return kind === 'insert'
-    ? 'ins'
-    : kind === 'delete'
-      ? 'del'
-      : kind === 'moveFrom' || kind === 'moveTo'
-        ? kind
-        : undefined;
-}
-
-/** A replacement must not resolve unrelated formatting that reused a content revision ID. */
+/** Resolve only the canonical sites that contributed to this card. */
 function resolutionOps(
   item: ReviewRevisionItem,
   action: 'accept' | 'reject',
   part: OoxmlPart | null
 ): TreeDocOp[] {
   const op = action === 'accept' ? 'acceptRevision' : 'rejectRevision';
-  if (item.revisionKind !== 'replace') {
-    const localName = revisionElementName(item);
-    return item.addresses.map((revision) => ({
-      op,
-      revision,
-      ...(localName ? { localName } : {}),
-    }));
-  }
   if (!part) return [];
   const nodeIds = new Set(revisionSiteNodeIdsOf(item));
-  const operations = new Map<string, TreeDocOp>();
+  const operations = new Map<
+    string,
+    {
+      revision: ReviewRevisionItem['address'];
+      localName: string | undefined;
+      siteNodeIds: string[];
+    }
+  >();
   for (const site of collectRevisionSites(part)) {
     if (!nodeIds.has(site.node.id)) continue;
     const attr = (name: string) =>
@@ -255,8 +249,17 @@ function resolutionOps(
         (address.date ?? '') === (attr('date') ?? '')
     );
     if (!revision) continue;
-    const localName = site.node.localName;
-    operations.set(JSON.stringify([revision, localName]), { op, revision, localName });
+    // A tracked row is one decision across its `del` and `cellDel` markers.
+    const localName = item.revisionKind === 'structural' ? undefined : site.node.localName;
+    const key = JSON.stringify([revision, localName]);
+    const known = operations.get(key);
+    if (known) known.siteNodeIds.push(site.node.id);
+    else operations.set(key, { revision, localName, siteNodeIds: [site.node.id] });
   }
-  return [...operations.values()];
+  return [...operations.values()].map(({ revision, localName, siteNodeIds }) => ({
+    op,
+    revision,
+    ...(localName === undefined ? {} : { localName }),
+    siteNodeIds,
+  }));
 }

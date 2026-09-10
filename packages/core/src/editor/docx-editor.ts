@@ -293,6 +293,7 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
    * the first mount, which reads it.
    */
   let reviewActivationExclusions: readonly ReviewRevisionKind[] | null = null;
+  let allowExcludedFormatNavigation = false;
   const reviewAuthorVisibility = createRevisionAuthorVisibility();
   // How tracked changes are coloured, replaceable live; a reload mounts with the latest.
   const revisionStyleState = createRevisionStyleState(config.revisionStyles);
@@ -1265,7 +1266,6 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       reviewActivationExclusions.includes(item.revisionKind)
     );
   }
-
   const anchorIndexOf = createAnchorIndex();
 
   /**
@@ -1719,7 +1719,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
     viewing: () => editingMode === 'viewing',
     placements: () => reviewPlacements(),
     scope: storyScopeOfReviewItem,
-    activate: (key) => editor.setActiveReviewItem(key),
+    activate: (key, allowExcludedFormat) => {
+      allowExcludedFormatNavigation = allowExcludedFormat ?? false;
+      try {
+        return editor.setActiveReviewItem(key);
+      } finally {
+        allowExcludedFormatNavigation = false;
+      }
+    },
     setDisplayMode: (mode) => {
       reviewDisplayMode = mode;
       surface?.setRevisionDisplayMode(mode);
@@ -2288,7 +2295,14 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // a selection nothing lights up: the caret would land on the text, no card would open,
       // and a host stepping through its queue would see the viewport move and the active key
       // stay put with nothing to explain it.
-      if (!reviewItemActivatable(item)) {
+      if (
+        !reviewItemActivatable(item) &&
+        !(
+          allowExcludedFormatNavigation &&
+          item.kind === 'revision' &&
+          item.revisionKind === 'format'
+        )
+      ) {
         return {
           ok: false,
           code: 'unsupported',
@@ -2339,7 +2353,11 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
         // before the selection is published, or the surface reports whichever card the caret
         // classifies to — the wrong twin, when two cards share one span — and corrects itself
         // a frame later.
-        surface.activateReview(key, { anchor: caret, head: caret });
+        surface.activateReview(
+          key,
+          { anchor: caret, head: caret },
+          { allowExcluded: allowExcludedFormatNavigation }
+        );
         // Focus-independent by design: the rail card focused itself on mousedown, which is
         // exactly what keeps the caret-follow scroll from ever firing here.
         // `centerIfNeeded` by default, not `nearest`: opening a card the reader can already
@@ -2354,7 +2372,10 @@ export function createDocxEditor(config: DocxEditorConfig): DocxEditorInstance {
       // A header, footer or note card pins here instead: those branches install the selection
       // themselves, inside the scope they open, so there is nothing to hand down. The body
       // branch above has already pinned with its own selection.
-      if (home !== null || note !== null) surface.activateReview(key);
+      if (home !== null || note !== null)
+        surface.activateReview(key, undefined, {
+          allowExcluded: allowExcludedFormatNavigation,
+        });
       // ANNOUNCED, exactly as dismissing is. Opening a card is observable state of its own,
       // and the surface's `onChange` deliberately stays quiet when the caret did not move —
       // which is precisely this case whenever the card is reopened after being DISMISSED:

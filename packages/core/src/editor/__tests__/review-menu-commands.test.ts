@@ -94,7 +94,41 @@ describe('shared Review menu commands', () => {
       );
       editor.destroy();
     });
+
+    test(`${action} on a paragraph break preserves non-adjacent text with the same address`, () => {
+      const address = 'w:id="1" w:author="Ada" w:date="2026-09-09T10:00:00Z"';
+      const editor = mountEditor(
+        `<w:p><w:pPr><w:rPr><w:ins ${address}/></w:rPr></w:pPr><w:r><w:t>First</w:t></w:r></w:p>` +
+          '<w:p><w:r><w:t>Middle</w:t></w:r></w:p>' +
+          '<w:sdt><w:sdtPr><w:lock w:val="contentLocked"/></w:sdtPr><w:sdtContent>' +
+          `<w:p><w:ins ${address}><w:r><w:t>Other</w:t></w:r></w:ins></w:p>` +
+          '</w:sdtContent></w:sdt>'
+      );
+      const paragraphBreak = editor
+        .getReviewItems()
+        .find((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
+      expect(paragraphBreak).toBeDefined();
+      expect(editor[action](paragraphBreak!.key).ok).toBe(true);
+      const remaining = editor.getReviewItems();
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]!.kind === 'revision' && remaining[0]!.revisionKind).toBe('insert');
+      expect(editor.surface!.session.bodyText()).toBe(
+        action === 'acceptReviewItem' ? 'First\nMiddle\nOther' : 'FirstMiddle\nOther'
+      );
+      editor.destroy();
+    });
   }
+
+  test('empty adjacent paragraph breaks from separate editing moments stay separate', () => {
+    const mark = (id: number, date: string) =>
+      `<w:p><w:pPr><w:rPr><w:ins w:id="${id}" w:author="Ada" w:date="${date}"/></w:rPr></w:pPr></w:p>`;
+    const editor = mountEditor(mark(1, '2026-09-08T10:00:00Z') + mark(2, '2026-09-09T10:00:00Z'));
+    const paragraphBreaks = editor
+      .getReviewItems()
+      .filter((item) => item.kind === 'revision' && item.revisionKind === 'paragraphMark');
+    expect(paragraphBreaks).toHaveLength(2);
+    editor.destroy();
+  });
   test('navigation starts from the caret when no change is active', () => {
     const editor = mountEditor(ins(1) + '<w:p><w:r><w:t>Unchanged</w:t></w:r></w:p>' + ins(2));
     const items = editor.getReviewItems();
@@ -183,6 +217,21 @@ describe('shared Review menu commands', () => {
     expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(keys[2]);
     editor.setReviewActivationExclusions(['insert']);
     expect(editor.can({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(false);
+    editor.destroy();
+  });
+
+  test('navigation reaches a formatting balloon when the rail hides format cards', () => {
+    const editor = mountEditor(
+      '<w:p><w:r><w:rPr><w:b/><w:rPrChange w:id="1" w:author="Ada"><w:rPr/></w:rPrChange></w:rPr><w:t>Bold</w:t></w:r></w:p>' +
+        ins(2)
+    );
+    const format = editor
+      .getReviewItems()
+      .find((item) => item.kind === 'revision' && item.revisionKind === 'format');
+    expect(format).toBeDefined();
+    editor.setReviewActivationExclusions(['format', 'structural']);
+    expect(editor.exec({ type: 'navigateReviewChange', direction: 'next' }).ok).toBe(true);
+    expect(editor.getReviewItems().find((item) => item.isActive)?.key).toBe(format!.key);
     editor.destroy();
   });
 

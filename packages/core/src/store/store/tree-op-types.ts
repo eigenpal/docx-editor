@@ -229,11 +229,15 @@ export type TreeDocOp =
       readonly revision: RevisionAddress;
       /** When set, only wrappers with this element local name resolve (ins/del/moveFrom/moveTo). */
       readonly localName?: string;
+      /** Internal exact-site scope used when one Word revision address names separate decisions. */
+      readonly siteNodeIds?: readonly string[];
     }
   | {
       readonly op: 'rejectRevision';
       readonly revision: RevisionAddress;
       readonly localName?: string;
+      /** Internal exact-site scope used when one Word revision address names separate decisions. */
+      readonly siteNodeIds?: readonly string[];
     }
   | {
       /**

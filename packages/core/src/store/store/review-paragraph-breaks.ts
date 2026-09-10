@@ -7,6 +7,7 @@ import {
   type ReviewRevisionItem,
   type ReviewRange,
 } from './review-items.ts';
+import { sameEditingMoment } from './tree-op-tracked-adjacency.ts';
 
 export function mergeParagraphBreakEdits(
   items: readonly ReviewRevisionItem[],
@@ -60,7 +61,12 @@ export function mergeParagraphBreakEdits(
     }
   });
   const join = (index: number, others: readonly number[]): void => {
-    for (const other of others) parent[find(other)] = find(index);
+    for (const other of others) {
+      const left = items[index]!.date;
+      const right = items[other]!.date;
+      if (left !== undefined && right !== undefined && !sameEditingMoment(left, right)) continue;
+      parent[find(other)] = find(index);
+    }
   };
   items.forEach((item, index) => {
     if (

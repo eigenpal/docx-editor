@@ -3855,13 +3855,12 @@ export function mountPaginatedSurface(
     readonly anchor: SemanticPosition;
     readonly head: SemanticPosition;
   } | null = null;
-
   /**
    * Set only while {@link activateReview} installs its own caret, so the write below does
    * not retire the pin it was just asked to raise.
    */
   let activationSelectionWrite = false;
-
+  let allowExcludedReviewPin = false;
   /** Any selection the reader (or an edit) moves retires the pin. See {@link activatedReview}. */
   function retireActivationPin(): void {
     if (!activationSelectionWrite) activatedReview = null;
@@ -3881,7 +3880,8 @@ export function mountPaginatedSurface(
     if (
       found.kind === 'revision' &&
       reviewActivationExclusions !== null &&
-      reviewActivationExclusions.has(found.revisionKind)
+      reviewActivationExclusions.has(found.revisionKind) &&
+      !allowExcludedReviewPin
     ) {
       return null;
     }
@@ -5438,7 +5438,7 @@ export function mountPaginatedSurface(
       const active = activeReviewAtCaret();
       return active ? reviewItemKey(active) : null;
     },
-    activateReview: (key, next) => {
+    activateReview: (key, next, activationOptions) => {
       // Reopening a card the reader dismissed has to clear the dismissal: activation can leave
       // the caret exactly where it already was, so nothing else would take it down and the card
       // would refuse to reopen however many times it was clicked.
@@ -5448,6 +5448,7 @@ export function mountPaginatedSurface(
       // way round, `setSelection` repainted the bands and fired `onChange` while the caret was
       // still the only evidence — so a host saw the WRONG twin reported active for one frame
       // and then a correction. One publish, one answer.
+      allowExcludedReviewPin = activationOptions?.allowExcluded ?? false;
       activatedReview = next
         ? { key, anchor: next.anchor, head: next.head }
         : { key, anchor: selection.anchor, head: selection.head };

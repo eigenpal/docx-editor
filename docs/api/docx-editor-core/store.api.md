@@ -4283,10 +4283,12 @@ export type TreeDocOp = {
     readonly localName?: string;
     readonly op: 'acceptRevision';
     readonly revision: RevisionAddress;
+    readonly siteNodeIds?: readonly string[];
 } | {
     readonly localName?: string;
     readonly op: 'rejectRevision';
     readonly revision: RevisionAddress;
+    readonly siteNodeIds?: readonly string[];
 } | {
     readonly op: 'acceptAllRevisions';
     readonly scopeRootId?: string;

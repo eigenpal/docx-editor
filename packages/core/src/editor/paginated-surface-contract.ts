@@ -681,7 +681,11 @@ export interface PaginatedSurface {
    * evidence, so a host saw the wrong twin active for one frame and then a correction. Omit it
    * to pin against the live selection, which is what a header or note scope has already set.
    */
-  activateReview(key: string, selection?: SemanticSelection): void;
+  activateReview(
+    key: string,
+    selection?: SemanticSelection,
+    options?: { readonly allowExcluded?: boolean }
+  ): void;
   /**
    * The key {@link activateReview} pinned, or null once its selection is no longer live.
    *
