@@ -78,7 +78,8 @@
     "altText": "वैकल्पिक पाठ",
     "imageWrap": "पाठ रैप करें",
     "formatPainter": null,
-    "formatPainterShortcut": null
+    "formatPainterShortcut": null,
+    "paragraphMarks": null
   },
   "alignment": {
     "alignLeft": "बाएं संरेखित करें",
@@ -559,7 +560,38 @@
     "paragraphMarksDeleted": null,
     "paragraphMarksInserted": null,
     "paragraphMarksMovedFrom": null,
-    "paragraphMarksMovedTo": null
+    "paragraphMarksMovedTo": null,
+    "formattingDetails": {
+      "alignment": null,
+      "auto": null,
+      "bold": null,
+      "both": null,
+      "center": null,
+      "color": null,
+      "default": null,
+      "double": null,
+      "end": null,
+      "firstLineIndent": null,
+      "fontFamily": null,
+      "fontSize": null,
+      "hangingIndent": null,
+      "italic": null,
+      "left": null,
+      "leftIndent": null,
+      "none": null,
+      "notBold": null,
+      "notItalic": null,
+      "notStrike": null,
+      "points": null,
+      "right": null,
+      "rightIndent": null,
+      "single": null,
+      "spaceAfter": null,
+      "spaceBefore": null,
+      "start": null,
+      "strike": null,
+      "underline": null
+    }
   },
   "toc": {
     "refresh": "पूरी तालिका अपडेट करें",
@@ -683,7 +715,15 @@
     "deleteComment": "टिप्पणी हटाएँ",
     "discardChange": "परिवर्तन छोड़ें",
     "showResolvedComment": null,
-    "resolved": null
+    "resolved": null,
+    "acceptAllChanges": null,
+    "nextChange": null,
+    "previousChange": null,
+    "rejectAllChanges": null,
+    "allMarkup": null,
+    "displayForReview": null,
+    "noMarkup": null,
+    "original": null
   },
   "imageAltText": {
     "description": "विवरण",

@@ -99,6 +99,29 @@ async function savedDocumentXml(editor: DocxEditorInstance): Promise<string> {
 }
 
 describe('save() refreshes stale REF results', () => {
+  test('Original view does not save PAGEREF results from the original pagination', async () => {
+    const editor = mount(
+      `<w:p>${refField(' PAGEREF target ', '<w:r><w:t>2</w:t></w:r>')}</w:p>` +
+        '<w:p><w:pPr><w:pageBreakBefore/><w:pPrChange w:id="20" w:author="Ada">' +
+        '<w:pPr/></w:pPrChange></w:pPr>' +
+        bookmarked('target', 'Target') +
+        '</w:p>'
+    );
+    try {
+      const surface = editor.surface!;
+      expect(surface.layout().pages).toHaveLength(2);
+      const before = new Uint8Array(await editor.save());
+      const revision = editor.getDocumentHandle().revision;
+      surface.setRevisionDisplayMode('original');
+      expect(surface.layout().pages).toHaveLength(1);
+      expect(new Uint8Array(await editor.save())).toEqual(before);
+      expect(editor.getDocumentHandle().revision).toBe(revision);
+      expect(surface.session.canUndo()).toBe(false);
+    } finally {
+      editor.destroy();
+    }
+  });
+
   test('after an edit the exported bytes carry the live value; the instruction survives', async () => {
     const editor = mount(FRESH_BODY);
     editTarget(editor);

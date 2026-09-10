@@ -17,7 +17,7 @@ import {
   type PropType,
   type VNode,
 } from 'vue';
-import { Slot } from '@docx-editor.dev/vue';
+import { Slot, useEditorState } from '@docx-editor.dev/vue';
 import { cloneReviewCard, partitionReviewChildren } from './review-composition.ts';
 import {
   MARKER_STEP,
@@ -265,6 +265,7 @@ export const ReviewAddComment = markPart(
 
 interface BalloonAnchor {
   readonly revisionId: string;
+  readonly formattingKind?: string;
   readonly author: string;
   readonly date?: string;
   readonly kind?: string;
@@ -304,6 +305,10 @@ export const ReviewBalloon = markPart(
       const rail = useRail();
       const t = useReviewLabel();
       const anchor = ref<BalloonAnchor | null>(null);
+      const displayMode = useEditorState((snapshot) => snapshot.reviewDisplayMode ?? 'all-markup');
+      watch(displayMode, () => {
+        anchor.value = null;
+      });
       const openRef = ref(false);
       const hadEntry = ref(false);
 
@@ -323,10 +328,13 @@ export const ReviewBalloon = markPart(
           const railRect = railEl.getBoundingClientRect();
           const rect = element.getBoundingClientRect();
           const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
-          const start = Number(element.dataset.start);
-          const end = Number(element.dataset.end);
+          const start = Number(element.dataset.reviewStart ?? element.dataset.start);
+          const end = Number(element.dataset.reviewEnd ?? element.dataset.end);
           anchor.value = {
             revisionId: element.dataset.revisionId!,
+            ...(element.dataset.formattingKind
+              ? { formattingKind: element.dataset.formattingKind }
+              : {}),
             author: element.dataset.reviewAuthor ?? '',
             ...(element.dataset.revisionDate !== undefined
               ? { date: element.dataset.revisionDate }
@@ -387,6 +395,8 @@ export const ReviewBalloon = markPart(
         let byRangeAmbiguous = false;
         for (const candidate of allItems) {
           if (candidate.kind !== 'revision' || candidate.item.kind !== 'revision') continue;
+          if (current.formattingKind && candidate.item.formattingKind !== current.formattingKind)
+            continue;
           for (const address of candidate.item.addresses) {
             if (address.id !== current.revisionId) continue;
             if (address.author === current.author) {
@@ -453,7 +463,9 @@ export const ReviewBalloon = markPart(
         const matched = entry.value;
 
         const balloonBody =
-          current === null
+          current === null ||
+          displayMode.value !== 'all-markup' ||
+          (matched && review.items.some((item) => item.id === matched.id) && review.paneOpen)
             ? null
             : h(
                 'div',

@@ -457,7 +457,7 @@ const ReviewCardPreset = defineComponent({
                 {take('Reject', <ReviewReject />)}
                 {take('Resolve', <ReviewResolve />)}
                 {take('Reopen', <ReviewReopen />)}
-                {take('Delete', <ReviewDelete />)}
+                {take('Delete', entry.kind === 'comment' ? <ReviewDelete /> : null)}
               </div>
             ) : null}
           </div>

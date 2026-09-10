@@ -1,5 +1,5 @@
 ---
-'@docx-editor.dev/core': patch
+'@docx-editor.dev/core': minor
 ---
 
-Hide tracked paragraph-break marks until their review card is active, and show grouped break counts in review cards. Fixes #793 and #794.
+Improve Word review parity with grouped paragraph breaks, optional paragraph and manual line-break marks, detailed formatting cards, separate formatting decisions, navigation, bulk acceptance/rejection, and markup display controls. Fixes #793 and #794.

@@ -679,6 +679,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     insertToc: Record<never, never>;
     // (undocumented)
     mergeCells: Record<never, never>;
+    navigateReviewChange: {
+        direction: 'next' | 'previous';
+    };
     paste: {
         html?: string;
         text: string;
@@ -711,6 +714,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     replaceMatch: {
         match: TextMatch;
         text: string;
+    };
+    resolveAllReviewChanges: {
+        action: 'accept' | 'reject';
     };
     selectAll: Record<never, never>;
     selectTableRegion: {
@@ -794,6 +800,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         afterPt?: number | null;
         beforePt?: number | null;
     };
+    setReviewDisplayMode: {
+        mode: 'all-markup' | 'proposed' | 'original';
+    };
     setSelection: {
         anchor: DocAnchor;
     } | {
@@ -833,6 +842,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     toggleMark: {
         mark: string;
     };
+    toggleParagraphMarks: Record<never, never>;
     toggleReviewPane: Record<never, never>;
     transformImage: {
         action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
@@ -1090,12 +1100,14 @@ export interface EditorSnapshot {
     readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
+    readonly reviewDisplayMode?: 'all-markup' | 'proposed' | 'original';
     readonly reviewPaneOpen?: boolean;
     // (undocumented)
     readonly scope: EditorScope;
     // (undocumented)
     readonly selection: DocRange | null;
     readonly selectionCollapsed: boolean;
+    readonly showParagraphMarks?: boolean;
     // (undocumented)
     readonly table: TableContext | null;
     readonly tocContext: {
@@ -1644,6 +1656,12 @@ export interface ReviewRevisionItem {
     readonly author: string;
     // (undocumented)
     readonly date?: string;
+    readonly formattingChanges?: readonly {
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter';
+        readonly value: string | null;
+    }[];
+    readonly formattingKind?: string;
+    readonly formattingLanguages?: readonly string[];
     readonly id: string;
     // (undocumented)
     readonly kind: 'revision';

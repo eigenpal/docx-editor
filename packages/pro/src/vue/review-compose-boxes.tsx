@@ -284,7 +284,7 @@ export function createReviewComposeParts(deps: ComposePartDeps) {
                   type="button"
                   data-testid="review-reply-submit"
                   class="docx-review__submit"
-                  disabled={readOnly}
+                  disabled={readOnly || draft.value.trim().length === 0}
                   title={readOnly ? t('editingMode.viewingHint') : undefined}
                   onClick={(event) => {
                     event.preventDefault();

@@ -1,4 +1,5 @@
 import { pendingLineExclusionSkipAtPlacement } from './pending-line.ts';
+import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 // Table row and cell layout over the canonical tree.
 //
 // Row, cell, and nested-table flow operate on typed tree nodes with the injected
@@ -663,6 +664,7 @@ function placeCellParagraph(
         : pendingLine.baseline,
       leading: collapseHeight ? 0 : pendingLine.leading,
       trailingSpacing: collapseHeight ? 0 : pendingLine.trailingSpacing,
+      ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
       ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
       ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),
     });
@@ -832,6 +834,7 @@ function placeCellParagraph(
   const fragment = {
     kind: 'paragraph' as const,
     id: `${paragraphId}#f${fragmentIndex}`,
+    ...(complete ? { paragraphEnd: true as const } : {}),
     paragraphId,
     fragmentIndex,
     range: {
@@ -853,6 +856,11 @@ function placeCellParagraph(
     ...(marker ? { marker } : {}),
     ...markRevisionFields(markRevisions, markFormatRevision),
     lines: records,
+    ...emptyParagraphStyleFields(
+      records,
+      layoutInputs.markRunProperties,
+      deps.styleCascade?.themeFonts
+    ),
     box: {
       x: fragmentX,
       y: top,

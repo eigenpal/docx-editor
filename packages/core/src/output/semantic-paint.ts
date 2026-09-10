@@ -1,3 +1,4 @@
+import { paintParagraphMark, paintManualLineBreak } from './semantic-paragraph-marks.ts';
 // Non-authoritative semantic DOM paint: position elements from the numbers layout already
 // published and never measures anything back: no `getBoundingClientRect`, no `offsetWidth`,
 // no `getComputedStyle`, no canvas text metrics. If this file could measure, the DOM would
@@ -15,19 +16,14 @@ import { DEFAULT_CANVAS_FONT_STACK } from '../layout/canvas-measurer.ts';
 import { styleForFontSlot } from '../layout/script-itemization.ts';
 import {
   REVIEW_AUTHOR_SLOTS,
-  reviewAuthorSlotColor,
   revisionStyleContextKey,
   revisionStyleContextOf,
   revisionPresentationOf,
   type RevisionStyleContext,
   type RevisionStyles,
 } from './revision-presentation.ts';
-import {
-  formatRevisionOf,
-  markRevisionRemovesMark,
-  shownMarkRevision,
-  type RevisionAttribution,
-} from '@docx-editor.dev/core/layout';
+import { formatRevisionOf } from '@docx-editor.dev/core/layout';
+import { applyParagraphFormatAnchor } from './paragraph-format-anchor.ts';
 import type {
   BlockFragmentRecord,
   ContentControlBoundaryRecord,
@@ -133,6 +129,8 @@ export interface PaintContext {
    * arrow key, and deciding it in layout would do far worse.
    */
   readonly fieldShading?: FieldShadingMode;
+  /** Paint paragraph-end and manual-line-break furniture. Tracked marks also follow Show/Hide. */
+  readonly showParagraphMarks?: boolean;
   /**
    * Whether legacy form fields (`w:ffData`) are shaded — the document's `w:doNotShadeFormData`,
    * inverted at the read so this states what to DO rather than what to skip.
@@ -198,6 +196,8 @@ export interface PaintOptions {
   readonly defaultFontFamily?: string;
   /** See {@link PaintContext.fieldShading}. */
   readonly fieldShading?: FieldShadingMode;
+  /** Paint paragraph-end and manual-line-break furniture. Tracked marks also follow Show/Hide. */
+  readonly showParagraphMarks?: boolean;
   /** See {@link PaintContext.shadeFormFields}. */
   readonly shadeFormFields?: boolean;
   /**
@@ -921,6 +921,7 @@ function applyRevisionPresentation(
   // it with one CSS override instead of forking the painter.
   element.classList.add('docx-revision', 'docx-revision-format');
   element.dataset.revisionKind = 'format';
+  element.dataset.formattingKind = 'rPrChange';
   element.dataset.revisionId = format!.id;
   if (format!.author !== '') element.dataset.reviewAuthor = format!.author;
   if (format!.date !== undefined) element.dataset.revisionDate = format!.date;
@@ -944,69 +945,6 @@ function applyRevisionPresentation(
       element.style.backgroundColor = formatStyle.background;
     }
   }
-}
-
-/**
- * The pilcrow beside a paragraph whose MARK was inserted or deleted.
- *
- * Word draws it because there is nothing else to draw: the change is to the paragraph break
- * itself, so no character carries it. A struck-through ¶ is how a reader sees that this
- * paragraph is being merged into the next one, and an underlined one that it was split here.
- *
- * Furniture: no model range, `aria-hidden`, not editable, so it can never be selected, copied
- * or counted as text.
- */
-function paintParagraphMark(
-  document: Document,
-  revisions: readonly RevisionAttribution[],
-  scale: number,
-  colors: RevisionStyleContext | undefined
-): HTMLElement {
-  // ONE glyph however many decisions stand on it: there is one pilcrow, and drawing a second
-  // beside it would read as a second paragraph break. A REMOVAL wins the face when a mark
-  // carries both — a break proposed and then unproposed ends up removed, and the same rule
-  // already decides the colour of a change bar over mixed lines. `moveFrom` counts as a
-  // removal, which is what keeps this glyph agreeing with the rule in the margin beside it.
-  // Both attributions are published on the element, so review chrome can offer both.
-  const shown = shownMarkRevision(revisions)!;
-  const glyph = document.createElement('span');
-  glyph.className = `docx-revision-pmark docx-revision-pmark-${shown.kind}`;
-  glyph.setAttribute('aria-hidden', 'true');
-  glyph.contentEditable = 'false';
-  glyph.dataset.revisionKind = shown.kind;
-  glyph.dataset.revisionId = shown.id;
-  if (shown.author !== '') glyph.dataset.reviewAuthor = shown.author;
-  // Always, not only for a pair: a consumer reading `data-revision-ids` should not have to
-  // fall back to `data-revision-id` for the ordinary case. Kinds ride alongside, because the
-  // ids alone cannot say which decision each one is.
-  glyph.dataset.revisionIds = revisions.map((revision) => revision.id).join(' ');
-  glyph.dataset.revisionKinds = revisions.map((revision) => revision.kind).join(' ');
-  glyph.textContent = '\u00b6';
-  glyph.style.position = 'absolute';
-  glyph.style.pointerEvents = 'none';
-  glyph.style.marginLeft = `${2 * scale}px`;
-  const removes = markRevisionRemovesMark(shown);
-  // Under author colouring the glyph follows its author, like the spans beside it; the
-  // strike still says a removal is a removal.
-  const markStyle = colors?.styles.get(shown.author);
-  const markSlot = colors ? (colors.authorSlots.get(shown.author) ?? 0) % REVIEW_AUTHOR_SLOTS : 0;
-  if (colors) {
-    glyph.dataset.reviewAuthorSlot = String(markSlot);
-    const tokens = colors.classTokens.get(shown.author);
-    if (tokens) for (let i = 0; i < tokens.length; i += 1) glyph.classList.add(tokens[i]!);
-  }
-  // The same selective rule as the spans, read straight off the maps: building a whole
-  // presentation object for one field allocated per paragraph mark, and a heavily revised
-  // document has one per paragraph.
-  glyph.style.color =
-    markStyle?.color ??
-    (colors?.others === 'author'
-      ? reviewAuthorSlotColor(markSlot)
-      : removes
-        ? 'var(--doc-revision-deletion)'
-        : 'var(--doc-revision-insertion)');
-  if (removes) glyph.style.textDecorationLine = 'line-through';
-  return glyph;
 }
 
 /**
@@ -1523,6 +1461,8 @@ function paintLine(
     width: line.box.width,
     height: line.box.height,
   });
+  if (ctx.showParagraphMarks && line.manualBreakAfter)
+    element.append(paintManualLineBreak(document, line, scale));
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
   if (line.drawings && line.drawings.length > 0) {
     for (const painted of paintInlineDrawingsOnLine(
@@ -1627,6 +1567,7 @@ function paintFragment(
   if (fragment.clipToBox) element.style.overflow = 'hidden';
   element.dataset.paragraphId = fragment.paragraphId;
   element.dataset.fragmentIndex = String(fragment.fragmentIndex);
+  applyParagraphFormatAnchor(element, fragment);
   if (ctx.readOnlyParagraphIds?.has(fragment.paragraphId)) {
     element.classList.add('docx-generated-region');
     element.dataset.docxReadOnly = '';
@@ -1659,8 +1600,16 @@ function paintFragment(
   // is the only signal that a change exists at all once the reader is in a resolved view.
   const bars = paintChangeBars(document, fragment, scale);
   if (bars) element.append(bars);
-  if (fragment.markRevisions && fragment.markRevisions.length > 0) {
-    const glyph = paintParagraphMark(document, fragment.markRevisions, scale, ctx.revisionStyles);
+  if (
+    (ctx.showParagraphMarks && fragment.paragraphEnd) ||
+    (fragment.markRevisions && fragment.markRevisions.length > 0)
+  ) {
+    const glyph = paintParagraphMark(
+      document,
+      fragment.markRevisions ?? [],
+      scale,
+      ctx.revisionStyles
+    );
     const last = fragment.lines[fragment.lines.length - 1];
     if (last) {
       // At the end of the last line's text, which is where the mark itself sits.
@@ -1674,6 +1623,9 @@ function paintFragment(
   }
   for (const line of fragment.lines) {
     const painted = paintLine(document, line, ctx);
+    if (fragment.markFormatRevision && line === fragment.lines[fragment.lines.length - 1]) {
+      applyParagraphFormatAnchor(painted, fragment, true);
+    }
     // Line boxes are page-relative; inside a fragment they are drawn relative to it —
     // BOTH axes. The fragment box already carries the x origin (indent, or a table cell's
     // content edge), so an absolute left here would count that origin twice.
@@ -2849,6 +2801,7 @@ export function paintSemanticLayoutWithAuthorSlots(
   options: PaintOptions,
   authorSlots?: ReadonlyMap<string, number>
 ): void {
+  container.classList.toggle('docx-show-paragraph-marks', options.showParagraphMarks ?? false);
   const chrome = options.contentControlChrome;
   // `hoverIds` is absent ON PURPOSE — see its doc comment. Including it made a pointer
   // entering a TOC rebuild every page, which detached the node the gesture started on.
@@ -2893,6 +2846,7 @@ export function paintSemanticLayoutWithAuthorSlots(
       : {}),
     ...(options.defaultFontFamily ? { defaultFontFamily: options.defaultFontFamily } : {}),
     ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
+    showParagraphMarks: options.showParagraphMarks ?? false,
     ...(options.shadeFormFields !== undefined ? { shadeFormFields: options.shadeFormFields } : {}),
     ...(revisionStyles ? { revisionStyles } : {}),
     ...(options.imageUrlPort ? { imageUrlPort: options.imageUrlPort } : {}),
@@ -2926,7 +2880,7 @@ export function paintSemanticLayoutWithAuthorSlots(
     `${drawingPaintStringsCacheToken(drawingStrings)}|` +
     // The slot map belongs to this paint. A standalone paint derives it from the layout; an
     // attached surface supplies its stable session map. The key must move when that map moves.
-    `rev:${revisionStyleContextKey(revisionStyles)}`;
+    `rev:${revisionStyleContextKey(revisionStyles)}|marks:${options.showParagraphMarks ?? false}`;
   const previous = retainedPaints.get(container);
   const parametersUnchanged = previous?.parameters === parameters;
   const reusable = parametersUnchanged

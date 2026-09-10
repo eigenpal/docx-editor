@@ -131,6 +131,26 @@ const fragmentPropsByLayout = new WeakMap<
   Map<string, readonly SurfaceProperty[]>
 >();
 
+const emptyStylesByLayout = new WeakMap<SemanticLayout, ReadonlyMap<string, ResolvedRunStyle>>();
+
+function emptyParagraphStyleOf(
+  layout: SemanticLayout,
+  paragraphId: string
+): ResolvedRunStyle | undefined {
+  let styles = emptyStylesByLayout.get(layout);
+  if (!styles) {
+    const next = new Map<string, ResolvedRunStyle>();
+    for (const page of layout.pages)
+      eachParagraphFragmentOnPage(page, (fragment) => {
+        if (fragment.emptyParagraphStyle)
+          recordFragment(next, fragment, fragment.emptyParagraphStyle);
+      });
+    styles = next;
+    emptyStylesByLayout.set(layout, styles);
+  }
+  return styles.get(paragraphId);
+}
+
 /**
  * One page's contribution to that index, remembered on the PAGE record.
  *
@@ -611,10 +631,17 @@ export function formattingAt(
    * with the head paragraph alone, so a two-paragraph header selection reported the first
    * one's alignment as if the pair agreed — and the following press changed both.
    */
-  paragraphOrder?: readonly string[]
+  paragraphOrder?: readonly string[],
+  fallbackFontFamily?: string | null
 ): SurfaceFormatting {
   const spans = selectionSpans(layout, selection, cells, paragraphOrder);
-  const styles = spans.map((span) => span.style);
+  const emptyStyles =
+    spans.length === 0
+      ? paragraphsTouched(layout, selection, cells, paragraphOrder)
+          .map((id) => emptyParagraphStyleOf(layout, id))
+          .filter((style): style is ResolvedRunStyle => style !== undefined)
+      : [];
+  const styles = emptyStyles.length > 0 ? emptyStyles : spans.map((span) => span.style);
   // Agreement across the WHOLE selection, or nothing. A collapsed caret yields the one
   // span beside it (Word's rule), so the toolbar reflects the run the user is typing in.
   const agreed = <T>(pick: (style: (typeof styles)[number]) => T): T | null => {
@@ -648,7 +675,14 @@ export function formattingAt(
       : (inherited?.(span.range.paragraphId, span.props).fontSizeHalfPoints ??
         Math.round(span.style.fontSizePt * 2));
   const caretInherited =
-    spans.length === 0 ? inherited?.(selection.head.paragraphId, []) : undefined;
+    emptyStyles.length > 0
+      ? {
+          fontFamily: agreed((style) => style.fontFamily ?? fallbackFontFamily ?? null),
+          fontSizeHalfPoints: agreed((style) => Math.round(style.fontSizePt * 2)),
+        }
+      : spans.length === 0
+        ? inherited?.(selection.head.paragraphId, [])
+        : undefined;
 
   // Paragraph-level values answer for EVERY paragraph the selection touches — the same
   // span `setParagraphProperty` writes over. Reading only `selection.head` made the

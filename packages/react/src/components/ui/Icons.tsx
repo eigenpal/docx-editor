@@ -109,6 +109,15 @@ export function IconLink(props: IconProps) {
   );
 }
 
+/** Material Symbols format_paragraph: Word's familiar Show/Hide symbol. */
+export function IconFormatParagraph(props: IconProps) {
+  return (
+    <SvgIcon {...props}>
+      <path d="M360-160v-240q-83 0-141.5-58.5T160-600q0-83 58.5-141.5T360-800h360v80h-80v560h-80v-560H440v560h-80Z" />
+    </SvgIcon>
+  );
+}
+
 export function IconFormatClear(props: IconProps) {
   return (
     <SvgIcon {...props}>
@@ -850,6 +859,7 @@ const iconMap: Record<string, React.ComponentType<IconProps>> = {
   subscript: IconSubscript,
   link: IconLink,
   format_clear: IconFormatClear,
+  format_paragraph: IconFormatParagraph,
   format_align_left: IconAlignLeft,
   format_align_center: IconAlignCenter,
   format_align_right: IconAlignRight,

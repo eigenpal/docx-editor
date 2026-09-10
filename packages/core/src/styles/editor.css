@@ -1776,14 +1776,11 @@ a.docx-hyperlink:focus-visible {
   text-decoration-color: var(--doc-revision-format);
 }
 
-/* Keep tracked paragraph marks out of the ordinary editing view, as Word does. The surface
-   adds the active class to every mark covered by the selected review card, so a grouped
-   decision reveals its complete scope without leaving a permanent column of pilcrows. */
-.docx-revision-pmark {
+/* Show/Hide is independent of the active revision, as in Word. */
+.docx-paragraph-mark {
   opacity: 0;
 }
-
-.docx-revision-pmark--active {
+.docx-show-paragraph-marks .docx-paragraph-mark {
   opacity: 1;
 }
 

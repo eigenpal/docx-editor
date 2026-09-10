@@ -1027,6 +1027,14 @@ export interface EditorCommands
    * adapters and any host chrome read one answer.
    */
   toggleReviewPane: Record<never, never>;
+  /** Word's Show/Hide paragraph marks; presentation only. */
+  toggleParagraphMarks: Record<never, never>;
+  /** Navigate visible, activatable tracked changes, skipping comments and wrapping at the end. */
+  navigateReviewChange: { direction: 'next' | 'previous' };
+  /** Resolve all document changes, including hidden authors and other stories, in one undo step. */
+  resolveAllReviewChanges: { action: 'accept' | 'reject' };
+  /** Change the review projection without accepting or rejecting document revisions. */
+  setReviewDisplayMode: { mode: 'all-markup' | 'proposed' | 'original' };
   toggleMark: { mark: string };
   setMarkAttr: { mark: string; attr: string; value: unknown };
   /**
@@ -1594,6 +1602,10 @@ export interface EditorSnapshot {
    * value-equal snapshot correctly refuses to re-render.
    */
   readonly reviewPaneOpen?: boolean;
+  /** Whether Show/Hide paragraph marks is enabled. */
+  readonly showParagraphMarks?: boolean;
+  /** The displayed revision projection. The document and its revision history stay unchanged. */
+  readonly reviewDisplayMode?: 'all-markup' | 'proposed' | 'original';
   /**
    * Whether the document carries review content — tracked changes or comment
    * anchors — independent of any registered review module.

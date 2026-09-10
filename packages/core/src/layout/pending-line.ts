@@ -36,6 +36,8 @@ export interface PendingLine {
   pageBreakAfter?: boolean;
   /** When true, layout must advance to the next authored section column. */
   columnBreakAfter?: boolean;
+  /** An authored line break (`w:br` textWrapping or `w:cr`), never an automatic wrap. */
+  manualBreakAfter?: true;
   /** Model ranges on this line covering deleted content; see {@link LineRecord.deletedRanges}. */
   deletedRanges?: readonly ModelRange[];
   /** Vertical gap inserted before this line to clear a drawing exclusion band. */
@@ -214,6 +216,7 @@ export function frozenLine(line: PendingLine): PendingLine {
     trailingSpacing: line.trailingSpacing,
     ...(line.pageBreakAfter ? { pageBreakAfter: true } : {}),
     ...(line.columnBreakAfter ? { columnBreakAfter: true } : {}),
+    ...(line.manualBreakAfter ? { manualBreakAfter: true } : {}),
     ...(line.deletedRanges ? { deletedRanges: Object.freeze(line.deletedRanges) } : {}),
     ...(line.exclusionSkipBefore ? { exclusionSkipBefore: line.exclusionSkipBefore } : {}),
     ...(line.anchorRevisions ? { anchorRevisions: Object.freeze(line.anchorRevisions) } : {}),

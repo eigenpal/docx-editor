@@ -16,6 +16,8 @@ import {
 } from '../store/store/review-items.ts';
 import {
   findNode,
+  parentNodeOf,
+  collectRevisionSites,
   linkRevisionReplies,
   type OoxmlPart,
   type TreeModelChange,
@@ -173,6 +175,19 @@ export function localReviewPatchParagraphId(
   const paragraphId = change.dirty[0]!;
   const paragraph = findNode(part, paragraphId);
   if (!paragraph || paragraph.kind !== 'paragraph') return null;
+
+  // A local edit can CREATE a cross-paragraph group. The cached queue cannot prove
+  // that boundary safe: before typing after Enter, only the preceding mark exists.
+  const owner = parentNodeOf(part, paragraphId);
+  if (owner) {
+    const index = owner.children.findIndex((child) => child.id === paragraphId);
+    const previous = owner.children[index - 1];
+    if (
+      previous?.kind === 'paragraph' &&
+      collectRevisionSites({ ...part, root: previous }).some((site) => site.paragraphMark)
+    )
+      return null;
+  }
 
   for (const item of items) {
     if (item.kind === 'comment') {

@@ -1,3 +1,5 @@
+import { textUnder } from './review-text.ts';
+export { commentBodyText, commentInitials } from './review-text.ts';
 // The review queue: every pending decision in the document, derived from the TREE.
 //
 // Deliberately not from laid-out spans. Layout is a VIEW — the proposed-result mode drops every
@@ -14,9 +16,13 @@
 // beside the page, which is the one thing the tree cannot answer.
 
 import { WML_NAMESPACE_URI } from '../package/ooxml-tree.ts';
-import type { OoxmlElement, OoxmlNode, OoxmlPart } from '../package/ooxml-tree.ts';
-import { hardBreakText } from '../package/hard-break.ts';
-import { isInstrText } from '../package/field-nodes.ts';
+import type { OoxmlElement, OoxmlPart } from '../package/ooxml-tree.ts';
+import { mergeParagraphBreakEdits } from './review-paragraph-breaks.ts';
+import {
+  changedLanguages,
+  changedFormatting,
+  type ReviewFormattingChange,
+} from './review-formatting.ts';
 import { collectRevisionSites } from './tree-op-revisions.ts';
 import type { RevisionAddress } from './tree-op-types.ts';
 import {
@@ -55,31 +61,6 @@ const MARK_DIRECTIONS: Readonly<Record<string, 'insert' | 'delete' | 'moveFrom' 
   moveTo: 'moveTo',
 };
 
-/** Plain text of a comment's body, so a card never re-implements the run walk. */
-export function commentBodyText(comment: CommentRecord): string {
-  const parts: string[] = [];
-  const visit = (node: OoxmlNode): void => {
-    if (node.kind === 'textValue') {
-      parts.push(node.value);
-      return;
-    }
-    for (const child of node.children) visit(child);
-  };
-  for (const block of comment.blocks) visit(block);
-  return parts.join('');
-}
-
-/** Author initials for an avatar, from `@w:initials` or the name. */
-export function commentInitials(comment: CommentRecord): string {
-  if (comment.initials && comment.initials.trim().length > 0) return comment.initials.trim();
-  const words = comment.author.trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return '?';
-  return words
-    .slice(0, 2)
-    .map((word) => word[0]!.toUpperCase())
-    .join('');
-}
-
 function wmlAttribute(node: OoxmlElement, localName: string): string | undefined {
   for (const attribute of node.attributes) {
     if (attribute.localName === localName && attribute.namespaceUri === WML_NAMESPACE_URI) {
@@ -87,25 +68,6 @@ function wmlAttribute(node: OoxmlElement, localName: string): string | undefined
     }
   }
   return undefined;
-}
-
-/** Text under a node, counting `w:t` and `w:delText` alike. */
-function textUnder(node: OoxmlNode): string {
-  if (node.kind === 'textValue') return node.value;
-  // A tab or a break carries no text value, so a card derived from a tracked one read as
-  // EMPTY — the reviewer was asked to accept content they were never shown, and a tab
-  // replacing a word presented as a pure deletion. Project the same characters the offset
-  // model counts for them.
-  if (node.kind === 'tab') return '\t';
-  if (node.kind === 'hardBreak') return hardBreakText(node);
-  // A field's instruction is CODE, not content: it measures nothing in the offset model,
-  // and a tracked page field would otherwise present its ` PAGE ` source as inserted
-  // words. `isInstrText` covers all three spellings — the typed kind, the parse-demoted
-  // generic, and `w:delInstrText`, which a struck field's card would otherwise read out.
-  if (isInstrText(node)) return '';
-  let text = '';
-  for (const child of node.children) text += textUnder(child);
-  return text;
 }
 
 function addressKey(address: RevisionAddress): string {
@@ -191,15 +153,20 @@ function computeRevisionItemsOf(
   const sites = dependencies.revisionSites(part);
   if (sites.length === 0) return [];
   const located = dependencies.locations(part);
+  const hasParagraphMarks = sites.some((site) => site.paragraphMark);
+  const previewByNode = new Map<string, { range: ReviewRange; text: string }>();
   const byAddress = new Map<
     string,
     {
       address: RevisionAddress;
       revisionKind: ReviewRevisionKind;
+      localName: string;
       markDirection?: 'insert' | 'delete' | 'moveFrom' | 'moveTo';
       author: string;
       date?: string;
       text: string;
+      formattingLanguages?: string[];
+      formattingChanges?: ReviewFormattingChange[];
       /** Kept apart from `text`: a replacement needs both halves to word its card. */
       deletedText: string;
       ranges: ReviewRange[];
@@ -240,6 +207,17 @@ function computeRevisionItemsOf(
         }
       : null;
 
+    if (
+      hasParagraphMarks &&
+      range &&
+      (kind === 'paragraphMark' || kind === 'insert' || kind === 'delete')
+    ) {
+      previewByNode.set(site.node.id, {
+        range,
+        text: kind === 'paragraphMark' ? '\n' : textUnder(site.node),
+      });
+    }
+
     // Keyed on the ELEMENT too. `@w:id` has no uniqueness constraint and Word writes one
     // date per editing burst, so an insertion and a deletion can legally share the triple —
     // and grouping on it alone showed them as one `insert` card with both texts run together,
@@ -247,10 +225,23 @@ function computeRevisionItemsOf(
     const key =
       kind === 'structural'
         ? `structural\u0000${addressKey(address)}`
-        : `${site.node.localName}\u0000${addressKey(address)}`;
+        : `${kind}\u0000${site.node.localName}\u0000${addressKey(address)}`;
     const existing = byAddress.get(key);
     if (existing) {
       existing.siteNodeIds.push(site.node.id);
+      if (site.propertyChange) {
+        existing.formattingLanguages = [
+          ...new Set([...(existing.formattingLanguages ?? []), ...changedLanguages(site)]),
+        ];
+        existing.formattingChanges = [
+          ...new Map(
+            [...(existing.formattingChanges ?? []), ...changedFormatting(site)].map((change) => [
+              JSON.stringify(change),
+              change,
+            ])
+          ).values(),
+        ];
+      }
       if (
         range &&
         !existing.ranges.some(
@@ -291,6 +282,13 @@ function computeRevisionItemsOf(
     }
     byAddress.set(key, {
       address,
+      localName: site.node.localName,
+      ...(site.propertyChange
+        ? {
+            formattingLanguages: changedLanguages(site),
+            formattingChanges: changedFormatting(site),
+          }
+        : {}),
       revisionKind: kind,
       ...(markDirection ? { markDirection } : {}),
       author,
@@ -319,10 +317,17 @@ function computeRevisionItemsOf(
           // id for two decisions: the rail's `byId` map kept whichever came last, so one card
           // was unreachable, its replies were attached to the other, and React saw two
           // children under one key.
-          id: `${entry.revisionKind}-${part.name}\u0000${addressKey(entry.address)}`,
+          id: `${entry.revisionKind}${entry.revisionKind === 'format' || entry.revisionKind === 'paragraphMark' ? `-${entry.localName}` : ''}-${part.name}\u0000${addressKey(entry.address)}`,
           address: entry.address,
           addresses: [entry.address],
           revisionKind: entry.revisionKind,
+          ...(entry.revisionKind === 'format' ? { formattingKind: entry.localName } : {}),
+          ...(entry.formattingChanges?.length
+            ? { formattingChanges: entry.formattingChanges }
+            : {}),
+          ...(entry.formattingLanguages?.length
+            ? { formattingLanguages: entry.formattingLanguages }
+            : {}),
           ...(entry.markDirection ? { markDirection: entry.markDirection } : {}),
           author: entry.author,
           ...(entry.date === undefined ? {} : { date: entry.date }),
@@ -339,7 +344,8 @@ function computeRevisionItemsOf(
         entry.siteNodeIds
       )
   );
-  return pairReplacements(items, dependencies.deepOrder(part));
+  const order = dependencies.deepOrder(part);
+  return pairReplacements(mergeParagraphBreakEdits(items, part, order, previewByNode), order);
 }
 
 /**

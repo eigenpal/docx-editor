@@ -1340,6 +1340,7 @@ export function breakParagraph(
       continue;
     }
     if (piece.text === '\n') {
+      if (piece.breakKind === 'line') line.manualBreakAfter = true;
       // A hard break ends the line without ending the paragraph — and it OCCUPIES a model
       // offset. Emitting no span for it meant the text reconstructed from the records was
       // shorter than the model: Select All stopped short and left residue, a copied break

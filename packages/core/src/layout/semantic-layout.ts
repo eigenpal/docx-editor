@@ -1,4 +1,5 @@
 import * as sectionPrep from './section-preparation.ts';
+import { emptyParagraphStyleFields } from './empty-paragraph-style.ts';
 import {
   readParagraphFrame,
   positionedFrameBottom,
@@ -2549,8 +2550,10 @@ function layoutBlocksPass(
         // Final fragment only — a paragraph split across pages must not draw two pilcrows —
         // and `all-markup` only, as Word draws attribution in All Markup alone. The record's
         // own declaration carries the rest of the reasoning.
+        ...(isLast ? { paragraphEnd: true as const } : {}),
         ...(isLast && showsMarkup ? markRevisionFields(markRevisions, markFormatRevision) : {}),
         lines: mergedLines ?? pending,
+        ...emptyParagraphStyleFields(pending, markRunProperties, styleCascade?.themeFonts),
         box: { x: columnX + indent.left, y: top, width: available, height },
       };
       if (frame) paragraphFrames.add(frame, publishedFragment, frameStart?.groupId, index);
@@ -2815,6 +2818,7 @@ function layoutBlocksPass(
         baseline: pendingLine.baseline,
         leading: pendingLine.leading,
         trailingSpacing: pendingLine.trailingSpacing,
+        ...(pendingLine.manualBreakAfter ? { manualBreakAfter: true } : {}),
         ...(pendingLine.deletedRanges ? { deletedRanges: pendingLine.deletedRanges } : {}),
         ...(alignedDrawings.length > 0 ? { drawings: alignedDrawings } : {}),
         ...(pendingLine.anchorRevisions ? { anchorRevisions: pendingLine.anchorRevisions } : {}),

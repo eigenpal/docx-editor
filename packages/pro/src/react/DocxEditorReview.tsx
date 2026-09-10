@@ -363,10 +363,8 @@ export interface ReviewProps extends Omit<ReviewPartProps, 'children'> {
    */
   structural?: boolean;
   /**
-   * Show the "changed text formatting" cards. Default `false`, same reasoning as
-   * {@link structural}: a restyled document mints one per run, and the decision is
-   * reachable by clicking the grey-marked text instead. The rail keeps the decisions a
-   * reviewer reads in order — content changes and comments.
+   * Show formatting changes in the rail. Default `false`: inspect formatting in the
+   * page balloon. Set `true` to also include its decisions in the sidebar.
    */
   formatting?: boolean;
 }
@@ -1166,6 +1164,7 @@ ReviewAddComment.docxReviewPart = 'AddComment' as const;
 /** What a clicked tracked change tells us before any item matching — straight off its DOM. */
 interface BalloonAnchor {
   readonly revisionId: string;
+  readonly formattingKind?: string;
   readonly author: string;
   readonly date?: string;
   readonly kind?: string;
@@ -1208,6 +1207,8 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
   const t = useReviewLabel();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [anchor, setAnchor] = useState<BalloonAnchor | null>(null);
+  const displayMode = useEditorState((snapshot) => snapshot.reviewDisplayMode ?? 'all-markup');
+  useEffect(() => setAnchor(null), [displayMode]);
   // Whether a balloon is up, readable from the listener without re-binding it.
   const openRef = useRef(false);
   openRef.current = anchor !== null;
@@ -1225,10 +1226,13 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
       const railRect = rail.getBoundingClientRect();
       const rect = element.getBoundingClientRect();
       const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
-      const start = Number(element.dataset.start);
-      const end = Number(element.dataset.end);
+      const start = Number(element.dataset.reviewStart ?? element.dataset.start);
+      const end = Number(element.dataset.reviewEnd ?? element.dataset.end);
       setAnchor({
         revisionId: element.dataset.revisionId!,
+        ...(element.dataset.formattingKind
+          ? { formattingKind: element.dataset.formattingKind }
+          : {}),
         author: element.dataset.reviewAuthor ?? '',
         ...(element.dataset.revisionDate !== undefined
           ? { date: element.dataset.revisionDate }
@@ -1283,18 +1287,10 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
     };
   }, []);
 
-  // The decision the pressed SITE belongs to. Sites coalesce into decisions by the
-  // `(id, author, date)` triple, which is what the painted element carries — but real
-  // files drift: producers reuse ids, omit dates on one wrapper and not another, and a
-  // strict triple left the balloon informational over changes the rail could resolve. So
-  // the match RELAXES in steps, taking the strictest interpretation with a single answer:
-  // the full triple, then `(id, author)`, then the id alone — and never a guess between
-  // two candidates.
-  // ONE allocation-free pass, not one filter per rung: this re-derives on every review
-  // tick while a balloon is up, and the queue behind a heavy redline runs to thousands.
-  // The exact triple returns the FIRST hit immediately (Word reuses ids across an editing
-  // burst, and reading order picks the right one); the relaxed rungs each keep a single
-  // candidate and disqualify themselves on a second distinct hit. The POSITION rung runs
+  // Match the revision triple first, then relax attribution only for a unique candidate.
+  // One pass matches attribution first, then position. Relaxed attribution matches must
+  // be unique; formatting kinds distinguish run and paragraph decisions with reused IDs.
+  // The exact triple returns immediately. The POSITION rung runs
   // over the same pass: the pressed span's own paragraph range against the item's ranges,
   // restricted to the balloon's kinds — attribution can drift between the painter's read
   // and the review model's, but both took the range from the same characters.
@@ -1308,6 +1304,8 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
     let byRangeAmbiguous = false;
     for (const candidate of allItems) {
       if (candidate.kind !== 'revision' || candidate.item.kind !== 'revision') continue;
+      if (anchor.formattingKind && candidate.item.formattingKind !== anchor.formattingKind)
+        continue;
       for (const address of candidate.item.addresses) {
         if (address.id !== anchor.revisionId) continue;
         if (address.author === anchor.author) {
@@ -1371,7 +1369,9 @@ function ReviewBalloon({ className, hidden }: ReviewPartProps) {
     // The wrapper always mounts — it is what the wiring effect climbs from — and carries
     // no box of its own until there is a balloon to show.
     <div ref={rootRef} className={`docx-review__balloon-root${className ? ` ${className}` : ''}`}>
-      {anchor === null ? null : (
+      {anchor === null ||
+      displayMode !== 'all-markup' ||
+      (served && review.items.some((item) => item.id === served.id) && review.paneOpen) ? null : (
         <div
           className="docx-review__balloon"
           data-testid="review-balloon"
@@ -1654,7 +1654,7 @@ function ReviewCardPreset({ children }: { children?: ReactNode }) {
             {take('Reject', <ReviewReject />)}
             {take('Resolve', <ReviewResolve />)}
             {take('Reopen', <ReviewReopen />)}
-            {take('Delete', <ReviewDelete />)}
+            {take('Delete', entry.kind === 'comment' ? <ReviewDelete /> : null)}
           </div>
         ) : null}
       </div>

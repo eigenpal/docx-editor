@@ -73,5 +73,56 @@ export function revisionItemLabel(
   item: ReviewRevisionItem,
   translate: (key: TranslationKey) => string
 ): string {
-  return `${translate(revisionItemLabelKey(item))}${revisionItemCountSuffix(item)}`;
+  const label = `${translate(revisionItemLabelKey(item))}${revisionItemCountSuffix(item)}`;
+  if (item.revisionKind !== 'format') return label;
+  const languages = (item.formattingLanguages ?? []).map((code) => {
+    try {
+      return (
+        new Intl.DisplayNames([translate('_lang')], { type: 'language' }).of(
+          new Intl.Locale(code).minimize().toString()
+        ) ?? code
+      );
+    } catch {
+      return code;
+    }
+  });
+  const details = [
+    ...languages,
+    ...(item.formattingChanges ?? []).map((change) => formattingChangeLabel(change, translate)),
+  ];
+  return details.length ? `${label}: ${details.join(', ')}` : label;
+}
+
+function formattingChangeLabel(
+  change: NonNullable<ReviewRevisionItem['formattingChanges']>[number],
+  translate: (key: TranslationKey) => string
+): string {
+  const { property, value } = change;
+  if (value !== null && (property === 'bold' || property === 'italic' || property === 'strike')) {
+    const negative = { bold: 'notBold', italic: 'notItalic', strike: 'notStrike' } as const;
+    return translate(
+      `revisions.formattingDetails.${value === 'true' ? property : negative[property]}`
+    );
+  }
+  let detail = value ?? translate(`revisions.formattingDetails.default`);
+  if (value !== null) {
+    if (
+      [
+        'fontSize',
+        'leftIndent',
+        'rightIndent',
+        'firstLineIndent',
+        'hangingIndent',
+        'spaceBefore',
+        'spaceAfter',
+      ].includes(property)
+    ) {
+      detail = `${value} ${translate(`revisions.formattingDetails.points`)}`;
+    } else if (/^(left|center|right|both|start|end|none|single|double|auto)$/.test(value)) {
+      detail = translate(`revisions.formattingDetails.${value}` as TranslationKey);
+    } else if (property === 'color' && /^[0-9a-f]{6}$/i.test(value)) {
+      detail = `#${value.toUpperCase()}`;
+    }
+  }
+  return `${translate(`revisions.formattingDetails.${property}`)}: ${detail}`;
 }

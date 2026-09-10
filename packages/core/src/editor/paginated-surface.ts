@@ -1,3 +1,4 @@
+import { createParagraphMarkVisibility } from './surface-paragraph-mark-visibility.ts';
 import { saveSurfaceDocument } from './docx-editor-save.ts';
 import { applyTextFormOperation, applyTextFormSave } from './surface-text-form-apply.ts';
 import { beginSurfaceCommit } from './surface-commit-state.ts';
@@ -113,7 +114,6 @@ import {
   type StableReviewAuthorSlots,
 } from '../output/revision-presentation.ts';
 import { createSurfaceReviewAuthors, reviewItemAuthor } from './surface-review-authors.ts';
-import { syncActiveParagraphMarks } from './surface-paragraph-mark-visibility.ts';
 import { createPresenceColors } from './surface-presence-color.ts';
 import {
   DEFAULT_DRAWING_PAINT_STRINGS,
@@ -839,16 +839,9 @@ export function mountPaginatedSurface(
     mintValidatedBytes: (handle, expectedContentId) =>
       drawingBundle.mintValidatedBytes(handle, expectedContentId),
   });
-  /**
-   * Which revision halves this surface is SHOWING — the one answer every lane asks for.
-   *
-   * Layout, furniture and the FORMATTING walks read it: a write must not restyle text the
-   * view hides, because the store offsets cover every revision half whatever the view does
-   * with them (#497). A function rather than a constant so a future
-   * `setRevisionDisplayMode` moves every reader at once.
-   */
-  const revisionDisplayMode = (): RevisionDisplayMode =>
-    options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  // Layout, furniture, and formatting writes share the view's current projection (#497).
+  let displayMode = options.revisionDisplayMode ?? DEFAULT_REVISION_DISPLAY_MODE;
+  const revisionDisplayMode = (): RevisionDisplayMode => displayMode;
   const revisionAuthorVisibility =
     runtimeOptions.revisionAuthorVisibility ??
     createRevisionAuthorVisibility(options.hiddenRevisionAuthors);
@@ -970,6 +963,11 @@ export function mountPaginatedSurface(
   let currentLayout = layoutOnce();
   // Declared before the first paint can run — `render` reads it.
   let revisionStyles = options.revisionStyles;
+  const paragraphMarks = createParagraphMarkVisibility(
+    options.showParagraphMarks ?? false,
+    flushPendingInputAndLayout,
+    () => render(false)
+  );
   // The facade owns this across internal remounts of the SAME attached document. A direct
   // surface mount has no facade session, so it correctly starts a fresh assignment here.
   const stableAuthorSlots = runtimeOptions.reviewAuthorSlots ?? createStableReviewAuthorSlots();
@@ -2754,6 +2752,7 @@ export function mountPaginatedSurface(
         ...(options.fieldShading ? { fieldShading: options.fieldShading } : {}),
         ...(revisionStyles !== undefined ? { revisionStyles } : {}),
         shadeFormFields: shadeFormFields(),
+        showParagraphMarks: paragraphMarks.get(),
         ...(paintImageUrlPort ? { imageUrlPort: paintImageUrlPort } : {}),
         ...(activeHf
           ? {
@@ -4024,7 +4023,6 @@ export function mountPaginatedSurface(
     ) {
       return;
     }
-    syncActiveParagraphMarks(pagesLayer, active);
     // Once per paint, not once per rect: a decision spanning many lines asked the same
     // question for every one of them.
     const byKey = new Map<string, ReviewItem>();
@@ -5380,6 +5378,12 @@ export function mountPaginatedSurface(
     },
 
     revisionAuthors: () => reviewAuthors.get().value,
+    setRevisionDisplayMode(mode) {
+      if (destroyed || mode === displayMode) return;
+      flushPendingInputAndLayout();
+      displayMode = mode;
+      applyRevisionAuthorVisibility(true);
+    },
     hiddenRevisionAuthors: () => revisionAuthorVisibility.hiddenAuthors,
     setRevisionAuthorVisible(author, visible) {
       applyRevisionAuthorVisibility(revisionAuthorVisibility.setVisible(author, visible));
@@ -5397,6 +5401,7 @@ export function mountPaginatedSurface(
     },
     collaborationSession: () => collaborationSession ?? null,
     remotePresenceColor,
+    setShowParagraphMarks: paragraphMarks.set,
     setRevisionStyles: (colors) => {
       if (colors === revisionStyles) return;
       revisionStyles = colors;
@@ -5931,10 +5936,7 @@ export function mountPaginatedSurface(
     },
     runtimeOptions.initialTextFormInput
   );
-  const dispatchKeyDown = createKeyDownHandler(
-    surface,
-    options.onRequestHyperlink ? { onRequestHyperlink: options.onRequestHyperlink } : {}
-  );
+  const dispatchKeyDown = createKeyDownHandler(surface, options);
   const onKeyDown = (event: KeyboardEvent): void => {
     // The browser may have moved its caret without delivering the queued `selectionchange`
     // yet. Close that window before a command resolves its TreeDocOp from model selection.

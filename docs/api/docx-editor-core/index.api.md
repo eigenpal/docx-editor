@@ -274,6 +274,78 @@ export const CHROME_GROUPS: readonly [{
     readonly labelKey: "formattingBar.groups.format";
 }, {
     readonly controls: readonly [{
+        readonly defaultToolbar: false;
+        readonly id: "allMarkup";
+        readonly labelKey: "review.allMarkup";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "noMarkup";
+        readonly labelKey: "review.noMarkup";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "original";
+        readonly labelKey: "review.original";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "previousChange";
+        readonly labelKey: "review.previousChange";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "nextChange";
+        readonly labelKey: "review.nextChange";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "acceptAllChanges";
+        readonly labelKey: "review.acceptAllChanges";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "rejectAllChanges";
+        readonly labelKey: "review.rejectAllChanges";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
+        readonly defaultToolbar: false;
+        readonly id: "paragraphMarks";
+        readonly labelKey: "formattingBar.paragraphMarks";
+        readonly paths: readonly string[];
+        readonly shape: "icon";
+        readonly state: {
+            readonly kind: "command";
+        };
+    }, {
         readonly id: "comments";
         readonly labelKey: "formattingBar.commentsAndChanges";
         readonly paths: readonly string[];
@@ -593,7 +665,7 @@ export interface ChromeMenuSubmenuEntry {
 }
 
 // @public
-export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
+export type ChromeSlotId = 'history.undo' | 'history.redo' | 'zoom.level' | 'styles.style' | 'font.family' | 'font.size' | 'text.bold' | 'text.italic' | 'text.underline' | 'text.strike' | 'text.color' | 'text.highlight' | 'text.link' | 'script.super' | 'script.sub' | 'alignment.left' | 'alignment.center' | 'alignment.right' | 'alignment.justify' | 'list.bullet' | 'list.numbered' | 'list.outdent' | 'list.indent' | 'list.lineSpacing' | 'format.painter' | 'format.clear' | 'review.comments' | 'review.paragraphMarks' | 'review.allMarkup' | 'review.noMarkup' | 'review.original' | 'review.previousChange' | 'review.nextChange' | 'review.acceptAllChanges' | 'review.rejectAllChanges' | 'review.authors' | 'review.editingMode' | 'contentControl.showAll' | 'contentControl.formFill' | 'contentControl.inspector' | 'contentControl.remove' | 'image.insert' | 'image.properties' | 'image.wrap' | 'image.altText' | 'table.insert' | 'table.borderTarget' | 'table.borderColor' | 'table.borderStyle' | 'table.borderWidth' | 'table.cellFill' | 'file.open' | 'file.save' | 'paragraph.dialog' | 'file.pageSetup' | 'insert.footnote' | 'insert.endnote' | 'insert.pageNumber' | 'insert.totalPages' | 'insert.sectionPages' | 'insert.pageXofY' | 'insert.pageBreak' | 'insert.sectionBreakNextPage' | 'insert.sectionBreakContinuous' | 'insert.toc';
 
 // @public
 export type CollectReviewItems = (input: ReviewModelInput) => readonly ReviewItem[];
@@ -1347,6 +1419,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     insertToc: Record<never, never>;
     // (undocumented)
     mergeCells: Record<never, never>;
+    navigateReviewChange: {
+        direction: 'next' | 'previous';
+    };
     paste: {
         html?: string;
         text: string;
@@ -1379,6 +1454,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     replaceMatch: {
         match: TextMatch;
         text: string;
+    };
+    resolveAllReviewChanges: {
+        action: 'accept' | 'reject';
     };
     selectAll: Record<never, never>;
     selectTableRegion: {
@@ -1462,6 +1540,9 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
         afterPt?: number | null;
         beforePt?: number | null;
     };
+    setReviewDisplayMode: {
+        mode: 'all-markup' | 'proposed' | 'original';
+    };
     setSelection: {
         anchor: DocAnchor;
     } | {
@@ -1501,6 +1582,7 @@ export interface EditorCommands extends EditorCommandShape<DocEdits>, EditorHead
     toggleMark: {
         mark: string;
     };
+    toggleParagraphMarks: Record<never, never>;
     toggleReviewPane: Record<never, never>;
     transformImage: {
         action: 'rotateCW' | 'rotateCCW' | 'flipH' | 'flipV';
@@ -1768,12 +1850,14 @@ export interface EditorSnapshot {
     readonly pageSetup?: PageSetup | null;
     // (undocumented)
     readonly parseError: string | null;
+    readonly reviewDisplayMode?: 'all-markup' | 'proposed' | 'original';
     readonly reviewPaneOpen?: boolean;
     // (undocumented)
     readonly scope: EditorScope;
     // (undocumented)
     readonly selection: DocRange | null;
     readonly selectionCollapsed: boolean;
+    readonly showParagraphMarks?: boolean;
     // (undocumented)
     readonly table: TableContext | null;
     readonly tocContext: {
@@ -2483,6 +2567,12 @@ export interface ReviewRevisionItem {
     readonly author: string;
     // (undocumented)
     readonly date?: string;
+    readonly formattingChanges?: readonly {
+        readonly property: 'bold' | 'italic' | 'underline' | 'strike' | 'fontFamily' | 'fontSize' | 'color' | 'alignment' | 'leftIndent' | 'rightIndent' | 'firstLineIndent' | 'hangingIndent' | 'spaceBefore' | 'spaceAfter';
+        readonly value: string | null;
+    }[];
+    readonly formattingKind?: string;
+    readonly formattingLanguages?: readonly string[];
     readonly id: string;
     // (undocumented)
     readonly kind: 'revision';

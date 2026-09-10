@@ -78,7 +78,8 @@
     "altText": "Alternativtext",
     "imageWrap": "Textumbruch",
     "formatPainter": null,
-    "formatPainterShortcut": null
+    "formatPainterShortcut": null,
+    "paragraphMarks": null
   },
   "alignment": {
     "alignLeft": "Linksbündig",
@@ -559,7 +560,38 @@
     "paragraphMarksDeleted": null,
     "paragraphMarksInserted": null,
     "paragraphMarksMovedFrom": null,
-    "paragraphMarksMovedTo": null
+    "paragraphMarksMovedTo": null,
+    "formattingDetails": {
+      "alignment": null,
+      "auto": null,
+      "bold": null,
+      "both": null,
+      "center": null,
+      "color": null,
+      "default": null,
+      "double": null,
+      "end": null,
+      "firstLineIndent": null,
+      "fontFamily": null,
+      "fontSize": null,
+      "hangingIndent": null,
+      "italic": null,
+      "left": null,
+      "leftIndent": null,
+      "none": null,
+      "notBold": null,
+      "notItalic": null,
+      "notStrike": null,
+      "points": null,
+      "right": null,
+      "rightIndent": null,
+      "single": null,
+      "spaceAfter": null,
+      "spaceBefore": null,
+      "start": null,
+      "strike": null,
+      "underline": null
+    }
   },
   "toc": {
     "refresh": "Gesamtes Verzeichnis aktualisieren",
@@ -683,7 +715,15 @@
     "deleteComment": "Kommentar löschen",
     "discardChange": "Änderung verwerfen",
     "showResolvedComment": null,
-    "resolved": null
+    "resolved": null,
+    "acceptAllChanges": null,
+    "nextChange": null,
+    "previousChange": null,
+    "rejectAllChanges": null,
+    "allMarkup": null,
+    "displayForReview": null,
+    "noMarkup": null,
+    "original": null
   },
   "imageAltText": {
     "description": "Beschreibung",
