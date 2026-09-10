@@ -7,6 +7,7 @@ import {
 import {
   REVIEW_AUTHOR_SLOTS,
   reviewAuthorSlotColor,
+  revisionPresentationOf,
   type RevisionStyleContext,
 } from './revision-presentation.ts';
 
@@ -14,7 +15,8 @@ import {
 export function paintManualLineBreak(
   document: Document,
   line: LineRecord,
-  scale: number
+  scale: number,
+  colors?: RevisionStyleContext
 ): HTMLElement {
   const glyph = document.createElement('span');
   const last = line.spans[line.spans.length - 1];
@@ -32,6 +34,29 @@ export function paintManualLineBreak(
   glyph.style.fontSize = `${(last?.style.fontSizePt ?? line.box.height) * scale}px`;
   glyph.style.lineHeight = `${Math.max(0, line.box.height - line.leading - (line.trailingSpacing ?? 0)) * scale}px`;
   glyph.style.color = 'var(--doc-revision-format)';
+  // Read the newline's own revision, never the preceding text's attribution.
+  const presentation = revisionPresentationOf(last?.revisions, colors?.authorSlots, colors?.styles);
+  if (presentation) {
+    const { attribution } = presentation;
+    const authorStyle = colors?.styles.get(attribution.author);
+    const byAuthor = colors && (authorStyle?.color !== undefined || colors.others === 'author');
+    glyph.style.color = byAuthor ? presentation.authorColor : presentation.color;
+    glyph.dataset.revisionKind = attribution.kind;
+    glyph.dataset.revisionId = attribution.id;
+    glyph.dataset.reviewAuthor = attribution.author;
+    if (colors) {
+      glyph.dataset.reviewAuthorSlot = String(
+        (colors.authorSlots.get(attribution.author) ?? 0) % REVIEW_AUTHOR_SLOTS
+      );
+      for (const token of colors.classTokens.get(attribution.author) ?? [])
+        glyph.classList.add(token);
+    }
+    if (presentation.line) {
+      glyph.style.textDecorationLine = presentation.line;
+      glyph.style.textDecorationStyle = presentation.decorationStyle;
+      glyph.style.textDecorationColor = glyph.style.color;
+    }
+  }
   return glyph;
 }
 

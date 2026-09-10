@@ -1462,7 +1462,7 @@ function paintLine(
     height: line.box.height,
   });
   if (ctx.showParagraphMarks && line.manualBreakAfter)
-    element.append(paintManualLineBreak(document, line, scale));
+    element.append(paintManualLineBreak(document, line, scale, ctx.revisionStyles));
   const drawingCtx = drawingContextOf(asResolvedPaintContext(ctx));
   if (line.drawings && line.drawings.length > 0) {
     for (const painted of paintInlineDrawingsOnLine(

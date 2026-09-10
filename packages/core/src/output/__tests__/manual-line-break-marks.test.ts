@@ -101,3 +101,35 @@ test('carriage returns have the same layout geometry and model offsets as text-w
     }));
   expect(geometry(layoutFor('cr'))).toEqual(geometry(layoutFor('br')));
 });
+
+test('manual-break marks use their own revision colors and decorations', () => {
+  const source = part(
+    '<w:p><w:ins w:id="1" w:author="Ada"><w:r><w:t>Inserted</w:t><w:br/></w:r></w:ins>' +
+      '<w:del w:id="2" w:author="Grace"><w:r><w:cr/></w:r></w:del>' +
+      '<w:ins w:id="3" w:author="Ada"><w:r><w:t>Text only</w:t></w:r></w:ins>' +
+      '<w:r><w:br/></w:r></w:p>'
+  );
+  const container = document.createElement('div');
+  const layout = layoutSemanticDocument(source, 0, { measurer: createFixedMeasurer(6, 14) });
+  for (const revisionStyles of [
+    'author',
+    'kind',
+    { authors: { Ada: 'purple', Grace: 'orange' } },
+  ] as const) {
+    paintSemanticLayout(container, layout, { scale: 1, showParagraphMarks: true, revisionStyles });
+    const marks = [...container.querySelectorAll<HTMLElement>('.docx-line-break-mark')];
+    expect(marks).toHaveLength(3);
+    for (const [index, id] of ['1', '2'].entries()) {
+      const mark = marks[index]!;
+      const modelSpan = container.querySelector<HTMLElement>(
+        `.docx-line [data-start][data-revision-id="${id}"]`
+      )!;
+      expect(modelSpan).not.toBeNull();
+      expect(mark.style.color).toBe(modelSpan.style.color);
+      expect(mark.style.textDecorationLine).toBe(modelSpan.style.textDecorationLine);
+      expect(mark.dataset.reviewAuthor).toBe(index === 0 ? 'Ada' : 'Grace');
+    }
+    expect(marks[2]!.style.color).toBe('var(--doc-revision-format)');
+    expect(marks[2]!.dataset.revisionId).toBeUndefined();
+  }
+});
