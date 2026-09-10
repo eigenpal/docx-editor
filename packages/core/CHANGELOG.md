@@ -1,5 +1,12 @@
 # @docx-editor.dev/core
 
+## 2.16.1
+
+### Patch Changes
+
+- b2390c6: Improve Word review parity with grouped paragraph breaks, optional paragraph and manual line-break marks, detailed formatting cards, separate formatting decisions, navigation, bulk acceptance/rejection, and markup display controls. Fixes #793 and #794.
+- @docx-editor.dev/i18n@2.16.1
+
 ## 2.16.0
 
 ### Minor Changes
