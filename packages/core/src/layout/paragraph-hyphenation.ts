@@ -12,6 +12,7 @@ import {
   MAX_HYPHENATION_WORD_UTF16,
   type DiscretionaryHyphenBreak,
 } from './hyphenation.ts';
+import { stripTrailingOrdinarySpaces } from './paragraph-justify.ts';
 import { wordBoundaries } from './paragraph-word-boundaries.ts';
 import { lastWinsRunLanguage } from './run-language.ts';
 import type { ResolvedRunStyle } from './run-style.ts';
@@ -234,6 +235,13 @@ export interface HyphenationOverflowInput {
   readonly suppressAutoHyphens: boolean;
   readonly consecutiveHyphenatedLines: number;
   readonly slackPt: number;
+  /**
+   * Extra room from compressing expandable U+0020 on a non-final justified line.
+   *
+   * Added to {@link slackPt} for the zone gate and last-fit prefix. Left-aligned wrap
+   * leaves this 0: shrinking spaces to force a hyphen would be a visible distortion.
+   */
+  readonly shrinkBudgetPt?: number;
   readonly word: string;
   readonly firstSliceUtf16: number;
   readonly language: string | null;
@@ -247,6 +255,11 @@ export interface HyphenationOverflowInput {
    * unbroken word that cannot fit an empty line still takes a last-fitting pattern break.
    */
   readonly ignoreHyphenationZone?: boolean;
+}
+
+/** Remaining slack plus optional justified shrink, used for zone and last-fit. */
+export function hyphenationSlackPt(remainingPt: number, shrinkBudgetPt = 0): number {
+  return remainingPt + Math.max(0, shrinkBudgetPt);
 }
 
 /**
@@ -311,6 +324,13 @@ type HyphenSpanExtras = Partial<
   Pick<StyleSpanRecord, 'link' | 'noteNav' | 'fontSlot' | 'revisions' | 'fieldAtom'>
 >;
 
+function overflowHyphenSlackPt(input: {
+  readonly slackPt: number;
+  readonly shrinkBudgetPt?: number;
+}): number {
+  return hyphenationSlackPt(input.slackPt, input.shrinkBudgetPt);
+}
+
 /** Last-fit hyphen for an overflowing candidate, including interior letter runs, or `null`. */
 export function hyphenateOverflowingCandidate(
   input: OverflowingCandidateHyphenInput
@@ -319,11 +339,12 @@ export function hyphenateOverflowingCandidate(
   const settings = input.settings;
   if (!settings?.autoHyphenation) return null;
   if (input.suppressAutoHyphens) return null;
-  if (!input.ignoreHyphenationZone && input.slackPt <= settings.hyphenationZonePt) return null;
+  const slackPt = overflowHyphenSlackPt(input);
+  if (!input.ignoreHyphenationZone && slackPt <= settings.hyphenationZonePt) return null;
   const limit = settings.consecutiveHyphenLimit;
   if (limit !== null && input.consecutiveHyphenatedLines >= limit) return null;
   if (settings.doNotHyphenateCaps && input.capsFormatted) return null;
-  return lastFittingInteriorHyphen(input);
+  return lastFittingInteriorHyphen({ ...input, slackPt });
 }
 
 export interface MixedPrefixSlice {
@@ -505,18 +526,15 @@ export function hyphenationSplitForOverflow(
   const settings = input.settings;
   if (!settings?.autoHyphenation) return null;
   if (input.suppressAutoHyphens) return null;
-  if (!input.ignoreHyphenationZone && input.slackPt <= settings.hyphenationZonePt) return null;
+  const slackPt = overflowHyphenSlackPt(input);
+  if (!input.ignoreHyphenationZone && slackPt <= settings.hyphenationZonePt) return null;
   const limit = settings.consecutiveHyphenLimit;
   if (limit !== null && input.consecutiveHyphenatedLines >= limit) return null;
   if (input.firstSliceUtf16 <= 0 || input.firstSliceUtf16 > input.word.length) return null;
   if (settings.doNotHyphenateCaps && input.capsFormatted) return null;
-  const found = lastFittingDiscretionaryHyphen(
-    input.word,
-    input.language,
-    input.slackPt,
-    input.measure,
-    { doNotHyphenateCaps: settings.doNotHyphenateCaps }
-  );
+  const found = lastFittingDiscretionaryHyphen(input.word, input.language, slackPt, input.measure, {
+    doNotHyphenateCaps: settings.doNotHyphenateCaps,
+  });
   if (!found) return null;
   if (found.utf16Offset > input.firstSliceUtf16) return null;
   return found;
@@ -602,7 +620,11 @@ export function nextOversizedEmptyLineCut(input: {
 }): OversizedEmptyLineCut | null {
   if (input.remaining.length <= 1) return null;
   const remainingWidth = input.measure(input.remaining);
-  if (remainingWidth <= input.availablePt) return null;
+  const visible = stripTrailingOrdinarySpaces(input.remaining);
+  const visibleWidth =
+    visible.length === input.remaining.length ? remainingWidth : input.measure(visible);
+  // Trailing U+0020 hangs at the margin. It must not force an empty-line hyphen.
+  if (visibleWidth <= input.availablePt) return null;
   const hyphen = hyphenateOverflowingCandidate({
     ...input.hyphen,
     candidate: input.remaining,

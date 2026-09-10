@@ -19,6 +19,7 @@ import {
   letterWordTail,
   mixedTokenAcrossPieces,
   mixedTokenRunsAreUniform,
+  nextOversizedEmptyLineCut,
   type MixedPlaceablePiece,
 } from '../paragraph-hyphenation.ts';
 import { DEFAULT_RUN_STYLE } from '../run-style.ts';
@@ -279,6 +280,47 @@ describe('paragraph-hyphenation helpers', () => {
         settings: { ...ON, hyphenationZonePt: 36 },
         suppressAutoHyphens: false,
         consecutiveHyphenatedLines: 0,
+        slackPt: 18,
+        shrinkBudgetPt: 12,
+        word: 'citizenship',
+        firstSliceUtf16: 11,
+        language: 'en',
+        capsFormatted: false,
+        measure,
+      })
+    ).toBeNull();
+    expect(
+      hyphenationSplitForOverflow({
+        settings: { ...ON, hyphenationZonePt: 18 },
+        suppressAutoHyphens: false,
+        consecutiveHyphenatedLines: 0,
+        slackPt: 18,
+        word: 'citizenship',
+        firstSliceUtf16: 11,
+        language: 'en',
+        capsFormatted: false,
+        measure,
+      })
+    ).toBeNull();
+    expect(
+      hyphenationSplitForOverflow({
+        settings: { ...ON, hyphenationZonePt: 18 },
+        suppressAutoHyphens: false,
+        consecutiveHyphenatedLines: 0,
+        slackPt: 18,
+        shrinkBudgetPt: 12,
+        word: 'citizenship',
+        firstSliceUtf16: 11,
+        language: 'en',
+        capsFormatted: false,
+        measure,
+      })?.utf16Offset
+    ).toBe(4);
+    expect(
+      hyphenationSplitForOverflow({
+        settings: { ...ON, hyphenationZonePt: 36 },
+        suppressAutoHyphens: false,
+        consecutiveHyphenatedLines: 0,
         slackPt: 30,
         word: 'citizenship',
         firstSliceUtf16: 11,
@@ -288,6 +330,51 @@ describe('paragraph-hyphenation helpers', () => {
         ignoreHyphenationZone: true,
       })?.utf16Offset
     ).toBe(4);
+  });
+
+  test('empty-line cut ignores a hanging trailing space', () => {
+    const measure = (text: string) => text.length * 6;
+    const hyphen = {
+      settings: ON,
+      suppressAutoHyphens: false,
+      consecutiveHyphenatedLines: 0,
+      language: 'en-US' as const,
+      capsFormatted: false,
+      measure,
+      pieces: [{ text: 'citizenship more' }],
+      pieceIndex: 0,
+      consumed: 0,
+      layoutOwned: false,
+      measureText: undefined,
+    };
+    expect(
+      nextOversizedEmptyLineCut({
+        remaining: 'citizenship ',
+        remainingStart: 0,
+        availablePt: 70,
+        measure,
+        hyphen,
+        paragraphId: 'p',
+        x: 0,
+        height: 14,
+        props: [],
+        style: DEFAULT_RUN_STYLE,
+      })
+    ).toBeNull();
+    expect(
+      nextOversizedEmptyLineCut({
+        remaining: 'citizenship',
+        remainingStart: 0,
+        availablePt: 30,
+        measure,
+        hyphen,
+        paragraphId: 'p',
+        x: 0,
+        height: 14,
+        props: [],
+        style: DEFAULT_RUN_STYLE,
+      })?.span.text
+    ).toBe('citi');
   });
 });
 
@@ -419,6 +506,28 @@ describe('discretionary hyphen in paragraph flow', () => {
     expect(lines.slice(1).some((line) => line.spans.some((span) => span.discretionaryHyphen))).toBe(
       true
     );
+  });
+
+  test('justified shrink hyphenates when raw slack is inside the zone', () => {
+    // "aa bb cc " = 54pt on 72pt → slack 18pt, equal to the zone. Three spaces shrink 9pt.
+    // "cit-" is 24pt and fits 27pt. Left-aligned wrap keeps the whole word.
+    const justified = `<w:p><w:pPr><w:jc w:val="both"/></w:pPr>${run('aa bb cc citizenship extra')}</w:p>`;
+    const left = `<w:p>${run('aa bb cc citizenship extra')}</w:p>`;
+    expect(hasDiscretionaryHyphen(left, 72)).toBe(false);
+    expect(textsOf(left, 72)[0]).toBe('aa bb cc ');
+    expect(tailText(textsOf(left, 72)).startsWith('citizenship')).toBe(true);
+    expect(hasDiscretionaryHyphen(justified, 72)).toBe(true);
+    expect(textsOf(justified, 72)[0]).toMatch(/^aa bb cc cit/);
+    expect(textsOf(justified, 72).join('')).toBe('aa bb cc citizenship extra');
+  });
+
+  test('an empty line does not hyphenate a word that fits once trailing space hangs', () => {
+    // "citizenship " = 72pt, visible 66pt, line 70pt. Word hangs the U+0020.
+    const body = `<w:p>${run('citizenship more')}</w:p>`;
+    expect(hasDiscretionaryHyphen(body, 70)).toBe(false);
+    expect(textsOf(body, 70)[0]).toBe('citizenship ');
+    expect(tailText(textsOf(body, 70))).toBe('more');
+    expect(textsOf(body, 70).join('')).toBe('citizenship more');
   });
 
   test('unknown language and paragraph suppression fail open', () => {

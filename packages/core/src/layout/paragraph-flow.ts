@@ -1402,8 +1402,6 @@ export function breakParagraph(
               }
             : {}),
           ...(piece.link ? { link: piece.link } : {}),
-          // destination rather than re-derived from the paragraph at paint time.
-          ...(destination.leader ? { tabLeader: destination.leader } : {}),
           ...(layoutOwned && !piece.positionalTab ? { projected: true as const } : {}),
           ...(piece.noteNav ? { noteNav: piece.noteNav } : {}),
           ...revisionsOf(piece),
@@ -1470,12 +1468,16 @@ export function breakParagraph(
         ...(piece.fontSlot ? { fontSlot: piece.fontSlot } : {}),
         ...revisionsOf(piece),
       };
+      const hyphenShrink =
+        alignment === 'both' && placeableSuffixes[pieceIndex]![boundary] === 1
+          ? expandableShrinkBudget(line.spans, measurer)
+          : 0;
       if (templatePunct && !layoutOwned && piece.measureText === undefined && !lineEndWhitespace) {
         const mixedResume = tryPlaceUniformMixedTokenHyphen({
           settings: flow?.hyphenationSettings,
           suppressAutoHyphens,
           consecutiveHyphenatedLines,
-          slackPt: lineAvailable() - line.width,
+          slackPt: remainingLineWidth() + hyphenShrink,
           language: lastWinsRunLanguage(piece.props),
           capsFormatted: faceStyle.caps,
           measure: measureDrawn,
@@ -1521,7 +1523,7 @@ export function breakParagraph(
                   settings: flow?.hyphenationSettings,
                   suppressAutoHyphens,
                   consecutiveHyphenatedLines,
-                  slackPt: lineAvailable() - line.width,
+                  slackPt: remainingLineWidth() + hyphenShrink,
                   language: lastWinsRunLanguage(piece.props),
                   capsFormatted: faceStyle.caps,
                   measure: measureDrawn,
@@ -1572,9 +1574,7 @@ export function breakParagraph(
           shrinkBudget: expandableShrinkBudget(line.spans, measurer),
         })
       ) {
-        // Mid-word overflow: carry the whole word to the next line rather than splitting it
-        // at a run boundary. The spans already placed for it are lifted off this line, the
-        // line is closed without them, and they are re-laid at the new origin.
+        // Mid-word overflow: lift already-placed spans of this word, close the line, re-lay.
         const carried = line.spans.splice(wordStartSpan);
         line.width = wordStartWidth;
         line.end = wordStartEnd;
