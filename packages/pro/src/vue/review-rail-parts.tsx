@@ -43,6 +43,13 @@ import {
 import { ADD_COMMENT_ICON, icon, markerIconPath, resolvedCommentIcon } from './review-icons.tsx';
 import { revisionLabelKey } from './review-labels.ts';
 import { authorAccent, authorCardStyle, authorSlot } from './review-author-styles.ts';
+import {
+  activeItemNeedsBalloon,
+  anchorFromRevisionElement,
+  findPaintedRevisionElement,
+  matchBalloonReviewItem,
+  type BalloonAnchor,
+} from './review-balloon-anchor.ts';
 
 /** @public */
 export const ReviewList = markPart(
@@ -263,22 +270,6 @@ export const ReviewAddComment = markPart(
   'AddComment'
 );
 
-interface BalloonAnchor {
-  readonly revisionId: string;
-  readonly formattingKind?: string;
-  readonly author: string;
-  readonly date?: string;
-  readonly kind?: string;
-  readonly structuralSite: boolean;
-  readonly paragraphId?: string;
-  readonly start?: number;
-  readonly end?: number;
-  readonly left: number;
-  readonly top: number;
-  readonly bottom: number;
-  readonly above: boolean;
-}
-
 const BalloonTime = defineComponent({
   name: 'BalloonTime',
   props: { raw: { type: String, required: true } },
@@ -305,8 +296,10 @@ export const ReviewBalloon = markPart(
       const rail = useRail();
       const t = useReviewLabel();
       const anchor = ref<BalloonAnchor | null>(null);
+      const navigationAnchorKey = ref<string | null>(null);
       const displayMode = useEditorState((snapshot) => snapshot.reviewDisplayMode ?? 'all-markup');
       watch(displayMode, () => {
+        navigationAnchorKey.value = null;
         anchor.value = null;
       });
       const openRef = ref(false);
@@ -325,34 +318,8 @@ export const ReviewBalloon = markPart(
         if (!host || !railEl || !scroller) return;
 
         const openAt = (element: HTMLElement, structuralSite: boolean): void => {
-          const railRect = railEl.getBoundingClientRect();
-          const rect = element.getBoundingClientRect();
-          const viewportBottom = element.ownerDocument.defaultView?.innerHeight ?? Infinity;
-          const start = Number(element.dataset.reviewStart ?? element.dataset.start);
-          const end = Number(element.dataset.reviewEnd ?? element.dataset.end);
-          anchor.value = {
-            revisionId: element.dataset.revisionId!,
-            ...(element.dataset.formattingKind
-              ? { formattingKind: element.dataset.formattingKind }
-              : {}),
-            author: element.dataset.reviewAuthor ?? '',
-            ...(element.dataset.revisionDate !== undefined
-              ? { date: element.dataset.revisionDate }
-              : {}),
-            ...(element.dataset.revisionKind !== undefined
-              ? { kind: element.dataset.revisionKind }
-              : {}),
-            structuralSite,
-            ...(element.dataset.paragraphId !== undefined
-              ? { paragraphId: element.dataset.paragraphId }
-              : {}),
-            ...(Number.isFinite(start) ? { start } : {}),
-            ...(Number.isFinite(end) ? { end } : {}),
-            left: rect.left - railRect.left,
-            top: rect.top - railRect.top,
-            bottom: rect.bottom - railRect.top,
-            above: rect.bottom + 220 > viewportBottom,
-          };
+          navigationAnchorKey.value = null;
+          anchor.value = anchorFromRevisionElement(element, railEl, structuralSite);
           instance?.proxy?.$forceUpdate();
         };
 
@@ -369,6 +336,7 @@ export const ReviewBalloon = markPart(
             }
           }
           if (openRef.value) {
+            navigationAnchorKey.value = null;
             anchor.value = null;
             instance?.proxy?.$forceUpdate();
           }
@@ -383,53 +351,70 @@ export const ReviewBalloon = markPart(
       });
       onUnmounted(() => balloonCleanup?.());
 
+      const navigationActive = computed(
+        () => rail.value.allItems.find((entry) => entry.isActive) ?? null
+      );
+      const navigationActiveKey = computed(() => navigationActive.value?.key ?? null);
+      const navigationNeedsBalloon = computed(
+        () =>
+          navigationActive.value !== null &&
+          activeItemNeedsBalloon(
+            navigationActive.value,
+            rail.value.review.items,
+            rail.value.review.paneOpen
+          )
+      );
+      watch(
+        [navigationActiveKey, navigationNeedsBalloon],
+        ([activeKey, needsBalloon], _previous, onCleanup) => {
+          const active = navigationActive.value;
+          const host = instance?.proxy?.$el as HTMLElement | undefined;
+          const railEl = host?.closest('.docx-review') as HTMLElement | null;
+          const scroller = (railEl?.closest('.docx-editor__scroll-container') ??
+            railEl?.offsetParent) as HTMLElement | null;
+          if (!activeKey || !active) {
+            if (navigationAnchorKey.value === null) return;
+            navigationAnchorKey.value = null;
+            anchor.value = null;
+            instance?.proxy?.$forceUpdate();
+            return;
+          }
+          if (!needsBalloon) {
+            navigationAnchorKey.value = null;
+            anchor.value = null;
+            instance?.proxy?.$forceUpdate();
+            return;
+          }
+          if (!railEl || !scroller) return;
+          navigationAnchorKey.value = active.key;
+          anchor.value = null;
+          let cancelled = false;
+          const frame = requestAnimationFrame(() => {
+            if (cancelled) return;
+            const element = findPaintedRevisionElement(scroller, active);
+            if (!element) {
+              anchor.value = null;
+              instance?.proxy?.$forceUpdate();
+              return;
+            }
+            anchor.value = anchorFromRevisionElement(
+              element,
+              railEl,
+              element.classList.contains('docx-table-row--revision')
+            );
+            instance?.proxy?.$forceUpdate();
+          });
+          onCleanup(() => {
+            cancelled = true;
+            cancelAnimationFrame(frame);
+          });
+        },
+        { flush: 'post' }
+      );
+
       const served = computed(() => {
         const current = anchor.value;
-        if (!current) return null;
-        const { allItems } = rail.value;
-        let byAuthor: ReviewItemView | null = null;
-        let byAuthorAmbiguous = false;
-        let byId: ReviewItemView | null = null;
-        let byIdAmbiguous = false;
-        let byRange: ReviewItemView | null = null;
-        let byRangeAmbiguous = false;
-        for (const candidate of allItems) {
-          if (candidate.kind !== 'revision' || candidate.item.kind !== 'revision') continue;
-          if (current.formattingKind && candidate.item.formattingKind !== current.formattingKind)
-            continue;
-          for (const address of candidate.item.addresses) {
-            if (address.id !== current.revisionId) continue;
-            if (address.author === current.author) {
-              if (address.date === current.date) return candidate;
-              if (byAuthor === null) byAuthor = candidate;
-              else if (byAuthor !== candidate) byAuthorAmbiguous = true;
-            }
-            if (byId === null) byId = candidate;
-            else if (byId !== candidate) byIdAmbiguous = true;
-          }
-          if (
-            current.paragraphId !== undefined &&
-            current.start !== undefined &&
-            current.end !== undefined &&
-            (candidate.revisionKind === 'format' || candidate.revisionKind === 'structural')
-          ) {
-            for (const range of candidate.item.ranges) {
-              if (
-                range.start.paragraphId === current.paragraphId &&
-                range.start.offset < current.end &&
-                range.end.offset > current.start
-              ) {
-                if (byRange === null) byRange = candidate;
-                else if (byRange !== candidate) byRangeAmbiguous = true;
-                break;
-              }
-            }
-          }
-        }
-        if (byAuthor !== null && !byAuthorAmbiguous) return byAuthor;
-        if (byId !== null && !byIdAmbiguous) return byId;
-        if (byRange !== null && !byRangeAmbiguous) return byRange;
-        return null;
+        return current ? matchBalloonReviewItem(current, rail.value.allItems) : null;
       });
 
       const entry = computed(() => {

@@ -688,6 +688,63 @@ describe('DocxEditorReview (Vue)', () => {
     }
   });
 
+  test('Next and Previous Change open the balloon for a rail-hidden format revision', async () => {
+    const mounted = mountReview(FORMAT_AND_INSERT);
+    try {
+      await flush();
+      await waitFor(() => mounted.container.querySelector('[data-testid="review-rail"]') !== null);
+      expect(
+        mounted.container.querySelector('[data-testid="review-rail"]')?.getAttribute('data-count')
+      ).toBe('1');
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
+
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-balloon-card"]') !== null
+      );
+      const balloon = mounted.container.querySelector(
+        '[data-testid="review-balloon-card"]'
+      ) as HTMLElement;
+      expect(balloon.dataset.kind).toBe('format');
+      expect(
+        mounted.container.querySelector(
+          '[data-testid="review-balloon"] [data-testid="review-accept"]'
+        )
+      ).not.toBeNull();
+
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-card"][data-active]') !== null
+      );
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
+      expect(
+        (mounted.container.querySelector('[data-testid="review-card"]') as HTMLElement).dataset.kind
+      ).toBe('insert');
+
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'previous' });
+      await flush();
+      await waitFor(
+        () => mounted.container.querySelector('[data-testid="review-balloon-card"]') !== null
+      );
+      expect(
+        (mounted.container.querySelector('[data-testid="review-balloon-card"]') as HTMLElement)
+          .dataset.kind
+      ).toBe('format');
+
+      mounted.container.querySelector('[data-revision-kind="format"]')?.remove();
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'next' });
+      await flush();
+      mounted.editor().exec({ type: 'navigateReviewChange', direction: 'previous' });
+      await flush();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      expect(mounted.container.querySelector('[data-testid="review-balloon"]')).toBeNull();
+    } finally {
+      mounted.unmount();
+    }
+  });
+
   test('default rail keeps formatting in the page balloon', async () => {
     const mounted = mountReview(FORMAT_AND_INSERT);
     try {

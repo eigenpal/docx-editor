@@ -1029,7 +1029,7 @@ export interface EditorCommands
   toggleReviewPane: Record<never, never>;
   /** Word's Show/Hide paragraph marks; presentation only. */
   toggleParagraphMarks: Record<never, never>;
-  /** Navigate visible, activatable tracked changes, skipping comments and wrapping at the end. */
+  /** Navigate tracked changes, including hidden formatting balloons, and wrap at the end. */
   navigateReviewChange: { direction: 'next' | 'previous' };
   /** Resolve all document changes, including hidden authors and other stories, in one undo step. */
   resolveAllReviewChanges: { action: 'accept' | 'reject' };

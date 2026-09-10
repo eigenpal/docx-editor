@@ -32,6 +32,14 @@ export const source = docx(
     '<w:p><w:pPr><w:rPr><w:lang w:val="sv-SE"/><w:rPrChange w:id="10" w:author="Ada">' +
     '<w:rPr/></w:rPrChange></w:rPr></w:pPr></w:p>'
 );
+export const navigationSource = docx(
+  '<w:p><w:r><w:rPr>' +
+    '<w:rPrChange w:id="3" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z"><w:b/></w:rPrChange>' +
+    '<w:b/></w:rPr><w:t>bold</w:t></w:r></w:p>' +
+    '<w:p><w:r><w:t xml:space="preserve">Kept </w:t></w:r>' +
+    '<w:ins w:id="3" w:author="Ada Lovelace" w:date="2026-01-02T03:04:05Z">' +
+    '<w:r><w:t>added text</w:t></w:r></w:ins></w:p>'
+);
 
 export async function checkFormattingPageBalloons(
   container: HTMLElement,
@@ -46,6 +54,16 @@ export async function checkFormattingPageBalloons(
   const paragraph = container.querySelector('[data-formatting-kind="pPrChange"]')!;
   expect(paragraph).not.toBeNull();
   await change(() => paragraph.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })));
+  expect(container.querySelector('[data-testid="review-balloon-card"]')?.textContent).toContain(
+    'Centered'
+  );
+  const clickedParagraphId = editor.surface!.session.paragraphIds()[1]!;
+  await change(() =>
+    editor.surface!.setSelection({
+      anchor: { paragraphId: clickedParagraphId, offset: 1 },
+      head: { paragraphId: clickedParagraphId, offset: 1 },
+    })
+  );
   expect(container.querySelector('[data-testid="review-balloon-card"]')?.textContent).toContain(
     'Centered'
   );
