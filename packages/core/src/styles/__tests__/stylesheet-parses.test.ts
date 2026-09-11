@@ -63,4 +63,15 @@ describe('the shipped stylesheets parse', () => {
       expect(selectorMentions(fragment), fragment).toBe(true);
     }
   });
+
+  test('tracked insertions default to a thin solid underline', () => {
+    const css = readFileSync(resolve(repositoryRoot, STYLESHEETS[0]!), 'utf8');
+    const root = postcss.parse(css);
+    const values = new Map<string, string>();
+    root.walkDecls(/^--doc-revision-insertion-decoration-/, (declaration) => {
+      values.set(declaration.prop, declaration.value);
+    });
+    expect(values.get('--doc-revision-insertion-decoration-style')).toBe('solid');
+    expect(values.get('--doc-revision-insertion-decoration-thickness')).toBe('0.06em');
+  });
 });

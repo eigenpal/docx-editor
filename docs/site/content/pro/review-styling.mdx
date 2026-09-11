@@ -17,7 +17,7 @@ and [comments](/docs/2.x/pro/comments).
 | Author assignment       | Authors receive slots in first-appearance order.                 |
 | Color ramp              | `--doc-review-author-0` through `--doc-review-author-7`          |
 | More than eight authors | The ramp repeats after eight authors.                            |
-| Change type             | Insertions stay underlined. Deletions stay struck through.       |
+| Change type             | Insertions use a thin solid underline. Deletions use a strike.   |
 | Review sidebar          | Cards use the author color for the leading edge and avatar disc. |
 | Comment highlights      | All authors use the same yellow highlight by default.            |
 
@@ -33,11 +33,23 @@ Override ramp tokens under `.docx-editor`. Load your stylesheet after
 
 The document filter handles dark mode. Review chrome adjusts separately.
 
+### Customize insertion underlines
+
+Override the insertion decoration tokens under `.docx-editor`. These tokens
+change presentation only.
+
+```css
+.docx-editor {
+  --doc-revision-insertion-decoration-style: dashed;
+  --doc-revision-insertion-decoration-thickness: 0.08em;
+}
+```
+
 ## Choose a styling API
 
 | API                             | Use                                                              |
 | ------------------------------- | ---------------------------------------------------------------- |
-| CSS tokens                      | Replace the shared eight-color ramp.                             |
+| CSS tokens                      | Replace the color ramp or insertion underline.                   |
 | `AuthorStyle` declaration       | Set one author's color, background, classes, or avatar.          |
 | `ColorByChangeType` declaration | Color unmatched insertions green and deletions red.              |
 | `setRevisionStyles`             | Control the same state from an editor instance or headless host. |
@@ -192,9 +204,10 @@ receive its configured image. Do not use review styling as identity proof.
 `data-review-author-slot` wraps to `0` through `7`. Calculate it as `slot % 8`
 when you build selectors from `useReviewAuthors()`.
 
-Painted spans use an inline ink color. CSS cannot override that color or its text
-decoration. Use a declaration or ramp token for ink. Use `currentColor` for
-metric-safe span effects.
+Painted spans use inline ink and text decoration. CSS selectors cannot override
+those properties. Use a declaration or ramp token for ink. Use the insertion
+decoration tokens for insertion underlines. Use `currentColor` for metric-safe
+span effects.
 
 ```css
 .docx-editor [data-review-author='Jess Lin'] {

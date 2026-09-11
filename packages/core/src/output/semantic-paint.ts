@@ -897,8 +897,7 @@ function applyRevisionPresentation(
     // The wash keeps the KIND pair under either scheme — unless the host's style for this
     // author says otherwise. At its faint strength an author-mixed wash is
     // indistinguishable anyway, and the kind pair keeps "added" and "removed" scannable
-    // while the ink answers "whose". It also needs no `color-mix()`, which a host-supplied
-    // literal colour would have forced on every painted run.
+    // while the ink answers "whose". It also avoids per-run `color-mix()` for host colours.
     element.style.backgroundColor =
       authorStyle?.background ??
       (presentation.deleted
@@ -906,7 +905,13 @@ function applyRevisionPresentation(
         : 'var(--doc-revision-insertion-wash)');
     if (presentation.line) {
       element.style.textDecorationLine = presentation.line;
-      element.style.textDecorationStyle = presentation.decorationStyle;
+      if (attribution.kind === 'insert' && presentation.line === 'underline') {
+        element.style.textDecorationStyle = 'var(--doc-revision-insertion-decoration-style)';
+        element.style.textDecorationThickness =
+          'var(--doc-revision-insertion-decoration-thickness)';
+      } else {
+        element.style.textDecorationStyle = presentation.decorationStyle;
+      }
       element.style.textDecorationColor = color;
     }
     return;
