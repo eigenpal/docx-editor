@@ -54,14 +54,17 @@ function trackedSpans(root: HTMLElement): HTMLElement[] {
 }
 
 describe('the reader can see which text is tracked', () => {
-  test('an insertion is underlined, dashed so it cannot be read as authored w:u', () => {
+  test('an insertion uses the configurable thin Word-like underline', () => {
     const root = paint(`<w:p>${run('keep ')}${ins('1', run('added'))}</w:p>`);
     const spans = trackedSpans(root);
     expect(spans.length).toBeGreaterThan(0);
     const span = spans[0]!;
     expect(span.textContent).toBe('added');
     expect(span.style.textDecorationLine).toBe('underline');
-    expect(span.style.textDecorationStyle).toBe('dashed');
+    expect(span.style.textDecorationStyle).toBe('var(--doc-revision-insertion-decoration-style)');
+    expect(span.style.textDecorationThickness).toBe(
+      'var(--doc-revision-insertion-decoration-thickness)'
+    );
     // Coloured by AUTHOR by default, as Word does — the decoration is what says "added".
     expect(span.style.color).toBe('var(--doc-review-author-0)');
   });

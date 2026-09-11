@@ -147,6 +147,10 @@
   --doc-revision-deletion: #c62828;
   --doc-revision-insertion-tint: rgba(46, 125, 50, 0.09);
   --doc-revision-deletion-tint: rgba(198, 40, 40, 0.09);
+  /* Word marks inserted text with a thin solid underline. Hosts can change these two
+     presentation tokens without changing revision data or editor configuration. */
+  --doc-revision-insertion-decoration-style: solid;
+  --doc-revision-insertion-decoration-thickness: 0.06em;
   /* THE HIGHLIGHT LAYER, which reads the same for tracked changes and for comments:
      `-bg` is the band's fill and `-border` the rule under it, and an `-active-` pair is
      the same two for the one the reader has open. The comment family is below.
