@@ -65,6 +65,7 @@ describe('the reader can see which text is tracked', () => {
     expect(span.style.textDecorationThickness).toBe(
       'var(--doc-revision-insertion-decoration-thickness)'
     );
+    expect(span.style.textUnderlineOffset).toBe('var(--doc-revision-insertion-underline-offset)');
     // Coloured by AUTHOR by default, as Word does — the decoration is what says "added".
     expect(span.style.color).toBe('var(--doc-review-author-0)');
   });

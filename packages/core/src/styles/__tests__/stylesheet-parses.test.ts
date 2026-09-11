@@ -68,10 +68,11 @@ describe('the shipped stylesheets parse', () => {
     const css = readFileSync(resolve(repositoryRoot, STYLESHEETS[0]!), 'utf8');
     const root = postcss.parse(css);
     const values = new Map<string, string>();
-    root.walkDecls(/^--doc-revision-insertion-decoration-/, (declaration) => {
+    root.walkDecls(/^--doc-revision-insertion-/, (declaration) => {
       values.set(declaration.prop, declaration.value);
     });
     expect(values.get('--doc-revision-insertion-decoration-style')).toBe('solid');
     expect(values.get('--doc-revision-insertion-decoration-thickness')).toBe('0.06em');
+    expect(values.get('--doc-revision-insertion-underline-offset')).toBe('0.15em');
   });
 });
