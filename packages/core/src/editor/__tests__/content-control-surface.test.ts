@@ -236,10 +236,59 @@ describe('content-control surface chrome', () => {
           beforeTitle
         );
         expect(menu!.querySelector('.docx-content-control-calendar-input')).not.toBeNull();
-        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
         expect(menu!.isConnected).toBe(false);
       }
     }
+  });
+
+  test('widget menus dismiss on outside press, Escape, and widget re-press', () => {
+    const body =
+      `<w:p>${sdt(
+        `<w:dropDownList><w:listItem w:displayText="One" w:value="1"/>` +
+          `<w:listItem w:displayText="Two" w:value="2"/></w:dropDownList>`,
+        `<w:r><w:t>One</w:t></w:r>`
+      )}</w:p>` +
+      `<w:p>${sdt(
+        `<w:dropDownList><w:listItem w:displayText="A" w:value="a"/></w:dropDownList>`,
+        `<w:r><w:t>A</w:t></w:r>`
+      )}</w:p>`;
+    const { container } = mount(body);
+    const widgets = [...container.querySelectorAll<HTMLElement>('[data-docx-cc-widget]')];
+    expect(widgets).toHaveLength(2);
+    const press = (node: EventTarget): void => {
+      node.dispatchEvent(
+        new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 })
+      );
+    };
+    const menu = (): HTMLElement | null =>
+      container.querySelector<HTMLElement>('.docx-content-control-menu');
+
+    // An outside press dismisses without picking a value. `pointerdown`, not `mousedown`:
+    // the surface prevents the page press default, which suppresses the compatibility
+    // mouse events a `mousedown` listener would wait for.
+    press(widgets[0]!);
+    expect(menu()).not.toBeNull();
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    expect(menu()).toBeNull();
+    expect(container.querySelector('.docx-page-content')?.textContent).toContain('One');
+
+    // Escape dismisses without picking a value.
+    press(widgets[0]!);
+    expect(menu()).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    expect(menu()).toBeNull();
+
+    // Re-pressing the owning widget toggles the menu shut.
+    press(widgets[0]!);
+    expect(menu()).not.toBeNull();
+    press(widgets[0]!);
+    expect(menu()).toBeNull();
+
+    // Pressing another widget switches menus.
+    press(widgets[0]!);
+    press(widgets[1]!);
+    expect(menu()?.textContent).toContain('A');
   });
 
   test('manual calendar entry commits an ISO date', () => {
